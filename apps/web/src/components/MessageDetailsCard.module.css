@@ -1,0 +1,299 @@
+/**
+ * MessageDetailsCard layout (C3). The Radix bottom sheet shell (position,
+ * max-height, safe-area, radius) lives in the @neotavern/ui shared stylesheet; this
+ * module only arranges the card internals: pinned footer, internally
+ * scrollable content, horizontal action panel, drag handle and the edit mode.
+ * Design tokens only — no hardcoded colors/fonts/spacing, logical properties
+ * for RTL, ≥44px touch targets on every control.
+ */
+@layer components {
+  /* Compound selector raises specificity above the base [data-component]
+     dialog skin without resorting to !important (AGENTS.md §14). The sheet
+     becomes a flex column so the card can pin its footer and scroll the
+     content area internally. */
+  :global(.st-dialog).dialog {
+    display: flex;
+    padding: 0;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  :global(.st-dialog).dialog :global([data-component='dialog-title']) {
+    margin: 0;
+    padding: var(--st-space-md) var(--st-space-lg) 0;
+  }
+
+  .card {
+    display: flex;
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    padding-inline: var(--st-space-lg);
+    padding-block: var(--st-space-sm) max(var(--st-space-md), env(safe-area-inset-bottom));
+  }
+
+  /* ── Details mode ──────────────────────────────────────────────────────── */
+
+  .dragHandle {
+    width: var(--st-control-height-xs);
+    height: 4px;
+    margin-inline: auto;
+    margin-block: 0 var(--st-space-sm);
+    flex: none;
+    border-radius: var(--st-radius-round);
+    background: var(--st-color-border);
+  }
+
+  .header {
+    display: flex;
+    align-items: center;
+    gap: var(--st-space-sm);
+    margin-bottom: var(--st-space-md);
+    flex: none;
+  }
+
+  .avatar {
+    display: grid;
+    place-items: center;
+    width: var(--st-control-height-sm);
+    height: var(--st-control-height-sm);
+    flex: none;
+    overflow: hidden;
+    border-radius: var(--st-radius-round);
+    color: var(--st-color-accent-soft-text);
+    background: var(--st-color-accent-soft);
+  }
+
+  .avatarUser {
+    color: var(--st-color-text-secondary);
+    background: var(--st-color-surface-tertiary);
+  }
+
+  .avatarImage {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .avatarInitial {
+    font-size: var(--st-font-size-md);
+    font-weight: var(--st-font-weight-bold);
+  }
+
+  .author {
+    min-inline-size: 0;
+    overflow: hidden;
+    color: var(--st-color-text-primary);
+    font-size: var(--st-font-size-md);
+    font-weight: var(--st-font-weight-strong);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .meta {
+    display: flex;
+    margin: 0 0 var(--st-space-md);
+    flex: none;
+    flex-direction: column;
+    gap: var(--st-space-2xs);
+  }
+
+  .metaRow {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--st-space-sm);
+    font-size: var(--st-font-size-sm);
+  }
+
+  .metaRow dt {
+    flex: none;
+    color: var(--st-color-text-muted);
+  }
+
+  .metaRow dd {
+    margin: 0;
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+    color: var(--st-color-text-secondary);
+    text-align: end;
+  }
+
+  /* Horizontal action panel: built-ins + plugin actions, no wrap. */
+  .actions {
+    display: flex;
+    flex: none;
+    gap: var(--st-space-sm);
+    padding-block: var(--st-space-md);
+    margin-block-end: var(--st-space-md);
+    border-block-end: var(--st-border-width) solid var(--st-color-border);
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+  }
+
+  .panelAction {
+    display: inline-flex;
+    min-height: var(--st-control-height);
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    gap: var(--st-space-xs);
+    padding-inline: var(--st-space-md);
+    border: var(--st-border-width) solid color-mix(in srgb, var(--st-color-border) 60%, transparent);
+    border-radius: var(--st-radius-round);
+    background: var(--st-color-surface-secondary);
+    color: var(--st-color-text-secondary);
+    font-size: var(--st-font-size-sm);
+    cursor: pointer;
+  }
+
+  .panelAction:hover:not(:disabled) {
+    background: var(--st-color-surface-tertiary);
+    color: var(--st-color-text-primary);
+  }
+
+  .panelAction:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  .content {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-block: var(--st-space-xs) var(--st-space-md);
+    color: var(--st-color-text-secondary);
+    word-break: break-word;
+  }
+
+  .footer {
+    display: flex;
+    flex: none;
+    gap: var(--st-space-sm);
+    padding-block: var(--st-space-md) 0;
+    border-block-start: var(--st-border-width) solid
+      color-mix(in srgb, var(--st-color-border) 48%, transparent);
+  }
+
+  .footerAction {
+    display: inline-flex;
+    min-height: var(--st-control-height);
+    flex: 1 1 0;
+    align-items: center;
+    justify-content: center;
+    gap: var(--st-space-xs);
+    padding-inline: var(--st-space-sm);
+    border: var(--st-border-width) solid
+      color-mix(in srgb, var(--st-color-text-inverse) 10%, transparent);
+    border-radius: var(--st-radius-control);
+    background: var(--st-color-surface-secondary);
+    color: var(--st-color-text-secondary);
+    font-size: var(--st-font-size-sm);
+    cursor: pointer;
+  }
+
+  .footerAction:hover:not(:disabled) {
+    background: var(--st-color-surface-tertiary);
+    color: var(--st-color-text-primary);
+  }
+
+  .footerAction:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  /* ── Edit mode ────────────────────────────────────────────────────────── */
+
+  .editor {
+    display: flex;
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: var(--st-space-sm);
+  }
+
+  .editor textarea {
+    width: 100%;
+    min-height: var(--st-textarea-min-height);
+    flex: 1 1 auto;
+    padding: var(--st-space-sm) var(--st-space-md);
+    border: var(--st-border-width) solid var(--st-color-border);
+    border-radius: var(--st-radius-control);
+    background: var(--st-color-surface-secondary);
+    color: var(--st-color-text-primary);
+    font-family: var(--st-font-ui);
+    font-size: var(--st-font-size-md);
+    line-height: var(--st-line-height-body);
+    overflow-y: hidden;
+    resize: none;
+  }
+
+  .editor textarea:focus-visible {
+    outline: none;
+    box-shadow: var(--st-shadow-focus);
+  }
+
+  .editor textarea:disabled {
+    color: var(--st-color-text-muted);
+    cursor: not-allowed;
+  }
+
+  .editorError {
+    margin: 0;
+    flex: none;
+    color: var(--st-color-danger);
+    font-size: var(--st-font-size-sm);
+  }
+
+  .editorActions {
+    display: flex;
+    flex: none;
+    justify-content: flex-end;
+    gap: var(--st-space-sm);
+  }
+
+  .editorActions button {
+    display: inline-flex;
+    min-height: var(--st-control-height);
+    align-items: center;
+    justify-content: center;
+    padding-inline: var(--st-space-lg);
+    border: var(--st-border-width) solid
+      color-mix(in srgb, var(--st-color-text-inverse) 10%, transparent);
+    border-radius: var(--st-radius-control);
+    background: var(--st-color-surface-secondary);
+    color: var(--st-color-text-primary);
+    font-size: var(--st-font-size-sm);
+    cursor: pointer;
+  }
+
+  .editorActions button:last-child {
+    border-color: transparent;
+    background: var(--st-color-accent);
+    color: var(--st-color-accent-text);
+  }
+
+  .editorActions button:hover:not(:disabled) {
+    background: var(--st-color-surface-tertiary);
+  }
+
+  .editorActions button:last-child:hover:not(:disabled) {
+    background: var(--st-color-accent-hover);
+  }
+
+  .editorActions button:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  .srOnly {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+}

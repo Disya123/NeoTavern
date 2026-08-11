@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#eee9e2" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#151311" media="(prefers-color-scheme: dark)" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icons/pwa-192.png" />
+    <link rel="apple-touch-icon" href="/icons/pwa-192.png" />
+    <meta
+      name="description"
+      content="NeoTavern — local-first AI character chat. Runs entirely on your machine."
+    />
+    <title>NeoTavern</title>
+    <script>
+      // Pre-hydration theme bootstrap (anti-FOUC): apply the persisted color
+      // mode synchronously, then fetch the active theme's resolved tokens and
+      // stylesheets so the first paint already carries the installed theme.
+      // React's ThemeSync re-applies authoritatively after mount; this only
+      // closes the flash between reload and hydration.
+      (function () {
+        try {
+          var root = document.documentElement;
+          var stored = null;
+          try {
+            stored = localStorage.getItem('neotavern.themeMode');
+          } catch (error) {}
+          var mode = stored === 'light' || stored === 'dark' ? stored : 'system';
+          var dark =
+            mode === 'dark' ||
+            (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (mode === 'system') root.removeAttribute('data-theme-mode');
+          else root.setAttribute('data-theme-mode', mode);
+          if (new URLSearchParams(window.location.search).has('safe')) return;
+          fetch('/api/v2/themes/boot', { credentials: 'same-origin' })
+            .then(function (response) {
+              return response.ok ? response.json() : null;
+            })
+            .then(function (boot) {
+              if (!boot || !boot.themeId) return;
+              var vars = dark ? boot.dark : boot.light;
+              for (var name in vars) root.style.setProperty(name, vars[name]);
+              root.setAttribute('data-theme-id', boot.themeId);
+              (boot.cssUrls || []).forEach(function (href) {
+                var link = document.createElement('link');
+                link.rel = 'stylesheet';
+                link.href = href;
+                link.setAttribute('data-neotavern-theme-style', boot.themeId);
+                document.head.appendChild(link);
+              });
+            })
+            .catch(function () {});
+        } catch (error) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

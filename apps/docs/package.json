@@ -1,0 +1,43 @@
+{
+  "name": "@neotavern/docs",
+  "version": "0.1.0",
+  "private": true,
+  "description": "NeoTavern documentation site (Docusaurus)",
+  "engines": {
+    "node": ">=24",
+    "pnpm": ">=9 <10"
+  },
+  "scripts": {
+    "docusaurus": "docusaurus",
+    "start": "docusaurus start",
+    "build": "docusaurus build",
+    "swizzle": "docusaurus swizzle",
+    "deploy": "docusaurus deploy",
+    "clear": "docusaurus clear",
+    "serve": "docusaurus serve",
+    "write-translations": "docusaurus write-translations",
+    "write-heading-ids": "docusaurus write-heading-ids"
+  },
+  "dependencies": {
+    "@docusaurus/core": "^3.10.2",
+    "@docusaurus/preset-classic": "^3.10.2",
+    "@mdx-js/react": "^3.1.0",
+    "clsx": "^2.1.1",
+    "prism-react-renderer": "^2.4.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@docusaurus/module-type-aliases": "^3.10.2",
+    "@docusaurus/tsconfig": "^3.10.2",
+    "@docusaurus/types": "^3.10.2",
+    "@neotavern/contracts": "workspace:*",
+    "@neotavern/plugin-sdk": "workspace:*",
+    "@neotavern/provider-sdk": "workspace:*",
+    "@neotavern/theme-sdk": "workspace:*",
+    "docusaurus-plugin-typedoc": "^1.4.2",
+    "typedoc": "^0.28.0",
+    "typedoc-plugin-markdown": "^4.5.0",
+    "typescript": "catalog:"
+  }
+}

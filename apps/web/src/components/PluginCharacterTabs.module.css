@@ -1,0 +1,14 @@
+@layer components {
+  .tabs {
+    margin-bottom: var(--st-space-md);
+  }
+
+  .host {
+    min-height: calc(var(--st-control-hit-min) * 3);
+    padding-top: 0;
+  }
+
+  .host > [data-part='sandbox-host'] {
+    min-height: calc(var(--st-control-hit-min) * 3);
+  }
+}

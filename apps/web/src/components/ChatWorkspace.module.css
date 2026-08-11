@@ -1,0 +1,526 @@
+@layer components {
+  /*
+ * Shared chat shell — the single source of truth for the conversation
+ * workspace used by both the Home preview (`/home`) and the live chat
+ * (`/chats/:id`). Keeping the wallpaper, centred panel, header, scrollable
+ * viewport and composer in one module is what guarantees the two routes stay
+ * visually identical (AGENTS.md §14/§15: one shell contract, themed via slots).
+ * Page-specific states (onboarding, empty, loading skeletons) live in the page
+ * modules and are rendered *inside* the neutral flex viewport below.
+ */
+
+  .page {
+    position: relative;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    isolation: isolate;
+  }
+
+  .wallpaper {
+    position: fixed;
+    z-index: calc(var(--st-layer-base) - 1);
+    inset: calc(var(--st-space-md) * -1);
+    background-image:
+      linear-gradient(var(--st-chat-wallpaper-overlay), var(--st-chat-wallpaper-overlay)),
+      var(--st-chat-wallpaper-image);
+    background-position: center, var(--st-chat-wallpaper-position);
+    background-size: cover, var(--st-chat-wallpaper-size);
+    filter: blur(var(--st-chat-wallpaper-blur));
+    transform: scale(1.025);
+    pointer-events: none;
+  }
+
+  .workspace,
+  .chatPanel {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .workspace {
+    width: min(100%, var(--st-size-chat-column-max));
+    margin: 0 auto;
+  }
+
+  .chatPanel {
+    --chat-composer-edge-inset: var(--st-space-lg);
+    --chat-content-inline-inset: var(--st-space-lg);
+    --st-chat-markdown-column-width: 75ch;
+
+    display: grid;
+    position: relative;
+    min-width: 0;
+    padding-inline: var(--st-space-lg);
+    isolation: isolate;
+    grid-template-rows: auto minmax(0, 1fr);
+    background: color-mix(
+      in srgb,
+      var(--st-color-surface-secondary) var(--st-custom-ui-opacity, 70%),
+      transparent
+    );
+  }
+
+  .viewport {
+    grid-row: 2;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .viewport::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollBody {
+    display: flex;
+    box-sizing: border-box;
+    min-height: 100%;
+    flex-direction: column;
+    gap: var(--st-space-xl);
+    padding-block: var(--st-space-lg) var(--st-space-md);
+    padding-inline: var(--chat-content-inline-inset);
+  }
+
+  .composerWrapper {
+    position: sticky;
+    z-index: var(--st-layer-panel);
+    inset-block-end: 0;
+    box-sizing: border-box;
+    width: 100%;
+    padding-inline: var(--chat-content-inline-inset);
+    padding-block-end: var(--chat-composer-edge-inset);
+    margin-block-start: calc(-1 * var(--st-space-sm));
+    margin-inline: 0;
+    margin-block-end: 0;
+  }
+
+  .composerWrapper > :global([data-slot='chat.composer']) {
+    box-sizing: border-box;
+    width: 100%;
+  }
+
+  .chatPanel :global([data-component='chat-message'] .chat-message-markdown) {
+    box-sizing: border-box;
+    width: min(100%, var(--st-chat-markdown-column-width, 75ch));
+  }
+
+  /* Optional inline error beneath the composer (e.g. Home submit failure). */
+  .footer {
+    min-width: 0;
+  }
+
+  .footerError {
+    margin-top: var(--st-space-xs);
+    color: var(--st-color-danger);
+  }
+
+  .scrollBody > :global([data-component='chat-message']) {
+    margin: 0;
+  }
+
+  /* Let a lone empty/loading state fill the scroll surface and centre itself. */
+  .scrollBody > :global([data-component='chat-state']) {
+    flex: 1;
+  }
+
+  /* Shared empty/error panels for Home, live chat, and the chats library so the
+   three surfaces cannot drift on icon chrome or copy rhythm. */
+  .chatState {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+    padding: var(--st-space-xl);
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .chatStateIcon {
+    display: grid;
+    place-items: center;
+    width: 56px;
+    height: 56px;
+    border: 1px solid color-mix(in srgb, var(--st-color-border) 70%, transparent);
+    border-radius: var(--st-radius-overlay);
+    color: var(--st-color-accent-soft-text);
+    background: color-mix(in srgb, var(--st-color-surface-elevated) 70%, transparent);
+    backdrop-filter: blur(var(--st-effect-glass-blur));
+  }
+
+  .chatState h2,
+  .chatState h3 {
+    margin-top: var(--st-space-lg);
+    font-size: var(--st-font-size-lg);
+  }
+
+  .chatState p {
+    max-width: 54ch;
+    margin-top: var(--st-space-sm);
+    color: var(--st-color-text-secondary);
+  }
+
+  .chatState > :global([data-component='button']) {
+    margin-top: var(--st-space-xl);
+  }
+
+  /* --- header (identity + conversation search) ------------------------------ */
+
+  .chatHeader {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    min-height: var(--st-control-height-large);
+    gap: var(--st-space-sm);
+    padding-inline: var(--st-space-sm);
+    border-bottom: 1px solid color-mix(in srgb, var(--st-color-border) 48%, transparent);
+  }
+
+  .headerAvatar,
+  .headerAvatarFallback {
+    width: var(--st-control-height-2xs);
+    height: var(--st-control-height-2xs);
+    border-radius: var(--st-radius-round);
+  }
+
+  .headerAvatar {
+    object-fit: cover;
+  }
+
+  .headerAvatarFallback {
+    display: grid;
+    place-items: center;
+    color: var(--st-color-accent-soft-text);
+    background: var(--st-color-accent-soft);
+    font-size: var(--st-font-size-sm);
+    font-weight: var(--st-font-weight-bold);
+  }
+
+  .chatIdentity {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    gap: var(--st-space-sm);
+  }
+
+  .chatIdentity h1 {
+    overflow: hidden;
+    min-width: 0;
+    font-size: var(--st-font-size-sm);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .headerSearch {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--st-control-height-sm);
+    height: var(--st-control-height-sm);
+    border: 1px solid transparent;
+    border-radius: var(--st-radius-round);
+    color: var(--st-color-text-secondary);
+    background: transparent;
+    transition:
+      color var(--st-motion-duration-fast) var(--st-motion-easing-standard),
+      background var(--st-motion-duration-fast) var(--st-motion-easing-standard),
+      transform var(--st-motion-duration-fast) var(--st-motion-easing-standard);
+  }
+
+  .headerSearch:hover {
+    color: var(--st-color-text-primary);
+    background: color-mix(in srgb, var(--st-color-text-inverse) 7%, transparent);
+  }
+
+  .headerSearch:active {
+    transform: scale(0.96);
+  }
+
+  .chatSearch {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    align-items: center;
+    min-width: 0;
+    gap: var(--st-space-sm);
+    color: var(--st-color-text-muted);
+  }
+
+  .chatSearch input {
+    min-width: 0;
+    height: var(--st-control-height-xs);
+    border: 0;
+    color: var(--st-color-text-primary);
+    background: transparent;
+  }
+
+  .chatSearch input:focus {
+    outline: 0;
+  }
+
+  .searchMatchCount {
+    color: var(--st-color-text-muted);
+    font-size: var(--st-font-size-sm);
+    white-space: nowrap;
+  }
+
+  /* --- composer ------------------------------------------------------------- */
+
+  .composer {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--st-color-text-inverse) 10%, transparent);
+    border-radius: var(--st-radius-panel);
+    background: color-mix(
+      in srgb,
+      var(--st-color-surface-canvas) var(--st-custom-ui-opacity, 75%),
+      transparent
+    );
+    backdrop-filter: blur(calc(var(--st-effect-glass-blur) * 1.35));
+  }
+
+  .composerToolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-height: 42px;
+    padding: 0 var(--st-space-lg);
+    box-sizing: border-box;
+    border-bottom: 1px solid color-mix(in srgb, var(--st-color-text-inverse) 8%, transparent);
+    background: color-mix(
+      in srgb,
+      var(--st-color-surface-canvas) var(--st-custom-ui-opacity, 70%),
+      transparent
+    );
+  }
+
+  .contextPanelSlot {
+    overflow: hidden;
+    max-height: 0;
+    border-block-end: 1px solid color-mix(in srgb, var(--st-color-text-inverse) 8%, transparent);
+    transition: max-height var(--st-motion-duration-normal) var(--st-motion-easing-standard);
+  }
+
+  .contextPanelSlot[data-state='visible'] {
+    max-height: var(--context-panel-measured-height, 40rem);
+  }
+
+  .contextPanelSlot[data-state='leaving'] {
+    border-block-end-color: transparent;
+    pointer-events: none;
+  }
+
+  .contextPanelSlot[data-state='hidden'] {
+    pointer-events: none;
+  }
+
+  .toolbarActions,
+  .composerUtilities {
+    display: flex;
+    align-items: center;
+    gap: var(--st-space-xs);
+  }
+
+  .menuButton,
+  .contextTrigger,
+  .iconButton {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: var(--st-control-height-2xs);
+    height: var(--st-control-height-2xs);
+    gap: var(--st-space-xs);
+    padding: 0 var(--st-space-sm);
+    border: 1px solid color-mix(in srgb, var(--st-color-text-inverse) 10%, transparent);
+    border-radius: var(--st-radius-round);
+    color: var(--st-color-text-secondary);
+    background: color-mix(in srgb, var(--st-color-text-inverse) 5%, transparent);
+    transition:
+      color var(--st-motion-duration-fast) var(--st-motion-easing-standard),
+      background var(--st-motion-duration-fast) var(--st-motion-easing-standard),
+      transform var(--st-motion-duration-fast) var(--st-motion-easing-standard);
+  }
+
+  .iconButton {
+    width: var(--st-control-height-2xs);
+    padding: 0;
+    border-color: transparent;
+    background: transparent;
+  }
+
+  .iconButton:disabled {
+    opacity: 0.42;
+    cursor: not-allowed;
+  }
+
+  .menuButton:hover,
+  .contextTrigger:hover,
+  .iconButton:hover {
+    color: var(--st-color-text-primary);
+    background: color-mix(in srgb, var(--st-color-text-inverse) 10%, transparent);
+  }
+
+  .menuButton:active,
+  .contextTrigger:active,
+  .iconButton:active {
+    transform: scale(0.96);
+  }
+
+  .composerField {
+    display: flex;
+    min-width: 0;
+    min-height: 132px;
+    width: 100%;
+    flex-direction: column;
+    padding: var(--st-space-md) var(--st-space-lg) var(--st-space-sm);
+    box-sizing: border-box;
+    background: color-mix(
+      in srgb,
+      var(--st-color-surface-secondary) var(--st-custom-ui-opacity, 75%),
+      transparent
+    );
+  }
+
+  .composerField [data-component='textarea'] {
+    min-height: 58px;
+    max-height: 160px;
+    width: 100%;
+    border: 0;
+    background: transparent;
+    resize: none;
+  }
+
+  .composerField [data-component='textarea']:focus {
+    box-shadow: none;
+  }
+
+  .composerActions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--st-space-md);
+    padding-top: var(--st-space-sm);
+  }
+
+  .composerUtilities {
+    margin-inline-end: auto;
+    gap: var(--st-space-sm);
+  }
+
+  /* Wraps ChatComposer's owned Send/Stop control so the responsive rules below
+   apply regardless of the button's own class. */
+  .sendSlot {
+    display: flex;
+    flex: none;
+  }
+
+  /* Composer-owned utilities and page-supplied extra toolbar actions share the
+   transparent icon-button skin so Home / live chat cannot drift. */
+  .composerUtilities :global(button),
+  .extraActions :global(button) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: var(--st-control-height-2xs);
+    height: var(--st-control-height-2xs);
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: var(--st-radius-round);
+    color: var(--st-color-text-secondary);
+    background: transparent;
+    transition:
+      color var(--st-motion-duration-fast) var(--st-motion-easing-standard),
+      background var(--st-motion-duration-fast) var(--st-motion-easing-standard),
+      transform var(--st-motion-duration-fast) var(--st-motion-easing-standard);
+  }
+
+  .composerUtilities :global(button):hover,
+  .extraActions :global(button):hover {
+    color: var(--st-color-text-primary);
+    background: color-mix(in srgb, var(--st-color-text-inverse) 10%, transparent);
+  }
+
+  .composerUtilities :global(button):active,
+  .extraActions :global(button):active {
+    transform: scale(0.96);
+  }
+
+  .composerUtilities :global(button):disabled,
+  .extraActions :global(button):disabled {
+    opacity: 0.42;
+    cursor: not-allowed;
+  }
+
+  .srOnly {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
+  @media (max-width: 600px) {
+    .chatHeader {
+      position: relative;
+      border-block-end: 0;
+    }
+
+    .chatHeader::after {
+      position: absolute;
+      inset-block-end: 0;
+      inset-inline: var(--st-space-xs);
+      border-block-end: 1px solid color-mix(in srgb, var(--st-color-border) 48%, transparent);
+      content: '';
+      pointer-events: none;
+    }
+
+    :global(:root[data-navigation-rail-state='collapsed']) .chatHeader {
+      padding-inline-start: calc(var(--st-shell-rail-width) - var(--st-space-sm));
+    }
+
+    .chatPanel {
+      padding-inline: var(--st-space-sm);
+      --chat-composer-edge-inset: max(var(--st-space-sm), env(safe-area-inset-bottom));
+      --chat-content-inline-inset: var(--st-space-md);
+    }
+
+    .scrollBody {
+      padding-block: var(--st-space-sm) var(--st-space-md);
+      padding-inline: var(--chat-content-inline-inset);
+    }
+
+    .composerWrapper {
+      padding-inline: var(--chat-content-inline-inset);
+    }
+
+    .menuButton span,
+    .sendSlot :global([data-component='button']) span {
+      display: none;
+    }
+
+    .composerField {
+      min-height: 104px;
+    }
+
+    .sendSlot :global([data-component='button']) {
+      width: var(--st-control-height-large);
+      min-width: var(--st-control-height-large);
+      padding: 0;
+      font-size: 0;
+    }
+
+    .sendSlot :global([data-component='button']) svg {
+      width: 20px;
+      height: 20px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .viewport {
+      scroll-behavior: auto;
+    }
+  }
+}

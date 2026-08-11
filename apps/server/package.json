@@ -1,0 +1,70 @@
+{
+  "name": "@neotavern/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "NeoTavern backend: Fastify 5, SQLite, providers, prompt pipeline, plugin host",
+  "bin": "./dist/main.js",
+  "main": "./dist/main.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "postbuild": "pnpm assets",
+    "assets": "node -e \"require('node:fs').cpSync('assets/starter','dist/assets/starter',{recursive:true});require('node:fs').cpSync('assets/themes','dist/assets/themes',{recursive:true})\"",
+    "typecheck": "tsc -b",
+    "clean": "tsc -b --clean",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.3.0",
+    "@fastify/express": "^4.0.7",
+    "@fastify/multipart": "^9.2.1",
+    "@fastify/static": "^10.1.0",
+    "@fastify/type-provider-typebox": "^5.1.0",
+    "@sinclair/typebox": "^0.34.52",
+    "@neotavern/contracts": "workspace:*",
+    "@neotavern/db": "workspace:*",
+    "@neotavern/plugin-runtime": "workspace:*",
+    "@neotavern/plugin-sdk": "workspace:*",
+    "@neotavern/provider-sdk": "workspace:*",
+    "@neotavern/shared": "workspace:*",
+    "@neotavern/theme-sdk": "workspace:*",
+    "express": "^5.2.1",
+    "fastify": "^5.10.0",
+    "handlebars": "^4.7.8",
+    "sharp": "^0.34.5",
+    "tar": "^7.5.0",
+    "yaml": "^2.9.0",
+    "yauzl": "^3.4.0",
+    "yazl": "^3.3.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/express": "^5.0.6",
+    "@types/node": "catalog:",
+    "@types/yauzl": "^3.4.0",
+    "@types/yazl": "^3.3.1",
+    "tsx": "^4.23.1",
+    "typescript": "catalog:"
+  },
+  "pkg": {
+    "scripts": [
+      "dist/**/*.js",
+      "!dist/**/*.test.js",
+      "../../packages/*/dist/**/*.js",
+      "!../../packages/*/dist/**/*.test.js",
+      "../../packages/db/node_modules/drizzle-orm/better-sqlite3/index.cjs"
+    ],
+    "assets": [
+      "../../packages/db/node_modules/drizzle-orm/package.json",
+      "assets/starter/**/*",
+      "assets/themes/**/*"
+    ]
+  }
+}

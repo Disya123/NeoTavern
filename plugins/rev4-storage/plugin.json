@@ -1,0 +1,13 @@
+{
+  "id": "neotavern.rev4-storage",
+  "name": "Rev4 Storage Example",
+  "version": "1.0.0",
+  "apiVersion": 2,
+  "engines": {
+    "neotavern": ">=0.1.0"
+  },
+  "frontend": "frontend.js",
+  "permissions": [],
+  "requiredCapabilities": ["storage.user", "storage.blobs"],
+  "optionalCapabilities": ["ui.commands"]
+}

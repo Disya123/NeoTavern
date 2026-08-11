@@ -1,0 +1,65 @@
+{
+  "id": "neotavern.matrix",
+  "name": "Matrix",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "modes": ["dark"],
+  "tokens": {
+    "dark": {
+      "color-text-primary": "#00ff41",
+      "color-text-secondary": "#7fff8f",
+      "color-text-muted": "#4a9d52",
+      "color-text-inverse": "#000000",
+      "color-text-link": "#39ff14",
+      "color-surface-primary": "#000000",
+      "color-surface-secondary": "#040a05",
+      "color-surface-tertiary": "#08130a",
+      "color-surface-overlay": "#040a05",
+      "color-surface-canvas": "#000000",
+      "color-surface-elevated": "#08130a",
+      "color-accent": "#00ff41",
+      "color-accent-hover": "#39ff14",
+      "color-accent-text": "#000000",
+      "color-accent-soft": "#0a2a12",
+      "color-accent-soft-text": "#7fff8f",
+      "color-border": "#0e2a14",
+      "color-border-strong": "#1f6b35",
+      "color-success": "#00ff41",
+      "color-warning": "#e6ff00",
+      "color-danger": "#ff4d4d",
+      "color-info": "#41d6ff",
+      "color-message-quote": "#e6ff00",
+      "color-message-emphasis": "#7fff8f",
+      "color-message-code": "#00ff41",
+      "color-message-code-bg": "#08130a",
+      "font-ui": "'JetBrains Mono Variable', 'Cascadia Code', monospace",
+      "shadow-card": "0 1px 2px rgba(0, 255, 65, 0.08)",
+      "shadow-soft": "0 10px 28px rgba(0, 0, 0, 0.6)",
+      "shadow-focus": "0 0 0 3px rgba(0, 255, 65, 0.35)",
+      "shadow-overlay": "0 24px 64px rgba(0, 0, 0, 0.8)",
+      "chat-wallpaper-overlay": "rgba(0, 0, 0, 0.45)"
+    }
+  },
+  "componentsCss": "components.css",
+  "shell": "shell.css",
+  "preview": "preview.png",
+  "shellLayout": {
+    "managementTabs": {
+      "pinned": false
+    },
+    "navigationRail": {
+      "main": [
+        "menu-toggle",
+        "chats",
+        "characters",
+        "personas",
+        "lorebooks",
+        "ai-settings",
+        "plugins",
+        "settings"
+      ],
+      "bottom": []
+    }
+  },
+  "settings": {}
+}

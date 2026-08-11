@@ -1,0 +1,14 @@
+@layer theme {
+  [data-slot='app.shell'] {
+    background: var(--st-color-surface-canvas);
+  }
+
+  [data-component='chat-message'][data-role='assistant'] {
+    border-color: var(--st-color-border-strong);
+  }
+
+  [data-component='card'],
+  [data-component='theme-card'] {
+    border-color: var(--st-color-border);
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "id": "neotavern.amoled",
+  "name": "AMOLED",
+  "version": "1.1.8",
+  "apiVersion": 1,
+  "modes": ["dark"],
+  "tokens": {
+    "dark": {
+      "color-text-primary": "#ffffff",
+      "color-text-secondary": "#b8b8b8",
+      "color-text-muted": "#8a8a8a",
+      "color-text-inverse": "#000000",
+      "color-text-link": "#ffffff",
+      "color-surface-primary": "#000000",
+      "color-surface-secondary": "#000000",
+      "color-surface-tertiary": "#0a0a0a",
+      "color-surface-overlay": "#0a0a0a",
+      "color-surface-canvas": "#000000",
+      "color-surface-elevated": "#0a0a0a",
+      "color-accent": "#ffffff",
+      "color-accent-hover": "#ffffff",
+      "color-accent-text": "#000000",
+      "color-accent-soft": "#1a1a1a",
+      "color-accent-soft-text": "#ffffff",
+      "color-border": "#1f1f1f",
+      "color-border-strong": "#3a3a3a",
+      "color-success": "#4ade80",
+      "color-warning": "#fbbf24",
+      "color-danger": "#f87171",
+      "color-info": "#ffffff",
+      "color-message-quote": "#fbbf24",
+      "color-message-emphasis": "#9a9a9a",
+      "color-message-code": "#d4d4d4",
+      "color-message-code-bg": "#111111",
+      "shadow-card": "0 1px 2px rgba(0, 0, 0, 0.6)",
+      "shadow-soft": "0 10px 28px rgba(0, 0, 0, 0.7)",
+      "shadow-focus": "0 0 0 3px rgba(255, 255, 255, 0.28)",
+      "shadow-overlay": "0 24px 64px rgba(0, 0, 0, 0.85)",
+      "chat-wallpaper-overlay": "rgba(0, 0, 0, 0.5)"
+    }
+  },
+  "componentsCss": "components.css",
+  "shell": "shell.css",
+  "preview": "preview.png",
+  "shellLayout": {
+    "managementTabs": {
+      "pinned": false
+    },
+    "navigationRail": {
+      "main": [
+        "menu-toggle",
+        "chats",
+        "characters",
+        "personas",
+        "lorebooks",
+        "ai-settings",
+        "plugins",
+        "settings"
+      ],
+      "bottom": []
+    }
+  },
+  "settings": {}
+}

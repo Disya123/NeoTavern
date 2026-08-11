@@ -1,0 +1,42 @@
+{
+  "version.label": {
+    "message": "最新",
+    "description": "The label for version current"
+  },
+  "sidebar.docsSidebar.category.Architecture": {
+    "message": "アーキテクチャ",
+    "description": "The label for category 'Architecture' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Prompt Pipeline": {
+    "message": "プロンプトパイプライン",
+    "description": "The label for category 'Prompt Pipeline' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Data & Storage": {
+    "message": "データとストレージ",
+    "description": "The label for category 'Data & Storage' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Plugin SDK": {
+    "message": "プラグインSDK",
+    "description": "The label for category 'Plugin SDK' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Theme SDK": {
+    "message": "テーマSDK",
+    "description": "The label for category 'Theme SDK' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Providers": {
+    "message": "プロバイダー",
+    "description": "The label for category 'Providers' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Desktop": {
+    "message": "デスクトップ",
+    "description": "The label for category 'Desktop' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.SDK Reference": {
+    "message": "SDKリファレンス",
+    "description": "The label for category 'SDK Reference' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.doc.Overview": {
+    "message": "概要",
+    "description": "The label for the doc item 'Overview' in sidebar 'docsSidebar', linking to the doc api/index"
+  }
+}

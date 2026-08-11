@@ -1,0 +1,31 @@
+{
+  "name": "@neotavern/plugin-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Versioned Plugin SDK v2: manifest, permissions, frontend/backend API contracts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    },
+    "./gestures": {
+      "types": "./dist/gestures.d.ts",
+      "import": "./dist/gestures.js",
+      "require": "./dist/gestures.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "clean": "tsc -b --clean"
+  },
+  "dependencies": {
+    "@neotavern/contracts": "workspace:*",
+    "@neotavern/gestures": "workspace:*",
+    "@neotavern/shared": "workspace:*"
+  }
+}

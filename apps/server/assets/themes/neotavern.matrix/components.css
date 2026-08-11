@@ -1,0 +1,14 @@
+@layer theme {
+  [data-component='button'][data-variant='primary'] > [data-part='icon'] {
+    color: var(--st-color-accent-text);
+  }
+
+  [data-component='button'][data-variant='primary'] {
+    text-shadow: 0 0 8px color-mix(in srgb, var(--st-color-accent) 45%, transparent);
+  }
+
+  [data-component='tabs-list'][data-variant='segment'] {
+    background: var(--st-color-surface-tertiary);
+    border-color: var(--st-color-border-strong);
+  }
+}

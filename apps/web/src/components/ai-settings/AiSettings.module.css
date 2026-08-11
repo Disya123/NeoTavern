@@ -1,0 +1,849 @@
+@layer components {
+  .headerAvatar {
+    display: grid;
+    width: var(--st-control-height);
+    height: var(--st-control-height);
+    flex: none;
+    place-items: center;
+    border: 1px solid var(--st-color-border-strong);
+    border-radius: var(--st-radius-control);
+    color: var(--st-color-text-primary);
+    background: var(--st-color-surface-tertiary);
+  }
+
+  .tabs {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+  }
+
+  .tabPanel {
+    min-height: 0;
+    flex: 1;
+    overflow: hidden;
+    padding-top: 0;
+  }
+
+  .tabBody,
+  .providerEditor,
+  .generationEditor,
+  .templateEditor {
+    container-type: inline-size;
+    display: grid;
+    gap: var(--st-space-md);
+    color: var(--st-color-text-primary);
+  }
+
+  .providerEditor {
+    container-name: provider-settings;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .providerFormGrid {
+    align-items: start;
+  }
+
+  .tabBody {
+    padding: var(--st-space-sm) var(--st-space-lg) var(--st-space-lg);
+  }
+
+  /* Tabs use the shared segmented Tabs primitive (@neotavern/ui, DUP-23); only the
+     generic button treatment for other inline icon actions stays local. */
+  .iconActions button,
+  .keyStatus button,
+  .textAction {
+    min-height: var(--st-control-height);
+    border: 1px solid transparent;
+    border-radius: var(--st-radius-control);
+    color: var(--st-color-text-secondary);
+    background: transparent;
+    font: inherit;
+    cursor: pointer;
+    transition:
+      color var(--st-motion-duration-fast) var(--st-motion-easing-standard),
+      background var(--st-motion-duration-fast) var(--st-motion-easing-standard);
+  }
+
+  .iconActions button:hover,
+  .keyStatus button:hover,
+  .textAction:hover {
+    color: var(--st-color-text-primary);
+    background: var(--st-color-surface-tertiary);
+  }
+
+  .editorToolbar,
+  .actionRow,
+  .keyStatus,
+  .privacyHint,
+  .connectionStatus,
+  .presetToolbar,
+  .nameEditor,
+  .checkboxField {
+    display: flex;
+    align-items: center;
+    gap: var(--st-space-sm);
+  }
+
+  /* Selector toolbars (generation preset, provider profile, prompt/chat
+     templates): a stacked layout at every width — label above the select,
+     the select spanning the full row, and the icon group on its own line
+     below, compact and pinned left. One shared rule keeps every toolbar
+     identical and stops the select from sitting left of the icons. */
+  .editorToolbar,
+  .presetToolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .editorToolbar > .field > span,
+  .presetToolbar > .field > span {
+    white-space: nowrap;
+  }
+
+  .editorToolbar > .iconActions,
+  .presetToolbar > .iconActions {
+    align-self: flex-start;
+  }
+
+  .iconActions {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--st-space-xs);
+  }
+
+  .iconActions button {
+    display: grid;
+    flex: 0 0 auto;
+    min-width: var(--st-control-height);
+    padding: 0;
+    place-items: center;
+  }
+
+  .iconActions button:disabled,
+  .tabs button:disabled,
+  .textAction:disabled {
+    color: var(--st-color-text-muted);
+    cursor: not-allowed;
+  }
+
+  .formGrid,
+  .controlGrid,
+  .testArea,
+  .pluginSummary {
+    display: grid;
+    gap: var(--st-space-sm);
+  }
+
+  .field {
+    display: grid;
+    min-width: 0;
+    gap: var(--st-space-xs);
+    color: var(--st-color-text-secondary);
+    font-size: var(--st-font-size-sm);
+  }
+
+  .field > span,
+  .field > strong {
+    color: var(--st-color-text-primary);
+    font-weight: var(--st-font-weight-semibold);
+  }
+
+  .field input,
+  .field select,
+  .field textarea,
+  .nameEditor input {
+    width: 100%;
+    min-height: var(--st-control-height);
+    padding-inline: var(--st-space-sm);
+    border: 1px solid var(--st-color-border-strong);
+    border-radius: var(--st-radius-control);
+    color: var(--st-color-text-primary);
+    background: var(--st-color-surface-tertiary);
+    font: inherit;
+  }
+
+  .field textarea {
+    min-height: calc(var(--st-control-height) * 2);
+    padding-block: var(--st-space-sm);
+    resize: vertical;
+  }
+
+  .field small,
+  .fieldHint,
+  .privacyHint,
+  .unsupportedHint,
+  .unlockHint {
+    color: var(--st-color-text-muted);
+    font-size: var(--st-font-size-xs);
+    line-height: var(--st-line-height-body);
+  }
+
+  .fieldGroup {
+    display: grid;
+    min-width: 0;
+    gap: var(--st-space-xs);
+  }
+
+  .modelRow,
+  .apiKeyRow,
+  .toolbarControlRow {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--st-space-xs);
+  }
+
+  .modelRow > input,
+  .apiKeyRow > select,
+  .toolbarControlRow > input,
+  .toolbarControlRow > select {
+    min-width: 0;
+    flex: 1 1 auto;
+    width: auto;
+  }
+
+  .toolbarControlRow > .iconActions,
+  .toolbarControlRow > :not(input):not(select):not(.iconActions):not(.manageKeyButton) {
+    flex: 0 0 auto;
+  }
+
+  .toolbarControlRow > .manageKeyButton {
+    flex: none;
+    width: var(--st-control-height);
+    min-width: var(--st-control-height);
+    max-width: var(--st-control-height);
+    height: var(--st-control-height);
+  }
+
+  /* Default shell panel (~380px) stays single-column. Two columns only after the
+     user widens the panel past the documented shell max comfortable pair width. */
+  @container provider-settings (min-width: 28rem) {
+    .providerFormGrid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .providerFormGrid > .formFieldFull {
+      grid-column: 1 / -1;
+    }
+  }
+
+  .manageKeyButton {
+    display: grid;
+    flex: none;
+    box-sizing: border-box;
+    padding: 0;
+    border: 1px solid var(--st-color-border-strong);
+    border-radius: var(--st-radius-control);
+    color: var(--st-color-text-secondary);
+    background: var(--st-color-surface-tertiary);
+    place-items: center;
+    cursor: pointer;
+  }
+
+  .manageKeyButton:hover:not(:disabled) {
+    color: var(--st-color-text-primary);
+    background: var(--st-color-surface-secondary);
+  }
+
+  .manageKeyButton:disabled {
+    color: var(--st-color-text-muted);
+    cursor: not-allowed;
+  }
+
+  .field input:disabled,
+  .field select:disabled,
+  .field textarea:disabled {
+    color: var(--st-color-text-muted);
+    cursor: not-allowed;
+  }
+
+  .checkboxField {
+    min-height: var(--st-control-height);
+    color: var(--st-color-text-secondary);
+    font-size: var(--st-font-size-sm);
+  }
+
+  .unlockRow {
+    display: grid;
+    gap: var(--st-space-xs);
+  }
+
+  .keyStatus {
+    justify-content: space-between;
+    color: var(--st-color-text-muted);
+    font-size: var(--st-font-size-xs);
+  }
+
+  .keyStatus span[data-state='stored'] {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--st-space-xs);
+    color: var(--st-color-success);
+  }
+
+  .keyStatusActions {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--st-space-sm);
+  }
+
+  .keyStatus button,
+  .textAction {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--st-space-xs);
+    min-height: auto;
+    padding: var(--st-space-xs);
+    color: var(--st-color-text-link);
+    font-size: var(--st-font-size-xs);
+  }
+
+  .pluginSummary,
+  .testResult {
+    padding: var(--st-space-sm);
+    border: 1px solid var(--st-color-border);
+    border-radius: var(--st-radius-card);
+    background: var(--st-color-surface-secondary);
+  }
+
+  .pluginSummary pre,
+  .testResult {
+    margin: 0;
+    color: var(--st-color-text-secondary);
+    font-family: var(--st-font-mono);
+    font-size: var(--st-font-size-xs);
+    line-height: var(--st-line-height-body);
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
+
+  .testResult {
+    display: block;
+  }
+
+  .actionRow {
+    flex-wrap: wrap;
+  }
+
+  .connectionStatus {
+    margin-inline-start: auto;
+    color: var(--st-color-text-muted);
+    font-size: var(--st-font-size-xs);
+  }
+
+  .connectionStatus[data-state='ready'] {
+    color: var(--st-color-success);
+  }
+
+  .connectionStatus[data-state='error'] {
+    color: var(--st-color-danger);
+  }
+
+  .inlineError {
+    margin: 0;
+    padding: var(--st-space-sm);
+    border: 1px solid var(--st-color-danger);
+    color: var(--st-color-danger);
+    background: color-mix(in srgb, var(--st-color-danger) 8%, transparent);
+    font-size: var(--st-font-size-sm);
+  }
+
+  .privacyHint {
+    margin: 0;
+  }
+
+  .sectionHeading {
+    display: grid;
+    gap: var(--st-space-xs);
+  }
+
+  .sectionHeading h2,
+  .sectionHeading strong,
+  .sectionHeading p {
+    margin: 0;
+  }
+
+  .sectionHeading p,
+  .sectionHeading span {
+    color: var(--st-color-text-muted);
+    font-size: var(--st-font-size-sm);
+  }
+
+  .rangeField {
+    display: grid;
+    gap: var(--st-space-xs);
+    padding-block: var(--st-space-xs);
+  }
+
+  .rangeHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--st-space-sm);
+  }
+
+  .rangeHeader > span:first-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  /* Editable value box (replaces the read-only output): type a number
+     directly, the slider follows; blur/Enter clamps to min/max/step. */
+  .rangeValue {
+    flex: 0 0 auto;
+    width: 6.5rem;
+    min-height: var(--st-control-height);
+    padding-inline: var(--st-space-sm);
+    border: 1px solid var(--st-color-border-strong);
+    border-radius: var(--st-radius-control);
+    color: var(--st-color-text-primary);
+    background: var(--st-color-surface-tertiary);
+    font-family: var(--st-font-mono);
+    font-size: var(--st-font-size-sm);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  .rangeValue:disabled {
+    color: var(--st-color-text-muted);
+    cursor: not-allowed;
+  }
+
+  .rangeField input[type='range'] {
+    width: 100%;
+    accent-color: var(--st-color-accent);
+  }
+
+  .rangeField[data-state='unsupported'] {
+    color: var(--st-color-text-muted);
+    filter: grayscale(1);
+  }
+
+  .nameEditor {
+    align-items: end;
+    padding: var(--st-space-sm);
+    border: 1px solid var(--st-color-border);
+    border-radius: var(--st-radius-card);
+    background: var(--st-color-surface-secondary);
+  }
+
+  .nameEditor .field {
+    flex: 1;
+  }
+
+  .templateFields {
+    display: grid;
+    gap: var(--st-space-sm);
+  }
+
+  .modeSwitch {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+    gap: var(--st-space-xs);
+    margin: 0;
+    padding: var(--st-space-sm);
+    border: 1px solid var(--st-color-border);
+    border-radius: var(--st-radius-control);
+    background: var(--st-color-surface-secondary);
+  }
+
+  .modeSwitchLabel {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-start: var(--st-space-sm);
+    padding-inline: var(--st-space-xs);
+    color: var(--st-color-text-muted);
+    font-size: var(--st-font-size-xs);
+    line-height: 1;
+    background: var(--st-color-surface-secondary);
+    translate: 0 -50%;
+  }
+
+  .modeSwitch label {
+    display: flex;
+    flex-wrap: nowrap;
+    box-sizing: border-box;
+    min-inline-size: 0;
+    inline-size: 100%;
+    min-block-size: var(--st-control-height);
+    align-items: center;
+    justify-content: center;
+    gap: var(--st-space-xs);
+    padding-block: var(--st-space-xs);
+    padding-inline: var(--st-space-sm);
+    border: 1px solid transparent;
+    border-radius: var(--st-radius-control);
+    color: var(--st-color-text-secondary);
+    background: transparent;
+    cursor: pointer;
+    transition:
+      color var(--st-motion-duration-fast) var(--st-motion-easing-standard),
+      background var(--st-motion-duration-fast) var(--st-motion-easing-standard);
+  }
+
+  .modeSwitch label:hover {
+    color: var(--st-color-text-primary);
+    background: var(--st-color-surface-tertiary);
+  }
+
+  .modeSwitch label span {
+    flex: 0 1 auto;
+    min-inline-size: 0;
+    max-inline-size: calc(100% - 1em - var(--st-space-xs));
+    line-height: var(--st-line-height-body);
+    text-align: center;
+    overflow-wrap: anywhere;
+  }
+
+  .modeSwitch label[data-state='active'] {
+    color: var(--st-color-accent-soft-text);
+    background: var(--st-color-accent-soft);
+    font-weight: var(--st-font-weight-semibold);
+  }
+
+  .modeSwitch label[data-state='active']:hover {
+    color: var(--st-color-accent-soft-text);
+    background: var(--st-color-accent-soft);
+  }
+
+  .modeSwitch input {
+    flex-shrink: 0;
+    accent-color: var(--st-color-accent);
+  }
+
+  .promptManagerHeader,
+  .promptManagerFooter {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--st-space-sm);
+  }
+
+  .promptManagerHeader {
+    min-width: 0;
+    flex-wrap: wrap;
+    padding-inline: var(--st-space-xs);
+    color: var(--st-color-text-secondary);
+    font-size: var(--st-font-size-sm);
+  }
+
+  .promptManagerHeader strong {
+    color: var(--st-color-text-primary);
+  }
+
+  .promptManagerHeader output,
+  .promptTokens {
+    font-family: var(--st-font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .promptManagerHeader output {
+    flex: 0 0 auto;
+    color: var(--st-color-text-primary);
+    font-size: var(--st-font-size-xs);
+    font-weight: var(--st-font-weight-semibold);
+    white-space: nowrap;
+  }
+
+  .promptTable {
+    min-width: 0;
+    padding: var(--st-space-xs);
+    border: 1px solid var(--st-color-border);
+    border-radius: var(--st-radius-control);
+    background: var(--st-color-surface-primary);
+  }
+
+  .promptTableHead {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--st-control-height-large);
+    gap: var(--st-space-sm);
+    padding: var(--st-space-xs) var(--st-space-sm) var(--st-space-sm);
+    border-bottom: 1px solid var(--st-color-border);
+    color: var(--st-color-text-secondary);
+    font-size: var(--st-font-size-sm);
+  }
+
+  .promptTableHead span:last-child {
+    text-align: end;
+  }
+
+  .promptTableHead span:nth-child(2) {
+    display: none;
+  }
+
+  .promptBlockList {
+    display: grid;
+    gap: var(--st-space-xs);
+    margin: var(--st-space-xs) 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .promptBlock {
+    position: relative;
+    display: grid;
+    grid-template-columns:
+      auto auto minmax(0, 1fr) auto
+      var(--st-control-height-large);
+    min-height: var(--st-control-height);
+    align-items: center;
+    gap: calc(var(--st-space-xs) / 2);
+    padding: calc(var(--st-space-xs) / 2) var(--st-space-xs);
+    border: 1px solid var(--st-color-border);
+    border-radius: calc(var(--st-radius-control) / 2);
+    background: var(--st-color-surface-secondary);
+    transition:
+      border-color var(--st-motion-duration-fast) var(--st-motion-easing-standard),
+      background var(--st-motion-duration-fast) var(--st-motion-easing-standard),
+      transform var(--st-motion-duration-fast) var(--st-motion-easing-standard);
+  }
+
+  .promptBlock:hover,
+  .promptBlock:focus-within {
+    border-color: var(--st-color-border-strong);
+    background: var(--st-color-surface-tertiary);
+  }
+
+  .promptBlock:active {
+    transform: translateY(1px);
+  }
+
+  .promptBlock[data-dragging='true'] {
+    border-color: var(--st-color-accent);
+    background: var(--st-color-accent-soft);
+    opacity: 0.78;
+    transform: scale(0.99);
+  }
+
+  .promptBlock[data-state='disabled'] {
+    color: var(--st-color-text-muted);
+    background: var(--st-color-surface-primary);
+  }
+
+  .promptBlock[data-state='disabled'] .promptName,
+  .promptBlock[data-state='disabled'] .promptKindIcon {
+    color: var(--st-color-text-muted);
+  }
+
+  .dragHandle {
+    display: grid;
+    inline-size: calc(var(--st-control-height) * 0.42);
+    block-size: calc(var(--st-control-height) * 0.68);
+    padding: 0;
+    border: 0;
+    border-radius: calc(var(--st-radius-control) / 2);
+    color: var(--st-color-text-muted);
+    background: transparent;
+    cursor: grab;
+    place-items: center;
+    touch-action: none;
+  }
+
+  .dragHandle:active {
+    cursor: grabbing;
+  }
+
+  .dragHandle:disabled {
+    color: var(--st-color-text-secondary);
+    cursor: default;
+    opacity: 0.75;
+    touch-action: auto;
+  }
+
+  .promptName {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--st-space-xs);
+    color: var(--st-color-text-primary);
+    font-size: var(--st-font-size-sm);
+  }
+
+  .promptName > button {
+    min-width: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    color: inherit;
+    background: transparent;
+    font: inherit;
+    text-align: start;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .promptName > button:hover {
+    text-decoration: underline;
+  }
+
+  .promptName small {
+    flex: 0 0 auto;
+    color: var(--st-color-text-muted);
+    font-family: var(--st-font-mono);
+    font-size: var(--st-font-size-xs);
+  }
+
+  .promptKindIcon {
+    flex: 0 0 auto;
+    color: var(--st-color-text-secondary);
+  }
+
+  .promptBlock[data-kind='custom'] .promptKindIcon {
+    color: var(--st-color-accent);
+  }
+
+  .promptRowControls,
+  .keyboardMoveActions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: calc(var(--st-space-xs) / 2);
+  }
+
+  .promptToggle,
+  .promptRowControls button,
+  .keyboardMoveActions button {
+    display: grid;
+    inline-size: calc(var(--st-control-height) * 0.64);
+    block-size: calc(var(--st-control-height) * 0.64);
+    padding: 0;
+    border: 0;
+    border-radius: calc(var(--st-radius-control) / 2);
+    color: var(--st-color-text-muted);
+    background: transparent;
+    place-items: center;
+    cursor: pointer;
+    transition:
+      color var(--st-motion-duration-fast) var(--st-motion-easing-standard),
+      background var(--st-motion-duration-fast) var(--st-motion-easing-standard),
+      transform var(--st-motion-duration-fast) var(--st-motion-easing-standard);
+  }
+
+  .promptToggle:hover,
+  .promptRowControls button:hover,
+  .keyboardMoveActions button:hover {
+    color: var(--st-color-text-primary);
+    background: color-mix(in srgb, var(--st-color-surface-primary) 72%, transparent);
+  }
+
+  .promptToggle:active,
+  .promptRowControls button:active,
+  .keyboardMoveActions button:active {
+    transform: scale(0.96);
+  }
+
+  .promptToggle[aria-pressed='true'] {
+    color: var(--st-color-accent);
+  }
+
+  .promptToggle:disabled,
+  .promptRowControls button:disabled,
+  .keyboardMoveActions button:disabled {
+    color: var(--st-color-text-muted);
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  .promptTokens {
+    color: var(--st-color-text-primary);
+    font-size: var(--st-font-size-sm);
+    font-weight: var(--st-font-weight-semibold);
+    text-align: end;
+  }
+
+  .promptTokens[data-state='dynamic'] {
+    color: var(--st-color-text-secondary);
+    font-weight: var(--st-font-weight-medium);
+  }
+
+  .keyboardMoveActions {
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-end: calc(var(--st-control-height-large) + var(--st-space-sm));
+    padding-inline: var(--st-space-xs);
+    background: var(--st-color-surface-tertiary);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-50%);
+    transition: opacity var(--st-motion-duration-fast) var(--st-motion-easing-standard);
+  }
+
+  .keyboardMoveActions:focus-within {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .promptManagerFooter {
+    justify-content: flex-end;
+  }
+
+  .visuallyHidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    border: 0;
+    white-space: nowrap;
+  }
+
+  @container (min-width: 36rem) {
+    .formGrid:not(.providerFormGrid),
+    .controlGrid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .pluginSummary,
+    .testArea,
+    .actionRow,
+    .inlineError,
+    .privacyHint {
+      grid-column: 1 / -1;
+    }
+  }
+
+  @container (max-width: 28rem) {
+    .keyboardMoveActions {
+      inset-inline-end: var(--st-control-height-large);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tabs button,
+    .modeSwitch label,
+    .iconActions button,
+    .keyStatus button,
+    .textAction,
+    .promptBlock,
+    .promptToggle,
+    .promptRowControls button,
+    .keyboardMoveActions,
+    .keyboardMoveActions button {
+      transition: none;
+    }
+  }
+
+  @media (pointer: coarse) {
+    .dragHandle,
+    .promptToggle,
+    .promptRowControls button,
+    .keyboardMoveActions button {
+      inline-size: var(--st-control-hit-min);
+      block-size: var(--st-control-hit-min);
+    }
+
+    .keyboardMoveActions:not(:focus-within) {
+      opacity: 0;
+      pointer-events: none;
+    }
+  }
+}

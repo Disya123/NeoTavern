@@ -1,0 +1,12 @@
+{
+  "id": "neotavern.example-hello",
+  "name": "Hello Example",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "engines": {
+    "neotavern": ">=0.1.0"
+  },
+  "frontend": "frontend.js",
+  "backend": "backend.js",
+  "permissions": ["ui.toolbar", "notifications", "server.routes"]
+}

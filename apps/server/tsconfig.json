@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.package.json",
+  "include": ["src/**/*.ts"],
+  "references": [
+    { "path": "../../packages/shared" },
+    { "path": "../../packages/contracts" },
+    { "path": "../../packages/db" },
+    { "path": "../../packages/provider-sdk" },
+    { "path": "../../packages/plugin-sdk" },
+    { "path": "../../packages/theme-sdk" }
+  ]
+}

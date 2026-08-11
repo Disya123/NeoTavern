@@ -1,0 +1,7 @@
+/* Aggregated base styles. Order matters: layers declaration first, then
+   reset, tokens, base, and component styles. */
+@import './styles/layers.css';
+@import './styles/reset.css';
+@import './styles/tokens.css';
+@import './styles/base.css';
+@import './styles/components.css';

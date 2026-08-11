@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "./tsconfig.frontend.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "types": ["node", "react", "react-dom"],
+    // DOCUMENTED EXCEPTION (OTHER-63): CSS Modules are typed as an index
+    // signature (`{ readonly [key: string]: string }` via vite/client), so
+    // noPropertyAccessFromIndexSignature would force bracket access for every
+    // `styles.foo` in every React package without adding type safety — class
+    // names are not checked either way. Node packages keep the strict flag
+    // (tsconfig.package.json inherits the base value).
+    "noPropertyAccessFromIndexSignature": false
+  }
+}

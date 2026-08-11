@@ -1,0 +1,14 @@
+{
+  "id": "neotavern.rev4-worker",
+  "name": "Rev4 Worker Example",
+  "version": "1.0.0",
+  "apiVersion": 2,
+  "engines": {
+    "neotavern": ">=0.1.0"
+  },
+  "frontend": "frontend.js",
+  "workers": ["workers/double.js", "workers/triple.mjs"],
+  "permissions": [],
+  "requiredCapabilities": ["ui.commands", "compute.worker"],
+  "optionalCapabilities": ["notifications.show"]
+}

@@ -1,0 +1,58 @@
+{
+  "link.title.Docs": {
+    "message": "文档",
+    "description": "The title of the footer links column with title=Docs in the footer"
+  },
+  "link.title.SDK Reference": {
+    "message": "SDK 参考",
+    "description": "The title of the footer links column with title=SDK Reference in the footer"
+  },
+  "link.title.Project": {
+    "message": "项目",
+    "description": "The title of the footer links column with title=Project in the footer"
+  },
+  "link.item.label.Getting Started": {
+    "message": "快速开始",
+    "description": "The label of footer link with label=Getting Started linking to /getting-started/"
+  },
+  "link.item.label.User Guide": {
+    "message": "用户指南",
+    "description": "The label of footer link with label=User Guide linking to /user-guide/chat"
+  },
+  "link.item.label.Developers": {
+    "message": "开发者",
+    "description": "The label of footer link with label=Developers linking to /developers/"
+  },
+  "link.item.label.FAQ": {
+    "message": "常见问题",
+    "description": "The label of footer link with label=FAQ linking to /faq"
+  },
+  "link.item.label.Plugin SDK": {
+    "message": "插件 SDK",
+    "description": "The label of footer link with label=Plugin SDK linking to /api/plugin-sdk/"
+  },
+  "link.item.label.Theme SDK": {
+    "message": "主题 SDK",
+    "description": "The label of footer link with label=Theme SDK linking to /api/theme-sdk/"
+  },
+  "link.item.label.Provider SDK": {
+    "message": "提供商 SDK",
+    "description": "The label of footer link with label=Provider SDK linking to /api/provider-sdk/"
+  },
+  "link.item.label.Contracts": {
+    "message": "契约",
+    "description": "The label of footer link with label=Contracts linking to /api/contracts/"
+  },
+  "link.item.label.GitHub": {
+    "message": "GitHub",
+    "description": "The label of footer link with label=GitHub linking to https://github.com/Disya123/NeoTavern"
+  },
+  "link.item.label.Changelog": {
+    "message": "更新日志",
+    "description": "The label of footer link with label=Changelog linking to https://github.com/Disya123/NeoTavern/blob/main/CHANGELOG.md"
+  },
+  "copyright": {
+    "message": "版权所有 © 2026 NeoTavern 贡献者。",
+    "description": "The footer copyright"
+  }
+}

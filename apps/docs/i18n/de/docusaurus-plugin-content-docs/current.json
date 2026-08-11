@@ -1,0 +1,42 @@
+{
+  "version.label": {
+    "message": "Nächste",
+    "description": "The label for version current"
+  },
+  "sidebar.docsSidebar.category.Architecture": {
+    "message": "Architektur",
+    "description": "The label for category 'Architecture' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Prompt Pipeline": {
+    "message": "Prompt-Pipeline",
+    "description": "The label for category 'Prompt Pipeline' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Data & Storage": {
+    "message": "Daten & Speicherung",
+    "description": "The label for category 'Data & Storage' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Plugin SDK": {
+    "message": "Plugin-SDK",
+    "description": "The label for category 'Plugin SDK' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Theme SDK": {
+    "message": "Theme-SDK",
+    "description": "The label for category 'Theme SDK' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Providers": {
+    "message": "Anbieter",
+    "description": "The label for category 'Providers' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Desktop": {
+    "message": "Desktop",
+    "description": "The label for category 'Desktop' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.SDK Reference": {
+    "message": "SDK-Referenz",
+    "description": "The label for category 'SDK Reference' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.doc.Overview": {
+    "message": "Übersicht",
+    "description": "The label for the doc item 'Overview' in sidebar 'docsSidebar', linking to the doc api/index"
+  }
+}

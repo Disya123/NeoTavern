@@ -1,0 +1,12 @@
+{
+  "id": "neotavern.rev4-service",
+  "name": "Rev4 Service Example",
+  "version": "1.0.0",
+  "apiVersion": 2,
+  "engines": {
+    "neotavern": ">=0.1.0"
+  },
+  "frontend": "frontend.js",
+  "permissions": [],
+  "requiredCapabilities": ["services.provide", "ui.commands", "notifications.show"]
+}

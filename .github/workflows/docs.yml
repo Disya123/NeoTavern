@@ -1,0 +1,84 @@
+name: Docs site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/docs/**'
+      - 'packages/**'
+      - 'docsearch.config.json'
+      - '.github/workflows/docs.yml'
+  pull_request:
+    paths:
+      - 'apps/docs/**'
+      - 'docsearch.config.json'
+      - '.github/workflows/docs.yml'
+  schedule:
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+env:
+  ALGOLIA_APP_ID: ${{ secrets.ALGOLIA_APP_ID }}
+  ALGOLIA_API_KEY: ${{ secrets.ALGOLIA_API_KEY }}
+  ALGOLIA_INDEX_NAME: ${{ secrets.ALGOLIA_INDEX_NAME }}
+
+jobs:
+  build:
+    name: Build (9 locales + SDK reference)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build workspace packages (fresh dist for TypeDoc resolution)
+        run: pnpm build
+
+      - name: Build docs site
+        run: pnpm --filter @neotavern/docs build
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/docs/build
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  crawl:
+    name: Algolia DocSearch crawl
+    runs-on: ubuntu-24.04
+    needs: build
+    if: github.event_name != 'pull_request'
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Run DocSearch crawler
+        run: |
+          docker run --rm \
+            -e APPLICATION_ID="${{ secrets.ALGOLIA_APP_ID }}" \
+            -e API_KEY="${{ secrets.ALGOLIA_ADMIN_API_KEY }}" \
+            -e CONFIG="$(cat docsearch.config.json | jq -r tostring)" \
+            algolia/docsearch-scraper

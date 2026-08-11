@@ -1,0 +1,64 @@
+{
+  "id": "neotavern.solarized-dark",
+  "name": "Solarized Dark",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "modes": ["dark"],
+  "tokens": {
+    "dark": {
+      "color-text-primary": "#93a1a1",
+      "color-text-secondary": "#839496",
+      "color-text-muted": "#657b83",
+      "color-text-inverse": "#002b36",
+      "color-text-link": "#268bd2",
+      "color-surface-primary": "#002b36",
+      "color-surface-secondary": "#073642",
+      "color-surface-tertiary": "#0d4754",
+      "color-surface-overlay": "#073642",
+      "color-surface-canvas": "#001e26",
+      "color-surface-elevated": "#0d4754",
+      "color-accent": "#268bd2",
+      "color-accent-hover": "#3aa0e0",
+      "color-accent-text": "#fdf6e3",
+      "color-accent-soft": "#1a4a6e",
+      "color-accent-soft-text": "#7dbbe8",
+      "color-border": "#0d4754",
+      "color-border-strong": "#586e75",
+      "color-success": "#859900",
+      "color-warning": "#b58900",
+      "color-danger": "#dc322f",
+      "color-info": "#2aa198",
+      "color-message-quote": "#b58900",
+      "color-message-emphasis": "#93a1a1",
+      "color-message-code": "#93a1a1",
+      "color-message-code-bg": "#073642",
+      "shadow-card": "0 1px 2px rgba(0, 0, 0, 0.4)",
+      "shadow-soft": "0 10px 28px rgba(0, 0, 0, 0.42)",
+      "shadow-focus": "0 0 0 3px rgba(38, 139, 210, 0.32)",
+      "shadow-overlay": "0 24px 64px rgba(0, 0, 0, 0.55)",
+      "chat-wallpaper-overlay": "rgba(0, 30, 38, 0.5)"
+    }
+  },
+  "componentsCss": "components.css",
+  "shell": "shell.css",
+  "preview": "preview.png",
+  "shellLayout": {
+    "managementTabs": {
+      "pinned": false
+    },
+    "navigationRail": {
+      "main": [
+        "menu-toggle",
+        "chats",
+        "characters",
+        "personas",
+        "lorebooks",
+        "ai-settings",
+        "plugins",
+        "settings"
+      ],
+      "bottom": []
+    }
+  },
+  "settings": {}
+}

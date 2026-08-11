@@ -1,0 +1,64 @@
+{
+  "id": "neotavern.nord",
+  "name": "Nord",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "modes": ["dark"],
+  "tokens": {
+    "dark": {
+      "color-text-primary": "#eceff4",
+      "color-text-secondary": "#d8dee9",
+      "color-text-muted": "#8b9bb4",
+      "color-text-inverse": "#2e3440",
+      "color-text-link": "#88c0d0",
+      "color-surface-primary": "#2e3440",
+      "color-surface-secondary": "#3b4252",
+      "color-surface-tertiary": "#434c5e",
+      "color-surface-overlay": "#3b4252",
+      "color-surface-canvas": "#242933",
+      "color-surface-elevated": "#434c5e",
+      "color-accent": "#88c0d0",
+      "color-accent-hover": "#8fbcbb",
+      "color-accent-text": "#2e3440",
+      "color-accent-soft": "#3b4c5e",
+      "color-accent-soft-text": "#a3dbe5",
+      "color-border": "#434c5e",
+      "color-border-strong": "#6b7b94",
+      "color-success": "#a3be8c",
+      "color-warning": "#ebcb8b",
+      "color-danger": "#bf616a",
+      "color-info": "#81a1c1",
+      "color-message-quote": "#ebcb8b",
+      "color-message-emphasis": "#b9c0d0",
+      "color-message-code": "#d8dee9",
+      "color-message-code-bg": "#3b4252",
+      "shadow-card": "0 1px 2px rgba(0, 0, 0, 0.3)",
+      "shadow-soft": "0 10px 28px rgba(0, 0, 0, 0.32)",
+      "shadow-focus": "0 0 0 3px rgba(136, 192, 208, 0.3)",
+      "shadow-overlay": "0 24px 64px rgba(0, 0, 0, 0.5)",
+      "chat-wallpaper-overlay": "rgba(36, 41, 51, 0.5)"
+    }
+  },
+  "componentsCss": "components.css",
+  "shell": "shell.css",
+  "preview": "preview.png",
+  "shellLayout": {
+    "managementTabs": {
+      "pinned": false
+    },
+    "navigationRail": {
+      "main": [
+        "menu-toggle",
+        "chats",
+        "characters",
+        "personas",
+        "lorebooks",
+        "ai-settings",
+        "plugins",
+        "settings"
+      ],
+      "bottom": []
+    }
+  },
+  "settings": {}
+}

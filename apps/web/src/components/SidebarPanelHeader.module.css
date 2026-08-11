@@ -1,0 +1,98 @@
+@layer components {
+  .header {
+    position: relative;
+    z-index: calc(var(--st-layer-panel) + 1);
+    display: flex;
+    min-width: 0;
+    min-block-size: calc(var(--st-control-height-large) + env(safe-area-inset-top));
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--st-space-md);
+    padding: env(safe-area-inset-top) var(--st-space-lg) 0;
+    border-bottom: 0;
+    background: transparent;
+  }
+
+  .header::after {
+    position: absolute;
+    z-index: inherit;
+    inset-block-end: 0;
+    inset-inline: 0;
+    block-size: 1px;
+    background: var(--st-color-border);
+    content: '';
+    pointer-events: none;
+  }
+
+  .identity {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--st-space-sm);
+  }
+
+  .avatar {
+    display: grid;
+    flex: none;
+    place-items: center;
+  }
+
+  .copy {
+    display: grid;
+    min-width: 0;
+    gap: var(--st-space-2xs);
+  }
+
+  .eyebrow {
+    color: var(--st-color-text-muted);
+    font-size: var(--st-font-size-sm);
+  }
+
+  .title {
+    margin: 0;
+    overflow: hidden;
+    font-size: var(--st-font-size-lg);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: var(--st-space-xs);
+  }
+
+  .close {
+    position: relative;
+    display: inline-grid;
+    width: var(--st-control-height-sm);
+    height: var(--st-control-height-sm);
+    flex: 0 0 auto;
+    place-items: center;
+    border: 1px solid transparent;
+    border-radius: var(--st-radius-control);
+    color: var(--st-color-text-muted);
+    background: transparent;
+    cursor: pointer;
+    transition:
+      color var(--st-motion-duration-fast) var(--st-motion-easing-standard),
+      background var(--st-motion-duration-fast) var(--st-motion-easing-standard),
+      transform var(--st-motion-duration-fast) var(--st-motion-easing-standard);
+  }
+
+  .close:hover {
+    color: var(--st-color-text-primary);
+    background: var(--st-color-surface-tertiary);
+  }
+
+  .close:active {
+    transform: scale(0.94);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .close {
+      transition: none;
+    }
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "note": "SES Compatibility Corpus (ТЗ v3.2 §6.6, B25): versioned set of real pure-JS packages that must import inside the production boundary (Worker + lockdown(moderate) + one SES Compartment). Every Node/SES/endo upgrade MUST re-run this gate. `expect: pass` — the package entry must import and report module-graph-loaded. `expect: fail` — a documented incompatibility; the gate asserts the exact error code and the offending module path so unsupported packages fail at validation with a precise dependency chain, not silently at runtime.",
+  "packages": [
+    {
+      "package": "@endo/hex",
+      "entry": "index.js",
+      "expect": "pass",
+      "reason": "Endo family: audited pure-ESM byte-to-hex helpers; exercises re-export chains inside the Compartment."
+    },
+    {
+      "package": "@endo/immutable-arraybuffer",
+      "entry": "index.js",
+      "expect": "pass",
+      "reason": "Endo family: immutable ArrayBuffer utilities; typed-array semantics under SES."
+    },
+    {
+      "package": "@endo/trampoline",
+      "entry": "index.js",
+      "expect": "pass",
+      "reason": "Endo family: async trampoline primitives used by hardened async code."
+    },
+    {
+      "package": "@endo/path-compare",
+      "entry": "index.js",
+      "expect": "pass",
+      "reason": "Endo family: dependency-version path comparison (pure string logic)."
+    },
+    {
+      "package": "@endo/env-options",
+      "entry": "index.js",
+      "expect": "pass",
+      "reason": "Endo family: bounded environment-option parsing."
+    },
+    {
+      "package": "@fastify/error",
+      "entry": "index.js",
+      "expect": "fail",
+      "expectedError": "MODULE_EVALUATION_FAILED",
+      "reason": "CommonJS (module.exports = ...) parses as ESM but fails at evaluation (`module` is not defined in the Compartment); vendoring path is build-time transpilation (§7.2) — recorded so the failure is a documented gate, not a silent runtime surprise."
+    }
+  ]
+}

@@ -1,0 +1,102 @@
+@layer components {
+  .dialogHost {
+    min-block-size: min(50vh, var(--st-dialog-max-height));
+  }
+
+  /* rev4 §G7: proxy overlay hit-divs stack above the sandbox iframe via the
+     style-contract token — never a hardcoded z-index (AGENTS §14). */
+  :global([data-part='plugin-overlay-hit-layer']) {
+    z-index: var(--st-layer-plugin-overlay);
+  }
+
+  /* rev4 §G7: host overlay chrome — above every plugin layer
+     (--st-layer-plugin-chrome) but below host modals (--st-layer-modal), so
+     a plugin can never cover the fact that its overlay is active. */
+  .chrome {
+    position: fixed;
+    z-index: var(--st-layer-plugin-chrome);
+    inset-block-start: max(var(--st-space-md), env(safe-area-inset-top));
+    inset-inline-end: max(var(--st-space-md), env(safe-area-inset-right));
+    display: flex;
+    align-items: center;
+    gap: var(--st-space-sm);
+    padding: var(--st-space-xs) var(--st-space-sm);
+    border: 1px solid var(--st-color-border);
+    border-radius: var(--st-radius-card);
+    background: var(--st-color-surface-elevated);
+    box-shadow: var(--st-shadow-soft);
+  }
+
+  .chromeLabel {
+    font-size: var(--st-font-size-sm);
+    color: var(--st-color-text-secondary);
+  }
+
+  .chromeClose {
+    display: grid;
+    place-items: center;
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    border-radius: var(--st-radius-round);
+    color: var(--st-color-text-secondary);
+    background: transparent;
+    border: 0;
+  }
+
+  .chromeClose:hover {
+    background: var(--st-color-surface-overlay);
+    color: var(--st-color-text-primary);
+  }
+
+  .layer {
+    position: fixed;
+    z-index: var(--st-layer-notification);
+    inset-inline-end: max(var(--st-space-lg), env(safe-area-inset-right));
+    inset-block-end: max(var(--st-space-lg), env(safe-area-inset-bottom));
+    display: grid;
+    width: min(24rem, calc(100vw - 2 * var(--st-space-lg)));
+    gap: var(--st-space-sm);
+  }
+
+  .notice {
+    display: grid;
+    padding: var(--st-space-md);
+    border: 1px solid var(--st-color-border);
+    border-radius: var(--st-radius-card);
+    background: var(--st-color-surface-elevated);
+    box-shadow: var(--st-shadow-soft);
+    grid-template-columns: auto 1fr auto;
+    gap: var(--st-space-sm);
+  }
+
+  .notice p {
+    margin-top: var(--st-space-xs);
+    color: var(--st-color-text-secondary);
+  }
+
+  .notice .noticeAction {
+    margin-top: var(--st-space-sm);
+    padding: var(--st-space-xs) var(--st-space-md);
+    border: 1px solid color-mix(in srgb, var(--st-color-accent) 40%, transparent);
+    border-radius: var(--st-radius-control);
+    color: var(--st-color-accent);
+    background: var(--st-color-accent-soft);
+    font-size: var(--st-font-size-sm);
+    font-weight: var(--st-font-weight-medium);
+  }
+
+  .notice .noticeAction:hover {
+    color: var(--st-color-accent-hover);
+    background: color-mix(
+      in srgb,
+      var(--st-color-accent-soft) 72%,
+      var(--st-color-surface-tertiary)
+    );
+  }
+
+  .notice button {
+    border: 0;
+    background: transparent;
+    color: var(--st-color-text-secondary);
+  }
+}

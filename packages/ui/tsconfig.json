@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.react.json",
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "compilerOptions": {
+    // @neotavern/gestures is consumed from source here (like @neotavern/ui in apps/web):
+    // its package exports point at dist/, which only exists after `tsc -b`.
+    "baseUrl": ".",
+    "paths": {
+      "@neotavern/gestures": ["../gestures/src/index.ts"]
+    }
+  }
+}

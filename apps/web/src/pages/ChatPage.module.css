@@ -1,0 +1,47 @@
+@layer components {
+  /*
+ * Live-chat page styles only: load-older control and loading skeletons inside
+ * the shared ChatWorkspace viewport. Empty/error panels use the shared
+ * `.chatState` / `.chatStateIcon` classes from ChatWorkspace so `/home`,
+ * `/chats/:id` and the chats library stay aligned. Empty panels carry
+ * `data-component="chat-state"` so the viewport stretches and centres them.
+ */
+
+  .loadOlder {
+    display: flex;
+    justify-content: center;
+  }
+
+  /* Virtualized message canvas: absolutely positioned measured rows (OTHER-60). */
+  .messageCanvas {
+    position: relative;
+    width: 100%;
+    flex-shrink: 0;
+  }
+
+  .messageRow {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+  }
+
+  .loading {
+    display: flex;
+    width: min(100%, 820px);
+    margin: 0 auto;
+    flex-direction: column;
+    gap: var(--st-space-lg);
+  }
+
+  /* Shimmer/animation come from the shared Skeleton primitive (@neotavern/ui). */
+  .loadingItem {
+    width: 62%;
+    height: 76px;
+  }
+
+  .loadingItem:nth-child(2) {
+    align-self: flex-end;
+    width: 48%;
+  }
+}

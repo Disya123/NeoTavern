@@ -1,0 +1,64 @@
+{
+  "id": "neotavern.tokyo-night",
+  "name": "Tokyo Night",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "modes": ["dark"],
+  "tokens": {
+    "dark": {
+      "color-text-primary": "#c0caf5",
+      "color-text-secondary": "#a9b1d6",
+      "color-text-muted": "#7a88c3",
+      "color-text-inverse": "#1a1b26",
+      "color-text-link": "#7aa2f7",
+      "color-surface-primary": "#1a1b26",
+      "color-surface-secondary": "#16161e",
+      "color-surface-tertiary": "#24283b",
+      "color-surface-overlay": "#16161e",
+      "color-surface-canvas": "#13131d",
+      "color-surface-elevated": "#24283b",
+      "color-accent": "#7aa2f7",
+      "color-accent-hover": "#89b4fa",
+      "color-accent-text": "#1a1b26",
+      "color-accent-soft": "#2a3a5e",
+      "color-accent-soft-text": "#a6c7ff",
+      "color-border": "#2f3549",
+      "color-border-strong": "#565f89",
+      "color-success": "#9ece6a",
+      "color-warning": "#e0af68",
+      "color-danger": "#f7768e",
+      "color-info": "#7dcfff",
+      "color-message-quote": "#e0af68",
+      "color-message-emphasis": "#a9b1d6",
+      "color-message-code": "#c0caf5",
+      "color-message-code-bg": "#24283b",
+      "shadow-card": "0 1px 2px rgba(0, 0, 0, 0.35)",
+      "shadow-soft": "0 10px 28px rgba(0, 0, 0, 0.4)",
+      "shadow-focus": "0 0 0 3px rgba(122, 162, 247, 0.32)",
+      "shadow-overlay": "0 24px 64px rgba(0, 0, 0, 0.55)",
+      "chat-wallpaper-overlay": "rgba(19, 19, 29, 0.5)"
+    }
+  },
+  "componentsCss": "components.css",
+  "shell": "shell.css",
+  "preview": "preview.png",
+  "shellLayout": {
+    "managementTabs": {
+      "pinned": false
+    },
+    "navigationRail": {
+      "main": [
+        "menu-toggle",
+        "chats",
+        "characters",
+        "personas",
+        "lorebooks",
+        "ai-settings",
+        "plugins",
+        "settings"
+      ],
+      "bottom": []
+    }
+  },
+  "settings": {}
+}

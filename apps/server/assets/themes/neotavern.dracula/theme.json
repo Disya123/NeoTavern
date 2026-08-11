@@ -1,0 +1,64 @@
+{
+  "id": "neotavern.dracula",
+  "name": "Dracula",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "modes": ["dark"],
+  "tokens": {
+    "dark": {
+      "color-text-primary": "#f8f8f2",
+      "color-text-secondary": "#bdc2cf",
+      "color-text-muted": "#8e95a3",
+      "color-text-inverse": "#282a36",
+      "color-text-link": "#8be9fd",
+      "color-surface-primary": "#282a36",
+      "color-surface-secondary": "#21222c",
+      "color-surface-tertiary": "#343746",
+      "color-surface-overlay": "#21222c",
+      "color-surface-canvas": "#1e1f29",
+      "color-surface-elevated": "#343746",
+      "color-accent": "#bd93f9",
+      "color-accent-hover": "#caa9fa",
+      "color-accent-text": "#282a36",
+      "color-accent-soft": "#4a3b6b",
+      "color-accent-soft-text": "#d4baff",
+      "color-border": "#343746",
+      "color-border-strong": "#6272a4",
+      "color-success": "#50fa7b",
+      "color-warning": "#ffb86c",
+      "color-danger": "#ff5555",
+      "color-info": "#8be9fd",
+      "color-message-quote": "#ffb86c",
+      "color-message-emphasis": "#bdc2cf",
+      "color-message-code": "#f8f8f2",
+      "color-message-code-bg": "#343746",
+      "shadow-card": "0 1px 2px rgba(0, 0, 0, 0.35)",
+      "shadow-soft": "0 10px 28px rgba(0, 0, 0, 0.4)",
+      "shadow-focus": "0 0 0 3px rgba(189, 147, 249, 0.35)",
+      "shadow-overlay": "0 24px 64px rgba(0, 0, 0, 0.55)",
+      "chat-wallpaper-overlay": "rgba(30, 31, 41, 0.5)"
+    }
+  },
+  "componentsCss": "components.css",
+  "shell": "shell.css",
+  "preview": "preview.png",
+  "shellLayout": {
+    "managementTabs": {
+      "pinned": false
+    },
+    "navigationRail": {
+      "main": [
+        "menu-toggle",
+        "chats",
+        "characters",
+        "personas",
+        "lorebooks",
+        "ai-settings",
+        "plugins",
+        "settings"
+      ],
+      "bottom": []
+    }
+  },
+  "settings": {}
+}

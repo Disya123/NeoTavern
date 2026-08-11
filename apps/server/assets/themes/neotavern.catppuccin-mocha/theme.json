@@ -1,0 +1,64 @@
+{
+  "id": "neotavern.catppuccin-mocha",
+  "name": "Catppuccin Mocha",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "modes": ["dark"],
+  "tokens": {
+    "dark": {
+      "color-text-primary": "#cdd6f4",
+      "color-text-secondary": "#bac2de",
+      "color-text-muted": "#a6adc8",
+      "color-text-inverse": "#1e1e2e",
+      "color-text-link": "#89b4fa",
+      "color-surface-primary": "#1e1e2e",
+      "color-surface-secondary": "#181825",
+      "color-surface-tertiary": "#313244",
+      "color-surface-overlay": "#181825",
+      "color-surface-canvas": "#15151f",
+      "color-surface-elevated": "#313244",
+      "color-accent": "#cba6f7",
+      "color-accent-hover": "#d4b5ff",
+      "color-accent-text": "#1e1e2e",
+      "color-accent-soft": "#3a2f4d",
+      "color-accent-soft-text": "#d4b5ff",
+      "color-border": "#313244",
+      "color-border-strong": "#585b70",
+      "color-success": "#a6e3a1",
+      "color-warning": "#f9e2af",
+      "color-danger": "#f38ba8",
+      "color-info": "#89dceb",
+      "color-message-quote": "#fab387",
+      "color-message-emphasis": "#bac2de",
+      "color-message-code": "#cdd6f4",
+      "color-message-code-bg": "#313244",
+      "shadow-card": "0 1px 2px rgba(0, 0, 0, 0.3)",
+      "shadow-soft": "0 10px 28px rgba(0, 0, 0, 0.36)",
+      "shadow-focus": "0 0 0 3px rgba(203, 166, 247, 0.32)",
+      "shadow-overlay": "0 24px 64px rgba(0, 0, 0, 0.5)",
+      "chat-wallpaper-overlay": "rgba(21, 21, 31, 0.5)"
+    }
+  },
+  "componentsCss": "components.css",
+  "shell": "shell.css",
+  "preview": "preview.png",
+  "shellLayout": {
+    "managementTabs": {
+      "pinned": false
+    },
+    "navigationRail": {
+      "main": [
+        "menu-toggle",
+        "chats",
+        "characters",
+        "personas",
+        "lorebooks",
+        "ai-settings",
+        "plugins",
+        "settings"
+      ],
+      "bottom": []
+    }
+  },
+  "settings": {}
+}

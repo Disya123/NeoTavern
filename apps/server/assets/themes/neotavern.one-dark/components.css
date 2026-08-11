@@ -1,0 +1,9 @@
+@layer theme {
+  [data-component='button'][data-variant='primary'] > [data-part='icon'] {
+    color: var(--st-color-accent-text);
+  }
+
+  [data-component='tabs-list'][data-variant='segment'] {
+    background: var(--st-color-surface-tertiary);
+  }
+}

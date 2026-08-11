@@ -1,0 +1,12 @@
+{
+  "id": "neotavern.rev4-translate",
+  "name": "Rev4 Translate Action Example",
+  "version": "1.0.0",
+  "apiVersion": 2,
+  "engines": {
+    "neotavern": ">=0.1.0"
+  },
+  "frontend": "frontend.js",
+  "permissions": ["chat.read", "ui.messageActions"],
+  "requiredCapabilities": ["ui.surfaces", "notifications.show"]
+}

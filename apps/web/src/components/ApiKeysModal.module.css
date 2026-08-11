@@ -1,0 +1,175 @@
+@layer components {
+  /* Compound selector raises specificity above the base [data-component]
+     dialog skin without resorting to !important (AGENTS.md §14). */
+  :global(.st-dialog).modalContent {
+    width: min(92vw, 30rem);
+  }
+
+  .header {
+    margin-bottom: var(--st-space-md);
+  }
+
+  .quickActive {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: var(--st-space-xs);
+    min-width: 0;
+  }
+
+  .quickActive > span {
+    color: var(--st-color-text-secondary);
+    font-size: var(--st-font-size-sm);
+  }
+
+  .addSecretForm {
+    display: flex;
+    flex-direction: column;
+    gap: var(--st-space-sm);
+    margin-bottom: var(--st-space-md);
+    padding: var(--st-space-md);
+    border: 1px solid var(--st-color-border-strong);
+    border-radius: var(--st-radius-card);
+    background: var(--st-color-surface-secondary);
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--st-space-xs);
+  }
+
+  .field > span {
+    color: var(--st-color-text-secondary);
+    font-size: var(--st-font-size-sm);
+  }
+
+  .input {
+    min-height: var(--st-control-height);
+    width: 100%;
+    padding: 0 var(--st-space-sm);
+    border: 1px solid var(--st-color-border);
+    border-radius: var(--st-radius-control);
+    color: var(--st-color-text-primary);
+    background: var(--st-color-surface-tertiary);
+    font-family: inherit;
+    font-size: var(--st-font-size-md);
+  }
+
+  .formActions {
+    margin-top: var(--st-space-xs);
+  }
+
+  .exposureHint {
+    margin: 0 0 var(--st-space-md);
+    color: var(--st-color-text-muted);
+    font-size: var(--st-font-size-sm);
+  }
+
+  .inlineError {
+    margin: 0 0 var(--st-space-md);
+    padding: var(--st-space-sm);
+    border: 1px solid var(--st-color-danger);
+    border-radius: var(--st-radius-control);
+    color: var(--st-color-danger);
+    background: color-mix(in srgb, var(--st-color-danger) 8%, transparent);
+    font-size: var(--st-font-size-sm);
+  }
+
+  .empty {
+    margin: 0 0 var(--st-space-md);
+    color: var(--st-color-text-muted);
+    font-size: var(--st-font-size-sm);
+  }
+
+  .keysList {
+    display: flex;
+    flex-direction: column;
+    gap: var(--st-space-sm);
+    max-height: var(--st-size-content-max-height);
+    margin: 0 0 var(--st-space-lg);
+    padding: 0;
+    overflow-y: auto;
+    list-style: none;
+  }
+
+  .keyCard {
+    display: flex;
+    flex-direction: column;
+    gap: var(--st-space-xs);
+    padding: var(--st-space-md);
+    border: 1px solid var(--st-color-border);
+    border-radius: var(--st-radius-card);
+    background: var(--st-color-surface-tertiary);
+  }
+
+  .keyCard[data-state='active'] {
+    border-color: var(--st-color-accent);
+    background: color-mix(in srgb, var(--st-color-accent) 12%, var(--st-color-surface-tertiary));
+  }
+
+  .cardHeader {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--st-space-sm);
+  }
+
+  .cardInfo {
+    display: flex;
+    flex-direction: column;
+    gap: var(--st-space-xs);
+    min-width: 0;
+  }
+
+  .dateRow {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--st-space-xs);
+  }
+
+  .date {
+    color: var(--st-color-text-secondary);
+    font-size: var(--st-font-size-sm);
+  }
+
+  .labelTag {
+    padding: 0 var(--st-space-xs);
+    border-radius: var(--st-radius-control);
+    color: var(--st-color-accent-soft-text);
+    background: var(--st-color-accent-soft);
+    font-size: var(--st-font-size-sm);
+    font-weight: var(--st-font-weight-semibold);
+  }
+
+  .keyMasked {
+    color: var(--st-color-text-secondary);
+    font-family: var(--st-font-mono);
+    font-size: var(--st-font-size-sm);
+    overflow-wrap: anywhere;
+  }
+
+  .labelEdit {
+    display: flex;
+    align-items: center;
+    gap: var(--st-space-xs);
+  }
+
+  .labelEdit .input {
+    min-height: var(--st-control-height);
+  }
+
+  .activeBadge {
+    display: grid;
+    place-items: center;
+    color: var(--st-color-success);
+  }
+
+  .cardActions {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    gap: var(--st-space-xs);
+  }
+}

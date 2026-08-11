@@ -1,0 +1,38 @@
+@layer components {
+  .settings,
+  .sidebar {
+    border: 1px solid var(--st-color-border);
+    border-radius: var(--st-radius-card);
+    background: var(--st-color-surface-secondary);
+  }
+
+  .settings {
+    padding: var(--st-space-xl);
+  }
+
+  .sidebar {
+    padding: var(--st-space-md);
+  }
+
+  .tabs {
+    margin-top: var(--st-space-md);
+  }
+
+  .host {
+    height: calc(var(--st-control-height-large) * 7);
+    margin-top: var(--st-space-md);
+    border-radius: var(--st-radius-control);
+    overflow: hidden;
+    padding-top: 0;
+  }
+
+  /* The sandbox frame is positioned over the anchor div; the anchor is empty
+     by design, so it must inherit the sized tab content. */
+  .host > [data-part='sandbox-host'] {
+    height: 100%;
+  }
+
+  .sidebar .host {
+    height: calc(var(--st-control-height-large) * 5);
+  }
+}

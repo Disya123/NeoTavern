@@ -1,0 +1,40 @@
+{
+  "name": "@neotavern/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "SQLite database: Drizzle schema, migrations, repositories, FTS5 search",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    },
+    "./schema": {
+      "types": "./dist/schema/index.d.ts",
+      "import": "./dist/schema/index.js",
+      "require": "./dist/schema/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "clean": "tsc -b --clean",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "node --import tsx scripts/migrate.ts",
+    "db:benchmark": "node --import tsx scripts/benchmark.ts"
+  },
+  "dependencies": {
+    "@neotavern/contracts": "workspace:*",
+    "@neotavern/shared": "workspace:*",
+    "better-sqlite3": "^12.11.1",
+    "drizzle-orm": "^0.45.2"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "drizzle-kit": "^0.31.0",
+    "tsx": "^4.19.2"
+  }
+}

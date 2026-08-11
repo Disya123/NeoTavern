@@ -1,0 +1,27 @@
+@layer components {
+  .toolbar {
+    position: absolute;
+    inset-block-start: var(--st-space-md);
+    inset-inline-end: var(--st-space-lg);
+    z-index: var(--st-layer-panel);
+    max-width: min(70%, 640px);
+    padding: var(--st-space-xs);
+    border: 1px solid var(--st-color-border);
+    border-radius: var(--st-radius-control);
+    background: var(--st-color-surface-overlay);
+    box-shadow: var(--st-shadow-soft);
+  }
+
+  .toolbar :global([data-component='action-bar']) {
+    container-type: normal;
+  }
+
+  @media (max-width: 760px) {
+    .toolbar {
+      inset-block-start: auto;
+      inset-inline-end: var(--st-space-md);
+      inset-block-end: var(--st-space-md);
+      max-width: calc(100% - 2 * var(--st-space-md));
+    }
+  }
+}

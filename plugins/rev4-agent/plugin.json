@@ -1,0 +1,14 @@
+{
+  "id": "neotavern.rev4-agent",
+  "name": "Rev4 Agent Example",
+  "version": "1.0.0",
+  "apiVersion": 2,
+  "engines": {
+    "neotavern": ">=0.1.0"
+  },
+  "frontend": "frontend.js",
+  "backend": "backend.mjs",
+  "permissions": ["server.routes"],
+  "requiredCapabilities": ["compute.backend", "ui.commands"],
+  "optionalCapabilities": ["chats.read.current", "chats.write.plugin", "notifications.show"]
+}

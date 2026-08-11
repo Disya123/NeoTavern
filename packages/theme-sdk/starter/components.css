@@ -1,0 +1,14 @@
+@layer theme {
+  /* Stable component-skin hooks: no generated CSS Module classes. */
+  [data-component='button'][data-variant='primary'] > [data-part='icon'] {
+    color: var(--st-color-accent-text);
+  }
+
+  [data-component='action-bar'] [data-part='group'][data-role='secondary'] {
+    color: var(--st-color-text-secondary);
+  }
+
+  [data-component='tabs-list'][data-overflow='scroll'] {
+    scrollbar-color: var(--st-scrollbar-thumb-bg) var(--st-scrollbar-track-bg);
+  }
+}

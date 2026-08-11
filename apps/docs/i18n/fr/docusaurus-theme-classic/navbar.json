@@ -1,0 +1,26 @@
+{
+  "title": {
+    "message": "NeoTavern",
+    "description": "The title in the navbar"
+  },
+  "item.label.Getting Started": {
+    "message": "Démarrage",
+    "description": "Navbar item with label Getting Started"
+  },
+  "item.label.User Guide": {
+    "message": "Guide utilisateur",
+    "description": "Navbar item with label User Guide"
+  },
+  "item.label.Developers": {
+    "message": "Développeurs",
+    "description": "Navbar item with label Developers"
+  },
+  "item.label.SDK Reference": {
+    "message": "Référence SDK",
+    "description": "Navbar item with label SDK Reference"
+  },
+  "item.label.GitHub": {
+    "message": "GitHub",
+    "description": "Navbar item with label GitHub"
+  }
+}

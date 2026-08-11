@@ -1,0 +1,42 @@
+{
+  "version.label": {
+    "message": "Next",
+    "description": "The label for version current"
+  },
+  "sidebar.docsSidebar.category.Architecture": {
+    "message": "架构",
+    "description": "The label for category 'Architecture' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Prompt Pipeline": {
+    "message": "提示词管线",
+    "description": "The label for category 'Prompt Pipeline' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Data & Storage": {
+    "message": "数据与存储",
+    "description": "The label for category 'Data & Storage' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Plugin SDK": {
+    "message": "插件 SDK",
+    "description": "The label for category 'Plugin SDK' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Theme SDK": {
+    "message": "主题 SDK",
+    "description": "The label for category 'Theme SDK' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Providers": {
+    "message": "提供商",
+    "description": "The label for category 'Providers' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Desktop": {
+    "message": "桌面端",
+    "description": "The label for category 'Desktop' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.SDK Reference": {
+    "message": "SDK 参考",
+    "description": "The label for category 'SDK Reference' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.doc.Overview": {
+    "message": "概述",
+    "description": "The label for the doc item 'Overview' in sidebar 'docsSidebar', linking to the doc api/index"
+  }
+}
