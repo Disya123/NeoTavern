@@ -1,0 +1,12 @@
+{
+  "id": "neotavern.rev4-modelmenu",
+  "name": "Rev4 Model Menu Example",
+  "version": "1.0.0",
+  "apiVersion": 2,
+  "engines": {
+    "neotavern": ">=0.1.0"
+  },
+  "frontend": "frontend.js",
+  "permissions": ["ui.sidebar"],
+  "requiredCapabilities": ["models.list"]
+}

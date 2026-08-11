@@ -1,0 +1,13 @@
+{
+  "id": "neotavern.rev4-blocks",
+  "name": "Rev4 Blocks Example",
+  "version": "1.0.0",
+  "apiVersion": 2,
+  "engines": {
+    "neotavern": ">=0.1.0"
+  },
+  "frontend": "frontend.js",
+  "permissions": [],
+  "requiredCapabilities": ["ui.messageBlock"],
+  "optionalCapabilities": ["ui.commands", "chats.read.current", "notifications.show"]
+}

@@ -1,0 +1,25 @@
+@layer components {
+  .annotation {
+    margin-top: var(--st-space-xs);
+    padding: var(--st-space-sm) var(--st-space-md);
+    border-inline-start: 2px solid var(--st-color-accent);
+    color: var(--st-color-text-secondary);
+    background: var(--st-color-surface-secondary);
+    font-size: var(--st-font-size-sm);
+    white-space: pre-wrap;
+  }
+
+  .searchMatch {
+    border-radius: var(--st-radius-control);
+    color: var(--st-color-accent-soft-text);
+    background: var(--st-color-accent-soft);
+  }
+
+  .plainText {
+    white-space: pre-wrap;
+  }
+
+  .typing {
+    color: var(--st-color-text-muted);
+  }
+}

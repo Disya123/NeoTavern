@@ -1,0 +1,12 @@
+@layer components {
+  .root {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    flex: 1;
+    flex-direction: column;
+    color: var(--st-color-text-primary);
+    container-type: inline-size;
+  }
+}

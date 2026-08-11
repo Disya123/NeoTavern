@@ -1,0 +1,16 @@
+@layer components {
+  .layer {
+    position: fixed;
+    z-index: var(--st-layer-dropdown);
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .island {
+    pointer-events: auto;
+  }
+
+  .island:empty {
+    display: none;
+  }
+}

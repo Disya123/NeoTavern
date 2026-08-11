@@ -1,0 +1,129 @@
+# Mandatory test matrix (ТЗ §17): lint, typecheck, unit/integration tests,
+# frontend component tests and a production build run on every PR and push.
+# Desktop packaging/release lives in desktop-release.yml; E2E below builds the
+# app and runs the Playwright suite including the axe accessibility audit.
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Lint / typecheck / unit / build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit and integration tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+  e2e:
+    name: Playwright E2E + accessibility (shard ${{ matrix.shard }}/4)
+    # Visual baselines are intentionally recorded on Windows; keep the
+    # functional/accessibility suite and visual project on the same runner.
+    # The suite is sharded across runners (scripts/run-e2e-parallel.mjs):
+    # each shard is its own process with its own server, SQLite and ports.
+    runs-on: windows-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browser
+        run: pnpm exec playwright install chromium
+
+      - name: Run E2E suite (shard ${{ matrix.shard }}/4)
+        run: pnpm build && node scripts/run-e2e-parallel.mjs --shard=${{ matrix.shard }}/4
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: playwright-report-shard-${{ matrix.shard }}
+          path: playwright-report/
+          retention-days: 7
+
+  # Plugin SDK vNext cross-platform parity (ТЗ §44/§56, Stage J / B18): the
+  # IDENTICAL conformance suite, benchmark harness (B01–B31, default gates)
+  # and parity recorder run on all three supported OS families. A platform
+  # whose report diverges fails the job — same source, same SDK, same error
+  # model, same tests.
+  plugin-runtime-platforms:
+    name: Plugin Runtime conformance (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest, macos-14]
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (dist for runtime/bench/parity)
+        run: pnpm build
+
+      - name: Unit and integration tests
+        run: pnpm test
+
+      - name: Benchmark harness B01–B31 (§47, default gates)
+        run: node apps/plugin-runtime/bench/bench-vnext.mjs
+
+      - name: Cross-platform parity report (§44/§46)
+        run: node scripts/platform-parity.mjs --out platform-parity-${{ matrix.os }}.json
+
+      - name: Upload parity report
+        uses: actions/upload-artifact@v6
+        with:
+          name: platform-parity-${{ matrix.os }}
+          path: platform-parity-${{ matrix.os }}.json
+          retention-days: 90

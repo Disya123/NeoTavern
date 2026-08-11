@@ -1,0 +1,27 @@
+{
+  "id": "neotavern.rev4-auth",
+  "name": "Rev4 OAuth Example",
+  "version": "1.0.0",
+  "apiVersion": 2,
+  "engines": {
+    "neotavern": ">=0.1.0"
+  },
+  "frontend": "frontend.js",
+  "permissions": [],
+  "requiredCapabilities": [
+    "auth.connections",
+    "network:http://127.0.0.1:8080",
+    "ui.commands",
+    "notifications.show"
+  ],
+  "authClients": [
+    {
+      "serviceId": "com.example.idp",
+      "name": "Example IdP",
+      "authorizationUrl": "http://127.0.0.1:8080/authorize",
+      "tokenUrl": "http://127.0.0.1:8080/token",
+      "clientId": "neotavern-sample",
+      "scopes": ["profile.read"]
+    }
+  ]
+}

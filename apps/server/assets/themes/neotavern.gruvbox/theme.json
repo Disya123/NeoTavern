@@ -1,0 +1,64 @@
+{
+  "id": "neotavern.gruvbox",
+  "name": "Gruvbox",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "modes": ["dark"],
+  "tokens": {
+    "dark": {
+      "color-text-primary": "#ebdbb2",
+      "color-text-secondary": "#d5c4a1",
+      "color-text-muted": "#a89984",
+      "color-text-inverse": "#282828",
+      "color-text-link": "#83a598",
+      "color-surface-primary": "#282828",
+      "color-surface-secondary": "#3c3836",
+      "color-surface-tertiary": "#504945",
+      "color-surface-overlay": "#3c3836",
+      "color-surface-canvas": "#1d2021",
+      "color-surface-elevated": "#504945",
+      "color-accent": "#d79921",
+      "color-accent-hover": "#fabd2f",
+      "color-accent-text": "#282828",
+      "color-accent-soft": "#4a3f1f",
+      "color-accent-soft-text": "#fabd2f",
+      "color-border": "#504945",
+      "color-border-strong": "#7c6f64",
+      "color-success": "#b8bb26",
+      "color-warning": "#fabd2f",
+      "color-danger": "#fb4934",
+      "color-info": "#83a598",
+      "color-message-quote": "#fe8019",
+      "color-message-emphasis": "#bdae93",
+      "color-message-code": "#d5c4a1",
+      "color-message-code-bg": "#3c3836",
+      "shadow-card": "0 1px 2px rgba(0, 0, 0, 0.35)",
+      "shadow-soft": "0 10px 28px rgba(0, 0, 0, 0.38)",
+      "shadow-focus": "0 0 0 3px rgba(215, 153, 33, 0.3)",
+      "shadow-overlay": "0 24px 64px rgba(0, 0, 0, 0.55)",
+      "chat-wallpaper-overlay": "rgba(29, 32, 33, 0.5)"
+    }
+  },
+  "componentsCss": "components.css",
+  "shell": "shell.css",
+  "preview": "preview.png",
+  "shellLayout": {
+    "managementTabs": {
+      "pinned": false
+    },
+    "navigationRail": {
+      "main": [
+        "menu-toggle",
+        "chats",
+        "characters",
+        "personas",
+        "lorebooks",
+        "ai-settings",
+        "plugins",
+        "settings"
+      ],
+      "bottom": []
+    }
+  },
+  "settings": {}
+}

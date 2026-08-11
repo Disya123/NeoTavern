@@ -1,0 +1,70 @@
+name: Publish existing release artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'Workflow run ID containing signed artifacts'
+        required: true
+        type: string
+      tag:
+        description: 'Existing release tag, e.g. v0.1.0'
+        required: true
+        type: string
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: write
+
+    steps:
+      - name: Download signed artifacts from existing run
+        uses: actions/download-artifact@v6
+        with:
+          pattern: signed-desktop-*
+          path: release-assets
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.run_id }}
+
+      - name: Prepare release assets
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          cd release-assets
+          # Lift flat distributables out of their per-format directories; a
+          # directory cannot be a release asset.
+          find . -mindepth 2 -maxdepth 2 -type f \
+            \( -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' \
+            -o -name '*.exe' -o -name '*.msi' -o -name '*.dmg' \
+            -o -name '*.sig' -o -name '*.tar.gz' -o -name '*.zip' \
+            -o -name '*.sha256' \) \
+            -exec mv {} . \;
+          # Directory-based deliverables: zip them unless a flat archive
+          # (updater .tar.gz / portable .zip) already covers the format.
+          if [ -d macos ] && [ ! -f NeoTavern.app.tar.gz ]; then
+            (cd macos && zip -qr "../NeoTavern-${RELEASE_TAG}-macos.zip" .)
+          fi
+          if [ -d portable ] && ! ls *.zip >/dev/null 2>&1 | grep -qi portable; then
+            (cd portable && zip -qr "../NeoTavern-${RELEASE_TAG}-windows-portable.zip" .)
+          fi
+          # Remove every remaining directory (intermediates and leftovers).
+          find . -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} +
+          ls -la
+
+      - name: Create draft GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          gh release create "$RELEASE_TAG" release-assets/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --draft \
+            --title "NeoTavern $RELEASE_TAG" \
+            --generate-notes

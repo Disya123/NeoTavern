@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "files": [],
+  "references": [
+    { "path": "packages/shared" },
+    { "path": "packages/gestures" },
+    { "path": "packages/contracts" },
+    { "path": "packages/db" },
+    { "path": "packages/provider-sdk" },
+    { "path": "packages/plugin-sdk" },
+    { "path": "packages/plugin-build" },
+    { "path": "packages/theme-sdk" },
+    { "path": "apps/plugin-runtime" },
+    { "path": "apps/server" }
+  ]
+}

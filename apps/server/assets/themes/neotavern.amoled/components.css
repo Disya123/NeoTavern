@@ -1,0 +1,74 @@
+@layer theme {
+  [data-component='button'] {
+    background: transparent;
+  }
+  [data-component='button']:hover,
+  [data-component='button'][data-state='hover'] {
+    background: transparent;
+  }
+
+  [data-component='button'][data-variant='primary'] {
+    background: transparent;
+    color: var(--st-color-text-primary);
+  }
+  [data-component='button'][data-variant='primary']:hover {
+    background: transparent;
+    color: var(--st-color-text-primary);
+  }
+
+  [data-component='dialog-content'],
+  [data-component='menu-content'],
+  [data-component='combobox-content'] {
+    background: color-mix(in srgb, var(--st-color-surface-overlay) 70%, transparent);
+    backdrop-filter: blur(var(--st-effect-glass-blur));
+  }
+
+  [data-component='combobox-input'],
+  [data-component='input'],
+  [data-component='textarea'] {
+    background: color-mix(in srgb, var(--st-color-surface-elevated) 70%, transparent);
+    backdrop-filter: blur(calc(var(--st-effect-glass-blur) * 0.8));
+  }
+
+  /*
+   * Pure #000 host token stacks read as a solid block. Skin only — geometry
+   * stays in ChatWorkspace.module.css for every theme.
+   */
+  [data-slot='chat.composer'] {
+    border-color: color-mix(in srgb, var(--st-color-border-strong) 58%, transparent);
+    background: color-mix(in srgb, var(--st-color-surface-elevated) 92%, transparent);
+    backdrop-filter: blur(calc(var(--st-effect-glass-blur) * 1.35));
+  }
+
+  [data-slot='chat.composer'] [data-part='toolbar'],
+  [data-slot='chat.composer'] [data-part='field'],
+  [data-slot='chat.composer'] [data-component='textarea'] {
+    background: transparent;
+    backdrop-filter: none;
+  }
+
+  [data-slot='chat.composer'] [data-component='context-usage-panel'] {
+    background: transparent;
+    backdrop-filter: none;
+  }
+
+  [data-slot='chat.composer'] [data-component='context-usage-panel'] [data-part='metric'],
+  [data-slot='chat.composer'] [data-component='context-usage-panel'] [data-part='icon'] {
+    background: color-mix(in srgb, var(--st-color-surface-elevated) 32%, transparent);
+  }
+
+  [data-component='card'],
+  [data-component='theme-card'],
+  [data-component='character-card'],
+  [data-component='chat-item'],
+  [data-component='plugin-card'],
+  .st-card {
+    background: color-mix(in srgb, var(--st-color-surface-elevated) 70%, transparent);
+    backdrop-filter: blur(var(--st-effect-glass-blur));
+  }
+
+  [data-component='tabs-list'][data-variant='segment'] {
+    background: color-mix(in srgb, var(--st-color-surface-tertiary) 72%, transparent);
+    backdrop-filter: blur(calc(var(--st-effect-glass-blur) * 0.8));
+  }
+}

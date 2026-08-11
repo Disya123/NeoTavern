@@ -1,0 +1,185 @@
+@layer components {
+  .headerAvatar {
+    display: grid;
+    width: var(--st-control-height);
+    height: var(--st-control-height);
+    flex: none;
+    place-items: center;
+    border: 1px solid var(--st-color-border-strong);
+    border-radius: var(--st-radius-round);
+    color: var(--st-color-text-primary);
+    background: var(--st-color-surface-tertiary);
+  }
+
+  .body {
+    min-height: 0;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .content {
+    display: flex;
+    padding: var(--st-space-sm) var(--st-space-lg) var(--st-space-lg);
+    flex-direction: column;
+    gap: var(--st-space-md);
+  }
+
+  .uploadRow {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--st-space-sm);
+  }
+
+  .fileInput {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
+  .uploadHint {
+    min-width: 0;
+    flex: 1;
+    color: var(--st-color-text-muted);
+    font-size: var(--st-font-size-sm);
+  }
+
+  .error {
+    margin: 0;
+    color: var(--st-color-danger);
+    font-size: var(--st-font-size-sm);
+  }
+
+  .current {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--st-space-sm);
+    padding: var(--st-space-sm) var(--st-space-md);
+    border: 1px solid var(--st-color-border);
+    border-radius: var(--st-radius-panel);
+    background: var(--st-color-surface-tertiary);
+  }
+
+  .currentLabel {
+    flex: none;
+    color: var(--st-color-text-secondary);
+    font-size: var(--st-font-size-sm);
+  }
+
+  .currentName {
+    min-width: 0;
+    overflow: hidden;
+    flex: 1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: var(--st-font-weight-medium);
+  }
+
+  .currentEmpty,
+  .noChat {
+    flex: 1;
+    margin: 0;
+    color: var(--st-color-text-muted);
+    font-size: var(--st-font-size-sm);
+  }
+
+  .grid {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+    gap: var(--st-space-md);
+    list-style: none;
+  }
+
+  .card {
+    position: relative;
+    display: flex;
+    min-width: 0;
+    overflow: hidden;
+    flex-direction: column;
+    border: 2px solid transparent;
+    border-radius: var(--st-radius-panel);
+    background: var(--st-color-surface-secondary);
+    cursor: pointer;
+    user-select: none;
+    transition:
+      transform var(--st-motion-duration-fast) var(--st-motion-easing-standard),
+      border-color var(--st-motion-duration-fast) var(--st-motion-easing-standard);
+  }
+
+  .card:hover {
+    transform: scale(1.02);
+  }
+
+  .card[data-applied='true'] {
+    border-color: var(--st-color-accent);
+  }
+
+  .preview {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 10;
+    overflow: hidden;
+    background: var(--st-color-surface-tertiary);
+  }
+
+  .preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .previewFallback {
+    display: grid;
+    width: 100%;
+    height: 100%;
+    place-items: center;
+    color: var(--st-color-text-muted);
+  }
+
+  .state {
+    display: flex;
+    min-height: 12rem;
+    padding: var(--st-space-xl);
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: var(--st-space-sm);
+    text-align: center;
+  }
+
+  .state h3 {
+    margin: var(--st-space-sm) 0 0;
+    font-size: var(--st-font-size-md);
+  }
+
+  .state p {
+    max-width: 32ch;
+    margin: 0;
+    color: var(--st-color-text-secondary);
+    font-size: var(--st-font-size-sm);
+  }
+
+  .stateIcon {
+    display: grid;
+    width: 48px;
+    height: 48px;
+    place-items: center;
+    border: 1px solid var(--st-color-border);
+    border-radius: var(--st-radius-overlay);
+    color: var(--st-color-accent-soft-text);
+    background: var(--st-color-surface-tertiary);
+  }
+
+  .skeleton {
+    height: 7.5rem;
+    border-radius: var(--st-radius-panel);
+    background: color-mix(in srgb, var(--st-color-text-inverse) 6%, transparent);
+  }
+}

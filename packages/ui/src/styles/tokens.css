@@ -1,0 +1,222 @@
+/* Default semantic theme contract. Values mirror @neotavern/theme-sdk. */
+@layer tokens {
+  :root {
+    color-scheme: light;
+
+    --st-color-text-primary: #26221f;
+    --st-color-text-secondary: #5c554f;
+    --st-color-text-muted: #706861;
+    --st-color-text-inverse: #ffffff;
+    --st-color-text-link: #8d4026;
+
+    --st-color-surface-primary: #fbfaf8;
+    --st-color-surface-secondary: #f3f0eb;
+    --st-color-surface-tertiary: #e9e4dc;
+    --st-color-surface-overlay: #ffffff;
+    --st-color-surface-canvas: #eee9e2;
+    --st-color-surface-elevated: #ffffff;
+
+    --st-color-accent: #984729;
+    --st-color-accent-hover: #7d351d;
+    --st-color-accent-text: #ffffff;
+    --st-color-accent-soft: #f1ded4;
+    --st-color-accent-soft-text: #6f2e19;
+    --st-color-border: #ddd6cd;
+    --st-color-border-strong: #aaa097;
+    --st-color-success: #2d7b4c;
+    --st-color-warning: #a86118;
+    --st-color-danger: #b23b35;
+    --st-color-info: #416f83;
+    --st-color-message-quote: #96520e;
+    --st-color-message-emphasis: #6e6e6e;
+    --st-color-message-code: #5c554f;
+    --st-color-message-code-bg: #e9e4dc;
+
+    --st-font-ui: 'Outfit Variable', 'Segoe UI Variable', sans-serif;
+    --st-font-mono: 'JetBrains Mono Variable', 'Cascadia Code', monospace;
+    --st-font-size-2xs: 0.6875rem;
+    --st-font-size-xs: 0.75rem;
+    --st-font-size-sm: 0.8125rem;
+    --st-font-size-md: 1rem;
+    --st-font-size-lg: 1.25rem;
+    --st-font-size-xl: 1.75rem;
+    --st-font-size-2xl: 2.125rem;
+    --st-line-height-body: 1.45;
+    --st-font-weight-normal: 400;
+    --st-font-weight-medium: 500;
+    --st-font-weight-semibold: 600;
+    --st-font-weight-strong: 650;
+    --st-font-weight-bold: 700;
+
+    --st-space-2xs: 2px;
+    --st-space-xs: 4px;
+    --st-space-sm: 8px;
+    --st-space-md: 12px;
+    --st-space-lg: 16px;
+    --st-space-xl: 24px;
+    --st-space-2xl: 32px;
+    --st-space-3xl: 48px;
+
+    --st-radius-control: 10px;
+    --st-radius-card: 16px;
+    --st-radius-overlay: 20px;
+    --st-radius-panel: 28px;
+    --st-radius-round: 999px;
+    --st-radius-inset: 4px;
+
+    --st-border-width: 1px;
+
+    --st-shadow-card: 0 1px 2px rgba(68, 54, 43, 0.08);
+    --st-shadow-soft: 0 8px 24px rgba(68, 54, 43, 0.09);
+    --st-shadow-focus: 0 0 0 3px rgba(152, 71, 41, 0.16);
+    --st-shadow-overlay: 0 24px 64px rgba(45, 35, 28, 0.22);
+
+    --st-layer-base: 0;
+    --st-layer-panel: 100;
+    --st-layer-plugin-overlay: 200;
+    --st-layer-plugin-chrome: 300;
+    --st-layer-dropdown: 1100;
+    --st-layer-modal: 1000;
+    --st-layer-notification: 1500;
+    --st-layer-raised: 1;
+
+    --st-motion-duration-fast: 180ms;
+    --st-motion-duration-normal: 320ms;
+    --st-motion-duration-slow: 1400ms;
+    --st-motion-easing-standard: cubic-bezier(0.22, 1, 0.36, 1);
+    --st-effect-glass-blur: var(--st-custom-glass-blur, 16px);
+    --st-custom-glass-blur: 16px;
+    --st-custom-ui-opacity: 70%;
+    --st-custom-wallpaper-overlay-alpha: 0.4;
+
+    --st-control-height: 44px;
+    --st-control-height-large: 52px;
+    --st-control-height-sm: 40px;
+    --st-control-height-xs: 36px;
+    --st-control-height-2xs: 32px;
+    --st-shell-rail-width: 60px;
+    --st-shell-panel-width: 380px;
+    --st-shell-panel-min-width: 260px;
+    --st-shell-panel-max-width: 720px;
+    --st-control-hit-min: 44px;
+    --st-switch-width: 40px;
+    --st-switch-height: 22px;
+    --st-switch-thumb-size: 18px;
+    --st-menu-min-width: 200px;
+    --st-dialog-max-width: 560px;
+    --st-dialog-max-height: 85vh;
+    --st-textarea-min-height: 96px;
+    --st-spinner-size: 20px;
+    --st-size-panel-max-height: 70vh;
+    --st-size-content-max-height: 20rem;
+    --st-size-chat-column-max: 1080px;
+
+    --st-overlay-width-limit: 92vw;
+    --st-overlay-height-limit: 60vh;
+    --st-dialog-sheet-height: 88dvh;
+
+    --st-scrollbar-width: 8px;
+    --st-scrollbar-radius: 999px;
+    --st-scrollbar-track-bg: transparent;
+    --st-scrollbar-thumb-bg: color-mix(in srgb, var(--st-color-border-strong) 45%, transparent);
+    --st-scrollbar-thumb-hover-bg: color-mix(in srgb, var(--st-color-accent) 65%, transparent);
+    --st-scrollbar-fade-duration: 320ms;
+    --st-scrollbar-fade-easing: cubic-bezier(0.22, 1, 0.36, 1);
+    --st-scrollbar-hide-delay: 1000ms;
+
+    --st-chat-wallpaper-image: none;
+    --st-chat-wallpaper-position: center;
+    --st-chat-wallpaper-size: cover;
+    --st-chat-wallpaper-overlay: rgba(251, 250, 248, var(--st-custom-wallpaper-overlay-alpha, 0.4));
+    --st-chat-wallpaper-blur: 0px;
+    --st-chat-markdown-column-width: 75ch;
+    --st-chat-message-block: var(--st-space-md);
+    --st-chat-message-inline: var(--st-space-md);
+  }
+
+  :root[data-theme-mode='dark'] {
+    color-scheme: dark;
+    --st-color-text-primary: #f3eee8;
+    --st-color-text-secondary: #c5bbb2;
+    --st-color-text-muted: #998f87;
+    --st-color-text-inverse: #211b17;
+    --st-color-text-link: #f0a07d;
+    --st-color-surface-primary: #1b1917;
+    --st-color-surface-secondary: #24211e;
+    --st-color-surface-tertiary: #302c28;
+    --st-color-surface-overlay: #292522;
+    --st-color-surface-canvas: #151311;
+    --st-color-surface-elevated: #292522;
+    --st-color-accent: #e38a62;
+    --st-color-accent-hover: #f09a73;
+    --st-color-accent-text: #2a130b;
+    --st-color-accent-soft: #492a20;
+    --st-color-accent-soft-text: #ffc4a8;
+    --st-color-border: #39342f;
+    --st-color-border-strong: #625a53;
+    /* Status colors: lightened dark variants for WCAG AA text contrast. */
+    --st-color-success: #63c98d;
+    --st-color-warning: #e0a35c;
+    --st-color-danger: #f0837d;
+    --st-color-info: #7fb3c9;
+    --st-color-message-quote: #e8943a;
+    --st-color-message-emphasis: #919191;
+    --st-color-message-code: #c5bbb2;
+    --st-color-message-code-bg: #302c28;
+    --st-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --st-shadow-soft: 0 10px 28px rgba(0, 0, 0, 0.26);
+    --st-shadow-focus: 0 0 0 3px rgba(227, 138, 98, 0.2);
+    --st-shadow-overlay: 0 24px 64px rgba(0, 0, 0, 0.58);
+    --st-chat-wallpaper-overlay: rgba(18, 16, 14, var(--st-custom-wallpaper-overlay-alpha, 0.3));
+    --st-custom-wallpaper-overlay-alpha: 0.3;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme-mode='light']) {
+      color-scheme: dark;
+      --st-color-text-primary: #f3eee8;
+      --st-color-text-secondary: #c5bbb2;
+      --st-color-text-muted: #998f87;
+      --st-color-text-inverse: #211b17;
+      --st-color-text-link: #f0a07d;
+      --st-color-surface-primary: #1b1917;
+      --st-color-surface-secondary: #24211e;
+      --st-color-surface-tertiary: #302c28;
+      --st-color-surface-overlay: #292522;
+      --st-color-surface-canvas: #151311;
+      --st-color-surface-elevated: #292522;
+      --st-color-accent: #e38a62;
+      --st-color-accent-hover: #f09a73;
+      --st-color-accent-text: #2a130b;
+      --st-color-accent-soft: #492a20;
+      --st-color-accent-soft-text: #ffc4a8;
+      --st-color-border: #39342f;
+      --st-color-border-strong: #625a53;
+      /* Status colors: lightened dark variants for WCAG AA text contrast. */
+      --st-color-success: #63c98d;
+      --st-color-warning: #e0a35c;
+      --st-color-danger: #f0837d;
+      --st-color-info: #7fb3c9;
+      --st-color-message-quote: #e8943a;
+      --st-color-message-emphasis: #919191;
+      --st-color-message-code: #c5bbb2;
+      --st-color-message-code-bg: #302c28;
+      --st-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35);
+      --st-shadow-soft: 0 10px 28px rgba(0, 0, 0, 0.26);
+      --st-shadow-focus: 0 0 0 3px rgba(227, 138, 98, 0.2);
+      --st-shadow-overlay: 0 24px 64px rgba(0, 0, 0, 0.58);
+      --st-chat-wallpaper-overlay: rgba(18, 16, 14, var(--st-custom-wallpaper-overlay-alpha, 0.3));
+      --st-custom-wallpaper-overlay-alpha: 0.3;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :root {
+      --st-motion-duration-fast: 1ms;
+      --st-motion-duration-normal: 1ms;
+      --st-motion-duration-slow: 1ms;
+      --st-scrollbar-fade-duration: 1ms;
+      --st-scrollbar-hide-delay: 0ms;
+    }
+  }
+}

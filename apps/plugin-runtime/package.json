@@ -1,0 +1,43 @@
+{
+  "name": "@neotavern/plugin-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "NeoTavern Plugin Runtime: separate process running SES-hardened Workers per plugin",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "neotavern-plugin-runtime": "./dist/runtime-main.js"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "clean": "tsc -b --clean",
+    "dev": "tsx src/runtime-main.ts"
+  },
+  "dependencies": {
+    "@babel/parser": "^8.0.4",
+    "@endo/compartment-mapper": "^2.3.0",
+    "@endo/module-source": "^1.4.1",
+    "@neotavern/contracts": "workspace:*",
+    "ses": "^2.2.0"
+  },
+  "devDependencies": {
+    "@endo/env-options": "^1.1.11",
+    "@endo/hex": "^1.1.1",
+    "@endo/immutable-arraybuffer": "^1.1.2",
+    "@endo/path-compare": "^1.1.0",
+    "@endo/trampoline": "^1.0.5",
+    "@fastify/error": "^4.2.0",
+    "@types/node": "catalog:",
+    "tsx": "^4.23.1",
+    "typescript": "catalog:"
+  }
+}

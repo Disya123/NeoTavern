@@ -1,0 +1,17 @@
+node_modules
+dist
+build
+coverage
+pnpm-lock.yaml
+*.tsbuildinfo
+data
+apps/web/dist
+apps/desktop/src-tauri/gen
+apps/desktop/src-tauri/resources
+apps/desktop/src-tauri/target
+Пример-макет
+CHANGELOG.md
+AGENTS.md
+ТЗ.md
+SillyTavern-release
+.zcode

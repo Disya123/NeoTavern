@@ -1,0 +1,13 @@
+{
+  "id": "neotavern.rev4-tools",
+  "name": "Rev4 Tools Example",
+  "version": "1.0.0",
+  "apiVersion": 2,
+  "engines": {
+    "neotavern": ">=0.1.0"
+  },
+  "frontend": "frontend.js",
+  "permissions": [],
+  "requiredCapabilities": ["ui.commands"],
+  "optionalCapabilities": ["notifications.show"]
+}

@@ -1,0 +1,83 @@
+@layer components {
+  .root {
+    position: relative;
+  }
+
+  .trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--st-control-height-2xs);
+    height: var(--st-control-height-2xs);
+    border: 1px solid color-mix(in srgb, var(--st-color-text-inverse) 10%, transparent);
+    border-radius: var(--st-radius-round);
+    color: var(--st-color-text-secondary);
+    background: color-mix(in srgb, var(--st-color-surface-secondary) 62%, transparent);
+  }
+
+  .trigger:hover {
+    color: var(--st-color-text-primary);
+    background: var(--st-color-surface-tertiary);
+  }
+
+  .popover {
+    position: absolute;
+    inset-block-start: calc(100% + var(--st-space-xs));
+    inset-inline-end: 0;
+    z-index: var(--st-layer-dropdown);
+    display: flex;
+    min-width: 260px;
+    max-height: 280px;
+    padding: var(--st-space-xs);
+    flex-direction: column;
+    gap: var(--st-space-2xs);
+    overflow-y: auto;
+    border: 1px solid color-mix(in srgb, var(--st-color-border) 60%, transparent);
+    border-radius: var(--st-radius-control);
+    background: var(--st-color-surface-overlay);
+    box-shadow: var(--st-shadow-overlay);
+  }
+
+  .popover button {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: var(--st-space-sm);
+    padding: var(--st-space-sm);
+    border: 0;
+    border-radius: var(--st-radius-control);
+    color: var(--st-color-text-secondary);
+    background: transparent;
+    font-size: var(--st-font-size-sm);
+    text-align: start;
+  }
+
+  .popover button:hover {
+    color: var(--st-color-text-primary);
+    background: var(--st-color-surface-tertiary);
+  }
+
+  .popover button[data-state='active'] {
+    color: var(--st-color-text-primary);
+    background: var(--st-color-accent-soft);
+  }
+
+  .index {
+    color: var(--st-color-text-muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .preview {
+    overflow: hidden;
+    min-width: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .empty {
+    padding: var(--st-space-sm);
+    color: var(--st-color-text-muted);
+    font-size: var(--st-font-size-sm);
+  }
+}

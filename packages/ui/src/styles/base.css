@@ -1,0 +1,46 @@
+/* Base element defaults applied app-wide (base layer). */
+@layer base {
+  body {
+    font-family: var(--st-font-ui);
+    font-size: var(--st-font-size-md);
+    background: var(--st-color-surface-primary);
+    color: var(--st-color-text-primary);
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--st-color-accent) 30%, transparent);
+  }
+
+  /* Custom Scrollbar System (Themeable via CSS Variables) */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--st-scrollbar-thumb-bg) var(--st-scrollbar-track-bg);
+  }
+
+  ::-webkit-scrollbar {
+    width: var(--st-scrollbar-width);
+    height: var(--st-scrollbar-width);
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--st-scrollbar-track-bg);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--st-scrollbar-thumb-bg);
+    border-radius: var(--st-scrollbar-radius);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    transition: background-color var(--st-motion-duration-fast) var(--st-motion-easing-standard);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--st-scrollbar-thumb-hover-bg);
+    background-clip: padding-box;
+  }
+
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}

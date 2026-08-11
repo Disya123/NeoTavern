@@ -1,0 +1,12 @@
+{
+  "id": "neotavern.rev4-service-client",
+  "name": "Rev4 Service Client Example",
+  "version": "1.0.0",
+  "apiVersion": 2,
+  "engines": {
+    "neotavern": ">=0.1.0"
+  },
+  "frontend": "frontend.js",
+  "permissions": [],
+  "requiredCapabilities": ["services.connect", "ui.commands", "notifications.show"]
+}

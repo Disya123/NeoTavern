@@ -1,0 +1,182 @@
+@layer components {
+  :global(.st-dialog).dialog {
+    display: flex;
+    padding: 0;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  :global(.st-dialog).dialog :global([data-component='dialog-title']) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
+  .card {
+    display: flex;
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    padding-inline: var(--st-space-lg);
+    padding-block: var(--st-space-sm) max(var(--st-space-md), env(safe-area-inset-bottom));
+  }
+
+  .dragHandle {
+    width: var(--st-control-height-xs);
+    height: var(--st-space-2xs);
+    margin-inline: auto;
+    margin-block-end: var(--st-space-sm);
+    border-radius: var(--st-radius-round);
+    background: var(--st-color-border);
+  }
+
+  .header,
+  .revisionHeader,
+  .revisionActions {
+    display: flex;
+    align-items: center;
+  }
+
+  .header {
+    justify-content: space-between;
+    gap: var(--st-space-sm);
+    padding-block-end: var(--st-space-md);
+  }
+
+  .title {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--st-space-sm);
+    color: var(--st-color-text-primary);
+    font-size: var(--st-font-size-lg);
+    font-weight: var(--st-font-weight-semibold);
+  }
+
+  .iconButton,
+  .revisionActions button,
+  .loadMore {
+    min-height: var(--st-control-hit-min);
+    border: var(--st-border-width) solid var(--st-color-border);
+    border-radius: var(--st-radius-control);
+    background: var(--st-color-surface-secondary);
+    color: var(--st-color-text-secondary);
+    cursor: pointer;
+  }
+
+  .iconButton {
+    display: inline-grid;
+    min-width: var(--st-control-hit-min);
+    padding: 0;
+    place-items: center;
+  }
+
+  .scrollArea {
+    display: flex;
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: var(--st-space-sm);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .sectionLabel {
+    padding-block: var(--st-space-sm) var(--st-space-2xs);
+    color: var(--st-color-text-muted);
+    font-size: var(--st-font-size-xs);
+    font-weight: var(--st-font-weight-strong);
+    text-transform: uppercase;
+  }
+
+  .revision {
+    padding: var(--st-space-md);
+    border: var(--st-border-width) solid var(--st-color-border);
+    border-radius: var(--st-radius-card);
+    background: var(--st-color-surface-secondary);
+  }
+
+  .revision[data-state='current'] {
+    border-color: var(--st-color-accent);
+  }
+
+  .revisionHeader {
+    justify-content: space-between;
+    gap: var(--st-space-sm);
+    margin-block-end: var(--st-space-sm);
+  }
+
+  .revisionHeader time {
+    color: var(--st-color-text-muted);
+    font-size: var(--st-font-size-xs);
+    text-align: end;
+  }
+
+  .revisionContent,
+  .revisionContentExpanded {
+    color: var(--st-color-text-secondary);
+    line-height: var(--st-line-height-body);
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
+
+  .revisionContent {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
+  }
+
+  .revisionActions {
+    justify-content: flex-end;
+    gap: var(--st-space-xs);
+    margin-block-start: var(--st-space-sm);
+    flex-wrap: wrap;
+  }
+
+  .revisionActions button {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--st-space-xs);
+    padding-inline: var(--st-space-sm);
+  }
+
+  .iconButton:hover:not(:disabled),
+  .revisionActions button:hover:not(:disabled),
+  .loadMore:hover:not(:disabled) {
+    background: var(--st-color-surface-tertiary);
+    color: var(--st-color-text-primary);
+  }
+
+  .iconButton:focus-visible,
+  .revisionActions button:focus-visible,
+  .loadMore:focus-visible {
+    outline: none;
+    box-shadow: var(--st-shadow-focus);
+  }
+
+  .revisionActions button:disabled,
+  .loadMore:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  .loadMore {
+    width: 100%;
+    padding-inline: var(--st-space-md);
+  }
+
+  .status,
+  .error {
+    margin: 0;
+    padding: var(--st-space-md);
+    color: var(--st-color-text-muted);
+    text-align: center;
+  }
+
+  .error {
+    color: var(--st-color-danger);
+  }
+}

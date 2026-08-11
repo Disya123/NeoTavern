@@ -1,0 +1,2 @@
+/* Cascade layer order — predictable override precedence (ТЗ §6.2). */
+@layer reset, tokens, base, components, plugin-base, theme, user;

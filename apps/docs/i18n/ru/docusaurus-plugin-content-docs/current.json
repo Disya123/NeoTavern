@@ -1,0 +1,42 @@
+{
+  "version.label": {
+    "message": "Актуальная",
+    "description": "The label for version current"
+  },
+  "sidebar.docsSidebar.category.Architecture": {
+    "message": "Архитектура",
+    "description": "The label for category 'Architecture' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Prompt Pipeline": {
+    "message": "Конвейер промптов",
+    "description": "The label for category 'Prompt Pipeline' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Data & Storage": {
+    "message": "Данные и хранилище",
+    "description": "The label for category 'Data & Storage' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Plugin SDK": {
+    "message": "Плагин SDK",
+    "description": "The label for category 'Plugin SDK' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Theme SDK": {
+    "message": "Тема SDK",
+    "description": "The label for category 'Theme SDK' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Providers": {
+    "message": "Провайдеры",
+    "description": "The label for category 'Providers' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Desktop": {
+    "message": "Десктоп",
+    "description": "The label for category 'Desktop' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.SDK Reference": {
+    "message": "Справочник SDK",
+    "description": "The label for category 'SDK Reference' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.doc.Overview": {
+    "message": "Обзор",
+    "description": "The label for the doc item 'Overview' in sidebar 'docsSidebar', linking to the doc api/index"
+  }
+}

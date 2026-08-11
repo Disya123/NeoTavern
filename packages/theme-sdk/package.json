@@ -1,0 +1,25 @@
+{
+  "name": "@neotavern/theme-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Theme SDK: manifest schema, token/component/shell levels, inheritance resolution",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "clean": "tsc -b --clean"
+  },
+  "dependencies": {
+    "@neotavern/contracts": "workspace:*",
+    "@neotavern/shared": "workspace:*"
+  }
+}

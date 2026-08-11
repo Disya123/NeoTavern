@@ -1,0 +1,134 @@
+@layer components {
+  .page {
+    display: grid;
+    min-height: 100dvh;
+    place-items: center;
+    padding: var(--st-space-lg);
+    color: var(--st-color-text-primary);
+    background: var(--st-color-surface-secondary);
+  }
+
+  .offline {
+    position: fixed;
+    z-index: var(--st-layer-notification);
+    inset-block-start: var(--st-space-sm);
+    inset-inline-start: 50%;
+    max-width: calc(100vw - (2 * var(--st-space-lg)));
+    padding: var(--st-space-xs) var(--st-space-md);
+    border: 1px solid var(--st-color-border-strong);
+    border-radius: var(--st-radius-round);
+    color: var(--st-color-text-primary);
+    background: var(--st-color-surface-primary);
+    box-shadow: var(--st-shadow-soft);
+    font-size: var(--st-font-size-xs);
+    transform: translateX(-50%);
+  }
+
+  .panel {
+    display: grid;
+    width: min(100%, 32rem);
+    gap: var(--st-space-lg);
+    padding: var(--st-space-2xl);
+    border: 1px solid var(--st-color-border);
+    border-radius: var(--st-radius-card);
+    background: var(--st-color-surface-primary);
+    box-shadow: var(--st-shadow-soft);
+  }
+
+  .icon {
+    display: grid;
+    width: var(--st-control-height-large);
+    height: var(--st-control-height-large);
+    place-items: center;
+    border-radius: var(--st-radius-control);
+    color: var(--st-color-accent-soft-text);
+    background: var(--st-color-accent-soft);
+  }
+
+  .icon svg {
+    width: 60%;
+    height: 60%;
+  }
+
+  .panel > div {
+    display: grid;
+    gap: var(--st-space-sm);
+  }
+
+  .eyebrow {
+    color: var(--st-color-accent-soft-text);
+    font-size: var(--st-font-size-xs);
+    font-weight: var(--st-font-weight-bold);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .panel h1 {
+    font-size: var(--st-font-size-xl);
+  }
+
+  .panel > div > p:last-child,
+  .panel form > small {
+    color: var(--st-color-text-secondary);
+    font-size: var(--st-font-size-sm);
+    line-height: 1.55;
+  }
+
+  .panel form {
+    display: grid;
+    gap: var(--st-space-sm);
+  }
+
+  .panel label {
+    font-size: var(--st-font-size-sm);
+    font-weight: var(--st-font-weight-bold);
+  }
+
+  .panel input {
+    min-height: var(--st-control-height-large);
+    padding: 0 var(--st-space-md);
+    border: 1px solid var(--st-color-border-strong);
+    border-radius: var(--st-radius-control);
+    color: var(--st-color-text-primary);
+    background: var(--st-color-surface-primary);
+    font: inherit;
+  }
+
+  .panel input:focus-visible {
+    border-color: var(--st-color-accent);
+    outline: none;
+    box-shadow: var(--st-shadow-focus);
+  }
+
+  .panel form [data-component='button'] {
+    margin-top: var(--st-space-md);
+  }
+
+  .error {
+    padding: var(--st-space-sm) var(--st-space-md);
+    border-inline-start: var(--st-space-xs) solid var(--st-color-danger);
+    color: var(--st-color-danger);
+    background: var(--st-color-surface-secondary);
+    font-size: var(--st-font-size-sm);
+  }
+
+  .loading {
+    display: grid;
+    width: min(100%, 32rem);
+    gap: var(--st-space-md);
+  }
+
+  /* Shared Skeleton shimmer (@neotavern/ui); the pulse drift lived here before. */
+  .loadingItem {
+    height: var(--st-control-height);
+    border-radius: var(--st-radius-control);
+  }
+
+  .loadingItem:nth-child(2) {
+    width: 78%;
+  }
+
+  .loadingItem:nth-child(3) {
+    width: 52%;
+  }
+}

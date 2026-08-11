@@ -1,0 +1,119 @@
+@layer components {
+  .panel {
+    display: grid;
+  }
+
+  .actions,
+  .maintenance {
+    padding: var(--st-space-lg);
+  }
+
+  .actions {
+    border-bottom: 1px solid var(--st-color-border);
+  }
+
+  .summary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metric {
+    display: grid;
+    min-width: 0;
+    gap: var(--st-space-xs);
+    padding: var(--st-space-lg);
+    border-bottom: 1px solid var(--st-color-border);
+  }
+
+  .metric:nth-child(odd) {
+    border-inline-end: 1px solid var(--st-color-border);
+  }
+
+  .metric span {
+    color: var(--st-color-text-muted);
+    font-size: var(--st-font-size-sm);
+  }
+
+  .metric strong {
+    overflow-wrap: anywhere;
+    font-size: var(--st-font-size-md);
+    font-weight: var(--st-font-weight-strong);
+  }
+
+  .metric[data-state] strong {
+    display: flex;
+    align-items: center;
+    gap: var(--st-space-sm);
+  }
+
+  .metric[data-state] strong::before {
+    width: var(--st-space-sm);
+    height: var(--st-space-sm);
+    border-radius: var(--st-radius-round);
+    background: var(--st-color-success);
+    content: '';
+  }
+
+  .metric[data-state='error'] strong::before {
+    background: var(--st-color-danger);
+  }
+
+  .privacy,
+  .empty,
+  .safeHint,
+  .message,
+  .error {
+    margin: 0;
+    padding: var(--st-space-md) var(--st-space-lg);
+    color: var(--st-color-text-secondary);
+    font-size: var(--st-font-size-sm);
+  }
+
+  .privacy {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--st-space-sm);
+    border-bottom: 1px solid var(--st-color-border);
+    color: var(--st-color-text-secondary);
+  }
+
+  .privacy svg {
+    width: var(--st-spinner-size);
+    height: var(--st-spinner-size);
+    flex: none;
+    color: var(--st-color-success);
+  }
+
+  .empty {
+    border-bottom: 1px solid var(--st-color-border);
+  }
+
+  .maintenance {
+    padding-bottom: var(--st-space-sm);
+  }
+
+  .safeHint {
+    padding-top: 0;
+    color: var(--st-color-text-muted);
+  }
+
+  .message {
+    border-inline-start: var(--st-space-xs) solid var(--st-color-success);
+    color: var(--st-color-text-primary);
+  }
+
+  .error {
+    border-inline-start: var(--st-space-xs) solid var(--st-color-danger);
+    color: var(--st-color-text-primary);
+  }
+
+  @media (max-width: 620px) {
+    .summary {
+      grid-template-columns: 1fr;
+    }
+
+    .metric:nth-child(odd) {
+      border-inline-end: 0;
+    }
+  }
+}

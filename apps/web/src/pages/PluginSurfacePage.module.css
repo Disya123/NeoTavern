@@ -1,0 +1,43 @@
+@layer components {
+  .page {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .header {
+    padding: var(--st-space-lg) var(--st-space-2xl);
+    border-bottom: 1px solid var(--st-color-border);
+  }
+
+  .header span {
+    color: var(--st-color-accent-soft-text);
+    font-size: var(--st-font-size-sm);
+    font-weight: var(--st-font-weight-strong);
+  }
+
+  .header h1 {
+    margin-top: var(--st-space-xs);
+    font-size: var(--st-font-size-xl);
+  }
+
+  .frameHost {
+    height: calc(100% - 86px);
+    min-height: 0;
+  }
+
+  .unavailable {
+    display: flex;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+    padding: var(--st-space-2xl);
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .unavailable p {
+    max-width: 42ch;
+    margin: var(--st-space-sm) 0 var(--st-space-lg);
+    color: var(--st-color-text-secondary);
+  }
+}

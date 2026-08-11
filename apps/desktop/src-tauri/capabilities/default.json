@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Core desktop window capability. The sidecar is controlled only by Rust.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

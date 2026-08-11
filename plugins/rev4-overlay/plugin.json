@@ -1,0 +1,12 @@
+{
+  "id": "neotavern.rev4-overlay",
+  "name": "Rev4 Overlay Example",
+  "version": "1.0.0",
+  "apiVersion": 2,
+  "engines": {
+    "neotavern": ">=0.1.0"
+  },
+  "frontend": "frontend.js",
+  "permissions": [],
+  "requiredCapabilities": ["ui.overlay", "ui.commands"]
+}

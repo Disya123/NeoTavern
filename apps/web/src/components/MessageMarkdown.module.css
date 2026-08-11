@@ -1,0 +1,161 @@
+@layer components {
+  .root {
+    color: inherit;
+    word-break: break-word;
+    line-height: inherit;
+  }
+
+  .root > :global(.chat-message-markdown) {
+    display: flow-root;
+  }
+
+  .root > :global(.chat-message-markdown > :first-child) {
+    margin-top: 0;
+  }
+
+  .root > :global(.chat-message-markdown > :last-child) {
+    margin-bottom: 0;
+  }
+
+  .root > :global(.chat-message-markdown h1),
+  .root > :global(.chat-message-markdown h2),
+  .root > :global(.chat-message-markdown h3),
+  .root > :global(.chat-message-markdown h4),
+  .root > :global(.chat-message-markdown h5),
+  .root > :global(.chat-message-markdown h6) {
+    margin: var(--st-space-md) 0 var(--st-space-sm);
+    color: var(--st-color-text-primary);
+    font-weight: var(--st-font-weight-bold);
+    line-height: 1.25;
+  }
+
+  .root > :global(.chat-message-markdown p),
+  .root > :global(.chat-message-markdown ul),
+  .root > :global(.chat-message-markdown ol) {
+    margin: 0 0 var(--st-space-sm);
+  }
+
+  .root > :global(.chat-message-markdown p:last-child),
+  .root > :global(.chat-message-markdown ul:last-child),
+  .root > :global(.chat-message-markdown ol:last-child) {
+    margin-bottom: 0;
+  }
+
+  .root > :global(.chat-message-markdown li + li) {
+    margin-top: var(--st-space-xs);
+  }
+
+  .root > :global(.chat-message-markdown blockquote) {
+    margin: 0 0 var(--st-space-sm);
+    padding-inline-start: var(--st-space-md);
+    border-inline-start: 2px solid var(--st-color-message-quote);
+    color: var(--st-color-text-secondary);
+    background: color-mix(in srgb, var(--st-color-surface-tertiary) 55%, transparent);
+  }
+
+  /* ST1: "dialogue" → <q>, colored via Quote token (default amber/yellow). */
+  .root > :global(.chat-message-markdown q),
+  .root > :global(.chat-message-markdown [data-part='message-quote']) {
+    color: var(--st-color-message-quote);
+  }
+
+  .root > :global(.chat-message-markdown q::before),
+  .root > :global(.chat-message-markdown q::after) {
+    content: '';
+  }
+
+  /* Nested emphasis inside dialogue keeps quote color (ST1). */
+  .root > :global(.chat-message-markdown q em),
+  .root > :global(.chat-message-markdown q i),
+  .root > :global(.chat-message-markdown [data-part='message-quote'] em),
+  .root > :global(.chat-message-markdown [data-part='message-quote'] i) {
+    color: inherit;
+  }
+
+  /* ST1: *...* / em → emphasis color. */
+  .root > :global(.chat-message-markdown em),
+  .root > :global(.chat-message-markdown i),
+  .root > :global(.chat-message-markdown [data-part='message-emphasis']) {
+    color: var(--st-color-message-emphasis);
+    font-style: italic;
+  }
+
+  /* ST1: **...** → bold. */
+  .root > :global(.chat-message-markdown strong),
+  .root > :global(.chat-message-markdown [data-part='message-strong']) {
+    color: inherit;
+    font-weight: var(--st-font-weight-bold);
+  }
+
+  /* ST1: `...` → highlighted code. */
+  .root > :global(.chat-message-markdown code),
+  .root > :global(.chat-message-markdown [data-part='message-code']) {
+    padding: 0.1em 0.35em;
+    border-radius: var(--st-radius-control);
+    color: var(--st-color-message-code);
+    font-family: var(--st-font-mono);
+    font-size: 0.92em;
+    background: var(--st-color-message-code-bg);
+  }
+
+  .root > :global(.chat-message-markdown pre) {
+    overflow-x: auto;
+    margin: 0 0 var(--st-space-sm);
+    padding: var(--st-space-sm) var(--st-space-md);
+    border-radius: var(--st-radius-control);
+    white-space: pre-wrap;
+    background: var(--st-color-message-code-bg);
+  }
+
+  .root > :global(.chat-message-markdown pre code) {
+    padding: 0;
+    background: transparent;
+  }
+
+  .root > :global(.chat-message-markdown a),
+  .root > :global(.chat-message-markdown [data-part='message-link']) {
+    color: var(--st-color-text-link);
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+  }
+
+  .root > :global(.chat-message-markdown img),
+  .root > :global(.chat-message-markdown [data-part='message-image']) {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: var(--st-space-sm) 0;
+    border-radius: var(--st-radius-card);
+  }
+
+  .root > :global(.chat-message-markdown hr) {
+    margin: var(--st-space-md) 0;
+    border: 0;
+    border-top: 1px solid var(--st-color-border);
+  }
+
+  .root[data-state='streaming'] > :global(.chat-message-markdown)::after {
+    content: '';
+    display: inline-block;
+    width: 0.45em;
+    height: 1em;
+    margin-inline-start: 0.12em;
+    vertical-align: text-bottom;
+    background: currentColor;
+    opacity: 0.75;
+    animation: streamCursor var(--st-motion-duration-slow) steps(1, end) infinite;
+  }
+
+  @keyframes streamCursor {
+    50% {
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .root[data-state='streaming'] > :global(.chat-message-markdown)::after {
+      animation: none;
+      opacity: 0.55;
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "id": "neotavern.rev4-jobs",
+  "name": "Rev4 Jobs Example",
+  "version": "1.0.0",
+  "apiVersion": 2,
+  "engines": {
+    "neotavern": ">=0.1.0"
+  },
+  "frontend": "frontend.js",
+  "permissions": [],
+  "requiredCapabilities": ["jobs.background", "ui.commands"],
+  "optionalCapabilities": ["notifications.show"]
+}

@@ -1,0 +1,14 @@
+/** Register the production-only PWA shell cache. API/SSE requests are excluded in sw.js. */
+export function registerServiceWorker(): void {
+  if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return;
+
+  window.addEventListener(
+    'load',
+    () => {
+      void navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch((error: unknown) => {
+        console.warn('Service worker registration failed', error);
+      });
+    },
+    { once: true },
+  );
+}

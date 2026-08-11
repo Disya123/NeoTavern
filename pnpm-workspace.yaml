@@ -1,0 +1,10 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# Single source of truth for shared tooling versions (DUP-25): package.json
+# files reference these via the `catalog:` protocol instead of duplicating
+# ranges that used to drift.
+catalog:
+  typescript: ^5.7.2
+  '@types/node': ^24.0.0
