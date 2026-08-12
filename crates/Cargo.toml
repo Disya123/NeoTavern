@@ -1,0 +1,6 @@
+# NeoTavern Rust workspace (Phase 0/1: wire contracts + runtime kernel).
+# The runtime-kernel member is created by the kernel task; it will exist
+# before any build runs.
+[workspace]
+resolver = "2"
+members = ["contracts-generated", "runtime-kernel", "storage", "adapters/remote-http"]

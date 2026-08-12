@@ -19,6 +19,9 @@
     "desktop:portable": "pnpm desktop:build && pnpm desktop:portable:package && pnpm desktop:shell-smoke",
     "desktop:dev": "pnpm --filter @neotavern/desktop dev",
     "desktop:build": "pnpm --filter @neotavern/desktop build",
+    "desktop:android:init": "pnpm --filter @neotavern/desktop tauri android init",
+    "desktop:android:dev": "pnpm --filter @neotavern/desktop tauri android dev",
+    "desktop:android:build": "pnpm --filter @neotavern/desktop tauri android build --apk --debug",
     "desktop:release": "pnpm desktop:prepare && node scripts/build-desktop-release.mjs && node scripts/smoke-desktop-release.mjs",
     "typecheck": "tsc -b tsconfig.build.json && pnpm --filter @neotavern/ui typecheck && pnpm --filter @neotavern/i18n typecheck && pnpm --filter @neotavern/legacy-compat typecheck && pnpm --filter @neotavern/web typecheck",
     "lint": "eslint . --max-warnings=0",
@@ -41,6 +44,11 @@
     "db:generate": "pnpm --filter @neotavern/db db:generate",
     "db:migrate": "pnpm --filter @neotavern/db db:migrate",
     "benchmark": "pnpm --filter @neotavern/db db:benchmark",
+    "contracts:generate": "node tools/contract-codegen/codegen.mjs",
+    "contracts:check": "node tools/contract-codegen/codegen.mjs --check",
+    "contracts:diff": "node tools/contract-codegen/diff.mjs",
+    "crates:test": "cargo test --manifest-path crates/Cargo.toml",
+    "crates:test:adapter": "cargo test --manifest-path crates/Cargo.toml -p remote-http-adapter",
     "clean": "node scripts/clean.mjs"
   },
   "devDependencies": {

@@ -14,7 +14,8 @@ import type {
   LegacyExtensionSettingsResponse,
   Message,
 } from '@neotavern/contracts';
-import { api, getCsrfToken } from '../api/client.js';
+import { legacyRaw } from '../api/backend.js';
+import { getCsrfToken } from '../api/client.js';
 import { useCharacters, useChat, useMessages, usePersonas, useSettings } from '../api/hooks.js';
 import { resolveActivePersona } from '../lib/macros.js';
 
@@ -42,8 +43,8 @@ export function LegacyBridgeSync() {
 
   useEffect(() => {
     let active = true;
-    void api
-      .get<LegacyExtensionSettingsResponse>('/legacy/extension-settings')
+    void legacyRaw()
+      .request<LegacyExtensionSettingsResponse>('GET', '/legacy/extension-settings')
       .then((response) => {
         if (!active) return;
         settingsRef.current = response.items;
@@ -110,10 +111,14 @@ export function LegacyBridgeSync() {
       },
       async sendChatMessage(text) {
         if (!chatId || text.trim().length === 0) return;
-        const message = await api.post<Message>(`/chats/${encodeURIComponent(chatId)}/messages`, {
-          role: 'user',
-          content: text,
-        });
+        const message = await legacyRaw().request<Message>(
+          'POST',
+          `/chats/${encodeURIComponent(chatId)}/messages`,
+          {
+            role: 'user',
+            content: text,
+          },
+        );
         await queryClient.invalidateQueries({ queryKey: ['messages', chatId] });
         (window as LegacyGlobals).eventSource?.emit(event_types.MESSAGE_SENT, message);
       },
@@ -126,8 +131,8 @@ export function LegacyBridgeSync() {
         (window as LegacyGlobals).eventSource?.emit(event_types.SETTINGS_UPDATED, {
           namespace,
         });
-        void api
-          .patch(`/legacy/extension-settings/${encodeURIComponent(namespace)}`, {
+        void legacyRaw()
+          .request('PATCH', `/legacy/extension-settings/${encodeURIComponent(namespace)}`, {
             settings: settingsToUpdate,
           })
           .catch(() => undefined);

@@ -678,3 +678,34 @@ Before using an unfamiliar or recently changed API, consult the official documen
 - [Playwright Documentation](https://playwright.dev/docs/intro)
 
 If a library is pinned to a specific major version, use the versioned docs for that major version. Do not port an example from `latest` until you have verified its compatibility with the versions in the lockfile.
+
+## 30. Parallel subagent usage
+
+Goal: the main agent and its subagents work concurrently. The main agent never idles waiting for subagent answers; it does its own slice of the work while subagents run.
+
+### Dispatch
+
+1. Decompose first, yourself. Split the work into independent slices before spawning anyone; never outsource the top-level plan or decomposition to a subagent.
+2. Spawn the whole phase's subagents in one `tasks[]` batch, as early as possible, before starting your own slice. The call is asynchronous: it returns job IDs immediately, and each result auto-delivers when its job settles.
+3. Never wait right after dispatching. `hub wait` is allowed only when you are fully blocked with no other work left. Collect settled results via `hub jobs` / `hub inbox` snapshots and auto-delivery.
+4. Continue your own reads, edits, and verification immediately after the dispatch call — they run in parallel with the subagents. Do not start your work only after theirs finishes.
+
+### Contracts
+
+5. Decide cross-slice contracts up front — shared interfaces, formats, function signatures, file ownership — and state them in the batch `context`. Subagents must not negotiate contracts with each other.
+6. Make every task self-contained: Target (exact files and symbols, explicit non-goals), Change (step-by-step), Acceptance (observable result). Subagents have no conversation history; never reference prior discussion.
+7. Instruct every subagent to skip formatters, linters, and project-wide test suites; the main agent runs those once at the end.
+8. Overlap on the same files is allowed — worst case, agents coordinate via IRC. But when two slices touch the same file, pre-assign ownership (who edits which symbols) in `context` to minimize merges.
+9. Pass large payloads via `local://` URIs, never inline.
+
+### Roles
+
+10. Pick the most specific agent type: `scout` for read-only research, `librarian` for library/API questions, `reviewer` / `security-reviewer` for review, `sonic` for mechanical updates, general `task` only when nothing else fits.
+11. Read-only exploration MUST use `scout`, never a writing agent.
+
+### Collection and failure
+
+12. A settled `hub jobs` snapshot is the delivery of that job's result. When integrating, verify claimed changes yourself — a completed job is not acceptance.
+13. A failed subagent degrades only its slice: absorb the slice yourself or re-dispatch it; never restart the batch.
+14. Stay under the concurrency cap (32); a larger batch queues, so split into waves.
+15. If a subagent's result is needed for a decision, finish every other piece of work first and only then wait — never block early.

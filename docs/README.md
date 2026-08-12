@@ -5,6 +5,10 @@ Index of the internal documentation. Each major topic has its own folder.
 ## Sections
 
 - [Architecture](architecture/README.md) — package boundaries, data flow, stack.
+- [Operations inventory](architecture/operations-inventory.md) — current `/api/v2` surface, feature ownership/routing.
+- [Product Wire Contracts](architecture/wire-contracts.md) — canonical contracts, codegen, handshake, corpus.
+- [Generation durability](architecture/generation-durability.md) — Phase 6 recoverable generation workflows, state machine, SSE resume.
+- [Version axes](architecture/version-axes.md) — independent app/storage/wire/SDK versioning.
 - [UX spec](ux/README.md) — user scenarios, states, accessibility, and
   acceptance criteria.
 - [API](api/README.md) — REST `/api/v2`, SSE generation, error envelope.

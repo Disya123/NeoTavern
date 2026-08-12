@@ -40,3 +40,4 @@ export * from './capabilityBroker.js';
 export * from './sdkOps.js';
 export * from './legacy.js';
 export * from './validate.js';
+export * from './wire/index.js';

@@ -50,7 +50,7 @@ async function fetchApi(input: RequestInfo | URL, init: RequestInit): Promise<Re
   }
 }
 
-async function request<T>(
+export async function request<T>(
   method: string,
   path: string,
   body?: unknown,
@@ -86,7 +86,7 @@ async function request<T>(
   return (await response.json()) as T;
 }
 
-async function upload<T>(path: string, file: File, signal?: AbortSignal): Promise<T> {
+export async function upload<T>(path: string, file: File, signal?: AbortSignal): Promise<T> {
   const body = new FormData();
   body.append('file', file);
   const response = await fetchApi(`${BASE}${path}`, {

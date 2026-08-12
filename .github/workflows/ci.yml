@@ -127,3 +127,42 @@ jobs:
           name: platform-parity-${{ matrix.os }}
           path: platform-parity-${{ matrix.os }}.json
           retention-days: 90
+
+  # Product Wire Contracts (ТЗ §6, Фаза 0): deterministic codegen must leave
+  # the tree clean, and the generated Rust boundary DTOs must compile and pass
+  # the cross-language corpus. The workspace spans contracts-generated,
+  # storage, runtime-kernel (Phase 1+) and the Phase 4 remote-http adapter;
+  # all crates are tested together.
+  contracts-rust:
+    name: Wire contracts codegen + Rust corpus
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build contracts (codegen input)
+        run: pnpm --filter @neotavern/contracts build
+
+      - name: Contract codegen determinism (must be byte-identical, no writes)
+        run: node tools/contract-codegen/codegen.mjs --check
+
+      - name: Contract semantic diff self-test (ТЗ §6.7)
+        run: node tools/contract-codegen/diff-test.mjs
+
+      - name: Generated artifacts must be committed (no working-tree diff)
+        run: git diff --exit-code -- packages/contracts/generated crates/contracts-generated/src/generated.rs
+
+      - name: Rust boundary corpus + kernel tests
+        run: cargo test --manifest-path crates/Cargo.toml

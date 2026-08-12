@@ -1,5 +1,31 @@
 # Architecture Decision Records
 
+## ADR-0030: Remote HTTP Adapter — envelope-over-HTTP on the shared Runtime Kernel
+
+Phase 4 headless/remote surface: a new std-only crate
+(`crates/adapters/remote-http`, tiny_http 0.12) maps the frozen wire envelopes
+onto `GET /meta`, `POST /rpc`, `POST /rpc/stream` (SSE) without defining any
+DTO of its own; `Arc<Mutex<Kernel>>` is the single writer coordinator shared
+with local IPC (§22), insecure non-loopback binds fail closed unless
+`trusted_proxy: true` declares a TLS-terminating boundary, protocol mismatch
+(426) is enforced before dispatch, and kernel product errors are copied into
+the envelope verbatim. SSE framing and Last-Event-ID exist now; durable
+sequenced streams arrive with Phase 6 generation workflows. Full decision,
+alternatives and consequences: [ADR-0030](0030-remote-http-adapter.md).
+
+## ADR-0029: Wire contract toolchain (TypeBox single source → deterministic codegen)
+
+Product Wire Contracts in `packages/contracts/src/wire/` are the single
+hand-authored cross-language contract source: TypeScript types are inferred
+from TypeBox schemas, the JSON Schema bundle + manifest (with `schemaHash`)
+are emitted deterministically by `tools/contract-codegen`, and the Rust
+boundary DTOs/validators in `crates/contracts-generated` are generated from
+the same bundle and committed. Wire-safe subset with fail-on-unsupported
+(no `serde_json::Value` fallback), string-discriminated unions, exact-match
+local handshake (`wireProtocol` + `schemaHash`), UTF-16 code-unit string
+length and a shared format registry on both validators. Full decision,
+alternatives and consequences: [ADR-0029](0029-wire-contract-toolchain.md).
+
 ## ADR-0028: SES bootstrap and TCB (two-phase bootstrap, lockdown policy, endowment list)
 
 Trusted `worker-bootstrap.mjs` performs a 9-step two-phase bootstrap:

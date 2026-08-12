@@ -16,7 +16,8 @@
  */
 import { kernel } from '@neotavern/plugin-sdk';
 import type { CursorPage, Message, MessageDraft } from '@neotavern/contracts';
-import { api, ApiError } from '../../api/client.js';
+import { legacyRaw } from '../../api/backend.js';
+import { ApiError } from '../../api/client.js';
 import type { KernelHostContext } from './types.js';
 
 const { KernelError, KernelErrorCode } = kernel;
@@ -105,10 +106,9 @@ export function attachChat(ctx: KernelHostContext): void {
     const chatId = ctx.currentChatId();
     if (!chatId) return null;
     try {
-      const chat = await api.get<ChatMeta>(`/chats/${encodeURIComponent(chatId)}`);
+      const chat = await legacyRaw().request<ChatMeta>('GET', `/chats/${encodeURIComponent(chatId)}`);
       return { chatId, title: chat.title };
     } catch (error) {
-      // The focused chat may vanish between the lookup and the call.
       if (
         error instanceof ApiError &&
         (error.code === 'CHAT_NOT_FOUND' || error.code === 'NOT_FOUND')
@@ -141,7 +141,10 @@ export function attachChat(ctx: KernelHostContext): void {
     }
     const suffix = query.size > 0 ? `?${query.toString()}` : '';
     try {
-      const page = await api.get<CursorPage<Message>>(`${messagePath(chatId)}${suffix}`);
+      const page = await legacyRaw().request<CursorPage<Message>>(
+        'GET',
+        `${messagePath(chatId)}${suffix}`,
+      );
       return {
         items: page.items,
         ...(page.nextCursor === null ? {} : { nextCursor: page.nextCursor }),
@@ -174,7 +177,7 @@ export function attachChat(ctx: KernelHostContext): void {
       body.idempotencyKey = params.idempotencyKey;
     }
     try {
-      const message = await api.post<Message>(messagePath(chatId), body);
+      const message = await legacyRaw().request<Message>('POST', messagePath(chatId), body);
       return { messageId: message.id };
     } catch (error) {
       throw toKernelError(error);
@@ -196,7 +199,7 @@ export function attachChat(ctx: KernelHostContext): void {
     // Stream into the server-side draft; the sequence makes replayed writes
     // idempotent no-ops (rev4 stage 3). No committed message exists yet.
     draft.sequence += 1;
-    await api.patch<MessageDraft>(draftPath(draft.chatId, draft.draftId), {
+    await legacyRaw().request<MessageDraft>('PATCH', draftPath(draft.chatId, draft.draftId), {
       content: draft.text,
       sequence: draft.sequence,
     });
@@ -232,7 +235,7 @@ export function attachChat(ctx: KernelHostContext): void {
     dispose: () => {
       for (const draft of [...drafts.values()]) {
         clearTimer(draft);
-        void api.del(draftPath(draft.chatId, draft.draftId)).catch(() => {});
+        void legacyRaw().request('DELETE', draftPath(draft.chatId, draft.draftId)).catch(() => {});
       }
       drafts.clear();
     },
@@ -243,9 +246,13 @@ export function attachChat(ctx: KernelHostContext): void {
     if (!ctx.hasCapability('chats.draft')) throw deny('chat.draft.start');
     const chatId = resolveChatId(ctx, params, 'chat.draft.start');
     try {
-      const draft = await api.post<MessageDraft>(`/chats/${encodeURIComponent(chatId)}/drafts`, {
-        role: 'assistant',
-      });
+      const draft = await legacyRaw().request<MessageDraft>(
+        'POST',
+        `/chats/${encodeURIComponent(chatId)}/drafts`,
+        {
+          role: 'assistant',
+        },
+      );
       drafts.set(draft.id, {
         draftId: draft.id,
         chatId,
@@ -292,13 +299,18 @@ export function attachChat(ctx: KernelHostContext): void {
       if (draft.flushing !== null) await draft.flushing;
       if (draft.dirty) {
         draft.sequence += 1;
-        await api.patch<MessageDraft>(draftPath(draft.chatId, draft.draftId), {
-          content: draft.text,
-          sequence: draft.sequence,
-        });
+        await legacyRaw().request<MessageDraft>(
+          'PATCH',
+          draftPath(draft.chatId, draft.draftId),
+          {
+            content: draft.text,
+            sequence: draft.sequence,
+          },
+        );
         draft.dirty = false;
       }
-      const committed = await api.post<{ messageId: string }>(
+      const committed = await legacyRaw().request<{ messageId: string }>(
+        'POST',
         draftPath(draft.chatId, draft.draftId) + '/commit',
         {},
       );
@@ -320,7 +332,7 @@ export function attachChat(ctx: KernelHostContext): void {
     if (draft.flushing !== null) {
       await draft.flushing.catch(() => {});
     }
-    await api.del(draftPath(draft.chatId, draft.draftId)).catch(() => {});
+    await legacyRaw().request('DELETE', draftPath(draft.chatId, draft.draftId)).catch(() => {});
     return {};
   });
 }

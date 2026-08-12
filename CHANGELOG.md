@@ -18,6 +18,62 @@ Public release prep:
 ## Unreleased
 ### Added
 
+- **Runtime Kernel + storage foundation (ТЗ 7.2 Фазы 0–2).** New `crates/`
+  workspace: `contracts-generated` (deterministic Rust boundary DTOs from the
+  TypeBox wire schemas), `runtime-kernel` (contract-validated dispatch,
+  handshake, cancellation, durable storage attach) and `neotavern-storage`
+  (exclusive data-root lease, pinned SQLite 3.53.2 baseline, migration ledger
+  with checksums, immutable assets with orphan GC, Backup-API recovery
+  snapshot, read-only Recovery Mode). A second writable process on the same
+  data root gets a controlled `data_root_in_use` error.
+- **Semantic contract diff (ТЗ §6.7).** `tools/contract-codegen/diff.mjs`
+  classifies breaking/additive wire changes between canonical bundles;
+  self-tested in CI (`diff-test.mjs`).
+- **Headless Remote Adapter (ТЗ 7.2 Фаза 4).** New `crates/adapters/remote-http`
+  (`remote-http-adapter`): a std-only tiny_http 0.12 adapter serving the frozen
+  wire envelopes over `GET /meta`, `POST /rpc` and `POST /rpc/stream` (SSE) on
+  the **same Runtime Kernel** as local IPC — one writer coordinator
+  (`Arc<Mutex<Kernel>>`), no SQLite access, no product rules. Envelope-over-HTTP:
+  valid envelopes always answer HTTP 200 with a `wire.response.envelope`;
+  transport failures map to 400/404/405/413/426 with canonical error codes.
+  Protocol negotiation (major equality, client minor ≤ server minor) is
+  enforced before dispatch, so a mismatched client can never execute product
+  writes; kernel product errors (`CHARACTER_NOT_FOUND`, …) pass through the
+  error envelope verbatim. Security defaults: loopback-only bind, non-loopback
+  requires an explicit `trusted_proxy` declaration (TLS-terminating boundary),
+  bounded body/connection limits; TLS termination and pairing land with Phase
+  4 hardening / Phase 9 (ADR-0030).
+- **Generation durability (ТЗ 7.2 Фаза 6).** Generation is now a recoverable
+  workflow on the Runtime Kernel: wire registry grows 15 → 20 operations
+  (`generation.get`, `generation.events`, `generation.retry`, `generation.keep`,
+  `generation.discard`; schema hash `7e469552…`), storage migration 3 adds
+  `generation_runs` + `generation_events` (schema revision 3), and the kernel
+  gains a writer-coordinator thread (`Kernel` is now `Send + Sync`,
+  `dispatch_stream` returns an `EventStream`). Durable state machine with
+  CAS-by-revision transitions, executor lease, deterministic fake provider
+  (`steps`/`fail-at`/`delay-ms`/`tokens-per-step` fault injection), per-step
+  committed event log, atomic terminal commit (final message + terminal event
+  in one transaction), and startup recovery of lease-expired runs to
+  `interrupted`. The remote adapter streams real SSE for `generation.start` /
+  `generation.retry` and resumes from `Last-Event-ID` via `generation.events`;
+  Retry / Keep partial / Discard reconciliation commands are idempotent
+  (ТЗ §62–§64). `NeoBackend` exposes the new generation API on all three
+  backends with parity tests. Docs:
+  `docs/architecture/generation-durability.md`.
+- **NeoBackend UI routing.** Every web UI API call now routes through the
+  `NeoBackend` facade (`apps/web/src/api/backend.ts`): typed wire operations
+  via `LegacyBackend`, unmigrated `/api/v2` routes through the temporary
+  `raw` passthrough (removed per-slice in Фаза 3).
+
+- **Android APK client (remote server test).** Tauri 2 Android target:
+  `#[cfg(desktop)]` sidecar/updater logic and `#[cfg(mobile)]` updater stubs;
+  `tauri.android.conf.json` overrides the platform config; a plain
+  `mobile-connect/` start page (no React, no Tauri API) remembers the server
+  address, auto-navigates on fresh loads and lets the system back button
+  return to the form. The APK connects to a NeoTavern server over LAN — no
+  Node, no localhost backend on the device, cleartext HTTP only in debug
+  builds via the manifest placeholder. Scripts: `desktop:android:init`,
+  `desktop:android:dev`, `desktop:android:build`.
 - **Non-destructive message edit history.** Real manual text edits now archive the
   previous content with CAS-safe restore, cursor pagination, checkpoint/branch copying,
   and chat export v2. Swipe/regenerate variants remain a separate history.

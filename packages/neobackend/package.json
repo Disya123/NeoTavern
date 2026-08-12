@@ -1,0 +1,26 @@
+{
+  "name": "@neotavern/neobackend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "UI facade over the NeoTavern product wire API: local kernel, remote SDK, and legacy /api/v2 adapters",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "clean": "tsc -b --clean"
+  },
+  "dependencies": {
+    "@neotavern/contracts": "workspace:*",
+    "@neotavern/client-sdk": "workspace:*",
+    "@sinclair/typebox": "^0.34.52"
+  }
+}

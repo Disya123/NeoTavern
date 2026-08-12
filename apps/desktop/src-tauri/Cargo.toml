@@ -10,6 +10,10 @@ rust-version = "1.84"
 name = "neotavern"
 path = "src/main.rs"
 
+[lib]
+name = "neotavern_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

@@ -15,6 +15,7 @@ export default tseslint.config(
       'apps/desktop/src-tauri/gen/**',
       'apps/desktop/src-tauri/resources/**',
       'apps/desktop/src-tauri/target/**',
+      'crates/target/**',
       'data/**',
       'backups/**',
       'cache/**',

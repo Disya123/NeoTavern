@@ -58,6 +58,64 @@ Windows resource paths without the `\\?\` verbatim prefix before passing them
 to the packaged Node. An unexpected backend exit terminates the shell with an
 error; a clean exit is marked separately and leaves no orphan sidecar.
 
+## Android APK client
+
+The APK is a Tauri 2 Android client that connects to a NeoTavern server. It
+does not bundle or start Node and does not run a localhost backend: the WebView
+navigates to the user's server origin (`http://<host>:<port>`), so the server
+serves the SPA itself and same-origin auth, CORS and CSP work unchanged. The
+same scheme applies to a future embedded backend on the device (WebView →
+`http://127.0.0.1:<port>`).
+
+Structure:
+
+- `apps/desktop/src-tauri/src/lib.rs` — shared shell crate. `#[cfg(desktop)]`
+  keeps the existing sidecar/updater logic; `#[cfg(mobile)]` registers only the
+  `mobile_check_core_update` / `mobile_install_core_update` stubs (the updater
+  reports `configured: false` on Android).
+- `apps/desktop/src-tauri/tauri.android.conf.json` — platform config override:
+  `frontendDist` → `../mobile-connect`, an empty `beforeBuildCommand`, the
+  single `main` window, a mobile CSP, no external binaries and no plugins.
+- `apps/desktop/mobile-connect/` — plain HTML/CSS/JS start page (no React, no
+  Tauri API). It remembers the server address in
+  `localStorage['neotavern.backendUrl']`, auto-navigates on fresh loads, and
+  skips the redirect on back/forward navigation so the system back button
+  returns to the form. Before redirecting it pushes a history copy of the
+  page: a failed navigation to an unreachable address replaces the current
+  history entry, so without the copy the back button would exit the app
+  instead of coming back to the form.
+- `apps/desktop/src-tauri/gen/android/` — generated Android Studio project
+  (`pnpm desktop:android:init`).
+
+Build and run:
+
+```bash
+pnpm desktop:android:init     # one-time scaffold (icons + identifier required)
+pnpm desktop:android:build    # debug APK (all ABIs)
+pnpm desktop:android:dev      # install + launch on a connected device/emulator
+```
+
+For a single ABI pass `--target x86_64` (emulator) or `--target aarch64`
+(device). Prerequisites: JDK 17+, `ANDROID_HOME` (platforms, build-tools,
+NDK), and the `aarch64-linux-android` / `x86_64-linux-android` rustup targets.
+Cleartext HTTP is enabled only for debug builds via the
+`usesCleartextTraffic` manifest placeholder in `app/build.gradle.kts`; release
+builds keep it disabled. Production remote access must use HTTPS (see
+ADR-0005) with the server's `NEOTA_REMOTE_ALLOW_INSECURE_HTTP` flag left off.
+
+LAN test (server code unchanged):
+
+```bash
+NEOTA_HOST=0.0.0.0 NEOTA_PORT=8000 NEOTA_REMOTE_ACCESS=true \
+NEOTA_REMOTE_TOKEN=<32+ chars> NEOTA_PUBLIC_ORIGIN=http://<LAN-IP>:8000 \
+NEOTA_WEB_DIR=<abs path>/apps/web/dist NEOTA_REMOTE_ALLOW_INSECURE_HTTP=true \
+pnpm --filter @neotavern/server start
+```
+
+The mobile-connect page accepts `http://<LAN-IP>:8000`, then the server's
+login gate exchanges the token for a session. `GET /api/v2/health` answers
+`{"status":"ok"}`.
+
 ## PWA
 
 - responsive layout (desktop/tablet/phone);

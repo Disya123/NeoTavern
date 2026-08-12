@@ -1,0 +1,804 @@
+//! NeoTavern runtime kernel — Phase 6: generation durability.
+//!
+//! A transport-free, in-process dispatcher over the product wire contract
+//! (see `packages/contracts/src/wire`). The kernel validates its embedded
+//! contract manifest at open time, decodes request payloads through the
+//! generated DTO checkers, and returns serialized DTO bytes.
+//!
+//! The crate is deliberately std-only: no tokio, no HTTP, no platform I/O.
+//! Transport lives in the facade layer (`packages/neobackend`).
+//!
+//! # Writer coordination (ТЗ §22)
+//!
+//! [`Kernel::open`] spawns ONE dedicated writer thread that owns the
+//! [`Database`](neotavern_storage::open::Database). The [`Kernel`] handle
+//! only holds command channels, the cached contract meta and open-time
+//! storage diagnostics, so it is `Send + Sync`. Every operation — unary or
+//! stream — is executed on the writer thread, which is the single writer of
+//! the data root. A stream (generation executor) runs inline on the writer
+//! thread and drains pending commands between provider steps, so unary
+//! operations (including `generation.cancel`) stay serviced mid-generation.
+
+use contracts_generated::generated::{self, MetaDto, MetaDtoApi, MetaDtoProductWire};
+use contracts_generated::{Issue, WireError};
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc;
+use std::sync::Arc;
+use std::time::Duration;
+
+pub mod generation;
+pub mod headless;
+pub mod local;
+pub mod product;
+
+/// FFI ABI version this kernel implements. Must match the embedded manifest's
+/// `ffiAbiVersion` (see `contracts_generated::contract_schema_hash`).
+pub const FFI_ABI_VERSION: u32 = 1;
+
+/// Cancellation token threaded through every dispatch.
+///
+/// Cheap to clone; clones share the underlying flag, so cancelling one clone
+/// is observed by every other clone.
+#[derive(Debug, Clone)]
+pub struct CancellationFlag(Arc<AtomicBool>);
+
+impl CancellationFlag {
+    /// Creates a fresh, non-cancelled flag.
+    pub fn new() -> Self {
+        Self(Arc::new(AtomicBool::new(false)))
+    }
+
+    /// Marks the flag as cancelled. In-flight dispatches observe this on their
+    /// next cancellation check.
+    pub fn cancel(&self) {
+        self.0.store(true, Ordering::SeqCst);
+    }
+
+    /// Returns `true` once [`cancel`](Self::cancel) has been called.
+    pub fn is_cancelled(&self) -> bool {
+        self.0.load(Ordering::SeqCst)
+    }
+}
+
+impl Default for CancellationFlag {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Kernel error codes, mirroring the wire error model
+/// (`INTERNAL`, `CONTRACT_VIOLATION`, `CANCELLED`, ...).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KernelErrorCode {
+    /// The caller's contract expectations do not match the embedded manifest.
+    ContractMismatch,
+    /// A payload failed the generated DTO checker.
+    ContractViolation,
+    /// The requested operation id is not registered.
+    OperationNotFound,
+    /// The caller is not authorized for the operation (unused in Phase 1).
+    Unauthorized,
+    /// An unexpected internal failure.
+    Internal,
+    /// The operation was cancelled before execution.
+    Cancelled,
+    /// The data root is already held by another live process (ТЗ §22).
+    DataRootInUse,
+    /// A storage-layer failure (SQLite, migrations, integrity).
+    StorageFailure,
+    /// A product record was not found (wire product code `*_NOT_FOUND`, e.g.
+    /// `CHARACTER_NOT_FOUND`).
+    NotFound,
+    /// A product state conflict (wire product code `*_CONFLICT`).
+    Conflict,
+    /// A provider-level failure. The wire-code mapping
+    /// (`PROVIDER_ERROR`) lives in the transport adapter; the kernel only
+    /// defines the class so the mapping table has a source code.
+    ProviderError,
+}
+
+impl std::fmt::Display for KernelErrorCode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let text = match self {
+            KernelErrorCode::ContractMismatch => "contract-mismatch",
+            KernelErrorCode::ContractViolation => "contract-violation",
+            KernelErrorCode::OperationNotFound => "operation-not-found",
+            KernelErrorCode::Unauthorized => "unauthorized",
+            KernelErrorCode::Internal => "internal",
+            KernelErrorCode::Cancelled => "cancelled",
+            KernelErrorCode::DataRootInUse => "data-root-in-use",
+            KernelErrorCode::StorageFailure => "storage-failure",
+            KernelErrorCode::NotFound => "not-found",
+            KernelErrorCode::Conflict => "conflict",
+            KernelErrorCode::ProviderError => "provider-error",
+        };
+        f.write_str(text)
+    }
+}
+
+impl std::error::Error for KernelErrorCode {}
+
+/// Error surfaced by [`Kernel`] dispatch.
+#[derive(Debug, Clone, PartialEq)]
+pub struct KernelError {
+    /// The error class.
+    pub code: KernelErrorCode,
+    /// Human-readable detail.
+    pub message: String,
+    /// Per-path violations from the generated checkers (empty unless
+    /// [`KernelErrorCode::ContractViolation`]).
+    pub issues: Vec<Issue>,
+    /// Diagnostic `(key, value)` parameters (host diagnostics; not part of
+    /// the wire product error unless [`Self::product`] is set).
+    pub params: Vec<(String, String)>,
+    /// Wire product error payload when the failure is product-level (e.g.
+    /// `CHARACTER_NOT_FOUND`); the host glue copies this DTO into the
+    /// response envelope verbatim.
+    ///
+    /// Boxed to keep [`KernelError`] under clippy's 128-byte
+    /// `result_large_err` threshold (the DTO is ~104 bytes); deref makes the
+    /// box transparent at use sites.
+    pub product: Option<Box<generated::ProductErrorDto>>,
+}
+
+impl KernelError {
+    fn new(code: KernelErrorCode, message: impl Into<String>) -> Self {
+        Self {
+            code,
+            message: message.into(),
+            issues: Vec::new(),
+            params: Vec::new(),
+            product: None,
+        }
+    }
+
+    /// Creates an error with diagnostic `(key, value)` parameters.
+    pub fn with_params(
+        code: KernelErrorCode,
+        message: impl Into<String>,
+        params: Vec<(String, String)>,
+    ) -> Self {
+        Self {
+            code,
+            message: message.into(),
+            issues: Vec::new(),
+            params,
+            product: None,
+        }
+    }
+
+    /// Builds a product-level error carrying the wire
+    /// [`generated::ProductErrorDto`].
+    ///
+    /// The kernel-level class is derived from the stable wire code:
+    /// `*_NOT_FOUND` codes map to [`KernelErrorCode::NotFound`], `*_CONFLICT`
+    /// codes to [`KernelErrorCode::Conflict`], `PROVIDER_*` codes to
+    /// [`KernelErrorCode::ProviderError`], and every other product code to
+    /// [`KernelErrorCode::Conflict`].
+    pub fn product(code: impl Into<String>, params: Vec<(String, String)>) -> Self {
+        let code = code.into();
+        let kernel_code = if code.ends_with("_NOT_FOUND") {
+            KernelErrorCode::NotFound
+        } else if code.starts_with("PROVIDER_") {
+            KernelErrorCode::ProviderError
+        } else {
+            KernelErrorCode::Conflict
+        };
+        let params_value = serde_json::Value::Object(
+            params
+                .into_iter()
+                .map(|(key, value)| (key, serde_json::Value::String(value)))
+                .collect(),
+        );
+        Self {
+            code: kernel_code,
+            message: format!("product error {code}"),
+            issues: Vec::new(),
+            params: Vec::new(),
+            product: Some(Box::new(generated::ProductErrorDto {
+                code,
+                params: params_value,
+                trace_id: None,
+                correlation_id: None,
+            })),
+        }
+    }
+}
+
+impl From<WireError> for KernelError {
+    /// Payload decode failures are always contract violations, never panics.
+    fn from(wire: WireError) -> Self {
+        Self {
+            code: KernelErrorCode::ContractViolation,
+            message: wire.message,
+            issues: wire.issues,
+            params: Vec::new(),
+            product: None,
+        }
+    }
+}
+
+impl From<neotavern_storage::StorageError> for KernelError {
+    /// Storage failures surface as kernel errors with the stable storage code
+    /// preserved; the data-root lease conflict keeps its dedicated code
+    /// (ТЗ §22: controlled `data_root_in_use`).
+    fn from(err: neotavern_storage::StorageError) -> Self {
+        let code = match err.code {
+            neotavern_storage::StorageErrorCode::DataRootInUse => KernelErrorCode::DataRootInUse,
+            _ => KernelErrorCode::StorageFailure,
+        };
+        KernelError::new(code, format!("storage {:?}: {}", err.code, err.message))
+    }
+}
+
+impl std::fmt::Display for KernelError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "kernel error {}: {}", self.code, self.message)
+    }
+}
+
+impl std::error::Error for KernelError {}
+
+/// Configuration required to open a [`Kernel`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KernelConfig {
+    /// The schema hash the caller expects the embedded contract manifest to
+    /// carry. Must equal `contracts_generated::contract_schema_hash()`.
+    pub expected_schema_hash: String,
+    /// FFI ABI version the caller expects; must equal [`FFI_ABI_VERSION`].
+    pub ffi_abi_version: u32,
+    /// Optional local data root. `None` keeps the kernel stateless
+    /// (in-memory test harness). When set, the kernel acquires the exclusive
+    /// data-root lease and opens SQLite through the storage crate (ТЗ §22/31);
+    /// the writer thread holds the single writable connection for its
+    /// lifetime.
+    pub data_root: Option<std::path::PathBuf>,
+}
+
+/// A notice delivered to a stream consumer by [`EventStream::next_notice`].
+///
+/// Notices are an optimization over polling `generation.events`: the durable
+/// event log is the canonical source of truth, so a dropped notice is never
+/// a correctness problem.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StreamNotice {
+    /// The generation executor durably committed every event with sequence
+    /// `<= through_sequence` for the run.
+    Committed { through_sequence: i64 },
+    /// The run reached a terminal state; `last_sequence` is the sequence of
+    /// the terminal event (the final event in the run's durable log).
+    Terminal { last_sequence: i64 },
+}
+
+/// A live generation stream returned by [`Kernel::dispatch_stream`].
+///
+/// The consumer polls [`next_notice`](Self::next_notice) and replays the
+/// durable `generation.events` log for the run (the run id is
+/// [`stream_id`](Self::stream_id)). The underlying executor runs on the
+/// kernel's writer thread and keeps producing even if this handle is dropped
+/// — the run is durable and recoverable.
+#[derive(Debug)]
+pub struct EventStream {
+    rx: mpsc::Receiver<StreamNotice>,
+    stream_id: String,
+}
+
+impl EventStream {
+    /// The run id this stream is generating (== the `streamId` of every
+    /// event envelope in the run's durable log).
+    pub fn stream_id(&self) -> &str {
+        &self.stream_id
+    }
+
+    /// Waits up to `timeout` for the next notice.
+    ///
+    /// Returns `None` on timeout **or** when the stream has ended (the
+    /// executor finished and the notice channel closed). Consumers should
+    /// poll `generation.events` after a timeout and treat a terminal event
+    /// type as the end of the stream.
+    pub fn next_notice(&mut self, timeout: Duration) -> Option<StreamNotice> {
+        self.rx.recv_timeout(timeout).ok()
+    }
+}
+
+/// One command sent to the kernel's writer thread. All replies are
+/// rendezvous-style `sync_channel(1)` pairs owned by the caller.
+enum Command {
+    /// A unary operation: execute and reply with the serialized response.
+    Unary {
+        op: String,
+        req: Vec<u8>,
+        cancel: CancellationFlag,
+        reply: mpsc::SyncSender<Result<Vec<u8>, KernelError>>,
+    },
+    /// A stream operation (`generation.start` / `generation.retry`): create
+    /// the run, reply with the notice channel, then run the executor inline.
+    Stream {
+        op: String,
+        req: Vec<u8>,
+        cancel: CancellationFlag,
+        reply: mpsc::SyncSender<Result<StreamStart, KernelError>>,
+    },
+    /// Orderly shutdown: stop the writer loop (mid-generation this sets a
+    /// stop flag observed at the executor's next step boundary) and ack.
+    Shutdown { reply: mpsc::SyncSender<()> },
+}
+
+/// The reply payload of a [`Command::Stream`]: the run id and the consumer's
+/// end of the notice channel.
+struct StreamStart {
+    stream_id: String,
+    notices: mpsc::Receiver<StreamNotice>,
+}
+
+/// The runtime kernel: contract-validated dispatch over optional durable
+/// storage. The kernel is the single writer of its data root while it lives.
+///
+/// The kernel is a cheap `Send + Sync` handle: a command channel to the
+/// dedicated writer thread (which owns the
+/// [`Database`](neotavern_storage::open::Database)) plus cached contract
+/// meta and open-time storage diagnostics. Dropping the kernel sends an
+/// orderly shutdown command and joins the writer thread.
+#[derive(Debug)]
+pub struct Kernel {
+    cmd_tx: mpsc::Sender<Command>,
+    meta: MetaDto,
+    has_storage: bool,
+    storage_diagnostics: Option<StorageDiagnostics>,
+    writer: Option<std::thread::JoinHandle<()>>,
+}
+
+/// Storage-layer version report for diagnostics and recovery mode (cached at
+/// open time — the writer thread owns the connection afterwards).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StorageDiagnostics {
+    /// `storageFormat` from the database metadata (ТЗ §28).
+    pub storage_format: Option<i64>,
+    /// `schemaRevision` (`PRAGMA user_version`, ТЗ §29/30).
+    pub schema_revision: Option<i64>,
+    /// The bundled SQLite library version (ТЗ §23 baseline).
+    pub sqlite_version: String,
+}
+
+/// Builds the `wire.meta.dto` describing this kernel build.
+fn build_meta() -> MetaDto {
+    MetaDto {
+        app_version: env!("CARGO_PKG_VERSION").to_string(),
+        // API and product wire protocol are both 1.0 in this phase.
+        api: MetaDtoApi { major: 1, minor: 0 },
+        product_wire: MetaDtoProductWire { major: 1, minor: 0 },
+        minimum_client_version: None,
+        features: HashMap::from([("core".to_string(), 1)]),
+    }
+}
+
+/// Executes `handle_meta_get` against the cached meta.
+fn handle_meta_get(meta: &MetaDto, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    // Strict empty request: `{}` exactly, any extra field is a violation.
+    generated::decode_empty_request_dto(request)?;
+    let value = serde_json::to_value(meta).map_err(|err| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            format!("failed to serialize meta response: {err}"),
+        )
+    })?;
+    generated::validate_meta_dto(&value).map_err(|issues| KernelError {
+        code: KernelErrorCode::ContractViolation,
+        message: "kernel meta dto failed validation".to_string(),
+        issues,
+        params: Vec::new(),
+        product: None,
+    })?;
+    serde_json::to_vec(&value).map_err(|err| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            format!("failed to serialize meta response: {err}"),
+        )
+    })
+}
+
+/// Runs a unary operation against the writer's database (when present).
+///
+/// Product operations require durable storage: a stateless kernel (no
+/// `data_root`) yields [`KernelErrorCode::StorageFailure`]. `meta.get` does
+/// not go through this path and stays available stateless.
+fn with_db_opt<F>(
+    db: Option<&mut neotavern_storage::open::Database>,
+    f: F,
+) -> Result<Vec<u8>, KernelError>
+where
+    F: FnOnce(&mut neotavern_storage::open::Database) -> Result<Vec<u8>, KernelError>,
+{
+    match db {
+        Some(db) => f(db),
+        None => Err(KernelError::new(
+            KernelErrorCode::StorageFailure,
+            "operation requires durable storage",
+        )),
+    }
+}
+
+/// Executes one unary operation on the writer thread.
+fn handle_unary(
+    db: Option<&mut neotavern_storage::open::Database>,
+    meta: &MetaDto,
+    op: &str,
+    req: &[u8],
+    cancel: &CancellationFlag,
+) -> Result<Vec<u8>, KernelError> {
+    if cancel.is_cancelled() {
+        return Err(KernelError::new(
+            KernelErrorCode::Cancelled,
+            "operation cancelled before dispatch",
+        ));
+    }
+    match op {
+        "meta.get" => handle_meta_get(meta, req),
+        // Phase 3 product CRUD over durable storage.
+        "characters.list" => with_db_opt(db, |db| product::characters_list(db, req)),
+        "characters.get" => with_db_opt(db, |db| product::characters_get(db, req)),
+        "characters.create" => with_db_opt(db, |db| product::characters_create(db, req)),
+        "characters.update" => with_db_opt(db, |db| product::characters_update(db, req)),
+        "characters.delete" => with_db_opt(db, |db| product::characters_delete(db, req)),
+        "chats.list" => with_db_opt(db, |db| product::chats_list(db, req)),
+        "chats.get" => with_db_opt(db, |db| product::chats_get(db, req)),
+        "chats.messages.list" => with_db_opt(db, |db| product::messages_list(db, req)),
+        "lorebooks.list" => with_db_opt(db, |db| product::lorebooks_list(db, req)),
+        "presets.list" => with_db_opt(db, |db| product::presets_list(db, req)),
+        // Phase 6 generation operations.
+        "generation.cancel" => with_db_opt(db, |db| generation::generation_cancel(db, req)),
+        "generation.get" => with_db_opt(db, |db| generation::generation_get(db, req)),
+        "generation.events" => with_db_opt(db, |db| generation::generation_events(db, req)),
+        "generation.keep" => with_db_opt(db, |db| generation::generation_keep(db, req)),
+        "generation.discard" => with_db_opt(db, |db| generation::generation_discard(db, req)),
+        _ => Err(KernelError::new(
+            KernelErrorCode::OperationNotFound,
+            format!("unknown operation: {op}"),
+        )),
+    }
+}
+
+/// Drains every command currently queued on the writer channel, executing
+/// unary operations inline, queueing stream commands for after the current
+/// stream, and acknowledging shutdowns (which set `stop`).
+///
+/// This runs between provider steps of an inline generation executor, which
+/// is how unary operations (notably `generation.cancel`) stay serviced while
+/// a generation is running. Returns `true` when a shutdown was observed.
+fn drain_pending(
+    db: &mut neotavern_storage::open::Database,
+    meta: &MetaDto,
+    cmd_rx: &mpsc::Receiver<Command>,
+    pending: &mut Vec<Command>,
+    stop: &mut bool,
+) -> bool {
+    let mut shutdown = false;
+    while let Ok(cmd) = cmd_rx.try_recv() {
+        match cmd {
+            Command::Unary {
+                op,
+                req,
+                cancel,
+                reply,
+            } => {
+                let result = handle_unary(Some(db), meta, &op, &req, &cancel);
+                let _ = reply.send(result);
+            }
+            Command::Stream {
+                op,
+                req,
+                cancel,
+                reply,
+            } => {
+                // At most one stream runs at a time; the rest queue until the
+                // current executor reaches a step boundary and finishes.
+                pending.push(Command::Stream {
+                    op,
+                    req,
+                    cancel,
+                    reply,
+                });
+            }
+            Command::Shutdown { reply } => {
+                shutdown = true;
+                *stop = true;
+                let _ = reply.send(());
+            }
+        }
+    }
+    shutdown
+}
+
+/// The writer thread: owns the [`Database`], runs startup recovery, and
+/// executes every command. Stream commands run their executor inline and
+/// drain the command channel between provider steps.
+fn writer_main(
+    mut db: Option<neotavern_storage::open::Database>,
+    cmd_rx: mpsc::Receiver<Command>,
+    meta: MetaDto,
+    lease_owner: String,
+) {
+    if let Some(db) = &mut db {
+        if let Err(err) = generation::recover(db) {
+            eprintln!("kernel: startup generation recovery failed: {err}");
+        }
+    }
+    let mut stop = false;
+    let mut pending: Vec<Command> = Vec::new();
+    while !stop {
+        let cmd = match pending.first() {
+            Some(_) => pending.remove(0),
+            None => match cmd_rx.recv() {
+                Ok(cmd) => cmd,
+                // All senders dropped (e.g. the Kernel was leaked without a
+                // Drop): exit and release the data-root lease.
+                Err(_) => break,
+            },
+        };
+        match cmd {
+            Command::Unary {
+                op,
+                req,
+                cancel,
+                reply,
+            } => {
+                let result = handle_unary(db.as_mut(), &meta, &op, &req, &cancel);
+                let _ = reply.send(result);
+            }
+            Command::Stream {
+                op,
+                req,
+                cancel: _,
+                reply,
+            } => {
+                let launch = match db.as_mut() {
+                    Some(db) => generation::stream_start(db, &op, &req, &lease_owner),
+                    None => Err(KernelError::new(
+                        KernelErrorCode::StorageFailure,
+                        "operation requires durable storage",
+                    )),
+                };
+                match launch {
+                    Err(err) => {
+                        let _ = reply.send(Err(err));
+                    }
+                    Ok(launch) => {
+                        let _ = reply.send(Ok(StreamStart {
+                            stream_id: launch.stream_id.clone(),
+                            notices: launch.notice_rx,
+                        }));
+                        if let Some(db) = db.as_mut() {
+                            let mut drain = |db: &mut neotavern_storage::open::Database| {
+                                drain_pending(db, &meta, &cmd_rx, &mut pending, &mut stop)
+                            };
+                            let result = generation::execute_stream(
+                                db,
+                                &launch.stream_id,
+                                &launch.notice_tx,
+                                &mut drain,
+                                &lease_owner,
+                            );
+                            if let Err(err) = result {
+                                eprintln!("kernel: generation executor failed: {err}");
+                            }
+                        }
+                    }
+                }
+            }
+            Command::Shutdown { reply } => {
+                stop = true;
+                let _ = reply.send(());
+            }
+        }
+    }
+    // `db` (and its data-root lease) is dropped here.
+}
+
+impl Kernel {
+    /// Opens a kernel, validating the caller's contract expectations against
+    /// the embedded manifest, then spawning the writer thread.
+    ///
+    /// # Errors
+    ///
+    /// [`KernelErrorCode::ContractMismatch`] when the expected schema hash or
+    /// FFI ABI version does not match the embedded contract; storage-layer
+    /// errors (lease conflicts, corruption, ...) propagate from `open`.
+    pub fn open(config: KernelConfig) -> Result<Kernel, KernelError> {
+        let actual = contracts_generated::contract_schema_hash();
+        if config.expected_schema_hash != actual {
+            return Err(KernelError::new(
+                KernelErrorCode::ContractMismatch,
+                format!(
+                    "schema hash mismatch: caller expects {}, embedded manifest has {}",
+                    config.expected_schema_hash, actual
+                ),
+            ));
+        }
+        if config.ffi_abi_version != FFI_ABI_VERSION {
+            return Err(KernelError::new(
+                KernelErrorCode::ContractMismatch,
+                format!(
+                    "ffi abi version mismatch: caller expects {}, kernel implements {}",
+                    config.ffi_abi_version, FFI_ABI_VERSION
+                ),
+            ));
+        }
+        let db = match &config.data_root {
+            Some(root) => {
+                let mut progress = |p: neotavern_storage::migrations::MigrationProgress| {
+                    // Structured diagnostics hook for the host (Phase 2:
+                    // stderr only; the observability module lands later).
+                    eprintln!("storage: applying migration {} ({})", p.id, p.name);
+                };
+                Some(neotavern_storage::open::open(
+                    root,
+                    &neotavern_storage::baseline::ConnectionPolicy::default(),
+                    &mut progress,
+                )?)
+            }
+            None => None,
+        };
+        let (has_storage, storage_diagnostics) = match &db {
+            Some(db) => (
+                true,
+                Some(StorageDiagnostics {
+                    storage_format: db.storage_format().ok(),
+                    schema_revision: db.schema_revision().ok(),
+                    sqlite_version: neotavern_storage::baseline::sqlite_libversion().to_string(),
+                }),
+            ),
+            None => (false, None),
+        };
+        let meta = build_meta();
+        let (cmd_tx, cmd_rx) = mpsc::channel();
+        // Per-kernel executor identity for the generation lease (ТЗ §63).
+        let lease_owner = product::new_id();
+        let writer_meta = meta.clone();
+        let writer = std::thread::Builder::new()
+            .name("kernel-writer".to_string())
+            .spawn(move || writer_main(db, cmd_rx, writer_meta, lease_owner))
+            .map_err(|err| {
+                KernelError::new(
+                    KernelErrorCode::Internal,
+                    format!("failed to spawn writer thread: {err}"),
+                )
+            })?;
+        Ok(Kernel {
+            cmd_tx,
+            meta,
+            has_storage,
+            storage_diagnostics,
+            writer: Some(writer),
+        })
+    }
+
+    /// Builds the `wire.meta.dto` describing this kernel build.
+    pub fn meta(&self) -> MetaDto {
+        self.meta.clone()
+    }
+
+    /// Storage-layer diagnostics for this kernel instance (ТЗ §86: version
+    /// reporting), captured at open time. `None` when the kernel runs
+    /// stateless.
+    pub fn storage_diagnostics(&self) -> Option<StorageDiagnostics> {
+        self.storage_diagnostics.clone()
+    }
+
+    /// Whether this kernel holds durable storage.
+    pub fn has_storage(&self) -> bool {
+        self.has_storage
+    }
+
+    /// Dispatches `operation_id` over `request` bytes.
+    ///
+    /// Cancellation is checked first: a cancelled flag yields
+    /// [`KernelErrorCode::Cancelled`]. Unknown operation ids yield
+    /// [`KernelErrorCode::OperationNotFound`]. Request payloads are decoded
+    /// through the generated DTO checkers, so malformed input is a
+    /// [`KernelErrorCode::ContractViolation`] — never a panic.
+    ///
+    /// The generation stream operations (`generation.start`,
+    /// `generation.retry`) must go through
+    /// [`dispatch_stream`](Self::dispatch_stream); dispatching them here
+    /// yields [`KernelErrorCode::OperationNotFound`].
+    pub fn dispatch(
+        &self,
+        operation_id: &str,
+        request: &[u8],
+        cancel: &CancellationFlag,
+    ) -> Result<Vec<u8>, KernelError> {
+        if cancel.is_cancelled() {
+            return Err(KernelError::new(
+                KernelErrorCode::Cancelled,
+                "operation cancelled before dispatch",
+            ));
+        }
+        if matches!(operation_id, "generation.start" | "generation.retry") {
+            return Err(KernelError::new(
+                KernelErrorCode::OperationNotFound,
+                format!("operation {operation_id} must use dispatch_stream"),
+            ));
+        }
+        let (reply_tx, reply_rx) = mpsc::sync_channel(1);
+        self.cmd_tx
+            .send(Command::Unary {
+                op: operation_id.to_string(),
+                req: request.to_vec(),
+                cancel: cancel.clone(),
+                reply: reply_tx,
+            })
+            .map_err(|_| {
+                KernelError::new(KernelErrorCode::Internal, "kernel writer thread terminated")
+            })?;
+        reply_rx.recv().map_err(|_| {
+            KernelError::new(KernelErrorCode::Internal, "kernel writer thread terminated")
+        })?
+    }
+
+    /// Dispatches a stream operation (`generation.start` / `generation.retry`)
+    /// and returns the live [`EventStream`] for the new run.
+    ///
+    /// The run is created durably before this returns; the executor then runs
+    /// on the kernel's writer thread, committing each provider step atomically.
+    /// Consumers poll [`EventStream::next_notice`] and replay the durable
+    /// `generation.events` log. Cancelling a run goes through
+    /// `generation.cancel` on [`dispatch`](Self::dispatch).
+    ///
+    /// # Errors
+    ///
+    /// [`KernelErrorCode::OperationNotFound`] for non-stream operations;
+    /// [`KernelErrorCode::StorageFailure`] on a stateless kernel; product
+    /// errors (`CHAT_NOT_FOUND`, `GENERATION_RUN_NOT_FOUND`,
+    /// `GENERATION_RUN_STATE_CONFLICT`) from the run setup.
+    pub fn dispatch_stream(
+        &self,
+        operation_id: &str,
+        request: &[u8],
+        cancel: &CancellationFlag,
+    ) -> Result<EventStream, KernelError> {
+        if cancel.is_cancelled() {
+            return Err(KernelError::new(
+                KernelErrorCode::Cancelled,
+                "operation cancelled before dispatch",
+            ));
+        }
+        if !matches!(operation_id, "generation.start" | "generation.retry") {
+            return Err(KernelError::new(
+                KernelErrorCode::OperationNotFound,
+                format!("operation {operation_id} must use dispatch"),
+            ));
+        }
+        let (reply_tx, reply_rx) = mpsc::sync_channel(1);
+        self.cmd_tx
+            .send(Command::Stream {
+                op: operation_id.to_string(),
+                req: request.to_vec(),
+                cancel: cancel.clone(),
+                reply: reply_tx,
+            })
+            .map_err(|_| {
+                KernelError::new(KernelErrorCode::Internal, "kernel writer thread terminated")
+            })?;
+        let start = reply_rx.recv().map_err(|_| {
+            KernelError::new(KernelErrorCode::Internal, "kernel writer thread terminated")
+        })??;
+        Ok(EventStream {
+            rx: start.notices,
+            stream_id: start.stream_id,
+        })
+    }
+}
+
+impl Drop for Kernel {
+    fn drop(&mut self) {
+        // Orderly shutdown: the writer stops (mid-generation it commits
+        // progress at the next step boundary), closes the database and exits.
+        let (reply_tx, reply_rx) = mpsc::sync_channel(1);
+        let _ = self.cmd_tx.send(Command::Shutdown { reply: reply_tx });
+        let _ = reply_rx.recv();
+        if let Some(writer) = self.writer.take() {
+            let _ = writer.join();
+        }
+    }
+}
