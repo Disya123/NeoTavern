@@ -54,15 +54,15 @@ describe('shouldLoadLegacyFrontend', () => {
 });
 
 describe('readLegacyFrontendSetting', () => {
-  it('reads extensions.legacyFrontend defensively', () => {
-    expect(readLegacyFrontendSetting({ extensions: { legacyFrontend: true } })).toBe(true);
-    expect(readLegacyFrontendSetting({ extensions: { legacyFrontend: false } })).toBe(false);
-    expect(readLegacyFrontendSetting({ extensions: {} })).toBe(false);
+  it('reads the flat extensions.legacyFrontend key defensively', () => {
+    expect(readLegacyFrontendSetting({ 'extensions.legacyFrontend': true })).toBe(true);
+    expect(readLegacyFrontendSetting({ 'extensions.legacyFrontend': false })).toBe(false);
+    expect(readLegacyFrontendSetting({ 'extensions.legacyFrontend': 'yes' })).toBe(false);
+    expect(readLegacyFrontendSetting({ other: { legacyFrontend: true } })).toBe(false);
+    expect(readLegacyFrontendSetting({ extensions: { legacyFrontend: true } })).toBe(false);
     expect(readLegacyFrontendSetting({})).toBe(false);
     expect(readLegacyFrontendSetting(null)).toBe(false);
     expect(readLegacyFrontendSetting('nope')).toBe(false);
-    expect(readLegacyFrontendSetting({ extensions: 'nope' })).toBe(false);
-    expect(readLegacyFrontendSetting({ extensions: { legacyFrontend: 'yes' } })).toBe(false);
   });
 });
 

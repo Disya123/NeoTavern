@@ -32,14 +32,13 @@ export function shouldLoadLegacyFrontend(input: {
 
 /**
  * Defensive read of the app-level `extensions.legacyFrontend` setting from
- * the settings payload. The key is registered server-side and is not part of
- * the frozen wire schema, so unknown shapes safely read as `false`.
+ * the settings payload. The settings API serves a flat key-value object
+ * (repo keys are literal, e.g. `'extensions.legacyFrontend'`), so the flat
+ * key is the single contract shape; unknown shapes safely read as `false`.
  */
 export function readLegacyFrontendSetting(settings: unknown): boolean {
   if (typeof settings !== 'object' || settings === null) return false;
-  const extensions = (settings as Record<string, unknown>)['extensions'];
-  if (typeof extensions !== 'object' || extensions === null) return false;
-  return (extensions as Record<string, unknown>)['legacyFrontend'] === true;
+  return (settings as Record<string, unknown>)['extensions.legacyFrontend'] === true;
 }
 
 class LegacyFrontendRuntime {
