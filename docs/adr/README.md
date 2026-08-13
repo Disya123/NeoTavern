@@ -1,5 +1,41 @@
 # Architecture Decision Records
 
+## ADR-0039: Legacy Compatibility Authority Boundary
+
+Legacy compatibility is an **authority-non-expanding boundary** (ТЗ 10/10
+rev2 §14): compatibility MAY translate or restrict an operation but MUST NOT
+grant more authority than the corresponding native capability. Three
+compatibility tiers (Native compatible / Sandbox compatible / Architecturally
+incompatible); unconditional prohibitions — canonical `database.sqlite`+WAL/SHM,
+`SecretStore`, kernel internals, other plugins' data, `legacy.superuser`,
+Product Wire bypass — that user consent, debug mode or a high-risk grant
+cannot lift; scoped VFS (`/data/extensions/<id>/...` →
+`<data-root>/plugin-data/<plugin-id>/...`); high-risk grants limited to
+arbitrary public-host network, picker-scoped filesystem, Desktop process
+execution behind an allowlist, and the legacy frontend unmanaged island;
+compatibility adapter is not a second core; permanent
+`packages/legacy-compat/` (`ST Compatibility API v1`) vs temporary
+`packages/migration-shims/` with CI-enforced expiry (ARC-09); per-API
+capability mapping with an ARC-11 mapping test. Full decision, alternatives
+and consequences: [ADR-0039](0039-legacy-compatibility-authority-boundary.md).
+
+## ADR-0038: Canonical Rust Kernel Core — Architecture Convergence decision
+
+The Rust Runtime Kernel is the **canonical application core** of NeoTavern —
+the single owner of product logic and persistent state (ТЗ 10/10 rev2 §4,
+§28). The Fastify/Drizzle contour is feature-frozen legacy/migration mode;
+new product logic lives in the Kernel. Canonical filename `database.sqlite`;
+live dual-write between `app.db` and `database.sqlite` is prohibited; support
+tiers (Desktop Released after the M2 gate, Headless later, Android
+Experimental, Web Client Remote-only); **honest staged Desktop default**
+(public builds use the tested legacy sidecar, Kernel is Preview, nightly
+defaults to Kernel, public switch only after the release gate); standalone
+browser/WASM runtime is out of scope; legacy compatibility is an
+authority-non-expanding boundary (ADR-0039); the target architecture ТЗ 10/10
+rev2 supersedes ТЗ 7.2 where they conflict, and AGENTS.md is amended
+accordingly. Full decision, alternatives and consequences:
+[ADR-0038](0038-canonical-rust-kernel-core.md).
+
 ## ADR-0037: Extension hardening — declarative slots, legacy-frontend gate, theme fallback, engines enforcement, namespaced quotas + secrets
 
 Phase 10 defines the real extension security boundaries (ТЗ §10): the five

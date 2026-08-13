@@ -1,0 +1,296 @@
+{
+  "formatVersion": 1,
+  "source": "docs",
+  "files": [
+    {
+      "source": "README.md",
+      "target": "README.md",
+      "sha256": "6b3419dca85a189da3e3b795e3aafa382917121b329f058662c97ec01bd7b323"
+    },
+    {
+      "source": "adr/0004-typebox-contracts.md",
+      "target": "adr/0004-typebox-contracts.md",
+      "sha256": "b2a86237f98a28123c479be4d6af0b3abed2a9c797a1abf007b636255251792d"
+    },
+    {
+      "source": "adr/0005-remote-session-auth.md",
+      "target": "adr/0005-remote-session-auth.md",
+      "sha256": "453956d57d661183039abc0145ebf619ce145859842124b9b072019d50a85b58"
+    },
+    {
+      "source": "adr/0006-declarative-theme-shell.md",
+      "target": "adr/0006-declarative-theme-shell.md",
+      "sha256": "9bd27207048ace2a9fc875397ad891710eb85f16748dd9591da5c7b3610f43bc"
+    },
+    {
+      "source": "adr/0007-plugin-runtime-isolation.md",
+      "target": "adr/0007-plugin-runtime-isolation.md",
+      "sha256": "2cf418ab0b1cfdd26dbc0c8debec927a2f9c2a4cc56a6706c77b0a8c579f2968"
+    },
+    {
+      "source": "adr/0008-json-additional-parameters.md",
+      "target": "adr/0008-json-additional-parameters.md",
+      "sha256": "1ffcfd44bdcc2efdb366da606d788b9f2ef620ffdc84fc338c2e65b6f6a30af1"
+    },
+    {
+      "source": "adr/0011-shell-layout-v1.md",
+      "target": "adr/0011-shell-layout-v1.md",
+      "sha256": "71625992c89d42fc200f6b4947bb6401dfbef0701646d6f2db5ae31355e1c486"
+    },
+    {
+      "source": "adr/0012-multi-surface-sandbox-composition.md",
+      "target": "adr/0012-multi-surface-sandbox-composition.md",
+      "sha256": "70bdfc67791b427e7481de3d82a910c5bc73ff9f1f3429ef0da3c4e9ef1217b8"
+    },
+    {
+      "source": "adr/0013-plugin-git-install-and-deps.md",
+      "target": "adr/0013-plugin-git-install-and-deps.md",
+      "sha256": "2e7e12d16bd88a68207c00b0c56d8aea2d541a81a36daad00ec4f93ecede57a0"
+    },
+    {
+      "source": "adr/0014-plugin-capability-kernel.md",
+      "target": "adr/0014-plugin-capability-kernel.md",
+      "sha256": "9faa0bd26f0d3810ceae235b9c2265f140016ce8c55f810e2af9440c049d6b87"
+    },
+    {
+      "source": "adr/0015-runtime-capability-grants.md",
+      "target": "adr/0015-runtime-capability-grants.md",
+      "sha256": "4de1069d41fbfca408cbd309a834033bf139aa800b739ba2986a1f6fb906d212"
+    },
+    {
+      "source": "adr/0016-plugin-oauth-connections.md",
+      "target": "adr/0016-plugin-oauth-connections.md",
+      "sha256": "02fd6696182b6ec72ea4bb04dd3b969269765262decea6c72c8d2485e715dfba"
+    },
+    {
+      "source": "adr/0017-plugin-services.md",
+      "target": "adr/0017-plugin-services.md",
+      "sha256": "90e6654298760b790e44ff0d2d2d88c404dfc48de2ad1048757a294031021598"
+    },
+    {
+      "source": "adr/0018-plugin-compute-workers.md",
+      "target": "adr/0018-plugin-compute-workers.md",
+      "sha256": "3d8d66c0183f72d6d9af7bd4d9f0900e8211dc2bc8eceb893a62e930501695e3"
+    },
+    {
+      "source": "adr/0019-chat-cas-drafts-outbox.md",
+      "target": "adr/0019-chat-cas-drafts-outbox.md",
+      "sha256": "7e0396b9cf168ca9afb107d2b176b77b15508a20923c1595d851481c3883881b"
+    },
+    {
+      "source": "adr/0020-persistent-message-blocks.md",
+      "target": "adr/0020-persistent-message-blocks.md",
+      "sha256": "f0a83034a1e250a793d814a77a111374caf5f03b1545be40f618172630f5e530"
+    },
+    {
+      "source": "adr/0021-plugin-jobs-cron-retries-dlq.md",
+      "target": "adr/0021-plugin-jobs-cron-retries-dlq.md",
+      "sha256": "8ce7651022cbda8d14c2207611a6649c64c68ec0b9950b490c6a7d942bc40c2d"
+    },
+    {
+      "source": "adr/0022-overlay-host-chrome-zorder.md",
+      "target": "adr/0022-overlay-host-chrome-zorder.md",
+      "sha256": "2f7484e18d55b259390e2b440a1dbb649a48dd6eb88f8d7a3fc3e0197df1c350"
+    },
+    {
+      "source": "adr/0023-plugin-lifecycle-hooks.md",
+      "target": "adr/0023-plugin-lifecycle-hooks.md",
+      "sha256": "4daf58f6ce54c686744086b99714a0d0e8fa547d8da6f27520f6bf0cc8b3d8e3"
+    },
+    {
+      "source": "adr/0024-sandbox-crash-isolation.md",
+      "target": "adr/0024-sandbox-crash-isolation.md",
+      "sha256": "7aec6ee78f71f0689a5b4a50146b9680dce645d8a434c5a8bb7afc5e8cf44c11"
+    },
+    {
+      "source": "adr/0025-event-cursor-and-multiwindow.md",
+      "target": "adr/0025-event-cursor-and-multiwindow.md",
+      "sha256": "b0ffa1c5a4ddfb91c09dd17db8e6a4a44336a02d5a29c36d39d134dddb4178e8"
+    },
+    {
+      "source": "adr/0026-plugin-resource-governor.md",
+      "target": "adr/0026-plugin-resource-governor.md",
+      "sha256": "4a92d6bdfb03e5a019948d756776e4a251cd913c7eae7b3db7d9a3be1f11207e"
+    },
+    {
+      "source": "adr/0027-plugin-node-universal-runtime.md",
+      "target": "adr/0027-plugin-node-universal-runtime.md",
+      "sha256": "1bcd2d9f7a1d3c55bd49b359d0906e3bd93d358e9f8c5779986226c33629ba33"
+    },
+    {
+      "source": "adr/0028-ses-bootstrap-tcb.md",
+      "target": "adr/0028-ses-bootstrap-tcb.md",
+      "sha256": "3496dd94c48f6b8cfa7a36e5a3f7b64c01e9bfd23557f44f36ad2c6c15d36190"
+    },
+    {
+      "source": "adr/0029-wire-contract-toolchain.md",
+      "target": "adr/0029-wire-contract-toolchain.md",
+      "sha256": "fa5d458cacc8ed2f436fdf32794c6c759276bedfa43fb40f3667183e5dd814a3"
+    },
+    {
+      "source": "adr/0030-remote-http-adapter.md",
+      "target": "adr/0030-remote-http-adapter.md",
+      "sha256": "ecc7f48fdf90339018c0b4682b03174a7e5802848b027e1333869df646efb3d9"
+    },
+    {
+      "source": "adr/0031-portable-provider-contract.md",
+      "target": "adr/0031-portable-provider-contract.md",
+      "sha256": "751f539738804d83ff2ceea3ead877255bb838ceddac963c8ce79a0597d53f35"
+    },
+    {
+      "source": "adr/0032-portable-data.md",
+      "target": "adr/0032-portable-data.md",
+      "sha256": "eed049ea5baebd6f28751723b2cb90f5c8383346f84acebe111a1864eefd9966"
+    },
+    {
+      "source": "adr/0033-desktop-local-kernel-transport.md",
+      "target": "adr/0033-desktop-local-kernel-transport.md",
+      "sha256": "248f05faace4c08eab36b8718f3c56d2ca4c98b5f5a366e9adc7e53648453e23"
+    },
+    {
+      "source": "adr/0034-android-local-host-jni-transport.md",
+      "target": "adr/0034-android-local-host-jni-transport.md",
+      "sha256": "ed52dbf855c8f2f503a78fefae03e1b763b9f95f9954a3c492313b9d898b87e0"
+    },
+    {
+      "source": "adr/0035-desktop-remote-access.md",
+      "target": "adr/0035-desktop-remote-access.md",
+      "sha256": "819e5a61b449a161e1f6309f84f2bcdb9ca32bb1102141316ef031f1cee7f3ce"
+    },
+    {
+      "source": "adr/0036-android-background-execution.md",
+      "target": "adr/0036-android-background-execution.md",
+      "sha256": "3fe4e41086f63bce6b371b0b23dd64f8e84fb1f4126dcd7d30dee7c123219d1d"
+    },
+    {
+      "source": "adr/0037-extension-hardening.md",
+      "target": "adr/0037-extension-hardening.md",
+      "sha256": "0f90703069c2f4f51f2de364e82ff495108ab48d1feac1da8cdc513aa5cef38f"
+    },
+    {
+      "source": "adr/0038-canonical-rust-kernel-core.md",
+      "target": "adr/0038-canonical-rust-kernel-core.md",
+      "sha256": "ec8af2fbb51de8598ff9e8ca7c354bf7386ee49db3913678de3e4acb1e069864"
+    },
+    {
+      "source": "adr/0039-legacy-compatibility-authority-boundary.md",
+      "target": "adr/0039-legacy-compatibility-authority-boundary.md",
+      "sha256": "7ec410a1ef231e09c217c1b2a6a4a1f8363b177aaa663b3857df770b9107b129"
+    },
+    {
+      "source": "adr/README.md",
+      "target": "adr/README.md",
+      "sha256": "baee9fd39e706ea7de3483544b606c3027cd8cb57bae25043db680666bd5b4c8"
+    },
+    {
+      "source": "android/README.md",
+      "target": "android/README.md",
+      "sha256": "34f9d207dcc000076d459a2e17b3ebb1820b7a507090cc75e2dbc84a701f5e2e"
+    },
+    {
+      "source": "api/README.md",
+      "target": "api/README.md",
+      "sha256": "b91015d2d2405ff36c7e85dda78f9363c86fc6c67feb339c6c1e622b1aee3f1b"
+    },
+    {
+      "source": "architecture/README.md",
+      "target": "architecture/README.md",
+      "sha256": "178520b1495769312b6a3e06980292e50c501056eb29f8ac061421a8101fe344"
+    },
+    {
+      "source": "architecture/benchmarks.md",
+      "target": "architecture/benchmarks.md",
+      "sha256": "ac8b2800735d9cf72f0388fc41214d8ffedfdd4c32b46f59bc6e8848c5f292b7"
+    },
+    {
+      "source": "architecture/generation-durability.md",
+      "target": "architecture/generation-durability.md",
+      "sha256": "2d4d2418f8cee3edb4deb6f129b3e7ec72408d215f12c8b0f7f6557fce4772dc"
+    },
+    {
+      "source": "architecture/operations-inventory.md",
+      "target": "architecture/operations-inventory.md",
+      "sha256": "6f5bf77a92bdf3f2282b56b57d244a5f49972e9b1874b6e23b696ef9e958d63f"
+    },
+    {
+      "source": "architecture/portable-data.md",
+      "target": "architecture/portable-data.md",
+      "sha256": "270061de29500e3f7b8f1d1869d0cc5bd53f0328dd68997fb336f0091546ed04"
+    },
+    {
+      "source": "architecture/providers.md",
+      "target": "architecture/providers.md",
+      "sha256": "be49bc75a0be919b43d14c4d5617c062781399d0f0dc460099598f1a73c336f1"
+    },
+    {
+      "source": "architecture/ui-legacy-surface.md",
+      "target": "architecture/ui-legacy-surface.md",
+      "sha256": "7645e59543116fc06dbf1b914a28ad19d2ef76e022696dee3dd0bcedfe5bedc8"
+    },
+    {
+      "source": "architecture/version-axes.md",
+      "target": "architecture/version-axes.md",
+      "sha256": "64f8528dc888af4911199c467f761d18481e2e0ea1ca5733e8fc9971ca965c9a"
+    },
+    {
+      "source": "architecture/wire-contracts.md",
+      "target": "architecture/wire-contracts.md",
+      "sha256": "9c1c59475850b48f09899ad49bd8b3ccec72523c075fd99fd7712a740ed969be"
+    },
+    {
+      "source": "capability-matrix.md",
+      "target": "capability-matrix.md",
+      "sha256": "a6aa4d2e1fe0b6b823dafc48c60c45ee89120a22fa07f6eb96b7f1eafcc8e2af"
+    },
+    {
+      "source": "data/README.md",
+      "target": "data/README.md",
+      "sha256": "0a10c447c39dda0c51ca4c27f226af56c241f38cdf07575f14614f27fd1e610f"
+    },
+    {
+      "source": "desktop/README.md",
+      "target": "desktop/README.md",
+      "sha256": "c3b75b5afd23c0dbea84c5a24d6acd8ae7d00ac19c404c0cecbd08e92a38f2ae"
+    },
+    {
+      "source": "migrations/README.md",
+      "target": "migrations/README.md",
+      "sha256": "1b2922859edb7d6753f9ae4e0836836f0d8533581ee9b85a11354a27ef1a48fb"
+    },
+    {
+      "source": "plugin-sdk/README.md",
+      "target": "plugin-sdk/README.md",
+      "sha256": "e3755313e5a6a677342824060c2f833747dd7e176ba8152dcc2784a4a841a2bb"
+    },
+    {
+      "source": "plugin-sdk/examples/rev4-overlay-game.md",
+      "target": "plugin-sdk/examples/rev4-overlay-game.md",
+      "sha256": "d974489a9a934d1c4773e2b771e0b14e94dbea295df203c4ab14aab90ec11452"
+    },
+    {
+      "source": "plugin-sdk/rev4-api.md",
+      "target": "plugin-sdk/rev4-api.md",
+      "sha256": "0fbb9611b36e054aaa378b5e714eb294d3ce4b0e40c8db68e63732cdb5a08c3b"
+    },
+    {
+      "source": "prompt-pipeline/README.md",
+      "target": "prompt-pipeline/README.md",
+      "sha256": "b03ae1eb8a99e16f2ba0cf26ae82f8689b41057be3ae933ee4acc7ee0bd9a40c"
+    },
+    {
+      "source": "theme-sdk/README.md",
+      "target": "theme-sdk/README.md",
+      "sha256": "4053c8bf0d999f57d0ff4d8be8f67daca5b337842a781621981e3b6babc75c7d"
+    },
+    {
+      "source": "ux/README.md",
+      "target": "ux/README.md",
+      "sha256": "42e67e7ae60fe803045240123783d6a76b470ba8507f42b66e827f8a2db1dc0e"
+    },
+    {
+      "source": "_category_.json",
+      "target": "_category_.json",
+      "sha256": "2bc6ef518ff26f9436f2dd108f2a48d598b457fb4c21ce879e909603de227489"
+    }
+  ]
+}

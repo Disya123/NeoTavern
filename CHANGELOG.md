@@ -3,6 +3,47 @@
 ## Unreleased
 ### Added
 
+- **Architecture Convergence program — M1/Wave 0 governance (ТЗ 10/10 rev2).**
+  The target-architecture
+  [ТЗ 10/10 rev2](NeoTavern_architecture_10_of_10_spec_2026-08-13.md) is the
+  governing requirements document (supersedes ТЗ 7.2 where they conflict).
+  [ADR-0038](docs/adr/0038-canonical-rust-kernel-core.md) makes the Rust
+  Runtime Kernel the canonical application core (single owner of product
+  logic and persistent state) and freezes Fastify/Drizzle as the
+  legacy/migration contour; [ADR-0039](docs/adr/0039-legacy-compatibility-authority-boundary.md)
+  defines the authority-non-expanding compatibility boundary (legacy code
+  may translate/restrict, never grant more authority). The web artifact is
+  now an **installable Web Client** (remote-only, ARC-12): "PWA" wording was
+  swept from the repo, and docs, AGENTS.md §2/§6/§21 and the desktop README
+  describe the honest staged default (public builds use the tested legacy
+  sidecar; the Kernel becomes the public default only after the release
+  gate). New governance tooling: the generated
+  [capability matrix](docs/capability-matrix.md) with
+  `docs/release-manifest.json` (ARC-10, `pnpm capability:matrix:check`),
+  `docs/architecture/exceptions.json` for temporary architectural exceptions
+  (ARC-09, expiry checked by docs:check), and a new CI gate
+  `scripts/check-ui-api.mjs` + ESLint rule `@neotavern/no-legacy-api-surface`
+  that forbids NEW `/api/v2`/`legacyRaw` calls in production UI while the
+  existing 65 call sites are tracked in
+  [ui-legacy-surface.md](docs/architecture/ui-legacy-surface.md) with
+  baseline-disable comments (ARC-02/ARC-03).
+- **Wave 0 verification hardening (M1 acceptance).** The honest Desktop
+  default is now **code, not docs**: `desktop_mode()` in
+  `apps/desktop/src-tauri/src/lib.rs` selects the legacy sidecar for public
+  release builds (`NEOTA_DESKTOP_CHANNEL=release`, baked by
+  `desktop:release`), the Kernel for nightly/internal and debug builds, with
+  explicit `NEOTA_LEGACY_SERVER=1` / `NEOTA_KERNEL=1` overrides (the portable
+  shell smoke pins `NEOTA_KERNEL=1`). Docs are a **single source tree**:
+  `scripts/docs-sync.mjs` deterministically mirrors `docs/` into
+  `apps/docs/docs/architecture/` (escaping links rewritten to GitHub URLs,
+  `editUrl` pointing at the canonical file), `pnpm docs:site:build` syncs
+  before building, and CI runs `pnpm docs:sync:check` (byte-for-byte
+  divergence gate). The capability generator now **fails** on any Product
+  Wire operation that is unreferenced, referenced by two capabilities, or has
+  an unknown status/host. The legacy-surface gate compares **per-site
+  fingerprints** (`file:line:kind:detail`, not a bare count) and the CRLF
+  ESLint exemption is registered in `docs/architecture/exceptions.json`
+  (ARC-09, id `M1-crlf-blob-eslint-exemption`, deadline 2026-09-30).
 - **Root README rewritten** to match the shipped ТЗ 7.2 architecture: Rust
   Runtime Kernel (crates/), Product Wire Contracts + generated Rust DTOs, Android
   host, headless/server role, extension-hardening surface, and the docs site

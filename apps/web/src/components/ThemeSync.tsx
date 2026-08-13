@@ -237,6 +237,7 @@ export function ThemeSync() {
     let cancelled = false;
     void (async () => {
       try {
+        // eslint-disable-next-line @neotavern/no-legacy-api-surface
         const response = await fetch(`/api/v2/themes/${encodeURIComponent(theme.id)}/settings`);
         if (!response.ok || cancelled) return;
         const data = (await response.json()) as { values?: Record<string, unknown> };
@@ -261,6 +262,7 @@ export function ThemeSync() {
     if (safeMode) return;
     const link = document.createElement('link');
     link.rel = 'stylesheet';
+    // eslint-disable-next-line @neotavern/no-legacy-api-surface
     link.href = '/api/v2/user.css';
     link.dataset.neotavernUserStyle = 'user';
     document.head.append(link);

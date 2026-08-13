@@ -70,8 +70,9 @@ a few hundred megabytes of free RAM for the backend are enough for typical use.
 
 ## Is There a Web or Mobile Version?
 
-The desktop app is built on Tauri and ships with a PWA companion: the web UI can
-be installed as a progressive web app with an offline app shell. See
+The desktop app is built on Tauri and ships with an installable Web Client: the
+web UI can be installed as a remote client with a cached app shell (API and
+generation still require a reachable backend). See
 [Desktop](./developers/desktop/).
 
 ## How Do I Back Up My Data?

@@ -1061,7 +1061,8 @@ function CharacterCardViewer({
   );
   const avatarOriginalUrl =
     characterId && draft.avatar
-      ? `/api/v2/characters/${characterId}/avatar-original`
+      ? // eslint-disable-next-line @neotavern/no-legacy-api-surface
+        `/api/v2/characters/${characterId}/avatar-original`
       : draft.avatar;
   const characterName = draft.name || t('characters:unnamed');
   return (
@@ -1236,12 +1237,14 @@ function ExportMenu({ characterId }: { characterId: string }) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem asChild>
+          {/* eslint-disable-next-line @neotavern/no-legacy-api-surface */}
           <a href={`/api/v2/characters/${characterId}/export?format=png`}>
             <strong>PNG</strong>
             <small>{t('characters:exportPngHint')}</small>
           </a>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
+          {/* eslint-disable-next-line @neotavern/no-legacy-api-surface */}
           <a href={`/api/v2/characters/${characterId}/export?format=json`}>
             <strong>JSON</strong>
             <small>{t('characters:exportJsonHint')}</small>
@@ -1630,6 +1633,7 @@ function GalleryTab({
             <GalleryFigure
               name={character.name}
               thumbnailUrl={character.avatar}
+              // eslint-disable-next-line @neotavern/no-legacy-api-surface
               originalUrl={`/api/v2/characters/${character.id}/avatar-original`}
               primary
             />

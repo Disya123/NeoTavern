@@ -50,6 +50,27 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # Architecture Convergence (M1, Wave 0) gates:
+      # - capability matrix must be committed and up to date (ARC-10);
+      # - no NEW /api/v2 / legacyRaw calls in production UI (ARC-02/ARC-03,
+      #   ESLint rule `@neotavern/no-legacy-api-surface` + baseline scanner);
+      # - docs:check: required docs, relative links, matrix freshness,
+      #   exception expiry (ARC-09), misleading offline-Web-Client claims (ARC-12);
+      # - docs:sync:check: the Docusaurus mirror of `docs/` must be committed
+      #   and byte-identical to a fresh sync (single source tree, ТЗ §19.1).
+      # The gates run after Build so the built @neotavern/contracts dist is fresh.
+      - name: Capability matrix determinism (ARC-10)
+        run: pnpm capability:matrix:check
+
+      - name: Legacy UI surface gate (ARC-02/ARC-03)
+        run: pnpm ui:api:check
+
+      - name: Docs check (links, matrix, exceptions, claims)
+        run: pnpm docs:check
+
+      - name: Docs mirror divergence check (single source tree)
+        run: pnpm docs:sync:check
+
   e2e:
     name: Playwright E2E + accessibility (shard ${{ matrix.shard }}/4)
     # Visual baselines are intentionally recorded on Windows; keep the

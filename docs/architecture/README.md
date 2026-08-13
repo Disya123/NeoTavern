@@ -1,7 +1,27 @@
 # Architecture
 
+> **Architecture Convergence program (M1, Wave 0).** The governing decisions are
+> [ADR-0038](../adr/0038-canonical-rust-kernel-core.md) (the **Rust Runtime
+> Kernel is the canonical application core**; the Fastify/Drizzle contour is a
+> feature-frozen legacy/migration adapter) and
+> [ADR-0039](../adr/0039-legacy-compatibility-authority-boundary.md)
+> (legacy compatibility is an authority-non-expanding boundary). The governing
+> requirements document is the target-architecture
+> [ТЗ 10/10 rev2](../../NeoTavern_architecture_10_of_10_spec_2026-08-13.md),
+> which supersedes the previous ТЗ 7.2 where they conflict. Capability and
+> host statuses are tracked in the generated
+> [capability matrix](../capability-matrix.md) (ARC-10); temporary architectural
+> exceptions live in [exceptions.json](exceptions.json) (ARC-09). The desktop
+> default is staged: public builds use the tested legacy sidecar while the
+> Kernel is a Preview (release gate, ADR-0038 §"Honest Desktop default").
+
+The section below describes the current (pre-cutover) layout. Product logic
+migrates into the Kernel over the program milestones; new product logic is
+implemented only in the Kernel and exposed through Product Wire.
+
 NeoTavern is a local application: a single Fastify process serves the API and
-(optionally) the built frontend. No PostgreSQL/Redis/Docker.
+(optionally) the built frontend (legacy/migration contour, ADR-0038). No
+PostgreSQL/Redis/Docker.
 
 ## Stack
 
@@ -186,7 +206,9 @@ gate passes.
   revocable credentials, token-bucket rate limiting, bounded streams with
   per-batch credential re-check, CORS deny-by-default, bounded secret-free
   audit, and one writer coordinator (`Arc<Mutex<Kernel>>`).
-  See [ADR-0030](../adr/README.md#adr-0030-remote-http-adapter) and
+  See
+  [ADR-0030](../adr/README.md#adr-0030-remote-http-adapter--envelope-over-http-on-the-shared-runtime-kernel)
+  and
   [Wire contracts §6.1](wire-contracts.md#61-http-transport-mapping-phase-4-remote-adapter).
 - [Phase 4 CLI transport](../../crates/adapters/cli/README.md) —
   `neotavern-cli` maps one wire request envelope → one response envelope
@@ -275,5 +297,5 @@ gate passes.
 - [Portable data](portable-data.md) — Phase 11: public backup containers,
   kill-safe staged restore with atomic activation, Portable Export/import and
   the read-only legacy converter (ТЗ §34, §40–§43).
-- [ADR-0029](../adr/README.md#adr-0029-wire-contract-toolchain) — the
-  contract toolchain decision.
+- [ADR-0029](../adr/README.md#adr-0029-wire-contract-toolchain-typebox-single-source--deterministic-codegen)
+  — the contract toolchain decision.

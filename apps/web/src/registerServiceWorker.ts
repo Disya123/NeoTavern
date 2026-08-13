@@ -1,4 +1,4 @@
-/** Register the production-only PWA shell cache. API/SSE requests are excluded in sw.js. */
+/** Register the production-only Web Client shell cache. API/SSE requests are excluded in sw.js. */
 export function registerServiceWorker(): void {
   if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return;
 

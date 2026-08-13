@@ -415,6 +415,7 @@ export function ChatManagementPanel({ onClose }: ChatManagementPanelProps) {
                           {t('chat:rename')}
                         </DropdownMenuItem>
                         <DropdownMenuItem asChild>
+                          {/* eslint-disable-next-line @neotavern/no-legacy-api-surface */}
                           <a href={`/api/v2/chats/${chatItem.id}/export`}>
                             <DownloadSimple aria-hidden="true" />
                             {t('chat:export')}

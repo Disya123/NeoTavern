@@ -1,6 +1,10 @@
 use serde::Serialize;
 use tauri::AppHandle;
 
+#[cfg(all(desktop, feature = "remote"))]
+use neotavern_tauri_local::remote::{RemoteAccessService, RemoteAccessState};
+#[cfg(desktop)]
+use neotavern_tauri_local::{build_request_envelope, commands, KernelHost, KernelHostConfig};
 #[cfg(desktop)]
 use std::{
     fs,
@@ -13,10 +17,6 @@ use std::{
     thread,
     time::Duration,
 };
-#[cfg(desktop)]
-use neotavern_tauri_local::{commands, build_request_envelope, KernelHost, KernelHostConfig};
-#[cfg(all(desktop, feature = "remote"))]
-use neotavern_tauri_local::remote::{RemoteAccessService, RemoteAccessState};
 #[cfg(desktop)]
 use tauri::{path::BaseDirectory, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder};
 #[cfg(desktop)]
@@ -37,12 +37,48 @@ const STARTUP_POLL_INTERVAL: Duration = Duration::from_millis(50);
 const UPDATE_ENDPOINT: Option<&str> = option_env!("NEOTA_UPDATE_ENDPOINT");
 #[cfg(desktop)]
 const UPDATE_PUBLIC_KEY: Option<&str> = option_env!("NEOTA_UPDATE_PUBLIC_KEY");
-/// Opt-in legacy bridge: `NEOTA_LEGACY_SERVER=1` spawns the Node sidecar and
-/// serves the window from `http://127.0.0.1:<port>` exactly like the
-/// pre-Phase-3 shell. Default (unset) is the Phase 3 local kernel mode: no
-/// HTTP server, no listening port, no server lifecycle (§11.1).
+/// Backend mode selection — the honest staged default (ADR-0038 "Honest
+/// Desktop default", AGENTS.md §21).
+///
+/// The Runtime Kernel is the canonical core, but public/release builds
+/// temporarily run the tested legacy Node sidecar while the Kernel is an
+/// explicit Preview; nightly/internal builds default to the Kernel. The
+/// channel is baked at build time via `NEOTA_DESKTOP_CHANNEL`
+/// (`nightly` → Kernel default; any other value or unset → sidecar default).
+/// Debug (dev) builds are internal and default to the Kernel.
+///
+/// Explicit runtime overrides always win: `NEOTA_LEGACY_SERVER=1` forces the
+/// sidecar, `NEOTA_KERNEL=1` forces the Kernel (Preview opt-in).
 #[cfg(desktop)]
 const LEGACY_SERVER_ENV: &str = "NEOTA_LEGACY_SERVER";
+#[cfg(desktop)]
+const KERNEL_MODE_ENV: &str = "NEOTA_KERNEL";
+#[cfg(desktop)]
+const DESKTOP_CHANNEL: Option<&str> = option_env!("NEOTA_DESKTOP_CHANNEL");
+
+#[cfg(desktop)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum DesktopMode {
+    Sidecar,
+    Kernel,
+}
+
+#[cfg(desktop)]
+fn desktop_mode() -> DesktopMode {
+    if std::env::var(LEGACY_SERVER_ENV).as_deref() == Ok("1") {
+        return DesktopMode::Sidecar;
+    }
+    if std::env::var(KERNEL_MODE_ENV).as_deref() == Ok("1") {
+        return DesktopMode::Kernel;
+    }
+    if cfg!(debug_assertions) {
+        return DesktopMode::Kernel;
+    }
+    match DESKTOP_CHANNEL {
+        Some("nightly") => DesktopMode::Kernel,
+        _ => DesktopMode::Sidecar,
+    }
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -246,15 +282,20 @@ fn open_main_window_when_ready(app: AppHandle, port: u16) {
     });
 }
 
-/// Spawns the legacy Node sidecar (opt-in `NEOTA_LEGACY_SERVER=1` transition
-/// bridge for unmigrated features). Returns the events receiver and child.
+/// Spawns the legacy Node sidecar — the release-channel default while the
+/// Kernel is a Preview, and the explicit `NEOTA_LEGACY_SERVER=1` transition
+/// bridge for unmigrated features (ADR-0038). Returns the events receiver and
+/// child.
 #[cfg(desktop)]
 fn spawn_legacy_sidecar(
     app: &tauri::App,
     port: u16,
     data_dir: &std::path::Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let web_dir = sidecar_path(app.path().resolve("resources/web", BaseDirectory::Resource)?);
+    let web_dir = sidecar_path(
+        app.path()
+            .resolve("resources/web", BaseDirectory::Resource)?,
+    );
     let sharp_module = sidecar_path(app.path().resolve(
         "resources/native/node_modules/sharp/lib/index.js",
         BaseDirectory::Resource,
@@ -336,7 +377,10 @@ fn spawn_legacy_sidecar(
 /// server at all. With `NEOTA_DESKTOP_SMOKE=1` the shell self-checks the
 /// packaged kernel (handshake + meta + reads) and exits deterministically.
 #[cfg(desktop)]
-fn setup_local_kernel_mode(app: &mut tauri::App, data_dir: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+fn setup_local_kernel_mode(
+    app: &mut tauri::App,
+    data_dir: PathBuf,
+) -> Result<(), Box<dyn std::error::Error>> {
     let host = KernelHost::open(KernelHostConfig {
         // Clone: `data_dir` is also the Remote Access config fallback (the
         // kernel data root is guaranteed writable and exists).
@@ -375,15 +419,12 @@ fn setup_local_kernel_mode(app: &mut tauri::App, data_dir: PathBuf) -> Result<()
         std::process::exit(0);
     }
 
-    if let Err(error) = WebviewWindowBuilder::new(
-        app.handle(),
-        "main",
-        WebviewUrl::App("index.html".into()),
-    )
-    .title("NeoTavern")
-    .inner_size(1280.0, 820.0)
-    .min_inner_size(360.0, 520.0)
-    .build()
+    if let Err(error) =
+        WebviewWindowBuilder::new(app.handle(), "main", WebviewUrl::App("index.html".into()))
+            .title("NeoTavern")
+            .inner_size(1280.0, 820.0)
+            .min_inner_size(360.0, 520.0)
+            .build()
     {
         eprintln!("failed to create main window: {error}");
         app.handle().exit(1);
@@ -417,7 +458,10 @@ fn run_kernel_smoke(app: &AppHandle) {
                 Ok(envelope) => {
                     eprintln!(
                         "[smoke] {operation_id}: error envelope {}",
-                        envelope.get("error").map(|e| e.to_string()).unwrap_or_default()
+                        envelope
+                            .get("error")
+                            .map(|e| e.to_string())
+                            .unwrap_or_default()
                     );
                     failures += 1;
                 }
@@ -455,11 +499,10 @@ pub fn run() {
             ]);
 
         // Kernel commands are registered only in local kernel mode: in the
-        // opt-in legacy mode the host is not managed, and an unmanaged State
-        // access would panic. Unset `NEOTA_LEGACY_SERVER` → kernel mode.
-        let builder = if std::env::var(LEGACY_SERVER_ENV).as_deref() == Ok("1") {
-            builder
-        } else {
+        // sidecar mode the host is not managed, and an unmanaged State access
+        // would panic. `desktop_mode()` decides the mode (honest staged
+        // default, ADR-0038).
+        let builder = if desktop_mode() == DesktopMode::Kernel {
             builder.invoke_handler(tauri::generate_handler![
                 commands::kernel_dispatch,
                 commands::kernel_stream_start,
@@ -478,19 +521,21 @@ pub fn run() {
                 #[cfg(feature = "remote")]
                 commands::kernel_remote_revoke
             ])
+        } else {
+            builder
         };
 
         let app = builder
             .setup(|app| {
                 let data_dir = resolve_data_dir(app)?;
 
-                if std::env::var(LEGACY_SERVER_ENV).as_deref() == Ok("1") {
-                    let port = reserve_loopback_port()?;
-                    spawn_legacy_sidecar(app, port, &data_dir)?;
-                    return Ok(());
+                match desktop_mode() {
+                    DesktopMode::Sidecar => {
+                        let port = reserve_loopback_port()?;
+                        spawn_legacy_sidecar(app, port, &data_dir)?;
+                    }
+                    DesktopMode::Kernel => setup_local_kernel_mode(app, data_dir)?,
                 }
-
-                setup_local_kernel_mode(app, data_dir)?;
                 Ok(())
             })
             .build(tauri::generate_context!())

@@ -20,25 +20,45 @@ Do not change the approved stack or public contracts without an explicit assignm
 
 ## 2. Approved stack
 
-- Node.js 24 LTS, bundled with the distribution.
-- Fastify 5 for the backend.
-- React 19.2 + Vite 8 for the frontend.
-- TypeScript with `strict: true` for all new code.
-- SQLite via `better-sqlite3` and Drizzle ORM.
-- SQLite FTS5 for full-text search.
-- React Router for routing.
-- TanStack Query for server state.
-- Zustand for local UI state only.
-- Radix Primitives as the headless component base.
-- CSS Modules, CSS Custom Properties, Cascade Layers, and Container Queries.
-- i18next + react-i18next.
-- Handlebars for instruct formats and safe templates.
-- Tauri 2.x for the desktop shell.
-- Node.js/Fastify runs in the desktop build as an embedded sidecar.
-- Wails is allowed only as an alternative shell while keeping the Node.js sidecar.
-- pnpm workspaces for the monorepo.
+The stack is governed by [ADR-0038](docs/adr/0038-canonical-rust-kernel-core.md)
+(canonical Rust Kernel core; Fastify/Drizzle is the legacy/migration contour)
+and the target architecture
+[ТЗ 10/10 rev2](NeoTavern_architecture_10_of_10_spec_2026-08-13.md).
+The "approved stack" is split into two planes:
 
-Do not replace Fastify with Express/NestJS, React with another UI framework, SQLite with a server database, or Tauri with Electron without a separate architectural decision.
+**Canonical plane (new product logic lives here):**
+
+- Rust Runtime Kernel — the canonical application core: the single owner of
+  product logic and persistent state (SQLite ownership, migrations, generation
+  durability, backup/restore, provider and SecretStore ports).
+- Product Wire Contracts (TypeBox) — the single cross-language contract
+  source; generated TypeScript types and Rust DTOs.
+- React 19.2 + Vite 8 for the frontend; TypeScript with `strict: true`.
+- TanStack Query for server state; Zustand for local UI state only.
+- Radix Primitives as the headless component base; CSS Modules, CSS Custom
+  Properties, Cascade Layers, and Container Queries.
+- i18next + react-i18next.
+- Tauri 2.x for the desktop shell; pnpm workspaces for the monorepo.
+
+**Legacy-compat plane (feature-frozen migration adapter, ADR-0038):**
+
+- Node.js 24 LTS, bundled with the distribution (legacy host runtime).
+- Fastify 5 — legacy/migration backend surface (`/api/v2`), no new product
+  features except security fixes, defect fixes and migration bridges.
+- SQLite via `better-sqlite3` and Drizzle ORM — legacy `app.db` adapter only;
+  the canonical database is `database.sqlite` owned by the Kernel.
+- SQLite FTS5, React Router, Handlebars for instruct formats and safe
+  templates (legacy contour; the Kernel pipeline replaces them over time).
+- Node.js/Fastify runs in the desktop build only as the legacy sidecar — the
+  public release default while the Kernel is a Preview, and the explicit
+  `NEOTA_LEGACY_SERVER=1` transition bridge (ADR-0038; mode selection in
+  `apps/desktop/src-tauri/src/lib.rs`); Wails is allowed only as an
+  alternative shell while keeping the legacy sidecar.
+
+Live dual-write between `app.db` and `database.sqlite` is prohibited
+(ADR-0038). Do not replace React with another UI framework, SQLite with a
+server database, or Tauri with Electron without a separate architectural
+decision. Any change to the canonical core requires an explicit assignment.
 
 ## 3. Expected structure
 
@@ -113,6 +133,15 @@ User-facing error text is localized on the frontend.
 
 ## 6. Backend and API
 
+This section describes the legacy/migration contour (`apps/server`, `/api/v2`),
+which is feature-frozen (ADR-0038): no new product features are added to it,
+only security fixes, defect fixes and migration bridges. **New product logic
+is implemented in the Rust Kernel and exposed through the Product Wire
+Contracts** (`packages/contracts/src/wire`); hosts and the UI consume the
+typed Product Wire client, never the legacy API directly.
+
+For the legacy contour:
+
 - Structure every backend module as an isolated Fastify plugin.
 - Place the main API under `/api/v2/...`.
 - Place plugin routes under `/api/plugins/{pluginId}/...`.
@@ -124,6 +153,11 @@ User-facing error text is localized on the frontend.
 - Add timeouts and correct request termination when the client disconnects.
 - Do not hand ready-made, non-localized error messages to the frontend.
 - The backend listens on `127.0.0.1` only by default.
+
+Product Wire operations carry the same requirements as metadata (name/version,
+request/response/event schema, scope, idempotency, retry, timeouts, size
+limits, error codes, streaming semantics, compatibility classification) —
+enforced by `compileWireContract` in `packages/contracts/src/wire/registry.ts`.
 
 ## 7. Provider SDK
 
@@ -450,26 +484,38 @@ The disk cache must be fully deletable and automatically recoverable. User data 
 
 The service worker caches only the app shell and static assets. Do not cache API, SSE, secrets, or sensitive responses.
 
-## 21. Desktop and PWA
+## 21. Desktop and Web Client
 
-Desktop:
+Desktop (ADR-0038 honest default):
 
 - The main shell is Tauri 2.x.
-- The Fastify backend runs as an embedded Node.js sidecar.
-- Node.js and SQLite are included in the distribution.
+- The Runtime Kernel is the canonical backend; the legacy Fastify backend runs
+  only as the Node.js sidecar — the release default while the Kernel is a
+  Preview, selectable via `NEOTA_DESKTOP_CHANNEL`/`NEOTA_LEGACY_SERVER=1`/
+  `NEOTA_KERNEL=1` (see docs/desktop/README.md).
+- Public builds temporarily default to the tested legacy sidecar while the
+  Kernel is an explicit Preview; the Kernel becomes the default for
+  nightly/internal builds only. The public default switches to the Kernel only
+  after the release gate: all mandatory Desktop capabilities are `Packaged` in
+  the capability matrix, migration and rollback are verified on packaged
+  artifacts, no silent fallbacks exist and no P0 defects are open.
+- Node.js and SQLite are included in the distribution (legacy sidecar).
 - The first launch does not run `npm install`.
 - The user does not need a terminal.
 - Windows installer, macOS package, Linux AppImage/archive, and portable Windows build are supported.
 - App shutdown must properly terminate the sidecar.
 - The backend must not linger after the window closes.
 
-PWA:
+Web Client (remote-only; not a standalone offline runtime, ADR-0038/0043):
 
 - responsive layout;
-- connection to a local backend on a PC or home server;
-- offline app shell;
-- API and generation require an available backend;
-- the PWA must not pretend to be a fully standalone Node.js application.
+- connection to a local backend on a PC or home server (user-controlled host);
+- the service worker caches only the versioned app shell and static assets —
+  API responses, SSE, prompts, provider events and secrets never enter Cache Storage;
+- without a connection the Web Client shows an honest connection/offline screen
+  and does not allow product mutations;
+- the Web Client must not pretend to be a standalone offline Node.js
+  application or a browser-hosted Kernel (ARC-12).
 
 ## 22. Accessibility
 
@@ -595,7 +641,7 @@ Any change affecting user or developer behavior must update the corresponding fi
 - import, export, files, and the thumbnail cache;
 - prompt pipeline, instruct formats, tokenization, and context shifting;
 - provider adapters;
-- desktop packaging, the Tauri sidecar, PWA, and updates;
+- desktop packaging, the Tauri sidecar, Web Client, and updates;
 - user settings, i18n, and accessibility;
 - breaking changes, deprecations, and migration guides.
 

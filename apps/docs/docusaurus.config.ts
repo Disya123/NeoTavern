@@ -13,11 +13,12 @@ const KIND_LABELS: Record<string, string> = {
   variables: 'Variables',
 };
 
-// The auto-generated SDK reference repeats the same kind folders
-// (classes/, functions/, ...) for every package and the kernel namespace.
+// Auto-generated sections (api/ from TypeDoc, architecture/ from the synced
+// `docs/` mirror) repeat the same kind folders (classes/, functions/, ...)
+// and folder names (plugin-sdk, theme-sdk, ...) under different parents.
 // Docusaurus derives sidebar translation keys from the category label, so
-// those duplicates would collide. Give every category under api/ a unique key
-// derived from its label path and capitalize the kind labels.
+// those duplicates would collide. Give every category a unique key derived
+// from its label path and capitalize the kind labels.
 const sidebarItemsGenerator: SidebarItemsGenerator = async ({
   defaultSidebarItemsGenerator,
   item,
@@ -36,7 +37,7 @@ const sidebarItemsGenerator: SidebarItemsGenerator = async ({
       return {
         ...category,
         label: prettyLabel,
-        ...(path.startsWith('/api') ? { key: nextPath } : {}),
+        key: nextPath,
         items: transform(category.items, nextPath),
       };
     });

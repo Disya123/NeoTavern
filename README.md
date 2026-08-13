@@ -14,9 +14,9 @@ entirely on your machine — no cloud, no account, no telemetry.
 
 NeoTavern is a local-first AI chat platform built around one idea: your data and
 your conversations stay on your computer. It ships as a desktop application
-(Windows, macOS, Linux), a native Android app, and an installable PWA that talks
-to a local or remote backend. SillyTavern-era plugin compatibility is preserved
-through a dedicated legacy layer.
+(Windows, macOS, Linux), a native Android app, and an installable Web Client
+that talks to a local or remote backend. SillyTavern-era plugin compatibility
+is preserved through a dedicated legacy layer.
 
 One product, several hosts: the Desktop app runs locally without any server, the
 same backend runs headless on a VPS, Android uses the same runtime and data
@@ -134,8 +134,8 @@ The APK bundles the Runtime Kernel via JNI — no Node.js runs on-device.
 
 ```text
 apps/
-├── server          Fastify 5 backend (REST /api/v2, SSE) — also the headless host
-├── web             React 19 SPA (Vite 8, PWA)
+├── server          Fastify 5 legacy/migration backend (REST /api/v2, SSE) — headless host
+├── web             React 19 SPA (Vite 8, installable Web Client)
 ├── desktop         Tauri 2 shell with a bundled Node.js sidecar
 ├── android         Android host (Gradle): JNI kernel bridge, background adapter
 ├── docs            Docusaurus documentation site (EN / 简体中文 / 日本語)
@@ -166,7 +166,8 @@ crates/              Rust workspace (Runtime Kernel, generated contract DTOs)
                      desktop-remote · cli · envelope
 
 tools/
-└── contract-codegen Deterministic schema bundle → manifest + Rust DTO generator
+├── contract-codegen Deterministic schema bundle → manifest + Rust DTO generator
+└── capability-matrix Capability × host status matrix (ARC-10) generator
 ```
 
 ## Development commands

@@ -1,19 +1,38 @@
-# Desktop and PWA
+# Desktop and Web Client
 
 ## Desktop (Tauri 2.x)
 
-### Phase 3 local kernel mode (default)
+### Backend mode selection (honest staged default)
+
+The Runtime Kernel (`crates/runtime-kernel`) is the canonical backend; the
+legacy Fastify backend runs only as the bundled Node.js sidecar while
+unmigrated features still need it. Which backend the shell starts is decided
+by `desktop_mode()` in `apps/desktop/src-tauri/src/lib.rs` (ADR-0038 "Honest
+Desktop default", AGENTS.md §21):
+
+| Build channel                                                              | Default mode   |
+| -------------------------------------------------------------------------- | -------------- |
+| Public release (`NEOTA_DESKTOP_CHANNEL=release`, set by `desktop:release`) | Legacy sidecar |
+| Nightly/internal (`NEOTA_DESKTOP_CHANNEL=nightly`)                         | Kernel         |
+| Debug/dev builds (`cfg!(debug_assertions)`)                                | Kernel         |
+
+Explicit runtime overrides always win: `NEOTA_LEGACY_SERVER=1` forces the
+sidecar; `NEOTA_KERNEL=1` forces the Kernel (Preview opt-in). The public
+default switches to the Kernel only after the release gate: all mandatory
+Desktop capabilities are `Packaged` in the capability matrix, migration and
+rollback are verified on packaged artifacts, no silent fallbacks exist and no
+P0 defects are open.
+
+### Phase 3 local kernel mode
 
 - The Runtime Kernel (`crates/runtime-kernel`) is embedded in the Tauri
   process; the window loads the bundled web assets over `tauri://localhost`.
 - The UI talks to the kernel through Tauri IPC commands
   (`kernel_dispatch`, `kernel_stream_start`, `kernel_stream_abort` from
   `crates/adapters/tauri-local`): `React → LocalBackend → Tauri IPC →
-  Runtime Kernel → SQLite` (ТЗ §11.1/§15.1).
+Runtime Kernel → SQLite` (ТЗ §11.1/§15.1).
 - **No HTTP server, no listening port, no network auth, no server lifecycle**
-  when Remote Access is off. The legacy Node sidecar is spawned only with
-  `NEOTA_LEGACY_SERVER=1` as the temporary transition bridge for unmigrated
-  routes.
+  when Remote Access is off.
 - Contract handshake: `KernelHost::open` requires the exact embedded
   `schemaHash` and FFI ABI version (§6.5); a stale WebView bundle or native
   library is caught before any product write.
@@ -21,7 +40,7 @@
   native worker and forwarded to the webview over a Tauri `Channel`; aborting
   the stream dispatches `generation.cancel` (durable, §63).
 
-### Legacy sidecar mode (opt-in `NEOTA_LEGACY_SERVER=1`)
+### Legacy sidecar mode
 
 - The Fastify backend runs as a bundled Node.js sidecar (`neotavern-server`).
 - Node.js and SQLite are included in the distribution; first launch needs no `npm install`.
@@ -33,11 +52,11 @@
 > Status: Windows x64 pre-release verified locally. For macOS and Linux a
 > mandatory native build/smoke gate is added in
 > `.github/workflows/desktop-release.yml`: the bundle is launched with
-> `NEOTA_DESKTOP_SMOKE=1`, waits for sidecar readiness (legacy mode) or runs
+> `NEOTA_DESKTOP_SMOKE=1`, waits for sidecar readiness (sidecar mode) or runs
 > the kernel self-check (kernel mode: handshake + `meta.get` +
 > `characters.list` + `backups.list`), checks SQLite creation and the absence
 > of orphan processes. Node.js, `better-sqlite3`, Sharp and production web
-> assets are included in every legacy-mode package; the first launch does not
+> assets are included in every sidecar-mode package; the first launch does not
 > run `npm install`.
 
 `tauri.conf.json` uses `bundle.targets: "all"`, so `pnpm desktop:build`
@@ -56,12 +75,12 @@ Runtime Kernel** over HTTP (envelope-over-HTTP, ADR-0030/ADR-0035). It is
   a plain browser cannot control it). The default binds `127.0.0.1` with an
   OS-assigned ephemeral port — use it from the same machine. The running
   address is shown in the panel.
-- **Pairing.** Click *Pair* — the service issues a scoped credential
+- **Pairing.** Click _Pair_ — the service issues a scoped credential
   `(id, token)` and the token is shown **once**. Copy it to the remote
   client (curl `Authorization: Bearer <token>`, or the app's remote
   profile). Credentials are held in memory (SHA-256 verifier only) and are
   revocable.
-- **Revoking.** *Revoke* invalidates a credential immediately — active
+- **Revoking.** _Revoke_ invalidates a credential immediately — active
   streams re-check per frame batch and abort. The panel's audit log shows
   start/stop and pair/revoke events (no token material).
 - **Restart note.** In-memory credentials do not survive an app restart —
@@ -186,11 +205,12 @@ The mobile-connect page accepts `http://<LAN-IP>:8000`, then the server's
 login gate exchanges the token for a session. `GET /api/v2/health` answers
 `{"status":"ok"}`.
 
-## PWA
+## Web Client
 
 - responsive layout (desktop/tablet/phone);
-- connects to the local backend on a PC/home server;
-- offline app shell; API and generation require a reachable backend;
+- connects to the local backend on a PC/home server (remote-only client, ARC-12);
+- cached app shell; API and generation require a reachable backend — there is
+  no standalone offline runtime and no browser-hosted Kernel;
 - the service worker caches only the app shell and static assets (not API/SSE/secrets);
 - hashed assets are `immutable`, the HTML shell is `no-cache`.
 
@@ -200,11 +220,11 @@ cache-first, and all `/api/` requests are explicitly excluded. The manifest and
 192/512 icons ship with the production frontend. The behavior is verified by
 Playwright in offline mode and by a Cache Storage content audit.
 
-When the PWA connects to a remote backend, access is closed behind a separate
-login gate. The bootstrap token is exchanged for an HttpOnly/SameSite session
-and is not stored in Web Storage; state-changing API requests use an in-memory
-CSRF token. The production remote origin must be served over HTTPS. See
-[ADR-0005](../adr/0005-remote-session-auth.md).
+When the Web Client connects to a remote backend, access is closed behind a
+separate login gate. The bootstrap token is exchanged for an HttpOnly/SameSite
+session and is not stored in Web Storage; state-changing API requests use an
+in-memory CSRF token. The production remote origin must be served over HTTPS.
+See [ADR-0005](../adr/0005-remote-session-auth.md).
 
 If the backend is unreachable during an offline reload, the login gate only
 allows showing the cached shell with an explicit offline indicator. This does

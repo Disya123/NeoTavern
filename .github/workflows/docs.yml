@@ -52,8 +52,12 @@ jobs:
       - name: Build workspace packages (fresh dist for TypeDoc resolution)
         run: pnpm build
 
+      # docs:site:build runs scripts/docs-sync.mjs first, so the deployed site
+      # always serves the CURRENT canonical `docs/` tree even if a commit
+      # forgets to commit the mirror (the mirror is enforced separately by
+      # `pnpm docs:sync:check` in ci.yml).
       - name: Build docs site
-        run: pnpm --filter @neotavern/docs build
+        run: pnpm docs:site:build
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

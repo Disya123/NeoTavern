@@ -24,8 +24,9 @@ machine.
   Node.js and SQLite, so you never install a runtime yourself.
 - The app starts its own local backend, an embedded Node.js sidecar that
   listens on `127.0.0.1:8000` by default and shuts down with the window.
-- A responsive PWA lets phones and tablets connect to a backend running on
-  your PC or home server.
+- A responsive, installable Web Client lets phones and tablets connect to a
+  backend running on your PC or home server (a connection is required for API
+  and generation).
 
 ## What You Need
 

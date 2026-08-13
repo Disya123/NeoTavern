@@ -1,0 +1,254 @@
+{
+  "formatVersion": 1,
+  "generatedAt": "2026-08-13T23:22:52.207Z",
+  "rows": [
+    {
+      "hosts": {
+        "android": "Implemented",
+        "desktop": "Integrated",
+        "headless": "Implemented",
+        "webClient": "Implemented"
+      },
+      "id": "backups",
+      "milestone": "M3",
+      "notes": "Backup containers (manifest, checksums, atomic publish); restore + activation journal is M3.",
+      "title": "Backup create/list",
+      "wireOps": ["backups.create", "backups.list"]
+    },
+    {
+      "hosts": {
+        "android": "Implemented",
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "webClient": "Implemented"
+      },
+      "id": "characters.crud",
+      "milestone": "M2",
+      "notes": "Kernel-owned ops with component tests; UI still routes through legacy /api/v2 until M2 golden flow cutover.",
+      "title": "Character CRUD",
+      "wireOps": [
+        "characters.create",
+        "characters.delete",
+        "characters.get",
+        "characters.list",
+        "characters.update"
+      ]
+    },
+    {
+      "hosts": {
+        "android": "Implemented",
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "webClient": "Implemented"
+      },
+      "id": "chats.messages.list",
+      "milestone": "M2",
+      "notes": "Kernel op exists; message create/update/delete arrive in M2.",
+      "title": "Message read",
+      "wireOps": ["chats.messages.list"]
+    },
+    {
+      "hosts": {
+        "android": "Implemented",
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "webClient": "Implemented"
+      },
+      "id": "chats.read",
+      "milestone": "M2",
+      "notes": "Kernel ops exist; chats.create arrives in M2.",
+      "title": "Chat read",
+      "wireOps": ["chats.get", "chats.list"]
+    },
+    {
+      "hosts": {
+        "android": "Implemented",
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "webClient": "Implemented"
+      },
+      "id": "generation.workflow",
+      "milestone": "M2",
+      "notes": "Durable run/event model in kernel; run/step + tool protocol is M2 (GEN-RUN 10A/10B); UI streaming cutover in M2.",
+      "title": "Generation workflow (stream, cancel, retry, keep, discard)",
+      "wireOps": [
+        "generation.cancel",
+        "generation.discard",
+        "generation.events",
+        "generation.get",
+        "generation.keep",
+        "generation.retry",
+        "generation.start"
+      ]
+    },
+    {
+      "hosts": {
+        "android": "Implemented",
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "webClient": "Implemented"
+      },
+      "id": "lorebooks.read",
+      "milestone": "M2",
+      "notes": "Kernel op exists; full lorebook CRUD and prompt integration in M2.",
+      "title": "Lorebook read",
+      "wireOps": ["lorebooks.list"]
+    },
+    {
+      "hosts": {
+        "android": "Integrated",
+        "desktop": "Integrated",
+        "headless": "Integrated",
+        "webClient": "Integrated"
+      },
+      "id": "meta.get",
+      "milestone": "M0",
+      "notes": "Exact local handshake (schemaHash + FFI ABI) enforced at kernel open; exercised by desktop smoke and JNI bridge.",
+      "title": "Kernel handshake / meta",
+      "wireOps": ["meta.get"]
+    },
+    {
+      "hosts": {
+        "android": "Implemented",
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "webClient": "Implemented"
+      },
+      "id": "presets.read",
+      "milestone": "M4",
+      "notes": "Kernel op exists; preset CRUD in M4.",
+      "title": "Preset read",
+      "wireOps": ["presets.list"]
+    },
+    {
+      "hosts": {
+        "android": "Implemented",
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "webClient": "Implemented"
+      },
+      "id": "providers.list",
+      "milestone": "M2",
+      "notes": "Kernel op exists; provider configuration without secrets in DB arrives in M2/M3.",
+      "title": "Provider catalog read",
+      "wireOps": ["providers.list"]
+    },
+    {
+      "hosts": {
+        "android": "Implemented",
+        "desktop": "Integrated",
+        "headless": "Implemented",
+        "webClient": "Implemented"
+      },
+      "id": "ui.diagnostics",
+      "milestone": "M1",
+      "notes": "First vertical slice through the NeoBackend facade; legacy sections remain on /api/v2 until M4.",
+      "title": "Diagnostics panel (kernel section)",
+      "wireOps": []
+    },
+    {
+      "hosts": {
+        "android": "Designed",
+        "desktop": "Designed",
+        "headless": "Designed",
+        "webClient": "Designed"
+      },
+      "id": "ui.message-editing",
+      "milestone": "M4",
+      "notes": "Legacy /api/v2 contour today; kernel message ops + UI cutover in M2/M4.",
+      "title": "Message edit/delete/drafts/blocks UI",
+      "wireOps": []
+    },
+    {
+      "hosts": {
+        "android": "Designed",
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "webClient": "Implemented"
+      },
+      "id": "ui.plugins",
+      "milestone": "M4",
+      "notes": "Legacy /api/v2 plugin surface; kernel capability protocol is the long-term path (M4).",
+      "title": "Plugin management UI",
+      "wireOps": []
+    },
+    {
+      "hosts": {
+        "android": "Designed",
+        "desktop": "Designed",
+        "headless": "Designed",
+        "webClient": "Designed"
+      },
+      "id": "ui.portable-data",
+      "milestone": "M3",
+      "notes": "Versioned roots + activation journal + Windows restart-to-complete in M3 (ADR-0041).",
+      "title": "Portable data / activation / restore",
+      "wireOps": []
+    },
+    {
+      "hosts": {
+        "android": "Designed",
+        "desktop": "Designed",
+        "headless": "Designed",
+        "webClient": "Designed"
+      },
+      "id": "ui.profile-export",
+      "milestone": "M1",
+      "notes": "SEC-02: legacy allowlist export fixed in M1; kernel export.profile in M3.",
+      "title": "Logical profile export",
+      "wireOps": []
+    },
+    {
+      "hosts": {
+        "android": "Designed",
+        "desktop": "Designed",
+        "headless": "Designed",
+        "webClient": "Designed"
+      },
+      "id": "ui.prompt-pipeline",
+      "milestone": "M2",
+      "notes": "Legacy TS pipeline in apps/server; kernel crates/prompting + PromptPlan in M2.",
+      "title": "Prompt pipeline (macros, context, tokens, instruct)",
+      "wireOps": []
+    },
+    {
+      "hosts": {
+        "android": "Designed",
+        "desktop": "Designed",
+        "headless": "Designed",
+        "webClient": "Designed"
+      },
+      "id": "ui.secrets",
+      "milestone": "M3",
+      "notes": "SEC-01: SecretStore + portable secrets.enc in M3; no reveal op by design.",
+      "title": "Secret management",
+      "wireOps": []
+    },
+    {
+      "hosts": {
+        "android": "Designed",
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "webClient": "Implemented"
+      },
+      "id": "ui.themes",
+      "milestone": "M4",
+      "notes": "Theme SDK + legacy routes; cutover tracked in M4.",
+      "title": "Themes",
+      "wireOps": []
+    },
+    {
+      "hosts": {
+        "android": "Not supported",
+        "desktop": "Not supported",
+        "headless": "Not supported",
+        "webClient": "Not supported"
+      },
+      "id": "web-client.standalone-browser",
+      "milestone": "n/a",
+      "notes": "ARC-12 / ТЗ 10/10 rev2 §11.3.2: Web Client is remote-only; standalone Browser Runtime is a separate product track with its own ADR.",
+      "title": "Standalone browser runtime (WASM/OPFS)",
+      "wireOps": []
+    }
+  ]
+}

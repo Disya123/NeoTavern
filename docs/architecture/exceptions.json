@@ -1,0 +1,19 @@
+{
+  "$comment": "Architecture exception registry (ARC-09 / ТЗ 10/10 rev2 §6). Every temporary exception MUST have owner, reason, affected files, createdAt, issue and deadline. An expired exception blocks CI (docs:check). Exceptions and user consent can NEVER permit: direct canonical SQL, SecretStore reads, Product Wire bypass, or a second product-data writer.",
+  "formatVersion": 1,
+  "exceptions": [
+    {
+      "id": "M1-crlf-blob-eslint-exemption",
+      "owner": "neotavern/desktop-web (maintainers)",
+      "reason": "AutoConnectSync.tsx, LegacyBridgeSync.tsx and pages/ChatPage.tsx have CRLF-committed blobs while .gitattributes mandates LF for *.ts (text eol=lf); any edit renormalizes the whole file in the diff. They are exempt from the ESLint rule @neotavern/no-legacy-api-surface (no per-line disable comments) but REMAIN gated by scripts/check-ui-api.mjs --check, which fails on NEW /api/v2 / legacyRaw hits in them. The exemption is removed once the blobs are renormalized to LF (a one-time diff).",
+      "files": [
+        "apps/web/src/components/AutoConnectSync.tsx",
+        "apps/web/src/components/LegacyBridgeSync.tsx",
+        "apps/web/src/pages/ChatPage.tsx"
+      ],
+      "createdAt": "2026-08-13",
+      "issue": "Architecture Convergence M1 — renormalize CRLF web blobs to LF and drop the eslint exemption (tracked in CHANGELOG and ui-legacy-surface.md)",
+      "deadline": "2026-09-30"
+    }
+  ]
+}

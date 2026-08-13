@@ -120,5 +120,99 @@ export default tseslint.config(
       ],
     },
   },
+  // Legacy UI surface gate (ARC-02/ARC-03, ТЗ 10/10 rev2 §13.1): forbid NEW
+  // direct /api/v2 and legacyRaw() usage in production UI code. Existing sites
+  // carry an eslint-disable-next-line comment and are tracked in
+  // docs/architecture/ui-legacy-surface.md. The plugin sandbox (plugins/**)
+  // and the legacy API client shim (api/{client,backend,events,generate}.ts)
+  // are the legacy-compat plane and are excluded (ADR-0039, ADR-0038).
+  {
+    files: ['apps/web/src/**/*.{ts,tsx}'],
+    plugins: {
+      '@neotavern': {
+        rules: {
+          'no-legacy-api-surface': {
+            meta: {
+              type: 'problem',
+              docs: {
+                description:
+                  'Forbid direct /api/v2 and legacyRaw() usage in production UI (ARC-02/ARC-03)',
+              },
+              messages: {
+                legacy:
+                  'Direct legacy API usage is forbidden in production UI (ARC-02/ARC-03). Migrate to the Product Wire client; existing sites are tracked in docs/architecture/ui-legacy-surface.md.',
+              },
+            },
+            create(context) {
+              function report(node) {
+                context.report({ node, messageId: 'legacy' });
+              }
+              return {
+                Literal(node) {
+                  if (typeof node.value === 'string' && node.value.includes('/api/v2')) {
+                    report(node);
+                  }
+                },
+                TemplateLiteral(node) {
+                  for (const quasi of node.quasis) {
+                    if (
+                      quasi &&
+                      quasi.value &&
+                      typeof quasi.value.raw === 'string' &&
+                      quasi.value.raw.includes('/api/v2')
+                    ) {
+                      report(node);
+                      return;
+                    }
+                  }
+                },
+                ImportSpecifier(node) {
+                  if (
+                    node.imported &&
+                    node.imported.type === 'Identifier' &&
+                    node.imported.name === 'legacyRaw'
+                  ) {
+                    report(node);
+                  }
+                },
+                Identifier(node) {
+                  if (
+                    node.name === 'legacyRaw' &&
+                    node.parent &&
+                    node.parent.type !== 'ImportSpecifier'
+                  ) {
+                    report(node);
+                  }
+                },
+              };
+            },
+          },
+        },
+      },
+    },
+    rules: { '@neotavern/no-legacy-api-surface': 'error' },
+  },
+  // Exemptions: test/spec files, the plugin sandbox bridge (ADR-0039) and the
+  // legacy API client shim (tracked in docs/architecture/ui-legacy-surface.md).
+  // AutoConnectSync.tsx / LegacyBridgeSync.tsx / pages/ChatPage.tsx are exempt
+  // because their committed blobs are CRLF (gitattributes mandates LF), so any
+  // edit renormalizes the whole file in the diff; they remain covered by the
+  // `pnpm ui:api:check` scanner gate (scripts/check-ui-api.mjs --check). This
+  // CRLF exemption is registered in docs/architecture/exceptions.json
+  // (ARC-09, id M1-crlf-blob-eslint-exemption) with owner and deadline.
+  {
+    files: [
+      'apps/web/src/**/*.{test,spec}.{ts,tsx}',
+      'apps/web/src/plugins/**/*.{ts,tsx}',
+      'apps/web/src/api/client.ts',
+      'apps/web/src/api/backend.ts',
+      'apps/web/src/api/events.ts',
+      'apps/web/src/api/generate.ts',
+      'apps/web/src/components/AutoConnectSync.tsx',
+      'apps/web/src/components/LegacyBridgeSync.tsx',
+      'apps/web/src/pages/ChatPage.tsx',
+    ],
+    rules: { '@neotavern/no-legacy-api-surface': 'off' },
+  },
   prettier,
 );

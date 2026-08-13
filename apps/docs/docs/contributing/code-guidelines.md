@@ -55,7 +55,7 @@ files in `docs/` in the same change. This is mandatory for:
 - import, export, files, and the thumbnail cache;
 - prompt pipeline, instruct formats, tokenization, and context shifting;
 - provider adapters;
-- desktop packaging, the Tauri sidecar, PWA, and updates;
+- desktop packaging, the Tauri sidecar, Web Client, and updates;
 - user settings, i18n, and accessibility;
 - breaking changes, deprecations, and migration guides.
 

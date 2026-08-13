@@ -1,0 +1,79 @@
+---
+editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/architecture/version-axes.md
+---
+
+# Version Axes (ТЗ §45)
+
+> **Status.** "CURRENT" values are grounded in the repo today. "[PLANNED]"
+> entries belong to Phase 0 targets (Product Wire, Runtime Kernel, facades) and
+> are not yet implemented. The version axes are **independent**: bumping one
+> axis never implies bumping another, and no axis is derived from a package
+> SemVer version.
+
+Related documents: [Operations inventory](operations-inventory.md),
+[Wire contracts](wire-contracts.md),
+[ADR-0029](../adr/0029-wire-contract-toolchain.md),
+[API reference](../api/README.md), [Data and SQLite](../data/README.md).
+
+## 1. The axes
+
+| Axis              | Current value                                                                                                                                                                                                       | Compatibility rule                                                                                                                      | Min / max supported                                                | Negotiation source                                                                                                                                                           | Fixtures / evidence                                                                                                                                                                             |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **App version**   | `0.1.0` (CURRENT — root `package.json` `version`; `APP_VERSION` in `apps/server/src/plugins/meta.ts`)                                                                                                               | User-facing SemVer; no protocol meaning (see §2)                                                                                        | SemVer; engine floor Node ≥24 (`package.json` `engines`)           | `GET /api/v2/version` → `{ name, version, apiVersion }`; wire `MetaDto.appVersion`                                                                                           | `GET /api/v2/version` response; `wire.meta.dto` fixture                                                                                                                                         |
+| **DB Format**     | `1` (CURRENT-designated by the wire contract `BackupDto.formatVersion` literal `1`, [PLANNED] `wire.backup.dto`; today the on-disk format is SQLite WAL with no standalone format constant — see note)              | Same format ⇒ same file layout; change ⇒ migration path                                                                                 | `1` only                                                           | `BackupDto.formatVersion` (wire); backup file header for snapshots                                                                                                           | `neg-backup-bad-status` / `neg-backup-bad-checksum` fixtures [PLANNED]; `data/backups/backup-*.db` snapshots                                                                                    |
+| **DB Schema**     | `21` (CURRENT — max migration version in `packages/db/src/migrations/` (`0000`…`0021`), tracked in the `_migrations` table; `packages/db/src/migrate.ts`)                                                           | Additive migrations only; applied migrations are content-hash-pinned and must never be modified                                         | Min: last applied; Max: latest shipped migration                   | Diagnostics snapshot `schemaVersion` / `migrationCount` (`GET /api/v2/diagnostics`; `packages/db/src/database.ts`)                                                           | Migration tests in `packages/db/test`; `docs/migrations/README.md`                                                                                                                              |
+| **Product Wire**  | `1.0` + `schemaHash` (PLANNED — `WIRE_PROTOCOL = { major: 1, minor: 0 }`, `SCHEMA_DIALECT = 'JSON Schema 2020-12'`; `schemaHash` = lowercase hex sha256 of the canonical bundle)                                    | Same **major** required; **minor** = additive capability level; **exact** `schemaHash` for local handshake; any schema change re-hashes | major ≥1; minor ≥0; local kernel accepts exactly its embedded hash | Local: embedded `contract-manifest.json` (`contracts_generated::contract_schema_hash()`); Remote: `meta.get` → `MetaDto.api`/`productWire`/`minimumClientVersion`/`features` | Wire fixture corpus (`packages/contracts/generated/fixtures/`), `packages/contracts/test/wire.test.ts`, `crates/contracts-generated/tests/wire_corpus.rs`, kernel handshake tests [all PLANNED] |
+| **Local FFI ABI** | `1` (CURRENT — `FFI_ABI_VERSION` in `wire/envelope.ts` = `crates/runtime-kernel/src/lib.rs`; `Kernel::open` rejects `ffi_abi_version != 1`; implemented by the Phase 5 adapter `crates/adapters/mobile-ffi`)                                                                                | Opaque handles/buffers only; ABI change bumps independently of wire protocol                                                            | `1` only                                                           | Kernel open config (`KernelConfig::ffi_abi_version`); `contract-manifest.json` `ffiAbiVersion`; `nt_ffi_version()`                                                                                 | `kernel_smoke::open_rejects_wrong_abi_version` → `ContractMismatch`; `neotavern-mobile-ffi` unit tests (`nt_ffi_version()` == kernel ABI, ABI round-trips)                                                                                          …|
+| **HTTP API**      | `2` (CURRENT — `API_VERSION = 2` in `apps/server/src/plugins/meta.ts`; surface is `/api/v2/*`)                                                                                                                      | Additive changes stay in `/api/v2`; breaking changes ⇒ new major + migration guide (`docs/api/README.md` "Versioning")                  | Current `/api/v2`; no v1/v3 yet                                    | `GET /api/v2/version` → `apiVersion`                                                                                                                                         | API tests + `docs/api/README.md` endpoint inventory                                                                                                                                             |
+| **Plugin API**    | `3` (CURRENT — `CURRENT_API_VERSION = 3` in `packages/plugin-sdk/src/manifest.ts`; rev4 is `apiVersion` 2 and stays the default until Stage A integration; v3 routes to the Node Universal Runtime, ADR-0027)       | Manifest `apiVersion` ≤ `CURRENT_API_VERSION`; newer manifests are rejected at validation                                               | 1 … 3                                                              | `PluginManifest.apiVersion` validation (`packages/plugin-sdk/src/manifest.ts`)                                                                                               | Manifest validation tests in `packages/plugin-sdk/test`                                                                                                                                         |
+| **Theme API**     | `1` (CURRENT — `CURRENT_THEME_API_VERSION = 1` in `packages/theme-sdk/src/manifest.ts`)                                                                                                                             | Manifest `apiVersion` ≤ current; newer rejected                                                                                         | 1 only                                                             | `ThemeManifest.apiVersion` validation                                                                                                                                        | Theme manifest validation tests in `packages/theme-sdk/test`                                                                                                                                    |
+| **Provider API**  | unversioned (CURRENT — `ProviderAdapter` interface in `packages/provider-sdk/src/types.ts`; `adapterKind` catalog in `packages/provider-sdk/src/catalog.ts`)                                                        | Interface compatibility by code review today; **noted gap** — no version constant exists                                                | —                                                                  | —                                                                                                                                                                            | `packages/provider-sdk/test` adapter tests; `GET /api/v2/providers/catalog`                                                                                                                     |
+| **Client SDK**    | not shipped (PLANNED — `packages/client-sdk`, Phase 0 facade task)                                                                                                                                                  | Will follow Product Wire major/minor                                                                                                    | —                                                                  | —                                                                                                                                                                            | —                                                                                                                                                                                               |
+| **Backup Format** | `1` (CURRENT-shape: single-file SQLite snapshot in `data/backups/`, created via the online-backup API; wire `BackupDto.formatVersion = 1` [PLANNED])                                                                | Restore only from same-format snapshots; format change ⇒ migration/import path                                                          | `1` only                                                           | `BackupDto.formatVersion`; `kind: 'manual' \| 'auto'`                                                                                                                        | Backup route tests; wire backup fixtures [PLANNED]                                                                                                                                              |
+| **Export Format** | `1` (CURRENT — profile export ZIP with `manifest.json` `{ format: "neotavern-profile-export", version: 1, appVersion, exportedAt, profile }`, `app.db` snapshot + `files/`; `apps/server/src/lib/profileExport.ts`) | Importers check `format` + `version`; change ⇒ new format id or major                                                                   | `neotavern-profile-export` v1 only                                 | `manifest.json` inside the archive                                                                                                                                           | `GET /api/v2/profiles/export` tests                                                                                                                                                             |
+
+> **Android JNI reuses the same Local FFI ABI axis (no new axis).** The
+> Android host (`neotavern-android-jni`, `apps/android`) marshals to the
+> identical `nt_*` ABI above: `ffiAbiVersion` + `schemaHash` come from the
+> same kernel manifest and the same `nt_ffi_version()` check, so the JNI
+> layer introduces no additional version axis.
+
+## 2. Non-derivation rules
+
+- **SemVer package version ≠ protocol version.** Every `@neotavern/*` package
+  and the root are `0.1.0` today; package versions carry no wire-compatibility
+  meaning. Wire compatibility is governed solely by `wireProtocol` +
+  `schemaHash` (+ `FFI_ABI_VERSION` for the local ABI). Bumping a package
+  version does not bump an axis and vice versa.
+- **appVersion ≠ schemaRevision (§26–29).** `appVersion` (`0.1.0`) is a
+  user-facing product version; the DB **schema revision** (`_migrations` max
+  version, currently 21) is an internal storage revision that changes on every
+  additive migration without any app-version bump. The same separation holds
+  inside plugin state: a row's `schema_version` (default 1) and CAS `revision`
+  are independent (see `packages/db/src/repositories/pluginCapabilities.ts`
+  and migration 0016) — and neither equals the Plugin API manifest version.
+- **Axis independence.** A DB migration does not change the HTTP API version; a
+  wire schema addition bumps `schemaHash` and possibly wire `minor` but not the
+  FFI ABI; the FFI ABI can change without touching the wire protocol.
+
+## 3. Compatibility matrix
+
+| Pair                          | Rule                                                                                                                         |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Client (remote) ↔ Server wire | Same wire **major**; server `minor` ≥ client-required minimum; strict envelope `schemaHash`/`wireProtocol` check per request |
+| Local facade ↔ Kernel         | **Exact** `schemaHash` (kernel opens only against its embedded manifest) + `ffiAbiVersion == 1`                              |
+| Plugin ↔ Host                 | Manifest `apiVersion` ≤ `CURRENT_API_VERSION` (3); rev4 (2) supported; v1 legacy                                             |
+| Theme ↔ Host                  | Manifest `apiVersion` ≤ `CURRENT_THEME_API_VERSION` (1)                                                                      |
+| App ↔ DB                      | Migrations are additive and content-hash-pinned; a populated DB is migrated forward before serving                           |
+| Backup/Export ↔ App           | Same format id + version required; import/restore paths validate before writing                                              |
+
+## 4. Related documents
+
+- [Wire contracts](wire-contracts.md) — envelope handshake, versioning (§6.5,
+  §6.7), codegen determinism.
+- [Operations inventory](operations-inventory.md) — current HTTP surface and
+  the `meta.get` mapping that exposes these axes.
+- [ADR-0029](../adr/0029-wire-contract-toolchain.md) — why the wire axis exists
+  as a generated, hash-pinned contract.
+- [API reference](../api/README.md), [Data and SQLite](../data/README.md),
+  [Migrations](../migrations/README.md) — per-axis evidence.

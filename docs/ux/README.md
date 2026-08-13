@@ -603,6 +603,7 @@ inherits the parent's character, persona, background, and summary.
 - Child chats are marked with an origin badge in the chat management panel
   (see §10.6). Data is copied as of the snapshot moment: parent changes after
   the snapshot do not reach it, and vice versa.
+
 ## 11. Character creation and editing
 
 - The editor is divided into clear groups: identity, description, first
@@ -1029,17 +1030,17 @@ Artifacts do not duplicate the implementation with a separate set of quickly
 outdated mockups. The normative source and verifiable evidence for each
 artifact:
 
-| Artifact                                               | Source of truth                                                   |
-| ------------------------------------------------------ | ----------------------------------------------------------------- |
-| Screen and route map                                   | Sections 6–7, `apps/web/src/components/systemSurfaces.ts`          |
+| Artifact                                                 | Source of truth                                                                 |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Screen and route map                                     | Sections 6–7, `apps/web/src/components/systemSurfaces.ts`                       |
 | Interactive prototype of first launch, catalog, and chat | The working SPA and the scenarios in `e2e/release.spec.ts`, `e2e/flows.spec.ts` |
-| Keyboard shortcuts                                     | Section 29.1                                                       |
-| Content guide and vocabulary                           | Section 29.2 and the i18n resources in `packages/i18n/src/resources/` |
-| Accessibility checklist and results                    | Section 29.3                                                       |
-| Large library and long chat                            | `packages/db/scripts/benchmark.ts`, the `pnpm benchmark` command   |
-| Usability-testing scenarios                            | Section 29.4                                                       |
-| Visual regression matrix                               | `e2e/visual.spec.ts` and the golden snapshots next to it           |
-| Known UX limitations                                   | Section 29.5                                                       |
+| Keyboard shortcuts                                       | Section 29.1                                                                    |
+| Content guide and vocabulary                             | Section 29.2 and the i18n resources in `packages/i18n/src/resources/`           |
+| Accessibility checklist and results                      | Section 29.3                                                                    |
+| Large library and long chat                              | `packages/db/scripts/benchmark.ts`, the `pnpm benchmark` command                |
+| Usability-testing scenarios                              | Section 29.4                                                                    |
+| Visual regression matrix                                 | `e2e/visual.spec.ts` and the golden snapshots next to it                        |
+| Known UX limitations                                     | Section 29.5                                                                    |
 
 ### 29.1. Keyboard shortcuts
 
@@ -1147,7 +1148,7 @@ are not included in the result record.
 - [Plugin SDK](../plugin-sdk/README.md)
 - [Theme SDK](../theme-sdk/README.md)
 - [Data and SQLite](../data/README.md)
-- [Desktop and PWA](../desktop/README.md)
+- [Desktop and Web Client](../desktop/README.md)
 
 ## Message details and version controls
 

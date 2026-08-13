@@ -47,15 +47,29 @@ await writeFile(
 
 let status = null;
 try {
-  const args = ['--dir', desktop, 'tauri', 'build', '--config', 'src-tauri/.release-config.generated.json'];
+  const args = [
+    '--dir',
+    desktop,
+    'tauri',
+    'build',
+    '--config',
+    'src-tauri/.release-config.generated.json',
+  ];
   if (bundles) args.push('--bundles', bundles);
   const result = spawnSync('pnpm', args, {
-      cwd: root,
-      env: { ...process.env, CI: process.env['CI'] === '1' ? 'true' : process.env['CI'] },
-      shell: process.platform === 'win32',
-      stdio: 'inherit',
+    cwd: root,
+    env: {
+      ...process.env,
+      CI: process.env['CI'] === '1' ? 'true' : process.env['CI'],
+      // Public release channel: the shell defaults to the tested legacy
+      // sidecar while the Kernel is an explicit Preview (ADR-0038 honest
+      // staged default). Nightly/internal builds set NEOTA_DESKTOP_CHANNEL
+      // =nightly (or NEOTA_KERNEL=1 at runtime) to default to the Kernel.
+      NEOTA_DESKTOP_CHANNEL: 'release',
     },
-  );
+    shell: process.platform === 'win32',
+    stdio: 'inherit',
+  });
   if (result.error) throw result.error;
   status = result.status;
 } finally {

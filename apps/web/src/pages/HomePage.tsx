@@ -251,7 +251,8 @@ export function HomePage() {
   const globalBackgroundId = useUiStore((state) => state.globalBackgroundId);
   const wallpaperUrl = useMemo(() => {
     return globalBackgroundId
-      ? `/api/v2/assets/backgrounds/${encodeURIComponent(globalBackgroundId)}`
+      ? // eslint-disable-next-line @neotavern/no-legacy-api-surface
+        `/api/v2/assets/backgrounds/${encodeURIComponent(globalBackgroundId)}`
       : null;
   }, [globalBackgroundId]);
 
