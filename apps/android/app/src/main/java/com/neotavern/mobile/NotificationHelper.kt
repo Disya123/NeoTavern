@@ -48,7 +48,7 @@ object NotificationHelper {
 
     /** Removes the foreground notification (idempotent). */
     fun cancelForeground(service: Service) {
-        service.stopForeground(STOP_FOREGROUND_REMOVE)
+        service.stopForeground(Service.STOP_FOREGROUND_REMOVE)
     }
 
     private fun ensureChannel(context: Context) {

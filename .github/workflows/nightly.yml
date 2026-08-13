@@ -13,8 +13,9 @@
 #     fuzz over every generated decoder at a scaled budget — a panic on
 #     arbitrary input is a test failure (§6.8/§80)
 #   - TS regression baseline (vitest) + docs integrity
-#   - Android device gate (Phase 5, ТЗ §7.2): instrumented tests on an API 34
-#     x86_64 emulator against the JNI bridge (arm64-v8a + x86_64 libs)
+#   - Android device gate (Phase 5 + Phase 8, ТЗ §7.2/§8): instrumented
+#     tests on API 26 + 34 x86_64 emulators against the JNI bridge
+#     (arm64-v8a + x86_64 libs), incl. the background-execution suite
 #
 # The Rust jobs repeat `cargo test --workspace` and clippy/fmt from ci.yml on
 # a schedule so a flake or regression that slipped past PR gates is caught
