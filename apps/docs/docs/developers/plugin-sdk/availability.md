@@ -46,5 +46,6 @@ Mobile builds follow the same model host-side: the Android WebView exposes
 `backgroundExecutionAvailable()` and has no plugin surface, matching the
 `unavailable` reporting contract.
 
-See also: [Sandboxing](sandboxing.md) for how plugins run where they are
-available, and [Declarative UI Slots](slots.md) for the plugin UI surface.
+See also: [Sandboxing](/developers/plugin-sdk/sandboxing) for how plugins run
+where they are available, and [Declarative UI Slots](slots.md) for the plugin
+UI surface.

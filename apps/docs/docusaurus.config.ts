@@ -96,17 +96,11 @@ const config: Config = {
 
   i18n: {
     defaultLocale: 'en',
-    locales: ['en', 'ru', 'zh-Hans', 'ja', 'ko', 'es', 'fr', 'de', 'pt-BR'],
+    locales: ['en', 'zh-Hans', 'ja'],
     localeConfigs: {
       en: { label: 'English' },
-      ru: { label: 'Русский' },
       'zh-Hans': { label: '简体中文' },
       ja: { label: '日本語' },
-      ko: { label: '한국어' },
-      es: { label: 'Español' },
-      fr: { label: 'Français' },
-      de: { label: 'Deutsch' },
-      'pt-BR': { label: 'Português (Brasil)' },
     },
   },
 

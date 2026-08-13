@@ -89,6 +89,6 @@ code and `params`:
 - `SLOT_INVALID` — `{ reason }`: any other structural violation (priority,
   permission, action, `when`).
 
-See also: [Frontend API](frontend.md) for the imperative registrars, and
-[Extension Availability](availability.md) for when plugin surfaces exist at
-all.
+See also: [Frontend API](/developers/plugin-sdk/frontend) for the imperative
+registrars, and [Extension Availability](availability.md) for when plugin
+surfaces exist at all.

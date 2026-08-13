@@ -57,6 +57,6 @@ There is no per-plugin exception: the app-level gate is global. Disabling the
 gate is equivalent to «no legacy frontend plugins, ever», while keeping the
 globals and the consent records intact for later opt-in.
 
-See also: [Sandboxing](sandboxing.md) for the rev4 sandbox model and
-[Extension Availability](availability.md) for when the plugin host exists at
-all.
+See also: [Sandboxing](/developers/plugin-sdk/sandboxing) for the rev4
+sandbox model and [Extension Availability](availability.md) for when the
+plugin host exists at all.
