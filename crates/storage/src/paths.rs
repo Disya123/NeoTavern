@@ -23,6 +23,9 @@ pub const SNAPSHOTS_DIR: &str = "snapshots";
 /// Lease lock file name inside a data root.
 pub const LOCK_FILE: &str = ".neotavern.lock";
 
+/// Backups directory name inside a data root (Phase 11 backup containers).
+pub const BACKUPS_DIR: &str = "backups";
+
 /// Absolute path of the SQLite database for `root`.
 pub fn db_path(root: &Path) -> PathBuf {
     root.join(DB_FILE_NAME)
@@ -41,6 +44,11 @@ pub fn snapshots_dir(root: &Path) -> PathBuf {
 /// Absolute path of the lease lock file for `root`.
 pub fn lock_path(root: &Path) -> PathBuf {
     root.join(LOCK_FILE)
+}
+
+/// Absolute path of the backups directory for `root` (Phase 11).
+pub fn backups_dir(root: &Path) -> PathBuf {
+    root.join(BACKUPS_DIR)
 }
 
 /// Validates a managed relative key for asset storage.

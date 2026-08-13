@@ -476,7 +476,7 @@ the kernel yet.
 | personas                    | `plugins/personas.ts` + `repositories/personas.ts`                                              | Runtime Kernel                                                    | legacy                     | — (beyond Phase 0 wire registry)                                                                   |
 | presets                     | `plugins/presets.ts` + `repositories/presets.ts`                                                | Runtime Kernel                                                    | legacy                     | `presets.list`                                                                                     |
 | profiles                    | `plugins/profiles.ts` + `repositories/profiles.ts` + `lib/profileExport.ts`                     | Runtime Kernel                                                    | legacy                     | — (beyond Phase 0 wire registry)                                                                   |
-| providers                   | `plugins/providers.ts` + `provider-sdk`                                                         | Runtime Kernel                                                    | legacy                     | — (beyond Phase 0 wire registry)                                                                   |
+| providers                   | `plugins/providers.ts` + `provider-sdk`                                                         | Runtime Kernel                                                    | legacy → Phase 7           | `providers.list` (kernel built-in adapter report); CRUD/models/test remain legacy until provider-config slices |
 | secrets                     | `plugins/secrets.ts` + `repositories/providerSecrets.ts`                                        | Runtime Kernel                                                    | legacy                     | — (beyond Phase 0 wire registry)                                                                   |
 | settings                    | `plugins/settings.ts` + `repositories/settings.ts`                                              | Runtime Kernel                                                    | legacy                     | — (beyond Phase 0 wire registry)                                                                   |
 | search                      | `plugins/search.ts` + `repositories/search.ts` (FTS5)                                           | Runtime Kernel                                                    | legacy                     | — (beyond Phase 0 wire registry)                                                                   |
@@ -510,7 +510,7 @@ Notes:
 ## 8. Product Wire mapping (Phase 0 registry)
 
 The Phase 0 wire registry (`packages/contracts/src/wire/registry.ts`, exported
-by `buildProductWireRegistry()`) covers 20 operations. Mapping to today's
+by `buildProductWireRegistry()`) covers 21 operations. Mapping to today's
 routes:
 
 | Wire operation        | Class                 | Current HTTP counterpart                                                                                                             |
@@ -531,6 +531,7 @@ routes:
 | `generation.retry`    | workflow (SSE events) | none (kernel-native; new attempt over a failed/cancelled/interrupted run)                                                          |
 | `generation.keep`     | transactional         | none (kernel-native; keep partial artifact as a message)                                                                             |
 | `generation.discard`  | transactional         | none (kernel-native; discard partial artifact)                                                                                       |
+| `providers.list`      | transactional         | kernel-native built-in adapter report; legacy CRUD/models/test stay `/api/v2/providers/*` until later slices                          |
 | `backups.create`      | workflow              | `POST /api/v2/backups`                                                                                                               |
 | `backups.list`        | transactional         | `GET /api/v2/backups`                                                                                                                |
 | `lorebooks.list`      | transactional         | `GET /api/v2/lorebooks`                                                                                                              |

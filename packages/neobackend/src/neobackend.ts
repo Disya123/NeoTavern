@@ -22,6 +22,7 @@ import type {
   ListLorebooksResultDto,
   ListMessagesRequestDto,
   ListPresetsResultDto,
+  ListProvidersResultDto,
   MetaDto,
   PagedCharactersDto,
   PagedChatsDto,
@@ -105,6 +106,12 @@ export interface PresetsApi {
   list(): Promise<ListPresetsResultDto>;
 }
 
+/** Provider domain operations (wire `providers.*`). */
+export interface ProvidersApi {
+  /** List providers. */
+  list(): Promise<ListProvidersResultDto>;
+}
+
 /**
  * The UI-facing backend surface (ТЗ §15).
  *
@@ -119,6 +126,7 @@ export interface NeoBackend {
   chats: ChatsApi;
   lorebooks: LorebooksApi;
   presets: PresetsApi;
+  providers: ProvidersApi;
   generation: GenerationApi;
   backups: BackupsApi;
 }

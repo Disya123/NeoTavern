@@ -38,7 +38,7 @@ requirement at runtime against the actually linked library version.
 | `baseline`  | SQLite version gate, `ConnectionPolicy`, connection config + verify |
 | `error`     | `StorageError`/`StorageErrorCode` classification (incl. Busy/DiskFull) |
 | `lease`     | exclusive data-root lease (fs2 lock on `.neotavern.lock`)    |
-| `schema`    | v1–v3 migration SQL literals + fresh-install fingerprint    |
+| `schema`    | v1–v4 migration SQL literals + fresh-install fingerprint   |
 | `migrations`| migration engine: ledger + checksums, risk classes          |
 | `open`      | inspect / open sequences, read-only recovery open           |
 | `paths`     | data-root layout + managed relative-key validation          |
@@ -54,7 +54,8 @@ requirement at runtime against the actually linked library version.
 - **No HTTP**, no UI. Schema knowledge is table-shape only: v1 foundation
   (`meta`/`migrations`/`assets`), v2 product tables (`characters`, `chats`,
   `messages`, `lorebooks`, `presets`), v3 generation durability
-  (`generation_runs`, `generation_events`). Row-level semantics live in the
-  Runtime Kernel, not here.
+  (`generation_runs`, `generation_events`), v4 provider configuration
+  (`provider_configs`, config/secret separation per ТЗ §55/§68). Row-level
+  semantics live in the Runtime Kernel, not here.
 - **Single-writer coordinator**: all writes flow through one writable
   `Database` connection; no read pool in v1.

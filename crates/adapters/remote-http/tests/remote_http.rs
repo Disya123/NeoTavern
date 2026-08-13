@@ -29,9 +29,9 @@ use common::{
     decode_envelope, default_config, encode_envelope_frame, encode_frame, encode_terminal_frame,
     envelope_body, envelope_body_full, expect_error, expect_ok, free_port, gen, http_request,
     http_request_chunked, http_requests_keepalive, json, kernel_config, parse_last_event_id,
-    parse_sse, rid, seed_data_root, AdapterError, Arc, IpAddr, Ipv4Addr, Kernel, KernelErrorCode,
-    Mutex, RemoteAdapter, RemoteAdapterConfig, SocketAddr, SseFrame, TestServer, Value, T0,
-    ZERO_SCHEMA_HASH,
+    parse_sse, rid, seed_data_root, AdapterError, Arc, AuthConfig, IpAddr, Ipv4Addr, Kernel,
+    KernelErrorCode, Mutex, RemoteAdapter, RemoteAdapterConfig, SocketAddr, SseFrame, TestServer,
+    Value, T0, ZERO_SCHEMA_HASH,
 };
 
 // ---------------------------------------------------------------------------
@@ -99,6 +99,36 @@ fn character_create_get_round_trip_over_http() {
     assert_eq!(request_id, rid(2), "requestId is echoed");
     gen::validate_character_dto(&fetched).expect("fetched character DTO is wire-valid");
     assert_eq!(fetched["id"], json!(id), "round-trip keeps the same id");
+}
+
+/// 2b. `providers.list` over `/rpc` (Phase 7): stateless operation reporting
+///    the built-in `fake` provider with schema-valid availability and models.
+#[test]
+fn providers_list_over_http_reports_builtin_fake() {
+    let server = TestServer::spawn();
+
+    let body = envelope_body(&rid(9), "providers.list", json!({}));
+    let response = http_request(server.addr, "POST", "/rpc", &[], &body);
+    assert_eq!(response.status, 200, "providers.list answers HTTP 200");
+    let (request_id, result) = expect_ok(decode_envelope(&response.body));
+    assert_eq!(request_id, rid(9), "requestId is echoed");
+    gen::validate_result_list_providers(&result).expect("list-providers result is wire-valid");
+    let items = result["items"].as_array().expect("items array");
+    let fake = items
+        .iter()
+        .find(|p| p["id"] == json!("fake"))
+        .expect("built-in fake provider is listed");
+    assert_eq!(fake["builtin"], json!(true), "fake is builtin");
+    assert_eq!(
+        fake["availability"]["status"],
+        json!("available"),
+        "fake availability is available"
+    );
+    let models = fake["models"].as_array().expect("models array");
+    assert!(
+        models.iter().any(|m| m["id"] == json!("fake-1")),
+        "fake-1 model listed"
+    );
 }
 
 /// 3. `characters.list` respects `limit` and returns `items` + `nextCursor`
@@ -348,7 +378,7 @@ fn request_body_over_limit_returns_413_quota_exceeded() {
 ///     `trusted_proxy` → `Err(AdapterError::InsecureBind)`; with
 ///     `trusted_proxy = true` the same bind succeeds and serves.
 #[test]
-fn insecure_bind_rejected_unless_trusted_proxy() {
+fn insecure_bind_rejected_unless_trusted_proxy_and_auth() {
     let temp = tempfile::tempdir().expect("temp dir for the kernel data root");
     let kernel = Arc::new(Mutex::new(
         Kernel::open(kernel_config(temp.path())).expect("kernel opens on the temp data root"),
@@ -371,22 +401,46 @@ fn insecure_bind_rejected_unless_trusted_proxy() {
         Err(other) => panic!("expected InsecureBind, got {other:?}"),
     }
 
-    // trusted_proxy=true permits the wildcard bind, and it serves.
-    let adapter = RemoteAdapter::start(
-        kernel,
+    // A public bind with trusted_proxy but WITHOUT auth is a startup error
+    // (§10: "Публичное включение listener без настроенных auth ... является
+    // startup error").
+    let no_auth = RemoteAdapter::start(
+        kernel.clone(),
         RemoteAdapterConfig {
             bind_addr: wildcard,
             trusted_proxy: true,
             ..default_config()
         },
+    );
+    match no_auth {
+        Ok(_) => panic!("expected PublicBindRequiresAuth without auth config"),
+        Err(AdapterError::PublicBindRequiresAuth { addr }) => {
+            assert!(addr.ip().is_unspecified(), "reported addr was {addr}");
+        }
+        Err(other) => panic!("expected PublicBindRequiresAuth, got {other:?}"),
+    }
+
+    // trusted_proxy=true + auth permits the wildcard bind, and it serves
+    // with a valid credential.
+    let adapter = RemoteAdapter::start(
+        kernel,
+        RemoteAdapterConfig {
+            bind_addr: wildcard,
+            trusted_proxy: true,
+            auth: Some(AuthConfig { max_credentials: 4 }),
+            ..default_config()
+        },
     )
-    .expect("trusted_proxy=true permits the wildcard bind");
+    .expect("trusted_proxy + auth permits the wildcard bind");
     assert!(adapter.is_listening());
     // Connect through loopback explicitly (0.0.0.0 destination is not
     // portable across platforms).
     let loopback = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), adapter.local_addr().port());
     let response = http_request(loopback, "GET", "/meta", &[], &[]);
-    assert_eq!(response.status, 200, "trusted wildcard adapter serves");
+    assert_eq!(
+        response.status, 200,
+        "trusted wildcard adapter serves /meta"
+    );
     adapter.shutdown().expect("graceful shutdown");
 }
 
@@ -1184,4 +1238,47 @@ fn stream_endpoint_enforces_protocol_before_streaming() {
     assert_eq!(error.code, "PROTOCOL_MISMATCH");
     assert_eq!(error.params["client_major"], json!("2"));
     assert_eq!(error.params["server_major"], json!("1"));
+}
+
+/// 25. `backups.create` + `backups.list` over `/rpc` (Phase 11): create on
+///     the adapter's data root → 200 ok envelope, the created backup DTO
+///     passes `validate_backup_dto` with `status == "completed"`, and the
+///     follow-up list contains the created backup.
+#[test]
+fn backups_create_and_list_over_http() {
+    let server = TestServer::spawn();
+
+    let create = envelope_body(&rid(1), "backups.create", json!({}));
+    let response = http_request(server.addr, "POST", "/rpc", &[], &create);
+    assert_eq!(response.status, 200, "backups.create answers HTTP 200");
+    let (request_id, created) = expect_ok(decode_envelope(&response.body));
+    assert_eq!(request_id, rid(1), "requestId is echoed");
+    gen::validate_backup_dto(&created).expect("created backup DTO is wire-valid");
+    assert_eq!(created["status"], json!("completed"));
+    assert_eq!(created["formatVersion"], json!(1.0));
+    let id = created["id"]
+        .as_str()
+        .expect("created backup has an id")
+        .to_string();
+    let checksum = created["checksumSha256"]
+        .as_str()
+        .expect("created backup has a checksum");
+    assert_eq!(checksum.len(), 64, "checksumSha256 is a sha256 hex digest");
+    assert!(
+        checksum.chars().all(|c| c.is_ascii_hexdigit()),
+        "checksumSha256 is hex"
+    );
+
+    let list = envelope_body(&rid(2), "backups.list", json!({}));
+    let response = http_request(server.addr, "POST", "/rpc", &[], &list);
+    assert_eq!(response.status, 200, "backups.list answers HTTP 200");
+    let (request_id, result) = expect_ok(decode_envelope(&response.body));
+    assert_eq!(request_id, rid(2), "requestId is echoed");
+    gen::validate_result_list_backups(&result).expect("list-backups result is wire-valid");
+    let items = result["items"].as_array().expect("items array");
+    assert!(
+        items.iter().any(|b| b["id"] == json!(id)),
+        "the created backup is listed"
+    );
+    assert_eq!(items.len(), 1, "exactly one backup on a fresh root");
 }

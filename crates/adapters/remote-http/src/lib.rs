@@ -17,18 +17,27 @@
 //! passes the protocol check the adapter always answers HTTP 200 with a
 //! validated ok/error response envelope.
 
+pub mod audit;
+pub mod auth;
+pub mod cors;
 pub mod envelope;
+pub mod rate_limit;
 pub mod sse;
 
+use std::collections::HashSet;
 use std::io::{Cursor, Write};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use audit::{AuditEvent, AuditKind, AuditLog};
+use auth::{AuthConfig, AuthError, CredentialInfo, PairingStore};
 use contracts_generated::generated;
+use cors::CorsPolicy;
 use envelope::{EnvelopeFailure, ProtocolVerdict};
+use rate_limit::{RateLimitConfig, RateLimiter};
 use runtime_kernel::{CancellationFlag, EventStream, Kernel, KernelError, KernelErrorCode};
 use sse::SseFrame;
 use tiny_http::{Header, Method, Request, Response, Server};
@@ -36,8 +45,8 @@ use tiny_http::{Header, Method, Request, Response, Server};
 /// Configuration for [`RemoteAdapter::start`].
 ///
 /// Defaults enforce the loopback-only security posture: ephemeral loopback
-/// bind, no trusted proxy, a 1 MiB request cap, 64 worker connections and a
-/// 5s drain budget.
+/// bind, no trusted proxy, no pairing gate, no rate limit, a 1 MiB request
+/// cap, 64 worker connections and a 5s drain budget.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteAdapterConfig {
     /// Address to bind. Default `127.0.0.1:0` — loopback only; port 0 lets
@@ -60,6 +69,40 @@ pub struct RemoteAdapterConfig {
     /// Graceful-drain budget: how long [`RemoteAdapter::shutdown`] waits for
     /// in-flight requests before abandoning the remaining workers.
     pub drain_timeout: Duration,
+
+    /// Pairing/credential gate. `None` (default) = open access (loopback
+    /// dev posture). `Some(cfg)` = every `/rpc` and `/rpc/stream` request
+    /// must carry a valid `Authorization: Bearer <token>`; credentials are
+    /// issued via [`RemoteAdapter::pair`] and revoked via
+    /// [`RemoteAdapter::revoke`] (§10, Phase 4 hardening / Phase 9).
+    pub auth: Option<AuthConfig>,
+
+    /// Token-bucket rate limiting keyed by credential id (when auth is on)
+    /// or peer IP (when auth is off). `None` (default) = unlimited.
+    pub rate_limit: Option<RateLimitConfig>,
+
+    /// Maximum concurrently open SSE streams. `None`-style unbounded
+    /// streaming is forbidden (§10: bounded stream limits); default 8.
+    pub max_streams: usize,
+
+    /// Audit ring capacity (bounded, FIFO). Default 256 events.
+    pub audit_capacity: usize,
+
+    /// CORS/Origin allowlist (exact-match, case-sensitive). Empty (default)
+    /// is deny-by-default: any request carrying an `Origin` header is
+    /// rejected 403 `ORIGIN_NOT_ALLOWED` before dispatch; no
+    /// `Access-Control-*` header is ever emitted. Non-browser clients (no
+    /// `Origin` header) are unaffected.
+    pub allowed_origins: Vec<String>,
+
+    /// Addresses of reverse proxies this adapter trusts to append
+    /// `X-Forwarded-For` (§10: "forwarded client/proto headers принимаются
+    /// только от configured proxy addresses"). Empty (default) = forwarded
+    /// headers are ignored entirely; rate limiting keys by the peer socket
+    /// IP. When the peer is trusted, the client IP for rate-limit keying is
+    /// taken from `X-Forwarded-For` (rightmost entry not added by a trusted
+    /// proxy). Forwarded headers from any other peer are never honored.
+    pub trusted_proxies: Vec<IpAddr>,
 }
 
 impl Default for RemoteAdapterConfig {
@@ -70,6 +113,12 @@ impl Default for RemoteAdapterConfig {
             max_request_bytes: 1024 * 1024,
             max_connections: 64,
             drain_timeout: Duration::from_secs(5),
+            auth: None,
+            rate_limit: None,
+            max_streams: 8,
+            audit_capacity: 256,
+            allowed_origins: Vec::new(),
+            trusted_proxies: Vec::new(),
         }
     }
 }
@@ -82,6 +131,13 @@ pub enum AdapterError {
     /// [`RemoteAdapterConfig::trusted_proxy`]. Returned BEFORE any listener
     /// is created.
     InsecureBind {
+        /// The rejected bind address.
+        addr: SocketAddr,
+    },
+    /// A non-loopback bind was requested with `trusted_proxy` but without
+    /// [`RemoteAdapterConfig::auth`] — a public listener without configured
+    /// auth is a startup error (ТЗ §10).
+    PublicBindRequiresAuth {
         /// The rejected bind address.
         addr: SocketAddr,
     },
@@ -121,6 +177,34 @@ pub struct RemoteAdapter {
     stop: Arc<AtomicBool>,
     /// Worker threads, joined during `shutdown`.
     workers: Vec<thread::JoinHandle<()>>,
+    /// State shared with every worker: kernel, optional pairing store,
+    /// optional rate limiter, bounded audit log and the concurrent-stream
+    /// counter. Also the pairing/audit surface the host drives (§10).
+    shared: Arc<Shared>,
+}
+
+/// State shared by every worker: the kernel plus the security gates (§10,
+/// Phase 4 hardening / Phase 9).
+struct Shared {
+    /// The single writer coordinator every transport shares (§22).
+    kernel: Arc<Mutex<Kernel>>,
+    /// Optional pairing gate; `None` = open loopback-dev posture.
+    auth: Option<Arc<PairingStore>>,
+    /// Optional token-bucket rate limiter.
+    rate: Option<Arc<RateLimiter>>,
+    /// Bounded structured audit log (never token/secret/payload material).
+    audit: Arc<AuditLog>,
+    /// Currently open SSE streams (bounded by `max_streams`).
+    streams: AtomicUsize,
+    /// Concurrent-stream cap.
+    max_streams: usize,
+    /// Request body cap enforced per request.
+    max_request_bytes: u64,
+    /// CORS/Origin policy (deny-by-default).
+    cors: CorsPolicy,
+    /// Reverse proxies trusted to append `X-Forwarded-For` (§10). Empty =
+    /// forwarded headers ignored.
+    trusted_proxies: HashSet<IpAddr>,
 }
 
 impl RemoteAdapter {
@@ -142,10 +226,19 @@ impl RemoteAdapter {
         kernel: Arc<Mutex<Kernel>>,
         config: RemoteAdapterConfig,
     ) -> Result<Self, AdapterError> {
-        if !config.bind_addr.ip().is_loopback() && !config.trusted_proxy {
-            return Err(AdapterError::InsecureBind {
-                addr: config.bind_addr,
-            });
+        if !config.bind_addr.ip().is_loopback() {
+            if !config.trusted_proxy {
+                return Err(AdapterError::InsecureBind {
+                    addr: config.bind_addr,
+                });
+            }
+            if config.auth.is_none() {
+                // ТЗ §10: "Публичное включение listener без настроенных
+                // auth и transport security является startup error."
+                return Err(AdapterError::PublicBindRequiresAuth {
+                    addr: config.bind_addr,
+                });
+            }
         }
 
         let server =
@@ -162,6 +255,27 @@ impl RemoteAdapter {
             .to_ip()
             .expect("Server::http(SocketAddr) binds an IP listener");
 
+        let audit = Arc::new(AuditLog::new(config.audit_capacity));
+        audit.record(AuditKind::Started, "adapter.start");
+
+        let shared = Arc::new(Shared {
+            kernel,
+            auth: config
+                .auth
+                .as_ref()
+                .map(|cfg| Arc::new(PairingStore::new(cfg.max_credentials))),
+            rate: config
+                .rate_limit
+                .as_ref()
+                .map(|cfg| Arc::new(RateLimiter::new(*cfg))),
+            audit,
+            streams: AtomicUsize::new(0),
+            max_streams: config.max_streams,
+            max_request_bytes: config.max_request_bytes,
+            cors: CorsPolicy::new(&config.allowed_origins),
+            trusted_proxies: config.trusted_proxies.iter().copied().collect(),
+        });
+
         let stop = Arc::new(AtomicBool::new(false));
         let mut workers = Vec::with_capacity(config.max_connections);
         for _ in 0..config.max_connections {
@@ -170,14 +284,13 @@ impl RemoteAdapter {
             // spawn closure.
             let unblock_server = Arc::clone(&server);
             let server = Arc::clone(&server);
-            let kernel = Arc::clone(&kernel);
+            let shared = Arc::clone(&shared);
             // Another dedicated clone: the error arm sets the flag even
             // though the worker clone moved into the spawn closure.
             let stop_signal = Arc::clone(&stop);
             let stop = Arc::clone(&stop);
-            let max_request_bytes = config.max_request_bytes;
             let builder = thread::Builder::new().name("remote-http-worker".to_string());
-            match builder.spawn(move || worker_loop(server, kernel, stop, max_request_bytes)) {
+            match builder.spawn(move || worker_loop(server, shared, stop)) {
                 Ok(handle) => workers.push(handle),
                 Err(err) => {
                     // Partial spawn failure: stop the workers that did start,
@@ -204,6 +317,7 @@ impl RemoteAdapter {
             config,
             stop,
             workers,
+            shared,
         })
     }
 
@@ -217,6 +331,52 @@ impl RemoteAdapter {
     /// [`Self::shutdown`] has stopped the worker pool.
     pub fn is_listening(&self) -> bool {
         !self.stop.load(Ordering::SeqCst)
+    }
+
+    /// Issues a new pairing credential. The token is returned exactly once;
+    /// only its verifier is stored. `Err([`AuthError::LimitReached`])` when
+    /// the store is at its configured cap (§10: bounded credential store).
+    /// `Err([`AuthError::AuthDisabled`])` when the adapter was started
+    /// without [`RemoteAdapterConfig::auth`].
+    pub fn pair(&self, label: Option<String>) -> Result<(String, String), AuthError> {
+        match &self.shared.auth {
+            Some(store) => {
+                let issued = store.pair(label)?;
+                self.shared
+                    .audit
+                    .record(AuditKind::PairCreated, issued.0.clone());
+                Ok(issued)
+            }
+            None => Err(AuthError::AuthDisabled),
+        }
+    }
+
+    /// Revokes a credential; `true` when the id existed. Audit records the
+    /// revocation (id only, never token material).
+    pub fn revoke(&self, id: &str) -> bool {
+        let revoked = match &self.shared.auth {
+            Some(store) => store.revoke(id),
+            None => false,
+        };
+        if revoked {
+            self.shared
+                .audit
+                .record(AuditKind::PairRevoked, id.to_string());
+        }
+        revoked
+    }
+
+    /// Current credentials (ids, labels, revocation flags — no tokens).
+    pub fn credentials(&self) -> Vec<CredentialInfo> {
+        match &self.shared.auth {
+            Some(store) => store.list(),
+            None => Vec::new(),
+        }
+    }
+
+    /// A snapshot of the bounded audit log (oldest first).
+    pub fn audit_events(&self) -> Vec<AuditEvent> {
+        self.shared.audit.snapshot()
     }
 
     /// Graceful drain: stops accepting new requests, wakes every worker
@@ -239,10 +399,11 @@ impl RemoteAdapter {
             local_addr,
             stop,
             workers,
-            ..
+            shared,
         } = self;
         let deadline = Instant::now() + config.drain_timeout;
 
+        shared.audit.record(AuditKind::Shutdown, "adapter.shutdown");
         stop.store(true, Ordering::SeqCst);
         // Each unblock() token wakes one worker blocked in recv(); the
         // workers that are mid-request finish them first (drain semantics).
@@ -333,15 +494,10 @@ impl RemoteAdapter {
 /// routing each request to the kernel. `recv()` errors only after
 /// `unblock()` (shutdown) or when the accept thread dies — either way the
 /// worker exits.
-fn worker_loop(
-    server: Arc<Server>,
-    kernel: Arc<Mutex<Kernel>>,
-    stop: Arc<AtomicBool>,
-    max_request_bytes: u64,
-) {
+fn worker_loop(server: Arc<Server>, shared: Arc<Shared>, stop: Arc<AtomicBool>) {
     while !stop.load(Ordering::SeqCst) {
         match server.recv() {
-            Ok(request) => handle_request(&kernel, request, max_request_bytes),
+            Ok(request) => handle_request(&shared, request),
             Err(_) => break,
         }
     }
@@ -350,27 +506,273 @@ fn worker_loop(
 /// Routes one request: `GET /meta`, `POST /rpc`, `POST /rpc/stream`; any
 /// other path is 404 NOT_FOUND and any other method on a known path is 405
 /// VALIDATION. Query strings are ignored for routing.
-fn handle_request(kernel: &Arc<Mutex<Kernel>>, request: Request, max_request_bytes: u64) {
+///
+/// The pairing gate (§10) is enforced BEFORE the body is read: when auth is
+/// configured, a request without a valid `Authorization: Bearer <token>`
+/// header is rejected with 401 `UNAUTHORIZED` without consuming the body.
+/// `/meta` stays open (handshake surface, no secrets); `/rpc` and
+/// `/rpc/stream` are gated.
+fn handle_request(shared: &Arc<Shared>, request: Request) {
     let method = request.method().clone();
     let url = request.url().to_owned();
     let path = url.split_once('?').map_or(url.as_str(), |(p, _)| p);
 
+    // CORS gate (§10): deny-by-default. A browser cross-origin request is
+    // admitted only when its `Origin` exactly matches the configured
+    // allowlist; disallowed origins get 403 before any body read or
+    // dispatch. `OPTIONS` with an allowed origin answers the preflight.
+    // Non-browser clients (no Origin header) are unaffected.
+    let cors_origin: Option<String> = match request
+        .headers()
+        .iter()
+        .find(|header| header.field.equiv("Origin"))
+        .map(|header| header.value.as_str().trim().to_string())
+        .filter(|value| !value.is_empty())
+    {
+        None => None,
+        Some(origin) => {
+            if !shared.cors.allows(&origin) {
+                shared
+                    .audit
+                    .record(AuditKind::OriginDenied, "origin_not_allowed");
+                respond_transport_error(
+                    request,
+                    403,
+                    "ORIGIN_NOT_ALLOWED",
+                    &[("rule".to_string(), "origin_not_allowed".to_string())],
+                    None,
+                );
+                return;
+            }
+            if method == Method::Options {
+                respond_cors_preflight(request, &origin);
+                return;
+            }
+            Some(origin)
+        }
+    };
+    let origin = cors_origin.as_deref();
+
     match (path, method) {
-        ("/meta", Method::Get) => respond_meta(kernel, request),
-        ("/meta", _) => respond_transport_error(request, 405, "VALIDATION", &[]),
-        ("/rpc", Method::Post) => respond_envelope(kernel, request, max_request_bytes, false),
-        ("/rpc", _) => respond_transport_error(request, 405, "VALIDATION", &[]),
-        ("/rpc/stream", Method::Post) => respond_envelope(kernel, request, max_request_bytes, true),
-        ("/rpc/stream", _) => respond_transport_error(request, 405, "VALIDATION", &[]),
-        _ => respond_transport_error(request, 404, "NOT_FOUND", &[]),
+        ("/meta", Method::Get) => respond_meta(shared, request, origin),
+        ("/meta", _) => respond_transport_error(request, 405, "VALIDATION", &[], origin),
+        ("/rpc", Method::Post) => match gate_request(shared, &request) {
+            GateOutcome::Admitted(credential) => {
+                respond_envelope(shared, request, false, credential, origin)
+            }
+            GateOutcome::Rejected { .. } => gate_respond(request, shared, origin),
+        },
+        ("/rpc", _) => respond_transport_error(request, 405, "VALIDATION", &[], origin),
+        ("/rpc/stream", Method::Post) => match gate_request(shared, &request) {
+            GateOutcome::Admitted(credential) => {
+                respond_envelope(shared, request, true, credential, origin)
+            }
+            GateOutcome::Rejected { .. } => gate_respond(request, shared, origin),
+        },
+        ("/rpc/stream", _) => respond_transport_error(request, 405, "VALIDATION", &[], origin),
+        _ => respond_transport_error(request, 404, "NOT_FOUND", &[], origin),
     }
+}
+
+/// Answers an `OPTIONS` preflight for an allowed origin: 204 + the CORS
+/// headers a browser needs to perform the actual request. Disallowed
+/// origins never reach this point (denied in [`handle_request`]).
+fn respond_cors_preflight(request: Request, origin: &str) {
+    let response = Response::empty(204)
+        .with_header(header("Access-Control-Allow-Origin", origin))
+        .with_header(header("Vary", "Origin"))
+        .with_header(header("Access-Control-Allow-Methods", "GET, POST, OPTIONS"))
+        .with_header(header(
+            "Access-Control-Allow-Headers",
+            "Authorization, Content-Type, Last-Event-ID",
+        ))
+        .with_header(header("Access-Control-Max-Age", "600"));
+    let _ = request.respond(response);
+}
+
+/// Outcome of the pre-body security gate (§10): either admitted (with the
+/// authenticated credential id, if any) or rejected with a transport-level
+/// response (401 UNAUTHORIZED / 429 RATE_LIMITED).
+enum GateOutcome {
+    /// Admitted. `Some(credential_id)` when the pairing store verified the
+    /// bearer token; `None` when auth is disabled.
+    Admitted(Option<String>),
+    /// Rejected: the request must be answered and dropped.
+    Rejected {
+        /// HTTP status (401 for auth, 429 for rate limit).
+        status: u16,
+        /// Transport error code (`UNAUTHORIZED` / `RATE_LIMITED`).
+        code: &'static str,
+        /// Error params (`rule` and friends).
+        params: Vec<(String, String)>,
+    },
+}
+
+/// Runs the pairing + rate-limit gate WITHOUT reading the request body
+/// (§10: "auth проверяется до чтения body сверх минимального лимита").
+///
+/// Order: bearer credential check (401 before anything else), then the
+/// token-bucket rate limit keyed by credential id (authed) or peer IP
+/// (unauthed) — 429 `RATE_LIMITED` with `Retry-After`.
+fn gate_request(shared: &Arc<Shared>, request: &Request) -> GateOutcome {
+    // Pairing gate.
+    let credential = match &shared.auth {
+        Some(store) => {
+            let header = request
+                .headers()
+                .iter()
+                .find(|header| header.field.equiv("Authorization"));
+            let token = header.and_then(|header| bearer_token(header.value.as_str()));
+            match token {
+                Some(token) => match store.verify(&token) {
+                    Some(id) => {
+                        shared.audit.record(AuditKind::AuthGranted, id.clone());
+                        Some(id)
+                    }
+                    None => {
+                        shared
+                            .audit
+                            .record(AuditKind::AuthDenied, "invalid_credential");
+                        return GateOutcome::Rejected {
+                            status: 401,
+                            code: "UNAUTHORIZED",
+                            params: vec![("rule".to_string(), "invalid_credential".to_string())],
+                        };
+                    }
+                },
+                None => {
+                    shared
+                        .audit
+                        .record(AuditKind::AuthDenied, "missing_credential");
+                    return GateOutcome::Rejected {
+                        status: 401,
+                        code: "UNAUTHORIZED",
+                        params: vec![("rule".to_string(), "missing_credential".to_string())],
+                    };
+                }
+            }
+        }
+        None => None,
+    };
+
+    // Rate limit: key = credential id when authed, else the client IP —
+    // the peer socket IP, or the `X-Forwarded-For` value when the peer is a
+    // configured trusted proxy (§10: forwarded headers are honored only
+    // from configured proxy addresses).
+    if let Some(limiter) = &shared.rate {
+        let key = credential
+            .clone()
+            .unwrap_or_else(|| client_ip_for_rate_limit(request, shared));
+        if limiter.allow(&key).is_err() {
+            shared.audit.record(AuditKind::RateLimited, "rate_limited");
+            return GateOutcome::Rejected {
+                status: 429,
+                code: "RATE_LIMITED",
+                params: vec![
+                    ("rule".to_string(), "rate_limited".to_string()),
+                    ("retry_after_seconds".to_string(), "1".to_string()),
+                ],
+            };
+        }
+    }
+
+    GateOutcome::Admitted(credential)
+}
+
+/// Answers a rejected gate outcome (401 with `WWW-Authenticate: Bearer`,
+/// 429 with `Retry-After`) — transport-level, no envelope exists yet.
+fn gate_respond(request: Request, shared: &Arc<Shared>, origin: Option<&str>) {
+    let outcome = match gate_request(shared, &request) {
+        GateOutcome::Admitted(_) => return, // not rejected; unreachable here
+        GateOutcome::Rejected {
+            status,
+            code,
+            params,
+        } => (status, code, params),
+    };
+    let (status, code, params) = outcome;
+    let mut response = json_response(
+        status,
+        "application/json",
+        transport_error_json(code, &params),
+    );
+    if status == 401 {
+        response = response.with_header(header("WWW-Authenticate", "Bearer"));
+    }
+    if status == 429 {
+        response = response.with_header(header("Retry-After", "1"));
+    }
+    let _ = request.respond(with_cors(response, origin));
+}
+
+/// The rate-limit key for an unauthenticated request: the client IP.
+///
+/// The peer socket IP is used unless the peer is a configured trusted proxy
+/// (§10: "forwarded client/proto headers принимаются только от configured
+/// proxy addresses"). For a trusted peer the `X-Forwarded-For` chain is
+/// honored — the client is the rightmost entry NOT appended by a trusted
+/// proxy (multi-hop proxies append one entry each); garbage entries are
+/// skipped, and a missing/unusable header falls back to the peer IP. Any
+/// other peer's forwarded header is ignored entirely, so a client cannot
+/// self-spoof the bucket key.
+fn client_ip_for_rate_limit(request: &Request, shared: &Shared) -> String {
+    let peer = request.remote_addr().map(|addr| addr.ip());
+    let xff = request
+        .headers()
+        .iter()
+        .find(|header| header.field.equiv("X-Forwarded-For"))
+        .map(|header| header.value.as_str());
+    client_ip_resolve(peer, xff, &shared.trusted_proxies)
+}
+
+/// Pure resolution of the rate-limit client key. Tested directly so the
+/// multi-hop chain rules are pinned without a live socket.
+fn client_ip_resolve(
+    peer: Option<IpAddr>,
+    x_forwarded_for: Option<&str>,
+    trusted: &HashSet<IpAddr>,
+) -> String {
+    let Some(peer) = peer else {
+        return "unknown-peer".to_string();
+    };
+    if !trusted.contains(&peer) {
+        return peer.to_string();
+    }
+    let Some(header) = x_forwarded_for else {
+        return peer.to_string();
+    };
+    let entries: Vec<&str> = header
+        .split(',')
+        .map(str::trim)
+        .filter(|entry| !entry.is_empty())
+        .collect();
+    // Rightmost entry not appended by a trusted proxy; skip unparsable junk.
+    for entry in entries.iter().rev() {
+        match entry.parse::<IpAddr>() {
+            Ok(ip) if trusted.contains(&ip) => continue,
+            Ok(ip) => return ip.to_string(),
+            Err(_) => continue,
+        }
+    }
+    // Every entry was trusted or garbage: key by the immediate peer.
+    peer.to_string()
+}
+
+/// Extracts the bearer token from an `Authorization` header value
+/// (`Bearer <token>`); anything else is rejected (no scheme fallback).
+fn bearer_token(value: &str) -> Option<String> {
+    let (scheme, token) = value.split_once(' ')?;
+    if !scheme.eq_ignore_ascii_case("Bearer") || token.is_empty() {
+        return None;
+    }
+    Some(token.to_string())
 }
 
 /// Serves `GET /meta`: the kernel [`MetaDto`](generated::MetaDto) with the
 /// schema-hash and protocol diagnostic headers. A poisoned kernel mutex is a
 /// 500 `INTERNAL`, never a panic.
-fn respond_meta(kernel: &Arc<Mutex<Kernel>>, request: Request) {
-    let meta = match kernel.lock() {
+fn respond_meta(shared: &Arc<Shared>, request: Request, origin: Option<&str>) {
+    let meta = match shared.kernel.lock() {
         Ok(guard) => serde_json::to_vec(&guard.meta()).ok(),
         Err(_) => None,
     };
@@ -390,7 +792,7 @@ fn respond_meta(kernel: &Arc<Mutex<Kernel>>, request: Request) {
             ),
         ),
     };
-    let _ = request.respond(response);
+    let _ = request.respond(with_cors(response, origin));
 }
 
 /// `"<major>.<minor>"` from the embedded contract manifest (diagnostics
@@ -411,12 +813,18 @@ fn protocol_header_value() -> String {
 /// `generation.events` resumes a durable stream from the `Last-Event-ID`
 /// header or payload cursor, and every other operation answers the existing
 /// `operation_not_streamable` SSE error sequence (design §6).
+///
+/// The auth gate ran in [`handle_request`] BEFORE this function (401/429 are
+/// answered without reading the body); here the concurrent-stream cap is
+/// enforced for long-lived streams (§10: bounded stream limits).
 fn respond_envelope(
-    kernel: &Arc<Mutex<Kernel>>,
+    shared: &Arc<Shared>,
     mut request: Request,
-    max_request_bytes: u64,
     streaming: bool,
+    credential: Option<String>,
+    origin: Option<&str>,
 ) {
+    let max_request_bytes = shared.max_request_bytes;
     let body = match read_body_limited(&mut request, max_request_bytes) {
         Ok(body) => body,
         Err(BodyReadError::TooLarge) => {
@@ -428,6 +836,7 @@ fn respond_envelope(
                     ("limit".to_string(), max_request_bytes.to_string()),
                     ("rule".to_string(), "request_too_large".to_string()),
                 ],
+                origin,
             );
             return;
         }
@@ -437,28 +846,31 @@ fn respond_envelope(
                 400,
                 "CONTRACT_VIOLATION",
                 &[("rule".to_string(), "body_read_failed".to_string())],
+                origin,
             );
             return;
         }
     };
-
     let env = match envelope::decode_request_envelope(&body) {
         Ok(env) => env,
         Err(failure) => {
-            respond_envelope_failure(request, &failure);
+            respond_envelope_failure(request, &failure, origin);
             return;
         }
     };
 
     if let Err((status, body)) = protocol_check_response(&env) {
-        let _ = request.respond(json_response(status, "application/json", body));
+        let _ = request.respond(with_cors(
+            json_response(status, "application/json", body),
+            origin,
+        ));
         return;
     }
 
     let payload = match envelope::operation_payload_bytes(&env) {
         Ok(payload) => payload,
         Err(failure) => {
-            respond_envelope_failure(request, &failure);
+            respond_envelope_failure(request, &failure, origin);
             return;
         }
     };
@@ -466,12 +878,12 @@ fn respond_envelope(
     // Unary `/rpc`: the outcome is a plain JSON response envelope. The
     // kernel mutex is held only for the single dispatch.
     if !streaming {
-        let guard = match kernel.lock() {
+        let guard = match shared.kernel.lock() {
             Ok(guard) => guard,
             Err(_) => {
                 // Poisoned mutex: the kernel state is unknown — answer with
                 // a controlled INTERNAL envelope instead of panicking.
-                respond_kernel_poisoned(request, &env.request_id, false);
+                respond_kernel_poisoned(request, &env.request_id, false, origin);
                 return;
             }
         };
@@ -497,7 +909,7 @@ fn respond_envelope(
                 EnvelopeAnswer::Json(envelope::kernel_error_envelope(&err, &env.request_id))
             }
         };
-        send_answer(request, &env.request_id, answer);
+        send_answer(request, &env.request_id, answer, origin);
         return;
     }
 
@@ -505,11 +917,64 @@ fn respond_envelope(
     // (design §6), generation.events is a durable RESUME; every other
     // operation keeps the Phase 4 `operation_not_streamable` answer.
     match env.operation_id.as_str() {
-        "generation.start" | "generation.retry" => {
-            respond_generation_live(kernel, request, &env, &payload)
+        "generation.start" | "generation.retry" | "generation.events" => {
+            // Concurrent-stream cap (§10): a worker is held for the whole
+            // stream, so bound how many can be open at once.
+            let previous = shared.streams.fetch_add(1, Ordering::SeqCst);
+            if previous >= shared.max_streams {
+                shared.streams.fetch_sub(1, Ordering::SeqCst);
+                shared
+                    .audit
+                    .record(AuditKind::StreamLimitReached, "stream_limit");
+                respond_transport_error(
+                    request,
+                    429,
+                    "RATE_LIMITED",
+                    &[
+                        ("rule".to_string(), "stream_limit".to_string()),
+                        ("max_streams".to_string(), shared.max_streams.to_string()),
+                    ],
+                    origin,
+                );
+                return;
+            }
+            let _stream_slot = StreamSlot {
+                streams: &shared.streams,
+            };
+            respond_generation_stream(shared, request, &env, &payload, credential, origin);
         }
-        "generation.events" => respond_generation_resume(kernel, request, &env, &payload),
-        _ => respond_stream_unavailable(kernel, request, &env, &payload),
+        _ => respond_stream_unavailable(shared, request, &env, &payload, origin),
+    }
+}
+
+/// RAII release for the concurrent-stream counter.
+struct StreamSlot<'a> {
+    streams: &'a AtomicUsize,
+}
+
+impl Drop for StreamSlot<'_> {
+    fn drop(&mut self) {
+        self.streams.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+/// Dispatches the three streaming operations through the shared kernel.
+fn respond_generation_stream(
+    shared: &Arc<Shared>,
+    request: Request,
+    env: &generated::RequestEnvelope,
+    payload: &[u8],
+    credential: Option<String>,
+    origin: Option<&str>,
+) {
+    match env.operation_id.as_str() {
+        "generation.start" | "generation.retry" => {
+            respond_generation_live(shared, request, env, payload, credential, origin)
+        }
+        "generation.events" => {
+            respond_generation_resume(shared, request, env, payload, credential, origin)
+        }
+        _ => respond_stream_unavailable(shared, request, env, payload, origin),
     }
 }
 
@@ -543,13 +1008,15 @@ const STREAM_TERMINAL_TYPES: [&str; 3] = [
 /// `stream.closed` frame; a client write error drops the stream without
 /// cancelling the executor (the run is durable, design §6).
 fn respond_generation_live(
-    kernel: &Arc<Mutex<Kernel>>,
+    shared: &Arc<Shared>,
     request: Request,
     env: &generated::RequestEnvelope,
     payload: &[u8],
+    credential: Option<String>,
+    origin: Option<&str>,
 ) {
     let cancel = CancellationFlag::new();
-    let stream = match kernel.lock() {
+    let stream = match shared.kernel.lock() {
         Ok(guard) => match guard.dispatch_stream(&env.operation_id, payload, &cancel) {
             Ok(stream) => stream,
             Err(err) => {
@@ -557,12 +1024,13 @@ fn respond_generation_live(
                     request,
                     &env.request_id,
                     EnvelopeAnswer::Sse(envelope::kernel_error_envelope(&err, &env.request_id)),
+                    origin,
                 );
                 return;
             }
         },
         Err(_) => {
-            respond_kernel_poisoned(request, &env.request_id, true);
+            respond_kernel_poisoned(request, &env.request_id, true, origin);
             return;
         }
     };
@@ -575,7 +1043,7 @@ fn respond_generation_live(
     respond_sse_stream(
         request,
         StreamingResponseReader {
-            kernel: Arc::clone(kernel),
+            kernel: Arc::clone(&shared.kernel),
             stream: Some(stream),
             workflow_id: stream_id,
             request_id: env.request_id.clone(),
@@ -585,7 +1053,9 @@ fn respond_generation_live(
             pending: String::new(),
             finished: false,
             terminal: false,
+            auth: auth_recheck(shared, credential),
         },
+        origin,
     );
 }
 
@@ -598,10 +1068,12 @@ fn respond_generation_live(
 /// `stream.closed`. A run that already reached its terminal event (resume
 /// past the log head) closes immediately via its `generation.get` status.
 fn respond_generation_resume(
-    kernel: &Arc<Mutex<Kernel>>,
+    shared: &Arc<Shared>,
     request: Request,
     env: &generated::RequestEnvelope,
     payload: &[u8],
+    credential: Option<String>,
+    origin: Option<&str>,
 ) {
     let header_cursor = request
         .headers()
@@ -618,6 +1090,7 @@ fn respond_generation_resume(
                 request,
                 &env.request_id,
                 EnvelopeAnswer::Sse(envelope::kernel_error_envelope(&err, &env.request_id)),
+                origin,
             );
             return;
         }
@@ -635,7 +1108,7 @@ fn respond_generation_resume(
     respond_sse_stream(
         request,
         StreamingResponseReader {
-            kernel: Arc::clone(kernel),
+            kernel: Arc::clone(&shared.kernel),
             stream: None,
             workflow_id: decoded.workflow_id,
             request_id: env.request_id.clone(),
@@ -645,8 +1118,24 @@ fn respond_generation_resume(
             pending: String::new(),
             finished: false,
             terminal: false,
+            auth: auth_recheck(shared, credential),
         },
+        origin,
     );
+}
+
+/// The per-stream credential re-check state: `Some((store, id))` when auth
+/// is enabled (the gate guarantees a live credential at open time); `None`
+/// when auth is disabled. The reader re-validates liveness on every poll
+/// batch so revocation terminates long-lived streams (§10).
+fn auth_recheck(
+    shared: &Arc<Shared>,
+    credential: Option<String>,
+) -> Option<(Arc<PairingStore>, String)> {
+    match (&shared.auth, credential) {
+        (Some(store), Some(id)) => Some((Arc::clone(store), id)),
+        _ => None,
+    }
 }
 
 /// `/rpc/stream` for a non-streamable operation (design §6: "any other op →
@@ -654,15 +1143,16 @@ fn respond_generation_resume(
 /// (Phase 4 semantics — the 24 Phase 4 scenarios lock this in), then the
 /// adapter answers the SSE error sequence classifying it as not streamable.
 fn respond_stream_unavailable(
-    kernel: &Arc<Mutex<Kernel>>,
+    shared: &Arc<Shared>,
     request: Request,
     env: &generated::RequestEnvelope,
     payload: &[u8],
+    origin: Option<&str>,
 ) {
-    let guard = match kernel.lock() {
+    let guard = match shared.kernel.lock() {
         Ok(guard) => guard,
         Err(_) => {
-            respond_kernel_poisoned(request, &env.request_id, true);
+            respond_kernel_poisoned(request, &env.request_id, true, origin);
             return;
         }
     };
@@ -683,11 +1173,16 @@ fn respond_stream_unavailable(
         }
         Err(err) => EnvelopeAnswer::Sse(envelope::kernel_error_envelope(&err, &env.request_id)),
     };
-    send_answer(request, &env.request_id, answer);
+    send_answer(request, &env.request_id, answer, origin);
 }
 
 /// Answers an INTERNAL error envelope when the kernel mutex is poisoned.
-fn respond_kernel_poisoned(request: Request, request_id: &str, streaming: bool) {
+fn respond_kernel_poisoned(
+    request: Request,
+    request_id: &str,
+    streaming: bool,
+    origin: Option<&str>,
+) {
     let body = error_envelope_body(
         request_id,
         "INTERNAL",
@@ -698,7 +1193,7 @@ fn respond_kernel_poisoned(request: Request, request_id: &str, streaming: bool) 
     } else {
         EnvelopeAnswer::Json(body)
     };
-    send_answer(request, request_id, answer);
+    send_answer(request, request_id, answer, origin);
 }
 
 /// Answers an SSE stream from a [`StreamingResponseReader`]: HTTP 200
@@ -710,10 +1205,15 @@ fn respond_kernel_poisoned(request: Request, request_id: &str, streaming: bool) 
 /// the socket via [`Request::into_writer`] and flush every frame. This
 /// worker blocks until the stream closes (terminal frame) or the client
 /// disconnects; the reader drives the polling loop.
-fn respond_sse_stream(request: Request, mut reader: StreamingResponseReader) {
+fn respond_sse_stream(request: Request, mut reader: StreamingResponseReader, origin: Option<&str>) {
     let mut writer = request.into_writer();
-    let head =
-        "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\n\r\n";
+    let cors_head = match origin {
+        Some(origin) => format!("Access-Control-Allow-Origin: {origin}\r\nVary: Origin\r\n"),
+        None => String::new(),
+    };
+    let head = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\n{cors_head}\r\n"
+    );
     if writer
         .write_all(head.as_bytes())
         .and_then(|()| writer.flush())
@@ -788,12 +1288,34 @@ struct StreamingResponseReader {
     finished: bool,
     /// A terminal generation event was written; the stream must close.
     terminal: bool,
+    /// Per-stream credential re-check: `Some((store, credential_id))` when
+    /// auth is enabled; the poll loop re-validates liveness every batch so
+    /// revocation terminates the stream (§10).
+    auth: Option<(Arc<PairingStore>, String)>,
 }
 
 impl StreamingResponseReader {
     /// One poll iteration: pace, then dispatch `generation.events` under a
     /// short lock and append the resulting frames to [`Self::pending`].
     fn produce_next_batch(&mut self) {
+        // Credential liveness re-check (§10: SSE re-validates the credential;
+        // a revoked credential terminates long-lived streams).
+        if let Some((store, id)) = &self.auth {
+            if !store.is_live(id) {
+                let body = transport_error_json(
+                    "UNAUTHORIZED",
+                    &[("rule".to_string(), "credential_revoked".to_string())],
+                );
+                self.pending.push_str(&sse::encode_frame(&SseFrame {
+                    event: "error".to_string(),
+                    id: Some(self.next_sequence()),
+                    data: String::from_utf8_lossy(&body).into_owned(),
+                }));
+                self.close_stream();
+                return;
+            }
+        }
+
         match &mut self.stream {
             // Live mode: wait for the next commit notice (or the poll
             // timeout). Notices coalesce; the durable log is authoritative.
@@ -1077,18 +1599,26 @@ enum EnvelopeAnswer {
 }
 
 /// Sends the prepared envelope answer.
-fn send_answer(request: Request, request_id: &str, answer: EnvelopeAnswer) {
+fn send_answer(request: Request, request_id: &str, answer: EnvelopeAnswer, origin: Option<&str>) {
     match answer {
         EnvelopeAnswer::Json(body) => {
-            let _ = request.respond(json_response(200, "application/json", body));
+            let _ = request.respond(with_cors(
+                json_response(200, "application/json", body),
+                origin,
+            ));
         }
-        EnvelopeAnswer::Sse(body) => respond_sse_error(request, request_id, body),
+        EnvelopeAnswer::Sse(body) => respond_sse_error(request, request_id, body, origin),
     }
 }
 
 /// Answers with `text/event-stream`: one `error` frame carrying the error
 /// envelope JSON, then the terminal `stream.closed` frame (§7).
-fn respond_sse_error(request: Request, request_id: &str, error_body: Vec<u8>) {
+fn respond_sse_error(
+    request: Request,
+    request_id: &str,
+    error_body: Vec<u8>,
+    origin: Option<&str>,
+) {
     // Envelope bodies are built by this adapter (or the kernel) as JSON, so
     // they are always UTF-8 (program invariant).
     let error_text =
@@ -1102,7 +1632,10 @@ fn respond_sse_error(request: Request, request_id: &str, error_body: Vec<u8>) {
         }),
         sse::encode_terminal_frame(request_id, 1, "stream.closed", serde_json::json!({})),
     );
-    let _ = request.respond(json_response(200, "text/event-stream", body.into_bytes()));
+    let _ = request.respond(with_cors(
+        json_response(200, "text/event-stream", body.into_bytes()),
+        origin,
+    ));
 }
 
 /// Builds a validated error-envelope body; on an internal build failure
@@ -1134,19 +1667,31 @@ fn transport_error_json(code: &str, params: &[(String, String)]) -> Vec<u8> {
 
 /// Answers a transport-level failure: an HTTP status with the error JSON
 /// body (400/404/405/413/426/500 — no response envelope exists yet).
-fn respond_transport_error(request: Request, status: u16, code: &str, params: &[(String, String)]) {
+fn respond_transport_error(
+    request: Request,
+    status: u16,
+    code: &str,
+    params: &[(String, String)],
+    origin: Option<&str>,
+) {
     let response = json_response(
         status,
         "application/json",
         transport_error_json(code, params),
     );
-    let _ = request.respond(response);
+    let _ = request.respond(with_cors(response, origin));
 }
 
 /// Answers an envelope decode failure with the status/code/params carried by
 /// the [`EnvelopeFailure`].
-fn respond_envelope_failure(request: Request, failure: &EnvelopeFailure) {
-    respond_transport_error(request, failure.http_status, failure.code, &failure.params);
+fn respond_envelope_failure(request: Request, failure: &EnvelopeFailure, origin: Option<&str>) {
+    respond_transport_error(
+        request,
+        failure.http_status,
+        failure.code,
+        &failure.params,
+        origin,
+    );
 }
 
 /// A response with an explicit status and content type.
@@ -1158,6 +1703,22 @@ fn json_response(
     Response::from_data(body)
         .with_status_code(status)
         .with_header(header("Content-Type", content_type))
+}
+
+/// Appends the CORS headers a browser needs to read the response when the
+/// request origin is explicitly allowed. `None` (no `Origin` header /
+/// non-browser client) leaves the response untouched; disallowed origins
+/// never reach a responder (they are 403'd in [`handle_request`]).
+fn with_cors(
+    response: Response<Cursor<Vec<u8>>>,
+    origin: Option<&str>,
+) -> Response<Cursor<Vec<u8>>> {
+    match origin {
+        Some(origin) => response
+            .with_header(header("Access-Control-Allow-Origin", origin))
+            .with_header(header("Vary", "Origin")),
+        None => response,
+    }
 }
 
 /// Builds a response header from ASCII input. Infallible because every
@@ -1212,5 +1773,67 @@ mod tests {
     fn protocol_header_value_matches_manifest() {
         let (major, minor) = contracts_generated::wire_protocol();
         assert_eq!(super::protocol_header_value(), format!("{major}.{minor}"));
+    }
+
+    fn trusted(ips: &[&str]) -> std::collections::HashSet<IpAddr> {
+        ips.iter()
+            .map(|ip| ip.parse().expect("test IP parses"))
+            .collect()
+    }
+
+    #[test]
+    fn client_ip_ignores_forwarded_headers_from_untrusted_peers() {
+        let peer = v4([127, 0, 0, 1], 5555).ip();
+        // Untrusted peer: X-Forwarded-For must be ignored entirely — a
+        // client cannot self-spoof the rate-limit bucket key.
+        assert_eq!(
+            super::client_ip_resolve(Some(peer), Some("203.0.113.9"), &trusted(&[])),
+            "127.0.0.1"
+        );
+    }
+
+    #[test]
+    fn client_ip_uses_forwarded_chain_from_trusted_peer() {
+        let proxy = v4([10, 0, 0, 1], 80).ip();
+        let allowed = trusted(&["10.0.0.1"]);
+        // Single trusted proxy appended the client IP.
+        assert_eq!(
+            super::client_ip_resolve(Some(proxy), Some("203.0.113.9"), &allowed),
+            "203.0.113.9"
+        );
+        // Multi-hop: two trusted proxies append one entry each; the client
+        // is the rightmost entry NOT appended by a trusted proxy.
+        let chain = trusted(&["10.0.0.1", "10.0.0.2"]);
+        assert_eq!(
+            super::client_ip_resolve(Some(proxy), Some("203.0.113.9, 10.0.0.2"), &chain),
+            "203.0.113.9"
+        );
+    }
+
+    #[test]
+    fn client_ip_falls_back_to_peer_on_garbage_or_missing_chain() {
+        let proxy = v4([10, 0, 0, 1], 80).ip();
+        let allowed = trusted(&["10.0.0.1"]);
+        // Missing header → peer.
+        assert_eq!(
+            super::client_ip_resolve(Some(proxy), None, &allowed),
+            "10.0.0.1"
+        );
+        // Garbage entries are skipped; nothing usable → peer.
+        assert_eq!(
+            super::client_ip_resolve(Some(proxy), Some("not-an-ip, , 1.2.3"), &allowed),
+            "10.0.0.1"
+        );
+        // Every entry was appended by a trusted proxy (no client entry):
+        // key by the immediate peer rather than guessing.
+        assert_eq!(
+            super::client_ip_resolve(Some(proxy), Some("10.0.0.1"), &allowed),
+            "10.0.0.1"
+        );
+        // No peer at all → stable fallback key.
+        assert_eq!(
+            super::client_ip_resolve(None, Some("203.0.113.9"), &allowed),
+            "unknown-peer"
+        );
     }
 }

@@ -89,8 +89,8 @@ fn migrated_v1_fingerprint_matches_fresh_install() -> Result<(), Box<dyn std::er
     assert_eq!(schema_fingerprint(), fresh_fingerprint);
     assert_eq!(db_b.schema_revision()?, CURRENT_SCHEMA);
 
-    // The migration to v2 recorded a second ledger row with the declared
-    // checksum; the complete ledger matches MIGRATIONS.
+    // The upgrade recorded the remaining ledger rows with the declared
+    // checksums; the complete ledger matches MIGRATIONS.
     let mut stmt = db_b
         .conn()
         .prepare("SELECT id, name, checksum FROM __neotavern_migrations ORDER BY id")?;

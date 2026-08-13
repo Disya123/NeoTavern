@@ -267,7 +267,7 @@ pub fn open(
 ) -> Result<Database> {
     assert_baseline(sqlite_libversion())?;
 
-    let lease = DataRootLease::acquire(root).map_err(|mut e| {
+    let mut lease = DataRootLease::acquire(root).map_err(|mut e| {
         // Diagnostics: which lock file was contended.
         e.params.push((
             "lock_path".to_string(),
@@ -275,6 +275,26 @@ pub fn open(
         ));
         e
     })?;
+
+    // Phase 11 (ТЗ §42): complete or discard an interrupted candidate
+    // activation before any database open. Completing a swap renames the
+    // root, which on Windows requires no open handles inside it — so when a
+    // pending marker exists the lease is released across the resolution and
+    // re-acquired afterwards (the marker itself serializes activations; the
+    // re-acquire re-establishes exclusivity).
+    if crate::restore::pending_marker_exists(root) {
+        lease.release()?;
+        crate::restore::resolve_pending_restore(root)?;
+        lease = DataRootLease::acquire(root).map_err(|mut e| {
+            e.params.push((
+                "lock_path".to_string(),
+                lock_path(root).display().to_string(),
+            ));
+            e
+        })?;
+    } else {
+        crate::restore::resolve_pending_restore(root)?;
+    }
 
     let inspection = inspect(root)?;
 

@@ -1,0 +1,10 @@
+{
+  "id": "faults",
+  "steps": [
+    { "type": "delta", "text": "first" },
+    { "type": "sleep", "ms": 200 },
+    { "type": "delta", "text": "second" },
+    { "type": "sleep", "ms": 100 },
+    { "type": "fail", "code": "step-failed" }
+  ]
+}

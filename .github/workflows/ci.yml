@@ -166,3 +166,15 @@ jobs:
 
       - name: Rust boundary corpus + kernel tests
         run: cargo test --manifest-path crates/Cargo.toml
+
+      # ТЗ §79 merge-blocking: Rust fmt/clippy/tests. `contracts-generated` is
+      # deliberately excluded from fmt — its generated.rs is emitted
+      # byte-identically by codegen.mjs in generator style and its determinism
+      # is enforced by the codegen --check step above (hand-editing forbidden,
+      # ТЗ §6.1). `cargo fmt --all` would reformat it, so the check lists the
+      # hand-written crates explicitly.
+      - name: Rust clippy (workspace, all targets, warnings denied)
+        run: cargo clippy --manifest-path crates/Cargo.toml --workspace --all-targets -- -D warnings
+
+      - name: Rust formatting (hand-written crates)
+        run: cargo fmt --manifest-path crates/Cargo.toml -p runtime-kernel -p neotavern-storage -p remote-http-adapter -p neotavern-mobile-ffi -p neotavern-cli -p built-in-providers -p provider-sdk --check

@@ -27,6 +27,9 @@
 #![allow(unused_imports, dead_code)]
 
 pub use contracts_generated::generated as gen;
+pub use remote_http_adapter::audit::{AuditEvent, AuditKind};
+pub use remote_http_adapter::auth::{AuthConfig, AuthError};
+pub use remote_http_adapter::rate_limit::RateLimitConfig;
 pub use remote_http_adapter::sse::{
     encode_envelope_frame, encode_frame, encode_terminal_frame, parse_last_event_id, SseFrame,
 };
@@ -63,6 +66,12 @@ pub fn default_config() -> RemoteAdapterConfig {
         max_request_bytes: 1024 * 1024,
         max_connections: 8,
         drain_timeout: Duration::from_secs(5),
+        auth: None,
+        rate_limit: None,
+        max_streams: 8,
+        audit_capacity: 256,
+        allowed_origins: Vec::new(),
+        trusted_proxies: Vec::new(),
     }
 }
 
@@ -130,11 +139,41 @@ impl TestServer {
         }
     }
 
+    /// Spawns a server with an explicit config over a PRE-SEEDED data root
+    /// (seeding must happen before the kernel takes the exclusive lease).
+    pub fn spawn_with_config_and_seed(
+        config: RemoteAdapterConfig,
+        seed: impl FnOnce(&rusqlite::Transaction<'_>),
+    ) -> TestServer {
+        let temp = tempfile::tempdir().expect("temp dir for the kernel data root");
+        seed_data_root(temp.path(), seed);
+        let kernel = Kernel::open(kernel_config(temp.path()))
+            .expect("kernel opens over the seeded data root (migrations run)");
+        let kernel = Arc::new(Mutex::new(kernel));
+        let adapter = RemoteAdapter::start(kernel.clone(), config)
+            .expect("adapter starts on the ephemeral loopback port");
+        let addr = adapter.local_addr();
+        TestServer {
+            kernel,
+            adapter: Some(adapter),
+            addr,
+            _temp: temp,
+        }
+    }
+
     /// The data root path (the tempdir the kernel's SQLite database lives
     /// in) — read-only access for direct assertions the wire ops cannot
     /// express (e.g. "no generation run row was created").
     pub fn data_root(&self) -> &Path {
         self._temp.path()
+    }
+
+    /// Gracefully shuts the adapter down (drain + listener release). The
+    /// kernel and temp dir are dropped with the server.
+    pub fn shutdown(&mut self) {
+        if let Some(adapter) = self.adapter.take() {
+            adapter.shutdown().expect("graceful shutdown");
+        }
     }
 }
 

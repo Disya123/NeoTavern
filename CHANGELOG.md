@@ -43,6 +43,60 @@ Public release prep:
   requires an explicit `trusted_proxy` declaration (TLS-terminating boundary),
   bounded body/connection limits; TLS termination and pairing land with Phase
   4 hardening / Phase 9 (ADR-0030).
+- **Mobile FFI ABI (ТЗ 7.2 Фаза 5, native bridge foundation).** New
+  `crates/adapters/mobile-ffi` (`neotavern-mobile-ffi`): a minimal stable C
+  ABI over the **same Runtime Kernel** for Android JNI / future Swift hosts —
+  opaque `NtKernel`/`NtStream` handles, bounded length-delimited buffers,
+  UTF-8 operation ids and stable integer status codes
+  (`NT_OK` … `NT_ERR_MISMATCH`). Payloads are the identical Product Wire
+  Contract bytes (`nt_call`/`nt_stream_start` → `Kernel::dispatch`/
+  `dispatch_stream`), buffer sizes are checked before any allocation/parse
+  (`MAX_REQUEST_LEN` 1 MiB; `NT_ERR_BUFFER` reports the required capacity),
+  Rust allocations are freed only by the exported free functions
+  (`nt_kernel_free`, `nt_stream_free`), and every entry point contains panics
+  (`catch_unwind` → `NT_ERR_INTERNAL`). The `ffiAbiVersion` + `schemaHash`
+  exact local handshake runs inside `nt_kernel_open`, so an incompatible host
+  never receives a runtime handle and performs no product operations (§6.5).
+  Streams wait via `nt_stream_wait` (committed/terminal sequence, durable
+  `generation.events` replay) and cancel via `nt_stream_cancel` (§64). Docs:
+  `crates/adapters/mobile-ffi/README.md`, wire-contracts §10,
+  version-axes «Local FFI ABI».
+- **Remote Access hardening (ТЗ §10, Фаза 4 hardening / Фаза 9).**
+  `remote-http-adapter` gains the full remote-access security surface:
+  pairing issues revocable scoped credentials (`pair` → `(id, token)`,
+  SHA-256 verifier only, idempotent `revoke`, bounded by `max_credentials`),
+  the auth gate runs **before** the body is read (401 `UNAUTHORIZED` with
+  `WWW-Authenticate: Bearer` — `missing_credential` / `invalid_credential`;
+  `/meta` stays public), a token-bucket rate limiter (keyed by credential id
+  or peer IP, bounded bucket map) answers `429 RATE_LIMITED` with
+  `Retry-After`, `max_streams` caps concurrent SSE streams (`rule:
+  stream_limit`), live streams re-check the credential per frame batch and
+  abort mid-stream on revocation (`credential_revoked`), CORS/Origin is
+  deny-by-default (a browser `Origin` is admitted only on an exact match
+  against the configured `allowed_origins` allowlist, otherwise 403
+  `ORIGIN_NOT_ALLOWED` before dispatch; allowed origins get
+  `Access-Control-Allow-Origin` + a 204 preflight), forwarded client headers
+  are honored only from configured proxy addresses (`trusted_proxies`:
+  `X-Forwarded-For` keys the rate-limit bucket only when the immediate peer
+  is listed — rightmost chain entry not appended by a trusted proxy; from
+  any other peer the header is ignored, so a client cannot self-spoof the
+  bucket key), and every gate decision
+  lands in a bounded audit ring without token material. A public non-loopback
+  bind now requires BOTH `trusted_proxy` and configured `auth` — otherwise it
+  is a startup error (`InsecureBind` / `PublicBindRequiresAuth`, §10). Docs:
+  `crates/adapters/remote-http/README.md`, wire-contracts §6.1.
+- **CLI transport (ТЗ §6.3, Фаза 4 CLI hooks).** New `crates/adapters/cli`
+  (`neotavern-cli`): a std-only binary mapping one wire request envelope →
+  one response envelope through the **same Runtime Kernel** and the same
+  envelope layer as the HTTP adapter (decode → protocol check → dispatch →
+  validated response; byte-identical answers). `--operation <id> '<payload>'`
+  builds the envelope from the embedded manifest (protocol + `schemaHash` +
+  generated v4 request id), `--envelope` reads a full request envelope JSON
+  from stdin (bounded to 1 MiB, request id echoed). Stable exit codes: `0` =
+  ok envelope, `1` = error envelope / pre-envelope transport failure, `2` =
+  usage error. With `--root` the CLI holds the exclusive data-root lease for
+  its run and a held lease answers `DATA_ROOT_IN_USE` (§22). Docs:
+  `crates/adapters/cli/README.md`, wire-contracts §6.1.
 - **Generation durability (ТЗ 7.2 Фаза 6).** Generation is now a recoverable
   workflow on the Runtime Kernel: wire registry grows 15 → 20 operations
   (`generation.get`, `generation.events`, `generation.retry`, `generation.keep`,
@@ -60,6 +114,35 @@ Public release prep:
   (ТЗ §62–§64). `NeoBackend` exposes the new generation API on all three
   backends with parity tests. Docs:
   `docs/architecture/generation-durability.md`.
+- **Portable Built-in Providers (ТЗ 7.2 Фаза 7).** Provider execution is a
+  portable contract, not kernel-internal code: new `crates/provider-sdk`
+  (the `ProviderAdapter` trait with normalized errors/usage, `Deadline` /
+  `RetryPolicy` policy primitives, `SecretRef`/`SecretValue`/`SecretResolver`
+  config-secret separation, `CancelToken`/`EmitStatus` cancellation
+  semantics) and `crates/built-in-providers` (deterministic `FakeProvider`
+  ported byte-identical from the kernel inline fake, `RecordedProvider`
+  replaying non-secret JSON fixtures, shared conformance suite proving
+  cancel/timeout/no-double-billing/redaction). Storage migration 4 adds the
+  `provider_configs` table (non-secret `config_json` + `secret_ref` only —
+  secrets never enter the DB, snapshots, backups or logs). The wire registry
+  grows 20 → 21 operations (`providers.list`, schema hash
+  `b5333728…`); the kernel executor now resolves adapters through a
+  `ProviderRegistry` with a host-provided secret-resolver seam and a 60s
+  per-run deadline, and `NeoBackend` exposes `providers.list` on all three
+  backends with parity tests. Docs: `docs/architecture/providers.md`.
+- **Portable Data (ТЗ 7.2 Фаза 11).** The Phase 2 recovery primitives are
+  now public long-lived formats: `.neotavern-backup` containers (manifest +
+  checksummed inventory + the snapshot-pinned asset set, assembled in a temp
+  dir and finalized atomically; `backups.create` / `backups.list` wire
+  operations with a 16-container quota), kill-safe staged restore (candidate
+  data roots activated by directory swap; a pending marker resolved at open
+  completes or discards an interrupted activation — the active root is never
+  overwritten), `.neotavern-export` NDJSON interchange with explicit
+  duplicate policy (`reject`/`replace`/`remap`) and offline import through
+  the same candidate machinery, and a read-only legacy converter for
+  pre-kernel data roots (timestamps normalized, secrets/plugins never
+  copied, source never mutated). Docs: `docs/architecture/portable-data.md`,
+  ADR-0032, benchmark manifest `docs/architecture/benchmarks.md`.
 - **NeoBackend UI routing.** Every web UI API call now routes through the
   `NeoBackend` facade (`apps/web/src/api/backend.ts`): typed wire operations
   via `LegacyBackend`, unmigrated `/api/v2` routes through the temporary

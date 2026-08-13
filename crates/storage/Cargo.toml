@@ -48,6 +48,22 @@ name = "snapshot"
 path = "tests/snapshot.rs"
 
 [[test]]
+name = "backup"
+path = "tests/backup.rs"
+
+[[test]]
 name = "kill_safety"
 path = "tests/kill_safety.rs"
 harness = false
+
+[[test]]
+name = "export"
+path = "tests/export.rs"
+
+[[test]]
+name = "legacy"
+path = "tests/legacy.rs"
+
+[[test]]
+name = "restore"
+path = "tests/restore.rs"

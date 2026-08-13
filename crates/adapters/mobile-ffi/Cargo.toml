@@ -1,0 +1,18 @@
+[package]
+name = "neotavern-mobile-ffi"
+version = "0.1.0"
+edition = "2021"
+description = "Minimal stable C ABI over the Runtime Kernel for native mobile hosts (ТЗ §6.9, Фаза 5)"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+runtime-kernel = { path = "../../runtime-kernel" }
+contracts-generated = { path = "../../contracts-generated" }
+serde_json = "1"
+
+[dev-dependencies]
+tempfile = "3"
+neotavern-storage = { path = "../../storage" }
+rusqlite = { version = "=0.40.2", default-features = false, features = ["bundled"] }

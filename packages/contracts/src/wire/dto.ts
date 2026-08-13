@@ -430,6 +430,79 @@ export const CancelGenerationRequestDtoSchema = Type.Object(
 );
 export type CancelGenerationRequestDto = Static<typeof CancelGenerationRequestDtoSchema>;
 
+/**
+ * Provider availability code wire rule (ТЗ §60): a versioned documented set;
+ * receivers implement an explicit unknown-code fallback, so the wire type is
+ * an open lowercase identifier (adding a code is additive, §6.7).
+ */
+const PROVIDER_AVAILABILITY_CODE = Type.String({
+  pattern: '^[a-z][a-z0-9_]{0,63}$',
+});
+
+/**
+ * Provider availability union (`wire.provider.availability`): discriminated on
+ * `status` (ТЗ §60). `available` carries nothing; `degraded` / `unavailable`
+ * carry a versioned `code` and an optional safe user-facing `detail` that the
+ * UI must not use for programmatic branching.
+ */
+export const ProviderAvailabilitySchema = Type.Union(
+  [
+    Type.Object({ status: Type.Literal('available') }, { additionalProperties: false }),
+    Type.Object(
+      {
+        status: Type.Literal('degraded'),
+        code: PROVIDER_AVAILABILITY_CODE,
+        detail: Type.Optional(Type.String({ minLength: 1, maxLength: 256 })),
+      },
+      { additionalProperties: false },
+    ),
+    Type.Object(
+      {
+        status: Type.Literal('unavailable'),
+        code: PROVIDER_AVAILABILITY_CODE,
+        detail: Type.Optional(Type.String({ minLength: 1, maxLength: 256 })),
+      },
+      { additionalProperties: false },
+    ),
+  ],
+  { $id: 'wire.provider.availability', 'x-wire-discriminator': 'status' },
+);
+export type ProviderAvailability = Static<typeof ProviderAvailabilitySchema>;
+
+/** Provider model DTO (`wire.provider.model`). */
+export const ProviderModelDtoSchema = Type.Object(
+  {
+    id: Type.String({ minLength: 1, maxLength: 128 }),
+    name: Type.String({ minLength: 1, maxLength: 200 }),
+    contextLimit: Type.Optional(Type.Integer({ minimum: 0 })),
+    maxOutputTokens: Type.Optional(Type.Integer({ minimum: 0 })),
+  },
+  { $id: 'wire.provider.model', additionalProperties: false },
+);
+export type ProviderModelDto = Static<typeof ProviderModelDtoSchema>;
+
+/** Provider DTO (`wire.provider.dto`) — ТЗ §55/§60 normalized surface. */
+export const ProviderDtoSchema = Type.Object(
+  {
+    id: Type.String({ pattern: '^[a-z][a-z0-9-]{0,63}$' }),
+    name: Type.String({ minLength: 1, maxLength: 120 }),
+    builtin: Type.Boolean(),
+    availability: ProviderAvailabilitySchema,
+    models: Type.Array(ProviderModelDtoSchema, { maxItems: 64 }),
+  },
+  { $id: 'wire.provider.dto', additionalProperties: false },
+);
+export type ProviderDto = Static<typeof ProviderDtoSchema>;
+
+/** List providers result DTO (`wire.result.list-providers`). */
+export const ListProvidersResultDtoSchema = Type.Object(
+  {
+    items: Type.Array(ProviderDtoSchema),
+  },
+  { $id: 'wire.result.list-providers', additionalProperties: false },
+);
+export type ListProvidersResultDto = Static<typeof ListProvidersResultDtoSchema>;
+
 /** Empty result DTO (`wire.result.empty`). */
 export const EmptyResultDtoSchema = Type.Object(
   {},
@@ -484,6 +557,10 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.generation.event': WireGenerationEvent,
   'wire.generation.status': WireGenerationStatus,
   'wire.generation.run': GenerationRunDtoSchema,
+  'wire.provider.availability': ProviderAvailabilitySchema,
+  'wire.provider.model': ProviderModelDtoSchema,
+  'wire.provider.dto': ProviderDtoSchema,
+  'wire.result.list-providers': ListProvidersResultDtoSchema,
   'wire.error.dto': ProductErrorDtoSchema,
   'wire.request.empty': EmptyRequestDtoSchema,
   'wire.request.list-characters': ListCharactersRequestDtoSchema,

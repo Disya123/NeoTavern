@@ -15,6 +15,7 @@ import type {
   ListBackupsResultDto,
   ListLorebooksResultDto,
   ListPresetsResultDto,
+  ListProvidersResultDto,
   MetaDto,
   PagedCharactersDto,
   PagedChatsDto,
@@ -30,6 +31,7 @@ import type {
   LorebooksApi,
   NeoBackend,
   PresetsApi,
+  ProvidersApi,
 } from './neobackend.js';
 
 /** RemoteBackend constructor options. */
@@ -111,6 +113,10 @@ export class RemoteBackend implements NeoBackend {
 
   readonly presets: PresetsApi = {
     list: () => this.sdk.call<ListPresetsResultDto>('presets.list', {}),
+  };
+
+  readonly providers: ProvidersApi = {
+    list: () => this.sdk.call<ListProvidersResultDto>('providers.list', {}),
   };
 
   private async *streamOperation(

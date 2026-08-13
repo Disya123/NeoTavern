@@ -40,6 +40,8 @@ crates/
   adapters/
     remote-http/       # Phase 4 headless/remote adapter: HTTP/SSE → same Kernel
                        # (tiny_http, envelope-over-HTTP, ADR-0030)
+    mobile-ffi/        # Phase 5 native bridge: stable C ABI → same Kernel
+                       # (opaque handles, bounded buffers, status codes)
 ```
 
 Dependencies only go "downward": `server`/`web` → packages; packages → `shared`/
@@ -179,15 +181,41 @@ gate passes.
 - [Phase 4 Remote Adapter](../../crates/adapters/remote-http/README.md) —
   headless/remote HTTP+SSE surface on the **same Runtime Kernel** as local
   IPC: `GET /meta`, `POST /rpc`, `POST /rpc/stream`, envelope-over-HTTP status
-  mapping (400/404/405/413/426), loopback-by-default with fail-closed
-  non-loopback bind, and one writer coordinator (`Arc<Mutex<Kernel>>`).
+  mapping (400/403/404/405/413/426), loopback-by-default with fail-closed
+  non-loopback bind (public bind requires trusted proxy AND auth), pairing/
+  revocable credentials, token-bucket rate limiting, bounded streams with
+  per-batch credential re-check, CORS deny-by-default, bounded secret-free
+  audit, and one writer coordinator (`Arc<Mutex<Kernel>>`).
   See [ADR-0030](../adr/README.md#adr-0030-remote-http-adapter) and
   [Wire contracts §6.1](wire-contracts.md#61-http-transport-mapping-phase-4-remote-adapter).
+- [Phase 4 CLI transport](../../crates/adapters/cli/README.md) —
+  `neotavern-cli` maps one wire request envelope → one response envelope
+  through the same kernel (same envelope layer, byte-identical answers):
+  `--operation <id> '<payload>'` builds the envelope from the embedded
+  manifest, `--envelope` reads a full envelope JSON from stdin; stable exit
+  codes 0/1/2 and the exclusive data-root lease for `--root` runs (§6.3,
+  §22).
+- [Phase 5 mobile FFI ABI](../../crates/adapters/mobile-ffi/README.md) —
+  the Android/local native bridge foundation (ТЗ §6.9): a minimal stable C
+  ABI (`nt_ffi_version`, `nt_kernel_open/free`, `nt_call`,
+  `nt_stream_start/wait/cancel/free`) carrying the **same** Product Wire
+  Contract bytes over opaque handles and bounded buffers. Buffer sizes are
+  checked before allocation, Rust allocations are freed only by exported free
+  functions, panics are contained to `NT_ERR_INTERNAL`, and
+  `ffiAbiVersion` + `schemaHash` are part of the exact local handshake — an
+  incompatible host never receives a runtime handle.
 - [Generation durability](generation-durability.md) — Phase 6: recoverable
   generation workflows over the same kernel — durable state machine
   (`generation_runs`/`generation_events`, migration 3), CAS transitions by
   revision, deterministic fake provider with fault injection, at-least-once
   sequenced SSE with `Last-Event-ID` resume, and idempotent Retry/Keep/Discard
   reconciliation (ТЗ §62–§64).
+- [Providers](providers.md) — Phase 7: portable provider contract, built-in
+  adapters (deterministic fake, recorded fixtures), config/secret separation
+  (`provider_configs`, migration 4), deadline/cancellation and the
+  conformance suite (ТЗ §55–§56).
+- [Portable data](portable-data.md) — Phase 11: public backup containers,
+  kill-safe staged restore with atomic activation, Portable Export/import and
+  the read-only legacy converter (ТЗ §34, §40–§43).
 - [ADR-0029](../adr/README.md#adr-0029-wire-contract-toolchain) — the
   contract toolchain decision.

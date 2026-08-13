@@ -23,6 +23,7 @@ import {
   type ListBackupsResultDto,
   type ListLorebooksResultDto,
   type ListPresetsResultDto,
+  type ListProvidersResultDto,
   type MetaDto,
   type PagedCharactersDto,
   type PagedChatsDto,
@@ -39,6 +40,7 @@ import type {
   LorebooksApi,
   NeoBackend,
   PresetsApi,
+  ProvidersApi,
 } from './neobackend.js';
 
 /** A single schema validation issue (JSON pointer path + human message). */
@@ -182,6 +184,7 @@ export class LocalBackend implements NeoBackend {
   readonly chats: ChatsApi;
   readonly lorebooks: LorebooksApi;
   readonly presets: PresetsApi;
+  readonly providers: ProvidersApi;
   readonly generation: GenerationApi;
   readonly backups: BackupsApi;
 
@@ -242,6 +245,9 @@ export class LocalBackend implements NeoBackend {
     };
     this.presets = {
       list: () => this.invoke<ListPresetsResultDto>('presets.list', {}, undefined),
+    };
+    this.providers = {
+      list: () => this.invoke<ListProvidersResultDto>('providers.list', {}, undefined),
     };
   }
 

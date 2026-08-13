@@ -15,7 +15,7 @@ use crate::error::{Result, StorageError, StorageErrorCode};
 use crate::schema::{
     schema_fingerprint, FRESH_SCHEMA_SQL, MIGRATION_1_CHECKSUM, MIGRATION_1_NAME, MIGRATION_1_SQL,
     MIGRATION_2_CHECKSUM, MIGRATION_2_NAME, MIGRATION_2_SQL, MIGRATION_3_CHECKSUM,
-    MIGRATION_3_NAME, MIGRATION_3_SQL,
+    MIGRATION_3_NAME, MIGRATION_3_SQL, MIGRATION_4_CHECKSUM, MIGRATION_4_NAME, MIGRATION_4_SQL,
 };
 use crate::{
     now_utc_rfc3339, APPLICATION_ID, CURRENT_SCHEMA, META_KEY_STORAGE_FORMAT, STORAGE_FORMAT,
@@ -53,9 +53,10 @@ pub struct Migration {
 /// Ordered migration list. v1 (`001_initial_schema`) builds the three STRICT
 /// foundation tables; v2 (`002_product_core`) adds the STRICT product tables;
 /// v3 (`003_generation_durability`) adds the recoverable generation workflow
-/// tables (`generation_runs`, `generation_events`). A fresh install runs
-/// `FRESH_SCHEMA_SQL` — the concatenation of all three — and records every
-/// migration in the ledger.
+/// tables (`generation_runs`, `generation_events`); v4 (`004_provider_configs`)
+/// adds the user-configured provider table (`provider_configs`). A fresh
+/// install runs `FRESH_SCHEMA_SQL` — the concatenation of all four — and
+/// records every migration in the ledger.
 pub const MIGRATIONS: &[Migration] = &[
     Migration {
         id: 1,
@@ -80,6 +81,14 @@ pub const MIGRATIONS: &[Migration] = &[
         transactional: true,
         sql: MIGRATION_3_SQL,
         checksum: MIGRATION_3_CHECKSUM,
+    },
+    Migration {
+        id: 4,
+        name: MIGRATION_4_NAME,
+        risk: MigrationRisk::Low,
+        transactional: true,
+        sql: MIGRATION_4_SQL,
+        checksum: MIGRATION_4_CHECKSUM,
     },
 ];
 

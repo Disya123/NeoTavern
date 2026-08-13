@@ -166,7 +166,7 @@ ops (eventSchemaId) carrying a response schema; empty/unknown
 
 ### Phase 0 registry (`buildProductWireRegistry()`)
 
-20 operations, all `feature: 'core'`, `version: '1.0'`,
+21 operations, all `feature: 'core'`, `version: '1.0'`,
 `unknownFields: 'strict'`:
 
 | operationId           | class         | idempotency    | retry | auth      | reqB   | respB  | eventB |
@@ -187,6 +187,7 @@ ops (eventSchemaId) carrying a response schema; empty/unknown
 | `generation.retry`    | workflow      | non-idempotent | none  | app.write | 2048   | –      | 65536  |
 | `generation.keep`     | transactional | idempotent     | safe  | app.write | 2048   | 65536  | –      |
 | `generation.discard`  | transactional | idempotent     | safe  | app.write | 2048   | 65536  | –      |
+| `providers.list`      | transactional | idempotent     | safe  | app.read  | 1024   | 262144 | –      |
 | `backups.create`      | workflow      | non-idempotent | none  | app.write | 1024   | 262144 | –      |
 | `backups.list`        | transactional | idempotent     | safe  | app.read  | 1024   | 262144 | –      |
 | `lorebooks.list`      | transactional | idempotent     | safe  | app.read  | 1024   | 262144 | –      |
@@ -202,6 +203,12 @@ both emit `wire.generation.event` frames (`generation.delta`,
 monotonic `sequence`, tagged `payload`), and `generation.keep` /
 `generation.discard` are the idempotent post-terminal reconciliation commands
 over a partial artifact (ТЗ §63).
+
+`providers.list` reports the registered provider adapters (ТЗ §55/§60):
+`wire.result.list-providers` items carry id/name/builtin, the
+`wire.provider.availability` union (`available` | `degraded{code,detail?}` |
+`unavailable{code,detail?}`) and the model list — see
+[Providers](providers.md).
 
 ## 6. Handshake and negotiation (§6.5)
 
@@ -246,6 +253,7 @@ reserved for transport-level failures that occur before a usable envelope:
 | Status | Condition                                                | Error code          | Params                                   |
 | ------ | -------------------------------------------------------- | ------------------- | ---------------------------------------- |
 | 400    | JSON parse or envelope-schema violation                  | `CONTRACT_VIOLATION`| `issue.<i>.path`, `issue.<i>.rule`       |
+| 403    | Browser `Origin` not in the CORS allowlist (deny-by-default)| `ORIGIN_NOT_ALLOWED`| `rule: origin_not_allowed`               |
 | 405    | Wrong method on a known path                             | `VALIDATION`        | —                                        |
 | 404    | Unknown route                                            | `NOT_FOUND`         | —                                        |
 | 413    | Body over `max_request_bytes` (Content-Length or chunked)| `QUOTA_EXCEEDED`    | —                                        |
@@ -278,14 +286,49 @@ writer-coordinator thread (§22): SSE polling acquires the mutex only for the
 short `generation.events` read, never across a wait. A poisoned mutex maps to
 a controlled `INTERNAL` envelope, never a panic.
 
+**CLI transport (Phase 4 CLI hooks, `crates/adapters/cli`):** the
+`neotavern-cli` binary maps one request envelope → one response envelope
+through the same kernel with the same envelope layer (decode → protocol
+check → dispatch → validated response), so CLI and HTTP answers are
+byte-identical (§6.3). `--operation <id> '<payload>'` builds the envelope
+from the embedded manifest (protocol + hash + generated v4 request id);
+`--envelope` reads a full request envelope JSON from stdin (bounded to
+1 MiB) and echoes the request id verbatim. Exit codes are a stable contract:
+`0` = ok envelope, `1` = error envelope or pre-envelope transport failure,
+`2` = usage error. With `--root` the CLI holds the exclusive data-root lease
+for its run; a held lease answers `DATA_ROOT_IN_USE` (§22). See
+`crates/adapters/cli/README.md`.
+
 **Security defaults** (§10, ADR-0030): default bind `127.0.0.1:0`;
 `start()` rejects any non-loopback bind with `AdapterError::InsecureBind`
 unless `trusted_proxy: true` explicitly declares a TLS-terminating reverse
-proxy boundary; body size and connection/worker counts are bounded by config
-(`max_request_bytes`, `max_connections`, `drain_timeout`). TLS termination,
-pairing and rate limiting are Phase 4 hardening / Phase 9 — until then the
-crate is not a full remote-access server, and no public listener can start
-without the explicit trusted-proxy declaration.
+proxy boundary — and with `trusted_proxy` but **no configured `auth`** a
+public bind is still a startup error (`PublicBindRequiresAuth`); a public
+listener without configured auth and transport security never starts (§10).
+When `auth` is enabled, pairing issues revocable scoped credentials
+(`RemoteAdapter::pair(label)` → `(id, token)`; the store keeps only a SHA-256
+verifier; `revoke(id)` is idempotent; the store is bounded by
+`max_credentials`), the auth gate runs **before** the body is read (401
+`UNAUTHORIZED` with `WWW-Authenticate: Bearer` — `missing_credential` /
+`invalid_credential`; `/meta` stays public), over-burst requests and
+over-cap concurrent streams answer `429 RATE_LIMITED` with `Retry-After`
+(token-bucket keyed by credential id or peer IP, bounded bucket map; `rule:
+`stream_limit` for `max_streams`), SSE streams re-check the credential per
+frame batch and abort mid-stream on revocation (`credential_revoked`), CORS/
+Origin is deny-by-default (a request carrying an `Origin` header is admitted
+only on an exact match against the configured `allowed_origins` allowlist —
+otherwise 403 `ORIGIN_NOT_ALLOWED` before any body read or dispatch; with the
+allowlist configured, allowed-origin responses carry
+`Access-Control-Allow-Origin` + `Vary: Origin` and an `OPTIONS` preflight
+answers 204 with `Access-Control-Allow-Methods`/`-Headers`), forwarded
+client headers are honored only from configured proxy addresses (the
+rate-limit bucket keys by the `X-Forwarded-For` client IP — rightmost chain
+entry not appended by a trusted proxy — solely when the immediate peer is
+listed in `trusted_proxies`; from any other peer the header is ignored, so a
+client cannot self-spoof the bucket key), and every gate decision
+lands in a bounded audit ring without token material.
+Body size and connection/worker counts are bounded by config
+(`max_request_bytes`, `max_connections`, `drain_timeout`).
 
 ## 7. Contract versioning (§6.7)
 
@@ -381,6 +424,23 @@ Result<Vec<u8>, KernelError>`).
     `call`; no HTTP/port, ТЗ §11.1) as the Phase 1 surface the facades
     (`LocalBackend`, `RemoteBackend`, `LegacyBackend` in `packages/neobackend`)
     will bind to.
+- **Concrete native adapter (Phase 5):** `crates/adapters/mobile-ffi`
+  implements the policy as a stable C ABI for Android JNI / future Swift
+  hosts. Surface: `nt_ffi_version`, `nt_kernel_open`/`nt_kernel_free`,
+  `nt_call`, `nt_stream_start`/`nt_stream_wait`/`nt_stream_cancel`/
+  `nt_stream_free` — opaque `NtKernel`/`NtStream` handles, bounded
+  length-delimited UTF-8/byte buffers, stable integer status codes
+  (`NT_OK`, `NT_ERR_INVALID_ARG`, `NT_ERR_CONTRACT`, `NT_ERR_NOT_FOUND`,
+  `NT_ERR_STORAGE`, `NT_ERR_CANCELLED`, `NT_ERR_INTERNAL`, `NT_ERR_BUFFER`,
+  `NT_ERR_MISMATCH`). Payloads are the identical Product Wire Contract bytes;
+  `MAX_REQUEST_LEN` (1 MiB) is checked before any parse, output-buffer
+  shortage returns `NT_ERR_BUFFER` with the required capacity, Rust
+  allocations are freed only by the exported free functions, and every entry
+  point contains panics (`catch_unwind` → `NT_ERR_INTERNAL`). The ABI
+  version is part of the exact local handshake: `nt_kernel_open` runs the
+  `schemaHash` + `ffiAbiVersion` check before creating a handle, so an
+  incompatible host performs no product operations (§6.5). See
+  `crates/adapters/mobile-ffi/README.md`.
 - No `serde_json::Value` escapes generated DTO boundaries; tolerant payload
   fields are explicitly typed `Value` at the envelope level only.
 - No platform/server/HTTP/UI dependencies in the kernel crate (ТЗ §6); std-only
@@ -391,5 +451,8 @@ Result<Vec<u8>, KernelError>`).
 - [Operations inventory](operations-inventory.md) — the current HTTP surface
   these contracts back, and the ownership/routing table.
 - [Version axes](version-axes.md) — wire version as one axis among many.
+- [Mobile FFI ABI](../../crates/adapters/mobile-ffi/README.md) — the Phase 5
+  native adapter implementing §6.9 as a stable C ABI (handles, buffers,
+  status codes, buffer-free contract).
 - [ADR-0029](../adr/0029-wire-contract-toolchain.md) — decision record for this
   toolchain; [ADR-0004](../adr/0004-typebox-contracts.md) — the TypeBox base.

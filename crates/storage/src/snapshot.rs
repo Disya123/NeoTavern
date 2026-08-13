@@ -213,7 +213,7 @@ fn quick_check_ok(conn: &Connection) -> Result<()> {
 }
 
 /// Streamed lowercase-hex SHA-256 of the file at `path`.
-fn sha256_file_hex(path: &Path) -> Result<String> {
+pub(crate) fn sha256_file_hex(path: &Path) -> Result<String> {
     let mut file = fs::File::open(path).map_err(|e| io_err(e, "open snapshot for hashing"))?;
     let mut hasher = Sha256::new();
     let mut buf = [0u8; HASH_BUF_SIZE];

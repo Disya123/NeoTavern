@@ -39,6 +39,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "built-in-providers"
+version = "0.1.0"
+dependencies = [
+ "provider-sdk",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -291,6 +302,32 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
+name = "neotavern-cli"
+version = "0.1.0"
+dependencies = [
+ "contracts-generated",
+ "neotavern-storage",
+ "remote-http-adapter",
+ "runtime-kernel",
+ "rusqlite",
+ "serde_json",
+ "tempfile",
+ "uuid",
+]
+
+[[package]]
+name = "neotavern-mobile-ffi"
+version = "0.1.0"
+dependencies = [
+ "contracts-generated",
+ "neotavern-storage",
+ "runtime-kernel",
+ "rusqlite",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "neotavern-storage"
 version = "0.1.0"
 dependencies = [
@@ -343,6 +380,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "provider-sdk"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -391,11 +437,13 @@ name = "remote-http-adapter"
 version = "0.1.0"
 dependencies = [
  "contracts-generated",
+ "getrandom",
  "neotavern-storage",
  "runtime-kernel",
  "rusqlite",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
  "tiny_http",
 ]
@@ -415,12 +463,13 @@ name = "runtime-kernel"
 version = "0.1.0"
 dependencies = [
  "base64",
+ "built-in-providers",
  "contracts-generated",
  "neotavern-storage",
+ "provider-sdk",
  "rusqlite",
  "serde",
  "serde_json",
- "sha2",
  "tempfile",
  "time",
  "uuid",

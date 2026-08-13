@@ -1680,6 +1680,361 @@ pub fn decode_generation_run(bytes: &[u8]) -> Result<GenerationRun, WireError> {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "status")]
+pub enum ProviderAvailability {
+    #[serde(rename = "available")] Available,
+    #[serde(rename = "degraded")] Degraded { code: String, #[serde(default, skip_serializing_if = "Option::is_none")] detail: Option<String> },
+    #[serde(rename = "unavailable")] Unavailable { code: String, #[serde(default, skip_serializing_if = "Option::is_none")] detail: Option<String> },
+}
+
+pub(crate) fn check_provider_availability(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9_]{0,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9_]{0,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    let tag = value.get("status").and_then(|t| t.as_str());
+    match tag {
+        Some("available") => {
+            if let Some(obj) = value.as_object() {
+                for key in obj.keys() {
+                    if !matches!(key.as_str(), "status") {
+                        let key_path = join_path(path, key);
+                        issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                    }
+                }
+            }
+        }
+        Some("degraded") => {
+            if value.get("code").is_none() {
+                issues.push(Issue::new(join_path(path, "code"), "RequiredProperty"));
+            }
+            if let Some(child) = value.get("code") {
+                let child_path = join_path(path, "code");
+                match child.as_str() {
+                    Some(s) => {
+                        if !RE_0.is_match(s) {
+                            issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                        }
+                    }
+                    None => issues.push(Issue::new(child_path.as_str(), "String")),
+                }
+            }
+            if let Some(child) = value.get("detail") {
+                let child_path = join_path(path, "detail");
+                match child.as_str() {
+                    Some(s) => {
+                        let len = s.encode_utf16().count();
+                        if len < 1 {
+                            issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                        }
+                        if len > 256 {
+                            issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                        }
+                    }
+                    None => issues.push(Issue::new(child_path.as_str(), "String")),
+                }
+            }
+            if let Some(obj) = value.as_object() {
+                for key in obj.keys() {
+                    if !matches!(key.as_str(), "status" | "code" | "detail") {
+                        let key_path = join_path(path, key);
+                        issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                    }
+                }
+            }
+        }
+        Some("unavailable") => {
+            if value.get("code").is_none() {
+                issues.push(Issue::new(join_path(path, "code"), "RequiredProperty"));
+            }
+            if let Some(child) = value.get("code") {
+                let child_path = join_path(path, "code");
+                match child.as_str() {
+                    Some(s) => {
+                        if !RE_1.is_match(s) {
+                            issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                        }
+                    }
+                    None => issues.push(Issue::new(child_path.as_str(), "String")),
+                }
+            }
+            if let Some(child) = value.get("detail") {
+                let child_path = join_path(path, "detail");
+                match child.as_str() {
+                    Some(s) => {
+                        let len = s.encode_utf16().count();
+                        if len < 1 {
+                            issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                        }
+                        if len > 256 {
+                            issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                        }
+                    }
+                    None => issues.push(Issue::new(child_path.as_str(), "String")),
+                }
+            }
+            if let Some(obj) = value.as_object() {
+                for key in obj.keys() {
+                    if !matches!(key.as_str(), "status" | "code" | "detail") {
+                        let key_path = join_path(path, key);
+                        issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                    }
+                }
+            }
+        }
+        _ => issues.push(Issue::new(path, "Discriminator")),
+    }
+}
+
+pub fn validate_provider_availability(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_provider_availability(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_provider_availability(bytes: &[u8]) -> Result<ProviderAvailability, WireError> {
+    crate::decode::<ProviderAvailability>(validate_provider_availability, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProviderModel {
+    pub id: String,
+    pub name: String,
+    #[serde(rename = "contextLimit", default, skip_serializing_if = "Option::is_none")]
+    pub context_limit: Option<i64>,
+    #[serde(rename = "maxOutputTokens", default, skip_serializing_if = "Option::is_none")]
+    pub max_output_tokens: Option<i64>,
+}
+
+pub(crate) fn check_provider_model(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("id").is_none() {
+            issues.push(Issue::new(join_path(path, "id"), "RequiredProperty"));
+        }
+        if value.get("name").is_none() {
+            issues.push(Issue::new(join_path(path, "name"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("id") {
+            let child_path = join_path(path, "id");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 128 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("name") {
+            let child_path = join_path(path, "name");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 200 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("contextLimit") {
+            let child_path = join_path(path, "contextLimit");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("maxOutputTokens") {
+            let child_path = join_path(path, "maxOutputTokens");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "id" | "name" | "contextLimit" | "maxOutputTokens") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_provider_model(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_provider_model(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_provider_model(bytes: &[u8]) -> Result<ProviderModel, WireError> {
+    crate::decode::<ProviderModel>(validate_provider_model, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProviderDto {
+    pub id: String,
+    pub name: String,
+    pub builtin: bool,
+    pub availability: ProviderAvailability,
+    pub models: Vec<ProviderModel>,
+}
+
+pub(crate) fn check_provider_dto(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{0,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("id").is_none() {
+            issues.push(Issue::new(join_path(path, "id"), "RequiredProperty"));
+        }
+        if value.get("name").is_none() {
+            issues.push(Issue::new(join_path(path, "name"), "RequiredProperty"));
+        }
+        if value.get("builtin").is_none() {
+            issues.push(Issue::new(join_path(path, "builtin"), "RequiredProperty"));
+        }
+        if value.get("availability").is_none() {
+            issues.push(Issue::new(join_path(path, "availability"), "RequiredProperty"));
+        }
+        if value.get("models").is_none() {
+            issues.push(Issue::new(join_path(path, "models"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("id") {
+            let child_path = join_path(path, "id");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("name") {
+            let child_path = join_path(path, "name");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 120 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("builtin") {
+            let child_path = join_path(path, "builtin");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(child) = value.get("availability") {
+            let child_path = join_path(path, "availability");
+            check_provider_availability(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("models") {
+            let child_path = join_path(path, "models");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                if arr.len() > 64 {
+                    issues.push(Issue::new(child_path.as_str(), "ArrayMaxItems"));
+                }
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    check_provider_model(item, &item_path, issues);
+                }
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "id" | "name" | "builtin" | "availability" | "models") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_provider_dto(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_provider_dto(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_provider_dto(bytes: &[u8]) -> Result<ProviderDto, WireError> {
+    crate::decode::<ProviderDto>(validate_provider_dto, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultListProviders {
+    pub items: Vec<ProviderDto>,
+}
+
+pub(crate) fn check_result_list_providers(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("items").is_none() {
+            issues.push(Issue::new(join_path(path, "items"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("items") {
+            let child_path = join_path(path, "items");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    check_provider_dto(item, &item_path, issues);
+                }
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "items") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_list_providers(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_list_providers(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_list_providers(bytes: &[u8]) -> Result<ResultListProviders, WireError> {
+    crate::decode::<ResultListProviders>(validate_result_list_providers, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ErrorDto {
     pub code: String,

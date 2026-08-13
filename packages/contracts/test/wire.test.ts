@@ -34,9 +34,9 @@ const VALID_META_OP: WireOperation = {
 };
 
 describe('product wire registry', () => {
-  it('compiles the canonical 20-operation registry with zero violations', () => {
+  it('compiles the canonical 21-operation registry with zero violations', () => {
     const registry = buildProductWireRegistry();
-    expect(registry.operations).toHaveLength(20);
+    expect(registry.operations).toHaveLength(21);
     expect(registry.operations.map((op) => op.operationId)).toEqual([
       'meta.get',
       'characters.list',
@@ -54,6 +54,7 @@ describe('product wire registry', () => {
       'generation.retry',
       'generation.keep',
       'generation.discard',
+      'providers.list',
       'backups.create',
       'backups.list',
       'lorebooks.list',
@@ -183,8 +184,8 @@ describe('fixture corpus', () => {
     const registry = buildProductWireRegistry();
     const valid = PRODUCT_WIRE_FIXTURES.filter((fixture) => fixture.valid);
     const invalid = PRODUCT_WIRE_FIXTURES.filter((fixture) => !fixture.valid);
-    expect(valid).toHaveLength(40);
-    expect(invalid).toHaveLength(12);
+    expect(valid).toHaveLength(42);
+    expect(invalid).toHaveLength(13);
     for (const operation of registry.operations) {
       expect(
         valid.some((f) => f.operationId === operation.operationId && f.kind === 'request'),

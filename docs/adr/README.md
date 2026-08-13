@@ -1,5 +1,24 @@
 # Architecture Decision Records
 
+## ADR-0032: Portable Data — Backup Container, Staged Restore, Portable Export
+
+Phase 11 turns the Phase 2 recovery primitives into public long-lived formats:
+the `.neotavern-backup` container (manifest + checksummed inventory + pinned
+asset set), kill-safe staged restore with atomic candidate activation resolved
+at open, the `.neotavern-export` NDJSON interchange with explicit duplicate
+policy, and a read-only legacy converter. Full decision, alternatives and
+consequences: [ADR-0032](0032-portable-data.md).
+
+## ADR-0031: Portable Provider Contract (Phase 7)
+
+Phase 7 turns provider execution into a portable contract: `crates/provider-sdk`
+(adapter trait, normalized errors/usage, deadline/retry policy, secret
+references) + `crates/built-in-providers` (deterministic fake, recorded
+fixtures, conformance suite) + kernel `ProviderRegistry` with `providers.list`,
+host secret-resolver seam and per-run deadline; storage migration 4 persists
+config/secret separation (`provider_configs`). Full decision, alternatives and
+consequences: [ADR-0031](0031-portable-provider-contract.md).
+
 ## ADR-0030: Remote HTTP Adapter — envelope-over-HTTP on the shared Runtime Kernel
 
 Phase 4 headless/remote surface: a new std-only crate

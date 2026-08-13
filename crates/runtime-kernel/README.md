@@ -54,9 +54,10 @@ only implements the in-process dispatch semantics.
 - `generation` — Phase 6 durable generation workflows: state machine
   (`queued → preparing → streaming → completed | failed | cancelling →
   cancelled`, plus `interrupted` via startup recovery), CAS transitions by
-  `revision`, deterministic fake provider, per-step durable commits, atomic
+  `revision`, provider routing through the Phase 7 `ProviderRegistry`
+  (deterministic built-in fake), per-step durable commits, atomic
   terminal commits (final message + terminal event in one transaction), lease
-  fields and idempotent reconciliation commands (see the Phase 6 section).
+  fields and idempotent reconciliation commands (see the Phase 6/7 sections).
 
 ## Constraints
 
@@ -127,10 +128,13 @@ writer-coordinator thread:
   late provider output after cancellation.
 - **Fake provider** (deterministic, fault-injectable): `model` grammar
   `steps=N;fail-at=N;delay-ms=N;tokens-per-step=N`; delta text derived from
-  `sha256(chat_id|attempt|step)` — same inputs give byte-identical event logs
-  across processes, which the Local/Remote equivalence tests rely on. Unknown
-  provider → `PROVIDER_UNAVAILABLE`; bad grammar → `PROVIDER_MODEL_INVALID`;
-  injected failure → `PROVIDER_STEP_FAILED`.
+  `sha256(run_key|i)` with `run_key = "{chat_id}|{attempt}"` — same inputs
+  give byte-identical event logs across processes, which the Local/Remote
+  equivalence tests rely on. Since Phase 7 the fake lives as a portable
+  adapter in `built-in-providers` (`FakeProvider`) and is registered by the
+  kernel's `ProviderRegistry`; behavior is byte-identical to the Phase 6
+  inline provider. Unknown provider → `PROVIDER_UNAVAILABLE`; bad grammar →
+  `PROVIDER_MODEL_INVALID`; injected failure → `PROVIDER_STEP_FAILED`.
 - **Durability**: every delta/checkpoint/terminal event is appended to
   `generation_events` in the same transaction that advances the run's
   `last_event_sequence` (CAS), refreshes the executor lease (`lease_owner`,
@@ -145,3 +149,56 @@ writer-coordinator thread:
 - **No duplicate writer**: exactly one kernel instance per data root (lease);
   a second `Kernel::open` on the same root fails with `DataRootInUse` before
   any generation state can fork.
+
+## Phase 7 slice (portable providers)
+
+Generation execution now routes through portable provider adapters
+(`provider-sdk`) instead of the Phase 6 inline fake. The kernel registers
+the built-in adapters (`built-in-providers`) and hands each run to the
+adapter resolved from the run's `provider` field (default `fake`).
+
+- **`providers::ProviderRegistry`** — stable-order adapter list:
+  `new_builtins()` registers `FakeProvider` (id `fake`, model `fake-1`);
+  `register(Arc<dyn ProviderAdapter>)` appends host adapters;
+  `find(id)` resolves one for generation execution; `list()` returns all in
+  registration order. The registry lives in the writer thread state next to
+  the `Database`.
+- **`providers.list` operation** — stateless (like `meta.get`): no `data_root`
+  required, so a stateless kernel answers it. Strict empty request; the
+  response is `wire.result.list-providers` with one `ProviderDto` per
+  registered adapter (id, name, builtin, availability, models), validated
+  through `validate_result_list_providers` before serialization. Adapter
+  `Availability` maps onto the generated `ProviderAvailability` enum.
+- **`Kernel::set_secret_resolver(Arc<dyn SecretResolver>)`** — host-provided
+  secret-resolution seam (ТЗ §68): the kernel stores only the handle, never
+  resolved values, and passes it to the generation executor for adapters
+  that need secrets (the built-in fake/recorded providers ignore it). The
+  command is ack'd fire-and-forget (5s rendezvous timeout; a timed-out ack
+  is ignored and the setting still lands at the next step boundary).
+- **`Kernel::set_run_timeout(Duration)`** — per-run provider deadline for
+  future generations; default `RUN_TIMEOUT` = 60s. The executor builds
+  `ProviderRequest { deadline: Some(Deadline::after(run_timeout)) }`, and
+  the adapter must finish the attempt within the window (a late attempt
+  fails with `PROVIDER_TIMEOUT`).
+- **Executor emit bridge** — adapter deltas stream through a bridge that,
+  per delta: drains queued commands (shutdown → commit progress and stop),
+  re-reads the durable run (a `cancelling`/`cancel_requested`/terminal run
+  stops — late output never reaches the chat, §63), then commits the delta
+  (checkpoint every 4th, lease refresh, CAS on `revision`). `EmitStatus::Stop`
+  tells the adapter to stop producing immediately; the kernel's dispatch
+  `CancellationFlag` is exposed to the adapter as a `CancelToken`.
+- **Provider error mapping** (kernel `ErrorDto` codes in `generation.failed`):
+
+  | Provider SDK error | Wire code | Params |
+  |---|---|---|
+  | `StepFailed` | `PROVIDER_STEP_FAILED` | `runId`, `step` (when present) |
+  | `Timeout` | `PROVIDER_TIMEOUT` | `runId` |
+  | `NetworkFault` | `PROVIDER_NETWORK_FAULT` | `runId` |
+  | `Unavailable` | `PROVIDER_UNAVAILABLE` | `provider` |
+  | `RequestInvalid` | `PROVIDER_MODEL_INVALID` | `model` |
+  | `Cancelled` | cancelled terminal (`generation.cancelled`) | — |
+
+  An unknown `provider` field (no registered adapter) fails the run with
+  `PROVIDER_UNAVAILABLE` — unchanged product behavior. Secret values never
+  appear in request snapshots, event payloads, error payloads or `Debug`
+  output (`SecretValue` prints `<redacted>`).

@@ -2,7 +2,7 @@
  * Wire operation registry: operation metadata, the fixture corpus and the
  * `compileWireContract` validator that every schema/operation/fixture must
  * pass. `buildProductWireRegistry()` produces the canonical product registry
- * (20 operations) that codegen, the Rust kernel and the facades consume.
+ * (21 operations) that codegen, the Rust kernel and the facades consume.
  */
 import { type TSchema } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
@@ -275,7 +275,7 @@ export function compileWireContract(
 }
 
 // ---------------------------------------------------------------------------
-// Product wire registry (Phase 0): the canonical 20-operation table.
+// Product wire registry (Phase 0): the canonical 21-operation table.
 // ---------------------------------------------------------------------------
 
 function op(
@@ -555,6 +555,20 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'providers.list',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.empty',
+    'wire.result.list-providers',
+    undefined,
+    ['INTERNAL', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    1024,
+    262144,
+    undefined,
+  ),
+  op(
     'backups.create',
     'workflow',
     'non-idempotent',
@@ -713,6 +727,14 @@ const GENERATION_EVENT_ENVELOPE_VALUE = {
   payload: { type: 'generation.delta', text: 'Hello' },
 };
 
+const PROVIDER_VALUE = {
+  id: 'fake',
+  name: 'Fake Provider',
+  builtin: true,
+  availability: { status: 'available' },
+  models: [{ id: 'fake-1', name: 'Fake 1', contextLimit: 8192 }],
+};
+
 function fx(
   id: string,
   operationId: string,
@@ -778,6 +800,7 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('backups-list-request', 'backups.list', 'request', true, {}),
   fx('lorebooks-list-request', 'lorebooks.list', 'request', true, {}),
   fx('presets-list-request', 'presets.list', 'request', true, {}),
+  fx('providers-list-request', 'providers.list', 'request', true, {}),
 
   // --- valid response fixtures.
   fx('meta-get-response', 'meta.get', 'response', true, META_VALUE),
@@ -817,6 +840,7 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('backups-list-response', 'backups.list', 'response', true, { items: [BACKUP_VALUE] }),
   fx('lorebooks-list-response', 'lorebooks.list', 'response', true, { items: [LOREBOOK_VALUE] }),
   fx('presets-list-response', 'presets.list', 'response', true, { items: [PRESET_VALUE] }),
+  fx('providers-list-response', 'providers.list', 'response', true, { items: [PROVIDER_VALUE] }),
 
   // --- valid event fixture (generation.start streams events, no response).
   fx('generation-start-event', 'generation.start', 'event', true, {
@@ -830,6 +854,14 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('neg-generation-events-bad-envelope', 'generation.events', 'response', false, {
     items: [{ streamId: UUID_RUN, sequence: -3, type: 'generation.delta', payload: {} }],
     hasMore: false,
+  }),
+  fx('neg-provider-bad-availability', 'providers.list', 'response', false, {
+    items: [
+      {
+        ...PROVIDER_VALUE,
+        availability: { status: 'half-available' },
+      },
+    ],
   }),
 
   // --- negative fixtures (one per rule family).
@@ -884,7 +916,7 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
 const WIRE_SCHEMA_MAP: ReadonlyMap<string, TSchema> = new Map(Object.entries(WIRE_SCHEMAS));
 
 /**
- * Builds the canonical product wire registry: compiles the 20 operations and
+ * Builds the canonical product wire registry: compiles the 21 operations and
  * the fixture corpus against `WIRE_SCHEMAS` (registering the wire formats
  * first). Throws `ContractCompileError` on any violation — a broken registry
  * is a build-time failure, never a runtime surprise.

@@ -1,9 +1,11 @@
 //! Database schema (ТЗ §22-§25, Фаза 2; ТЗ §78 Фаза 3).
 //!
 //! Defines the ordered migrations: v1 (`001_initial_schema`) — the three
-//! STRICT foundation tables — and v2 (`002_product_core`) — the STRICT product
-//! tables — plus the fresh-install fingerprint used to detect schema drift.
-//! `FRESH_SCHEMA_SQL` is the concatenation of both migration literals, so a
+//! STRICT foundation tables — v2 (`002_product_core`) — the STRICT product
+//! tables — v3 (`003_generation_durability`) — the recoverable generation
+//! tables — and v4 (`004_provider_configs`) — the user-configured provider
+//! table — plus the fresh-install fingerprint used to detect schema drift.
+//! `FRESH_SCHEMA_SQL` is the concatenation of all migration literals, so a
 //! fresh install produces exactly the schema that running the migrations in
 //! order would produce.
 //!
@@ -134,6 +136,26 @@ CREATE TABLE generation_events (
     };
 }
 
+/// Literal body of the provider-configs (v4) schema migration
+/// (ТЗ §78, Фаза 7): the STRICT `provider_configs` table holding
+/// user-configured provider instances — per-provider display name, opaque
+/// JSON config, optional secret reference and timestamps — plus the unique
+/// `(provider, name)` index; nothing else.
+macro_rules! migration_4_sql {
+    () => {
+        r#"CREATE TABLE provider_configs (
+  id TEXT PRIMARY KEY,
+  provider TEXT NOT NULL,
+  name TEXT NOT NULL,
+  config_json TEXT NOT NULL DEFAULT '{}',
+  secret_ref TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+) STRICT;
+CREATE UNIQUE INDEX idx_provider_configs_provider_name ON provider_configs(provider, name);"#
+    };
+}
+
 /// Name of the initial (v1) schema migration.
 pub const MIGRATION_1_NAME: &str = "001_initial_schema";
 
@@ -186,19 +208,37 @@ pub const MIGRATION_3_SQL: &str = migration_3_sql!();
 pub const MIGRATION_3_CHECKSUM: &str =
     "54e7657d9032c4ff1f59980c277d8a78d793a72391841e585366b3332efc0280";
 
+/// Name of the provider-configs (v4) schema migration.
+pub const MIGRATION_4_NAME: &str = "004_provider_configs";
+
+/// Exact SQL of the provider-configs schema migration (v4) — the
+/// `migration_4_sql!()` literal.
+pub const MIGRATION_4_SQL: &str = migration_4_sql!();
+
+/// Lowercase sha256 hex of the `MIGRATION_4_SQL` string bytes.
+///
+/// Computed on 2026-08-13: the exact `r#"..."#` literal was written to a temp
+/// file via node (`crypto.createHash('sha256')` over the literal bytes, no
+/// trailing newline) and independently re-hashed with the `sha256sum`
+/// utility on that same file. Both agree on `b36e2bc7…`.
+pub const MIGRATION_4_CHECKSUM: &str =
+    "b36e2bc70f6ee448ede6957b7df538a66de2e0ff04cd5df9c840f6cd4833eaa2";
+
 /// A fresh install runs every migration in order, so `FRESH_SCHEMA_SQL` is the
-/// concatenation of the two migration literals with a single newline between
-/// them (the same statement separator `execute_batch` applies).
+/// concatenation of all migration literals with a single newline between them
+/// (the same statement separator `execute_batch` applies).
 ///
 /// `concat!` requires literals rather than `const` items, hence the
-/// `migration_{1,2}_sql!()` macro indirection; the SQL text itself is not
+/// `migration_{1,2,3,4}_sql!()` macro indirection; the SQL text itself is not
 /// duplicated here.
 pub const FRESH_SCHEMA_SQL: &str = concat!(
     migration_1_sql!(),
     "\n",
     migration_2_sql!(),
     "\n",
-    migration_3_sql!()
+    migration_3_sql!(),
+    "\n",
+    migration_4_sql!()
 );
 
 /// sha256 hex of the `FRESH_SCHEMA_SQL` bytes — the fresh-install fingerprint.

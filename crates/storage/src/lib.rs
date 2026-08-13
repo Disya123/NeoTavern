@@ -13,13 +13,17 @@
 //! chat tables here — only the `meta`/`migrations`/`assets` foundations.
 
 pub mod assets;
+pub mod backup;
 pub mod baseline;
 pub mod error;
+pub mod export;
 pub mod lease;
+pub mod legacy;
 pub mod migrations;
 pub mod open;
 pub mod paths;
 pub mod recovery;
+pub mod restore;
 pub mod schema;
 pub mod snapshot;
 
@@ -32,7 +36,7 @@ use std::time::Duration;
 pub const STORAGE_FORMAT: i64 = 1;
 
 /// Current schema revision (`PRAGMA user_version`).
-pub const CURRENT_SCHEMA: i64 = 3;
+pub const CURRENT_SCHEMA: i64 = 4;
 
 /// Lowest schema revision that can be opened directly; anything older requires
 /// a legacy converter that lives outside this crate.

@@ -21,6 +21,7 @@ import type {
   LorebooksApi,
   NeoBackend,
   PresetsApi,
+  ProvidersApi,
 } from './neobackend.js';
 
 /**
@@ -174,6 +175,10 @@ export class LegacyBackend implements NeoBackend {
 
   readonly presets: PresetsApi = {
     list: () => this.unsupported('presets.list'),
+  };
+
+  readonly providers: ProvidersApi = {
+    list: () => this.unsupported('providers.list'),
   };
 
   private async listCharacters(req: ListCharactersRequestDto): Promise<PagedCharactersDto> {

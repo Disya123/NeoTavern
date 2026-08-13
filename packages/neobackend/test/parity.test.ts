@@ -8,6 +8,7 @@ import {
   WIRE_SCHEMA_HASH,
   type CharacterDto,
   type GenerationRunDto,
+  type ListProvidersResultDto,
   type MetaDto,
   type PagedCharactersDto,
   type PagedGenerationEventsDto,
@@ -44,6 +45,20 @@ const META: MetaDto = {
   api: { major: 2, minor: 0 },
   productWire: { major: 1, minor: 0 },
   features: { core: 1 },
+};
+
+// --- Canonical providers fixture (wire fixture shape from
+// `packages/contracts/src/wire/registry.ts` PROVIDER_VALUE). ---
+const PROVIDERS: ListProvidersResultDto = {
+  items: [
+    {
+      id: 'fake',
+      name: 'Fake Provider',
+      builtin: true,
+      availability: { status: 'available' },
+      models: [{ id: 'fake-1', name: 'Fake 1', contextLimit: 8192 }],
+    },
+  ],
 };
 
 // --- Canonical generation fixtures (ТЗ §62–64, Phase 6). ---
@@ -114,16 +129,20 @@ const GENERATION_STREAM_EVENTS: WireGenerationEvent[] = [
 /** In-process kernel transport returning canned canonical wire values. */
 class FakeKernelTransport implements LocalTransport {
   calls = 0;
+  requests: Array<{ operationId: string; payload: unknown }> = [];
 
   async call(
     operationId: string,
-    _payload: unknown,
+    payload: unknown,
     _opts: { signal?: AbortSignal },
   ): Promise<LocalCallResult> {
     this.calls += 1;
+    this.requests.push({ operationId, payload });
     switch (operationId) {
       case 'characters.list':
         return { ok: true, value: PAGED_CHARACTERS };
+      case 'providers.list':
+        return { ok: true, value: PROVIDERS };
       case 'generation.get':
         return { ok: true, value: GENERATION_RUN };
       case 'generation.events':
@@ -162,6 +181,8 @@ function rpcResult(operationId: string | undefined): unknown {
   switch (operationId) {
     case 'characters.list':
       return PAGED_CHARACTERS;
+    case 'providers.list':
+      return PROVIDERS;
     case 'generation.get':
       return GENERATION_RUN;
     case 'generation.events':
@@ -249,6 +270,29 @@ describe('Local vs Remote parity', () => {
   it('remote handshake surfaces validated MetaDto', async () => {
     const remote = makeRemoteBackend();
     await expect(remote.meta()).resolves.toEqual(META);
+  });
+});
+
+describe('Providers Local vs Remote parity (Phase 7)', () => {
+  it('providers.list returns deep-equal canonical ListProvidersResultDto from both backends', async () => {
+    const local = new LocalBackend({ transport: new FakeKernelTransport() });
+    const remote = makeRemoteBackend();
+
+    const [localResult, remoteResult] = await Promise.all([
+      local.providers.list(),
+      remote.providers.list(),
+    ]);
+
+    expect(localResult).toEqual(remoteResult);
+    expect(localResult).toEqual(PROVIDERS);
+  });
+
+  it('providers.list sends the canonical empty request payload to the kernel', async () => {
+    const kernel = new FakeKernelTransport();
+    const backend = new LocalBackend({ transport: kernel });
+
+    await expect(backend.providers.list()).resolves.toEqual(PROVIDERS);
+    expect(kernel.requests).toEqual([{ operationId: 'providers.list', payload: {} }]);
   });
 });
 
@@ -503,6 +547,11 @@ describe('LegacyBackend', () => {
   it('generation.get throws UnsupportedError', () => {
     const backend = makeLegacyBackend(new Map());
     expect(() => backend.generation.get(RUN_ID)).toThrow(UnsupportedError);
+  });
+
+  it('providers.list throws UnsupportedError', () => {
+    const backend = makeLegacyBackend(new Map());
+    expect(() => backend.providers.list()).toThrow(UnsupportedError);
   });
 
   it('raw passthrough forwards the host transport for unmigrated routes (ТЗ Фаза 0)', async () => {

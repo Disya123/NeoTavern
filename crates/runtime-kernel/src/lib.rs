@@ -21,16 +21,19 @@
 
 use contracts_generated::generated::{self, MetaDto, MetaDtoApi, MetaDtoProductWire};
 use contracts_generated::{Issue, WireError};
+use provider_sdk::secret::SecretResolver;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::time::Duration;
 
+pub mod backup;
 pub mod generation;
 pub mod headless;
 pub mod local;
 pub mod product;
+pub mod providers;
 
 /// FFI ABI version this kernel implements. Must match the embedded manifest's
 /// `ffiAbiVersion` (see `contracts_generated::contract_schema_hash`).
@@ -320,6 +323,19 @@ enum Command {
         cancel: CancellationFlag,
         reply: mpsc::SyncSender<Result<StreamStart, KernelError>>,
     },
+    /// Sets the host-provided secret-resolution seam (ТЗ §68). Applied
+    /// immediately (even mid-generation, at the next step boundary) and
+    /// acknowledged.
+    SetSecretResolver {
+        resolver: Arc<dyn SecretResolver>,
+        reply: mpsc::SyncSender<()>,
+    },
+    /// Sets the per-run provider deadline for future generations (default
+    /// [`generation::RUN_TIMEOUT`]). Applied immediately and acknowledged.
+    SetRunTimeout {
+        timeout: Duration,
+        reply: mpsc::SyncSender<()>,
+    },
     /// Orderly shutdown: stop the writer loop (mid-generation this sets a
     /// stop flag observed at the executor's next step boundary) and ack.
     Shutdown { reply: mpsc::SyncSender<()> },
@@ -423,6 +439,7 @@ where
 fn handle_unary(
     db: Option<&mut neotavern_storage::open::Database>,
     meta: &MetaDto,
+    registry: &providers::ProviderRegistry,
     op: &str,
     req: &[u8],
     cancel: &CancellationFlag,
@@ -435,6 +452,9 @@ fn handle_unary(
     }
     match op {
         "meta.get" => handle_meta_get(meta, req),
+        // Phase 7: stateless provider registry listing (like meta.get — no
+        // durable storage required).
+        "providers.list" => providers::handle_providers_list(registry, req),
         // Phase 3 product CRUD over durable storage.
         "characters.list" => with_db_opt(db, |db| product::characters_list(db, req)),
         "characters.get" => with_db_opt(db, |db| product::characters_get(db, req)),
@@ -452,6 +472,9 @@ fn handle_unary(
         "generation.events" => with_db_opt(db, |db| generation::generation_events(db, req)),
         "generation.keep" => with_db_opt(db, |db| generation::generation_keep(db, req)),
         "generation.discard" => with_db_opt(db, |db| generation::generation_discard(db, req)),
+        // Phase 11 portable data (ТЗ §40–§41): backup containers.
+        "backups.create" => with_db_opt(db, |db| backup::backups_create(db, req)),
+        "backups.list" => with_db_opt(db, |db| backup::backups_list(db, req)),
         _ => Err(KernelError::new(
             KernelErrorCode::OperationNotFound,
             format!("unknown operation: {op}"),
@@ -461,7 +484,8 @@ fn handle_unary(
 
 /// Drains every command currently queued on the writer channel, executing
 /// unary operations inline, queueing stream commands for after the current
-/// stream, and acknowledging shutdowns (which set `stop`).
+/// stream, applying provider-state setters immediately, and acknowledging
+/// shutdowns (which set `stop`).
 ///
 /// This runs between provider steps of an inline generation executor, which
 /// is how unary operations (notably `generation.cancel`) stay serviced while
@@ -469,6 +493,7 @@ fn handle_unary(
 fn drain_pending(
     db: &mut neotavern_storage::open::Database,
     meta: &MetaDto,
+    state: &mut providers::ProviderState,
     cmd_rx: &mpsc::Receiver<Command>,
     pending: &mut Vec<Command>,
     stop: &mut bool,
@@ -482,7 +507,7 @@ fn drain_pending(
                 cancel,
                 reply,
             } => {
-                let result = handle_unary(Some(db), meta, &op, &req, &cancel);
+                let result = handle_unary(Some(db), meta, &state.registry, &op, &req, &cancel);
                 let _ = reply.send(result);
             }
             Command::Stream {
@@ -499,6 +524,14 @@ fn drain_pending(
                     cancel,
                     reply,
                 });
+            }
+            Command::SetSecretResolver { resolver, reply } => {
+                state.secret_resolver = Some(resolver);
+                let _ = reply.send(());
+            }
+            Command::SetRunTimeout { timeout, reply } => {
+                state.run_timeout = timeout;
+                let _ = reply.send(());
             }
             Command::Shutdown { reply } => {
                 shutdown = true;
@@ -524,6 +557,9 @@ fn writer_main(
             eprintln!("kernel: startup generation recovery failed: {err}");
         }
     }
+    // Phase 7 provider state: the adapter registry plus the host-provided
+    // secret-resolution seam and the per-run deadline.
+    let mut state = providers::ProviderState::new_builtins();
     let mut stop = false;
     let mut pending: Vec<Command> = Vec::new();
     while !stop {
@@ -543,13 +579,13 @@ fn writer_main(
                 cancel,
                 reply,
             } => {
-                let result = handle_unary(db.as_mut(), &meta, &op, &req, &cancel);
+                let result = handle_unary(db.as_mut(), &meta, &state.registry, &op, &req, &cancel);
                 let _ = reply.send(result);
             }
             Command::Stream {
                 op,
                 req,
-                cancel: _,
+                cancel,
                 reply,
             } => {
                 let launch = match db.as_mut() {
@@ -569,8 +605,21 @@ fn writer_main(
                             notices: launch.notice_rx,
                         }));
                         if let Some(db) = db.as_mut() {
+                            // Snapshot the provider state for this run: the
+                            // deadline and secret seam are fixed at stream
+                            // start; later Set* commands affect the next run.
+                            let run_timeout = state.run_timeout;
+                            let secret_resolver = state.secret_resolver.clone();
+                            let registry = state.registry.clone();
                             let mut drain = |db: &mut neotavern_storage::open::Database| {
-                                drain_pending(db, &meta, &cmd_rx, &mut pending, &mut stop)
+                                drain_pending(
+                                    db,
+                                    &meta,
+                                    &mut state,
+                                    &cmd_rx,
+                                    &mut pending,
+                                    &mut stop,
+                                )
                             };
                             let result = generation::execute_stream(
                                 db,
@@ -578,6 +627,10 @@ fn writer_main(
                                 &launch.notice_tx,
                                 &mut drain,
                                 &lease_owner,
+                                &registry,
+                                run_timeout,
+                                secret_resolver,
+                                &cancel,
                             );
                             if let Err(err) = result {
                                 eprintln!("kernel: generation executor failed: {err}");
@@ -585,6 +638,14 @@ fn writer_main(
                         }
                     }
                 }
+            }
+            Command::SetSecretResolver { resolver, reply } => {
+                state.secret_resolver = Some(resolver);
+                let _ = reply.send(());
+            }
+            Command::SetRunTimeout { timeout, reply } => {
+                state.run_timeout = timeout;
+                let _ = reply.send(());
             }
             Command::Shutdown { reply } => {
                 stop = true;
@@ -787,6 +848,36 @@ impl Kernel {
             rx: start.notices,
             stream_id: start.stream_id,
         })
+    }
+
+    /// Sets the host-provided secret-resolution seam (ТЗ §68).
+    ///
+    /// The kernel stores only the resolver handle — never resolved values —
+    /// and passes it to the generation executor for adapters that need
+    /// secrets; the built-in providers ignore the seam. The command is
+    /// acknowledged fire-and-forget (5s rendezvous timeout): a busy writer
+    /// thread applies it at its next step boundary, and a timed-out ack is
+    /// ignored (the setting still lands).
+    pub fn set_secret_resolver(&self, resolver: Arc<dyn SecretResolver>) {
+        let (reply_tx, reply_rx) = mpsc::sync_channel(1);
+        let _ = self.cmd_tx.send(Command::SetSecretResolver {
+            resolver,
+            reply: reply_tx,
+        });
+        let _ = reply_rx.recv_timeout(Duration::from_secs(5));
+    }
+
+    /// Sets the per-run provider deadline for future generations (default
+    /// 60s, [`generation::RUN_TIMEOUT`]). Applied to runs started after this
+    /// command is processed; fire-and-forget ack like
+    /// [`set_secret_resolver`](Self::set_secret_resolver).
+    pub fn set_run_timeout(&self, timeout: Duration) {
+        let (reply_tx, reply_rx) = mpsc::sync_channel(1);
+        let _ = self.cmd_tx.send(Command::SetRunTimeout {
+            timeout,
+            reply: reply_tx,
+        });
+        let _ = reply_rx.recv_timeout(Duration::from_secs(5));
     }
 }
 

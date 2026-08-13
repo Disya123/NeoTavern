@@ -1,5 +1,5 @@
-//! Phase 6 generation durability: state machine, executor and fake provider
-//! (ТЗ §78 Фаза 6, §62–64, §18.2).
+//! Phase 6 generation durability: state machine, executor and provider
+//! routing (ТЗ §78 Фаза 6, §62–64, §18.2; Фаза 7 §55, §60).
 //!
 //! The generation workflow is a durable, recoverable state machine over the
 //! `generation_runs` / `generation_events` tables (storage migration 3):
@@ -14,16 +14,21 @@
 //! and reacts instead of blindly retrying. Each provider step commits the
 //! delta event and the run update in ONE transaction, so the durable event
 //! log is always consistent with the run row. The executor runs inline on
-//! the kernel's writer thread and drains pending commands between steps, so
-//! unary operations (notably `generation.cancel`) stay serviced while a
-//! generation streams.
+//! the kernel's writer thread and drains pending commands between provider
+//! steps, so unary operations (notably `generation.cancel`) stay serviced
+//! while a generation streams.
 //!
-//! The fake provider is deterministic: delta text derives from
-//! `sha256(chat_id|attempt|i)` — no wall clock, so two runs with the same
-//! chat id, attempt and model produce byte-identical payloads.
+//! Phase 7: the executor routes each run through the
+//! [`ProviderRegistry`](crate::providers::ProviderRegistry) instead of an
+//! inline fake. The built-in `fake` adapter (in `built-in-providers`) is a
+//! byte-identical port of the Phase 6 inline provider: delta text derives
+//! from `sha256(run_key|i)` with `run_key = "{chat_id}|{attempt}"` — no wall
+//! clock, so two runs with the same chat id, attempt and model produce
+//! byte-identical payloads.
 
 use crate::product;
-use crate::{KernelError, KernelErrorCode, StreamNotice};
+use crate::providers::ProviderRegistry;
+use crate::{CancellationFlag, KernelError, KernelErrorCode, StreamNotice};
 use contracts_generated::generated::{
     self, ErrorDto, EventEnvelope, GenerationEvent, GenerationRun, GenerationStatus, MessageDto,
     MessageRole, PagedGenerationEvents, ResultEmpty,
@@ -31,8 +36,10 @@ use contracts_generated::generated::{
 use contracts_generated::Issue;
 use neotavern_storage::open::Database;
 use neotavern_storage::StorageError;
+use provider_sdk::secret::SecretResolver;
 use rusqlite::params;
 use std::sync::mpsc;
+use std::sync::Arc;
 use std::time::Duration;
 
 /// Executor lease grace period: every transaction (re)writes
@@ -44,9 +51,12 @@ const LEASE_GRACE_SECONDS: i64 = 30;
 /// (mirrors the wire `partialText` max length).
 const PARTIAL_PREVIEW_LEN: usize = 4096;
 
-/// Default fake-provider parameters (per design §3).
-const DEFAULT_STEPS: usize = 8;
-const DEFAULT_TOKENS_PER_STEP: usize = 6;
+/// Default per-run provider deadline (design §Kernel integration): the
+/// adapter must finish one generation attempt within this window. Settable
+/// per kernel via `Kernel::set_run_timeout` (the writer's
+/// [`ProviderState`](crate::providers::ProviderState) carries the live
+/// value; this const is the default).
+pub(crate) const RUN_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// UTC now as an RFC 3339 wire timestamp (seconds precision).
 fn now() -> String {
@@ -1107,12 +1117,24 @@ fn commit_shutdown_progress(db: &mut Database, run: &RunRow) -> Result<(), Kerne
 /// operations — notably `generation.cancel` — and reports whether a shutdown
 /// was requested). On shutdown the executor commits progress and exits; the
 /// run stays non-terminal for startup recovery.
+///
+/// Phase 7: the run is executed by the adapter resolved from `registry`
+/// (`run.provider`, defaulting to `"fake"`), with a per-run deadline of
+/// `run_timeout` and the host-provided `_secret_resolver` seam available to
+/// adapters (the built-ins ignore it). Deltas stream through the `emit`
+/// bridge below, which re-checks the durable run between steps so late
+/// output after a cancel never reaches the chat (§63).
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn execute_stream(
     db: &mut Database,
     stream_id: &str,
     notice_tx: &mpsc::Sender<StreamNotice>,
     drain: &mut dyn FnMut(&mut Database) -> bool,
     lease_owner: &str,
+    registry: &ProviderRegistry,
+    run_timeout: Duration,
+    _secret_resolver: Option<Arc<dyn SecretResolver>>,
+    cancel: &CancellationFlag,
 ) -> Result<(), KernelError> {
     let mut run = reload(db, stream_id)?;
     // First step boundary: service anything queued during setup.
@@ -1121,7 +1143,7 @@ pub(crate) fn execute_stream(
         return Ok(());
     }
     run = reload(db, stream_id)?;
-    // queued → preparing (before provider parse).
+    // queued → preparing (before provider resolution).
     match cas_status(db, run, "preparing", lease_owner)? {
         StepOutcome::Proceed(next) => run = *next,
         StepOutcome::Cancelled(seq) => {
@@ -1130,16 +1152,6 @@ pub(crate) fn execute_stream(
         }
         StepOutcome::AlreadyTerminal => return Ok(()),
     }
-    // Provider/model validation: a parse failure fails the run with a
-    // terminal `generation.failed` event.
-    let provider = match parse_provider(run.provider.as_deref(), run.model.as_deref()) {
-        Ok(provider) => provider,
-        Err(error) => {
-            let seq = terminal_failed(db, run, error, lease_owner)?;
-            send_terminal(notice_tx, seq);
-            return Ok(());
-        }
-    };
     // preparing → streaming (before the first delta).
     match cas_status(db, run, "streaming", lease_owner)? {
         StepOutcome::Proceed(next) => run = *next,
@@ -1149,151 +1161,142 @@ pub(crate) fn execute_stream(
         }
         StepOutcome::AlreadyTerminal => return Ok(()),
     }
-    for step in 0..provider.steps {
-        if drain(db) {
-            commit_shutdown_progress(db, &run)?;
-            return Ok(());
-        }
-        // Re-read: a durable cancel request (or a shutdown-flavoured
-        // conflict) decides this step. Late deltas are never committed.
-        run = reload(db, stream_id)?;
-        if run.status == "cancelling" || run.cancel_requested {
-            let seq = terminal_cancelled(db, run, lease_owner)?;
-            send_terminal(notice_tx, seq);
-            return Ok(());
-        }
-        if is_terminal(&run.status) {
-            return Ok(());
-        }
-        if provider.fail_at == Some(step + 1) {
-            let error = error_dto(
-                "PROVIDER_STEP_FAILED",
-                &[
-                    ("runId", run.run_id.clone()),
-                    ("step", (step + 1).to_string()),
-                ],
-            );
+    // Provider resolution: an unknown provider fails the run with a terminal
+    // `generation.failed` event (unchanged product behavior).
+    let provider_name = run.provider.clone().unwrap_or_else(|| "fake".to_string());
+    let adapter = match registry.find(&provider_name) {
+        Some(adapter) => adapter,
+        None => {
+            let error = error_dto("PROVIDER_UNAVAILABLE", &[("provider", provider_name)]);
             let seq = terminal_failed(db, run, error, lease_owner)?;
             send_terminal(notice_tx, seq);
             return Ok(());
         }
-        if provider.delay_ms > 0 {
-            std::thread::sleep(Duration::from_millis(provider.delay_ms));
-        }
-        let text = delta_text(
-            &run.chat_id,
-            run.attempt,
-            step,
-            provider.steps,
-            provider.tokens_per_step,
-        );
-        match commit_delta(db, &run, &text, step, notice_tx, lease_owner)? {
-            DeltaOutcome::Applied(next) => run = *next,
-            // CAS lost (e.g. a cancel landed between our re-read and the
-            // commit): re-read and react at the loop top.
-            DeltaOutcome::Conflict => {}
-        }
-    }
-    // All steps produced: atomic terminal commit.
-    let full_text = concat_delta_text(db.conn(), stream_id)?;
-    let seq = terminal_completed(db, run, &full_text, lease_owner)?;
-    send_terminal(notice_tx, seq);
-    Ok(())
-}
-
-// ---------------------------------------------------------------------------
-// Fake provider (design §3)
-// ---------------------------------------------------------------------------
-
-/// Parsed fake-provider configuration from the `model` string
-/// (`;`-separated `key=value` pairs, all optional).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct ProviderConfig {
-    /// Provider steps (default 8, clamp 1..=64).
-    steps: usize,
-    /// 1-based step at which the provider errors before producing; `None`
-    /// never fails.
-    fail_at: Option<usize>,
-    /// Sleep per step in milliseconds (default 0, clamp 0..=200).
-    delay_ms: u64,
-    /// Delta chars per step (default 6, clamp 1..=256).
-    tokens_per_step: usize,
-}
-
-/// Parses the provider/model spec. The provider field must be `"fake"`
-/// (default); an unknown provider yields `PROVIDER_UNAVAILABLE`, a malformed
-/// model grammar `PROVIDER_MODEL_INVALID` — both as provider [`ErrorDto`]s
-/// that fail the run.
-fn parse_provider(provider: Option<&str>, model: Option<&str>) -> Result<ProviderConfig, ErrorDto> {
-    let provider_name = provider.unwrap_or("fake");
-    if provider_name != "fake" {
-        return Err(error_dto(
-            "PROVIDER_UNAVAILABLE",
-            &[("provider", provider_name.to_string())],
-        ));
-    }
-    let mut cfg = ProviderConfig {
-        steps: DEFAULT_STEPS,
-        fail_at: None,
-        delay_ms: 0,
-        tokens_per_step: DEFAULT_TOKENS_PER_STEP,
     };
-    if let Some(model) = model {
-        for segment in model.split(';') {
-            let segment = segment.trim();
-            if segment.is_empty() {
-                continue;
-            }
-            let (key, value) = segment
-                .split_once('=')
-                .ok_or_else(|| model_invalid(model))?;
-            let value = value.trim();
-            let n: i64 = value.parse().map_err(|_| model_invalid(model))?;
-            match key.trim() {
-                "steps" => cfg.steps = n.clamp(1, 64) as usize,
-                "fail-at" => cfg.fail_at = Some(n.clamp(1, cfg.steps as i64) as usize),
-                "delay-ms" => cfg.delay_ms = n.clamp(0, 200) as u64,
-                "tokens-per-step" => cfg.tokens_per_step = n.clamp(1, 256) as usize,
-                _ => return Err(model_invalid(model)),
+    // Build the sanitized provider request from the durable snapshot: the
+    // input is the snapshot's `message` string (missing/non-string → "").
+    let model = run.model.clone().unwrap_or_default();
+    let input = snapshot_message(&run.request_snapshot_json);
+    let run_key = format!("{}|{}", run.chat_id, run.attempt);
+    let request = provider_sdk::ProviderRequest {
+        provider_id: adapter.id(),
+        model: &model,
+        input: &input,
+        run_key: &run_key,
+        deadline: Some(provider_sdk::policy::Deadline::after(run_timeout)),
+    };
+    let cancel_token = provider_sdk::CancelToken::new(cancel.0.as_ref());
+    let mut shutdown_seen = false;
+    let mut emit_error: Option<KernelError> = None;
+    // 0-based delta index (checkpoint rhythm) == committed delta count.
+    let mut emitted = 0usize;
+    let mut emit = |event: provider_sdk::ProviderEvent| -> provider_sdk::EmitStatus {
+        let provider_sdk::ProviderEvent::Delta { text } = event;
+        // (a) Service queued commands; a shutdown commits progress and stops.
+        if drain(db) {
+            shutdown_seen = true;
+            return provider_sdk::EmitStatus::Stop;
+        }
+        // (b) Re-read: a durable cancel (or a shutdown-flavoured conflict)
+        // decides this delta; late deltas are never committed.
+        match reload(db, stream_id) {
+            Ok(next) => run = next,
+            Err(err) => {
+                emit_error = Some(err);
+                return provider_sdk::EmitStatus::Stop;
             }
         }
+        if run.status == "cancelling" || run.cancel_requested {
+            return provider_sdk::EmitStatus::Stop;
+        }
+        if is_terminal(&run.status) {
+            return provider_sdk::EmitStatus::Stop;
+        }
+        // (c) Durable commit; a lost CAS re-reads on the next emit (loop-top
+        // semantics preserved).
+        match commit_delta(db, &run, &text, emitted, notice_tx, lease_owner) {
+            Ok(DeltaOutcome::Applied(next)) => run = *next,
+            Ok(DeltaOutcome::Conflict) => {}
+            Err(err) => {
+                emit_error = Some(err);
+                return provider_sdk::EmitStatus::Stop;
+            }
+        }
+        emitted += 1;
+        provider_sdk::EmitStatus::Continue
+    };
+    let result = adapter.generate(&request, cancel_token, &mut emit);
+    // A commit-side failure (storage, invariant) wins over whatever the
+    // adapter reported — the run stays non-terminal for startup recovery.
+    if let Some(err) = emit_error {
+        return Err(err);
     }
-    // `fail-at` clamps against the final step count regardless of order.
-    if let Some(fail_at) = cfg.fail_at {
-        cfg.fail_at = Some(fail_at.clamp(1, cfg.steps));
+    if shutdown_seen {
+        commit_shutdown_progress(db, &run)?;
+        return Ok(());
     }
-    Ok(cfg)
+    match result {
+        Ok(_usage) => {
+            // All deltas committed: atomic terminal commit.
+            let full_text = concat_delta_text(db.conn(), stream_id)?;
+            let seq = terminal_completed(db, run, &full_text, lease_owner)?;
+            send_terminal(notice_tx, seq);
+            Ok(())
+        }
+        Err(err) => {
+            use provider_sdk::ProviderErrorCode as Code;
+            let error = match err.code {
+                // A cancelled attempt (executor Stop, adapter-observed
+                // cancel) commits the durable cancelled terminal.
+                Code::Cancelled => {
+                    let seq = terminal_cancelled(db, run, lease_owner)?;
+                    send_terminal(notice_tx, seq);
+                    return Ok(());
+                }
+                Code::StepFailed => {
+                    let mut params = vec![("runId", run.run_id.clone())];
+                    if let Some((_, step)) = err.params.iter().find(|(key, _)| key == "step") {
+                        params.push(("step", step.clone()));
+                    }
+                    error_dto("PROVIDER_STEP_FAILED", &params)
+                }
+                Code::Timeout => error_dto("PROVIDER_TIMEOUT", &[("runId", run.run_id.clone())]),
+                Code::NetworkFault => {
+                    error_dto("PROVIDER_NETWORK_FAULT", &[("runId", run.run_id.clone())])
+                }
+                Code::Unavailable => {
+                    error_dto("PROVIDER_UNAVAILABLE", &[("provider", provider_name)])
+                }
+                Code::RequestInvalid => {
+                    let model_param = err
+                        .params
+                        .iter()
+                        .find(|(key, _)| key == "model")
+                        .map(|(_, value)| value.clone())
+                        .unwrap_or(model);
+                    error_dto("PROVIDER_MODEL_INVALID", &[("model", model_param)])
+                }
+            };
+            let seq = terminal_failed(db, run, error, lease_owner)?;
+            send_terminal(notice_tx, seq);
+            Ok(())
+        }
+    }
 }
 
-fn model_invalid(model: &str) -> ErrorDto {
-    error_dto("PROVIDER_MODEL_INVALID", &[("model", model.to_string())])
-}
-
-/// Deterministic delta text for step `i` (0-based):
-/// `[attempt {a}] step {i+1}/{steps}: {hex8}` where `hex8` is the first 8
-/// hex chars of `sha256(chat_id|attempt|i)`, truncated to `tokens_per_step`
-/// chars.
-fn delta_text(
-    chat_id: &str,
-    attempt: i64,
-    step: usize,
-    steps: usize,
-    tokens_per_step: usize,
-) -> String {
-    use sha2::{Digest, Sha256};
-    let mut hasher = Sha256::new();
-    hasher.update(chat_id.as_bytes());
-    hasher.update(b"|");
-    hasher.update(attempt.to_string().as_bytes());
-    hasher.update(b"|");
-    hasher.update(step.to_string().as_bytes());
-    let digest = hasher.finalize();
-    let hex8 = format!(
-        "{:02x}{:02x}{:02x}{:02x}",
-        digest[0], digest[1], digest[2], digest[3]
-    );
-    let text = format!("[attempt {attempt}] step {}/{}: {hex8}", step + 1, steps);
-    text.chars().take(tokens_per_step).collect()
+/// The sanitized input handed to the provider: the `message` string from the
+/// run's request snapshot. A missing/non-string field (or a tampered
+/// snapshot) yields `""` — never a panic on stored payloads.
+fn snapshot_message(snapshot_json: &str) -> String {
+    serde_json::from_str::<serde_json::Value>(snapshot_json)
+        .ok()
+        .and_then(|value| {
+            value
+                .get("message")
+                .and_then(|m| m.as_str())
+                .map(str::to_string)
+        })
+        .unwrap_or_default()
 }
 
 // ---------------------------------------------------------------------------
