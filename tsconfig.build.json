@@ -4,8 +4,10 @@
   "references": [
     { "path": "packages/shared" },
     { "path": "packages/gestures" },
+    { "path": "packages/client-sdk" },
     { "path": "packages/contracts" },
     { "path": "packages/db" },
+    { "path": "packages/neobackend" },
     { "path": "packages/provider-sdk" },
     { "path": "packages/plugin-sdk" },
     { "path": "packages/plugin-build" },
