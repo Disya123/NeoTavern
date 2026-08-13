@@ -43,6 +43,42 @@ unexpected backend exit ends the shell with an error instead of a silently
 broken window. See [Tauri Shell](tauri-shell.md) and
 [Node Sidecar](node-sidecar.md) for the mechanics.
 
+## Recovery Mode
+
+If a third-party theme or plugin leaves the interface unusable, start the
+app in recovery (safe) mode — third-party package code never loads:
+
+- **Kernel mode** — append `?safe=1` to the window URL
+  (`tauri://localhost/?safe=1`). The web layer processes the switch before
+  any package CSS or plugin entry point loads (see
+  [Safe Mode](../theme-sdk/safe-mode.md)); in kernel mode this is the theme
+  recovery switch, because declarative theme packages are the only
+  third-party contribution the kernel-mode shell accepts.
+- **Server mode** (legacy sidecar or a self-hosted server) — set
+  `NEOTA_SAFE_MODE=true` on the backend process: third-party plugin
+  activation is disabled for the whole startup. The web `?safe=1` switch
+  also works here, since the server serves the SPA.
+
+Leaving safe mode restores the previously saved theme and plugin state —
+exiting does not change your selection.
+
+## Plugin Runtime Availability
+
+The plugin runtime (sandboxed backend workers, the capability broker,
+frontend registrars, the legacy frontend gate) is a **server** feature: it
+exists only where a backend process runs.
+
+- **Kernel mode** — unavailable by design: the Runtime Kernel is embedded in
+  the shell and there is no plugin host (no server, no HTTP, no listening
+  port). The only third-party contributions are declarative theme packages.
+- **Legacy sidecar mode** (`NEOTA_LEGACY_SERVER=1`) — available: the Node.js
+  sidecar runs the full Fastify backend, including the plugin runtime and
+  the server-side safe-mode switch above.
+
+Which extension surfaces the web UI exposes (and the legacy frontend gate)
+is documented in the [Frontend Plugin API](../plugin-sdk/frontend.md)
+availability note.
+
 ## Data Location
 
 Installed builds store user data in the platform's app-local-data directory,

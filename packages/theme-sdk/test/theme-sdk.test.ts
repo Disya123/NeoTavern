@@ -5,6 +5,7 @@ import {
   TOKEN_NAMES,
   validateThemeManifest,
   resolveTokens,
+  resolveThemeResponsive,
   tokensToCssVariables,
   buildThemeVariables,
   getSafeModeFromSearch,
@@ -244,12 +245,89 @@ describe('management tabs layout', () => {
   });
 });
 
+describe('responsive semantics', () => {
+  const base = { id: 'author.responsive', name: 'Responsive', version: '1.0.0' };
+
+  it('accepts a valid responsive object', () => {
+    const result = validateThemeManifest({
+      ...base,
+      responsive: { density: 'compact', motion: 'reduced' },
+    });
+    expect(result.ok).toBe(true);
+    expect(result.value?.responsive).toEqual({ density: 'compact', motion: 'reduced' });
+  });
+
+  it('rejects unknown density and motion values with a stable error code', () => {
+    for (const responsive of [
+      { density: 'huge' },
+      { motion: 'smooth' },
+      { density: 'compact', motion: 'every-frame' },
+      'compact',
+      null,
+    ]) {
+      const result = validateThemeManifest({ ...base, responsive });
+      expect(result.ok, JSON.stringify(responsive)).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('THEME_INVALID');
+        const issues = result.error.params?.issues ?? [];
+        // Object-valued responsive payloads produce field-prefixed issues
+        // (`responsive.density` / `responsive.motion`); non-object payloads
+        // fail with a single shape issue mentioning the field path.
+        if (responsive !== null && typeof responsive === 'object') {
+          expect(issues).toEqual(expect.arrayContaining([expect.stringMatching(/^responsive\./u)]));
+        } else {
+          expect(issues.some((issue) => String(issue).includes('responsive'))).toBe(true);
+        }
+      }
+    }
+  });
+
+  it('resolves omitted responsive fields to the host defaults', () => {
+    const densityOnly = validateThemeManifest({ ...base, responsive: { density: 'compact' } });
+    expect(densityOnly.ok).toBe(true);
+    expect(densityOnly.value?.responsive).toEqual({ density: 'compact' });
+    const resolved = resolveThemeResponsive(
+      densityOnly.value ?? { id: 'x', name: 'X', version: '1.0.0' },
+    );
+    expect(resolved).toEqual({ density: 'compact', motion: 'standard' });
+
+    // No responsive object at all → both defaults.
+    expect(resolveThemeResponsive({ id: 'plain', name: 'Plain', version: '1.0.0' })).toEqual({
+      density: 'comfortable',
+      motion: 'standard',
+    });
+  });
+
+  it('rejects responsive on a non-object value', () => {
+    expect(validateThemeManifest({ ...base, responsive: [] }).ok).toBe(false);
+  });
+});
+
 describe('resolveTokens', () => {
   const base: ThemeManifest = { id: 'base', name: 'Base', version: '1.0.0' };
 
   it('falls back to defaults', () => {
     const resolved = resolveTokens(base, 'light');
     expect(resolved['color-accent']).toBe(DEFAULT_LIGHT_TOKENS['color-accent']);
+  });
+
+  it('fills every canonical token a theme omits from the built-in defaults (§83)', () => {
+    const theme: ThemeManifest = {
+      ...base,
+      tokens: { light: { 'color-accent': '#123456' } },
+    };
+    const light = resolveTokens(theme, 'light');
+    // The omitted canonical tokens resolve to the DEFAULT_LIGHT values.
+    expect(light['color-text-primary']).toBe(DEFAULT_LIGHT_TOKENS['color-text-primary']);
+    expect(light['color-danger']).toBe(DEFAULT_LIGHT_TOKENS['color-danger']);
+    expect(light['motion-duration-normal']).toBe(DEFAULT_LIGHT_TOKENS['motion-duration-normal']);
+    // The overridden token wins.
+    expect(light['color-accent']).toBe('#123456');
+    // Dark mode: same omission contract against DEFAULT_DARK, with the light
+    // override inherited (dark falls back to the theme's light tokens).
+    const dark = resolveTokens(theme, 'dark');
+    expect(dark['color-text-primary']).toBe(DEFAULT_DARK_TOKENS['color-text-primary']);
+    expect(dark['color-accent']).toBe('#123456');
   });
 
   it('applies theme overrides', () => {

@@ -67,6 +67,24 @@ function titleOf(value) {
   }
 }
 
+/** Declarative slot action (ТЗ §53) over the wire: plain object, bounded. */
+function serializeSlotAction(value) {
+  if (!value || typeof value !== 'object') return undefined;
+  const { type, commandId, event } = value;
+  if (
+    type === 'command' &&
+    typeof commandId === 'string' &&
+    commandId.length > 0 &&
+    commandId.length <= 200
+  ) {
+    return { type: 'command', commandId };
+  }
+  if (type === 'event' && typeof event === 'string' && event.length > 0 && event.length <= 200) {
+    return { type: 'event', event };
+  }
+  return undefined;
+}
+
 function register(kind, definition) {
   const registrationId = pluginId + ':' + kind + ':' + (++sequence);
   registrations.set(registrationId, { kind, definition });
@@ -83,6 +101,8 @@ function register(kind, definition) {
     priority: Number.isSafeInteger(definition.priority) ? definition.priority : undefined,
     timeoutMs: Number.isSafeInteger(definition.timeoutMs) ? definition.timeoutMs : undefined,
     order: Number.isSafeInteger(definition.order) ? definition.order : undefined,
+    permission: typeof definition.permission === 'string' ? definition.permission : undefined,
+    action: serializeSlotAction(definition.action),
   };
   send({ type: 'neotavern.plugin.register', kind, registrationId, definition: serializable });
   return () => {
@@ -175,6 +195,13 @@ const api = {
     dialogs: registrar('dialogs'),
     commands: registrar('commands'),
     hotkeys: registrar('hotkeys'),
+    // Declarative semantic UI slots (ТЗ §53): contribute() mirrors the
+    // registrar shape; list() is the host's snapshot — the sandbox has no
+    // local registry, so it reports an empty view (host renders the truth).
+    slots: {
+      contribute: (definition) => register('slots', definition),
+      list: () => [],
+    },
   },
   slash: registrar('slash'),
   interceptors: registrar('interceptors'),

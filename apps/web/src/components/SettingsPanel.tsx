@@ -35,6 +35,7 @@ import { FloatingTabContent } from './FloatingTabContent.js';
 import { FloatingTabPanel } from './FloatingTabPanel.js';
 import { PluginSettingsPanels } from './PluginPanels.js';
 import { RemoteAccessPanel } from './RemoteAccessPanel.js';
+import { SlotHost } from '../plugins/slots.js';
 import { SystemSurfaceLink } from './SystemSurfaceLink.js';
 import styles from './SettingsPanel.module.css';
 
@@ -326,6 +327,8 @@ function GeneralTab() {
       </Section>
 
       <PluginSettingsPanels />
+
+      <SlotHost slot="settings.section" />
 
       {authSession?.required ? (
         <Section title={t('auth:remoteMode')} hint={t('auth:signOutHint')}>

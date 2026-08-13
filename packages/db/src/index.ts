@@ -32,3 +32,4 @@ export * from './repositories/themes.js';
 export * from './repositories/plugins.js';
 export * from './repositories/pluginCapabilities.js';
 export * from './repositories/pluginAuth.js';
+export * from './repositories/pluginSecrets.js';

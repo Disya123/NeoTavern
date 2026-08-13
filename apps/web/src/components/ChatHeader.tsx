@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, MagnifyingGlass, X } from '@phosphor-icons/react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { SlotHost } from '../plugins/slots.js';
 import styles from './ChatWorkspace.module.css';
 
 export type ChatHeaderProps = {
@@ -110,6 +111,7 @@ export function ChatHeader({
             )}
             <h1>{name ?? t('common:loading')}</h1>
           </div>
+          <SlotHost slot="chat.header.actions" />
           <button
             type="button"
             className={styles.headerSearch}

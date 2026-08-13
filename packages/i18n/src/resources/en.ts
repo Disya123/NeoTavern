@@ -1299,6 +1299,9 @@ export const en = {
     slashNotFound: 'Unknown slash command: /{{command}}',
     settingsPanels: 'Plugin settings',
     sidebarPanels: 'Plugin sidebar panels',
+    runtimeAvailabilityAvailable: 'Plugin runtime: available',
+    runtimeAvailabilityUnavailable:
+      'Plugin runtime: unavailable — no plugin host in this desktop build',
     characterExtensions: 'Extensions',
     characterTabs: 'Character extensions',
     characterTabsHint: 'Plugin tabs for {{name}}.',

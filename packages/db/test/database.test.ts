@@ -608,8 +608,8 @@ describe('database + repositories', () => {
 
     expect(db.diagnostics()).toMatchObject({
       integrity: 'ok',
-      schemaVersion: 21,
-      migrationCount: 22,
+      schemaVersion: 22,
+      migrationCount: 23,
       entities: { characters: 1 },
       providers: { configured: 1, enabled: 1 },
       plugins: { installed: 0, enabled: 0 },

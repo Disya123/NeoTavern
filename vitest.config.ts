@@ -36,6 +36,10 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    // SES/worker and integration suites exceed the 5 s default under full
+    // parallel load on slower runners; 10 s widens the margin without
+    // masking genuine hangs.
+    testTimeout: 10_000,
     include: [
       'packages/**/*.test.{ts,tsx}',
       'apps/**/*.test.ts',

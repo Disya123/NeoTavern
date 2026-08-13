@@ -29,6 +29,7 @@ import { MessageRevisionHistoryCard } from './MessageRevisionHistoryCard.js';
 import { MessageSwipePager } from './MessageSwipePager.js';
 import { PluginMessageActions } from './PluginMessageActions.js';
 import { PluginRenderedMessage } from './PluginMessageRenderers.js';
+import { SlotHost } from '../plugins/slots.js';
 import {
   BLOCKS_CHANGED_EVENT,
   ensureBlocksLoaded,
@@ -485,6 +486,10 @@ function MessageBubbleInner({
                       );
                     })}
                   <PluginMessageActions message={message} branchId={branchId} placement="all" />
+                  <SlotHost
+                    slot="chat.message.actions"
+                    context={{ messageId: message.id, chatId: message.chatId }}
+                  />
                 </>
               )}
             </div>

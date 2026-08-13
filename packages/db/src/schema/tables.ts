@@ -426,6 +426,27 @@ export const pluginCapabilityGrants = sqliteTable('plugin_capability_grants', {
 });
 
 /**
+ * Plugin SecretStore (ТЗ §54): write-only per-plugin secrets. Values are never
+ * serialized in list/state/backup/export/diagnostics surfaces; the plaintext
+ * is only reachable through the gated reveal route. The DDL lives in
+ * migration 0022; `plugin_id` cascades with plugin deletion.
+ */
+export const pluginSecrets = sqliteTable(
+  'plugin_secrets',
+  {
+    pluginId: text('plugin_id')
+      .notNull()
+      .references(() => pluginRegistry.id, { onDelete: 'cascade' }),
+    scope: text('scope').notNull(),
+    key: text('key').notNull(),
+    value: text('value').notNull(),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.pluginId, table.scope, table.key] })],
+);
+
+/**
  * Plugin OAuth connections (rev4 §K5, api.auth). Token, state and PKCE
  * verifier live only here, server-side; sandbox sees metadata only. Indexes
  * live in migration 0017.

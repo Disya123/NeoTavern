@@ -42,10 +42,46 @@ The core fields are:
   version is 3; version 2 remains the default until the new runtime lands
   in production.
 - **`engines`** — compatibility constraints such as `neotavern: "^0.1.0"`.
+  See [Engine Compatibility](#engine-compatibility) below.
 - **`frontend`** — relative path to the browser ESM entry.
 - **`backend`** — relative path to the Node.js ESM entry.
 - **`styles`** — optional plugin stylesheet.
 - **`i18n`** — locale code to relative path of translation JSON files.
+
+## Engine Compatibility
+
+The `engines` object declares which host versions the plugin is compatible
+with. Every declared range is resolved against the current host version at
+**install time and at activation time** (ТЗ §76). A mismatch rejects the
+install with the stable `ENGINE_MISMATCH` error (`params: { engine, required,
+host }`); an already-installed plugin whose update would be incompatible is
+auto-disabled with the same diagnostic and keeps its previous version.
+
+Supported range syntax (rev4 §A4): exact `x.y.z`, caret `^x.y.z`, comparator
+lists like `>=2.4.0 <3`, major-only upper bounds like `<3`, and `*`. A major
+bump is incompatible; minor changes are additive.
+
+The four engine axes and the host version each is compared against:
+
+| Engine      | Host version                            |
+| ----------- | --------------------------------------- |
+| `neotavern` | Application version (`/api/v2/version`) |
+| `host`      | Plugin host handshake version (`2.0.0`) |
+| `sdk`       | Plugin SDK API major, e.g. `3.0.0`      |
+| `protocol`  | Kernel protocol version (`2.0.0`)       |
+
+`engines` is optional — plugins without it are not affected. Example:
+
+```json
+{
+  "engines": {
+    "neotavern": "^0.1.0",
+    "host": ">=2.0.0 <3",
+    "sdk": "^3.0.0",
+    "protocol": "^2.0.0"
+  }
+}
+```
 
 ## Permissions
 

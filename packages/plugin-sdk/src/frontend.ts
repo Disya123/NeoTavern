@@ -184,6 +184,196 @@ export interface PromptInterceptorContext {
   meta: Record<string, unknown>;
 }
 
+// ── Declarative semantic UI slots (ТЗ §53) ───────────────────────────────────
+
+/**
+ * Stable semantic slot ids rendered declaratively by the host. These ids are
+ * a frozen cross-agent contract — plugins must not invent new ones.
+ */
+export const SLOT_IDS = [
+  'chat.header.actions',
+  'chat.message.actions',
+  'character.editor.actions',
+  'settings.section',
+  'generation.controls',
+] as const;
+
+export type SlotId = (typeof SLOT_IDS)[number];
+
+/** True when `value` is one of the stable semantic slot ids. */
+export function isSlotId(value: unknown): value is SlotId {
+  return typeof value === 'string' && (SLOT_IDS as readonly string[]).includes(value);
+}
+
+/**
+ * What a slot contribution does when the host renders it. Commands dispatch
+ * through the plugin's command registration (`commandId` matches the command
+ * `id`); events are emitted on the shared event bus.
+ */
+export type SlotAction = { type: 'command'; commandId: string } | { type: 'event'; event: string };
+
+/**
+ * A declarative contribution to a semantic UI slot (ТЗ §53). The host renders
+ * a button; plugins provide semantics only — never layout or markup.
+ */
+export interface SlotContribution {
+  /** One of the stable slot ids. */
+  slot: SlotId;
+  /** Button label: non-empty, ≤80 characters, no control characters. */
+  title: string;
+  /** Lower renders first. Default 100. */
+  priority?: number;
+  /**
+   * When set, the button renders only while the plugin holds this v2
+   * permission (e.g. `chat.read`) — same gate the host applies to
+   * registrations.
+   */
+  permission?: string;
+  /** What the button does when clicked. */
+  action: SlotAction;
+  /**
+   * Optional runtime gate; the button is hidden when it returns `false`.
+   */
+  when?: () => boolean;
+}
+
+/**
+ * Declarative slot surface on {@link FrontendPluginApi.ui}. Unlike the
+ * imperative registrars there is no `register`/`run` shape: contributions are
+ * pure data plus an action descriptor, so the host can re-validate everything
+ * at the untrusted boundary and render without ever running plugin code in
+ * the main window.
+ */
+export interface SlotUiApi {
+  /**
+   * Register a slot contribution. Validates the definition (unknown slot id,
+   * title rules) and throws a {@link SlotContributionError} on violation.
+   * Returns a cleanup function.
+   */
+  contribute(def: SlotContribution): Unregister;
+  /** Read-only snapshot of the host's current contributions for a slot. */
+  list(slotId: SlotId): readonly SlotContribution[];
+}
+
+/** Stable machine-readable codes for slot-contribution validation failures. */
+export type SlotContributionErrorCode = 'SLOT_UNKNOWN' | 'SLOT_TITLE_INVALID' | 'SLOT_INVALID';
+
+/**
+ * Typed validation error for slot contributions (AGENTS.md §5): stable
+ * `code` plus structured `params`, never a ready-made human string.
+ */
+export class SlotContributionError extends Error {
+  readonly code: SlotContributionErrorCode;
+  readonly params: Record<string, unknown>;
+
+  constructor(code: SlotContributionErrorCode, params: Record<string, unknown>) {
+    super(`slot contribution rejected: ${code}`);
+    this.name = 'SlotContributionError';
+    this.code = code;
+    this.params = params;
+  }
+}
+
+const MAX_SLOT_TITLE_LENGTH = 80;
+const MAX_SLOT_PERMISSION_LENGTH = 128;
+const MAX_SLOT_ACTION_ID_LENGTH = 160;
+const MAX_SLOT_EVENT_LENGTH = 200;
+// eslint-disable-next-line no-control-regex -- title validation needs the C0/C1 range; the constructor form below avoids the literal-regex lint
+const SLOT_CONTROL_CHARACTER_RE = new RegExp('[\u0000-\u001f\u007f]', 'u');
+
+/**
+ * Validate a slot contribution at the untrusted boundary. `contribute()` and
+ * the host registry both apply these rules; returns a normalized copy or
+ * throws {@link SlotContributionError} with a stable code:
+ *
+ * - `SLOT_UNKNOWN` — `slot` is not one of {@link SLOT_IDS}
+ * - `SLOT_TITLE_INVALID` — `title` is missing/empty, longer than 80 chars, or
+ *   contains control characters
+ * - `SLOT_INVALID` — any other structural violation (priority, permission,
+ *   action, `when`)
+ */
+export function validateSlotContribution(def: unknown): SlotContribution {
+  if (typeof def !== 'object' || def === null || Array.isArray(def)) {
+    throw new SlotContributionError('SLOT_INVALID', { reason: 'shape' });
+  }
+  const record = def as Record<string, unknown>;
+
+  const slot = record['slot'];
+  if (!isSlotId(slot)) {
+    throw new SlotContributionError('SLOT_UNKNOWN', { slot });
+  }
+
+  const title = record['title'];
+  if (typeof title !== 'string' || title.length === 0) {
+    throw new SlotContributionError('SLOT_TITLE_INVALID', { reason: 'empty' });
+  }
+  if (title.length > MAX_SLOT_TITLE_LENGTH) {
+    throw new SlotContributionError('SLOT_TITLE_INVALID', {
+      reason: 'too-long',
+      maxLength: MAX_SLOT_TITLE_LENGTH,
+    });
+  }
+  if (SLOT_CONTROL_CHARACTER_RE.test(title)) {
+    throw new SlotContributionError('SLOT_TITLE_INVALID', { reason: 'control-characters' });
+  }
+
+  const priority = record['priority'];
+  if (
+    priority !== undefined &&
+    (typeof priority !== 'number' || !Number.isSafeInteger(priority) || priority < 0)
+  ) {
+    throw new SlotContributionError('SLOT_INVALID', { reason: 'priority' });
+  }
+
+  const permission = record['permission'];
+  if (
+    permission !== undefined &&
+    (typeof permission !== 'string' ||
+      permission.length === 0 ||
+      permission.length > MAX_SLOT_PERMISSION_LENGTH)
+  ) {
+    throw new SlotContributionError('SLOT_INVALID', { reason: 'permission' });
+  }
+
+  const action = record['action'];
+  if (typeof action !== 'object' || action === null) {
+    throw new SlotContributionError('SLOT_INVALID', { reason: 'action' });
+  }
+  const actionRecord = action as Record<string, unknown>;
+  if (actionRecord['type'] === 'command') {
+    const commandId = actionRecord['commandId'];
+    if (
+      typeof commandId !== 'string' ||
+      commandId.length === 0 ||
+      commandId.length > MAX_SLOT_ACTION_ID_LENGTH
+    ) {
+      throw new SlotContributionError('SLOT_INVALID', { reason: 'action-commandId' });
+    }
+  } else if (actionRecord['type'] === 'event') {
+    const event = actionRecord['event'];
+    if (typeof event !== 'string' || event.length === 0 || event.length > MAX_SLOT_EVENT_LENGTH) {
+      throw new SlotContributionError('SLOT_INVALID', { reason: 'action-event' });
+    }
+  } else {
+    throw new SlotContributionError('SLOT_INVALID', { reason: 'action-type' });
+  }
+
+  const when = record['when'];
+  if (when !== undefined && typeof when !== 'function') {
+    throw new SlotContributionError('SLOT_INVALID', { reason: 'when' });
+  }
+
+  const validated: SlotContribution = {
+    slot,
+    title,
+    action: actionRecord as SlotAction,
+    ...(priority === undefined ? {} : { priority }),
+    ...(permission === undefined ? {} : { permission }),
+    ...(when === undefined ? {} : { when: when as () => boolean }),
+  };
+  return validated;
+}
+
 export interface PluginI18nApi {
   /** Add translation resources under an isolated plugin namespace. */
   addResources(language: string, resources: Record<string, unknown>): Unregister;
@@ -207,6 +397,8 @@ export interface FrontendPluginApi {
     dialogs: Registrar<DialogDef>;
     commands: Registrar<CommandPaletteDef>;
     hotkeys: Registrar<HotkeyDef>;
+    /** Declarative semantic UI slots (ТЗ §53). */
+    slots: SlotUiApi;
   };
   readonly slash: Registrar<SlashCommandDef>;
   readonly interceptors: Registrar<PromptInterceptorDef>;

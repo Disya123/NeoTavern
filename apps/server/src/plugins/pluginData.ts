@@ -8,6 +8,7 @@
  * plugin exists in the registry, then asks the broker.
  */
 import { Type } from '@sinclair/typebox';
+import { kernel } from '@neotavern/plugin-sdk';
 import { AppError, ErrorCodes } from '@neotavern/shared';
 import type { PluginStateScope } from '@neotavern/db';
 import type { CapabilityBroker } from '../plugin/capabilityBroker.js';
@@ -157,6 +158,19 @@ export async function registerPluginDataRoutes(
       const scope = request.query.scope as PluginStateScope;
       const ownerId = ownerIdForScope(scope, request.query.ownerId);
       requireAccess(request.params.id, scope);
+      // ТЗ §54 namespaced-state quota (DEFAULT_PLUGIN_LIMITS.storage): keys =
+      // top-level JSON keys of `data`, bytes = UTF-8 length of the serialized
+      // data. Existing rows are unaffected — the quota applies on the next
+      // write only.
+      const { kvBytes, kvKeys } = kernel.DEFAULT_PLUGIN_LIMITS.storage;
+      const keys = Object.keys(request.body.data);
+      const bytes = Buffer.byteLength(JSON.stringify(request.body.data), 'utf8');
+      if (keys.length > kvKeys || bytes > kvBytes) {
+        throw new AppError({
+          code: ErrorCodes.STATE_QUOTA_EXCEEDED,
+          params: { limitKeys: kvKeys, limitBytes: kvBytes, keys: keys.length, bytes },
+        });
+      }
       const result = state.set({
         pluginId: request.params.id,
         scope,

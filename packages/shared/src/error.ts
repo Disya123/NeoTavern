@@ -92,6 +92,10 @@ export const ErrorCodes = {
   PLUGIN_DEPS_CONFLICT: 'PLUGIN_DEPS_CONFLICT',
   PLUGIN_DEPS_FORBIDDEN_FILE: 'PLUGIN_DEPS_FORBIDDEN_FILE',
   PLUGIN_DEPS_FAILED: 'PLUGIN_DEPS_FAILED',
+  /** Manifest `engines` range does not match the current host version (ТЗ §76). */
+  ENGINE_MISMATCH: 'ENGINE_MISMATCH',
+  /** Namespaced plugin state exceeds the kv quota (ТЗ §54). */
+  STATE_QUOTA_EXCEEDED: 'STATE_QUOTA_EXCEEDED',
   /** Manifest apiVersion 3 requires the vNext runtime (Stage A integration). */
   PLUGIN_RUNTIME_UNAVAILABLE: 'PLUGIN_RUNTIME_UNAVAILABLE',
   /** The Plugin Runtime process died unexpectedly; workers are gone (§20.13). */
@@ -189,6 +193,8 @@ const DEFAULT_STATUS: Record<ErrorCode, number> = {
   [ErrorCodes.PLUGIN_DEPS_CONFLICT]: 409,
   [ErrorCodes.PLUGIN_DEPS_FORBIDDEN_FILE]: 422,
   [ErrorCodes.PLUGIN_DEPS_FAILED]: 422,
+  [ErrorCodes.ENGINE_MISMATCH]: 422,
+  [ErrorCodes.STATE_QUOTA_EXCEEDED]: 413,
   [ErrorCodes.PLUGIN_RUNTIME_UNAVAILABLE]: 503,
   [ErrorCodes.PLUGIN_RUNTIME_CRASHED]: 503,
   [ErrorCodes.RESOURCE_PRESSURE]: 503,

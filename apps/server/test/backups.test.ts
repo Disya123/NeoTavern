@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { createTestApp } from './helpers.js';
 
 describe('backup restore', () => {
@@ -45,5 +47,56 @@ describe('backup restore', () => {
         item.id.startsWith('pre-restore-'),
       ),
     ).toBe(true);
+  });
+
+  it('writes the additive plugin-namespaces sidecar with namespaced state (ТЗ §54)', async () => {
+    const { app, database, paths } = await createTestApp({ useFileDatabase: true });
+    const pluginId = 'test.namespace-backup';
+    database.repos.plugins.install({
+      id: pluginId,
+      name: 'Namespace Backup',
+      version: '1.0.0',
+      manifest: { id: pluginId, name: 'Namespace Backup', version: '1.0.0', apiVersion: 2 },
+      requestedPermissions: [],
+    });
+    database.repos.pluginState.set({
+      pluginId,
+      scope: 'user',
+      ownerId: null,
+      data: { theme: 'dark' },
+    });
+
+    const backup = await app.inject({ method: 'POST', url: '/api/v2/backups' });
+    expect(backup.statusCode, backup.payload).toBe(200);
+    const id = backup.json().id as string;
+
+    // The sidecar is additive and optional — the .db snapshot stays the
+    // primary artifact; the section carries state only.
+    const sidecar = JSON.parse(
+      await readFile(join(paths.backups, `${id}.plugin-namespaces.json`), 'utf8'),
+    ) as {
+      format: string;
+      formatVersion: number;
+      pluginNamespaces: Array<{
+        pluginId: string;
+        state: Array<{
+          scope: string;
+          ownerId: string | null;
+          schemaVersion: number;
+          revision: number;
+          data: Record<string, unknown>;
+        }>;
+      }>;
+    };
+    expect(sidecar.format).toBe('neotavern-plugin-namespaces');
+    expect(sidecar.formatVersion).toBe(1);
+    expect(sidecar.pluginNamespaces).toEqual([
+      {
+        pluginId,
+        state: [
+          { scope: 'user', ownerId: null, schemaVersion: 1, revision: 1, data: { theme: 'dark' } },
+        ],
+      },
+    ]);
   });
 });

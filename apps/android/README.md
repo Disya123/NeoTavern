@@ -40,6 +40,7 @@ window.__neotavernMobile !== undefined`) installs
 | `handshake(): string` | Synchronous handshake JSON: `{ffiAbiVersion, schemaHash, wireProtocol:{major,minor}, appVersion}`. |
 | `call(requestId, envelopeJson, callbackId): void` | Fire-and-forget. Unary ops resolve with the response envelope JSON (requestId echoed). Stream ops (`generation.start`, `generation.retry`) deliver stream payload objects through the same callback. |
 | `cancelStream(streamId): void` | Cancels the durable run behind a wire stream id (learned from event envelopes, or the request id before the first event). |
+| `extensionsAvailability(): string` | Extension-surface probe (ТЗ §51): `{"themes":true,"plugins":"declarative-only","nodeRuntime":false,"arbitraryJsInWebView":false}`. Pure constant, JVM-tested on the exact bytes. |
 
 Async results are delivered by evaluating:
 
@@ -67,6 +68,34 @@ Stream payload objects (delivered via `resolve` on the same callbackId):
 `stream-start-failed`, `unknown-stream`, `stream-limit`, `kernel-error`,
 `internal`). Mid-stream wait failures reject() — the durable run stays
 recoverable via `generation.get` / `generation.events`.
+
+## Extension surface (declarative-only, ТЗ §10/§51)
+
+The Android host has **no plugin execution surface by design**: no
+sandbox/compartment host, no plugin registry, no Node runtime — the app is
+JNI-only (no HTTP, no Node, ТЗ §6.9). `window.__neotavernMobile
+.extensionsAvailability()` reports the frozen probe
+(`{"themes":true,"plugins":"declarative-only","nodeRuntime":false,
+"arbitraryJsInWebView":false}`):
+
+- **Themes: yes, declaratively.** Trusted built-in themes plus declarative
+  theme packages (validated CSS/tokens — see the
+  [Theme SDK docs](../docs/docs/developers/theme-sdk/index.md)) are the only
+  third-party contributions accepted on Android.
+- **Plugins: declarative-only.** No third-party plugin code runs on the
+  device — no JavaScript entry points, no legacy frontend runtime. (The
+  desktop/web plugin runtimes are separate surfaces; see the
+  [Plugin SDK docs](../docs/docs/developers/plugin-sdk/index.md).)
+- **Node runtime: unavailable locally.** No Node.js, no localhost server, no
+  HTTP (ТЗ §6.9).
+- **Arbitrary JS in the WebView: never.** The main WebView loads only the
+  packaged UI and the single `window.__neotavernMobile` bridge — no
+  third-party `<script>` injection, no legacy runtime.
+
+The probe constant is pure Kotlin (`ExtensionAvailability` in
+`NeotavernBridge.kt`) and JVM-tested on the exact byte contract; the
+instrumented test (`ExtensionSurfaceInstrumentedTest`) asserts it through the
+bridge on device.
 
 ## Native JNI contract (frozen)
 
@@ -127,11 +156,13 @@ bash scripts/build-libs.sh
 
 | Scope | Command | Runs on |
 | --- | --- | --- |
-| JVM unit tests (state machine, JS escaping, callback frames, secret-store contract) | `./gradlew :app:testDebugUnitTest` | Any JVM — no Android needed |
+| JVM unit tests (state machine, JS escaping, callback frames, extension-availability probe, secret-store contract) | `./gradlew :app:testDebugUnitTest` | Any JVM — no Android needed |
 | Instrumented round trip (real kernel: meta.get, characters CRUD, durability after reopen) | `./gradlew :app:connectedDebugAndroidTest` | API 26+ device/emulator with the `.so` packaged |
+| Instrumented extension-surface probe (frozen `extensionsAvailability()` JSON through the bridge; no kernel/JNI needed) | `./gradlew :app:connectedDebugAndroidTest` | API 26+ device/emulator |
 
 The JVM-tested classes (`KernelSession`, `JsEscaping`, `CallbackFrame`,
-`SecretStore`) contain **no android.\*** imports and run as plain JUnit 4.
+`ExtensionAvailability`, `SecretStore`) contain **no android.\*** imports and
+run as plain JUnit 4.
 
 ## Phase gate status
 
@@ -149,3 +180,5 @@ The JVM-tested classes (`KernelSession`, `JsEscaping`, `CallbackFrame`,
       (the JS bridge is still installed and the kernel still opens).
 - [ ] LocalBackend over the mobile transport (TS side, apps/web).
 - [ ] Device gate: full CRUD/settings + startup recovery on emulator matrix.
+- [x] Extension-surface probe (declarative-only policy, ТЗ §51) — JVM byte
+      contract + instrumented bridge probe.

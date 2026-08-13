@@ -136,6 +136,25 @@
     background: color-mix(in srgb, var(--st-color-danger) 10%, transparent);
   }
 
+  .runtimeNote {
+    display: flex;
+    align-items: center;
+    gap: var(--st-space-sm);
+    width: min(calc(100% - 2 * var(--st-space-2xl)), 1180px);
+    margin: var(--st-space-md) auto 0;
+    color: var(--st-color-text-secondary);
+    font-size: var(--st-font-size-sm);
+  }
+
+  .runtimeNote > svg {
+    flex: none;
+    color: var(--st-color-success);
+  }
+
+  .runtimeNote[data-state='unavailable'] > svg {
+    color: var(--st-color-warning);
+  }
+
   .content {
     width: min(100%, 1180px);
     margin: 0 auto;

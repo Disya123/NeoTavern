@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { InstalledTheme } from '@neotavern/contracts';
-import { applyInstalledTheme, clearThemeOverrides, setInterfacePreferences } from './apply.js';
+import {
+  THEME_APPLY_FAILED_EVENT,
+  applyInstalledTheme,
+  clearThemeOverrides,
+  setInterfacePreferences,
+} from './apply.js';
 
 function installedTheme(
   id: string,
@@ -85,8 +90,8 @@ describe('installed theme application', () => {
     expect(document.documentElement.style.getPropertyValue('--st-color-accent')).toBe('#112233');
     expect(document.documentElement.style.getPropertyValue('--st-color-danger')).toBe('#cc0000');
     expect(
-      [...document.querySelectorAll<HTMLLinkElement>('link[data-neotavern-theme-style]')].map((link) =>
-        link.getAttribute('href'),
+      [...document.querySelectorAll<HTMLLinkElement>('link[data-neotavern-theme-style]')].map(
+        (link) => link.getAttribute('href'),
       ),
     ).toEqual([
       '/api/v2/themes/test.parent/assets/components.css?v=1.0.0-1',
@@ -140,5 +145,86 @@ describe('installed theme application', () => {
     applyInstalledTheme(active, [], 'dark');
 
     expect(document.documentElement.style.getPropertyValue('--st-shell-panel-width')).toBe('520px');
+  });
+});
+
+describe('responsive behavior attributes', () => {
+  it('publishes the manifest responsive hints as root data attributes', () => {
+    const active = installedTheme('test.responsive', {
+      responsive: { density: 'compact', motion: 'reduced' },
+    });
+
+    applyInstalledTheme(active, [], 'light');
+
+    expect(document.documentElement.dataset.themeDensity).toBe('compact');
+    expect(document.documentElement.dataset.themeMotion).toBe('reduced');
+  });
+
+  it('falls back to the host defaults when the manifest omits responsive fields', () => {
+    const active = installedTheme('test.responsive-defaults', {});
+
+    applyInstalledTheme(active, [], 'light');
+
+    expect(document.documentElement.dataset.themeDensity).toBe('comfortable');
+    expect(document.documentElement.dataset.themeMotion).toBe('standard');
+  });
+
+  it('removes responsive attributes when overrides are cleared', () => {
+    const active = installedTheme('test.responsive-clear', {
+      responsive: { density: 'spacious', motion: 'standard' },
+    });
+    applyInstalledTheme(active, [], 'light');
+    clearThemeOverrides();
+
+    expect(document.documentElement).not.toHaveAttribute('data-theme-density');
+    expect(document.documentElement).not.toHaveAttribute('data-theme-motion');
+  });
+});
+
+describe('theme apply failure', () => {
+  it('returns false, reverts to defaults and emits an event for an invalid active manifest', () => {
+    const failedThemeIds: string[] = [];
+    const onApplyFailed = (event: Event): void => {
+      failedThemeIds.push((event as CustomEvent<{ themeId?: unknown }>).detail?.themeId as string);
+    };
+    window.addEventListener(THEME_APPLY_FAILED_EVENT, onApplyFailed);
+    try {
+      const active = installedTheme('test.broken', {
+        tokens: { light: { 'not-a-token': '#fff' } },
+      });
+
+      const applied = applyInstalledTheme(active, [], 'dark');
+
+      expect(applied).toBe(false);
+      expect(document.documentElement).not.toHaveAttribute('data-theme-id');
+      expect(document.documentElement.style.getPropertyValue('--st-color-accent')).toBe('');
+      expect(failedThemeIds).toEqual(['test.broken']);
+    } finally {
+      window.removeEventListener(THEME_APPLY_FAILED_EVENT, onApplyFailed);
+    }
+  });
+
+  it('emits an event when a package stylesheet fails to load', () => {
+    const failedThemeIds: string[] = [];
+    const onApplyFailed = (event: Event): void => {
+      failedThemeIds.push((event as CustomEvent<{ themeId?: unknown }>).detail?.themeId as string);
+    };
+    window.addEventListener(THEME_APPLY_FAILED_EVENT, onApplyFailed);
+    try {
+      const active = installedTheme(
+        'test.link-error',
+        {},
+        '/api/v2/themes/test.link-error/assets/components.css',
+      );
+
+      expect(applyInstalledTheme(active, [], 'dark')).toBe(true);
+      const link = document.querySelector<HTMLLinkElement>('link[data-neotavern-theme-style]');
+      expect(link).not.toBeNull();
+      link?.dispatchEvent(new Event('error'));
+
+      expect(failedThemeIds).toEqual(['test.link-error']);
+    } finally {
+      window.removeEventListener(THEME_APPLY_FAILED_EVENT, onApplyFailed);
+    }
   });
 });

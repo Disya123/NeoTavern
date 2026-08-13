@@ -1,5 +1,21 @@
 # Architecture Decision Records
 
+## ADR-0037: Extension hardening — declarative slots, legacy-frontend gate, theme fallback, engines enforcement, namespaced quotas + secrets
+
+Phase 10 defines the real extension security boundaries (ТЗ §10): the five
+declarative semantic UI slots (host re-validation, permission gating,
+priority order — plugins provide data only, never markup), an app-level
+`extensions.legacyFrontend` gate (default off) stacked on the admin-only
+`legacy.trusted` consent before any legacy `<script>` reaches the main
+document, theme activation rollback with a last-working boot fallback and
+responsive `density`/`motion` semantics, manifest `engines` enforcement
+(incompatible updates auto-disable and keep the previous version), kv quotas
+on namespaced state (413 `STATE_QUOTA_EXCEEDED`), a write-only per-plugin
+SecretStore with gated reveal that never enters backups/exports/logs, plugin
+namespaces as an additive backup sidecar with conflict-skip restore, and
+explicit extension-runtime availability probes on every host. Full decision,
+alternatives and consequences: [ADR-0037](0037-extension-hardening.md).
+
 ## ADR-0036: Android Background Execution — bounded foreground service + WorkManager maintenance over the shared kernel handle
 
 Phase 8 wires ТЗ §8/§19 background execution on the Android host onto the

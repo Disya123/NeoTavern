@@ -38,7 +38,13 @@ import {
 } from '@neotavern/contracts';
 import { pluginStatus, type PluginRegistryEntry, type PluginRepository } from '@neotavern/db';
 import { AppError, ErrorCodes, isAppError, randomToken } from '@neotavern/shared';
-import { diffPermissions, kernel, validateManifest, type PluginManifest } from '@neotavern/plugin-sdk';
+import {
+  CURRENT_API_VERSION,
+  diffPermissions,
+  kernel,
+  validateManifest,
+  type PluginManifest,
+} from '@neotavern/plugin-sdk';
 import { assertSafeThemeCss } from './themes.js';
 import {
   DEFAULT_PACKAGE_ARCHIVE_LIMITS,
@@ -64,6 +70,8 @@ import {
 } from '../plugin/dependencyInstaller.js';
 import { buildArchiveUrl, downloadRepoArchive, parseGitRepoUrl } from '../plugin/gitSource.js';
 import { LegacyServerPluginHost } from '../legacy/host.js';
+import { APP_VERSION } from './meta.js';
+import { registerPluginSecretRoutes } from './pluginSecrets.js';
 
 const MAX_MANIFEST_BYTES = 256 * 1024;
 const MAX_ENTRYPOINT_BYTES = 10 * 1024 * 1024;
@@ -101,6 +109,50 @@ const ASSET_CONTENT_TYPES: Readonly<Record<string, string>> = {
   '.ogg': 'audio/ogg',
   '.wav': 'audio/wav',
 };
+
+/**
+ * Plugin host handshake version (rev4 §A1 `hostVersion`). The web host
+ * reports the same value to sandboxed plugins, so server-side `engines.host`
+ * enforcement agrees with what a plugin observes at runtime.
+ */
+const HOST_VERSION = '2.0.0';
+
+/**
+ * Host versions that manifest `engines` ranges are resolved against (ТЗ §76,
+ * rev4 §A4): `neotavern` = product version, `host` = the plugin host
+ * handshake version, `sdk` = the Plugin SDK API major as a semver,
+ * `protocol` = the kernel protocol version.
+ */
+const HOST_ENGINE_VERSIONS = {
+  neotavern: APP_VERSION,
+  host: HOST_VERSION,
+  sdk: `${CURRENT_API_VERSION}.0.0`,
+  protocol: kernel.PROTOCOL_VERSION,
+} as const;
+
+/**
+ * Resolve the manifest `engines` ranges against the current host versions.
+ * Returns a typed ENGINE_MISMATCH error naming the failing engine, the
+ * required range and the host version, or null when every declared range is
+ * satisfied (`engines` is optional — plugins without it are unaffected).
+ */
+function resolveEngineMismatch(manifest: PluginManifest): AppError | null {
+  for (const engine of Object.keys(HOST_ENGINE_VERSIONS) as Array<
+    keyof typeof HOST_ENGINE_VERSIONS
+  >) {
+    const required = manifest.engines?.[engine];
+    if (required === undefined) continue;
+    const host = HOST_ENGINE_VERSIONS[engine];
+    if (!kernel.satisfiesRange(host, required)) {
+      return new AppError({
+        code: ErrorCodes.ENGINE_MISMATCH,
+        params: { engine, required, host },
+        message: `Plugin requires ${engine} ${required}, host provides ${host}`,
+      });
+    }
+  }
+  return null;
+}
 
 function invalidPlugin(reason: string, cause?: unknown): AppError {
   return new AppError({
@@ -302,9 +354,35 @@ async function installFromExtractedDir(
   const packageRoot = await findPackageRoot(extractedRoot);
   const manifest = await readManifest(packageRoot);
   await validatePackage(packageRoot, manifest);
-  const dependencies = await installPackageDependencies(packageRoot, ctx);
 
   const existing = repo.getById(manifest.id);
+  // ТЗ §76: engines are enforced at install. An incompatible update never
+  // replaces the installed version — the previous version stays installed
+  // and the plugin is auto-disabled with a stable diagnostic (exit gate
+  // "incompatible update откатывается/отключается", §83). A fresh install
+  // is simply rejected.
+  const engineMismatch = resolveEngineMismatch(manifest);
+  if (engineMismatch) {
+    if (existing?.enabled) {
+      await Promise.all([
+        backendHost.deactivate(manifest.id),
+        legacyHost.deactivate(manifest.id),
+        manifest.apiVersion >= 3 ? runtime.deactivate(manifest.id) : Promise.resolve(),
+      ]);
+    }
+    if (existing) {
+      repo.markError(manifest.id, ErrorCodes.ENGINE_MISMATCH);
+      ctx.events.emit('plugin.disabled', {
+        pluginId: manifest.id,
+        reason: ErrorCodes.ENGINE_MISMATCH,
+        ...engineMismatch.params,
+      });
+    }
+    throw engineMismatch;
+  }
+
+  const dependencies = await installPackageDependencies(packageRoot, ctx);
+
   if (existing?.enabled) {
     await Promise.all([
       backendHost.deactivate(manifest.id),
@@ -535,6 +613,7 @@ export async function registerPluginRoutes(app: TypedApp, ctx: AppContext): Prom
   registerBackendRpcExtensions(backendHost, ctx, broker, jobs);
   registerPluginAuthRoutes(app, ctx, broker, repo, () => runtimeSafeMode);
   await registerPluginDataRoutes(app, ctx, broker);
+  await registerPluginSecretRoutes(app, ctx, broker);
   const unregisterChatRelay = registerPluginChatRelay(app, ctx);
   app.addHook('onClose', async () => {
     unregisterChatRelay();
@@ -669,6 +748,11 @@ export async function registerPluginRoutes(app: TypedApp, ctx: AppContext): Prom
         });
       }
       const manifest = validatedStoredManifest(existing);
+      // ТЗ §76: engines are also enforced at activation — a host upgrade (or
+      // a registry write that predates the gate) must not let an
+      // incompatible plugin start.
+      const engineMismatch = resolveEngineMismatch(manifest);
+      if (engineMismatch) throw engineMismatch;
       if (!permissionsSubset(requestedConsentItems(manifest), request.body.grantedPermissions)) {
         throw new AppError({
           code: ErrorCodes.PLUGIN_PERMISSION_DENIED,
@@ -1060,6 +1144,18 @@ async function activateEnabledPlugins(
     // rev4 §B2: grants revoked during safe mode are re-issued from the stored
     // consent so the frontend handshake sees the same set as the backend host.
     broker.grantConsented(entry.id, manifest, entry.grantedPermissions);
+    // ТЗ §76: a host version change can invalidate an installed plugin —
+    // skip activation and record the stable diagnostic instead of loading it.
+    const engineMismatch = resolveEngineMismatch(manifest);
+    if (engineMismatch) {
+      ctx.database.repos.plugins.markError(entry.id, ErrorCodes.ENGINE_MISMATCH);
+      ctx.events.emit('plugin.disabled', {
+        pluginId: entry.id,
+        reason: ErrorCodes.ENGINE_MISMATCH,
+        ...engineMismatch.params,
+      });
+      continue;
+    }
     try {
       await activatePluginBackends(
         manifest,

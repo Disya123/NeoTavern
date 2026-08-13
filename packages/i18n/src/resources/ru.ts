@@ -1325,6 +1325,9 @@ export const ru: Resources = {
     slashNotFound: 'Неизвестная slash-команда: /{{command}}',
     settingsPanels: 'Настройки плагинов',
     sidebarPanels: 'Боковые панели плагинов',
+    runtimeAvailabilityAvailable: 'Runtime плагинов: доступен',
+    runtimeAvailabilityUnavailable:
+      'Runtime плагинов: недоступен — в этой сборке для рабочего стола нет хоста плагинов',
     characterExtensions: 'Расширения',
     characterTabs: 'Расширения персонажа',
     characterTabsHint: 'Вкладки плагинов для {{name}}.',

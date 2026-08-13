@@ -3,6 +3,37 @@
 ## Unreleased
 ### Added
 
+- **Extension hardening (ТЗ 7.2 Фаза 10, §10/§47–§54/§60/§61/§70/§76/§83).**
+  Extensions now cross real security boundaries. **Declarative semantic UI
+  slots** — the five frozen ids (`chat.header.actions`,
+  `chat.message.actions`, `character.editor.actions`, `settings.section`,
+  `generation.controls`) — accept plain-data contributions (title ≤80, no
+  control chars; priority; optional v2 permission; `command`/`event` action)
+  that the web host re-validates, permission-gates, orders and renders as
+  plain buttons (`SlotHost`); plugins provide semantics only, never markup,
+  and zero contributions render nothing. **No arbitrary third-party JS in
+  the main WebView by default**: legacy SillyTavern `<script>` injection now
+  requires the app-level `extensions.legacyFrontend` setting (default off)
+  AND the admin-only `legacy.trusted` consent; rev4 plugins stay in the
+  sandboxed iframe; the kernel-mode CSP is pinned by a contract test
+  (`script-src 'self'` only). **Themes**: activation re-validates before
+  flipping, the previously working theme (id + settings) is snapshotted as
+  the fallback, boot resolves active → last-working → empty (safe mode
+  always empty), and optional `responsive {density, motion}` semantics apply
+  `data-theme-density`/`data-theme-motion` with defaults. **Manifest
+  `engines`** are enforced against `neotavern`/`host`/`sdk`/`protocol`
+  (422 `ENGINE_MISMATCH`); an incompatible update auto-disables the plugin
+  and keeps the previous version installed. **Namespaced state** is
+  quota-bounded (`kvBytes` 1 MiB / `kvKeys` 4096 → 413
+  `STATE_QUOTA_EXCEEDED`). New **per-plugin SecretStore** (write-only PUT,
+  masked list, reveal only with `secrets.reveal` + the host exposure gate;
+  never in state/backup/export/logs). Plugin namespaces enter backups as an
+  **additive optional sidecar** (state only, secrets excluded, conflict-skip
+  restore). Hosts report **explicit extension availability**
+  (`extensionsAvailability()` on Android — declarative-only policy;
+  `useExtensionAvailability()` in web — `nodeRuntime` unavailable in
+  desktop kernel mode). Docs: ADR-0037, plugin-sdk slots/availability/
+  legacy-frontend pages, theme-sdk responsive/fallback sections.
 - **Android background execution (ТЗ 7.2 Фаза 8, §8/§19/§65/§66/§85/§87).**
   Generation the user can see keeps running when the app leaves the
   foreground, and maintenance runs without interaction — both on the

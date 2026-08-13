@@ -26,6 +26,17 @@ export interface ThemeSettingDef {
   variable?: string;
 }
 
+/** UI density preference a theme may declare (ТЗ §47). */
+export type ThemeDensity = 'compact' | 'comfortable' | 'spacious';
+/** Motion preference a theme may declare (ТЗ §48). */
+export type ThemeMotion = 'reduced' | 'standard';
+
+/** Responsive presentation semantics declared by a theme manifest. */
+export interface ThemeResponsive {
+  density?: ThemeDensity;
+  motion?: ThemeMotion;
+}
+
 export interface ThemeManifest {
   id: string;
   name: string;
@@ -44,6 +55,11 @@ export interface ThemeManifest {
   shell?: string;
   /** Declarative host-controlled shell composition (no executable code). */
   shellLayout?: ThemeShellLayout;
+  /**
+   * Responsive presentation semantics (density/motion). Optional; omitted
+   * fields fall back to the host defaults (see `resolveThemeResponsive`).
+   */
+  responsive?: ThemeResponsive;
   settings?: Record<string, ThemeSettingDef>;
   preview?: string;
   iconPack?: string;
@@ -56,6 +72,15 @@ const ID_RE = /^[a-z0-9][a-z0-9_-]*(\.[a-z0-9][a-z0-9_-]*)*$/i;
 const VERSION_RE = /^\d+\.\d+\.\d+/;
 const TOKEN_NAME_SET: ReadonlySet<string> = new Set(TOKEN_NAMES);
 const THEME_MODES: ReadonlySet<string> = new Set(['light', 'dark']);
+const THEME_DENSITIES: Readonly<Record<string, true>> = {
+  compact: true,
+  comfortable: true,
+  spacious: true,
+};
+const THEME_MOTION_PREFERENCES: Readonly<Record<string, true>> = {
+  reduced: true,
+  standard: true,
+};
 const NAVIGATION_RAIL_ITEM_ID_SET: ReadonlySet<string> = new Set(NAVIGATION_RAIL_ITEM_IDS);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -175,6 +200,27 @@ export function validateThemeManifest(input: unknown): Result<ThemeManifest> {
       input['modes'].some((mode) => typeof mode !== 'string' || !THEME_MODES.has(mode))
     ) {
       issues.push('modes may contain only "light" and "dark"');
+    }
+  }
+
+  if (input['responsive'] !== undefined) {
+    if (!isRecord(input['responsive'])) {
+      issues.push('responsive must be an object');
+    } else {
+      const density = input['responsive']['density'];
+      if (
+        density !== undefined &&
+        (typeof density !== 'string' || THEME_DENSITIES[density] !== true)
+      ) {
+        issues.push('responsive.density must be one of "compact", "comfortable", "spacious"');
+      }
+      const motion = input['responsive']['motion'];
+      if (
+        motion !== undefined &&
+        (typeof motion !== 'string' || THEME_MOTION_PREFERENCES[motion] !== true)
+      ) {
+        issues.push('responsive.motion must be one of "reduced", "standard"');
+      }
     }
   }
 
@@ -333,6 +379,9 @@ export function validateThemeManifest(input: unknown): Result<ThemeManifest> {
     manifest.tokens = {};
     if (isRecord(tokens['light'])) manifest.tokens.light = tokens['light'] as TokenSet;
     if (isRecord(tokens['dark'])) manifest.tokens.dark = tokens['dark'] as TokenSet;
+  }
+  if (isRecord(input['responsive'])) {
+    manifest.responsive = input['responsive'] as ThemeResponsive;
   }
   if (typeof input['componentsCss'] === 'string') manifest.componentsCss = input['componentsCss'];
   if (typeof input['shell'] === 'string') manifest.shell = input['shell'];

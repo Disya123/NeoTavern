@@ -84,6 +84,28 @@ class CallbackFrame private constructor(
 }
 
 /**
+ * Extension-surface availability probe for the Android host (ТЗ §51, §86,
+ * §90, §92). PURE Kotlin (no android.*) — JVM-tested on the exact byte
+ * contract ([ExtensionAvailabilityTest]).
+ *
+ * The Android host accepts only trusted built-in themes plus declarative
+ * theme contributions (validated theme packages); there is NO plugin
+ * execution surface (no sandbox/compartment host, no plugin registry — the
+ * app is JNI-only, ТЗ §6.9) and arbitrary third-party JavaScript is never
+ * loaded into the main WebView. The probe is the single source of truth the
+ * web UI reads via `window.__neotavernMobile.extensionsAvailability()`.
+ */
+object ExtensionAvailability {
+
+    /**
+     * Compact JSON constant, frozen with this probe contract:
+     * `{"themes":true,"plugins":"declarative-only","nodeRuntime":false,"arbitraryJsInWebView":false}`.
+     */
+    const val JSON: String =
+        """{"themes":true,"plugins":"declarative-only","nodeRuntime":false,"arbitraryJsInWebView":false}"""
+}
+
+/**
  * The object installed on the WebView as `window.__neotavernMobile` via
  * `addJavascriptInterface` (BEFORE `loadUrl`).
  *
@@ -118,6 +140,13 @@ class CallbackFrame private constructor(
  *    pump (activity alive but backgrounded), so the foreground notification
  *    reflects the real operation state (§8);
  *  - [backgroundExecutionAvailable] is the host capability probe (ТЗ §60).
+ *
+ * Phase 10 (extension hardening) additive hooks — the frozen Phase 5 method
+ * table is unchanged:
+ *  - [extensionsAvailability] reports the Android extension surface: themes
+ *    available (trusted built-in + declarative contributions), plugins
+ *    declarative-only, no Node runtime, no arbitrary third-party JS in the
+ *    WebView (ТЗ §51).
  *
  * All native work happens on the single-threaded [executor]; [close] stops
  * pumps and drops new deliveries (called before the activity releases the
@@ -156,6 +185,16 @@ class NeotavernBridge(
      */
     @JavascriptInterface
     fun backgroundExecutionAvailable(): Boolean = true
+
+    /**
+     * Host capability probe (ТЗ §51, §86, §90, §92): the extension surface
+     * of the Android host, as [ExtensionAvailability.JSON] — themes yes
+     * (trusted built-in + declarative), plugins declarative-only, no Node
+     * runtime, no arbitrary third-party JS in the WebView. Additive — the
+     * frozen Phase 5 surface is unchanged.
+     */
+    @JavascriptInterface
+    fun extensionsAvailability(): String = ExtensionAvailability.JSON
 
     @JavascriptInterface
     fun call(requestId: String, envelopeJson: String, callbackId: String) {

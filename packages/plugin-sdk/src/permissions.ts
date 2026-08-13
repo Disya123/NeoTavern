@@ -18,6 +18,8 @@ export const Permissions = {
   uiSidebar: 'ui.sidebar',
   uiMessageActions: 'ui.messageActions',
   uiShell: 'ui.shell',
+  /** Declarative semantic UI slot contributions (ТЗ §53). */
+  uiSlots: 'ui.slots',
   clipboardRead: 'clipboard.read',
   clipboardWrite: 'clipboard.write',
   notifications: 'notifications',

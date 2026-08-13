@@ -231,6 +231,24 @@ gate passes.
   wire registry (no contract/codegen impact). The enable/pair/revoke UI is
   gated to the desktop shell. See
   [ADR-0035](../adr/README.md#adr-0035-desktop-remote-access--host-service-over-the-shared-runtime-kernel).
+- **Phase 10 Extension hardening** — real security boundaries for
+  extensions (ТЗ §10/§47–§54/§70): declarative semantic UI slots
+  (the five frozen ids, host-side re-validation, permission gating,
+  priority ordering, zero layout change when nothing renders),
+  app-level `extensions.legacyFrontend` gate (default off) so legacy
+  SillyTavern `<script>` injection additionally requires the admin-only
+  `legacy.trusted` consent, theme activation rollback + last-working boot
+  fallback + responsive `density`/`motion` semantics, manifest `engines`
+  enforcement (incompatible update → auto-disable with the previous
+  version intact), namespaced-state kv quotas (413
+  `STATE_QUOTA_EXCEEDED`), per-plugin SecretStore (write-only, gated
+  reveal, never in backups/exports/logs), plugin namespaces as an
+  additive backup sidecar (conflict-skip restore), and explicit
+  extension-runtime availability probes (Android `extensionsAvailability`,
+  web `useExtensionAvailability`, kernel-mode CSP contract test). See
+  [ADR-0037](../adr/README.md#adr-0037-extension-hardening--declarative-slots-legacy-frontend-gate-theme-fallback-engines-enforcement-namespaced-quotas--secrets)
+  and the [Plugin SDK](../plugin-sdk/README.md) /
+  [Theme SDK](../theme-sdk/README.md) docs.
 - [Generation durability](generation-durability.md) — Phase 6: recoverable
   generation workflows over the same kernel — durable state machine
   (`generation_runs`/`generation_events`, migration 3), CAS transitions by
