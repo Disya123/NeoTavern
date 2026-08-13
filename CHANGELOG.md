@@ -31,7 +31,9 @@ Public release prep:
   export/legacy fixtures) on ubuntu + **Windows NTFS**, clippy/fmt gates, a
   scaled deterministic contract boundary fuzz (200k iterations over all 45
   generated decoders; any panic fails), the Phase 11 benchmark with report
-  artifact, and the TS regression baseline + docs integrity.
+  artifact, production dependency advisory scan (`pnpm audit --prod`,
+  report-only until the graph is clean — current baseline: 12 high /
+  2 moderate), and the TS regression baseline + docs integrity.
 - **Contract boundary fuzz (ТЗ §80/§6.8).**
   `crates/contracts-generated/tests/fuzz_deserialization.rs` drives every
   generated `decode_*` fn with random raw buffers and structurally mutated

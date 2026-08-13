@@ -130,5 +130,21 @@ jobs:
       - name: Unit and integration tests (regression baseline)
         run: pnpm test
 
+      # §79 dependency advisory policy for the production graph. Report-only:
+      # the audit result is uploaded for triage instead of failing the
+      # schedule (findings require a deliberate dependency update, which is
+      # out of scope for CI). A triage owner must resolve high findings; the
+      # gate becomes fail-closed once the production graph is clean.
+      - name: Production dependency advisory scan (report only)
+        run: pnpm audit --prod --audit-level high > deps-audit-report.txt || true
+
+      - name: Upload advisory report
+        uses: actions/upload-artifact@v6
+        with:
+          name: nightly-deps-audit
+          path: deps-audit-report.txt
+          retention-days: 90
+          if-no-files-found: warn
+
       - name: Docs integrity
         run: pnpm docs:check && pnpm docs:build
