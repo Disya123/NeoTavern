@@ -3,6 +3,10 @@
 ## Unreleased
 ### Added
 
+- **Root README rewritten** to match the shipped ТЗ 7.2 architecture: Rust
+  Runtime Kernel (crates/), Product Wire Contracts + generated Rust DTOs, Android
+  host, headless/server role, extension-hardening surface, and the docs site
+  locales (EN/zh-Hans/ja).
 - **Extension hardening (ТЗ 7.2 Фаза 10, §10/§47–§54/§60/§61/§70/§76/§83).**
   Extensions now cross real security boundaries. **Declarative semantic UI
   slots** — the five frozen ids (`chat.header.actions`,
