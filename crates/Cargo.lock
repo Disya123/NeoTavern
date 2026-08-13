@@ -1959,6 +1959,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "neotavern-android-jni"
+version = "0.1.0"
+dependencies = [
+ "contracts-generated",
+ "jni",
+ "neotavern-envelope",
+ "neotavern-mobile-ffi",
+ "neotavern-storage",
+ "neotavern-tauri-local",
+ "runtime-kernel",
+ "rusqlite",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "neotavern-cli"
 version = "0.1.0"
 dependencies = [

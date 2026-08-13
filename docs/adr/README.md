@@ -1,5 +1,19 @@
 # Architecture Decision Records
 
+## ADR-0034: Android Local Host — JNI + WebView Bridge on the mobile FFI ABI
+
+Phase 5 wires the Android host to the Runtime Kernel without Node or
+localhost: the `neotavern-android-jni` crate marshals JNI calls to the
+existing stable C ABI (`crates/adapters/mobile-ffi`, thin marshalling only,
+envelope extraction in Rust, no hand-written Kotlin DTOs, opaque `jlong`
+handles, contained `KernelException`), the WebView loads bundled web assets
+and speaks a frozen JS bridge protocol (`window.__neotavernMobile`
+handshake/call/cancelStream with a callback channel), and the local profile
+routes `LocalBackend` over `MobileBridgeTransport`. Secrets live in the
+Android Keystore (AES/GCM, no plaintext fallback). Full decision,
+alternatives and consequences:
+[ADR-0034](0034-android-local-host-jni-transport.md).
+
 ## ADR-0033: Desktop Local Kernel Transport — Tauri IPC Cutover
 
 Phase 3 wires the desktop to the Runtime Kernel without the HTTP server:

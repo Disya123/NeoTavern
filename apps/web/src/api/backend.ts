@@ -19,6 +19,7 @@ import {
   type NeoBackend,
 } from '@neotavern/neobackend';
 import { request, sseUrl, upload } from './client.js';
+import { resolveBackend, type Profile } from './profiles.js';
 import { isTauriRuntime, TauriTransport } from './tauriTransport.js';
 
 function createBackend(): NeoBackend {
@@ -36,6 +37,17 @@ function createBackend(): NeoBackend {
 }
 
 export const backend: NeoBackend = createBackend();
+
+/**
+ * Backend for an explicit profile (ТЗ §7.2 Phase 5). Local profiles resolve
+ * to `LocalBackend` over the shell transport — the mobile WebView bridge in
+ * the Android shell, Tauri IPC on desktop; remote profiles are Phase 9 scope
+ * and throw `UnsupportedError`. The default `createBackend()` singleton above
+ * is unchanged: profiles add an explicit override layer on top of it.
+ */
+export function createBackendForProfile(profile: Profile): NeoBackend {
+  return resolveBackend(profile).backend;
+}
 
 /**
  * Raw legacy passthrough for unmigrated routes.

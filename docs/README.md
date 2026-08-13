@@ -19,6 +19,7 @@ Index of the internal documentation. Each major topic has its own folder.
 - [Prompt pipeline](prompt-pipeline/README.md) — stages, instruct formats, context shifting.
 - [Data and SQLite](data/README.md) — schema, WAL/FTS5, files, cache.
 - [Desktop](desktop/README.md) — Tauri 2 + Node sidecar, PWA, updates.
+- [Android](android/README.md) — WebView + JNI local host, mobile-ffi bridge protocol, Keystore secrets.
 - [Migrations](migrations/README.md) — schema version, backup, rollback.
 - [ADR](adr/README.md) — architectural decisions.
 - [Changelog](../CHANGELOG.md).

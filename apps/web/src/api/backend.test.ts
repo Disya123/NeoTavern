@@ -4,6 +4,7 @@
  * typed UnsupportedError in local kernel mode (ТЗ §15).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { WIRE_PROTOCOL, WIRE_SCHEMA_HASH } from '@neotavern/contracts';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -34,5 +35,30 @@ describe('backend routing', () => {
     // The legacy passthrough is backed by the HTTP transport (no throw here
     // would require a fetch; the getter itself is reachable).
     expect(typeof legacyRaw().request).toBe('function');
+  });
+
+  it('routes a mobile-shell local profile to LocalBackend over the WebView bridge', async () => {
+    vi.stubGlobal('__neotavernMobile', {
+      handshake: () =>
+        JSON.stringify({
+          ffiAbiVersion: 1,
+          schemaHash: WIRE_SCHEMA_HASH,
+          wireProtocol: { major: WIRE_PROTOCOL.major, minor: WIRE_PROTOCOL.minor },
+          appVersion: '0.1.0',
+        }),
+      call: () => undefined,
+      cancelStream: () => undefined,
+    });
+    vi.resetModules();
+    const [{ LocalBackend }, { createBackendForProfile }] = await Promise.all([
+      import('@neotavern/neobackend'),
+      import('./backend.js'),
+    ]);
+    const mobileBackend = createBackendForProfile({
+      id: 'mobile',
+      kind: 'local',
+      label: 'Mobile',
+    });
+    expect(mobileBackend).toBeInstanceOf(LocalBackend);
   });
 });

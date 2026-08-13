@@ -1,0 +1,9 @@
+# Native kernel libraries are built by scripts/build-libs.sh (cargo-ndk) and
+# must not be committed (contract: prebuilt .so is NOT committed).
+app/src/main/jniLibs/
+
+# Local Gradle state (the repo has no committed gradlew wrapper).
+.gradle/
+local.properties
+.idea/
+*.iml

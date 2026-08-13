@@ -9,6 +9,7 @@ apps/web/dist
 apps/desktop/src-tauri/gen
 apps/desktop/src-tauri/resources
 apps/desktop/src-tauri/target
+apps/android/**
 Пример-макет
 CHANGELOG.md
 AGENTS.md

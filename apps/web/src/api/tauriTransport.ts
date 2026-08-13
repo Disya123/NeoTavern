@@ -22,23 +22,12 @@
 
 import { Channel, invoke } from '@tauri-apps/api/core';
 import { ProductError, TransportError, type StreamEvent } from '@neotavern/client-sdk';
-import { WIRE_PROTOCOL, WIRE_SCHEMA_HASH } from '@neotavern/contracts';
-import type { ProductErrorDto } from '@neotavern/contracts';
 import type { LocalCallResult, LocalTransport } from '@neotavern/neobackend';
-
-/** Structural shape of the outgoing request envelope (`wire.request.envelope`). */
-interface WireRequestEnvelope {
-  wireProtocol: { major: number; minor: number };
-  schemaHash: string;
-  requestId: string;
-  operationId: string;
-  payload: unknown;
-}
-
-/** Structural shape of the response envelope (`wire.response.envelope`). */
-type WireResponseEnvelope =
-  | { kind: 'ok'; requestId: string; result: unknown }
-  | { kind: 'error'; requestId: string; error: ProductErrorDto };
+import {
+  buildRequestEnvelope,
+  type WireRequestEnvelope,
+  type WireResponseEnvelope,
+} from './wireEnvelope.js';
 
 /** A committed `wire.event.envelope` pushed by the kernel poller. */
 interface WireEventEnvelope {
@@ -247,13 +236,7 @@ export class TauriTransport implements LocalTransport {
   }
 
   private buildEnvelope(operationId: string, payload: unknown): WireRequestEnvelope {
-    return {
-      wireProtocol: { major: WIRE_PROTOCOL.major, minor: WIRE_PROTOCOL.minor },
-      schemaHash: WIRE_SCHEMA_HASH,
-      requestId: this.requestId(),
-      operationId,
-      payload,
-    };
+    return buildRequestEnvelope({ requestId: this.requestId(), operationId, payload });
   }
 
   private parseResponse(body: string): LocalCallResult {

@@ -121,6 +121,33 @@ Public release prep:
   `generation.events` replay) and cancel via `nt_stream_cancel` (§64). Docs:
   `crates/adapters/mobile-ffi/README.md`, wire-contracts §10,
   version-axes «Local FFI ABI».
+- **Android local host foundation (ТЗ 7.2 Фаза 5, §13/§6.9/§5.4).** New
+  `apps/android` (Gradle 8.9 / AGP 8.5.2 / Kotlin 1.9.24, compileSdk/
+  targetSdk 35, minSdk 26, JDK 17) runs the **same Runtime Kernel** on the
+  device: a WebView loads bundled web assets (no Node, no listening port,
+  no HTTP, no arbitrary third-party JS) and talks to the kernel over a
+  frozen JS bridge protocol (`window.__neotavernMobile` — sync
+  `handshake()`, fire-and-forget `call(requestId, envelopeJson,
+  callbackId)`, `cancelStream(streamId)`; async results via
+  `window.__neotavernMobileCallbacks.resolve/reject` with
+  `{kind:"event"|"terminal"|"error"}` stream payloads). The new
+  `neotavern-android-jni` crate (cdylib + rlib, workspace member) is thin
+  marshalling onto the mobile-ffi C ABI — envelope extraction in Rust, no
+  hand-written Kotlin DTOs, opaque `jlong` handles, contained
+  `KernelException`, no Rust panic crossing JNI. The TS side is
+  `MobileBridgeTransport` (`LocalBackend` over it, byte-identical envelopes
+  to `TauriTransport`, same typed `TransportError` split); the local
+  profile routes to it as an explicit override while the default
+  `createBackend()` routing stays unchanged. Data root
+  `filesDir/neotavern`; secrets via Android Keystore AES/GCM with **no
+  plaintext fallback** (typed `SecretStoreUnavailableError`); kernel open
+  on a background executor, close on destroy, process-death durability via
+  the kernel. The `.so` is built by `apps/android/scripts/build-libs.sh`
+  (cargo ndk) into
+  `app/src/main/jniLibs/{arm64-v8a,x86_64}/libneotavern_android_jni.so` and
+  is **not committed**; Android compilation is verified in CI only
+  (`android-build` job), JVM unit tests in PR `checks`, instrumentation on
+  the nightly emulator. Docs: `docs/android/README.md`, ADR-0034.
 - **Remote Access hardening (ТЗ §10, Фаза 4 hardening / Фаза 9).**
   `remote-http-adapter` gains the full remote-access security surface:
   pairing issues revocable scoped credentials (`pair` → `(id, token)`,

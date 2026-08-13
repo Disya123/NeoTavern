@@ -28,6 +28,12 @@ Related documents: [Operations inventory](operations-inventory.md),
 | **Backup Format** | `1` (CURRENT-shape: single-file SQLite snapshot in `data/backups/`, created via the online-backup API; wire `BackupDto.formatVersion = 1` [PLANNED])                                                                | Restore only from same-format snapshots; format change ⇒ migration/import path                                                          | `1` only                                                           | `BackupDto.formatVersion`; `kind: 'manual' \| 'auto'`                                                                                                                        | Backup route tests; wire backup fixtures [PLANNED]                                                                                                                                              |
 | **Export Format** | `1` (CURRENT — profile export ZIP with `manifest.json` `{ format: "neotavern-profile-export", version: 1, appVersion, exportedAt, profile }`, `app.db` snapshot + `files/`; `apps/server/src/lib/profileExport.ts`) | Importers check `format` + `version`; change ⇒ new format id or major                                                                   | `neotavern-profile-export` v1 only                                 | `manifest.json` inside the archive                                                                                                                                           | `GET /api/v2/profiles/export` tests                                                                                                                                                             |
 
+> **Android JNI reuses the same Local FFI ABI axis (no new axis).** The
+> Android host (`neotavern-android-jni`, `apps/android`) marshals to the
+> identical `nt_*` ABI above: `ffiAbiVersion` + `schemaHash` come from the
+> same kernel manifest and the same `nt_ffi_version()` check, so the JNI
+> layer introduces no additional version axis.
+
 ## 2. Non-derivation rules
 
 - **SemVer package version ≠ protocol version.** Every `@neotavern/*` package

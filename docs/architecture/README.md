@@ -204,6 +204,17 @@ gate passes.
   functions, panics are contained to `NT_ERR_INTERNAL`, and
   `ffiAbiVersion` + `schemaHash` are part of the exact local handshake — an
   incompatible host never receives a runtime handle.
+- [Phase 5 Android local host](../android/README.md) — `apps/android`
+  (WebView + JNI) on the same mobile FFI ABI: the `neotavern-android-jni`
+  crate marshals to the stable `nt_*` functions, the frozen JS bridge
+  protocol (`window.__neotavernMobile` handshake/call/cancelStream with a
+  callback channel) carries byte-identical envelopes to
+  `MobileBridgeTransport`, Keystore AES/GCM secrets with no plaintext
+  fallback, kernel open on a background executor and close on destroy.
+  Profile routing: the local profile selects `LocalBackend` over
+  `MobileBridgeTransport` (explicit override layer — the default
+  `createBackend()` routing is unchanged). See
+  [ADR-0034](../adr/README.md#adr-0034-android-local-host--jni--webview-bridge-on-the-mobile-ffi-abi).
 - [Generation durability](generation-durability.md) — Phase 6: recoverable
   generation workflows over the same kernel — durable state machine
   (`generation_runs`/`generation_events`, migration 3), CAS transitions by

@@ -1,0 +1,151 @@
+# NeoTavern Android Host
+
+Phase 5 local foundation: the Android app shell that renders the packaged web
+UI in a hardened WebView and talks to the **same in-process Runtime Kernel**
+over JNI — no Node, no localhost server, no HTTP (ТЗ Фаза 5; "Android
+Standalone не обязан запускать Node или localhost server").
+
+```
+WebView (apps/web UI in assets/web/index.html)
+   │  window.__neotavernMobile (addJavascriptInterface, installed pre-load)
+   ▼
+NeotavernBridge            @JavascriptInterface handshake/call/cancelStream
+   │  background single-thread executor; UI-thread evaluateJavascript
+   ▼
+KernelSession              pure Kotlin state machine CLOSED→OPENING→OPEN→CLOSING
+   │  streams registry freed on close; typed SessionError
+   ▼
+JniNativeKernel → KernelBridge   external natives (System.loadLibrary)
+   │
+   ▼
+libneotavern_android_jni.so → neotavern-mobile-ffi (C ABI) → Runtime Kernel
+   ▼
+<filesDir>/neotavern (data root; single writable owner via kernel lease)
+```
+
+Data flows are the **Product Wire Contract bytes** used by every other
+transport: the request/response envelopes are byte-identical to the
+TauriTransport's (wireProtocol, schemaHash, requestId v4, operationId,
+payload), so `LocalBackend` on mobile behaves exactly like desktop.
+
+## Bridge protocol (`window.__neotavernMobile`)
+
+Installed with `addJavascriptInterface` **before** `loadUrl`. The TS side
+(`isMobileShell()` = `typeof window !== 'undefined' &&
+window.__neotavernMobile !== undefined`) installs
+`window.__neotavernMobileCallbacks` before invoking anything.
+
+| Method | Contract |
+| --- | --- |
+| `handshake(): string` | Synchronous handshake JSON: `{ffiAbiVersion, schemaHash, wireProtocol:{major,minor}, appVersion}`. |
+| `call(requestId, envelopeJson, callbackId): void` | Fire-and-forget. Unary ops resolve with the response envelope JSON (requestId echoed). Stream ops (`generation.start`, `generation.retry`) deliver stream payload objects through the same callback. |
+| `cancelStream(streamId): void` | Cancels the durable run behind a wire stream id (learned from event envelopes, or the request id before the first event). |
+
+Async results are delivered by evaluating:
+
+```
+window.__neotavernMobileCallbacks && window.__neotavernMobileCallbacks
+  .resolve('<callbackId>', JSON.parse('<escaped envelope string literal>'))
+```
+
+(`reject('<callbackId>', JSON.parse('<escaped error JSON>'))` for transport
+failures). The envelope/error JSON is embedded via `JsEscaping` (pure Kotlin)
+as a **properly escaped JS string literal — never raw interpolation** — so
+attacker-controlled quotes/backslashes/control characters cannot execute JS
+(ТЗ: arbitrary third-party JS in the main WebView is not supported).
+
+Stream payload objects (delivered via `resolve` on the same callbackId):
+
+| Kind | Meaning |
+| --- | --- |
+| `{"kind":"event","event":{streamId,sequence,type,payload}}` | One committed event; `streamId` enables `cancelStream`. Open success is signaled by the first event. |
+| `{"kind":"terminal"}` | Run reached a terminal state; the pump stops. |
+| `{"kind":"error","error":{code,params}}` | Stream-open product failure, synthesized by the bridge from the native status code (the frozen native surface has no product-DTO channel for stream start; unary product errors keep full DTO parity via error envelopes). |
+
+`reject()` payloads are `{"code":"<bridge code>","message":"..."}` (codes:
+`session-state`, `kernel-open-failed`, `kernel-call-failed`,
+`stream-start-failed`, `unknown-stream`, `stream-limit`, `kernel-error`,
+`internal`). Mid-stream wait failures reject() — the durable run stays
+recoverable via `generation.get` / `generation.events`.
+
+## Native JNI contract (frozen)
+
+Class `com.neotavern.mobile.KernelBridge`, `@JvmStatic external` functions
+(JNI symbols `Java_com_neotavern_mobile_KernelBridge_*`):
+
+| Kotlin | JVM signature |
+| --- | --- |
+| `nativeHandshake()` | `()Ljava/lang/String;` |
+| `nativeOpen(dataRoot)` | `(Ljava/lang/String;)J` — 0 = fail, throws `KernelException(code, message)` |
+| `nativeClose(kernel)` | `(J)V` |
+| `nativeCall(kernel, request)` | `(J[B)[B` — response envelope |
+| `nativeStreamStart(kernel, request)` | `(J[B)J` |
+| `nativeStreamWait(stream, timeoutMs)` | `(JI)[B` — `null` = poll timeout (never end-of-stream) |
+| `nativeStreamCancel(kernel, stream)` | `(JJ)V` |
+| `nativeStreamFree(stream)` | `(J)V` |
+
+`KernelException.code` is the `NT_ERR_*` status (1 invalid arg, 2 contract,
+3 not found, 4 storage, 5 cancelled, 6 internal, 7 buffer, 8 mismatch).
+`nativeStreamWait` payloads are already the `{kind:...}` bridge payload
+objects and are forwarded verbatim.
+
+## Building the native library (.so)
+
+The prebuilt `.so` is **NOT committed** (gitignored). Build it first:
+
+```sh
+cd apps/android
+bash scripts/build-libs.sh        # requires cargo-ndk + Android NDK
+```
+
+Produces `app/src/main/jniLibs/{arm64-v8a,x86_64}/libneotavern_android_jni.so`
+(both ABIs; x86_64 is what the CI emulator loads). The script is
+cwd-independent and locates the Rust workspace (`crates/`) itself.
+
+## Building and running the app
+
+### Android Studio
+
+1. Open `apps/android` as a Gradle project (Gradle 8.9+, JDK 17).
+2. Run `scripts/build-libs.sh` first (or build via CI).
+3. Run the `app` configuration on an API 26+ device/emulator.
+
+### Command line
+
+```sh
+cd apps/android
+bash scripts/build-libs.sh
+./gradlew :app:assembleDebug          # APK in app/build/outputs/apk/debug/
+./gradlew :app:installDebug           # install on a connected device/emulator
+```
+
+> Note: the repo intentionally ships no `gradlew` wrapper; CI uses
+> `gradle/actions/setup-gradle` with Gradle 8.9, AGP 8.5.2, Kotlin 1.9.24,
+> JDK 17 temurin.
+
+## Test matrix
+
+| Scope | Command | Runs on |
+| --- | --- | --- |
+| JVM unit tests (state machine, JS escaping, callback frames, secret-store contract) | `./gradlew :app:testDebugUnitTest` | Any JVM — no Android needed |
+| Instrumented round trip (real kernel: meta.get, characters CRUD, durability after reopen) | `./gradlew :app:connectedDebugAndroidTest` | API 26+ device/emulator with the `.so` packaged |
+
+The JVM-tested classes (`KernelSession`, `JsEscaping`, `CallbackFrame`,
+`SecretStore`) contain **no android.\*** imports and run as plain JUnit 4.
+
+## Phase gate status
+
+- [x] Gradle + Kotlin host shell (no INTERNET permission, hardened WebView,
+      no foreground service, no HTTP).
+- [x] JNI binding (KernelBridge) + pure KernelSession state machine with
+      typed errors and stream registry.
+- [x] Keystore-backed SecretStore (AES/GCM, no plaintext fallback) and
+      atomic-write ManagedDataRoot.
+- [x] JVM unit tests + instrumentation round trip (durability after
+      simulated process death).
+- [ ] **Web assets not packaged yet** — the app loads
+      `file:///android_asset/web/index.html`; until `apps/web` is built into
+      `app/src/main/assets/web/`, MainActivity shows a plain error screen
+      (the JS bridge is still installed and the kernel still opens).
+- [ ] LocalBackend over the mobile transport (TS side, apps/web).
+- [ ] Device gate: full CRUD/settings + startup recovery on emulator matrix.

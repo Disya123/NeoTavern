@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      NeoTavern Android Host — Phase 5 local foundation.
+
+      Deliberately NO INTERNET permission: this host talks to the in-process
+      kernel over JNI only. No HTTP, no sockets, no network access (ТЗ §6.9,
+      "Android Standalone не обязан запускать Node или localhost server").
+    -->
+
+    <application
+        android:label="NeoTavern"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar"
+        android:allowBackup="false">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>

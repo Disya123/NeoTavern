@@ -13,6 +13,8 @@
 #     fuzz over every generated decoder at a scaled budget — a panic on
 #     arbitrary input is a test failure (§6.8/§80)
 #   - TS regression baseline (vitest) + docs integrity
+#   - Android device gate (Phase 5, ТЗ §7.2): instrumented tests on an API 34
+#     x86_64 emulator against the JNI bridge (arm64-v8a + x86_64 libs)
 #
 # The Rust jobs repeat `cargo test --workspace` and clippy/fmt from ci.yml on
 # a schedule so a flake or regression that slipped past PR gates is caught
@@ -72,7 +74,7 @@ jobs:
         run: cargo clippy --manifest-path crates/Cargo.toml --workspace --all-targets -- -D warnings
 
       - name: Rust formatting (hand-written crates; generated.rs is byte-checked by codegen)
-        run: cargo fmt --manifest-path crates/Cargo.toml -p runtime-kernel -p neotavern-storage -p remote-http-adapter -p neotavern-mobile-ffi -p neotavern-cli -p built-in-providers -p provider-sdk -p neotavern-envelope -p neotavern-tauri-local --check
+        run: cargo fmt --manifest-path crates/Cargo.toml -p runtime-kernel -p neotavern-storage -p remote-http-adapter -p neotavern-mobile-ffi -p neotavern-cli -p built-in-providers -p provider-sdk -p neotavern-envelope -p neotavern-tauri-local -p neotavern-android-jni --check
 
       # §84 performance sampling: Phase 11 backup/restore/export benchmark.
       # The machine-readable report is uploaded as an artifact; threshold
@@ -148,3 +150,71 @@ jobs:
 
       - name: Docs integrity
         run: pnpm docs:check && pnpm docs:build
+
+  # Android device gate (ТЗ §7.2, Phase 5): JNI libs built for arm64-v8a +
+  # x86_64, then instrumented tests run on a hardware-accelerated API 34
+  # x86_64 emulator. Single configuration for now; the API-level/arch device
+  # matrix is a Phase 5 gate follow-up. Toolchain steps deliberately duplicate
+  # ci.yml android-build (no workflow composition).
+  android-device:
+    name: Android device gate (API 34 emulator)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android, armv7-linux-androideabi, x86_64-linux-android, i686-linux-android
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Cache cargo (cargo-ndk + registry)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo
+          key: cargo-ndk-3.5.4-${{ runner.os }}-${{ hashFiles('crates/Cargo.lock', 'crates/**/Cargo.toml') }}
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --version 3.5.4 --locked
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install NDK 27.x
+        run: sdkmanager --install "ndk;27.1.12297006"
+
+      - name: Set ANDROID_NDK_HOME
+        run: echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/27.1.12297006" >> "$GITHUB_ENV"
+
+      # Same JNI build as ci.yml. build-libs.sh emits arm64-v8a AND x86_64 —
+      # the x86_64 .so is what the API 34 x86_64 emulator loads, so it MUST be
+      # present here (cargo-ndk invoked with -t x86_64 -t arm64-v8a inside).
+      - name: Build JNI libraries (arm64-v8a + x86_64)
+        working-directory: apps/android
+        run: bash scripts/build-libs.sh
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      # Required by reactivecircus/android-emulator-runner on Ubuntu runners
+      # (hardware acceleration via KVM; documented by the action).
+      - name: Enable KVM group perms
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Instrumented tests (API 34, x86_64)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          force-avd-creation: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          disable-animations: true
+          script: gradle -p apps/android :app:connectedDebugAndroidTest

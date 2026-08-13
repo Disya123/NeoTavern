@@ -183,4 +183,65 @@ jobs:
         run: cargo clippy --manifest-path crates/Cargo.toml --workspace --all-targets -- -D warnings
 
       - name: Rust formatting (hand-written crates)
-        run: cargo fmt --manifest-path crates/Cargo.toml -p runtime-kernel -p neotavern-storage -p remote-http-adapter -p neotavern-mobile-ffi -p neotavern-cli -p built-in-providers -p provider-sdk -p neotavern-envelope -p neotavern-tauri-local --check
+        run: cargo fmt --manifest-path crates/Cargo.toml -p runtime-kernel -p neotavern-storage -p remote-http-adapter -p neotavern-mobile-ffi -p neotavern-cli -p built-in-providers -p provider-sdk -p neotavern-envelope -p neotavern-tauri-local -p neotavern-android-jni --check
+
+  # Android Phase 5 gate (ТЗ §7.2): the JNI bridge is built for arm64-v8a +
+  # x86_64 via cargo-ndk, then the debug APK and JVM unit tests are verified.
+  # Device-level instrumented tests run nightly (android-device in nightly.yml);
+  # the API-level/arch device matrix is a Phase 5 gate follow-up.
+  android-build:
+    name: Android build (JNI + APK + unit tests)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android, armv7-linux-androideabi, x86_64-linux-android, i686-linux-android
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # ~/.cargo caches the installed cargo-ndk binary plus the crate registry;
+      # the key is pinned to the cargo-ndk version so a toolchain bump re-seeds.
+      - name: Cache cargo (cargo-ndk + registry)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo
+          key: cargo-ndk-3.5.4-${{ runner.os }}-${{ hashFiles('crates/Cargo.lock', 'crates/**/Cargo.toml') }}
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --version 3.5.4 --locked
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install NDK 27.x
+        run: sdkmanager --install "ndk;27.1.12297006"
+
+      # cargo-ndk locates the NDK through ANDROID_NDK_HOME.
+      - name: Set ANDROID_NDK_HOME
+        run: echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/27.1.12297006" >> "$GITHUB_ENV"
+
+      # build-libs.sh is cwd-sensitive and must run from apps/android; it emits
+      # apps/android/app/src/main/jniLibs/{arm64-v8a,x86_64}/libneotavern_android_jni.so
+      # (build matrix per ТЗ §7.2: Gradle 8.9 / AGP 8.5.2 / Kotlin 1.9.24, JDK 17).
+      - name: Build JNI libraries (arm64-v8a, x86_64)
+        working-directory: apps/android
+        run: bash scripts/build-libs.sh
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Assemble debug APK + JVM unit tests
+        run: gradle -p apps/android :app:assembleDebug :app:testDebugUnitTest
+
+      - name: Upload debug APK artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: neotavern-android-debug
+          path: apps/android/app/build/outputs/apk/debug/*.apk
+          retention-days: 14
