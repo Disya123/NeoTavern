@@ -19,10 +19,13 @@ import org.json.JSONObject
  * ```
  *
  * Fields are emitted in exactly that order: `wireProtocol{major,minor}`,
- * `schemaHash`, `requestId`, `operationId`, `payload`. The payload is
- * embedded as a nested JSON value (not a string) and must therefore be a
- * valid JSON object — every request schema in the wire registry
- * (`wire.request.*`) is an object, so callers pass e.g. `{}` or
+ * `schemaHash`, `requestId`, `operationId`, `payload`. The envelope is a
+ * fixed-shape string assembled directly, so byte-identity never depends on a
+ * JSON library's key ordering (the reference org.json used by unit tests is
+ * HashMap-backed; the Android-framework org.json is insertion-ordered). The
+ * payload is embedded as a nested JSON value (not a string) and must
+ * therefore be a valid JSON object — every request schema in the wire
+ * registry (`wire.request.*`) is an object, so callers pass e.g. `{}` or
  * `{"chatId":"..."}`.
  *
  * PURE Kotlin (org.json, which is also a unit-test dependency) — no
@@ -37,20 +40,22 @@ class EnvelopeBuilder(
     /**
      * Serializes one request envelope for `operationId` with `payloadJson`.
      *
-     * @param payloadJson valid JSON object text; embedded verbatim as the
-     *   `payload` value (never string-escaped)
+     * The envelope is a FIXED-SHAPE JSON string assembled directly (not via a
+     * JSON library): byte-identity with the TypeScript builder must not
+     * depend on any library's key ordering (the reference org.json used by
+     * unit tests is HashMap-backed and does not preserve insertion order,
+     * while the Android-framework org.json does). The identifier strings
+     * ([schemaHash], [requestId], [operationId]) are contract-safe charsets
+     * (lowercase hex, v4 UUID, `[a-z0-9._-]`) and need no escaping; the
+     * payload is embedded verbatim as a nested JSON value (every
+     * `wire.request.*` schema is a JSON object).
      */
     fun request(requestId: String, operationId: String, payloadJson: String): String {
-        val wireProtocol = JSONObject()
-            .put("major", protocolMajor)
-            .put("minor", protocolMinor)
-        val envelope = JSONObject()
-            .put("wireProtocol", wireProtocol)
-            .put("schemaHash", schemaHash)
-            .put("requestId", requestId)
-            .put("operationId", operationId)
-            .put("payload", JSONObject(payloadJson))
-        return envelope.toString()
+        return "{\"wireProtocol\":{\"major\":$protocolMajor,\"minor\":$protocolMinor}," +
+            "\"schemaHash\":\"$schemaHash\"," +
+            "\"requestId\":\"$requestId\"," +
+            "\"operationId\":\"$operationId\"," +
+            "\"payload\":$payloadJson}"
     }
 
     /** A fresh RFC 4122 version-4 UUID (lowercase, hyphenated — matches `crypto.randomUUID()`). */
