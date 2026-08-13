@@ -18,6 +18,20 @@ Public release prep:
 ## Unreleased
 ### Added
 
+- **Nightly CI (ТЗ §80).** New `.github/workflows/nightly.yml`: scheduled
+  daily run of the full Rust workspace suite (including the storage recovery
+  matrix: DB support window, backup/restore kill-safety, data-root lease,
+  export/legacy fixtures) on ubuntu + **Windows NTFS**, clippy/fmt gates, a
+  scaled deterministic contract boundary fuzz (200k iterations over all 45
+  generated decoders; any panic fails), the Phase 11 benchmark with report
+  artifact, and the TS regression baseline + docs integrity.
+- **Contract boundary fuzz (ТЗ §80/§6.8).**
+  `crates/contracts-generated/tests/fuzz_deserialization.rs` drives every
+  generated `decode_*` fn with random raw buffers and structurally mutated
+  fixture values (field deletion, wrong-type swaps, unknown keys, corrupt
+  strings) under `catch_unwind` — a panic on arbitrary input is a test
+  failure. Fixed-seed xorshift64 keeps the corpus reproducible;
+  `NT_CONTRACT_FUZZ_ITERS` scales the budget.
 - **Runtime Kernel + storage foundation (ТЗ 7.2 Фазы 0–2).** New `crates/`
   workspace: `contracts-generated` (deterministic Rust boundary DTOs from the
   TypeBox wire schemas), `runtime-kernel` (contract-validated dispatch,

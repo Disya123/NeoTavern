@@ -18,6 +18,14 @@
 | Export size | 2 283 530 bytes |
 | Measurement | `crates/storage/examples/phase11_bench.rs` (wall clock, single run; p50/p95 sampling lands with the Nightly harness) |
 
+**Nightly harness (`.github/workflows/nightly.yml`, ТЗ §80).** The nightly
+schedule runs `phase11_bench` on a release profile and uploads the
+machine-readable report as a workflow artifact (90-day retention). Sampling
+is raw (no threshold comparison yet): auto-compare against an approved
+baseline becomes blocking once a baseline fixture and the comparison step are
+committed; until then §84 thresholds are checked manually per release against
+this manifest.
+
 ## Phase 11 portable-data budgets
 
 | Metric | Measured (debug) | Budget |

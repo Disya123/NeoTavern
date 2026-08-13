@@ -1,0 +1,134 @@
+# Nightly matrix (ТЗ §80): the heavyweight cross-checks that are too slow or
+# too broad for every PR run on top of the merge-blocking gates in ci.yml.
+#
+# Covers, with the existing test infrastructure:
+#   - full DB support window: open_migrate / fresh_fingerprint / legacy /
+#     baseline fixtures (migrations, checksums, fingerprints, rollback)
+#   - backup round-trip + restore kill matrix + archive adversarial corpus
+#     (storage tests: backup / restore / kill_safety / export / legacy)
+#   - single-writer / data-root lease tests (lease.rs), also on Windows NTFS
+#   - provider stream interruption + generation fault injection
+#     (runtime-kernel tests: generation / providers / backups)
+#   - schema-derived contract property/fuzz tests: deterministic boundary
+#     fuzz over every generated decoder at a scaled budget — a panic on
+#     arbitrary input is a test failure (§6.8/§80)
+#   - TS regression baseline (vitest) + docs integrity
+#
+# The Rust jobs repeat `cargo test --workspace` and clippy/fmt from ci.yml on
+# a schedule so a flake or regression that slipped past PR gates is caught
+# within 24h and pinned to a failing nightly report.
+
+name: Nightly
+
+on:
+  schedule:
+    - cron: '17 4 * * *' # 04:17 UTC every day
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust-nightly:
+    name: Rust workspace + scaled contract fuzz (ubuntu)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build contracts (codegen input)
+        run: pnpm --filter @neotavern/contracts build
+
+      - name: Contract codegen determinism (must be byte-identical)
+        run: node tools/contract-codegen/codegen.mjs --check
+
+      - name: Workspace tests (full DB support window + recovery matrix)
+        run: cargo test --manifest-path crates/Cargo.toml
+
+      # Scaled deterministic boundary fuzz (§80): 200k iterations across all
+      # 45 generated decoders, raw bytes + structurally mutated fixtures.
+      # Any panic fails the job.
+      - name: Contract boundary fuzz (200k iterations, release)
+        run: >-
+          cargo test --manifest-path crates/Cargo.toml -p contracts-generated
+          --test fuzz_deserialization --release
+        env:
+          NT_CONTRACT_FUZZ_ITERS: '200000'
+
+      - name: Rust clippy (workspace, all targets, warnings denied)
+        run: cargo clippy --manifest-path crates/Cargo.toml --workspace --all-targets -- -D warnings
+
+      - name: Rust formatting (hand-written crates; generated.rs is byte-checked by codegen)
+        run: cargo fmt --manifest-path crates/Cargo.toml -p runtime-kernel -p neotavern-storage -p remote-http-adapter -p neotavern-mobile-ffi -p neotavern-cli -p built-in-providers -p provider-sdk --check
+
+      # §84 performance sampling: Phase 11 backup/restore/export benchmark.
+      # The machine-readable report is uploaded as an artifact; threshold
+      # comparison against an approved baseline is wired once a baseline
+      # fixture is committed (docs/architecture/benchmarks.md).
+      - name: Phase 11 benchmark (backup/restore/export throughput)
+        run: cargo run --manifest-path crates/Cargo.toml -p neotavern-storage --release --example phase11_bench > crates/storage/bench-report.txt
+
+      - name: Upload benchmark report
+        uses: actions/upload-artifact@v6
+        with:
+          name: nightly-bench-report
+          path: crates/storage/bench-report.txt
+          retention-days: 90
+          if-no-files-found: warn
+
+  rust-windows:
+    name: Rust workspace (Windows NTFS filesystem matrix)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Fixtures are committed; no Node toolchain needed for the Rust side.
+      # The storage suite exercises the data-root lease, kill-safety, restore
+      # activation and backup/export on NTFS (§22/§80 filesystem matrix).
+      - name: Workspace tests (Windows)
+        run: cargo test --manifest-path crates/Cargo.toml
+
+  ts-nightly:
+    name: TS regression baseline + docs (ubuntu)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit and integration tests (regression baseline)
+        run: pnpm test
+
+      - name: Docs integrity
+        run: pnpm docs:check && pnpm docs:build

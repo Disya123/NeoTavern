@@ -404,6 +404,13 @@ The fixture corpus is the executable contract shared by both validators:
   generated `decode_<snake>` functions, asserts `is_ok() == valid`, verifies
   decode → re-serialize → decode round-trips, and runs a no-panic fuzz pass
   (xorshift32 LCG over 512 byte-strings, `catch_unwind` around every decode).
+  `crates/contracts-generated/tests/fuzz_deserialization.rs` adds the
+  standalone boundary fuzz (ТЗ §80/§6.8): every one of the 45 generated
+  decoders is driven with random raw buffers and with structurally mutated
+  fixture values (field deletion, wrong-type swaps, unknown keys, corrupt
+  strings); any panic fails the test. Fixed-seed xorshift64 keeps the corpus
+  byte-reproducible; `NT_CONTRACT_FUZZ_ITERS` scales the budget (nightly runs
+  200k iterations).
 - The kernel smoke tests
   (`crates/runtime-kernel/tests/kernel_smoke.rs`, [PLANNED]) additionally pin
   handshake failure modes (wrong hash / wrong ABI → `ContractMismatch`),
