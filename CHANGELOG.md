@@ -18,6 +18,14 @@ Public release prep:
 ## Unreleased
 ### Added
 
+- **Provider SDK contract tests (ТЗ §83).**
+  `packages/provider-sdk/test/contract.test.ts` pins the public Provider SDK
+  contract: config/base-URL validation, model listing, the unified stream
+  contract (exactly one terminal event; usage arithmetic), AbortSignal
+  cancellation (`GENERATION_CANCELLED`, no `done` after abort),
+  `DeadlineController` timeout semantics, HTTP-status → stable error-code
+  normalization with raw-body suppression, and timeout defaults/merging.
+  13 tests against the offline EchoAdapter — no network required.
 - **Dependency direction / forbidden-import gate (ТЗ §79/§6/§87).** New
   `scripts/check-dependency-rules.mjs` runs in the PR `checks` job: the
   Runtime Kernel's Cargo.toml must not depend on transport/UI/platform crates
