@@ -1,0 +1,17 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "build": {
+    "frontendDist": "../mobile-connect",
+    "beforeBuildCommand": ""
+  },
+  "app": {
+    "windows": [{ "label": "main", "title": "NeoTavern" }],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'self'"
+    }
+  },
+  "bundle": {
+    "externalBin": []
+  },
+  "plugins": {}
+}

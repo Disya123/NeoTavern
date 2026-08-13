@@ -1,5 +1,121 @@
 # Architecture Decision Records
 
+## ADR-0037: Extension hardening — declarative slots, legacy-frontend gate, theme fallback, engines enforcement, namespaced quotas + secrets
+
+Phase 10 defines the real extension security boundaries (ТЗ §10): the five
+declarative semantic UI slots (host re-validation, permission gating,
+priority order — plugins provide data only, never markup), an app-level
+`extensions.legacyFrontend` gate (default off) stacked on the admin-only
+`legacy.trusted` consent before any legacy `<script>` reaches the main
+document, theme activation rollback with a last-working boot fallback and
+responsive `density`/`motion` semantics, manifest `engines` enforcement
+(incompatible updates auto-disable and keep the previous version), kv quotas
+on namespaced state (413 `STATE_QUOTA_EXCEEDED`), a write-only per-plugin
+SecretStore with gated reveal that never enters backups/exports/logs, plugin
+namespaces as an additive backup sidecar with conflict-skip restore, and
+explicit extension-runtime availability probes on every host. Full decision,
+alternatives and consequences: [ADR-0037](0037-extension-hardening.md).
+
+## ADR-0036: Android Background Execution — bounded foreground service + WorkManager maintenance over the shared kernel handle
+
+Phase 8 wires ТЗ §8/§19 background execution on the Android host onto the
+**same kernel session** as the activity: a bounded `dataSync` foreground
+service continues user-visible generation streams (shared handle via
+`KernelHolder` refcount — never a second writable kernel, §22), the
+notification shows run state and a Stop action but **never message content**
+(§85), maintenance is WorkManager unique one-time work (`backups.create`,
+battery + storage constraints, no exact schedule §66), and stop/expiration
+map to `generation.cancel` while process death recovers via kernel startup
+recovery + `generation.retry`. No new JNI/contract/codegen surface — purely
+a host-side lifecycle adapter on the frozen wire registry. Full decision,
+alternatives and consequences: [ADR-0036](0036-android-background-execution.md).
+
+## ADR-0035: Desktop Remote Access — host service over the shared Runtime Kernel
+
+Phase 9 wires the Phase 4 remote surface into the desktop shell: the new
+`neotavern-desktop-remote` host service (`crates/adapters/desktop-remote`)
+wraps `remote-http-adapter` on the **same `Arc<Mutex<Kernel>>`** as local
+IPC (one writer, §22) — off by default (no listener), loopback default with
+an ephemeral port, non-loopback only with `trusted_proxy` AND auth
+(fail-closed pre-bind), pairing with revocable in-memory SHA-256-verifier
+credentials (re-pair after restart; durable credential persistence deferred),
+CORS deny-by-default via `allowed_origins`, bounded audit, and a
+`kernel_remote_*` Tauri command surface that controls the host service
+without touching the frozen wire registry (no contract/codegen change).
+Config lives host-owned at `app_config_dir/remote-access.json` (atomic
+write), never in the product DB. Full decision, alternatives and
+consequences: [ADR-0035](0035-desktop-remote-access.md).
+
+## ADR-0034: Android Local Host — JNI + WebView Bridge on the mobile FFI ABI
+
+Phase 5 wires the Android host to the Runtime Kernel without Node or
+localhost: the `neotavern-android-jni` crate marshals JNI calls to the
+existing stable C ABI (`crates/adapters/mobile-ffi`, thin marshalling only,
+envelope extraction in Rust, no hand-written Kotlin DTOs, opaque `jlong`
+handles, contained `KernelException`), the WebView loads bundled web assets
+and speaks a frozen JS bridge protocol (`window.__neotavernMobile`
+handshake/call/cancelStream with a callback channel), and the local profile
+routes `LocalBackend` over `MobileBridgeTransport`. Secrets live in the
+Android Keystore (AES/GCM, no plaintext fallback). Full decision,
+alternatives and consequences:
+[ADR-0034](0034-android-local-host-jni-transport.md).
+
+## ADR-0033: Desktop Local Kernel Transport — Tauri IPC Cutover
+
+Phase 3 wires the desktop to the Runtime Kernel without the HTTP server:
+a shared envelope crate (`neotavern-envelope`) for byte-identical envelopes
+across CLI/HTTP/Tauri, `neotavern-tauri-local` with `kernel_dispatch` /
+`kernel_stream_start` / `kernel_stream_abort`, kernel mode as the shell
+default (legacy Node sidecar opt-in via `NEOTA_LEGACY_SERVER=1`) and a
+`LocalTransport` over `invoke` for `LocalBackend`. First vertical slice:
+DiagnosticsPanel kernel section (meta + backups). Full decision, alternatives
+and consequences: [ADR-0033](0033-desktop-local-kernel-transport.md).
+
+## ADR-0032: Portable Data — Backup Container, Staged Restore, Portable Export
+
+Phase 11 turns the Phase 2 recovery primitives into public long-lived formats:
+the `.neotavern-backup` container (manifest + checksummed inventory + pinned
+asset set), kill-safe staged restore with atomic candidate activation resolved
+at open, the `.neotavern-export` NDJSON interchange with explicit duplicate
+policy, and a read-only legacy converter. Full decision, alternatives and
+consequences: [ADR-0032](0032-portable-data.md).
+
+## ADR-0031: Portable Provider Contract (Phase 7)
+
+Phase 7 turns provider execution into a portable contract: `crates/provider-sdk`
+(adapter trait, normalized errors/usage, deadline/retry policy, secret
+references) + `crates/built-in-providers` (deterministic fake, recorded
+fixtures, conformance suite) + kernel `ProviderRegistry` with `providers.list`,
+host secret-resolver seam and per-run deadline; storage migration 4 persists
+config/secret separation (`provider_configs`). Full decision, alternatives and
+consequences: [ADR-0031](0031-portable-provider-contract.md).
+
+## ADR-0030: Remote HTTP Adapter — envelope-over-HTTP on the shared Runtime Kernel
+
+Phase 4 headless/remote surface: a new std-only crate
+(`crates/adapters/remote-http`, tiny_http 0.12) maps the frozen wire envelopes
+onto `GET /meta`, `POST /rpc`, `POST /rpc/stream` (SSE) without defining any
+DTO of its own; `Arc<Mutex<Kernel>>` is the single writer coordinator shared
+with local IPC (§22), insecure non-loopback binds fail closed unless
+`trusted_proxy: true` declares a TLS-terminating boundary, protocol mismatch
+(426) is enforced before dispatch, and kernel product errors are copied into
+the envelope verbatim. SSE framing and Last-Event-ID exist now; durable
+sequenced streams arrive with Phase 6 generation workflows. Full decision,
+alternatives and consequences: [ADR-0030](0030-remote-http-adapter.md).
+
+## ADR-0029: Wire contract toolchain (TypeBox single source → deterministic codegen)
+
+Product Wire Contracts in `packages/contracts/src/wire/` are the single
+hand-authored cross-language contract source: TypeScript types are inferred
+from TypeBox schemas, the JSON Schema bundle + manifest (with `schemaHash`)
+are emitted deterministically by `tools/contract-codegen`, and the Rust
+boundary DTOs/validators in `crates/contracts-generated` are generated from
+the same bundle and committed. Wire-safe subset with fail-on-unsupported
+(no `serde_json::Value` fallback), string-discriminated unions, exact-match
+local handshake (`wireProtocol` + `schemaHash`), UTF-16 code-unit string
+length and a shared format registry on both validators. Full decision,
+alternatives and consequences: [ADR-0029](0029-wire-contract-toolchain.md).
+
 ## ADR-0028: SES bootstrap and TCB (two-phase bootstrap, lockdown policy, endowment list)
 
 Trusted `worker-bootstrap.mjs` performs a 9-step two-phase bootstrap:

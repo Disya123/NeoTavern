@@ -82,6 +82,10 @@ function scopeFrontendApi(api: FrontendPluginApi, disposables: Disposables): Fro
       dialogs: trackedRegistrar(api.ui.dialogs, disposables),
       commands: trackedRegistrar(api.ui.commands, disposables),
       hotkeys: trackedRegistrar(api.ui.hotkeys, disposables),
+      slots: {
+        contribute: (def) => disposables.add(api.ui.slots.contribute(def)),
+        list: (slotId) => api.ui.slots.list(slotId),
+      },
     },
     slash: trackedRegistrar(api.slash, disposables),
     interceptors: trackedRegistrar(api.interceptors, disposables),

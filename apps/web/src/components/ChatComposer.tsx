@@ -28,6 +28,7 @@ import {
 } from '@phosphor-icons/react';
 import { useTranslation } from 'react-i18next';
 import { Button, IconButton } from '@neotavern/ui';
+import { SlotHost } from '../plugins/slots.js';
 import styles from './ChatWorkspace.module.css';
 
 export type ChatComposerProps = {
@@ -256,6 +257,7 @@ export function ChatComposer({
               <MagicWand size={19} aria-hidden="true" />
             </button>
           </div>
+          <SlotHost slot="generation.controls" />
           <div className={styles.sendSlot}>
             {showStop ? (
               <Button

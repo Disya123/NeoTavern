@@ -14,7 +14,8 @@ import type { ChatSnapshotResult, Message } from '@neotavern/contracts';
 import { findLegacySlashCommand, hasLegacyPromptInterceptors } from '@neotavern/legacy-compat';
 import { useCharacter, useChat, useMessages, useSettings } from '../api/hooks.js';
 import { streamGeneration } from '../api/generate.js';
-import { api, ApiError } from '../api/client.js';
+import { legacyRaw } from '../api/backend.js';
+import { ApiError } from '../api/client.js';
 import { clampSwipeIndex, readGreetingSwipes } from '@neotavern/shared';
 import { expandDisplayMacros, useMacroContext, type MacroContext } from '../lib/macros.js';
 import { useErrorText } from '../lib/useErrorText.js';
@@ -417,7 +418,7 @@ export function ChatPage() {
       setEditErrorText(null);
       const current = orderedRef.current.find((message) => message.id === messageId);
       try {
-        await api.patch<Message>(`/chats/${chatId}/messages/${messageId}`, {
+        await legacyRaw().request<Message>('PATCH', `/chats/${chatId}/messages/${messageId}`, {
           content,
           ...(current ? { expectedRevision: current.revision } : {}),
         });
@@ -444,7 +445,7 @@ export function ChatPage() {
       if (!chatId) return;
       setError(null);
       try {
-        await api.del(`/chats/${chatId}/messages/${messageId}`);
+        await legacyRaw().request('DELETE', `/chats/${chatId}/messages/${messageId}`);
         await queryClient.invalidateQueries({ queryKey: ['messages', chatId] });
         await queryClient.invalidateQueries({ queryKey: ['chats'] });
       } catch (err) {
@@ -461,7 +462,7 @@ export function ChatPage() {
       setError(null);
       const excluded = message.meta['manualExcluded'] === true;
       try {
-        await api.patch<Message>(`/chats/${chatId}/messages/${message.id}`, {
+        await legacyRaw().request<Message>('PATCH', `/chats/${chatId}/messages/${message.id}`, {
           meta: { ...message.meta, manualExcluded: !excluded },
         });
         await queryClient.invalidateQueries({ queryKey: ['messages', chatId] });
@@ -483,7 +484,7 @@ export function ChatPage() {
       if (content === undefined || swipeId === greetingSwipes.swipeId) return;
       setError(null);
       try {
-        await api.patch<Message>(`/chats/${chatId}/messages/${message.id}`, {
+        await legacyRaw().request<Message>('PATCH', `/chats/${chatId}/messages/${message.id}`, {
           content,
           meta: {
             ...message.meta,
@@ -527,7 +528,11 @@ export function ChatPage() {
       }
       setError(null);
       try {
-        await api.post<Message>(`/chats/${chatId}/messages/${message.id}/swipe`, { position });
+        await legacyRaw().request<Message>(
+          'POST',
+          `/chats/${chatId}/messages/${message.id}/swipe`,
+          { position },
+        );
         await queryClient.invalidateQueries({ queryKey: ['messages', chatId] });
       } catch (err) {
         setError(errorText(err));
@@ -549,11 +554,15 @@ export function ChatPage() {
     ): Promise<ChatSnapshotResult> => {
       if (!chatId) throw new Error('CHAT_NOT_LOADED');
       setError(null);
-      const response = await api.post<ChatSnapshotResult>(`/chats/${chatId}/snapshots`, {
-        messageId: message.id,
-        kind,
-        replace,
-      });
+      const response = await legacyRaw().request<ChatSnapshotResult>(
+        'POST',
+        `/chats/${chatId}/snapshots`,
+        {
+          messageId: message.id,
+          kind,
+          replace,
+        },
+      );
       await queryClient.invalidateQueries({ queryKey: ['messages', chatId] });
       await queryClient.invalidateQueries({ queryKey: ['chat', chatId] });
       await queryClient.invalidateQueries({ queryKey: ['chats'] });
@@ -610,7 +619,7 @@ export function ChatPage() {
       if (!chatId) return;
       setError(null);
       try {
-        await api.patch<Message>(`/chats/${chatId}/messages/${message.id}`, {
+        await legacyRaw().request<Message>('PATCH', `/chats/${chatId}/messages/${message.id}`, {
           checkpointChatId: null,
         });
         await queryClient.invalidateQueries({ queryKey: ['messages', chatId] });

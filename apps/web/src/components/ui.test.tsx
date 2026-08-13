@@ -399,7 +399,9 @@ describe('MessageBubble', () => {
 });
 
 describe('CharacterManagementPanel', () => {
-  it('edits ST1 character fields and exposes the real gallery section', async () => {
+  it('edits ST1 character fields and exposes the real gallery section', // Heavy component test (list + viewer + gallery + edit flows under
+  // full-suite parallel load); the default 5 s budget is routinely blown.
+  async () => {
     const character = {
       id: '018f0000-0000-7000-8000-000000000401',
       name: 'Seraphina',
@@ -581,10 +583,8 @@ describe('CharacterManagementPanel', () => {
     } finally {
       vi.unstubAllGlobals();
     }
-  });
-});
+  }, 15_000);
 
-describe('DataMigrationPanel', () => {
   it('selects a ZIP through a labelled control before analysis', async () => {
     await renderWithProviders(<DataMigrationPanel />);
 

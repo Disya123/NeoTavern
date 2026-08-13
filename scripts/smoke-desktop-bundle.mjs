@@ -65,7 +65,13 @@ if (leakedSidecars.length > 0) {
   throw new Error(`Desktop bundle left sidecar processes running: ${leakedSidecars.join(', ')}`);
 }
 const files = await readdir(smokeRoot, { recursive: true });
-const database = files.find((entry) => entry.replaceAll('\\', '/').endsWith('/app.db'));
+// Kernel mode (Phase 3+) creates `database.sqlite` via the Runtime Kernel;
+// the legacy server sidecar created `app.db`. Accept either.
+const database = files.find(
+  (entry) =>
+    entry.replaceAll('\\', '/').endsWith('/database.sqlite') ||
+    entry.replaceAll('\\', '/').endsWith('/app.db'),
+);
 if (!database || (await stat(resolve(smokeRoot, database))).size <= 0) {
   throw new Error(
     `Desktop bundle did not create its app-local SQLite database\n--- app stdout (tail) ---\n` +

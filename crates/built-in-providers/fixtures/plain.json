@@ -1,0 +1,10 @@
+{
+  "id": "plain",
+  "steps": [
+    { "type": "delta", "text": "alpha" },
+    { "type": "delta", "text": "bravo" },
+    { "type": "delta", "text": "charlie" },
+    { "type": "delta", "text": "delta" },
+    { "type": "delta", "text": "echo" }
+  ]
+}

@@ -110,54 +110,94 @@ function themeSettingsKey(themeId: string): string {
   return `theme.settings.${themeId}`;
 }
 
+/**
+ * Storage key for the last known-good active theme (ТЗ §83). Persisted before
+ * every activation flip so boot can recover when the stored active theme
+ * turns out missing, broken or invalid.
+ */
+const LAST_WORKING_THEME_KEY = 'theme.lastWorking';
+
+/** Last known-good theme snapshot: id plus its persisted setting values. */
+interface LastWorkingTheme {
+  themeId: string | null;
+  settings: Record<string, unknown> | null;
+}
+
+function isStoredRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+async function readLastWorkingTheme(ctx: AppContext): Promise<LastWorkingTheme> {
+  const stored = (await ctx.database.repos.settings.get(LAST_WORKING_THEME_KEY)) as
+    { themeId?: unknown; settings?: unknown } | null | undefined;
+  if (!isStoredRecord(stored)) return { themeId: null, settings: null };
+  return {
+    themeId: typeof stored['themeId'] === 'string' ? stored['themeId'] : null,
+    settings: isStoredRecord(stored['settings']) ? stored['settings'] : null,
+  };
+}
+
 const EMPTY_THEME_BOOT: ThemeBootResponse = { themeId: null, cssUrls: [], light: {}, dark: {} };
 
 /**
- * Resolve the pre-hydration boot payload for the active theme: its resolved
- * token variables (both modes) and package stylesheet URLs. Any problem
- * (no active theme, broken extends chain, invalid manifest) degrades to an
- * empty boot — the client simply paints built-in defaults.
+ * Build the pre-hydration boot payload for one theme: its resolved token
+ * variables (both modes) and package stylesheet URLs. Returns null when the
+ * theme or any parent in its `extends` chain is missing, cyclic or fails
+ * manifest validation.
  */
-function resolveThemeBoot(items: InstalledTheme[]): ThemeBootResponse {
-  const active = items.find((item) => item.enabled);
-  if (!active) return EMPTY_THEME_BOOT;
-  const byId = new Map(items.map((item) => [item.id, item]));
-  const parents: InstalledTheme[] = [];
-  const seen = new Set<string>([active.id]);
-  let parentId =
-    typeof active.manifest['extends'] === 'string' ? active.manifest['extends'] : undefined;
-  while (parentId) {
-    if (seen.has(parentId)) return EMPTY_THEME_BOOT;
-    seen.add(parentId);
-    const parent = byId.get(parentId);
-    if (!parent) return EMPTY_THEME_BOOT;
-    parents.unshift(parent);
-    parentId =
-      typeof parent.manifest['extends'] === 'string' ? parent.manifest['extends'] : undefined;
+function tryBootTheme(entries: ThemeRegistryEntry[], themeId: string): ThemeBootResponse | null {
+  const byId = new Map(entries.map((entry) => [entry.id, entry]));
+  const chain: Array<{ entry: ThemeRegistryEntry; manifest: ThemeManifest }> = [];
+  const seen = new Set<string>();
+  let current: string | undefined = themeId;
+  while (current) {
+    if (seen.has(current)) return null;
+    seen.add(current);
+    const entry = byId.get(current);
+    if (!entry) return null;
+    const validation = validateThemeManifest(entry.manifest);
+    if (!validation.ok) return null;
+    chain.unshift({ entry, manifest: validation.value });
+    current = validation.value.extends;
   }
-  try {
-    const manifests = [...parents, active].map((item) => {
-      const result = validateThemeManifest(item.manifest);
-      if (!result.ok) throw result.error;
-      return result.value;
-    });
-    const activeManifest = manifests.at(-1);
-    if (!activeManifest) return EMPTY_THEME_BOOT;
-    const parentManifests = manifests.slice(0, -1);
-    const cssUrls = [...parents, active].flatMap((item) =>
-      [item.componentsCssUrl, item.shellCssUrl].filter(
-        (href): href is string => typeof href === 'string' && href.length > 0,
-      ),
-    );
-    return {
-      themeId: active.id,
-      cssUrls,
-      light: buildThemeVariables(activeManifest, 'light', parentManifests),
-      dark: buildThemeVariables(activeManifest, 'dark', parentManifests),
-    };
-  } catch {
-    return EMPTY_THEME_BOOT;
+  const active = chain.at(-1);
+  if (!active) return null;
+  const parentManifests = chain.slice(0, -1).map((item) => item.manifest);
+  const cssUrls = chain.flatMap(({ entry, manifest }) =>
+    [assetUrl(entry.id, manifest.componentsCss), assetUrl(entry.id, manifest.shell)].filter(
+      (href): href is string => typeof href === 'string' && href.length > 0,
+    ),
+  );
+  return {
+    themeId,
+    cssUrls,
+    light: buildThemeVariables(active.manifest, 'light', parentManifests),
+    dark: buildThemeVariables(active.manifest, 'dark', parentManifests),
+  };
+}
+
+/**
+ * Resolve the pre-hydration boot payload for the stored active theme: its
+ * resolved token variables (both modes) and package stylesheet URLs. When
+ * the active theme is missing, broken or invalid, fall back to the last
+ * working theme (ТЗ §83). An empty boot remains the final resort (no active
+ * theme, explicit reset, or a broken fallback too) — the client simply
+ * paints built-in defaults, exactly like before.
+ */
+function resolveThemeBoot(
+  entries: ThemeRegistryEntry[],
+  lastWorking: LastWorkingTheme,
+): ThemeBootResponse {
+  const active = entries.find((entry) => entry.enabled);
+  if (active) {
+    const boot = tryBootTheme(entries, active.id);
+    if (boot) return boot;
   }
+  if (lastWorking.themeId) {
+    const boot = tryBootTheme(entries, lastWorking.themeId);
+    if (boot) return boot;
+  }
+  return EMPTY_THEME_BOOT;
 }
 
 /** Merge manifest defaults with stored user values. */
@@ -320,14 +360,17 @@ export async function registerThemeRoutes(app: TypedApp, ctx: AppContext): Promi
 
   // Pre-hydration bootstrap (THEME-44): an inline script in index.html fetches
   // this before React mounts so the active theme paints on the first frame
-  // instead of flashing the built-in one. No active/valid theme → empty boot;
-  // the client falls back to defaults exactly like before.
+  // instead of flashing the built-in one. A missing, broken or invalid
+  // active theme falls back to the last working theme (ТЗ §83); an empty
+  // boot remains the final resort — the client paints defaults, exactly
+  // like before. Safe mode must always boot empty so a broken theme cannot
+  // be resurrected by the fallback (ТЗ §6.6).
   app.get(
     '/api/v2/themes/boot',
     { schema: { response: { 200: ThemeBootResponseSchema } } },
     async (): Promise<ThemeBootResponse> => {
-      const items = repo.list().map(toInstalledTheme);
-      return resolveThemeBoot(items);
+      if (ctx.config.safeMode) return EMPTY_THEME_BOOT;
+      return resolveThemeBoot(repo.list(), await readLastWorkingTheme(ctx));
     },
   );
 
@@ -401,13 +444,47 @@ export async function registerThemeRoutes(app: TypedApp, ctx: AppContext): Promi
       },
     },
     async (request) => {
-      if (!repo.getById(request.params.id)) {
+      const entries = repo.list();
+      if (!entries.some((entry) => entry.id === request.params.id)) {
         throw new AppError({
           code: ErrorCodes.THEME_NOT_FOUND,
           params: { themeId: request.params.id },
         });
       }
-      assertActivationGraph(request.params.id, repo.list());
+      // Re-validate the target manifest and its activation graph before any
+      // state changes (ТЗ §83): a broken theme must never displace the
+      // currently working one.
+      assertActivationGraph(request.params.id, entries);
+
+      // Persist the current working theme as the last-working fallback, then
+      // flip. Only a fully valid active theme becomes the fallback — a
+      // corrupted one keeps the previous snapshot so boot recovery stays
+      // intact. Re-activating the already-active theme changes nothing.
+      const currentActive = entries.find((entry) => entry.enabled);
+      if (currentActive && currentActive.id !== request.params.id) {
+        let currentIsWorking = true;
+        try {
+          assertActivationGraph(currentActive.id, entries);
+        } catch {
+          currentIsWorking = false;
+        }
+        if (currentIsWorking) {
+          const settings = (await ctx.database.repos.settings.get(
+            themeSettingsKey(currentActive.id),
+          )) as Record<string, unknown> | null | undefined;
+          await ctx.database.repos.settings.set(LAST_WORKING_THEME_KEY, {
+            themeId: currentActive.id,
+            settings: settings ?? null,
+          });
+        }
+      } else if (!currentActive) {
+        // First activation (or right after a reset): no fallback exists yet.
+        await ctx.database.repos.settings.set(LAST_WORKING_THEME_KEY, {
+          themeId: null,
+          settings: null,
+        });
+      }
+
       const active = repo.activate(request.params.id);
       if (!active) {
         throw new AppError({
@@ -424,6 +501,13 @@ export async function registerThemeRoutes(app: TypedApp, ctx: AppContext): Promi
     { schema: { response: { 200: ThemeActivationResultSchema } } },
     async () => {
       repo.resetActive();
+      // An explicit reset must stick: drop the last-working fallback so the
+      // next boot does not resurrect the previously active theme — the
+      // empty boot (built-in defaults) is the intended outcome.
+      await ctx.database.repos.settings.set(LAST_WORKING_THEME_KEY, {
+        themeId: null,
+        settings: null,
+      });
       return { activeThemeId: null };
     },
   );

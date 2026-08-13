@@ -59,6 +59,10 @@ mount })` with `slot: 'left' | 'right'`.
 - **Command palette actions** — `api.ui.commands.register({ id, title, run })`.
 - **Hotkeys** — `api.ui.hotkeys.register({ id, combo, run })`, for example
   `combo: 'mod+shift+k'`.
+- **Declarative slots** — `api.ui.slots.contribute({ slot, title, priority,
+permission, action, when })` contributes buttons to the five stable
+  semantic slot ids without shipping any markup or script. See
+  [Declarative UI Slots](slots.md).
 
 Slash commands register separately through `api.slash.register({ name,
 description, run })`, and prompt interceptors through `api.interceptors`.
@@ -131,3 +135,10 @@ them, disabling a plugin removes all of its handlers, timers, DOM nodes,
 subscriptions, and background requests. See [Lifecycle](lifecycle.md) for the
 full teardown contract, and the generated
 [Plugin SDK reference](../../api/plugin-sdk/) for the precise types.
+
+## Related
+
+- [Declarative UI Slots](slots.md) — the declarative `api.ui.slots` surface.
+- [Extension Availability](availability.md) — where plugin surfaces exist at all.
+- [Legacy Frontend Gate](legacy-frontend.md) — the app-level opt-in for
+  legacy main-window scripts.

@@ -28,12 +28,22 @@ const DEFAULTS: AppSettings = {
   instructFormatId: null,
 };
 
+/**
+ * Server-registered extension settings (ТЗ §10 "no arbitrary third-party JS in
+ * the main WebView"): the app-level gate for legacy frontend script injection.
+ * Default false; exposed through the existing settings API (GET /api/v2/settings)
+ * so the web host can read it without web-side server knowledge.
+ */
+const EXTENSION_SETTING_DEFAULTS: Record<string, unknown> = {
+  'extensions.legacyFrontend': false,
+};
+
 export class SettingsRepository {
   constructor(private readonly db: DrizzleDb) {}
 
   async getAll(): Promise<AppSettings> {
     const rows = await this.db.select().from(settings);
-    const result: Record<string, unknown> = { ...DEFAULTS };
+    const result: Record<string, unknown> = { ...DEFAULTS, ...EXTENSION_SETTING_DEFAULTS };
     for (const row of rows) {
       result[row.key] = parseJson<unknown>(row.value, null);
     }

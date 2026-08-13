@@ -1,4 +1,14 @@
-/** Trusted main-window loader for explicitly consented SillyTavern legacy UI code. */
+/**
+ * Trusted main-window loader for explicitly consented SillyTavern legacy UI
+ * code.
+ *
+ * ТЗ §10/§87: no arbitrary third-party JS in the main WebView. Legacy
+ * frontend entries inject a plain `<script>` into the main document, so
+ * loading requires BOTH the per-plugin `legacy.trusted` consent AND the
+ * app-level `extensions.legacyFrontend` opt-in (default off). The
+ * `window.SillyTavern` globals stay installed — they are a documented legacy
+ * contract (AGENTS.md §18) and inert without an injected entry.
+ */
 import type { i18n } from 'i18next';
 import type { InstalledPlugin } from '@neotavern/contracts';
 
@@ -8,12 +18,48 @@ interface LoadedLegacyPlugin {
   localeLanguages: string[];
 }
 
+/**
+ * Legacy frontend gate decision (ТЗ §10/§87): inject only when the admin
+ * consented `legacy.trusted` for the plugin AND the app-level
+ * `extensions.legacyFrontend` setting is enabled.
+ */
+export function shouldLoadLegacyFrontend(input: {
+  legacyTrusted: boolean;
+  appGateEnabled: boolean;
+}): boolean {
+  return input.legacyTrusted && input.appGateEnabled;
+}
+
+/**
+ * Defensive read of the app-level `extensions.legacyFrontend` setting from
+ * the settings payload. The settings API serves a flat key-value object
+ * (repo keys are literal, e.g. `'extensions.legacyFrontend'`), so the flat
+ * key is the single contract shape; unknown shapes safely read as `false`.
+ */
+export function readLegacyFrontendSetting(settings: unknown): boolean {
+  if (typeof settings !== 'object' || settings === null) return false;
+  return (settings as Record<string, unknown>)['extensions.legacyFrontend'] === true;
+}
+
 class LegacyFrontendRuntime {
   private readonly loaded = new Map<string, LoadedLegacyPlugin>();
   private i18n: i18n | null = null;
+  private appGateEnabled = false;
+  private gateWarningLogged = false;
 
   configureI18n(instance: i18n): void {
     this.i18n = instance;
+  }
+
+  /**
+   * App-level opt-in for legacy frontend injection (`extensions.legacyFrontend`,
+   * default off). Turning the gate off unloads every injected legacy entry
+   * immediately; the `window.SillyTavern` globals remain installed.
+   */
+  setAppGateEnabled(enabled: boolean): void {
+    if (enabled === this.appGateEnabled) return;
+    this.appGateEnabled = enabled;
+    if (!enabled) this.clear();
   }
 
   sync(plugins: readonly InstalledPlugin[]): void {
@@ -36,7 +82,11 @@ class LegacyFrontendRuntime {
   }
 
   private load(plugin: InstalledPlugin): void {
-    if (!plugin.grantedPermissions.includes('legacy.trusted')) return;
+    const legacyTrusted = plugin.grantedPermissions.includes('legacy.trusted');
+    if (!shouldLoadLegacyFrontend({ legacyTrusted, appGateEnabled: this.appGateEnabled })) {
+      if (legacyTrusted) this.warnGateOnce();
+      return;
+    }
     const script = document.createElement('script');
     script.type = 'module';
     // Cache-buster on the module URL: the ESM module map is keyed by URL, so
@@ -49,6 +99,15 @@ class LegacyFrontendRuntime {
     document.head.append(script);
     this.loaded.set(plugin.id, { plugin, script, localeLanguages: [] });
     this.loadI18nResources(plugin);
+  }
+
+  /** One warning per session when the app-level gate hides trusted entries. */
+  private warnGateOnce(): void {
+    if (this.gateWarningLogged) return;
+    this.gateWarningLogged = true;
+    console.warn(
+      '[legacy] Legacy frontend injection is off: trusted legacy plugins are skipped until the app-level "extensions.legacyFrontend" setting is enabled.',
+    );
   }
 
   /** Manifest i18n resources register under the `legacy.<id>` namespace. */

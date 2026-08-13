@@ -6,7 +6,8 @@
 import type { GenerationEvent, PromptTriggerId } from '@neotavern/contracts';
 import { ErrorCodes } from '@neotavern/shared';
 import { runLegacyPromptInterceptors } from '@neotavern/legacy-compat';
-import { getCsrfToken, setCsrfToken, sseUrl } from './client.js';
+import { legacyRaw } from './backend.js';
+import { getCsrfToken, setCsrfToken } from './client.js';
 import { frontendPluginRuntime } from '../plugins/runtime.js';
 
 export interface GenerateHandlers {
@@ -33,7 +34,7 @@ export async function streamGeneration(
   signal: AbortSignal,
 ): Promise<void> {
   const csrfToken = getCsrfToken();
-  const response = await fetch(sseUrl(`/chats/${chatId}/generate`), {
+  const response = await fetch(legacyRaw().sseUrl(`/chats/${chatId}/generate`), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -112,11 +113,10 @@ export async function streamGeneration(
           ...(message.name ? { name: message.name } : {}),
         }));
         const interceptorResponse = await fetch(
-          sseUrl(`/plugin-intercepts/${encodeURIComponent(event.requestId)}`),
+          legacyRaw().sseUrl(`/plugin-intercepts/${encodeURIComponent(event.requestId)}`),
           {
             method: 'POST',
             headers: {
-              'Content-Type': 'application/json',
               ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
             },
             body: JSON.stringify({

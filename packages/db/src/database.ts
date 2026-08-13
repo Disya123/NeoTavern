@@ -35,6 +35,7 @@ import {
   PluginStateRepository,
 } from './repositories/pluginCapabilities.js';
 import { PluginAuthRepository } from './repositories/pluginAuth.js';
+import { PluginSecretRepository } from './repositories/pluginSecrets.js';
 
 export interface Repositories {
   appMeta: AppMetaRepository;
@@ -63,6 +64,7 @@ export interface Repositories {
   pluginState: PluginStateRepository;
   capabilityGrants: CapabilityGrantRepository;
   authConnections: PluginAuthRepository;
+  pluginSecrets: PluginSecretRepository;
 }
 
 export interface DatabaseDiagnostics {
@@ -161,6 +163,7 @@ export function createAppDatabase(path: string, options: CreateDatabaseOptions =
     pluginState: new PluginStateRepository(sqlite),
     capabilityGrants: new CapabilityGrantRepository(sqlite),
     authConnections: new PluginAuthRepository(sqlite),
+    pluginSecrets: new PluginSecretRepository(sqlite),
   };
 
   return {

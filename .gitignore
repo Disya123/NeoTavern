@@ -76,3 +76,6 @@ apps/desktop/src-tauri/resources/runtime/*
 .tmp-desktop-smoke/
 
 apps/desktop/src-tauri/.release-config.generated.json
+crates/target/
+crates/*/target/
+.scratch/

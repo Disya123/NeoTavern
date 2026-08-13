@@ -1,11 +1,13 @@
 /** Applies the persisted theme mode and language to the document. Renders
  * nothing; kept as a component so it lives inside the provider tree. */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { validateThemeManifest } from '@neotavern/theme-sdk';
-import { useUiStore } from '../state/ui.js';
+import type { InstalledTheme } from '@neotavern/contracts';
+import { useUiStore, type InterfacePreferences } from '../state/ui.js';
 import { useThemes } from '../api/hooks.js';
 import {
+  THEME_APPLY_FAILED_EVENT,
   applyInstalledTheme,
   applyThemeSettings,
   clearThemeOverrides,
@@ -17,6 +19,62 @@ import {
 } from '../theme/apply.js';
 import { setDocumentLanguage } from '../lib/lang.js';
 import { frontendPluginRuntime } from '../plugins/runtime.js';
+
+/**
+ * Build the resolved parent chain for a theme (root first, closest last).
+ * Returns null when the chain is broken (cycle or missing parent) so callers
+ * can fall back to built-in defaults.
+ */
+function buildParentChain(
+  theme: InstalledTheme,
+  items: readonly InstalledTheme[],
+): InstalledTheme[] | null {
+  const byId = new Map(items.map((item) => [item.id, item]));
+  const parents: InstalledTheme[] = [];
+  const seen = new Set<string>([theme.id]);
+  let parentId =
+    typeof theme.manifest['extends'] === 'string' ? theme.manifest['extends'] : undefined;
+  while (parentId) {
+    if (seen.has(parentId)) return null;
+    seen.add(parentId);
+    const parent = byId.get(parentId);
+    if (!parent) return null;
+    parents.unshift(parent);
+    parentId =
+      typeof parent.manifest['extends'] === 'string' ? parent.manifest['extends'] : undefined;
+  }
+  return parents;
+}
+
+/** Snapshot the current user-level interface preferences from the store. */
+function snapshotInterfacePreferences(): InterfacePreferences {
+  const {
+    density,
+    scale,
+    contrast,
+    fontProfile,
+    motion,
+    chatStyle,
+    chatAvatarStyle,
+    userMessagePosition,
+    characterMessagePosition,
+    uiOpacity,
+    uiGlassBlur,
+  } = useUiStore.getState();
+  return {
+    density,
+    scale,
+    contrast,
+    fontProfile,
+    motion,
+    chatStyle,
+    chatAvatarStyle,
+    userMessagePosition,
+    characterMessagePosition,
+    uiOpacity,
+    uiGlassBlur,
+  };
+}
 
 export function ThemeSync() {
   const themeMode = useUiStore((s) => s.themeMode);
@@ -37,6 +95,10 @@ export function ThemeSync() {
   const { i18n } = useTranslation();
   const activeThemeId = themes.data?.activeThemeId ?? null;
   const activeTheme = themes.data?.items.find((item) => item.id === activeThemeId) ?? undefined;
+  /** Theme id of the last successfully applied theme (for revert-on-failure). */
+  const lastAppliedThemeId = useRef<string | null>(null);
+  /** Guards against re-entrant reverts while a failed re-apply is itself reverting. */
+  const revertingRef = useRef(false);
 
   // OS color scheme / motion as reactive state. The theme is applied inline
   // on :root, which beats stylesheet media queries — so OS preference changes
@@ -93,33 +155,47 @@ export function ThemeSync() {
     setDocumentLanguage(language);
   }, [language]);
 
+  // A theme that fails to apply (invalid manifest, or a package stylesheet
+  // that never loads) reverts to the last successfully applied theme;
+  // built-in defaults are the final resort. Stale failures (a link error
+  // from a previously applied theme) and re-entrant failures while already
+  // reverting are ignored.
   useEffect(() => {
-    const {
-      density,
-      scale,
-      contrast,
-      fontProfile,
-      motion,
-      chatStyle,
-      chatAvatarStyle,
-      userMessagePosition,
-      characterMessagePosition,
-      uiOpacity,
-      uiGlassBlur,
-    } = useUiStore.getState();
-    const prefs = {
-      density,
-      scale,
-      contrast,
-      fontProfile,
-      motion,
-      chatStyle,
-      chatAvatarStyle,
-      userMessagePosition,
-      characterMessagePosition,
-      uiOpacity,
-      uiGlassBlur,
+    const onApplyFailed = (event: Event): void => {
+      const detail = (event as CustomEvent<{ themeId?: unknown }>).detail;
+      const failedThemeId = typeof detail?.themeId === 'string' ? detail.themeId : null;
+      if (revertingRef.current || failedThemeId === null || failedThemeId !== activeThemeId) {
+        return;
+      }
+      revertingRef.current = true;
+      try {
+        const prefs = snapshotInterfacePreferences();
+        const previousId = lastAppliedThemeId.current;
+        const previous =
+          previousId && previousId !== failedThemeId
+            ? themes.data?.items.find((item) => item.id === previousId)
+            : undefined;
+        if (previous) {
+          const parents = buildParentChain(previous, themes.data?.items ?? []);
+          if (parents) {
+            applyInstalledTheme(previous, parents, themeMode);
+          } else {
+            clearThemeOverrides();
+          }
+        } else {
+          clearThemeOverrides();
+        }
+        setInterfacePreferences(prefs);
+      } finally {
+        revertingRef.current = false;
+      }
     };
+    window.addEventListener(THEME_APPLY_FAILED_EVENT, onApplyFailed);
+    return () => window.removeEventListener(THEME_APPLY_FAILED_EVENT, onApplyFailed);
+  }, [activeThemeId, themeMode, themes.data]);
+
+  useEffect(() => {
+    const prefs = snapshotInterfacePreferences();
     if (safeMode) {
       clearThemeOverrides();
       setInterfacePreferences(prefs);
@@ -131,33 +207,21 @@ export function ThemeSync() {
       setInterfacePreferences(prefs);
       return;
     }
-    const byId = new Map(themes.data?.items.map((item) => [item.id, item]) ?? []);
-    const parents = [];
-    const seen = new Set<string>([active.id]);
-    let parentId =
-      typeof active.manifest['extends'] === 'string' ? active.manifest['extends'] : undefined;
-    while (parentId) {
-      if (seen.has(parentId)) {
-        clearThemeOverrides();
-        setInterfacePreferences(prefs);
-        return;
-      }
-      seen.add(parentId);
-      const parent = byId.get(parentId);
-      if (!parent) {
-        clearThemeOverrides();
-        setInterfacePreferences(prefs);
-        return;
-      }
-      parents.unshift(parent);
-      parentId =
-        typeof parent.manifest['extends'] === 'string' ? parent.manifest['extends'] : undefined;
+    const parents = buildParentChain(active, themes.data?.items ?? []);
+    if (!parents) {
+      clearThemeOverrides();
+      setInterfacePreferences(prefs);
+      return;
     }
     try {
-      applyInstalledTheme(active, parents, themeMode);
+      const applied = applyInstalledTheme(active, parents, themeMode);
       setInterfacePreferences(prefs);
-      frontendPluginRuntime.emitEvent('theme.changed', { themeId: active.id });
+      if (applied) {
+        lastAppliedThemeId.current = active.id;
+        frontendPluginRuntime.emitEvent('theme.changed', { themeId: active.id });
+      }
     } catch {
+      // Defensive: an unexpected throw still reverts to built-in defaults.
       clearThemeOverrides();
       setInterfacePreferences(prefs);
     }

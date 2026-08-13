@@ -93,10 +93,14 @@ Tokens resolve in this order, later winning:
 2. The parent-theme chain, root first.
 3. The theme itself.
 
-Dark mode falls back to the theme's light tokens when no dark override
-exists, so a light-only theme still works in dark mode. The `resolveTokens`
-and `buildThemeVariables` functions in `@neotavern/theme-sdk` implement this, and
-the host writes the result as CSS variables on `document.documentElement`.
+A theme may omit any subset of the canonical names: every omitted token
+resolves to the built-in default for the active mode (`DEFAULT_LIGHT_TOKENS`
+/ `DEFAULT_DARK_TOKENS`), so an additive theme never leaves a token
+undefined. Dark mode falls back to the theme's light tokens when no dark
+override exists, so a light-only theme still works in dark mode. The
+`resolveTokens` and `buildThemeVariables` functions in `@neotavern/theme-sdk`
+implement this, and the host writes the result as CSS variables on
+`document.documentElement`.
 
 ## What Components May Not Hardcode
 

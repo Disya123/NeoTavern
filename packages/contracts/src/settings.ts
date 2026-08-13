@@ -114,6 +114,15 @@ export const AppSettingsSchema = Type.Object({
   ),
   /** Free-form, UI-owned settings (panel layout, etc.). */
   ui: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
+  /**
+   * Phase 10: app-level gate for legacy SillyTavern frontend entrypoints
+   * (`/api/v2/plugins/:id/legacy.js` script injection into the main
+   * document). Flat dotted key (same convention as `theme.settings.*`).
+   * Default off: legacy frontend plugins additionally require the admin-only
+   * `legacy.trusted` consent per plugin (ТЗ §10/§18 — no arbitrary
+   * third-party JS in the main WebView unless explicitly opted in).
+   */
+  'extensions.legacyFrontend': Type.Optional(Type.Boolean()),
 });
 export type AppSettings = Static<typeof AppSettingsSchema>;
 

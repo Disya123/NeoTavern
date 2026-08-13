@@ -35,6 +35,12 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      # ТЗ §79 merge-blocking: dependency direction / forbidden-import rules.
+      # Runtime Kernel stays host-neutral (no HTTP/UI/platform deps, no
+      # is_server/is_android branching); packages never import Rust internals.
+      - name: Dependency direction / forbidden imports
+        run: node scripts/check-dependency-rules.mjs
+
       - name: Typecheck
         run: pnpm typecheck
 
@@ -127,3 +133,129 @@ jobs:
           name: platform-parity-${{ matrix.os }}
           path: platform-parity-${{ matrix.os }}.json
           retention-days: 90
+
+  # Product Wire Contracts (ТЗ §6, Фаза 0): deterministic codegen must leave
+  # the tree clean, and the generated Rust boundary DTOs must compile and pass
+  # the cross-language corpus. The workspace spans contracts-generated,
+  # storage, runtime-kernel (Phase 1+) and the Phase 4 remote-http adapter;
+  # all crates are tested together.
+  contracts-rust:
+    name: Wire contracts codegen + Rust corpus
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build contracts (codegen input)
+        run: pnpm --filter @neotavern/contracts build
+
+      - name: Contract codegen determinism (must be byte-identical, no writes)
+        run: node tools/contract-codegen/codegen.mjs --check
+
+      - name: Contract semantic diff self-test (ТЗ §6.7)
+        run: node tools/contract-codegen/diff-test.mjs
+
+      - name: Generated artifacts must be committed (no working-tree diff)
+        run: git diff --exit-code -- packages/contracts/generated crates/contracts-generated/src/generated.rs
+
+      - name: Rust boundary corpus + kernel tests
+        run: cargo test --manifest-path crates/Cargo.toml
+
+      # ТЗ §79 merge-blocking: Rust fmt/clippy/tests. `contracts-generated` is
+      # deliberately excluded from fmt — its generated.rs is emitted
+      # byte-identically by codegen.mjs in generator style and its determinism
+      # is enforced by the codegen --check step above (hand-editing forbidden,
+      # ТЗ §6.1). `cargo fmt --all` would reformat it, so the check lists the
+      # hand-written crates explicitly.
+      - name: Rust clippy (workspace, all targets, warnings denied)
+        run: cargo clippy --manifest-path crates/Cargo.toml --workspace --all-targets -- -D warnings
+
+      # Phase 9 remote feature gate (ТЗ §11.2): neotavern-tauri-local's
+      # optional `remote` feature wires the desktop Remote Access host
+      # service into the shell; the workspace commands above build the crate
+      # without it, so compile and lint it with the feature enabled here.
+      - name: Phase 9 remote feature gate (tauri-local)
+        working-directory: crates
+        run: cargo test -p neotavern-tauri-local --features remote && cargo clippy -p neotavern-tauri-local --features remote --all-targets -- -D warnings
+
+      - name: Rust formatting (hand-written crates)
+        run: cargo fmt --manifest-path crates/Cargo.toml -p runtime-kernel -p neotavern-storage -p remote-http-adapter -p neotavern-mobile-ffi -p neotavern-cli -p built-in-providers -p provider-sdk -p neotavern-envelope -p neotavern-tauri-local -p neotavern-android-jni -p neotavern-desktop-remote --check
+
+  # Android gates — Phase 5: Android Local foundation (JNI bridge, host,
+  # mobile transport, CI gates, ТЗ §7.2) + Phase 8: Android background
+  # execution (ТЗ §8): the JNI bridge is built for arm64-v8a + x86_64 via
+  # cargo-ndk, then the debug APK, JVM unit tests and the Phase 8
+  # instrumented-test APK are verified (assembleDebug + testDebugUnitTest +
+  # assembleDebugAndroidTest); device-level instrumented tests run nightly
+  # (android-device in nightly.yml) across the API 26 + 34 emulator matrix.
+  android-build:
+    name: Android build (JNI + APK + unit tests)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android, armv7-linux-androideabi, x86_64-linux-android, i686-linux-android
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # ~/.cargo caches the installed cargo-ndk binary plus the crate registry;
+      # the key is pinned to the cargo-ndk version so a toolchain bump re-seeds.
+      - name: Cache cargo (cargo-ndk + registry)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo
+          key: cargo-ndk-3.5.4-${{ runner.os }}-${{ hashFiles('crates/Cargo.lock', 'crates/**/Cargo.toml') }}
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --version 3.5.4 --locked
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install NDK 27.x
+        run: sdkmanager --install "ndk;27.1.12297006"
+
+      # cargo-ndk locates the NDK through ANDROID_NDK_HOME.
+      - name: Set ANDROID_NDK_HOME
+        run: echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/27.1.12297006" >> "$GITHUB_ENV"
+
+      # build-libs.sh is cwd-sensitive and must run from apps/android; it emits
+      # apps/android/app/src/main/jniLibs/{arm64-v8a,x86_64}/libneotavern_android_jni.so
+      # (build matrix per ТЗ §7.2: Gradle 8.9 / AGP 8.5.2 / Kotlin 1.9.24, JDK 17).
+      - name: Build JNI libraries (arm64-v8a, x86_64)
+        working-directory: apps/android
+        run: bash scripts/build-libs.sh
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      # The instrumented-test APK (androidTest) is assembled here so the
+      # Phase 8 BackgroundExecutionInstrumentedTest COMPILES on every PR;
+      # the tests themselves run on the nightly emulator (android-device).
+      - name: Assemble debug APK + JVM unit tests + instrumented test APK
+        run: gradle -p apps/android :app:assembleDebug :app:testDebugUnitTest :app:assembleDebugAndroidTest
+
+      - name: Upload debug APK artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: neotavern-android-debug
+          path: apps/android/app/build/outputs/apk/debug/*.apk
+          retention-days: 14

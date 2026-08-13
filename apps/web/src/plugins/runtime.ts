@@ -8,6 +8,7 @@ import { attachKernelServices } from './kernel/index.js';
 import { WindowRoleManager, type WindowRoleSnapshot } from './windows.js';
 import { RUN_DEADLINE_MS } from './kernel/commands.js';
 import { snapshotPluginUiTokens } from './themeTokens.js';
+import { slotRegistry, slotsContributionFromDefinition } from './slots.js';
 
 /**
  * Permissions-Policy directives denied in every plugin sandbox iframe.
@@ -83,6 +84,7 @@ export type PluginRegistrationKind =
   | 'hotkeys'
   | 'slash'
   | 'interceptors'
+  | 'slots'
   | 'overlays'
   | 'messageBlocks';
 
@@ -107,6 +109,10 @@ export interface PluginUiRegistration {
     timeoutMs?: number;
     /** Lower renders first (message actions). Default 100. */
     order?: number;
+    /** Declarative slot contributions: v2 permission gate (optional). */
+    permission?: string;
+    /** Declarative slot contributions: what the button does (ТЗ §53). */
+    action?: { type: 'command'; commandId: string } | { type: 'event'; event: string };
     /** rev4 §A4: registered via kernel `commands/surfaces.register`. */
     kernel?: boolean;
   };
@@ -409,6 +415,7 @@ const REQUIRED_PERMISSION: Partial<Record<PluginRegistrationKind, string>> = {
   hotkeys: 'ui.toolbar',
   slash: 'chat.write',
   interceptors: 'prompt.modify',
+  slots: 'ui.slots',
 };
 
 /** rev4 §A4: feature registry advertised in the host handshake. */
@@ -521,7 +528,12 @@ export class FrontendPluginRuntime {
     const revision = typeof record.revision === 'number' ? record.revision : 0;
     frame.session?.notifyCapabilityRevoked(record.name, revision);
     frame.iframe.contentWindow?.postMessage(
-      { type: 'neotavern.capability.revoked', pluginId: record.pluginId, name: record.name, revision },
+      {
+        type: 'neotavern.capability.revoked',
+        pluginId: record.pluginId,
+        name: record.name,
+        revision,
+      },
       '*',
     );
     // Keep the live frame grant list in sync with the server so enforcement
@@ -1776,7 +1788,10 @@ export class FrontendPluginRuntime {
       this.registrations.delete(registrationId);
       registrationsChanged = true;
     }
-    if (registrationsChanged) this.publish();
+    if (registrationsChanged) {
+      slotRegistry.unregisterByPlugin(pluginId);
+      this.publish();
+    }
   }
 
   private removeFrame(pluginId: string, replacement?: InstalledPlugin): void {
@@ -1842,6 +1857,7 @@ export class FrontendPluginRuntime {
     for (const [registrationId, registration] of this.registrations) {
       if (registration.pluginId === pluginId) this.registrations.delete(registrationId);
     }
+    slotRegistry.unregisterByPlugin(pluginId);
     // rev4 §D: a removed plugin takes its provided services (and the consumer
     // connections pointing at them) and its own consumer connections with it.
     this.kernelServiceRemoveByPlugin(pluginId);
@@ -1852,7 +1868,9 @@ export class FrontendPluginRuntime {
     this.publish();
     // Let host surfaces drop anything the plugin left behind (notifications,
     // dialogs) — "no handlers, timers, DOM elements or background requests".
-    globalThis.dispatchEvent?.(new CustomEvent('neotavern-plugin-removed', { detail: { pluginId } }));
+    globalThis.dispatchEvent?.(
+      new CustomEvent('neotavern-plugin-removed', { detail: { pluginId } }),
+    );
     if (next) this.createFrame(next);
     this.syncEventStream();
   }
@@ -1890,6 +1908,20 @@ export class FrontendPluginRuntime {
         return;
       }
       this.registrations.set(registration.registrationId, registration);
+      if (registration.kind === 'slots') {
+        // Declarative slot contributions cross the sandbox channel as plain
+        // data and land in the host slot registry (ТЗ §53); `when` is a
+        // function and never leaves the iframe.
+        const contribution = slotsContributionFromDefinition(registration.definition);
+        if (contribution !== null) {
+          slotRegistry.register({
+            pluginId: registration.pluginId,
+            pluginName: registration.pluginName,
+            registrationId: registration.registrationId,
+            contribution,
+          });
+        }
+      }
       this.publish();
       return;
     }
@@ -1912,7 +1944,10 @@ export class FrontendPluginRuntime {
       frame.subscriptions.add(message.event);
       return;
     }
-    if (message.type === 'neotavern.plugin.event.unsubscribe' && typeof message.event === 'string') {
+    if (
+      message.type === 'neotavern.plugin.event.unsubscribe' &&
+      typeof message.event === 'string'
+    ) {
       frame.subscriptions.delete(message.event);
       return;
     }
@@ -1926,7 +1961,11 @@ export class FrontendPluginRuntime {
       return;
     }
     if (message.type === 'neotavern.plugin.unregister' && message.registrationId) {
+      const removed = this.registrations.get(message.registrationId);
       this.registrations.delete(message.registrationId);
+      if (removed?.kind === 'slots') {
+        slotRegistry.unregister(message.registrationId);
+      }
       this.removeOverlay(frame, message.registrationId, false);
       this.publish();
       return;
@@ -1985,7 +2024,10 @@ export class FrontendPluginRuntime {
       this.finalizeFrameRemoval(message.pluginId);
       return;
     }
-    if (message.type === 'neotavern.plugin.error' || message.type === 'neotavern.plugin.mount.error') {
+    if (
+      message.type === 'neotavern.plugin.error' ||
+      message.type === 'neotavern.plugin.mount.error'
+    ) {
       // A plugin that fails activate()/mount leaves an invisible dead iframe
       // unless surfaced: report it and tear the frame down deterministically.
       const detail = {
@@ -2619,15 +2661,34 @@ function optionalDefinitionFields(
 ): Partial<PluginUiRegistration['definition']> {
   const output: Partial<PluginUiRegistration['definition']> = {};
   for (const [field, limit] of [
-    ['slot', 20],
+    ['slot', 32],
     ['context', 20],
     ['combo', 100],
     ['icon', 100],
     ['description', 500],
     ['placement', 20],
+    ['permission', 64],
   ] as const) {
     const value = optionalSafeString(definition[field], limit);
     if (value) output[field] = value;
+  }
+  const action = definition['action'];
+  if (isRecord(action)) {
+    if (
+      action['type'] === 'command' &&
+      typeof action['commandId'] === 'string' &&
+      action['commandId'].length > 0 &&
+      action['commandId'].length <= 200
+    ) {
+      output['action'] = { type: 'command', commandId: action['commandId'] };
+    } else if (
+      action['type'] === 'event' &&
+      typeof action['event'] === 'string' &&
+      action['event'].length > 0 &&
+      action['event'].length <= 200
+    ) {
+      output['action'] = { type: 'event', event: action['event'] };
+    }
   }
   for (const [field, max] of [
     ['priority', 60_000],
@@ -2692,6 +2753,7 @@ function isRegistrationKind(value: unknown): value is PluginRegistrationKind {
     'hotkeys',
     'slash',
     'interceptors',
+    'slots',
   ].includes(String(value));
 }
 

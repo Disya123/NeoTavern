@@ -7,6 +7,7 @@ import {
   Package,
   ShieldCheck,
   Trash,
+  WarningCircle,
 } from '@phosphor-icons/react';
 import { useState, type ChangeEvent, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -25,6 +26,7 @@ import { SystemSurfaceLink } from '../components/SystemSurfaceLink.js';
 import { ConfirmActionDialog } from '../components/ConfirmActionDialog.js';
 import { PluginAuthDialog, extractAuthClients } from '../components/PluginAuthDialog.js';
 import { usePluginRegistrations } from '../plugins/runtime.js';
+import { useExtensionAvailability } from '../plugins/availability.js';
 import { isSafeMode } from '../theme/apply.js';
 import styles from './PluginsPage.module.css';
 
@@ -45,6 +47,7 @@ export function PluginsPage() {
   const remove = useDeletePlugin();
   const exitSafeMode = useExitPluginSafeMode();
   const pages = usePluginRegistrations('pages');
+  const availability = useExtensionAvailability();
   const errorText = useErrorText();
   const querySafeMode = isSafeMode();
   const safeMode = querySafeMode || Boolean(plugins.data?.safeMode);
@@ -196,6 +199,20 @@ export function PluginsPage() {
             <p>{t('plugins:isolationHint')}</p>
           </div>
         </section>
+
+        <p className={styles.runtimeNote} data-state={availability.nodeRuntime} role="status">
+          {availability.nodeRuntime === 'unavailable' ? (
+            <>
+              <WarningCircle weight="duotone" aria-hidden="true" />
+              <span>{t('plugins:runtimeAvailabilityUnavailable')}</span>
+            </>
+          ) : (
+            <>
+              <CheckCircle weight="duotone" aria-hidden="true" />
+              <span>{t('plugins:runtimeAvailabilityAvailable')}</span>
+            </>
+          )}
+        </p>
 
         <form
           className={styles.gitInstall}

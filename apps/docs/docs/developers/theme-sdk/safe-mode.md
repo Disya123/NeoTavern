@@ -27,12 +27,25 @@ Several guarantees protect the user from a broken theme:
 
 - **Preview before apply** — themes are previewed before activation, and
   installing a package never activates it automatically.
+- **Activation rollback** — activation validates the incoming theme (manifest
+  and the whole `extends` chain) before flipping anything, and the currently
+  working theme is persisted as the last-known-good fallback. A failed
+  activation leaves the active theme untouched.
 - **Safe mode is pre-package** — `?safe=1` is processed before the theme
   registry is consulted, so even a theme whose CSS crashes the renderer is
-  never loaded.
+  never loaded. The server also boots an empty theme payload in safe mode
+  (`NEOTA_SAFE_MODE`), so no third-party theme can be resurrected by the
+  boot fallback.
+- **Last-working boot fallback** — when the stored active theme is missing,
+  broken or invalid, the boot falls back to the last working theme instead
+  of painting a blank interface; if that is unusable too, it stays empty and
+  the client uses the built-in tokens. An empty boot is always a valid
+  outcome.
 - **The reset button** — the reset action returns the built-in theme,
   removes runtime CSS links, and clears inline `--st-*` overrides. Deleting
-  the active theme also resets the saved theme selection.
+  the active theme also resets the saved theme selection, and an explicit
+  reset drops the last-working fallback so the next boot does not resurrect
+  the previous theme.
 - **Themes cannot hide Settings** — the navigation rail always keeps the
   Settings item reachable, because omitted system items are restored in the
   standard order. In safe mode the built-in rail order is used and the

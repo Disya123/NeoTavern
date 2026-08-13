@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/android-schema.json",
+  "identifier": "android-default",
+  "description": "Android window capability. The WebView navigates to the user's server origin; it needs no host-side commands beyond core defaults.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

@@ -874,6 +874,15 @@ test('loads a trusted legacy frontend only after explicit consent and bypasses i
     `,
   });
 
+  // App-level legacy frontend opt-in (`extensions.legacyFrontend`, default
+  // off, ТЗ §10/§87): legacy entries inject into the main document, so the
+  // app gate must be on IN ADDITION to the per-plugin `legacy.trusted`
+  // consent. PATCH before the page load so the app fetches the gate fresh.
+  const legacyGate = await page.request.patch('/api/v2/settings', {
+    data: { 'extensions.legacyFrontend': true },
+  });
+  expect(legacyGate.ok()).toBe(true);
+
   await page.goto('/plugins');
   await page.getByLabel('Install plugin package').setInputFiles({
     name: 'legacy-plugin.stplugin',

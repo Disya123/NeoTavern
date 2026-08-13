@@ -77,8 +77,17 @@ if (exitCode !== 0) {
     `Portable Tauri shell exited with ${exitCode}\n${output.join('')}\n${errors.join('')}`,
   );
 }
-const database = await stat(resolve(dataDir, 'app.db'));
-if (database.size <= 0) throw new Error('Portable shell did not create its local database');
+// Kernel mode (Phase 3+) creates `database.sqlite` via the Runtime Kernel;
+// the legacy server sidecar created `app.db`. Accept either.
+const databaseCandidates = ['database.sqlite', 'app.db'].map((name) => resolve(dataDir, name));
+const databasePath = await Promise.any(
+  databaseCandidates.map(async (candidate) => {
+    const info = await stat(candidate).catch(() => null);
+    if (info && info.size > 0) return candidate;
+    throw new Error(`missing or empty: ${candidate}`);
+  }),
+).catch(() => null);
+if (!databasePath) throw new Error('Portable shell did not create its local database');
 await new Promise((resolvePromise) => setTimeout(resolvePromise, 300));
 const sidecarProbe = spawn('tasklist', ['/FI', 'IMAGENAME eq neotavern-server.exe', '/FO', 'CSV'], {
   windowsHide: true,

@@ -15,6 +15,12 @@ export default tseslint.config(
       'apps/desktop/src-tauri/gen/**',
       'apps/desktop/src-tauri/resources/**',
       'apps/desktop/src-tauri/target/**',
+      // User's in-flight experimental Android bridge harness (not part of
+      // the product build; linted once it lands in a real package).
+      'apps/desktop/mobile-connect/**',
+      // Android local host project (Kotlin/Gradle — not linted by this config).
+      'apps/android/**',
+      'crates/target/**',
       'data/**',
       'backups/**',
       'cache/**',
@@ -89,7 +95,12 @@ export default tseslint.config(
         {
           // @neotavern/gestures is a dependency-leaf (no @st2 imports inside), so
           // consuming it from any package still keeps dependencies "down".
-          patterns: ['@neotavern/*', '!@neotavern/shared', '!@neotavern/contracts', '!@neotavern/gestures'],
+          patterns: [
+            '@neotavern/*',
+            '!@neotavern/shared',
+            '!@neotavern/contracts',
+            '!@neotavern/gestures',
+          ],
         },
       ],
     },

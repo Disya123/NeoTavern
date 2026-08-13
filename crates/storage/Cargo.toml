@@ -1,0 +1,69 @@
+[package]
+name = "neotavern-storage"
+version = "0.1.0"
+edition = "2021"
+description = "NeoTavern Runtime Kernel storage foundation: SQLite ownership, lease, migrations, assets, snapshot, recovery (ТЗ Фаза 2)"
+
+[dependencies]
+rusqlite = { version = "=0.40.2", default-features = false, features = ["bundled", "backup"] }
+fs2 = "0.4.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+time = { version = "0.3", features = ["formatting", "parsing"] }
+
+[dev-dependencies]
+tempfile = "3"
+# Needed by integration tests (separate crates) to open raw connections for
+# tampering/fresh-install scenarios.
+rusqlite = { version = "=0.40.2", default-features = false, features = ["bundled"] }
+
+# Explicit targets: declaring any [[test]] disables auto-discovery for ALL
+# test targets, so every tests/*.rs file is listed here. lease.rs and
+# kill_safety.rs use a custom fn main (child-process lease/kill tests) and
+# must not use the libtest harness.
+[[test]]
+name = "baseline"
+path = "tests/baseline.rs"
+
+[[test]]
+name = "lease"
+path = "tests/lease.rs"
+harness = false
+
+[[test]]
+name = "open_migrate"
+path = "tests/open_migrate.rs"
+
+[[test]]
+name = "fresh_fingerprint"
+path = "tests/fresh_fingerprint.rs"
+
+[[test]]
+name = "assets"
+path = "tests/assets.rs"
+
+[[test]]
+name = "snapshot"
+path = "tests/snapshot.rs"
+
+[[test]]
+name = "backup"
+path = "tests/backup.rs"
+
+[[test]]
+name = "kill_safety"
+path = "tests/kill_safety.rs"
+harness = false
+
+[[test]]
+name = "export"
+path = "tests/export.rs"
+
+[[test]]
+name = "legacy"
+path = "tests/legacy.rs"
+
+[[test]]
+name = "restore"
+path = "tests/restore.rs"

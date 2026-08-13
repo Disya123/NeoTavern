@@ -179,6 +179,44 @@ export class PluginStateRepository {
     return this.sqlite.prepare('DELETE FROM plugin_state WHERE plugin_id = ?').run(pluginId)
       .changes;
   }
+
+  /**
+   * Restore a backed-up state row (ТЗ §54 backup policy). Conflict policy:
+   * a row with the same (plugin, scope, owner) identity is KEPT — the backup
+   * never clobbers an existing row. Returns whether the row was inserted.
+   * The original `schemaVersion`/`revision` are preserved so CAS continuity
+   * survives a restore.
+   */
+  restore(input: {
+    pluginId: string;
+    scope: PluginStateScope;
+    ownerId: string | null;
+    schemaVersion: number;
+    revision: number;
+    data: Record<string, unknown>;
+  }): boolean {
+    const existing = this.get(input.pluginId, input.scope, input.ownerId ?? null);
+    if (existing) return false;
+    const now = Date.now();
+    this.sqlite
+      .prepare(
+        `INSERT INTO plugin_state (
+           id, plugin_id, scope, owner_id, schema_version, revision, data, created_at, updated_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        uuidv7(),
+        input.pluginId,
+        input.scope,
+        input.ownerId ?? null,
+        input.schemaVersion,
+        input.revision,
+        toJson(input.data),
+        now,
+        now,
+      );
+    return true;
+  }
 }
 
 /** Capability grants issued by the broker (rev4 §B2). */

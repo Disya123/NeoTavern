@@ -61,6 +61,7 @@ import {
 } from '../api/hooks.js';
 import { renderMarkdownDocument } from '../lib/markdown.js';
 import { createCreatorNotesPreviewDocument } from '../lib/creatorNotes.js';
+import { SlotHost } from '../plugins/slots.js';
 import { useErrorText } from '../lib/useErrorText.js';
 import { useUiStore } from '../state/ui.js';
 import { ConfirmActionDialog } from './ConfirmActionDialog.js';
@@ -881,6 +882,7 @@ function EditTab({
         >
           <Trash size={18} aria-hidden="true" />
         </IconButton>
+        <SlotHost slot="character.editor.actions" context={{ characterId: characterId ?? null }} />
       </div>
 
       <section className={styles.identity}>

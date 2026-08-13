@@ -1,0 +1,27 @@
+[package]
+name = "runtime-kernel"
+version = "0.1.0"
+edition = "2021"
+description = "NeoTavern runtime kernel: operation dispatch over the product wire contract (Phase 1 skeleton, std-only)."
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+contracts-generated = { path = "../contracts-generated" }
+neotavern-storage = { path = "../storage" }
+# Phase 7 provider integration: the portable adapter contract plus the
+# built-in adapters registered by `providers::ProviderRegistry`.
+provider-sdk = { path = "../provider-sdk" }
+built-in-providers = { path = "../built-in-providers" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Same pin as neotavern-storage so both crates share one compiled rusqlite
+# (the storage Database hands out its raw `rusqlite::Connection`).
+rusqlite = { version = "=0.40.2", default-features = false, features = ["bundled"] }
+uuid = { version = "1", features = ["v7"] }
+base64 = "0.22"
+# Lease expiry timestamps (`now + 30s` formatted RFC 3339, same crate the
+# storage layer uses for its wire timestamps).
+time = { version = "0.3", features = ["formatting"] }
+
+[dev-dependencies]
+tempfile = "3"

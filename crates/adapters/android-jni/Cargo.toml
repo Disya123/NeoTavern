@@ -1,0 +1,40 @@
+[package]
+name = "neotavern-android-jni"
+version = "0.1.0"
+edition = "2021"
+description = "Thin JNI transport over the mobile-ffi C ABI for the Android host (ТЗ §6.9, Фаза 5)"
+license = "AGPL-3.0"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# `default-features = false`: the library is loaded into an existing JVM on
+# Android; the `invocation` feature would link libjvm, which does not exist
+# on device. Every JNIEnv call below is a plain JNI function-pointer call.
+jni = { version = "0.21", default-features = false }
+# The C ABI boundary — every kernel call goes through these exported
+# functions; this crate adds no second kernel entry point (ТЗ §6.9).
+neotavern-mobile-ffi = { path = "../mobile-ffi" }
+# Shared envelope mapping — byte-identical response envelopes to the CLI,
+# remote-http and Tauri transports (§6.3: transports do not define their own
+# DTOs).
+neotavern-envelope = { path = "../envelope" }
+# schemaHash / wireProtocol for the handshake plus the generated wire DTOs
+# used to decode request envelopes and stream payloads.
+contracts-generated = { path = "../../contracts-generated" }
+# KernelError type: the C ABI returns `(status, body)`; the typed error is
+# reconstructed (the inverse of mobile-ffi's error_body) so the shared
+# envelope layer builds the same error envelope the Tauri transport answers.
+runtime-kernel = { path = "../../runtime-kernel" }
+serde_json = "1"
+
+[dev-dependencies]
+tempfile = "3"
+# Mirrors mobile-ffi's test setup: a storage handle seeds a chat row directly
+# so generation.start has a durable chat to run against.
+neotavern-storage = { path = "../../storage" }
+rusqlite = { version = "=0.40.2", default-features = false, features = ["bundled"] }
+# Byte-identical envelope comparison against the Tauri local transport
+# (default features: the heavy `tauri` dep stays out of the dev graph).
+neotavern-tauri-local = { path = "../tauri-local" }

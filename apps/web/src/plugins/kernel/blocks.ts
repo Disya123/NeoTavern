@@ -18,7 +18,8 @@
  */
 import { kernel } from '@neotavern/plugin-sdk';
 import type { MessageBlock } from '@neotavern/contracts';
-import { api, ApiError } from '../../api/client.js';
+import { legacyRaw } from '../../api/backend.js';
+import { ApiError } from '../../api/client.js';
 import type { PluginUiRegistration } from '../runtime.js';
 import type { KernelHostContext } from './types.js';
 
@@ -103,7 +104,8 @@ export function ensureBlocksLoaded(chatId: string, messageId: string): Promise<v
   if (existing) return existing;
   const load = (async (): Promise<void> => {
     try {
-      const page = await api.get<{ items: MessageBlock[] }>(
+      const page = await legacyRaw().request<{ items: MessageBlock[] }>(
+        'GET',
         `/chats/${encodeURIComponent(chatId)}/blocks?messageIds=${encodeURIComponent(messageId)}`,
       );
       const list = page.items.map((block): BlockAttachment => ({
@@ -356,8 +358,8 @@ function mountOne(attachment: BlockAttachment, rootEl: HTMLElement): () => void 
           attachment.serializedState = result.serializedState;
           // Persist the frozen state: a reload must remount the block with
           // the same renderer state. Best-effort — the cache already has it.
-          void api
-            .patch<MessageBlock>(`/blocks/${encodeURIComponent(attachment.blockId)}`, {
+          void legacyRaw()
+            .request<MessageBlock>('PATCH', `/blocks/${encodeURIComponent(attachment.blockId)}`, {
               serializedState: result.serializedState,
             })
             .catch(() => undefined);
@@ -488,7 +490,8 @@ export function attachBlocks(ctx: KernelHostContext): void {
     // current chat with MESSAGE_NOT_FOUND.
     let created: MessageBlock;
     try {
-      created = await api.post<MessageBlock>(
+      created = await legacyRaw().request<MessageBlock>(
+        'POST',
         `/chats/${encodeURIComponent(chatId)}/messages/${encodeURIComponent(messageId)}/blocks`,
         {
           blockType,

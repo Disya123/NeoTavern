@@ -60,9 +60,47 @@ theme and the saved theme selection in one transaction. Updating a package
 with the same id atomically replaces its directory and keeps the current
 activation state; on a registry error the previous directory is restored.
 
+Activation is rollback-safe: the incoming theme must pass manifest and
+inheritance-chain validation before anything changes, and the currently
+working theme (id plus its setting values) is persisted as the last-known-good
+fallback at the same time. A failed activation leaves the current theme
+untouched — the interface never ends up half-switched.
+
 The distribution ships a set of built-in themes, such as AMOLED, GitHub Dark,
 Matrix, Nord, Gruvbox, Dracula, Tokyo Night, Catppuccin Mocha, Solarized
 Dark, and One Dark, so the Themes manager never opens empty.
+
+## Responsive Behavior
+
+A theme may declare responsive behavior hints in its manifest:
+
+```json
+{
+  "responsive": {
+    "density": "compact",
+    "motion": "reduced"
+  }
+}
+```
+
+- `density` — `compact` | `comfortable` | `spacious`, default `comfortable`.
+- `motion` — `reduced` | `standard`, default `standard`.
+
+Omitted fields fall back to the defaults, and unknown values are rejected by
+manifest validation. The host publishes the resolved values as
+`data-theme-density` and `data-theme-motion` attributes on the document root,
+so theme stylesheets can target them with attribute selectors (for example
+`[data-theme-density='compact']`). They are hints, not layout definitions:
+breakpoints and shell composition stay host-owned.
+
+## Boot Fallback
+
+The pre-hydration boot resolves the stored active theme's tokens and
+stylesheets. When the stored active theme is missing, broken or invalid (a
+corrupted manifest, a deleted parent, a cycle), the boot falls back to the
+last working theme persisted at activation time. When both are unusable, the
+boot stays empty and the client paints the built-in defaults — an empty boot
+is always a valid outcome, and safe mode always boots empty.
 
 ## Safety
 

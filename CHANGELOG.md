@@ -1,23 +1,310 @@
 # Changelog
 
-## [0.1.0] — 2026-08-11
-
-Public release prep:
-
-- Rebranded SillyTavern 2 → **NeoTavern**: package scope `@st2/*` → `@neotavern/*`,
-  desktop product identity, plugin IDs, CLI tools (`neotavern-plugin`,
-  `neotavern-plugin-runtime`), env vars (`NEOTA_*`), wire-format markers
-  (`neotavern-profile-export`, `neotavern-chat-export`), and display strings.
-- Versioning restarts at `0.1.0` (was `2.0.0-pre.3`).
-- Documentation is now English: all app/package READMEs, `docs/` reference tree,
-  ADRs, and `AGENTS.md` were translated from Russian.
-- **AGPL-3.0** license added.
-- Removed superseded planning documents (`ТЗ.md`, plugin-SDK vNext specs, mockup
-  directory) and tracked build debris.
-
 ## Unreleased
 ### Added
 
+- **Extension hardening (ТЗ 7.2 Фаза 10, §10/§47–§54/§60/§61/§70/§76/§83).**
+  Extensions now cross real security boundaries. **Declarative semantic UI
+  slots** — the five frozen ids (`chat.header.actions`,
+  `chat.message.actions`, `character.editor.actions`, `settings.section`,
+  `generation.controls`) — accept plain-data contributions (title ≤80, no
+  control chars; priority; optional v2 permission; `command`/`event` action)
+  that the web host re-validates, permission-gates, orders and renders as
+  plain buttons (`SlotHost`); plugins provide semantics only, never markup,
+  and zero contributions render nothing. **No arbitrary third-party JS in
+  the main WebView by default**: legacy SillyTavern `<script>` injection now
+  requires the app-level `extensions.legacyFrontend` setting (default off)
+  AND the admin-only `legacy.trusted` consent; rev4 plugins stay in the
+  sandboxed iframe; the kernel-mode CSP is pinned by a contract test
+  (`script-src 'self'` only). **Themes**: activation re-validates before
+  flipping, the previously working theme (id + settings) is snapshotted as
+  the fallback, boot resolves active → last-working → empty (safe mode
+  always empty), and optional `responsive {density, motion}` semantics apply
+  `data-theme-density`/`data-theme-motion` with defaults. **Manifest
+  `engines`** are enforced against `neotavern`/`host`/`sdk`/`protocol`
+  (422 `ENGINE_MISMATCH`); an incompatible update auto-disables the plugin
+  and keeps the previous version installed. **Namespaced state** is
+  quota-bounded (`kvBytes` 1 MiB / `kvKeys` 4096 → 413
+  `STATE_QUOTA_EXCEEDED`). New **per-plugin SecretStore** (write-only PUT,
+  masked list, reveal only with `secrets.reveal` + the host exposure gate;
+  never in state/backup/export/logs). Plugin namespaces enter backups as an
+  **additive optional sidecar** (state only, secrets excluded, conflict-skip
+  restore). Hosts report **explicit extension availability**
+  (`extensionsAvailability()` on Android — declarative-only policy;
+  `useExtensionAvailability()` in web — `nodeRuntime` unavailable in
+  desktop kernel mode). Docs: ADR-0037, plugin-sdk slots/availability/
+  legacy-frontend pages, theme-sdk responsive/fallback sections.
+- **Android background execution (ТЗ 7.2 Фаза 8, §8/§19/§65/§66/§85/§87).**
+  Generation the user can see keeps running when the app leaves the
+  foreground, and maintenance runs without interaction — both on the
+  **same kernel session**, never a second writable kernel (the data-root
+  lease rejects it with `DataRootInUse`, §22). `GenerationService` is a
+  bounded `FOREGROUND_SERVICE_TYPE_DATA_SYNC` service sharing the ONE
+  `KernelSession` handle with the activity via `KernelHolder`
+  (refcounted `acquire()`/`release()`; at zero the session closes and the
+  executor shuts down); the bridge hands active streams to the service
+  through `ForegroundExecutionCoordinator` (first claim wins, idempotent),
+  and `EnvelopeBuilder` produces request envelopes byte-identical to the
+  TS `wireEnvelope`. The notification (channel `neotavern_generation`, id
+  1001) shows run state only (`Generating` / `Complete` / `Failed`,
+  `NotificationState`) plus a Stop action — **never message content**
+  (§85); user Stop and OS expiration both map to `session.cancelStream` →
+  `generation.cancel`, and process death recovers via kernel startup
+  recovery (`interrupted`, §63) + `generation.retry`. Maintenance is
+  WorkManager **unique one-time work** (`neotavern-maintenance` →
+  `backups.create`) with `BATTERY_NOT_LOW` + `STORAGE_NOT_LOW` constraints —
+  at-least-once, duplicates safe, best-effort timing with **no exact
+  schedule** (§66), no boot-time daemon, no own scheduler (§87). No new
+  JNI/FFI/contract/codegen surface: the wire registry and schema hash stay
+  frozen (the only host addition is one additive bridge handoff entry
+  point). API-level matrix 26/34 in nightly
+  (`BackgroundExecutionInstrumentedTest` on API 26 + API 34 emulators),
+  JVM unit tests for the new pure-Kotlin classes in PR `checks`. Docs:
+  ADR-0036, `docs/android/README.md`, operations inventory.
+- **Desktop Remote Access service (ТЗ 7.2 Фаза 9, §11.2/§10/§18.4).** New
+  `crates/adapters/desktop-remote` (`neotavern-desktop-remote`) — a host
+  service in the Tauri shell wrapping the Phase 4 `remote-http` adapter on
+  the **same `Arc<Mutex<Kernel>>`** as local IPC (one writer): off by
+  default (no listener until enabled in Settings → Remote Access), loopback
+  default with an ephemeral port, non-loopback requires `trusted_proxy` AND
+  auth (fail-closed pre-bind — `InsecureBind` / `PublicBindRequiresAuth`),
+  pairing with revocable in-memory SHA-256-verifier credentials (token shown
+  once, never logged or stored in plaintext; re-pair after restart — durable
+  credential persistence deferred), CORS deny-by-default via
+  `allowed_origins`, bounded secret-free audit, host-owned config at
+  `app_config_dir/remote-access.json` (atomic write, never in the product
+  DB), and a `kernel_remote_*` Tauri command surface (`remote` feature on
+  `neotavern-tauri-local`) that controls the host service without touching
+  the frozen wire registry (no contract/codegen change). The Settings panel
+  gains the enable/pair/revoke UI in the desktop shell. Docs: ADR-0035,
+  `docs/desktop/README.md`, operations inventory.
+- **Phase 3 desktop local kernel mode (ТЗ §11.1/§15.1).** The Tauri shell
+  now defaults to local kernel mode: the Runtime Kernel is embedded in the
+  desktop process and the window loads bundled web assets over
+  `tauri://localhost` — no HTTP server, no listening port, no server
+  lifecycle. `React → LocalBackend → Tauri IPC → Runtime Kernel` via
+  `crates/adapters/tauri-local` (`kernel_dispatch`, `kernel_stream_start`
+  with a durable-log poller over a Tauri `Channel`, `kernel_stream_abort`),
+  with the exact schema-hash/FFI-ABI handshake enforced at open (ТЗ §6.5).
+  The legacy Node sidecar is opt-in via `NEOTA_LEGACY_SERVER=1` (transition
+  bridge for unmigrated routes); kernel mode is smoke-tested with the server
+  fully off. Desktop README and docs updated; ADR-0033 records the cutover.
+- **Shared wire envelope layer (ТЗ §6.3).** `crates/adapters/envelope`
+  (`neotavern-envelope`) now owns the request/response envelope mapping for
+  every Kernel transport — CLI, remote-http and Tauri IPC answer
+  byte-identical response envelopes; the CLI and HTTP adapter were migrated
+  to it (no per-transport DTO copies).
+- **`TauriTransport` for `LocalBackend`.** `apps/web/src/api/tauriTransport.ts`
+  implements the same-process `LocalTransport` over Tauri IPC: contract
+  envelopes in/out, product-vs-transport error split, live stream open with
+  an eager independent promise chain and a manual async iterator (early
+  consumer leave still aborts the opened run durably). `backend.ts` routes
+  to `LocalBackend` inside the Tauri shell and keeps `LegacyBackend` in a
+  browser; unmigrated legacy routes fail with a typed `UnsupportedError` in
+  kernel mode. Covered by 13 new vitest tests (transport + routing).
+- **First Phase 3 vertical slice: DiagnosticsPanel kernel section.** In the
+  desktop shell the panel renders kernel metadata (`meta.get`) and backup
+  count (`backups.list`) through the `NeoBackend` facade; hidden in a plain
+  browser (ТЗ §60 availability). i18n keys added (en/ru).
+
+- **Provider SDK contract tests (ТЗ §83).**
+  `packages/provider-sdk/test/contract.test.ts` pins the public Provider SDK
+  contract: config/base-URL validation, model listing, the unified stream
+  contract (exactly one terminal event; usage arithmetic), AbortSignal
+  cancellation (`GENERATION_CANCELLED`, no `done` after abort),
+  `DeadlineController` timeout semantics, HTTP-status → stable error-code
+  normalization with raw-body suppression, and timeout defaults/merging.
+  13 tests against the offline EchoAdapter — no network required.
+- **Dependency direction / forbidden-import gate (ТЗ §79/§6/§87).** New
+  `scripts/check-dependency-rules.mjs` runs in the PR `checks` job: the
+  Runtime Kernel's Cargo.toml must not depend on transport/UI/platform crates
+  (denylist), the Kernel source must contain no `is_server`/`is_android`/
+  `serverMode` branching, adapters may depend on the Kernel but never the
+  reverse, and `packages/*` TypeScript never imports from `crates/` or
+  `apps/` (Public SDK не импортирует Rust internal crates).
+- **Nightly CI (ТЗ §80).** New `.github/workflows/nightly.yml`: scheduled
+  daily run of the full Rust workspace suite (including the storage recovery
+  matrix: DB support window, backup/restore kill-safety, data-root lease,
+  export/legacy fixtures) on ubuntu + **Windows NTFS**, clippy/fmt gates, a
+  scaled deterministic contract boundary fuzz (200k iterations over all 45
+  generated decoders; any panic fails), the Phase 11 benchmark with report
+  artifact, production dependency advisory scan (`pnpm audit --prod`,
+  report-only until the graph is clean — current baseline: 12 high /
+  2 moderate), and the TS regression baseline + docs integrity.
+- **Contract boundary fuzz (ТЗ §80/§6.8).**
+  `crates/contracts-generated/tests/fuzz_deserialization.rs` drives every
+  generated `decode_*` fn with random raw buffers and structurally mutated
+  fixture values (field deletion, wrong-type swaps, unknown keys, corrupt
+  strings) under `catch_unwind` — a panic on arbitrary input is a test
+  failure. Fixed-seed xorshift64 keeps the corpus reproducible;
+  `NT_CONTRACT_FUZZ_ITERS` scales the budget.
+- **Runtime Kernel + storage foundation (ТЗ 7.2 Фазы 0–2).** New `crates/`
+  workspace: `contracts-generated` (deterministic Rust boundary DTOs from the
+  TypeBox wire schemas), `runtime-kernel` (contract-validated dispatch,
+  handshake, cancellation, durable storage attach) and `neotavern-storage`
+  (exclusive data-root lease, pinned SQLite 3.53.2 baseline, migration ledger
+  with checksums, immutable assets with orphan GC, Backup-API recovery
+  snapshot, read-only Recovery Mode). A second writable process on the same
+  data root gets a controlled `data_root_in_use` error.
+- **Semantic contract diff (ТЗ §6.7).** `tools/contract-codegen/diff.mjs`
+  classifies breaking/additive wire changes between canonical bundles;
+  self-tested in CI (`diff-test.mjs`).
+- **Headless Remote Adapter (ТЗ 7.2 Фаза 4).** New `crates/adapters/remote-http`
+  (`remote-http-adapter`): a std-only tiny_http 0.12 adapter serving the frozen
+  wire envelopes over `GET /meta`, `POST /rpc` and `POST /rpc/stream` (SSE) on
+  the **same Runtime Kernel** as local IPC — one writer coordinator
+  (`Arc<Mutex<Kernel>>`), no SQLite access, no product rules. Envelope-over-HTTP:
+  valid envelopes always answer HTTP 200 with a `wire.response.envelope`;
+  transport failures map to 400/404/405/413/426 with canonical error codes.
+  Protocol negotiation (major equality, client minor ≤ server minor) is
+  enforced before dispatch, so a mismatched client can never execute product
+  writes; kernel product errors (`CHARACTER_NOT_FOUND`, …) pass through the
+  error envelope verbatim. Security defaults: loopback-only bind, non-loopback
+  requires an explicit `trusted_proxy` declaration (TLS-terminating boundary),
+  bounded body/connection limits; TLS termination and pairing land with Phase
+  4 hardening / Phase 9 (ADR-0030).
+- **Mobile FFI ABI (ТЗ 7.2 Фаза 5, native bridge foundation).** New
+  `crates/adapters/mobile-ffi` (`neotavern-mobile-ffi`): a minimal stable C
+  ABI over the **same Runtime Kernel** for Android JNI / future Swift hosts —
+  opaque `NtKernel`/`NtStream` handles, bounded length-delimited buffers,
+  UTF-8 operation ids and stable integer status codes
+  (`NT_OK` … `NT_ERR_MISMATCH`). Payloads are the identical Product Wire
+  Contract bytes (`nt_call`/`nt_stream_start` → `Kernel::dispatch`/
+  `dispatch_stream`), buffer sizes are checked before any allocation/parse
+  (`MAX_REQUEST_LEN` 1 MiB; `NT_ERR_BUFFER` reports the required capacity),
+  Rust allocations are freed only by the exported free functions
+  (`nt_kernel_free`, `nt_stream_free`), and every entry point contains panics
+  (`catch_unwind` → `NT_ERR_INTERNAL`). The `ffiAbiVersion` + `schemaHash`
+  exact local handshake runs inside `nt_kernel_open`, so an incompatible host
+  never receives a runtime handle and performs no product operations (§6.5).
+  Streams wait via `nt_stream_wait` (committed/terminal sequence, durable
+  `generation.events` replay) and cancel via `nt_stream_cancel` (§64). Docs:
+  `crates/adapters/mobile-ffi/README.md`, wire-contracts §10,
+  version-axes «Local FFI ABI».
+- **Phase 5: Android Local foundation — JNI bridge, host, mobile transport,
+  CI gates (ТЗ 7.2 Фаза 5, §13/§6.9/§5.4).** New
+  `apps/android` (Gradle 8.9 / AGP 8.5.2 / Kotlin 1.9.24, compileSdk/
+  targetSdk 35, minSdk 26, JDK 17) runs the **same Runtime Kernel** on the
+  device: a WebView loads bundled web assets (no Node, no listening port,
+  no HTTP, no arbitrary third-party JS) and talks to the kernel over a
+  frozen JS bridge protocol (`window.__neotavernMobile` — sync
+  `handshake()`, fire-and-forget `call(requestId, envelopeJson,
+  callbackId)`, `cancelStream(streamId)`; async results via
+  `window.__neotavernMobileCallbacks.resolve/reject` with
+  `{kind:"event"|"terminal"|"error"}` stream payloads). The new
+  `neotavern-android-jni` crate (cdylib + rlib, workspace member) is thin
+  marshalling onto the mobile-ffi C ABI — envelope extraction in Rust, no
+  hand-written Kotlin DTOs, opaque `jlong` handles, contained
+  `KernelException`, no Rust panic crossing JNI. The TS side is
+  `MobileBridgeTransport` (`LocalBackend` over it, byte-identical envelopes
+  to `TauriTransport`, same typed `TransportError` split); the local
+  profile routes to it as an explicit override while the default
+  `createBackend()` routing stays unchanged. Data root
+  `filesDir/neotavern`; secrets via Android Keystore AES/GCM with **no
+  plaintext fallback** (typed `SecretStoreUnavailableError`); kernel open
+  on a background executor, close on destroy, process-death durability via
+  the kernel. The `.so` is built by `apps/android/scripts/build-libs.sh`
+  (cargo ndk) into
+  `app/src/main/jniLibs/{arm64-v8a,x86_64}/libneotavern_android_jni.so` and
+  is **not committed**; Android compilation is verified in CI only
+  (`android-build` job), JVM unit tests in PR `checks`, instrumentation on
+  the nightly emulator. Docs: `docs/android/README.md`, ADR-0034.
+- **Remote Access hardening (ТЗ §10, Фаза 4 hardening / Фаза 9).**
+  `remote-http-adapter` gains the full remote-access security surface:
+  pairing issues revocable scoped credentials (`pair` → `(id, token)`,
+  SHA-256 verifier only, idempotent `revoke`, bounded by `max_credentials`),
+  the auth gate runs **before** the body is read (401 `UNAUTHORIZED` with
+  `WWW-Authenticate: Bearer` — `missing_credential` / `invalid_credential`;
+  `/meta` stays public), a token-bucket rate limiter (keyed by credential id
+  or peer IP, bounded bucket map) answers `429 RATE_LIMITED` with
+  `Retry-After`, `max_streams` caps concurrent SSE streams (`rule:
+  stream_limit`), live streams re-check the credential per frame batch and
+  abort mid-stream on revocation (`credential_revoked`), CORS/Origin is
+  deny-by-default (a browser `Origin` is admitted only on an exact match
+  against the configured `allowed_origins` allowlist, otherwise 403
+  `ORIGIN_NOT_ALLOWED` before dispatch; allowed origins get
+  `Access-Control-Allow-Origin` + a 204 preflight), forwarded client headers
+  are honored only from configured proxy addresses (`trusted_proxies`:
+  `X-Forwarded-For` keys the rate-limit bucket only when the immediate peer
+  is listed — rightmost chain entry not appended by a trusted proxy; from
+  any other peer the header is ignored, so a client cannot self-spoof the
+  bucket key), and every gate decision
+  lands in a bounded audit ring without token material. A public non-loopback
+  bind now requires BOTH `trusted_proxy` and configured `auth` — otherwise it
+  is a startup error (`InsecureBind` / `PublicBindRequiresAuth`, §10). Docs:
+  `crates/adapters/remote-http/README.md`, wire-contracts §6.1.
+- **CLI transport (ТЗ §6.3, Фаза 4 CLI hooks).** New `crates/adapters/cli`
+  (`neotavern-cli`): a std-only binary mapping one wire request envelope →
+  one response envelope through the **same Runtime Kernel** and the same
+  envelope layer as the HTTP adapter (decode → protocol check → dispatch →
+  validated response; byte-identical answers). `--operation <id> '<payload>'`
+  builds the envelope from the embedded manifest (protocol + `schemaHash` +
+  generated v4 request id), `--envelope` reads a full request envelope JSON
+  from stdin (bounded to 1 MiB, request id echoed). Stable exit codes: `0` =
+  ok envelope, `1` = error envelope / pre-envelope transport failure, `2` =
+  usage error. With `--root` the CLI holds the exclusive data-root lease for
+  its run and a held lease answers `DATA_ROOT_IN_USE` (§22). Docs:
+  `crates/adapters/cli/README.md`, wire-contracts §6.1.
+- **Generation durability (ТЗ 7.2 Фаза 6).** Generation is now a recoverable
+  workflow on the Runtime Kernel: wire registry grows 15 → 20 operations
+  (`generation.get`, `generation.events`, `generation.retry`, `generation.keep`,
+  `generation.discard`; schema hash `7e469552…`), storage migration 3 adds
+  `generation_runs` + `generation_events` (schema revision 3), and the kernel
+  gains a writer-coordinator thread (`Kernel` is now `Send + Sync`,
+  `dispatch_stream` returns an `EventStream`). Durable state machine with
+  CAS-by-revision transitions, executor lease, deterministic fake provider
+  (`steps`/`fail-at`/`delay-ms`/`tokens-per-step` fault injection), per-step
+  committed event log, atomic terminal commit (final message + terminal event
+  in one transaction), and startup recovery of lease-expired runs to
+  `interrupted`. The remote adapter streams real SSE for `generation.start` /
+  `generation.retry` and resumes from `Last-Event-ID` via `generation.events`;
+  Retry / Keep partial / Discard reconciliation commands are idempotent
+  (ТЗ §62–§64). `NeoBackend` exposes the new generation API on all three
+  backends with parity tests. Docs:
+  `docs/architecture/generation-durability.md`.
+- **Portable Built-in Providers (ТЗ 7.2 Фаза 7).** Provider execution is a
+  portable contract, not kernel-internal code: new `crates/provider-sdk`
+  (the `ProviderAdapter` trait with normalized errors/usage, `Deadline` /
+  `RetryPolicy` policy primitives, `SecretRef`/`SecretValue`/`SecretResolver`
+  config-secret separation, `CancelToken`/`EmitStatus` cancellation
+  semantics) and `crates/built-in-providers` (deterministic `FakeProvider`
+  ported byte-identical from the kernel inline fake, `RecordedProvider`
+  replaying non-secret JSON fixtures, shared conformance suite proving
+  cancel/timeout/no-double-billing/redaction). Storage migration 4 adds the
+  `provider_configs` table (non-secret `config_json` + `secret_ref` only —
+  secrets never enter the DB, snapshots, backups or logs). The wire registry
+  grows 20 → 21 operations (`providers.list`, schema hash
+  `b5333728…`); the kernel executor now resolves adapters through a
+  `ProviderRegistry` with a host-provided secret-resolver seam and a 60s
+  per-run deadline, and `NeoBackend` exposes `providers.list` on all three
+  backends with parity tests. Docs: `docs/architecture/providers.md`.
+- **Portable Data (ТЗ 7.2 Фаза 11).** The Phase 2 recovery primitives are
+  now public long-lived formats: `.neotavern-backup` containers (manifest +
+  checksummed inventory + the snapshot-pinned asset set, assembled in a temp
+  dir and finalized atomically; `backups.create` / `backups.list` wire
+  operations with a 16-container quota), kill-safe staged restore (candidate
+  data roots activated by directory swap; a pending marker resolved at open
+  completes or discards an interrupted activation — the active root is never
+  overwritten), `.neotavern-export` NDJSON interchange with explicit
+  duplicate policy (`reject`/`replace`/`remap`) and offline import through
+  the same candidate machinery, and a read-only legacy converter for
+  pre-kernel data roots (timestamps normalized, secrets/plugins never
+  copied, source never mutated). Docs: `docs/architecture/portable-data.md`,
+  ADR-0032, benchmark manifest `docs/architecture/benchmarks.md`.
+- **NeoBackend UI routing.** Every web UI API call now routes through the
+  `NeoBackend` facade (`apps/web/src/api/backend.ts`): typed wire operations
+  via `LegacyBackend`, unmigrated `/api/v2` routes through the temporary
+  `raw` passthrough (removed per-slice in Фаза 3).
+
+- **Android APK client (remote server test).** Tauri 2 Android target:
+  `#[cfg(desktop)]` sidecar/updater logic and `#[cfg(mobile)]` updater stubs;
+  `tauri.android.conf.json` overrides the platform config; a plain
+  `mobile-connect/` start page (no React, no Tauri API) remembers the server
+  address, auto-navigates on fresh loads and lets the system back button
+  return to the form. The APK connects to a NeoTavern server over LAN — no
+  Node, no localhost backend on the device, cleartext HTTP only in debug
+  builds via the manifest placeholder. Scripts: `desktop:android:init`,
+  `desktop:android:dev`, `desktop:android:build`.
 - **Non-destructive message edit history.** Real manual text edits now archive the
   previous content with CAS-safe restore, cursor pagination, checkpoint/branch copying,
   and chat export v2. Swipe/regenerate variants remain a separate history.
@@ -28,6 +315,19 @@ Public release prep:
 
 ### Fixed
 
+- **Android: backgrounded generation is no longer silently dropped (Фаза 8).**
+  An active user-visible generation that used to stop being driven when the
+  app left the foreground (WebView throttled, process trimmed/killed without
+  a notification) now continues through the bounded foreground service on
+  the shared kernel handle; user Stop and OS expiration cancel the run
+  explicitly via `generation.cancel` instead of abandoning it, and a killed
+  process resumes through kernel startup recovery + `generation.retry`.
+- **Phase 9 CI gate (3cb5f87).** The feature-gated `neotavern-tauri-local`
+  test/clippy step now runs with `working-directory: crates` (the workspace
+  root — previously it failed with "could not find Cargo.toml" from the
+  repo root), and the Remote Access status badge uses the `--st-radius-round`
+  token instead of a hardcoded `999px` radius (theme-sdk style contract,
+  AGENTS.md §14).
 - **Token counter now matches the model's real tokenizer.** DeepSeek models
   (`deepseek/*`, `deepseek-chat`, `deepseek-reasoner`, local checkpoints) are
   counted with an exact counting-only byte-level BPE engine (ranks of
@@ -2129,6 +2429,21 @@ Public release prep:
   `data-part="character-management-header"` hooks are preserved, and the new
   `data-component="sidebar-panel-header"` hook (parts `identity`, `avatar`,
   `eyebrow`, `title`, `actions`, `close`) is documented in the Theme SDK.
+
+## [0.1.0] — 2026-08-11
+
+Public release prep:
+
+- Rebranded SillyTavern 2 → **NeoTavern**: package scope `@st2/*` → `@neotavern/*`,
+  desktop product identity, plugin IDs, CLI tools (`neotavern-plugin`,
+  `neotavern-plugin-runtime`), env vars (`NEOTA_*`), wire-format markers
+  (`neotavern-profile-export`, `neotavern-chat-export`), and display strings.
+- Versioning restarts at `0.1.0` (was `2.0.0-pre.3`).
+- Documentation is now English: all app/package READMEs, `docs/` reference tree,
+  ADRs, and `AGENTS.md` were translated from Russian.
+- **AGPL-3.0** license added.
+- Removed superseded planning documents (`ТЗ.md`, plugin-SDK vNext specs, mockup
+  directory) and tracked build debris.
 
 ## 2.0.0-pre.3 (prior)
 

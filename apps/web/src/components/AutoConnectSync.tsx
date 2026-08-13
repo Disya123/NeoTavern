@@ -9,7 +9,7 @@
 import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { ModelInfo } from '@neotavern/contracts';
-import { api } from '../api/client.js';
+import { legacyRaw } from '../api/backend.js';
 import { useProviders, useSettings, useUpdateSettings } from '../api/hooks.js';
 
 export function AutoConnectSync() {
@@ -36,7 +36,7 @@ export function AutoConnectSync() {
     void queryClient
       .prefetchQuery<{ models: ModelInfo[] }>({
         queryKey: ['provider-models', target.id],
-        queryFn: () => api.get<{ models: ModelInfo[] }>(`/providers/${target.id}/models`),
+        queryFn: () => legacyRaw().request<{ models: ModelInfo[] }>('GET', `/providers/${target.id}/models`),
       })
       .catch(() => undefined);
   }, [settings.data, providers.data, queryClient, updateSettings]);

@@ -10,7 +10,7 @@ import {
   type ResolvedTokenSet,
   type TokenSet,
 } from './tokens.js';
-import type { ThemeManifest, ThemeMode } from './manifest.js';
+import type { ThemeDensity, ThemeManifest, ThemeMode, ThemeMotion } from './manifest.js';
 
 function tokenSetToRecord(set: TokenSet | undefined): Record<string, string> {
   if (!set) return {};
@@ -44,4 +44,28 @@ export function resolveTokens(
   }
 
   return merged as ResolvedTokenSet;
+}
+
+/** Built-in density default used when a theme declares none (ТЗ §47). */
+export const DEFAULT_THEME_DENSITY = 'comfortable' as const;
+/** Built-in motion default used when a theme declares none (ТЗ §48). */
+export const DEFAULT_THEME_MOTION = 'standard' as const;
+
+/** Responsive semantics with the host defaults merged in. */
+export interface ResolvedThemeResponsive {
+  density: ThemeDensity;
+  motion: ThemeMotion;
+}
+
+/**
+ * Resolve a theme's responsive semantics, filling omitted fields with the
+ * host defaults: density `comfortable`, motion `standard`. The host publishes
+ * the result as `data-theme-density` / `data-theme-motion` attributes on the
+ * document root (ТЗ §47-48).
+ */
+export function resolveThemeResponsive(manifest: ThemeManifest): ResolvedThemeResponsive {
+  return {
+    density: manifest.responsive?.density ?? DEFAULT_THEME_DENSITY,
+    motion: manifest.responsive?.motion ?? DEFAULT_THEME_MOTION,
+  };
 }

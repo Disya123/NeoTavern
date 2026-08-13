@@ -21,6 +21,7 @@ import { migration as chatCasAndDrafts } from './0018_chat_cas_and_drafts.js';
 import { migration as messageBlockAttachments } from './0019_message_block_attachments.js';
 import { migration as swipeHistoryAndChildChats } from './0020_swipe_history_and_child_chats.js';
 import { migration as messageContentRevisions } from './0021_message_content_revisions.js';
+import { migration as pluginSecrets } from './0022_plugin_secrets.js';
 
 /** All migrations in ascending version order. */
 export const migrations: readonly Migration[] = [
@@ -46,6 +47,7 @@ export const migrations: readonly Migration[] = [
   messageBlockAttachments,
   swipeHistoryAndChildChats,
   messageContentRevisions,
+  pluginSecrets,
 ];
 
 export type { Migration } from './types.js';

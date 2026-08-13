@@ -1,0 +1,8 @@
+{
+  "id": "fail-network",
+  "steps": [
+    { "type": "delta", "text": "first" },
+    { "type": "delta", "text": "second" },
+    { "type": "fail", "code": "network-fault" }
+  ]
+}

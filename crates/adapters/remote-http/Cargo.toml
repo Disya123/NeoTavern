@@ -1,0 +1,23 @@
+[package]
+name = "remote-http-adapter"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tiny_http = "0.12"
+serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+contracts-generated = { path = "../../contracts-generated" }
+runtime-kernel = { path = "../../runtime-kernel" }
+neotavern-envelope = { path = "../envelope" }
+sha2 = "0.10"
+getrandom = "0.4"
+
+[dev-dependencies]
+tempfile = "3"
+# Direct storage + rusqlite access in tests ONLY, to seed product rows the
+# frozen registry cannot create (no wire op for chat/message/lorebook/preset
+# creation in Phase 3/4). Same rusqlite version as crates/storage so exactly
+# one compiled copy exists in the test graph.
+neotavern-storage = { path = "../../storage" }
+rusqlite = "0.40.2"

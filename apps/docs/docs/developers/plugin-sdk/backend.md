@@ -59,6 +59,53 @@ const keys = await api.storage.keys();
 
 Data is scoped to your plugin id, so two plugins can never collide.
 
+## Storage Quotas
+
+Namespaced state is quota-enforced (ТЗ §54, SDK `limits.storage` defaults):
+
+- `kvBytes` — the serialized state may not exceed **1 MiB** (UTF-8 length);
+- `kvKeys` — the state may not exceed **4096 top-level keys**.
+
+A write that exceeds either limit is rejected with the stable
+`STATE_QUOTA_EXCEEDED` error (HTTP 413, `params: { limitBytes, limitKeys,
+keys, bytes }`). Existing rows are never affected by a rejected write — the
+quota applies per write. Blobs are capped separately (8 MiB per blob, 64
+blobs per plugin).
+
+## Plugin Secrets
+
+Sensitive material is stored through the scoped SecretStore API — never in
+`api.storage` state (ТЗ §54: plugin secrets are stored only through the
+SecretStore and never enter namespaced backup/export state):
+
+```ts
+await api.secrets.set('apiKey', '…'); // write-only
+const { key, masked } = await api.secrets.get('apiKey'); // masked preview
+await api.secrets.delete('apiKey');
+```
+
+Secret values are **write-only**: list responses return keys, metadata and a
+masked preview, never the plaintext. The plaintext is returned only by the
+dedicated reveal operation, and only when secrets exposure is enabled
+server-side (`NEOTA_ALLOW_SECRETS_EXPOSURE`, default off) plus the
+`secrets.reveal` capability grant. Secrets never appear in plugin state,
+logs, diagnostics, or namespaced backup/export sections, and are deleted with
+the plugin. The capability catalog grants `secrets.manageOwn` for managing
+your own store and `secrets.reveal` for reading a plaintext.
+
+## Backup and Export Policy
+
+Manual backups (POST `/api/v2/backups`) store the full SQLite snapshot and,
+additionally, an additive optional `<id>.plugin-namespaces.json` sidecar whose
+`pluginNamespaces` section carries per-plugin namespaced state (`scope`,
+`ownerId`, `schemaVersion`, `revision`, `data`) — **state only, secrets
+never**. The sidecar is self-describing and unknown-section tolerant: future
+sections are ignored. Restore applies the section with a conflict-skip
+policy: a row whose (plugin, scope, owner) identity already exists is kept —
+a backup never clobbers existing state. Deleting a plugin deletes its
+namespaced state, capabilities and secrets with it (cascade); uninstalled
+plugins contribute nothing to backups.
+
 ## Events and Logging
 
 `api.events` is the same typed event bus the frontend uses. Subscribing

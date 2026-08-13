@@ -184,9 +184,6 @@ importers:
       '@fastify/type-provider-typebox':
         specifier: ^5.1.0
         version: 5.2.0(@sinclair/typebox@0.34.52)
-      '@sinclair/typebox':
-        specifier: ^0.34.52
-        version: 0.34.52
       '@neotavern/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -208,6 +205,9 @@ importers:
       '@neotavern/theme-sdk':
         specifier: workspace:*
         version: link:../../packages/theme-sdk
+      '@sinclair/typebox':
+        specifier: ^0.34.52
+        version: 0.34.52
       express:
         specifier: ^5.2.1
         version: 5.2.1
@@ -266,9 +266,9 @@ importers:
       '@fontsource/opendyslexic':
         specifier: ^5.3.0
         version: 5.3.0
-      '@phosphor-icons/react':
-        specifier: ^2.1.10
-        version: 2.1.10(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@neotavern/client-sdk':
+        specifier: workspace:^
+        version: link:../../packages/client-sdk
       '@neotavern/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -278,6 +278,9 @@ importers:
       '@neotavern/legacy-compat':
         specifier: workspace:*
         version: link:../../packages/legacy-compat
+      '@neotavern/neobackend':
+        specifier: workspace:*
+        version: link:../../packages/neobackend
       '@neotavern/plugin-sdk':
         specifier: workspace:*
         version: link:../../packages/plugin-sdk
@@ -290,12 +293,18 @@ importers:
       '@neotavern/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@phosphor-icons/react':
+        specifier: ^2.1.10
+        version: 2.1.10(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@tanstack/react-query':
         specifier: ^5.101.4
         version: 5.101.4(react@19.2.8)
       '@tanstack/react-virtual':
         specifier: ^3.14.8
         version: 3.14.8(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@tauri-apps/api':
+        specifier: ^2
+        version: 2.11.1
       i18next:
         specifier: ^26.3.6
         version: 26.3.6(typescript@5.9.3)
@@ -352,14 +361,23 @@ importers:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@24.13.3)(jsdom@25.0.1)(vite@8.1.5(@types/node@24.13.3)(esbuild@0.28.1)(jiti@1.21.7)(terser@5.49.2)(tsx@4.23.1)(yaml@2.9.0))
 
-  packages/contracts:
+  packages/client-sdk:
     dependencies:
+      '@neotavern/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@sinclair/typebox':
         specifier: ^0.34.52
         version: 0.34.52
+
+  packages/contracts:
+    dependencies:
       '@neotavern/shared':
         specifier: workspace:*
         version: link:../shared
+      '@sinclair/typebox':
+        specifier: ^0.34.52
+        version: 0.34.52
 
   packages/db:
     dependencies:
@@ -410,6 +428,18 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
+
+  packages/neobackend:
+    dependencies:
+      '@neotavern/client-sdk':
+        specifier: workspace:*
+        version: link:../client-sdk
+      '@neotavern/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@sinclair/typebox':
+        specifier: ^0.34.52
+        version: 0.34.52
 
   packages/plugin-build:
     dependencies:
@@ -470,6 +500,9 @@ importers:
 
   packages/ui:
     dependencies:
+      '@neotavern/gestures':
+        specifier: workspace:*
+        version: link:../gestures
       '@radix-ui/react-context-menu':
         specifier: ^2.3.7
         version: 2.3.7(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -509,9 +542,6 @@ importers:
       '@radix-ui/react-tooltip':
         specifier: ^1.2.16
         version: 1.2.16(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@neotavern/gestures':
-        specifier: workspace:*
-        version: link:../gestures
     devDependencies:
       '@types/react':
         specifier: ^19.2.0
@@ -3492,6 +3522,9 @@ packages:
 
   '@tanstack/virtual-core@3.17.6':
     resolution: {integrity: sha512-h0/Ebo18CkOrChlQIhNtQkM5ySUnh/GumQ/D1st3hG2HWUPEF+ILUc2k29UtivCi/9G7w7G3/f7Xyd5cCFbKBw==}
+
+  '@tauri-apps/api@2.11.1':
+    resolution: {integrity: sha512-M2FPuYND2m+wh5hfW9ZpSdxMPdEJovPBWwoHJmwUpysTYNHaOkVFN419m/K0LIgjb/7KU2vBgsUepJWugQCvAA==}
 
   '@tauri-apps/cli-darwin-arm64@2.11.4':
     resolution: {integrity: sha512-1ryOF3ZhpZ/nemHV5zVwBQBz9jDGKmKPvWPADOhc83ig0P4bMc2iER4NbC6r9sjeIZ6RVQ4g3RZIYvezhcl4TQ==}
@@ -12440,6 +12473,8 @@ snapshots:
       react-dom: 19.2.8(react@19.2.8)
 
   '@tanstack/virtual-core@3.17.6': {}
+
+  '@tauri-apps/api@2.11.1': {}
 
   '@tauri-apps/cli-darwin-arm64@2.11.4':
     optional: true
