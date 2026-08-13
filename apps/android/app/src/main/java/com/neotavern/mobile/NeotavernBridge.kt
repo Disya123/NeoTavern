@@ -1,11 +1,11 @@
 package com.neotavern.mobile
 
 import android.os.Handler
-import android.util.JSONObject
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.ExecutorService
+import org.json.JSONObject
 
 /**
  * Wire operations that open a durable event stream (they declare an
