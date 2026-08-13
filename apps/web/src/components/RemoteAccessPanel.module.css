@@ -37,7 +37,7 @@
   .badgeRunning,
   .badgeStopped {
     padding: var(--st-space-2xs) var(--st-space-sm);
-    border-radius: 999px;
+    border-radius: var(--st-radius-round);
     font-size: var(--st-font-size-xs);
     font-weight: var(--st-font-weight-medium);
   }

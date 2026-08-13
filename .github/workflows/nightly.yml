@@ -78,6 +78,7 @@ jobs:
       # service into the shell; the workspace commands above build the crate
       # without it, so compile and lint it with the feature enabled here.
       - name: Phase 9 remote feature gate (tauri-local)
+        working-directory: crates
         run: cargo test -p neotavern-tauri-local --features remote && cargo clippy -p neotavern-tauri-local --features remote --all-targets -- -D warnings
 
       - name: Rust formatting (hand-written crates; generated.rs is byte-checked by codegen)
