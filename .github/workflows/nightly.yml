@@ -13,9 +13,11 @@
 #     fuzz over every generated decoder at a scaled budget — a panic on
 #     arbitrary input is a test failure (§6.8/§80)
 #   - TS regression baseline (vitest) + docs integrity
-#   - Android device gate (Phase 5 + Phase 8, ТЗ §7.2/§8): instrumented
-#     tests on API 26 + 34 x86_64 emulators against the JNI bridge
-#     (arm64-v8a + x86_64 libs), incl. the background-execution suite
+#   - Android device gates — Phase 5: Android Local foundation (JNI bridge,
+#     host, mobile transport, CI gates, ТЗ §7.2) + Phase 8: Android
+#     background execution (ТЗ §8): instrumented tests on API 26 + 34 x86_64
+#     emulators against the JNI bridge (arm64-v8a + x86_64 libs), incl. the
+#     background-execution suite
 #
 # The Rust jobs repeat `cargo test --workspace` and clippy/fmt from ci.yml on
 # a schedule so a flake or regression that slipped past PR gates is caught
@@ -160,11 +162,13 @@ jobs:
       - name: Docs integrity
         run: pnpm docs:check && pnpm docs:build
 
-  # Android device gate (ТЗ §7.2, Phase 5 + Phase 8): JNI libs built for
-  # arm64-v8a + x86_64, then instrumented tests run on hardware-accelerated
-  # x86_64 emulators across the supported API range (26 = minSdk, 34 =
-  # current emulator). Toolchain steps deliberately duplicate ci.yml
-  # android-build (no workflow composition).
+  # Android device gates — Phase 5: Android Local foundation (JNI bridge,
+  # host, mobile transport, CI gates, ТЗ §7.2) + Phase 8: Android background
+  # execution (ТЗ §8): JNI libs built for arm64-v8a + x86_64, then
+  # instrumented tests run on hardware-accelerated x86_64 emulators across
+  # the supported API range (26 = minSdk, 34 = current emulator). Toolchain
+  # steps deliberately duplicate ci.yml android-build (no workflow
+  # composition).
   android-device:
     name: Android device gate (API ${{ matrix.api-level }} emulator)
     runs-on: ubuntu-24.04

@@ -150,7 +150,8 @@
   `generation.events` replay) and cancel via `nt_stream_cancel` (§64). Docs:
   `crates/adapters/mobile-ffi/README.md`, wire-contracts §10,
   version-axes «Local FFI ABI».
-- **Android local host foundation (ТЗ 7.2 Фаза 5, §13/§6.9/§5.4).** New
+- **Phase 5: Android Local foundation — JNI bridge, host, mobile transport,
+  CI gates (ТЗ 7.2 Фаза 5, §13/§6.9/§5.4).** New
   `apps/android` (Gradle 8.9 / AGP 8.5.2 / Kotlin 1.9.24, compileSdk/
   targetSdk 35, minSdk 26, JDK 17) runs the **same Runtime Kernel** on the
   device: a WebView loads bundled web assets (no Node, no listening port,

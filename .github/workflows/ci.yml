@@ -193,12 +193,13 @@ jobs:
       - name: Rust formatting (hand-written crates)
         run: cargo fmt --manifest-path crates/Cargo.toml -p runtime-kernel -p neotavern-storage -p remote-http-adapter -p neotavern-mobile-ffi -p neotavern-cli -p built-in-providers -p provider-sdk -p neotavern-envelope -p neotavern-tauri-local -p neotavern-android-jni -p neotavern-desktop-remote --check
 
-  # Android Phase 5 + Phase 8 gate (ТЗ §7.2, §8): the JNI bridge is built for
-  # arm64-v8a + x86_64 via cargo-ndk, then the debug APK, JVM unit tests and
-  # the Phase 8 instrumented-test APK are verified (assembleDebug +
-  # testDebugUnitTest + assembleDebugAndroidTest); device-level instrumented
-  # tests run nightly (android-device in nightly.yml) across the API 26 + 34
-  # emulator matrix.
+  # Android gates — Phase 5: Android Local foundation (JNI bridge, host,
+  # mobile transport, CI gates, ТЗ §7.2) + Phase 8: Android background
+  # execution (ТЗ §8): the JNI bridge is built for arm64-v8a + x86_64 via
+  # cargo-ndk, then the debug APK, JVM unit tests and the Phase 8
+  # instrumented-test APK are verified (assembleDebug + testDebugUnitTest +
+  # assembleDebugAndroidTest); device-level instrumented tests run nightly
+  # (android-device in nightly.yml) across the API 26 + 34 emulator matrix.
   android-build:
     name: Android build (JNI + APK + unit tests)
     runs-on: ubuntu-24.04

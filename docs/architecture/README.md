@@ -204,7 +204,8 @@ gate passes.
   functions, panics are contained to `NT_ERR_INTERNAL`, and
   `ffiAbiVersion` + `schemaHash` are part of the exact local handshake — an
   incompatible host never receives a runtime handle.
-- [Phase 5 Android local host](../android/README.md) — `apps/android`
+- [Phase 5: Android Local foundation — JNI bridge, host, mobile transport,
+  CI gates](../android/README.md) — `apps/android`
   (WebView + JNI) on the same mobile FFI ABI: the `neotavern-android-jni`
   crate marshals to the stable `nt_*` functions, the frozen JS bridge
   protocol (`window.__neotavernMobile` handshake/call/cancelStream with a
