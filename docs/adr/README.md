@@ -1,5 +1,19 @@
 # Architecture Decision Records
 
+## ADR-0036: Android Background Execution — bounded foreground service + WorkManager maintenance over the shared kernel handle
+
+Phase 8 wires ТЗ §8/§19 background execution on the Android host onto the
+**same kernel session** as the activity: a bounded `dataSync` foreground
+service continues user-visible generation streams (shared handle via
+`KernelHolder` refcount — never a second writable kernel, §22), the
+notification shows run state and a Stop action but **never message content**
+(§85), maintenance is WorkManager unique one-time work (`backups.create`,
+battery + storage constraints, no exact schedule §66), and stop/expiration
+map to `generation.cancel` while process death recovers via kernel startup
+recovery + `generation.retry`. No new JNI/contract/codegen surface — purely
+a host-side lifecycle adapter on the frozen wire registry. Full decision,
+alternatives and consequences: [ADR-0036](0036-android-background-execution.md).
+
 ## ADR-0035: Desktop Remote Access — host service over the shared Runtime Kernel
 
 Phase 9 wires the Phase 4 remote surface into the desktop shell: the new

@@ -195,8 +195,9 @@ jobs:
 
   # Android Phase 5 gate (ТЗ §7.2): the JNI bridge is built for arm64-v8a +
   # x86_64 via cargo-ndk, then the debug APK and JVM unit tests are verified.
-  # Device-level instrumented tests run nightly (android-device in nightly.yml);
-  # the API-level/arch device matrix is a Phase 5 gate follow-up.
+  # The instrumented-test APK is compiled here too (assembleDebugAndroidTest);
+  # device-level instrumented tests run nightly (android-device in
+  # nightly.yml) across the API 26 + 34 emulator matrix.
   android-build:
     name: Android build (JNI + APK + unit tests)
     runs-on: ubuntu-24.04
@@ -244,8 +245,11 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Assemble debug APK + JVM unit tests
-        run: gradle -p apps/android :app:assembleDebug :app:testDebugUnitTest
+      # The instrumented-test APK (androidTest) is assembled here so the
+      # Phase 8 BackgroundExecutionInstrumentedTest COMPILES on every PR;
+      # the tests themselves run on the nightly emulator (android-device).
+      - name: Assemble debug APK + JVM unit tests + instrumented test APK
+        run: gradle -p apps/android :app:assembleDebug :app:testDebugUnitTest :app:assembleDebugAndroidTest
 
       - name: Upload debug APK artifact
         uses: actions/upload-artifact@v6

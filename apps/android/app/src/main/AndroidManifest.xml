@@ -2,12 +2,28 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!--
-      NeoTavern Android Host — Phase 5 local foundation.
+      NeoTavern Android Host — Phase 5 local foundation + Phase 8 background
+      execution (ТЗ §8, §19, §65, §66).
 
       Deliberately NO INTERNET permission: this host talks to the in-process
       kernel over JNI only. No HTTP, no sockets, no network access (ТЗ §6.9,
       "Android Standalone не обязан запускать Node или localhost server").
+
+      Background execution stays bounded (ТЗ §87 — no eternal foreground
+      service):
+       - FOREGROUND_SERVICE + FOREGROUND_SERVICE_DATA_SYNC let the host run
+         a user-visible, dataSync-typed foreground service ONLY while a
+         generation stream is being pumped (GenerationService, start/stop
+         bound to stream lifecycle);
+       - POST_NOTIFICATIONS (API 33+) gates the generation notification;
+         requested at runtime before the first service start.
+      Maintenance (backups.create) runs as best-effort WorkManager work
+      (MaintenanceWorker) — no exact-schedule promise (ТЗ §66).
     -->
+
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:label="NeoTavern"
@@ -22,6 +38,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <service
+            android:name=".GenerationService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
     </application>
 
 </manifest>

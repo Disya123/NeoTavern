@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Phase 8: generation foreground notification (status only — never message content, ТЗ §85). -->
+    <string name="notification_channel_name">Generation</string>
+    <string name="notification_title_generating">Generating…</string>
+    <string name="notification_title_complete">Generation complete</string>
+    <string name="notification_title_failed">Generation failed</string>
+    <string name="notification_action_stop">Stop</string>
+</resources>

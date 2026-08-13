@@ -240,6 +240,19 @@ gate passes.
   adapters (deterministic fake, recorded fixtures), config/secret separation
   (`provider_configs`, migration 4), deadline/cancellation and the
   conformance suite (ТЗ §55–§56).
+- **Phase 8 Android background execution** — host-side lifecycle adapter
+  over the **same kernel session** (never a second writable kernel, §22):
+  a bounded `dataSync` foreground service continues user-visible generation
+  streams via a shared `KernelHolder`-refcounted handle, with a
+  status-only notification and Stop action (§85) mapping stop/expiration to
+  `generation.cancel` and process death to kernel startup recovery +
+  `generation.retry`; maintenance runs as WorkManager unique one-time work
+  (`neotavern-maintenance` → `backups.create`, battery + storage
+  constraints, no exact schedule §66, no boot-time daemon, no own scheduler
+  §87). Purely host-side: JNI symbols, wire registry and schema hash stay
+  frozen — no kernel/platform branching. See
+  [ADR-0036](../adr/README.md#adr-0036-android-background-execution--bounded-foreground-service--workmanager-maintenance-over-the-shared-kernel-handle)
+  and [Android host](../android/README.md).
 - [Portable data](portable-data.md) — Phase 11: public backup containers,
   kill-safe staged restore with atomic activation, Portable Export/import and
   the read-only legacy converter (ТЗ §34, §40–§43).

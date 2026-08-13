@@ -3,6 +3,33 @@
 ## Unreleased
 ### Added
 
+- **Android background execution (ТЗ 7.2 Фаза 8, §8/§19/§65/§66/§85/§87).**
+  Generation the user can see keeps running when the app leaves the
+  foreground, and maintenance runs without interaction — both on the
+  **same kernel session**, never a second writable kernel (the data-root
+  lease rejects it with `DataRootInUse`, §22). `GenerationService` is a
+  bounded `FOREGROUND_SERVICE_TYPE_DATA_SYNC` service sharing the ONE
+  `KernelSession` handle with the activity via `KernelHolder`
+  (refcounted `acquire()`/`release()`; at zero the session closes and the
+  executor shuts down); the bridge hands active streams to the service
+  through `ForegroundExecutionCoordinator` (first claim wins, idempotent),
+  and `EnvelopeBuilder` produces request envelopes byte-identical to the
+  TS `wireEnvelope`. The notification (channel `neotavern_generation`, id
+  1001) shows run state only (`Generating` / `Complete` / `Failed`,
+  `NotificationState`) plus a Stop action — **never message content**
+  (§85); user Stop and OS expiration both map to `session.cancelStream` →
+  `generation.cancel`, and process death recovers via kernel startup
+  recovery (`interrupted`, §63) + `generation.retry`. Maintenance is
+  WorkManager **unique one-time work** (`neotavern-maintenance` →
+  `backups.create`) with `BATTERY_NOT_LOW` + `STORAGE_NOT_LOW` constraints —
+  at-least-once, duplicates safe, best-effort timing with **no exact
+  schedule** (§66), no boot-time daemon, no own scheduler (§87). No new
+  JNI/FFI/contract/codegen surface: the wire registry and schema hash stay
+  frozen (the only host addition is one additive bridge handoff entry
+  point). API-level matrix 26/34 in nightly
+  (`BackgroundExecutionInstrumentedTest` on API 26 + API 34 emulators),
+  JVM unit tests for the new pure-Kotlin classes in PR `checks`. Docs:
+  ADR-0036, `docs/android/README.md`, operations inventory.
 - **Desktop Remote Access service (ТЗ 7.2 Фаза 9, §11.2/§10/§18.4).** New
   `crates/adapters/desktop-remote` (`neotavern-desktop-remote`) — a host
   service in the Tauri shell wrapping the Phase 4 `remote-http` adapter on
@@ -256,6 +283,13 @@
 
 ### Fixed
 
+- **Android: backgrounded generation is no longer silently dropped (Фаза 8).**
+  An active user-visible generation that used to stop being driven when the
+  app left the foreground (WebView throttled, process trimmed/killed without
+  a notification) now continues through the bounded foreground service on
+  the shared kernel handle; user Stop and OS expiration cancel the run
+  explicitly via `generation.cancel` instead of abandoning it, and a killed
+  process resumes through kernel startup recovery + `generation.retry`.
 - **Phase 9 CI gate (3cb5f87).** The feature-gated `neotavern-tauri-local`
   test/clippy step now runs with `working-directory: crates` (the workspace
   root — previously it failed with "could not find Cargo.toml" from the

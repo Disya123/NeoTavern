@@ -104,14 +104,32 @@ class CallbackFrame private constructor(
  *    the request id before the first event) back to the native handle and
  *    cancels the durable run.
  *
+ * Phase 8 (background execution) additive hooks — the frozen Phase 5 method
+ * table is unchanged:
+ *  - [onStreamOpened] fires once per stream, on the main thread, when the
+ *    first event carrying a wire stream id arrives. The host uses it to claim
+ *    the stream in [ForegroundExecutionCoordinator] and start the bounded
+ *    [GenerationService] while the app is still in the foreground, so the
+ *    background service can take over pumping the stream after this bridge
+ *    closes;
+ *  - [onStreamTerminal] fires once per stream, on the main thread, when the
+ *    stream reaches its terminal state (terminal/error payload) — the host
+ *    ends the background service even when this bridge is still the active
+ *    pump (activity alive but backgrounded), so the foreground notification
+ *    reflects the real operation state (§8);
+ *  - [backgroundExecutionAvailable] is the host capability probe (ТЗ §60).
+ *
  * All native work happens on the single-threaded [executor]; [close] stops
- * pumps and drops new deliveries (called before the session is closed).
+ * pumps and drops new deliveries (called before the activity releases the
+ * session — the claimed streams themselves stay open for the service).
  */
 class NeotavernBridge(
     private val session: KernelSession,
     private val executor: ExecutorService,
     private val mainHandler: Handler,
     private val webView: WebView,
+    private val onStreamOpened: ((Pair<Long, String>) -> Unit)? = null,
+    private val onStreamTerminal: ((String) -> Unit)? = null,
 ) {
 
     /** Set by the host on teardown; stops pumps and drops pending deliveries. */
@@ -129,6 +147,15 @@ class NeotavernBridge(
 
     @JavascriptInterface
     fun handshake(): String = session.handshake()
+
+    /**
+     * Host capability probe (ТЗ §60): the Android host supports background
+     * execution of generation streams via the bounded foreground service
+     * ([GenerationService], Phase 8). Additive — the frozen Phase 5 surface
+     * is unchanged.
+     */
+    @JavascriptInterface
+    fun backgroundExecutionAvailable(): Boolean = true
 
     @JavascriptInterface
     fun call(requestId: String, envelopeJson: String, callbackId: String) {
@@ -240,15 +267,20 @@ class NeotavernBridge(
             }
             when (kind) {
                 "event" -> {
-                    registerWireStreamId(payloadJson, handle)
+                    val wireStreamId = registerWireStreamId(payloadJson, handle)
+                    if (wireStreamId != null) {
+                        notifyStreamOpened(handle, wireStreamId)
+                    }
                     deliver(CallbackFrame.resolve(callbackId, payloadJson))
                 }
                 "terminal" -> {
+                    notifyStreamTerminal(handle)
                     deliver(CallbackFrame.resolve(callbackId, payloadJson))
                     done = true
                 }
                 else -> {
                     // "error" payloads and anything unknown: deliver and end the pump.
+                    notifyStreamTerminal(handle)
                     deliver(CallbackFrame.resolve(callbackId, payloadJson))
                     done = true
                 }
@@ -259,16 +291,64 @@ class NeotavernBridge(
         streamByWireId.entries.removeAll { it.value == handle }
     }
 
-    /** Remembers the wire stream id so a later [cancelStream] can find the native handle. */
-    private fun registerWireStreamId(payloadJson: String, handle: Long) {
-        try {
+    /**
+     * Remembers the wire stream id so a later [cancelStream] can find the
+     * native handle. Returns the wire id only when it was newly registered
+     * (the first event of the stream), so the host hook fires once per stream.
+     */
+    private fun registerWireStreamId(payloadJson: String, handle: Long): String? {
+        return try {
             val event = JSONObject(payloadJson).getJSONObject("event")
             val wireStreamId = event.getString("streamId")
-            if (wireStreamId.isNotEmpty()) {
+            if (wireStreamId.isNotEmpty() && wireStreamId !in streamByWireId) {
                 streamByWireId[wireStreamId] = handle
+                wireStreamId
+            } else {
+                null
             }
         } catch (e: Exception) {
             // Event envelope without a streamId: the consumer cannot cancel this stream early.
+            null
+        }
+    }
+
+    /**
+     * Notifies the host that a stream just opened (first event with a wire
+     * stream id). Delivered on the main thread; a failing host hook must
+     * never break the stream pump.
+     */
+    private fun notifyStreamOpened(handle: Long, wireStreamId: String) {
+        val listener = onStreamOpened ?: return
+        mainHandler.post {
+            if (closed) return@post
+            try {
+                listener(handle to wireStreamId)
+            } catch (e: Exception) {
+                // Best-effort host hook; the pump keeps delivering either way.
+            }
+        }
+    }
+
+    /**
+     * Notifies the host that a stream reached its terminal state (terminal or
+     * error payload), so the host can end the background service even while
+     * the activity is still alive and its bridge pump is the active pump.
+     * Delivered on the main thread; a failing host hook never breaks the
+     * pump teardown.
+     */
+    private fun notifyStreamTerminal(handle: Long) {
+        val listener = onStreamTerminal ?: return
+        val wireStreamId = synchronized(streamByWireId) {
+            streamByWireId.entries.firstOrNull { it.value == handle }?.key
+        }
+        if (wireStreamId == null) return
+        mainHandler.post {
+            if (closed) return@post
+            try {
+                listener(wireStreamId)
+            } catch (e: Exception) {
+                // Best-effort host hook.
+            }
         }
     }
 

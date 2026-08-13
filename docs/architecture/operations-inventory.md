@@ -494,6 +494,7 @@ move over per-slice (see the "Desktop local" row above).
 | legacy (extension-settings) | `legacy/host.ts` (Express host)                                                                 | facade `LegacyBackend` (SillyTavern compat)                       | legacy                     | — (kept for compat)                                                                                |
 | **remote (Phase 4 adapter)**| `crates/adapters/remote-http` (tiny_http, envelope-over-HTTP; **no SQLite, no product rules**) | **Runtime Kernel — same instance as local IPC, one writer coordinator (`Arc<Mutex<Kernel>>`)** | **kernel (Phase 4)** | **all 15 registry operations over `wire.request.envelope` / `wire.response.envelope`; `GET /meta`, `POST /rpc`, `POST /rpc/stream` (SSE)** |
 | **desktop remote (Phase 9 host)** | `crates/adapters/desktop-remote` (`neotavern-desktop-remote`) — host service wrapping `remote-http` on the shared kernel; **off by default, no listener**; config at `app_config_dir/remote-access.json` (host-owned, atomic) | **Runtime Kernel — same instance, one writer coordinator** | **kernel (Phase 9)** | same frozen registry via `remote-http` (ADR-0030); host controls `kernel_remote_*` Tauri commands (**not** wire ops, no registry change) |
+| **android background (Phase 8 host)** | `apps/android` host services: `GenerationService` (bounded `FOREGROUND_SERVICE_TYPE_DATA_SYNC` for user-visible active generation; shared kernel handle via `KernelHolder` refcount, status-only notification + Stop action, never message content §85) and `MaintenanceScheduler` (WorkManager unique one-time work `neotavern-maintenance` → `backups.create`, `BATTERY_NOT_LOW` + `STORAGE_NOT_LOW`, no exact schedule §66, no boot-time daemon §87) | **Runtime Kernel — same session, one lease, one writer** | **host (Phase 8)** | same frozen registry over the mobile-ffi envelope channel (`generation.start`/`retry`/`cancel`, `backups.create`); no new wire ops, no JNI additions, no codegen |
 
 Notes:
 
@@ -518,6 +519,17 @@ Notes:
   shell — off by default (no listener), loopback default, non-loopback
   requires trusted proxy AND auth (fail-closed pre-bind), pairing/revoke via
   `kernel_remote_*` Tauri commands that never touch the frozen wire registry.
+- **Phase 8:** the Android host adds a background lifecycle adapter on the
+  **same kernel session** ([ADR-0036](../adr/0036-android-background-execution.md)) —
+  `KernelHolder` refcounts the one kernel handle between the activity and
+  the services (a second writable kernel is rejected by the data-root
+  lease, §22); a bounded `dataSync` foreground service continues
+  user-visible generation streams (status-only notification + Stop action,
+  §85) and maps stop/expiration onto `generation.cancel`, while process
+  death recovers through kernel startup recovery + `generation.retry`;
+  maintenance is WorkManager unique one-time work (`backups.create`,
+  battery/storage constraints, no exact schedule §66). No wire-registry,
+  JNI or codegen change — runtime-neutral, host-side only.
 
 ## 8. Product Wire mapping (Phase 0 registry)
 

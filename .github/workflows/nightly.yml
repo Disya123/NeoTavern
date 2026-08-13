@@ -159,15 +159,19 @@ jobs:
       - name: Docs integrity
         run: pnpm docs:check && pnpm docs:build
 
-  # Android device gate (ТЗ §7.2, Phase 5): JNI libs built for arm64-v8a +
-  # x86_64, then instrumented tests run on a hardware-accelerated API 34
-  # x86_64 emulator. Single configuration for now; the API-level/arch device
-  # matrix is a Phase 5 gate follow-up. Toolchain steps deliberately duplicate
-  # ci.yml android-build (no workflow composition).
+  # Android device gate (ТЗ §7.2, Phase 5 + Phase 8): JNI libs built for
+  # arm64-v8a + x86_64, then instrumented tests run on hardware-accelerated
+  # x86_64 emulators across the supported API range (26 = minSdk, 34 =
+  # current emulator). Toolchain steps deliberately duplicate ci.yml
+  # android-build (no workflow composition).
   android-device:
-    name: Android device gate (API 34 emulator)
+    name: Android device gate (API ${{ matrix.api-level }} emulator)
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [26, 34]
     steps:
       - uses: actions/checkout@v6
 
@@ -216,10 +220,10 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Instrumented tests (API 34, x86_64)
+      - name: Instrumented tests (API ${{ matrix.api-level }}, x86_64)
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 34
+          api-level: ${{ matrix.api-level }}
           target: google_apis
           arch: x86_64
           force-avd-creation: true
