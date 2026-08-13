@@ -355,10 +355,8 @@ class BackgroundExecutionInstrumentedTest {
         block: () -> T?,
     ): T {
         val deadline = SystemClock.elapsedRealtime() + timeoutMillis
-        var result: T? = null
         while (SystemClock.elapsedRealtime() < deadline) {
-            result = block()
-            if (result != null) return result
+            block()?.let { return it }
             SystemClock.sleep(pollMillis)
         }
         throw AssertionError("Timed out after ${timeoutMillis}ms waiting for: $description")

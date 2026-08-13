@@ -28,8 +28,8 @@ class ForegroundExecutionCoordinatorTest {
 
     @Test
     fun `first claim wins and a second claim of the same id is rejected`() {
-        assertTrue(ForegroundExecutionCoordinator.claim(handle = 100L, wireStreamId = "s1"))
-        assertFalse(ForegroundExecutionCoordinator.claim(handle = 200L, wireStreamId = "s1"))
+        assertTrue(ForegroundExecutionCoordinator.claim(streamHandle = 100L, wireStreamId = "s1"))
+        assertFalse(ForegroundExecutionCoordinator.claim(streamHandle = 200L, wireStreamId = "s1"))
 
         assertTrue(ForegroundExecutionCoordinator.isClaimed("s1"))
         assertEquals(
@@ -41,26 +41,26 @@ class ForegroundExecutionCoordinatorTest {
 
     @Test
     fun `unclaim then claim succeeds for the same id`() {
-        ForegroundExecutionCoordinator.claim(handle = 100L, wireStreamId = "s1")
+        ForegroundExecutionCoordinator.claim(streamHandle = 100L, wireStreamId = "s1")
         ForegroundExecutionCoordinator.unclaim("s1")
         assertFalse(ForegroundExecutionCoordinator.isClaimed("s1"))
 
-        assertTrue(ForegroundExecutionCoordinator.claim(handle = 300L, wireStreamId = "s1"))
+        assertTrue(ForegroundExecutionCoordinator.claim(streamHandle = 300L, wireStreamId = "s1"))
         assertTrue(ForegroundExecutionCoordinator.isClaimed("s1"))
         assertEquals(300L, ForegroundExecutionCoordinator.claimedStreams().single().streamHandle)
     }
 
     @Test
     fun `claimedStreams is an immutable snapshot`() {
-        ForegroundExecutionCoordinator.claim(handle = 100L, wireStreamId = "s1")
-        ForegroundExecutionCoordinator.claim(handle = 200L, wireStreamId = "s2")
+        ForegroundExecutionCoordinator.claim(streamHandle = 100L, wireStreamId = "s1")
+        ForegroundExecutionCoordinator.claim(streamHandle = 200L, wireStreamId = "s2")
 
         val snapshot = ForegroundExecutionCoordinator.claimedStreams()
         assertEquals(listOf("s1", "s2"), snapshot.map { it.wireStreamId })
 
         // Later registry mutations do not leak into the earlier snapshot.
         ForegroundExecutionCoordinator.unclaim("s1")
-        ForegroundExecutionCoordinator.claim(handle = 300L, wireStreamId = "s3")
+        ForegroundExecutionCoordinator.claim(streamHandle = 300L, wireStreamId = "s3")
 
         assertEquals(listOf("s1", "s2"), snapshot.map { it.wireStreamId })
         assertEquals(listOf("s2", "s3"), ForegroundExecutionCoordinator.claimedStreams().map { it.wireStreamId })
