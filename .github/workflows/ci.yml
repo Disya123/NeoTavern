@@ -35,6 +35,12 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      # ТЗ §79 merge-blocking: dependency direction / forbidden-import rules.
+      # Runtime Kernel stays host-neutral (no HTTP/UI/platform deps, no
+      # is_server/is_android branching); packages never import Rust internals.
+      - name: Dependency direction / forbidden imports
+        run: node scripts/check-dependency-rules.mjs
+
       - name: Typecheck
         run: pnpm typecheck
 

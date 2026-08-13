@@ -18,6 +18,13 @@ Public release prep:
 ## Unreleased
 ### Added
 
+- **Dependency direction / forbidden-import gate (ТЗ §79/§6/§87).** New
+  `scripts/check-dependency-rules.mjs` runs in the PR `checks` job: the
+  Runtime Kernel's Cargo.toml must not depend on transport/UI/platform crates
+  (denylist), the Kernel source must contain no `is_server`/`is_android`/
+  `serverMode` branching, adapters may depend on the Kernel but never the
+  reverse, and `packages/*` TypeScript never imports from `crates/` or
+  `apps/` (Public SDK не импортирует Rust internal crates).
 - **Nightly CI (ТЗ §80).** New `.github/workflows/nightly.yml`: scheduled
   daily run of the full Rust workspace suite (including the storage recovery
   matrix: DB support window, backup/restore kill-safety, data-root lease,
