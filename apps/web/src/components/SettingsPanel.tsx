@@ -28,11 +28,13 @@ import {
   type UserMessagePosition,
 } from '../state/ui.js';
 import { useErrorText } from '../lib/useErrorText.js';
+import { isTauriRuntime } from '../api/tauriTransport.js';
 import { DataMigrationPanel } from './DataMigrationPanel.js';
 import { DiagnosticsPanel } from './DiagnosticsPanel.js';
 import { FloatingTabContent } from './FloatingTabContent.js';
 import { FloatingTabPanel } from './FloatingTabPanel.js';
 import { PluginSettingsPanels } from './PluginPanels.js';
+import { RemoteAccessPanel } from './RemoteAccessPanel.js';
 import { SystemSurfaceLink } from './SystemSurfaceLink.js';
 import styles from './SettingsPanel.module.css';
 
@@ -45,6 +47,21 @@ export interface SettingsPanelProps {
 /** Settings menu: tabbed General / Themes / Data panel (role="tablist"). */
 export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const { t } = useTranslation();
+  // Desktop-shell-only tab: the kernel remote server exists only in the
+  // packaged app, so browsers never see (or invoke) it.
+  const remoteTab = isTauriRuntime()
+    ? [
+        {
+          value: 'remote',
+          label: t('settings:remoteAccess'),
+          content: (
+            <FloatingTabContent>
+              <RemoteAccessPanel />
+            </FloatingTabContent>
+          ),
+        },
+      ]
+    : [];
   return (
     <FloatingTabPanel
       component="settings-panel"
@@ -93,6 +110,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
               </FloatingTabContent>
             ),
           },
+          ...remoteTab,
         ]}
       />
     </FloatingTabPanel>

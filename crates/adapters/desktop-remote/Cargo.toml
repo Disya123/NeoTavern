@@ -1,0 +1,17 @@
+[package]
+name = "neotavern-desktop-remote"
+version = "0.1.0"
+edition = "2021"
+description = "Optional Desktop Remote Access host service over the shared runtime kernel (Phase 9)."
+
+[dependencies]
+remote-http-adapter = { path = "../remote-http" }
+runtime-kernel = { path = "../../runtime-kernel" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+tempfile = "3"
+# Tests construct KernelConfig with the embedded schema hash (mirroring
+# tauri-local's KernelHost::open); runtime-kernel does not re-export the hash.
+contracts-generated = { path = "../../contracts-generated" }

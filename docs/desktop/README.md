@@ -45,6 +45,53 @@ selects the native formats of the current OS. Native addons and the
 self-contained sidecar are always prepared on the same target runner;
 transferring built assets between OSes is not supported.
 
+### Remote Access (Phase 9, optional)
+
+Remote Access lets another device or browser reach the **same embedded
+Runtime Kernel** over HTTP (envelope-over-HTTP, ADR-0030/ADR-0035). It is
+**off by default — no listener exists until you enable it**.
+
+- **Enabling.** In the desktop shell open Settings → Remote Access and
+  switch the service on (this surface exists only inside the desktop shell;
+  a plain browser cannot control it). The default binds `127.0.0.1` with an
+  OS-assigned ephemeral port — use it from the same machine. The running
+  address is shown in the panel.
+- **Pairing.** Click *Pair* — the service issues a scoped credential
+  `(id, token)` and the token is shown **once**. Copy it to the remote
+  client (curl `Authorization: Bearer <token>`, or the app's remote
+  profile). Credentials are held in memory (SHA-256 verifier only) and are
+  revocable.
+- **Revoking.** *Revoke* invalidates a credential immediately — active
+  streams re-check per frame batch and abort. The panel's audit log shows
+  start/stop and pair/revoke events (no token material).
+- **Restart note.** In-memory credentials do not survive an app restart —
+  re-pair after restart. Durable, host-owned credential persistence is a
+  documented follow-up; secrets never enter the product database.
+- **Security posture.** Loopback by default; a non-loopback bind requires
+  **both** `trusted_proxy: true` (a TLS-terminating proxy in front) and auth
+  enabled — otherwise the service refuses to start
+  (`REMOTE_INSECURE_BIND` / `REMOTE_PUBLIC_BIND_REQUIRES_AUTH`). CORS is
+  deny-by-default: browser clients must be listed in `allowed_origins`
+  (exact match). Tokens are never logged or stored in plaintext; the auth
+  gate runs before the request body is read; token-bucket rate limiting and
+  a bounded stream cap protect the kernel.
+- **Config file.** Settings are saved host-owned at
+  `app_config_dir/remote-access.json` (Tauri 2 `app.path().app_config_dir()`,
+  created on demand, atomic write) — never inside the product data root, so
+  snapshots/backups/exports stay free of remote-access configuration.
+  Changing configuration while the service is running requires stopping it
+  first.
+- **What is NOT included.** The service is plain HTTP — for non-loopback
+  use TLS is terminated at your trusted proxy; the app does not manage
+  certificates. Credentials are not durable across restarts (re-pair). The
+  enable/pair/revoke UI exists only inside the desktop shell.
+- **Relationship to the legacy server remote mode.** The legacy Fastify
+  sidecar's `NEOTA_REMOTE_ACCESS` mode (session + CSRF, ADR-0005) is a
+  separate, process-level remote path for the unmigrated sidecar — not this
+  service. Desktop Remote Access runs **in-process** on the same kernel as
+  local IPC (one writer, §22). See
+  [ADR-0035](../adr/0035-desktop-remote-access.md).
+
 ### Windows build and checks
 
 ```bash

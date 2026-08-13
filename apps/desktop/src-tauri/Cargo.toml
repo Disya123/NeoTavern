@@ -14,6 +14,15 @@ path = "src/main.rs"
 name = "neotavern_desktop_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+# Phase 9 Remote Access (ТЗ §10): default-on so the `kernel_remote_*`
+# commands are always registered in kernel mode (the tauri-local dependency
+# pins its own `remote` feature unconditionally). The cfg guard keeps a
+# hypothetical tauri-only tauri-local configuration compiling: with
+# `--no-default-features` the entries are simply not registered.
+default = ["remote"]
+remote = []
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -25,7 +34,10 @@ tauri-plugin-shell = "2"
 url = "2"
 # Phase 3 local kernel transport: React → LocalBackend → Tauri IPC → Runtime
 # Kernel. The `tauri` feature of the adapter compiles the command surface.
-neotavern-tauri-local = { path = "../../../crates/adapters/tauri-local", features = ["tauri"] }
+# Phase 9 Remote Access (ТЗ §10): `remote` adds the `kernel_remote_*` host
+# commands (desktop build always carries them; the adapter stays tauri-only
+# compilable without the feature).
+neotavern-tauri-local = { path = "../../../crates/adapters/tauri-local", features = ["tauri", "remote"] }
 
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-updater = "2"

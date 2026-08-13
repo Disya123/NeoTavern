@@ -15,6 +15,8 @@ use std::{
 };
 #[cfg(desktop)]
 use neotavern_tauri_local::{commands, build_request_envelope, KernelHost, KernelHostConfig};
+#[cfg(all(desktop, feature = "remote"))]
+use neotavern_tauri_local::remote::{RemoteAccessService, RemoteAccessState};
 #[cfg(desktop)]
 use tauri::{path::BaseDirectory, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder};
 #[cfg(desktop)]
@@ -336,7 +338,9 @@ fn spawn_legacy_sidecar(
 #[cfg(desktop)]
 fn setup_local_kernel_mode(app: &mut tauri::App, data_dir: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
     let host = KernelHost::open(KernelHostConfig {
-        data_root: Some(data_dir),
+        // Clone: `data_dir` is also the Remote Access config fallback (the
+        // kernel data root is guaranteed writable and exists).
+        data_root: Some(data_dir.clone()),
     })
     .map_err(|error| {
         // Controlled kernel error (contract mismatch, data_root_in_use,
@@ -346,6 +350,25 @@ fn setup_local_kernel_mode(app: &mut tauri::App, data_dir: PathBuf) -> Result<()
         error.to_string()
     })?;
     app.manage(host);
+
+    // Phase 9 Remote Access host service (ТЗ §10): the service wraps the
+    // remote-http adapter lifecycle; its config persists next to the app
+    // data. Resolution is best-effort — a failure falls back to the local
+    // data dir instead of failing startup (Remote Access is off by default;
+    // the UI surfaces any persistence failure later as `REMOTE_IO`).
+    #[cfg(feature = "remote")]
+    {
+        let config_dir = app
+            .path()
+            .app_config_dir()
+            .or_else(|_| app.path().app_local_data_dir())
+            .unwrap_or_else(|_| data_dir.clone());
+        // Best-effort: an unwritable config dir only degrades config
+        // persistence, never startup.
+        let _ = std::fs::create_dir_all(&config_dir);
+        let service = RemoteAccessService::new(config_dir.join("remote-access.json"));
+        app.manage(RemoteAccessState(service));
+    }
 
     if std::env::var("NEOTA_DESKTOP_SMOKE").as_deref() == Ok("1") {
         run_kernel_smoke(&app.handle());
@@ -440,7 +463,20 @@ pub fn run() {
             builder.invoke_handler(tauri::generate_handler![
                 commands::kernel_dispatch,
                 commands::kernel_stream_start,
-                commands::kernel_stream_abort
+                commands::kernel_stream_abort,
+                // Phase 9 Remote Access (ТЗ §10) — the desktop build always
+                // has the `remote` feature; the cfg guard keeps a
+                // tauri-only tauri-local configuration compiling.
+                #[cfg(feature = "remote")]
+                commands::kernel_remote_status,
+                #[cfg(feature = "remote")]
+                commands::kernel_remote_start,
+                #[cfg(feature = "remote")]
+                commands::kernel_remote_stop,
+                #[cfg(feature = "remote")]
+                commands::kernel_remote_pair,
+                #[cfg(feature = "remote")]
+                commands::kernel_remote_revoke
             ])
         };
 

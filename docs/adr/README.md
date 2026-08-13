@@ -1,5 +1,21 @@
 # Architecture Decision Records
 
+## ADR-0035: Desktop Remote Access — host service over the shared Runtime Kernel
+
+Phase 9 wires the Phase 4 remote surface into the desktop shell: the new
+`neotavern-desktop-remote` host service (`crates/adapters/desktop-remote`)
+wraps `remote-http-adapter` on the **same `Arc<Mutex<Kernel>>`** as local
+IPC (one writer, §22) — off by default (no listener), loopback default with
+an ephemeral port, non-loopback only with `trusted_proxy` AND auth
+(fail-closed pre-bind), pairing with revocable in-memory SHA-256-verifier
+credentials (re-pair after restart; durable credential persistence deferred),
+CORS deny-by-default via `allowed_origins`, bounded audit, and a
+`kernel_remote_*` Tauri command surface that controls the host service
+without touching the frozen wire registry (no contract/codegen change).
+Config lives host-owned at `app_config_dir/remote-access.json` (atomic
+write), never in the product DB. Full decision, alternatives and
+consequences: [ADR-0035](0035-desktop-remote-access.md).
+
 ## ADR-0034: Android Local Host — JNI + WebView Bridge on the mobile FFI ABI
 
 Phase 5 wires the Android host to the Runtime Kernel without Node or

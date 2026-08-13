@@ -172,6 +172,23 @@ Public release prep:
   bind now requires BOTH `trusted_proxy` and configured `auth` — otherwise it
   is a startup error (`InsecureBind` / `PublicBindRequiresAuth`, §10). Docs:
   `crates/adapters/remote-http/README.md`, wire-contracts §6.1.
+- **Desktop Remote Access service (ТЗ 7.2 Фаза 9, §11.2/§10/§18.4).** New
+  `crates/adapters/desktop-remote` (`neotavern-desktop-remote`) — a host
+  service in the Tauri shell wrapping the Phase 4 `remote-http` adapter on
+  the **same `Arc<Mutex<Kernel>>`** as local IPC (one writer): off by
+  default (no listener until enabled in Settings → Remote Access), loopback
+  default with an ephemeral port, non-loopback requires `trusted_proxy` AND
+  auth (fail-closed pre-bind — `InsecureBind` / `PublicBindRequiresAuth`),
+  pairing with revocable in-memory SHA-256-verifier credentials (token shown
+  once, never logged or stored in plaintext; re-pair after restart — durable
+  credential persistence deferred), CORS deny-by-default via
+  `allowed_origins`, bounded secret-free audit, host-owned config at
+  `app_config_dir/remote-access.json` (atomic write, never in the product
+  DB), and a `kernel_remote_*` Tauri command surface (`remote` feature on
+  `neotavern-tauri-local`) that controls the host service without touching
+  the frozen wire registry (no contract/codegen change). The Settings panel
+  gains the enable/pair/revoke UI in the desktop shell. Docs: ADR-0035,
+  `docs/desktop/README.md`, operations inventory.
 - **CLI transport (ТЗ §6.3, Фаза 4 CLI hooks).** New `crates/adapters/cli`
   (`neotavern-cli`): a std-only binary mapping one wire request envelope →
   one response envelope through the **same Runtime Kernel** and the same

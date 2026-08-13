@@ -215,6 +215,21 @@ gate passes.
   `MobileBridgeTransport` (explicit override layer — the default
   `createBackend()` routing is unchanged). See
   [ADR-0034](../adr/README.md#adr-0034-android-local-host--jni--webview-bridge-on-the-mobile-ffi-abi).
+- **Phase 9 Desktop Remote Access** — `crates/adapters/desktop-remote`
+  (`neotavern-desktop-remote`): a host service in the Tauri shell that wraps
+  the Phase 4 `remote-http` adapter on the **same `Arc<Mutex<Kernel>>`** as
+  local IPC (one writer, §22) — off by default (no listener until enabled in
+  Settings → Remote Access), loopback default with an ephemeral port,
+  non-loopback only behind a trusted TLS-terminating proxy with auth
+  (fail-closed pre-bind), pairing with revocable in-memory
+  SHA-256-verifier credentials (re-pair after restart; durable credential
+  persistence deferred), CORS deny-by-default via `allowed_origins`, bounded
+  secret-free audit, host-owned config at `app_config_dir/remote-access.json`
+  (atomic write, never in the product DB), and a `kernel_remote_*` Tauri
+  command surface that controls the host service without changing the frozen
+  wire registry (no contract/codegen impact). The enable/pair/revoke UI is
+  gated to the desktop shell. See
+  [ADR-0035](../adr/README.md#adr-0035-desktop-remote-access--host-service-over-the-shared-runtime-kernel).
 - [Generation durability](generation-durability.md) — Phase 6: recoverable
   generation workflows over the same kernel — durable state machine
   (`generation_runs`/`generation_events`, migration 3), CAS transitions by

@@ -493,6 +493,7 @@ move over per-slice (see the "Desktop local" row above).
 | remoteAuth                  | `plugins/remoteAuth.ts` (session + CSRF)                                                        | facade `RemoteBackend` (transport concern, `packages/neobackend`) | legacy                     | — (auth scope on wire ops: `app.read`/`app.write`)                                                 |
 | legacy (extension-settings) | `legacy/host.ts` (Express host)                                                                 | facade `LegacyBackend` (SillyTavern compat)                       | legacy                     | — (kept for compat)                                                                                |
 | **remote (Phase 4 adapter)**| `crates/adapters/remote-http` (tiny_http, envelope-over-HTTP; **no SQLite, no product rules**) | **Runtime Kernel — same instance as local IPC, one writer coordinator (`Arc<Mutex<Kernel>>`)** | **kernel (Phase 4)** | **all 15 registry operations over `wire.request.envelope` / `wire.response.envelope`; `GET /meta`, `POST /rpc`, `POST /rpc/stream` (SSE)** |
+| **desktop remote (Phase 9 host)** | `crates/adapters/desktop-remote` (`neotavern-desktop-remote`) — host service wrapping `remote-http` on the shared kernel; **off by default, no listener**; config at `app_config_dir/remote-access.json` (host-owned, atomic) | **Runtime Kernel — same instance, one writer coordinator** | **kernel (Phase 9)** | same frozen registry via `remote-http` (ADR-0030); host controls `kernel_remote_*` Tauri commands (**not** wire ops, no registry change) |
 
 Notes:
 
@@ -511,6 +512,12 @@ Notes:
   above remain the authoritative writers for every **unmigrated** family;
   families already moved to the kernel (Phase 3/4) are updated per-slice in
   this table.
+- **Phase 9:** the desktop Remote Access host service
+  (`crates/adapters/desktop-remote`, [ADR-0035](../adr/0035-desktop-remote-access.md))
+  wraps the Phase 4 adapter on the same kernel instance for the desktop
+  shell — off by default (no listener), loopback default, non-loopback
+  requires trusted proxy AND auth (fail-closed pre-bind), pairing/revoke via
+  `kernel_remote_*` Tauri commands that never touch the frozen wire registry.
 
 ## 8. Product Wire mapping (Phase 0 registry)
 

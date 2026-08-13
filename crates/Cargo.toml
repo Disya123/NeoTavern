@@ -3,4 +3,4 @@
 # before any build runs.
 [workspace]
 resolver = "2"
-members = ["contracts-generated", "runtime-kernel", "storage", "adapters/android-jni", "adapters/remote-http", "adapters/cli", "adapters/envelope", "adapters/tauri-local", "provider-sdk", "built-in-providers", "adapters/mobile-ffi"]
+members = ["contracts-generated", "runtime-kernel", "storage", "adapters/android-jni", "adapters/remote-http", "adapters/cli", "adapters/desktop-remote", "adapters/envelope", "adapters/tauri-local", "provider-sdk", "built-in-providers", "adapters/mobile-ffi"]

@@ -115,6 +115,15 @@ impl KernelHost {
         })
     }
 
+    /// The shared kernel handle, for transports that dispatch directly to
+    /// the same kernel the IPC surface serves. Used by the Phase 9 Remote
+    /// Access service so the remote listener and the WebView share one
+    /// single-writer kernel (§22) — `Clone` is cheap and the mutex is held
+    /// only for short dispatch calls.
+    pub fn kernel_handle(&self) -> Arc<Mutex<Kernel>> {
+        Arc::clone(&self.kernel)
+    }
+
     /// Executes one unary wire operation: decode envelope → protocol check →
     /// kernel dispatch → validated response envelope.
     ///
@@ -426,6 +435,14 @@ fn envelope_or_fallback(result: Result<Vec<u8>, EnvelopeFailure>) -> Vec<u8> {
 
 #[cfg(feature = "tauri")]
 pub mod commands;
+
+/// Phase 9 Remote Access host surface (ТЗ §10): the service state wrapper
+/// managed by the Desktop shell and the wire DTOs the `kernel_remote_*`
+/// commands answer. The module itself is Tauri-free (pure serde DTOs) so
+/// the crate builds with `--features remote` alone; the command surface
+/// lives in [`commands`] behind the `tauri` feature.
+#[cfg(feature = "remote")]
+pub mod remote;
 
 /// Human-readable transport failure for the IPC error surface (never
 /// includes payload or secrets).
