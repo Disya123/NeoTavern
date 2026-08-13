@@ -2,7 +2,28 @@
 
 ## Desktop (Tauri 2.x)
 
-- The shell is Tauri 2; the Fastify backend runs as a bundled Node.js sidecar.
+### Phase 3 local kernel mode (default)
+
+- The Runtime Kernel (`crates/runtime-kernel`) is embedded in the Tauri
+  process; the window loads the bundled web assets over `tauri://localhost`.
+- The UI talks to the kernel through Tauri IPC commands
+  (`kernel_dispatch`, `kernel_stream_start`, `kernel_stream_abort` from
+  `crates/adapters/tauri-local`): `React → LocalBackend → Tauri IPC →
+  Runtime Kernel → SQLite` (ТЗ §11.1/§15.1).
+- **No HTTP server, no listening port, no network auth, no server lifecycle**
+  when Remote Access is off. The legacy Node sidecar is spawned only with
+  `NEOTA_LEGACY_SERVER=1` as the temporary transition bridge for unmigrated
+  routes.
+- Contract handshake: `KernelHost::open` requires the exact embedded
+  `schemaHash` and FFI ABI version (§6.5); a stale WebView bundle or native
+  library is caught before any product write.
+- Streaming: the kernel's durable `generation.events` log is polled by a
+  native worker and forwarded to the webview over a Tauri `Channel`; aborting
+  the stream dispatches `generation.cancel` (durable, §63).
+
+### Legacy sidecar mode (opt-in `NEOTA_LEGACY_SERVER=1`)
+
+- The Fastify backend runs as a bundled Node.js sidecar (`neotavern-server`).
 - Node.js and SQLite are included in the distribution; first launch needs no `npm install`.
 - The user needs no terminal, Git, npm, or database setup.
 - Targets: Windows installer + portable, macOS package, Linux AppImage/archive.
@@ -12,10 +33,12 @@
 > Status: Windows x64 pre-release verified locally. For macOS and Linux a
 > mandatory native build/smoke gate is added in
 > `.github/workflows/desktop-release.yml`: the bundle is launched with
-> `NEOTA_DESKTOP_SMOKE=1`, waits for sidecar readiness, checks SQLite creation
-> and the absence of orphan processes. Node.js, `better-sqlite3`, Sharp and
-> production web assets are included in every platform package; the first
-> launch does not run `npm install`.
+> `NEOTA_DESKTOP_SMOKE=1`, waits for sidecar readiness (legacy mode) or runs
+> the kernel self-check (kernel mode: handshake + `meta.get` +
+> `characters.list` + `backups.list`), checks SQLite creation and the absence
+> of orphan processes. Node.js, `better-sqlite3`, Sharp and production web
+> assets are included in every legacy-mode package; the first launch does not
+> run `npm install`.
 
 `tauri.conf.json` uses `bundle.targets: "all"`, so `pnpm desktop:build`
 selects the native formats of the current OS. Native addons and the

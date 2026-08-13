@@ -1,0 +1,23 @@
+[package]
+name = "neotavern-tauri-local"
+version = "0.1.0"
+edition = "2021"
+description = "Tauri local IPC adapter: React → LocalBackend → Tauri IPC → Runtime Kernel (ТЗ §11.1/§15.1)"
+license = "AGPL-3.0"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2", optional = true }
+contracts-generated = { path = "../../contracts-generated" }
+runtime-kernel = { path = "../../runtime-kernel" }
+# Shared envelope layer — the Tauri transport answers byte-identical
+# response envelopes to the CLI and the remote-http adapter (§6.3).
+neotavern-envelope = { path = "../envelope" }
+
+[features]
+# The Tauri command surface. Non-default so the workspace test/clippy jobs
+# stay free of the Tauri/WRY dependency tree; the Desktop shell enables it
+# (`neotavern-tauri-local = { features = ["tauri"] }`).
+default = []
+tauri = ["dep:tauri"]

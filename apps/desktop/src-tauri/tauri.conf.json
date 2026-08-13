@@ -6,6 +6,7 @@
   "build": {
     "beforeBuildCommand": "pnpm --dir ../.. desktop:prepare",
     "beforeDevCommand": "pnpm --dir ../.. desktop:prepare",
+    "devUrl": "http://localhost:5173",
     "frontendDist": "../../web/dist"
   },
   "app": {

@@ -8,7 +8,9 @@ import {
 } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useQuery } from '@tanstack/react-query';
 import { ActionBar, ActionBarGroup, Button } from '@neotavern/ui';
+import { backend } from '../api/backend.js';
 import { useClearDiagnosticCache, useDiagnostics, useRebuildSearch } from '../api/hooks.js';
 import { useErrorText } from '../lib/useErrorText.js';
 import { ConfirmActionDialog } from './ConfirmActionDialog.js';
@@ -37,6 +39,23 @@ export function DiagnosticsPanel() {
   const [desktop] = useState(() => isDesktopShell());
   const [updateStatus, setUpdateStatus] = useState<CoreUpdateStatus | null>(null);
   const [cacheConfirmOpen, setCacheConfirmOpen] = useState(false);
+  // Phase 3 local kernel slice: the desktop shell reads kernel metadata over
+  // the NeoBackend facade (React → LocalBackend → Tauri IPC → Runtime
+  // Kernel). Disabled in the browser where no kernel transport exists.
+  const kernelQuery = useQuery({
+    queryKey: ['kernel-meta'],
+    queryFn: () => backend.meta(),
+    enabled: desktop,
+    staleTime: 60_000,
+    retry: false,
+  });
+  const kernelBackupsQuery = useQuery({
+    queryKey: ['kernel-backups'],
+    queryFn: () => backend.backups.list(),
+    enabled: desktop,
+    staleTime: 60_000,
+    retry: false,
+  });
 
   const checkUpdates = async (): Promise<void> => {
     setActiveAction('update');
@@ -166,6 +185,54 @@ export function DiagnosticsPanel() {
           </Button>
         </ActionBarGroup>
       </ActionBar>
+
+      {desktop ? (
+        <section data-part="kernel-diagnostics" aria-label={t('settings:diagnosticsKernel')}>
+          <div className={styles.summary}>
+            {kernelQuery.data ? (
+              <>
+                <DiagnosticMetric
+                  label={t('settings:diagnosticsKernel')}
+                  value={kernelQuery.data.appVersion}
+                  state="ok"
+                />
+                <DiagnosticMetric
+                  label={t('settings:diagnosticsKernelWire')}
+                  value={`${kernelQuery.data.productWire.major}.${kernelQuery.data.productWire.minor}`}
+                />
+                <DiagnosticMetric
+                  label={t('settings:diagnosticsKernelFeatures')}
+                  value={t('settings:diagnosticsKernelFeaturesValue', {
+                    count: Object.keys(kernelQuery.data.features).length,
+                  })}
+                />
+                <DiagnosticMetric
+                  label={t('settings:diagnosticsKernelBackups')}
+                  value={
+                    kernelBackupsQuery.data
+                      ? t('settings:diagnosticsKernelBackupsValue', {
+                          count: kernelBackupsQuery.data.items.length,
+                        })
+                      : t('settings:diagnosticsKernelUnavailable')
+                  }
+                  state={kernelBackupsQuery.data ? 'ok' : 'error'}
+                />
+              </>
+            ) : kernelQuery.isError ? (
+              <DiagnosticMetric
+                label={t('settings:diagnosticsKernel')}
+                value={t('settings:diagnosticsKernelUnavailable')}
+                state="error"
+              />
+            ) : (
+              <DiagnosticMetric
+                label={t('settings:diagnosticsKernel')}
+                value={t('settings:diagnosticsRunning')}
+              />
+            )}
+          </div>
+        </section>
+      ) : null}
 
       {snapshot ? (
         <>

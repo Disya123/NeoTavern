@@ -18,6 +18,35 @@ Public release prep:
 ## Unreleased
 ### Added
 
+- **Phase 3 desktop local kernel mode (ТЗ §11.1/§15.1).** The Tauri shell
+  now defaults to local kernel mode: the Runtime Kernel is embedded in the
+  desktop process and the window loads bundled web assets over
+  `tauri://localhost` — no HTTP server, no listening port, no server
+  lifecycle. `React → LocalBackend → Tauri IPC → Runtime Kernel` via
+  `crates/adapters/tauri-local` (`kernel_dispatch`, `kernel_stream_start`
+  with a durable-log poller over a Tauri `Channel`, `kernel_stream_abort`),
+  with the exact schema-hash/FFI-ABI handshake enforced at open (ТЗ §6.5).
+  The legacy Node sidecar is opt-in via `NEOTA_LEGACY_SERVER=1` (transition
+  bridge for unmigrated routes); kernel mode is smoke-tested with the server
+  fully off. Desktop README and docs updated; ADR-0033 records the cutover.
+- **Shared wire envelope layer (ТЗ §6.3).** `crates/adapters/envelope`
+  (`neotavern-envelope`) now owns the request/response envelope mapping for
+  every Kernel transport — CLI, remote-http and Tauri IPC answer
+  byte-identical response envelopes; the CLI and HTTP adapter were migrated
+  to it (no per-transport DTO copies).
+- **`TauriTransport` for `LocalBackend`.** `apps/web/src/api/tauriTransport.ts`
+  implements the same-process `LocalTransport` over Tauri IPC: contract
+  envelopes in/out, product-vs-transport error split, live stream open with
+  an eager independent promise chain and a manual async iterator (early
+  consumer leave still aborts the opened run durably). `backend.ts` routes
+  to `LocalBackend` inside the Tauri shell and keeps `LegacyBackend` in a
+  browser; unmigrated legacy routes fail with a typed `UnsupportedError` in
+  kernel mode. Covered by 13 new vitest tests (transport + routing).
+- **First Phase 3 vertical slice: DiagnosticsPanel kernel section.** In the
+  desktop shell the panel renders kernel metadata (`meta.get`) and backup
+  count (`backups.list`) through the `NeoBackend` facade; hidden in a plain
+  browser (ТЗ §60 availability). i18n keys added (en/ru).
+
 - **Provider SDK contract tests (ТЗ §83).**
   `packages/provider-sdk/test/contract.test.ts` pins the public Provider SDK
   contract: config/base-URL validation, model listing, the unified stream

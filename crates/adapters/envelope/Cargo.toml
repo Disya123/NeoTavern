@@ -1,0 +1,12 @@
+[package]
+name = "neotavern-envelope"
+version = "0.1.0"
+edition = "2021"
+description = "Shared wire request/response envelope mapping for all Kernel transports (ТЗ §6.3)"
+license = "AGPL-3.0"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+contracts-generated = { path = "../../contracts-generated" }
+runtime-kernel = { path = "../../runtime-kernel" }

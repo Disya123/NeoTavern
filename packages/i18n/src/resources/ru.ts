@@ -939,6 +939,13 @@ export const ru: Resources = {
     diagnosticsExtensionsValue: 'провайдеры {{providers}} · плагины {{plugins}} · темы {{themes}}',
     diagnosticsRuntime: 'Среда выполнения',
     diagnosticsRuntimeValue: '{{version}} · Node {{nodeVersion}} · {{platform}}/{{architecture}}',
+    diagnosticsKernel: 'Локальное ядро',
+    diagnosticsKernelWire: 'Wire-контракт продукта',
+    diagnosticsKernelFeatures: 'Возможности',
+    diagnosticsKernelFeaturesValue: '{{count}} возможностей',
+    diagnosticsKernelBackups: 'Резервные копии',
+    diagnosticsKernelBackupsValue: '{{count}} резервных копий',
+    diagnosticsKernelUnavailable: 'Недоступно',
     diagnosticsUnknown: 'Неизвестно',
     diagnosticsPrivacy:
       'Отчёт не содержит секреты, логи, абсолютные пути и пользовательский текст.',

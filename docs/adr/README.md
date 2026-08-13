@@ -1,5 +1,16 @@
 # Architecture Decision Records
 
+## ADR-0033: Desktop Local Kernel Transport — Tauri IPC Cutover
+
+Phase 3 wires the desktop to the Runtime Kernel without the HTTP server:
+a shared envelope crate (`neotavern-envelope`) for byte-identical envelopes
+across CLI/HTTP/Tauri, `neotavern-tauri-local` with `kernel_dispatch` /
+`kernel_stream_start` / `kernel_stream_abort`, kernel mode as the shell
+default (legacy Node sidecar opt-in via `NEOTA_LEGACY_SERVER=1`) and a
+`LocalTransport` over `invoke` for `LocalBackend`. First vertical slice:
+DiagnosticsPanel kernel section (meta + backups). Full decision, alternatives
+and consequences: [ADR-0033](0033-desktop-local-kernel-transport.md).
+
 ## ADR-0032: Portable Data — Backup Container, Staged Restore, Portable Export
 
 Phase 11 turns the Phase 2 recovery primitives into public long-lived formats:

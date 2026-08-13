@@ -35,7 +35,8 @@ Related documents: [Wire contracts](wire-contracts.md), [Version axes](version-a
 | Storage        | SQLite `app.db` (WAL) via `@neotavern/db` (Drizzle repositories) + filesystem under `data/` (`apps/server/src/lib/paths.ts`: `files/{avatars,backgrounds,attachments,audio,generated}`, `cache/thumbnails`, `backups/`, `plugins/`, `themes/`, `logs/`) |
 | Real-time      | SSE: `GET /api/v2/events` (app events) and `POST /api/v2/chats/:id/generate` (generation stream)                                                                                                                                                        |
 | Legacy compat  | Express host for legacy server plugins and SillyTavern-style extension settings (`apps/server/src/legacy/host.ts`)                                                                                                                                      |
-| Target (ТЗ §7) | **[IN PROGRESS]** Runtime Kernel in `crates/runtime-kernel` becomes the authoritative writer for product operations; facades `LocalBackend`/`RemoteBackend`/`LegacyBackend` in `packages/neobackend`, transport SDK in `packages/client-sdk`. The web UI already routes **every** API call through the `NeoBackend` facade singleton (`apps/web/src/api/backend.ts`): typed wire operations go through `LegacyBackend` mappings, unmigrated `/api/v2` routes through the temporary `raw` passthrough (removed per-slice in Фаза 3). |
+| Target (ТЗ §7) | **[IN PROGRESS]** Runtime Kernel in `crates/runtime-kernel` becomes the authoritative writer for product operations; facades `LocalBackend`/`RemoteBackend`/`LegacyBackend` in `packages/neobackend`, transport SDK in `packages/client-sdk`. The web UI routes **every** API call through the `NeoBackend` facade singleton (`apps/web/src/api/backend.ts`): typed wire operations go through `LegacyBackend` mappings in a browser, unmigrated `/api/v2` routes through the temporary `raw` passthrough (removed per-slice in Фаза 3). |
+| Desktop local (ТЗ §11.1/§15.1, Phase 3) | **[DONE]** The Tauri shell now defaults to **local kernel mode**: the Runtime Kernel is embedded in the desktop process, `React → LocalBackend → Tauri IPC → Runtime Kernel` over `neotavern-tauri-local` commands (`kernel_dispatch` / `kernel_stream_start` / `kernel_stream_abort`), the window loads bundled web assets via `tauri://localhost`, and no HTTP server/listener exists (§11.1). The legacy Node sidecar stays available only behind `NEOTA_LEGACY_SERVER=1` as the transition bridge for unmigrated routes. Shared envelope layer moved to `crates/adapters/envelope` (byte-identical envelopes across CLI/HTTP/Tauri, §6.3). First vertical slice shipped: DiagnosticsPanel kernel section (kernel meta + backups via NeoBackend). Read-surface cutover (character/chat browse) is the next slice — the frozen wire registry carries no avatar URL/chat-create ops, so those UI paths stay legacy until the contract grows. |
 
 ## 3. Error model
 
@@ -454,7 +455,11 @@ typed `generation.*` event union (`wire.generation.event` discriminated on
 
 Current authoritative writer vs Phase 0 target per feature family. "Migration
 status" is **legacy** for every family at Phase 0 start: no route has moved to
-the kernel yet.
+the kernel yet. Phase 3 added the **desktop local transport** (kernel embedded,
+LocalBackend over Tauri IPC, server off by default) — the frozen-registry
+operations are now kernel-writer-capable on desktop; the UI read surfaces
+(character/chat browse, generation page) still speak the legacy routes and
+move over per-slice (see the "Desktop local" row above).
 
 | Feature family              | Current authoritative writer (status quo)                                                       | Target writer (ТЗ §7)                                             | Migration status (Phase 0) | Product Wire operation(s)                                                                          |
 | --------------------------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------- |

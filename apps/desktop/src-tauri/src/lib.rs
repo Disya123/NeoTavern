@@ -14,6 +14,8 @@ use std::{
     time::Duration,
 };
 #[cfg(desktop)]
+use neotavern_tauri_local::{commands, build_request_envelope, KernelHost, KernelHostConfig};
+#[cfg(desktop)]
 use tauri::{path::BaseDirectory, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder};
 #[cfg(desktop)]
 use tauri_plugin_shell::{
@@ -33,6 +35,12 @@ const STARTUP_POLL_INTERVAL: Duration = Duration::from_millis(50);
 const UPDATE_ENDPOINT: Option<&str> = option_env!("NEOTA_UPDATE_ENDPOINT");
 #[cfg(desktop)]
 const UPDATE_PUBLIC_KEY: Option<&str> = option_env!("NEOTA_UPDATE_PUBLIC_KEY");
+/// Opt-in legacy bridge: `NEOTA_LEGACY_SERVER=1` spawns the Node sidecar and
+/// serves the window from `http://127.0.0.1:<port>` exactly like the
+/// pre-Phase-3 shell. Default (unset) is the Phase 3 local kernel mode: no
+/// HTTP server, no listening port, no server lifecycle (§11.1).
+#[cfg(desktop)]
+const LEGACY_SERVER_ENV: &str = "NEOTA_LEGACY_SERVER";
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -166,6 +174,25 @@ fn stop_sidecar(app: &AppHandle) {
     };
 }
 
+/// Resolves the canonical local data root: `data/` next to the executable for
+/// the portable build, otherwise the platform app-data directory. Both the
+/// kernel and (opt-in) legacy sidecar use this root; only one mode runs at a
+/// time, so the root never has two writable owners.
+#[cfg(desktop)]
+fn resolve_data_dir(app: &tauri::App) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let executable = std::env::current_exe()?;
+    let portable_data_dir = executable
+        .parent()
+        .filter(|directory| directory.join("portable.flag").is_file())
+        .map(|directory| directory.join("data"));
+    let data_dir = match portable_data_dir {
+        Some(directory) => directory,
+        None => app.path().app_local_data_dir()?,
+    };
+    fs::create_dir_all(&data_dir)?;
+    Ok(data_dir)
+}
+
 #[cfg(desktop)]
 fn open_main_window_when_ready(app: AppHandle, port: u16) {
     thread::spawn(move || {
@@ -217,11 +244,182 @@ fn open_main_window_when_ready(app: AppHandle, port: u16) {
     });
 }
 
+/// Spawns the legacy Node sidecar (opt-in `NEOTA_LEGACY_SERVER=1` transition
+/// bridge for unmigrated features). Returns the events receiver and child.
+#[cfg(desktop)]
+fn spawn_legacy_sidecar(
+    app: &tauri::App,
+    port: u16,
+    data_dir: &std::path::Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let web_dir = sidecar_path(app.path().resolve("resources/web", BaseDirectory::Resource)?);
+    let sharp_module = sidecar_path(app.path().resolve(
+        "resources/native/node_modules/sharp/lib/index.js",
+        BaseDirectory::Resource,
+    )?);
+    let sqlite_module = sidecar_path(app.path().resolve(
+        "resources/native/node_modules/better-sqlite3/lib/index.js",
+        BaseDirectory::Resource,
+    )?);
+    let plugin_node = sidecar_path(app.path().resolve(
+        if cfg!(windows) {
+            "resources/runtime/node.exe"
+        } else {
+            "resources/runtime/node"
+        },
+        BaseDirectory::Resource,
+    )?);
+    let plugin_worker = sidecar_path(app.path().resolve(
+        "resources/runtime/plugin-worker.mjs",
+        BaseDirectory::Resource,
+    )?);
+    let plugin_loader = sidecar_path(app.path().resolve(
+        "resources/runtime/plugin-loader.mjs",
+        BaseDirectory::Resource,
+    )?);
+
+    let (mut events, child) = app
+        .shell()
+        .sidecar("neotavern-server")?
+        .env("NEOTA_HOST", "127.0.0.1")
+        .env("NEOTA_PORT", port.to_string())
+        .env("NEOTA_DATA_DIR", data_dir)
+        .env("NEOTA_WEB_DIR", web_dir)
+        .env("NEOTA_SHARP_MODULE", sharp_module)
+        .env("NEOTA_SQLITE_MODULE", sqlite_module)
+        .env("NEOTA_PLUGIN_NODE", plugin_node)
+        .env("NEOTA_PLUGIN_WORKER", plugin_worker)
+        .env("NEOTA_PLUGIN_LOADER", plugin_loader)
+        .env("NEOTA_CORS_ORIGIN", format!("http://127.0.0.1:{port}"))
+        .spawn()?;
+
+    {
+        let state = app.state::<SidecarState>();
+        let mut slot = state
+            .child
+            .lock()
+            .map_err(|_| "sidecar state lock was poisoned")?;
+        *slot = Some(child);
+    }
+
+    let event_app = app.handle().clone();
+    tauri::async_runtime::spawn(async move {
+        while let Some(event) = events.recv().await {
+            match event {
+                CommandEvent::Stdout(bytes) => {
+                    eprintln!("[server] {}", String::from_utf8_lossy(&bytes));
+                }
+                CommandEvent::Stderr(bytes) => {
+                    eprintln!("[server:error] {}", String::from_utf8_lossy(&bytes));
+                }
+                CommandEvent::Terminated(payload) => {
+                    eprintln!("backend sidecar terminated: {payload:?}");
+                    let state = event_app.state::<SidecarState>();
+                    if !state.stopping.load(Ordering::Acquire) {
+                        event_app.exit(1);
+                    }
+                    break;
+                }
+                _ => {}
+            }
+        }
+    });
+
+    open_main_window_when_ready(app.handle().clone(), port);
+    Ok(())
+}
+
+/// Phase 3 local kernel mode: the packaged kernel owns the data root; the
+/// window loads the bundled web assets over `tauri://localhost` with no HTTP
+/// server at all. With `NEOTA_DESKTOP_SMOKE=1` the shell self-checks the
+/// packaged kernel (handshake + meta + reads) and exits deterministically.
+#[cfg(desktop)]
+fn setup_local_kernel_mode(app: &mut tauri::App, data_dir: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+    let host = KernelHost::open(KernelHostConfig {
+        data_root: Some(data_dir),
+    })
+    .map_err(|error| {
+        // Controlled kernel error (contract mismatch, data_root_in_use,
+        // storage failure): the shell must not open a window against a dead
+        // kernel, and the error goes to stderr diagnostics only.
+        eprintln!("kernel open failed: {error}");
+        error.to_string()
+    })?;
+    app.manage(host);
+
+    if std::env::var("NEOTA_DESKTOP_SMOKE").as_deref() == Ok("1") {
+        run_kernel_smoke(&app.handle());
+        std::process::exit(0);
+    }
+
+    if let Err(error) = WebviewWindowBuilder::new(
+        app.handle(),
+        "main",
+        WebviewUrl::App("index.html".into()),
+    )
+    .title("NeoTavern")
+    .inner_size(1280.0, 820.0)
+    .min_inner_size(360.0, 520.0)
+    .build()
+    {
+        eprintln!("failed to create main window: {error}");
+        app.handle().exit(1);
+    }
+    Ok(())
+}
+
+/// Deterministic smoke self-check for the packaged local kernel: exercises
+/// the exact local handshake (already validated by [`KernelHost::open`]) plus
+/// one meta and two read operations through the shared envelope layer. Any
+/// non-ok envelope or transport failure exits 1.
+#[cfg(desktop)]
+fn run_kernel_smoke(app: &AppHandle) {
+    let host = app.state::<KernelHost>();
+    let mut failures = 0usize;
+    for (operation_id, payload) in [
+        ("meta.get", serde_json::json!({})),
+        ("characters.list", serde_json::json!({})),
+        ("backups.list", serde_json::json!({})),
+    ] {
+        let request = build_request_envelope(
+            operation_id,
+            payload,
+            "00000000-0000-4000-8000-000000000001",
+        );
+        match host.dispatch_envelope(&request) {
+            Ok(body) => match serde_json::from_slice::<serde_json::Value>(&body) {
+                Ok(envelope) if envelope.get("kind").and_then(|k| k.as_str()) == Some("ok") => {
+                    eprintln!("[smoke] {operation_id}: ok");
+                }
+                Ok(envelope) => {
+                    eprintln!(
+                        "[smoke] {operation_id}: error envelope {}",
+                        envelope.get("error").map(|e| e.to_string()).unwrap_or_default()
+                    );
+                    failures += 1;
+                }
+                Err(_) => {
+                    eprintln!("[smoke] {operation_id}: response was not JSON");
+                    failures += 1;
+                }
+            },
+            Err(failure) => {
+                eprintln!("[smoke] {operation_id}: transport failure {:?}", failure);
+                failures += 1;
+            }
+        }
+    }
+    if failures == 0 {
+        std::process::exit(0);
+    }
+    std::process::exit(1);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(desktop)]
     {
-        let app = tauri::Builder::default()
+        let builder = tauri::Builder::default()
             .plugin(tauri_plugin_shell::init())
             .plugin(tauri_plugin_updater::Builder::new().build())
             .manage(SidecarState {
@@ -231,96 +429,32 @@ pub fn run() {
             .invoke_handler(tauri::generate_handler![
                 check_core_update,
                 install_core_update
+            ]);
+
+        // Kernel commands are registered only in local kernel mode: in the
+        // opt-in legacy mode the host is not managed, and an unmanaged State
+        // access would panic. Unset `NEOTA_LEGACY_SERVER` → kernel mode.
+        let builder = if std::env::var(LEGACY_SERVER_ENV).as_deref() == Ok("1") {
+            builder
+        } else {
+            builder.invoke_handler(tauri::generate_handler![
+                commands::kernel_dispatch,
+                commands::kernel_stream_start,
+                commands::kernel_stream_abort
             ])
+        };
+
+        let app = builder
             .setup(|app| {
-                let port = reserve_loopback_port()?;
-                let executable = std::env::current_exe()?;
-                let portable_data_dir = executable
-                    .parent()
-                    .filter(|directory| directory.join("portable.flag").is_file())
-                    .map(|directory| directory.join("data"));
-                let data_dir = match portable_data_dir {
-                    Some(directory) => directory,
-                    None => app.path().app_local_data_dir()?,
-                };
-                fs::create_dir_all(&data_dir)?;
-                let web_dir = sidecar_path(
-                    app.path()
-                        .resolve("resources/web", BaseDirectory::Resource)?,
-                );
-                let sharp_module = sidecar_path(app.path().resolve(
-                    "resources/native/node_modules/sharp/lib/index.js",
-                    BaseDirectory::Resource,
-                )?);
-                let sqlite_module = sidecar_path(app.path().resolve(
-                    "resources/native/node_modules/better-sqlite3/lib/index.js",
-                    BaseDirectory::Resource,
-                )?);
-                let plugin_node = sidecar_path(app.path().resolve(
-                    if cfg!(windows) {
-                        "resources/runtime/node.exe"
-                    } else {
-                        "resources/runtime/node"
-                    },
-                    BaseDirectory::Resource,
-                )?);
-                let plugin_worker = sidecar_path(app.path().resolve(
-                    "resources/runtime/plugin-worker.mjs",
-                    BaseDirectory::Resource,
-                )?);
-                let plugin_loader = sidecar_path(app.path().resolve(
-                    "resources/runtime/plugin-loader.mjs",
-                    BaseDirectory::Resource,
-                )?);
+                let data_dir = resolve_data_dir(app)?;
 
-                let (mut events, child) = app
-                    .shell()
-                    .sidecar("neotavern-server")?
-                    .env("NEOTA_HOST", "127.0.0.1")
-                    .env("NEOTA_PORT", port.to_string())
-                    .env("NEOTA_DATA_DIR", data_dir)
-                    .env("NEOTA_WEB_DIR", web_dir)
-                    .env("NEOTA_SHARP_MODULE", sharp_module)
-                    .env("NEOTA_SQLITE_MODULE", sqlite_module)
-                    .env("NEOTA_PLUGIN_NODE", plugin_node)
-                    .env("NEOTA_PLUGIN_WORKER", plugin_worker)
-                    .env("NEOTA_PLUGIN_LOADER", plugin_loader)
-                    .env("NEOTA_CORS_ORIGIN", format!("http://127.0.0.1:{port}"))
-                    .spawn()?;
-
-                {
-                    let state = app.state::<SidecarState>();
-                    let mut slot = state
-                        .child
-                        .lock()
-                        .map_err(|_| "sidecar state lock was poisoned")?;
-                    *slot = Some(child);
+                if std::env::var(LEGACY_SERVER_ENV).as_deref() == Ok("1") {
+                    let port = reserve_loopback_port()?;
+                    spawn_legacy_sidecar(app, port, &data_dir)?;
+                    return Ok(());
                 }
 
-                let event_app = app.handle().clone();
-                tauri::async_runtime::spawn(async move {
-                    while let Some(event) = events.recv().await {
-                        match event {
-                            CommandEvent::Stdout(bytes) => {
-                                eprintln!("[server] {}", String::from_utf8_lossy(&bytes));
-                            }
-                            CommandEvent::Stderr(bytes) => {
-                                eprintln!("[server:error] {}", String::from_utf8_lossy(&bytes));
-                            }
-                            CommandEvent::Terminated(payload) => {
-                                eprintln!("backend sidecar terminated: {payload:?}");
-                                let state = event_app.state::<SidecarState>();
-                                if !state.stopping.load(Ordering::Acquire) {
-                                    event_app.exit(1);
-                                }
-                                break;
-                            }
-                            _ => {}
-                        }
-                    }
-                });
-
-                open_main_window_when_ready(app.handle().clone(), port);
+                setup_local_kernel_mode(app, data_dir)?;
                 Ok(())
             })
             .build(tauri::generate_context!())

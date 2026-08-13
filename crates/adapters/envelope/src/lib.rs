@@ -1,10 +1,16 @@
-//! Request/response envelope mapping between the HTTP adapter and the wire
-//! contract (`wire.request.envelope` / `wire.response.envelope`).
+//! Shared wire request/response envelope mapping between Kernel transports
+//! and the wire contract (`wire.request.envelope` / `wire.response.envelope`).
 //!
-//! This module owns the three mapping rules the adapter applies exactly:
+//! One implementation serves every transport — remote-http adapter, CLI and
+//! Tauri local IPC (ТЗ §6.3: transports do not define their own DTOs) — so a
+//! `characters.list` answered over HTTP/SSE, stdin or Tauri IPC carries
+//! byte-identical response envelopes.
+//!
+//! This module owns the three mapping rules every transport applies exactly:
 //! transport failures (an HTTP status before a usable envelope exists), the
 //! wire-protocol check (§6.5), and the kernel error → canonical wire code
-//! table (§10).
+//! table (§10). The HTTP status on [`EnvelopeFailure`] is informational for
+//! non-HTTP transports; the wire code + params are the contract.
 
 use contracts_generated::generated::{
     validate_response_envelope, ErrorDto, RequestEnvelope, ResponseEnvelope,

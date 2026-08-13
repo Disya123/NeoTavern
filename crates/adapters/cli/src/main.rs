@@ -37,7 +37,8 @@ use std::io::Read;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use remote_http_adapter::envelope::{self, EnvelopeFailure, ProtocolVerdict};
+use neotavern_envelope as envelope;
+use neotavern_envelope::{EnvelopeFailure, ProtocolVerdict};
 use runtime_kernel::{CancellationFlag, Kernel, KernelConfig};
 use uuid::Uuid;
 

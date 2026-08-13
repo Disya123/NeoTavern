@@ -20,7 +20,7 @@
 pub mod audit;
 pub mod auth;
 pub mod cors;
-pub mod envelope;
+
 pub mod rate_limit;
 pub mod sse;
 
@@ -36,7 +36,7 @@ use audit::{AuditEvent, AuditKind, AuditLog};
 use auth::{AuthConfig, AuthError, CredentialInfo, PairingStore};
 use contracts_generated::generated;
 use cors::CorsPolicy;
-use envelope::{EnvelopeFailure, ProtocolVerdict};
+use neotavern_envelope::{EnvelopeFailure, ProtocolVerdict};
 use rate_limit::{RateLimitConfig, RateLimiter};
 use runtime_kernel::{CancellationFlag, EventStream, Kernel, KernelError, KernelErrorCode};
 use sse::SseFrame;
@@ -851,7 +851,7 @@ fn respond_envelope(
             return;
         }
     };
-    let env = match envelope::decode_request_envelope(&body) {
+    let env = match neotavern_envelope::decode_request_envelope(&body) {
         Ok(env) => env,
         Err(failure) => {
             respond_envelope_failure(request, &failure, origin);
@@ -867,7 +867,7 @@ fn respond_envelope(
         return;
     }
 
-    let payload = match envelope::operation_payload_bytes(&env) {
+    let payload = match neotavern_envelope::operation_payload_bytes(&env) {
         Ok(payload) => payload,
         Err(failure) => {
             respond_envelope_failure(request, &failure, origin);
@@ -889,14 +889,16 @@ fn respond_envelope(
         };
         let answer = match guard.dispatch(&env.operation_id, &payload, &CancellationFlag::new()) {
             Ok(result_bytes) => match serde_json::from_slice::<serde_json::Value>(&result_bytes) {
-                Ok(result) => match envelope::build_ok_response(&env.request_id, result) {
-                    Ok(body) => EnvelopeAnswer::Json(body),
-                    Err(_) => EnvelopeAnswer::Json(error_envelope_body(
-                        &env.request_id,
-                        "INTERNAL",
-                        &[("rule".to_string(), "envelope_build_failed".to_string())],
-                    )),
-                },
+                Ok(result) => {
+                    match neotavern_envelope::build_ok_response(&env.request_id, result) {
+                        Ok(body) => EnvelopeAnswer::Json(body),
+                        Err(_) => EnvelopeAnswer::Json(error_envelope_body(
+                            &env.request_id,
+                            "INTERNAL",
+                            &[("rule".to_string(), "envelope_build_failed".to_string())],
+                        )),
+                    }
+                }
                 // The kernel's result bytes are its own DTO serialization; a
                 // parse failure is an internal bug, never a payload issue.
                 Err(_) => EnvelopeAnswer::Json(error_envelope_body(
@@ -905,9 +907,10 @@ fn respond_envelope(
                     &[("rule".to_string(), "result_json_parse_failed".to_string())],
                 )),
             },
-            Err(err) => {
-                EnvelopeAnswer::Json(envelope::kernel_error_envelope(&err, &env.request_id))
-            }
+            Err(err) => EnvelopeAnswer::Json(neotavern_envelope::kernel_error_envelope(
+                &err,
+                &env.request_id,
+            )),
         };
         send_answer(request, &env.request_id, answer, origin);
         return;
@@ -1023,7 +1026,10 @@ fn respond_generation_live(
                 send_answer(
                     request,
                     &env.request_id,
-                    EnvelopeAnswer::Sse(envelope::kernel_error_envelope(&err, &env.request_id)),
+                    EnvelopeAnswer::Sse(neotavern_envelope::kernel_error_envelope(
+                        &err,
+                        &env.request_id,
+                    )),
                     origin,
                 );
                 return;
@@ -1089,7 +1095,10 @@ fn respond_generation_resume(
             send_answer(
                 request,
                 &env.request_id,
-                EnvelopeAnswer::Sse(envelope::kernel_error_envelope(&err, &env.request_id)),
+                EnvelopeAnswer::Sse(neotavern_envelope::kernel_error_envelope(
+                    &err,
+                    &env.request_id,
+                )),
                 origin,
             );
             return;
@@ -1158,20 +1167,24 @@ fn respond_stream_unavailable(
     };
     let answer = match guard.dispatch(&env.operation_id, payload, &CancellationFlag::new()) {
         Ok(_) => {
-            let (code, rule) = match envelope::operation_event_schema_id(&env.operation_id) {
-                // A manifest-streamable operation executed — unreachable:
-                // generation.start/retry are handled in the streaming branch
-                // above and no other frozen op declares an event schema.
-                Some(_) => ("INTERNAL", "streaming_unimplemented"),
-                None => ("CONTRACT_VIOLATION", "operation_not_streamable"),
-            };
+            let (code, rule) =
+                match neotavern_envelope::operation_event_schema_id(&env.operation_id) {
+                    // A manifest-streamable operation executed — unreachable:
+                    // generation.start/retry are handled in the streaming branch
+                    // above and no other frozen op declares an event schema.
+                    Some(_) => ("INTERNAL", "streaming_unimplemented"),
+                    None => ("CONTRACT_VIOLATION", "operation_not_streamable"),
+                };
             let mut params = vec![("rule".to_string(), rule.to_string())];
             if code == "CONTRACT_VIOLATION" {
                 params.push(("operationId".to_string(), env.operation_id.clone()));
             }
             EnvelopeAnswer::Sse(error_envelope_body(&env.request_id, code, &params))
         }
-        Err(err) => EnvelopeAnswer::Sse(envelope::kernel_error_envelope(&err, &env.request_id)),
+        Err(err) => EnvelopeAnswer::Sse(neotavern_envelope::kernel_error_envelope(
+            &err,
+            &env.request_id,
+        )),
     };
     send_answer(request, &env.request_id, answer, origin);
 }
@@ -1361,7 +1374,7 @@ impl StreamingResponseReader {
                 self.pending.push_str(&sse::encode_frame(&SseFrame {
                     event: "error".to_string(),
                     id: Some(self.next_sequence()),
-                    data: String::from_utf8(envelope::kernel_error_envelope(
+                    data: String::from_utf8(neotavern_envelope::kernel_error_envelope(
                         &err,
                         &self.request_id,
                     ))
@@ -1460,7 +1473,7 @@ impl StreamingResponseReader {
 /// Applies the wire-protocol check; `Ok(())` when compatible, otherwise the
 /// HTTP status (426) and the PROTOCOL_MISMATCH error-envelope body.
 fn protocol_check_response(env: &generated::RequestEnvelope) -> Result<(), (u16, Vec<u8>)> {
-    match envelope::check_protocol(env) {
+    match neotavern_envelope::check_protocol(env) {
         ProtocolVerdict::Compatible => Ok(()),
         ProtocolVerdict::MajorMismatch {
             client_major,
@@ -1642,7 +1655,7 @@ fn respond_sse_error(
 /// (unreachable for validated request ids and plain string params) falls
 /// back to a transport-level INTERNAL JSON body.
 fn error_envelope_body(request_id: &str, code: &str, params: &[(String, String)]) -> Vec<u8> {
-    match envelope::build_error_response(request_id, code, params.to_vec()) {
+    match neotavern_envelope::build_error_response(request_id, code, params.to_vec()) {
         Ok(body) => body,
         Err(_) => transport_error_json(
             "INTERNAL",

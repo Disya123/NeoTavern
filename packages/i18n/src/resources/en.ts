@@ -914,6 +914,13 @@ export const en = {
     diagnosticsExtensionsValue: '{{providers}} providers · {{plugins}} plugins · {{themes}} themes',
     diagnosticsRuntime: 'Runtime',
     diagnosticsRuntimeValue: '{{version}} · Node {{nodeVersion}} · {{platform}}/{{architecture}}',
+    diagnosticsKernel: 'Local kernel',
+    diagnosticsKernelWire: 'Product wire',
+    diagnosticsKernelFeatures: 'Features',
+    diagnosticsKernelFeaturesValue: '{{count}} features',
+    diagnosticsKernelBackups: 'Backups',
+    diagnosticsKernelBackupsValue: '{{count}} backups',
+    diagnosticsKernelUnavailable: 'Unavailable',
     diagnosticsUnknown: 'Unknown',
     diagnosticsPrivacy:
       'The report excludes secrets, logs, absolute paths and user-authored content.',

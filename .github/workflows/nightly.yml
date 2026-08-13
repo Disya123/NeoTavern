@@ -72,7 +72,7 @@ jobs:
         run: cargo clippy --manifest-path crates/Cargo.toml --workspace --all-targets -- -D warnings
 
       - name: Rust formatting (hand-written crates; generated.rs is byte-checked by codegen)
-        run: cargo fmt --manifest-path crates/Cargo.toml -p runtime-kernel -p neotavern-storage -p remote-http-adapter -p neotavern-mobile-ffi -p neotavern-cli -p built-in-providers -p provider-sdk --check
+        run: cargo fmt --manifest-path crates/Cargo.toml -p runtime-kernel -p neotavern-storage -p remote-http-adapter -p neotavern-mobile-ffi -p neotavern-cli -p built-in-providers -p provider-sdk -p neotavern-envelope -p neotavern-tauri-local --check
 
       # §84 performance sampling: Phase 11 backup/restore/export benchmark.
       # The machine-readable report is uploaded as an artifact; threshold

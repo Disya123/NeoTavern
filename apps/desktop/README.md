@@ -1,13 +1,31 @@
 # @neotavern/desktop
 
-Tauri 2 desktop shell for NeoTavern. Runs the Fastify backend as a
-self-contained Node.js 24 sidecar and opens the webview only after the local
-API is ready.
+Tauri 2 desktop shell for NeoTavern.
+
+**Default (Phase 3 local kernel mode):** the Runtime Kernel is embedded in
+the desktop process (`neotavern-tauri-local`), the window loads the bundled
+web assets over `tauri://localhost`, and there is **no HTTP server, no
+listening port and no server lifecycle** (ТЗ §11.1). The UI talks to the
+kernel through `React → LocalBackend → Tauri IPC → Runtime Kernel`
+(`kernel_dispatch` / `kernel_stream_start` / `kernel_stream_abort` commands,
+registered only in kernel mode).
+
+**Legacy bridge (`NEOTA_LEGACY_SERVER=1`):** spawns the self-contained
+Node.js 24 sidecar (`neotavern-server`) and opens the webview only after the
+local API is ready. This is the temporary transition mode for unmigrated
+routes (message edit/delete, chat create, import/export, plugin runtime); it
+is removed as Phase 3/4 slices cut over. Only one mode runs at a time, so a
+data root never has two writable owners.
 
 ## Public entry points
 
-- `src-tauri/src/main.rs` — sidecar and window lifecycle;
-- `src-tauri/tauri.conf.json` — bundle/installers/resources;
+- `src-tauri/src/main.rs` — window and kernel/sidecar lifecycle;
+- `src-tauri/tauri.conf.json` — bundle/installers/resources, `devUrl`;
+- `crates/adapters/tauri-local` — kernel host, envelope dispatch, stream
+  poller and abort commands (workspace crate, `tauri` feature);
+- `crates/adapters/envelope` — shared wire envelope layer (CLI/HTTP/Tauri
+  answer byte-identical envelopes, §6.3);
+- `apps/web/src/api/tauriTransport.ts` — `LocalTransport` over Tauri IPC;
 - `scripts/build-desktop-release.mjs` — ephemeral signed updater configuration;
 - `.github/workflows/desktop-release.yml` — native Windows/macOS/Linux gates;
 - `scripts/prepare-desktop.mjs` — builds web and sidecar for the target triple.
@@ -15,8 +33,9 @@ API is ready.
 ## Dependencies
 
 - Tauri 2, `tauri-plugin-shell` and `tauri-plugin-updater`;
-- built `apps/server` and `apps/web`;
-- `@yao-pkg/pkg` for the self-contained Node 24 binary.
+- Runtime Kernel + storage + shared envelope (workspace crates);
+- built `apps/server` (legacy bridge only) and `apps/web`;
+- `@yao-pkg/pkg` for the self-contained Node 24 binary (legacy bridge only).
 
 ## Commands
 
@@ -39,33 +58,26 @@ prepared resources, for example when debugging the MSI.
 verifies the real Node 24 executable, SQLite, Sharp PNG→WebP, the packaged SPA,
 diagnostics and the absence of leftover processes. `desktop:portable`
 additionally builds NSIS/MSI, creates the Windows portable ZIP and `.sha256`,
-then runs a headless Tauri shell-smoke.
-`desktop:bundle:smoke` runs the `.app` or AppImage in headless smoke mode on
-the target runner. `desktop:release` requires the endpoint, the public signing
-key and the private release key, then produces the Tauri updater artifact and
-`.sig`.
+then runs a headless Tauri shell-smoke (`NEOTA_DESKTOP_SMOKE=1` — kernel mode
+self-checks the packaged kernel: handshake + `meta.get` + `characters.list` +
+`backups.list`, then exits deterministically). `desktop:bundle:smoke` runs the
+`.app` or AppImage in headless smoke mode on the target runner.
+`desktop:release` requires the endpoint, the public signing key and the
+private release key, then produces the Tauri updater artifact and `.sig`.
 
 The portable ZIP contains `portable.flag`; only in this variant is data created
 in `data/` next to the app. Installed NSIS/MSI builds have no marker and use
 the platform app-local-data directory. Moving a single exe without `resources/`
-and `neotavern-server.exe` is not supported.
+is not supported.
 
 ## Limitations
 
 - Build the installer on the target OS/architecture because of native addons
-  (`better-sqlite3`, `sharp`).
-- The sidecar listens only on a random free port on `127.0.0.1`.
+  (`better-sqlite3`, `sharp` — legacy bridge only).
+- In legacy mode the sidecar listens only on a random free port on `127.0.0.1`.
 - User data is stored in the platform app-local-data directory, not inside the
   bundle. The portable build stores it in the local `data/` folder next to the
   app.
-- Generated `binaries/`, `resources/` and `target/` are not a source of truth
-  and are recreated by `pnpm desktop:prepare`.
-- The Windows bundle uses the plain numeric version `0.1.0`. Since `0.1.0` is a
-  plain semver, both NSIS and MSI/WiX handle it without issues.
-- NSIS, MSI and the portable ZIP are verified on Windows x64. The macOS package
-  and the Linux AppImage are built only on their respective runners; the
-  workflow runs the sidecar and native bundle smoke before publishing the
-  artifact.
-- The core updater is disabled in builds without the compile-time
-  `NEOTA_UPDATE_ENDPOINT` and `NEOTA_UPDATE_PUBLIC_KEY`; the private signing
-  key never ships inside the bundle.
+- Kernel mode serves only the frozen product-wire surface: unmigrated legacy
+  routes fail with a typed `UnsupportedError` until the wire registry grows
+  (`docs/architecture/operations-inventory.md` routing table).
