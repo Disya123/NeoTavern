@@ -1,23 +1,25 @@
 # Changelog
 
-## [0.1.0] — 2026-08-11
-
-Public release prep:
-
-- Rebranded SillyTavern 2 → **NeoTavern**: package scope `@st2/*` → `@neotavern/*`,
-  desktop product identity, plugin IDs, CLI tools (`neotavern-plugin`,
-  `neotavern-plugin-runtime`), env vars (`NEOTA_*`), wire-format markers
-  (`neotavern-profile-export`, `neotavern-chat-export`), and display strings.
-- Versioning restarts at `0.1.0` (was `2.0.0-pre.3`).
-- Documentation is now English: all app/package READMEs, `docs/` reference tree,
-  ADRs, and `AGENTS.md` were translated from Russian.
-- **AGPL-3.0** license added.
-- Removed superseded planning documents (`ТЗ.md`, plugin-SDK vNext specs, mockup
-  directory) and tracked build debris.
-
 ## Unreleased
 ### Added
 
+- **Desktop Remote Access service (ТЗ 7.2 Фаза 9, §11.2/§10/§18.4).** New
+  `crates/adapters/desktop-remote` (`neotavern-desktop-remote`) — a host
+  service in the Tauri shell wrapping the Phase 4 `remote-http` adapter on
+  the **same `Arc<Mutex<Kernel>>`** as local IPC (one writer): off by
+  default (no listener until enabled in Settings → Remote Access), loopback
+  default with an ephemeral port, non-loopback requires `trusted_proxy` AND
+  auth (fail-closed pre-bind — `InsecureBind` / `PublicBindRequiresAuth`),
+  pairing with revocable in-memory SHA-256-verifier credentials (token shown
+  once, never logged or stored in plaintext; re-pair after restart — durable
+  credential persistence deferred), CORS deny-by-default via
+  `allowed_origins`, bounded secret-free audit, host-owned config at
+  `app_config_dir/remote-access.json` (atomic write, never in the product
+  DB), and a `kernel_remote_*` Tauri command surface (`remote` feature on
+  `neotavern-tauri-local`) that controls the host service without touching
+  the frozen wire registry (no contract/codegen change). The Settings panel
+  gains the enable/pair/revoke UI in the desktop shell. Docs: ADR-0035,
+  `docs/desktop/README.md`, operations inventory.
 - **Phase 3 desktop local kernel mode (ТЗ §11.1/§15.1).** The Tauri shell
   now defaults to local kernel mode: the Runtime Kernel is embedded in the
   desktop process and the window loads bundled web assets over
@@ -172,23 +174,6 @@ Public release prep:
   bind now requires BOTH `trusted_proxy` and configured `auth` — otherwise it
   is a startup error (`InsecureBind` / `PublicBindRequiresAuth`, §10). Docs:
   `crates/adapters/remote-http/README.md`, wire-contracts §6.1.
-- **Desktop Remote Access service (ТЗ 7.2 Фаза 9, §11.2/§10/§18.4).** New
-  `crates/adapters/desktop-remote` (`neotavern-desktop-remote`) — a host
-  service in the Tauri shell wrapping the Phase 4 `remote-http` adapter on
-  the **same `Arc<Mutex<Kernel>>`** as local IPC (one writer): off by
-  default (no listener until enabled in Settings → Remote Access), loopback
-  default with an ephemeral port, non-loopback requires `trusted_proxy` AND
-  auth (fail-closed pre-bind — `InsecureBind` / `PublicBindRequiresAuth`),
-  pairing with revocable in-memory SHA-256-verifier credentials (token shown
-  once, never logged or stored in plaintext; re-pair after restart — durable
-  credential persistence deferred), CORS deny-by-default via
-  `allowed_origins`, bounded secret-free audit, host-owned config at
-  `app_config_dir/remote-access.json` (atomic write, never in the product
-  DB), and a `kernel_remote_*` Tauri command surface (`remote` feature on
-  `neotavern-tauri-local`) that controls the host service without touching
-  the frozen wire registry (no contract/codegen change). The Settings panel
-  gains the enable/pair/revoke UI in the desktop shell. Docs: ADR-0035,
-  `docs/desktop/README.md`, operations inventory.
 - **CLI transport (ТЗ §6.3, Фаза 4 CLI hooks).** New `crates/adapters/cli`
   (`neotavern-cli`): a std-only binary mapping one wire request envelope →
   one response envelope through the **same Runtime Kernel** and the same
@@ -271,6 +256,12 @@ Public release prep:
 
 ### Fixed
 
+- **Phase 9 CI gate (3cb5f87).** The feature-gated `neotavern-tauri-local`
+  test/clippy step now runs with `working-directory: crates` (the workspace
+  root — previously it failed with "could not find Cargo.toml" from the
+  repo root), and the Remote Access status badge uses the `--st-radius-round`
+  token instead of a hardcoded `999px` radius (theme-sdk style contract,
+  AGENTS.md §14).
 - **Token counter now matches the model's real tokenizer.** DeepSeek models
   (`deepseek/*`, `deepseek-chat`, `deepseek-reasoner`, local checkpoints) are
   counted with an exact counting-only byte-level BPE engine (ranks of
@@ -2372,6 +2363,21 @@ Public release prep:
   `data-part="character-management-header"` hooks are preserved, and the new
   `data-component="sidebar-panel-header"` hook (parts `identity`, `avatar`,
   `eyebrow`, `title`, `actions`, `close`) is documented in the Theme SDK.
+
+## [0.1.0] — 2026-08-11
+
+Public release prep:
+
+- Rebranded SillyTavern 2 → **NeoTavern**: package scope `@st2/*` → `@neotavern/*`,
+  desktop product identity, plugin IDs, CLI tools (`neotavern-plugin`,
+  `neotavern-plugin-runtime`), env vars (`NEOTA_*`), wire-format markers
+  (`neotavern-profile-export`, `neotavern-chat-export`), and display strings.
+- Versioning restarts at `0.1.0` (was `2.0.0-pre.3`).
+- Documentation is now English: all app/package READMEs, `docs/` reference tree,
+  ADRs, and `AGENTS.md` were translated from Russian.
+- **AGPL-3.0** license added.
+- Removed superseded planning documents (`ТЗ.md`, plugin-SDK vNext specs, mockup
+  directory) and tracked build debris.
 
 ## 2.0.0-pre.3 (prior)
 
