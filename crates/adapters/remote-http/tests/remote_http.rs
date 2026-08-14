@@ -1282,3 +1282,74 @@ fn backups_create_and_list_over_http() {
     );
     assert_eq!(items.len(), 1, "exactly one backup on a fresh root");
 }
+
+/// 26. M4 slice 1 (Этап 4.1): the full lorebook CRUD over the HTTP host —
+///     create with entries → get → update → delete — with the product error
+///     `LOREBOOK_NOT_FOUND` copied verbatim into the error envelope after
+///     deletion (host parity with the direct kernel path).
+#[test]
+fn lorebook_crud_over_http() {
+    let server = TestServer::spawn();
+
+    let create = envelope_body(
+        &rid(1),
+        "lorebooks.create",
+        json!({
+            "name": "Harbor world",
+            "description": "The city by the sea",
+            "entries": [
+                { "keys": ["harbor"], "content": "The harbor never freezes." }
+            ]
+        }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &create);
+    assert_eq!(response.status, 200, "lorebooks.create answers HTTP 200");
+    let (request_id, created) = expect_ok(decode_envelope(&response.body));
+    assert_eq!(request_id, rid(1), "requestId is echoed");
+    gen::validate_lorebook_dto(&created).expect("created lorebook DTO is wire-valid");
+    assert_eq!(created["name"], json!("Harbor world"));
+    assert_eq!(created["entryCount"], json!(1));
+    let lorebook_id = created["id"]
+        .as_str()
+        .expect("created lorebook has an id")
+        .to_string();
+
+    let get = envelope_body(
+        &rid(2),
+        "lorebooks.get",
+        json!({ "lorebookId": lorebook_id }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &get);
+    assert_eq!(response.status, 200);
+    let (_, fetched) = expect_ok(decode_envelope(&response.body));
+    gen::validate_lorebook_dto(&fetched).expect("fetched lorebook DTO is wire-valid");
+    assert_eq!(fetched["id"], json!(lorebook_id));
+
+    let update = envelope_body(
+        &rid(3),
+        "lorebooks.update",
+        json!({ "lorebookId": lorebook_id, "name": "Harbor world v2", "entries": [] }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &update);
+    assert_eq!(response.status, 200);
+    let (_, updated) = expect_ok(decode_envelope(&response.body));
+    gen::validate_lorebook_dto(&updated).expect("updated lorebook DTO is wire-valid");
+    assert_eq!(updated["name"], json!("Harbor world v2"));
+    assert_eq!(updated["entryCount"], json!(0));
+
+    let delete = envelope_body(
+        &rid(4),
+        "lorebooks.delete",
+        json!({ "lorebookId": lorebook_id }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &delete);
+    assert_eq!(response.status, 200);
+    expect_ok(decode_envelope(&response.body));
+
+    // The follow-up get answers the stable product error verbatim.
+    let response = http_request(server.addr, "POST", "/rpc", &[], &get);
+    assert_eq!(response.status, 200);
+    let (_, error) = expect_error(decode_envelope(&response.body));
+    assert_eq!(error.code, "LOREBOOK_NOT_FOUND");
+    assert_eq!(error.params["lorebookId"], json!(lorebook_id));
+}
