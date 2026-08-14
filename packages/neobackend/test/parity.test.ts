@@ -13,6 +13,7 @@ import {
   type MetaDto,
   type PagedCharactersDto,
   type PagedGenerationEventsDto,
+  type PagedMessagesDto,
   type WireGenerationEvent,
 } from '@neotavern/contracts';
 import { ClientSdk, HttpTransport, ProductError, type StreamEvent } from '@neotavern/client-sdk';
@@ -67,6 +68,22 @@ const RUN_ID = '6f5e4d3c-2b1a-4f0e-9d8c-7a6b5c4d3e2f';
 const CHAT_ID = '01234567-89ab-4cde-8f01-23456789abcd';
 const MESSAGE_ID = '12345678-90ab-4cde-8f01-23456789abcd';
 const TIMESTAMP = '2026-06-01T12:00:00.000Z';
+
+/** `chats.messages.list` response: one canonical wire message (Этап 2.10). */
+const PAGED_MESSAGES: PagedMessagesDto = {
+  items: [
+    {
+      id: MESSAGE_ID,
+      chatId: CHAT_ID,
+      role: 'assistant',
+      content: 'Hello world.',
+      createdAt: TIMESTAMP,
+      sequence: 0,
+      generationRunId: RUN_ID,
+    },
+  ],
+  nextCursor: 'page-2',
+};
 
 const GENERATION_RUN: GenerationRunDto = {
   runId: RUN_ID,
@@ -157,6 +174,8 @@ class FakeKernelTransport implements LocalTransport {
     switch (operationId) {
       case 'characters.list':
         return { ok: true, value: PAGED_CHARACTERS };
+      case 'chats.messages.list':
+        return { ok: true, value: PAGED_MESSAGES };
       case 'providers.list':
         return { ok: true, value: PROVIDERS };
       case 'generation.get':
@@ -201,6 +220,8 @@ function rpcResult(operationId: string | undefined): unknown {
   switch (operationId) {
     case 'characters.list':
       return PAGED_CHARACTERS;
+    case 'chats.messages.list':
+      return PAGED_MESSAGES;
     case 'providers.list':
       return PROVIDERS;
     case 'generation.get':
@@ -289,6 +310,23 @@ describe('Local vs Remote parity', () => {
 
     expect(localResult).toEqual(remoteResult);
     expect(localResult).toEqual(PAGED_CHARACTERS);
+  });
+
+  it('chats.messages.list forwards the desc order, deep-equal DTOs (Этап 2.10)', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const [localResult, remoteResult] = await Promise.all([
+      local.chats.listMessages({ chatId: CHAT_ID, order: 'desc' }),
+      remote.chats.listMessages({ chatId: CHAT_ID, order: 'desc' }),
+    ]);
+
+    expect(kernel.requests).toEqual([
+      { operationId: 'chats.messages.list', payload: { chatId: CHAT_ID, order: 'desc' } },
+    ]);
+    expect(localResult).toEqual(remoteResult);
+    expect(localResult).toEqual(PAGED_MESSAGES);
   });
 
   it('remote handshake surfaces validated MetaDto', async () => {

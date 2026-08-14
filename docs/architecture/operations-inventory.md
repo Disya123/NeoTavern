@@ -461,9 +461,10 @@ Current authoritative writer vs Phase 0 target per feature family. "Migration
 status" is **legacy** for every family at Phase 0 start: no route has moved to
 the kernel yet. Phase 3 added the **desktop local transport** (kernel embedded,
 LocalBackend over Tauri IPC, server off by default) — the frozen-registry
-operations are now kernel-writer-capable on desktop; the UI read surfaces
-(character/chat browse, generation page) still speak the legacy routes and
-move over per-slice (see the "Desktop local" row above).
+operations are now kernel-writer-capable on desktop. Этап 2.10 cut over the
+golden-flow UI reads: the library/chat CRUD hooks route through the facade
+(`apps/web/src/api/wireBridge.ts`) in kernel mode and keep the legacy routes in
+browser/sidecar mode (transport branch confined to the API layer, ТЗ §13.1).
 
 | Feature family                        | Current authoritative writer (status quo)                                                                                                                                                                                                                                                                                                                                                                                                               | Target writer (ТЗ §7)                                                                          | Migration status (Phase 0) | Product Wire operation(s)                                                                                                                                        |
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -558,7 +559,7 @@ uses the canonical wire ops:
 | `chats.create`        | transactional         | `POST /api/v2/chats`                                                                                                                 |
 | `chats.update`        | transactional         | `PATCH /api/v2/chats/:id`                                                                                                            |
 | `chats.delete`        | transactional         | `DELETE /api/v2/chats/:id`                                                                                                           |
-| `chats.messages.list` | transactional         | `GET /api/v2/chats/:id/messages`                                                                                                     |
+| `chats.messages.list` | transactional         | `GET /api/v2/chats/:id/messages` (wire request gained additive `order: 'asc'\|'desc'`, Этап 2.10: `desc` walks the durable `(sequence,id)` cursor backward from the newest message, matching the UI history loading; both directions share the same opaque cursor encoding) |
 | `chats.messages.create` | transactional       | `POST /api/v2/chats/:id/messages` (bridge; the kernel-mode send flow uses it before `generation.start`)                              |
 | `chats.messages.update` | transactional       | `PATCH /api/v2/chats/:id/messages/:mid` (migration shim on `LegacyBackend`, Этап 2.10; wire contract is content-only — the legacy `expectedRevision` CAS is not part of the wire contract) |
 | `chats.messages.delete` | transactional       | `DELETE /api/v2/chats/:id/messages/:mid` (migration shim on `LegacyBackend`, Этап 2.10)                                              |

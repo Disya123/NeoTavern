@@ -98,6 +98,33 @@
   `Integrated`; `generation.tool-loop` desktop → `Integrated`), capability
   matrix, CHANGELOG.
 
+- **Library/chat CRUD over the Product Wire (M2 / Этап 2.10, шаг 2, ТЗ
+  §13.1/§14.3).** The golden-flow library/chat hooks now route through the
+  facade via the new `apps/web/src/api/wireBridge.ts` data plane: in kernel
+  mode every read/write goes over the canonical wire ops
+  (`characters.list/get/create/update/delete`, `chats.list/get/create/update/
+  delete`, `chats.messages.list`) with wire→UI translation onto the legacy
+  shapes (honest defaults: `avatar: null`, card fields `''`/`null`, `meta: {}`,
+  `variantCount: 0`, `activeVariantPosition: null`, `checkpointChatId: null`,
+  `branchId: chatId` — the kernel keeps one linear sequence per chat);
+  browser/sidecar mode keeps the legacy `/api/v2` routes byte-for-byte.
+  Unsupported inputs surface a typed `UnsupportedError`
+  (CAPABILITY_UNAVAILABLE) instead of a silent downgrade: character search/
+  tag/non-default sorts, chat search, personaId/greetingIndex on chat create,
+  persona/card fields on character create/update, branchId on message list,
+  non-title chat updates. Kernel `chats.create` makes an **empty** chat
+  (greeting insertion is a legacy pipeline feature; the continue hook already
+  reproduced the `reuseUnstarted` guard client-side), and kernel chat delete
+  is **permanent** (cascade; legacy soft-delete/trash is Этап 4). The wire
+  `chats.messages.list` request gains an additive `order: 'asc'|'desc'` field
+  (Этап 2.10): `desc` walks the durable `(sequence,id)` cursor backward from
+  the newest message, matching the UI history loading (`useMessages` pages
+  arrive newest-first; kernel was asc-only). Tests: 25 new web unit tests for
+  the bridge (translation + kernel branch); hooks suite green.
+  Docs: `operations-inventory.md` (list-messages order + UI cutover note),
+  release-manifest notes (characters.crud / chats.crud / chats.messages.crud),
+  CHANGELOG.
+
 - **Prompt pipeline in the Kernel (M2 / Этап 2.6, ТЗ §9.1–§9.2).** Every
   generation run now builds an immutable **PromptPlan** before the provider
   attempt: character/persona system blocks (from the chat's character card,

@@ -1036,7 +1036,10 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     title: 'Renamed conversation',
   }),
   fx('chats-delete-request', 'chats.delete', 'request', true, { chatId: UUID_CHAT }),
-  fx('chats-messages-list-request', 'chats.messages.list', 'request', true, { chatId: UUID_CHAT }),
+  fx('chats-messages-list-request', 'chats.messages.list', 'request', true, {
+    chatId: UUID_CHAT,
+    order: 'desc',
+  }),
   fx('chats-messages-create-request', 'chats.messages.create', 'request', true, {
     chatId: UUID_CHAT,
     role: 'user',
@@ -1213,6 +1216,10 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('neg-character-create-extra-field', 'characters.create', 'request', false, {
     name: 'Mallory',
     hacked: true,
+  }),
+  fx('neg-messages-list-bad-order', 'chats.messages.list', 'request', false, {
+    chatId: UUID_CHAT,
+    order: 'sideways',
   }),
   fx('neg-message-bad-role', 'chats.messages.list', 'response', false, {
     items: [

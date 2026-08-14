@@ -423,6 +423,18 @@ export const ListMessagesRequestDtoSchema = Type.Object(
     chatId: Type.String({ format: 'uuid' }),
     cursor: Type.Optional(Type.String({ minLength: 1, maxLength: 256 })),
     limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 200 })),
+    /**
+     * Page order (Этап 2.10). `asc` (default) walks the durable sequence
+     * forward from the oldest message; `desc` walks it backward from the
+     * newest, matching the UI's message history loading (`order: 'desc'`
+     * plus cursor → older pages). Both directions share the opaque
+     * `(sequence, id)` cursor encoding.
+     */
+    order: Type.Optional(
+      Type.Union([Type.Literal('asc'), Type.Literal('desc')], {
+        'x-wire-unknown-behavior': 'reject',
+      }),
+    ),
   },
   { $id: 'wire.request.list-messages', additionalProperties: false },
 );

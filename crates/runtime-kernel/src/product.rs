@@ -538,8 +538,10 @@ pub fn chats_get(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelErr
     encode(&dto)
 }
 
-/// `chats.messages.list` — paginated messages of one chat, ascending by
-/// `(sequence, id)`; missing chat → `CHAT_NOT_FOUND`.
+/// `chats.messages.list` — paginated messages of one chat, walking the
+/// durable `(sequence, id)` order either forward (`order: "asc"`, the
+/// default, oldest first) or backward (`order: "desc"`, newest first);
+/// missing chat → `CHAT_NOT_FOUND`.
 pub fn messages_list(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
     let req = generated::decode_request_list_messages(request)?;
     let chat_id = req.chat_id.clone();
@@ -549,6 +551,7 @@ pub fn messages_list(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Kerne
         return Err(not_found("CHAT", &chat_id));
     }
     let limit = page_limit(req.limit);
+    let descending = req.order.as_deref() == Some("desc");
     let mut items: Vec<MessageDto> = Vec::new();
     let mut next_cursor: Option<String> = None;
     {
@@ -560,12 +563,21 @@ pub fn messages_list(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Kerne
         let mut params: Vec<Value> = vec![Value::Text(chat_id.clone())];
         if let Some(cursor) = &req.cursor {
             let (sequence, id) = decode_message_cursor(cursor)?;
-            sql.push_str(" AND ((sequence > ?) OR (sequence = ? AND id > ?))");
+            if descending {
+                // Strictly older than the cursor message.
+                sql.push_str(" AND ((sequence < ?) OR (sequence = ? AND id < ?))");
+            } else {
+                sql.push_str(" AND ((sequence > ?) OR (sequence = ? AND id > ?))");
+            }
             params.push(Value::Integer(sequence));
             params.push(Value::Integer(sequence));
             params.push(Value::Text(id));
         }
-        sql.push_str(" ORDER BY sequence ASC, id ASC LIMIT ?");
+        if descending {
+            sql.push_str(" ORDER BY sequence DESC, id DESC LIMIT ?");
+        } else {
+            sql.push_str(" ORDER BY sequence ASC, id ASC LIMIT ?");
+        }
         // Probe one row past the page so the last exact page carries no cursor.
         params.push(Value::Integer(limit + 1));
         let mut stmt = conn

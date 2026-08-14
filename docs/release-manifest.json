@@ -30,7 +30,7 @@
         "android": "Implemented",
         "webClient": "Implemented"
       },
-      "notes": "Kernel-owned ops with component tests; UI still routes through legacy /api/v2 until M2 golden flow cutover. Desktop host Integrated: the packaged golden slice (Этап 2.9) creates characters over the real Tauri host path. Этап 2.10: the chat-page send flow persists the user message via wire `chats.messages.create` in kernel mode; the library CRUD hooks still route through /api/v2 (Этап 4 cutover).",
+      "notes": "Kernel-owned ops with component tests; desktop/headless/android hosts Integrated/Implemented. Этап 2.10 (golden-flow UI cutover, шаг 2): the library CRUD hooks (useCharacters/useCharacter/useCreateCharacter/useUpdateCharacter/useDeleteCharacter) route through the facade `apps/web/src/api/wireBridge.ts` in kernel mode — wire ops + wire→UI translation with honest defaults (avatar URL, card fields personality/scenario/firstMessage etc. are not modelled by the wire contract yet and surface CAPABILITY_UNAVAILABLE via UnsupportedError when actually requested, never a silent downgrade); the browser/sidecar mode keeps the legacy /api/v2 routes unchanged. Kernel list is newest-first (cursor/limit only): search (q), tag filter and non-default sorts are honest UnsupportedError in kernel mode (Этап 4).",
       "milestone": "M2"
     },
     {
@@ -49,7 +49,7 @@
         "android": "Implemented",
         "webClient": "Implemented"
       },
-      "notes": "Kernel-owned ops with component tests (round-trip, CHARACTER/CHAT_NOT_FOUND, title rename, message-count subquery, cascade delete); UI still routes through legacy /api/v2 until M2 golden flow cutover. Desktop host Integrated: the packaged golden slice (Этап 2.9) creates chats over the real Tauri host path.",
+      "notes": "Kernel-owned ops with component tests (round-trip, CHARACTER/CHAT_NOT_FOUND, title rename, message-count subquery, cascade delete). Этап 2.10 (шаг 2): chat CRUD hooks (useChats/useRecentChats/useChat/useCreateChat/useUpdateChat/useDeleteChat/useContinueCharacterChat) route through the facade in kernel mode. Honest boundaries: kernel chats are created EMPTY (greeting insertion and the reuseUnstarted guard are legacy pipeline features — the continue hook reproduces the guard client-side), delete is permanent (cascade; legacy soft-delete/trash is Этап 4), wire chat update is title-only (persona/background/summary/branch mutation → UnsupportedError), personaId/greetingIndex inputs → UnsupportedError, kernel ordering is by created_at DESC (manual/recent-updated ordering — Этап 4). Browser/sidecar mode keeps the legacy routes.",
       "milestone": "M2"
     },
     {
@@ -67,7 +67,7 @@
         "android": "Implemented",
         "webClient": "Implemented"
       },
-      "notes": "Kernel-owned ops with component tests (atomic sequence allocation per chat, role/content edit, scoped MESSAGE_NOT_FOUND, chat-scoped delete). Desktop host Integrated: the packaged golden slice (Этап 2.9) creates user messages over the real Tauri host path. Этап 2.10: UI edit/delete run through the facade (`backend.chats.updateMessage/delMessage` — wire on the kernel, legacy-route bridge on the sidecar; the legacy `expectedRevision` CAS is not part of the wire contract, kernel updates are last-write-wins); message create runs over the wire in the kernel-mode send flow; message list UI still routes through /api/v2 until the hooks cutover.",
+      "notes": "Kernel-owned ops with component tests (atomic sequence allocation per chat, role/content edit, scoped MESSAGE_NOT_FOUND, chat-scoped delete). Этап 2.10: UI edit/delete run through the facade (`backend.chats.updateMessage/delMessage` — wire on the kernel, legacy-route bridge on the sidecar; the legacy `expectedRevision` CAS is not part of the wire contract, kernel updates are last-write-wins); message create runs over the wire in the kernel-mode send flow; the message-list hook (useMessages) now loads newest-first over the wire `order: 'desc'` pages in kernel mode (additive wire field, Этап 2.10) with wire→UI translation (branchId defaults to the chat id — the kernel keeps one linear sequence per chat; variants/revisions/checkpoints/meta are not modelled yet and render as neutral defaults). branchId input on the kernel → UnsupportedError (branches — Этап 4).",
       "milestone": "M2"
     },
     {
