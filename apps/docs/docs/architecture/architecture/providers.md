@@ -18,10 +18,10 @@ Everything the kernel executes for local generation goes through the
 
 ## Crates
 
-| Crate | Role |
-| --- | --- |
-| `crates/provider-sdk` | Portable adapter contract: `ProviderAdapter`, `ProviderError`, `EmitStatus`, `CancelToken`, deadline/`RetryPolicy`/`Usage`, secret seams (`SecretRef`/`SecretValue`/`SecretResolver`). std-only, no async. |
-| `crates/built-in-providers` | Built-in adapters: `FakeProvider` (deterministic, fault-injectable) and `RecordedProvider` (JSON script replay) + conformance suite + fixtures. |
+| Crate                       | Role                                                                                                                                                                                                       |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `crates/provider-sdk`       | Portable adapter contract: `ProviderAdapter`, `ProviderError`, `EmitStatus`, `CancelToken`, deadline/`RetryPolicy`/`Usage`, secret seams (`SecretRef`/`SecretValue`/`SecretResolver`). std-only, no async. |
+| `crates/built-in-providers` | Built-in adapters: `FakeProvider` (deterministic, fault-injectable) and `RecordedProvider` (JSON script replay) + conformance suite + fixtures.                                                            |
 
 ## The adapter contract
 
@@ -52,7 +52,7 @@ Guarantees an adapter must uphold:
   reaches the chat (§63).
 - **Normalized errors.** `ProviderError { code, message, params, retryable }`
   with stable codes `timeout | cancelled | unavailable | request-invalid |
-  step-failed | network-fault`. `params` never contain secrets, raw user
+step-failed | network-fault`. `params` never contain secrets, raw user
   content or vendor payloads (§85).
 - **No vendor leakage.** Vendor types/payloads stay inside the adapter.
 
@@ -70,12 +70,12 @@ Deterministic, fault-injectable provider used by the durability tests and as
 the default when no provider is configured. Model string grammar
 (`;`-separated, all optional):
 
-| Key | Default | Range | Meaning |
-| --- | ------- | ----- | ------- |
-| `steps` | 8 | 1–64 | delta steps |
-| `fail-at` | – | 1–steps | `StepFailed` before step N |
-| `delay-ms` | 0 | 0–200 | sleep per step (cancel/timeout tests) |
-| `tokens-per-step` | 6 | 1–256 | delta text length |
+| Key               | Default | Range   | Meaning                               |
+| ----------------- | ------- | ------- | ------------------------------------- |
+| `steps`           | 8       | 1–64    | delta steps                           |
+| `fail-at`         | –       | 1–steps | `StepFailed` before step N            |
+| `delay-ms`        | 0       | 0–200   | sleep per step (cancel/timeout tests) |
+| `tokens-per-step` | 6       | 1–256   | delta text length                     |
 
 Delta text for step `i` derives from `sha256("{chat_id}|{attempt}|{i}")`
 (first 8 hex chars) — same request ⇒ byte-identical streams across processes

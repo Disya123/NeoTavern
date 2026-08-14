@@ -90,8 +90,7 @@ Gradle/cargo-ndk pipeline. The wire contract is frozen (`WIRE_SCHEMA_HASH`,
 ## Consequences
 
 - **Android compilation is verified in CI only**: the `android-build` job
-  compiles the APK (Gradle 8.9 / AGP 8.5.2 / Kotlin 1.9.24, JDK 17, minSdk
-  26) on every PR; JVM unit tests run in the PR `checks` job and
+  compiles the APK (Gradle 8.9 / AGP 8.5.2 / Kotlin 1.9.24, JDK 17, minSdk 26) on every PR; JVM unit tests run in the PR `checks` job and
   instrumentation tests run on the nightly emulator. No local Android
   toolchain is required for other platforms.
 - **The `.so` is not committed**: `apps/android/scripts/build-libs.sh`

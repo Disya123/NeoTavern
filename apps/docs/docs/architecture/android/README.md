@@ -43,7 +43,7 @@ loads; the TS transport installs `window.__neotavernMobileCallbacks = {
 resolve, reject }` **before** any `call()`:
 
 - `handshake(): string` — synchronous JSON `{ ffiAbiVersion, schemaHash,
-  wireProtocol: { major, minor }, appVersion }`.
+wireProtocol: { major, minor }, appVersion }`.
 - `call(requestId: string, envelopeJson: string, callbackId: string): void`
   — fire-and-forget; async results arrive through the callback channel.
 - `cancelStream(streamId: string): void`.
@@ -130,11 +130,11 @@ exclusive data-root lease would reject with `DataRootInUse` (§22):
 
 ### API-level matrix
 
-| API level | Background behaviour                                                                       |
-| --------- | ------------------------------------------------------------------------------------------ |
-| 26 (minSdk) | `startForegroundService` + foreground notification required for the FGS                    |
-| 33+       | `POST_NOTIFICATIONS` runtime permission before the notification can be shown               |
-| 34+       | `dataSync` foreground-service type with the system quota (6 h/day cumulative; exhaustion stops the service → cancel path) |
+| API level   | Background behaviour                                                                                                      |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------- |
+| 26 (minSdk) | `startForegroundService` + foreground notification required for the FGS                                                   |
+| 33+         | `POST_NOTIFICATIONS` runtime permission before the notification can be shown                                              |
+| 34+         | `dataSync` foreground-service type with the system quota (6 h/day cumulative; exhaustion stops the service → cancel path) |
 
 Verified in CI: JVM unit tests for `KernelHolder`, `EnvelopeBuilder`,
 `ForegroundExecutionCoordinator`, `NotificationState` and `MaintenancePolicy`

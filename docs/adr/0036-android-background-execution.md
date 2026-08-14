@@ -65,7 +65,7 @@ message content in notifications.
   OS service expiration / force-stop and the user's Stop action are all
   funneled through `session.cancelStream(...)` (`nt_stream_cancel` →
   `generation.cancel`, idempotent) plus `ForegroundExecutionCoordinator
-  .unclaim`. If the whole process dies instead, no explicit cancel is
+.unclaim`. If the whole process dies instead, no explicit cancel is
   possible — the kernel's startup recovery marks lease-expired runs
   `interrupted` at the next open (§63), and the web app resumes the run with
   `generation.retry` (Phase 6). Recovery never requires a new kernel
@@ -79,13 +79,13 @@ message content in notifications.
   `EnvelopeBuilder` (byte-identical to the TS `wireEnvelope`).
 - **(e) Operation → platform API mapping.**
 
-  | Host activity                        | Platform API                                                                                                              | Wire / kernel path                                                                 |
-  | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-  | Foreground generation continuation   | `ForegroundService` (`ServiceCompat.startForeground`, `FOREGROUND_SERVICE_TYPE_DATA_SYNC`) + `NotificationHelper`         | `generation.start` / `generation.retry` stream on `KernelHolder.session`            |
-  | User stop                            | Notification Stop action (`ACTION_STOP`, channel `neotavern_generation`, id 1001) → `stopSelf`                            | `session.cancelStream` (`nt_stream_cancel` → `generation.cancel`), `unclaim`        |
-  | OS expiration / force-stop           | System FGS stop / process kill                                                                                            | in-process: same cancel path; killed process: startup recovery (`interrupted`) then `generation.retry` |
-  | Maintenance backup                   | WorkManager unique `OneTimeWorkRequest` (`neotavern-maintenance`, `BATTERY_NOT_LOW` + `STORAGE_NOT_LOW`)                  | `backups.create` unary envelope                                                    |
-  | Notification presentation            | `NotificationChannel` `neotavern_generation`; `POST_NOTIFICATIONS` runtime permission (API 33+)                            | — (status-only, never message content, §85)                                        |
+  | Host activity                      | Platform API                                                                                                      | Wire / kernel path                                                                                     |
+  | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+  | Foreground generation continuation | `ForegroundService` (`ServiceCompat.startForeground`, `FOREGROUND_SERVICE_TYPE_DATA_SYNC`) + `NotificationHelper` | `generation.start` / `generation.retry` stream on `KernelHolder.session`                               |
+  | User stop                          | Notification Stop action (`ACTION_STOP`, channel `neotavern_generation`, id 1001) → `stopSelf`                    | `session.cancelStream` (`nt_stream_cancel` → `generation.cancel`), `unclaim`                           |
+  | OS expiration / force-stop         | System FGS stop / process kill                                                                                    | in-process: same cancel path; killed process: startup recovery (`interrupted`) then `generation.retry` |
+  | Maintenance backup                 | WorkManager unique `OneTimeWorkRequest` (`neotavern-maintenance`, `BATTERY_NOT_LOW` + `STORAGE_NOT_LOW`)          | `backups.create` unary envelope                                                                        |
+  | Notification presentation          | `NotificationChannel` `neotavern_generation`; `POST_NOTIFICATIONS` runtime permission (API 33+)                   | — (status-only, never message content, §85)                                                            |
 
   There is **no boot receiver** and **no scheduler daemon**: background work
   is started only by in-app events (stream handoff) and by WorkManager.

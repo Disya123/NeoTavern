@@ -17,11 +17,19 @@ Desktop default", AGENTS.md §21):
 | Debug/dev builds (`cfg!(debug_assertions)`)                                | Kernel         |
 
 Explicit runtime overrides always win: `NEOTA_LEGACY_SERVER=1` forces the
-sidecar; `NEOTA_KERNEL=1` forces the Kernel (Preview opt-in). The public
+sidecar; `NEOTA_KERNEL=1` forces the Kernel (Preview opt-in). **Conflict
+policy (ADR-0038):** when both overrides are set, `NEOTA_KERNEL=1` wins —
+the Kernel is the canonical plane and the direction of travel — and the shell
+prints a warning to stderr. The full mode matrix is unit-tested in
+`apps/desktop/src-tauri/src/lib.rs` (`resolve_desktop_mode`). The public
 default switches to the Kernel only after the release gate: all mandatory
 Desktop capabilities are `Packaged` in the capability matrix, migration and
 rollback are verified on packaged artifacts, no silent fallbacks exist and no
 P0 defects are open.
+
+The DiagnosticsPanel marks the Kernel as an explicit **Kernel Preview** (with
+a note on the release gate) whenever the Kernel is the active backend —
+release builds on the sidecar show no kernel marking.
 
 ### Phase 3 local kernel mode
 

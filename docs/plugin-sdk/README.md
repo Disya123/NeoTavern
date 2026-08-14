@@ -103,7 +103,7 @@ host and on the server, so the browser and backend see the same set of rights.
   (`grantedCapabilities`) and to the backend host through the capability
   broker (`apps/server/src/plugin/capabilityBroker.ts`).
 - **Runtime check.** Enforcement points call `broker.check(pluginId,
-  request)`; the semantics are `kernel.grantSatisfies` (name match + scope
+request)`; the semantics are `kernel.grantSatisfies` (name match + scope
   coverage).
 - **Revocation.** `revoke`/`revokeAll` mark the row revoked, bump the
   revision, and publish `plugin.capability.revoked` on the event bus (SSE →

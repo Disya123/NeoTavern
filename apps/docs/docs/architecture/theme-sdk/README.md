@@ -47,12 +47,12 @@ components.
 
 ### App Shell sizes
 
-| Token                   | Purpose                              | Default value         |
-| ----------------------- | ------------------------------------- | --------------------- |
-| `shell-rail-width`      | Width of the persistent navigation rail | `60px`              |
-| `shell-panel-width`     | Width of the open context panel       | `380px`               |
-| `shell-panel-min-width` | Minimum width of the resizable panel  | `260px`               |
-| `shell-panel-max-width` | Maximum width of the resizable panel  | `720px`               |
+| Token                   | Purpose                                 | Default value |
+| ----------------------- | --------------------------------------- | ------------- |
+| `shell-rail-width`      | Width of the persistent navigation rail | `60px`        |
+| `shell-panel-width`     | Width of the open context panel         | `380px`       |
+| `shell-panel-min-width` | Minimum width of the resizable panel    | `260px`       |
+| `shell-panel-max-width` | Maximum width of the resizable panel    | `720px`       |
 
 The desktop shell subtracts both widths from the main area while the context panel
 is open. On narrow screens the panel becomes an overlay; the theme MUST NOT cover
@@ -67,40 +67,40 @@ and the chat offset. The resize handle supports the mouse, `Home`/`End`, and log
 
 ### Panel sizes and scrollbars
 
-| Token                      | Purpose                                              | Default value         |
-| -------------------------- | ------------------------------------------------------ | --------------------- |
-| `size-panel-max-height`    | Maximum height of panels                              | `70vh`                |
-| `size-content-max-height`  | Maximum height of lists                               | `20rem`               |
-| `scrollbar-width`          | Scrollbar width (Chromium; Firefox fixes it to `thin`) | `8px`                |
-| `scrollbar-radius`         | Scrollbar radius                                      | `999px`               |
-| `scrollbar-track-bg`       | Scrollbar track background                            | `transparent`         |
-| `scrollbar-thumb-bg`       | Thumb background                                      | `color-mix(...)`      |
-| `scrollbar-thumb-hover-bg` | Thumb background on hover                             | `color-mix(...)`      |
-| `scrollbar-fade-duration`  | Duration of the overlay scrollbar fade in/out         | `320ms`               |
-| `scrollbar-fade-easing`    | Overlay scrollbar animation easing                    | `cubic-bezier(...)`   |
-| `scrollbar-hide-delay`     | Delay before hiding after scrolling stops             | `1000ms`              |
+| Token                      | Purpose                                                | Default value       |
+| -------------------------- | ------------------------------------------------------ | ------------------- |
+| `size-panel-max-height`    | Maximum height of panels                               | `70vh`              |
+| `size-content-max-height`  | Maximum height of lists                                | `20rem`             |
+| `scrollbar-width`          | Scrollbar width (Chromium; Firefox fixes it to `thin`) | `8px`               |
+| `scrollbar-radius`         | Scrollbar radius                                       | `999px`             |
+| `scrollbar-track-bg`       | Scrollbar track background                             | `transparent`       |
+| `scrollbar-thumb-bg`       | Thumb background                                       | `color-mix(...)`    |
+| `scrollbar-thumb-hover-bg` | Thumb background on hover                              | `color-mix(...)`    |
+| `scrollbar-fade-duration`  | Duration of the overlay scrollbar fade in/out          | `320ms`             |
+| `scrollbar-fade-easing`    | Overlay scrollbar animation easing                     | `cubic-bezier(...)` |
+| `scrollbar-hide-delay`     | Delay before hiding after scrolling stops              | `1000ms`            |
 
 ### Radii, borders, and overlay limits
 
-| Token                  | Purpose                                      | Default value         |
-| ---------------------- | --------------------------------------------- | --------------------- |
-| `radius-inset`         | Inner radius (nested menu elements)          | `4px`                 |
-| `border-width`         | Width of standard borders                    | `1px`                 |
-| `overlay-width-limit`  | Width limit of overlays (dialog/popover)     | `92vw`                |
-| `overlay-height-limit` | Height limit of dropdown lists               | `60vh`                |
-| `dialog-sheet-height`  | Height of the mobile dialog sheet (bottom sheet) | `88dvh`           |
+| Token                  | Purpose                                          | Default value |
+| ---------------------- | ------------------------------------------------ | ------------- |
+| `radius-inset`         | Inner radius (nested menu elements)              | `4px`         |
+| `border-width`         | Width of standard borders                        | `1px`         |
+| `overlay-width-limit`  | Width limit of overlays (dialog/popover)         | `92vw`        |
+| `overlay-height-limit` | Height limit of dropdown lists                   | `60vh`        |
+| `dialog-sheet-height`  | Height of the mobile dialog sheet (bottom sheet) | `88dvh`       |
 
 ### Chat message Markdown
 
 ST1-compatible roleplay formatting uses dedicated tokens (themes may
 override, like SmartTheme Quote / Em):
 
-| Token                    | Purpose                                         | Default value             |
-| ------------------------ | ------------------------------------------------ | --------------------------- |
+| Token                    | Purpose                                            | Default value               |
+| ------------------------ | -------------------------------------------------- | --------------------------- |
 | `color-message-quote`    | Dialogue `"..."` → `<q data-part="message-quote">` | `#a55f12` (dark: `#e8943a`) |
 | `color-message-emphasis` | Italic `*...*` / `<em>`                            | `#6e6e6e` (dark: `#919191`) |
-| `color-message-code`     | Text of `` `...` ``                                | mode-dependent             |
-| `color-message-code-bg`  | Background of highlighted inline code              | mode-dependent             |
+| `color-message-code`     | Text of `` `...` ``                                | mode-dependent              |
+| `color-message-code-bg`  | Background of highlighted inline code              | mode-dependent              |
 
 Stable `data-part` hooks inside a message: `message-quote`, `message-emphasis`,
 `message-strong`, `message-code`, `message-link`, `message-image`.
@@ -109,13 +109,13 @@ Stable `data-part` hooks inside a message: `message-quote`, `message-emphasis`,
 
 The chat canvas background is a swappable theme contract, not a component asset:
 
-| Token                     | Purpose                                  | Default value |
-| ------------------------- | ------------------------------------------ | --------------------- |
-| `chat-wallpaper-image`    | CSS image: `url(...)`, gradient, or `none` | `none`                |
-| `chat-wallpaper-position` | Position of the background image          | `center`              |
-| `chat-wallpaper-size`     | Image scaling                             | `cover`               |
-| `chat-wallpaper-overlay`  | Adaptive layer for text readability       | mode-dependent     |
-| `chat-wallpaper-blur`     | Blur of the background layer              | `0px`                 |
+| Token                     | Purpose                                    | Default value  |
+| ------------------------- | ------------------------------------------ | -------------- |
+| `chat-wallpaper-image`    | CSS image: `url(...)`, gradient, or `none` | `none`         |
+| `chat-wallpaper-position` | Position of the background image           | `center`       |
+| `chat-wallpaper-size`     | Image scaling                              | `cover`        |
+| `chat-wallpaper-overlay`  | Adaptive layer for text readability        | mode-dependent |
+| `chat-wallpaper-blur`     | Blur of the background layer               | `0px`          |
 
 The home screen and the chat screen publish the stable hook
 `data-part="chat-wallpaper"`. A theme may use any local background,
@@ -416,20 +416,20 @@ Slots are stable **skin-targets**: themes style them and inject content
 through the plugin SDK. The mechanics of moving areas are not provided in v1
 (see [ADR-0011](../adr/0011-shell-layout-v1.md)).
 
-| Slot                    | Where declared                         | Status     |
-| ----------------------- | -------------------------------------- | ---------- |
-| `data-slot="app.shell"` | AppShell root                          | implemented |
-| `navigation.primary`    | Sidebar navigation rail                | implemented |
-| `character.browser`     | CharactersPage root                    | implemented |
-| `chat.header`           | ChatHeader                             | implemented |
-| `chat.viewport`         | Outer `<main>` in AppShell             | implemented |
-| `chat.composer`         | ChatComposer                           | implemented |
-| `panel.left`            | Sidebar context panel                  | implemented |
-| `status.area`           | Connection status                      | implemented |
+| Slot                    | Where declared                          | Status      |
+| ----------------------- | --------------------------------------- | ----------- |
+| `data-slot="app.shell"` | AppShell root                           | implemented |
+| `navigation.primary`    | Sidebar navigation rail                 | implemented |
+| `character.browser`     | CharactersPage root                     | implemented |
+| `chat.header`           | ChatHeader                              | implemented |
+| `chat.viewport`         | Outer `<main>` in AppShell              | implemented |
+| `chat.composer`         | ChatComposer                            | implemented |
+| `panel.left`            | Sidebar context panel                   | implemented |
+| `status.area`           | Connection status                       | implemented |
 | `modal.layer`           | Plugin runtime + system surface (stack) | implemented |
-| `notification.layer`    | PluginRuntimeUi                        | implemented |
-| `navigation.secondary`  | —                                      | not in v1    |
-| `panel.right`           | —                                      | not in v1    |
+| `notification.layer`    | PluginRuntimeUi                         | implemented |
+| `navigation.secondary`  | —                                       | not in v1   |
+| `panel.right`           | —                                       | not in v1   |
 
 Multiple registrations of one slot are allowed only for `modal.layer` (stack:
 plugins → system surface). The inner scrollable chat canvas is declared
@@ -441,7 +441,7 @@ All viewport and container breakpoints of the built-in CSS are pinned in
 `@neotavern/theme-sdk` (`VIEWPORT_BREAKPOINTS` / `CONTAINER_BREAKPOINTS`) and
 verified by the style-contract test:
 
-| Type            | Values                         |
+| Type            | Values                          |
 | --------------- | ------------------------------- |
 | Viewport (px)   | `480, 600, 620, 760, 980, 1080` |
 | Container (rem) | `20, 28, 32, 35, 36, 42, 44`    |

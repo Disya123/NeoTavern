@@ -30,6 +30,7 @@ vi.mock('../lib/desktop.js', () => ({
   isDesktopShell: vi.fn(),
   checkCoreUpdate: vi.fn(async () => null),
   installCoreUpdate: vi.fn(async () => false),
+  getDesktopBackendMode: vi.fn(async () => 'kernel'),
 }));
 
 import { isDesktopShell } from '../lib/desktop.js';

@@ -940,6 +940,9 @@ export const ru: Resources = {
     diagnosticsRuntime: 'Среда выполнения',
     diagnosticsRuntimeValue: '{{version}} · Node {{nodeVersion}} · {{platform}}/{{architecture}}',
     diagnosticsKernel: 'Локальное ядро',
+    diagnosticsKernelPreview: 'Предварительная версия ядра',
+    diagnosticsKernelPreviewNote:
+      'Rust-ядро — явная предварительная версия (Preview): публичные сборки по-прежнему по умолчанию используют проверенный legacy-sidecar, пока не пройден release-гейт (все обязательные возможности Desktop в статусе Packaged, миграция и откат проверены на собранных артефактах, нет тихих fallback и открытых P0).',
     diagnosticsKernelWire: 'Wire-контракт продукта',
     diagnosticsKernelFeatures: 'Возможности',
     diagnosticsKernelFeaturesValue: '{{count}} возможностей',

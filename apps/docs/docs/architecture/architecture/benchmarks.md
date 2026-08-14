@@ -12,15 +12,15 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/architecture/bench
 
 ## Reference hardware / fixture
 
-| Axis | Value |
-| --- | --- |
-| CPU | AMD Ryzen 5 5600 (6C/12T) |
-| OS | Windows 11 Pro (NTFS) |
-| Rust profile | debug (bundled SQLite 3.53.2, WAL, `synchronous=FULL`) |
-| Fixture | 200 characters, 50 chats, 5 000 messages (16×"message content " bodies) |
-| Database size | 2 650 112 bytes |
-| Export size | 2 283 530 bytes |
-| Measurement | `crates/storage/examples/phase11_bench.rs` (wall clock, single run; p50/p95 sampling lands with the Nightly harness) |
+| Axis          | Value                                                                                                                |
+| ------------- | -------------------------------------------------------------------------------------------------------------------- |
+| CPU           | AMD Ryzen 5 5600 (6C/12T)                                                                                            |
+| OS            | Windows 11 Pro (NTFS)                                                                                                |
+| Rust profile  | debug (bundled SQLite 3.53.2, WAL, `synchronous=FULL`)                                                               |
+| Fixture       | 200 characters, 50 chats, 5 000 messages (16×"message content " bodies)                                              |
+| Database size | 2 650 112 bytes                                                                                                      |
+| Export size   | 2 283 530 bytes                                                                                                      |
+| Measurement   | `crates/storage/examples/phase11_bench.rs` (wall clock, single run; p50/p95 sampling lands with the Nightly harness) |
 
 **Nightly harness (`.github/workflows/nightly.yml`, ТЗ §80).** The nightly
 schedule runs `phase11_bench` on a release profile and uploads the
@@ -32,12 +32,12 @@ this manifest.
 
 ## Phase 11 portable-data budgets
 
-| Metric | Measured (debug) | Budget |
-| --- | --- | --- |
-| Backup throughput (2.53 MiB DB + assets) | 11.9 MiB/s (212 ms) | ≥ 5 MiB/s on reference hardware |
-| Restore throughput (verify + stage + activate) | 8.2 MiB/s (308 ms) | ≥ 4 MiB/s |
-| Export throughput (NDJSON + assets) | 10.7 MiB/s (203 ms) | ≥ 5 MiB/s |
-| Fixture seed (5 250 rows, one transaction) | 134 ms | informational |
+| Metric                                         | Measured (debug)    | Budget                          |
+| ---------------------------------------------- | ------------------- | ------------------------------- |
+| Backup throughput (2.53 MiB DB + assets)       | 11.9 MiB/s (212 ms) | ≥ 5 MiB/s on reference hardware |
+| Restore throughput (verify + stage + activate) | 8.2 MiB/s (308 ms)  | ≥ 4 MiB/s                       |
+| Export throughput (NDJSON + assets)            | 10.7 MiB/s (203 ms) | ≥ 5 MiB/s                       |
+| Fixture seed (5 250 rows, one transaction)     | 134 ms              | informational                   |
 
 Budgets are set at ~2× below the debug measurement so a release build passes
 with wide margin while a regression that halves throughput is caught.

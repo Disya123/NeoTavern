@@ -5,7 +5,7 @@
     {
       "source": "README.md",
       "target": "README.md",
-      "sha256": "6b3419dca85a189da3e3b795e3aafa382917121b329f058662c97ec01bd7b323"
+      "sha256": "e0322f57a3908f82b66382655e4b88dd2fdd09dcbb312fea77c313679533f5e7"
     },
     {
       "source": "adr/0004-typebox-contracts.md",
@@ -35,7 +35,7 @@
     {
       "source": "adr/0011-shell-layout-v1.md",
       "target": "adr/0011-shell-layout-v1.md",
-      "sha256": "71625992c89d42fc200f6b4947bb6401dfbef0701646d6f2db5ae31355e1c486"
+      "sha256": "6df1fe3a1c9045094149a27a37b6f6b2ea072df39bf01200d60da3b7635376ae"
     },
     {
       "source": "adr/0012-multi-surface-sandbox-composition.md",
@@ -130,12 +130,12 @@
     {
       "source": "adr/0030-remote-http-adapter.md",
       "target": "adr/0030-remote-http-adapter.md",
-      "sha256": "ecc7f48fdf90339018c0b4682b03174a7e5802848b027e1333869df646efb3d9"
+      "sha256": "ba647629ff577548fca119f5a5c5a3a832baab8718e19a7985dafe2935718870"
     },
     {
       "source": "adr/0031-portable-provider-contract.md",
       "target": "adr/0031-portable-provider-contract.md",
-      "sha256": "751f539738804d83ff2ceea3ead877255bb838ceddac963c8ce79a0597d53f35"
+      "sha256": "b371ad4d4286e2fafe5741e09540bd1adae889cf0308406a562d94c221dfb2ea"
     },
     {
       "source": "adr/0032-portable-data.md",
@@ -145,22 +145,22 @@
     {
       "source": "adr/0033-desktop-local-kernel-transport.md",
       "target": "adr/0033-desktop-local-kernel-transport.md",
-      "sha256": "248f05faace4c08eab36b8718f3c56d2ca4c98b5f5a366e9adc7e53648453e23"
+      "sha256": "dd2d014ddce78664472d9a2ce4e4b536c6d0e1a9f25be9ca1c59db8d5e755d58"
     },
     {
       "source": "adr/0034-android-local-host-jni-transport.md",
       "target": "adr/0034-android-local-host-jni-transport.md",
-      "sha256": "ed52dbf855c8f2f503a78fefae03e1b763b9f95f9954a3c492313b9d898b87e0"
+      "sha256": "98fd9898abbb0492fd663e1328620a397cc4aecd07d1b2635520eaa5db862729"
     },
     {
       "source": "adr/0035-desktop-remote-access.md",
       "target": "adr/0035-desktop-remote-access.md",
-      "sha256": "819e5a61b449a161e1f6309f84f2bcdb9ca32bb1102141316ef031f1cee7f3ce"
+      "sha256": "e44a1483c3dc0ec6f0ad8131c4abc2a6cf33714169450cd878a4ba835897abcf"
     },
     {
       "source": "adr/0036-android-background-execution.md",
       "target": "adr/0036-android-background-execution.md",
-      "sha256": "3fe4e41086f63bce6b371b0b23dd64f8e84fb1f4126dcd7d30dee7c123219d1d"
+      "sha256": "de01d20e81dccab3cbc5046e6cfa44bad9ec6ebe988c791fea1e4895fd4f416c"
     },
     {
       "source": "adr/0037-extension-hardening.md",
@@ -170,7 +170,7 @@
     {
       "source": "adr/0038-canonical-rust-kernel-core.md",
       "target": "adr/0038-canonical-rust-kernel-core.md",
-      "sha256": "ec8af2fbb51de8598ff9e8ca7c354bf7386ee49db3913678de3e4acb1e069864"
+      "sha256": "ea01e5827fec4adde62fdbc63b18e4c834dc21f4b302fb4c91fda1d6a685d78f"
     },
     {
       "source": "adr/0039-legacy-compatibility-authority-boundary.md",
@@ -185,7 +185,7 @@
     {
       "source": "android/README.md",
       "target": "android/README.md",
-      "sha256": "34f9d207dcc000076d459a2e17b3ebb1820b7a507090cc75e2dbc84a701f5e2e"
+      "sha256": "798bd8b6b7dd993c9545096ab60f128fb94204f8931c46090e21c26f0309c7c4"
     },
     {
       "source": "api/README.md",
@@ -200,17 +200,17 @@
     {
       "source": "architecture/benchmarks.md",
       "target": "architecture/benchmarks.md",
-      "sha256": "ac8b2800735d9cf72f0388fc41214d8ffedfdd4c32b46f59bc6e8848c5f292b7"
+      "sha256": "4b59e547d5ac48948f8f76c97cd24f536ae8f4cdde766d801f232b578026b7d9"
     },
     {
       "source": "architecture/generation-durability.md",
       "target": "architecture/generation-durability.md",
-      "sha256": "2d4d2418f8cee3edb4deb6f129b3e7ec72408d215f12c8b0f7f6557fce4772dc"
+      "sha256": "abfe53ec34502c3e089b40e30ea7daca1d927b653713f978d7743e7a5f38eae1"
     },
     {
       "source": "architecture/operations-inventory.md",
       "target": "architecture/operations-inventory.md",
-      "sha256": "6f5bf77a92bdf3f2282b56b57d244a5f49972e9b1874b6e23b696ef9e958d63f"
+      "sha256": "baf12c11a2d74638bedc15c2ed07eb72ca11aee72d6f3ec58622bf131fb8b234"
     },
     {
       "source": "architecture/portable-data.md",
@@ -220,27 +220,27 @@
     {
       "source": "architecture/providers.md",
       "target": "architecture/providers.md",
-      "sha256": "be49bc75a0be919b43d14c4d5617c062781399d0f0dc460099598f1a73c336f1"
+      "sha256": "e1496cf1627f422e0bfcdf6a70e0c522320a63a90953d4907af133383b9573dc"
     },
     {
       "source": "architecture/ui-legacy-surface.md",
       "target": "architecture/ui-legacy-surface.md",
-      "sha256": "7645e59543116fc06dbf1b914a28ad19d2ef76e022696dee3dd0bcedfe5bedc8"
+      "sha256": "a0cc19e162357efa6328604420aa72eb408cbff1a16e4fb1c8c0e32c3cfcacd6"
     },
     {
       "source": "architecture/version-axes.md",
       "target": "architecture/version-axes.md",
-      "sha256": "64f8528dc888af4911199c467f761d18481e2e0ea1ca5733e8fc9971ca965c9a"
+      "sha256": "bd1f6f631758b382df22c35672399a8a7ac48de52a60fc878048aecb9666fb0a"
     },
     {
       "source": "architecture/wire-contracts.md",
       "target": "architecture/wire-contracts.md",
-      "sha256": "9c1c59475850b48f09899ad49bd8b3ccec72523c075fd99fd7712a740ed969be"
+      "sha256": "ed7cc1e669eabe4afdaf9e29645343e5c4b6359bda6f9a5207de5518eaf6620c"
     },
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "a6aa4d2e1fe0b6b823dafc48c60c45ee89120a22fa07f6eb96b7f1eafcc8e2af"
+      "sha256": "ea190ebc7b34dccf05091338dd3e7ccfb554722ac9937822e433d6d50d58e998"
     },
     {
       "source": "data/README.md",
@@ -250,7 +250,7 @@
     {
       "source": "desktop/README.md",
       "target": "desktop/README.md",
-      "sha256": "c3b75b5afd23c0dbea84c5a24d6acd8ae7d00ac19c404c0cecbd08e92a38f2ae"
+      "sha256": "05a52cb73bddccbc8c0af2fd9a1cfd58ba8c30688d50f0bd4e2a37cb510ba2ac"
     },
     {
       "source": "migrations/README.md",
@@ -260,7 +260,7 @@
     {
       "source": "plugin-sdk/README.md",
       "target": "plugin-sdk/README.md",
-      "sha256": "e3755313e5a6a677342824060c2f833747dd7e176ba8152dcc2784a4a841a2bb"
+      "sha256": "e35a0c2ab268c4f2302581ca5a06a0b036564a488c033de75bcab29c5fbe498b"
     },
     {
       "source": "plugin-sdk/examples/rev4-overlay-game.md",
@@ -270,7 +270,7 @@
     {
       "source": "plugin-sdk/rev4-api.md",
       "target": "plugin-sdk/rev4-api.md",
-      "sha256": "0fbb9611b36e054aaa378b5e714eb294d3ce4b0e40c8db68e63732cdb5a08c3b"
+      "sha256": "92c21970d89776441c44c674fd1d203576a6c907a2dbc2c1846d38ffdafdba56"
     },
     {
       "source": "prompt-pipeline/README.md",
@@ -280,7 +280,7 @@
     {
       "source": "theme-sdk/README.md",
       "target": "theme-sdk/README.md",
-      "sha256": "4053c8bf0d999f57d0ff4d8be8f67daca5b337842a781621981e3b6babc75c7d"
+      "sha256": "dd8acba2965354398d64647100664f7a7f74b2331e62c75a6c0aee4deb36e134"
     },
     {
       "source": "ux/README.md",

@@ -59,29 +59,29 @@ use `api.capabilities.granted(name)` / `api.capabilities.list()`, not
 
 ## 2. The `api` namespaces
 
-| Namespace           | Purpose                                                                                                                               | Capability                                                                     |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `api.runtime`       | `supports()`, `limits()`, protocol versions                                                                                            | —                                                                              |
-| `api.capabilities`  | current grants: `granted(name)`, `list()`, `request()`, `onRevoked(listener)`                                                          | —                                                                              |
-| `api.diagnostics`   | `get()` — read-only snapshot of the plugin's own runtime state                                                                         | —                                                                              |
-| `api.auth`          | OAuth connections: `list()`, `get()`, `connect()`, `revoke()` — metadata only, tokens never leave the server                           | `auth.connections`                                                             |
-| `api.services`      | cross-plugin RPC: `provide()`, `list()`, `connect()`, `invoke()`, `disconnect()`                                                       | `services.provide` (provider) / `services.connect` (consumer)                 |
-| `api.storage.kv`    | JSON KV with CAS revision, scopes: installation/user/workspace/chat                                                                    | `storage.installation` / `storage.user` / `storage.workspace` / `storage.chat` |
-| `api.storage.blobs` | content-addressed binary objects, streaming write/read                                                                                 | `storage.blobs`                                                                |
-| `api.backend`       | `request()` (byte-stream response) and `invoke()` (JSON) to the plugin's own backend                                                   | `compute.backend`                                                              |
-| `api.commands`      | palette commands: `register(id, def, runner, {kernel?})`, `unregister`                                                                 | `ui.commands`                                                                  |
-| `api.surfaces`      | v2 surface registrations (toolbar, dialogs, pages, message actions, …)                                                                 | `ui.surfaces`                                                                  |
-| `api.overlays`      | fullscreen/spot overlays with hitPolicy                                                                                                | `ui.overlay.<mode>`                                                            |
-| `api.chats`         | `current()`, `listMessages()`, `append()`, `draft.*`                                                                                   | `chats.read.*`, `chats.write.plugin`, `chats.draft`                            |
-| `api.blocks`        | message block renderers: `registerRenderer`, `attach`                                                                                  | `ui.messageBlock`                                                              |
-| `api.jobs`          | background jobs: `schedule` (one-shot/interval/cron), `cancel`, `list`, `ack`, `retry`, `onRun`                                        | `jobs.background`                                                              |
-| `api.workers`       | isolated compute workers: `spawn({entry, name?, signal?})` → handle (`postMessage`, `onMessage`, `onError`, `closed`, `terminate`)     | `compute.worker`                                                               |
-| `api.network`       | proxied fetch through the host (allowlist + secret injection)                                                                          | `network:*` / `network:<host>`                                                 |
-| `api.models`        | provider models: `list(providerId?)` — without providerId the active provider is resolved                                              | `models.list`                                                                  |
-| `api.ui.modelMenu`  | ready-made model picker widget: `modelMenu(container, options)` → `{dispose, setValue}`                                                | `models.list`                                                                  |
-| `api.actions`       | user-activation-gated actions: clipboard, notifications, files.pick                                                                    | `actions.host`                                                                 |
-| `api.notifications` | toast notifications: `show({title, description?, variant?, timeoutMs?})`, `dismiss`                                                    | `notifications.show`                                                           |
-| `api.events`        | rev4 subscriptions `subscribe`/`unsubscribe` (whitelisted app events) + v2 `on` + `onKernelRevoked`                                    | `chats.read.current` — only for chat-content events                            |
+| Namespace           | Purpose                                                                                                                            | Capability                                                                     |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `api.runtime`       | `supports()`, `limits()`, protocol versions                                                                                        | —                                                                              |
+| `api.capabilities`  | current grants: `granted(name)`, `list()`, `request()`, `onRevoked(listener)`                                                      | —                                                                              |
+| `api.diagnostics`   | `get()` — read-only snapshot of the plugin's own runtime state                                                                     | —                                                                              |
+| `api.auth`          | OAuth connections: `list()`, `get()`, `connect()`, `revoke()` — metadata only, tokens never leave the server                       | `auth.connections`                                                             |
+| `api.services`      | cross-plugin RPC: `provide()`, `list()`, `connect()`, `invoke()`, `disconnect()`                                                   | `services.provide` (provider) / `services.connect` (consumer)                  |
+| `api.storage.kv`    | JSON KV with CAS revision, scopes: installation/user/workspace/chat                                                                | `storage.installation` / `storage.user` / `storage.workspace` / `storage.chat` |
+| `api.storage.blobs` | content-addressed binary objects, streaming write/read                                                                             | `storage.blobs`                                                                |
+| `api.backend`       | `request()` (byte-stream response) and `invoke()` (JSON) to the plugin's own backend                                               | `compute.backend`                                                              |
+| `api.commands`      | palette commands: `register(id, def, runner, {kernel?})`, `unregister`                                                             | `ui.commands`                                                                  |
+| `api.surfaces`      | v2 surface registrations (toolbar, dialogs, pages, message actions, …)                                                             | `ui.surfaces`                                                                  |
+| `api.overlays`      | fullscreen/spot overlays with hitPolicy                                                                                            | `ui.overlay.<mode>`                                                            |
+| `api.chats`         | `current()`, `listMessages()`, `append()`, `draft.*`                                                                               | `chats.read.*`, `chats.write.plugin`, `chats.draft`                            |
+| `api.blocks`        | message block renderers: `registerRenderer`, `attach`                                                                              | `ui.messageBlock`                                                              |
+| `api.jobs`          | background jobs: `schedule` (one-shot/interval/cron), `cancel`, `list`, `ack`, `retry`, `onRun`                                    | `jobs.background`                                                              |
+| `api.workers`       | isolated compute workers: `spawn({entry, name?, signal?})` → handle (`postMessage`, `onMessage`, `onError`, `closed`, `terminate`) | `compute.worker`                                                               |
+| `api.network`       | proxied fetch through the host (allowlist + secret injection)                                                                      | `network:*` / `network:<host>`                                                 |
+| `api.models`        | provider models: `list(providerId?)` — without providerId the active provider is resolved                                          | `models.list`                                                                  |
+| `api.ui.modelMenu`  | ready-made model picker widget: `modelMenu(container, options)` → `{dispose, setValue}`                                            | `models.list`                                                                  |
+| `api.actions`       | user-activation-gated actions: clipboard, notifications, files.pick                                                                | `actions.host`                                                                 |
+| `api.notifications` | toast notifications: `show({title, description?, variant?, timeoutMs?})`, `dismiss`                                                | `notifications.show`                                                           |
+| `api.events`        | rev4 subscriptions `subscribe`/`unsubscribe` (whitelisted app events) + v2 `on` + `onKernelRevoked`                                | `chats.read.current` — only for chat-content events                            |
 
 ### commands and the kernel flag
 
@@ -207,7 +207,7 @@ Security model:
   is kept, and the user can finish the cycle after re-enabling.
 - Authorized requests go through `api.network.fetch(url,
 {connectionId})`: the server resolves the token and injects `Authorization`
-server-side. There is no way for the sandbox to obtain the token value.
+  server-side. There is no way for the sandbox to obtain the token value.
 - Requires the `auth.connections` capability (enabled in the manifest's
   `requiredCapabilities`); an expired event arrives when attempting to
   use an expired connection (`AUTH_EXPIRED`).
@@ -267,15 +267,15 @@ interface KernelServiceCall {
 Error mapping (the consumer sees a stable code, provider details are in
 `details.providerCode`):
 
-| Case                                | Code to consumer                                 |
-| ----------------------------------- | ------------------------------------------------ |
-| No connection / service removed     | `SERVICE_NOT_FOUND`                              |
-| Service/method not found            | `SERVICE_NOT_FOUND` / `SERVICE_METHOD_NOT_FOUND` |
-| Provider dead (mid-call)            | `SERVICE_UNAVAILABLE`                            |
-| Service deadline                    | `SERVICE_TIMEOUT` (`OPERATION_DEADLINE`)         |
-| Consumer cancellation               | `OPERATION_ABORTED`                              |
-| Throw in provider handle            | `SERVICE_ERROR` (details.providerCode)           |
-| Quotas (methods/connections/payload)| `PLUGIN_QUOTA_EXCEEDED`                          |
+| Case                                 | Code to consumer                                 |
+| ------------------------------------ | ------------------------------------------------ |
+| No connection / service removed      | `SERVICE_NOT_FOUND`                              |
+| Service/method not found             | `SERVICE_NOT_FOUND` / `SERVICE_METHOD_NOT_FOUND` |
+| Provider dead (mid-call)             | `SERVICE_UNAVAILABLE`                            |
+| Service deadline                     | `SERVICE_TIMEOUT` (`OPERATION_DEADLINE`)         |
+| Consumer cancellation                | `OPERATION_ABORTED`                              |
+| Throw in provider handle             | `SERVICE_ERROR` (details.providerCode)           |
+| Quotas (methods/connections/payload) | `PLUGIN_QUOTA_EXCEEDED`                          |
 
 ### notifications
 
@@ -710,7 +710,7 @@ uninstall(); // the plugin is being removed (SSE plugin.uninstalling)
   `{version, previousVersion}`, for `rollback` — `{previousVersion,
 failedVersion}`.
 - The feature is checked with `api.runtime.supports('lifecycle.hooks',
-  1)`; without it, hooks are not called.
+1)`; without it, hooks are not called.
 - **Ordering with teardown**: when a frame is replaced on update, the host
   first delivers `beforeUpdate` → `afterUpdate`, and only after the last hook
   settles closes the old sandbox's session port —

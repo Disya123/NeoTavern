@@ -43,7 +43,7 @@ A std-only adapter (tiny_http 0.12 thread pool; no tokio/async) exposing:
   envelope), `POST /rpc/stream` (SSE; terminal-frame semantics now, durable
   event streams arrive with Phase 6 generation workflows);
 - `RemoteAdapterConfig { bind_addr, trusted_proxy, max_request_bytes,
-  max_connections, drain_timeout }` with loopback-ephemeral defaults.
+max_connections, drain_timeout }` with loopback-ephemeral defaults.
 
 ### 2. `Arc<Mutex<Kernel>>` is the adapter-level writer coordinator
 
@@ -82,7 +82,7 @@ product state reachable unsynchronized. A poisoned mutex maps to a controlled
 
 - Default bind `127.0.0.1:0`; `start()` rejects any non-loopback bind with
   `AdapterError::InsecureBind` **before** binding unless `trusted_proxy:
-  true` is set explicitly. `trusted_proxy` declares a TLS-terminating reverse
+true` is set explicitly. `trusted_proxy` declares a TLS-terminating reverse
   proxy boundary (§10: "non-loopback требует TLS либо явно настроенного
   trusted reverse proxy boundary"); the adapter itself does not terminate TLS
   yet — that is Phase 4 hardening / Phase 9 work, and no listener can be

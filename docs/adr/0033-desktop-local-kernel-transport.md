@@ -45,7 +45,7 @@ generation workflows, providers/backups/lorebooks/presets lists.
   durable `generation.cancel`, §63).
 - **Desktop shell** `apps/desktop/src-tauri`: kernel mode is the default —
   the window loads bundled web assets via `WebviewUrl::App` (`tauri://
-  localhost`), no HTTP server/listener exists, and the legacy Node sidecar
+localhost`), no HTTP server/listener exists, and the legacy Node sidecar
   is spawned only with `NEOTA_LEGACY_SERVER=1` (transition bridge for
   unmigrated routes; only one mode runs at a time, so a data root never has
   two writable owners). `NEOTA_DESKTOP_SMOKE=1` in kernel mode self-checks

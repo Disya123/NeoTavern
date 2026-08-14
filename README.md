@@ -18,10 +18,12 @@ your conversations stay on your computer. It ships as a desktop application
 that talks to a local or remote backend. SillyTavern-era plugin compatibility
 is preserved through a dedicated legacy layer.
 
-One product, several hosts: the Desktop app runs locally without any server, the
-same backend runs headless on a VPS, Android uses the same runtime and data
-format without Node.js — and all of them share one authoritative implementation
-of persistent state: the Rust Runtime Kernel.
+One product, several hosts: the Desktop app runs fully local (public builds
+temporarily bundle the tested legacy Node sidecar while the Rust Kernel is an
+explicit Preview — nightly/internal builds run the Kernel with no HTTP server;
+ADR-0038), the same backend runs headless on a VPS, Android uses the same
+runtime and data format without Node.js — and all of them share one
+authoritative implementation of persistent state: the Rust Runtime Kernel.
 
 ## Architecture
 

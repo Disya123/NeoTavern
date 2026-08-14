@@ -6,7 +6,8 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/README.md
 
 Index of the internal documentation. Each major topic has its own folder.
 
-> **Architecture Convergence program (M1, Wave 0).** The governing documents
+> **Architecture Convergence program (M1a, Wave 0 Governance — accepted;
+> M1, Wave 1 Immediate security — open).** The governing documents
 > are the [target-architecture ТЗ 10/10 rev2](https://github.com/Disya123/NeoTavern/blob/main/NeoTavern_architecture_10_of_10_spec_2026-08-13.md),
 > [ADR-0038](adr/0038-canonical-rust-kernel-core.md) (canonical Rust Kernel;
 > Fastify/Drizzle is the legacy/migration contour) and
@@ -20,7 +21,10 @@ Index of the internal documentation. Each major topic has its own folder.
 > `apps/docs/docs/architecture/` produced by `scripts/docs-sync.mjs`
 > (`pnpm docs:sync`). Edit files here, run `pnpm docs:sync` and commit the
 > mirror together with your change; `pnpm docs:sync:check` blocks CI on any
-> divergence and `pnpm docs:site:build` always syncs first.
+> divergence and `pnpm docs:site:build` always syncs first. The mirror is a
+> **closed tree**: `--check` enumerates the actual target directory and fails
+> on any file a fresh sync would not produce, and a plain sync deletes stale
+> generated files — a page smuggled into the mirror cannot reach the site.
 
 ## Sections
 

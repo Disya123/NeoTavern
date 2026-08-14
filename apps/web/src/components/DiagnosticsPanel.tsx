@@ -16,6 +16,7 @@ import { useErrorText } from '../lib/useErrorText.js';
 import { ConfirmActionDialog } from './ConfirmActionDialog.js';
 import {
   checkCoreUpdate,
+  getDesktopBackendMode,
   installCoreUpdate,
   isDesktopShell,
   type CoreUpdateStatus,
@@ -39,6 +40,14 @@ export function DiagnosticsPanel() {
   const [desktop] = useState(() => isDesktopShell());
   const [updateStatus, setUpdateStatus] = useState<CoreUpdateStatus | null>(null);
   const [cacheConfirmOpen, setCacheConfirmOpen] = useState(false);
+  // Resolved backend mode ("kernel" | "sidecar" | null). The panel marks the
+  // Kernel as an explicit Preview (ADR-0038) only when the shell reports the
+  // Kernel is the ACTIVE backend — never when the sidecar is running.
+  const [backendMode, setBackendMode] = useState<'kernel' | 'sidecar' | null>(null);
+  useEffect(() => {
+    if (!desktop) return;
+    void getDesktopBackendMode().then(setBackendMode);
+  }, [desktop]);
   // Phase 3 local kernel slice: the desktop shell reads kernel metadata over
   // the NeoBackend facade (React → LocalBackend → Tauri IPC → Runtime
   // Kernel). Disabled in the browser where no kernel transport exists.
@@ -186,8 +195,14 @@ export function DiagnosticsPanel() {
         </ActionBarGroup>
       </ActionBar>
 
-      {desktop ? (
+      {desktop && backendMode !== 'sidecar' ? (
         <section data-part="kernel-diagnostics" aria-label={t('settings:diagnosticsKernel')}>
+          {backendMode === 'kernel' ? (
+            <p className={styles.kernelPreview} data-part="kernel-preview">
+              <strong>{t('settings:diagnosticsKernelPreview')}</strong>
+              <span>{t('settings:diagnosticsKernelPreviewNote')}</span>
+            </p>
+          ) : null}
           <div className={styles.summary}>
             {kernelQuery.data ? (
               <>

@@ -242,11 +242,11 @@ The Runtime Kernel opens **only** against the contract it was built with:
 The Phase 4 adapter (`crates/adapters/remote-http`, ADR-0030) maps the frozen
 envelopes onto HTTP/SSE without defining any DTO of its own (§6.3). Surface:
 
-| Route           | Method | Purpose                                                                                                              |
-| --------------- | ------ | -------------------------------------------------------------------------------------------------------------------- |
-| `/meta`         | GET    | Public handshake; returns the same `MetaDto` as `meta.get` (`api`, `productWire`, `minimumClientVersion`, `features`) |
-| `/rpc`          | POST   | One request envelope in, one response envelope out (unary)                                                           |
-| `/rpc/stream`   | POST   | SSE: envelope validation + protocol check, then event frames for the streaming operations (`generation.start`, `generation.retry`) or durable-log resume (`generation.events`); terminal `stream.closed` frame |
+| Route         | Method | Purpose                                                                                                                                                                                                        |
+| ------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/meta`       | GET    | Public handshake; returns the same `MetaDto` as `meta.get` (`api`, `productWire`, `minimumClientVersion`, `features`)                                                                                          |
+| `/rpc`        | POST   | One request envelope in, one response envelope out (unary)                                                                                                                                                     |
+| `/rpc/stream` | POST   | SSE: envelope validation + protocol check, then event frames for the streaming operations (`generation.start`, `generation.retry`) or durable-log resume (`generation.events`); terminal `stream.closed` frame |
 
 **Envelope-over-HTTP rule:** once the request envelope parses and passes the
 protocol check, the response is always HTTP 200 carrying a
@@ -254,14 +254,14 @@ protocol check, the response is always HTTP 200 carrying a
 lives inside the envelope, never in the HTTP status. HTTP status codes are
 reserved for transport-level failures that occur before a usable envelope:
 
-| Status | Condition                                                | Error code          | Params                                   |
-| ------ | -------------------------------------------------------- | ------------------- | ---------------------------------------- |
-| 400    | JSON parse or envelope-schema violation                  | `CONTRACT_VIOLATION`| `issue.<i>.path`, `issue.<i>.rule`       |
-| 403    | Browser `Origin` not in the CORS allowlist (deny-by-default)| `ORIGIN_NOT_ALLOWED`| `rule: origin_not_allowed`               |
-| 405    | Wrong method on a known path                             | `VALIDATION`        | —                                        |
-| 404    | Unknown route                                            | `NOT_FOUND`         | —                                        |
-| 413    | Body over `max_request_bytes` (Content-Length or chunked)| `QUOTA_EXCEEDED`    | —                                        |
-| 426    | Protocol mismatch (§6.5 remote rule)                     | `PROTOCOL_MISMATCH` | `client_major`, `server_major`           |
+| Status | Condition                                                    | Error code           | Params                             |
+| ------ | ------------------------------------------------------------ | -------------------- | ---------------------------------- |
+| 400    | JSON parse or envelope-schema violation                      | `CONTRACT_VIOLATION` | `issue.<i>.path`, `issue.<i>.rule` |
+| 403    | Browser `Origin` not in the CORS allowlist (deny-by-default) | `ORIGIN_NOT_ALLOWED` | `rule: origin_not_allowed`         |
+| 405    | Wrong method on a known path                                 | `VALIDATION`         | —                                  |
+| 404    | Unknown route                                                | `NOT_FOUND`          | —                                  |
+| 413    | Body over `max_request_bytes` (Content-Length or chunked)    | `QUOTA_EXCEEDED`     | —                                  |
+| 426    | Protocol mismatch (§6.5 remote rule)                         | `PROTOCOL_MISMATCH`  | `client_major`, `server_major`     |
 
 **Protocol gate ordering:** for `/rpc/stream` the 426 check runs **before**
 any streaming classification — a mismatched client gets a JSON error envelope,
@@ -317,18 +317,17 @@ verifier; `revoke(id)` is idempotent; the store is bounded by
 `invalid_credential`; `/meta` stays public), over-burst requests and
 over-cap concurrent streams answer `429 RATE_LIMITED` with `Retry-After`
 (token-bucket keyed by credential id or peer IP, bounded bucket map; `rule:
-`stream_limit` for `max_streams`), SSE streams re-check the credential per
+`stream_limit`for`max_streams`), SSE streams re-check the credential per
 frame batch and abort mid-stream on revocation (`credential_revoked`), CORS/
-Origin is deny-by-default (a request carrying an `Origin` header is admitted
-only on an exact match against the configured `allowed_origins` allowlist —
-otherwise 403 `ORIGIN_NOT_ALLOWED` before any body read or dispatch; with the
-allowlist configured, allowed-origin responses carry
-`Access-Control-Allow-Origin` + `Vary: Origin` and an `OPTIONS` preflight
-answers 204 with `Access-Control-Allow-Methods`/`-Headers`), forwarded
+Origin is deny-by-default (a request carrying an `Origin`header is admitted
+only on an exact match against the configured`allowed_origins`allowlist —
+otherwise 403`ORIGIN_NOT_ALLOWED`before any body read or dispatch; with the
+allowlist configured, allowed-origin responses carry`Access-Control-Allow-Origin`+`Vary: Origin`and an`OPTIONS`preflight
+answers 204 with`Access-Control-Allow-Methods`/`-Headers`), forwarded
 client headers are honored only from configured proxy addresses (the
-rate-limit bucket keys by the `X-Forwarded-For` client IP — rightmost chain
+rate-limit bucket keys by the `X-Forwarded-For`client IP — rightmost chain
 entry not appended by a trusted proxy — solely when the immediate peer is
-listed in `trusted_proxies`; from any other peer the header is ignored, so a
+listed in`trusted_proxies`; from any other peer the header is ignored, so a
 client cannot self-spoof the bucket key), and every gate decision
 lands in a bounded audit ring without token material.
 Body size and connection/worker counts are bounded by config

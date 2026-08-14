@@ -45,6 +45,8 @@ export default defineConfig({
       'apps/**/*.test.ts',
       'packages/**/*.spec.{ts,tsx}',
       'apps/**/*.spec.ts',
+      // Node script gates (docs-sync closed-tree mirror, check-ui-api, ...).
+      'scripts/**/*.test.mjs',
     ],
     exclude: [
       '**/node_modules/**',

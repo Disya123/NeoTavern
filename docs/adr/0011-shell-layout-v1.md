@@ -41,20 +41,20 @@ Adopt **Option A — honest v1**:
 
 2. **A single slot registry (10 of 11):**
 
-   | Slot                    | Where declared                         | Status      |
-   | ----------------------- | -------------------------------------- | ----------- |
-   | `app.shell`             | AppShell root                          | implemented |
-   | `navigation.primary`    | Sidebar navigation rail                | implemented |
-   | `character.browser`     | CharactersPage root                    | implemented |
-   | `chat.header`           | ChatHeader                             | implemented |
-   | `chat.viewport`         | outer `<main>` in AppShell             | implemented |
-   | `chat.composer`         | ChatComposer                           | implemented |
-   | `panel.left`            | Sidebar context panel                  | implemented |
-   | `status.area`           | connection status                      | implemented |
-   | `modal.layer`           | plugin-runtime + system-surface (stack) | implemented |
-   | `notification.layer`    | PluginRuntimeUi                        | implemented |
-   | `navigation.secondary`  | —                                      | not in v1   |
-   | `panel.right`           | —                                      | not in v1   |
+   | Slot                   | Where declared                          | Status      |
+   | ---------------------- | --------------------------------------- | ----------- |
+   | `app.shell`            | AppShell root                           | implemented |
+   | `navigation.primary`   | Sidebar navigation rail                 | implemented |
+   | `character.browser`    | CharactersPage root                     | implemented |
+   | `chat.header`          | ChatHeader                              | implemented |
+   | `chat.viewport`        | outer `<main>` in AppShell              | implemented |
+   | `chat.composer`        | ChatComposer                            | implemented |
+   | `panel.left`           | Sidebar context panel                   | implemented |
+   | `status.area`          | connection status                       | implemented |
+   | `modal.layer`          | plugin-runtime + system-surface (stack) | implemented |
+   | `notification.layer`   | PluginRuntimeUi                         | implemented |
+   | `navigation.secondary` | —                                       | not in v1   |
+   | `panel.right`          | —                                       | not in v1   |
 
    Multiple registrations of one slot are allowed only for `modal.layer`
    (stack: plugins → system surface). The inner scrollable chat canvas is

@@ -93,7 +93,7 @@ frozen wire registry: no new product operations, no contract change.
 - **Feature-gated and tested in CI.** The `remote` feature on
   `neotavern-tauri-local` wires the service into the shell; CI compiles and
   lints it explicitly (`cargo test -p neotavern-tauri-local --features remote`
-  + clippy) because the default workspace build does not enable the feature.
+  - clippy) because the default workspace build does not enable the feature.
 
 ## Alternatives
 

@@ -492,7 +492,11 @@ Desktop (ADR-0038 honest default):
 - The Runtime Kernel is the canonical backend; the legacy Fastify backend runs
   only as the Node.js sidecar — the release default while the Kernel is a
   Preview, selectable via `NEOTA_DESKTOP_CHANNEL`/`NEOTA_LEGACY_SERVER=1`/
-  `NEOTA_KERNEL=1` (see docs/desktop/README.md).
+  `NEOTA_KERNEL=1` (see docs/desktop/README.md). Conflict policy
+  (ADR-0038): when both overrides are set, `NEOTA_KERNEL=1` wins; the mode
+  matrix is unit-tested in `apps/desktop/src-tauri/src/lib.rs`.
+- The DiagnosticsPanel marks an active Kernel as **Kernel Preview**; release
+  builds on the sidecar show no kernel marking.
 - Public builds temporarily default to the tested legacy sidecar while the
   Kernel is an explicit Preview; the Kernel becomes the default for
   nightly/internal builds only. The public default switches to the Kernel only

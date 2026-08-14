@@ -2,20 +2,32 @@
 
 Tauri 2 desktop shell for NeoTavern.
 
-**Default (Phase 3 local kernel mode):** the Runtime Kernel is embedded in
-the desktop process (`neotavern-tauri-local`), the window loads the bundled
-web assets over `tauri://localhost`, and there is **no HTTP server, no
-listening port and no server lifecycle** (ТЗ §11.1). The UI talks to the
-kernel through `React → LocalBackend → Tauri IPC → Runtime Kernel`
-(`kernel_dispatch` / `kernel_stream_start` / `kernel_stream_abort` commands,
-registered only in kernel mode).
+**Backend mode (honest staged default, ADR-0038):** which backend the shell
+starts is decided by `desktop_mode()` in `src-tauri/src/lib.rs`. **Public
+release builds default to the tested legacy Node sidecar** while the Rust
+Kernel is an explicit Preview; nightly/internal and debug/dev builds default
+to the Kernel. Explicit runtime overrides always win: `NEOTA_LEGACY_SERVER=1`
+forces the sidecar, `NEOTA_KERNEL=1` forces the Kernel; **when both are set,
+`NEOTA_KERNEL=1` wins** (conflict policy, ADR-0038 — the matrix is
+unit-tested). The public default switches to the Kernel only after the
+release gate (all mandatory Desktop capabilities `Packaged`, migration +
+rollback verified on packaged artifacts, no silent fallbacks, no open P0).
 
-**Legacy bridge (`NEOTA_LEGACY_SERVER=1`):** spawns the self-contained
-Node.js 24 sidecar (`neotavern-server`) and opens the webview only after the
-local API is ready. This is the temporary transition mode for unmigrated
-routes (message edit/delete, chat create, import/export, plugin runtime); it
-is removed as Phase 3/4 slices cut over. Only one mode runs at a time, so a
-data root never has two writable owners.
+**Kernel mode (`NEOTA_KERNEL=1`, nightly/debug default):** the Runtime Kernel
+is embedded in the desktop process (`neotavern-tauri-local`), the window loads
+the bundled web assets over `tauri://localhost`, and there is **no HTTP
+server, no listening port and no server lifecycle** (ТЗ §11.1). The UI talks
+to the kernel through `React → LocalBackend → Tauri IPC → Runtime Kernel`
+(`kernel_dispatch` / `kernel_stream_start` / `kernel_stream_abort` commands,
+registered only in kernel mode). The DiagnosticsPanel marks this backend as
+**Kernel Preview** (ADR-0038).
+
+**Sidecar mode (`NEOTA_LEGACY_SERVER=1`, public release default):** spawns the
+self-contained Node.js 24 sidecar (`neotavern-server`) and opens the webview
+only after the local API is ready. This is the temporary transition mode for
+unmigrated routes (message edit/delete, chat create, import/export, plugin
+runtime); it is removed as Phase 3/4 slices cut over. Only one mode runs at a
+time, so a data root never has two writable owners.
 
 ## Public entry points
 

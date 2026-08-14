@@ -8,15 +8,29 @@
  *
  * Test/spec files are excluded. Files under `apps/web/src/plugins/**` are the
  * plugin sandbox / legacy-compat bridge (ADR-0039) and are classified
- * "plugin-compat" (still listed, no removal milestone). Everything else is
- * "product" code that must migrate.
+ * "plugin-compat" (still listed, no removal milestone — a long-lived public
+ * adapter, ARC-09: stable adapters may live for years as long as they do not
+ * violate architectural invariants). Everything else is "product" code that
+ * must migrate.
+ *
+ * Every product site in the baseline carries a structured record:
+ * `owner`, `removalIssue`, `milestone` and `deadline`. A product site with an
+ * empty record FAILS `--check`, so `--update` alone can never legitimize a
+ * new legacy call: the operator must record who owns it and when it will be
+ * removed. `PRODUCT_METADATA` below is the generator-side register for the
+ * currently allowed sites; a NEW site not covered by it is emitted with empty
+ * metadata and the gate fails until the record is filled in.
  *
  * Modes:
  *   (default)            print a summary.
- *   --update             (re)generate docs/architecture/ui-legacy-surface.md.
+ *   --update             (re)generate docs/architecture/ui-legacy-surface.md
+ *                        (metadata is reused from the current baseline for
+ *                        unchanged site fingerprints).
  *   --check              fail (exit 1) if any current hit is NOT in the
- *                        baseline (a NEW legacy call was introduced); pass if
- *                        the current hits are a subset of the baseline.
+ *                        baseline (a NEW legacy call was introduced), if a
+ *                        baseline site drifted, or if any product site lacks
+ *                        its full owner/removalIssue/milestone/deadline
+ *                        record; pass otherwise.
  *   --annotate           insert `// eslint-disable-next-line
  *                        @neotavern/no-legacy-api-surface` above each current
  *                        product hit (idempotent; skips test files,
@@ -31,6 +45,77 @@ const WEB_SRC = join(ROOT, 'apps', 'web', 'src');
 const BASELINE = join(ROOT, 'docs', 'architecture', 'ui-legacy-surface.md');
 
 const DISABLE_COMMENT = '// eslint-disable-next-line @neotavern/no-legacy-api-surface';
+
+const OWNER = 'neotavern/desktop-web';
+/** M4 exit target (product convergence removes the last legacy UI call). */
+const M4 = { milestone: 'M4', deadline: '2026-12-31' };
+
+/**
+ * Generator-side removal register for the currently allowed PRODUCT sites,
+ * keyed by file. `--update` fills the baseline from here; `--check` fails on
+ * any product row with empty metadata, so a NEW site must get a record here
+ * (or in the baseline row) before the gate passes.
+ */
+const PRODUCT_METADATA = {
+  'apps/web/src/api/backend.ts': {
+    owner: OWNER,
+    removalIssue: 'M4: drop the legacy raw passthrough from the NeoBackend facade',
+    ...M4,
+  },
+  'apps/web/src/api/client.ts': {
+    owner: OWNER,
+    removalIssue: 'M4: delete the legacy /api/v2 HTTP client',
+    ...M4,
+  },
+  'apps/web/src/api/events.ts': {
+    owner: OWNER,
+    removalIssue: 'M4: replace SSE /api/v2/events with a Product Wire subscription',
+    ...M4,
+  },
+  'apps/web/src/api/generate.ts': {
+    owner: OWNER,
+    removalIssue: 'M2: cut the generation stream to the Product Wire (GEN-RUN 10A/10B)',
+    milestone: 'M2',
+    deadline: M4.deadline,
+  },
+  'apps/web/src/components/AutoConnectSync.tsx': {
+    owner: OWNER,
+    removalIssue: 'M4: remove sidecar auto-connect (sidecar retired at the stage-6 cleanup)',
+    ...M4,
+  },
+  'apps/web/src/components/CharacterManagementPanel.tsx': {
+    owner: OWNER,
+    removalIssue: 'M4: avatar and character export via Product Wire ops',
+    ...M4,
+  },
+  'apps/web/src/components/ChatManagementPanel.tsx': {
+    owner: OWNER,
+    removalIssue: 'M4: chat export via a Product Wire op',
+    ...M4,
+  },
+  'apps/web/src/components/LegacyBridgeSync.tsx': {
+    owner: OWNER,
+    removalIssue: 'M4: remove the legacy bridge sync',
+    ...M4,
+  },
+  'apps/web/src/components/ThemeSync.tsx': {
+    owner: OWNER,
+    removalIssue: 'M4: theme sync via a Product Wire op',
+    ...M4,
+  },
+  'apps/web/src/pages/ChatPage.tsx': {
+    owner: OWNER,
+    removalIssue: 'M4: remove legacyRaw chat routes',
+    ...M4,
+  },
+  'apps/web/src/pages/HomePage.tsx': {
+    owner: OWNER,
+    removalIssue: 'M4: background assets via a Product Wire op',
+    ...M4,
+  },
+};
+
+const PLUGIN_COMPAT_META = { owner: 'n/a', removalIssue: 'n/a', milestone: 'n/a', deadline: 'n/a' };
 
 /**
  * Files the ESLint rule never flags:
@@ -124,17 +209,28 @@ function baselineKeys(hits) {
   return new Set(hits.map(siteKey));
 }
 
-function readBaselineKeys() {
+/** Parse every data row of the baseline: siteKey + class + removal record. */
+function readBaselineRows() {
   const text = readFileSync(BASELINE, 'utf8');
-  const keys = new Set();
+  const rows = new Map();
   for (const line of text.split(/\r?\n/)) {
-    // Robust against Prettier's padded/aligned table cells.
+    // Robust against Prettier's padded/aligned table cells. Columns:
+    // File | Line | Kind | Detail | Class | Owner | Removal issue |
+    // Milestone | Deadline.
     const m = line.match(
-      /^\|\s*(apps\/web\/src\/[^|]+?)\s*\|\s*(\d+)\s*\|\s*([a-zA-Z0-9-]+)\s*\|\s*([^|]*?)\s*\|/,
+      /^\|\s*(apps\/web\/src\/[^|]+?)\s*\|\s*(\d+)\s*\|\s*([a-zA-Z0-9-]+)\s*\|\s*([^|]*?)\s*\|\s*([a-z-]+)\s*\|\s*([^|]*?)\s*\|\s*([^|]*?)\s*\|\s*([^|]*?)\s*\|\s*([^|]*?)\s*\|/,
     );
-    if (m) keys.add(`${m[1].trim()}:${Number(m[2])}:${m[3]}:${m[4].trim()}`);
+    if (m) {
+      rows.set(`${m[1].trim()}:${Number(m[2])}:${m[3]}:${m[4].trim()}`, {
+        cls: m[5].trim(),
+        owner: m[6].trim(),
+        removalIssue: m[7].trim(),
+        milestone: m[8].trim(),
+        deadline: m[9].trim(),
+      });
+    }
   }
-  return keys;
+  return rows;
 }
 
 /** Prettier-compatible markdown table (padded columns, aligned separators). */
@@ -147,7 +243,29 @@ function renderTable(headers, rows) {
   return [line(headers), sep, ...rows.map(line)].join('\n');
 }
 
-function renderBaseline(hits) {
+/**
+ * Removal record for one hit: the generator register for known product files,
+ * else the existing baseline row for the SAME fingerprint (hand-maintained
+ * overrides survive `--update`), else empty for product sites (the gate fails
+ * until a record is provided) and `n/a` for plugin-compat sites.
+ */
+function metadataFor(hit, existingRows) {
+  if (hit.cls === 'plugin-compat') return PLUGIN_COMPAT_META;
+  const registered = PRODUCT_METADATA[hit.file];
+  if (registered) return registered;
+  const existing = existingRows.get(siteKey(hit));
+  if (existing && existing.cls === 'product') {
+    return {
+      owner: existing.owner,
+      removalIssue: existing.removalIssue,
+      milestone: existing.milestone,
+      deadline: existing.deadline,
+    };
+  }
+  return { owner: '', removalIssue: '', milestone: '', deadline: '' };
+}
+
+function renderBaseline(hits, existingRows) {
   const lines = [];
   lines.push('# Legacy UI surface — baseline inventory (ARC-02/ARC-03)');
   lines.push('');
@@ -161,15 +279,69 @@ function renderBaseline(hits) {
   lines.push(
     '> carry an `eslint-disable-next-line` comment until they are migrated to the Product',
   );
-  lines.push('> Wire client (program milestones M2–M4). `plugin-compat` entries are the plugin');
-  lines.push('> sandbox / legacy-compat bridge (ADR-0039) and have no removal milestone.');
+  lines.push('> Wire client (program milestones M2–M4). Every PRODUCT site carries a structured');
+  lines.push('> record: `Owner`, `Removal issue`, `Milestone`, `Deadline`. `--check` FAILS on any');
+  lines.push(
+    '> product row with an empty field, so `--update` alone cannot legitimize a new legacy',
+  );
+  lines.push('> call: the owner and the removal work item must be recorded first. `plugin-compat`');
+  lines.push('> entries are the plugin sandbox / legacy-compat bridge (ADR-0039) — a long-lived');
+  lines.push('> public adapter — and carry `n/a`. Deadline = M4 product-convergence target.');
   lines.push('');
   const tableRows = hits.map((h) => {
-    const removal = h.cls === 'plugin-compat' ? 'n/a (plugin-compat, ADR-0039)' : '';
-    return [h.file, String(h.line), h.kind, h.detail, h.cls, removal];
+    const meta = metadataFor(h, existingRows);
+    return [
+      h.file,
+      String(h.line),
+      h.kind,
+      h.detail,
+      h.cls,
+      meta.owner,
+      meta.removalIssue,
+      meta.milestone,
+      meta.deadline,
+    ];
   });
-  lines.push(renderTable(['File', 'Line', 'Kind', 'Detail', 'Class', 'Removal issue'], tableRows));
+  lines.push(
+    renderTable(
+      [
+        'File',
+        'Line',
+        'Kind',
+        'Detail',
+        'Class',
+        'Owner',
+        'Removal issue',
+        'Milestone',
+        'Deadline',
+      ],
+      tableRows,
+    ),
+  );
   return `${lines.join('\n')}\n`;
+}
+
+/**
+ * Validate the committed baseline's removal records: every product row must
+ * carry owner, removalIssue, milestone and deadline; plugin-compat rows must
+ * not be empty (n/a expected). Returns a list of problems.
+ */
+function validateMetadata(rows) {
+  const problems = [];
+  for (const [key, row] of rows) {
+    const fields = ['owner', 'removalIssue', 'milestone', 'deadline'];
+    const missing = fields.filter((f) => row[f] === '');
+    if (row.cls === 'product' && missing.length > 0) {
+      problems.push(
+        `${key} [product] missing ${missing.join(', ')} — record who owns the removal and when`,
+      );
+    } else if (row.cls === 'plugin-compat' && missing.length > 0) {
+      problems.push(
+        `${key} [plugin-compat] missing ${missing.join(', ')} — use n/a for the long-lived adapter`,
+      );
+    }
+  }
+  return problems;
 }
 
 function annotate(hits) {
@@ -237,8 +409,24 @@ function main() {
   }
 
   if (mode === 'update') {
+    const existing = (() => {
+      try {
+        return readBaselineRows();
+      } catch {
+        return new Map();
+      }
+    })();
     mkdirSync(dirname(BASELINE), { recursive: true });
-    writeFileSync(BASELINE, renderBaseline(hits), 'utf8');
+    writeFileSync(BASELINE, renderBaseline(hits, existing), 'utf8');
+    const unrecorded = hits.filter(
+      (h) => h.cls === 'product' && !PRODUCT_METADATA[h.file] && !existing.has(siteKey(h)),
+    );
+    if (unrecorded.length > 0) {
+      console.warn(
+        `[check-ui-api] WARNING — ${unrecorded.length} NEW product site(s) have no removal record (owner/removalIssue/milestone/deadline); the --check gate will FAIL until one is filled in:`,
+      );
+      for (const h of unrecorded) console.warn(`  ${siteKey(h)}`);
+    }
     console.log(`[check-ui-api] wrote ${BASELINE} (${hits.length} hits).`);
     return;
   }
@@ -251,8 +439,11 @@ function main() {
 
   if (mode === 'check') {
     let baseline;
+    let metadataProblems = [];
     try {
-      baseline = readBaselineKeys();
+      const rows = readBaselineRows();
+      baseline = new Set(rows.keys());
+      metadataProblems = validateMetadata(rows);
     } catch {
       console.error(
         '[check-ui-api] FAIL — baseline docs/architecture/ui-legacy-surface.md missing; run `node scripts/check-ui-api.mjs --update`.',
@@ -271,7 +462,7 @@ function main() {
       );
       for (const k of added.sort()) console.error(`  ${k}`);
       console.error(
-        '[check-ui-api] Migrate them to the Product Wire client, or (temporarily) add them to the baseline via `--update` with a removal issue.',
+        '[check-ui-api] Migrate them to the Product Wire client, or add them to the baseline via `--update` AND record owner/removalIssue/milestone/deadline (the gate fails until a removal issue exists).',
       );
       process.exit(1);
     }
@@ -285,8 +476,18 @@ function main() {
       );
       process.exit(1);
     }
+    if (metadataProblems.length > 0) {
+      console.error(
+        `[check-ui-api] FAIL — ${metadataProblems.length} baseline site(s) have an incomplete removal record:`,
+      );
+      for (const p of metadataProblems.sort()) console.error(`  ${p}`);
+      console.error(
+        '[check-ui-api] Fill Owner / Removal issue / Milestone / Deadline for product sites (or n/a for plugin-compat) in the baseline, then commit.',
+      );
+      process.exit(1);
+    }
     console.log(
-      `[check-ui-api] OK — ${current.size} current hit(s) all match the ${baseline.size} allowed sites (per-site fingerprint, not a count).`,
+      `[check-ui-api] OK — ${current.size} current hit(s) all match the ${baseline.size} allowed sites (per-site fingerprint, not a count); every product record carries owner/removalIssue/milestone/deadline.`,
     );
   }
 }

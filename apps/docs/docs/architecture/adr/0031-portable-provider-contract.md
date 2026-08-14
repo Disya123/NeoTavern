@@ -29,7 +29,7 @@ Three layers with one frozen trait:
 1. `crates/provider-sdk` — the portable adapter contract (std-only, no
    async): `ProviderAdapter` (`id`/`name`/`builtin`/`models`/`availability`/
    `generate`), normalized `ProviderError` (stable codes `timeout |
-   cancelled | unavailable | request-invalid | step-failed | network-fault`),
+cancelled | unavailable | request-invalid | step-failed | network-fault`),
    `Usage` accounting, `Deadline`/`RetryPolicy` policy primitives,
    `CancelToken`/`EmitStatus` cancellation/backpressure semantics, and the
    secret seams `SecretRef`/`SecretValue`/`SecretResolver` (opaque value,

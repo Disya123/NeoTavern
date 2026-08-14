@@ -915,6 +915,9 @@ export const en = {
     diagnosticsRuntime: 'Runtime',
     diagnosticsRuntimeValue: '{{version}} · Node {{nodeVersion}} · {{platform}}/{{architecture}}',
     diagnosticsKernel: 'Local kernel',
+    diagnosticsKernelPreview: 'Kernel Preview',
+    diagnosticsKernelPreviewNote:
+      'The Rust Kernel is an explicit Preview: public release builds still default to the tested legacy sidecar until the release gate passes (all mandatory Desktop capabilities Packaged, migration and rollback verified on packaged artifacts, no silent fallbacks, no open P0 defects).',
     diagnosticsKernelWire: 'Product wire',
     diagnosticsKernelFeatures: 'Features',
     diagnosticsKernelFeaturesValue: '{{count}} features',

@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-08-13T23:22:52.207Z",
+  "generatedAt": "2026-08-14T00:23:38.107Z",
   "rows": [
     {
       "hosts": {
@@ -141,8 +141,8 @@
         "webClient": "Implemented"
       },
       "id": "ui.diagnostics",
-      "milestone": "M1",
-      "notes": "First vertical slice through the NeoBackend facade; legacy sections remain on /api/v2 until M4.",
+      "milestone": "M1a",
+      "notes": "First vertical slice through the NeoBackend facade; legacy sections remain on /api/v2 until M4. Delivered in M1a (Wave 0 Governance).",
       "title": "Diagnostics panel (kernel section)",
       "wireOps": []
     },
@@ -194,7 +194,7 @@
       },
       "id": "ui.profile-export",
       "milestone": "M1",
-      "notes": "SEC-02: legacy allowlist export fixed in M1; kernel export.profile in M3.",
+      "notes": "SEC-02: Pending — the legacy profile export still snapshots the full app.db into the archive (ТЗ §SEC-02 forbids a full-DB snapshot as a profile export); an allowlist export lands in M1 Wave 1 (Immediate security), kernel export.profile in M3.",
       "title": "Logical profile export",
       "wireOps": []
     },

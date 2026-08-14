@@ -12,6 +12,12 @@
  * - `node scripts/docs-sync.mjs --check`— verify the committed mirror matches
  *   a fresh sync byte-for-byte; exit 1 on any divergence (CI gate).
  *
+ * The mirror is a CLOSED tree: `--check` enumerates the actual files of the
+ * target directory (not just the committed manifest) and fails on any file a
+ * fresh sync would not produce, and a plain sync deletes stale generated
+ * files. A page smuggled into `apps/docs/docs/architecture/` cannot survive
+ * either mode.
+ *
  * Transformations applied to every mirrored page:
  * 1. Relative links that ESCAPE the `docs/` tree (e.g. `../CHANGELOG.md`,
  *    `../../NeoTavern_architecture_10_of_10_spec_2026-08-13.md`) are
@@ -25,9 +31,9 @@
  * `--check` never fails on regeneration noise.
  */
 import { createHash } from 'node:crypto';
-import { readdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { dirname, join, posix, relative, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SOURCE_ROOT = resolve(REPO_ROOT, 'docs');
@@ -38,29 +44,30 @@ const GITHUB_EDIT = `https://github.com/${GITHUB_ORG_REPO}/edit/main/`;
 const GITHUB_BLOB = `https://github.com/${GITHUB_ORG_REPO}/blob/main/`;
 const SIDEBAR_LABEL = 'Architecture (canonical repo docs)';
 
-const SITE_DOCS_ROOT = resolve(REPO_ROOT, 'apps/docs/docs');
-if (resolve(dirname(TARGET_ROOT)) !== SITE_DOCS_ROOT) {
-  throw new Error('docs-sync: target layout assumption changed');
-}
-
-/** Walk `docs/` and return source-relative POSIX paths of every .md file. */
-async function collectMarkdown() {
+/** Walk `dir` and return dir-relative POSIX paths of every file (recursive). */
+async function walkFiles(dir) {
   const out = [];
-  const walk = async (dir) => {
-    const entries = await readdir(dir, { withFileTypes: true });
+  const walk = async (current) => {
+    const entries = await readdir(current, { withFileTypes: true });
     entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
     for (const entry of entries) {
       if (entry.name === '.build') continue;
-      const full = join(dir, entry.name);
+      const full = join(current, entry.name);
       if (entry.isDirectory()) {
         await walk(full);
-      } else if (entry.isFile() && entry.name.endsWith('.md')) {
-        out.push(relative(SOURCE_ROOT, full).split('\\').join('/'));
+      } else if (entry.isFile()) {
+        out.push(relative(dir, full).split('\\').join('/'));
       }
     }
   };
-  await walk(SOURCE_ROOT);
+  await walk(dir);
   return out;
+}
+
+/** Walk `docs/` and return source-relative POSIX paths of every .md file. */
+export async function collectMarkdown(sourceRoot = SOURCE_ROOT) {
+  const files = await walkFiles(sourceRoot);
+  return files.filter((f) => f.endsWith('.md'));
 }
 
 const LINK_RE = /(!?\[[^\]]*\]\()([^)\s]+)((?:\s+"[^"]*")?\))/g;
@@ -69,7 +76,7 @@ const LINK_RE = /(!?\[[^\]]*\]\()([^)\s]+)((?:\s+"[^"]*")?\))/g;
  * blob URLs; keep in-tree .md links relative. Docusaurus treats every link
  * target as a doc route, so a raw file (exceptions.json, images, ...) must
  * be an absolute URL, not a relative path. */
-function rewriteEscapingLinks(sourceRel, content) {
+export function rewriteEscapingLinks(sourceRel, content) {
   const baseDir = posix.dirname(sourceRel);
   return content.replace(LINK_RE, (_all, prefix, target, suffix) => {
     if (/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith('#') || target.startsWith('/')) {
@@ -88,11 +95,11 @@ function rewriteEscapingLinks(sourceRel, content) {
 }
 
 /** Build the full mirrored file set: [{ source, target, content }]. */
-async function buildMirror() {
-  const files = await collectMarkdown();
+export async function buildMirror(sourceRoot = SOURCE_ROOT) {
+  const files = await collectMarkdown(sourceRoot);
   const entries = [];
   for (const source of files) {
-    let content = await readFile(join(SOURCE_ROOT, source), 'utf8');
+    let content = await readFile(join(sourceRoot, source), 'utf8');
     content = rewriteEscapingLinks(source, content);
     const frontMatter = ['---', `editUrl: ${GITHUB_EDIT}docs/${source}`, '---', '', ''].join('\n');
     entries.push({
@@ -111,7 +118,7 @@ async function buildMirror() {
   return entries;
 }
 
-function manifest(entries) {
+export function manifest(entries) {
   const files = entries.map(({ source, target, content }) => ({
     source,
     target,
@@ -120,64 +127,128 @@ function manifest(entries) {
   return `${JSON.stringify({ formatVersion: 1, source: 'docs', files }, null, 2)}\n`;
 }
 
-async function writeMirror(entries) {
-  const { mkdir } = await import('node:fs/promises');
-  await mkdir(TARGET_ROOT, { recursive: true });
+/** The set of files a fresh sync is allowed to own in the target tree:
+ * every produced entry plus the manifest itself. */
+export function expectedTargetSet(entries) {
+  return new Set([...entries.map((e) => e.target), MANIFEST_NAME]);
+}
+
+/**
+ * Write the mirror into `targetRoot` and DELETE stale files: anything
+ * currently in the target tree that a fresh sync does not produce (a
+ * smuggled page, an orphaned old mirror file) is removed, so `docs/` is the
+ * single source of truth in both directions.
+ */
+export async function writeMirror(entries, targetRoot = TARGET_ROOT) {
+  await mkdir(targetRoot, { recursive: true });
   for (const entry of entries) {
-    const targetPath = join(TARGET_ROOT, entry.target);
+    const targetPath = join(targetRoot, entry.target);
     await mkdir(dirname(targetPath), { recursive: true });
     await writeFile(targetPath, entry.content, 'utf8');
   }
-  await writeFile(join(TARGET_ROOT, MANIFEST_NAME), manifest(entries), 'utf8');
+  await writeFile(join(targetRoot, MANIFEST_NAME), manifest(entries), 'utf8');
+
+  const expected = expectedTargetSet(entries);
+  const actual = await walkFiles(targetRoot);
+  const stale = actual.filter((f) => !expected.has(f));
+  for (const f of stale) {
+    await rm(join(targetRoot, f), { force: true });
+    console.log(`[docs:sync] removed stale ${f}`);
+  }
+  // Prune directories the stale removal emptied (deepest first, never the
+  // target root itself).
+  const dirs = stale
+    .map((f) => posix.dirname(f))
+    .filter((d) => d !== '.')
+    .sort((a, b) => b.length - a.length);
+  for (const d of dirs) {
+    await rm(join(targetRoot, d), { recursive: true, force: true }).catch(() => {});
+  }
   console.log(
-    `[docs:sync] wrote ${entries.length} page(s) + ${MANIFEST_NAME} to apps/docs/docs/architecture/`,
+    `[docs:sync] wrote ${entries.length} file(s) + ${MANIFEST_NAME} to apps/docs/docs/architecture/`,
   );
 }
 
-async function checkMirror(entries) {
-  const { mkdtemp, readFile: read, rm } = await import('node:fs/promises');
-  const { tmpdir } = await import('node:os');
-  const tmp = await mkdtemp(join(tmpdir(), 'neota-docs-sync-'));
+/**
+ * Verify the committed mirror byte-for-byte against a fresh sync. Returns a
+ * list of divergence descriptions (empty = up to date). Failures include:
+ *  - the manifest differs or is missing;
+ *  - a committed file differs from the fresh content (or is missing);
+ *  - the committed manifest lists a stale target a fresh sync would not produce;
+ *  - ANY file physically present in the target tree is outside the expected
+ *    set (a rogue page can reach Docusaurus even though it is not in the
+ *    manifest — the target directory is enumerated, not just the manifest).
+ */
+export async function checkMirror(entries, targetRoot = TARGET_ROOT) {
   const diffs = [];
-  try {
-    const expected = new Map(entries.map((e) => [e.target, e.content]));
-    const expectedManifest = manifest(entries);
-    const committedManifest = await read(join(TARGET_ROOT, MANIFEST_NAME), 'utf8').catch(
-      () => null,
-    );
-    if (committedManifest !== expectedManifest) diffs.push(MANIFEST_NAME);
-    const committedTargets = new Set(
-      committedManifest ? JSON.parse(committedManifest).files.map((f) => f.target) : [],
-    );
-    for (const target of committedTargets) {
-      if (!expected.has(target)) {
-        diffs.push(`${target} (stale — not produced by a fresh sync)`);
-      }
-    }
-    for (const [target, content] of expected) {
-      const committed = await read(join(TARGET_ROOT, target), 'utf8').catch(() => null);
-      if (committed !== content) diffs.push(target);
-    }
-  } finally {
-    await rm(tmp, { recursive: true, force: true });
-  }
-  if (diffs.length > 0) {
-    console.error(`[docs:sync] FAIL — mirror is out of date (${diffs.length} file(s)):`);
-    for (const d of diffs.sort()) console.error(`  ${d}`);
-    console.error(
-      '[docs:sync] Run `node scripts/docs-sync.mjs` (pnpm docs:sync) and commit the mirror together with the docs/ change.',
-    );
-    process.exit(1);
-  }
-  console.log(
-    `[docs:sync] OK — ${entries.length} page(s) match the committed mirror byte-for-byte.`,
+  const expected = new Map(entries.map((e) => [e.target, e.content]));
+  const expectedManifest = manifest(entries);
+  const committedManifest = await readFile(join(targetRoot, MANIFEST_NAME), 'utf8').catch(
+    () => null,
   );
+  if (committedManifest !== expectedManifest) diffs.push(`${MANIFEST_NAME} (manifest differs)`);
+
+  // Enumerate the ACTUAL target tree: a rogue file that is not in the
+  // committed manifest still ships to the site, so it must fail the gate.
+  let actual = [];
+  try {
+    actual = await walkFiles(targetRoot);
+  } catch {
+    actual = [];
+  }
+  const allowed = expectedTargetSet(entries);
+  const rogue = actual.filter((f) => !allowed.has(f));
+  for (const f of rogue.sort()) {
+    diffs.push(`${f} (not produced by a fresh sync — delete it or move it to docs/)`);
+  }
+
+  const committedTargets = new Set(
+    committedManifest ? JSON.parse(committedManifest).files.map((f) => f.target) : [],
+  );
+  for (const target of committedTargets) {
+    if (!expected.has(target)) {
+      diffs.push(`${target} (stale — listed in the manifest but not produced by a fresh sync)`);
+    }
+  }
+  for (const [target, content] of expected) {
+    const committed = await readFile(join(targetRoot, target), 'utf8').catch(() => null);
+    if (committed !== content) diffs.push(target);
+  }
+  return diffs;
 }
 
-const check = process.argv.includes('--check');
-const entries = await buildMirror();
-if (check) {
-  await checkMirror(entries);
-} else {
-  await writeMirror(entries);
+async function main() {
+  const check = process.argv.includes('--check');
+  // The layout guard: the mirror must live directly under the Docusaurus
+  // content root; the script refuses to run if the repo layout moved.
+  const siteDocsRoot = resolve(REPO_ROOT, 'apps/docs/docs');
+  if (resolve(dirname(TARGET_ROOT)) !== siteDocsRoot) {
+    throw new Error('docs-sync: target layout assumption changed');
+  }
+  const entries = await buildMirror();
+  if (check) {
+    const diffs = await checkMirror(entries);
+    if (diffs.length > 0) {
+      console.error(`[docs:sync] FAIL — mirror is out of date (${diffs.length} file(s)):`);
+      for (const d of diffs.sort()) console.error(`  ${d}`);
+      console.error(
+        '[docs:sync] Run `node scripts/docs-sync.mjs` (pnpm docs:sync) and commit the mirror together with the docs/ change.',
+      );
+      process.exit(1);
+    }
+    console.log(
+      `[docs:sync] OK — ${entries.length} file(s) match the committed mirror byte-for-byte; target tree contains no unexpected files.`,
+    );
+  } else {
+    await writeMirror(entries);
+  }
+}
+
+// CLI entry: run only when executed directly, so the functions above stay
+// importable by tests (scripts/docs-sync.test.mjs).
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  main().catch((err) => {
+    console.error(`[docs:sync] ${err.message}`);
+    process.exit(1);
+  });
 }

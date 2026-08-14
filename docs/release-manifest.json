@@ -142,8 +142,8 @@
         "android": "Implemented",
         "webClient": "Implemented"
       },
-      "notes": "First vertical slice through the NeoBackend facade; legacy sections remain on /api/v2 until M4.",
-      "milestone": "M1"
+      "notes": "First vertical slice through the NeoBackend facade; legacy sections remain on /api/v2 until M4. Delivered in M1a (Wave 0 Governance).",
+      "milestone": "M1a"
     },
     {
       "id": "ui.message-editing",
@@ -194,7 +194,7 @@
         "android": "Designed",
         "webClient": "Designed"
       },
-      "notes": "SEC-02: legacy allowlist export fixed in M1; kernel export.profile in M3.",
+      "notes": "SEC-02: Pending — the legacy profile export still snapshots the full app.db into the archive (ТЗ §SEC-02 forbids a full-DB snapshot as a profile export); an allowlist export lands in M1 Wave 1 (Immediate security), kernel export.profile in M3.",
       "milestone": "M1"
     },
     {

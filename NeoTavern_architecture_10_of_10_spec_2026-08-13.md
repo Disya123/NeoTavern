@@ -119,14 +119,14 @@ flowchart TD
 
 ### 5.1. Слои и ответственность
 
-| Слой | Ответственность | Запрещено |
-|---|---|---|
-| Domain | Сущности, value objects, инварианты Character/Chat/Message/Prompt/Generation | SQL, HTTP, Tauri, JNI, JSON-RPC, UI types |
-| Application | Use cases, транзакции, orchestration, authorization, idempotency | Конкретный SQLite/HTTP driver, presentation logic |
-| Ports | Интерфейсы Storage, Provider, SecretStore, AssetStore, PluginHooks, Clock, ID generator | Реализация внешних систем |
-| Adapters | SQLite, filesystem assets, OS secret store, provider HTTP, plugin broker | Самостоятельные продуктовые правила |
-| Hosts | Tauri commands, headless HTTP, JNI/FFI, CLI composition root | Дублирование use cases и прямой SQL |
-| Web UI | Представление, TanStack Query server state, Zustand UI-only state | `/api/v2`, SQL, provider orchestration, обход Product Wire |
+| Слой        | Ответственность                                                                         | Запрещено                                                  |
+| ----------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Domain      | Сущности, value objects, инварианты Character/Chat/Message/Prompt/Generation            | SQL, HTTP, Tauri, JNI, JSON-RPC, UI types                  |
+| Application | Use cases, транзакции, orchestration, authorization, idempotency                        | Конкретный SQLite/HTTP driver, presentation logic          |
+| Ports       | Интерфейсы Storage, Provider, SecretStore, AssetStore, PluginHooks, Clock, ID generator | Реализация внешних систем                                  |
+| Adapters    | SQLite, filesystem assets, OS secret store, provider HTTP, plugin broker                | Самостоятельные продуктовые правила                        |
+| Hosts       | Tauri commands, headless HTTP, JNI/FFI, CLI composition root                            | Дублирование use cases и прямой SQL                        |
+| Web UI      | Представление, TanStack Query server state, Zustand UI-only state                       | `/api/v2`, SQL, provider orchestration, обход Product Wire |
 
 ### 5.2. Рекомендуемые физические границы
 
@@ -194,20 +194,20 @@ CI должен проверять dependency graph и запрещённые и
 
 Следующие инварианты обязательны и проверяются автоматически:
 
-| ID | Инвариант | Автоматическая проверка |
-|---|---|---|
-| ARC-01 | Все продуктовые операции проходят через Product Wire | Registry/client parity test |
-| ARC-02 | UI не вызывает `/api/v2` напрямую | ESLint rule + repository scan |
-| ARC-03 | `legacyRaw()` отсутствует в production UI | ESLint/AST rule |
-| ARC-04 | Только canonical storage adapter пишет product data | Dependency test + code ownership |
-| ARC-05 | Hosts не содержат бизнес-правил | Dependency/API surface test |
-| ARC-06 | Одна каноническая schema и migration ledger | Workspace/schema check |
-| ARC-07 | Каждый публичный request/response/event runtime-валидируется | Contract corpus |
-| ARC-08 | Плагины не имеют ambient capabilities | Security integration suite |
-| ARC-09 | Каждый временный migration shim имеет owner и removal milestone | CI manifest check |
-| ARC-10 | Документация не помечает Designed как Released | Generated capability matrix |
-| ARC-11 | Legacy compatibility не расширяет authority native capability | Capability mapping test |
-| ARC-12 | Web Client не заявляет offline product capability без browser runtime | Release manifest/docs check |
+| ID     | Инвариант                                                             | Автоматическая проверка          |
+| ------ | --------------------------------------------------------------------- | -------------------------------- |
+| ARC-01 | Все продуктовые операции проходят через Product Wire                  | Registry/client parity test      |
+| ARC-02 | UI не вызывает `/api/v2` напрямую                                     | ESLint rule + repository scan    |
+| ARC-03 | `legacyRaw()` отсутствует в production UI                             | ESLint/AST rule                  |
+| ARC-04 | Только canonical storage adapter пишет product data                   | Dependency test + code ownership |
+| ARC-05 | Hosts не содержат бизнес-правил                                       | Dependency/API surface test      |
+| ARC-06 | Одна каноническая schema и migration ledger                           | Workspace/schema check           |
+| ARC-07 | Каждый публичный request/response/event runtime-валидируется          | Contract corpus                  |
+| ARC-08 | Плагины не имеют ambient capabilities                                 | Security integration suite       |
+| ARC-09 | Каждый временный migration shim имеет owner и removal milestone       | CI manifest check                |
+| ARC-10 | Документация не помечает Designed как Released                        | Generated capability matrix      |
+| ARC-11 | Legacy compatibility не расширяет authority native capability         | Capability mapping test          |
+| ARC-12 | Web Client не заявляет offline product capability без browser runtime | Release manifest/docs check      |
 
 Допускаются временные исключения только через файл архитектурных исключений со следующими полями: owner, причина, затронутые файлы, дата создания, issue, крайний срок удаления. Просроченное исключение блокирует CI. Исключение или пользовательский consent не могут разрешить direct canonical SQL, чтение `SecretStore`, обход Product Wire либо второй product-data writer.
 
@@ -732,7 +732,7 @@ UI может работать только через `NeoBackend`/generated Pr
 Из Product Wire registry и release manifest генерируется матрица:
 
 | Capability | Designed | Implemented | Integrated | Packaged | Released |
-|---|---:|---:|---:|---:|---:|
+| ---------- | -------: | ----------: | ---------: | -------: | -------: |
 
 README и docs используют эту матрицу и не поддерживают отдельные ручные заявления о готовности.
 
@@ -772,11 +772,11 @@ Plugin runtime взаимодействует с Kernel только через 
 
 #### 14.2.1. Уровни совместимости
 
-| Уровень | Реализация | Статус |
-|---|---|---|
-| Native compatible | Legacy API переводится в обычные Product Wire/capability calls | Fully supported |
-| Sandbox compatible | Плагин исполняется изолированно и видит только broker, scoped VFS и выданные capabilities | Supported with limitations |
-| Architecturally incompatible | Нужны raw canonical SQL, Kernel internals, unrestricted secrets, hidden superuser или нарушение single-writer | Unsupported |
+| Уровень                      | Реализация                                                                                                    | Статус                     |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| Native compatible            | Legacy API переводится в обычные Product Wire/capability calls                                                | Fully supported            |
+| Sandbox compatible           | Плагин исполняется изолированно и видит только broker, scoped VFS и выданные capabilities                     | Supported with limitations |
+| Architecturally incompatible | Нужны raw canonical SQL, Kernel internals, unrestricted secrets, hidden superuser или нарушение single-writer | Unsupported                |
 
 NeoTavern не обещает 100% совместимость со всеми SillyTavern extensions. Обещается предсказуемая совместимость документированного класса расширений без изменения trust boundaries NeoTavern.
 
@@ -879,14 +879,14 @@ ARC-09 применяется к migration shims, а не автоматичес
 
 Сохраняются целевые бюджеты проекта:
 
-| Метрика | Бюджет |
-|---|---:|
-| Startup до ready UI на reference PC | ≤ 4 с |
-| Idle backend/kernel memory | ≤ 180 MB |
-| Первая страница библиотеки из 100 000 characters | ≤ 300 мс |
-| Открытие последних сообщений чата из 10 000 сообщений | ≤ 700 мс |
-| UI streaming updates | ≤ 30/с |
-| Initial frontend bundle | ≤ 2 MB gzip без lazy chunks |
+| Метрика                                               |                      Бюджет |
+| ----------------------------------------------------- | --------------------------: |
+| Startup до ready UI на reference PC                   |                       ≤ 4 с |
+| Idle backend/kernel memory                            |                    ≤ 180 MB |
+| Первая страница библиотеки из 100 000 characters      |                    ≤ 300 мс |
+| Открытие последних сообщений чата из 10 000 сообщений |                    ≤ 700 мс |
+| UI streaming updates                                  |                      ≤ 30/с |
+| Initial frontend bundle                               | ≤ 2 MB gzip без lazy chunks |
 
 Дополнительные обязательные бюджеты должны быть определены benchmark ADR:
 
@@ -1361,20 +1361,20 @@ Issue готова к реализации, если определены:
 
 ## 25. Основные риски и меры контроля
 
-| Риск | Вероятность/ущерб | Мера |
-|---|---|---|
-| Бесконечная параллельная поддержка двух cores | Высокая/критический | Feature freeze legacy, milestone удаления, CI exceptions |
-| Потеря данных при conversion | Средняя/критический | Immutable source, verified backup, versioned roots, activation journal |
-| Windows/антивирус блокирует activation | Высокая/высокий | Close handles, bounded retry, pending activation, restart-to-complete |
-| Rust rewrite замедлит продукт | Высокая/высокий | Вертикальные срезы, отсутствие big-bang rewrite |
-| Plugin compatibility нарушит изоляцию | Средняя/высокий | Compatibility cannot expand authority; canonical SQL forbidden regardless of consent |
-| Tool loop повторит внешний effect после crash | Средняя/критический | Durable steps, idempotency keys, effect journal, replay tests |
-| Portable secrets потеряются или окажутся plaintext | Средняя/критический | Explicit mode, AEAD + Argon2id, cross-machine and corruption tests |
-| Web Client ошибочно обещает offline local-first | Высокая/средний | Remote-only naming, offline truthfulness test, separate Browser Runtime ADR |
-| Документация снова опередит код | Высокая/средний | Generated capability matrix и чёткие статусы |
-| Зелёный CI не отражает artifact | Высокая/высокий | Packaged E2E как release gate |
-| Multi-host scope распылит разработку | Высокая/высокий | Приоритет Desktop → Headless → Android |
-| Чрезмерная модульность усложнит core | Средняя/средний | Modular monolith; crate только для enforceable boundary |
+| Риск                                               | Вероятность/ущерб   | Мера                                                                                 |
+| -------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------ |
+| Бесконечная параллельная поддержка двух cores      | Высокая/критический | Feature freeze legacy, milestone удаления, CI exceptions                             |
+| Потеря данных при conversion                       | Средняя/критический | Immutable source, verified backup, versioned roots, activation journal               |
+| Windows/антивирус блокирует activation             | Высокая/высокий     | Close handles, bounded retry, pending activation, restart-to-complete                |
+| Rust rewrite замедлит продукт                      | Высокая/высокий     | Вертикальные срезы, отсутствие big-bang rewrite                                      |
+| Plugin compatibility нарушит изоляцию              | Средняя/высокий     | Compatibility cannot expand authority; canonical SQL forbidden regardless of consent |
+| Tool loop повторит внешний effect после crash      | Средняя/критический | Durable steps, idempotency keys, effect journal, replay tests                        |
+| Portable secrets потеряются или окажутся plaintext | Средняя/критический | Explicit mode, AEAD + Argon2id, cross-machine and corruption tests                   |
+| Web Client ошибочно обещает offline local-first    | Высокая/средний     | Remote-only naming, offline truthfulness test, separate Browser Runtime ADR          |
+| Документация снова опередит код                    | Высокая/средний     | Generated capability matrix и чёткие статусы                                         |
+| Зелёный CI не отражает artifact                    | Высокая/высокий     | Packaged E2E как release gate                                                        |
+| Multi-host scope распылит разработку               | Высокая/высокий     | Приоритет Desktop → Headless → Android                                               |
+| Чрезмерная модульность усложнит core               | Средняя/средний     | Modular monolith; crate только для enforceable boundary                              |
 
 ---
 

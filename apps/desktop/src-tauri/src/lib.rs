@@ -48,7 +48,11 @@ const UPDATE_PUBLIC_KEY: Option<&str> = option_env!("NEOTA_UPDATE_PUBLIC_KEY");
 /// Debug (dev) builds are internal and default to the Kernel.
 ///
 /// Explicit runtime overrides always win: `NEOTA_LEGACY_SERVER=1` forces the
-/// sidecar, `NEOTA_KERNEL=1` forces the Kernel (Preview opt-in).
+/// sidecar, `NEOTA_KERNEL=1` forces the Kernel (Preview opt-in). CONFLICT
+/// POLICY (ADR-0038): when BOTH overrides are set, `NEOTA_KERNEL=1` wins —
+/// the Kernel is the canonical plane and the direction of travel — and a
+/// warning is printed to stderr. The full mode matrix is covered by unit
+/// tests (`resolve_desktop_mode`, see `mod tests` below).
 #[cfg(desktop)]
 const LEGACY_SERVER_ENV: &str = "NEOTA_LEGACY_SERVER";
 #[cfg(desktop)]
@@ -57,26 +61,184 @@ const KERNEL_MODE_ENV: &str = "NEOTA_KERNEL";
 const DESKTOP_CHANNEL: Option<&str> = option_env!("NEOTA_DESKTOP_CHANNEL");
 
 #[cfg(desktop)]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum DesktopMode {
     Sidecar,
     Kernel,
 }
 
+/// Pure mode resolver — the decision table behind [`desktop_mode`], explicit
+/// inputs so the whole matrix is unit-testable (no env/global access).
+///
+/// Precedence (ADR-0038):
+/// 1. `legacy_override` (`NEOTA_LEGACY_SERVER=1`) → Sidecar;
+/// 2. `kernel_override` (`NEOTA_KERNEL=1`) → Kernel; when BOTH are set the
+///    Kernel wins (conflict policy — the warning is printed by the caller);
+/// 3. `debug_build` → Kernel (dev builds are internal);
+/// 4. build channel: `nightly` → Kernel, any other/unset → Sidecar (the
+///    public release default while the Kernel is a Preview).
+#[cfg(desktop)]
+fn resolve_desktop_mode(
+    legacy_override: bool,
+    kernel_override: bool,
+    debug_build: bool,
+    channel: Option<&str>,
+) -> DesktopMode {
+    match (legacy_override, kernel_override) {
+        (true, true) => DesktopMode::Kernel,
+        (true, false) => DesktopMode::Sidecar,
+        (false, true) => DesktopMode::Kernel,
+        (false, false) => {
+            if debug_build {
+                DesktopMode::Kernel
+            } else {
+                match channel {
+                    Some("nightly") => DesktopMode::Kernel,
+                    _ => DesktopMode::Sidecar,
+                }
+            }
+        }
+    }
+}
+
 #[cfg(desktop)]
 fn desktop_mode() -> DesktopMode {
-    if std::env::var(LEGACY_SERVER_ENV).as_deref() == Ok("1") {
-        return DesktopMode::Sidecar;
+    let legacy = std::env::var(LEGACY_SERVER_ENV).as_deref() == Ok("1");
+    let kernel = std::env::var(KERNEL_MODE_ENV).as_deref() == Ok("1");
+    if legacy && kernel {
+        eprintln!(
+            "[neotavern] conflicting overrides: both NEOTA_LEGACY_SERVER=1 and NEOTA_KERNEL=1 are set; NEOTA_KERNEL wins (conflict policy, ADR-0038)"
+        );
     }
-    if std::env::var(KERNEL_MODE_ENV).as_deref() == Ok("1") {
-        return DesktopMode::Kernel;
+    resolve_desktop_mode(legacy, kernel, cfg!(debug_assertions), DESKTOP_CHANNEL)
+}
+
+/// Truthful backend-mode probe for the web UI (DiagnosticsPanel "Kernel
+/// Preview" marking, ADR-0038): the panel must show the Kernel as an explicit
+/// Preview only when the Kernel is actually the active backend.
+#[cfg(desktop)]
+#[tauri::command]
+fn desktop_backend_mode() -> &'static str {
+    match desktop_mode() {
+        DesktopMode::Kernel => "kernel",
+        DesktopMode::Sidecar => "sidecar",
     }
-    if cfg!(debug_assertions) {
-        return DesktopMode::Kernel;
+}
+
+#[cfg(all(test, desktop))]
+mod tests {
+    use super::{resolve_desktop_mode, DesktopMode};
+
+    #[test]
+    fn public_release_channel_defaults_to_sidecar() {
+        assert_eq!(
+            resolve_desktop_mode(false, false, false, None),
+            DesktopMode::Sidecar
+        );
+        assert_eq!(
+            resolve_desktop_mode(false, false, false, Some("release")),
+            DesktopMode::Sidecar
+        );
+        assert_eq!(
+            resolve_desktop_mode(false, false, false, Some("stable")),
+            DesktopMode::Sidecar
+        );
     }
-    match DESKTOP_CHANNEL {
-        Some("nightly") => DesktopMode::Kernel,
-        _ => DesktopMode::Sidecar,
+
+    #[test]
+    fn nightly_channel_defaults_to_kernel() {
+        assert_eq!(
+            resolve_desktop_mode(false, false, false, Some("nightly")),
+            DesktopMode::Kernel
+        );
+    }
+
+    #[test]
+    fn debug_build_defaults_to_kernel_even_on_release_channel() {
+        assert_eq!(
+            resolve_desktop_mode(false, false, true, None),
+            DesktopMode::Kernel
+        );
+        assert_eq!(
+            resolve_desktop_mode(false, false, true, Some("release")),
+            DesktopMode::Kernel
+        );
+    }
+
+    #[test]
+    fn explicit_legacy_override_forces_sidecar_everywhere() {
+        for (debug, channel) in [
+            (false, None),
+            (false, Some("nightly")),
+            (true, None),
+            (true, Some("nightly")),
+        ] {
+            assert_eq!(
+                resolve_desktop_mode(true, false, debug, channel),
+                DesktopMode::Sidecar
+            );
+        }
+    }
+
+    #[test]
+    fn explicit_kernel_override_forces_kernel_everywhere() {
+        for (debug, channel) in [
+            (false, None),
+            (false, Some("release")),
+            (true, None),
+            (true, Some("release")),
+        ] {
+            assert_eq!(
+                resolve_desktop_mode(false, true, debug, channel),
+                DesktopMode::Kernel
+            );
+        }
+    }
+
+    #[test]
+    fn conflicting_overrides_resolve_to_kernel() {
+        // Conflict policy: NEOTA_KERNEL=1 wins over NEOTA_LEGACY_SERVER=1.
+        for (debug, channel) in [
+            (false, None),
+            (false, Some("release")),
+            (false, Some("nightly")),
+            (true, None),
+        ] {
+            assert_eq!(
+                resolve_desktop_mode(true, true, debug, channel),
+                DesktopMode::Kernel
+            );
+        }
+    }
+
+    #[test]
+    fn mode_matrix_is_total_and_consistent() {
+        let channels: [Option<&str>; 4] = [None, Some("release"), Some("nightly"), Some("custom")];
+        for legacy in [false, true] {
+            for kernel in [false, true] {
+                for debug in [false, true] {
+                    for channel in channels {
+                        let mode = resolve_desktop_mode(legacy, kernel, debug, channel);
+                        let expected = if kernel {
+                            DesktopMode::Kernel
+                        } else if legacy {
+                            DesktopMode::Sidecar
+                        } else if debug {
+                            DesktopMode::Kernel
+                        } else {
+                            match channel {
+                                Some("nightly") => DesktopMode::Kernel,
+                                _ => DesktopMode::Sidecar,
+                            }
+                        };
+                        assert_eq!(
+                            mode, expected,
+                            "legacy={legacy} kernel={kernel} debug={debug} channel={channel:?}"
+                        );
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -495,7 +657,11 @@ pub fn run() {
             })
             .invoke_handler(tauri::generate_handler![
                 check_core_update,
-                install_core_update
+                install_core_update,
+                // Truthful mode probe for the UI (DiagnosticsPanel "Kernel
+                // Preview" marking): registered in BOTH modes so the panel
+                // never has to guess which backend is active.
+                desktop_backend_mode
             ]);
 
         // Kernel commands are registered only in local kernel mode: in the

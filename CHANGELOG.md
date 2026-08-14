@@ -44,6 +44,35 @@
   fingerprints** (`file:line:kind:detail`, not a bare count) and the CRLF
   ESLint exemption is registered in `docs/architecture/exceptions.json`
   (ARC-09, id `M1-crlf-blob-eslint-exemption`, deadline 2026-09-30).
+- **M1 review follow-up (Changes requested — re-scoped to M1a).** Reviewer
+  findings from the M1 acceptance check addressed in one follow-up commit:
+  - `.github/workflows/docs.yml` — the unquoted `name:` scalar (invalid YAML)
+    is quoted; the `pnpm docs:site:build` path in Actions is now provable.
+  - `scripts/docs-sync.mjs` treats the mirror as a **closed tree**: `--check`
+    enumerates the actual target directory and fails on any file a fresh sync
+    would not produce (a page smuggled into `apps/docs/docs/architecture/`
+    can no longer reach Docusaurus), and a plain sync deletes stale generated
+    files. Negative scenarios are covered by `scripts/docs-sync.test.mjs`.
+  - Honest Desktop default docs synced to code: root `README.md`,
+    `apps/desktop/README.md`, `docs/architecture/operations-inventory.md` and
+    ADR-0038 no longer call the Kernel the default or the sidecar "opt-in".
+    Explicit **conflict policy**: with both `NEOTA_LEGACY_SERVER=1` and
+    `NEOTA_KERNEL=1` set, `NEOTA_KERNEL=1` wins and a warning is printed; the
+    full mode matrix is unit-tested (`resolve_desktop_mode` in
+    `apps/desktop/src-tauri/src/lib.rs`). The DiagnosticsPanel marks an active
+    Kernel as **Kernel Preview** (ADR-0038) through a truthful
+    `desktop_backend_mode` probe — release builds on the sidecar show no
+    kernel marking.
+  - **M1 boundary fixed:** the accepted scope is **M1a / Wave 0 Governance**;
+    M1 (Wave 1 Immediate security) remains open, and SEC-02 (the legacy
+    profile export must stop snapshotting the full `app.db`, ТЗ §SEC-02) is
+    **Pending** in `docs/release-manifest.json` — it was incorrectly claimed
+    fixed in M1.
+  - `docs/architecture/ui-legacy-surface.md` product sites now carry a
+    structured record (Owner / Removal issue / Milestone / Deadline);
+    `--check` fails on any product row with empty fields, so `--update` alone
+    can no longer legitimize a new legacy call. `plugin-compat` rows stay `n/a`
+    (long-lived public adapter, ARC-09).
 - **Root README rewritten** to match the shipped ТЗ 7.2 architecture: Rust
   Runtime Kernel (crates/), Product Wire Contracts + generated Rust DTOs, Android
   host, headless/server role, extension-hardening surface, and the docs site

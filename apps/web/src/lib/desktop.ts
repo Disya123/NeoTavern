@@ -32,6 +32,24 @@ export function isDesktopShell(): boolean {
   return tauriInternals() !== null;
 }
 
+/**
+ * Resolved backend mode of the desktop shell: "kernel" | "sidecar" | null.
+ * The Rust shell answers from the same `desktop_mode()` decision table used
+ * to pick the backend (ADR-0038 conflict policy: `NEOTA_KERNEL=1` wins over
+ * `NEOTA_LEGACY_SERVER=1`). Null outside the shell or when the probe is
+ * unavailable (e.g. the mobile WebView, where the command is not registered).
+ */
+export async function getDesktopBackendMode(): Promise<'kernel' | 'sidecar' | null> {
+  const internals = tauriInternals();
+  if (!internals) return null;
+  try {
+    const mode = await internals.invoke<string>('desktop_backend_mode');
+    return mode === 'kernel' || mode === 'sidecar' ? mode : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Query the desktop core updater. Null outside the desktop shell. */
 export async function checkCoreUpdate(): Promise<CoreUpdateStatus | null> {
   const internals = tauriInternals();

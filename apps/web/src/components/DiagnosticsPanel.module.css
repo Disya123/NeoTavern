@@ -17,6 +17,34 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .kernelPreview {
+    display: grid;
+    gap: var(--st-space-xs);
+    margin: 0;
+    padding: var(--st-space-md) var(--st-space-lg);
+    border-bottom: 1px solid var(--st-color-border);
+    background: var(--st-color-surface-secondary);
+    color: var(--st-color-text-secondary);
+    font-size: var(--st-font-size-sm);
+  }
+
+  .kernelPreview strong {
+    display: flex;
+    align-items: center;
+    gap: var(--st-space-sm);
+    color: var(--st-color-text-primary);
+    font-size: var(--st-font-size-md);
+    font-weight: var(--st-font-weight-strong);
+  }
+
+  .kernelPreview strong::before {
+    width: var(--st-space-sm);
+    height: var(--st-space-sm);
+    border-radius: var(--st-radius-round);
+    background: var(--st-color-info);
+    content: '';
+  }
+
   .metric {
     display: grid;
     min-width: 0;
