@@ -441,9 +441,9 @@
     {
       "id": "M3-data-cutover",
       "name": "Этап 3 / Data cutover",
-      "status": "in_progress",
-      "acceptedCommit": null,
-      "acceptedBy": null,
+      "status": "accepted",
+      "acceptedCommit": "3c00134",
+      "acceptedBy": "Deepseek",
       "requirements": [
         "schema mapping complete",
         "staged converter in the application flow",
@@ -594,7 +594,11 @@
         "date": "2026-08-15",
         "proposalUpdatedAt": "2026-08-15 (round 76) — M3 re-cut EXECUTED as pr-migration on the accepted M2 HEAD (1448b55): 6 cherry-picked M3 commits (b6246b0..96178e7, conflicts per reCutGuide: CHANGELOG/ledger/ADR-README ours, matrix/sync/release-manifest theirs-then-regen) + adaptation commit ff0d1fd (007_personas schema migration, portable pointer/journal v2, recovery validator, convert-from-verified-snapshot, tolerant personas count, drill content-faithfulness, regenerated generated.rs/matrix/docs, M3 CHANGELOG + ADR-0041 index). Full parity re-verified at ff0d1fd: cargo test --workspace 56 targets exit 0, clippy/fmt clean, upgrade-drill PASS, vitest 146/1756, web 565, typecheck/lint/dependency-rules/codegen/matrix/docs checks PASS, gate --check 5 milestones / 3 accepted GATE PASS + self-test PASS. Round-76 rehearsal found and fixed six chain-integration defects (see evidence inspection item). 2026-08-15 (round 76, verdict revision): the human M3 verdict rejected the packet because pnpm ui:api:check was red at HEAD and unmentioned — the 16 M2-carried legacy hits were not in the baseline and no check-ui-api record existed in the packet. RESOLVED: scripts/check-ui-api.mjs PRODUCT_METADATA gained the wireBridge.ts record (M4 removal) and the generate.ts record was corrected from the stale M2 milestone to M4 (the generation-stream cut did not land in M2); the baseline was regenerated to 68 allowed sites with full owner/removalIssue/milestone/deadline records; pnpm ui:api:check PASS at HEAD; the packet now lists the check in the evidence, review step 1 and step 8."
       },
-      "reviewFeedback": {},
+      "reviewFeedback": {
+        "verdict": "ACCEPTED (binding human verdict, 2026-08-15, revision 2 via ask_user_question)",
+        "acceptedBy": "Deepseek",
+        "notes": "First human verdict (round 76) REJECTED the packet because pnpm ui:api:check was red at HEAD and unmentioned: the M2 re-cut never regenerated the M1-era 65-site baseline, so 16 M2-carried legacy hits surfaced as NEW unrecorded sites. RESOLVED before re-submission: scripts/check-ui-api.mjs PRODUCT_METADATA gained the wireBridge.ts record (M4 removal) and corrected generate.ts from the stale M2 milestone to M4; baseline regenerated to 68 allowed sites with full owner/removalIssue/milestone/deadline; pnpm ui:api:check PASS at HEAD; the packet now lists the check in evidence, review step 1 and step 8. Human then ACCEPTED the revised packet (acceptedCommit 3c00134). The M3 acceptance carries the eight limited P1 waivers of ADR-0046 (expiries at the release gate or M4 cutover); all audit P0 findings are fixed in the slice. M4 (full UI/API cutover) is now unblocked by the ordering policy."
+      },
       "humanReviewSteps": [
         {
           "directive": "1. Clean branch / gates / acceptance on actual HEAD",
@@ -642,7 +646,8 @@
           "howToVerify": "node scripts/check-milestone-gates.mjs --check must report M3 accepted (4 milestones accepted); commit with a human-signed message. Acceptance cannot be self-certified: acceptedBy must be a person."
         }
       ],
-      "verdictNeeded": "HUMAN acceptance packet for M3 (branch pr-migration, base 1448b55 = accepted M2 HEAD, tree clean; review surface = the full branch diff 1448b55..HEAD; concrete acceptance target = acceptanceProposal.proposedAcceptedCommit ff0d1fd). Packet contents: 6 cherry-picked M3 commits (b6246b0..96178e7: staged legacy->kernel migration in the application flow, versioned data roots + activation journal + Windows restart-to-complete, migration corpus + real-schema mapping, CLI host flow, cross-platform upgrade drill, single-writer + pointer integrity + verified safety copy + personas conversion) + adaptation commit ff0d1fd (007_personas schema migration, portable pointer/journal v2, recovery validator, convert-from-verified-snapshot, tolerant personas count, drill content-faithfulness, regenerated generated.rs/matrix/docs, M3 CHANGELOG, ADR-0041 index). Parity at the proposed commit: cargo test --workspace 56 targets exit 0; clippy -D warnings clean; rustfmt clean; upgrade-drill PASS on Windows; vitest 146 files / 1756 tests exit 0; web 565; typecheck/lint/dependency-rules/codegen/matrix/docs checks PASS; gate --check \"5 milestones, 3 accepted, GATE PASS\" + self-test PASS. Eight limited P1 waivers recorded in blockingIssues/waivers (ADR-0046, expiries at release gate or M4 cutover). Round-76 rehearsal fixed six chain-integration defects the accumulated branch masked (personas schema split, portable pointer, recovery validator, snapshot-consistent conversion, stale generated.rs, drill byte-identity assertion). The UI surface gate (pnpm ui:api:check / node scripts/check-ui-api.mjs --check) is green at HEAD with the 16 M2-carried legacy hits recorded in the regenerated 68-site baseline (M4 removal targets)."
+      "verdictNeeded": "HUMAN acceptance packet for M3 (branch pr-migration, base 1448b55 = accepted M2 HEAD, tree clean; review surface = the full branch diff 1448b55..HEAD; concrete acceptance target = acceptanceProposal.proposedAcceptedCommit ff0d1fd). Packet contents: 6 cherry-picked M3 commits (b6246b0..96178e7: staged legacy->kernel migration in the application flow, versioned data roots + activation journal + Windows restart-to-complete, migration corpus + real-schema mapping, CLI host flow, cross-platform upgrade drill, single-writer + pointer integrity + verified safety copy + personas conversion) + adaptation commit ff0d1fd (007_personas schema migration, portable pointer/journal v2, recovery validator, convert-from-verified-snapshot, tolerant personas count, drill content-faithfulness, regenerated generated.rs/matrix/docs, M3 CHANGELOG, ADR-0041 index). Parity at the proposed commit: cargo test --workspace 56 targets exit 0; clippy -D warnings clean; rustfmt clean; upgrade-drill PASS on Windows; vitest 146 files / 1756 tests exit 0; web 565; typecheck/lint/dependency-rules/codegen/matrix/docs checks PASS; gate --check \"5 milestones, 3 accepted, GATE PASS\" + self-test PASS. Eight limited P1 waivers recorded in blockingIssues/waivers (ADR-0046, expiries at release gate or M4 cutover). Round-76 rehearsal fixed six chain-integration defects the accumulated branch masked (personas schema split, portable pointer, recovery validator, snapshot-consistent conversion, stale generated.rs, drill byte-identity assertion). The UI surface gate (pnpm ui:api:check / node scripts/check-ui-api.mjs --check) is green at HEAD with the 16 M2-carried legacy hits recorded in the regenerated 68-site baseline (M4 removal targets).",
+      "acceptedAt": "2026-08-15"
     },
     {
       "id": "M4-ui-api-cutover",
