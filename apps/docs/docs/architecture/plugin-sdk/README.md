@@ -352,7 +352,15 @@ permission explicitly. The legacy frontend runs in the main window; the
 backend receives an Express Router limited to its own `/api/plugins/{id}`
 namespace. Safe mode does not load legacy entry points.
 
-Detailed rationale: [ADR-0007](../adr/0007-plugin-runtime-isolation.md).
+The per-legacy-API authority map — supported contract, native-capability
+mapping, isolation level, limits and support policy for each legacy surface —
+lives in [`packages/legacy-compat/COMPATIBILITY.md`](https://github.com/Disya123/NeoTavern/blob/main/packages/legacy-compat/COMPATIBILITY.md)
+and is enforced by the ARC-11 suite (`apps/server/test/legacyAuthority.spec.ts`):
+legacy compatibility may translate or restrict an operation, but never grants
+more authority than the corresponding native capability.
+
+Detailed rationale: [ADR-0007](../adr/0007-plugin-runtime-isolation.md),
+[ADR-0039](../adr/0039-legacy-compatibility-authority-boundary.md).
 
 ## Installing from a Git repository
 

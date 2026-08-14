@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-08-14T01:46:29.425Z",
+  "generatedAt": "2026-08-14T01:56:10.034Z",
   "rows": [
     {
       "hosts": {
@@ -59,6 +59,19 @@
       "notes": "Kernel ops exist; chats.create arrives in M2.",
       "title": "Chat read",
       "wireOps": ["chats.get", "chats.list"]
+    },
+    {
+      "hosts": {
+        "android": "Designed",
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "webClient": "Implemented"
+      },
+      "id": "compat.authority-boundary",
+      "milestone": "M1",
+      "notes": "M1 Wave 1 (ТЗ §14.2, ADR-0039): per-legacy-API authority map shipped as packages/legacy-compat/COMPATIBILITY.md and enforced by apps/server/test/legacyAuthority.spec.ts — legacy Express routers are confined to /api/plugins/{id}/... (core /api/v2 routes are never shadowed), extension settings are namespaced per installed plugin with a 1 MiB bound, and the scoped plugin VFS is wired to <data-root>/plugins/{id}/data with ../ and backslash escapes rejected and files.plugin required (PLUGIN_PERMISSION_DENIED without the grant).",
+      "title": "Legacy compatibility authority boundary (ARC-11)",
+      "wireOps": []
     },
     {
       "hosts": {
