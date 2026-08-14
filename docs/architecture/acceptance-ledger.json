@@ -237,7 +237,7 @@
           "8": {
             "type": "test-run",
             "command": "npx vitest run (workspace) && pnpm typecheck && cargo test --manifest-path crates/Cargo.toml && node scripts/check-milestone-gates.mjs --self-test",
-            "result": "regression/security suites green — vitest 145 files / 1724 tests, web 534 tests, tsc -b, cargo 279 tests, gate self-test 17 cases",
+            "result": "regression/security suites green — vitest 145 files / 1724 tests, web 534 tests, tsc -b, cargo 279 tests, gate self-test 17 cases. Totals measured at fc1ec87 and re-validated at HEAD: the only source change since is the prettier-only packageIntegrity.ts reformat in fca0ef0 (formatting, 4 lines, spec 12/12 green); everything else is docs/ledger.",
             "commit": "fc1ec87"
           }
         },
