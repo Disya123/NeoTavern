@@ -22,6 +22,7 @@
 use contracts_generated::generated::{self, MetaDto, MetaDtoApi, MetaDtoProductWire};
 use contracts_generated::{Issue, WireError};
 use provider_sdk::secret::SecretResolver;
+use provider_sdk::ProviderAdapter;
 use secret_store::SecretStore;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -340,6 +341,13 @@ enum Command {
         store: Arc<dyn SecretStore>,
         reply: mpsc::SyncSender<()>,
     },
+    /// Registers a runtime provider adapter (e.g. an OpenAI-compatible
+    /// instance built from a stored provider config, ТЗ §9.3). Applied
+    /// immediately and acknowledged.
+    RegisterProvider {
+        adapter: Arc<dyn ProviderAdapter>,
+        reply: mpsc::SyncSender<()>,
+    },
     /// Sets the per-run provider deadline for future generations (default
     /// [`generation::RUN_TIMEOUT`]). Applied immediately and acknowledged.
     SetRunTimeout {
@@ -563,6 +571,10 @@ fn drain_pending(
                 state.secret_store = Some(store);
                 let _ = reply.send(());
             }
+            Command::RegisterProvider { adapter, reply } => {
+                state.registry.register(adapter);
+                let _ = reply.send(());
+            }
             Command::SetRunTimeout { timeout, reply } => {
                 state.run_timeout = timeout;
                 let _ = reply.send(());
@@ -679,6 +691,10 @@ fn writer_main(
             }
             Command::SetSecretStore { store, reply } => {
                 state.secret_store = Some(store);
+                let _ = reply.send(());
+            }
+            Command::RegisterProvider { adapter, reply } => {
+                state.registry.register(adapter);
                 let _ = reply.send(());
             }
             Command::SetRunTimeout { timeout, reply } => {
@@ -930,6 +946,22 @@ impl Kernel {
         let (reply_tx, reply_rx) = mpsc::sync_channel(1);
         let _ = self.cmd_tx.send(Command::SetSecretStore {
             store,
+            reply: reply_tx,
+        });
+        let _ = reply_rx.recv_timeout(Duration::from_secs(5));
+    }
+
+    /// Registers a runtime provider adapter (ТЗ §9.3).
+    ///
+    /// Hosts build production adapters (e.g. an OpenAI-compatible instance
+    /// from a stored `provider_configs` row) and register them here; the
+    /// adapter becomes visible to `providers.list` and generation dispatch
+    /// immediately. Fire-and-forget ack like
+    /// [`set_secret_resolver`](Self::set_secret_resolver).
+    pub fn register_provider(&self, adapter: Arc<dyn ProviderAdapter>) {
+        let (reply_tx, reply_rx) = mpsc::sync_channel(1);
+        let _ = self.cmd_tx.send(Command::RegisterProvider {
+            adapter,
             reply: reply_tx,
         });
         let _ = reply_rx.recv_timeout(Duration::from_secs(5));

@@ -123,6 +123,19 @@
       "milestone": "M2"
     },
     {
+      "id": "providers.openai",
+      "title": "OpenAI-compatible production provider",
+      "wireOps": [],
+      "hosts": {
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "android": "Implemented",
+        "webClient": "Implemented"
+      },
+      "notes": "Adapter crate (ТЗ §9.3, Этап 2.5) with 12 unit + 3 kernel integration tests: chat-completions streaming over a minimal blocking HTTP/1.1 client with rustls TLS (OS trust store), bounded SSE reads (SEC-04), normalized errors. API key resolved at execution time from the config's secret_ref through the SecretResolver seam (Kernel::set_secret_resolver) and passed via ProviderRequest::api_key — only in the Authorization header, never in body/DB/logs; missing resolver fails closed. Registration via the new Kernel::register_provider seam; config instance selection in the run model and tool/reasoning events arrive with Этап 2.7.",
+      "milestone": "M2"
+    },
+    {
       "id": "backups",
       "title": "Backup create/list",
       "wireOps": ["backups.create", "backups.list"],
