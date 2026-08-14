@@ -238,6 +238,22 @@
   `portable-data.md` (host-flow section), CHANGELOG. Remaining Этап 3
   slices: Windows/macOS/Linux upgrade drills on packaged artifacts.
 
+- **Cross-platform upgrade drill (M3 / Этап 3 work 7, ТЗ §10.3).**
+  `node scripts/upgrade-drill.mjs` (`pnpm upgrade:drill`) proves the upgrade
+  cycle on the real CLI artifact on Windows/macOS/Linux (Node 24 built-in
+  `node:sqlite`, no external dependencies): builds a Drizzle-style legacy
+  fixture, runs `neotavern-cli --migrate-legacy`, and asserts the migration
+  commits with the kernel opening on the active root, `characters.get`
+  returns the migrated character, the legacy database stays byte-identical
+  (immutable source), re-running is idempotent (one committed entry, one
+  staging root), the pre-migration safety copy matches the source checksum,
+  and the activation journal ends `committed` with the rollback pointer
+  retained. PASS on Windows in this session; macOS/Linux runs gate the
+  release branch in CI. The Windows lock-contention/restart-to-complete
+  corpus remains the Rust held-handle test. Docs: `portable-data.md`
+  (upgrade-drill section), `package.json` (`upgrade:drill` script),
+  CHANGELOG.
+
 - **Prompt pipeline in the Kernel (M2 / Этап 2.6, ТЗ §9.1–§9.2).** Every
   generation run now builds an immutable **PromptPlan** before the provider
   attempt: character/persona system blocks (from the chat's character card,

@@ -242,6 +242,29 @@ neotavern-cli --root <data-root> --migrate-legacy <legacy.db> [--no-backup]
   (spawns the real binary): full migration + `characters.get` round-trip on
   the versioned root, missing-`--root` usage error, and non-legacy rejection.
 
+### Upgrade drill (Этап 3 work 7)
+
+`node scripts/upgrade-drill.mjs` proves the cross-platform upgrade cycle on a
+real CLI artifact (Windows/macOS/Linux; Node 24 built-in `node:sqlite`, no
+external deps). It builds a Drizzle-style legacy fixture, runs
+`--migrate-legacy`, and asserts:
+
+1. migration commits and the kernel opens on the active root;
+2. `characters.get` returns the migrated character (same data for the
+   upgraded user);
+3. the legacy database is byte-identical afterwards (immutable source,
+   ТЗ §10.3);
+4. re-running the migration is idempotent — one committed entry, one staging
+   root;
+5. the pre-migration safety copy matches the legacy database checksum;
+6. the journal ends `committed` and the rollback pointer (previous root) is
+   retained.
+
+The Windows lock-contention/restart-to-complete platform corpus stays in the
+Rust suite (`crates/storage/tests/migration.rs`, held handle without
+`FILE_SHARE_DELETE`); the drill covers the upgrade cycle itself so the
+Windows/macOS/Linux upgrade runs can gate the release branch in CI.
+
 ## Related documents
 
 - [Data and SQLite](../data/README.md) — storage foundation.
