@@ -44,6 +44,22 @@
   per-plugin trip (3rd concurrent fetch of one plugin denied) and a
   cross-plugin global trip (9 plugins, 8 held fetches, 9th denied).
 
+- **WebSocket post-connect remoteAddress verification (SEC-03 Wave 3, audit
+  P0 follow-up closed).** `apps/plugin-runtime/src/host/socketHandles.ts`
+  replaces the undici WebSocket client (which never exposes the connected
+  socket) with a hand-written RFC 6455 client over the raw socket: it
+  connects to a policy-approved address (no DNS for the hostname in the
+  stack; hostname survives only in Host/SNI), verifies `remoteAddress` in the
+  approved set BEFORE the HTTP Upgrade, validates `Sec-WebSocket-Accept`, and
+  then drives the frame loop (masked client frames, text/continuation into
+  the ring, ping→pong, close handshake). The plugin still only holds an
+  opaque handle id. Tests: `socketHandles.test.ts` 13 tests — a raw-socket
+  RFC 6455 echo server proves the ws://localhost round-trip goes over the
+  verified 127.0.0.1, and a policy approving a different address rejects the
+  open with NETWORK_DESTINATION_DENIED before any handshake byte is sent.
+  This closes the last open P0 in the M1 security ledger (the remaining
+  M1 blocker is P1 migrator coverage of settings/branches/revisions/assets).
+
 - **Verified-IP set honored on every plugin network connect (SEC-03 Wave 3,
   audit P0 "TCP/proxy paths connect by hostname").** The §29.1 SSRF-approved
   address set now drives the actual connect on EVERY path in
@@ -56,10 +72,7 @@
   only as the TLS servername). Tests: `networkPool.test.ts` 21 tests (new:
   verified absolute-form target, verified CONNECT authority),
   `socketHandles.test.ts` 11 tests (new: tcp/udp verified-IP round-trips via
-  `localhost` against a 127.0.0.1-only peer, proving no hostname DNS). The
-  only remaining documented follow-up is WebSocket post-connect
-  `remoteAddress` verification (undici WebSocket does not expose the connected
-  socket; noted in `socketHandles.ts`).
+  `localhost` against a 127.0.0.1-only peer, proving no hostname DNS).
 
 - **Migration single-writer and pointer integrity fixes (audit P0 #3,
   ТЗ §10.3/§22.3).** `neotavern_storage::migration` is now session-based:

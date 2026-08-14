@@ -5,10 +5,10 @@
  * revoke closing handles, and the handle-count cap.
  */
 import { describe, expect, it } from 'vitest';
-import { connect as netConnect, createServer, type Server } from 'node:net';
+import { connect as netConnect, createServer, type Server, type Socket } from 'node:net';
 import { createSocket } from 'node:dgram';
 import type { AddressInfo } from 'node:net';
-import { createSocketRegistry, type SocketRegistry } from './socketHandles.js';
+import { createSocketRegistry, type SocketRegistry, wsAcceptHeader } from './socketHandles.js';
 
 function registry(): SocketRegistry {
   return createSocketRegistry({
@@ -241,6 +241,125 @@ describe('socket registry (§29)', () => {
       await expect(sockets.tcpReceive('plugin-a', id, 1, 0, abortSignal())).rejects.toMatchObject({
         code: 'NOT_FOUND',
       });
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+
+  it('websocket round-trips over the verified IP, handshake + RFC 6455 frames (§SEC-03)', async () => {
+    // Minimal RFC 6455 echo server on a raw net socket: accepts the Upgrade,
+    // then replies to every masked client text frame with an unmasked frame.
+    // Client frames are masked (RFC 6455 §5.1) — the server-side parser here
+    // unmasks them (socketHandles.wsParseFrame only decodes server frames).
+    const parseClientFrame = (
+      buffer: Buffer,
+    ): { opcode: number; payload: Buffer; rest: Buffer } | null => {
+      if (buffer.byteLength < 2) return null;
+      const first = buffer[0];
+      if (first === undefined) return null;
+      const opcode = first & 0x0f;
+      const second = buffer[1];
+      if (second === undefined) return null;
+      const b1 = second;
+      let len = b1 & 0x7f;
+      let offset = 2;
+      if (len === 126) {
+        if (buffer.byteLength < 4) return null;
+        len = buffer.readUInt16BE(2);
+        offset = 4;
+      } else if (len === 127) {
+        if (buffer.byteLength < 10) return null;
+        len = Number(buffer.readBigUInt64BE(2));
+        offset = 10;
+      }
+      if (buffer.byteLength < offset + 4 + len) return null;
+      const mask = buffer.subarray(offset, offset + 4);
+      const payload = Buffer.allocUnsafe(len);
+      for (let i = 0; i < len; i += 1) {
+        payload[i] = (buffer[offset + 4 + i] ?? 0) ^ (mask[i & 3] ?? 0);
+      }
+      return { opcode, payload, rest: buffer.subarray(offset + 4 + len) };
+    };
+    const server = createServer((socket: Socket) => {
+      let buffer: Buffer = Buffer.alloc(0);
+      let upgraded = false;
+      socket.on('error', () => undefined); // peer close races are expected here
+      socket.on('data', (chunk: Buffer) => {
+        buffer = Buffer.concat([buffer, chunk]);
+        if (!upgraded) {
+          const headEnd = buffer.indexOf('\r\n\r\n');
+          if (headEnd === -1) return;
+          const head = buffer.subarray(0, headEnd).toString('utf8');
+          buffer = buffer.subarray(headEnd + 4);
+          const key = /Sec-WebSocket-Key: (.+)\r\n/i.exec(head)?.[1] ?? '';
+          const accept = wsAcceptHeader(key);
+          socket.write(
+            `HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`,
+          );
+          upgraded = true;
+        }
+        for (;;) {
+          const parsed = parseClientFrame(buffer);
+          if (parsed === null) break;
+          buffer = parsed.rest;
+          const { opcode, payload } = parsed;
+          if (opcode === 0x8) {
+            // Close handshake: reply with a close frame and end the socket.
+            socket.write(Buffer.from([0x80 | 0x8, 0x02, 0x03, 0xe8]));
+            socket.end();
+            return;
+          }
+          if (opcode !== 0x1) continue; // only text frames are echoed
+          const data = payload;
+          let header: Buffer;
+          if (data.byteLength < 126) {
+            header = Buffer.from([0x80 | 0x1, data.byteLength]);
+          } else {
+            header = Buffer.alloc(4);
+            header[0] = 0x80 | 0x1;
+            header[1] = 126;
+            header.writeUInt16BE(data.byteLength, 2);
+          }
+          socket.write(Buffer.concat([header, data]));
+        }
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as AddressInfo).port;
+    try {
+      const sockets = registry();
+      // 'localhost' is approved to 127.0.0.1; the WS client must connect to
+      // the verified IP and verify remoteAddress after connect (§SEC-03).
+      const id = await sockets.websocketOpen('plugin-a', `ws://localhost:${port}/echo`, undefined);
+      await sockets.websocketSend('plugin-a', id, 'hello-ws');
+      const received = await sockets.websocketReceive('plugin-a', id, 1, 2000, abortSignal());
+      expect(received.messages).toEqual(['hello-ws']);
+      expect(received.closed).toBe(false);
+      await sockets.websocketClose('plugin-a', id);
+      await expect.poll(() => sockets.size()).toBe(0);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+
+  it('rejects a websocket whose connected address is outside the approved set (§SEC-03)', async () => {
+    // A policy that approves 127.0.0.2 while the server lives on 127.0.0.1:
+    // the client connects to 127.0.0.2, the post-connect remoteAddress check
+    // (127.0.0.1) must fail the open BEFORE any handshake byte is sent.
+    const server = createServer((socket: Socket) => {
+      socket.on('error', () => undefined); // client destroys on mismatch
+      socket.on('data', () => undefined);
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as AddressInfo).port;
+    const mismatchRegistry = createSocketRegistry({
+      checkDestination: async () => ['127.0.0.2'],
+      checkBind: () => undefined,
+    });
+    try {
+      await expect(
+        mismatchRegistry.websocketOpen('plugin-a', `ws://127.0.0.1:${port}/`, undefined),
+      ).rejects.toMatchObject({ code: 'NETWORK_DESTINATION_DENIED' });
     } finally {
       await new Promise((resolve) => server.close(resolve));
     }
