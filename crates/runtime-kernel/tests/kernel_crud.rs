@@ -9,7 +9,8 @@
 
 use contracts_generated::generated::{
     CharacterDto, ChatDto, LorebookDto, MessageDto, MessageRole, PagedCharacters, PagedChats,
-    PagedMessages, ResultEmpty, ResultListLorebooks, ResultListPresets,
+    PagedMessages, PersonaDto, ResultEmpty, ResultListLorebooks, ResultListPersonas,
+    ResultListPresets,
 };
 use runtime_kernel::{CancellationFlag, Kernel, KernelConfig, KernelError, KernelErrorCode};
 use rusqlite::params;
@@ -914,4 +915,145 @@ fn lorebook_crud_error_paths() {
     )
     .expect_err("extra fields must fail wire validation");
     assert_eq!(extra.code, KernelErrorCode::ContractViolation);
+}
+
+/// M4 slice 1 (Этап 4.1, ТЗ §8.1 Library context): the full persona CRUD
+/// cycle over the wire — create (default), list, get, update (name + avatar,
+/// demote default), single-default invariant, delete, and the NOT_FOUND /
+/// CONTRACT_VIOLATION error paths.
+#[test]
+fn persona_crud_round_trip() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel_with_root(root.path());
+
+    // create the default persona.
+    let created = dispatch_decoded::<PersonaDto>(
+        &kernel,
+        "personas.create",
+        json!({ "name": "Aria", "description": "Curious scholar", "isDefault": true }),
+    )
+    .expect("personas.create must succeed");
+    assert_eq!(created.name, "Aria");
+    assert_eq!(created.description.as_deref(), Some("Curious scholar"));
+    assert!(created.is_default, "isDefault true is honoured");
+    assert!(created.avatar.is_none(), "avatar defaults to none");
+
+    // list → the created row, newest first.
+    let list = dispatch_decoded::<ResultListPersonas>(&kernel, "personas.list", json!({}))
+        .expect("personas.list must succeed");
+    assert_eq!(list.items.len(), 1);
+    assert_eq!(list.items[0].id, created.id);
+
+    // get → equal.
+    let fetched =
+        dispatch_decoded::<PersonaDto>(&kernel, "personas.get", json!({ "personaId": created.id }))
+            .expect("personas.get must succeed");
+    assert_eq!(fetched.id, created.id);
+    assert_eq!(fetched.name, "Aria");
+
+    // create a second default: the previous default must be demoted.
+    let second = dispatch_decoded::<PersonaDto>(
+        &kernel,
+        "personas.create",
+        json!({ "name": "Bastian", "isDefault": true }),
+    )
+    .expect("second personas.create must succeed");
+    assert!(second.is_default);
+    let demoted =
+        dispatch_decoded::<PersonaDto>(&kernel, "personas.get", json!({ "personaId": created.id }))
+            .expect("get the demoted persona must succeed");
+    assert!(
+        !demoted.is_default,
+        "single-default invariant: first default demoted"
+    );
+
+    // update name + avatar (no isDefault → flag untouched).
+    let updated = dispatch_decoded::<PersonaDto>(
+        &kernel,
+        "personas.update",
+        json!({ "personaId": second.id, "name": "Bastian the Brave", "avatar": "portraits/b.png" }),
+    )
+    .expect("personas.update must succeed");
+    assert_eq!(updated.name, "Bastian the Brave");
+    assert_eq!(updated.avatar.as_deref(), Some("portraits/b.png"));
+    assert!(
+        updated.is_default,
+        "update without isDefault leaves the flag untouched"
+    );
+    assert_eq!(
+        updated.created_at, second.created_at,
+        "created_at is untouched"
+    );
+
+    // update with isDefault: false demotes the default explicitly.
+    let demoted = dispatch_decoded::<PersonaDto>(
+        &kernel,
+        "personas.update",
+        json!({ "personaId": second.id, "isDefault": false }),
+    )
+    .expect("demote update must succeed");
+    assert!(!demoted.is_default, "isDefault: false clears the flag");
+
+    // delete → empty result; the follow-up get answers PERSONA_NOT_FOUND.
+    dispatch_decoded::<ResultEmpty>(
+        &kernel,
+        "personas.delete",
+        json!({ "personaId": second.id }),
+    )
+    .expect("personas.delete must succeed");
+    let get_err = dispatch_json(&kernel, "personas.get", json!({ "personaId": second.id }))
+        .expect_err("get on a deleted persona must fail");
+    assert_eq!(get_err.code, KernelErrorCode::NotFound);
+    let product = get_err.product.expect("product dto");
+    assert_eq!(product.code, "PERSONA_NOT_FOUND");
+    assert_eq!(product.params["personaId"], json!(second.id));
+}
+
+/// M4 slice 1: update/delete on a missing persona and contract violations
+/// answer the stable error codes.
+#[test]
+fn persona_crud_error_paths() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel_with_root(root.path());
+    let missing = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+
+    let update_err = dispatch_json(
+        &kernel,
+        "personas.update",
+        json!({ "personaId": missing, "name": "Ghost" }),
+    )
+    .expect_err("update on a missing persona must fail");
+    assert_eq!(update_err.code, KernelErrorCode::NotFound);
+    assert_eq!(
+        update_err.product.expect("product dto").code,
+        "PERSONA_NOT_FOUND"
+    );
+
+    let delete_err = dispatch_json(&kernel, "personas.delete", json!({ "personaId": missing }))
+        .expect_err("delete on a missing persona must fail");
+    assert_eq!(delete_err.code, KernelErrorCode::NotFound);
+    assert_eq!(
+        delete_err.product.expect("product dto").code,
+        "PERSONA_NOT_FOUND"
+    );
+
+    // Empty name violates the wire contract before any storage write.
+    let violation = dispatch_json(&kernel, "personas.create", json!({ "name": "" }))
+        .expect_err("empty name must fail wire validation");
+    assert_eq!(violation.code, KernelErrorCode::ContractViolation);
+
+    // Unknown request fields are rejected (strict, ARC-07).
+    let extra = dispatch_json(
+        &kernel,
+        "personas.create",
+        json!({ "name": "Aria", "hacked": true }),
+    )
+    .expect_err("extra fields must fail wire validation");
+    assert_eq!(extra.code, KernelErrorCode::ContractViolation);
+
+    // update with no fields at all still requires the id — a missing id is a
+    // contract violation (strict, ARC-07).
+    let no_id = dispatch_json(&kernel, "personas.update", json!({ "name": "No id" }))
+        .expect_err("update without personaId must fail wire validation");
+    assert_eq!(no_id.code, KernelErrorCode::ContractViolation);
 }

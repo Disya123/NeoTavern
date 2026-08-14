@@ -507,6 +507,11 @@ fn handle_unary(
         "lorebooks.update" => with_db_opt(db, |db| product::lorebooks_update(db, req)),
         "lorebooks.delete" => with_db_opt(db, |db| product::lorebooks_delete(db, req)),
         "presets.list" => with_db_opt(db, |db| product::presets_list(db, req)),
+        "personas.list" => with_db_opt(db, |db| product::personas_list(db, req)),
+        "personas.get" => with_db_opt(db, |db| product::personas_get(db, req)),
+        "personas.create" => with_db_opt(db, |db| product::personas_create(db, req)),
+        "personas.update" => with_db_opt(db, |db| product::personas_update(db, req)),
+        "personas.delete" => with_db_opt(db, |db| product::personas_delete(db, req)),
         // Provider configuration (ТЗ §9.4): secrets go to the SecretStore
         // seam, only opaque references reach the database.
         "providers.config.set" => with_db_opt(db, |db| {

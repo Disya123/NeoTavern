@@ -870,6 +870,76 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     262144,
     undefined,
   ),
+  op(
+    'personas.list',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.empty',
+    'wire.result.list-personas',
+    undefined,
+    ['INTERNAL', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    1024,
+    262144,
+    undefined,
+  ),
+  op(
+    'personas.get',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.get-persona',
+    'wire.persona.dto',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    262144,
+    undefined,
+  ),
+  op(
+    'personas.create',
+    'transactional',
+    'non-idempotent',
+    'none',
+    'app.write',
+    'wire.request.create-persona',
+    'wire.persona.dto',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    65536,
+    262144,
+    undefined,
+  ),
+  op(
+    'personas.update',
+    'transactional',
+    'non-idempotent',
+    'none',
+    'app.write',
+    'wire.request.update-persona',
+    'wire.persona.dto',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    65536,
+    262144,
+    undefined,
+  ),
+  op(
+    'personas.delete',
+    'transactional',
+    'non-idempotent',
+    'none',
+    'app.write',
+    'wire.request.delete-persona',
+    'wire.result.empty',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    1024,
+    undefined,
+  ),
 ];
 
 // ---------------------------------------------------------------------------
@@ -882,6 +952,7 @@ const UUID_MESSAGE = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
 const UUID_BACKUP = '1a2b3c4d-5e6f-4a8b-9c0d-1e2f3a4b5c6d';
 const UUID_LOREBOOK = '2b3c4d5e-6f7a-4b9c-8d0e-1f2a3b4c5d6e';
 const UUID_PRESET = '3c4d5e6f-7a8b-4c0d-9e1f-2a3b4c5d6e7f';
+const UUID_PERSONA = '0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f';
 const UUID_WORKFLOW = '9c8b7a6e-5d4c-4b3a-9f8e-7d6c5b4a3f2e';
 const UUID_CONFIG = '4d5e6f70-8a9b-4c2d-9e3f-4a5b6c7d8e9f';
 const UUID_AVATAR = '5d6e7f80-9a1b-4c2d-8e3f-4a5b6c7d8e9f';
@@ -949,6 +1020,16 @@ const LOREBOOK_VALUE = {
 const PRESET_VALUE = {
   id: UUID_PRESET,
   name: 'Balanced',
+  createdAt: TIMESTAMP,
+  updatedAt: TIMESTAMP,
+};
+
+const PERSONA_VALUE = {
+  id: UUID_PERSONA,
+  name: 'Aria',
+  description: 'Curious scholar',
+  avatar: 'portraits/aria.png',
+  isDefault: true,
   createdAt: TIMESTAMP,
   updatedAt: TIMESTAMP,
 };
@@ -1106,6 +1187,22 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('lorebooks-delete-request', 'lorebooks.delete', 'request', true, {
     lorebookId: UUID_LOREBOOK,
   }),
+  fx('personas-get-request', 'personas.get', 'request', true, {
+    personaId: UUID_PERSONA,
+  }),
+  fx('personas-create-request', 'personas.create', 'request', true, {
+    name: 'Aria',
+    description: 'Curious scholar',
+    isDefault: true,
+  }),
+  fx('personas-update-request', 'personas.update', 'request', true, {
+    personaId: UUID_PERSONA,
+    name: 'Aria the Voyager',
+    avatar: 'portraits/aria.png',
+  }),
+  fx('personas-delete-request', 'personas.delete', 'request', true, {
+    personaId: UUID_PERSONA,
+  }),
   fx('chats-list-request', 'chats.list', 'request', true, {}),
   fx('chats-get-request', 'chats.get', 'request', true, { chatId: UUID_CHAT }),
   fx('chats-create-request', 'chats.create', 'request', true, {
@@ -1172,6 +1269,7 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('backups-list-request', 'backups.list', 'request', true, {}),
   fx('lorebooks-list-request', 'lorebooks.list', 'request', true, {}),
   fx('presets-list-request', 'presets.list', 'request', true, {}),
+  fx('personas-list-request', 'personas.list', 'request', true, {}),
   fx('providers-list-request', 'providers.list', 'request', true, {}),
   fx('providers-config-set-request', 'providers.config.set', 'request', true, {
     provider: 'fake',
@@ -1251,6 +1349,11 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('backups-list-response', 'backups.list', 'response', true, { items: [BACKUP_VALUE] }),
   fx('lorebooks-list-response', 'lorebooks.list', 'response', true, { items: [LOREBOOK_VALUE] }),
   fx('presets-list-response', 'presets.list', 'response', true, { items: [PRESET_VALUE] }),
+  fx('personas-list-response', 'personas.list', 'response', true, { items: [PERSONA_VALUE] }),
+  fx('personas-get-response', 'personas.get', 'response', true, PERSONA_VALUE),
+  fx('personas-create-response', 'personas.create', 'response', true, PERSONA_VALUE),
+  fx('personas-update-response', 'personas.update', 'response', true, PERSONA_VALUE),
+  fx('personas-delete-response', 'personas.delete', 'response', true, {}),
   fx('providers-list-response', 'providers.list', 'response', true, { items: [PROVIDER_VALUE] }),
   fx(
     'providers-config-set-response',
@@ -1318,6 +1421,18 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     entries: [{ keys: ['castle'], content: '' }],
   }),
   fx('neg-lorebook-delete-missing-field', 'lorebooks.delete', 'request', false, {}),
+  fx('neg-persona-get-missing-field', 'personas.get', 'request', false, {}),
+  fx('neg-persona-get-wrong-type', 'personas.get', 'request', false, { personaId: 42 }),
+  fx('neg-persona-create-extra-field', 'personas.create', 'request', false, {
+    name: 'Aria',
+    hacked: true,
+  }),
+  fx('neg-persona-create-empty-name', 'personas.create', 'request', false, {
+    name: '',
+  }),
+  fx('neg-persona-update-missing-field', 'personas.update', 'request', false, {
+    name: 'No id',
+  }),
   fx('neg-messages-list-bad-order', 'chats.messages.list', 'request', false, {
     chatId: UUID_CHAT,
     order: 'sideways',

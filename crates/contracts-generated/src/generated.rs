@@ -1193,6 +1193,144 @@ pub fn decode_preset_dto(bytes: &[u8]) -> Result<PresetDto, WireError> {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct PersonaDto {
+    pub id: String,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub avatar: Option<String>,
+    #[serde(rename = "isDefault")]
+    pub is_default: bool,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: String,
+}
+
+pub(crate) fn check_persona_dto(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_2: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("id").is_none() {
+            issues.push(Issue::new(join_path(path, "id"), "RequiredProperty"));
+        }
+        if value.get("name").is_none() {
+            issues.push(Issue::new(join_path(path, "name"), "RequiredProperty"));
+        }
+        if value.get("isDefault").is_none() {
+            issues.push(Issue::new(join_path(path, "isDefault"), "RequiredProperty"));
+        }
+        if value.get("createdAt").is_none() {
+            issues.push(Issue::new(join_path(path, "createdAt"), "RequiredProperty"));
+        }
+        if value.get("updatedAt").is_none() {
+            issues.push(Issue::new(join_path(path, "updatedAt"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("id") {
+            let child_path = join_path(path, "id");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("name") {
+            let child_path = join_path(path, "name");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 200 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("description") {
+            let child_path = join_path(path, "description");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len > 10000 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("avatar") {
+            let child_path = join_path(path, "avatar");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len > 512 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("isDefault") {
+            let child_path = join_path(path, "isDefault");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(child) = value.get("createdAt") {
+            let child_path = join_path(path, "createdAt");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("updatedAt") {
+            let child_path = join_path(path, "updatedAt");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_2.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "id" | "name" | "description" | "avatar" | "isDefault" | "createdAt" | "updatedAt") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_persona_dto(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_persona_dto(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_persona_dto(bytes: &[u8]) -> Result<PersonaDto, WireError> {
+    crate::decode::<PersonaDto>(validate_persona_dto, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PagedCharacters {
     pub items: Vec<CharacterDto>,
     #[serde(
@@ -3842,6 +3980,285 @@ pub fn decode_lorebook_entry_input(bytes: &[u8]) -> Result<LorebookEntryInput, W
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct RequestGetPersona {
+    #[serde(rename = "personaId")]
+    pub persona_id: String,
+}
+
+pub(crate) fn check_request_get_persona(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("personaId").is_none() {
+            issues.push(Issue::new(join_path(path, "personaId"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("personaId") {
+            let child_path = join_path(path, "personaId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "personaId") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_get_persona(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_get_persona(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_get_persona(bytes: &[u8]) -> Result<RequestGetPersona, WireError> {
+    crate::decode::<RequestGetPersona>(validate_request_get_persona, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestCreatePersona {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub avatar: Option<String>,
+    #[serde(rename = "isDefault", default, skip_serializing_if = "Option::is_none")]
+    pub is_default: Option<bool>,
+}
+
+pub(crate) fn check_request_create_persona(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("name").is_none() {
+            issues.push(Issue::new(join_path(path, "name"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("name") {
+            let child_path = join_path(path, "name");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 200 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("description") {
+            let child_path = join_path(path, "description");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len > 10000 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("avatar") {
+            let child_path = join_path(path, "avatar");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len > 512 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("isDefault") {
+            let child_path = join_path(path, "isDefault");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "name" | "description" | "avatar" | "isDefault") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_create_persona(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_create_persona(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_create_persona(bytes: &[u8]) -> Result<RequestCreatePersona, WireError> {
+    crate::decode::<RequestCreatePersona>(validate_request_create_persona, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestUpdatePersona {
+    #[serde(rename = "personaId")]
+    pub persona_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub avatar: Option<String>,
+    #[serde(rename = "isDefault", default, skip_serializing_if = "Option::is_none")]
+    pub is_default: Option<bool>,
+}
+
+pub(crate) fn check_request_update_persona(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("personaId").is_none() {
+            issues.push(Issue::new(join_path(path, "personaId"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("personaId") {
+            let child_path = join_path(path, "personaId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("name") {
+            let child_path = join_path(path, "name");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 200 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("description") {
+            let child_path = join_path(path, "description");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len > 10000 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("avatar") {
+            let child_path = join_path(path, "avatar");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len > 512 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("isDefault") {
+            let child_path = join_path(path, "isDefault");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "personaId" | "name" | "description" | "avatar" | "isDefault") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_update_persona(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_update_persona(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_update_persona(bytes: &[u8]) -> Result<RequestUpdatePersona, WireError> {
+    crate::decode::<RequestUpdatePersona>(validate_request_update_persona, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestDeletePersona {
+    #[serde(rename = "personaId")]
+    pub persona_id: String,
+}
+
+pub(crate) fn check_request_delete_persona(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("personaId").is_none() {
+            issues.push(Issue::new(join_path(path, "personaId"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("personaId") {
+            let child_path = join_path(path, "personaId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "personaId") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_delete_persona(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_delete_persona(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_delete_persona(bytes: &[u8]) -> Result<RequestDeletePersona, WireError> {
+    crate::decode::<RequestDeletePersona>(validate_request_delete_persona, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RequestListChats {
     #[serde(
         rename = "characterId",
@@ -6472,6 +6889,51 @@ pub fn validate_result_list_presets(value: &Value) -> Result<(), Vec<Issue>> {
 
 pub fn decode_result_list_presets(bytes: &[u8]) -> Result<ResultListPresets, WireError> {
     crate::decode::<ResultListPresets>(validate_result_list_presets, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultListPersonas {
+    pub items: Vec<PersonaDto>,
+}
+
+pub(crate) fn check_result_list_personas(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("items").is_none() {
+            issues.push(Issue::new(join_path(path, "items"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("items") {
+            let child_path = join_path(path, "items");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    check_persona_dto(item, &item_path, issues);
+                }
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "items") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_list_personas(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_list_personas(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_list_personas(bytes: &[u8]) -> Result<ResultListPersonas, WireError> {
+    crate::decode::<ResultListPersonas>(validate_result_list_personas, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

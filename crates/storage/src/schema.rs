@@ -207,6 +207,12 @@ CREATE INDEX idx_generation_steps_run ON generation_steps(run_id);"#
     };
 }
 
+/// Literal body of the personas (v7) schema migration (ТЗ §8.1 Library
+/// context, Этап 4.1): the STRICT `personas` table — the "user" identity
+/// injected into the prompt pipeline as `{{user}}`. `is_default` is a
+/// plain boolean flag; the single-default invariant is enforced by the
+/// kernel on create/update (clearing any previous default), matching the
+/// legacy `PersonaRepository`.
 macro_rules! migration_7_sql {
     () => {
         r#"CREATE TABLE personas (
@@ -325,18 +331,14 @@ pub const MIGRATION_6_CHECKSUM: &str =
 pub const MIGRATION_7_NAME: &str = "007_personas";
 
 /// Exact SQL of the personas schema migration (v7) — the
-/// `migration_7_sql!()` literal. The legacy→kernel migration (Этап 3,
-/// ADR-0041) writes migrated persona rows into this table, so it is part of
-/// the canonical schema from the data cutover on; the kernel persona CRUD
-/// operations (Этап 4.1) build on top of it.
+/// `migration_7_sql!()` literal.
 pub const MIGRATION_7_SQL: &str = migration_7_sql!();
 
 /// Lowercase sha256 hex of the `MIGRATION_7_SQL` string bytes.
 ///
-/// Computed on 2026-08-15: the exact `r#"..."#` literal was written to a temp
-/// file via node (`crypto.createHash('sha256')` over the literal bytes, no
-/// trailing newline) and independently re-hashed with the `sha256sum`
-/// utility on that same file. Both agree on `43535151…`.
+/// Computed on 2026-08-14 via node (`crypto.createHash('sha256')` over the
+/// literal bytes, no trailing newline) and asserted by the migration test
+/// suite against the ledger.
 pub const MIGRATION_7_CHECKSUM: &str =
     "43535151094b3e5c1b18ea38c4024e4c3edfb86489755ecb6d1374a3b9b9b9cb";
 
