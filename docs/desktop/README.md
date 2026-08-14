@@ -46,7 +46,20 @@ Runtime Kernel → SQLite` (ТЗ §11.1/§15.1).
   library is caught before any product write.
 - Streaming: the kernel's durable `generation.events` log is polled by a
   native worker and forwarded to the webview over a Tauri `Channel`; aborting
-  the stream dispatches `generation.cancel` (durable, §63).
+  the stream dispatches `generation.cancel` (durable, §63). The poller closes
+  the consumer stream when the run's session ends — terminal OR durably
+  `waiting_for_tool` (§8.3); a waiting run is followed via
+  `generation.events` / `generation.get`.
+- Tools: `KernelHost::register_tool` (the host seam for `Kernel::register_tool`,
+  Этап 2.7) validates the `wire.tool.spec` by deserialization; tool execution
+  stays kernel-side orchestrated (wait → host effect → `generation.tool.result`).
+- **Packaged golden slice** (Этап 2.9): `NEOTA_DESKTOP_SMOKE=1` runs the full
+  user flow headless on the packaged shell — handshake, character → chat →
+  user message, `generation.start` (deterministic fake) → durable assistant
+  message, then a complete tool round trip (register → `waiting_for_tool` →
+  `generation.tools.list` → `generation.tool.result` → completed, a second
+  assistant message). No HTTP, no sidecar, no UI: the packaged host's own
+  self-check, exits 0 only when every step and assertion holds.
 
 ### Legacy sidecar mode
 
@@ -62,10 +75,10 @@ Runtime Kernel → SQLite` (ТЗ §11.1/§15.1).
 > `.github/workflows/desktop-release.yml`: the bundle is launched with
 > `NEOTA_DESKTOP_SMOKE=1`, waits for sidecar readiness (sidecar mode) or runs
 > the kernel self-check (kernel mode: handshake + `meta.get` +
-> `characters.list` + `backups.list`), checks SQLite creation and the absence
-> of orphan processes. Node.js, `better-sqlite3`, Sharp and production web
-> assets are included in every sidecar-mode package; the first launch does not
-> run `npm install`.
+> `characters.list` + `backups.list` + the golden slice above), checks SQLite
+> creation and the absence of orphan processes. Node.js, `better-sqlite3`,
+> Sharp and production web assets are included in every sidecar-mode package;
+> the first launch does not run `npm install`.
 
 `tauri.conf.json` uses `bundle.targets: "all"`, so `pnpm desktop:build`
 selects the native formats of the current OS. Native addons and the

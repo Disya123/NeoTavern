@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-08-14T06:08:15.017Z",
+  "generatedAt": "2026-08-14T06:23:30.116Z",
   "rows": [
     {
       "hosts": {
@@ -18,13 +18,13 @@
     {
       "hosts": {
         "android": "Implemented",
-        "desktop": "Implemented",
+        "desktop": "Integrated",
         "headless": "Implemented",
         "webClient": "Implemented"
       },
       "id": "characters.crud",
       "milestone": "M2",
-      "notes": "Kernel-owned ops with component tests; UI still routes through legacy /api/v2 until M2 golden flow cutover.",
+      "notes": "Kernel-owned ops with component tests; UI still routes through legacy /api/v2 until M2 golden flow cutover. Desktop host Integrated: the packaged golden slice (Этап 2.9) creates characters over the real Tauri host path.",
       "title": "Character CRUD",
       "wireOps": [
         "characters.create",
@@ -37,13 +37,13 @@
     {
       "hosts": {
         "android": "Implemented",
-        "desktop": "Implemented",
+        "desktop": "Integrated",
         "headless": "Implemented",
         "webClient": "Implemented"
       },
       "id": "chats.crud",
       "milestone": "M2",
-      "notes": "Kernel-owned ops with component tests (round-trip, CHARACTER/CHAT_NOT_FOUND, title rename, message-count subquery, cascade delete); UI still routes through legacy /api/v2 until M2 golden flow cutover.",
+      "notes": "Kernel-owned ops with component tests (round-trip, CHARACTER/CHAT_NOT_FOUND, title rename, message-count subquery, cascade delete); UI still routes through legacy /api/v2 until M2 golden flow cutover. Desktop host Integrated: the packaged golden slice (Этап 2.9) creates chats over the real Tauri host path.",
       "title": "Chat CRUD",
       "wireOps": [
         "chats.create",
@@ -56,13 +56,13 @@
     {
       "hosts": {
         "android": "Implemented",
-        "desktop": "Implemented",
+        "desktop": "Integrated",
         "headless": "Implemented",
         "webClient": "Implemented"
       },
       "id": "chats.messages.crud",
       "milestone": "M2",
-      "notes": "Kernel-owned ops with component tests (atomic sequence allocation per chat, role/content edit, scoped MESSAGE_NOT_FOUND, chat-scoped delete); UI still routes through legacy /api/v2 until M2 golden flow cutover.",
+      "notes": "Kernel-owned ops with component tests (atomic sequence allocation per chat, role/content edit, scoped MESSAGE_NOT_FOUND, chat-scoped delete); UI still routes through legacy /api/v2 until M2 golden flow cutover. Desktop host Integrated: the packaged golden slice (Этап 2.9) creates user messages over the real Tauri host path.",
       "title": "Message CRUD",
       "wireOps": [
         "chats.messages.create",
@@ -106,20 +106,20 @@
       },
       "id": "generation.tool-loop",
       "milestone": "M2",
-      "notes": "Этап 2.7 (ТЗ §8.3): the kernel journals every generation step in generation_steps (migration 6: ALTER TABLE generation_runs ADD COLUMN pending_tool_call_json + generation_steps table, no rebuild) and streams generation.step events (provider_turn/tool_call/tool_result/final_commit). A provider turn emitting a tool call is validated against the declarative tool registry (capability + minimal JSON-Schema argument check) and durably transitions the run to waiting_for_tool — a DERIVED wire status from the pending marker (DB status stays streaming; the v3 CHECK is untouched). The kernel NEVER executes tools: the host performs the effect and submits generation.tool.result, which journals the tool_result step, clears the marker and resumes the provider turn with the assistant tool_calls + tool-role messages. Stable terminal codes: TOOL_NOT_FOUND / TOOL_ARGS_INVALID / TOOL_LOOP_LIMIT (8 calls max) / TOOL_RESULT_STALE (non-idempotent submission). Crash-at-wait: fresh lease survives a reopen and the result still resumes; expired lease → interrupted (retry-safe). Этап 2.8: waiting-run cancel/retry — generation.cancel finalizes cancelled itself for a waiting run (no live executor) and every terminal writer clears the pending marker; retry from a cancelled waiting run starts attempt 2; retry on a still-waiting run is GENERATION_RUN_STATE_CONFLICT. Tools register via Kernel::register_tool; generation.tools.list (app.read) serves the registry. Tests: 7 tools.rs unit + 2 fake unit + 2 adapter + 10 tool_loop.rs kernel integration + 1 providers_openai tool round trip + 1 storage migration test. Honest boundary: JSON-Schema validation covers a documented subset (object/required/additionalProperties + scalar/array/object types); the full schema engine is a follow-up.",
+      "notes": "Этап 2.7 (ТЗ §8.3): the kernel journals every generation step in generation_steps (migration 6: ALTER TABLE generation_runs ADD COLUMN pending_tool_call_json + generation_steps table, no rebuild) and streams generation.step events (provider_turn/tool_call/tool_result/final_commit). A provider turn emitting a tool call is validated against the declarative tool registry (capability + minimal JSON-Schema argument check) and durably transitions the run to waiting_for_tool — a DERIVED wire status from the pending marker (DB status stays streaming; the v3 CHECK is untouched). The kernel NEVER executes tools: the host performs the effect and submits generation.tool.result, which journals the tool_result step, clears the marker and resumes the provider turn with the assistant tool_calls + tool-role messages. Stable terminal codes: TOOL_NOT_FOUND / TOOL_ARGS_INVALID / TOOL_LOOP_LIMIT (8 calls max) / TOOL_RESULT_STALE (non-idempotent submission). Crash-at-wait: fresh lease survives a reopen and the result still resumes; expired lease → interrupted (retry-safe). Этап 2.8: waiting-run cancel/retry — generation.cancel finalizes cancelled itself for a waiting run (no live executor) and every terminal writer clears the pending marker; retry from a cancelled waiting run starts attempt 2; retry on a still-waiting run is GENERATION_RUN_STATE_CONFLICT. Tools register via Kernel::register_tool; generation.tools.list (app.read) serves the registry. Tests: 7 tools.rs unit + 2 fake unit + 2 adapter + 10 tool_loop.rs kernel integration + 1 providers_openai tool round trip + 1 storage migration test. Этап 2.9: desktop host Integrated — the packaged golden slice registers a tool and completes a full waiting_for_tool → tool.result round trip over the real Tauri host path (NEOTA_DESKTOP_SMOKE=1); the host seam KernelHost::register_tool was added, and both Tauri-local and remote-http stream pollers now close the consumer stream when a run durably waits (previously an unbounded poll loop). Honest boundary: JSON-Schema validation covers a documented subset (object/required/additionalProperties + scalar/array/object types); the full schema engine is a follow-up.",
       "title": "Durable run/step journal + tool-call loop (waiting_for_tool)",
       "wireOps": ["generation.tool.result", "generation.tools.list"]
     },
     {
       "hosts": {
         "android": "Implemented",
-        "desktop": "Implemented",
+        "desktop": "Integrated",
         "headless": "Implemented",
         "webClient": "Implemented"
       },
       "id": "generation.workflow",
       "milestone": "M2",
-      "notes": "Durable run/event model in kernel; run/step + tool protocol is M2 (GEN-RUN 10A/10B); UI streaming cutover in M2.",
+      "notes": "Durable run/event model in kernel; run/step + tool protocol is M2 (GEN-RUN 10A/10B); UI streaming cutover in M2. Desktop host Integrated: the packaged golden slice (NEOTA_DESKTOP_SMOKE=1, Этап 2.9) drives character → chat → message → generation.start → durable save over the real Tauri host path (shell → KernelHost envelope → kernel → SQLite).",
       "title": "Generation workflow (stream, cancel, retry, keep, discard)",
       "wireOps": [
         "generation.cancel",

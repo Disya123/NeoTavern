@@ -255,7 +255,7 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "15177ed468c0173cfbb025d42403a127aba871aa32ffc3971cb82fa8f8ccdc63"
+      "sha256": "93b41b9dae6fff43535602a67c24ba8de4ce6a9ce5a6c0023f7282913a09b0ba"
     },
     {
       "source": "data/README.md",
@@ -265,7 +265,7 @@
     {
       "source": "desktop/README.md",
       "target": "desktop/README.md",
-      "sha256": "05a52cb73bddccbc8c0af2fd9a1cfd58ba8c30688d50f0bd4e2a37cb510ba2ac"
+      "sha256": "53b938aa0e0ecfdb351e2ae5c6cdf212c40e8a387f2cb69d289e866c6e0852a8"
     },
     {
       "source": "migrations/README.md",

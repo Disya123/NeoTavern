@@ -26,7 +26,7 @@
 //! terminal state (§63).
 
 use contracts_generated::generated::{
-    EventEnvelope, PagedGenerationEvents, RequestListGenerationEvents,
+    EventEnvelope, PagedGenerationEvents, RequestListGenerationEvents, ToolSpec,
 };
 use neotavern_envelope::{self as envelope, EnvelopeFailure, ProtocolVerdict};
 use runtime_kernel::{CancellationFlag, EventStream, Kernel, KernelConfig, KernelError};
@@ -299,6 +299,22 @@ impl KernelHost {
             flag.cancel();
         }
     }
+
+    /// Registers a declarative tool contract (`wire.tool.spec`) with the
+    /// shared kernel — the host-side seam for `Kernel::register_tool`
+    /// (Этап 2.7). Deserialization into the generated DTO validates the spec;
+    /// a malformed spec is an IPC-level error, never a kernel write. The
+    /// registry is in-memory per kernel: hosts re-register after restart.
+    pub fn register_tool(&self, spec: serde_json::Value) -> Result<(), String> {
+        let spec: ToolSpec =
+            serde_json::from_value(spec).map_err(|e| format!("invalid wire.tool.spec: {e}"))?;
+        let guard = self
+            .kernel
+            .lock()
+            .map_err(|_| "kernel lock poisoned".to_string())?;
+        guard.register_tool(spec);
+        Ok(())
+    }
 }
 
 /// Pushes a bounded page of the durable `generation.events` log to the
@@ -326,7 +342,7 @@ fn poll_loop(
         }
         // Wait for the next notice (or the poll timeout) before re-reading
         // the durable log; a dropped notice is never a correctness problem.
-        let _notice = stream.next_notice(STREAM_POLL_INTERVAL);
+        let notice = stream.next_notice(STREAM_POLL_INTERVAL);
         let request = RequestListGenerationEvents {
             workflow_id: stream_id.clone(),
             after_sequence: Some(last_sent),
@@ -355,6 +371,16 @@ fn poll_loop(
                 unregister_stream(&streams, &stream_id);
                 return;
             }
+        }
+        if matches!(notice, Some(runtime_kernel::StreamNotice::Terminal { .. })) {
+            // The run's stream session ended — terminal (completed/failed/
+            // cancelled) OR durably waiting for a tool result (§8.3). The
+            // durable log has no further events (this page was the final
+            // drain), so close the consumer stream; waiting runs are followed
+            // via `generation.events` / `generation.get` from here on.
+            let _ = emit(serde_json::Value::Null);
+            unregister_stream(&streams, &stream_id);
+            return;
         }
     }
     let _ = emit(serde_json::Value::Null);
@@ -608,5 +634,129 @@ mod tests {
         let host = stateless_host();
         host.abort_stream("00000000-0000-4000-8000-000000000099");
         // No panic, no error — the stream simply does not exist anymore.
+    }
+
+    /// The poller must CLOSE the consumer stream when the run durably waits
+    /// for a tool result (§8.3): the kernel's stream session ends at the
+    /// waiting transition with a `Terminal` notice, and waiting runs are
+    /// followed via `generation.events` / `generation.get` from then on —
+    /// never an unbounded poll loop.
+    #[test]
+    fn stream_closes_at_durable_waiting_for_tool() {
+        let root = std::env::temp_dir().join(format!(
+            "neotavern-tauri-local-waiting-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).expect("temp root");
+        let host = KernelHost::open(KernelHostConfig {
+            data_root: Some(root.clone()),
+        })
+        .expect("kernel");
+
+        // Seed character + chat through the real wire surface.
+        let character = match dispatch(
+            &host,
+            "characters.create",
+            json!({
+                "name": "Aria", "description": "test", "tags": []
+            }),
+        ) {
+            ResponseEnvelope::Ok { result, .. } => result,
+            other => panic!("character create: {other:?}"),
+        };
+        let character_id = character["id"].as_str().expect("id").to_string();
+        let chat = match dispatch(
+            &host,
+            "chats.create",
+            json!({
+                "characterId": character_id, "title": "waiting"
+            }),
+        ) {
+            ResponseEnvelope::Ok { result, .. } => result,
+            other => panic!("chat create: {other:?}"),
+        };
+        let chat_id = chat["id"].as_str().expect("id").to_string();
+
+        // Register the tool the fake provider will call.
+        host.register_tool(json!({
+            "id": "lookup-weather",
+            "name": "lookup_weather",
+            "description": "Weather lookup",
+            "inputSchema": {
+                "type": "object",
+                "properties": { "query": { "type": "string" } },
+                "required": ["query"]
+            }
+        }))
+        .expect("register tool");
+
+        // Open the live stream; collect forwarded events until the sentinel.
+        let (tx, rx) = std::sync::mpsc::channel::<serde_json::Value>();
+        let body = host
+            .open_stream(
+                &serde_json::to_vec(&request_envelope(
+                    "generation.start",
+                    json!({
+                        "chatId": chat_id,
+                        "message": "Weather in Kyiv",
+                        "provider": "fake",
+                        "model": "tool=lookup_weather",
+                    }),
+                ))
+                .unwrap(),
+                move |event| {
+                    let _ = tx.send(event);
+                    Ok(())
+                },
+            )
+            .expect("open_stream must answer");
+        let stream_id = match decode_response_envelope(&body).expect("valid envelope") {
+            ResponseEnvelope::Ok { result, .. } => {
+                result["streamId"].as_str().expect("streamId").to_string()
+            }
+            other => panic!("expected ok envelope, got {other:?}"),
+        };
+
+        let mut events = Vec::new();
+        let mut closed = false;
+        let deadline = std::time::Instant::now() + Duration::from_secs(30);
+        while std::time::Instant::now() < deadline {
+            match rx.recv_timeout(Duration::from_secs(1)) {
+                Ok(value) if value.is_null() => {
+                    closed = true;
+                    break;
+                }
+                Ok(value) => events.push(value),
+                Err(_) => continue,
+            }
+        }
+        assert!(
+            closed,
+            "stream must close at waiting_for_tool; events: {events:?}"
+        );
+
+        // The journal carries the provider_turn + tool_call steps, and the
+        // run is durably waiting.
+        let step_types: Vec<&str> = events
+            .iter()
+            .filter(|e| e["type"] == "generation.step")
+            .filter_map(|e| e["payload"]["step"]["type"].as_str())
+            .collect();
+        assert!(
+            step_types.contains(&"provider_turn"),
+            "provider_turn step missing: {events:?}"
+        );
+        assert!(
+            step_types.contains(&"tool_call"),
+            "tool_call step missing: {events:?}"
+        );
+        let run = match dispatch(&host, "generation.get", json!({ "workflowId": stream_id })) {
+            ResponseEnvelope::Ok { result, .. } => result,
+            other => panic!("generation.get: {other:?}"),
+        };
+        assert_eq!(run["status"], "waiting_for_tool");
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

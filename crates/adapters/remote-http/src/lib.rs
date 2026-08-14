@@ -38,7 +38,9 @@ use contracts_generated::generated;
 use cors::CorsPolicy;
 use neotavern_envelope::{EnvelopeFailure, ProtocolVerdict};
 use rate_limit::{RateLimitConfig, RateLimiter};
-use runtime_kernel::{CancellationFlag, EventStream, Kernel, KernelError, KernelErrorCode};
+use runtime_kernel::{
+    CancellationFlag, EventStream, Kernel, KernelError, KernelErrorCode, StreamNotice,
+};
 use sse::SseFrame;
 use tiny_http::{Header, Method, Request, Response, Server};
 
@@ -1329,9 +1331,14 @@ impl StreamingResponseReader {
             }
         }
 
-        match &mut self.stream {
-            // Live mode: wait for the next commit notice (or the poll
-            // timeout). Notices coalesce; the durable log is authoritative.
+        // Pace: in live mode wait for the next commit notice (or the poll
+        // timeout); in resume mode sleep a fixed interval. Notices coalesce;
+        // the durable log is authoritative. `session_ended` records whether
+        // the kernel's stream session terminated — terminal (completed /
+        // failed / cancelled) OR durably waiting for a tool result (§8.3) —
+        // which closes the SSE stream after the final drain; waiting runs
+        // are then followed via `generation.events` / `generation.get`.
+        let session_ended = match &mut self.stream {
             Some(stream) => {
                 let started = Instant::now();
                 let notice = stream.next_notice(STREAM_POLL_INTERVAL);
@@ -1343,10 +1350,14 @@ impl StreamingResponseReader {
                     // of hot-spinning on an unrecoverable stream.
                     thread::sleep(STREAM_POLL_INTERVAL);
                 }
+                matches!(notice, Some(StreamNotice::Terminal { .. }))
             }
             // Resume mode: no stream handle — poll the durable log directly.
-            None => thread::sleep(STREAM_POLL_INTERVAL),
-        }
+            None => {
+                thread::sleep(STREAM_POLL_INTERVAL);
+                false
+            }
+        };
 
         match self.poll_events() {
             Ok(page) => {
@@ -1359,6 +1370,11 @@ impl StreamingResponseReader {
                     }
                 }
                 if self.terminal {
+                    self.close_stream();
+                } else if session_ended {
+                    // The run's stream session ended without a terminal event
+                    // type (durable `waiting_for_tool`): this page was the
+                    // final drain — close with `stream.closed`.
                     self.close_stream();
                 } else if self.stream.is_none() && was_empty && self.run_finished() {
                     // Resume at/after the terminal event: the log holds no
