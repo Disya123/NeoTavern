@@ -213,9 +213,14 @@
       "sha256": "41185c69649e017a90163fb4eb648bba789a6c7de5c4eea9fd8b85e2bb8031aa"
     },
     {
+      "source": "adr/0047-m4-limited-waivers.md",
+      "target": "adr/0047-m4-limited-waivers.md",
+      "sha256": "6f0d0e8b599f15dfa67daee0978ca6c7a47d3c865ea498690d3b447fa5533de6"
+    },
+    {
       "source": "adr/README.md",
       "target": "adr/README.md",
-      "sha256": "3db5f31f0088932ba4919a224c067a2bcc4437f258df9db9df5eb1eced197c10"
+      "sha256": "42ec4a3e7eaae8331a851e5e8db77a21f40384c5c83463edf8d9c5f86361f98a"
     },
     {
       "source": "android/README.md",
