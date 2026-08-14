@@ -175,6 +175,38 @@ CREATE INDEX idx_prompt_plans_chat ON prompt_plans(chat_id);"#
     };
 }
 
+/// Literal body of the generation-steps (v6) schema migration (ТЗ §8.3,
+/// Этап 2.7): the durable `generation_steps` journal — one immutable row per
+/// provider turn, tool call and tool result with a monotonic per-run
+/// `sequence`, type, status, attempt, idempotency key and bounded JSON
+/// input/output — plus the run's `pending_tool_call_json` column: the
+/// outstanding normalized tool request a run waits on. A waiting run keeps
+/// the v3 `status = 'streaming'` (the CHECK is untouched); the wire status
+/// `waiting_for_tool` is DERIVED by the kernel from
+/// `pending_tool_call_json IS NOT NULL`, so no `CHECK` rebuild is needed and
+/// the child tables (events, prompt plans) are never at risk.
+macro_rules! migration_6_sql {
+    () => {
+        r#"ALTER TABLE generation_runs ADD COLUMN pending_tool_call_json TEXT;
+CREATE TABLE generation_steps (
+  run_id TEXT NOT NULL REFERENCES generation_runs(id) ON DELETE CASCADE,
+  sequence INTEGER NOT NULL,
+  step_id TEXT NOT NULL,
+  step_type TEXT NOT NULL,
+  status TEXT NOT NULL,
+  attempt INTEGER NOT NULL DEFAULT 1,
+  idempotency_key TEXT NOT NULL,
+  input_json TEXT NOT NULL DEFAULT '{}',
+  output_json TEXT,
+  error_json TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (run_id, sequence)
+) STRICT;
+CREATE INDEX idx_generation_steps_run ON generation_steps(run_id);"#
+    };
+}
+
 /// Name of the initial (v1) schema migration.
 pub const MIGRATION_1_NAME: &str = "001_initial_schema";
 
@@ -259,6 +291,22 @@ pub const MIGRATION_5_SQL: &str = migration_5_sql!();
 pub const MIGRATION_5_CHECKSUM: &str =
     "439d56c8050e27d1373d12df90fdc16c54a423945e0c9c2d51f08b0df58c4fd0";
 
+/// Name of the generation-steps (v6) schema migration.
+pub const MIGRATION_6_NAME: &str = "006_generation_steps";
+
+/// Exact SQL of the generation-steps schema migration (v6) — the
+/// `migration_6_sql!()` literal.
+pub const MIGRATION_6_SQL: &str = migration_6_sql!();
+
+/// Lowercase sha256 hex of the `MIGRATION_6_SQL` string bytes.
+///
+/// Computed on 2026-08-13: the exact `r#"..."#` literal was written to a temp
+/// file via node (`crypto.createHash('sha256')` over the literal bytes, no
+/// trailing newline) and independently re-hashed with the `sha256sum`
+/// utility on that same file.
+pub const MIGRATION_6_CHECKSUM: &str =
+    "4e7d2912dea3fb36233d89e77fe282d16a5cad95eb3d338c8b22f6b887aff166";
+
 /// A fresh install runs every migration in order, so `FRESH_SCHEMA_SQL` is the
 /// concatenation of all migration literals with a single newline between them
 /// (the same statement separator `execute_batch` applies).
@@ -275,7 +323,9 @@ pub const FRESH_SCHEMA_SQL: &str = concat!(
     "\n",
     migration_4_sql!(),
     "\n",
-    migration_5_sql!()
+    migration_5_sql!(),
+    "\n",
+    migration_6_sql!()
 );
 
 /// sha256 hex of the `FRESH_SCHEMA_SQL` bytes — the fresh-install fingerprint.

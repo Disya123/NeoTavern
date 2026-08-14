@@ -178,8 +178,9 @@ fn delta_text(events: &[gen::EventEnvelope]) -> String {
 fn live_stream_frames_match_durable_log_and_terminate() {
     let server = spawn_seeded_server();
 
-    // steps=4: deltas at sequences 0..3, one checkpoint (after delta 3),
-    // one completed terminal event — deterministic, instant.
+    // steps=4: deltas at sequences 0..3, one checkpoint (after delta 3), then
+    // Этап 2.7 journals the closing steps (provider_turn + final_commit)
+    // before the terminal — deterministic, instant.
     let (stream_id, streamed) = run_generation(&server, &rid(1), "steps=4;tokens-per-step=64");
 
     // Frames arrive in exactly the executor's commit order.
@@ -192,16 +193,23 @@ fn live_stream_frames_match_durable_log_and_terminate() {
             "generation.delta",
             "generation.delta",
             "generation.checkpoint",
+            "generation.step",
+            "generation.step",
             "generation.completed",
         ],
         "frames arrive in commit order"
     );
 
-    // Sequences are globally monotonic with no gaps (0..=5 here).
+    // The two journaled steps are the turn and final commits.
+    assert_eq!(streamed[5].payload["step"]["type"], json!("provider_turn"));
+    assert_eq!(streamed[6].payload["step"]["type"], json!("final_commit"));
+    assert_eq!(streamed[5].payload["step"]["status"], json!("completed"));
+
+    // Sequences are globally monotonic with no gaps (0..=7 here).
     let sequences: Vec<i64> = streamed.iter().map(|env| env.sequence).collect();
     assert_eq!(
         sequences,
-        (0..6).collect::<Vec<i64>>(),
+        (0..8).collect::<Vec<i64>>(),
         "sequences are gapless"
     );
     assert_eq!(
@@ -224,7 +232,7 @@ fn live_stream_frames_match_durable_log_and_terminate() {
 
     // The completed event carries the persisted assistant message: full
     // concatenated text, linked to the run, in this chat.
-    let completed = &streamed[5].payload;
+    let completed = &streamed[7].payload;
     let full_text = delta_text(&streamed);
     assert_eq!(full_text.len(), 120);
     let final_message = &completed["finalMessage"];

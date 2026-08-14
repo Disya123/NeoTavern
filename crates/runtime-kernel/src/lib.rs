@@ -38,6 +38,7 @@ pub mod product;
 pub mod prompt;
 pub mod providers;
 pub mod providers_config;
+pub mod tools;
 
 /// FFI ABI version this kernel implements. Must match the embedded manifest's
 /// `ffiAbiVersion` (see `contracts_generated::contract_schema_hash`).
@@ -349,6 +350,14 @@ enum Command {
         adapter: Arc<dyn ProviderAdapter>,
         reply: mpsc::SyncSender<()>,
     },
+    /// Registers a tool contract (wire `wire.tool.spec`, ТЗ §8.3): the
+    /// kernel validates provider tool calls against it and durably waits for
+    /// the host-submitted result; it never executes tools itself. Applied
+    /// immediately and acknowledged.
+    RegisterTool {
+        spec: generated::ToolSpec,
+        reply: mpsc::SyncSender<()>,
+    },
     /// Sets the per-run provider deadline for future generations (default
     /// [`generation::RUN_TIMEOUT`]). Applied immediately and acknowledged.
     SetRunTimeout {
@@ -462,6 +471,7 @@ fn handle_unary(
     op: &str,
     req: &[u8],
     cancel: &CancellationFlag,
+    lease_owner: &str,
 ) -> Result<Vec<u8>, KernelError> {
     if cancel.is_cancelled() {
         return Err(KernelError::new(
@@ -474,6 +484,8 @@ fn handle_unary(
         // Phase 7: stateless provider registry listing (like meta.get — no
         // durable storage required).
         "providers.list" => providers::handle_providers_list(&state.registry, req),
+        // Этап 2.7: stateless tool registry listing (declarative contracts).
+        "generation.tools.list" => tools::generation_tools_list(&state.tools, req),
         // Phase 3 product CRUD over durable storage.
         "characters.list" => with_db_opt(db, |db| product::characters_list(db, req)),
         "characters.get" => with_db_opt(db, |db| product::characters_get(db, req)),
@@ -514,6 +526,19 @@ fn handle_unary(
         "generation.prompt.plan" => {
             with_db_opt(db, |db| generation::generation_prompt_plan(db, req))
         }
+        // Этап 2.7: submit a tool result and resume a waiting-for-tool run.
+        "generation.tool.result" => with_db_opt(db, |db| {
+            generation::generation_tool_result(
+                db,
+                req,
+                &state.registry,
+                &state.tools,
+                state.run_timeout,
+                state.secret_resolver.clone(),
+                cancel,
+                lease_owner,
+            )
+        }),
         // Phase 11 portable data (ТЗ §40–§41): backup containers.
         "backups.create" => with_db_opt(db, |db| backup::backups_create(db, req)),
         "backups.list" => with_db_opt(db, |db| backup::backups_list(db, req)),
@@ -539,6 +564,7 @@ fn drain_pending(
     cmd_rx: &mpsc::Receiver<Command>,
     pending: &mut Vec<Command>,
     stop: &mut bool,
+    lease_owner: &str,
 ) -> bool {
     let mut shutdown = false;
     while let Ok(cmd) = cmd_rx.try_recv() {
@@ -549,7 +575,7 @@ fn drain_pending(
                 cancel,
                 reply,
             } => {
-                let result = handle_unary(Some(db), meta, state, &op, &req, &cancel);
+                let result = handle_unary(Some(db), meta, state, &op, &req, &cancel, lease_owner);
                 let _ = reply.send(result);
             }
             Command::Stream {
@@ -577,6 +603,10 @@ fn drain_pending(
             }
             Command::RegisterProvider { adapter, reply } => {
                 state.registry.register(adapter);
+                let _ = reply.send(());
+            }
+            Command::RegisterTool { spec, reply } => {
+                state.tools.register(spec);
                 let _ = reply.send(());
             }
             Command::SetRunTimeout { timeout, reply } => {
@@ -629,7 +659,8 @@ fn writer_main(
                 cancel,
                 reply,
             } => {
-                let result = handle_unary(db.as_mut(), &meta, &state, &op, &req, &cancel);
+                let result =
+                    handle_unary(db.as_mut(), &meta, &state, &op, &req, &cancel, &lease_owner);
                 let _ = reply.send(result);
             }
             Command::Stream {
@@ -656,11 +687,13 @@ fn writer_main(
                         }));
                         if let Some(db) = db.as_mut() {
                             // Snapshot the provider state for this run: the
-                            // deadline and secret seam are fixed at stream
-                            // start; later Set* commands affect the next run.
+                            // deadline, secret seam, adapter registry and
+                            // tool registry are fixed at stream start; later
+                            // Set*/Register* commands affect the next run.
                             let run_timeout = state.run_timeout;
                             let secret_resolver = state.secret_resolver.clone();
                             let registry = state.registry.clone();
+                            let tools = state.tools.clone();
                             let mut drain = |db: &mut neotavern_storage::open::Database| {
                                 drain_pending(
                                     db,
@@ -669,6 +702,7 @@ fn writer_main(
                                     &cmd_rx,
                                     &mut pending,
                                     &mut stop,
+                                    &lease_owner,
                                 )
                             };
                             let result = generation::execute_stream(
@@ -681,6 +715,7 @@ fn writer_main(
                                 run_timeout,
                                 secret_resolver,
                                 &cancel,
+                                &tools,
                             );
                             if let Err(err) = result {
                                 eprintln!("kernel: generation executor failed: {err}");
@@ -699,6 +734,10 @@ fn writer_main(
             }
             Command::RegisterProvider { adapter, reply } => {
                 state.registry.register(adapter);
+                let _ = reply.send(());
+            }
+            Command::RegisterTool { spec, reply } => {
+                state.tools.register(spec);
                 let _ = reply.send(());
             }
             Command::SetRunTimeout { timeout, reply } => {
@@ -966,6 +1005,21 @@ impl Kernel {
         let (reply_tx, reply_rx) = mpsc::sync_channel(1);
         let _ = self.cmd_tx.send(Command::RegisterProvider {
             adapter,
+            reply: reply_tx,
+        });
+        let _ = reply_rx.recv_timeout(Duration::from_secs(5));
+    }
+
+    /// Registers a tool contract (ТЗ §8.3, Этап 2.7).
+    ///
+    /// The kernel validates provider tool calls against the registered
+    /// contract (capability + argument schema) and durably waits for the
+    /// host-submitted result; it never executes tools itself. Fire-and-forget
+    /// ack like [`set_secret_resolver`](Self::set_secret_resolver).
+    pub fn register_tool(&self, spec: generated::ToolSpec) {
+        let (reply_tx, reply_rx) = mpsc::sync_channel(1);
+        let _ = self.cmd_tx.send(Command::RegisterTool {
+            spec,
             reply: reply_tx,
         });
         let _ = reply_rx.recv_timeout(Duration::from_secs(5));

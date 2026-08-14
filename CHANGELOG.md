@@ -3,6 +3,38 @@
 ## Unreleased
 ### Added
 
+- **Durable run/step journal and the tool-call loop (M2 / Этап 2.7, ТЗ
+  §8.3).** The kernel now journals every generation step in the new
+  `generation_steps` table (schema migration 6 — `ALTER TABLE` + `CREATE
+  TABLE`, no rebuild) and streams `generation.step` wire events
+  (`provider_turn` / `tool_call` / `tool_result` / `final_commit`; DTOs
+  `wire.generation.step` / `.type` / `.status`). A provider turn that emits a
+  normalized tool call is validated against the **declarative tool registry**
+  (capability + minimal JSON-Schema argument check; `Kernel::register_tool`,
+  `generation.tools.list` `app.read`) and durably transitions the run to the
+  derived wire status **`waiting_for_tool`** (DB `status` stays `streaming`;
+  the marker column `pending_tool_call_json` is the source of truth — the v3
+  CHECK is untouched). The kernel **never executes tools**: the host performs
+  the effect once and submits `generation.tool.result` (non-idempotent,
+  `app.write`), which journals the `tool_result` step, clears the marker and
+  resumes the provider turn with the assistant `tool_calls` + `tool`-role
+  result messages. Stable terminal codes: `TOOL_NOT_FOUND`,
+  `TOOL_ARGS_INVALID`, `TOOL_LOOP_LIMIT` (max 8 tool calls per run),
+  `TOOL_RESULT_STALE` (replay/foreign submission). Crash-at-wait: the waiting
+  transition refreshed the run lease, so a reopen with a fresh lease resumes;
+  an expired lease → `interrupted` (retry-safe — no external effect ever ran).
+  Provider SDK: `ProviderEvent::ToolCall`, `PromptMessage.tool_calls` /
+  `.tool_call_id`, `ProviderRequest.tools`. OpenAI-compatible adapter
+  serializes `tools` and the resumed-turn context and accumulates SSE
+  `delta.tool_calls[]` fragments into a normalized `ToolCall`. Fake provider
+  gains `tool=<name>` and `tool-loop=<name>` grammar. Tests: 7 `tools.rs`
+  unit (registry + schema subset), 2 fake unit, 2 adapter (fragmented
+  arguments, mixed text+call), 8 `tool_loop.rs` kernel integration (golden
+  round trip, listing, rejections, loop limit, crash-at-wait reopen-resume),
+  1 storage migration test (v5→v6 with data). Honest boundary: JSON-Schema
+  validation covers a documented subset (object/required/additionalProperties
+  + scalar/array/object types); the full schema engine is a follow-up.
+
 - **Prompt pipeline in the Kernel (M2 / Этап 2.6, ТЗ §9.1–§9.2).** Every
   generation run now builds an immutable **PromptPlan** before the provider
   attempt: character/persona system blocks (from the chat's character card,

@@ -79,17 +79,23 @@ pub(crate) struct ProviderState {
     pub secret_store: Option<Arc<dyn SecretStore>>,
     /// Per-run provider deadline for new generations.
     pub run_timeout: Duration,
+    /// The kernel's declarative tool registry (ТЗ §8.3, Этап 2.7): the
+    /// contracts the executor validates provider tool calls against. Tools
+    /// are never executed by the kernel — the host performs the effect and
+    /// submits the result via `generation.tool.result`.
+    pub tools: crate::tools::ToolRegistry,
 }
 
 impl ProviderState {
     /// Fresh writer state: built-in adapters, no resolver, no store, default
-    /// timeout.
+    /// timeout, empty tool registry.
     pub fn new_builtins() -> Self {
         Self {
             registry: ProviderRegistry::new_builtins(),
             secret_resolver: None,
             secret_store: None,
             run_timeout: RUN_TIMEOUT,
+            tools: crate::tools::ToolRegistry::new(),
         }
     }
 }

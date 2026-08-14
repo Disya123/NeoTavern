@@ -178,10 +178,13 @@ fn generate_collect(
         deadline,
         api_key,
         messages: None,
+        tools: None,
     };
     let mut texts = Vec::new();
     let result = provider.generate(&request, CancelToken::new(flag), &mut |event| {
-        let ProviderEvent::Delta { text } = event;
+        let ProviderEvent::Delta { text } = event else {
+            return EmitStatus::Continue;
+        };
         texts.push(text);
         EmitStatus::Continue
     });
@@ -261,14 +264,20 @@ fn rendered_plan_messages_serialize_into_the_body() {
         provider_sdk::PromptMessage {
             role: "system",
             content: "You are Aria.",
+            tool_calls: None,
+            tool_call_id: None,
         },
         provider_sdk::PromptMessage {
             role: "user",
             content: "earlier",
+            tool_calls: None,
+            tool_call_id: None,
         },
         provider_sdk::PromptMessage {
             role: "user",
             content: "hello",
+            tool_calls: None,
+            tool_call_id: None,
         },
     ];
     let request = ProviderRequest {
@@ -279,10 +288,13 @@ fn rendered_plan_messages_serialize_into_the_body() {
         deadline: None,
         api_key: Some("sk-test"),
         messages: Some(&plan),
+        tools: None,
     };
     let mut texts = Vec::new();
     let result = provider.generate(&request, CancelToken::new(&flag), &mut |event| {
-        let ProviderEvent::Delta { text } = event;
+        let ProviderEvent::Delta { text } = event else {
+            return EmitStatus::Continue;
+        };
         texts.push(text);
         EmitStatus::Continue
     });
@@ -383,10 +395,13 @@ fn cancel_mid_stream_stops_emission() {
         deadline: None,
         api_key: Some("sk-test"),
         messages: None,
+        tools: None,
     };
     let mut texts = Vec::new();
     let result = provider.generate(&request, CancelToken::new(&flag), &mut |event| {
-        let ProviderEvent::Delta { text } = event;
+        let ProviderEvent::Delta { text } = event else {
+            return EmitStatus::Continue;
+        };
         texts.push(text);
         flag.store(true, Ordering::SeqCst);
         EmitStatus::Continue
@@ -529,6 +544,7 @@ fn mock_server_never_hangs_without_a_connection() {
         deadline: Some(Deadline::after(Duration::from_millis(200))),
         api_key: Some("sk-test"),
         messages: None,
+        tools: None,
     };
     let result = provider.generate(&request, CancelToken::new(&flag), &mut |_| {
         EmitStatus::Continue
@@ -573,4 +589,192 @@ fn api_key_never_in_the_request_body() {
         body.contains("\"model\":\"mock-1\""),
         "body carries the model"
     );
+}
+
+/// One chat-completions `delta.tool_calls[]` chunk (fragmentable arguments).
+fn tool_call_chunk_payload(
+    index: u64,
+    id: Option<&str>,
+    name: Option<&str>,
+    arguments: &str,
+) -> String {
+    let id_json = match id {
+        Some(id) => format!(r#""id":"{id}","#),
+        None => String::new(),
+    };
+    let name_json = match name {
+        Some(name) => format!(r#""name":"{name}","#),
+        None => String::new(),
+    };
+    format!(
+        r#"{{"choices":[{{"delta":{{"tool_calls":[{{"index":{index},{id_json}"function":{{{name_json}"arguments":"{arguments}"}}}}]}},"finish_reason":null}}]}}"#
+    )
+}
+
+/// §8.3: a stream carrying a tool call (with fragmented JSON arguments) emits
+/// `ProviderEvent::ToolCall` with the accumulated arguments, and the request
+/// body declares `tools` plus the resumed-turn tool context.
+#[test]
+fn streams_tool_call_and_serializes_tool_context() {
+    let observed = Arc::new(Mutex::new(String::new()));
+    let observed_clone = Arc::clone(&observed);
+    let server = MockServer::spawn(move |request, mut stream| {
+        let body = request
+            .split_once("\r\n\r\n")
+            .map(|(_, body)| body.to_string())
+            .unwrap_or_default();
+        // Parse BEFORE moving the body into the observed slot.
+        let parsed: serde_json::Value =
+            serde_json::from_str(&body).expect("request body must be JSON");
+        *observed_clone.lock().expect("lock") = body;
+        let tools = parsed["tools"].as_array().expect("tools array");
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0]["type"], "function");
+        assert_eq!(tools[0]["function"]["name"], "lookup_weather");
+        assert!(tools[0]["function"]["parameters"].is_object());
+        let messages = parsed["messages"].as_array().expect("messages array");
+        let assistant = &messages[0];
+        assert_eq!(assistant["role"], "assistant");
+        assert_eq!(assistant["tool_calls"][0]["id"], "call-1");
+        assert_eq!(
+            assistant["tool_calls"][0]["function"]["name"],
+            "lookup_weather"
+        );
+        let tool_msg = &messages[1];
+        assert_eq!(tool_msg["role"], "tool");
+        assert_eq!(tool_msg["tool_call_id"], "call-1");
+        assert_eq!(tool_msg["content"], "{\"celsius\":22}");
+        stream.write_all(CHUNKED_HEAD.as_bytes())?;
+        let events = [
+            // Fragment 1: id + name + first half of the JSON-encoded
+            // arguments (`{\"city\":\"Ky`).
+            (
+                tool_call_chunk_payload(
+                    0,
+                    Some("call-1"),
+                    Some("lookup_weather"),
+                    r#"{\"city\":\"Ky"#,
+                ),
+                Duration::ZERO,
+            ),
+            // Fragment 2: arguments continuation (`iv\"}`).
+            (
+                tool_call_chunk_payload(0, None, None, r#"iv\"}"#),
+                Duration::ZERO,
+            ),
+            ("[DONE]".to_string(), Duration::ZERO),
+        ];
+        stream.write_all(&chunked_sse_response(&events))?;
+        stream.flush()
+    });
+    let provider = test_provider(&server.base_url());
+    let flag = AtomicBool::new(false);
+    let scratch_json = r#"{"city":"Kyiv"}"#.to_string();
+    let scratch_result = r#"{"celsius":22}"#.to_string();
+    let tool_calls = [provider_sdk::PromptToolCall {
+        id: "call-1",
+        name: "lookup_weather",
+        arguments: &scratch_json,
+    }];
+    let plan = [
+        provider_sdk::PromptMessage {
+            role: "assistant",
+            content: "",
+            tool_calls: Some(&tool_calls),
+            tool_call_id: None,
+        },
+        provider_sdk::PromptMessage {
+            role: "tool",
+            content: &scratch_result,
+            tool_calls: None,
+            tool_call_id: Some("call-1"),
+        },
+    ];
+    let spec = provider_sdk::ToolSpec {
+        id: "lookup-weather",
+        name: "lookup_weather",
+        description: "weather lookup",
+        input_schema: &serde_json::json!({ "type": "object" }),
+    };
+    let tools = [spec];
+    let request = ProviderRequest {
+        provider_id: provider.id(),
+        model: "mock-1",
+        input: "what is the weather?",
+        run_key: "chat-123|1",
+        deadline: None,
+        api_key: Some("sk-test"),
+        messages: Some(&plan),
+        tools: Some(&tools),
+    };
+    let mut events = Vec::new();
+    let result = provider.generate(&request, CancelToken::new(&flag), &mut |event| {
+        events.push(event);
+        EmitStatus::Continue
+    });
+    let usage = result.expect("tool-call stream succeeds");
+    assert_eq!(usage.steps, 0, "no text deltas in the tool-call stream");
+    assert_eq!(events.len(), 1, "exactly one emitted event");
+    match &events[0] {
+        ProviderEvent::ToolCall {
+            id,
+            name,
+            arguments,
+        } => {
+            assert_eq!(id, "call-1");
+            assert_eq!(name, "lookup_weather");
+            assert_eq!(arguments, &serde_json::json!({ "city": "Kyiv" }));
+        }
+        other => panic!("expected ToolCall, got {other:?}"),
+    }
+}
+
+/// §8.3: a stream with BOTH content and a later tool call emits the deltas
+/// first, then the tool call (the kernel commits deltas before waiting).
+#[test]
+fn streams_text_then_tool_call() {
+    let server = MockServer::spawn(move |_request, mut stream| {
+        stream.write_all(CHUNKED_HEAD.as_bytes())?;
+        let events = [
+            (delta_payload("Let me check"), Duration::ZERO),
+            (
+                tool_call_chunk_payload(
+                    0,
+                    Some("call-9"),
+                    Some("lookup_weather"),
+                    r#"{\"city\":\"Oslo\"}"#,
+                ),
+                Duration::ZERO,
+            ),
+            ("[DONE]".to_string(), Duration::ZERO),
+        ];
+        stream.write_all(&chunked_sse_response(&events))?;
+        stream.flush()
+    });
+    let provider = test_provider(&server.base_url());
+    let flag = AtomicBool::new(false);
+    let request = ProviderRequest {
+        provider_id: provider.id(),
+        model: "mock-1",
+        input: "weather in Oslo",
+        run_key: "chat-123|1",
+        deadline: None,
+        api_key: Some("sk-test"),
+        messages: None,
+        tools: None,
+    };
+    let mut events = Vec::new();
+    let result = provider.generate(&request, CancelToken::new(&flag), &mut |event| {
+        events.push(event);
+        EmitStatus::Continue
+    });
+    let usage = result.expect("mixed stream succeeds");
+    assert_eq!(usage.steps, 1);
+    assert_eq!(usage.output_chars, 12);
+    assert_eq!(events.len(), 2);
+    assert!(matches!(&events[0], ProviderEvent::Delta { text } if text == "Let me check"));
+    assert!(matches!(
+        &events[1],
+        ProviderEvent::ToolCall { id, name, .. } if id == "call-9" && name == "lookup_weather"
+    ));
 }

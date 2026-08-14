@@ -299,6 +299,13 @@ gate passes.
   system blocks, bounded history, heuristic token budget with explicit
   truncation; `prompt_plans`, migration 5; `generation.prompt.plan` wire op;
   ТЗ §9.1–§9.2).
+- [Generation run/steps and the tool-call loop](generation-run-steps.md) — M2 /
+  Этап 2.7 (ТЗ §8.3): the durable `generation_steps` journal (migration 6), the
+  derived `waiting_for_tool` run status, the declarative tool registry
+  (`Kernel::register_tool`, `generation.tools.list`), the kernel-side
+  tool-call loop with loop guard (`TOOL_LOOP_LIMIT`) and stable terminal
+  codes (`TOOL_NOT_FOUND`, `TOOL_ARGS_INVALID`, `TOOL_RESULT_STALE`), resume
+  via `generation.tool.result`, and crash-at-wait recovery.
 - **Phase 8 Android background execution** — host-side lifecycle adapter
   over the **same kernel session** (never a second writable kernel, §22):
   a bounded `dataSync` foreground service continues user-visible generation

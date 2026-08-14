@@ -493,6 +493,20 @@ pub fn insert_prompt_plan(db: &mut Database, plan: &PromptPlan) -> Result<(), Ke
     Ok(())
 }
 
+/// Whether a run already has a stored plan (the resumed-turn fast path of the
+/// executor: the plan is built once, on the first provider turn).
+pub fn prompt_plan_exists(db: &Database, run_id: &str) -> Result<bool, KernelError> {
+    let count: i64 = db
+        .conn()
+        .query_row(
+            "SELECT COUNT(*) FROM prompt_plans WHERE run_id = ?1",
+            params![run_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "prompt plan: exists"))?;
+    Ok(count > 0)
+}
+
 /// Loads the stored plan for a run (for `generation.prompt-plan`).
 pub fn load_prompt_plan(db: &Database, run_id: &str) -> Result<PromptPlan, KernelError> {
     let plan_json: String = db

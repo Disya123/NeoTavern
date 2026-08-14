@@ -30,13 +30,14 @@ use crate::product;
 use crate::providers::ProviderRegistry;
 use crate::{CancellationFlag, KernelError, KernelErrorCode, StreamNotice};
 use contracts_generated::generated::{
-    self, ErrorDto, EventEnvelope, GenerationEvent, GenerationRun, GenerationStatus, MessageDto,
-    MessageRole, PagedGenerationEvents, ResultEmpty,
+    self, ErrorDto, EventEnvelope, GenerationEvent, GenerationRun, GenerationStatus,
+    GenerationStep, MessageDto, MessageRole, PagedGenerationEvents, ResultEmpty,
 };
 use contracts_generated::Issue;
 use neotavern_storage::open::Database;
 use neotavern_storage::StorageError;
 use provider_sdk::secret::SecretResolver;
+use provider_sdk::ProviderAdapter;
 use rusqlite::params;
 use rusqlite::OptionalExtension;
 use std::sync::mpsc;
@@ -216,6 +217,10 @@ struct RunRow {
     partial_length: i64,
     error_json: Option<String>,
     message_id: Option<String>,
+    /// The outstanding normalized tool call of a waiting-for-tool run
+    /// (migration 6). `Some` means the run is durably waiting on the host's
+    /// `generation.tool.result` for this exact tool call.
+    pending_tool_call_json: Option<String>,
     lease_expires_at: Option<String>,
     started_at: String,
     updated_at: String,
@@ -224,7 +229,7 @@ struct RunRow {
 /// Column list shared by every `generation_runs` read.
 const RUN_COLUMNS: &str = "id, source_run_id, chat_id, attempt, status, provider, model, \
      request_snapshot_json, revision, cancel_requested, last_event_sequence, partial_length, \
-     error_json, message_id, lease_expires_at, started_at, updated_at";
+     error_json, message_id, pending_tool_call_json, lease_expires_at, started_at, updated_at";
 
 /// Loads one run row; `None` when absent.
 fn load_run(conn: &rusqlite::Connection, run_id: &str) -> Result<Option<RunRow>, KernelError> {
@@ -290,14 +295,17 @@ fn row_to_run(row: &rusqlite::Row) -> Result<RunRow, KernelError> {
         message_id: row
             .get(13)
             .map_err(|e| sqlite(e, "generation: read message_id"))?,
-        lease_expires_at: row
+        pending_tool_call_json: row
             .get(14)
+            .map_err(|e| sqlite(e, "generation: read pending_tool_call_json"))?,
+        lease_expires_at: row
+            .get(15)
             .map_err(|e| sqlite(e, "generation: read lease_expires_at"))?,
         started_at: row
-            .get(15)
+            .get(16)
             .map_err(|e| sqlite(e, "generation: read started_at"))?,
         updated_at: row
-            .get(16)
+            .get(17)
             .map_err(|e| sqlite(e, "generation: read updated_at"))?,
     })
 }
@@ -372,7 +380,7 @@ fn run_to_dto(conn: &rusqlite::Connection, run: &RunRow) -> Result<GenerationRun
         source_run_id: run.source_run_id.clone(),
         chat_id: run.chat_id.clone(),
         attempt: run.attempt,
-        status: status_enum(&run.status)?,
+        status: run_status_enum(run)?,
         provider: run.provider.clone(),
         model: run.model.clone(),
         revision: run.revision,
@@ -390,6 +398,17 @@ fn run_to_dto(conn: &rusqlite::Connection, run: &RunRow) -> Result<GenerationRun
         started_at: run.started_at.clone(),
         updated_at: run.updated_at.clone(),
     })
+}
+
+/// The wire run status: the v3 `CHECK` stores `streaming` while a run waits
+/// on a tool result (migration 6 keeps the CHECK untouched), so the wire
+/// `waiting_for_tool` status is DERIVED from the pending-tool marker (ТЗ
+/// §8.3: `WaitingForTool` is the durable waiting state).
+fn run_status_enum(run: &RunRow) -> Result<GenerationStatus, KernelError> {
+    if run.status == "streaming" && run.pending_tool_call_json.is_some() {
+        return Ok(GenerationStatus::WaitingForTool);
+    }
+    status_enum(&run.status)
 }
 
 // ---------------------------------------------------------------------------
@@ -517,6 +536,12 @@ pub(crate) fn generation_keep(db: &mut Database, request: &[u8]) -> Result<Vec<u
     let mut run = load_run(db.conn(), &run_id)?.ok_or_else(|| run_not_found(&run_id))?;
     ensure_recoverable(&run)?;
     if run.message_id.is_some() {
+        return keep_response(db, &run);
+    }
+    // A waiting-for-tool run has no partial output yet and must not be
+    // treated as a keep failure: return the run (the UI shows the waiting
+    // state and the tool call step).
+    if run.pending_tool_call_json.is_some() {
         return keep_response(db, &run);
     }
     if run.partial_length == 0 {
@@ -904,6 +929,509 @@ fn commit_delta(
     Ok(DeltaOutcome::Applied(Box::new(reload(db, &run.run_id)?)))
 }
 
+// ---------------------------------------------------------------------------
+// Durable step journal (ТЗ §8.3, Этап 2.7)
+// ---------------------------------------------------------------------------
+
+/// The next per-run step sequence (0-based, gapless): `MAX(sequence)+1`.
+fn next_step_sequence(conn: &rusqlite::Connection, run_id: &str) -> Result<i64, KernelError> {
+    conn.query_row(
+        "SELECT COALESCE(MAX(sequence), -1) + 1 FROM generation_steps WHERE run_id = ?1",
+        params![run_id],
+        |row| row.get(0),
+    )
+    .map_err(|e| sqlite(e, "generation: next step sequence"))
+}
+
+/// Serializes a step DTO to its stored `input_json`/`output_json` (bounded
+/// JSON, never secrets).
+fn step_json(value: &serde_json::Value) -> Result<String, KernelError> {
+    serde_json::to_string(value)
+        .map_err(|e| internal(format!("generation step payload: serialize: {e}")))
+}
+
+/// Outcome of a step-commit attempt (mirrors [`DeltaOutcome`]).
+enum StepCommit {
+    /// Committed; carries the fresh row.
+    Applied(Box<RunRow>),
+    /// The CAS lost; the caller re-reads and reacts.
+    Conflict,
+}
+
+/// Commits ONE immutable step row (`generation_steps`) plus its
+/// `generation.step` event, in ONE transaction with a CAS on the run's
+/// `revision`/`last_event_sequence` (mirrors [`commit_delta`]).
+#[allow(clippy::too_many_arguments)]
+fn commit_step(
+    db: &mut Database,
+    run: &RunRow,
+    step_type: &str,
+    status: &str,
+    idempotency_key: &str,
+    input: Option<&serde_json::Value>,
+    output: Option<&serde_json::Value>,
+    notice_tx: &mpsc::Sender<StreamNotice>,
+    lease_owner: &str,
+) -> Result<StepCommit, KernelError> {
+    let seq = run.last_event_sequence + 1;
+    let step_seq = next_step_sequence(db.conn(), &run.run_id)?;
+    let step_id = new_id();
+    let created_at = now();
+    let input_json = match input {
+        Some(value) => step_json(value)?,
+        None => "{}".to_string(),
+    };
+    let output_json = match output {
+        Some(value) => Some(step_json(value)?),
+        None => None,
+    };
+    let dto = GenerationStep {
+        step_id: step_id.clone(),
+        run_id: run.run_id.clone(),
+        sequence: step_seq,
+        r#type: step_type_enum(step_type)?,
+        status: step_status_enum(status)?,
+        attempt: run.attempt,
+        idempotency_key: idempotency_key.to_string(),
+        input: input.cloned(),
+        output: output.cloned(),
+        error: None,
+        created_at: created_at.clone(),
+        updated_at: created_at.clone(),
+    };
+    validate(&dto, generated::validate_generation_step)?;
+    let event_payload = event_payload(&GenerationEvent::GenerationStep { step: dto })?;
+    let changed = db.transaction(|tx| {
+        let changed = tx
+            .execute(
+                "UPDATE generation_runs SET last_event_sequence = ?1, revision = revision + 1, \
+                 lease_owner = ?2, lease_expires_at = ?3, updated_at = ?4 \
+                 WHERE id = ?5 AND revision = ?6",
+                params![
+                    seq,
+                    lease_owner,
+                    &lease_expires(),
+                    &created_at,
+                    run.run_id,
+                    run.revision
+                ],
+            )
+            .map_err(|e| StorageError::from_sqlite(e, "generation: step cas"))?;
+        if changed == 0 {
+            return Ok(false);
+        }
+        tx.execute(
+            "INSERT INTO generation_steps \
+             (run_id, sequence, step_id, step_type, status, attempt, idempotency_key, \
+              input_json, output_json, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10)",
+            params![
+                run.run_id,
+                step_seq,
+                &step_id,
+                step_type,
+                status,
+                run.attempt,
+                idempotency_key,
+                &input_json,
+                &output_json,
+                &created_at
+            ],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "generation: step insert"))?;
+        tx.execute(
+            "INSERT INTO generation_events (run_id, sequence, type, payload_json, created_at) \
+             VALUES (?1, ?2, 'generation.step', ?3, ?4)",
+            params![run.run_id, seq, &event_payload, &created_at],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "generation: step event"))?;
+        Ok(true)
+    })?;
+    if !changed {
+        return Ok(StepCommit::Conflict);
+    }
+    send_committed(notice_tx, seq);
+    Ok(StepCommit::Applied(Box::new(reload(db, &run.run_id)?)))
+}
+
+/// Maps a step type string to the wire enum (values are kernel-internal
+/// constants; an unexpected value is a controlled internal error).
+fn step_type_enum(step_type: &str) -> Result<generated::GenerationStepType, KernelError> {
+    use generated::GenerationStepType as T;
+    Ok(match step_type {
+        "provider_turn" => T::ProviderTurn,
+        "tool_call" => T::ToolCall,
+        "tool_result" => T::ToolResult,
+        "final_commit" => T::FinalCommit,
+        other => {
+            return Err(internal(format!("invalid generation step type: {other}")));
+        }
+    })
+}
+
+/// Maps a step status string to the wire enum (values are kernel-internal
+/// constants; an unexpected value is a controlled internal error).
+fn step_status_enum(step_status: &str) -> Result<generated::GenerationStepStatus, KernelError> {
+    use generated::GenerationStepStatus as S;
+    Ok(match step_status {
+        "running" => S::Running,
+        "waiting" => S::Waiting,
+        "completed" => S::Completed,
+        "failed" => S::Failed,
+        other => {
+            return Err(internal(format!("invalid generation step status: {other}")));
+        }
+    })
+}
+
+/// Commits the durable waiting transition of a run whose provider turn
+/// produced a tool call (ТЗ §8.3): ONE transaction CASes the run
+/// (`last_event_sequence += 2`, `pending_tool_call_json` set, lease refresh),
+/// then journals the `provider_turn` step (completed) and the `tool_call`
+/// step (waiting) with their `generation.step` events. The run keeps
+/// `status = 'streaming'`; the wire derives `waiting_for_tool`.
+fn commit_tool_call_transition(
+    db: &mut Database,
+    run: &RunRow,
+    tool_call: &generated::ToolCall,
+    notice_tx: &mpsc::Sender<StreamNotice>,
+    lease_owner: &str,
+) -> Result<StepCommit, KernelError> {
+    let seq1 = run.last_event_sequence + 1;
+    let seq2 = run.last_event_sequence + 2;
+    let step_seq = next_step_sequence(db.conn(), &run.run_id)?;
+    let provider_step_id = new_id();
+    let tool_step_id = new_id();
+    let created_at = now();
+    let input_json = serde_json::to_string(&serde_json::json!({ "toolCall": tool_call }))
+        .map_err(|e| internal(format!("tool call payload: serialize: {e}")))?;
+    let tool_call_json = serde_json::to_string(tool_call)
+        .map_err(|e| internal(format!("pending tool call: serialize: {e}")))?;
+    let turn_dto = GenerationStep {
+        step_id: provider_step_id.clone(),
+        run_id: run.run_id.clone(),
+        sequence: step_seq,
+        r#type: generated::GenerationStepType::ProviderTurn,
+        status: generated::GenerationStepStatus::Completed,
+        attempt: run.attempt,
+        idempotency_key: format!("turn-{seq1}"),
+        input: Some(serde_json::json!({ "model": run.model })),
+        output: None,
+        error: None,
+        created_at: created_at.clone(),
+        updated_at: created_at.clone(),
+    };
+    let call_dto = GenerationStep {
+        step_id: tool_step_id.clone(),
+        run_id: run.run_id.clone(),
+        sequence: step_seq + 1,
+        r#type: generated::GenerationStepType::ToolCall,
+        status: generated::GenerationStepStatus::Waiting,
+        attempt: run.attempt,
+        idempotency_key: format!("tool-call-{}", tool_call.id),
+        input: Some(serde_json::json!({ "toolCall": tool_call })),
+        output: None,
+        error: None,
+        created_at: created_at.clone(),
+        updated_at: created_at.clone(),
+    };
+    validate(&turn_dto, generated::validate_generation_step)?;
+    validate(&call_dto, generated::validate_generation_step)?;
+    let turn_payload = event_payload(&GenerationEvent::GenerationStep { step: turn_dto })?;
+    let call_payload = event_payload(&GenerationEvent::GenerationStep { step: call_dto })?;
+    let changed = db.transaction(|tx| {
+        let changed = tx
+            .execute(
+                "UPDATE generation_runs SET last_event_sequence = ?1, \
+                 pending_tool_call_json = ?2, revision = revision + 1, lease_owner = ?3, \
+                 lease_expires_at = ?4, updated_at = ?5 WHERE id = ?6 AND revision = ?7",
+                params![
+                    seq2,
+                    &tool_call_json,
+                    lease_owner,
+                    &lease_expires(),
+                    &created_at,
+                    run.run_id,
+                    run.revision
+                ],
+            )
+            .map_err(|e| StorageError::from_sqlite(e, "generation: tool-call cas"))?;
+        if changed == 0 {
+            return Ok(false);
+        }
+        tx.execute(
+            "INSERT INTO generation_steps \
+             (run_id, sequence, step_id, step_type, status, attempt, idempotency_key, \
+              input_json, output_json, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, 'provider_turn', 'completed', ?4, ?5, '{}', NULL, ?6, ?6)",
+            params![
+                run.run_id,
+                step_seq,
+                &provider_step_id,
+                run.attempt,
+                format!("turn-{seq1}"),
+                &created_at
+            ],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "generation: turn step insert"))?;
+        tx.execute(
+            "INSERT INTO generation_steps \
+             (run_id, sequence, step_id, step_type, status, attempt, idempotency_key, \
+              input_json, output_json, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, 'tool_call', 'waiting', ?4, ?5, ?6, NULL, ?7, ?7)",
+            params![
+                run.run_id,
+                step_seq + 1,
+                &tool_step_id,
+                run.attempt,
+                format!("tool-call-{}", tool_call.id),
+                &input_json,
+                &created_at
+            ],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "generation: tool-call step insert"))?;
+        tx.execute(
+            "INSERT INTO generation_events (run_id, sequence, type, payload_json, created_at) \
+             VALUES (?1, ?2, 'generation.step', ?3, ?4)",
+            params![run.run_id, seq1, &turn_payload, &created_at],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "generation: turn step event"))?;
+        tx.execute(
+            "INSERT INTO generation_events (run_id, sequence, type, payload_json, created_at) \
+             VALUES (?1, ?2, 'generation.step', ?3, ?4)",
+            params![run.run_id, seq2, &call_payload, &created_at],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "generation: tool-call step event"))?;
+        Ok(true)
+    })?;
+    if !changed {
+        return Ok(StepCommit::Conflict);
+    }
+    send_committed(notice_tx, seq1);
+    send_committed(notice_tx, seq2);
+    Ok(StepCommit::Applied(Box::new(reload(db, &run.run_id)?)))
+}
+
+/// Commits the `tool_result` step and clears the run's pending marker —
+/// the durable resume of a waiting-for-tool run (ТЗ §8.3
+/// `WaitingForTool → Running`). ONE transaction: CAS (`last_event_sequence`,
+/// `pending_tool_call_json = NULL`), insert the step row, insert the
+/// `generation.step` event.
+fn commit_tool_result_step(
+    db: &mut Database,
+    run: &RunRow,
+    tool_call: &generated::ToolCall,
+    result: &serde_json::Value,
+    notice_tx: &mpsc::Sender<StreamNotice>,
+    lease_owner: &str,
+) -> Result<StepCommit, KernelError> {
+    let seq = run.last_event_sequence + 1;
+    let step_seq = next_step_sequence(db.conn(), &run.run_id)?;
+    let step_id = new_id();
+    let created_at = now();
+    let dto = GenerationStep {
+        step_id: step_id.clone(),
+        run_id: run.run_id.clone(),
+        sequence: step_seq,
+        r#type: generated::GenerationStepType::ToolResult,
+        status: generated::GenerationStepStatus::Completed,
+        attempt: run.attempt,
+        idempotency_key: format!("tool-result-{}", tool_call.id),
+        input: Some(serde_json::json!({ "toolCall": tool_call })),
+        output: Some(result.clone()),
+        error: None,
+        created_at: created_at.clone(),
+        updated_at: created_at.clone(),
+    };
+    validate(&dto, generated::validate_generation_step)?;
+    let event_payload = event_payload(&GenerationEvent::GenerationStep { step: dto })?;
+    let input_json = serde_json::to_string(&serde_json::json!({ "toolCall": tool_call }))
+        .map_err(|e| internal(format!("tool result payload: serialize: {e}")))?;
+    let output_json = serde_json::to_string(result)
+        .map_err(|e| internal(format!("tool result payload: serialize: {e}")))?;
+    let changed = db.transaction(|tx| {
+        let changed = tx
+            .execute(
+                "UPDATE generation_runs SET last_event_sequence = ?1, pending_tool_call_json = NULL, \
+                 revision = revision + 1, lease_owner = ?2, lease_expires_at = ?3, updated_at = ?4 \
+                 WHERE id = ?5 AND revision = ?6",
+                params![
+                    seq,
+                    lease_owner,
+                    &lease_expires(),
+                    &created_at,
+                    run.run_id,
+                    run.revision
+                ],
+            )
+            .map_err(|e| StorageError::from_sqlite(e, "generation: tool-result cas"))?;
+        if changed == 0 {
+            return Ok(false);
+        }
+        tx.execute(
+            "INSERT INTO generation_steps \
+             (run_id, sequence, step_id, step_type, status, attempt, idempotency_key, \
+              input_json, output_json, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, 'tool_result', 'completed', ?4, ?5, ?6, ?7, ?8, ?8)",
+            params![run.run_id, step_seq, &step_id, run.attempt, format!("tool-result-{}", tool_call.id), &input_json, &output_json, &created_at],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "generation: tool-result step insert"))?;
+        tx.execute(
+            "INSERT INTO generation_events (run_id, sequence, type, payload_json, created_at) \
+             VALUES (?1, ?2, 'generation.step', ?3, ?4)",
+            params![run.run_id, seq, &event_payload, &created_at],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "generation: tool-result step event"))?;
+        Ok(true)
+    })?;
+    if !changed {
+        return Ok(StepCommit::Conflict);
+    }
+    send_committed(notice_tx, seq);
+    Ok(StepCommit::Applied(Box::new(reload(db, &run.run_id)?)))
+}
+
+/// Journals the closing steps of a successful run (provider turn completed +
+/// final commit completed) before the atomic terminal commit. Both steps are
+/// advisory diagnostics; the durable message row + `generation.completed`
+/// event remain the canonical terminal record.
+fn commit_turn_final_steps(
+    db: &mut Database,
+    run: &RunRow,
+    notice_tx: &mpsc::Sender<StreamNotice>,
+    lease_owner: &str,
+) -> Result<(), KernelError> {
+    let run = run.clone();
+    match commit_step(
+        db,
+        &run,
+        "provider_turn",
+        "completed",
+        &format!("turn-{}", run.last_event_sequence + 1),
+        Some(&serde_json::json!({ "model": run.model })),
+        None,
+        notice_tx,
+        lease_owner,
+    )? {
+        StepCommit::Applied(next) => {
+            commit_step(
+                db,
+                &next,
+                "final_commit",
+                "completed",
+                "final",
+                Some(&serde_json::json!({})),
+                None,
+                notice_tx,
+                lease_owner,
+            )?;
+        }
+        StepCommit::Conflict => {
+            // Lost CAS: the run changed under us; the terminal commit below
+            // re-reads and reacts. Steps are advisory, so proceed.
+        }
+    }
+    Ok(())
+}
+
+/// `TOOL_RESULT_STALE` product error: a tool result submitted for a run that
+/// is not waiting on the matching tool call.
+fn tool_result_stale(run_id: &str, tool_call_id: &str) -> KernelError {
+    KernelError::product(
+        "TOOL_RESULT_STALE",
+        vec![
+            ("runId".to_string(), run_id.to_string()),
+            ("toolCallId".to_string(), tool_call_id.to_string()),
+        ],
+    )
+}
+
+/// The prompt plan of a run, building and storing it on the FIRST turn and
+/// loading the stored plan on resumed turns (idempotent by run id).
+fn ensure_prompt_plan(
+    db: &mut Database,
+    run: &RunRow,
+    provider: &str,
+    model: &str,
+    input: &str,
+    adapter: &Arc<dyn ProviderAdapter>,
+) -> Result<crate::prompt::PromptPlan, KernelError> {
+    if crate::prompt::prompt_plan_exists(db, &run.run_id)? {
+        return crate::prompt::load_prompt_plan(db, &run.run_id);
+    }
+    let context_limit = adapter
+        .models()
+        .iter()
+        .find(|m| m.id == model)
+        .and_then(|m| m.context_limit)
+        .unwrap_or(0);
+    let plan = crate::prompt::build_prompt_plan(
+        db,
+        &crate::prompt::PlanInput {
+            run_id: run.run_id.clone(),
+            chat_id: run.chat_id.clone(),
+            message: input,
+            provider,
+            model,
+            context_limit,
+            response_reserved: 0,
+        },
+    )?;
+    crate::prompt::insert_prompt_plan(db, &plan)?;
+    Ok(plan)
+}
+
+/// The number of tool calls already committed for a run (the loop-guard
+/// budget, ТЗ §8.3).
+fn count_tool_calls(conn: &rusqlite::Connection, run_id: &str) -> Result<usize, KernelError> {
+    conn.query_row(
+        "SELECT COUNT(*) FROM generation_steps WHERE run_id = ?1 AND step_type = 'tool_call'",
+        params![run_id],
+        |row| row.get(0),
+    )
+    .map(|n: i64| n as usize)
+    .map_err(|e| sqlite(e, "generation: count tool calls"))
+}
+
+/// The working context appended to a resumed provider turn (§8.3): the
+/// assistant message carrying the tool call and the matching `tool`-role
+/// result message. JSON-encoded payloads are staged in `scratch_json` and
+/// the tool-call entry in `scratch_calls` (both owned by the caller) so the
+/// returned messages can borrow them without leaking.
+fn build_tool_context<'a>(
+    tool_call: &'a generated::ToolCall,
+    result: &'a serde_json::Value,
+    scratch_json: &'a mut Vec<String>,
+    scratch_calls: &'a mut Vec<provider_sdk::PromptToolCall<'a>>,
+) -> Vec<provider_sdk::PromptMessage<'a>> {
+    let arguments =
+        serde_json::to_string(&tool_call.arguments).unwrap_or_else(|_| "{}".to_string());
+    scratch_json.push(arguments);
+    let result_json = serde_json::to_string(result).unwrap_or_else(|_| "{}".to_string());
+    scratch_json.push(result_json);
+    let arguments_ref = &scratch_json[scratch_json.len() - 2];
+    let result_ref = &scratch_json[scratch_json.len() - 1];
+    scratch_calls.push(provider_sdk::PromptToolCall {
+        id: &tool_call.id,
+        name: &tool_call.name,
+        arguments: arguments_ref,
+    });
+    vec![
+        provider_sdk::PromptMessage {
+            role: "assistant",
+            content: "",
+            tool_calls: Some(scratch_calls.as_slice()),
+            tool_call_id: None,
+        },
+        provider_sdk::PromptMessage {
+            role: "tool",
+            content: result_ref,
+            tool_calls: None,
+            tool_call_id: Some(&tool_call.id),
+        },
+    ]
+}
+
 /// Serializes a [`GenerationEvent`] to its stored `payload_json`, validating
 /// the wire shape (a kernel-internal DTO bug must fail loudly, not store a
 /// corrupt log row).
@@ -1137,6 +1665,299 @@ fn commit_shutdown_progress(db: &mut Database, run: &RunRow) -> Result<(), Kerne
     Ok(())
 }
 
+/// Outcome of one provider turn.
+enum TurnOutcome {
+    /// The run was committed terminal by this turn (completed / failed /
+    /// cancelled / shutdown-progress).
+    Terminal,
+    /// The run is durably waiting on a tool result (`generation.tool.result`).
+    WaitingForTool,
+}
+
+/// Runs ONE provider turn for a `streaming` run: resolves the adapter secret,
+/// ensures the prompt plan, builds the provider request (plan messages +
+/// resumed-turn tool context + declared tools), streams the adapter's deltas
+/// through the emit bridge, and handles the outcome:
+///
+/// - a `ToolCall` event is validated against the tool registry (capability +
+///   argument schema, §8.3) and, when valid, commits the durable waiting
+///   transition; the turn ends `WaitingForTool`;
+/// - an invalid/unknown tool call or an exhausted tool budget fails the run
+///   with a stable terminal code;
+/// - normal completion journals the closing steps and commits the atomic
+///   terminal (one assistant message, §8.3);
+/// - provider errors map to the stable terminal codes.
+///
+/// `drain` is the writer's command-drain seam (`None` on resumed turns run
+/// from a unary operation, where no stream is active). `tool_call_count` is
+/// the loop-guard budget (tool calls already committed for the run).
+#[allow(clippy::too_many_arguments)]
+fn provider_turn_once(
+    db: &mut Database,
+    mut run: RunRow,
+    adapter: &Arc<dyn ProviderAdapter>,
+    extra_messages: &[provider_sdk::PromptMessage<'_>],
+    notice_tx: &mpsc::Sender<StreamNotice>,
+    mut drain: Option<&mut dyn FnMut(&mut Database) -> bool>,
+    lease_owner: &str,
+    run_timeout: Duration,
+    secret_resolver: Option<Arc<dyn SecretResolver>>,
+    cancel: &CancellationFlag,
+    tool_registry: &crate::tools::ToolRegistry,
+    tool_call_count: usize,
+) -> Result<TurnOutcome, KernelError> {
+    let provider_name = run.provider.clone().unwrap_or_else(|| "fake".to_string());
+    let model = run.model.clone().unwrap_or_default();
+    let input = snapshot_message(&run.request_snapshot_json);
+    let run_key = format!("{}|{}", run.chat_id, run.attempt);
+    // Resolve the provider secret (API key) at execution time (ТЗ §9.4).
+    let api_key = match resolve_provider_api_key(db, &provider_name, secret_resolver.as_deref()) {
+        Ok(key) => key,
+        Err(err) => {
+            let error = provider_error_dto(&err, &run.run_id, &provider_name, &model);
+            let seq = terminal_failed(db, run, error, lease_owner)?;
+            send_terminal(notice_tx, seq);
+            return Ok(TurnOutcome::Terminal);
+        }
+    };
+    // Prompt pipeline: the first turn builds and stores the plan; resumed
+    // turns load the stored plan (ТЗ §9.2, Этап 2.6/2.7).
+    let plan = ensure_prompt_plan(db, &run, &provider_name, &model, &input, adapter)?;
+    let mut plan_messages: Vec<provider_sdk::PromptMessage<'_>> = plan
+        .messages
+        .iter()
+        .map(|m| provider_sdk::PromptMessage {
+            role: &m.role,
+            content: &m.content,
+            tool_calls: None,
+            tool_call_id: None,
+        })
+        .collect();
+    plan_messages.extend_from_slice(extra_messages);
+    let specs = tool_registry.list();
+    let tool_specs: Vec<provider_sdk::ToolSpec<'_>> = specs
+        .iter()
+        .map(|s| provider_sdk::ToolSpec {
+            id: &s.id,
+            name: &s.name,
+            description: &s.description,
+            input_schema: &s.input_schema,
+        })
+        .collect();
+    let request = provider_sdk::ProviderRequest {
+        provider_id: adapter.id(),
+        model: &model,
+        input: &input,
+        run_key: &run_key,
+        deadline: Some(provider_sdk::policy::Deadline::after(run_timeout)),
+        api_key: api_key.as_deref(),
+        messages: Some(&plan_messages),
+        tools: if tool_specs.is_empty() {
+            None
+        } else {
+            Some(&tool_specs)
+        },
+    };
+    let cancel_token = provider_sdk::CancelToken::new(cancel.0.as_ref());
+    let mut shutdown_seen = false;
+    let mut emit_error: Option<KernelError> = None;
+    // Set when this turn itself committed a terminal (tool rejection).
+    let mut terminal_seq: Option<i64> = None;
+    // Set when this turn durably committed the waiting transition.
+    let mut waiting = false;
+    // 0-based delta index (checkpoint rhythm) == committed delta count.
+    let mut emitted = 0usize;
+    let mut emit = |event: provider_sdk::ProviderEvent| -> provider_sdk::EmitStatus {
+        match event {
+            provider_sdk::ProviderEvent::Delta { text } => {
+                // (a) Service queued commands; a shutdown commits progress.
+                if let Some(drain) = drain.as_mut() {
+                    if drain(db) {
+                        shutdown_seen = true;
+                        return provider_sdk::EmitStatus::Stop;
+                    }
+                }
+                // (b) Re-read: a durable cancel decides this delta.
+                match reload(db, &run.run_id) {
+                    Ok(next) => run = next,
+                    Err(err) => {
+                        emit_error = Some(err);
+                        return provider_sdk::EmitStatus::Stop;
+                    }
+                }
+                if run.status == "cancelling" || run.cancel_requested {
+                    return provider_sdk::EmitStatus::Stop;
+                }
+                if is_terminal(&run.status) {
+                    return provider_sdk::EmitStatus::Stop;
+                }
+                // (c) Durable commit; a lost CAS re-reads on the next emit.
+                match commit_delta(db, &run, &text, emitted, notice_tx, lease_owner) {
+                    Ok(DeltaOutcome::Applied(next)) => run = *next,
+                    Ok(DeltaOutcome::Conflict) => {}
+                    Err(err) => {
+                        emit_error = Some(err);
+                        return provider_sdk::EmitStatus::Stop;
+                    }
+                }
+                emitted += 1;
+                provider_sdk::EmitStatus::Continue
+            }
+            provider_sdk::ProviderEvent::ToolCall {
+                id: _,
+                name,
+                arguments,
+            } => {
+                // (a) Service queued commands; a shutdown commits progress.
+                if let Some(drain) = drain.as_mut() {
+                    if drain(db) {
+                        shutdown_seen = true;
+                        return provider_sdk::EmitStatus::Stop;
+                    }
+                }
+                // (b) Re-read: a durable cancel decides this tool call.
+                match reload(db, &run.run_id) {
+                    Ok(next) => run = next,
+                    Err(err) => {
+                        emit_error = Some(err);
+                        return provider_sdk::EmitStatus::Stop;
+                    }
+                }
+                if run.status == "cancelling" || run.cancel_requested {
+                    return provider_sdk::EmitStatus::Stop;
+                }
+                if is_terminal(&run.status) {
+                    return provider_sdk::EmitStatus::Stop;
+                }
+                // (c) Capability + schema validation (ТЗ §8.3): the call must
+                // name a registered tool and conform to its input schema.
+                let spec = match tool_registry.find(&name) {
+                    Some(spec) => spec,
+                    None => {
+                        let error = error_dto("TOOL_NOT_FOUND", &[("toolName", name.clone())]);
+                        let seq = match terminal_failed(db, run.clone(), error, lease_owner) {
+                            Ok(seq) => seq,
+                            Err(err) => {
+                                emit_error = Some(err);
+                                return provider_sdk::EmitStatus::Stop;
+                            }
+                        };
+                        terminal_seq = Some(seq);
+                        return provider_sdk::EmitStatus::Stop;
+                    }
+                };
+                if let Err(message) =
+                    crate::tools::validate_arguments(&spec.input_schema, &arguments)
+                {
+                    let error = error_dto(
+                        "TOOL_ARGS_INVALID",
+                        &[("toolName", name.clone()), ("detail", message)],
+                    );
+                    let seq = match terminal_failed(db, run.clone(), error, lease_owner) {
+                        Ok(seq) => seq,
+                        Err(err) => {
+                            emit_error = Some(err);
+                            return provider_sdk::EmitStatus::Stop;
+                        }
+                    };
+                    terminal_seq = Some(seq);
+                    return provider_sdk::EmitStatus::Stop;
+                }
+                // (d) Loop guard (budgets, §8.3): a run may perform at most
+                // MAX_TOOL_CALLS tool calls.
+                if tool_call_count >= crate::tools::MAX_TOOL_CALLS {
+                    let error = error_dto(
+                        "TOOL_LOOP_LIMIT",
+                        &[("limit", crate::tools::MAX_TOOL_CALLS.to_string())],
+                    );
+                    let seq = match terminal_failed(db, run.clone(), error, lease_owner) {
+                        Ok(seq) => seq,
+                        Err(err) => {
+                            emit_error = Some(err);
+                            return provider_sdk::EmitStatus::Stop;
+                        }
+                    };
+                    terminal_seq = Some(seq);
+                    return provider_sdk::EmitStatus::Stop;
+                }
+                // (e) Durable waiting transition: the kernel assigns the
+                // stable toolCallId (uuid), journals the provider turn + tool
+                // call steps and stores the pending marker.
+                let tool_call = generated::ToolCall {
+                    id: new_id(),
+                    name,
+                    arguments,
+                };
+                match commit_tool_call_transition(db, &run, &tool_call, notice_tx, lease_owner) {
+                    Ok(StepCommit::Applied(next)) => {
+                        run = *next;
+                        waiting = true;
+                    }
+                    Ok(StepCommit::Conflict) => {
+                        // Lost CAS: re-read on the next emit; the adapter is
+                        // stopped (this turn produced a tool call).
+                        waiting = true;
+                    }
+                    Err(err) => {
+                        emit_error = Some(err);
+                    }
+                }
+                provider_sdk::EmitStatus::Stop
+            }
+        }
+    };
+    let result = adapter.generate(&request, cancel_token, &mut emit);
+    // A commit-side failure (storage, invariant) wins over whatever the
+    // adapter reported — the run stays non-terminal for startup recovery.
+    if let Some(err) = emit_error {
+        return Err(err);
+    }
+    if shutdown_seen {
+        commit_shutdown_progress(db, &run)?;
+        return Ok(TurnOutcome::Terminal);
+    }
+    // This turn committed a terminal itself (tool rejection): the terminal
+    // event is already durable; deliver the notice and stop.
+    if let Some(seq) = terminal_seq {
+        send_terminal(notice_tx, seq);
+        return Ok(TurnOutcome::Terminal);
+    }
+    if waiting {
+        // The run is durably waiting for a tool result. The stream session
+        // ends with a terminal notice (no further notices will arrive for
+        // this stream); consumers follow the run via `generation.events` /
+        // `generation.get` (status `waiting_for_tool`) and resume with
+        // `generation.tool.result`.
+        send_terminal(notice_tx, run.last_event_sequence);
+        return Ok(TurnOutcome::WaitingForTool);
+    }
+    match result {
+        Ok(_usage) => {
+            // All deltas committed: journal the closing steps, then the
+            // atomic terminal commit (one assistant message, §8.3).
+            commit_turn_final_steps(db, &run, notice_tx, lease_owner)?;
+            let full_text = concat_delta_text(db.conn(), &run.run_id)?;
+            let seq = terminal_completed(db, run, &full_text, lease_owner)?;
+            send_terminal(notice_tx, seq);
+            Ok(TurnOutcome::Terminal)
+        }
+        Err(err) => {
+            use provider_sdk::ProviderErrorCode as Code;
+            // A cancelled attempt (executor Stop, adapter-observed cancel)
+            // commits the durable cancelled terminal — not a failure.
+            if err.code == Code::Cancelled {
+                let seq = terminal_cancelled(db, run, lease_owner)?;
+                send_terminal(notice_tx, seq);
+                return Ok(TurnOutcome::Terminal);
+            }
+            let error = provider_error_dto(&err, &run.run_id, &provider_name, &model);
+            let seq = terminal_failed(db, run, error, lease_owner)?;
+            send_terminal(notice_tx, seq);
+            Ok(TurnOutcome::Terminal)
+        }
+    }
+}
+
 /// Runs the generation executor for `stream_id` inline on the writer thread.
 ///
 /// Between provider steps `drain` is invoked (it services queued unary
@@ -1147,9 +1968,9 @@ fn commit_shutdown_progress(db: &mut Database, run: &RunRow) -> Result<(), Kerne
 /// Phase 7: the run is executed by the adapter resolved from `registry`
 /// (`run.provider`, defaulting to `"fake"`), with a per-run deadline of
 /// `run_timeout` and the host-provided `_secret_resolver` seam available to
-/// adapters (the built-ins ignore it). Deltas stream through the `emit`
-/// bridge below, which re-checks the durable run between steps so late
-/// output after a cancel never reaches the chat (§63).
+/// adapters (the built-ins ignore it). Этап 2.7: a provider turn that emits a
+/// normalized tool call leaves the run durably `waiting_for_tool`; the host
+/// resumes it via `generation.tool.result`.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn execute_stream(
     db: &mut Database,
@@ -1161,6 +1982,7 @@ pub(crate) fn execute_stream(
     run_timeout: Duration,
     secret_resolver: Option<Arc<dyn SecretResolver>>,
     cancel: &CancellationFlag,
+    tool_registry: &crate::tools::ToolRegistry,
 ) -> Result<(), KernelError> {
     let mut run = reload(db, stream_id)?;
     // First step boundary: service anything queued during setup.
@@ -1199,156 +2021,105 @@ pub(crate) fn execute_stream(
             return Ok(());
         }
     };
-    // Build the sanitized provider request from the durable snapshot: the
-    // input is the snapshot's `message` string (missing/non-string → "").
-    let model = run.model.clone().unwrap_or_default();
-    let input = snapshot_message(&run.request_snapshot_json);
-    let run_key = format!("{}|{}", run.chat_id, run.attempt);
-    // Resolve the provider secret (API key) at execution time (ТЗ §9.4):
-    // the first stored provider config for this provider, alphabetically by
-    // name, contributes its `secret_ref`; the kernel resolves it through the
-    // host's SecretResolver seam just-in-time and drops it after the
-    // attempt. No store/resolver/config → `None` (adapters decide).
-    let api_key = match resolve_provider_api_key(db, &provider_name, secret_resolver.as_deref()) {
-        Ok(key) => key,
-        Err(err) => {
-            let error = provider_error_dto(&err, &run.run_id, &provider_name, &model);
-            let seq = terminal_failed(db, run, error, lease_owner)?;
-            send_terminal(notice_tx, seq);
-            return Ok(());
-        }
-    };
-    // Prompt pipeline (ТЗ §9.2, Этап 2.6): build the immutable PromptPlan —
-    // character/persona/lorebook system blocks + bounded selected history +
-    // the user message, with a heuristic token budget and explicit
-    // truncation — and store it durably BEFORE the provider attempt. The
-    // plan's instruct-neutral message array is what the provider serializes
-    // (adapters fall back to `input` when no plan is present). A plan that
-    // cannot be built or stored fails the run with a stable
-    // `PROMPT_PLAN_FAILED` terminal: the pipeline is now mandatory for run
-    // execution, and a run must not execute without the context it claims.
-    let context_limit = adapter
-        .models()
-        .iter()
-        .find(|m| m.id == model)
-        .and_then(|m| m.context_limit)
-        .unwrap_or(0);
-    let plan = match crate::prompt::build_prompt_plan(
+    let mut drain = Some(drain);
+    let _ = provider_turn_once(
         db,
-        &crate::prompt::PlanInput {
-            run_id: run.run_id.clone(),
-            chat_id: run.chat_id.clone(),
-            message: &input,
-            provider: &provider_name,
-            model: &model,
-            context_limit,
-            response_reserved: 0,
-        },
-    ) {
-        Ok(plan) => plan,
-        Err(_err) => {
-            let error = error_dto("PROMPT_PLAN_FAILED", &[("runId", run.run_id.clone())]);
-            let seq = terminal_failed(db, run, error, lease_owner)?;
-            send_terminal(notice_tx, seq);
-            return Ok(());
+        run,
+        &adapter,
+        &[],
+        notice_tx,
+        drain
+            .as_mut()
+            .map(|d| d as &mut dyn FnMut(&mut Database) -> bool),
+        lease_owner,
+        run_timeout,
+        secret_resolver,
+        cancel,
+        tool_registry,
+        0,
+    )?;
+    Ok(())
+}
+
+/// `generation.tool.result` — submit a tool result and resume a
+/// waiting-for-tool run (ТЗ §8.3 `WaitingForTool → Running`).
+///
+/// Validates the run is durably waiting on the EXACT `toolCallId` (else a
+/// stable `TOOL_RESULT_STALE`), journals the `tool_result` step, clears the
+/// pending marker, appends the assistant tool-call + `tool`-role result to
+/// the working context and runs the next provider turn inline. The response
+/// is the run DTO — the run may be `completed`, `waiting_for_tool` (further
+/// tool calls) or `failed` afterwards.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn generation_tool_result(
+    db: &mut Database,
+    request: &[u8],
+    registry: &ProviderRegistry,
+    tool_registry: &crate::tools::ToolRegistry,
+    run_timeout: Duration,
+    secret_resolver: Option<Arc<dyn SecretResolver>>,
+    cancel: &CancellationFlag,
+    lease_owner: &str,
+) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_generation_tool_result(request)?;
+    let run_id = req.run_id.clone();
+    let run = load_run(db.conn(), &run_id)?.ok_or_else(|| run_not_found(&run_id))?;
+    // The run must be durably waiting on this exact tool call.
+    if run.status != "streaming" || run.pending_tool_call_json.is_none() {
+        return Err(tool_result_stale(&run_id, &req.tool_call_id));
+    }
+    let pending_json = run.pending_tool_call_json.as_ref().expect("checked above");
+    let pending: generated::ToolCall = serde_json::from_str(pending_json)
+        .map_err(|e| internal(format!("pending tool call payload malformed: {e}")))?;
+    if pending.id != req.tool_call_id {
+        return Err(tool_result_stale(&run_id, &req.tool_call_id));
+    }
+    // Journal the durable tool_result step and clear the pending marker.
+    let (notice_tx, _notice_rx) = mpsc::channel::<StreamNotice>();
+    let next =
+        match commit_tool_result_step(db, &run, &pending, &req.result, &notice_tx, lease_owner)? {
+            StepCommit::Applied(next) => *next,
+            StepCommit::Conflict => {
+                return Err(internal("generation tool result could not make progress"));
+            }
+        };
+    // Resolve the adapter (an unknown provider fails the resumed run).
+    let provider_name = next.provider.clone().unwrap_or_else(|| "fake".to_string());
+    let adapter = match registry.find(&provider_name) {
+        Some(adapter) => adapter,
+        None => {
+            let error = error_dto("PROVIDER_UNAVAILABLE", &[("provider", provider_name)]);
+            let seq = terminal_failed(db, next, error, lease_owner)?;
+            send_terminal(&notice_tx, seq);
+            let run = reload(db, &run_id)?;
+            let dto = run_to_dto(db.conn(), &run)?;
+            validate(&dto, generated::validate_generation_run)?;
+            return encode(&dto);
         }
     };
-    if let Err(err) = crate::prompt::insert_prompt_plan(db, &plan) {
-        let error = error_dto("PROMPT_PLAN_FAILED", &[("runId", run.run_id.clone())]);
-        let seq = terminal_failed(db, run, error, lease_owner)?;
-        send_terminal(notice_tx, seq);
-        return Err(err);
-    }
-    let plan_messages: Vec<provider_sdk::PromptMessage<'_>> = plan
-        .messages
-        .iter()
-        .map(|m| provider_sdk::PromptMessage {
-            role: &m.role,
-            content: &m.content,
-        })
-        .collect();
-    let request = provider_sdk::ProviderRequest {
-        provider_id: adapter.id(),
-        model: &model,
-        input: &input,
-        run_key: &run_key,
-        deadline: Some(provider_sdk::policy::Deadline::after(run_timeout)),
-        api_key: api_key.as_deref(),
-        messages: Some(&plan_messages),
-    };
-    let cancel_token = provider_sdk::CancelToken::new(cancel.0.as_ref());
-    let mut shutdown_seen = false;
-    let mut emit_error: Option<KernelError> = None;
-    // 0-based delta index (checkpoint rhythm) == committed delta count.
-    let mut emitted = 0usize;
-    let mut emit = |event: provider_sdk::ProviderEvent| -> provider_sdk::EmitStatus {
-        let provider_sdk::ProviderEvent::Delta { text } = event;
-        // (a) Service queued commands; a shutdown commits progress and stops.
-        if drain(db) {
-            shutdown_seen = true;
-            return provider_sdk::EmitStatus::Stop;
-        }
-        // (b) Re-read: a durable cancel (or a shutdown-flavoured conflict)
-        // decides this delta; late deltas are never committed.
-        match reload(db, stream_id) {
-            Ok(next) => run = next,
-            Err(err) => {
-                emit_error = Some(err);
-                return provider_sdk::EmitStatus::Stop;
-            }
-        }
-        if run.status == "cancelling" || run.cancel_requested {
-            return provider_sdk::EmitStatus::Stop;
-        }
-        if is_terminal(&run.status) {
-            return provider_sdk::EmitStatus::Stop;
-        }
-        // (c) Durable commit; a lost CAS re-reads on the next emit (loop-top
-        // semantics preserved).
-        match commit_delta(db, &run, &text, emitted, notice_tx, lease_owner) {
-            Ok(DeltaOutcome::Applied(next)) => run = *next,
-            Ok(DeltaOutcome::Conflict) => {}
-            Err(err) => {
-                emit_error = Some(err);
-                return provider_sdk::EmitStatus::Stop;
-            }
-        }
-        emitted += 1;
-        provider_sdk::EmitStatus::Continue
-    };
-    let result = adapter.generate(&request, cancel_token, &mut emit);
-    // A commit-side failure (storage, invariant) wins over whatever the
-    // adapter reported — the run stays non-terminal for startup recovery.
-    if let Some(err) = emit_error {
-        return Err(err);
-    }
-    if shutdown_seen {
-        commit_shutdown_progress(db, &run)?;
-        return Ok(());
-    }
-    match result {
-        Ok(_usage) => {
-            // All deltas committed: atomic terminal commit.
-            let full_text = concat_delta_text(db.conn(), stream_id)?;
-            let seq = terminal_completed(db, run, &full_text, lease_owner)?;
-            send_terminal(notice_tx, seq);
-            Ok(())
-        }
-        Err(err) => {
-            use provider_sdk::ProviderErrorCode as Code;
-            // A cancelled attempt (executor Stop, adapter-observed cancel)
-            // commits the durable cancelled terminal — not a failure.
-            if err.code == Code::Cancelled {
-                let seq = terminal_cancelled(db, run, lease_owner)?;
-                send_terminal(notice_tx, seq);
-                return Ok(());
-            }
-            let error = provider_error_dto(&err, &run.run_id, &provider_name, &model);
-            let seq = terminal_failed(db, run, error, lease_owner)?;
-            send_terminal(notice_tx, seq);
-            Ok(())
-        }
-    }
+    // Working context of the resumed turn (§8.3).
+    let mut scratch_json: Vec<String> = Vec::new();
+    let mut scratch_calls: Vec<provider_sdk::PromptToolCall<'_>> = Vec::new();
+    let extra = build_tool_context(&pending, &req.result, &mut scratch_json, &mut scratch_calls);
+    let tool_call_count = count_tool_calls(db.conn(), &run_id)?;
+    let _ = provider_turn_once(
+        db,
+        next,
+        &adapter,
+        &extra,
+        &notice_tx,
+        None,
+        lease_owner,
+        run_timeout,
+        secret_resolver,
+        cancel,
+        tool_registry,
+        tool_call_count,
+    )?;
+    let run = reload(db, &run_id)?;
+    let dto = run_to_dto(db.conn(), &run)?;
+    validate(&dto, generated::validate_generation_run)?;
+    encode(&dto)
 }
 
 /// Maps a normalized provider error to the terminal `generation.failed`

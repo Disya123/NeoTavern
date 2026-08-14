@@ -13,8 +13,7 @@ use built_in_providers::{FakeProvider, RecordedProvider, RecordedScript};
 use provider_sdk::policy::{Deadline, Usage};
 use provider_sdk::secret::{SecretRef, SecretResolver, SecretValue};
 use provider_sdk::{
-    CancelToken, EmitStatus, ProviderAdapter, ProviderError, ProviderErrorCode, ProviderEvent,
-    ProviderRequest,
+    CancelToken, EmitStatus, ProviderAdapter, ProviderError, ProviderErrorCode, ProviderRequest,
 };
 
 const PLAIN: &str = include_str!("../fixtures/plain.json");
@@ -60,10 +59,13 @@ fn generate_collect(
         deadline,
         api_key: None,
         messages: None,
+        tools: None,
     };
     let mut texts = Vec::new();
     let result = provider.generate(&request, CancelToken::new(flag), &mut |event| {
-        let ProviderEvent::Delta { text } = event;
+        let provider_sdk::ProviderEvent::Delta { text } = event else {
+            return EmitStatus::Continue;
+        };
         texts.push(text);
         EmitStatus::Continue
     });
@@ -85,10 +87,13 @@ fn generate_cancel_midstream(
         deadline: None,
         api_key: None,
         messages: None,
+        tools: None,
     };
     let mut texts = Vec::new();
     let result = provider.generate(&request, CancelToken::new(flag), &mut |event| {
-        let ProviderEvent::Delta { text } = event;
+        let provider_sdk::ProviderEvent::Delta { text } = event else {
+            return EmitStatus::Continue;
+        };
         texts.push(text);
         flag.store(true, Ordering::SeqCst);
         EmitStatus::Continue
@@ -110,6 +115,7 @@ fn generate_stop_first(
         deadline: None,
         api_key: None,
         messages: None,
+        tools: None,
     };
     let flag = AtomicBool::new(false);
     let mut seen = 0usize;
@@ -266,10 +272,13 @@ fn fake_byte_identity_through_generate() {
         deadline: None,
         api_key: None,
         messages: None,
+        tools: None,
     };
     let mut texts = Vec::new();
     let result = provider.generate(&request, CancelToken::new(&flag), &mut |event| {
-        let ProviderEvent::Delta { text } = event;
+        let provider_sdk::ProviderEvent::Delta { text } = event else {
+            return EmitStatus::Continue;
+        };
         texts.push(text);
         EmitStatus::Continue
     });

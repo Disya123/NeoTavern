@@ -653,6 +653,42 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'generation.tools.list',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.empty',
+    'wire.result.list-tools',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    65536,
+    undefined,
+  ),
+  op(
+    'generation.tool.result',
+    'transactional',
+    'non-idempotent',
+    'none',
+    'app.write',
+    'wire.request.generation-tool-result',
+    'wire.generation.run',
+    undefined,
+    [
+      'INTERNAL',
+      'VALIDATION',
+      'NOT_FOUND',
+      'CONFLICT',
+      'PROVIDER_ERROR',
+      'CONTRACT_VIOLATION',
+      'OUTCOME_UNKNOWN',
+    ],
+    2048,
+    65536,
+    undefined,
+  ),
+  op(
     'providers.list',
     'transactional',
     'idempotent',
@@ -794,6 +830,8 @@ const UUID_WORKFLOW = '9c8b7a6e-5d4c-4b3a-9f8e-7d6c5b4a3f2e';
 const UUID_CONFIG = '4d5e6f70-8a9b-4c2d-9e3f-4a5b6c7d8e9f';
 const UUID_AVATAR = '5d6e7f80-9a1b-4c2d-8e3f-4a5b6c7d8e9f';
 const UUID_RUN = '6e7f8091-ab2c-4d3e-9f4a-5b6c7d8e9f01';
+const UUID_STEP = 'a1a2a3a4-b5c6-4d7e-8f90-1a2b3c4d5e6f';
+const UUID_TOOL_CALL = 'b1b2b3b4-c5d6-4e7f-8a90-2b3c4d5e6f70';
 const UUID_REQUEST = '8f901a2b-c3d4-4e5f-8a6b-7c8d9e0f1a2b';
 const TIMESTAMP = '2026-08-12T10:00:00Z';
 
@@ -880,6 +918,37 @@ const GENERATION_EVENT_ENVELOPE_VALUE = {
   sequence: 0,
   type: 'generation.delta',
   payload: { type: 'generation.delta', text: 'Hello' },
+};
+
+const TOOL_CALL_VALUE = {
+  id: UUID_TOOL_CALL,
+  name: 'lookup_weather',
+  arguments: { city: 'Kyiv' },
+};
+
+const GENERATION_STEP_VALUE = {
+  stepId: UUID_STEP,
+  runId: UUID_RUN,
+  sequence: 1,
+  type: 'tool_call',
+  status: 'waiting',
+  attempt: 1,
+  idempotencyKey: UUID_STEP,
+  input: { toolCall: TOOL_CALL_VALUE },
+  createdAt: TIMESTAMP,
+  updatedAt: TIMESTAMP,
+};
+
+const TOOL_SPEC_VALUE = {
+  id: 'lookup-weather',
+  name: 'lookup_weather',
+  description: 'Look up current weather for a city',
+  inputSchema: {
+    type: 'object',
+    properties: { city: { type: 'string' } },
+    required: ['city'],
+    additionalProperties: false,
+  },
 };
 
 const PROVIDER_VALUE = {
@@ -1009,6 +1078,12 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('generation-prompt-plan-request', 'generation.prompt.plan', 'request', true, {
     runId: UUID_RUN,
   }),
+  fx('generation-tools-list-request', 'generation.tools.list', 'request', true, {}),
+  fx('generation-tool-result-request', 'generation.tool.result', 'request', true, {
+    runId: UUID_RUN,
+    toolCallId: UUID_TOOL_CALL,
+    result: { temperature: 21, condition: 'sunny' },
+  }),
   fx('backups-create-request', 'backups.create', 'request', true, {}),
   fx('backups-list-request', 'backups.list', 'request', true, {}),
   fx('lorebooks-list-request', 'lorebooks.list', 'request', true, {}),
@@ -1071,6 +1146,17 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     status: 'interrupted',
   }),
   fx('generation-prompt-plan-response', 'generation.prompt.plan', 'response', true, PROMPT_PLAN_VALUE),
+  fx('generation-tools-list-response', 'generation.tools.list', 'response', true, {
+    items: [TOOL_SPEC_VALUE],
+  }),
+  fx('generation-tool-result-response', 'generation.tool.result', 'response', true, {
+    ...GENERATION_RUN_VALUE,
+    status: 'waiting_for_tool',
+  }),
+  fx('generation-step-event', 'generation.start', 'event', true, {
+    type: 'generation.step',
+    step: GENERATION_STEP_VALUE,
+  }),
   fx('backups-create-response', 'backups.create', 'response', true, BACKUP_VALUE),
   fx('backups-list-response', 'backups.list', 'response', true, { items: [BACKUP_VALUE] }),
   fx('lorebooks-list-response', 'lorebooks.list', 'response', true, { items: [LOREBOOK_VALUE] }),

@@ -308,6 +308,11 @@ impl ProviderAdapter for OpenAICompatProvider {
         let mut steps: u64 = 0;
         let mut output_chars: u64 = 0;
 
+        // Tool-call deltas accumulate across chunks (`delta.tool_calls[]` with
+        // incremental `function.arguments` fragments, §8.3); each entry is
+        // (id, name, arguments) or `None` when the index never appeared.
+        let mut tool_calls: Vec<Option<(String, String, String)>> = Vec::new();
+
         let mut reader = BufReader::new(reader);
         let mut sse = SseReader::new(&mut reader);
         loop {
@@ -355,11 +360,68 @@ impl ProviderAdapter for OpenAICompatProvider {
                                 steps += 1;
                                 output_chars += chars;
                             }
+                            // §8.3: accumulate tool-call deltas (id, name,
+                            // concatenated JSON arguments) by `index`.
+                            if let Some(calls) = delta.get("tool_calls").and_then(|c| c.as_array())
+                            {
+                                for call in calls {
+                                    let index =
+                                        call.get("index").and_then(|i| i.as_u64()).unwrap_or(0)
+                                            as usize;
+                                    while tool_calls.len() <= index {
+                                        tool_calls.push(None);
+                                    }
+                                    let entry = tool_calls[index].get_or_insert_with(|| {
+                                        (String::new(), String::new(), String::new())
+                                    });
+                                    if let Some(id) = call.get("id").and_then(|v| v.as_str()) {
+                                        entry.0 = id.to_string();
+                                    }
+                                    if let Some(name) = call
+                                        .get("function")
+                                        .and_then(|f| f.get("name"))
+                                        .and_then(|v| v.as_str())
+                                    {
+                                        entry.1 = name.to_string();
+                                    }
+                                    if let Some(fragment) = call
+                                        .get("function")
+                                        .and_then(|f| f.get("arguments"))
+                                        .and_then(|v| v.as_str())
+                                    {
+                                        entry.2.push_str(fragment);
+                                    }
+                                }
+                            }
                         }
                     }
                 },
                 Ok(None) => break, // end of stream
                 Err(err) => return Err(map_stream_error(err)),
+            }
+        }
+
+        // §8.3: a completed tool call is emitted AFTER the stream (the kernel
+        // durably commits the waiting transition from this event). Calls
+        // without a name are skipped (incomplete protocol fragments).
+        for entry in tool_calls.into_iter().flatten() {
+            if entry.1.is_empty() {
+                continue;
+            }
+            let arguments: serde_json::Value = match serde_json::from_str(&entry.2) {
+                Ok(value) => value,
+                Err(_) => serde_json::json!({ "raw": entry.2 }),
+            };
+            if emit(ProviderEvent::ToolCall {
+                id: entry.0,
+                name: entry.1,
+                arguments,
+            }) == EmitStatus::Stop
+            {
+                return Err(ProviderError::new(
+                    ProviderErrorCode::Cancelled,
+                    "executor requested stop",
+                ));
             }
         }
 
@@ -375,7 +437,9 @@ impl ProviderAdapter for OpenAICompatProvider {
 /// When the kernel's prompt pipeline is active the request carries the
 /// rendered instruct-neutral `messages` array (system + selected history +
 /// user) and it is serialized verbatim; otherwise the single `input` message
-/// is used (direct single-message calls, backwards compatibility).
+/// is used (direct single-message calls, backwards compatibility). Tool
+/// calls/results ride their messages (`tool_calls`, `tool_call_id`, §8.3)
+/// and the declared tools serialize into `tools` (function schema).
 fn build_body(
     request: &ProviderRequest<'_>,
     max_tokens: Option<u32>,
@@ -383,7 +447,29 @@ fn build_body(
     let messages: Vec<serde_json::Value> = match request.messages {
         Some(plan) => plan
             .iter()
-            .map(|m| serde_json::json!({ "role": m.role, "content": m.content }))
+            .map(|m| {
+                let mut value = serde_json::json!({ "role": m.role, "content": m.content });
+                if let Some(tool_call_id) = m.tool_call_id {
+                    value["tool_call_id"] = serde_json::json!(tool_call_id);
+                }
+                if let Some(calls) = m.tool_calls {
+                    let calls: Vec<serde_json::Value> = calls
+                        .iter()
+                        .map(|c| {
+                            serde_json::json!({
+                                "id": c.id,
+                                "type": "function",
+                                "function": {
+                                    "name": c.name,
+                                    "arguments": c.arguments,
+                                },
+                            })
+                        })
+                        .collect();
+                    value["tool_calls"] = serde_json::json!(calls);
+                }
+                value
+            })
             .collect(),
         None => vec![serde_json::json!({ "role": "user", "content": request.input })],
     };
@@ -394,6 +480,26 @@ fn build_body(
     });
     if let Some(max_tokens) = max_tokens {
         body["max_tokens"] = serde_json::json!(max_tokens);
+    }
+    // §8.3: declared tools (function schema). `tool_choice` stays unset —
+    // "auto" is the API default when `tools` is present.
+    if let Some(tools) = request.tools {
+        if !tools.is_empty() {
+            let tools: Vec<serde_json::Value> = tools
+                .iter()
+                .map(|t| {
+                    serde_json::json!({
+                        "type": "function",
+                        "function": {
+                            "name": t.name,
+                            "description": t.description,
+                            "parameters": t.input_schema,
+                        },
+                    })
+                })
+                .collect();
+            body["tools"] = serde_json::json!(tools);
+        }
     }
     serde_json::to_vec(&body).map_err(|err| {
         ProviderError::with(

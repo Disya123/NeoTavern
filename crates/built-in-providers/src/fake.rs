@@ -4,7 +4,14 @@
 //! derives from `sha256(run_key|i)` — no wall clock — so two attempts with
 //! the same `run_key` and model produce byte-identical payloads. The model
 //! grammar is `;`-separated `key=value` pairs (`steps`, `fail-at`,
-//! `delay-ms`, `tokens-per-step`, all optional).
+//! `delay-ms`, `tokens-per-step`, `tool=<name>`, all optional).
+//!
+//! Tool mode (Этап 2.7, ТЗ §8.3): with `tool=<name>` the first provider turn
+//! emits one normalized `ProviderEvent::ToolCall` (arguments derived from the
+//! run input) instead of text, and the turn ends. On a RESUMED turn — the
+//! request carries a `tool`-role result message appended by the kernel after
+//! `generation.tool.result` — the provider emits deterministic final text and
+//! ends, so a run can complete exactly one tool round trip.
 //!
 //! One billable attempt per [`generate`](FakeProvider::generate) call: the
 //! shared call counter increments exactly once per entry, regardless of
@@ -28,7 +35,7 @@ const DEFAULT_TOKENS_PER_STEP: usize = 6;
 
 /// Parsed fake-provider configuration from the `model` string
 /// (`;`-separated `key=value` pairs, all optional).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct FakeConfig {
     /// Provider steps (default 8, clamp 1..=64).
     steps: usize,
@@ -39,6 +46,13 @@ struct FakeConfig {
     delay_ms: u64,
     /// Delta chars per step (default 6, clamp 1..=256).
     tokens_per_step: usize,
+    /// Tool-mode: the tool name the model calls on its first turn. `None`
+    /// disables tools for the attempt.
+    tool: Option<String>,
+    /// Loop-mode (budget tests, ТЗ §8.3): the model calls `tool_loop` on
+    /// EVERY turn — even resumed ones — so a kernel run keeps re-entering the
+    /// waiting state until its loop guard fails the run. `None` disables.
+    tool_loop: Option<String>,
 }
 
 /// Deterministic built-in `fake` provider.
@@ -77,6 +91,8 @@ fn parse_config(model: &str) -> Result<FakeConfig, ProviderError> {
         fail_at: None,
         delay_ms: 0,
         tokens_per_step: DEFAULT_TOKENS_PER_STEP,
+        tool: None,
+        tool_loop: None,
     };
     for segment in model.split(';') {
         let segment = segment.trim();
@@ -86,9 +102,26 @@ fn parse_config(model: &str) -> Result<FakeConfig, ProviderError> {
         let (key, value) = segment
             .split_once('=')
             .ok_or_else(|| model_invalid(model))?;
+        let key = key.trim();
         let value = value.trim();
+        // `tool`/`tool-loop` take a name, everything else a clamped integer.
+        if key == "tool" || key == "tool-loop" {
+            if value.is_empty()
+                || !value
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+            {
+                return Err(model_invalid(model));
+            }
+            if key == "tool" {
+                cfg.tool = Some(value.to_string());
+            } else {
+                cfg.tool_loop = Some(value.to_string());
+            }
+            continue;
+        }
         let n: i64 = value.parse().map_err(|_| model_invalid(model))?;
-        match key.trim() {
+        match key {
             "steps" => cfg.steps = n.clamp(1, 64) as usize,
             "fail-at" => cfg.fail_at = Some(n.clamp(1, cfg.steps as i64) as usize),
             "delay-ms" => cfg.delay_ms = n.clamp(0, 200) as u64,
@@ -143,6 +176,19 @@ fn delta_text(
     text.chars().take(tokens_per_step).collect()
 }
 
+/// Deterministic final text emitted by tool mode on the resumed turn:
+/// `[tool-result] final {hex8}` where `hex8` derives from `sha256(run_key)`.
+fn tool_final_text(run_key: &str, attempt: u64) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(run_key.as_bytes());
+    let digest = hasher.finalize();
+    let hex8 = format!(
+        "{:02x}{:02x}{:02x}{:02x}",
+        digest[0], digest[1], digest[2], digest[3]
+    );
+    format!("[tool-result {attempt}] final {hex8}")
+}
+
 impl ProviderAdapter for FakeProvider {
     fn id(&self) -> &str {
         "fake"
@@ -185,6 +231,64 @@ impl ProviderAdapter for FakeProvider {
         }
         let cfg = parse_config(request.model)?;
         let attempt = parse_attempt(request.run_key);
+
+        // Tool loop-mode (budget tests, ТЗ §8.3): EVERY turn — including
+        // resumed ones with a tool-role result — emits a tool call, so the
+        // kernel's loop guard is exercised.
+        if let Some(tool_name) = &cfg.tool_loop {
+            if emit(ProviderEvent::ToolCall {
+                id: format!("fake-loop-call-{attempt}"),
+                name: tool_name.clone(),
+                arguments: serde_json::json!({ "query": request.input }),
+            }) == EmitStatus::Stop
+            {
+                return Err(ProviderError::new(
+                    ProviderErrorCode::Cancelled,
+                    "executor requested stop",
+                ));
+            }
+            return Ok(Usage {
+                steps: 1,
+                output_chars: 0,
+            });
+        }
+
+        // Tool mode (Этап 2.7): a resumed turn — the kernel appended a
+        // `tool`-role result message — emits deterministic final text; the
+        // first turn emits one normalized tool call instead of text.
+        if let Some(tool_name) = &cfg.tool {
+            let has_tool_result = request
+                .messages
+                .is_some_and(|messages| messages.iter().any(|m| m.role == "tool"));
+            if has_tool_result {
+                let text = tool_final_text(request.run_key, attempt);
+                if emit(ProviderEvent::Delta { text }) == EmitStatus::Stop {
+                    return Err(ProviderError::new(
+                        ProviderErrorCode::Cancelled,
+                        "executor requested stop",
+                    ));
+                }
+                return Ok(Usage {
+                    steps: 1,
+                    output_chars: 1,
+                });
+            }
+            if emit(ProviderEvent::ToolCall {
+                id: format!("fake-call-{attempt}"),
+                name: tool_name.clone(),
+                arguments: serde_json::json!({ "query": request.input }),
+            }) == EmitStatus::Stop
+            {
+                return Err(ProviderError::new(
+                    ProviderErrorCode::Cancelled,
+                    "executor requested stop",
+                ));
+            }
+            return Ok(Usage {
+                steps: 1,
+                output_chars: 0,
+            });
+        }
 
         let mut emitted_steps: u64 = 0;
         let mut output_chars: u64 = 0;
@@ -234,6 +338,13 @@ impl ProviderAdapter for FakeProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::AtomicBool;
+
+    /// A never-cancelled token for unit tests.
+    fn never_cancel() -> CancelToken<'static> {
+        static FLAG: AtomicBool = AtomicBool::new(false);
+        CancelToken::new(&FLAG)
+    }
 
     #[test]
     fn delta_text_byte_identity() {
@@ -292,6 +403,59 @@ mod tests {
         assert_eq!(cfg.tokens_per_step, 1);
         assert_eq!(cfg.delay_ms, 0);
         assert_eq!(cfg.fail_at, None);
+        assert_eq!(cfg.tool, None);
+    }
+
+    #[test]
+    fn model_grammar_tool_key_takes_a_name() {
+        let cfg = parse_config("tool=lookup_weather").unwrap();
+        assert_eq!(cfg.tool.as_deref(), Some("lookup_weather"));
+        // Non-alphanumeric tool names and missing values are rejected.
+        for bad in ["tool=", "tool=with space", "tool=bad/name", "tool=ümlaut"] {
+            assert!(parse_config(bad).is_err(), "{bad} must be invalid");
+        }
+        // tool-loop accepts the same grammar.
+        let cfg = parse_config("tool-loop=lookup_weather").unwrap();
+        assert_eq!(cfg.tool_loop.as_deref(), Some("lookup_weather"));
+        assert!(parse_config("tool-loop=").is_err());
+    }
+
+    #[test]
+    fn tool_loop_mode_emits_a_call_on_every_turn() {
+        let provider = FakeProvider::new();
+        let run_key = "7f3a2b4c-1d2e-4f5a-8b9c-0d1e2f3a4b5c|1";
+        let model = "tool-loop=lookup_weather";
+        // A resumed turn (tool-role result present) STILL emits a call.
+        let tool_message = provider_sdk::PromptMessage {
+            role: "tool",
+            content: "sunny",
+            tool_calls: None,
+            tool_call_id: Some("call-1"),
+        };
+        let request = ProviderRequest {
+            provider_id: "fake",
+            model,
+            input: "weather in Kyiv",
+            run_key,
+            deadline: None,
+            api_key: None,
+            messages: Some(&[tool_message]),
+            tools: None,
+        };
+        let mut events = Vec::new();
+        let usage = provider
+            .generate(&request, never_cancel(), &mut |event| {
+                events.push(event);
+                EmitStatus::Continue
+            })
+            .expect("loop turn succeeds");
+        assert_eq!(usage.steps, 1);
+        assert_eq!(usage.output_chars, 0);
+        assert_eq!(events.len(), 1);
+        let ProviderEvent::ToolCall { name, .. } = &events[0] else {
+            panic!("expected a tool call, got {events:?}");
+        };
+        assert_eq!(name, "lookup_weather");
     }
 
     #[test]
@@ -322,5 +486,84 @@ mod tests {
                 max_output_tokens: None,
             }]
         );
+    }
+
+    #[test]
+    fn tool_mode_emits_call_then_final_text_on_resume() {
+        let provider = FakeProvider::new();
+        let run_key = "7f3a2b4c-1d2e-4f5a-8b9c-0d1e2f3a4b5c|1";
+        let model = "tool=lookup_weather";
+
+        // Turn 1: a normalized tool call, no text.
+        let request = ProviderRequest {
+            provider_id: "fake",
+            model,
+            input: "weather in Kyiv",
+            run_key,
+            deadline: None,
+            api_key: None,
+            messages: None,
+            tools: None,
+        };
+        let mut events = Vec::new();
+        let result = provider.generate(&request, never_cancel(), &mut |event| {
+            events.push(event);
+            EmitStatus::Continue
+        });
+        let usage = result.expect("turn 1 succeeds");
+        assert_eq!(usage.steps, 1);
+        assert_eq!(usage.output_chars, 0);
+        assert_eq!(events.len(), 1);
+        let ProviderEvent::ToolCall {
+            id,
+            name,
+            arguments,
+        } = &events[0]
+        else {
+            panic!("expected a tool call, got {events:?}");
+        };
+        assert_eq!(name, "lookup_weather");
+        assert!(id.starts_with("fake-call-"));
+        assert_eq!(arguments["query"], serde_json::json!("weather in Kyiv"));
+
+        // Turn 2 (resumed): a tool-role result message present → final text.
+        let tool_message = provider_sdk::PromptMessage {
+            role: "tool",
+            content: "sunny, 21 C",
+            tool_calls: None,
+            tool_call_id: Some("call-1"),
+        };
+        let resumed = ProviderRequest {
+            provider_id: "fake",
+            model,
+            input: "weather in Kyiv",
+            run_key,
+            deadline: None,
+            api_key: None,
+            messages: Some(&[tool_message]),
+            tools: None,
+        };
+        let mut events = Vec::new();
+        let usage = provider
+            .generate(&resumed, never_cancel(), &mut |event| {
+                events.push(event);
+                EmitStatus::Continue
+            })
+            .expect("turn 2 succeeds");
+        assert_eq!(usage.steps, 1);
+        assert_eq!(events.len(), 1);
+        let ProviderEvent::Delta { text } = &events[0] else {
+            panic!("expected final text, got {events:?}");
+        };
+        assert!(text.starts_with("[tool-result 1] final "), "got {text}");
+        // Deterministic across runs.
+        let mut events2 = Vec::new();
+        provider
+            .generate(&resumed, never_cancel(), &mut |event| {
+                events2.push(event);
+                EmitStatus::Continue
+            })
+            .expect("turn 2 rerun");
+        assert_eq!(events, events2);
     }
 }
