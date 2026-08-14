@@ -376,9 +376,9 @@ describe('install recovery journal (ТЗ §SEC-05, v2)', () => {
 
     await recoverInterruptedInstalls(pluginsDir, repo, logger);
 
-    expect(readFile(join(pluginsDir, 'author.ok', 'package', 'plugin.json'), 'utf8')).resolves.toBe(
-      '{"id":"x"}',
-    );
+    await expect(
+      readFile(join(pluginsDir, 'author.ok', 'package', 'plugin.json'), 'utf8'),
+    ).resolves.toBe('{"id":"x"}');
     // The stray rollback is KEPT (restored semantics: never delete both).
     expect(
       await readFile(join(pluginsDir, 'author.ok', '.rollback-efgh', 'plugin.json'), 'utf8'),
