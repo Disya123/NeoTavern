@@ -3,6 +3,24 @@
 ## Unreleased
 ### Added
 
+- **SEC-03/SEC-04 — plugin network broker hardening (M1 / Wave 1).** The
+  plugin `network.http.fetch` transport now connects to the policy-approved
+  IP (no DNS in the connect path) with the hostname preserved only in `Host` /
+  TLS `servername`, and verifies the connected `remoteAddress` against the
+  approved set after connect (ТЗ §SEC-03: "после connect проверяется
+  remoteAddress"); TCP connects do the same post-connect check. IP literal
+  normalization now handles the bracket form WHATWG URL produces for IPv6
+  (`[::1]`) and both IPv4-mapped spellings (`::ffff:127.0.0.1` and the hex
+  `::ffff:7f00:1`) — previously `[::1]` was misclassified as public, a
+  loopback SSRF bypass. Response bodies are capped while streaming and the
+  connection is destroyed immediately on exceed (ТЗ §SEC-04), instead of
+  buffering an unbounded body to truncate later. New coverage:
+  `netPolicy.test.ts` (normalization + post-connect verification),
+  bracketed-IPv6 deny/allow tests in `memoryHost.test.ts`, verified-connect +
+  bounded-body integration tests in `networkPool.test.ts`. Capability
+  `security.plugin-network` is now `Implemented` on desktop/headless/web-client
+  hosts (`docs/release-manifest.json`). WebSocket post-connect verification is
+  a documented follow-up (undici WebSocket does not expose the socket).
 - **SEC-02 — logical profile export (M1 / Wave 1, Immediate security).**
   `apps/server/src/lib/profileExport.ts` no longer snapshots the full
   `app.db` into the archive (ТЗ §SEC-02 forbids a DB snapshot as a profile

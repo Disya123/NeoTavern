@@ -7,6 +7,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { NETWORK_MAX_BODY_BYTES } from '@neotavern/contracts';
 import { createNetworkPool } from './networkPool.js';
 
 const servers: Server[] = [];
@@ -142,5 +143,60 @@ describe('network pool (§29 proxy)', () => {
     expect(() => createNetworkPool({ proxyUrl: 'ftp://proxy.local' })).toThrow(
       'proxy URL must use http: or https:',
     );
+  });
+});
+
+describe('network pool verified-IP connects and bounded bodies (ТЗ §SEC-03/§SEC-04)', () => {
+  it('connects to the approved IP and keeps the hostname only in Host (§SEC-03)', async () => {
+    const seenHosts: string[] = [];
+    const server = createServer((req, res) => {
+      seenHosts.push(req.headers.host ?? '');
+      res.end('verified');
+    });
+    const port = await listen(server);
+
+    const pool = createNetworkPool();
+    // `resolve-me.invalid` does not resolve on the OS DNS: the request can
+    // only succeed if the transport connects to the approved IP 127.0.0.1.
+    const resp = await pool.fetch(`http://resolve-me.invalid:${port}/`, undefined, {
+      ips: ['127.0.0.1'],
+    });
+    expect(resp.status).toBe(200);
+    expect(await resp.text()).toBe('verified');
+    // The hostname survives only in the Host header, never in DNS/connect.
+    expect(seenHosts).toEqual([`resolve-me.invalid:${port}`]);
+    await pool.close();
+  });
+
+  it('bounded body: destroys the response at the cap and returns the prefix (§SEC-04)', async () => {
+    const FULL = NETWORK_MAX_BODY_BYTES + 1024 * 1024; // above the response cap
+    let written = 0;
+    const server = createServer((_req, res) => {
+      res.writeHead(200, { 'content-type': 'application/octet-stream' });
+      const chunk = Buffer.alloc(64 * 1024, 0x61); // 'a'
+      const timer = setInterval(() => {
+        if (res.destroyed) {
+          clearInterval(timer);
+          return;
+        }
+        res.write(chunk);
+        written += chunk.length;
+        if (written >= FULL) {
+          clearInterval(timer);
+          res.end();
+        }
+      }, 1);
+      res.on('close', () => clearInterval(timer));
+    });
+    const port = await listen(server);
+
+    const pool = createNetworkPool();
+    const resp = await pool.fetch(`http://127.0.0.1:${port}/`);
+    const body = await resp.text();
+    expect(body.length).toBe(NETWORK_MAX_BODY_BYTES);
+    // The connection was destroyed once the cap was exceeded — the server
+    // never delivered the full body.
+    expect(written).toBeLessThan(FULL);
+    await pool.close();
   });
 });

@@ -14,11 +14,13 @@ function registry(): SocketRegistry {
   return createSocketRegistry({
     checkDestination: async (host) => {
       // Loopback-only test policy: 127.0.0.1 / localhost pass, the rest deny.
+      // Returns the approved address list (ТЗ §SEC-03 post-connect check).
       if (host !== '127.0.0.1' && host !== 'localhost') {
         const error = new Error('destination denied') as Error & { code?: string };
         error.code = 'NETWORK_DESTINATION_DENIED';
         throw error;
       }
+      return ['127.0.0.1'];
     },
     checkBind: (host) => {
       if (host !== '127.0.0.1' && host !== 'localhost') {

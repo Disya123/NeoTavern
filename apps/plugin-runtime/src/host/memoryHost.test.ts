@@ -564,6 +564,45 @@ describe('memory host network fetch (§29, SSRF-hardened)', () => {
     );
   });
 
+  it('denies bracketed IPv6 loopback without network.local (SEC-03)', async () => {
+    const host = createMemoryHostExecutor({
+      grants: { 'plugin-a': NETWORK_GRANTS },
+      fetchImpl: async () => mockResponse(200, 'should-not-reach'),
+      dnsLookupImpl: async () => ['::1'],
+    });
+    const core = wired(host);
+    // URL.hostname keeps the brackets on IPv6 hosts ("[::1]"); a classifier
+    // that misses the bracket form labels it "public" — the SSRF bypass this
+    // test pins shut.
+    await expectCode(
+      core.submit(networkCall('http://[::1]/admin')).promise,
+      'NETWORK_DESTINATION_DENIED',
+    );
+  });
+
+  it('denies IPv4-mapped loopback literals without network.local (SEC-03)', async () => {
+    const host = createMemoryHostExecutor({
+      grants: { 'plugin-a': NETWORK_GRANTS },
+      fetchImpl: async () => mockResponse(200, 'should-not-reach'),
+    });
+    const core = wired(host);
+    // Dotted-quad mapped form.
+    await expectCode(
+      core.submit(networkCall('http://[::ffff:127.0.0.1]/admin')).promise,
+      'NETWORK_DESTINATION_DENIED',
+    );
+    // Hex spelling is what URL parsing produces for the same address.
+    await expectCode(
+      core.submit(networkCall('http://[::ffff:7f00:1]/admin')).promise,
+      'NETWORK_DESTINATION_DENIED',
+    );
+    // A mapped private range must need network.private, not pass as public.
+    await expectCode(
+      core.submit(networkCall('http://[::ffff:10.0.0.1]/admin')).promise,
+      'NETWORK_DESTINATION_DENIED',
+    );
+  });
+
   it('denies RFC1918 private ranges', async () => {
     const host = createMemoryHostExecutor({
       grants: { 'plugin-a': NETWORK_GRANTS },

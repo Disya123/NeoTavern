@@ -198,6 +198,19 @@
       "milestone": "M1"
     },
     {
+      "id": "security.plugin-network",
+      "title": "Plugin network broker (SSRF policy + bounded streaming)",
+      "wireOps": [],
+      "hosts": {
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "android": "Designed",
+        "webClient": "Implemented"
+      },
+      "notes": "SEC-03/SEC-04 (M1 Wave 1): plugin network.http.fetch and socket destinations pass the §29.1 SSRF scope policy — every DNS answer checked, bracketed IPv6 and IPv4-mapped literals normalized, per-hop redirect re-checks, connect to the policy-approved IP with the hostname only in Host/SNI and post-connect remoteAddress verification; response bodies are capped while streaming and the connection is destroyed on exceed (apps/plugin-runtime/src/host). WebSocket post-connect verification is a documented follow-up.",
+      "milestone": "M1"
+    },
+    {
       "id": "ui.portable-data",
       "title": "Portable data / activation / restore",
       "wireOps": [],

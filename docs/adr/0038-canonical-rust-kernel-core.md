@@ -109,7 +109,8 @@ before any migration work can be declared.
     and the single docs source tree;
   - **M1 / Wave 1 — Immediate security** (OPEN): SEC-01 SecretStore
     hardening, SEC-02 legacy allowlist export (replacing the full-DB snapshot —
-    delivered in Wave 1, see CHANGELOG), plugin networking and package
+    delivered in Wave 1, see CHANGELOG), plugin networking (SSRF policy +
+    bounded streaming hardening delivered in Wave 1) and package
     verification; M1 is NOT closed until these land;
   - **M2 — Kernel Golden Foundation**, **M3 — Data Convergence**,
     **M4 — Product Convergence** (GEN-RUN 10C/10D).
