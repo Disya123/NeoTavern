@@ -44,6 +44,23 @@
   per-plugin trip (3rd concurrent fetch of one plugin denied) and a
   cross-plugin global trip (9 plugins, 8 held fetches, 9th denied).
 
+- **Verified-IP set honored on every plugin network connect (SEC-03 Wave 3,
+  audit P0 "TCP/proxy paths connect by hostname").** The §29.1 SSRF-approved
+  address set now drives the actual connect on EVERY path in
+  `apps/plugin-runtime/src/host`: `directFetch` (already), HTTP proxy
+  absolute-form hops carry the verified IP in the request-target while the
+  Host header keeps the hostname, HTTPS CONNECT tunnels use the verified IP in
+  the CONNECT authority (TLS still validates the hostname), and
+  `socketHandles.ts` `tcpConnect`/`udpSend` connect/send to a policy-approved
+  address instead of resolving the hostname in the stack (hostname survives
+  only as the TLS servername). Tests: `networkPool.test.ts` 21 tests (new:
+  verified absolute-form target, verified CONNECT authority),
+  `socketHandles.test.ts` 11 tests (new: tcp/udp verified-IP round-trips via
+  `localhost` against a 127.0.0.1-only peer, proving no hostname DNS). The
+  only remaining documented follow-up is WebSocket post-connect
+  `remoteAddress` verification (undici WebSocket does not expose the connected
+  socket; noted in `socketHandles.ts`).
+
 - **Migration single-writer and pointer integrity fixes (audit P0 #3,
   ТЗ §10.3/§22.3).** `neotavern_storage::migration` is now session-based:
   `MigrationSession::begin` acquires the data-root lease and holds it for

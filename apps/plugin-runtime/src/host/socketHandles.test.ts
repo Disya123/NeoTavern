@@ -71,6 +71,23 @@ describe('socket registry (§29)', () => {
     }
   });
 
+  it('connects to the verified IP, never resolving the hostname (§SEC-03)', async () => {
+    // The echo server binds 127.0.0.1 ONLY. On hosts where 'localhost'
+    // resolves to ::1 first, a connect-by-hostname would fail; the registry
+    // must connect to the policy-approved 127.0.0.1 instead.
+    const { server: _server, port, close } = await echoServer();
+    try {
+      const sockets = registry(); // checkDestination('localhost') -> ['127.0.0.1']
+      const id = await sockets.tcpConnect('plugin-a', 'localhost', port, false);
+      await sockets.tcpSend('plugin-a', id, 'verified-ip');
+      const received = await sockets.tcpReceive('plugin-a', id, 1, 2000, abortSignal());
+      expect(received.messages).toEqual(['verified-ip']);
+      await sockets.tcpClose('plugin-a', id);
+    } finally {
+      await close();
+    }
+  });
+
   it('rejects tcp destinations outside the SSRF policy', async () => {
     const sockets = registry();
     await expect(sockets.tcpConnect('plugin-a', '192.168.1.1', 80, false)).rejects.toMatchObject({
@@ -126,6 +143,27 @@ describe('socket registry (§29)', () => {
       expect(received.host).toBe('127.0.0.1');
       expect(received.port).toBe(peerPort);
       void port;
+    } finally {
+      peer.close();
+      await sockets.udpClose('plugin-a', id);
+    }
+  });
+
+  it('sends udp to the verified IP, never resolving the hostname (§SEC-03)', async () => {
+    const sockets = registry();
+    const { id } = await sockets.udpOpen('plugin-a', undefined, 0);
+    const peer = createSocket('udp4');
+    await new Promise<void>((resolve) => peer.bind(0, '127.0.0.1', resolve));
+    const peerPort = (peer.address() as AddressInfo).port;
+    try {
+      peer.on('message', (message, rinfo) => {
+        peer.send(`echo:${message.toString('utf8')}`, rinfo.port, rinfo.address);
+      });
+      // 'localhost' must be sent to the policy-approved 127.0.0.1 — the dgram
+      // socket itself resolves no DNS for the hostname.
+      await sockets.udpSend('plugin-a', id, 'verified-udp', 'localhost', peerPort);
+      const received = await sockets.udpReceive('plugin-a', id, 2000, abortSignal());
+      expect(received.data).toBe('echo:verified-udp');
     } finally {
       peer.close();
       await sockets.udpClose('plugin-a', id);

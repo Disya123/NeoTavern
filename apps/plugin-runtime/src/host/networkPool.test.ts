@@ -139,6 +139,46 @@ describe('network pool (§29 proxy)', () => {
     await pool.close();
   });
 
+  it('absolute-form hop carries the verified IP, Host keeps the hostname (§SEC-03)', async () => {
+    const seen: Array<{ url: string; host: string | undefined }> = [];
+    const proxy = createServer((req, res) => {
+      seen.push({ url: req.url ?? '', host: req.headers.host });
+      res.end('proxied');
+    });
+    const proxyPort = await listen(proxy);
+
+    const pool = createNetworkPool({ proxyUrl: `http://127.0.0.1:${proxyPort}` });
+    const resp = await pool.fetch('http://example.com/resource?q=1', undefined, {
+      ips: ['93.184.216.34'],
+    });
+    expect(await resp.text()).toBe('proxied');
+    // The proxy resolves no DNS: the absolute-form authority is the approved
+    // IP; the Host header keeps the hostname for the target.
+    expect(seen[0]?.url).toBe('http://93.184.216.34/resource?q=1');
+    expect(seen[0]?.host).toBe('example.com');
+    await pool.close();
+  });
+
+  it('CONNECT authority carries the verified IP, TLS validates the hostname (§SEC-03)', async () => {
+    const connectTargets: string[] = [];
+    const proxy = createServer();
+    proxy.on('connect', (req, socket) => {
+      connectTargets.push(req.url ?? '');
+      socket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+      setTimeout(() => socket.destroy(), 50);
+    });
+    const proxyPort = await listen(proxy);
+
+    const pool = createNetworkPool({ proxyUrl: `http://127.0.0.1:${proxyPort}` });
+    // The TLS handshake still fails (dropped tunnel) — the observable that
+    // matters here is the CONNECT authority carrying the verified IP.
+    await expect(
+      pool.fetch('https://example.com/secure', undefined, { ips: ['93.184.216.34'] }),
+    ).rejects.toThrow();
+    expect(connectTargets).toEqual(['93.184.216.34:443']);
+    await pool.close();
+  });
+
   it('rejects a non-http proxy URL at creation', () => {
     expect(() => createNetworkPool({ proxyUrl: 'ftp://proxy.local' })).toThrow(
       'proxy URL must use http: or https:',
