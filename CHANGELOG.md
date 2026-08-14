@@ -125,6 +125,40 @@
   release-manifest notes (characters.crud / chats.crud / chats.messages.crud),
   CHANGELOG.
 
+- **Versioned data roots, activation journal and Windows restart-to-complete
+  (M3 / Этап 3, DATA-ACTIVATE, ТЗ §10.2–§10.4, ADR-0041).** The storage
+  foundation for the data cutover: a new `neotavern_storage::activation`
+  module implements the canonical v2 layout (versions under
+  `roots/root-<id>/`, a small `active-root.json` pointer written atomically
+  as the commit point), the durable `activation-journal.json` with the ТЗ
+  §10.3 statuses `prepared` → `validated` → `activation_pending` →
+  `committed` / `rolled_back`, and the Windows activation protocol: the
+  pointer switch runs through bounded retry with exponential backoff + jitter
+  for classified transient errors only (`ERROR_SHARING_VIOLATION` 32,
+  `ERROR_LOCK_VIOLATION` 33, POSIX `WouldBlock`; access-denied is never
+  retried), and after the budget is exhausted the journal stays at
+  `activation_pending` with a stable recoverable error
+  (`activation_pending`) so the host can offer **Restart to finish
+  migration**. `open::open` runs `resolve_pending_activation` right after the
+  data-root lease and before any SQLite open: a pending switch completes
+  (restart-to-complete) when the target carries a database, or records
+  `rolled_back` and keeps the previous root active when the target is
+  missing; the old and new roots are never opened writable simultaneously.
+  The v1 flat layout remains fully supported (a data root without
+  `active-root.json` — the active root IS the data root, and the ADR-0032
+  candidate-swap restore path is unchanged), and `open`/`open_read_only` now
+  resolve the active root first so product reads/writes always hit the
+  current version. Unknown future journal/pointer formats fail closed.
+  Tests: 21 new `tests/activation.rs` integration tests (journal
+  round-trip/transitions/idempotency, corrupt & future-format rejection,
+  pointer round-trip and missing-target failure, the kill-matrix recovery
+  — complete / roll back / no-op, transient-error classification and bounded
+  retry, full `activate` lifecycle, open-path integration on the active
+  root); storage suite and full cargo workspace green; clippy/rustfmt clean.
+  Docs: ADR-0041, `portable-data.md` (versioned roots + journal + Windows
+  protocol), CHANGELOG. The staged converter wiring this protocol into the
+  application flow and the migration corpus are the next Этап 3 slices.
+
 - **Prompt pipeline in the Kernel (M2 / Этап 2.6, ТЗ §9.1–§9.2).** Every
   generation run now builds an immutable **PromptPlan** before the provider
   attempt: character/persona system blocks (from the chat's character card,

@@ -48,6 +48,10 @@ pub enum StorageErrorCode {
     Conflict,
     /// A database integrity invariant was violated.
     IntegrityViolation,
+    /// A data-root activation is pending and requires a restart to finish
+    /// migration (ТЗ §10.3.1; the pointer switch exhausted its retry budget
+    /// and the journal stays at `activation_pending`).
+    ActivationPending,
 }
 
 /// A storage error: code + message + diagnostic parameters.

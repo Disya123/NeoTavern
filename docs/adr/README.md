@@ -1,5 +1,24 @@
 # Architecture Decision Records
 
+## ADR-0041: Versioned Data Roots — Activation Journal and Windows Restart-to-Complete
+
+The canonical v2 data-root layout for the Этап 3 data cutover (ТЗ §10.2–§10.4,
+ADR #8): versions live under `roots/root-<id>/`, a small `active-root.json`
+pointer (written atomically) is the commit point instead of a directory
+rename, and a durable `activation-journal.json` records every staged
+activation with the ТЗ §10.3 statuses `prepared` → `validated` →
+`activation_pending` → `committed` / `rolled_back`. The Windows activation
+protocol (ТЗ §10.3.1) runs the pointer switch through bounded retry with
+exponential backoff + jitter for classified transient errors only (sharing
+violation 32, lock violation 33, POSIX WouldBlock; access-denied is never
+retried), keeps the journal at `activation_pending` after the budget and
+offers **Restart to finish migration**; `resolve_pending_activation` runs at
+`open` after the lease and completes or rolls back deterministically. The v1
+flat layout remains fully supported; the old and new roots are never opened
+writable simultaneously; the previous root is never deleted before the switch
+is confirmed. Full decision, alternatives and consequences:
+[ADR-0041](0041-versioned-data-roots-activation.md).
+
 ## ADR-0040: SecretStore port — host backends, portable format, crypto parameters
 
 The canonical kernel SecretStore port (ТЗ §SEC-01 / §19.2 ADR #5): host

@@ -67,3 +67,7 @@ path = "tests/legacy.rs"
 [[test]]
 name = "restore"
 path = "tests/restore.rs"
+
+[[test]]
+name = "activation"
+path = "tests/activation.rs"

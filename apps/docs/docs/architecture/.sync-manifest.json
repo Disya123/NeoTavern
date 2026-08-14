@@ -183,9 +183,14 @@
       "sha256": "75f6ba9c6432785c647f11b2de5e007c918bf13596726e15b991f56fa29098e4"
     },
     {
+      "source": "adr/0041-versioned-data-roots-activation.md",
+      "target": "adr/0041-versioned-data-roots-activation.md",
+      "sha256": "4c1620ceb27769ccbf3b020c7d9a9fba438ed68a6bc69e412f519f919078d801"
+    },
+    {
       "source": "adr/README.md",
       "target": "adr/README.md",
-      "sha256": "22f63e8c4f40bc744f805f2e3ed871db08ebf02f78e6f69b4ae84e64d2f29709"
+      "sha256": "552662666f9636f00b61b58fbfdbf459530f672ff7ee3691c06289eebc957dc1"
     },
     {
       "source": "android/README.md",
@@ -225,7 +230,7 @@
     {
       "source": "architecture/portable-data.md",
       "target": "architecture/portable-data.md",
-      "sha256": "270061de29500e3f7b8f1d1869d0cc5bd53f0328dd68997fb336f0091546ed04"
+      "sha256": "5535815984ac95c71069a264a17a229639632ff060f864a165968379cb79d26f"
     },
     {
       "source": "architecture/prompt-pipeline.md",
@@ -255,7 +260,7 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "57f999a7ef919851f1ec430212c443b3d7f0e2dfc09ac2b21c8a0b008271b67b"
+      "sha256": "59c987879f8da345d8c9c3f1734278a1668ede2c49d44d1874b7af28230e7ed1"
     },
     {
       "source": "data/README.md",

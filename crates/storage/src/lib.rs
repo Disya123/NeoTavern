@@ -12,6 +12,7 @@
 //! The crate knows nothing about product features: there are no character or
 //! chat tables here — only the `meta`/`migrations`/`assets` foundations.
 
+pub mod activation;
 pub mod assets;
 pub mod backup;
 pub mod baseline;
