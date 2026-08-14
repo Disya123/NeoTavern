@@ -27,9 +27,10 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/architecture/READM
 > SecretStore (secrets out of the main DB; portable `secrets.enc`, session and
 > env modes; opaque references; bootstrap import) — each with its own
 > regression/security tests and capability rows in
-> [release-manifest.json](https://github.com/Disya123/NeoTavern/blob/main/docs/release-manifest.json). Remaining Wave 1 work is
-> kernel-plane (OS vault / Keystore adapters, portable UX) and the final
-> regression sweep is complete for the legacy contour.
+> [release-manifest.json](https://github.com/Disya123/NeoTavern/blob/main/docs/release-manifest.json). The kernel-plane
+> SecretStore port (crates/secret-store, ADR-0040) is delivered with the
+> canonical portable v2 format (Argon2id + AES-256-GCM). Remaining Wave 1
+> work: OS-vault / Keystore adapters and the portable passphrase UX (M3).
 
 The section below describes the current (pre-cutover) layout. Product logic
 migrates into the Kernel over the program milestones; new product logic is
