@@ -9,12 +9,14 @@
  * absolute-form request line, HTTPS targets use a CONNECT tunnel with TLS
  * over the tunneled socket.
  *
- * The pool never follows redirects (the executor's §29.1.3 policy loop does)
- * and never decodes bodies (it returns a buffered `Response`; producer-side
- * streaming of bodies is a documented follow-up). Both limits are enforced
- * while streaming: a response body over the cap destroys the connection
- * immediately and returns the truncated prefix (ТЗ §SEC-04 — never accumulate
- * a body that will be discarded).
+ * The pool never follows redirects (the executor's §29.1.3 policy loop does).
+ * Response bodies with a `content-encoding` of gzip/deflate/br are decoded
+ * through a bounded streaming decoder: the compressed wire bytes AND the
+ * decompressed result are both capped at the same budget, so a "zip bomb"
+ * cannot bypass the in-flight byte limits by claiming an enormous expansion
+ * (ТЗ §SEC-04). Both limits are enforced while streaming: a response body
+ * over the cap destroys the connection immediately and returns the truncated
+ * prefix (never accumulate a body that will be discarded).
  *
  * Verified connections (ТЗ §SEC-03): when the caller passes the policy-approved
  * address list, the pool connects straight to the approved IP (no DNS in the
@@ -32,6 +34,8 @@ import {
 import { Agent as HttpsAgent, request as httpsRequest } from 'node:https';
 import { connect as tlsConnect, type TLSSocket } from 'node:tls';
 import type { Socket } from 'node:net';
+import type { Transform } from 'node:stream';
+import { createBrotliDecompress, createGunzip, createInflate } from 'node:zlib';
 import {
   NETWORK_MAX_BODY_BYTES,
   NETWORK_POOL_CONNECT_TIMEOUT_MS,
@@ -138,6 +142,11 @@ function readResponse(res: IncomingMessage, maxBytes: number): Promise<Response>
           headers.set(name, String(value));
         }
       }
+      // The body below is DECODED (content-encoding consumed by the streaming
+      // decoder); leaving the encoding header would make the caller decode a
+      // second time. content-length also no longer matches the body.
+      headers.delete('content-encoding');
+      headers.delete('content-length');
       resolve(
         new Response(body, {
           status: res.statusCode ?? 0,
@@ -146,13 +155,65 @@ function readResponse(res: IncomingMessage, maxBytes: number): Promise<Response>
         }),
       );
     };
+    // Bound the DECOMPRESSED bytes too (§SEC-04): a tiny compressed body may
+    // expand enormously, so the decoder output is capped at the same budget.
+    const pushOutput = (chunk: Buffer): boolean => {
+      const room = maxBytes - total;
+      if (chunk.length > room) {
+        if (room > 0) {
+          chunks.push(chunk.subarray(0, room));
+          total = maxBytes;
+        }
+        truncated = true;
+        return false;
+      }
+      chunks.push(chunk);
+      total += chunk.length;
+      return true;
+    };
+    const fail = (error: Error): void => {
+      // After an intentional cap-destroy the truncated prefix is the answer;
+      // any other error fails the fetch.
+      if (truncated) buildResponse();
+      else reject(error);
+    };
+    const encoding = (res.headers['content-encoding'] ?? '').toLowerCase();
+    if (encoding === 'gzip' || encoding === 'deflate' || encoding === 'br') {
+      const decoder: Transform =
+        encoding === 'gzip'
+          ? createGunzip()
+          : encoding === 'deflate'
+            ? createInflate()
+            : createBrotliDecompress();
+      decoder.on('data', (chunk: Buffer) => {
+        if (!pushOutput(chunk)) {
+          // Cap exceeded on the DECODED stream: destroy the response
+          // immediately instead of expanding the whole payload.
+          res.destroy();
+          decoder.destroy();
+        }
+      });
+      decoder.on('error', fail);
+      decoder.on('end', buildResponse);
+      decoder.on('close', () => {
+        if (truncated) buildResponse();
+      });
+      res.on('data', (chunk: Buffer) => decoder.write(chunk));
+      res.on('end', () => decoder.end());
+      res.on('error', (error) => decoder.destroy(error));
+      // The decoder's own end/close/error handlers settle the promise; the
+      // truncation path destroys res + decoder explicitly above, so no extra
+      // 'close' wiring is needed here (a res 'close' racing the decoder's
+      // async flush must NOT destroy the decoder prematurely).
+      return;
+    }
     res.on('data', (chunk: Buffer) => {
       if (truncated) return;
       const room = maxBytes - total;
       if (chunk.length > room) {
-        // §SEC-04: bound compressed AND decompressed bytes before the body is
-        // accumulated; destroy the response immediately once the cap is
-        // exceeded instead of downloading a body that will be discarded.
+        // §SEC-04: bound the compressed bytes before the body is accumulated;
+        // destroy the response immediately once the cap is exceeded instead
+        // of downloading a body that will be discarded.
         if (room > 0) {
           chunks.push(chunk.subarray(0, room));
           total = maxBytes;
@@ -164,12 +225,7 @@ function readResponse(res: IncomingMessage, maxBytes: number): Promise<Response>
       chunks.push(chunk);
       total += chunk.length;
     });
-    res.on('error', (error) => {
-      // After an intentional cap-destroy the truncated prefix is the answer;
-      // any other error fails the fetch.
-      if (truncated) buildResponse();
-      else reject(error);
-    });
+    res.on('error', fail);
     res.on('end', buildResponse);
     // 'close' fires without 'end' after `res.destroy()` (cap exceeded).
     res.on('close', buildResponse);

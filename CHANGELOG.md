@@ -3,6 +3,50 @@
 ## Unreleased
 ### Added
 
+- **Acceptance ledger gate is now a real gate (audit directive).**
+  `scripts/check-milestone-gates.mjs` (CI + `--check`) now fails on an empty
+  or structurally broken ledger (the ignored `main()` result is fixed), an
+  `accepted` milestone must carry `acceptedCommit` that exists in HEAD's git
+  ancestry and `acceptedBy`, non-empty string `evidence`, and empty
+  `blockingIssues` — or every issue formally waived in `waivers[]`; a `P0`
+  issue forbids acceptance even with a waiver. The parallel-development rule
+  is explicit: `policy.parallelDevelopment` (default `false` = strict
+  sequential) — an `in_progress` milestone recording a `deliveredCommit`
+  while a predecessor is not accepted fails the gate, so the branch stops at
+  the red stage instead of accumulating later-stage commits. The ledger now
+  records this policy and marks the M2/M3/M4 `deliveredCommit` entries as
+  honest violations until their predecessors are accepted; M3 `FIXED` claims
+  were re-reviewed into `PARTIAL`/`OPEN` where the negative test does not yet
+  prove the full end-to-end invariant (pointer portability, parent-dir
+  fsync, containment canonicalization, recovery integrity, restore
+  activation, sidecar blocking). New M4 slices are stopped until M1 is
+  accepted.
+
+- **M1 security follow-ups closed (SEC-03/SEC-04/SEC-01/SEC-05).** IPv6
+  link-local classification now covers the full fe80::/10 hextet range
+  (fe80..febf) and multicast ff00::/8 is never public (`memoryHost.test.ts`
+  pins febf::1 and ff02::1 as denied). The WebSocket client refuses a frame
+  whose declared length exceeds `WS_MAX_FRAME_BYTES` from the header alone —
+  no buffering toward a huge declared size, and fragmented text is bounded
+  too (`socketHandles.test.ts` pins a 2-GiB declaration). `networkPool`
+  decodes `content-encoding` gzip/deflate/br through a bounded streaming
+  decoder so compressed wire bytes and the decompressed result share the
+  same cap — a tiny gzip bomb cannot expand past it, and the consumed
+  `content-encoding`/`content-length` headers are dropped from the returned
+  `Response` (`networkPool.test.ts`: decode, header drop, bomb truncation).
+  Deleting a provider/plugin secret reference now also removes the stored
+  value from the SecretStore (`SecretStoreHandle.deleteValue`), so no
+  orphaned secret survives the row delete (`secretStore.spec.ts`).
+  `verifyPackageTrust` recurses into `signature/` and allows only
+  `manifest.json` + `package.sig` there — a signed entrypoint cannot import
+  an unsigned file dropped into the signature directory
+  (`packageTrust.test.ts`).
+
+- **docs:sync pipeline fixed.** The Docusaurus mirror had diverged from
+  `docs/` on `architecture/operations-inventory.md` (edited after the last
+  sync); the mirror and `.sync-manifest.json` are committed together again,
+  so `pnpm docs:sync:check` (CI) is green.
+
 - **Entry-level lorebook CRUD over Product Wire (M4 slice 1 follow-up
   closed).** Four new wire operations `lorebooks.entries.list/create/update/
   delete` join the existing `lorebooks.*` book ops: the kernel owns each

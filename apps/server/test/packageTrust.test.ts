@@ -138,6 +138,32 @@ describe('verifyPackageTrust (ТЗ §SEC-05)', () => {
     }
   });
 
+  it('rejects a forged file inside signature/ — the signed entrypoint cannot import an unsigned module (SEC-05)', async () => {
+    const { publicKey, privateKey } = keyPair();
+    const root = await mkdtemp(join(tmpdir(), 'neotavern-trust-'));
+    try {
+      await writePackage(root, {
+        'plugin.json': '{}',
+        'frontend.js': "import './signature/module.js'",
+      });
+      await signPackage(root, privateKey);
+      // An attacker drops an unsigned helper into the signature directory:
+      // the whole directory is excluded from the digest, so it must NOT slip
+      // through as "extra but signed-out" — it is a forbidden signature-dir
+      // file and the package must be rejected.
+      await writeFile(join(root, 'signature', 'module.js'), 'module.exports = { hacked: true }');
+
+      const error = await verifyPackageTrust(root, [publicKey]).catch((caught: unknown) => caught);
+      expect(isAppError(error)).toBe(true);
+      if (isAppError(error)) {
+        expect(error.code).toBe('PLUGIN_SIGNATURE_INVALID');
+        expect(error.params).toMatchObject({ reason: 'FILE_SET_MISMATCH' });
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('rejects a corrupted signature file', async () => {
     const { publicKey, privateKey } = keyPair();
     const root = await mkdtemp(join(tmpdir(), 'neotavern-trust-'));

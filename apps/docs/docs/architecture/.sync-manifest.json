@@ -225,7 +225,7 @@
     {
       "source": "architecture/operations-inventory.md",
       "target": "architecture/operations-inventory.md",
-      "sha256": "06f5a868b87dfac4e7fd30878a8b3dd2ce5a3e4990c6adeade184f5cc873a832"
+      "sha256": "2123b9d86c78b04fa89f1876a996091e40226f57248d710e486ddb4830791506"
     },
     {
       "source": "architecture/portable-data.md",

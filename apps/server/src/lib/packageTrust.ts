@@ -40,6 +40,8 @@ const SIGNATURE_DIR = 'signature';
 const SIGNATURE_MANIFEST = 'signature/manifest.json';
 const SIGNATURE_FILE = 'signature/package.sig';
 const SIGNATURE_FORMAT = 'neotavern.package-signature.v1';
+/** Sentinel digest for forbidden files under signature/ (see walk). */
+const SIGNATURE_DIR_FORBIDDEN_DIGEST = 'forbidden-signature-dir-file';
 const SIGNATURE_ALGORITHM = 'ed25519';
 const SIGNATURE_HASH = 'sha256';
 /** Ed25519 signatures are always 64 bytes. */
@@ -250,7 +252,26 @@ async function walk(root: string, dir: string, out: Record<string, string>): Pro
   for (const entry of entries) {
     const path = join(dir, entry.name);
     const rel = relative(root, path).split('\\').join('/');
-    if (rel === SIGNATURE_DIR) continue; // the signature itself is not signed
+    if (rel === SIGNATURE_DIR) {
+      // SEC-05: recurse into signature/ so its contents are checked — only
+      // manifest.json and package.sig may exist there. A signed entrypoint
+      // must not be able to import an unsigned file dropped into signature/.
+      await walk(root, path, out);
+      continue;
+    }
+    // SEC-05: signature/ may hold ONLY manifest.json and package.sig — the
+    // signed manifest and its signature, neither of which is digest-covered
+    // (the Ed25519 signature is over the exact manifest bytes). Any other
+    // file under signature/ (e.g. an unsigned module.js that a signed
+    // entrypoint could import) is recorded with a sentinel digest: the strict
+    // file-set comparison then rejects the package, because no honest signer
+    // can include that path in the manifest (their tooling skips the whole
+    // directory just like the verifier).
+    if (rel.startsWith(`${SIGNATURE_DIR}/`)) {
+      if (rel === SIGNATURE_MANIFEST || rel === SIGNATURE_FILE) continue;
+      out[rel] = SIGNATURE_DIR_FORBIDDEN_DIGEST;
+      continue;
+    }
     if (entry.isDirectory()) {
       await walk(root, path, out);
     } else if (entry.isFile()) {

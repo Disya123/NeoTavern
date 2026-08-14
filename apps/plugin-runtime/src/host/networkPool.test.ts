@@ -7,6 +7,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { gzipSync, brotliCompressSync, deflateSync } from 'node:zlib';
 import { NETWORK_MAX_BODY_BYTES } from '@neotavern/contracts';
 import { createNetworkPool } from './networkPool.js';
 
@@ -237,6 +238,59 @@ describe('network pool verified-IP connects and bounded bodies (ТЗ §SEC-03/§
     // The connection was destroyed once the cap was exceeded — the server
     // never delivered the full body.
     expect(written).toBeLessThan(FULL);
+    await pool.close();
+  });
+
+  it('decodes a gzip body and drops the content-encoding header (§SEC-04)', async () => {
+    const payload = Buffer.from('compressed-response-'.repeat(200));
+    const server = createServer((_req, res) => {
+      res.writeHead(200, { 'content-encoding': 'gzip' });
+      res.end(gzipSync(payload));
+    });
+    const port = await listen(server);
+
+    const pool = createNetworkPool();
+    const resp = await pool.fetch(`http://127.0.0.1:${port}/`);
+    expect(await resp.text()).toBe(payload.toString('utf8'));
+    expect(resp.headers.get('content-encoding')).toBeNull();
+    await pool.close();
+  });
+
+  it('decodes deflate and brotli bodies too (§SEC-04)', async () => {
+    const payload = Buffer.from('deflate-brotli-'.repeat(100));
+    const server = createServer((req, res) => {
+      if (req.url === '/deflate') {
+        res.writeHead(200, { 'content-encoding': 'deflate' });
+        res.end(deflateSync(payload));
+      } else {
+        res.writeHead(200, { 'content-encoding': 'br' });
+        res.end(brotliCompressSync(payload));
+      }
+    });
+    const port = await listen(server);
+
+    const pool = createNetworkPool();
+    const deflated = await pool.fetch(`http://127.0.0.1:${port}/deflate`);
+    expect(await deflated.text()).toBe(payload.toString('utf8'));
+    const brotli = await pool.fetch(`http://127.0.0.1:${port}/br`);
+    expect(await brotli.text()).toBe(payload.toString('utf8'));
+    await pool.close();
+  });
+
+  it('bounds the DECOMPRESSED size — a tiny gzip bomb cannot expand past the cap (§SEC-04)', async () => {
+    // A ~100 KB compressed body that decompresses far past NETWORK_MAX_BODY_BYTES.
+    const bomb = gzipSync(Buffer.alloc(NETWORK_MAX_BODY_BYTES + 1024 * 1024, 0x62));
+    expect(bomb.byteLength).toBeLessThan(NETWORK_MAX_BODY_BYTES);
+    const server = createServer((_req, res) => {
+      res.writeHead(200, { 'content-encoding': 'gzip' });
+      res.end(bomb);
+    });
+    const port = await listen(server);
+
+    const pool = createNetworkPool();
+    const resp = await pool.fetch(`http://127.0.0.1:${port}/`);
+    const body = await resp.text();
+    expect(body.length).toBe(NETWORK_MAX_BODY_BYTES);
     await pool.close();
   });
 });

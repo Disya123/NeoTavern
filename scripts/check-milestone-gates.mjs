@@ -1,27 +1,44 @@
 #!/usr/bin/env node
 /**
- * check-milestone-gates — acceptance-ledger ordering gate (audit directive:
- * "CI gate blocking M2 while M1.status != accepted", ТЗ 10/10 rev2 §22).
+ * check-milestone-gates — acceptance-ledger gate (audit directive: "CI gate
+ * blocking M2 while M1.status != accepted", ТЗ 10/10 rev2 §22, §18.3).
  *
  * The ledger `docs/architecture/acceptance-ledger.json` records each program
- * milestone with a `status` (`in_progress` | `accepted`). A milestone may only
- * be `accepted` when EVERY earlier milestone is also `accepted` — later stages
- * build on earlier exit criteria, so an accepted M2 with an in-progress M1
- * would claim an impossible ordering (Этап 2 exits before Этап 1?).
+ * milestone with a `status` (`in_progress` | `accepted`). This gate enforces:
  *
- * Additional structural checks, so a green gate means a readable ledger:
- *   - every milestone id is unique;
- *   - `accepted` milestones must have `acceptedCommit` and `acceptedBy`;
- *   - `blockingIssues`/`waivers` are arrays;
- *   - a milestone named "accepted" may still carry OPEN blocking issues
- *     (they are honest follow-ups), but the milestone ORDER above must hold.
+ * Ordering (audit): a milestone may only be `accepted` when EVERY earlier
+ *   milestone is also `accepted` — later stages build on earlier exit
+ *   criteria, so an accepted M2 with an in-progress M1 would claim an
+ *   impossible ordering.
+ *
+ * Parallel development policy: `policy.parallelDevelopment` (ledger top
+ * level, default `false` = strict sequential) controls whether an
+ * `in_progress` milestone may carry a `deliveredCommit` before its
+ * predecessors are accepted. Under the strict default, shipping work for
+ * milestone N while N-1 is still open fails the gate — the branch stops at
+ * the red stage instead of accumulating later-stage commits. Setting the
+ * flag to `true` is the documented ТЗ change that allows parallel
+ * development, in which case formal `accepted` still requires every
+ * predecessor (merge/activate/accept remains ordered).
+ *
+ * Acceptance integrity (an `accepted` milestone must be provable):
+ *   - `acceptedCommit` is a non-empty git commit that exists and is an
+ *     ancestor of HEAD;
+ *   - `acceptedBy` is recorded;
+ *   - `blockingIssues` is empty, or every issue is covered by a formal
+ *     `waivers` entry (`{ issue, by, date, reason }`);
+ *   - any `P0` blocking issue forbids acceptance even with a waiver;
+ *   - `evidence` is a non-empty array of strings (checkable statements);
+ *   - the ledger itself is non-empty and structurally valid — an empty or
+ *     broken ledger exits 1 (no ignored failures).
  *
  * Modes:
- *   (default)  validate the real ledger and print a summary.
- *   --check    exit 1 if any milestone is out of order or structurally
- *              invalid; exit 0 otherwise (CI gate).
+ *   (default)  validate the real ledger and print a summary; exit 1 on any
+ *              violation (same as --check).
+ *   --check    CI gate: exit 1 on any violation.
  *   --self-test  run fixture-driven positive/negative cases (used by `pnpm test`).
  */
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -34,25 +51,41 @@ const SELF_TEST = process.argv.includes('--self-test');
 /** ACCEPTED states (a later milestone may build on them). */
 const ACCEPTED = new Set(['accepted']);
 
+/** Matches a P0 blocker ("P0", "P0:", "[P0]", "p0"). */
+const P0_RE = /\bP0\b/i;
+
+/** Non-empty sha1/sha256-looking git revision. */
+const COMMIT_RE = /^[0-9a-fA-F]{7,64}$/;
+
 function fail(message) {
-  if (CHECK) {
-    console.error(`[milestone-gates] FAIL: ${message}`);
-    process.exitCode = 1;
-  } else {
-    console.log(`[milestone-gates] FAIL: ${message}`);
-  }
+  console.error(`[milestone-gates] FAIL: ${message}`);
   return false;
 }
 
-function validate(milestones) {
+/** Is `commit` a real git object that is an ancestor of HEAD? */
+function commitExistsAndIsAncestor(commit) {
+  try {
+    execFileSync('git', ['merge-base', '--is-ancestor', commit, 'HEAD'], {
+      cwd: ROOT,
+      stdio: 'ignore',
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function validate(milestones, policy) {
   if (!Array.isArray(milestones) || milestones.length === 0) {
+    fail('ledger has no milestones — an empty ledger must exit 1 (no acceptance can be proven)');
     return { ok: false, accepted: 0 };
   }
 
+  const parallel = Boolean(policy && policy.parallelDevelopment === true);
   const seen = new Set();
   let ok = true;
-  let orderingHolds = true; // every accepted milestone has only accepted predecessors
   let acceptedPrefix = true; // the empty prefix is trivially accepted
+  let accepted = 0;
 
   for (let i = 0; i < milestones.length; i += 1) {
     const m = milestones[i];
@@ -69,10 +102,16 @@ function validate(milestones) {
     if (!Array.isArray(m.waivers)) {
       ok = fail(`${label}: waivers must be an array`) && ok;
     }
+    if (!Array.isArray(m.evidence)) {
+      ok = fail(`${label}: evidence must be an array`) && ok;
+    }
 
-    if (ACCEPTED.has(m.status)) {
+    const isAccepted = ACCEPTED.has(m.status);
+    if (isAccepted) accepted += 1;
+
+    if (isAccepted) {
+      // --- ordering: every predecessor must be accepted.
       if (!acceptedPrefix) {
-        orderingHolds = false;
         ok =
           fail(
             `${label} is accepted while an earlier milestone is not accepted — ` +
@@ -80,16 +119,63 @@ function validate(milestones) {
               '"CI gate blocking M2 while M1.status != accepted")',
           ) && ok;
       }
-      if (!m.acceptedCommit) {
-        ok = fail(`${label}: accepted milestone must record acceptedCommit`) && ok;
+      // --- acceptedCommit must exist and be an ancestor of HEAD.
+      if (typeof m.acceptedCommit !== 'string' || !COMMIT_RE.test(m.acceptedCommit)) {
+        ok = fail(`${label}: accepted milestone must record a git acceptedCommit`) && ok;
+      } else if (!SELF_TEST && !commitExistsAndIsAncestor(m.acceptedCommit)) {
+        ok =
+          fail(
+            `${label}: acceptedCommit '${m.acceptedCommit}' is not a git commit in HEAD's ancestry`,
+          ) && ok;
       }
       if (!m.acceptedBy) {
         ok = fail(`${label}: accepted milestone must record acceptedBy`) && ok;
       }
+      // --- evidence must be checkable.
+      if (
+        !Array.isArray(m.evidence) ||
+        m.evidence.length === 0 ||
+        !m.evidence.every((e) => typeof e === 'string')
+      ) {
+        ok = fail(`${label}: accepted milestone must carry non-empty string evidence`) && ok;
+      }
+      // --- blockers: empty, or every issue formally waived; P0 never waivable.
+      const blockers = Array.isArray(m.blockingIssues) ? m.blockingIssues : [];
+      const waivers = Array.isArray(m.waivers) ? m.waivers : [];
+      for (const blocker of blockers) {
+        if (typeof blocker !== 'string') {
+          ok = fail(`${label}: blockingIssues entries must be strings`) && ok;
+          continue;
+        }
+        if (P0_RE.test(blocker)) {
+          ok =
+            fail(
+              `${label}: P0 blocking issue forbids acceptance even with a waiver — ` +
+                `'${blocker.slice(0, 120)}'`,
+            ) && ok;
+          continue;
+        }
+        const covered = waivers.some((w) => w && typeof w === 'object' && w.issue === blocker);
+        if (!covered) {
+          ok =
+            fail(
+              `${label}: accepted milestone has an un-waived blocking issue — ` +
+                `'${blocker.slice(0, 120)}' (waive it in waivers[] with issue/by/date/reason)`,
+            ) && ok;
+        }
+      }
     } else if (m.status === 'in_progress') {
-      // in_progress milestones do not advance the accepted prefix. They may
-      // carry a `deliveredCommit` (works shipped) while formal acceptance
-      // waits for the ordering gate.
+      // --- parallel-development policy: shipping work for a later stage while
+      // a predecessor is open is only legal under policy.parallelDevelopment.
+      if (!parallel && m.deliveredCommit && !acceptedPrefix) {
+        ok =
+          fail(
+            `${label} records deliveredCommit '${m.deliveredCommit}' while an earlier ` +
+              'milestone is not accepted — parallel development is disabled ' +
+              '(policy.parallelDevelopment=false). Finish and accept the predecessor, ' +
+              'or set policy.parallelDevelopment=true as the documented ТЗ change.',
+          ) && ok;
+      }
       acceptedPrefix = false;
     } else if (m.status === undefined) {
       ok = fail(`${label}: missing status (expected in_progress | accepted)`) && ok;
@@ -100,39 +186,135 @@ function validate(milestones) {
     }
   }
 
-  const accepted = milestones.filter((m) => ACCEPTED.has(m.status)).length;
   console.log(
     `[milestone-gates] ${milestones.length} milestones, ${accepted} accepted, ` +
-      `ordering ${orderingHolds && ok ? 'holds' : 'BROKEN'}`,
+      `parallel=${parallel ? 'on' : 'off'}, ${ok ? 'GATE PASS' : 'GATE FAIL'}`,
   );
   return { ok, accepted };
 }
 
-/** Fixture-driven self-test: prove the gate fails exactly when an accepted
- *  milestone follows an unaccepted predecessor (the audit directive). */
+/** Fixture-driven self-test: the gate fails exactly on the documented rules. */
 function selfTest() {
   const base = (status) => ({
     id: 'M' + Math.random().toString(36).slice(2, 6),
     name: 'fixture',
     status,
     requirements: [],
-    evidence: [],
+    evidence: ['fixture evidence'],
     blockingIssues: [],
     waivers: [],
     ...(status === 'accepted'
-      ? { acceptedCommit: 'f00d', acceptedBy: 'self-test' }
+      ? { acceptedCommit: 'f00df00', acceptedBy: 'self-test' }
       : { acceptedCommit: null, acceptedBy: null }),
   });
-  // accepted → accepted → accepted : holds
-  const ok = validate([base('accepted'), base('accepted'), base('accepted')]);
-  // accepted → in_progress → accepted : must fail (M3 accepted while M2 open)
-  const broken = validate([base('accepted'), base('in_progress'), base('accepted')]);
-  if (ok.ok && !broken.ok) {
-    console.log('[milestone-gates] self-test PASS');
-    return true;
+  const cases = [
+    // accepted → accepted → accepted : holds
+    [
+      'accepted chain holds',
+      () =>
+        validate([base('accepted'), base('accepted'), base('accepted')], {
+          parallelDevelopment: false,
+        }),
+    ],
+    // accepted → in_progress(delivered) → accepted : ordering + strict parallel fail
+    [
+      'ordering fail',
+      () => {
+        const late = base('accepted');
+        const mid = base('in_progress');
+        mid.deliveredCommit = 'f00df00';
+        return validate([base('accepted'), mid, late], { parallelDevelopment: false });
+      },
+    ],
+    // accepted with an open blocker (no waiver) : fail
+    [
+      'unwaived blocker fail',
+      () => {
+        const m = base('accepted');
+        m.blockingIssues = ['some open issue'];
+        return validate([m], { parallelDevelopment: false });
+      },
+    ],
+    // accepted with a formally waived non-P0 blocker : holds
+    [
+      'waived blocker holds',
+      () => {
+        const m = base('accepted');
+        m.blockingIssues = ['waived issue'];
+        m.waivers = [
+          { issue: 'waived issue', by: 'self-test', date: '2026-01-01', reason: 'fixture' },
+        ];
+        return validate([m], { parallelDevelopment: false });
+      },
+    ],
+    // accepted with a P0 blocker even when waived : fail
+    [
+      'P0 never waivable',
+      () => {
+        const m = base('accepted');
+        m.blockingIssues = ['P0: critical'];
+        m.waivers = [
+          { issue: 'P0: critical', by: 'self-test', date: '2026-01-01', reason: 'fixture' },
+        ];
+        return validate([m], { parallelDevelopment: false });
+      },
+    ],
+    // accepted without acceptedCommit : fail
+    [
+      'missing acceptedCommit',
+      () => {
+        const m = base('accepted');
+        delete m.acceptedCommit;
+        return validate([m], { parallelDevelopment: false });
+      },
+    ],
+    // empty milestone list : fail
+    ['empty ledger fails', () => validate([], { parallelDevelopment: false })],
+    // strict policy: in_progress delivered after open predecessor : fail
+    [
+      'strict delivered-while-open fails',
+      () => {
+        const m = base('in_progress');
+        m.deliveredCommit = 'f00df00';
+        return validate([base('in_progress'), m], { parallelDevelopment: false });
+      },
+    ],
+    // parallel policy: same shape is allowed
+    [
+      'parallel policy allows delivered',
+      () => {
+        const m = base('in_progress');
+        m.deliveredCommit = 'f00df00';
+        return validate([base('in_progress'), m], { parallelDevelopment: true });
+      },
+    ],
+  ];
+  const results = cases.map(([name, run]) => ({ name, ok: run().ok }));
+  const expected = {
+    'accepted chain holds': true,
+    'ordering fail': false,
+    'unwaived blocker fail': false,
+    'waived blocker holds': true,
+    'P0 never waivable': false,
+    'missing acceptedCommit': false,
+    'empty ledger fails': false,
+    'strict delivered-while-open fails': false,
+    'parallel policy allows delivered': true,
+  };
+  let pass = true;
+  for (const { name, ok } of results) {
+    const want = expected[name];
+    if (ok !== want) {
+      pass = false;
+      console.error(`[milestone-gates] self-test case '${name}': expected ${want}, got ${ok}`);
+    }
   }
-  console.error('[milestone-gates] self-test FAIL: expected ok + broken cases to behave');
-  return false;
+  if (pass) {
+    console.log('[milestone-gates] self-test PASS');
+  } else {
+    console.error('[milestone-gates] self-test FAIL');
+  }
+  return pass;
 }
 
 function main() {
@@ -145,8 +327,19 @@ function main() {
   } catch (error) {
     return fail(`cannot read ${LEDGER}: ${error.message}`);
   }
-  const { ok } = validate(ledger.milestones);
-  return ok;
+  if (typeof ledger.policy !== 'object' || ledger.policy === null) {
+    return fail('ledger is missing the top-level policy object (policy.parallelDevelopment)');
+  }
+  if (typeof ledger.policy.parallelDevelopment !== 'boolean') {
+    return fail('ledger policy.parallelDevelopment must be a boolean');
+  }
+  return validate(ledger.milestones, ledger.policy).ok;
 }
 
-main();
+const ok = main();
+if (!CHECK && !SELF_TEST && !ok) {
+  // default mode is also a gate: non-zero exit on any violation.
+  process.exitCode = 1;
+} else if (CHECK && !ok) {
+  process.exitCode = 1;
+}

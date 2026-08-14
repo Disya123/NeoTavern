@@ -76,6 +76,30 @@ describe('SEC-01: provider secrets are stored out-of-band', () => {
     expect(await secrets.resolve(ref!)).toBe('sk-live-key-77');
   });
 
+  it('removes the stored value from the SecretStore when the DB row is deleted', async () => {
+    const { app, database, secrets } = await createTestApp({ allowSecretsExposure: true });
+    const providerId = await makeProvider(app);
+    const created = await app.inject({
+      method: 'POST',
+      url: `/api/v2/providers/${providerId}/secrets`,
+      payload: { value: 'sk-orphan-9e21', label: 'to-delete' },
+    });
+    const secretId = (created.json() as { id: string }).id;
+    const ref = await database.repos.providerSecrets.getActiveReference(providerId);
+    expect(ref).toMatch(/^session:/u);
+    expect(await secrets.resolve(ref!)).toBe('sk-orphan-9e21');
+
+    const del = await app.inject({
+      method: 'DELETE',
+      url: `/api/v2/providers/${providerId}/secrets/${secretId}`,
+    });
+    expect(del.statusCode, del.payload).toBe(200);
+
+    // The route deleted the store entry together with the row — the value no
+    // longer resolves, so no orphaned secret survives in the store.
+    expect(await secrets.resolve(ref!)).toBeNull();
+  });
+
   it('keeps the plaintext out of the database file and WAL entirely', async () => {
     const { app, paths } = await createTestApp({ useFileDatabase: true, secretMode: 'portable' });
     const providerId = await makeProvider(app);
@@ -137,7 +161,7 @@ describe('SEC-01: provider secrets are stored out-of-band', () => {
 
 describe('SEC-01: plugin secrets are stored out-of-band', () => {
   it('stores a reference, masks list, resolves reveal and deletes durably', async () => {
-    const { app, database } = await createTestApp({ allowSecretsExposure: true });
+    const { app, database, secrets } = await createTestApp({ allowSecretsExposure: true });
     const pluginId = 'test.sec01';
     await database.repos.plugins.install({
       id: pluginId,
@@ -195,6 +219,8 @@ describe('SEC-01: plugin secrets are stored out-of-band', () => {
     });
     expect(del.statusCode, del.payload).toBe(200);
     expect(database.repos.pluginSecrets.get(pluginId, 'user', 'api_key')).toBeNull();
+    // SEC-01: the stored value is removed with the reference — nothing orphaned.
+    expect(await secrets.resolve(entry!.valueRef!)).toBeNull();
   });
 });
 

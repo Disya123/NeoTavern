@@ -124,6 +124,10 @@ export async function registerSecretRoutes(app: TypedApp, ctx: AppContext): Prom
           params: { secretId: req.params.secretId },
         });
       }
+      // SEC-01: the DB row is gone, so the stored value in the SecretStore is
+      // an orphan — remove it too (a no-op on env/read-only backends).
+      const namespace = ctx.secrets.providerNamespace(req.params.id);
+      await ctx.secrets.deleteValue(namespace, req.params.secretId);
       return { ok: true };
     },
   );

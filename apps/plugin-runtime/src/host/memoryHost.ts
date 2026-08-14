@@ -778,7 +778,11 @@ export function createMemoryHostExecutor(options: MemoryHostOptions = {}): Memor
     // behind the mapped form (ТЗ §SEC-03).
     const lower = normalized.toLowerCase();
     if (lower === '::1' || lower === '::') return 'local'; // loopback / unspecified
-    if (lower.startsWith('fe80')) return 'private'; // link-local
+    // Link-local fe80::/10 — the first hextet ranges 0xfe80..0xfebf, i.e. the
+    // third nibble is 8..b (`fe80`–`febf`), not only the fe80 exact prefix.
+    if (/^fe[89ab]/.test(lower)) return 'private'; // link-local fe80::/10
+    // Multicast ff00::/8 (the first hextet starts with `ff`) is never public.
+    if (lower.startsWith('ff')) return 'private'; // multicast ff00::/8
     if (lower.startsWith('fc') || lower.startsWith('fd')) return 'private'; // ULA fc00::/7
     const mapped = mappedIpv4(lower);
     if (mapped !== null) return classifyAddress(mapped);
