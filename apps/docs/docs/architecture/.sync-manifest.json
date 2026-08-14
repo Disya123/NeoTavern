@@ -190,12 +190,12 @@
     {
       "source": "api/README.md",
       "target": "api/README.md",
-      "sha256": "8bd506ae691b4ac4c808f48e3e6840b71f7455db19c105121057883b35df1d67"
+      "sha256": "d6e75ffba771af81749ed4eef8d498fda308157dc0173a84c5e08c61d6677bbb"
     },
     {
       "source": "architecture/README.md",
       "target": "architecture/README.md",
-      "sha256": "178520b1495769312b6a3e06980292e50c501056eb29f8ac061421a8101fe344"
+      "sha256": "9a41779a5368ef7bf8badb277473bd60edbf56bc30f6571cdf2274ef368ef094"
     },
     {
       "source": "architecture/benchmarks.md",
