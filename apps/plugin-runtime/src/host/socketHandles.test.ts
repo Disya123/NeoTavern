@@ -375,10 +375,12 @@ describe('socket registry (§29)', () => {
     expect(parsed && 'frame' in parsed && parsed.frame.payload.byteLength).toBe(WS_MAX_FRAME_BYTES);
   });
 
-  it('tears down a websocket whose peer declares an oversized frame (SEC-04)', async () => {
-    // After the upgrade the server immediately writes a text frame that
-    // declares 2^31 bytes. The client must refuse it from the header and
-    // close the handle instead of buffering toward the declared length.
+  it('tears down a websocket whose peer declares an oversized frame after the open (SEC-04)', async () => {
+    // After the upgrade the server writes a text frame that declares 2^31
+    // bytes — in a SEPARATE data event, after the handshake has settled. The
+    // client must refuse it from the header and close the handle instead of
+    // buffering toward the declared length. (The coalesced "first bytes"
+    // variant is covered by the dedicated test above.)
     const server = createServer((socket: Socket) => {
       socket.on('error', () => undefined);
       socket.on('data', (chunk: Buffer) => {
@@ -392,7 +394,8 @@ describe('socket registry (§29)', () => {
           huge[0] = 0x80 | 0x1;
           huge[1] = 127;
           huge.writeBigUInt64BE(0x80000000n, 2); // declared 2 GiB payload
-          socket.write(huge);
+          // Delay guarantees a separate 'data' event after the open settles.
+          setTimeout(() => socket.write(huge), 25);
         }
       });
     });
@@ -401,11 +404,50 @@ describe('socket registry (§29)', () => {
     try {
       const sockets = registry();
       const id = await sockets.websocketOpen('plugin-a', `ws://localhost:${port}/huge`, undefined);
-      // The oversized declaration closes the handle asynchronously.
+      // The oversized declaration tears the connection down asynchronously.
       await expect.poll(() => sockets.size()).toBe(0);
       await expect(
         sockets.websocketReceive('plugin-a', id, 1, 0, abortSignal()),
       ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+
+  it('rejects a websocket whose first bytes after the upgrade head already violate the SEC-04 frame bound', async () => {
+    // The peer writes the 101 head AND an oversized frame header in ONE
+    // segment. The client must fail the OPEN (not return a dead handle id
+    // that only fails later on receive): the bound applies before the
+    // websocketOpen promise settles.
+    const server = createServer((socket: Socket) => {
+      socket.on('error', () => undefined);
+      socket.on('data', (chunk: Buffer) => {
+        if (chunk.toString('utf8').includes('Sec-WebSocket-Key:')) {
+          const key = /Sec-WebSocket-Key: (.+)\r\n/i.exec(chunk.toString('utf8'))?.[1] ?? '';
+          const accept = wsAcceptHeader(key);
+          const head =
+            `HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n` +
+            `Sec-WebSocket-Accept: ${accept}\r\n\r\n`;
+          const huge = Buffer.alloc(10);
+          huge[0] = 0x80 | 0x1;
+          huge[1] = 127;
+          huge.writeBigUInt64BE(0x80000000n, 2); // declared 2 GiB payload
+          socket.write(Buffer.concat([Buffer.from(head), huge]));
+        }
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as AddressInfo).port;
+    try {
+      const sockets = registry();
+      await expect(
+        sockets.websocketOpen('plugin-a', `ws://localhost:${port}/huge-head`, undefined),
+      ).rejects.toMatchObject({
+        code: 'NETWORK_DESTINATION_DENIED',
+        message: 'websocket frame bound exceeded during upgrade',
+      });
+      // The handle slot was released — no leak behind the refused open.
+      await expect.poll(() => sockets.size()).toBe(0);
     } finally {
       await new Promise((resolve) => server.close(resolve));
     }

@@ -625,6 +625,16 @@ export function createSocketRegistry(deps: SocketRegistryDeps): SocketRegistry {
       const firstBytes = upgradeRemainder;
       upgradeRemainder = Buffer.alloc(0);
       if (firstBytes.byteLength > 0) consumeFrames(firstBytes);
+      if (handle.closed) {
+        // The peer's first bytes after the upgrade head already violated the
+        // SEC-04 frame bound (declared length, fragmentation, or accumulation
+        // cap): fail the OPEN with the refusal instead of handing the caller
+        // a dead handle id that only fails later on receive.
+        throw new BrokerCallError('NETWORK_DESTINATION_DENIED', {
+          message: 'websocket frame bound exceeded during upgrade',
+          details: { host: parsed.hostname, maxBytes: WS_MAX_FRAME_BYTES },
+        });
+      }
       socket.on('data', consumeFrames);
       socket.on('close', () => {
         if (!handle.closed) void closeHandle(handle.id);

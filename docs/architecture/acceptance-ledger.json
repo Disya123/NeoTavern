@@ -250,7 +250,7 @@
           {
             "directive": "2. WS handshake size/timeout + bounded frames",
             "what": "WebSocket upgrade head is size-bounded and timeout-guarded; RFC 6455 frames above the SEC-04 bound are refused before buffering.",
-            "howToVerify": "npx vitest run apps/plugin-runtime/src/host/socketHandles.test.ts — see 'websocket round-trips…', 'refuses a declared frame length above the SEC-04 bound without buffering', 'rejects a websocket whose upgrade head exceeds the SEC-04 size bound', 'times out a websocket whose peer never completes the upgrade head'."
+            "howToVerify": "npx vitest run apps/plugin-runtime/src/host/socketHandles.test.ts — see 'websocket round-trips…', 'refuses a declared frame length above the SEC-04 bound without buffering', 'rejects a websocket whose upgrade head exceeds the SEC-04 size bound', 'times out a websocket whose peer never completes the upgrade head', 'rejects a websocket whose first bytes after the upgrade head already violate the SEC-04 frame bound' (the open FAILS instead of returning a dead handle id when the peer's first bytes already breach the bound), 'tears down a websocket whose peer declares an oversized frame after the open'."
           },
           {
             "directive": "3. Compressed-input accounting + backpressure",
