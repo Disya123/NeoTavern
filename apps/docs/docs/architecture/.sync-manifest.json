@@ -170,7 +170,7 @@
     {
       "source": "adr/0038-canonical-rust-kernel-core.md",
       "target": "adr/0038-canonical-rust-kernel-core.md",
-      "sha256": "1c10c6d9d3639961d01fe1c67bcab67ff396bd445ff99180211f754af6367126"
+      "sha256": "d70998e979b3a75d1c18b59dfccc2df70832d7f18764c5b3eeaf7ebcd3a83ce4"
     },
     {
       "source": "adr/0039-legacy-compatibility-authority-boundary.md",
@@ -240,12 +240,12 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "8c62a2ad83465a63bf137888f98b900a6ca643a9eafdc79674afc73a032d3ca5"
+      "sha256": "91dc5afee4ce53b5bb9f1e92d3ea6cedd63f8e3ede0cf57eaf0ff88fe07c259f"
     },
     {
       "source": "data/README.md",
       "target": "data/README.md",
-      "sha256": "0a10c447c39dda0c51ca4c27f226af56c241f38cdf07575f14614f27fd1e610f"
+      "sha256": "c6c48cd83d9e4a74d64339c66b1e183ace56d980c7f85f69bff5f5a08722d1c8"
     },
     {
       "source": "desktop/README.md",
@@ -255,7 +255,7 @@
     {
       "source": "migrations/README.md",
       "target": "migrations/README.md",
-      "sha256": "c56ec7d1ec74cc88abbd975def0dbe1c32284ba209932e16374d5b4e7ff6260c"
+      "sha256": "5482a0783448cc259402e20290cc3ee48be180694b5be86a29d6b3ee41f02141"
     },
     {
       "source": "plugin-sdk/README.md",

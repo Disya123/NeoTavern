@@ -4,6 +4,26 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/migrations/README.
 
 # Migrations
 
+## 0024 — secret value references (ТЗ §SEC-01)
+
+Migration `0024_secret_value_refs` (version 24) moves secret values out of
+the main database:
+
+- `provider_secrets.value_ref TEXT` — opaque SecretStore reference
+  (`portable:`/`session:`/`env:`), NULL for pre-migration rows;
+- `plugin_secrets.value_ref TEXT` — same contract for plugin secrets
+  (per-plugin namespace `plugin:<plugin-id>`);
+- partial indexes on rows that already carry a reference.
+
+New writes set `value_ref` and leave `value` empty; the legacy `value` column
+is retained as the import source and cleared by the bootstrap importer
+(`apps/server/src/lib/secretStore.ts`), which moves pre-migration plaintext
+into the SecretStore and rewrites rows as references (idempotent; skipped
+while the store is locked). The migration is additive (`ALTER TABLE ADD
+COLUMN`), no data is changed or lost; rollback is the pre-migration backup
+restore. Runtime semantics — `docs/data/README.md` § "SecretStore and
+secrets.enc".
+
 ## 0020 — swipe history & child chats
 
 Migration `0020_swipe_history_and_child_chats` (version 20) — the

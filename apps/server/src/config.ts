@@ -70,6 +70,10 @@ export interface ServerConfig {
   pluginPublisherKeys: string[];
   /** Reject unsigned plugin packages at install (ТЗ §SEC-05). */
   pluginRequireSignature: boolean;
+  /** SecretStore mode: 'portable' | 'session' | 'env' (ТЗ §SEC-01). */
+  secretMode: 'portable' | 'session' | 'env';
+  /** Master passphrase for the portable secrets.enc store (ТЗ §SEC-01.1). */
+  secretPassphrase: string | null;
   /** Deadlines enforced by provider adapters (ТЗ §4.3). */
   providerTimeouts: ProviderTimeouts;
 }
@@ -322,6 +326,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     pluginTrustedNative: env['NEOTA_PLUGIN_TRUSTED_NATIVE'] === 'true',
     pluginPublisherKeys: parsePublisherKeys(env['NEOTA_PLUGIN_PUBLISHER_KEYS']),
     pluginRequireSignature: env['NEOTA_PLUGIN_REQUIRE_SIGNATURE'] === 'true',
+    ...loadSecretConfig(env),
     providerTimeouts: {
       connectMs: positiveIntEnv(
         env['NEOTA_PROVIDER_CONNECT_TIMEOUT_MS'],
@@ -353,6 +358,50 @@ function parsePublisherKeys(value: string | undefined): string[] {
     .split(',')
     .map((key) => key.trim())
     .filter((key) => key.length > 0);
+}
+
+/**
+ * SecretStore policy (ТЗ §SEC-01). Explicit modes only — there is no silent
+ * plaintext fallback:
+ * - `portable`: encrypted `secrets.enc` in the data root, unlocked by the
+ *   master passphrase (`NEOTA_SECRET_PASSPHRASE` or `NEOTA_SECRET_PASSPHRASE_FILE`);
+ * - `env`: read-only environment provider (`NEOTA_SECRET_*`), headless policy;
+ * - `session`: values live in process memory only, gone after restart.
+ * Default: portable when a passphrase is configured, otherwise session.
+ */
+function loadSecretConfig(env: NodeJS.ProcessEnv): {
+  secretMode: 'portable' | 'session' | 'env';
+  secretPassphrase: string | null;
+} {
+  const explicit = env['NEOTA_SECRET_MODE'];
+  const passphrase =
+    env['NEOTA_SECRET_PASSPHRASE'] ??
+    (env['NEOTA_SECRET_PASSPHRASE_FILE']
+      ? readPassphraseFile(env['NEOTA_SECRET_PASSPHRASE_FILE'])
+      : null);
+  let mode: 'portable' | 'session' | 'env';
+  if (explicit === 'portable' || explicit === 'env' || explicit === 'session') {
+    mode = explicit;
+  } else if (explicit !== undefined) {
+    throw new Error(`NEOTA_SECRET_MODE must be one of: portable, session, env (got '${explicit}')`);
+  } else {
+    mode = passphrase ? 'portable' : 'session';
+  }
+  if (mode === 'portable' && !passphrase) {
+    throw new Error(
+      'NEOTA_SECRET_MODE=portable requires NEOTA_SECRET_PASSPHRASE or NEOTA_SECRET_PASSPHRASE_FILE',
+    );
+  }
+  return { secretMode: mode, secretPassphrase: passphrase };
+}
+
+/** Read the master passphrase from a file, trimming trailing newline. */
+function readPassphraseFile(path: string): string | null {
+  try {
+    return readFileSync(path, 'utf8').replace(/\r?\n$/u, '');
+  } catch {
+    return null;
+  }
 }
 
 /**

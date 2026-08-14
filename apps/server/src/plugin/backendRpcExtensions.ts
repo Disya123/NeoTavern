@@ -126,10 +126,13 @@ async function resolveAuthorization(
     });
   }
   const secrets = ctx.database.repos.providerSecrets;
-  const value =
-    secretId !== null
-      ? ((await secrets.getFullById(providerId, secretId))?.value ?? null)
-      : await secrets.getActiveValue(providerId);
+  let rawRef: string | null = null;
+  if (secretId !== null) {
+    rawRef = (await secrets.getFullById(providerId, secretId))?.valueRef ?? null;
+  } else {
+    rawRef = await secrets.getActiveReference(providerId);
+  }
+  const value = rawRef ? await ctx.secrets.resolve(rawRef) : null;
   if (typeof value !== 'string' || value.length === 0) {
     throw new AppError({
       code: ErrorCodes.PROVIDER_SECRET_NOT_FOUND,

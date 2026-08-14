@@ -16,6 +16,7 @@ import {
 } from './types.js';
 import { registerErrorHandler } from './lib/errors.js';
 import { MaintenanceController } from './lib/maintenance.js';
+import { createSecretStoreHandle } from './lib/secretStore.js';
 import { CONTENT_SECURITY_POLICY } from './lib/security.js';
 import { isTrustedOrigin, registerRemoteAuth } from './plugins/remoteAuth.js';
 import { registerMetaRoutes } from './plugins/meta.js';
@@ -45,12 +46,27 @@ import { MAX_SILLYTAVERN_ARCHIVE_BYTES, registerDataImportRoutes } from './plugi
 import { registerLegacyHost } from './legacy/host.js';
 
 export async function buildApp(input: AppContextInput): Promise<TypedApp> {
+  const secrets =
+    input.secrets ??
+    (await createSecretStoreHandle(
+      input.config.secretMode,
+      input.config.secretPassphrase,
+      input.config.dataDir,
+      input.logger,
+    ));
   const ctx: AppContext = {
     ...input,
     events: input.events ?? new EventBus(),
     maintenance: input.maintenance ?? new MaintenanceController(),
+    secrets,
   };
   const app = createAppInstance();
+
+  // Bootstrap import: move pre-migration plaintext secret rows into the
+  // SecretStore before any route can read them (ТЗ §SEC-01).
+  await secrets.migrateLegacySecrets(ctx).catch((error) => {
+    ctx.logger.error(`[secret-store] legacy import failed: ${String(error)}`);
+  });
 
   await app.register(cors, {
     origin: (origin, cb) => {

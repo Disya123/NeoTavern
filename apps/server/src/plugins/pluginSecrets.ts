@@ -1,11 +1,13 @@
 /**
- * Plugin SecretStore routes (ТЗ §54): /api/v2/plugins/:id/secrets.
+ * Plugin SecretStore routes (ТЗ §54, §SEC-01): /api/v2/plugins/:id/secrets.
  *
- * Secret values are write-only. The list response masks values; the plaintext
- * is returned only by `/reveal`, and only when secrets exposure is enabled
- * server-side (`NEOTA_ALLOW_SECRETS_EXPOSURE`, default off) — mirrors the
- * provider secrets pattern (AGENTS.md §4, §11). Secrets never enter plugin
- * state, namespaced backup/export sections, logs or diagnostics.
+ * Secret values are write-only and never enter the database: the value is
+ * stored in the SecretStore and the DB row keeps an opaque reference. The
+ * list response masks references; the plaintext is returned only by
+ * `/reveal`, and only when secrets exposure is enabled server-side
+ * (`NEOTA_ALLOW_SECRETS_EXPOSURE`, default off) — mirrors the provider
+ * secrets pattern (AGENTS.md §4, §11). Secrets never enter plugin state,
+ * namespaced backup/export sections, logs or diagnostics.
  *
  * Capability mapping: management (PUT/GET/DELETE) requires `secrets.manageOwn`
  * (the plugin manages its own store); reading a plaintext additionally
@@ -16,6 +18,7 @@ import { maskSecretValue } from '@neotavern/contracts';
 import { AppError, ErrorCodes } from '@neotavern/shared';
 import type { PluginSecretScope } from '@neotavern/db';
 import type { CapabilityBroker } from '../plugin/capabilityBroker.js';
+import { toSecretStoreAppError } from '../lib/secretStore.js';
 import type { AppContext, TypedApp } from '../types.js';
 
 /** Mirrors ProviderSecretCreateSchema's value cap (write-only storage). */
@@ -81,8 +84,21 @@ export async function registerPluginSecretRoutes(
     async (request) => {
       requireCapability(request.params.id, 'secrets.manageOwn');
       const scope = request.query.scope as PluginSecretScope;
-      // Write-only: the value is stored but never echoed in any response.
-      secrets.upsert(request.params.id, scope, request.body.key, request.body.value);
+      // Write-only: the value goes to the SecretStore, the DB keeps only an
+      // opaque reference, and the value is never echoed in any response.
+      let ref: string;
+      try {
+        ref = await ctx.secrets.storeValue(
+          `plugin:${request.params.id}`,
+          ctx.secrets.pluginSecretId(scope, request.body.key),
+          request.body.value,
+        );
+      } catch (error) {
+        const mapped = toSecretStoreAppError(error);
+        if (mapped) throw mapped;
+        throw error;
+      }
+      secrets.upsert(request.params.id, scope, request.body.key, ref);
       return { ok: true };
     },
   );
@@ -102,7 +118,7 @@ export async function registerPluginSecretRoutes(
       const items = secrets.list(request.params.id).map((entry) => ({
         key: entry.key,
         scope: entry.scope,
-        masked: maskSecretValue(entry.value),
+        masked: maskSecretValue(entry.valueRef ?? entry.value ?? ''),
         createdAt: entry.createdAt,
         updatedAt: entry.updatedAt,
       }));
@@ -161,7 +177,15 @@ export async function registerPluginSecretRoutes(
           params: { pluginId: request.params.id, scope, key: request.params.key },
         });
       }
-      return { value: entry.value };
+      const ref = entry.valueRef ?? entry.value;
+      const value = ref ? await ctx.secrets.resolve(ref) : null;
+      if (value === null) {
+        throw new AppError({
+          code: ErrorCodes.SECRET_UNAVAILABLE_ON_THIS_DEVICE,
+          params: { pluginId: request.params.id, scope, key: request.params.key },
+        });
+      }
+      return { value };
     },
   );
 }

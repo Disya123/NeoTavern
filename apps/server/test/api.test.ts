@@ -10,9 +10,11 @@ import { join } from 'node:path';
 import { DEFAULT_PROMPT_TEMPLATE, parseMessageGenerationMeta } from '@neotavern/contracts';
 import { createAppDatabase, type AppDatabase } from '@neotavern/db';
 import { DEFAULT_PROVIDER_TIMEOUTS, ProviderRegistry } from '@neotavern/provider-sdk';
+import { MemorySecretStore } from '@neotavern/secret-store';
 import { createLogger } from '@neotavern/shared';
 import yazl from 'yazl';
 import { buildApp } from '../src/app.js';
+import { createSecretStoreHandleForBackend } from '../src/lib/secretStore.js';
 import { ensureDataDirs, resolveDataPaths, type DataPaths } from '../src/lib/paths.js';
 import type { TypedApp } from '../src/types.js';
 import { ContextStrategyRegistry } from '../src/pipeline/contextShift.js';
@@ -24,6 +26,7 @@ let contextStrategies: ContextStrategyRegistry;
 let postProcessors: PostProcessorRegistry;
 let database: AppDatabase;
 let paths: DataPaths;
+let secretsHandle: ReturnType<typeof createSecretStoreHandleForBackend>;
 
 function multipartFile(
   bytes: Buffer,
@@ -79,6 +82,8 @@ beforeAll(async () => {
     }),
   });
   postProcessors = new PostProcessorRegistry();
+  secretsHandle = createSecretStoreHandleForBackend(new MemorySecretStore());
+  database = createAppDatabase(':memory:', { secretResolver: (ref) => secretsHandle.resolve(ref) });
   app = await buildApp({
     database,
     providers,
@@ -97,6 +102,8 @@ beforeAll(async () => {
       secureSessionCookies: false,
       safeMode: false,
       allowSecretsExposure: false,
+      secretMode: 'session',
+      secretPassphrase: null,
       pluginNodePath: process.execPath,
       pluginWorkerPath: null,
       pluginLoaderPath: null,
@@ -106,6 +113,7 @@ beforeAll(async () => {
       pluginDepsMaxBytes: 200 * 1024 * 1024,
       providerTimeouts: DEFAULT_PROVIDER_TIMEOUTS,
     },
+    secrets: secretsHandle,
     logger: createLogger({ level: 'error' }),
     paths,
   });
@@ -3446,7 +3454,11 @@ describe('provider secrets', () => {
     expect(items).toHaveLength(2);
     // The most recent non-empty key is active; exactly one active overall.
     expect(items.filter((item) => item.active)).toHaveLength(1);
-    expect(items.find((item) => item.active)?.masked.endsWith('2222')).toBe(true);
+    const activeMasked = items.find((item) => item.active)?.masked;
+    // The mask is derived from the opaque reference — non-empty, but never
+    // contains a fragment of the actual key (ТЗ §SEC-01).
+    expect(activeMasked?.length).toBeGreaterThan(0);
+    expect(activeMasked).not.toContain('sk-second-efgh2222');
     // Values are write-only: never serialized in list responses.
     expect(list.payload).not.toContain('sk-first-abcd1111');
     expect(list.payload).not.toContain('sk-second-efgh2222');
@@ -3460,9 +3472,10 @@ describe('provider secrets', () => {
     });
     expect(activated.statusCode, activated.payload).toBe(200);
     expect(activated.json()).toMatchObject({ active: true, label: 'first' });
-    expect(await database.repos.providerSecrets.getActiveValue(providerId)).toBe(
-      'sk-first-abcd1111',
-    );
+    // The DB holds only an opaque reference — never the plaintext key.
+    const activeRef = await database.repos.providerSecrets.getActiveReference(providerId);
+    expect(activeRef).toMatch(/^session:provider:/u);
+    expect(activeRef).not.toContain('sk-first-abcd1111');
   });
 
   it('renames a secret and 404s when patching an unknown secret', async () => {
@@ -3557,11 +3570,14 @@ describe('provider secrets', () => {
         secureSessionCookies: false,
         safeMode: false,
         allowSecretsExposure: true,
+        secretMode: 'session',
+        secretPassphrase: null,
         pluginNodePath: process.execPath,
         pluginWorkerPath: null,
         pluginLoaderPath: null,
         providerTimeouts: DEFAULT_PROVIDER_TIMEOUTS,
       },
+      secrets: secretsHandle,
       logger: createLogger({ level: 'error' }),
       paths,
     });
@@ -3625,10 +3641,11 @@ describe('backups', () => {
 describe('diagnostics and regenerable cache', () => {
   it('returns aggregate redacted state and clears thumbnails without user data', async () => {
     const secret = 'diagnostics-must-never-export-this';
+    const secretRef = await secretsHandle.storeValue('provider:diag', 'diag-key', secret);
     await database.repos.providerConfigs.create({
       kind: 'openai-compatible',
       name: 'Diagnostic provider',
-      apiKey: secret,
+      apiKey: secretRef,
       settings: { privateHeader: secret },
     });
     await writeFile(join(paths.thumbnails, 'diagnostic.webp'), Buffer.alloc(17));
@@ -3655,7 +3672,7 @@ describe('diagnostics and regenerable cache', () => {
     expect(response.statusCode, response.payload).toBe(200);
     expect(response.json()).toMatchObject({
       formatVersion: 1,
-      database: { integrity: 'ok', schemaVersion: 23 },
+      database: { integrity: 'ok', schemaVersion: 24 },
       providers: { configured: expect.any(Number), enabled: expect.any(Number) },
       themes: { safeModeAvailable: true },
       privacy: {

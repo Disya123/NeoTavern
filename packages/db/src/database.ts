@@ -111,6 +111,12 @@ export interface CreateDatabaseOptions {
    * snapshot is taken before any pending migration is applied.
    */
   autoBackupDir?: string;
+  /**
+   * Resolves an opaque secret reference to a value (ТЗ §SEC-01). Injected by
+   * the server; without it, provider secrets resolve to null and the provider
+   * runtime reports the key as unavailable.
+   */
+  secretResolver?: (ref: string) => Promise<string | null>;
 }
 
 export function createAppDatabase(path: string, options: CreateDatabaseOptions = {}): AppDatabase {
@@ -154,7 +160,12 @@ export function createAppDatabase(path: string, options: CreateDatabaseOptions =
     promptContextAudits: new PromptContextAuditRepository(sqlite),
     settings: new SettingsRepository(db),
     providerSecrets,
-    providerConfigs: new ProviderConfigRepository(db, clock, providerSecrets),
+    providerConfigs: new ProviderConfigRepository(
+      db,
+      clock,
+      providerSecrets,
+      options.secretResolver,
+    ),
     connectionProfiles: new ConnectionProfileRepository(db, clock),
     search: new SearchRepository(db),
     dataImports: new DataImportRepository(sqlite, clock),

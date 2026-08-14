@@ -8,7 +8,11 @@
  * server and must never be serialized to an API response or log.
  */
 import { asc, eq } from 'drizzle-orm';
-import type { ProviderConfig, ProviderConfigCreate, ProviderConfigUpdate } from '@neotavern/contracts';
+import type {
+  ProviderConfig,
+  ProviderConfigCreate,
+  ProviderConfigUpdate,
+} from '@neotavern/contracts';
 import { maskSecretValue } from '@neotavern/contracts';
 import { uuidv7 } from '@neotavern/shared';
 import type { DrizzleDb, Clock } from '../db.js';
@@ -99,14 +103,15 @@ export class ProviderConfigRepository {
     private readonly db: DrizzleDb,
     private readonly clock: Clock,
     private readonly secrets: ProviderSecretRepository,
+    private readonly secretResolver?: (ref: string) => Promise<string | null>,
   ) {}
 
-  async create(input: ProviderConfigCreate): Promise<ProviderConfig> {
+  async create(input: ProviderConfigCreate, id: string = uuidv7()): Promise<ProviderConfig> {
     const now = this.clock();
     const row = await this.db
       .insert(providerConfigs)
       .values({
-        id: uuidv7(),
+        id,
         kind: input.kind,
         name: input.name,
         baseUrl: input.baseUrl ?? null,
@@ -119,8 +124,9 @@ export class ProviderConfigRepository {
       })
       .returning()
       .get();
-    // Keys now live in the secrets store; a provided key becomes the active
-    // secret (an empty string is ignored so it never masks a later key).
+    // Keys now live in the SecretStore; `input.apiKey` is an opaque reference
+    // prepared by the server layer (an empty string is ignored so it never
+    // masks a later key).
     if (input.apiKey && input.apiKey.length > 0) {
       await this.secrets.create(row.id, input.apiKey, null);
     }
@@ -200,9 +206,15 @@ export class ProviderConfigRepository {
       .where(eq(providerConfigs.id, id))
       .get();
     if (!row) return null;
-    // Prefer the active secret; fall back to the legacy column for databases
+    // Prefer the active secret (an opaque reference resolved through the
+    // SecretStore — ТЗ §SEC-01); fall back to the legacy column for databases
     // whose key has not been migrated yet.
-    const apiKey = (await this.secrets.getActiveValue(id)) ?? row.apiKey;
+    let apiKey: string | null = null;
+    const ref = await this.secrets.getActiveReference(id);
+    if (ref) {
+      apiKey = this.secretResolver ? await this.secretResolver(ref) : null;
+    }
+    if (apiKey === null) apiKey = row.apiKey;
     return {
       id: row.id,
       kind: row.kind,

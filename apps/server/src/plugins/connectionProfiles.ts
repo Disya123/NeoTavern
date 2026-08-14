@@ -160,13 +160,21 @@ async function applyConnectionProfile(
   let selectedSecretValue: string | undefined;
   if (secretId !== undefined) {
     const secret = await ctx.database.repos.providerSecrets.getFullById(targetId, secretId);
-    if (!secret || secret.value.length === 0) {
+    if (!secret) {
       throw new AppError({
         code: ErrorCodes.CONNECTION_PROFILE_SECRET_INVALID,
         params: { profileId, secretId, providerConfigId: targetId },
       });
     }
-    selectedSecretValue = secret.value;
+    const ref = secret.valueRef ?? secret.value;
+    const value = ref ? await ctx.secrets.resolve(ref) : null;
+    if (value === null || value.length === 0) {
+      throw new AppError({
+        code: ErrorCodes.CONNECTION_PROFILE_SECRET_INVALID,
+        params: { profileId, secretId, providerConfigId: targetId },
+      });
+    }
+    selectedSecretValue = value;
   }
 
   const providerSettings = { ...provider.settings };

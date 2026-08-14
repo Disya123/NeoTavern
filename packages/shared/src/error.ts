@@ -80,6 +80,12 @@ export const ErrorCodes = {
   // Provider secrets
   PROVIDER_SECRET_NOT_FOUND: 'PROVIDER_SECRET_NOT_FOUND',
   SECRETS_EXPOSURE_DISABLED: 'SECRETS_EXPOSURE_DISABLED',
+  /** Secret exists but its backend cannot produce the value on this device
+   * (machine-bound vault moved elsewhere, locked store, session ended). The
+   * profile is intact — the user should re-enter the key (ТЗ §SEC-01.1). */
+  SECRET_UNAVAILABLE_ON_THIS_DEVICE: 'SECRET_UNAVAILABLE_ON_THIS_DEVICE',
+  /** The configured secret backend refuses writes (env store, locked). */
+  SECRET_STORE_READ_ONLY: 'SECRET_STORE_READ_ONLY',
 
   // Plugins / themes
   PLUGIN_NOT_FOUND: 'PLUGIN_NOT_FOUND',
@@ -191,6 +197,8 @@ const DEFAULT_STATUS: Record<ErrorCode, number> = {
   [ErrorCodes.TOKEN_BUDGET_EXCEEDED]: 422,
   [ErrorCodes.PROVIDER_SECRET_NOT_FOUND]: 404,
   [ErrorCodes.SECRETS_EXPOSURE_DISABLED]: 403,
+  [ErrorCodes.SECRET_UNAVAILABLE_ON_THIS_DEVICE]: 422,
+  [ErrorCodes.SECRET_STORE_READ_ONLY]: 403,
   [ErrorCodes.PLUGIN_NOT_FOUND]: 404,
   [ErrorCodes.PLUGIN_INVALID]: 422,
   [ErrorCodes.PLUGIN_PERMISSION_DENIED]: 403,

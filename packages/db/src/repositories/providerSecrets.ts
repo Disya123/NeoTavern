@@ -1,11 +1,12 @@
 /**
  * Provider secrets repository — multiple labelled API keys per provider.
  *
- * Values are stored locally (local-first SQLite) but are write-only at the API
- * boundary: {@link toPublic} masks them, and the plaintext accessors
- * ({@link getFullById}, {@link getActiveValue}) are used only by the provider
- * runtime and the gated reveal route (AGENTS.md §4, §11). Never serialize a
- * full row to a response or log.
+ * Since migration 0024 (ТЗ §SEC-01) the database never holds plaintext: the
+ * `value_ref` column stores an opaque SecretStore reference and the legacy
+ * `value` column exists only as the import source for pre-migration rows.
+ * Repositories expose references only — resolving a reference to the actual
+ * value is the server layer's job (apps/server/src/lib/secretStore.ts). Never
+ * serialize a full row to a response or log.
  */
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import { maskSecretValue, type ProviderSecret } from '@neotavern/contracts';
@@ -15,16 +16,23 @@ import { providerSecrets } from '../schema/index.js';
 
 type SecretRow = typeof providerSecrets.$inferSelect;
 
-/** Public projection — the value is masked, never the full secret. */
+/** Public projection — the value is masked, never the full secret/ref. */
 function toPublic(row: SecretRow): ProviderSecret {
   return {
     id: row.id,
     providerId: row.providerId,
     label: row.label,
     active: row.active,
-    masked: maskSecretValue(row.value),
+    masked: maskSecretValue(row.valueRef ?? row.value ?? ''),
     createdAt: row.createdAt,
   };
+}
+
+/** A row still holding pre-migration plaintext (`value` set, no `value_ref`). */
+export interface UnmigratedSecretRow {
+  id: string;
+  providerId: string;
+  value: string;
 }
 
 export class ProviderSecretRepository {
@@ -44,14 +52,20 @@ export class ProviderSecretRepository {
   }
 
   /**
-   * Store a new secret. A non-empty value becomes the provider's active key and
-   * deactivates every sibling; an empty value is kept inactive (useful as a
-   * placeholder for keyless local endpoints). Returns the new secret id.
+   * Store a new secret reference. A non-empty reference becomes the provider's
+   * active key and deactivates every sibling; an empty reference is kept
+   * inactive (useful as a placeholder for keyless local endpoints). Returns
+   * the new secret id. When `id` is given it must equal the record id used to
+   * persist the value in the SecretStore (the reference points at it).
    */
-  async create(providerId: string, value: string, label: string | null): Promise<string> {
-    const id = uuidv7();
+  async create(
+    providerId: string,
+    valueRef: string,
+    label: string | null,
+    id: string = uuidv7(),
+  ): Promise<string> {
     const now = this.clock();
-    const makeActive = value.length > 0;
+    const makeActive = valueRef.length > 0;
     this.db.transaction((tx) => {
       if (makeActive) {
         tx.update(providerSecrets)
@@ -60,7 +74,7 @@ export class ProviderSecretRepository {
           .run();
       }
       tx.insert(providerSecrets)
-        .values({ id, providerId, label, value, active: makeActive, createdAt: now })
+        .values({ id, providerId, label, value: '', valueRef, active: makeActive, createdAt: now })
         .run();
     });
     return id;
@@ -83,7 +97,8 @@ export class ProviderSecretRepository {
         .where(and(eq(providerSecrets.id, secretId), eq(providerSecrets.providerId, providerId)))
         .get();
       if (!existing) return null;
-      const makeActive = patch.active === true && existing.value.length > 0;
+      const hasValue = (existing.valueRef ?? existing.value ?? '').length > 0;
+      const makeActive = patch.active === true && hasValue;
       if (makeActive) {
         tx.update(providerSecrets)
           .set({ active: false })
@@ -123,7 +138,7 @@ export class ProviderSecretRepository {
           .where(eq(providerSecrets.providerId, providerId))
           .orderBy(desc(providerSecrets.createdAt), desc(sql`rowid`))
           .get();
-        if (next && next.value.length > 0) {
+        if (next && (next.valueRef ?? next.value ?? '').length > 0) {
           tx.update(providerSecrets)
             .set({ active: true })
             .where(eq(providerSecrets.id, next.id))
@@ -134,7 +149,7 @@ export class ProviderSecretRepository {
     });
   }
 
-  /** INTERNAL: full secret row including the plaintext value (reveal route). */
+  /** INTERNAL: full secret row including the opaque reference (reveal route). */
   async getFullById(providerId: string, secretId: string): Promise<SecretRow | null> {
     const row = await this.db
       .select()
@@ -144,14 +159,18 @@ export class ProviderSecretRepository {
     return row ?? null;
   }
 
-  /** INTERNAL: the provider's active secret value, for the provider runtime. */
-  async getActiveValue(providerId: string): Promise<string | null> {
+  /**
+   * INTERNAL: the provider's active opaque reference, for the provider runtime.
+   * Plaintext is never returned — the caller resolves the reference through
+   * the SecretStore.
+   */
+  async getActiveReference(providerId: string): Promise<string | null> {
     const row = await this.db
       .select()
       .from(providerSecrets)
       .where(and(eq(providerSecrets.providerId, providerId), eq(providerSecrets.active, true)))
       .get();
-    return row ? row.value : null;
+    return row?.valueRef ?? null;
   }
 
   /** INTERNAL: deactivate every secret for a provider (clears the active key). */
@@ -165,10 +184,36 @@ export class ProviderSecretRepository {
   /** INTERNAL: whether the provider has a usable (active, non-empty) key. */
   async hasActive(providerId: string): Promise<boolean> {
     const row = await this.db
-      .select({ value: providerSecrets.value })
+      .select()
       .from(providerSecrets)
       .where(and(eq(providerSecrets.providerId, providerId), eq(providerSecrets.active, true)))
       .get();
-    return row !== undefined && row.value.length > 0;
+    return row !== undefined && (row.valueRef ?? row.value ?? '').length > 0;
+  }
+
+  /**
+   * Pre-migration rows still holding plaintext (`value` set, `value_ref` NULL).
+   * The bootstrap importer moves them into the SecretStore and rewrites them
+   * as references (see lib/secretStore.ts).
+   */
+  async listUnmigrated(): Promise<UnmigratedSecretRow[]> {
+    const rows = await this.db
+      .select()
+      .from(providerSecrets)
+      .where(sql`${providerSecrets.value} IS NOT NULL AND ${providerSecrets.valueRef} IS NULL`);
+    return rows.map((row) => ({
+      id: row.id,
+      providerId: row.providerId,
+      value: row.value as string,
+    }));
+  }
+
+  /** Rewrite an imported row: keep only the opaque reference. */
+  async markMigrated(id: string, valueRef: string): Promise<void> {
+    await this.db
+      .update(providerSecrets)
+      .set({ valueRef, value: '' })
+      .where(eq(providerSecrets.id, id))
+      .run();
   }
 }

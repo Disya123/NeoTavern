@@ -3,6 +3,28 @@
 ## Unreleased
 ### Added
 
+- **SEC-01 — SecretStore, secrets out of the main DB (M1 / Wave 1, ТЗ §SEC-01 /
+  §SEC-01.1).** New `packages/secret-store` port with three explicit backends —
+  no silent plaintext fallback: **portable** `secrets.enc` in the data root
+  (`NEOTA_SECRET_MODE=portable` + `NEOTA_SECRET_PASSPHRASE[_FILE]`; AES-256-GCM,
+  versioned scrypt KDF with salt/parameters authenticated as AAD so a tampered
+  header can never downgrade, fresh nonce per write, atomic temp+rename,
+  machine-independent derivation, `lock()` and staged `reEncrypt()`),
+  **session** (process memory only, the default without a passphrase) and
+  **env** (read-only `NEOTA_SECRET_*`, headless policy). Provider and plugin
+  secrets no longer live in `app.db`: migration 0024 adds `value_ref` and the
+  DB stores opaque references (`portable:`/`session:`/`env:`), resolved at
+  runtime via `ctx.secrets` (`apps/server/src/lib/secretStore.ts`); the reveal
+  routes and the provider runtime (`getFullConfig`, plugin auth, connection
+  profiles) resolve through the store. Pre-migration plaintext rows are
+  imported at bootstrap (idempotent, skipped while locked). A reference whose
+  backend cannot produce the value surfaces the stable
+  `SECRET_UNAVAILABLE_ON_THIS_DEVICE` error (422) — never a fallback; backups
+  and profile exports contain no secrets (tests in
+  `apps/server/test/secretStore.spec.ts`, 16 package unit tests). Capability
+  `security.secret-store` is now `Implemented` on desktop/headless/web-client
+  hosts (`docs/release-manifest.json`); OS vault / Android Keystore adapters
+  and the portable passphrase UX remain kernel-plane M3.
 - **Legacy compatibility authority boundary (ARC-11, M1 / Wave 1, ТЗ §14.2 /
   ADR-0039).** The per-legacy-API authority map
   (`packages/legacy-compat/COMPATIBILITY.md`) and its enforcement suite
