@@ -29,20 +29,20 @@ User input
 (`PromptPlan`, camelCase serde — the stored `plan_json` equals the wire
 `wire.prompt.plan` shape):
 
-| Field                | Meaning                                                                   |
-| -------------------- | ------------------------------------------------------------------------- |
-| `runId`, `chatId`    | The run this plan belongs to.                                             |
-| `provider`, `model`  | The provider attempt the plan feeds.                                      |
-| `instructFormat`     | `plain-messages-v1` — the instruct-neutral message array; template rendering (ChatML/Alpaca…) is a later stage. |
-| `tokenizerProfile`   | `heuristic-v1` (approximate).                                             |
-| `approximateTokens`  | Always `true` today — the kernel has no model-specific tokenizer yet.     |
-| `contextLimit`       | Model context window (adapter-declared) or the 8192 fallback.             |
-| `responseReserved`   | Room reserved for the provider response (`min(2048, limit/4)`).           |
-| `inputTokens`        | Estimated input tokens after truncation.                                  |
-| `overBudget`         | `true` when the plan still exceeds the available window after dropping all unpinned history. |
-| `systemBlocks`       | Rendered blocks by source (`character`, `persona`, `lorebook`) — shown to the user. |
-| `messages`           | Final instruct-neutral array: merged system message + selected history + the user message (pinned last). |
-| `excluded`           | `{messageId, reason}` per dropped message (reason `token_budget`).        |
+| Field               | Meaning                                                                                                         |
+| ------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `runId`, `chatId`   | The run this plan belongs to.                                                                                   |
+| `provider`, `model` | The provider attempt the plan feeds.                                                                            |
+| `instructFormat`    | `plain-messages-v1` — the instruct-neutral message array; template rendering (ChatML/Alpaca…) is a later stage. |
+| `tokenizerProfile`  | `heuristic-v1` (approximate).                                                                                   |
+| `approximateTokens` | Always `true` today — the kernel has no model-specific tokenizer yet.                                           |
+| `contextLimit`      | Model context window (adapter-declared) or the 8192 fallback.                                                   |
+| `responseReserved`  | Room reserved for the provider response (`min(2048, limit/4)`).                                                 |
+| `inputTokens`       | Estimated input tokens after truncation.                                                                        |
+| `overBudget`        | `true` when the plan still exceeds the available window after dropping all unpinned history.                    |
+| `systemBlocks`      | Rendered blocks by source (`character`, `persona`, `lorebook`) — shown to the user.                             |
+| `messages`          | Final instruct-neutral array: merged system message + selected history + the user message (pinned last).        |
+| `excluded`          | `{messageId, reason}` per dropped message (reason `token_budget`).                                              |
 
 ## Stages
 

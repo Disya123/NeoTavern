@@ -90,10 +90,7 @@ export async function streamWireGeneration(
     throw new UnsupportedError('generation.emptyMessage');
   }
 
-  await backendImpl.chats.createMessage(
-    { chatId, role: 'user', content: userMessage },
-    { signal },
-  );
+  await backendImpl.chats.createMessage({ chatId, role: 'user', content: userMessage }, { signal });
   handlers.onStart?.('wire');
 
   const stream = backendImpl.generation.start({ chatId, message: userMessage }, { signal });

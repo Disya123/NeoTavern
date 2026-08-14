@@ -42,7 +42,7 @@ CREATE INDEX idx_generation_steps_run ON generation_steps(run_id);
 ```
 
 - The DB `status` CHECK **stays** `queued|preparing|streaming|completed|failed|
-  cancelling|cancelled|interrupted` — `waiting_for_tool` is a **derived wire
+cancelling|cancelled|interrupted` — `waiting_for_tool` is a **derived wire
   status**: `streaming` + `pending_tool_call_json IS NOT NULL`. No table
   rebuild, no migration risk for existing runs (the m6 lesson: never rebuild a
   parent table inside the transactional runner — children FK-repoint and a
@@ -60,12 +60,12 @@ the same CAS transaction that advances the run (`revision`,
 from 0 (`MAX(sequence)+1`); the event `sequence` is the run's
 `last_event_sequence + 1`.
 
-| step_type       | status      | written when                                                              |
-| --------------- | ----------- | ------------------------------------------------------------------------- |
-| `provider_turn` | `completed` | a provider turn ends (tool-call transition or normal completion)          |
-| `tool_call`     | `waiting`   | the waiting transition commits (carries the normalized `ToolCall`)        |
-| `tool_result`   | `completed` | `generation.tool.result` clears the marker (carries call + result)        |
-| `final_commit`  | `completed` | the successful run commits its terminal message                           |
+| step_type       | status      | written when                                                       |
+| --------------- | ----------- | ------------------------------------------------------------------ |
+| `provider_turn` | `completed` | a provider turn ends (tool-call transition or normal completion)   |
+| `tool_call`     | `waiting`   | the waiting transition commits (carries the normalized `ToolCall`) |
+| `tool_result`   | `completed` | `generation.tool.result` clears the marker (carries call + result) |
+| `final_commit`  | `completed` | the successful run commits its terminal message                    |
 
 The closing steps are advisory diagnostics; the canonical terminal record stays
 the atomic terminal transaction (assistant `messages` row + status flip +
@@ -158,10 +158,10 @@ Tools are **contracts, not code** (`wire.tool.spec`: `id` `^[a-z][a-z0-9-]{1,63}
 
 ## Operations (registry additions)
 
-| Operation              | Class             | Purpose                                                        |
-| ---------------------- | ----------------- | -------------------------------------------------------------- |
-| `generation.tools.list`| transactional, idempotent, safe, app.read | list registered tool contracts         |
-| `generation.tool.result`| transactional, non-idempotent, none, app.write | submit a tool result and resume the run (→ `wire.generation.run`) |
+| Operation                | Class                                          | Purpose                                                           |
+| ------------------------ | ---------------------------------------------- | ----------------------------------------------------------------- |
+| `generation.tools.list`  | transactional, idempotent, safe, app.read      | list registered tool contracts                                    |
+| `generation.tool.result` | transactional, non-idempotent, none, app.write | submit a tool result and resume the run (→ `wire.generation.run`) |
 
 Terminal error codes added: `TOOL_NOT_FOUND`, `TOOL_ARGS_INVALID`,
 `TOOL_LOOP_LIMIT`, `TOOL_RESULT_STALE`.

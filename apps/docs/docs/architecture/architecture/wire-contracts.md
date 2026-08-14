@@ -173,39 +173,39 @@ ops (eventSchemaId) carrying a response schema; empty/unknown
 21 operations, all `feature: 'core'`, `version: '1.0'`,
 `unknownFields: 'strict'`:
 
-| operationId           | class         | idempotency    | retry | auth      | reqB   | respB  | eventB |
-| --------------------- | ------------- | -------------- | ----- | --------- | ------ | ------ | ------ |
-| `meta.get`            | transactional | idempotent     | safe  | none      | 1024   | 16384  | –      |
-| `characters.list`     | transactional | idempotent     | safe  | app.read  | 4096   | 262144 | –      |
-| `characters.get`      | transactional | idempotent     | safe  | app.read  | 2048   | 262144 | –      |
-| `characters.create`   | transactional | non-idempotent | none  | app.write | 65536  | 262144 | –      |
-| `characters.update`   | transactional | non-idempotent | none  | app.write | 65536  | 262144 | –      |
-| `characters.delete`   | transactional | non-idempotent | none  | app.write | 2048   | 1024   | –      |
-| `chats.list`          | transactional | idempotent     | safe  | app.read  | 4096   | 262144 | –      |
-| `chats.get`           | transactional | idempotent     | safe  | app.read  | 2048   | 262144 | –      |
-| `chats.create`        | transactional | non-idempotent | none  | app.write | 4096   | 262144 | –      |
-| `chats.update`        | transactional | non-idempotent | none  | app.write | 2048   | 262144 | –      |
-| `chats.delete`        | transactional | non-idempotent | none  | app.write | 2048   | 1024   | –      |
-| `chats.messages.list` | transactional | idempotent     | safe  | app.read  | 4096   | 262144 | –      |
-| `chats.messages.create` | transactional | non-idempotent | none | app.write | 1048576 | 262144 | –    |
-| `chats.messages.update` | transactional | non-idempotent | none | app.write | 1048576 | 262144 | –    |
-| `chats.messages.delete` | transactional | non-idempotent | none | app.write | 2048   | 1024   | –      |
-| `generation.start`    | workflow      | non-idempotent | none  | app.write | 131072 | –      | 65536  |
-| `generation.cancel`   | transactional | idempotent     | safe  | app.write | 2048   | 1024   | –      |
-| `generation.get`      | transactional | idempotent     | safe  | app.read  | 2048   | 65536  | –      |
-| `generation.events`   | transactional | idempotent     | safe  | app.read  | 4096   | 262144 | –      |
-| `generation.retry`    | workflow      | non-idempotent | none  | app.write | 2048   | –      | 65536  |
-| `generation.keep`     | transactional | idempotent     | safe  | app.write | 2048   | 65536  | –      |
-| `generation.discard`  | transactional | idempotent     | safe  | app.write | 2048   | 65536  | –      |
-| `providers.list`      | transactional | idempotent     | safe  | app.read  | 1024   | 262144 | –      |
-| `providers.config.set` | transactional | non-idempotent | none | app.write | 131072 | 262144 | –      |
-| `providers.config.get` | transactional | idempotent    | safe  | app.read  | 2048   | 262144 | –      |
-| `providers.config.list` | transactional | idempotent   | safe  | app.read  | 4096   | 262144 | –      |
-| `providers.config.delete` | transactional | non-idempotent | none | app.write | 2048 | 1024 | –      |
-| `backups.create`      | workflow      | non-idempotent | none  | app.write | 1024   | 262144 | –      |
-| `backups.list`        | transactional | idempotent     | safe  | app.read  | 1024   | 262144 | –      |
-| `lorebooks.list`      | transactional | idempotent     | safe  | app.read  | 1024   | 262144 | –      |
-| `presets.list`        | transactional | idempotent     | safe  | app.read  | 1024   | 262144 | –      |
+| operationId               | class         | idempotency    | retry | auth      | reqB    | respB  | eventB |
+| ------------------------- | ------------- | -------------- | ----- | --------- | ------- | ------ | ------ |
+| `meta.get`                | transactional | idempotent     | safe  | none      | 1024    | 16384  | –      |
+| `characters.list`         | transactional | idempotent     | safe  | app.read  | 4096    | 262144 | –      |
+| `characters.get`          | transactional | idempotent     | safe  | app.read  | 2048    | 262144 | –      |
+| `characters.create`       | transactional | non-idempotent | none  | app.write | 65536   | 262144 | –      |
+| `characters.update`       | transactional | non-idempotent | none  | app.write | 65536   | 262144 | –      |
+| `characters.delete`       | transactional | non-idempotent | none  | app.write | 2048    | 1024   | –      |
+| `chats.list`              | transactional | idempotent     | safe  | app.read  | 4096    | 262144 | –      |
+| `chats.get`               | transactional | idempotent     | safe  | app.read  | 2048    | 262144 | –      |
+| `chats.create`            | transactional | non-idempotent | none  | app.write | 4096    | 262144 | –      |
+| `chats.update`            | transactional | non-idempotent | none  | app.write | 2048    | 262144 | –      |
+| `chats.delete`            | transactional | non-idempotent | none  | app.write | 2048    | 1024   | –      |
+| `chats.messages.list`     | transactional | idempotent     | safe  | app.read  | 4096    | 262144 | –      |
+| `chats.messages.create`   | transactional | non-idempotent | none  | app.write | 1048576 | 262144 | –      |
+| `chats.messages.update`   | transactional | non-idempotent | none  | app.write | 1048576 | 262144 | –      |
+| `chats.messages.delete`   | transactional | non-idempotent | none  | app.write | 2048    | 1024   | –      |
+| `generation.start`        | workflow      | non-idempotent | none  | app.write | 131072  | –      | 65536  |
+| `generation.cancel`       | transactional | idempotent     | safe  | app.write | 2048    | 1024   | –      |
+| `generation.get`          | transactional | idempotent     | safe  | app.read  | 2048    | 65536  | –      |
+| `generation.events`       | transactional | idempotent     | safe  | app.read  | 4096    | 262144 | –      |
+| `generation.retry`        | workflow      | non-idempotent | none  | app.write | 2048    | –      | 65536  |
+| `generation.keep`         | transactional | idempotent     | safe  | app.write | 2048    | 65536  | –      |
+| `generation.discard`      | transactional | idempotent     | safe  | app.write | 2048    | 65536  | –      |
+| `providers.list`          | transactional | idempotent     | safe  | app.read  | 1024    | 262144 | –      |
+| `providers.config.set`    | transactional | non-idempotent | none  | app.write | 131072  | 262144 | –      |
+| `providers.config.get`    | transactional | idempotent     | safe  | app.read  | 2048    | 262144 | –      |
+| `providers.config.list`   | transactional | idempotent     | safe  | app.read  | 4096    | 262144 | –      |
+| `providers.config.delete` | transactional | non-idempotent | none  | app.write | 2048    | 1024   | –      |
+| `backups.create`          | workflow      | non-idempotent | none  | app.write | 1024    | 262144 | –      |
+| `backups.list`            | transactional | idempotent     | safe  | app.read  | 1024    | 262144 | –      |
+| `lorebooks.list`          | transactional | idempotent     | safe  | app.read  | 1024    | 262144 | –      |
+| `presets.list`            | transactional | idempotent     | safe  | app.read  | 1024    | 262144 | –      |
 
 `generation.start` and `generation.retry` are the two streaming operations:
 both emit `wire.generation.event` frames (`generation.delta`,

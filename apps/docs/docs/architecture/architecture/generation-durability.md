@@ -86,14 +86,14 @@ Phase 6 executes generation through a built-in fake provider so durability is
 testable without network I/O (§78 Фаза 6 deliverable "deterministic fake
 provider for fault injection"). The `model` string is a `;`-separated grammar:
 
-| Key               | Default | Range   | Meaning                               |
-| ----------------- | ------- | ------- | ------------------------------------- |
-| `steps`           | 8       | 1–64    | delta steps                           |
-| `fail-at`         | –       | 1–steps | provider error before step N          |
-| `delay-ms`        | 0       | 0–200   | sleep per step (cancel/timeout tests) |
-| `tokens-per-step` | 6       | 1–256   | delta text length                     |
+| Key               | Default | Range   | Meaning                                                                      |
+| ----------------- | ------- | ------- | ---------------------------------------------------------------------------- |
+| `steps`           | 8       | 1–64    | delta steps                                                                  |
+| `fail-at`         | –       | 1–steps | provider error before step N                                                 |
+| `delay-ms`        | 0       | 0–200   | sleep per step (cancel/timeout tests)                                        |
+| `tokens-per-step` | 6       | 1–256   | delta text length                                                            |
 | `tool`            | –       | name    | Этап 2.7: call a tool on the first turn, emit final text on the resumed turn |
-| `tool-loop`       | –       | name    | Этап 2.7: call a tool on EVERY turn (loop-guard budget tests) |
+| `tool-loop`       | –       | name    | Этап 2.7: call a tool on EVERY turn (loop-guard budget tests)                |
 
 Delta text for step `i` is derived from `sha256(chat_id|attempt|i)` — no wall
 clock, no randomness: **same inputs → byte-identical event logs across
@@ -140,17 +140,17 @@ Delivery is **at-least-once over the durable log**:
 
 ## Operations (registry)
 
-| Operation            | Class                     | Purpose                                                                                                             |
-| -------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `generation.start`   | workflow, streaming       | create run (attempt 1) + execute                                                                                    |
-| `generation.retry`   | workflow, streaming       | new attempt over a `failed`/`cancelled`/`interrupted` source run (`sourceRunId`); never re-executes a completed run |
-| `generation.cancel`  | transactional             | request cancellation (§63)                                                                                          |
-| `generation.get`     | transactional             | durable run snapshot `wire.generation.run` incl. bounded `partialText` preview                                      |
-| `generation.events`  | transactional             | paged durable event log `wire.paged.generation-events` (`afterSequence` cursor, `hasMore`)                          |
-| `generation.keep`    | transactional, idempotent | promote partial text to an assistant message (post-terminal only; a waiting-for-tool run returns its DTO instead of `NO_PARTIAL_OUTPUT`)                                                   |
-| `generation.discard` | transactional, idempotent | purge the event log of a post-terminal run                                                                          |
-| `generation.tools.list` | transactional, idempotent, safe | list the registered tool contracts (Этап 2.7)                                                              |
-| `generation.tool.result` | transactional, non-idempotent | submit a tool result and resume a waiting-for-tool run (Этап 2.7)                                       |
+| Operation                | Class                           | Purpose                                                                                                                                  |
+| ------------------------ | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `generation.start`       | workflow, streaming             | create run (attempt 1) + execute                                                                                                         |
+| `generation.retry`       | workflow, streaming             | new attempt over a `failed`/`cancelled`/`interrupted` source run (`sourceRunId`); never re-executes a completed run                      |
+| `generation.cancel`      | transactional                   | request cancellation (§63)                                                                                                               |
+| `generation.get`         | transactional                   | durable run snapshot `wire.generation.run` incl. bounded `partialText` preview                                                           |
+| `generation.events`      | transactional                   | paged durable event log `wire.paged.generation-events` (`afterSequence` cursor, `hasMore`)                                               |
+| `generation.keep`        | transactional, idempotent       | promote partial text to an assistant message (post-terminal only; a waiting-for-tool run returns its DTO instead of `NO_PARTIAL_OUTPUT`) |
+| `generation.discard`     | transactional, idempotent       | purge the event log of a post-terminal run                                                                                               |
+| `generation.tools.list`  | transactional, idempotent, safe | list the registered tool contracts (Этап 2.7)                                                                                            |
+| `generation.tool.result` | transactional, non-idempotent   | submit a tool result and resume a waiting-for-tool run (Этап 2.7)                                                                        |
 
 Product error codes: `CHAT_NOT_FOUND`, `GENERATION_RUN_NOT_FOUND`,
 `GENERATION_RUN_STATE_CONFLICT`, `NO_PARTIAL_OUTPUT`, `PROVIDER_UNAVAILABLE`,

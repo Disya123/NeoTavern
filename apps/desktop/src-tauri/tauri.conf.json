@@ -30,14 +30,8 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "externalBin": [
-      "binaries/neotavern-server"
-    ],
-    "resources": [
-      "resources/web/**/*",
-      "resources/native/**/*",
-      "resources/runtime/**/*"
-    ],
+    "externalBin": ["binaries/neotavern-server"],
+    "resources": ["resources/web/**/*", "resources/native/**/*", "resources/runtime/**/*"],
     "windows": {
       "webviewInstallMode": {
         "type": "downloadBootstrapper",

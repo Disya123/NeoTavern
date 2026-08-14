@@ -14,11 +14,11 @@ Everything the kernel executes for local generation goes through the
 
 ## Crates
 
-| Crate                       | Role                                                                                                                                                                                                       |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `crates/provider-sdk`       | Portable adapter contract: `ProviderAdapter`, `ProviderError`, `EmitStatus`, `CancelToken`, deadline/`RetryPolicy`/`Usage`, secret seams (`SecretRef`/`SecretValue`/`SecretResolver`). std-only, no async. |
-| `crates/built-in-providers` | Built-in adapters: `FakeProvider` (deterministic, fault-injectable) and `RecordedProvider` (JSON script replay) + conformance suite + fixtures.                                                            |
-| `crates/provider-openai-compat` | Production OpenAI-compatible adapter (Этап 2.5): chat-completions streaming over a minimal blocking HTTP/1.1 client with rustls TLS (OS trust store), bounded SSE reads (SEC-04), normalized errors. |
+| Crate                           | Role                                                                                                                                                                                                       |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `crates/provider-sdk`           | Portable adapter contract: `ProviderAdapter`, `ProviderError`, `EmitStatus`, `CancelToken`, deadline/`RetryPolicy`/`Usage`, secret seams (`SecretRef`/`SecretValue`/`SecretResolver`). std-only, no async. |
+| `crates/built-in-providers`     | Built-in adapters: `FakeProvider` (deterministic, fault-injectable) and `RecordedProvider` (JSON script replay) + conformance suite + fixtures.                                                            |
+| `crates/provider-openai-compat` | Production OpenAI-compatible adapter (Этап 2.5): chat-completions streaming over a minimal blocking HTTP/1.1 client with rustls TLS (OS trust store), bounded SSE reads (SEC-04), normalized errors.       |
 
 ## The adapter contract
 

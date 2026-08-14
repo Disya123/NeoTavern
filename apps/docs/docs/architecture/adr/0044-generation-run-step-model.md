@@ -52,7 +52,7 @@ negotiation.
 4. **PromptPlan** (immutable, built before any network request):
    `PromptBlock`/`PromptMessage`/`PromptExcluded` with exclusion reasons;
    `MAX_HISTORY_MESSAGES = 128` (drop-oldest); `DEFAULT_CONTEXT_LIMIT =
-   8192`; `MAX_LOREBOOK_BLOCKS = 24`, `MAX_LOREBOOK_ENTRIES = 2000` (keyword
+8192`; `MAX_LOREBOOK_BLOCKS = 24`, `MAX_LOREBOOK_ENTRIES = 2000` (keyword
    activation); instruct format `plain-messages-v1`; heuristic token
    estimator (CJK/latin) with `response_reserved = 0`; camelCase wire DTO.
 5. **Provider secrets**: `providers_config` stores only a `secret_ref`

@@ -1148,7 +1148,13 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     ...GENERATION_RUN_VALUE,
     status: 'interrupted',
   }),
-  fx('generation-prompt-plan-response', 'generation.prompt.plan', 'response', true, PROMPT_PLAN_VALUE),
+  fx(
+    'generation-prompt-plan-response',
+    'generation.prompt.plan',
+    'response',
+    true,
+    PROMPT_PLAN_VALUE,
+  ),
   fx('generation-tools-list-response', 'generation.tools.list', 'response', true, {
     items: [TOOL_SPEC_VALUE],
   }),
