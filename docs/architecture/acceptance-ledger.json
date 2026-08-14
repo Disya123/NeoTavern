@@ -501,7 +501,7 @@
           "type": "test-run",
           "command": "node scripts/check-ui-api.mjs --check (pnpm ui:api:check)",
           "result": "PASS — baseline regenerated to 68 allowed sites with full owner/removalIssue/milestone/deadline records. The 16 NEW legacy hits carried from the M2-era code (backend.ts/generate.ts legacy client, ChatPage.tsx legacy chat routes, wireBridge.ts:15 doc-comment; the M2 re-cut never regenerated the M1-era baseline) are all sanctioned legacy-compat surface with M4 removal records: backend.ts (drop the legacy raw passthrough), generate.ts (cut the generation stream to the Product Wire — record corrected from the stale M2 milestone to M4, since the cut did not land in M2), wireBridge.ts (retire the legacy delegation path with the sidecar), ChatPage.tsx (remove legacyRaw chat routes, M4). No unexpected legacy call site exists in the UI.",
-          "commit": "M3-packet"
+          "commit": "42a9287"
         }
       ],
       "blockingIssues": [
