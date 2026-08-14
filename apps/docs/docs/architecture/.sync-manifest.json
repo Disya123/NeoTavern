@@ -200,7 +200,7 @@
     {
       "source": "architecture/README.md",
       "target": "architecture/README.md",
-      "sha256": "8cc44dfa93637c36c44b7daee45c5501c7fbc652d6376d2467d7fc4a23dce935"
+      "sha256": "553488844bbad5a9beb05ae9179a57a34f452233bba7fa63b854ff83e6d9d9a7"
     },
     {
       "source": "architecture/benchmarks.md",
@@ -221,6 +221,11 @@
       "source": "architecture/portable-data.md",
       "target": "architecture/portable-data.md",
       "sha256": "270061de29500e3f7b8f1d1869d0cc5bd53f0328dd68997fb336f0091546ed04"
+    },
+    {
+      "source": "architecture/prompt-pipeline.md",
+      "target": "architecture/prompt-pipeline.md",
+      "sha256": "2456f31dd93ed8d7950e6bc6a77146f8c69af330ead9cf3500c1393d99cf49cd"
     },
     {
       "source": "architecture/providers.md",
@@ -245,7 +250,7 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "98b0e44975bffcb2a9f5e4e1b8d1a140024c57e8a23dc1234cdc00f07bde4bfc"
+      "sha256": "db6c1964b608cfde2ca680da820fe0337dfe8ee0fae456495a312d763cfd0a9b"
     },
     {
       "source": "data/README.md",

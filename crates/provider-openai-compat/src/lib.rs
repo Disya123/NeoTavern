@@ -371,13 +371,25 @@ impl ProviderAdapter for OpenAICompatProvider {
 }
 
 /// Builds the chat-completions JSON body (`stream: true`).
+///
+/// When the kernel's prompt pipeline is active the request carries the
+/// rendered instruct-neutral `messages` array (system + selected history +
+/// user) and it is serialized verbatim; otherwise the single `input` message
+/// is used (direct single-message calls, backwards compatibility).
 fn build_body(
     request: &ProviderRequest<'_>,
     max_tokens: Option<u32>,
 ) -> Result<Vec<u8>, ProviderError> {
+    let messages: Vec<serde_json::Value> = match request.messages {
+        Some(plan) => plan
+            .iter()
+            .map(|m| serde_json::json!({ "role": m.role, "content": m.content }))
+            .collect(),
+        None => vec![serde_json::json!({ "role": "user", "content": request.input })],
+    };
     let mut body = serde_json::json!({
         "model": request.model,
-        "messages": [ { "role": "user", "content": request.input } ],
+        "messages": messages,
         "stream": true,
     });
     if let Some(max_tokens) = max_tokens {

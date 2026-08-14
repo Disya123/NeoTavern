@@ -408,7 +408,9 @@ fn openai_provider_run_without_config_key_fails_with_typed_error() {
     assert_eq!(run.status, GenerationStatus::Failed);
     assert_eq!(
         run.error.as_ref().expect("error").code,
-        "PROVIDER_MODEL_INVALID"
+        "PROVIDER_MODEL_INVALID",
+        "error payload: {:?}",
+        run.error
     );
     assert!(
         list_messages(&kernel, CHAT_ID).items.is_empty(),

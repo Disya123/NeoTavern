@@ -35,6 +35,7 @@ pub mod generation;
 pub mod headless;
 pub mod local;
 pub mod product;
+pub mod prompt;
 pub mod providers;
 pub mod providers_config;
 
@@ -510,6 +511,9 @@ fn handle_unary(
         "generation.events" => with_db_opt(db, |db| generation::generation_events(db, req)),
         "generation.keep" => with_db_opt(db, |db| generation::generation_keep(db, req)),
         "generation.discard" => with_db_opt(db, |db| generation::generation_discard(db, req)),
+        "generation.prompt.plan" => {
+            with_db_opt(db, |db| generation::generation_prompt_plan(db, req))
+        }
         // Phase 11 portable data (ТЗ §40–§41): backup containers.
         "backups.create" => with_db_opt(db, |db| backup::backups_create(db, req)),
         "backups.list" => with_db_opt(db, |db| backup::backups_list(db, req)),

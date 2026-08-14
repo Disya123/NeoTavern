@@ -136,6 +136,19 @@
       "milestone": "M2"
     },
     {
+      "id": "generation.prompt.plan",
+      "title": "Prompt pipeline: durable PromptPlan (history/character/lorebook/token budget)",
+      "wireOps": ["generation.prompt.plan"],
+      "hosts": {
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "android": "Implemented",
+        "webClient": "Implemented"
+      },
+      "notes": "Kernel pipeline (ТЗ §9.1–§9.2, Этап 2.6): every generation run builds an immutable PromptPlan (character/persona system blocks from the card incl. ext_json.personality, lorebook keyword activation with constant/selective rules, last 128 non-tool history messages, heuristic-v1 approximate token budget with response-room reservation and oldest-unpinned truncation recording every excluded message id), stores it in prompt_plans (schema migration 5) and passes the instruct-neutral message array to adapters via ProviderRequest.messages — the OpenAI adapter serializes it verbatim. generation.prompt.plan (app.read) serves the stored plan; stable PROMPT_PLAN_FAILED / PROMPT_PLAN_NOT_FOUND. Tests: 5 unit + 2 kernel integration + 1 adapter. Honest boundaries: approximate tokenizer (model-specific registry pending), instruct template rendering deferred, lorebook character-scoping awaits the lorebook cutover.",
+      "milestone": "M2"
+    },
+    {
       "id": "backups",
       "title": "Backup create/list",
       "wireOps": ["backups.create", "backups.list"],

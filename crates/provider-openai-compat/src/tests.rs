@@ -177,6 +177,7 @@ fn generate_collect(
         run_key: "chat-123|1",
         deadline,
         api_key,
+        messages: None,
     };
     let mut texts = Vec::new();
     let result = provider.generate(&request, CancelToken::new(flag), &mut |event| {
@@ -224,6 +225,70 @@ fn streams_over_content_length_sse() {
     let (result, texts) = generate_collect(&provider, Some("sk-test"), None, &flag);
     result.expect("content-length path succeeds");
     assert_eq!(texts, vec!["A"]);
+}
+
+#[test]
+fn rendered_plan_messages_serialize_into_the_body() {
+    let server = MockServer::spawn(move |request, mut stream| {
+        // The kernel's prompt plan arrives as `messages` and must be
+        // serialized verbatim (system + history + user), not replaced by the
+        // single `input` fallback.
+        let body = request
+            .split_once("\r\n\r\n")
+            .map(|(_, body)| body.to_string())
+            .unwrap_or_default();
+        let parsed: serde_json::Value =
+            serde_json::from_str(&body).expect("request body must be JSON");
+        let messages = parsed["messages"].as_array().expect("messages array");
+        assert_eq!(messages.len(), 3);
+        assert_eq!(messages[0]["role"], "system");
+        assert_eq!(messages[0]["content"], "You are Aria.");
+        assert_eq!(messages[1]["role"], "user");
+        assert_eq!(messages[1]["content"], "earlier");
+        assert_eq!(messages[2]["role"], "user");
+        assert_eq!(messages[2]["content"], "hello");
+        stream.write_all(CHUNKED_HEAD.as_bytes())?;
+        let events = [
+            (delta_payload("Hi"), Duration::ZERO),
+            ("[DONE]".to_string(), Duration::ZERO),
+        ];
+        stream.write_all(&chunked_sse_response(&events))?;
+        stream.flush()
+    });
+    let provider = test_provider(&server.base_url());
+    let flag = AtomicBool::new(false);
+    let plan = [
+        provider_sdk::PromptMessage {
+            role: "system",
+            content: "You are Aria.",
+        },
+        provider_sdk::PromptMessage {
+            role: "user",
+            content: "earlier",
+        },
+        provider_sdk::PromptMessage {
+            role: "user",
+            content: "hello",
+        },
+    ];
+    let request = ProviderRequest {
+        provider_id: provider.id(),
+        model: "mock-1",
+        input: "hello",
+        run_key: "chat-123|1",
+        deadline: None,
+        api_key: Some("sk-test"),
+        messages: Some(&plan),
+    };
+    let mut texts = Vec::new();
+    let result = provider.generate(&request, CancelToken::new(&flag), &mut |event| {
+        let ProviderEvent::Delta { text } = event;
+        texts.push(text);
+        EmitStatus::Continue
+    });
+    let usage = result.expect("plan-driven run succeeds");
+    assert_eq!(texts, vec!["Hi"]);
+    assert_eq!(usage.steps, 1);
 }
 
 #[test]
@@ -317,6 +382,7 @@ fn cancel_mid_stream_stops_emission() {
         run_key: "chat-123|1",
         deadline: None,
         api_key: Some("sk-test"),
+        messages: None,
     };
     let mut texts = Vec::new();
     let result = provider.generate(&request, CancelToken::new(&flag), &mut |event| {
@@ -462,6 +528,7 @@ fn mock_server_never_hangs_without_a_connection() {
         run_key: "chat-123|1",
         deadline: Some(Deadline::after(Duration::from_millis(200))),
         api_key: Some("sk-test"),
+        messages: None,
     };
     let result = provider.generate(&request, CancelToken::new(&flag), &mut |_| {
         EmitStatus::Continue

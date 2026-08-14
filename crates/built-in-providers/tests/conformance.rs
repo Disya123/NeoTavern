@@ -59,6 +59,7 @@ fn generate_collect(
         run_key: "chat-123|1",
         deadline,
         api_key: None,
+        messages: None,
     };
     let mut texts = Vec::new();
     let result = provider.generate(&request, CancelToken::new(flag), &mut |event| {
@@ -83,6 +84,7 @@ fn generate_cancel_midstream(
         run_key: "chat-123|1",
         deadline: None,
         api_key: None,
+        messages: None,
     };
     let mut texts = Vec::new();
     let result = provider.generate(&request, CancelToken::new(flag), &mut |event| {
@@ -107,6 +109,7 @@ fn generate_stop_first(
         run_key: "chat-123|1",
         deadline: None,
         api_key: None,
+        messages: None,
     };
     let flag = AtomicBool::new(false);
     let mut seen = 0usize;
@@ -262,6 +265,7 @@ fn fake_byte_identity_through_generate() {
         run_key,
         deadline: None,
         api_key: None,
+        messages: None,
     };
     let mut texts = Vec::new();
     let result = provider.generate(&request, CancelToken::new(&flag), &mut |event| {

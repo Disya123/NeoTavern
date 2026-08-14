@@ -435,6 +435,89 @@ export const GetGenerationRunRequestDtoSchema = Type.Object(
 );
 export type GetGenerationRunRequestDto = Static<typeof GetGenerationRunRequestDtoSchema>;
 
+/**
+ * Prompt plan DTOs (`wire.prompt.*`, ТЗ §9.2, Этап 2.6): the kernel's
+ * immutable record of what context entered a generation run's provider
+ * request — system blocks (character/persona/lorebook), the selected
+ * history, the user message, token counts and every excluded message — so
+ * the user can inspect what was included or cut.
+ */
+
+/** One rendered prompt message (`wire.prompt.message`). */
+export const PromptMessageDtoSchema = Type.Object(
+  {
+    role: WireMessageRole,
+    content: Type.String({ minLength: 0, maxLength: 1000000 }),
+  },
+  { $id: 'wire.prompt.message', additionalProperties: false },
+);
+export type PromptMessageDto = Static<typeof PromptMessageDtoSchema>;
+
+/** One system block source shown to the user (`wire.prompt.block`). */
+export const PromptBlockDtoSchema = Type.Object(
+  {
+    source: Type.Union(
+      [
+        Type.Literal('character'),
+        Type.Literal('persona'),
+        Type.Literal('lorebook'),
+        Type.Literal('instruct'),
+      ],
+      { 'x-wire-unknown-behavior': 'reject' },
+    ),
+    text: Type.String({ minLength: 0, maxLength: 1000000 }),
+  },
+  { $id: 'wire.prompt.block', additionalProperties: false },
+);
+export type PromptBlockDto = Static<typeof PromptBlockDtoSchema>;
+
+/** One message excluded from the plan (`wire.prompt.excluded`). */
+export const PromptExcludedDtoSchema = Type.Object(
+  {
+    messageId: Type.String({ format: 'uuid' }),
+    reason: Type.Union([Type.Literal('token_budget')], { 'x-wire-unknown-behavior': 'reject' }),
+  },
+  { $id: 'wire.prompt.excluded', additionalProperties: false },
+);
+export type PromptExcludedDto = Static<typeof PromptExcludedDtoSchema>;
+
+/**
+ * Prompt plan DTO (`wire.prompt.plan`): the durable plan of one generation
+ * run. `approximateTokens: true` means the tokenizer is a local heuristic
+ * (no model-specific tokenizer yet). `overBudget` means the plan still
+ * exceeds the available window after dropping all unpinned history.
+ */
+export const PromptPlanDtoSchema = Type.Object(
+  {
+    runId: Type.String({ format: 'uuid' }),
+    chatId: Type.String({ format: 'uuid' }),
+    provider: Type.String({ minLength: 1, maxLength: 128 }),
+    model: Type.String({ minLength: 0, maxLength: 128 }),
+    instructFormat: Type.String({ minLength: 1, maxLength: 128 }),
+    tokenizerProfile: Type.String({ minLength: 1, maxLength: 128 }),
+    approximateTokens: Type.Boolean(),
+    contextLimit: Type.Integer({ minimum: 0, maximum: 9_007_199_254_740_991 }),
+    responseReserved: Type.Integer({ minimum: 0, maximum: 9_007_199_254_740_991 }),
+    inputTokens: Type.Integer({ minimum: 0, maximum: 9_007_199_254_740_991 }),
+    overBudget: Type.Boolean(),
+    systemBlocks: Type.Array(PromptBlockDtoSchema),
+    messages: Type.Array(PromptMessageDtoSchema),
+    excluded: Type.Array(PromptExcludedDtoSchema),
+    createdAt: Type.String({ format: 'rfc3339' }),
+  },
+  { $id: 'wire.prompt.plan', additionalProperties: false },
+);
+export type PromptPlanDto = Static<typeof PromptPlanDtoSchema>;
+
+/** Get prompt plan request DTO (`wire.request.get-prompt-plan`). */
+export const GetPromptPlanRequestDtoSchema = Type.Object(
+  {
+    runId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.get-prompt-plan', additionalProperties: false },
+);
+export type GetPromptPlanRequestDto = Static<typeof GetPromptPlanRequestDtoSchema>;
+
 /** Retry generation request DTO (`wire.request.retry-generation`). */
 export const RetryGenerationRequestDtoSchema = Type.Object(
   {
@@ -722,6 +805,11 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.request.keep-partial-generation': KeepPartialGenerationRequestDtoSchema,
   'wire.request.discard-generation': DiscardGenerationRequestDtoSchema,
   'wire.request.list-generation-events': ListGenerationEventsRequestDtoSchema,
+  'wire.prompt.message': PromptMessageDtoSchema,
+  'wire.prompt.block': PromptBlockDtoSchema,
+  'wire.prompt.excluded': PromptExcludedDtoSchema,
+  'wire.prompt.plan': PromptPlanDtoSchema,
+  'wire.request.get-prompt-plan': GetPromptPlanRequestDtoSchema,
   'wire.result.empty': EmptyResultDtoSchema,
   'wire.result.list-backups': ListBackupsResultDtoSchema,
   'wire.paged.generation-events': PagedGenerationEventsDtoSchema,

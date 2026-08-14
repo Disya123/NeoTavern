@@ -130,6 +130,31 @@ fn run_not_found(run_id: &str) -> KernelError {
     )
 }
 
+/// `PROMPT_PLAN_NOT_FOUND` product error (`runId` param).
+fn prompt_plan_not_found(run_id: &str) -> KernelError {
+    KernelError::product(
+        "PROMPT_PLAN_NOT_FOUND",
+        vec![("runId".to_string(), run_id.to_string())],
+    )
+}
+
+/// `generation.prompt.plan` — the durable [`PromptPlan`] of a run
+/// (ТЗ §9.2, Этап 2.6): what context entered the provider request
+/// (system blocks + selected history + the user message), the token counts
+/// and every excluded message. Read-only, `app.read`.
+pub(crate) fn generation_prompt_plan(
+    db: &mut Database,
+    request: &[u8],
+) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_get_prompt_plan(request)?;
+    let plan = crate::prompt::load_prompt_plan(db, &req.run_id)
+        .map_err(|_| prompt_plan_not_found(&req.run_id))?;
+    let value = serde_json::to_value(&plan)
+        .map_err(|e| internal(format!("prompt plan: serialize: {e}")))?;
+    validate(&value, generated::validate_prompt_plan)?;
+    encode(&value)
+}
+
 /// `GENERATION_RUN_STATE_CONFLICT` product error (`runId`, `status` params).
 fn state_conflict(run_id: &str, status: &str) -> KernelError {
     KernelError::product(
@@ -1193,6 +1218,55 @@ pub(crate) fn execute_stream(
             return Ok(());
         }
     };
+    // Prompt pipeline (ТЗ §9.2, Этап 2.6): build the immutable PromptPlan —
+    // character/persona/lorebook system blocks + bounded selected history +
+    // the user message, with a heuristic token budget and explicit
+    // truncation — and store it durably BEFORE the provider attempt. The
+    // plan's instruct-neutral message array is what the provider serializes
+    // (adapters fall back to `input` when no plan is present). A plan that
+    // cannot be built or stored fails the run with a stable
+    // `PROMPT_PLAN_FAILED` terminal: the pipeline is now mandatory for run
+    // execution, and a run must not execute without the context it claims.
+    let context_limit = adapter
+        .models()
+        .iter()
+        .find(|m| m.id == model)
+        .and_then(|m| m.context_limit)
+        .unwrap_or(0);
+    let plan = match crate::prompt::build_prompt_plan(
+        db,
+        &crate::prompt::PlanInput {
+            run_id: run.run_id.clone(),
+            chat_id: run.chat_id.clone(),
+            message: &input,
+            provider: &provider_name,
+            model: &model,
+            context_limit,
+            response_reserved: 0,
+        },
+    ) {
+        Ok(plan) => plan,
+        Err(_err) => {
+            let error = error_dto("PROMPT_PLAN_FAILED", &[("runId", run.run_id.clone())]);
+            let seq = terminal_failed(db, run, error, lease_owner)?;
+            send_terminal(notice_tx, seq);
+            return Ok(());
+        }
+    };
+    if let Err(err) = crate::prompt::insert_prompt_plan(db, &plan) {
+        let error = error_dto("PROMPT_PLAN_FAILED", &[("runId", run.run_id.clone())]);
+        let seq = terminal_failed(db, run, error, lease_owner)?;
+        send_terminal(notice_tx, seq);
+        return Err(err);
+    }
+    let plan_messages: Vec<provider_sdk::PromptMessage<'_>> = plan
+        .messages
+        .iter()
+        .map(|m| provider_sdk::PromptMessage {
+            role: &m.role,
+            content: &m.content,
+        })
+        .collect();
     let request = provider_sdk::ProviderRequest {
         provider_id: adapter.id(),
         model: &model,
@@ -1200,6 +1274,7 @@ pub(crate) fn execute_stream(
         run_key: &run_key,
         deadline: Some(provider_sdk::policy::Deadline::after(run_timeout)),
         api_key: api_key.as_deref(),
+        messages: Some(&plan_messages),
     };
     let cancel_token = provider_sdk::CancelToken::new(cancel.0.as_ref());
     let mut shutdown_seen = false;
@@ -1357,7 +1432,7 @@ fn resolve_provider_api_key(
             "SELECT secret_ref FROM provider_configs WHERE provider = ?1 \
              ORDER BY name ASC LIMIT 1",
             params![provider],
-            |row| row.get(0),
+            |row| row.get::<_, Option<String>>(0),
         )
         .optional()
         .map_err(|_| {
@@ -1366,7 +1441,8 @@ fn resolve_provider_api_key(
                 "failed to read provider secret reference",
                 vec![("provider".to_string(), provider.to_string())],
             )
-        })?;
+        })?
+        .flatten();
     let Some(reference) = secret_ref else {
         return Ok(None);
     };

@@ -3,6 +3,37 @@
 ## Unreleased
 ### Added
 
+- **Prompt pipeline in the Kernel (M2 / Этап 2.6, ТЗ §9.1–§9.2).** Every
+  generation run now builds an immutable **PromptPlan** before the provider
+  attempt: character/persona system blocks (from the chat's character card,
+  including the `ext_json.personality` persona field), lorebook keyword
+  activation (constant/selective rules mirroring the legacy retrieval,
+  disabled entries skipped, defensive parsing), bounded history selection
+  (last 128 non-tool messages), a local heuristic token budget
+  (`heuristic-v1`, explicitly flagged approximate) with response-room
+  reservation and oldest-unpinned truncation that records every excluded
+  message id with reason. The plan is stored durably in the new
+  `prompt_plans` table (schema migration 5) and served by the new wire op
+  `generation.prompt.plan` (`app.read`; DTOs `wire.prompt.plan` /
+  `wire.prompt.message` / `wire.prompt.block` / `wire.prompt.excluded`;
+  stable `PROMPT_PLAN_NOT_FOUND`). The instruct-neutral message array is
+  passed to adapters via the new `ProviderRequest.messages` field
+  (`provider-sdk::PromptMessage`); the OpenAI-compatible adapter serializes
+  it verbatim as the chat-completions `messages` (falling back to the single
+  `input` message for plan-less calls). A plan that cannot be built or
+  stored fails the run with the stable terminal `PROMPT_PLAN_FAILED`. Tests:
+  5 unit tests in `crates/runtime-kernel/src/prompt.rs` (estimator,
+  system-block merging, budget truncation with excluded ids, lorebook
+  activation, camelCase plan shape), 2 kernel integration tests
+  (`tests/prompt_plan.rs`: golden path proves the durable plan row survives
+  a kernel reopen and `generation.prompt.plan` serves character+persona
+  blocks, history + pinned user message, empty `excluded` at the default
+  budget; unknown run → `PROMPT_PLAN_NOT_FOUND`), plus an adapter test for
+  plan serialization. Honest boundaries: tokenization is approximate
+  (model-specific registry is future work), instruct-format template
+  rendering is deferred, and lorebook scoping to characters awaits the
+  lorebook cutover.
+
 - **OpenAI-compatible production provider (M2 / Этап 2.5, ТЗ §9.3/§9.4).**
   New crate `crates/provider-openai-compat`: a `ProviderAdapter` speaking the
   OpenAI chat-completions streaming protocol (`POST {baseUrl}/chat/completions`,
