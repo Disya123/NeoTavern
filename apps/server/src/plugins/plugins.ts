@@ -53,6 +53,13 @@ import {
 } from '../lib/packageArchive.js';
 import { extractTarGzArchive } from '../lib/tarballArchive.js';
 import { enforceTrustPolicy, verifyPackageTrust } from '../lib/packageTrust.js';
+import {
+  INSTALL_JOURNAL_FILE,
+  ensureInstalledIntegrity,
+  recoverInterruptedInstalls,
+  snapshotInstalledDigests,
+  writeInstallJournal,
+} from '../lib/packageIntegrity.js';
 import { DEFAULT_RESOURCE_CONFIG } from '../config.js';
 import type { AppContext, TypedApp } from '../types.js';
 import { BackendPluginHost } from '../plugin/backendHost.js';
@@ -425,8 +432,22 @@ async function installFromExtractedDir(
     await rename(finalPath, rollbackPath);
   }
 
+  // ТЗ §SEC-05 recovery journal: record the promotion phase durably BEFORE
+  // the rename so a crash between staging and the registry write is detected
+  // on the next startup and the half-promoted package is cleaned up.
+  await writeInstallJournal(pluginRoot, {
+    pluginId: manifest.id,
+    version: manifest.version,
+    state: 'staging',
+  });
+
   try {
     await rename(incomingPath, finalPath);
+    // ТЗ §SEC-05 installed-package integrity: snapshot the digests of the
+    // freshly promoted files next to the package. Every later activation
+    // re-verifies against this snapshot, so a file tampered after install is
+    // refused before it can load.
+    await snapshotInstalledDigests(finalPath, manifest.id, manifest.version, pluginRoot);
     const installed = repo.install({
       id: manifest.id,
       name: manifest.name,
@@ -437,6 +458,13 @@ async function installFromExtractedDir(
       dependencies,
       trust: trustVerdict.trust,
       publisherKeyId: trustVerdict.publisherKeyId,
+    });
+    // The install is fully committed — the journal marker is dropped so a
+    // later crash does not mis-read it as interrupted.
+    await writeInstallJournal(pluginRoot, {
+      pluginId: manifest.id,
+      version: manifest.version,
+      state: 'committed',
     });
     if (rollbackPath) {
       await rm(rollbackPath, { recursive: true, force: true }).catch(() => undefined);
@@ -496,6 +524,14 @@ async function installFromExtractedDir(
       }
     };
     await rollbackFailure('remove-failed', rm(finalPath, { recursive: true, force: true }));
+    await rollbackFailure(
+      'journal-rolled-back',
+      writeInstallJournal(pluginRoot, {
+        pluginId: manifest.id,
+        version: manifest.version,
+        state: 'rolled_back',
+      }).then(() => rm(join(pluginRoot, INSTALL_JOURNAL_FILE), { force: true })),
+    );
     if (rollbackPath) {
       await rollbackFailure('restore-previous', rename(rollbackPath, finalPath));
       // rev4 §J2: the failed version never ran — consumers (the web runtime)
@@ -801,6 +837,17 @@ export async function registerPluginRoutes(app: TypedApp, ctx: AppContext): Prom
         });
       }
       try {
+        // ТЗ §SEC-05: re-verify the installed package against its digest
+        // snapshot (creating one from the publisher signature for pre-upgrade
+        // installs) before activation — a file tampered after install is
+        // refused here, fail-closed.
+        await ensureInstalledIntegrity(
+          join(ctx.paths.plugins, existing.id, 'package'),
+          existing.id,
+          existing.version,
+          join(ctx.paths.plugins, existing.id),
+          ctx.config.pluginPublisherKeys,
+        );
         await activatePluginBackends(
           manifest,
           join(ctx.paths.plugins, existing.id, 'package'),
@@ -812,7 +859,16 @@ export async function registerPluginRoutes(app: TypedApp, ctx: AppContext): Prom
       } catch (cause) {
         // Permission denials are consent decisions, not load failures —
         // surface them unchanged instead of masking as PLUGIN_LOAD_FAILED.
-        if (isAppError(cause) && cause.code === ErrorCodes.PLUGIN_PERMISSION_DENIED) throw cause;
+        // The same applies to a tamper refusal: the user must see why the
+        // package will not start.
+        if (
+          isAppError(cause) &&
+          (cause.code === ErrorCodes.PLUGIN_PERMISSION_DENIED ||
+            cause.code === ErrorCodes.PLUGIN_SIGNATURE_INVALID)
+        ) {
+          repo.markError(existing.id, cause.code);
+          throw cause;
+        }
         repo.markError(existing.id, ErrorCodes.PLUGIN_LOAD_FAILED);
         throw new AppError({
           code: ErrorCodes.PLUGIN_LOAD_FAILED,
@@ -1103,6 +1159,9 @@ export async function registerPluginRoutes(app: TypedApp, ctx: AppContext): Prom
   );
 
   app.addHook('onReady', async () => {
+    // ТЗ §SEC-05: clean up installs that a crash left half-promoted BEFORE
+    // any plugin is activated, then re-verify every enabled plugin's files.
+    await recoverInterruptedInstalls(ctx.paths.plugins, ctx.logger);
     if (!runtimeSafeMode) {
       await activateEnabledPlugins(repo.list(), backendHost, legacyHost, ctx, broker, vnextRuntime);
     }
@@ -1177,6 +1236,17 @@ async function activateEnabledPlugins(
       continue;
     }
     try {
+      // ТЗ §SEC-05: at startup every enabled plugin is re-verified against
+      // its installed-digests snapshot. A tampered package is NOT activated;
+      // the plugin is marked with the stable signature error so the UI can
+      // tell "tampered after install" from "failed to load".
+      await ensureInstalledIntegrity(
+        join(ctx.paths.plugins, entry.id, 'package'),
+        entry.id,
+        entry.version,
+        join(ctx.paths.plugins, entry.id),
+        ctx.config.pluginPublisherKeys,
+      );
       await activatePluginBackends(
         manifest,
         join(ctx.paths.plugins, entry.id, 'package'),
@@ -1185,8 +1255,19 @@ async function activateEnabledPlugins(
         legacyHost,
         runtime,
       );
-    } catch {
-      ctx.database.repos.plugins.markError(entry.id, ErrorCodes.PLUGIN_LOAD_FAILED);
+    } catch (cause) {
+      const code =
+        isAppError(cause) && cause.code === ErrorCodes.PLUGIN_SIGNATURE_INVALID
+          ? ErrorCodes.PLUGIN_SIGNATURE_INVALID
+          : ErrorCodes.PLUGIN_LOAD_FAILED;
+      ctx.database.repos.plugins.markError(entry.id, code);
+      if (code === ErrorCodes.PLUGIN_SIGNATURE_INVALID) {
+        const message = isAppError(cause) ? cause.message : String(cause);
+        ctx.logger.warn(
+          `[plugin-startup] refusing to activate ${entry.id}: installed files do not match ` +
+            `the recorded digests (${message})`,
+        );
+      }
     }
   }
 }

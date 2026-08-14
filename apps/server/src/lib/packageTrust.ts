@@ -240,8 +240,13 @@ async function readBoundedFile(path: string, maxBytes: number): Promise<Buffer> 
   return readFile(path);
 }
 
-/** sha256 of every regular file under `root`, keyed by POSIX relative path. */
-async function collectFileDigests(root: string): Promise<Record<string, string>> {
+/** sha256 of every regular file under `root`, keyed by POSIX relative path.
+ * The `signature/` directory is walked with the same policy as verification
+ * (only `signature/manifest.json` and `signature/package.sig` allowed, any
+ * other file recorded with a forbidden sentinel) — so a digest snapshot taken
+ * from a verified package stays comparable against later re-verification.
+ * Exported for the installed-package integrity snapshot (SEC-05). */
+export async function collectFileDigests(root: string): Promise<Record<string, string>> {
   const digests: Record<string, string> = {};
   await walk(root, root, digests);
   return digests;
