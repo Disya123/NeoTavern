@@ -39,6 +39,16 @@ function createBackend(): NeoBackend {
 export const backend: NeoBackend = createBackend();
 
 /**
+ * Whether the active backend is the in-process kernel (`LocalBackend`), i.e.
+ * the desktop kernel mode with no `/api/v2` surface. API-layer capability
+ * gate: React components never branch on the backend kind (ТЗ §13.1) — only
+ * transport modules like `generate.ts` consult it.
+ */
+export function isKernelMode(): boolean {
+  return backend instanceof LocalBackend;
+}
+
+/**
  * Backend for an explicit profile (ТЗ §7.2 Phase 5). Local profiles resolve
  * to `LocalBackend` over the shell transport — the mobile WebView bridge in
  * the Android shell, Tauri IPC on desktop; remote profiles are Phase 9 scope

@@ -540,8 +540,12 @@ Notes:
 ## 8. Product Wire mapping (Phase 0 registry)
 
 The Phase 0 wire registry (`packages/contracts/src/wire/registry.ts`, exported
-by `buildProductWireRegistry()`) covers 21 operations. Mapping to today's
-routes:
+by `buildProductWireRegistry()`) started at 21 operations and grew to the full
+M2 registry (characters/chats/messages CRUD, generation run/step + tools,
+prompt plan, backups, providers, presets, lorebooks). Mapping to today's
+routes; rows marked "migration shim" are Этап 2.10 facade bridges that keep
+the browser/sidecar mode working over the legacy server while the kernel mode
+uses the canonical wire ops:
 
 | Wire operation        | Class                 | Current HTTP counterpart                                                                                                             |
 | --------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
@@ -553,14 +557,22 @@ routes:
 | `characters.delete`   | transactional         | `DELETE /api/v2/characters/:id`                                                                                                      |
 | `chats.list`          | transactional         | `GET /api/v2/chats`                                                                                                                  |
 | `chats.get`           | transactional         | `GET /api/v2/chats/:id`                                                                                                              |
+| `chats.create`        | transactional         | `POST /api/v2/chats`                                                                                                                 |
+| `chats.update`        | transactional         | `PATCH /api/v2/chats/:id`                                                                                                            |
+| `chats.delete`        | transactional         | `DELETE /api/v2/chats/:id`                                                                                                           |
 | `chats.messages.list` | transactional         | `GET /api/v2/chats/:id/messages`                                                                                                     |
-| `generation.start`    | workflow (SSE events) | `POST /api/v2/chats/:id/generate`                                                                                                    |
+| `chats.messages.create` | transactional       | `POST /api/v2/chats/:id/messages` (bridge; the kernel-mode send flow uses it before `generation.start`)                              |
+| `chats.messages.update` | transactional       | `PATCH /api/v2/chats/:id/messages/:mid` (migration shim on `LegacyBackend`, Этап 2.10; wire contract is content-only — the legacy `expectedRevision` CAS is not part of the wire contract) |
+| `chats.messages.delete` | transactional       | `DELETE /api/v2/chats/:id/messages/:mid` (migration shim on `LegacyBackend`, Этап 2.10)                                              |
+| `generation.start`    | workflow (SSE events) | `POST /api/v2/chats/:id/generate` (legacy mode); kernel mode: `chats.messages.create` + wire stream over Tauri IPC (Этап 2.10)        |
 | `generation.cancel`   | transactional         | client abort on disconnect (no HTTP route today)                                                                                     |
 | `generation.get`      | transactional         | none (kernel-native durable run snapshot)                                                                                            |
 | `generation.events`   | transactional         | none (kernel-native durable event-log page; `/rpc/stream` resume)                                                                    |
 | `generation.retry`    | workflow (SSE events) | none (kernel-native; new attempt over a failed/cancelled/interrupted run)                                                            |
 | `generation.keep`     | transactional         | none (kernel-native; keep partial artifact as a message)                                                                             |
 | `generation.discard`  | transactional         | none (kernel-native; discard partial artifact)                                                                                       |
+| `generation.tools.list`  | transactional      | none (kernel-native tool registry; facade `generation.tools.list`, Этап 2.10)                                                        |
+| `generation.tool.result` | transactional      | none (kernel-native; resumes the waiting run; facade `generation.tool.result`, Этап 2.10)                                            |
 | `providers.list`      | transactional         | kernel-native built-in adapter report; legacy CRUD/models/test stay `/api/v2/providers/*` until later slices                         |
 | `backups.create`      | workflow              | `POST /api/v2/backups`                                                                                                               |
 | `backups.list`        | transactional         | `GET /api/v2/backups`                                                                                                                |

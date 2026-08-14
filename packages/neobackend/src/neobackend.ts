@@ -17,6 +17,8 @@ import type {
   DeleteMessageRequestDto,
   EmptyResultDto,
   GenerationRunDto,
+  GenerationToolResultRequestDto,
+  ListToolsResultDto,
   WireGenerationEvent,
   ListBackupsResultDto,
   ListCharactersRequestDto,
@@ -106,6 +108,23 @@ export interface GenerationApi {
   keep(workflowId: string, opts?: BackendCallOptions): Promise<GenerationRunDto>;
   /** Discard the partial output of a non-terminal run. */
   discard(workflowId: string, opts?: BackendCallOptions): Promise<GenerationRunDto>;
+  /** Tool registry for active runs (wire `generation.tools.*`, ТЗ §8.3). */
+  tools: GenerationToolsApi;
+}
+
+/**
+ * Tool registry operations for generation runs (wire `generation.tools.*`).
+ *
+ * The kernel never executes tools itself: the host inspects the durable
+ * tool-call step, performs the effect, and submits the result via `result`
+ * (which returns the resumed run). `list` exposes the tools the kernel
+ * currently has registered for tool-capable runs.
+ */
+export interface GenerationToolsApi {
+  /** List tools registered with the kernel for tool-capable runs. */
+  list(opts?: BackendCallOptions): Promise<ListToolsResultDto>;
+  /** Submit the result of one durable tool call; resolves with the resumed run. */
+  result(req: GenerationToolResultRequestDto, opts?: BackendCallOptions): Promise<GenerationRunDto>;
 }
 
 /** Backup domain operations (wire `backups.*`). */

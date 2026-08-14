@@ -6,11 +6,15 @@
  */
 import {
   WIRE_PROTOCOL,
+  type DeleteMessageRequestDto,
+  type EmptyResultDto,
+  type MessageDto,
   type MetaDto,
   type PagedCharactersDto,
   type ProductErrorDto,
   type ListCharactersRequestDto,
   type CharacterDto,
+  type UpdateMessageRequestDto,
 } from '@neotavern/contracts';
 import { ProductError } from '@neotavern/client-sdk';
 import type {
@@ -156,8 +160,8 @@ export class LegacyBackend implements NeoBackend {
     del: () => this.unsupported('chats.delete'),
     listMessages: () => this.unsupported('chats.messages.list'),
     createMessage: () => this.unsupported('chats.messages.create'),
-    updateMessage: () => this.unsupported('chats.messages.update'),
-    delMessage: () => this.unsupported('chats.messages.delete'),
+    updateMessage: (req) => this.updateMessage(req),
+    delMessage: (req) => this.delMessage(req),
   };
 
   readonly generation: GenerationApi = {
@@ -168,6 +172,10 @@ export class LegacyBackend implements NeoBackend {
     retry: () => this.unsupported('generation.retry'),
     keep: () => this.unsupported('generation.keep'),
     discard: () => this.unsupported('generation.discard'),
+    tools: {
+      list: () => this.unsupported('generation.tools.list'),
+      result: () => this.unsupported('generation.tool.result'),
+    },
   };
 
   readonly backups: BackupsApi = {
@@ -209,6 +217,94 @@ export class LegacyBackend implements NeoBackend {
   private async getCharacter(characterId: string): Promise<CharacterDto> {
     const body = await this.getJson(`/api/v2/characters/${encodeURIComponent(characterId)}`);
     return this.mapCharacter(body);
+  }
+
+  /**
+   * Migration shim for `chats.messages.update` (Этап 2.10): maps the wire
+   * request onto the existing legacy `PATCH /api/v2/chats/:id/messages/:mid`
+   * route. The legacy server answers with its own `Message` shape, which has
+   * no wire `sequence`/`generationRunId`; the mapping fills `sequence` from
+   * the response when present and otherwise reports 0 (the callers that use
+   * this bridge today discard the return value and refetch through the query
+   * cache). Content-only CAS (`expectedRevision`) is a legacy-only feature
+   * and is not part of the wire contract — kernel updates are
+   * last-write-wins; see `docs/architecture/operations-inventory.md`.
+   */
+  private async updateMessage(req: UpdateMessageRequestDto): Promise<MessageDto> {
+    const body = await this.sendRequest<Record<string, unknown>>(
+      'PATCH',
+      `/api/v2/chats/${encodeURIComponent(req.chatId)}/messages/${encodeURIComponent(req.messageId)}`,
+      { content: req.content },
+    );
+    return this.mapMessage(body);
+  }
+
+  /** Migration shim for `chats.messages.delete` (Этап 2.10): `DELETE /api/v2/chats/:id/messages/:mid`. */
+  private async delMessage(req: DeleteMessageRequestDto): Promise<EmptyResultDto> {
+    await this.sendRequest<unknown>(
+      'DELETE',
+      `/api/v2/chats/${encodeURIComponent(req.chatId)}/messages/${encodeURIComponent(req.messageId)}`,
+    );
+    return { ok: true };
+  }
+
+  /**
+   * Send a mutating legacy request through the host transport when one is
+   * supplied (the web app's same-origin transport adds the CSRF header and
+   * surfaces `ApiError` envelopes), falling back to plain `fetch` otherwise.
+   */
+  private async sendRequest<T>(
+    method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE',
+    path: string,
+    body?: unknown,
+    signal?: AbortSignal,
+  ): Promise<T> {
+    if (this.transport !== undefined) {
+      return this.transport.request<T>(method, path, body, signal);
+    }
+    const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
+      method,
+      headers: { 'content-type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal,
+    });
+    if (!response.ok) {
+      let errorBody: unknown;
+      try {
+        errorBody = await response.json();
+      } catch {
+        errorBody = undefined;
+      }
+      throw this.mapError(errorBody, response.status);
+    }
+    if (response.status === 204) return undefined as T;
+    try {
+      return (await response.json()) as T;
+    } catch {
+      return undefined as T;
+    }
+  }
+
+  /** Map a legacy `Message` body onto the canonical wire `MessageDto`. */
+  private mapMessage(value: unknown): MessageDto {
+    const item = isRecord(value) ? value : {};
+    const id = typeof item['id'] === 'string' ? item['id'] : '';
+    const chatId = typeof item['chatId'] === 'string' ? item['chatId'] : '';
+    const role = item['role'] === 'assistant' ? 'assistant' : 'user';
+    const content = typeof item['content'] === 'string' ? item['content'] : '';
+    const createdAt = typeof item['createdAt'] === 'string' ? item['createdAt'] : '';
+    const sequence = typeof item['sequence'] === 'number' ? item['sequence'] : 0;
+    const generationRunId =
+      typeof item['generationRunId'] === 'string' ? item['generationRunId'] : undefined;
+    return {
+      id,
+      chatId,
+      role,
+      content,
+      createdAt,
+      sequence,
+      ...(generationRunId !== undefined ? { generationRunId } : {}),
+    };
   }
 
   private async getJson(path: string): Promise<unknown> {

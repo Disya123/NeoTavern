@@ -14,8 +14,7 @@ import type { ChatSnapshotResult, Message } from '@neotavern/contracts';
 import { findLegacySlashCommand, hasLegacyPromptInterceptors } from '@neotavern/legacy-compat';
 import { useCharacter, useChat, useMessages, useSettings } from '../api/hooks.js';
 import { streamGeneration } from '../api/generate.js';
-import { legacyRaw } from '../api/backend.js';
-import { ApiError } from '../api/client.js';
+import { backend, legacyRaw } from '../api/backend.js';
 import { clampSwipeIndex, readGreetingSwipes } from '@neotavern/shared';
 import { expandDisplayMacros, useMacroContext, type MacroContext } from '../lib/macros.js';
 import { useErrorText } from '../lib/useErrorText.js';
@@ -416,28 +415,21 @@ export function ChatPage() {
       setError(null);
       setEditErrorId(null);
       setEditErrorText(null);
-      const current = orderedRef.current.find((message) => message.id === messageId);
       try {
-        await legacyRaw().request<Message>('PATCH', `/chats/${chatId}/messages/${messageId}`, {
-          content,
-          ...(current ? { expectedRevision: current.revision } : {}),
-        });
+        // Product Wire `chats.messages.update` (Этап 2.10): canonical on the
+        // kernel, bridged to the legacy PATCH route on the sidecar. The wire
+        // contract is content-only — the legacy `expectedRevision` CAS is a
+        // legacy-only feature (kernel updates are last-write-wins; see
+        // docs/architecture/operations-inventory.md).
+        await backend.chats.updateMessage({ chatId, messageId, content });
         await queryClient.invalidateQueries({ queryKey: ['messages', chatId] });
         await queryClient.invalidateQueries({ queryKey: ['chats'] });
       } catch (err) {
-        if (err instanceof ApiError && err.code === 'MESSAGE_CONFLICT') {
-          // The message changed elsewhere (e.g. a swipe landed). Keep the
-          // draft open and surface the conflict inline next to the editor.
-          setEditErrorId(messageId);
-          setEditErrorText(t('chat:editConflict'));
-          setError(t('chat:editConflict'));
-        } else {
-          setError(errorText(err));
-        }
+        setError(errorText(err));
         throw err;
       }
     },
-    [chatId, queryClient, errorText, t],
+    [chatId, queryClient, errorText],
   );
 
   const deleteMessage = useCallback(
@@ -445,7 +437,8 @@ export function ChatPage() {
       if (!chatId) return;
       setError(null);
       try {
-        await legacyRaw().request('DELETE', `/chats/${chatId}/messages/${messageId}`);
+        // Product Wire `chats.messages.delete` (Этап 2.10).
+        await backend.chats.delMessage({ chatId, messageId });
         await queryClient.invalidateQueries({ queryKey: ['messages', chatId] });
         await queryClient.invalidateQueries({ queryKey: ['chats'] });
       } catch (err) {

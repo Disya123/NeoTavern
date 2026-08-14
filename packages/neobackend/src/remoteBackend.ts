@@ -11,6 +11,7 @@ import type {
   ChatDto,
   EmptyResultDto,
   GenerationRunDto,
+  ListToolsResultDto,
   WireGenerationEvent,
   ListBackupsResultDto,
   ListLorebooksResultDto,
@@ -116,6 +117,14 @@ export class RemoteBackend implements NeoBackend {
           signal: opts?.signal,
         },
       ),
+    tools: {
+      list: (opts) =>
+        this.sdk.call<ListToolsResultDto>('generation.tools.list', {}, { signal: opts?.signal }),
+      result: (req, opts) =>
+        this.sdk.call<GenerationRunDto>('generation.tool.result', req, {
+          signal: opts?.signal,
+        }),
+    },
   };
 
   readonly backups: BackupsApi = {

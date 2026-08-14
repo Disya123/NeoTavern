@@ -9,6 +9,7 @@ import {
   type CharacterDto,
   type GenerationRunDto,
   type ListProvidersResultDto,
+  type ListToolsResultDto,
   type MetaDto,
   type PagedCharactersDto,
   type PagedGenerationEventsDto,
@@ -89,6 +90,21 @@ const KEEP_RUN: GenerationRunDto = { ...GENERATION_RUN, status: 'failed' };
 /** `generation.discard` response: partial output dropped. */
 const DISCARD_RUN: GenerationRunDto = { ...GENERATION_RUN, status: 'interrupted' };
 
+/** `generation.tools.list` response: one registered tool (Этап 2.10). */
+const TOOLS: ListToolsResultDto = {
+  items: [
+    {
+      id: 'lookup-weather',
+      name: 'Lookup weather',
+      description: 'Fake tool for the golden slice.',
+      inputSchema: { type: 'object', properties: { query: { type: 'string' } } },
+    },
+  ],
+};
+
+/** `generation.tool.result` response: the resumed run (still waiting). */
+const TOOL_RESULT_RUN: GenerationRunDto = { ...GENERATION_RUN, status: 'waiting_for_tool' };
+
 /** `generation.events` response: canonical event page. */
 const GENERATION_EVENTS: PagedGenerationEventsDto = {
   items: [
@@ -151,6 +167,10 @@ class FakeKernelTransport implements LocalTransport {
         return { ok: true, value: KEEP_RUN };
       case 'generation.discard':
         return { ok: true, value: DISCARD_RUN };
+      case 'generation.tools.list':
+        return { ok: true, value: TOOLS };
+      case 'generation.tool.result':
+        return { ok: true, value: TOOL_RESULT_RUN };
       default:
         return { ok: false, error: { code: 'NOT_FOUND', params: {}, traceId: 'kernel-trace' } };
     }
@@ -191,6 +211,10 @@ function rpcResult(operationId: string | undefined): unknown {
       return KEEP_RUN;
     case 'generation.discard':
       return DISCARD_RUN;
+    case 'generation.tools.list':
+      return TOOLS;
+    case 'generation.tool.result':
+      return TOOL_RESULT_RUN;
     default:
       return null;
   }
@@ -386,6 +410,60 @@ describe('Generation Local vs Remote parity (Phase 6)', () => {
   });
 });
 
+describe('Generation tools Local vs Remote parity (Этап 2.10)', () => {
+  it('generation.tools.list returns deep-equal ListToolsResultDto from both backends', async () => {
+    const local = new LocalBackend({ transport: new FakeKernelTransport() });
+    const remote = makeRemoteBackend();
+
+    const [localResult, remoteResult] = await Promise.all([
+      local.generation.tools.list(),
+      remote.generation.tools.list(),
+    ]);
+
+    expect(localResult).toEqual(remoteResult);
+    expect(localResult).toEqual(TOOLS);
+  });
+
+  it('generation.tools.list sends the canonical empty request payload to the kernel', async () => {
+    const kernel = new FakeKernelTransport();
+    const backend = new LocalBackend({ transport: kernel });
+
+    await expect(backend.generation.tools.list()).resolves.toEqual(TOOLS);
+    expect(kernel.requests).toEqual([{ operationId: 'generation.tools.list', payload: {} }]);
+  });
+
+  it('generation.tool.result returns the deep-equal resumed run from both backends', async () => {
+    const local = new LocalBackend({ transport: new FakeKernelTransport() });
+    const remote = makeRemoteBackend();
+
+    const req = {
+      runId: RUN_ID,
+      toolCallId: '9a8b7c6d-5e4f-4a3b-8c9d-0e1f2a3b4c5d',
+      result: { temperature: 21 },
+    };
+    const [localResult, remoteResult] = await Promise.all([
+      local.generation.tools.result(req),
+      remote.generation.tools.result(req),
+    ]);
+
+    expect(localResult).toEqual(remoteResult);
+    expect(localResult).toEqual(TOOL_RESULT_RUN);
+  });
+
+  it('generation.tool.result sends the canonical request payload to the kernel', async () => {
+    const kernel = new FakeKernelTransport();
+    const backend = new LocalBackend({ transport: kernel });
+
+    const req = {
+      runId: RUN_ID,
+      toolCallId: '9a8b7c6d-5e4f-4a3b-8c9d-0e1f2a3b4c5d',
+      result: { temperature: 21 },
+    };
+    await expect(backend.generation.tools.result(req)).resolves.toEqual(TOOL_RESULT_RUN);
+    expect(kernel.requests).toEqual([{ operationId: 'generation.tool.result', payload: req }]);
+  });
+});
+
 describe('LocalBackend generation validation (Phase 6)', () => {
   it('generation.get with a non-uuid workflowId throws ValidationError before any transport call', async () => {
     const kernel = new FakeKernelTransport();
@@ -552,6 +630,113 @@ describe('LegacyBackend', () => {
   it('providers.list throws UnsupportedError', () => {
     const backend = makeLegacyBackend(new Map());
     expect(() => backend.providers.list()).toThrow(UnsupportedError);
+  });
+
+  it('generation.tools.list throws UnsupportedError (no legacy route)', () => {
+    const backend = makeLegacyBackend(new Map());
+    expect(() => backend.generation.tools.list()).toThrow(UnsupportedError);
+  });
+
+  it('generation.tool.result throws UnsupportedError (no legacy route)', () => {
+    const backend = makeLegacyBackend(new Map());
+    expect(() =>
+      backend.generation.tools.result({ runId: RUN_ID, toolCallId: 'x', result: {} }),
+    ).toThrow(UnsupportedError);
+  });
+
+  it('updateMessage maps the wire request onto the legacy PATCH route via the host transport (Этап 2.10)', async () => {
+    const calls: Array<{ method: string; path: string; body?: unknown }> = [];
+    const backend = new LegacyBackend({
+      baseUrl: 'http://legacy.local',
+      transport: {
+        request: async (method, path, body) => {
+          calls.push({ method, path, body });
+          return {
+            id: '9a8b7c6d-5e4f-4a3b-8c9d-0e1f2a3b4c5d',
+            chatId: CHAT_ID,
+            role: 'user',
+            content: 'edited text',
+            createdAt: TIMESTAMP,
+          };
+        },
+      },
+    });
+
+    const result = await backend.chats.updateMessage({
+      chatId: CHAT_ID,
+      messageId: '9a8b7c6d-5e4f-4a3b-8c9d-0e1f2a3b4c5d',
+      content: 'edited text',
+    });
+
+    expect(result).toEqual({
+      id: '9a8b7c6d-5e4f-4a3b-8c9d-0e1f2a3b4c5d',
+      chatId: CHAT_ID,
+      role: 'user',
+      content: 'edited text',
+      createdAt: TIMESTAMP,
+      sequence: 0,
+    });
+    expect(calls).toEqual([
+      {
+        method: 'PATCH',
+        path: `/api/v2/chats/${CHAT_ID}/messages/9a8b7c6d-5e4f-4a3b-8c9d-0e1f2a3b4c5d`,
+        body: { content: 'edited text' },
+      },
+    ]);
+  });
+
+  it('updateMessage falls back to plain fetch when no host transport is supplied', async () => {
+    const backend = new LegacyBackend({
+      baseUrl: 'http://legacy.local',
+      fetchImpl: async (input) => {
+        const url =
+          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        if (!url.includes('/api/v2/chats/')) {
+          return jsonResponse({ code: 'NOT_FOUND', params: {}, traceId: 'legacy' }, 404);
+        }
+        return jsonResponse({
+          id: '9a8b7c6d-5e4f-4a3b-8c9d-0e1f2a3b4c5d',
+          chatId: CHAT_ID,
+          role: 'user',
+          content: 'edited text',
+          createdAt: TIMESTAMP,
+        });
+      },
+    });
+
+    await expect(
+      backend.chats.updateMessage({
+        chatId: CHAT_ID,
+        messageId: '9a8b7c6d-5e4f-4a3b-8c9d-0e1f2a3b4c5d',
+        content: 'edited text',
+      }),
+    ).resolves.toMatchObject({ content: 'edited text', sequence: 0 });
+  });
+
+  it('delMessage maps onto the legacy DELETE route and returns EmptyResultDto (Этап 2.10)', async () => {
+    const calls: Array<{ method: string; path: string }> = [];
+    const backend = new LegacyBackend({
+      baseUrl: 'http://legacy.local',
+      transport: {
+        request: async (method, path) => {
+          calls.push({ method, path });
+          return { ok: true };
+        },
+      },
+    });
+
+    await expect(
+      backend.chats.delMessage({
+        chatId: CHAT_ID,
+        messageId: '9a8b7c6d-5e4f-4a3b-8c9d-0e1f2a3b4c5d',
+      }),
+    ).resolves.toEqual({ ok: true });
+    expect(calls).toEqual([
+      {
+        method: 'DELETE',
+        path: `/api/v2/chats/${CHAT_ID}/messages/9a8b7c6d-5e4f-4a3b-8c9d-0e1f2a3b4c5d`,
+      },
+    ]);
   });
 
   it('raw passthrough forwards the host transport for unmigrated routes (ТЗ Фаза 0)', async () => {

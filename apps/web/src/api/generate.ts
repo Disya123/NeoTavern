@@ -1,12 +1,28 @@
 /**
- * Streaming generation client (SSE). Parses the event stream and forwards
- * deltas to the caller, which batches UI updates via requestAnimationFrame
- * (AGENTS.md §13: no per-token React render).
+ * Streaming generation client.
+ *
+ * Two transports share one handler surface (ТЗ §13.1, Этап 2.10):
+ *
+ * - **Kernel mode** (desktop, `LocalBackend`): the user message is persisted
+ *   durably via `chats.messages.create`, then `generation.start` streams
+ *   canonical wire events (`generation.delta` / `generation.completed` /
+ *   `generation.failed` / `generation.cancelled`). The transport never
+ *   touches `/api/v2`.
+ * - **Legacy mode** (browser/sidecar, `LegacyBackend`): the existing SSE
+ *   rendezvous (`POST /api/v2/chats/:id/generate`) persists the user message
+ *   server-side and supports `plugin_intercept` prompt interceptors.
+ *
+ * The transport branch lives here in the API layer — React components never
+ * branch on the backend kind. Legacy-only options (regeneration, prompt
+ * interceptors) are not silently downgraded on the kernel: they surface an
+ * honest `UnsupportedError` instead.
  */
 import type { GenerationEvent, PromptTriggerId } from '@neotavern/contracts';
+import type { NeoBackend } from '@neotavern/neobackend';
+import { UnsupportedError } from '@neotavern/neobackend';
 import { ErrorCodes } from '@neotavern/shared';
 import { runLegacyPromptInterceptors } from '@neotavern/legacy-compat';
-import { legacyRaw } from './backend.js';
+import { backend, isKernelMode, legacyRaw } from './backend.js';
 import { getCsrfToken, setCsrfToken } from './client.js';
 import { frontendPluginRuntime } from '../plugins/runtime.js';
 
@@ -28,6 +44,118 @@ export interface GenerateBody {
 }
 
 export async function streamGeneration(
+  chatId: string,
+  body: GenerateBody,
+  handlers: GenerateHandlers,
+  signal: AbortSignal,
+): Promise<void> {
+  if (isKernelMode()) {
+    await streamWireGeneration(backend, chatId, body, handlers, signal);
+    return;
+  }
+  await streamLegacyGeneration(chatId, body, handlers, signal);
+}
+
+/**
+ * Kernel-mode generation over the Product Wire (Этап 2.10).
+ *
+ * Persists the user message first (the kernel does not create it during
+ * `generation.start`), then streams the canonical wire events. Product
+ * failures arrive as `generation.failed` with a stable machine-readable
+ * code; a stream that ends without a terminal event is surfaced as a
+ * failure, mirroring the legacy SSE path (ST1-race).
+ *
+ * Not supported on the kernel yet — honest errors, no silent downgrade:
+ * - regeneration (`regenerate` / `regenerateMessageId`) is Этап 4 (variants);
+ * - frontend prompt interceptors have no kernel rendezvous yet (the kernel
+ *   prompt pipeline is the single prompt owner; see release-manifest notes);
+ * - `providerConfigId` is a legacy DB identity that does not exist in the
+ *   kernel — the kernel selects its own provider/model (or uses `provider`/
+ *   `model` when supplied) and the id is ignored.
+ *
+ * @param backendImpl Injectable backend for tests.
+ */
+export async function streamWireGeneration(
+  backendImpl: NeoBackend,
+  chatId: string,
+  body: GenerateBody,
+  handlers: GenerateHandlers,
+  signal: AbortSignal,
+): Promise<void> {
+  if (body.regenerate || body.regenerateMessageId) {
+    throw new UnsupportedError('generation.regenerate');
+  }
+  const userMessage = body.userMessage;
+  if (userMessage === undefined || userMessage.length === 0) {
+    throw new UnsupportedError('generation.emptyMessage');
+  }
+
+  await backendImpl.chats.createMessage(
+    { chatId, role: 'user', content: userMessage },
+    { signal },
+  );
+  handlers.onStart?.('wire');
+
+  const stream = backendImpl.generation.start({ chatId, message: userMessage }, { signal });
+
+  let sawTerminalEvent = false;
+  try {
+    for await (const event of stream) {
+      switch (event.type) {
+        case 'generation.delta':
+          handlers.onDelta(event.text);
+          break;
+        case 'generation.completed':
+          sawTerminalEvent = true;
+          handlers.onDone(event.finalMessage.content);
+          break;
+        case 'generation.failed':
+          sawTerminalEvent = true;
+          handlers.onError(event.error.code, formatProductError(event.error));
+          break;
+        case 'generation.cancelled':
+          sawTerminalEvent = true;
+          if (!signal.aborted) {
+            handlers.onError(ErrorCodes.GENERATION_CANCELLED, 'Generation cancelled');
+          }
+          break;
+        case 'generation.checkpoint':
+        case 'generation.step':
+        case 'consumer_lagged':
+          // Durable step/checkpoint announcements — the UI batches text
+          // deltas only; tool execution and waiting-for-tool surface via
+          // generation.step for the tool UI (Этап 4).
+          break;
+      }
+    }
+  } catch (err) {
+    if (signal.aborted) {
+      // User-initiated stop: the transport aborted the durable run; the
+      // caller already reset its streaming state.
+      return;
+    }
+    throw err;
+  }
+
+  if (!sawTerminalEvent && !signal.aborted) {
+    handlers.onError(ErrorCodes.GENERATION_FAILED, 'Stream ended unexpectedly');
+  }
+}
+
+/** Short stable message from a wire `ProductErrorDto` (`code key=value …`). */
+function formatProductError(error: { code: string; params?: Record<string, unknown> }): string {
+  const params = Object.entries(error.params ?? {})
+    .map(([key, value]) => `${key}=${String(value)}`)
+    .join(' ');
+  return params.length > 0 ? `${error.code} ${params}` : error.code;
+}
+
+/**
+ * Legacy SSE generation (`POST /api/v2/chats/:id/generate`). Parses the
+ * event stream and forwards deltas to the caller, which batches UI updates
+ * via requestAnimationFrame (AGENTS.md §13: no per-token React render).
+ */
+async function streamLegacyGeneration(
   chatId: string,
   body: GenerateBody,
   handlers: GenerateHandlers,
