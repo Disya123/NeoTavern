@@ -187,9 +187,10 @@
         }
       ],
       "acceptanceProposal": {
-        "proposedAcceptedCommit": "711b063",
+        "proposedAcceptedCommit": "f9878b7",
         "proposedBy": "neotavern/architecture",
         "date": "2026-08-14",
+        "proposalUpdatedAt": "2026-08-14 (f9878b7) — proposedAcceptedCommit advanced from 711b063 to the actual branch HEAD after the governance commits (gate waiver/evidence f390092, ADR-0042+matrix 7893268, ledger restructure 7ed4645, prettier/typecheck fixes, reCutGuide b009d03, M2/M3 content reviews, ADR-0043 790dc9f, definitive re-cut verdict f9878b7). Exit criteria evidence (items 1-8) is unchanged and each cited commit remains in HEAD ancestry; the drill re-validates the mechanics at the new proposed commit.",
         "exitCriteriaMap": {
           "1": {
             "type": "test-run",
@@ -240,7 +241,7 @@
             "commit": "fc1ec87"
           }
         },
-        "verdictNeeded": "Acceptance is the human verdict: set status=accepted, acceptedCommit=<the exact HEAD of this branch you reviewed (the drill proves the proposal's mechanics at the proposed commit 711b063; any later ancestor also passes)>, acceptedBy=<your name>. The gate then passes for M1 — one waived non-P0 blocker covered by a real limited ADR waiver (ADR-0042)."
+        "verdictNeeded": "HUMAN acceptance packet for M1 (branch m1-w1-security-clean, base ec127a4, 31 commits, HEAD f9878b7, tree clean). Review the full branch diff ec127a4..HEAD against the 7 audit directives: (1) clean branch rooted at ec127a4 with only M1 commits, all gates run, acceptance on actual HEAD f9878b7; (2) WS handshake size/timeout + bounded frames (SEC-04, commit 711b063); (3) compressed-input accounting + backpressure with decoder.write() result honored and pause/drain wiring (SEC-04, commit 711b063); (4) crash-recovery plugin install with journal-before-mutation containing old/new paths and expected registry state (SEC-05, commit 711b063); (5) owner-aware secret cleanup by saved valueRef + cascade revocation through provider delete (SEC-01, commit 711b063); (6) real ADR waiver file docs/adr/0042-m1-waiver-per-profile-export-scoping.md (commit 7893268); (7) gate validating waiver by/reason/severity/expiry and structured reproducible evidence (commit f390092). Full verification totals at HEAD: vitest 145 files/1724 tests, web 534 tests, tsc -b, cargo 279 tests, eslint 0 on changed files, prettier clean, docs:check + docs:sync:check + docs:build green, ui:api:check 65, capability:matrix 23 rows, gate --check PASS + --acceptance-drill PASS + --self-test PASS. NOT run (out of M1 scope): Playwright E2E, plugin-runtime bench/parity, Android NDK build. TO ACCEPT: edit this ledger — M1-security.status = \"accepted\", M1-security.acceptedCommit = \"f9878b7\" (the exact HEAD you reviewed), M1-security.acceptedBy = \"<your name>\". The gate then passes for M1: the single blocking issue is a non-P0 P1 covered by the limited ADR-0042 waiver. Do NOT set acceptedBy to an automated actor (gate rejects it); the acceptance is yours alone."
       }
     },
     {
