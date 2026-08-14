@@ -52,6 +52,26 @@
   the run completes with exactly one assistant message; both HTTP bodies are
   asserted (`tools` serialization + resumed `tool_call_id`).
 
+- **Packaged golden slice on the Desktop host (M2 / Этап 2.9, ТЗ §17.2).**
+  `NEOTA_DESKTOP_SMOKE=1` on the packaged shell now runs the full user flow
+  headless over the real Tauri host path (`shell → KernelHost envelope →
+  kernel → SQLite`): handshake + `meta.get` + `characters.list` +
+  `backups.list`, then character → chat → user message, `generation.start`
+  (deterministic fake grammar) → `completed` with exactly one 24-char
+  assistant message, then a complete tool round trip — `KernelHost::
+  register_tool` (new host seam), a second run durably waits
+  (`waiting_for_tool`), `generation.tools.list` serves the contract,
+  `generation.tool.result` resumes and completes it with a second assistant
+  message. The smoke exits 0 only when every step and assertion holds.
+  Bug fix found by the smoke: the **Tauri-local and remote-http stream
+  pollers now close the consumer stream when a run's session ends durably
+  waiting for a tool result** (previously an unbounded poll loop — the
+  kernel's `Terminal` notice was ignored); a new adapter integration test
+  covers the waiting-run closure, and the remote-http live SSE worker gets
+  the same `stream.closed` handling. Capability matrix: desktop host →
+  `Integrated` for `characters.crud`, `chats.crud`, `chats.messages.crud`,
+  `generation.workflow`, `generation.tool-loop`.
+
 - **Prompt pipeline in the Kernel (M2 / Этап 2.6, ТЗ §9.1–§9.2).** Every
   generation run now builds an immutable **PromptPlan** before the provider
   attempt: character/persona system blocks (from the chat's character card,

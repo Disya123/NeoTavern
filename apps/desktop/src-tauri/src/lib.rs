@@ -577,7 +577,11 @@ fn setup_local_kernel_mode(
     }
 
     if std::env::var("NEOTA_DESKTOP_SMOKE").as_deref() == Ok("1") {
-        run_kernel_smoke(&app.handle());
+        let smoke = run_kernel_smoke(app.handle()).and_then(|_| run_golden_smoke(app.handle()));
+        if let Err(error) = smoke {
+            eprintln!("[smoke] FAILED: {error}");
+            std::process::exit(1);
+        }
         std::process::exit(0);
     }
 
@@ -597,51 +601,302 @@ fn setup_local_kernel_mode(
 /// Deterministic smoke self-check for the packaged local kernel: exercises
 /// the exact local handshake (already validated by [`KernelHost::open`]) plus
 /// one meta and two read operations through the shared envelope layer. Any
-/// non-ok envelope or transport failure exits 1.
+/// non-ok envelope or transport failure fails the check.
 #[cfg(desktop)]
-fn run_kernel_smoke(app: &AppHandle) {
+fn run_kernel_smoke(app: &AppHandle) -> Result<(), String> {
     let host = app.state::<KernelHost>();
-    let mut failures = 0usize;
     for (operation_id, payload) in [
         ("meta.get", serde_json::json!({})),
         ("characters.list", serde_json::json!({})),
         ("backups.list", serde_json::json!({})),
     ] {
-        let request = build_request_envelope(
-            operation_id,
-            payload,
-            "00000000-0000-4000-8000-000000000001",
-        );
-        match host.dispatch_envelope(&request) {
-            Ok(body) => match serde_json::from_slice::<serde_json::Value>(&body) {
-                Ok(envelope) if envelope.get("kind").and_then(|k| k.as_str()) == Some("ok") => {
-                    eprintln!("[smoke] {operation_id}: ok");
-                }
-                Ok(envelope) => {
-                    eprintln!(
-                        "[smoke] {operation_id}: error envelope {}",
-                        envelope
-                            .get("error")
-                            .map(|e| e.to_string())
-                            .unwrap_or_default()
-                    );
-                    failures += 1;
-                }
-                Err(_) => {
-                    eprintln!("[smoke] {operation_id}: response was not JSON");
-                    failures += 1;
-                }
-            },
-            Err(failure) => {
-                eprintln!("[smoke] {operation_id}: transport failure {:?}", failure);
-                failures += 1;
-            }
+        dispatch_ok(&host, operation_id, payload)
+            .map_err(|error| format!("{operation_id}: {error}"))?;
+        eprintln!("[smoke] {operation_id}: ok");
+    }
+    Ok(())
+}
+
+/// One unary wire round trip: envelope → protocol check → kernel dispatch →
+/// validated response envelope. `Err` carries the envelope error or a
+/// transport failure.
+#[cfg(desktop)]
+fn dispatch_ok(
+    host: &KernelHost,
+    operation_id: &str,
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    let request = build_request_envelope(
+        operation_id,
+        payload,
+        "00000000-0000-4000-8000-000000000001",
+    );
+    let body = host
+        .dispatch_envelope(&request)
+        .map_err(|failure| format!("transport failure: {failure:?}"))?;
+    let envelope: serde_json::Value =
+        serde_json::from_slice(&body).map_err(|_| "response was not JSON".to_string())?;
+    match envelope.get("kind").and_then(|k| k.as_str()) {
+        Some("ok") => Ok(envelope
+            .get("result")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null)),
+        _ => Err(format!(
+            "error envelope {}",
+            envelope
+                .get("error")
+                .map(|e| e.to_string())
+                .unwrap_or_default()
+        )),
+    }
+}
+
+/// Opens a live wire stream through the host and collects every forwarded
+/// event envelope until the end-of-stream sentinel, returning the run id and
+/// the event log.
+#[cfg(desktop)]
+fn run_stream(
+    host: &KernelHost,
+    operation_id: &str,
+    payload: serde_json::Value,
+) -> Result<(String, Vec<serde_json::Value>), String> {
+    let request = build_request_envelope(
+        operation_id,
+        payload,
+        "00000000-0000-4000-8000-000000000002",
+    );
+    let (tx, rx) = std::sync::mpsc::channel::<serde_json::Value>();
+    let body = host
+        .open_stream(&request, move |event| {
+            let _ = tx.send(event);
+            Ok(())
+        })
+        .map_err(|failure| format!("transport failure: {failure:?}"))?;
+    let envelope: serde_json::Value =
+        serde_json::from_slice(&body).map_err(|_| "stream response was not JSON".to_string())?;
+    if envelope.get("kind").and_then(|k| k.as_str()) != Some("ok") {
+        return Err(format!(
+            "{operation_id}: error envelope {}",
+            envelope
+                .get("error")
+                .map(|e| e.to_string())
+                .unwrap_or_default()
+        ));
+    }
+    let stream_id = envelope["result"]["streamId"]
+        .as_str()
+        .ok_or_else(|| "stream response carried no streamId".to_string())?
+        .to_string();
+    let mut events = Vec::new();
+    let deadline = std::time::Instant::now() + Duration::from_secs(60);
+    loop {
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        if remaining.is_zero() {
+            return Err("stream did not terminate in time".to_string());
         }
+        let event = rx
+            .recv_timeout(remaining.min(Duration::from_secs(5)))
+            .map_err(|_| "stream channel closed without a terminal sentinel".to_string())?;
+        if event.is_null() {
+            break;
+        }
+        events.push(event);
     }
-    if failures == 0 {
-        std::process::exit(0);
+    Ok((stream_id, events))
+}
+
+/// The packaged golden vertical slice (Этап 2.9/2.10): the SAME user flow the
+/// UI drives through the generated client, exercised over the REAL Tauri host
+/// path (shell → KernelHost envelope → kernel → SQLite) on a fresh data root:
+///
+/// 1. character → chat → user message;
+/// 2. `generation.start` (deterministic fake grammar) → the run completes and
+///    saves exactly one assistant message durably;
+/// 3. a tool round trip (§8.3): register a declarative tool, a second run
+///    durably waits (`waiting_for_tool`), `generation.tools.list` serves the
+///    contract, `generation.tool.result` resumes and completes the run with a
+///    second assistant message.
+///
+/// No HTTP, no sidecar, no UI: this is the packaged host's own self-check,
+/// runnable headless via `NEOTA_DESKTOP_SMOKE=1`.
+#[cfg(desktop)]
+fn run_golden_smoke(app: &AppHandle) -> Result<(), String> {
+    let host = app.state::<KernelHost>();
+
+    // 1. Library + conversation setup (wire CRUD).
+    let character = dispatch_ok(
+        &host,
+        "characters.create",
+        serde_json::json!({
+            "name": "Aria",
+            "description": "Golden slice character",
+            "tags": [],
+        }),
+    )?;
+    let character_id = character["id"]
+        .as_str()
+        .ok_or_else(|| "character response carried no id".to_string())?
+        .to_string();
+    let chat = dispatch_ok(
+        &host,
+        "chats.create",
+        serde_json::json!({
+            "characterId": character_id,
+            "title": "Golden slice",
+        }),
+    )?;
+    let chat_id = chat["id"]
+        .as_str()
+        .ok_or_else(|| "chat response carried no id".to_string())?
+        .to_string();
+    dispatch_ok(
+        &host,
+        "chats.messages.create",
+        serde_json::json!({
+            "chatId": chat_id,
+            "role": "user",
+            "content": "Hello",
+        }),
+    )?;
+    eprintln!("[smoke] golden: character/chat/message created");
+
+    // 2. Plain generation → durable save (fake provider, deterministic
+    //    grammar: one step × 24 chars).
+    let (run_id, _events) = run_stream(
+        &host,
+        "generation.start",
+        serde_json::json!({
+            "chatId": chat_id,
+            "message": "Hello",
+            "provider": "fake",
+            "model": "steps=1;tokens-per-step=24",
+        }),
+    )?;
+    let run = dispatch_ok(
+        &host,
+        "generation.get",
+        serde_json::json!({ "workflowId": run_id }),
+    )?;
+    if run["status"] != serde_json::json!("completed") {
+        return Err(format!("plain run did not complete: {run}"));
     }
-    std::process::exit(1);
+    let assistant_count = count_assistant_messages(&host, &chat_id)?;
+    if assistant_count != 1 {
+        return Err(format!(
+            "plain run must save exactly one assistant message, found {assistant_count}"
+        ));
+    }
+    let messages = dispatch_ok(
+        &host,
+        "chats.messages.list",
+        serde_json::json!({ "chatId": chat_id, "limit": 200 }),
+    )?;
+    let assistant_content = messages["items"]
+        .as_array()
+        .and_then(|items| items.iter().find(|m| m["role"] == "assistant"))
+        .and_then(|m| m["content"].as_str())
+        .ok_or_else(|| "assistant message has no content".to_string())?;
+    if assistant_content.chars().count() != 24 {
+        return Err(format!(
+            "assistant content length {} != 24 (deterministic fake grammar)",
+            assistant_content.chars().count()
+        ));
+    }
+    eprintln!("[smoke] golden: generation completed, one assistant message saved");
+
+    // 3. Tool round trip (§8.3). The fake adapter calls with
+    //    `{"query": "<input>"}`, so the registered schema accepts exactly
+    //    that (matching the kernel integration suite's weather tool).
+    host.register_tool(serde_json::json!({
+        "id": "lookup-weather",
+        "name": "lookup_weather",
+        "description": "Look up the current weather for a city.",
+        "inputSchema": {
+            "type": "object",
+            "properties": { "query": { "type": "string" } },
+            "required": ["query"],
+            "additionalProperties": false
+        },
+    }))?;
+    eprintln!("[smoke] golden: tool registered");
+    let (tool_run_id, _events) = run_stream(
+        &host,
+        "generation.start",
+        serde_json::json!({
+            "chatId": chat_id,
+            "message": "Weather in Kyiv",
+            "provider": "fake",
+            "model": "tool=lookup_weather",
+        }),
+    )?;
+    let tool_run = dispatch_ok(
+        &host,
+        "generation.get",
+        serde_json::json!({ "workflowId": tool_run_id }),
+    )?;
+    if tool_run["status"] != serde_json::json!("waiting_for_tool") {
+        return Err(format!("tool run did not wait: {tool_run}"));
+    }
+    let tools = dispatch_ok(&host, "generation.tools.list", serde_json::json!({}))?;
+    if tools["items"].as_array().map(|items| items.len()) != Some(1) {
+        return Err(format!("tools.list must serve one contract: {tools}"));
+    }
+    let events = dispatch_ok(
+        &host,
+        "generation.events",
+        serde_json::json!({ "workflowId": tool_run_id, "limit": 200 }),
+    )?;
+    let tool_call_id = events["items"]
+        .as_array()
+        .and_then(|items| {
+            items.iter().find(|e| {
+                e["type"] == "generation.step" && e["payload"]["step"]["type"] == "tool_call"
+            })
+        })
+        .and_then(|step| step["payload"]["step"]["input"]["toolCall"]["id"].as_str())
+        .ok_or_else(|| "no tool_call step with a call id in the journal".to_string())?
+        .to_string();
+    dispatch_ok(
+        &host,
+        "generation.tool.result",
+        serde_json::json!({
+            "runId": tool_run_id,
+            "toolCallId": tool_call_id,
+            "result": { "celsius": 22 },
+        }),
+    )?;
+    let tool_run = dispatch_ok(
+        &host,
+        "generation.get",
+        serde_json::json!({ "workflowId": tool_run_id }),
+    )?;
+    if tool_run["status"] != serde_json::json!("completed") {
+        return Err(format!(
+            "tool run did not complete after the result: {tool_run}"
+        ));
+    }
+    let assistant_count = count_assistant_messages(&host, &chat_id)?;
+    if assistant_count != 2 {
+        return Err(format!(
+            "tool round trip must save exactly one more assistant message, found {assistant_count}"
+        ));
+    }
+    eprintln!("[smoke] golden: tool round trip completed, two assistant messages saved");
+    Ok(())
+}
+
+/// Counts assistant messages in the chat (bounded page).
+#[cfg(desktop)]
+fn count_assistant_messages(host: &KernelHost, chat_id: &str) -> Result<usize, String> {
+    let messages = dispatch_ok(
+        host,
+        "chats.messages.list",
+        serde_json::json!({ "chatId": chat_id, "limit": 200 }),
+    )?;
+    Ok(messages["items"]
+        .as_array()
+        .map(|items| items.iter().filter(|m| m["role"] == "assistant").count())
+        .unwrap_or(0))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
