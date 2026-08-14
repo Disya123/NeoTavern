@@ -191,7 +191,9 @@ pub enum Availability {
 }
 
 /// Sanitized generation request handed to an adapter. Built from the durable
-/// run snapshot; contains no secrets (§62).
+/// run snapshot; contains no secrets (§62) except the transient
+/// [`ProviderRequest::api_key`], which the kernel resolves at execution time
+/// and which must never be stored, logged, or serialized.
 #[derive(Debug)]
 pub struct ProviderRequest<'a> {
     /// Provider identifier (wire `provider` field).
@@ -205,6 +207,12 @@ pub struct ProviderRequest<'a> {
     pub run_key: &'a str,
     /// Per-run deadline, when the kernel sets one.
     pub deadline: Option<policy::Deadline>,
+    /// The resolved provider secret (API key), present only when the run's
+    /// provider configuration carries a stored `secret_ref` (§9.4). Resolved
+    /// by the kernel just before [`ProviderAdapter::generate`] and dropped
+    /// afterwards; adapters must use it only to build the outgoing request
+    /// and must never log, store, or echo it back.
+    pub api_key: Option<&'a str>,
 }
 
 /// The portable provider adapter contract (§55).

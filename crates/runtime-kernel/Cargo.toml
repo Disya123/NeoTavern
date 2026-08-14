@@ -28,3 +28,6 @@ time = { version = "0.3", features = ["formatting"] }
 
 [dev-dependencies]
 tempfile = "3"
+# Production OpenAI-compatible adapter + a raw-TCP mock endpoint: proves the
+# config → secret → adapter → durable generation path end-to-end (Этап 2.5).
+provider-openai-compat = { path = "../provider-openai-compat" }

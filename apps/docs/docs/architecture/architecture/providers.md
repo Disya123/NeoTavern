@@ -4,12 +4,12 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/architecture/provi
 
 # Providers (ТЗ §55–§56, Фаза 7)
 
-> **Status.** Phase 7 implemented: portable provider contract
+> **Status.** Phase 7 + Этап 2.5 implemented: portable provider contract
 > (`crates/provider-sdk`), built-in adapters (`crates/built-in-providers`),
 > provider configuration storage (migration 4), kernel executor seam with
-> deadline/cancellation, and the conformance suite. Network providers
-> (OpenAI-compatible HTTP etc.) plug into the same contract later — the seam
-> and guarantees are in place.
+> deadline/cancellation, the conformance suite, and the **production
+> OpenAI-compatible adapter** (`crates/provider-openai-compat`) with
+> secret-out-of-DB execution (ТЗ §9.3/§9.4).
 
 A **provider** executes one generation attempt: it turns a sanitized request
 into a bounded stream of text deltas plus normalized usage, or a typed error.
@@ -22,6 +22,7 @@ Everything the kernel executes for local generation goes through the
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `crates/provider-sdk`       | Portable adapter contract: `ProviderAdapter`, `ProviderError`, `EmitStatus`, `CancelToken`, deadline/`RetryPolicy`/`Usage`, secret seams (`SecretRef`/`SecretValue`/`SecretResolver`). std-only, no async. |
 | `crates/built-in-providers` | Built-in adapters: `FakeProvider` (deterministic, fault-injectable) and `RecordedProvider` (JSON script replay) + conformance suite + fixtures.                                                            |
+| `crates/provider-openai-compat` | Production OpenAI-compatible adapter (Этап 2.5): chat-completions streaming over a minimal blocking HTTP/1.1 client with rustls TLS (OS trust store), bounded SSE reads (SEC-04), normalized errors. |
 
 ## The adapter contract
 
@@ -110,6 +111,60 @@ provider_configs (
 - Unavailable/locked secure storage yields a typed `unavailable` error —
   plaintext fallback is forbidden (§87).
 
+## OpenAI-compatible provider (Этап 2.5)
+
+`crates/provider-openai-compat` implements the contract against the OpenAI
+**chat completions streaming** protocol (`POST {baseUrl}/chat/completions`,
+SSE `data:` frames) — OpenAI and any OpenAI-compatible endpoint (vLLM,
+llama.cpp, LocalAI, gateways). It is a production adapter: not a built-in of
+the kernel registry, but built from a stored `provider_configs` row and
+registered at runtime:
+
+```rust
+let adapter = OpenAICompatProvider::from_config("openai", &config_dto["config"])?;
+kernel.register_provider(Arc::new(adapter));   // Command::RegisterProvider
+```
+
+Non-secret `config_json` keys: `baseUrl` (required), `models[]`
+(`id`/`name`/`contextLimit`/`maxOutputTokens`; empty → one default model),
+`timeoutMs`, `maxResponseBytes` (SEC-04 body budget, default 16 MiB),
+`organization`, `maxTokens`.
+
+Secret handling at execution time (§9.4):
+
+1. the executor reads the first `provider_configs` row for the run's provider
+   (alphabetically by `name`) and takes its `secret_ref`;
+2. the kernel resolves it through the host `SecretResolver` seam just before
+   `generate` and hands the value via `ProviderRequest.api_key`;
+3. the adapter uses it only for the `Authorization: Bearer …` header and
+   drops it afterwards — it never appears in the request body, errors, logs,
+   snapshots or the database;
+4. no config/secret → `Ok(None)` and the adapter fails with
+   `request-invalid` (`PROVIDER_MODEL_INVALID`); a `secret_ref` without a
+   resolver seam → fail-closed `unavailable` (`PROVIDER_UNAVAILABLE`).
+
+Transport: a minimal blocking HTTP/1.1 client over `std::net::TcpStream`
+(no async runtime; the kernel is a synchronous single-writer process) with
+rustls TLS verified against the **OS trust store**
+(`rustls-platform-verifier` — no bundled root bundle). Bounded reads:
+response body capped at `maxResponseBytes`, connection destroyed immediately
+on breach; cancellation and the per-run deadline are re-checked between every
+chunk. HTTP statuses (401/403 → `unavailable`, 4xx → `request-invalid`,
+429/5xx → `step-failed` retryable) and SSE `error` events normalize to
+`ProviderError`; the key and raw payloads never appear in errors.
+
+Tests (`crates/provider-openai-compat`, 12 unit tests) run against a raw-TCP
+mock of an OpenAI-compatible endpoint (chunked/content-length SSE, HTTP
+errors, slow streams for cancel/deadline, byte budget, key-not-in-body);
+`crates/runtime-kernel/tests/providers_openai.rs` (3 tests) proves the whole
+kernel path: `providers.config.set` (key → SecretStore) → register →
+`providers.list` → `generation.start` streams deltas and saves the assistant
+message durably, with the resolved key on the wire and no plaintext in
+`database.sqlite`.
+
+Tool-call/reasoning events and config-instance selection in the run model
+arrive with the generation run/step slice (Этап 2.7).
+
 ## Availability (§60)
 
 `providers.list` (wire op, `app.read`) reports every registered adapter as
@@ -124,7 +179,7 @@ generation.start/retry (durable run, sanitized snapshot)
         ↓ writer-coordinator thread
 resolve adapter by run.provider (default "fake")
         ↓
-adapter.generate(ProviderRequest{provider_id, model, input, run_key, deadline})
+adapter.generate(ProviderRequest{provider_id, model, input, run_key, deadline, api_key?})
         ↓ emit(ProviderEvent::Delta) per step
 executor commits delta event + CAS run update (+ checkpoint every 4th)
         ↓

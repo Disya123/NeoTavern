@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-08-14T03:38:00.796Z",
+  "generatedAt": "2026-08-14T04:37:39.673Z",
   "rows": [
     {
       "hosts": {
@@ -174,6 +174,19 @@
       "notes": "Kernel op exists; provider configuration without secrets in DB is delivered (providers.config.*).",
       "title": "Provider catalog read",
       "wireOps": ["providers.list"]
+    },
+    {
+      "hosts": {
+        "android": "Implemented",
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "webClient": "Implemented"
+      },
+      "id": "providers.openai",
+      "milestone": "M2",
+      "notes": "Adapter crate (ТЗ §9.3, Этап 2.5) with 12 unit + 3 kernel integration tests: chat-completions streaming over a minimal blocking HTTP/1.1 client with rustls TLS (OS trust store), bounded SSE reads (SEC-04), normalized errors. API key resolved at execution time from the config's secret_ref through the SecretResolver seam (Kernel::set_secret_resolver) and passed via ProviderRequest::api_key — only in the Authorization header, never in body/DB/logs; missing resolver fails closed. Registration via the new Kernel::register_provider seam; config instance selection in the run model and tool/reasoning events arrive with Этап 2.7.",
+      "title": "OpenAI-compatible production provider",
+      "wireOps": []
     },
     {
       "hosts": {

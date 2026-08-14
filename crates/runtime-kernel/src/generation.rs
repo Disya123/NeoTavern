@@ -38,6 +38,7 @@ use neotavern_storage::open::Database;
 use neotavern_storage::StorageError;
 use provider_sdk::secret::SecretResolver;
 use rusqlite::params;
+use rusqlite::OptionalExtension;
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::time::Duration;
@@ -1133,7 +1134,7 @@ pub(crate) fn execute_stream(
     lease_owner: &str,
     registry: &ProviderRegistry,
     run_timeout: Duration,
-    _secret_resolver: Option<Arc<dyn SecretResolver>>,
+    secret_resolver: Option<Arc<dyn SecretResolver>>,
     cancel: &CancellationFlag,
 ) -> Result<(), KernelError> {
     let mut run = reload(db, stream_id)?;
@@ -1178,12 +1179,27 @@ pub(crate) fn execute_stream(
     let model = run.model.clone().unwrap_or_default();
     let input = snapshot_message(&run.request_snapshot_json);
     let run_key = format!("{}|{}", run.chat_id, run.attempt);
+    // Resolve the provider secret (API key) at execution time (ТЗ §9.4):
+    // the first stored provider config for this provider, alphabetically by
+    // name, contributes its `secret_ref`; the kernel resolves it through the
+    // host's SecretResolver seam just-in-time and drops it after the
+    // attempt. No store/resolver/config → `None` (adapters decide).
+    let api_key = match resolve_provider_api_key(db, &provider_name, secret_resolver.as_deref()) {
+        Ok(key) => key,
+        Err(err) => {
+            let error = provider_error_dto(&err, &run.run_id, &provider_name, &model);
+            let seq = terminal_failed(db, run, error, lease_owner)?;
+            send_terminal(notice_tx, seq);
+            return Ok(());
+        }
+    };
     let request = provider_sdk::ProviderRequest {
         provider_id: adapter.id(),
         model: &model,
         input: &input,
         run_key: &run_key,
         deadline: Some(provider_sdk::policy::Deadline::after(run_timeout)),
+        api_key: api_key.as_deref(),
     };
     let cancel_token = provider_sdk::CancelToken::new(cancel.0.as_ref());
     let mut shutdown_seen = false;
@@ -1245,42 +1261,62 @@ pub(crate) fn execute_stream(
         }
         Err(err) => {
             use provider_sdk::ProviderErrorCode as Code;
-            let error = match err.code {
-                // A cancelled attempt (executor Stop, adapter-observed
-                // cancel) commits the durable cancelled terminal.
-                Code::Cancelled => {
-                    let seq = terminal_cancelled(db, run, lease_owner)?;
-                    send_terminal(notice_tx, seq);
-                    return Ok(());
-                }
-                Code::StepFailed => {
-                    let mut params = vec![("runId", run.run_id.clone())];
-                    if let Some((_, step)) = err.params.iter().find(|(key, _)| key == "step") {
-                        params.push(("step", step.clone()));
-                    }
-                    error_dto("PROVIDER_STEP_FAILED", &params)
-                }
-                Code::Timeout => error_dto("PROVIDER_TIMEOUT", &[("runId", run.run_id.clone())]),
-                Code::NetworkFault => {
-                    error_dto("PROVIDER_NETWORK_FAULT", &[("runId", run.run_id.clone())])
-                }
-                Code::Unavailable => {
-                    error_dto("PROVIDER_UNAVAILABLE", &[("provider", provider_name)])
-                }
-                Code::RequestInvalid => {
-                    let model_param = err
-                        .params
-                        .iter()
-                        .find(|(key, _)| key == "model")
-                        .map(|(_, value)| value.clone())
-                        .unwrap_or(model);
-                    error_dto("PROVIDER_MODEL_INVALID", &[("model", model_param)])
-                }
-            };
+            // A cancelled attempt (executor Stop, adapter-observed cancel)
+            // commits the durable cancelled terminal — not a failure.
+            if err.code == Code::Cancelled {
+                let seq = terminal_cancelled(db, run, lease_owner)?;
+                send_terminal(notice_tx, seq);
+                return Ok(());
+            }
+            let error = provider_error_dto(&err, &run.run_id, &provider_name, &model);
             let seq = terminal_failed(db, run, error, lease_owner)?;
             send_terminal(notice_tx, seq);
             Ok(())
         }
+    }
+}
+
+/// Maps a normalized provider error to the terminal `generation.failed`
+/// [`ErrorDto`] (stable wire codes, params only — never the message, never
+/// secret or raw payload material).
+fn provider_error_dto(
+    err: &provider_sdk::ProviderError,
+    run_id: &str,
+    provider: &str,
+    model: &str,
+) -> ErrorDto {
+    use provider_sdk::ProviderErrorCode as Code;
+    match err.code {
+        Code::StepFailed => {
+            let mut params = vec![("runId".to_string(), run_id.to_string())];
+            if let Some((_, step)) = err.params.iter().find(|(key, _)| key == "step") {
+                params.push(("step".to_string(), step.clone()));
+            }
+            error_dto(
+                "PROVIDER_STEP_FAILED",
+                &params
+                    .iter()
+                    .map(|(k, v)| (k.as_str(), v.clone()))
+                    .collect::<Vec<_>>(),
+            )
+        }
+        Code::Timeout => error_dto("PROVIDER_TIMEOUT", &[("runId", run_id.to_string())]),
+        Code::NetworkFault => error_dto("PROVIDER_NETWORK_FAULT", &[("runId", run_id.to_string())]),
+        Code::Unavailable => error_dto(
+            "PROVIDER_UNAVAILABLE",
+            &[("provider", provider.to_string())],
+        ),
+        Code::RequestInvalid => {
+            let model_param = err
+                .params
+                .iter()
+                .find(|(key, _)| key == "model")
+                .map(|(_, value)| value.clone())
+                .unwrap_or_else(|| model.to_string());
+            error_dto("PROVIDER_MODEL_INVALID", &[("model", model_param)])
+        }
+        // Cancelled is handled by the caller (durable cancelled terminal).
+        Code::Cancelled => error_dto("PROVIDER_CANCELLED", &[("runId", run_id.to_string())]),
     }
 }
 
@@ -1297,6 +1333,60 @@ fn snapshot_message(snapshot_json: &str) -> String {
                 .map(str::to_string)
         })
         .unwrap_or_default()
+}
+
+/// Resolves the run's provider API key at execution time (ТЗ §9.4).
+///
+/// The first `provider_configs` row for the run's provider (alphabetically
+/// by name) contributes its `secret_ref`; the host's SecretResolver seam
+/// turns it into the value used only to build the outgoing provider request.
+///
+/// - No config / no `secret_ref` → `Ok(None)` (adapter decides; a keyless
+///   adapter errors itself).
+/// - A config with a `secret_ref` but no resolver seam → fail-closed
+///   `ProviderError::Unavailable` (no plaintext fallback, §87).
+/// - Resolver failures propagate as typed provider errors (terminal run).
+fn resolve_provider_api_key(
+    db: &Database,
+    provider: &str,
+    resolver: Option<&dyn SecretResolver>,
+) -> Result<Option<String>, provider_sdk::ProviderError> {
+    let secret_ref: Option<String> = db
+        .conn()
+        .query_row(
+            "SELECT secret_ref FROM provider_configs WHERE provider = ?1 \
+             ORDER BY name ASC LIMIT 1",
+            params![provider],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|_| {
+            provider_sdk::ProviderError::with(
+                provider_sdk::ProviderErrorCode::StepFailed,
+                "failed to read provider secret reference",
+                vec![("provider".to_string(), provider.to_string())],
+            )
+        })?;
+    let Some(reference) = secret_ref else {
+        return Ok(None);
+    };
+    let resolver = resolver.ok_or_else(|| {
+        provider_sdk::ProviderError::with(
+            provider_sdk::ProviderErrorCode::Unavailable,
+            "secure storage is not available to resolve the provider secret",
+            vec![("provider".to_string(), provider.to_string())],
+        )
+    })?;
+    let value = resolver
+        .resolve(&provider_sdk::secret::SecretRef(reference))
+        .map_err(|mut err| {
+            if err.params.is_empty() {
+                err.params
+                    .push(("provider".to_string(), provider.to_string()));
+            }
+            err
+        })?;
+    Ok(Some(value.expose().to_string()))
 }
 
 // ---------------------------------------------------------------------------

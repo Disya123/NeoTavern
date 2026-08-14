@@ -3,6 +3,32 @@
 ## Unreleased
 ### Added
 
+- **OpenAI-compatible production provider (M2 / Этап 2.5, ТЗ §9.3/§9.4).**
+  New crate `crates/provider-openai-compat`: a `ProviderAdapter` speaking the
+  OpenAI chat-completions streaming protocol (`POST {baseUrl}/chat/completions`,
+  SSE `data:` frames) against OpenAI and OpenAI-compatible endpoints (vLLM,
+  llama.cpp, LocalAI, gateways). Config-driven from the non-secret
+  `provider_configs.config_json` (`baseUrl`, `models`, `timeoutMs`,
+  `maxResponseBytes`, `organization`, `maxTokens`). Transport is a minimal
+  blocking HTTP/1.1 client over `std::net::TcpStream` with rustls TLS verified
+  against the OS trust store (`rustls-platform-verifier`), bounded SSE reads
+  (SEC-04: body capped at `maxResponseBytes`, connection destroyed on breach)
+  and normalized errors (HTTP statuses + SSE error events → stable
+  `ProviderErrorCode`s with advisory retryable flags). **Secret handling at
+  execution time (§9.4):** the kernel executor now resolves the run provider's
+  `secret_ref` (first config alphabetically by name) through the host
+  `SecretResolver` seam just-in-time and hands the value via
+  `ProviderRequest::api_key`; the adapter uses it only for the
+  `Authorization` header — never in the body, errors, logs, snapshots or the
+  DB; a `secret_ref` without a resolver fails closed (`PROVIDER_UNAVAILABLE`).
+  New kernel seam `Kernel::register_provider` (Command::RegisterProvider) for
+  hosts to register config-built adapters. 12 adapter unit tests against a
+  raw-TCP mock endpoint (chunked/content-length SSE, HTTP errors, cancel
+  mid-stream, deadline, byte budget, key-not-in-body) + 3 kernel integration
+  tests proving config → SecretStore → register → `providers.list` →
+  `generation.start` streams deltas and saves the assistant message durably
+  with the resolved key on the wire and no plaintext in `database.sqlite`.
+
 - **Provider configuration with secrets out of the database (M2 / Этап 2,
   ТЗ §9.4, §SEC-01).** New wire operations `providers.config.set/get/list/
   delete` with `wire.provider.config.dto` (non-secret `config` object plus
