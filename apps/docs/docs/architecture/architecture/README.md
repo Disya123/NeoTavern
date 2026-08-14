@@ -298,6 +298,11 @@ gate passes.
   adapters (deterministic fake, recorded fixtures), config/secret separation
   (`provider_configs`, migration 4), deadline/cancellation and the
   conformance suite (ТЗ §55–§56).
+- [Prompt pipeline](prompt-pipeline.md) — M2 / Этап 2.6: the kernel's
+  durable **PromptPlan** for every generation run (character/persona/lorebook
+  system blocks, bounded history, heuristic token budget with explicit
+  truncation; `prompt_plans`, migration 5; `generation.prompt.plan` wire op;
+  ТЗ §9.1–§9.2).
 - **Phase 8 Android background execution** — host-side lifecycle adapter
   over the **same kernel session** (never a second writable kernel, §22):
   a bounded `dataSync` foreground service continues user-visible generation

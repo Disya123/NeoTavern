@@ -76,7 +76,10 @@ fn reopen_does_not_remigrate() -> Result<(), Box<dyn std::error::Error>> {
                 .query_row("SELECT COUNT(*) FROM __neotavern_migrations", [], |r| {
                     r.get(0)
                 })?;
-        assert_eq!(count, 4);
+        assert_eq!(
+            count,
+            neotavern_storage::migrations::MIGRATIONS.len() as i64
+        );
     }
     let db = open(root, &ConnectionPolicy::default(), &mut noop)?;
     let count: i64 =
@@ -84,7 +87,11 @@ fn reopen_does_not_remigrate() -> Result<(), Box<dyn std::error::Error>> {
             .query_row("SELECT COUNT(*) FROM __neotavern_migrations", [], |r| {
                 r.get(0)
             })?;
-    assert_eq!(count, 4, "reopen must not re-apply migrations");
+    assert_eq!(
+        count,
+        neotavern_storage::migrations::MIGRATIONS.len() as i64,
+        "reopen must not re-apply migrations"
+    );
     let quick_check: String = db
         .conn()
         .query_row("PRAGMA quick_check", [], |r| r.get(0))?;

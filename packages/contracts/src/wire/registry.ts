@@ -639,6 +639,20 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'generation.prompt.plan',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.get-prompt-plan',
+    'wire.prompt.plan',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    262144,
+    undefined,
+  ),
+  op(
     'providers.list',
     'transactional',
     'idempotent',
@@ -886,6 +900,28 @@ const PROVIDER_CONFIG_VALUE = {
   updatedAt: TIMESTAMP,
 };
 
+const PROMPT_PLAN_VALUE = {
+  runId: UUID_RUN,
+  chatId: UUID_CHAT,
+  provider: 'fake',
+  model: 'fake-1',
+  instructFormat: 'plain-messages-v1',
+  tokenizerProfile: 'heuristic-v1',
+  approximateTokens: true,
+  contextLimit: 8192,
+  responseReserved: 2048,
+  inputTokens: 96,
+  overBudget: false,
+  systemBlocks: [{ source: 'character', text: 'Aria is a cheerful guide.' }],
+  messages: [
+    { role: 'system', content: 'Aria is a cheerful guide.' },
+    { role: 'user', content: 'Earlier message' },
+    { role: 'user', content: 'Hello there' },
+  ],
+  excluded: [{ messageId: UUID_MESSAGE, reason: 'token_budget' }],
+  createdAt: TIMESTAMP,
+};
+
 function fx(
   id: string,
   operationId: string,
@@ -970,6 +1006,9 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('generation-discard-request', 'generation.discard', 'request', true, {
     workflowId: UUID_WORKFLOW,
   }),
+  fx('generation-prompt-plan-request', 'generation.prompt.plan', 'request', true, {
+    runId: UUID_RUN,
+  }),
   fx('backups-create-request', 'backups.create', 'request', true, {}),
   fx('backups-list-request', 'backups.list', 'request', true, {}),
   fx('lorebooks-list-request', 'lorebooks.list', 'request', true, {}),
@@ -1031,6 +1070,7 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     ...GENERATION_RUN_VALUE,
     status: 'interrupted',
   }),
+  fx('generation-prompt-plan-response', 'generation.prompt.plan', 'response', true, PROMPT_PLAN_VALUE),
   fx('backups-create-response', 'backups.create', 'response', true, BACKUP_VALUE),
   fx('backups-list-response', 'backups.list', 'response', true, { items: [BACKUP_VALUE] }),
   fx('lorebooks-list-response', 'lorebooks.list', 'response', true, { items: [LOREBOOK_VALUE] }),

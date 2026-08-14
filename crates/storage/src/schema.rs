@@ -156,6 +156,25 @@ CREATE UNIQUE INDEX idx_provider_configs_provider_name ON provider_configs(provi
     };
 }
 
+/// Literal body of the prompt-plans (v5) schema migration (ТЗ §9.2,
+/// Этап 2.6): the STRICT `prompt_plans` table holding one immutable
+/// [`PromptPlan`] per generation run — the kernel's durable record of what
+/// context entered the provider request (selected history, excluded
+/// messages, token counts) so the user can later inspect what was included
+/// or cut (§9.2). A run carries at most one plan; retry attempts create new
+/// runs and therefore new plans.
+macro_rules! migration_5_sql {
+    () => {
+        r#"CREATE TABLE prompt_plans (
+  run_id TEXT PRIMARY KEY REFERENCES generation_runs(id) ON DELETE CASCADE,
+  chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  plan_json TEXT NOT NULL,
+  created_at TEXT NOT NULL
+) STRICT;
+CREATE INDEX idx_prompt_plans_chat ON prompt_plans(chat_id);"#
+    };
+}
+
 /// Name of the initial (v1) schema migration.
 pub const MIGRATION_1_NAME: &str = "001_initial_schema";
 
@@ -224,6 +243,22 @@ pub const MIGRATION_4_SQL: &str = migration_4_sql!();
 pub const MIGRATION_4_CHECKSUM: &str =
     "b36e2bc70f6ee448ede6957b7df538a66de2e0ff04cd5df9c840f6cd4833eaa2";
 
+/// Name of the prompt-plans (v5) schema migration.
+pub const MIGRATION_5_NAME: &str = "005_prompt_plans";
+
+/// Exact SQL of the prompt-plans schema migration (v5) — the
+/// `migration_5_sql!()` literal.
+pub const MIGRATION_5_SQL: &str = migration_5_sql!();
+
+/// Lowercase sha256 hex of the `MIGRATION_5_SQL` string bytes.
+///
+/// Computed on 2026-08-13: the exact `r#"..."#` literal was written to a temp
+/// file via node (`crypto.createHash('sha256')` over the literal bytes, no
+/// trailing newline) and independently re-hashed with the `sha256sum`
+/// utility on that same file.
+pub const MIGRATION_5_CHECKSUM: &str =
+    "439d56c8050e27d1373d12df90fdc16c54a423945e0c9c2d51f08b0df58c4fd0";
+
 /// A fresh install runs every migration in order, so `FRESH_SCHEMA_SQL` is the
 /// concatenation of all migration literals with a single newline between them
 /// (the same statement separator `execute_batch` applies).
@@ -238,7 +273,9 @@ pub const FRESH_SCHEMA_SQL: &str = concat!(
     "\n",
     migration_3_sql!(),
     "\n",
-    migration_4_sql!()
+    migration_4_sql!(),
+    "\n",
+    migration_5_sql!()
 );
 
 /// sha256 hex of the `FRESH_SCHEMA_SQL` bytes — the fresh-install fingerprint.

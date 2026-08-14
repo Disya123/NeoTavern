@@ -176,6 +176,7 @@ fn adapter_trait_is_object_safe_and_streams_usage() {
         run_key: "chat|1",
         deadline: None,
         api_key: None,
+        messages: None,
     };
     let mut texts = Vec::new();
     let usage = provider
@@ -200,6 +201,7 @@ fn adapter_stop_signal_cancels_the_attempt() {
         run_key: "chat|1",
         deadline: None,
         api_key: None,
+        messages: None,
     };
     let mut emitted = 0;
     let err = provider

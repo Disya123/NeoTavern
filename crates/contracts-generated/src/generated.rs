@@ -3963,6 +3963,511 @@ pub fn decode_request_list_generation_events(bytes: &[u8]) -> Result<RequestList
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct PromptMessage {
+    pub role: MessageRole,
+    pub content: String,
+}
+
+pub(crate) fn check_prompt_message(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("role").is_none() {
+            issues.push(Issue::new(join_path(path, "role"), "RequiredProperty"));
+        }
+        if value.get("content").is_none() {
+            issues.push(Issue::new(join_path(path, "content"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("role") {
+            let child_path = join_path(path, "role");
+            check_message_role(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("content") {
+            let child_path = join_path(path, "content");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len > 1000000 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "role" | "content") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_prompt_message(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_prompt_message(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_prompt_message(bytes: &[u8]) -> Result<PromptMessage, WireError> {
+    crate::decode::<PromptMessage>(validate_prompt_message, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PromptBlock {
+    pub source: String,
+    pub text: String,
+}
+
+pub(crate) fn check_prompt_block(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("source").is_none() {
+            issues.push(Issue::new(join_path(path, "source"), "RequiredProperty"));
+        }
+        if value.get("text").is_none() {
+            issues.push(Issue::new(join_path(path, "text"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("source") {
+            let child_path = join_path(path, "source");
+            match child.as_str() {
+                Some(s) => {
+                    if !matches!(s, "character" | "persona" | "lorebook" | "instruct") {
+                        issues.push(Issue::new(child_path.as_str(), "Union"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("text") {
+            let child_path = join_path(path, "text");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len > 1000000 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "source" | "text") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_prompt_block(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_prompt_block(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_prompt_block(bytes: &[u8]) -> Result<PromptBlock, WireError> {
+    crate::decode::<PromptBlock>(validate_prompt_block, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PromptExcluded {
+    #[serde(rename = "messageId")]
+    pub message_id: String,
+    pub reason: String,
+}
+
+pub(crate) fn check_prompt_excluded(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("messageId").is_none() {
+            issues.push(Issue::new(join_path(path, "messageId"), "RequiredProperty"));
+        }
+        if value.get("reason").is_none() {
+            issues.push(Issue::new(join_path(path, "reason"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("messageId") {
+            let child_path = join_path(path, "messageId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("reason") {
+            let child_path = join_path(path, "reason");
+            match child.as_str() {
+                Some(s) => {
+                    if s != "token_budget" {
+                        issues.push(Issue::new(child_path.as_str(), "StringConst"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "messageId" | "reason") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_prompt_excluded(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_prompt_excluded(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_prompt_excluded(bytes: &[u8]) -> Result<PromptExcluded, WireError> {
+    crate::decode::<PromptExcluded>(validate_prompt_excluded, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PromptPlan {
+    #[serde(rename = "runId")]
+    pub run_id: String,
+    #[serde(rename = "chatId")]
+    pub chat_id: String,
+    pub provider: String,
+    pub model: String,
+    #[serde(rename = "instructFormat")]
+    pub instruct_format: String,
+    #[serde(rename = "tokenizerProfile")]
+    pub tokenizer_profile: String,
+    #[serde(rename = "approximateTokens")]
+    pub approximate_tokens: bool,
+    #[serde(rename = "contextLimit")]
+    pub context_limit: i64,
+    #[serde(rename = "responseReserved")]
+    pub response_reserved: i64,
+    #[serde(rename = "inputTokens")]
+    pub input_tokens: i64,
+    #[serde(rename = "overBudget")]
+    pub over_budget: bool,
+    #[serde(rename = "systemBlocks")]
+    pub system_blocks: Vec<PromptBlock>,
+    pub messages: Vec<PromptMessage>,
+    pub excluded: Vec<PromptExcluded>,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+}
+
+pub(crate) fn check_prompt_plan(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_2: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("runId").is_none() {
+            issues.push(Issue::new(join_path(path, "runId"), "RequiredProperty"));
+        }
+        if value.get("chatId").is_none() {
+            issues.push(Issue::new(join_path(path, "chatId"), "RequiredProperty"));
+        }
+        if value.get("provider").is_none() {
+            issues.push(Issue::new(join_path(path, "provider"), "RequiredProperty"));
+        }
+        if value.get("model").is_none() {
+            issues.push(Issue::new(join_path(path, "model"), "RequiredProperty"));
+        }
+        if value.get("instructFormat").is_none() {
+            issues.push(Issue::new(join_path(path, "instructFormat"), "RequiredProperty"));
+        }
+        if value.get("tokenizerProfile").is_none() {
+            issues.push(Issue::new(join_path(path, "tokenizerProfile"), "RequiredProperty"));
+        }
+        if value.get("approximateTokens").is_none() {
+            issues.push(Issue::new(join_path(path, "approximateTokens"), "RequiredProperty"));
+        }
+        if value.get("contextLimit").is_none() {
+            issues.push(Issue::new(join_path(path, "contextLimit"), "RequiredProperty"));
+        }
+        if value.get("responseReserved").is_none() {
+            issues.push(Issue::new(join_path(path, "responseReserved"), "RequiredProperty"));
+        }
+        if value.get("inputTokens").is_none() {
+            issues.push(Issue::new(join_path(path, "inputTokens"), "RequiredProperty"));
+        }
+        if value.get("overBudget").is_none() {
+            issues.push(Issue::new(join_path(path, "overBudget"), "RequiredProperty"));
+        }
+        if value.get("systemBlocks").is_none() {
+            issues.push(Issue::new(join_path(path, "systemBlocks"), "RequiredProperty"));
+        }
+        if value.get("messages").is_none() {
+            issues.push(Issue::new(join_path(path, "messages"), "RequiredProperty"));
+        }
+        if value.get("excluded").is_none() {
+            issues.push(Issue::new(join_path(path, "excluded"), "RequiredProperty"));
+        }
+        if value.get("createdAt").is_none() {
+            issues.push(Issue::new(join_path(path, "createdAt"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("runId") {
+            let child_path = join_path(path, "runId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("chatId") {
+            let child_path = join_path(path, "chatId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("provider") {
+            let child_path = join_path(path, "provider");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 128 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("model") {
+            let child_path = join_path(path, "model");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len > 128 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("instructFormat") {
+            let child_path = join_path(path, "instructFormat");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 128 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("tokenizerProfile") {
+            let child_path = join_path(path, "tokenizerProfile");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 128 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("approximateTokens") {
+            let child_path = join_path(path, "approximateTokens");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(child) = value.get("contextLimit") {
+            let child_path = join_path(path, "contextLimit");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                    if n > 9007199254740991 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMaximum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("responseReserved") {
+            let child_path = join_path(path, "responseReserved");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                    if n > 9007199254740991 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMaximum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("inputTokens") {
+            let child_path = join_path(path, "inputTokens");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                    if n > 9007199254740991 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMaximum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("overBudget") {
+            let child_path = join_path(path, "overBudget");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(child) = value.get("systemBlocks") {
+            let child_path = join_path(path, "systemBlocks");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    check_prompt_block(item, &item_path, issues);
+                }
+            }
+        }
+        if let Some(child) = value.get("messages") {
+            let child_path = join_path(path, "messages");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    check_prompt_message(item, &item_path, issues);
+                }
+            }
+        }
+        if let Some(child) = value.get("excluded") {
+            let child_path = join_path(path, "excluded");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    check_prompt_excluded(item, &item_path, issues);
+                }
+            }
+        }
+        if let Some(child) = value.get("createdAt") {
+            let child_path = join_path(path, "createdAt");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_2.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "runId" | "chatId" | "provider" | "model" | "instructFormat" | "tokenizerProfile" | "approximateTokens" | "contextLimit" | "responseReserved" | "inputTokens" | "overBudget" | "systemBlocks" | "messages" | "excluded" | "createdAt") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_prompt_plan(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_prompt_plan(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_prompt_plan(bytes: &[u8]) -> Result<PromptPlan, WireError> {
+    crate::decode::<PromptPlan>(validate_prompt_plan, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestGetPromptPlan {
+    #[serde(rename = "runId")]
+    pub run_id: String,
+}
+
+pub(crate) fn check_request_get_prompt_plan(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("runId").is_none() {
+            issues.push(Issue::new(join_path(path, "runId"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("runId") {
+            let child_path = join_path(path, "runId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "runId") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_get_prompt_plan(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_get_prompt_plan(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_get_prompt_plan(bytes: &[u8]) -> Result<RequestGetPromptPlan, WireError> {
+    crate::decode::<RequestGetPromptPlan>(validate_request_get_prompt_plan, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ResultEmpty {}
 
 pub(crate) fn check_result_empty(value: &Value, path: &str, issues: &mut Vec<Issue>) {

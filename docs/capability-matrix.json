@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-08-14T04:37:39.673Z",
+  "generatedAt": "2026-08-14T05:06:38.858Z",
   "rows": [
     {
       "hosts": {
@@ -83,6 +83,19 @@
       "notes": "M1 Wave 1 (ТЗ §14.2, ADR-0039): per-legacy-API authority map shipped as packages/legacy-compat/COMPATIBILITY.md and enforced by apps/server/test/legacyAuthority.spec.ts — legacy Express routers are confined to /api/plugins/{id}/... (core /api/v2 routes are never shadowed), extension settings are namespaced per installed plugin with a 1 MiB bound, and the scoped plugin VFS is wired to <data-root>/plugins/{id}/data with ../ and backslash escapes rejected and files.plugin required (PLUGIN_PERMISSION_DENIED without the grant).",
       "title": "Legacy compatibility authority boundary (ARC-11)",
       "wireOps": []
+    },
+    {
+      "hosts": {
+        "android": "Implemented",
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "webClient": "Implemented"
+      },
+      "id": "generation.prompt.plan",
+      "milestone": "M2",
+      "notes": "Kernel pipeline (ТЗ §9.1–§9.2, Этап 2.6): every generation run builds an immutable PromptPlan (character/persona system blocks from the card incl. ext_json.personality, lorebook keyword activation with constant/selective rules, last 128 non-tool history messages, heuristic-v1 approximate token budget with response-room reservation and oldest-unpinned truncation recording every excluded message id), stores it in prompt_plans (schema migration 5) and passes the instruct-neutral message array to adapters via ProviderRequest.messages — the OpenAI adapter serializes it verbatim. generation.prompt.plan (app.read) serves the stored plan; stable PROMPT_PLAN_FAILED / PROMPT_PLAN_NOT_FOUND. Tests: 5 unit + 2 kernel integration + 1 adapter. Honest boundaries: approximate tokenizer (model-specific registry pending), instruct template rendering deferred, lorebook character-scoping awaits the lorebook cutover.",
+      "title": "Prompt pipeline: durable PromptPlan (history/character/lorebook/token budget)",
+      "wireOps": ["generation.prompt.plan"]
     },
     {
       "hosts": {

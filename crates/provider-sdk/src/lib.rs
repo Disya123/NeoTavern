@@ -190,6 +190,17 @@ pub enum Availability {
     },
 }
 
+/// One rendered prompt message (instruct-neutral form, ТЗ §9.2): the prompt
+/// pipeline works with a plain role/content array until the provider-specific
+/// serialization stage (AGENTS.md §9). Carries no secrets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PromptMessage<'a> {
+    /// Wire role: `system` | `user` | `assistant` | `tool`.
+    pub role: &'a str,
+    /// Message content.
+    pub content: &'a str,
+}
+
 /// Sanitized generation request handed to an adapter. Built from the durable
 /// run snapshot; contains no secrets (§62) except the transient
 /// [`ProviderRequest::api_key`], which the kernel resolves at execution time
@@ -200,7 +211,9 @@ pub struct ProviderRequest<'a> {
     pub provider_id: &'a str,
     /// Model string selected by the caller.
     pub model: &'a str,
-    /// Sanitized user input (from the run snapshot).
+    /// Sanitized user input (from the run snapshot). Providers that receive
+    /// [`ProviderRequest::messages`] should prefer the rendered plan; `input`
+    /// remains the durable single-message fallback.
     pub input: &'a str,
     /// Stable execution identity `"{chat_id}|{attempt}"` — deterministic
     /// adapters derive their output from this key.
@@ -213,6 +226,11 @@ pub struct ProviderRequest<'a> {
     /// afterwards; adapters must use it only to build the outgoing request
     /// and must never log, store, or echo it back.
     pub api_key: Option<&'a str>,
+    /// The kernel's rendered prompt plan (system blocks + selected history +
+    /// the user message), when the prompt pipeline is active (Этап 2.6).
+    /// `None` for direct single-message calls. Adapters serialize this array
+    /// (or fall back to `input`) and never store or log it.
+    pub messages: Option<&'a [PromptMessage<'a>]>,
 }
 
 /// The portable provider adapter contract (§55).

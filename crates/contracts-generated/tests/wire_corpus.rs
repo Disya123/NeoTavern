@@ -10,16 +10,17 @@ use contracts_generated::generated::{
     decode_event_envelope, decode_generation_event, decode_generation_run,
     decode_generation_status, decode_lorebook_dto, decode_message_dto, decode_message_role,
     decode_meta_dto, decode_paged_characters, decode_paged_chats, decode_paged_generation_events,
-    decode_paged_messages, decode_preset_dto, decode_provider_availability,
+    decode_paged_messages, decode_preset_dto, decode_prompt_block, decode_prompt_excluded,
+    decode_prompt_message, decode_prompt_plan, decode_provider_availability,
     decode_provider_config_dto, decode_provider_dto, decode_provider_model,
     decode_request_cancel_generation, decode_request_create_character, decode_request_create_chat,
     decode_request_create_message, decode_request_delete_character, decode_request_delete_chat,
     decode_request_delete_message, decode_request_delete_provider_config,
     decode_request_discard_generation, decode_request_empty, decode_request_envelope,
     decode_request_get_character, decode_request_get_chat, decode_request_get_generation_run,
-    decode_request_get_provider_config, decode_request_keep_partial_generation,
-    decode_request_list_characters, decode_request_list_chats,
-    decode_request_list_generation_events, decode_request_list_messages,
+    decode_request_get_prompt_plan, decode_request_get_provider_config,
+    decode_request_keep_partial_generation, decode_request_list_characters,
+    decode_request_list_chats, decode_request_list_generation_events, decode_request_list_messages,
     decode_request_list_provider_configs, decode_request_retry_generation,
     decode_request_set_provider_config, decode_request_start_generation,
     decode_request_update_character, decode_request_update_chat, decode_request_update_message,
@@ -182,6 +183,13 @@ fn dispatch(schema_id: &str, bytes: &[u8], valid: bool) {
         }
         "wire.result.list-presets" => {
             corpus_case(schema_id, decode_result_list_presets, bytes, valid)
+        }
+        "wire.prompt.message" => corpus_case(schema_id, decode_prompt_message, bytes, valid),
+        "wire.prompt.block" => corpus_case(schema_id, decode_prompt_block, bytes, valid),
+        "wire.prompt.excluded" => corpus_case(schema_id, decode_prompt_excluded, bytes, valid),
+        "wire.prompt.plan" => corpus_case(schema_id, decode_prompt_plan, bytes, valid),
+        "wire.request.get-prompt-plan" => {
+            corpus_case(schema_id, decode_request_get_prompt_plan, bytes, valid)
         }
         "wire.request.envelope" => corpus_case(schema_id, decode_request_envelope, bytes, valid),
         "wire.response.envelope" => corpus_case(schema_id, decode_response_envelope, bytes, valid),
