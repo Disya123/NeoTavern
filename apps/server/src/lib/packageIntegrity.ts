@@ -39,7 +39,7 @@ import { collectFileDigests, verifyPackageTrust } from './packageTrust.js';
 export const INSTALLED_DIGESTS_FILE = 'installed-digests.json';
 export const INSTALL_JOURNAL_FILE = 'install-journal.json';
 const DIGESTS_FORMAT = 'neotavern.installed-digests.v1';
-const JOURNAL_FORMAT = 'neotavern.install-journal.v2';
+const JOURNAL_FORMAT = 'neotavern.install-journal.v2' as const;
 
 export interface InstalledDigestsRecord {
   format: typeof DIGESTS_FORMAT;
@@ -365,7 +365,7 @@ export async function recoverInterruptedInstalls(
       await rm(journalPath, { force: true }).catch(() => undefined);
       continue;
     }
-    if (rollbackExists) {
+    if (rollbackExists && paths.rollback) {
       // UPDATE interrupted: the old version is parked in `.rollback-*`.
       // Remove the half-promoted new package (it must not shadow the
       // restored version), move the old one back, and restore the previous
