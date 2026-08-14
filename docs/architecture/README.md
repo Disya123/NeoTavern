@@ -1,6 +1,7 @@
 # Architecture
 
-> **Architecture Convergence program (M1, Wave 0).** The governing decisions are
+> **Architecture Convergence program (M1, Wave 0 → Wave 1).** The governing
+> decisions are
 > [ADR-0038](../adr/0038-canonical-rust-kernel-core.md) (the **Rust Runtime
 > Kernel is the canonical application core**; the Fastify/Drizzle contour is a
 > feature-frozen legacy/migration adapter) and
@@ -14,6 +15,17 @@
 > exceptions live in [exceptions.json](exceptions.json) (ARC-09). The desktop
 > default is staged: public builds use the tested legacy sidecar while the
 > Kernel is a Preview (release gate, ADR-0038 §"Honest Desktop default").
+>
+> **M1 / Wave 1 (Immediate security) — legacy contour delivered:** SEC-02
+> logical allowlist export, SEC-03/SEC-04 plugin network broker (SSRF policy +
+> bounded streaming), SEC-05 plugin package trust, the restore maintenance
+> lock, the ARC-11 compatibility authority/VFS isolation suite, and SEC-01
+> SecretStore (secrets out of the main DB; portable `secrets.enc`, session and
+> env modes; opaque references; bootstrap import) — each with its own
+> regression/security tests and capability rows in
+> [release-manifest.json](../release-manifest.json). Remaining Wave 1 work is
+> kernel-plane (OS vault / Keystore adapters, portable UX) and the final
+> regression sweep is complete for the legacy contour.
 
 The section below describes the current (pre-cutover) layout. Product logic
 migrates into the Kernel over the program milestones; new product logic is

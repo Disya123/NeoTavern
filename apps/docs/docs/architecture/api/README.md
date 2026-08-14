@@ -533,7 +533,11 @@ state returns the plaintext key, only a masked preview (`masked`). Schemas —
 - `POST /api/v2/providers/:id/secrets` (body `ProviderSecretCreate`
   `{ value, label? }`) → `{ id }`. A non-empty value becomes active and
   deactivates the others; an empty value is saved inactive (for local
-  endpoints without a key).
+  endpoints without a key). Since migration 0024 the value is stored in the
+  SecretStore (`docs/data/README.md` § "SecretStore and secrets.enc") and the
+  row keeps only an opaque reference; if no backend is configured the request
+  is rejected with 422 `SECRET_UNAVAILABLE_ON_THIS_DEVICE`, a read-only env
+  backend with 403 `SECRET_STORE_READ_ONLY` — never a plaintext fallback.
 - `PATCH /api/v2/providers/:id/secrets/:secretId` (body `ProviderSecretUpdate`
   `{ label?, active? }`) → updated `ProviderSecret`. `active: true`
   switches the active key. 404 `PROVIDER_SECRET_NOT_FOUND`.
@@ -541,7 +545,8 @@ state returns the plaintext key, only a masked preview (`masked`). Schemas —
   the active key is deleted, the last remaining non-empty one becomes active.
 - `POST /api/v2/providers/:id/secrets/:secretId/reveal` → `{ value }`.
   Returns the plaintext key **only** when `allowSecretsExposure: true`, otherwise
-  403 `SECRETS_EXPOSURE_DISABLED`.
+  403 `SECRETS_EXPOSURE_DISABLED`; when the stored reference cannot be resolved
+  on this device (session ended, store moved), 422 `SECRET_UNAVAILABLE_ON_THIS_DEVICE`.
 
 Cascade: deleting the provider (`DELETE /api/v2/providers/:id`) deletes all its
 secrets (FK `ON DELETE CASCADE`). Diagnostic export and logs do not contain
