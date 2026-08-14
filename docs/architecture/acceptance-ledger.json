@@ -284,7 +284,7 @@
           },
           {
             "directive": "9. How to accept (exact ledger edit)",
-            "what": "Edit docs/architecture/acceptance-ledger.json milestone M1-security: status → 'accepted', acceptedCommit → the branch tip (18070ad or any later tip in HEAD ancestry), acceptedBy → your human name (AUTO_ACTOR_RE rejects agent/assistant/system/bot/llm/claude/gpt), acceptedAt → today (YYYY-MM-DD).",
+            "what": "Edit docs/architecture/acceptance-ledger.json milestone M1-security: status → 'accepted', acceptedCommit → the branch tip (4610d8c, the current proposal target, or any later tip in HEAD ancestry), acceptedBy → your human name (AUTO_ACTOR_RE rejects agent/assistant/system/bot/llm/claude/gpt), acceptedAt → today (YYYY-MM-DD).",
             "howToVerify": "node scripts/check-milestone-gates.mjs --check must report M1 accepted; commit with a human-signed message. Acceptance cannot be self-certified: acceptedBy must be a person."
           }
         ],
