@@ -222,6 +222,30 @@ The canonical v2 layout keeps every version of a data root under
 The kill matrix (journal write, pointer write, first rename) is covered by
 `crates/storage/tests/activation.rs`.
 
+## Host flow: `neotavern-cli --migrate-legacy` (Этап 3 work 7–8)
+
+The CLI is the maintenance-mode host that runs the staged converter with the
+kernel **closed** (all SQLite handles released, ТЗ §10.3), then opens the
+kernel on the activated root — the canonical data-root switch:
+
+```text
+neotavern-cli --root <data-root> --migrate-legacy <legacy.db> [--no-backup]
+```
+
+- Progress stages (`preflight`/`backup`/`convert`/`validate`/`activate`) go to
+  stderr; the committed report (entry id, active root, previous root, per-table
+  counts, skipped orphans) and the kernel-open confirmation go to stdout.
+- Without `--root` → usage error (exit 2). A non-legacy or missing source →
+  controlled storage diagnostic on stderr and exit 1 with **no journal
+  written** (fail-closed before any write).
+- After the migration the CLI opens the same [`Kernel`](../README.md) the
+  hosts use: product reads through the generated wire client prove the
+  switch, and the previous (flat) root stays as the rollback pointer until
+  the first successful open.
+- This flow is covered end-to-end in `crates/adapters/cli/tests/cli.rs`
+  (spawns the real binary): full migration + `characters.get` round-trip on
+  the versioned root, missing-`--root` usage error, and non-legacy rejection.
+
 ## Related documents
 
 - [Data and SQLite](../data/README.md) — storage foundation.

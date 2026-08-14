@@ -219,6 +219,25 @@
   sections), CHANGELOG. The Windows E2E on packaged artifacts and the
   canonical data-root switch remain the later Этап 3 slices.
 
+- **CLI host flow for the data cutover (M3 / Этап 3, ТЗ §10.3 work 7–8).**
+  `neotavern-cli --root <data-root> --migrate-legacy <legacy.db> [--no-backup]`
+  is now the maintenance-mode host that runs the staged legacy→kernel
+  converter with the kernel **closed**, then opens the kernel on the
+  activated root — the canonical data-root switch. Progress stages
+  (`preflight`/`backup`/`convert`/`validate`/`activate`) go to stderr; the
+  committed report (entry id, active root, retained previous root, per-table
+  counts, skipped orphans) and the kernel-open confirmation go to stdout.
+  Missing `--root` → usage error (exit 2); a non-legacy/missing source →
+  controlled storage diagnostic on stderr and exit 1 with no journal written
+  (fail-closed before any write). The CLI's `neotavern-storage` dependency
+  moves from dev-only to runtime (the CLI now owns the offline migration
+  entry point). Tests: `crates/adapters/cli/tests/cli.rs` spawns the real
+  binary — full migration + `characters.get` round-trip over the versioned
+  root, missing-`--root` usage error, non-legacy rejection; 13 CLI tests
+  total; full cargo workspace green; clippy/rustfmt clean. Docs:
+  `portable-data.md` (host-flow section), CHANGELOG. Remaining Этап 3
+  slices: Windows/macOS/Linux upgrade drills on packaged artifacts.
+
 - **Prompt pipeline in the Kernel (M2 / Этап 2.6, ТЗ §9.1–§9.2).** Every
   generation run now builds an immutable **PromptPlan** before the provider
   attempt: character/persona system blocks (from the chat's character card,
