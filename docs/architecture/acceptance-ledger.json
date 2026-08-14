@@ -440,7 +440,14 @@
         "6d5af18 (M2 packaged golden slice)",
         "7672eef (M2 generation data plane)",
         "c580388 (M2 library/chat CRUD over Product Wire)"
-      ]
+      ],
+      "honestGapsToStateInPR": "The M2 PR must repeat the four scope boundaries from m2-contentReview.gaps: (1) plugin interceptors are NOT in the PromptPlan (INSTRUCT_FORMAT_PLAIN_MESSAGES 'plain-messages-v1' only; interceptors + named instruct presets are a later milestone); (2) response_reserved=0 with a heuristic token estimator (exact tokenizer profiles later); (3) interrupted runs are an explicit recoverable terminal state — resume is a UI/user retry, not automatic continuation (ТЗ §8.3 allows either; M2 chooses the recoverable-terminal branch); (4) streaming runs on a synchronous writer thread with an mpsc channel; backpressure is EmitStatus::Stop at step boundaries, not an async stream. These are honest scope boundaries, not defects."
+    },
+    "m1-sec04-cancellation-review": {
+      "date": "2026-08-14",
+      "scope": "Independent adversarial check of networkPool.ts SEC-04 cancellation semantics: does aborting a gzip-encoded response mid-body leave the fetch promise pending?",
+      "finding": "NO DEFECT. Empirically verified with a provably-slow local server (2 MiB incompressible gzip body, 16 KB per 50 ms) and AbortSignal fired mid-body: the request emits ABORT_ERR, then ~2 ms later the IncomingMessage emits 'aborted' → 'error' ECONNRESET → 'close'. In networkPool.ts the encoding branch wires res 'error' → decoder.destroy(error) → decoder 'error' → fail → reject, and the plain branch wires res 'error' → fail → reject, so the fetch settles with an error on cancellation in both branches (no hang). req.on('error', reject) at line 351 is a no-op after the outer promise resolved with readResponse — settlement is carried by the res 'error' path. Connect-phase and body-phase socket inactivity timeouts (req.setTimeout → destroy with 'connect timeout') use the same settle chain. Earlier probe 'hang' results were probe artifacts (http.request without req.end() never sends the request; and one probe exited before the delayed res events), not code defects.",
+      "verified": "Existing networkPool.test.ts SEC-04 suite (compressed/decompressed caps, cap-destroy, backpressure pause/drain) passes at HEAD; the cancellation settle chain was verified by an external script against a real slow server, then the script was deleted (not committed)."
     },
     "m2-contentReview": {
       "date": "2026-08-14",
