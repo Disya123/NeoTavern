@@ -94,8 +94,11 @@ options)` (the plugin's only path to the Broker): builds a BrokerCallRequest
     `http.Agent`/`https.Agent` (bounded per-origin, idle TTL), executor-level
     HTTP(S) proxy (absolute-form for http, CONNECT tunnel for https),
     `close()` releasing idle sockets, pool metrics. Verified-IP connects
-    (ТЗ §SEC-03) bypass the pool: they connect to the policy-approved address
-    (hostname only in Host/SNI) and verify the connected `remoteAddress`;
+    (ТЗ §SEC-03) honor the policy-approved set on EVERY path: direct connects
+    use the approved IP (hostname only in Host/SNI) and verify the connected
+    `remoteAddress`; proxy hops carry the verified IP in the absolute-form
+    request-target (HTTP) and in the CONNECT authority (HTTPS, with TLS still
+    validating the hostname);
   - `src/host/memoryHost.ts` — reference host executor. In-flight network
     byte budgets (ТЗ §SEC-04): while a fetch body is streamed its worst-case
     size is reserved against
@@ -256,7 +259,9 @@ the Broker (capability per family). `src/host/socketHandles.ts` — trusted
 sockets host-side: the plugin holds only an opaque handle id; bounded message
 ring per handle (§17: 128 messages, 64 KiB/message, 8 MiB buffer,
 evict-oldest); receive/accept with bounded wait; destination policy — the same
-§29.1 SSRF check as for http (loopback requires `network.local`, etc.);
+§29.1 SSRF check as for http (loopback requires `network.local`, etc.); §SEC-03
+verified-IP connects: tcpConnect/udpSend use the policy-approved address (no
+DNS for the hostname in the stack; TLS keeps the hostname as servername);
 bind policy §29.1.4 — default loopback, `0.0.0.0`/`::` are forbidden,
 non-loopback binds require `network.listen.public`; revoking a network
 capability closes the plugin's handles (§10.2). SDK:

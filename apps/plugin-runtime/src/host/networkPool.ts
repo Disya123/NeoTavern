@@ -70,9 +70,12 @@ export interface NetworkPoolMetrics {
 export interface NetworkPool {
   /**
    * Fetch one URL. `verified` carries the policy-approved addresses for this
-   * request (ТЗ §SEC-03): when present, the pool connects to the approved IP
-   * (no DNS in the stack), keeps the hostname only in Host/SNI, verifies the
-   * connected `remoteAddress` against the set, and bypasses keep-alive reuse.
+   * request (ТЗ §SEC-03): direct connects go to the approved IP (no DNS in
+   * the stack), the hostname is kept only in Host/SNI, the connected
+   * `remoteAddress` is verified against the set, and keep-alive reuse is
+   * bypassed. Proxy hops honor the same set: the absolute-form URI (HTTP) and
+   * the CONNECT authority (HTTPS) carry the verified IP, and the hostname
+   * survives only in the Host header / TLS servername.
    */
   fetch(url: string, init?: RequestInit, verified?: { ips: string[] }): Promise<Response>;
   metrics(): NetworkPoolMetrics;
@@ -173,6 +176,18 @@ function readResponse(res: IncomingMessage, maxBytes: number): Promise<Response>
   });
 }
 
+/**
+ * §SEC-03 absolute-form URI for a proxy hop: the authority host is replaced
+ * with the policy-approved IP so the proxy resolves no DNS for the hostname,
+ * while everything else (scheme, path, query, explicit port) is preserved.
+ * The Host header stays the hostname (set by the caller) for the target.
+ */
+function absoluteFormWithVerifiedIp(target: URL, ip: string): string {
+  const withIp = new URL(target.toString());
+  withIp.hostname = ip;
+  return withIp.toString();
+}
+
 export function createNetworkPool(options: NetworkPoolOptions = {}): NetworkPool {
   const proxyUrl = options.proxyUrl === undefined ? null : new URL(options.proxyUrl);
   if (proxyUrl !== null && proxyUrl.protocol !== 'http:' && proxyUrl.protocol !== 'https:') {
@@ -248,16 +263,27 @@ export function createNetworkPool(options: NetworkPoolOptions = {}): NetworkPool
   }
 
   /** HTTP target through the proxy: absolute-form request line. */
-  function proxyAbsoluteForm(target: URL, init: RequestInit): Promise<Response> {
+  function proxyAbsoluteForm(
+    target: URL,
+    init: RequestInit,
+    verified?: { ips: string[] },
+  ): Promise<Response> {
     const proxyPort =
       proxyUrl?.port !== '' && proxyUrl?.port !== undefined ? Number(proxyUrl.port) : 80;
     return new Promise((resolve, reject) => {
+      // §SEC-03: when the policy approved specific addresses, the absolute-form
+      // URI carries the verified IP (the proxy resolves no DNS for the
+      // hostname) while the Host header keeps the hostname for the target.
+      const targetUri =
+        verified === undefined
+          ? target.toString()
+          : absoluteFormWithVerifiedIp(target, verified.ips[0] ?? target.hostname);
       const req = httpRequest(
         {
           host: proxyUrl?.hostname,
           port: proxyPort,
           method: init.method ?? 'GET',
-          path: target.toString(),
+          path: targetUri,
           headers: { ...toPlainHeaders(init.headers), host: target.host },
           signal: init.signal ?? undefined,
         },
@@ -271,12 +297,20 @@ export function createNetworkPool(options: NetworkPoolOptions = {}): NetworkPool
   }
 
   /** HTTPS target through the proxy: CONNECT tunnel, then TLS over it. */
-  function proxyConnectTunnel(target: URL, init: RequestInit): Promise<Response> {
+  function proxyConnectTunnel(
+    target: URL,
+    init: RequestInit,
+    verified?: { ips: string[] },
+  ): Promise<Response> {
     const proxyPort =
       proxyUrl?.port !== '' && proxyUrl?.port !== undefined ? Number(proxyUrl.port) : 80;
     return new Promise((resolve, reject) => {
       // CONNECT requires an authority with an explicit port (RFC 7231 §4.3.6).
-      const authority = `${target.hostname}:${target.port === '' ? '443' : target.port}`;
+      // §SEC-03: the CONNECT authority carries the verified IP — the proxy
+      // connects to the policy-approved address, and TLS still validates the
+      // certificate against the hostname (servername), never the IP.
+      const connectHost = verified?.ips[0] ?? target.hostname;
+      const authority = `${connectHost}:${target.port === '' ? '443' : target.port}`;
       const connectReq = httpRequest(
         {
           host: proxyUrl?.hostname,
@@ -346,8 +380,8 @@ export function createNetworkPool(options: NetworkPoolOptions = {}): NetworkPool
       const requestInit: RequestInit = init ?? {};
       if (proxyUrl !== null) {
         return target.protocol === 'https:'
-          ? proxyConnectTunnel(target, requestInit)
-          : proxyAbsoluteForm(target, requestInit);
+          ? proxyConnectTunnel(target, requestInit, verified)
+          : proxyAbsoluteForm(target, requestInit, verified);
       }
       return directFetch(target, requestInit, verified);
     },

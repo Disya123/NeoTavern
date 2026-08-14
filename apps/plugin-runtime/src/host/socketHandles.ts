@@ -312,7 +312,13 @@ export function createSocketRegistry(deps: SocketRegistryDeps): SocketRegistry {
       // after connect the socket's remoteAddress must be in it (ТЗ §SEC-03).
       const approved = await deps.checkDestination(host, pluginId);
       const handle = allocate(pluginId, 'tcp');
-      const socket = tls ? tlsConnect({ host, port }) : netConnect({ host, port });
+      // §SEC-03: connect to a policy-approved IP — the Node stack performs no
+      // DNS for the hostname (every answer was already classified + checked
+      // by the policy). The hostname survives only in TLS servername/SNI.
+      const connectHost = approved[0] ?? host;
+      const socket = tls
+        ? tlsConnect({ host: connectHost, port, servername: host })
+        : netConnect({ host: connectHost, port });
       handle.resource = socket;
       socket.setNoDelay(true);
       socket.on('data', (chunk) => {
@@ -461,13 +467,15 @@ export function createSocketRegistry(deps: SocketRegistryDeps): SocketRegistry {
     },
     async udpSend(pluginId, id, data, host, port) {
       const handle = requireHandle(pluginId, id);
-      await deps.checkDestination(host, pluginId);
+      // §SEC-03: policy classifies every DNS answer; the datagram is sent to
+      // the approved address (the socket itself performs no DNS for `host`).
+      const approved = await deps.checkDestination(host, pluginId);
       const socket = handle.resource;
       if (!(socket instanceof DgramSocket)) {
         throw new BrokerCallError('STREAM_ABORTED', { message: 'udp handle not writable' });
       }
       await new Promise<void>((resolve, reject) => {
-        socket.send(Buffer.from(data, 'utf8'), port, host, (error) => {
+        socket.send(Buffer.from(data, 'utf8'), port, approved[0] ?? host, (error) => {
           if (error) {
             reject(
               new BrokerCallError('NETWORK_DESTINATION_DENIED', {
