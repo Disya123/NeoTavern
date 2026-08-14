@@ -3,6 +3,30 @@
 ## Unreleased
 ### Added
 
+- **Migration single-writer and pointer integrity fixes (audit P0 #3,
+  ТЗ §10.3/§22.3).** `neotavern_storage::migration` is now session-based:
+  `MigrationSession::begin` acquires the data-root lease and holds it for
+  the whole staging→commit/cancel sequence (`session.commit()` /
+  `session.cancel()`), so no second writer can enter between the phases —
+  the old free `prepare`/`commit`/`cancel` split released the lease before
+  commit. The active-root pointer is only ever written/read for the data
+  root itself or a versioned root under `<data-root>/roots/` (an arbitrary
+  absolute path is refused with `IntegrityViolation` on both write and
+  read), and a pointer/journal that exists but cannot be read fails closed
+  with `Corrupt` instead of being treated as missing (v1-flat fallback).
+  `write_atomic` now fsyncs the temp file before the rename and the target
+  after it (ТЗ §10.3 flush/sync requirement). The pre-migration safety copy
+  is created with the SQLite online-backup API (not a plain `fs::copy`), so
+  committed WAL frames are included and the copy passes `quick_check`
+  before its checksum is written. The legacy→kernel converter now migrates
+  the `personas` table (Этап 4.1) with honest description/avatar defaults
+  and the single-default invariant enforced on insert. Tests: migration
+  suite 24 tests (new: session holds the lease between phases, WAL commits
+  included in the safety copy, unreadable pointer is not missing,
+  out-of-root pointer refused on read and write, personas migrate with a
+  single default), full `cargo test --workspace` green, clippy + rustfmt
+  clean.
+
 - **Lorebook and persona UI cutover over the facade (M4 / Этап 4.1, ТЗ
   §13.1).** The lorebook and persona hooks in `apps/web/src/api/hooks.ts`
   now route through the facade `apps/web/src/api/wireBridge.ts` in kernel

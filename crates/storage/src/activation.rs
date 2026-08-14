@@ -159,15 +159,31 @@ pub fn versioned_root_path(data_root: &Path, root_id: &str) -> PathBuf {
 
 /// Reads the activation journal; a missing journal is an empty journal (never
 /// an error). An unreadable or malformed journal is a controlled
-/// [`StorageErrorCode::Corrupt`] failure (recovery must not guess).
+/// [`StorageErrorCode::Corrupt`] failure (recovery must not guess): only
+/// `NotFound` means "no journal", any other read failure is reported — a
+/// journal that exists but cannot be read must never be treated as empty
+/// (fail-closed, ТЗ §22.3).
 pub fn read_journal(data_root: &Path) -> Result<ActivationJournal> {
     let path = journal_path(data_root);
-    let Ok(bytes) = fs::read(&path) else {
-        return Ok(ActivationJournal {
-            format: JOURNAL_FORMAT.to_string(),
-            format_version: JOURNAL_FORMAT_VERSION,
-            entries: Vec::new(),
-        });
+    let bytes = match fs::read(&path) {
+        Ok(bytes) => bytes,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(ActivationJournal {
+                format: JOURNAL_FORMAT.to_string(),
+                format_version: JOURNAL_FORMAT_VERSION,
+                entries: Vec::new(),
+            });
+        }
+        Err(e) => {
+            return Err(StorageError::with(
+                StorageErrorCode::Corrupt,
+                format!(
+                    "activation journal {} exists but cannot be read: {e}",
+                    path.display()
+                ),
+                vec![("path".into(), path.display().to_string())],
+            ));
+        }
     };
     let value: serde_json::Value = serde_json::from_slice(&bytes).map_err(|e| {
         StorageError::new(
@@ -251,8 +267,21 @@ pub fn latest_entry(data_root: &Path) -> Result<Option<JournalEntry>> {
 /// [`StorageErrorCode::NotFound`] (recovery must not invent a root).
 pub fn read_pointer(data_root: &Path) -> Result<Option<ActiveRootPointer>> {
     let path = pointer_path(data_root);
-    let Ok(bytes) = fs::read(&path) else {
-        return Ok(None);
+    let bytes = match fs::read(&path) {
+        Ok(bytes) => bytes,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => {
+            // A pointer that exists but cannot be read is NOT "v1 flat": it
+            // must never be treated as missing (fail-closed, ТЗ §22.3).
+            return Err(StorageError::with(
+                StorageErrorCode::Corrupt,
+                format!(
+                    "active-root pointer {} exists but cannot be read: {e}",
+                    path.display()
+                ),
+                vec![("path".into(), path.display().to_string())],
+            ));
+        }
     };
     let value: serde_json::Value = serde_json::from_slice(&bytes).map_err(|e| {
         StorageError::new(
@@ -289,6 +318,11 @@ pub fn read_pointer(data_root: &Path) -> Result<Option<ActiveRootPointer>> {
             vec![("root".into(), root.display().to_string())],
         ));
     }
+    // A crafted pointer must never redirect the kernel to an arbitrary
+    // directory outside the data root (ТЗ §22.3, SEC hardening): the active
+    // root is the data root itself (v1 flat) or a versioned root under
+    // `<data-root>/roots/`. Anything else is corrupt, not "migrated".
+    validate_active_root_candidate(data_root, &root)?;
     let activated_at = value
         .get("activatedAt")
         .and_then(|v| v.as_str())
@@ -312,13 +346,36 @@ pub fn active_root(data_root: &Path) -> Result<PathBuf> {
 
 /// Writes the active-root pointer atomically (the commit point of an
 /// activation). Never touches the target or previous roots.
+///
+/// The pointer is the trust anchor for the whole data root, so `root` is
+/// validated before it is published: only a versioned root **inside** this
+/// data root's `roots/` directory (or the data root itself, for a v1-flat
+/// rollback pointer) may become active. A pointer to an arbitrary absolute
+/// path outside the data root is refused with
+/// [`StorageErrorCode::IntegrityViolation`] — a crafted pointer must never
+/// make the kernel open a foreign directory (ТЗ §22.3).
 pub fn write_pointer(data_root: &Path, root: &Path) -> Result<()> {
-    let body = serde_json::json!({
-        "formatVersion": ACTIVE_ROOT_FORMAT_VERSION,
-        "root": root.to_string_lossy(),
-        "activatedAt": now_utc_rfc3339(),
-    });
-    write_atomic(&pointer_path(data_root), body.to_string().as_bytes())
+    validate_active_root_candidate(data_root, root)?;
+    write_pointer_atomic(&pointer_path(data_root), root)
+}
+
+/// Validates that `root` is a legal active-root target for `data_root`: the
+/// data root itself (v1 flat) or a versioned root under `<data-root>/roots/`.
+fn validate_active_root_candidate(data_root: &Path, root: &Path) -> Result<()> {
+    if root == data_root {
+        return Ok(());
+    }
+    if root.starts_with(roots_dir(data_root)) {
+        return Ok(());
+    }
+    Err(StorageError::with(
+        StorageErrorCode::IntegrityViolation,
+        "refusing active-root pointer outside the data root",
+        vec![
+            ("data_root".into(), data_root.display().to_string()),
+            ("root".into(), root.display().to_string()),
+        ],
+    ))
 }
 
 /// Starts a new activation: writes a `prepared` journal entry BEFORE any
@@ -690,7 +747,10 @@ fn write_pointer_atomic(pointer: &Path, root: &Path) -> Result<()> {
 }
 
 /// Writes `bytes` to `path` via a temp file in the same directory + rename
-/// (shared with the restore machinery).
+/// (shared with the restore machinery). The temp file is fsync'd before the
+/// rename and the target is fsync'd after it, so a crash after this call
+/// returns can never lose the committed bytes (ТЗ §10.3 "flush/sync до
+/// объявления committed").
 pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
     static SEQ: AtomicU64 = AtomicU64::new(0);
     let parent = path
@@ -702,8 +762,33 @@ pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
         ".neotavern-tmp-{}-{seq}",
         path.file_name().and_then(|n| n.to_str()).unwrap_or("file")
     ));
-    fs::write(&tmp, bytes).map_err(|e| io_err(e, "write temp file"))?;
+    // Open read+write from the start so the handle can fsync on every
+    // platform (a read-only handle cannot sync on Windows).
+    let mut tmp_file = fs::OpenOptions::new()
+        .write(true)
+        .read(true)
+        .create(true)
+        .truncate(true)
+        .open(&tmp)
+        .map_err(|e| io_err(e, "create temp file"))?;
+    use std::io::Write;
+    tmp_file
+        .write_all(bytes)
+        .map_err(|e| io_err(e, "write temp file"))?;
+    // Durability before the rename: the temp bytes must be on stable storage
+    // before they can become the visible file (ТЗ §10.3 fsync requirement).
+    tmp_file
+        .sync_all()
+        .map_err(|e| io_err(e, "sync temp file"))?;
+    drop(tmp_file);
     fs::rename(&tmp, path).map_err(|e| io_err(e, "atomic rename"))?;
+    // After the rename the new path is openable; syncing the directory would
+    // be needed to make the rename itself durable across a crash, which is
+    // best-effort on each platform — sync the file at its final path so the
+    // bytes are flushed even if the rename survives.
+    if let Ok(final_file) = fs::OpenOptions::new().read(true).open(path) {
+        let _ = final_file.sync_all();
+    }
     Ok(())
 }
 

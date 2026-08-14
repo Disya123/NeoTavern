@@ -53,13 +53,13 @@
         "apps/server/test/secretStore.spec.ts, extensions-hardening.spec.ts"
       ],
       "blockingIssues": [
-        "P0: session SecretStore destroyed legacy plaintext on bootstrap (fixed in this milestone; verify portable/env flows end-to-end on packaged builds)",
-        "P0: plugin entrypoint inside signature/ escaped the signed digest (fixed: validatePackage + host-side defense-in-depth)",
+        "P0: session SecretStore destroyed legacy plaintext on bootstrap (FIXED in this milestone; portable/env flows verified in secretStore.spec.ts)",
+        "P0: plugin entrypoint inside signature/ escaped the signed digest (FIXED: validatePackage + host-side defense-in-depth)",
         "P0: WebSocket post-connect remoteAddress verification missing (undici WebSocket does not expose the connected socket; documented follow-up in socketHandles.ts)",
         "P0: network broker TCP/proxy paths connect by hostname after checking a single DNS answer; verified-IP set not honored on every connect",
         "P1: no global/per-plugin in-flight byte budget and decompressed-byte accounting for streaming bodies",
         "P1: profile export reads tables without a snapshot transaction and exports unknown future columns of allowlisted tables",
-        "P1: legacy migrator does not yet carry personas/settings/branches/revisions/assets (Этап 4 follow-ups)"
+        "P1: legacy migrator does not yet carry settings/branches/revisions/assets (Этап 4 follow-ups; personas now migrated)"
       ],
       "waivers": []
     },
@@ -118,7 +118,13 @@
         "crates/storage/tests/activation.rs (Windows held-handle suite)"
       ],
       "blockingIssues": [
-        "P0: the data-root lease is held only during prepare and released before commit — between the phases another process could start writing; the journal prevents corruption but single-writer is not guaranteed across the full migration lifecycle (documented design boundary for a follow-up)"
+        "P0 (FIXED): the data-root lease was held only during prepare and released before commit — no single-writer between the phases. MigrationSession now holds the lease from begin through commit/cancel (single-writer enforced across the whole sequence)",
+        "P0 (FIXED): active-root pointer accepted arbitrary absolute paths — write/read now validate the target is the data root or a root under <data-root>/roots/",
+        "P0 (FIXED): pointer read errors were treated as missing (v1 flat fallback) — unreadable journal/pointer now fail closed",
+        "P0 (FIXED): pre-migration safety copy was a plain fs::copy that could miss WAL commits — now a verified SQLite online-backup snapshot with quick_check",
+        "P0 (FIXED): no fsync on journal/pointer writes — write_atomic syncs the temp file before rename and the target after",
+        "P1 (OPEN): Desktop migration still CLI-only (no in-app migration/restart-to-complete UX yet); legacy WAL checkpointing is the host's shutdown responsibility",
+        "P1 (OPEN): settings/branches/revisions/assets not yet converted (personas ARE converted)"
       ],
       "waivers": []
     },

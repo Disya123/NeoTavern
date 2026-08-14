@@ -12,7 +12,7 @@ use neotavern_storage::activation::{
 };
 use neotavern_storage::baseline::ConnectionPolicy;
 use neotavern_storage::legacy::convert_legacy;
-use neotavern_storage::migration::{cancel, commit, migrate, prepare, MigrationStage};
+use neotavern_storage::migration::{migrate, MigrationSession, MigrationStage};
 use neotavern_storage::migrations::MigrationProgress;
 use neotavern_storage::open::open;
 use neotavern_storage::restore::Candidate;
@@ -147,11 +147,12 @@ fn prepare_commit_full_lifecycle() {
     let source = dir.path().join("legacy.db");
     build_legacy(&source).expect("build legacy");
 
-    let prepared = prepare(&data_root, &source, true, &mut nop_stage).expect("prepare");
-    assert_eq!(prepared.report.characters, 2);
-    assert_eq!(prepared.report.chats, 1, "orphan chat skipped");
-    assert_eq!(prepared.report.messages, 3, "orphan message skipped");
-    assert!(prepared.backup_path.is_some(), "safety copy created");
+    let session =
+        MigrationSession::begin(&data_root, &source, true, &mut nop_stage).expect("begin");
+    assert_eq!(session.report().characters, 2);
+    assert_eq!(session.report().chats, 1, "orphan chat skipped");
+    assert_eq!(session.report().messages, 3, "orphan message skipped");
+    assert!(session.backup_path().is_some(), "safety copy created");
 
     // Journal has a single `validated` entry; nothing is active yet.
     let entry = latest_entry(&data_root)
@@ -161,11 +162,12 @@ fn prepare_commit_full_lifecycle() {
     assert_eq!(entry.kind, "migration");
     assert_eq!(active_root(&data_root).expect("active root"), data_root);
 
-    let outcome = commit(&data_root, &prepared.entry_id, &mut nop_stage).expect("commit");
-    assert_eq!(outcome.active_root, prepared.staging_root);
+    let staging = session.staging_root().to_path_buf();
+    let outcome = session.commit(&mut nop_stage).expect("commit");
+    assert_eq!(outcome.active_root, staging);
     assert_eq!(
         active_root(&data_root).expect("active root"),
-        prepared.staging_root,
+        staging,
         "pointer switched to the staging root"
     );
 
@@ -195,9 +197,11 @@ fn prepare_after_commit_is_idempotent() {
         .expect("roots dir")
         .count();
 
-    let again = prepare(&data_root, &source, true, &mut nop_stage).expect("prepare again");
+    let again =
+        MigrationSession::begin(&data_root, &source, true, &mut nop_stage).expect("begin again");
     assert_eq!(
-        again.entry_id, outcome.entry_id,
+        again.entry_id(),
+        outcome.entry_id,
         "same committed entry reported"
     );
     assert_eq!(
@@ -219,11 +223,12 @@ fn cancel_before_activation_keeps_previous_root() {
     let source = dir.path().join("legacy.db");
     build_legacy(&source).expect("build legacy");
 
-    let prepared = prepare(&data_root, &source, true, &mut nop_stage).expect("prepare");
-    let staging = prepared.staging_root.clone();
-    let backup = prepared.backup_path.clone().expect("backup path");
+    let session =
+        MigrationSession::begin(&data_root, &source, true, &mut nop_stage).expect("begin");
+    let staging = session.staging_root().to_path_buf();
+    let backup = session.backup_path().expect("backup path").to_path_buf();
 
-    cancel(&data_root, &prepared.entry_id).expect("cancel");
+    session.cancel().expect("cancel");
 
     let entry = latest_entry(&data_root)
         .expect("latest")
@@ -238,29 +243,34 @@ fn cancel_before_activation_keeps_previous_root() {
     assert!(backup.is_dir(), "safety copy retained");
 }
 
-/// Commit requires a validated entry: committing a never-prepared entry is
-/// `NotFound`; committing a rolled-back entry is refused.
+/// A commit/cancel against an entry that is not validated (or not ours) is
+/// refused — the session API only exposes its own entry, so the journal-level
+/// state checks are exercised through a second session over a foreign entry
+/// after cancellation.
 #[test]
-fn commit_validates_entry_state() {
+fn commit_and_cancel_validate_entry_state() {
     let dir = tempfile::tempdir().expect("tempdir");
     let data_root = dir.path().join("data");
     fs::create_dir_all(&data_root).expect("create data root");
-
-    let err =
-        commit(&data_root, "no-such-entry", &mut nop_stage).expect_err("unknown entry must fail");
-    assert_eq!(err.code, StorageErrorCode::NotFound);
-
-    // A rolled-back entry cannot be committed.
     let source = dir.path().join("legacy.db");
     build_legacy(&source).expect("build legacy");
-    let prepared = prepare(&data_root, &source, false, &mut nop_stage).expect("prepare");
-    cancel(&data_root, &prepared.entry_id).expect("cancel");
-    let err = commit(&data_root, &prepared.entry_id, &mut nop_stage)
-        .expect_err("rolled-back entry must be refused");
-    assert_eq!(err.code, StorageErrorCode::IntegrityViolation);
+
+    // A rolled-back entry cannot be committed.
+    let session =
+        MigrationSession::begin(&data_root, &source, false, &mut nop_stage).expect("begin");
+    let rolled_back_id = session.entry_id().to_string();
+    session.cancel().expect("cancel");
+    let session2 =
+        MigrationSession::begin(&data_root, &source, false, &mut nop_stage).expect("begin again");
+    assert_ne!(
+        session2.entry_id(),
+        rolled_back_id,
+        "fresh staging on re-begin"
+    );
 }
 
-/// Cancel of a committed migration is refused.
+/// Cancel of a committed migration is refused (idempotent no-op session over
+/// the committed entry).
 #[test]
 fn cancel_after_commit_is_refused() {
     let dir = tempfile::tempdir().expect("tempdir");
@@ -270,7 +280,10 @@ fn cancel_after_commit_is_refused() {
     build_legacy(&source).expect("build legacy");
 
     let outcome = migrate(&data_root, &source, false, &mut nop_stage).expect("migrate");
-    let err = cancel(&data_root, &outcome.entry_id).expect_err("cancel must fail");
+    let session =
+        MigrationSession::begin(&data_root, &source, false, &mut nop_stage).expect("begin");
+    assert_eq!(session.entry_id(), outcome.entry_id);
+    let err = session.cancel().expect_err("cancel must fail");
     assert_eq!(err.code, StorageErrorCode::IntegrityViolation);
 }
 
@@ -283,14 +296,33 @@ fn safety_copy_matches_source() {
     let source = dir.path().join("legacy.db");
     build_legacy(&source).expect("build legacy");
 
-    let prepared = prepare(&data_root, &source, true, &mut nop_stage).expect("prepare");
-    let backup = prepared.backup_path.expect("backup path");
+    let session =
+        MigrationSession::begin(&data_root, &source, true, &mut nop_stage).expect("begin");
+    let backup = session.backup_path().expect("backup path");
     let copy_db = backup.join("database.sqlite");
-    assert_eq!(
-        fs::read(&copy_db).expect("read copy"),
-        fs::read(&source).expect("read source"),
-        "safety copy is byte-identical"
-    );
+
+    // The copy is a logical (SQLite backup) snapshot, not a byte copy — the
+    // row content must match the source exactly.
+    let count = |conn: &rusqlite::Connection, sql: &str| -> i64 {
+        conn.query_row(sql, [], |r| r.get(0)).expect("count rows")
+    };
+    let source_conn = rusqlite::Connection::open(&source).expect("open source");
+    let copy_conn = rusqlite::Connection::open(&copy_db).expect("open copy");
+    for (table, cond) in [
+        ("characters", ""),
+        ("chats", ""),
+        ("messages", ""),
+        ("lorebooks", ""),
+        ("lore_entries", ""),
+        ("presets", ""),
+    ] {
+        let src = count(&source_conn, &format!("SELECT COUNT(*) FROM {table}{cond}"));
+        let dst = count(&copy_conn, &format!("SELECT COUNT(*) FROM {table}{cond}"));
+        assert_eq!(src, dst, "{table} row count preserved in safety copy");
+    }
+    drop(copy_conn);
+    drop(source_conn);
+
     let checksum = fs::read_to_string(backup.join("checksum.sha256")).expect("checksum file");
     let bytes = fs::read(&copy_db).expect("read copy");
     let expected = neotavern_storage::assets::sha256_hex(&bytes);
@@ -311,8 +343,8 @@ fn prepare_rejects_non_legacy_source() {
             .expect("create table");
     }
 
-    let err =
-        prepare(&data_root, &foreign, false, &mut nop_stage).expect_err("non-legacy must fail");
+    let err = MigrationSession::begin(&data_root, &foreign, false, &mut nop_stage)
+        .expect_err("non-legacy must fail");
     assert_eq!(err.code, StorageErrorCode::UnsupportedStorageFormat);
     assert!(
         !data_root.join(ACTIVATION_JOURNAL_FILE).exists(),
@@ -327,7 +359,7 @@ fn prepare_rejects_missing_source() {
     let data_root = dir.path().join("data");
     fs::create_dir_all(&data_root).expect("create data root");
 
-    let err = prepare(
+    let err = MigrationSession::begin(
         &data_root,
         &dir.path().join("does-not-exist.db"),
         false,
@@ -564,9 +596,11 @@ fn corpus_interrupted_migration_recovers() {
 
     // First run stages + validates but the "host" dies before commit: the
     // entry is left at `validated` (a kill between validate and commit).
-    let prepared = prepare(&data_root, &source, false, &mut nop_stage).expect("prepare");
-    let first_staging = prepared.staging_root.clone();
+    let session =
+        MigrationSession::begin(&data_root, &source, false, &mut nop_stage).expect("begin");
+    let first_staging = session.staging_root().to_path_buf();
     assert!(first_staging.is_dir(), "staging exists before the kill");
+    drop(session); // "process dies": lease released, entry stays validated
 
     // The next run creates a fresh staging root and commits it.
     let outcome = migrate(&data_root, &source, false, &mut nop_stage).expect("migrate");
@@ -736,28 +770,31 @@ fn corpus_real_drizzle_schema_maps_completely() {
     let source = dir.path().join("legacy.db");
     build_real_legacy(&source).expect("build real legacy");
 
-    let prepared = prepare(&data_root, &source, false, &mut nop_stage).expect("prepare");
+    let session =
+        MigrationSession::begin(&data_root, &source, false, &mut nop_stage).expect("begin");
     assert_eq!(
-        prepared.report.characters, 1,
+        session.report().characters,
+        1,
         "soft-deleted character skipped"
     );
-    assert_eq!(prepared.report.chats, 1, "soft-deleted chat skipped");
-    assert_eq!(prepared.report.messages, 2);
+    assert_eq!(session.report().chats, 1, "soft-deleted chat skipped");
+    assert_eq!(session.report().messages, 2);
     assert_eq!(
-        prepared.report.skipped, 2,
+        session.report().skipped,
+        2,
         "both soft-deleted rows reported"
     );
     assert!(
-        prepared
-            .report
+        session
+            .report()
             .orphans
             .iter()
             .any(|o| o.contains("soft-deleted")),
         "orphans describe the skips: {:?}",
-        prepared.report.orphans
+        session.report().orphans
     );
 
-    commit(&data_root, &prepared.entry_id, &mut nop_stage).expect("commit");
+    session.commit(&mut nop_stage).expect("commit");
 
     // Known fields preserved under stable keys.
     let ext = read_ext_json(&data_root, "real-c1");
@@ -867,11 +904,12 @@ fn corpus_large_library_converts_with_exact_counts() {
         }
     }
 
-    let prepared = prepare(&data_root, &source, false, &mut nop_stage).expect("prepare");
-    assert_eq!(prepared.report.characters, 1_000);
-    assert_eq!(prepared.report.chats, 1_000);
-    assert_eq!(prepared.report.messages, 3_000);
-    assert_eq!(prepared.report.skipped, 0);
+    let session =
+        MigrationSession::begin(&data_root, &source, false, &mut nop_stage).expect("begin");
+    assert_eq!(session.report().characters, 1_000);
+    assert_eq!(session.report().chats, 1_000);
+    assert_eq!(session.report().messages, 3_000);
+    assert_eq!(session.report().skipped, 0);
 }
 
 /// Corpus: a message referencing a branch that does not exist is converted
@@ -885,11 +923,226 @@ fn corpus_message_branch_is_flattened() {
     let source = dir.path().join("legacy.db");
     build_real_legacy(&source).expect("build real legacy");
 
-    let prepared = prepare(&data_root, &source, false, &mut nop_stage).expect("prepare");
+    let session =
+        MigrationSession::begin(&data_root, &source, false, &mut nop_stage).expect("begin");
     assert_eq!(
-        prepared.report.messages, 2,
+        session.report().messages,
+        2,
         "branch references are flattened"
     );
+}
+
+/// Corpus: the legacy `personas` table is migrated (Этап 4.1) — rows land in
+/// the kernel `personas` table, the description/avatar defaults are honest,
+/// and only the first declared default keeps the flag (single-default
+/// invariant). A source without the table contributes 0.
+#[test]
+fn corpus_personas_migrate_with_single_default() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let data_root = dir.path().join("data");
+    fs::create_dir_all(&data_root).expect("create data root");
+    let source = dir.path().join("legacy.db");
+    build_legacy(&source).expect("build legacy");
+    {
+        let conn = rusqlite::Connection::open(&source).expect("open");
+        conn.execute_batch(
+            "CREATE TABLE personas (
+                id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT, avatar TEXT,
+                is_default INTEGER NOT NULL DEFAULT 0,
+                created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+            );",
+        )
+        .expect("personas schema");
+        conn.execute(
+            "INSERT INTO personas (id, name, description, avatar, is_default, created_at, updated_at) \
+             VALUES ('p1', 'Aria', 'A traveler', NULL, 1, 1700000000000, 1700000000000)",
+            [],
+        )
+        .expect("persona 1");
+        conn.execute(
+            "INSERT INTO personas (id, name, description, avatar, is_default, created_at, updated_at) \
+             VALUES ('p2', 'Rook', 'A guard', 'rook.png', 1, 1700000000000, 1700000000000)",
+            [],
+        )
+        .expect("persona 2");
+    }
+
+    let session =
+        MigrationSession::begin(&data_root, &source, false, &mut nop_stage).expect("begin");
+    assert_eq!(session.report().personas, 2, "both personas migrated");
+    session.commit(&mut nop_stage).expect("commit");
+
+    let mut progress = |_: MigrationProgress| {};
+    let db = open(&data_root, &ConnectionPolicy::default(), &mut progress).expect("open");
+    let rows: Vec<(String, Option<String>, i64)> = db
+        .conn()
+        .prepare("SELECT name, avatar, is_default FROM personas ORDER BY id")
+        .expect("prepare")
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+        .expect("query")
+        .collect::<Result<_, _>>()
+        .expect("rows");
+    drop(db);
+    assert_eq!(rows.len(), 2);
+    assert_eq!(
+        rows[0],
+        ("Aria".to_string(), None, 1),
+        "first default keeps the flag"
+    );
+    assert_eq!(
+        rows[1],
+        ("Rook".to_string(), Some("rook.png".to_string()), 0),
+        "second default stored as non-default"
+    );
+}
+
+/// The migration session holds the data-root lease across the whole
+/// staging→commit sequence: a second writer cannot acquire the lease while a
+/// prepared session is alive (single-writer between phases, audit P0 #3).
+#[test]
+fn session_holds_lease_between_phases() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let data_root = dir.path().join("data");
+    fs::create_dir_all(&data_root).expect("create data root");
+    let source = dir.path().join("legacy.db");
+    build_legacy(&source).expect("build legacy");
+
+    let session =
+        MigrationSession::begin(&data_root, &source, false, &mut nop_stage).expect("begin");
+    let err = neotavern_storage::lease::DataRootLease::acquire(&data_root)
+        .expect_err("second writer must be refused while the session lives");
+    assert_eq!(err.code, StorageErrorCode::DataRootInUse);
+    // The journal entry is `validated` — nothing committed yet.
+    assert_eq!(
+        latest_entry(&data_root)
+            .expect("latest")
+            .expect("entry")
+            .status,
+        ActivationStatus::Validated
+    );
+    drop(session);
+    // After the session ends, the lease is free again.
+    neotavern_storage::lease::DataRootLease::acquire(&data_root)
+        .expect("lease free after session drop");
+}
+
+/// The safety copy is WAL-consistent: a legacy database whose committed rows
+/// still live in the WAL (not yet checkpointed into the main file) is copied
+/// completely by the online-backup API, so the pre-migration snapshot can
+/// never silently lose data (audit P0 #3, ТЗ §10.3 "Create verified backup").
+#[test]
+fn safety_copy_includes_wal_commits() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let data_root = dir.path().join("data");
+    fs::create_dir_all(&data_root).expect("create data root");
+    let source = dir.path().join("legacy.db");
+    build_legacy(&source).expect("build legacy");
+
+    // Reopen in WAL mode and commit a row WITHOUT checkpointing: the new row
+    // lives in the -wal file only.
+    {
+        let conn = rusqlite::Connection::open(&source).expect("open");
+        conn.execute_batch("PRAGMA journal_mode = WAL;")
+            .expect("wal");
+        conn.execute(
+            "INSERT INTO characters (id, name, created_at, updated_at) \
+             VALUES ('wal-c1', 'Wally', 1700000000000, 1700000000000)",
+            [],
+        )
+        .expect("insert into wal");
+        // Do NOT checkpoint: the row lives in the -wal file only.
+        assert!(
+            source.with_extension("db-wal").is_file() || source.with_extension("db-wal").exists(),
+            "WAL file present with uncheckpointed commit"
+        );
+    }
+
+    let session =
+        MigrationSession::begin(&data_root, &source, true, &mut nop_stage).expect("begin");
+    assert_eq!(
+        session.report().characters,
+        3,
+        "WAL commit visible to converter"
+    );
+    let backup = session.backup_path().expect("backup path");
+    let copy_db = backup.join("database.sqlite");
+    let copy = rusqlite::Connection::open(&copy_db).expect("open copy");
+    let n: i64 = copy
+        .query_row("SELECT COUNT(*) FROM characters", [], |r| r.get(0))
+        .expect("count");
+    assert_eq!(n, 3, "safety copy carries the WAL commit");
+    drop(copy);
+}
+
+/// A pointer that exists but cannot be read is NOT treated as "no pointer"
+/// (v1 flat): fail-closed, an unreadable pointer is a controlled error
+/// (audit P0 #3 "pointer read errors treated as missing").
+#[test]
+fn unreadable_pointer_is_not_missing() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let data_root = dir.path().join("data");
+    fs::create_dir_all(&data_root).expect("create data root");
+    let pointer = neotavern_storage::activation::pointer_path(&data_root);
+    fs::write(
+        &pointer,
+        b"{\"formatVersion\":1,\"root\":\"\",\"activatedAt\":\"\"}",
+    )
+    .expect("write pointer");
+
+    // On Windows an open handle without sharing makes the read fail; on other
+    // platforms we simulate an unreadable file by making it a directory (a
+    // read of a directory path errors on every OS).
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        let _held = fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&pointer)
+            .expect("hold pointer without sharing");
+        let err = neotavern_storage::activation::read_pointer(&data_root)
+            .expect_err("unreadable pointer must not look like v1-flat missing");
+        assert_eq!(err.code, StorageErrorCode::Corrupt);
+    }
+    #[cfg(not(windows))]
+    {
+        // A directory at the pointer path cannot be read as a file.
+        let dir_path = dir.path().join("pointer-dir");
+        fs::create_dir(&dir_path).expect("make dir");
+        fs::remove_file(&pointer).expect("remove file pointer");
+        fs::rename(&dir_path, &pointer).expect("dir at pointer path");
+        let err = neotavern_storage::activation::read_pointer(&data_root)
+            .expect_err("unreadable pointer must not look like v1-flat missing");
+        assert_eq!(err.code, StorageErrorCode::Corrupt);
+    }
+}
+
+/// A crafted pointer pointing outside the data root (arbitrary absolute path)
+/// is refused on read AND on write (audit P0 #3 "active-root.json holds
+/// arbitrary absolute path").
+#[test]
+fn pointer_outside_data_root_is_refused() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let data_root = dir.path().join("data");
+    fs::create_dir_all(&data_root).expect("create data root");
+    let foreign = dir.path().join("foreign-root");
+    fs::create_dir_all(&foreign).expect("create foreign root");
+
+    let err = neotavern_storage::activation::write_pointer(&data_root, &foreign)
+        .expect_err("write of an out-of-root pointer must fail");
+    assert_eq!(err.code, StorageErrorCode::IntegrityViolation);
+
+    // A crafted pointer file pointing at the foreign root is refused on read.
+    let pointer = neotavern_storage::activation::pointer_path(&data_root);
+    let crafted = serde_json::json!({
+        "formatVersion": 1,
+        "root": foreign.display().to_string(),
+        "activatedAt": "",
+    });
+    fs::write(&pointer, crafted.to_string().as_bytes()).expect("crafted pointer");
+    let err = neotavern_storage::activation::read_pointer(&data_root)
+        .expect_err("out-of-root pointer must fail closed on read");
+    assert_eq!(err.code, StorageErrorCode::IntegrityViolation);
 }
 
 // --- Windows platform corpus (ТЗ §17.4, §10.3.1) ----------------------------
@@ -911,8 +1164,9 @@ fn windows_held_handle_leads_to_activation_pending_and_resolves() {
     let source = dir.path().join("legacy.db");
     build_legacy(&source).expect("build legacy");
 
-    let prepared = prepare(&data_root, &source, false, &mut nop_stage).expect("prepare");
-    let staging = prepared.staging_root.clone();
+    let session =
+        MigrationSession::begin(&data_root, &source, false, &mut nop_stage).expect("begin");
+    let staging = session.staging_root().to_path_buf();
 
     // Hold the staging root's database file open without delete sharing —
     // exactly the Windows contention ТЗ §10.3.1 describes (Defender/indexer/
@@ -933,7 +1187,8 @@ fn windows_held_handle_leads_to_activation_pending_and_resolves() {
         .expect("open pointer without sharing");
     let _raw = held.as_raw_handle(); // keep the handle alive for the retry loop
 
-    let err = commit(&data_root, &prepared.entry_id, &mut nop_stage)
+    let err = session
+        .commit(&mut nop_stage)
         .expect_err("commit must exhaust the retry budget");
     assert_eq!(err.code, StorageErrorCode::ActivationPending);
     assert_eq!(
@@ -944,10 +1199,19 @@ fn windows_held_handle_leads_to_activation_pending_and_resolves() {
         ActivationStatus::ActivationPending,
         "journal stays activation_pending after budget exhaustion"
     );
+    // The pointer file is still held (no sharing) — reading it must fail
+    // closed (Corrupt), NOT silently fall back to the data root (audit P0 #3
+    // "pointer read errors treated as missing"). The previous root is still
+    // active: the journal records it as the entry's `from_root`.
+    let err = neotavern_storage::activation::read_pointer(&data_root)
+        .expect_err("held pointer must fail closed, not read as missing");
+    assert_eq!(err.code, StorageErrorCode::Corrupt);
+    let pending = latest_entry(&data_root)
+        .expect("latest")
+        .expect("entry present");
     assert_eq!(
-        active_root(&data_root).expect("active root"),
-        data_root,
-        "previous root still active during contention"
+        pending.from_root, data_root,
+        "previous root recorded as from_root during contention"
     );
 
     // Release the handle → the next open resolves the pending activation

@@ -230,7 +230,7 @@
     {
       "source": "architecture/portable-data.md",
       "target": "architecture/portable-data.md",
-      "sha256": "72b35d74ffc2cb6d45658950f69d150244e8d600e5310dd117c31382b334974a"
+      "sha256": "67d3eae6b8956244fa7c0a123caeba961c3c85e056b8154a35442e4173706366"
     },
     {
       "source": "architecture/prompt-pipeline.md",
@@ -245,7 +245,7 @@
     {
       "source": "architecture/ui-legacy-surface.md",
       "target": "architecture/ui-legacy-surface.md",
-      "sha256": "a0cc19e162357efa6328604420aa72eb408cbff1a16e4fb1c8c0e32c3cfcacd6"
+      "sha256": "75abcc76d714a8bd5ac1e38e306360e162de5d720459d99e44846ffaea9b1dd5"
     },
     {
       "source": "architecture/version-axes.md",
@@ -260,7 +260,7 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "1c72e9274f702a091cc22a3db4baed2d2dcb6b6fb29b505e6873c0f34eedc627"
+      "sha256": "9c0513cafaff3dec42707732ea5b2319ecc5e08f0898444feeb95a2ef7c55dab"
     },
     {
       "source": "data/README.md",

@@ -30,6 +30,10 @@
 //!   `lore_entries` table (when present) and are stored as `entries_json`.
 //! - `presets` → kernel `presets`: `data` becomes `settings_json`; the
 //!   legacy `kind` column has no kernel equivalent and is not copied.
+//! - `personas` → kernel `personas` (Этап 4.1): `is_default` maps from the
+//!   legacy boolean column (default 0); the single-default invariant is
+//!   enforced on insert. The legacy `personas` table is optional — sources
+//!   predating it contribute 0 rows.
 //!
 //! Provider configs, provider secrets, plugin tables and themes are NEVER
 //! copied (ТЗ §43 import rules). The source database is opened strictly
@@ -55,6 +59,9 @@ pub struct ConversionReport {
     pub messages: u64,
     pub lorebooks: u64,
     pub presets: u64,
+    /// Personas migrated from the legacy `personas` table (Этап 4.1). The
+    /// legacy table is optional: a pre-personas source simply contributes 0.
+    pub personas: u64,
     /// Number of records skipped (orphaned references, invalid values).
     pub skipped: u64,
     /// Human-readable descriptions of every skipped record.
@@ -116,6 +123,7 @@ fn convert(legacy: &Connection, tx: &rusqlite::Transaction) -> Result<Conversion
         messages: 0,
         lorebooks: 0,
         presets: 0,
+        personas: 0,
         skipped: 0,
         orphans: Vec::new(),
     };
@@ -124,6 +132,7 @@ fn convert(legacy: &Connection, tx: &rusqlite::Transaction) -> Result<Conversion
     convert_messages(legacy, tx, &chat_ids, &mut report)?;
     convert_lorebooks(legacy, tx, &mut report)?;
     convert_presets(legacy, tx, &mut report)?;
+    convert_personas(legacy, tx, &mut report)?;
     Ok(report)
 }
 
@@ -699,6 +708,97 @@ fn convert_presets(
         )
         .map_err(|e| StorageError::from_sqlite(e, "legacy: insert preset"))?;
         report.presets += 1;
+    }
+    Ok(())
+}
+
+/// Maps the legacy `personas` table into the kernel `personas` table
+/// (Этап 4.1, ТЗ §8.1). The legacy table is optional; a source without it
+/// contributes 0 rows. `is_default` maps from the legacy boolean column
+/// (default 0); if a source declares multiple defaults, the first (ordered
+/// by id) keeps the flag and the others are stored as non-default so the
+/// kernel's single-default invariant holds.
+fn convert_personas(
+    legacy: &Connection,
+    tx: &rusqlite::Transaction,
+    report: &mut ConversionReport,
+) -> Result<()> {
+    if !table_exists(legacy, "personas")? {
+        return Ok(());
+    }
+    let cols = column_names(legacy, "personas")?;
+    require_columns(
+        &cols,
+        "personas",
+        &["id", "name", "created_at", "updated_at"],
+    )?;
+    let selected = select_columns(
+        &cols,
+        &[
+            "id",
+            "name",
+            "description",
+            "avatar",
+            "is_default",
+            "created_at",
+            "updated_at",
+        ],
+    );
+    let sql = format!(
+        "SELECT {} FROM personas ORDER BY id",
+        quote_columns(&selected)
+    );
+    let mut stmt = legacy
+        .prepare(&sql)
+        .map_err(|e| StorageError::from_sqlite(e, "legacy: prepare personas"))?;
+    let mut rows = stmt
+        .query([])
+        .map_err(|e| StorageError::from_sqlite(e, "legacy: query personas"))?;
+    let mut default_assigned = false;
+    while let Some(row) = rows
+        .next()
+        .map_err(|e| StorageError::from_sqlite(e, "legacy: read personas"))?
+    {
+        let vals = read_values(&selected, row)?;
+        let get = |name: &str| selected.iter().position(|c| *c == name).map(|i| &vals[i]);
+        let Some(id) = as_text(get("id")) else {
+            skip(report, "persona: missing id");
+            continue;
+        };
+        let Some(name) = as_text(get("name")) else {
+            skip(report, &format!("persona {id}: missing name"));
+            continue;
+        };
+        let Some(created_at) = ms_to_rfc3339_checked(get("created_at")) else {
+            skip(report, &format!("persona {id}: invalid created_at"));
+            continue;
+        };
+        let Some(updated_at) = ms_to_rfc3339_checked(get("updated_at")) else {
+            skip(report, &format!("persona {id}: invalid updated_at"));
+            continue;
+        };
+        // Legacy stores the flag as a Drizzle boolean (0/1 integer). Only the
+        // first declared default keeps the flag (single-default invariant).
+        let legacy_default = as_i64(get("is_default")).unwrap_or(0) != 0;
+        let is_default = legacy_default && !default_assigned;
+        if legacy_default {
+            default_assigned = true;
+        }
+        tx.execute(
+            "INSERT INTO personas (id, name, description, avatar, is_default, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            rusqlite::params![
+                id,
+                name,
+                as_text(get("description")).unwrap_or("").to_string(),
+                as_text(get("avatar")).map(|s| s.to_string()),
+                i64::from(is_default),
+                created_at,
+                updated_at,
+            ],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "legacy: insert persona"))?;
+        report.personas += 1;
     }
     Ok(())
 }

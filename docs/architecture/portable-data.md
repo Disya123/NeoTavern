@@ -141,22 +141,35 @@ Detect legacy data
 → Retain rollback pointer (previous root stays until first open after)
 ```
 
-- **`migration::prepare`** stages and validates without activating: the
-  caller (host) can still cancel; **`migration::commit`** publishes the
+- **`migration::MigrationSession`** stages, commits and cancels while holding
+  the data-root lease for the **whole** sequence: `MigrationSession::begin`
+  acquires the exclusive maintenance lock and stages + validates without
+  activating (the host can still cancel); `session.commit()` publishes the
   staged root through the journal (`activation_pending` → pointer switch with
-  bounded transient retry → `committed`); **`migration::cancel`** records
-  `rolled_back`, keeps the previous root active and removes the staging root
-  (the safety copy is retained). **`migration::migrate`** is the one-shot
-  convenience (prepare + commit).
+  bounded transient retry → `committed`) and releases the lease on success;
+  `session.cancel()` records `rolled_back`, keeps the previous root active,
+  removes the staging root and releases the lease (the safety copy is
+  retained). Holding the lease across the phases makes the migration
+  single-writer — no second process can open or write the data root between
+  staging and activation (audit P0 #3). **`migration::migrate`** is the
+  one-shot convenience (begin + commit under one lease).
 - **Immutable source**: the legacy database is opened strictly read-only;
   only the safety copy reads its bytes. **No live dual-write**: staging is a
   fresh versioned root on the same volume, published by the pointer switch.
+- **Verified safety copy**: the pre-migration snapshot is made with the
+  SQLite online-backup API (not a byte copy), so committed WAL frames are
+  included and the copy passes `quick_check` before its checksum is written.
 - **Preflight** refuses a non-file or missing source (`NotFound`), a
   non-legacy source (`UnsupportedStorageFormat`), and a target volume with
   less than 3× the source size + 64 MiB free (`DiskFull`) before any write.
-- **Idempotent**: re-running `prepare` after a committed migration reports
+- **Idempotent**: re-running `begin` after a committed migration reports
   the existing committed entry without staging a second root; re-committing a
   committed entry is a no-op.
+- **Pointer integrity** (audit P0 #3): the active-root pointer is only ever
+  written for the data root itself or a versioned root under `<data-root>/
+  roots/` — an arbitrary absolute path is refused on write AND on read; a
+  pointer/journal that exists but cannot be read fails closed (`Corrupt`)
+  instead of being treated as missing.
 - **Migration corpus** (ТЗ §17.4) is covered by `crates/storage/tests/
   migration.rs`: kernel databases at every released schema revision (1..6)
   upgrade with seeds preserved, a future schema fails closed
