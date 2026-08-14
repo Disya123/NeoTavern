@@ -1220,6 +1220,7 @@ pub enum GenerationEvent {
     #[serde(rename = "generation.completed")] GenerationCompleted { #[serde(rename = "finalMessage")] final_message: MessageDto },
     #[serde(rename = "generation.failed")] GenerationFailed { error: ErrorDto },
     #[serde(rename = "generation.cancelled")] GenerationCancelled,
+    #[serde(rename = "generation.step")] GenerationStep { step: GenerationStep },
     #[serde(rename = "consumer_lagged")] ConsumerLagged { dropped: i64 },
 }
 
@@ -1333,6 +1334,23 @@ pub(crate) fn check_generation_event(value: &Value, path: &str, issues: &mut Vec
                 }
             }
         }
+        Some("generation.step") => {
+            if value.get("step").is_none() {
+                issues.push(Issue::new(join_path(path, "step"), "RequiredProperty"));
+            }
+            if let Some(child) = value.get("step") {
+                let child_path = join_path(path, "step");
+                check_generation_step(child, &child_path, issues);
+            }
+            if let Some(obj) = value.as_object() {
+                for key in obj.keys() {
+                    if !matches!(key.as_str(), "type" | "step") {
+                        let key_path = join_path(path, key);
+                        issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                    }
+                }
+            }
+        }
         Some("consumer_lagged") => {
             if value.get("dropped").is_none() {
                 issues.push(Issue::new(join_path(path, "dropped"), "RequiredProperty"));
@@ -1376,6 +1394,7 @@ pub enum GenerationStatus {
     #[serde(rename = "queued")] Queued,
     #[serde(rename = "preparing")] Preparing,
     #[serde(rename = "streaming")] Streaming,
+    #[serde(rename = "waiting_for_tool")] WaitingForTool,
     #[serde(rename = "completed")] Completed,
     #[serde(rename = "failed")] Failed,
     #[serde(rename = "cancelling")] Cancelling,
@@ -1386,7 +1405,7 @@ pub enum GenerationStatus {
 pub(crate) fn check_generation_status(value: &Value, path: &str, issues: &mut Vec<Issue>) {
     match value.as_str() {
         Some(s) => {
-            if !matches!(s, "queued" | "preparing" | "streaming" | "completed" | "failed" | "cancelling" | "cancelled" | "interrupted") {
+            if !matches!(s, "queued" | "preparing" | "streaming" | "waiting_for_tool" | "completed" | "failed" | "cancelling" | "cancelled" | "interrupted") {
                 issues.push(Issue::new(path, "Union"));
             }
         }
@@ -4464,6 +4483,541 @@ pub fn validate_request_get_prompt_plan(value: &Value) -> Result<(), Vec<Issue>>
 
 pub fn decode_request_get_prompt_plan(bytes: &[u8]) -> Result<RequestGetPromptPlan, WireError> {
     crate::decode::<RequestGetPromptPlan>(validate_request_get_prompt_plan, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GenerationStep {
+    #[serde(rename = "stepId")]
+    pub step_id: String,
+    #[serde(rename = "runId")]
+    pub run_id: String,
+    pub sequence: i64,
+    pub r#type: GenerationStepType,
+    pub status: GenerationStepStatus,
+    pub attempt: i64,
+    #[serde(rename = "idempotencyKey")]
+    pub idempotency_key: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<ErrorDto>,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: String,
+}
+
+pub(crate) fn check_generation_step(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_2: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_3: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("stepId").is_none() {
+            issues.push(Issue::new(join_path(path, "stepId"), "RequiredProperty"));
+        }
+        if value.get("runId").is_none() {
+            issues.push(Issue::new(join_path(path, "runId"), "RequiredProperty"));
+        }
+        if value.get("sequence").is_none() {
+            issues.push(Issue::new(join_path(path, "sequence"), "RequiredProperty"));
+        }
+        if value.get("type").is_none() {
+            issues.push(Issue::new(join_path(path, "type"), "RequiredProperty"));
+        }
+        if value.get("status").is_none() {
+            issues.push(Issue::new(join_path(path, "status"), "RequiredProperty"));
+        }
+        if value.get("attempt").is_none() {
+            issues.push(Issue::new(join_path(path, "attempt"), "RequiredProperty"));
+        }
+        if value.get("idempotencyKey").is_none() {
+            issues.push(Issue::new(join_path(path, "idempotencyKey"), "RequiredProperty"));
+        }
+        if value.get("createdAt").is_none() {
+            issues.push(Issue::new(join_path(path, "createdAt"), "RequiredProperty"));
+        }
+        if value.get("updatedAt").is_none() {
+            issues.push(Issue::new(join_path(path, "updatedAt"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("stepId") {
+            let child_path = join_path(path, "stepId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("runId") {
+            let child_path = join_path(path, "runId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("sequence") {
+            let child_path = join_path(path, "sequence");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("type") {
+            let child_path = join_path(path, "type");
+            check_generation_step_type(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("status") {
+            let child_path = join_path(path, "status");
+            check_generation_step_status(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("attempt") {
+            let child_path = join_path(path, "attempt");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("idempotencyKey") {
+            let child_path = join_path(path, "idempotencyKey");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 128 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("input") {
+            let child_path = join_path(path, "input");
+            if !child.is_object() {
+                issues.push(Issue::new(child_path.as_str(), "Object"));
+            } else {
+            }
+        }
+        if let Some(child) = value.get("output") {
+            let child_path = join_path(path, "output");
+            if !child.is_object() {
+                issues.push(Issue::new(child_path.as_str(), "Object"));
+            } else {
+            }
+        }
+        if let Some(child) = value.get("error") {
+            let child_path = join_path(path, "error");
+            check_error_dto(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("createdAt") {
+            let child_path = join_path(path, "createdAt");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_2.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("updatedAt") {
+            let child_path = join_path(path, "updatedAt");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_3.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "stepId" | "runId" | "sequence" | "type" | "status" | "attempt" | "idempotencyKey" | "input" | "output" | "error" | "createdAt" | "updatedAt") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_generation_step(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_generation_step(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_generation_step(bytes: &[u8]) -> Result<GenerationStep, WireError> {
+    crate::decode::<GenerationStep>(validate_generation_step, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum GenerationStepType {
+    #[serde(rename = "provider_turn")] ProviderTurn,
+    #[serde(rename = "tool_call")] ToolCall,
+    #[serde(rename = "tool_result")] ToolResult,
+    #[serde(rename = "final_commit")] FinalCommit,
+}
+
+pub(crate) fn check_generation_step_type(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    match value.as_str() {
+        Some(s) => {
+            if !matches!(s, "provider_turn" | "tool_call" | "tool_result" | "final_commit") {
+                issues.push(Issue::new(path, "Union"));
+            }
+        }
+        None => issues.push(Issue::new(path, "String")),
+    }
+}
+
+pub fn validate_generation_step_type(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_generation_step_type(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_generation_step_type(bytes: &[u8]) -> Result<GenerationStepType, WireError> {
+    crate::decode::<GenerationStepType>(validate_generation_step_type, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum GenerationStepStatus {
+    #[serde(rename = "running")] Running,
+    #[serde(rename = "waiting")] Waiting,
+    #[serde(rename = "completed")] Completed,
+    #[serde(rename = "failed")] Failed,
+}
+
+pub(crate) fn check_generation_step_status(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    match value.as_str() {
+        Some(s) => {
+            if !matches!(s, "running" | "waiting" | "completed" | "failed") {
+                issues.push(Issue::new(path, "Union"));
+            }
+        }
+        None => issues.push(Issue::new(path, "String")),
+    }
+}
+
+pub fn validate_generation_step_status(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_generation_step_status(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_generation_step_status(bytes: &[u8]) -> Result<GenerationStepStatus, WireError> {
+    crate::decode::<GenerationStepStatus>(validate_generation_step_status, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ToolSpec {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    #[serde(rename = "inputSchema")]
+    pub input_schema: Value,
+}
+
+pub(crate) fn check_tool_spec(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{1,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("id").is_none() {
+            issues.push(Issue::new(join_path(path, "id"), "RequiredProperty"));
+        }
+        if value.get("name").is_none() {
+            issues.push(Issue::new(join_path(path, "name"), "RequiredProperty"));
+        }
+        if value.get("description").is_none() {
+            issues.push(Issue::new(join_path(path, "description"), "RequiredProperty"));
+        }
+        if value.get("inputSchema").is_none() {
+            issues.push(Issue::new(join_path(path, "inputSchema"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("id") {
+            let child_path = join_path(path, "id");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("name") {
+            let child_path = join_path(path, "name");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 128 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("description") {
+            let child_path = join_path(path, "description");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len > 512 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("inputSchema") {
+            let child_path = join_path(path, "inputSchema");
+            if !child.is_object() {
+                issues.push(Issue::new(child_path.as_str(), "Object"));
+            } else {
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "id" | "name" | "description" | "inputSchema") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_tool_spec(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_tool_spec(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_tool_spec(bytes: &[u8]) -> Result<ToolSpec, WireError> {
+    crate::decode::<ToolSpec>(validate_tool_spec, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultListTools {
+    pub items: Vec<ToolSpec>,
+}
+
+pub(crate) fn check_result_list_tools(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("items").is_none() {
+            issues.push(Issue::new(join_path(path, "items"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("items") {
+            let child_path = join_path(path, "items");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    check_tool_spec(item, &item_path, issues);
+                }
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "items") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_list_tools(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_list_tools(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_list_tools(bytes: &[u8]) -> Result<ResultListTools, WireError> {
+    crate::decode::<ResultListTools>(validate_result_list_tools, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ToolCall {
+    pub id: String,
+    pub name: String,
+    pub arguments: Value,
+}
+
+pub(crate) fn check_tool_call(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("id").is_none() {
+            issues.push(Issue::new(join_path(path, "id"), "RequiredProperty"));
+        }
+        if value.get("name").is_none() {
+            issues.push(Issue::new(join_path(path, "name"), "RequiredProperty"));
+        }
+        if value.get("arguments").is_none() {
+            issues.push(Issue::new(join_path(path, "arguments"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("id") {
+            let child_path = join_path(path, "id");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("name") {
+            let child_path = join_path(path, "name");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 128 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("arguments") {
+            let child_path = join_path(path, "arguments");
+            if !child.is_object() {
+                issues.push(Issue::new(child_path.as_str(), "Object"));
+            } else {
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "id" | "name" | "arguments") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_tool_call(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_tool_call(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_tool_call(bytes: &[u8]) -> Result<ToolCall, WireError> {
+    crate::decode::<ToolCall>(validate_tool_call, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestGenerationToolResult {
+    #[serde(rename = "runId")]
+    pub run_id: String,
+    #[serde(rename = "toolCallId")]
+    pub tool_call_id: String,
+    pub result: Value,
+}
+
+pub(crate) fn check_request_generation_tool_result(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("runId").is_none() {
+            issues.push(Issue::new(join_path(path, "runId"), "RequiredProperty"));
+        }
+        if value.get("toolCallId").is_none() {
+            issues.push(Issue::new(join_path(path, "toolCallId"), "RequiredProperty"));
+        }
+        if value.get("result").is_none() {
+            issues.push(Issue::new(join_path(path, "result"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("runId") {
+            let child_path = join_path(path, "runId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("toolCallId") {
+            let child_path = join_path(path, "toolCallId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("result") {
+            let child_path = join_path(path, "result");
+            if !child.is_object() {
+                issues.push(Issue::new(child_path.as_str(), "Object"));
+            } else {
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "runId" | "toolCallId" | "result") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_generation_tool_result(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_generation_tool_result(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_generation_tool_result(bytes: &[u8]) -> Result<RequestGenerationToolResult, WireError> {
+    crate::decode::<RequestGenerationToolResult>(validate_request_generation_tool_result, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

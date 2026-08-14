@@ -5,7 +5,7 @@
     {
       "source": "README.md",
       "target": "README.md",
-      "sha256": "e0322f57a3908f82b66382655e4b88dd2fdd09dcbb312fea77c313679533f5e7"
+      "sha256": "24f9781cda313daa92f4e052affe53fad11edc6712ded8a1ab6e2df36252fa93"
     },
     {
       "source": "adr/0004-typebox-contracts.md",
@@ -200,7 +200,7 @@
     {
       "source": "architecture/README.md",
       "target": "architecture/README.md",
-      "sha256": "553488844bbad5a9beb05ae9179a57a34f452233bba7fa63b854ff83e6d9d9a7"
+      "sha256": "22ad2e3b3768320afa22eeaf55a8a5d8be187f9fba33826aea4ede382e4a80b3"
     },
     {
       "source": "architecture/benchmarks.md",
@@ -210,7 +210,12 @@
     {
       "source": "architecture/generation-durability.md",
       "target": "architecture/generation-durability.md",
-      "sha256": "abfe53ec34502c3e089b40e30ea7daca1d927b653713f978d7743e7a5f38eae1"
+      "sha256": "bdd0a544de0f162bfebf6cdcad97f226d31811b6432f66cb289945ce38b3d123"
+    },
+    {
+      "source": "architecture/generation-run-steps.md",
+      "target": "architecture/generation-run-steps.md",
+      "sha256": "b12151cbedf245370f7d4bca6871c0408a0929d63355302b5235c4d2a477de33"
     },
     {
       "source": "architecture/operations-inventory.md",
@@ -250,7 +255,7 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "db6c1964b608cfde2ca680da820fe0337dfe8ee0fae456495a312d763cfd0a9b"
+      "sha256": "5a148f0a694fe4f37212b800459f9dcd29c940275aee610f02c0da0df84978c2"
     },
     {
       "source": "data/README.md",

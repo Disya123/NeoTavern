@@ -8,7 +8,8 @@
 use contracts_generated::generated::{
     decode_backup_dto, decode_character_dto, decode_chat_dto, decode_error_dto,
     decode_event_envelope, decode_generation_event, decode_generation_run,
-    decode_generation_status, decode_lorebook_dto, decode_message_dto, decode_message_role,
+    decode_generation_status, decode_generation_step, decode_generation_step_status,
+    decode_generation_step_type, decode_lorebook_dto, decode_message_dto, decode_message_role,
     decode_meta_dto, decode_paged_characters, decode_paged_chats, decode_paged_generation_events,
     decode_paged_messages, decode_preset_dto, decode_prompt_block, decode_prompt_excluded,
     decode_prompt_message, decode_prompt_plan, decode_provider_availability,
@@ -17,16 +18,17 @@ use contracts_generated::generated::{
     decode_request_create_message, decode_request_delete_character, decode_request_delete_chat,
     decode_request_delete_message, decode_request_delete_provider_config,
     decode_request_discard_generation, decode_request_empty, decode_request_envelope,
-    decode_request_get_character, decode_request_get_chat, decode_request_get_generation_run,
-    decode_request_get_prompt_plan, decode_request_get_provider_config,
-    decode_request_keep_partial_generation, decode_request_list_characters,
-    decode_request_list_chats, decode_request_list_generation_events, decode_request_list_messages,
+    decode_request_generation_tool_result, decode_request_get_character, decode_request_get_chat,
+    decode_request_get_generation_run, decode_request_get_prompt_plan,
+    decode_request_get_provider_config, decode_request_keep_partial_generation,
+    decode_request_list_characters, decode_request_list_chats,
+    decode_request_list_generation_events, decode_request_list_messages,
     decode_request_list_provider_configs, decode_request_retry_generation,
     decode_request_set_provider_config, decode_request_start_generation,
     decode_request_update_character, decode_request_update_chat, decode_request_update_message,
     decode_response_envelope, decode_result_empty, decode_result_list_backups,
     decode_result_list_lorebooks, decode_result_list_presets, decode_result_list_provider_configs,
-    decode_result_list_providers,
+    decode_result_list_providers, decode_result_list_tools, decode_tool_call, decode_tool_spec,
 };
 use contracts_generated::{contract_schema_hash, wire_protocol, WireError};
 use serde::de::DeserializeOwned;
@@ -194,6 +196,23 @@ fn dispatch(schema_id: &str, bytes: &[u8], valid: bool) {
         "wire.request.envelope" => corpus_case(schema_id, decode_request_envelope, bytes, valid),
         "wire.response.envelope" => corpus_case(schema_id, decode_response_envelope, bytes, valid),
         "wire.event.envelope" => corpus_case(schema_id, decode_event_envelope, bytes, valid),
+        // Этап 2.7 (ТЗ §8.3): generation step journal + tool contracts.
+        "wire.generation.step" => corpus_case(schema_id, decode_generation_step, bytes, valid),
+        "wire.generation.step.type" => {
+            corpus_case(schema_id, decode_generation_step_type, bytes, valid)
+        }
+        "wire.generation.step.status" => {
+            corpus_case(schema_id, decode_generation_step_status, bytes, valid)
+        }
+        "wire.tool.spec" => corpus_case(schema_id, decode_tool_spec, bytes, valid),
+        "wire.tool.call" => corpus_case(schema_id, decode_tool_call, bytes, valid),
+        "wire.result.list-tools" => corpus_case(schema_id, decode_result_list_tools, bytes, valid),
+        "wire.request.generation-tool-result" => corpus_case(
+            schema_id,
+            decode_request_generation_tool_result,
+            bytes,
+            valid,
+        ),
         other => panic!("corpus references unknown schemaId: {other}"),
     }
 }

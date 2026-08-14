@@ -164,9 +164,124 @@ export const PagedMessagesDtoSchema = Type.Object(
 export type PagedMessagesDto = Static<typeof PagedMessagesDtoSchema>;
 
 /**
+ * Generation run/step model DTOs (`wire.generation.step`, `wire.tool.*`,
+ * ТЗ §8.3, Этап 2.7): the durable `GenerationStep` journal of one run and
+ * the normalized tool-call contract — the kernel validates and records each
+ * provider turn, tool call and tool result as an immutable step, never
+ * executes tools itself, and resumes a run from the durable `waiting_for_tool`
+ * state when the host submits the result.
+ */
+
+/** Step type union (`wire.generation.step.type`). */
+export const WireGenerationStepType = Type.Union(
+  [
+    Type.Literal('provider_turn'),
+    Type.Literal('tool_call'),
+    Type.Literal('tool_result'),
+    Type.Literal('final_commit'),
+  ],
+  { $id: 'wire.generation.step.type', 'x-wire-unknown-behavior': 'reject' },
+);
+export type WireGenerationStepType = Static<typeof WireGenerationStepType>;
+
+/** Step status union (`wire.generation.step.status`). */
+export const WireGenerationStepStatus = Type.Union(
+  [
+    Type.Literal('running'),
+    Type.Literal('waiting'),
+    Type.Literal('completed'),
+    Type.Literal('failed'),
+  ],
+  { $id: 'wire.generation.step.status', 'x-wire-unknown-behavior': 'reject' },
+);
+export type WireGenerationStepStatus = Static<typeof WireGenerationStepStatus>;
+
+/**
+ * One durable generation step (`wire.generation.step`, ТЗ §8.3): an
+ * immutable journal row with a monotonic per-run `sequence`, its `type` and
+ * `status`, the attempt number, an `idempotencyKey` for replay safety and
+ * bounded JSON `input`/`output` (tool arguments/results; large payloads are
+ * referenced, never copied). `error` mirrors the terminal error DTO.
+ */
+export const GenerationStepDtoSchema = Type.Object(
+  {
+    stepId: Type.String({ format: 'uuid' }),
+    runId: Type.String({ format: 'uuid' }),
+    sequence: Type.Integer({ minimum: 0 }),
+    type: WireGenerationStepType,
+    status: WireGenerationStepStatus,
+    attempt: Type.Integer({ minimum: 1 }),
+    idempotencyKey: Type.String({ minLength: 1, maxLength: 128 }),
+    input: Type.Optional(Type.Object({}, { additionalProperties: true })),
+    output: Type.Optional(Type.Object({}, { additionalProperties: true })),
+    error: Type.Optional(ProductErrorDtoSchema),
+    createdAt: Type.String({ format: 'rfc3339' }),
+    updatedAt: Type.String({ format: 'rfc3339' }),
+  },
+  { $id: 'wire.generation.step', additionalProperties: false },
+);
+export type GenerationStepDto = Static<typeof GenerationStepDtoSchema>;
+
+/**
+ * Declared tool contract (`wire.tool.spec`, ТЗ §8.3): what the host exposes
+ * to the kernel's tool registry. `inputSchema` is a JSON-Schema document the
+ * kernel validates each call's arguments against before the run may wait on
+ * the tool result (schema/capability check, §8.3).
+ */
+export const ToolSpecDtoSchema = Type.Object(
+  {
+    id: Type.String({ pattern: '^[a-z][a-z0-9-]{1,63}$' }),
+    name: Type.String({ minLength: 1, maxLength: 128 }),
+    description: Type.String({ minLength: 0, maxLength: 512 }),
+    inputSchema: Type.Object({}, { additionalProperties: true }),
+  },
+  { $id: 'wire.tool.spec', additionalProperties: false },
+);
+export type ToolSpecDto = Static<typeof ToolSpecDtoSchema>;
+
+/** List tools result DTO (`wire.result.list-tools`). */
+export const ListToolsResultDtoSchema = Type.Object(
+  {
+    items: Type.Array(ToolSpecDtoSchema),
+  },
+  { $id: 'wire.result.list-tools', additionalProperties: false },
+);
+export type ListToolsResultDto = Static<typeof ListToolsResultDtoSchema>;
+
+/**
+ * Normalized tool request (`wire.tool.call`, ТЗ §9.3): what the provider
+ * adapter emits and the kernel records. The kernel never executes tools
+ * itself; the host performs the effect and submits the result via
+ * `generation.tool.result`.
+ */
+export const ToolCallDtoSchema = Type.Object(
+  {
+    id: Type.String({ format: 'uuid' }),
+    name: Type.String({ minLength: 1, maxLength: 128 }),
+    arguments: Type.Object({}, { additionalProperties: true }),
+  },
+  { $id: 'wire.tool.call', additionalProperties: false },
+);
+export type ToolCallDto = Static<typeof ToolCallDtoSchema>;
+
+/** Submit tool result request DTO (`wire.request.generation-tool-result`). */
+export const GenerationToolResultRequestDtoSchema = Type.Object(
+  {
+    runId: Type.String({ format: 'uuid' }),
+    toolCallId: Type.String({ format: 'uuid' }),
+    result: Type.Object({}, { additionalProperties: true }),
+  },
+  { $id: 'wire.request.generation-tool-result', additionalProperties: false },
+);
+export type GenerationToolResultRequestDto = Static<typeof GenerationToolResultRequestDtoSchema>;
+
+/**
  * Generation event union (`wire.generation.event`): discriminated on `type`.
  * Streamed by `generation.start` until a terminal member
- * (`generation.completed` / `generation.failed` / `generation.cancelled`).
+ * (`generation.completed` / `generation.failed` / `generation.cancelled`);
+ * `generation.step` announces each durable step commit (provider turns, tool
+ * calls and results), so the UI can distinguish streaming from tool
+ * execution and waiting-for-tool (§13.2).
  */
 export const WireGenerationEvent = Type.Union(
   [
@@ -202,6 +317,13 @@ export const WireGenerationEvent = Type.Union(
     Type.Object(
       {
         type: Type.Literal('generation.cancelled'),
+      },
+      { additionalProperties: false },
+    ),
+    Type.Object(
+      {
+        type: Type.Literal('generation.step'),
+        step: GenerationStepDtoSchema,
       },
       { additionalProperties: false },
     ),
@@ -386,6 +508,7 @@ export const WireGenerationStatus = Type.Union(
     Type.Literal('queued'),
     Type.Literal('preparing'),
     Type.Literal('streaming'),
+    Type.Literal('waiting_for_tool'),
     Type.Literal('completed'),
     Type.Literal('failed'),
     Type.Literal('cancelling'),
@@ -810,6 +933,13 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.prompt.excluded': PromptExcludedDtoSchema,
   'wire.prompt.plan': PromptPlanDtoSchema,
   'wire.request.get-prompt-plan': GetPromptPlanRequestDtoSchema,
+  'wire.generation.step': GenerationStepDtoSchema,
+  'wire.generation.step.type': WireGenerationStepType,
+  'wire.generation.step.status': WireGenerationStepStatus,
+  'wire.tool.spec': ToolSpecDtoSchema,
+  'wire.result.list-tools': ListToolsResultDtoSchema,
+  'wire.tool.call': ToolCallDtoSchema,
+  'wire.request.generation-tool-result': GenerationToolResultRequestDtoSchema,
   'wire.result.empty': EmptyResultDtoSchema,
   'wire.result.list-backups': ListBackupsResultDtoSchema,
   'wire.paged.generation-events': PagedGenerationEventsDtoSchema,

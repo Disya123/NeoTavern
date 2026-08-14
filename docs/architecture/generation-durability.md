@@ -82,6 +82,8 @@ provider for fault injection"). The `model` string is a `;`-separated grammar:
 | `fail-at`         | –       | 1–steps | provider error before step N          |
 | `delay-ms`        | 0       | 0–200   | sleep per step (cancel/timeout tests) |
 | `tokens-per-step` | 6       | 1–256   | delta text length                     |
+| `tool`            | –       | name    | Этап 2.7: call a tool on the first turn, emit final text on the resumed turn |
+| `tool-loop`       | –       | name    | Этап 2.7: call a tool on EVERY turn (loop-guard budget tests) |
 
 Delta text for step `i` is derived from `sha256(chat_id|attempt|i)` — no wall
 clock, no randomness: **same inputs → byte-identical event logs across
@@ -135,12 +137,15 @@ Delivery is **at-least-once over the durable log**:
 | `generation.cancel`  | transactional             | request cancellation (§63)                                                                                          |
 | `generation.get`     | transactional             | durable run snapshot `wire.generation.run` incl. bounded `partialText` preview                                      |
 | `generation.events`  | transactional             | paged durable event log `wire.paged.generation-events` (`afterSequence` cursor, `hasMore`)                          |
-| `generation.keep`    | transactional, idempotent | promote partial text to an assistant message (post-terminal only)                                                   |
+| `generation.keep`    | transactional, idempotent | promote partial text to an assistant message (post-terminal only; a waiting-for-tool run returns its DTO instead of `NO_PARTIAL_OUTPUT`)                                                   |
 | `generation.discard` | transactional, idempotent | purge the event log of a post-terminal run                                                                          |
+| `generation.tools.list` | transactional, idempotent, safe | list the registered tool contracts (Этап 2.7)                                                              |
+| `generation.tool.result` | transactional, non-idempotent | submit a tool result and resume a waiting-for-tool run (Этап 2.7)                                       |
 
 Product error codes: `CHAT_NOT_FOUND`, `GENERATION_RUN_NOT_FOUND`,
 `GENERATION_RUN_STATE_CONFLICT`, `NO_PARTIAL_OUTPUT`, `PROVIDER_UNAVAILABLE`,
-`PROVIDER_MODEL_INVALID`, `PROVIDER_STEP_FAILED`.
+`PROVIDER_MODEL_INVALID`, `PROVIDER_STEP_FAILED`, and Этап 2.7:
+`TOOL_NOT_FOUND`, `TOOL_ARGS_INVALID`, `TOOL_LOOP_LIMIT`, `TOOL_RESULT_STALE`.
 
 Retry semantics (§63): a retry creates a **new run** (`attempt = source + 1`,
 `source_run_id` link) — it never re-executes the old attempt and never hides a
@@ -161,6 +166,8 @@ start ── stream events ──► completed (message persisted)
 
 ## Related documents
 
+- [Generation run/steps and the tool-call loop](generation-run-steps.md) — Этап
+  2.7: durable step journal, `waiting_for_tool`, tool registry and loop guard.
 - [Wire contracts](wire-contracts.md) — the 20-operation registry, envelopes
   and §6.1 HTTP/SSE transport mapping.
 - [Operations inventory](operations-inventory.md) — wire-operation routing.

@@ -164,8 +164,12 @@ fn generation_happy_path_and_determinism() {
     // Both streams committed every delta and terminated.
     let (committed1, terminal1) = notices1;
     let (committed2, terminal2) = notices2;
-    assert_eq!(committed1.len(), 4, "four deltas must be committed");
-    assert_eq!(committed2.len(), 4);
+    assert_eq!(
+        committed1.len(),
+        6,
+        "four deltas + the two Этап 2.7 closing step events"
+    );
+    assert_eq!(committed2.len(), 6);
     assert_eq!(
         terminal1, terminal2,
         "terminal sequences must match across roots"
@@ -174,22 +178,24 @@ fn generation_happy_path_and_determinism() {
     // Events replay: the streamed content (deltas + checkpoints) is
     // byte-identical across two fresh roots with the same chat id, model and
     // attempt. The terminal `generation.completed` payload embeds a fresh
-    // message id + wall-clock timestamp, so it is compared structurally.
+    // message id + wall-clock timestamp, and the step events embed wall-clock
+    // timestamps, so both are compared structurally.
     let events1 = list_events(&kernel1, &run1, -1, None);
     let events2 = list_events(&kernel2, &run2, -1, None);
     assert_eq!(events1.items.len(), events2.items.len());
-    // 4 deltas (seq 0..=3) + 1 checkpoint (after delta index 3) + 1 completed.
-    assert_eq!(events1.items.len(), 6);
+    // 4 deltas (seq 0..=3) + 1 checkpoint (after delta index 3) + 2 closing
+    // steps (provider_turn, final_commit) + 1 completed.
+    assert_eq!(events1.items.len(), 8);
     let deterministic1: Vec<_> = events1
         .items
         .iter()
-        .filter(|e| e.r#type != "generation.completed")
+        .filter(|e| e.r#type != "generation.completed" && e.r#type != "generation.step")
         .map(|e| e.payload.clone())
         .collect();
     let deterministic2: Vec<_> = events2
         .items
         .iter()
-        .filter(|e| e.r#type != "generation.completed")
+        .filter(|e| e.r#type != "generation.completed" && e.r#type != "generation.step")
         .map(|e| e.payload.clone())
         .collect();
     assert_eq!(
@@ -695,10 +701,14 @@ fn terminal_replay_exactly_one_terminal_event_and_message() {
     .expect("generation.start must succeed");
     let run_id = stream.stream_id().to_string();
     let (committed, terminal) = drain_until_terminal(&mut stream, Duration::from_secs(30));
-    assert_eq!(committed, vec![0, 1]);
+    assert_eq!(committed, vec![0, 1, 2, 3], "2 deltas + 2 closing steps");
 
     let events = list_events(&kernel, &run_id, -1, None);
-    assert_eq!(events.items.len(), 3, "2 deltas + 1 terminal event");
+    assert_eq!(
+        events.items.len(),
+        5,
+        "2 deltas + 2 closing steps + 1 terminal event"
+    );
     let terminal_events: Vec<_> = events
         .items
         .iter()
@@ -882,9 +892,10 @@ fn generation_events_pagination() {
     let run_id = stream.stream_id().to_string();
     drain_until_terminal(&mut stream, Duration::from_secs(30));
 
-    // 20 deltas + 5 checkpoints (delta indices 3,7,11,15,19) + 1 terminal.
+    // 20 deltas + 5 checkpoints (delta indices 3,7,11,15,19) + 2 closing
+    // steps + 1 terminal.
     let all = list_events(&kernel, &run_id, -1, None);
-    assert_eq!(all.items.len(), 26);
+    assert_eq!(all.items.len(), 28);
     assert!(!all.has_more, "one page holds everything");
     let checkpoint_count = all
         .items
@@ -911,7 +922,7 @@ fn generation_events_pagination() {
         page2.items.last().unwrap().sequence,
         Some(10),
     );
-    assert_eq!(page3.items.len(), 6);
+    assert_eq!(page3.items.len(), 8);
     assert!(!page3.has_more);
 
     // The union is the full log: strictly increasing sequences, no gaps,
@@ -935,7 +946,7 @@ fn generation_events_pagination() {
     assert_eq!(one.items.len(), 1);
     assert!(one.has_more);
     let big = list_events(&kernel, &run_id, -1, Some(200));
-    assert_eq!(big.items.len(), 26);
+    assert_eq!(big.items.len(), 28);
 
     // afterSequence = last event → empty page, no hasMore.
     let after_last = list_events(
@@ -1045,7 +1056,11 @@ fn concurrent_characters_list_during_stream() {
     // And the run still completes normally.
     let (rest, _terminal) = drain_until_terminal(&mut stream, Duration::from_secs(30));
     committed.extend(rest);
-    assert_eq!(committed.len(), 10);
+    assert_eq!(
+        committed.len(),
+        12,
+        "10 deltas + the two closing step events"
+    );
     assert_eq!(
         get_run(&kernel, &run_id).status,
         contracts_generated::generated::GenerationStatus::Completed

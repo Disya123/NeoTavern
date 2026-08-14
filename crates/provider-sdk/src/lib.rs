@@ -130,7 +130,9 @@ impl std::error::Error for ProviderError {}
 
 /// One streaming unit produced by an adapter. The wire `generation.checkpoint`
 /// event is derived by the kernel from the commit rhythm — adapters emit
-/// deltas only.
+/// deltas only. `ToolCall` is the normalized tool request (§9.3): the adapter
+/// never executes tools itself — the kernel validates and durably records it,
+/// then the host performs the effect and submits the result.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum ProviderEvent {
@@ -138,6 +140,18 @@ pub enum ProviderEvent {
     Delta {
         /// Delta text.
         text: String,
+    },
+    /// A normalized tool request produced by the model: the adapter's turn is
+    /// complete when it emits this; the kernel transitions the run to the
+    /// durable `waiting_for_tool` state and stops the attempt.
+    ToolCall {
+        /// Stable tool-call identifier echoed to the host (`toolCallId`).
+        id: String,
+        /// Declared tool name (must match a registered `ToolSpec`).
+        name: String,
+        /// JSON arguments validated by the kernel against the tool's
+        /// `input_schema` before the run may wait on the result.
+        arguments: serde_json::Value,
     },
 }
 
@@ -192,13 +206,47 @@ pub enum Availability {
 
 /// One rendered prompt message (instruct-neutral form, ТЗ §9.2): the prompt
 /// pipeline works with a plain role/content array until the provider-specific
-/// serialization stage (AGENTS.md §9). Carries no secrets.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// serialization stage (AGENTS.md §9). Carries no secrets. On a resumed turn
+/// after a tool call the kernel appends an assistant message carrying
+/// `tool_calls` and the matching `tool`-role result message carrying
+/// `tool_call_id` — the working context of §8.3.
+#[derive(Debug, Clone, PartialEq)]
 pub struct PromptMessage<'a> {
     /// Wire role: `system` | `user` | `assistant` | `tool`.
     pub role: &'a str,
     /// Message content.
     pub content: &'a str,
+    /// Assistant tool calls (JSON-encoded arguments) on the resumed turn.
+    pub tool_calls: Option<&'a [PromptToolCall<'a>]>,
+    /// The `tool_call_id` of a `tool`-role result message.
+    pub tool_call_id: Option<&'a str>,
+}
+
+/// One assistant-side tool call in the working context (§8.3).
+#[derive(Debug, Clone, PartialEq)]
+pub struct PromptToolCall<'a> {
+    /// Tool-call identifier (matches `ProviderEvent::ToolCall.id`).
+    pub id: &'a str,
+    /// Declared tool name.
+    pub name: &'a str,
+    /// JSON-encoded arguments (the adapter writes them verbatim).
+    pub arguments: &'a str,
+}
+
+/// A tool the kernel exposes to providers for the run (ТЗ §8.3, §9.3):
+/// name, description and the JSON-Schema the kernel validates call arguments
+/// against before the run may wait on the tool result. The kernel never
+/// executes tools itself.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ToolSpec<'a> {
+    /// Stable wire id (`wire.tool.spec.id` pattern).
+    pub id: &'a str,
+    /// Function name the model calls.
+    pub name: &'a str,
+    /// Human description sent to the model.
+    pub description: &'a str,
+    /// JSON-Schema document for `arguments`.
+    pub input_schema: &'a serde_json::Value,
 }
 
 /// Sanitized generation request handed to an adapter. Built from the durable
@@ -229,8 +277,12 @@ pub struct ProviderRequest<'a> {
     /// The kernel's rendered prompt plan (system blocks + selected history +
     /// the user message), when the prompt pipeline is active (Этап 2.6).
     /// `None` for direct single-message calls. Adapters serialize this array
-    /// (or fall back to `input`) and never store or log it.
+    /// (or fall back to `input`) and never store or log it. On resumed turns
+    /// the array also carries the assistant tool calls and tool results.
     pub messages: Option<&'a [PromptMessage<'a>]>,
+    /// Tools declared for this run (adapter declares them to the model and
+    /// parses normalized tool requests). `None` when tool use is disabled.
+    pub tools: Option<&'a [ToolSpec<'a>]>,
 }
 
 /// The portable provider adapter contract (§55).

@@ -177,11 +177,14 @@ fn adapter_trait_is_object_safe_and_streams_usage() {
         deadline: None,
         api_key: None,
         messages: None,
+        tools: None,
     };
     let mut texts = Vec::new();
     let usage = provider
         .generate(&request, CancelToken::new(&flag), &mut |event| {
-            let ProviderEvent::Delta { text } = event;
+            let ProviderEvent::Delta { text } = event else {
+                return EmitStatus::Continue;
+            };
             texts.push(text);
             EmitStatus::Continue
         })
@@ -202,6 +205,7 @@ fn adapter_stop_signal_cancels_the_attempt() {
         deadline: None,
         api_key: None,
         messages: None,
+        tools: None,
     };
     let mut emitted = 0;
     let err = provider

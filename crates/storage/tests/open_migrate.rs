@@ -203,3 +203,156 @@ fn verify_ledger_detects_tampering() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(err.code, StorageErrorCode::MigrationChecksumMismatch);
     Ok(())
 }
+
+/// Builds a database at schema v5 (migrations 1..5 applied, ledger + meta +
+/// `application_id` set) and seeds it with a chat, a generation run, its
+/// event log and its prompt plan — the upgrade path migration 6 must preserve.
+fn build_v5_with_data(root: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
+    use neotavern_storage::schema::{
+        MIGRATION_1_SQL, MIGRATION_2_SQL, MIGRATION_3_SQL, MIGRATION_4_SQL, MIGRATION_5_SQL,
+    };
+    let conn = rusqlite::Connection::open(db_path(root))?;
+    conn.execute_batch(MIGRATION_1_SQL)?;
+    conn.execute_batch(MIGRATION_2_SQL)?;
+    conn.execute_batch(MIGRATION_3_SQL)?;
+    conn.execute_batch(MIGRATION_4_SQL)?;
+    conn.execute_batch(MIGRATION_5_SQL)?;
+    conn.execute_batch(&format!(
+        "PRAGMA application_id = {}; PRAGMA user_version = 5;",
+        neotavern_storage::APPLICATION_ID
+    ))?;
+    conn.execute(
+        "INSERT INTO __neotavern_meta (key, value) VALUES ('storageFormat', '1')",
+        [],
+    )?;
+    for (id, name, checksum) in [
+        (
+            1i64,
+            "001_initial_schema",
+            neotavern_storage::schema::MIGRATION_1_CHECKSUM,
+        ),
+        (
+            2i64,
+            "002_product_core",
+            neotavern_storage::schema::MIGRATION_2_CHECKSUM,
+        ),
+        (
+            3i64,
+            "003_generation_durability",
+            neotavern_storage::schema::MIGRATION_3_CHECKSUM,
+        ),
+        (
+            4i64,
+            "004_provider_configs",
+            neotavern_storage::schema::MIGRATION_4_CHECKSUM,
+        ),
+        (
+            5i64,
+            "005_prompt_plans",
+            neotavern_storage::schema::MIGRATION_5_CHECKSUM,
+        ),
+    ] {
+        conn.execute(
+            "INSERT INTO __neotavern_migrations (id, name, checksum, applied_at) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![id, name, checksum, "2026-08-13T10:00:00Z"],
+        )?;
+    }
+    // Seed: a character + chat + run + event + plan the rebuild must keep.
+    conn.execute(
+        "INSERT INTO characters (id, name, description, tags_json, ext_json, created_at, updated_at) \
+         VALUES ('c1c1c1c1-0000-4000-8000-000000000001', 'Aria', 'A cheerful guide.', '[]', '{}', '2026-08-13T10:00:00Z', '2026-08-13T10:00:00Z')",
+        [],
+    )?;
+    conn.execute(
+        "INSERT INTO chats (id, character_id, title, created_at, updated_at) \
+         VALUES ('c1c1c1c1-0000-4000-8000-000000000002', 'c1c1c1c1-0000-4000-8000-000000000001', 'Chat', '2026-08-13T10:00:00Z', '2026-08-13T10:00:00Z')",
+        [],
+    )?;
+    conn.execute(
+        "INSERT INTO generation_runs \
+         (id, chat_id, attempt, status, provider, model, request_snapshot_json, revision, \
+          last_event_sequence, partial_length, started_at, updated_at) \
+         VALUES ('c1c1c1c1-0000-4000-8000-000000000003', 'c1c1c1c1-0000-4000-8000-000000000002', 1, 'streaming', 'fake', 'steps=2', '{}', 7, 3, 42, '2026-08-13T10:00:00Z', '2026-08-13T10:00:00Z')",
+        [],
+    )?;
+    conn.execute(
+        "INSERT INTO generation_events (run_id, sequence, type, payload_json, created_at) \
+         VALUES ('c1c1c1c1-0000-4000-8000-000000000003', 0, 'generation.delta', '{\"type\":\"generation.delta\",\"text\":\"hi\"}', '2026-08-13T10:00:00Z')",
+        [],
+    )?;
+    conn.execute(
+        "INSERT INTO prompt_plans (run_id, chat_id, plan_json, created_at) \
+         VALUES ('c1c1c1c1-0000-4000-8000-000000000003', 'c1c1c1c1-0000-4000-8000-000000000002', '{}', '2026-08-13T10:00:00Z')",
+        [],
+    )?;
+    drop(conn);
+    Ok(())
+}
+
+#[test]
+fn migration_6_adds_steps_and_pending_tool_column() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = tempfile::tempdir()?;
+    let root = dir.path();
+    build_v5_with_data(root)?;
+
+    // open() migrates 5 → 6 (the ledger verifies before migration).
+    let mut noop = |_| {};
+    let db = open(root, &ConnectionPolicy::default(), &mut noop)?;
+    assert_eq!(db.schema_revision()?, CURRENT_SCHEMA);
+    verify_ledger(db.conn())?;
+
+    // The seeded run survived the upgrade with every column intact.
+    let (status, revision, partial, last_seq): (String, i64, i64, i64) = db.conn().query_row(
+        "SELECT status, revision, partial_length, last_event_sequence FROM generation_runs WHERE id = ?1",
+        ["c1c1c1c1-0000-4000-8000-000000000003"],
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+    )?;
+    assert_eq!(status, "streaming");
+    assert_eq!(revision, 7);
+    assert_eq!(partial, 42);
+    assert_eq!(last_seq, 3);
+
+    // The child tables still reference generation_runs and kept their rows.
+    let event_count: i64 = db.conn().query_row(
+        "SELECT COUNT(*) FROM generation_events WHERE run_id = ?1",
+        ["c1c1c1c1-0000-4000-8000-000000000003"],
+        |r| r.get(0),
+    )?;
+    assert_eq!(event_count, 1);
+    let plan_count: i64 = db
+        .conn()
+        .query_row("SELECT COUNT(*) FROM prompt_plans", [], |r| r.get(0))?;
+    assert_eq!(plan_count, 1);
+
+    // The new pending-tool column exists and round-trips; the waiting state
+    // is expressed by the marker, not by a CHECK value.
+    db.conn().execute(
+        "UPDATE generation_runs SET pending_tool_call_json = '{\"id\":\"tc-1\"}' WHERE id = ?1",
+        ["c1c1c1c1-0000-4000-8000-000000000003"],
+    )?;
+    let pending: String = db.conn().query_row(
+        "SELECT pending_tool_call_json FROM generation_runs WHERE id = ?1",
+        ["c1c1c1c1-0000-4000-8000-000000000003"],
+        |r| r.get(0),
+    )?;
+    assert_eq!(pending, "{\"id\":\"tc-1\"}");
+
+    // The steps journal accepts the full v6 contract, and FK/integrity hold.
+    db.conn().execute(
+        "INSERT INTO generation_steps \
+         (run_id, sequence, step_id, step_type, status, attempt, idempotency_key, input_json, created_at, updated_at) \
+         VALUES (?1, 0, 's1', 'tool_call', 'waiting', 1, 'ik-1', '{}', '2026-08-13T10:00:00Z', '2026-08-13T10:00:00Z')",
+        ["c1c1c1c1-0000-4000-8000-000000000003"],
+    )?;
+    let fk: i64 =
+        db.conn()
+            .query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |r| {
+                r.get(0)
+            })?;
+    assert_eq!(fk, 0, "no FK violations after the v6 migration");
+    let quick_check: String = db
+        .conn()
+        .query_row("PRAGMA quick_check", [], |r| r.get(0))?;
+    assert_eq!(quick_check, "ok");
+    Ok(())
+}
