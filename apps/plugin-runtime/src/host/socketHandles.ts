@@ -21,7 +21,7 @@
 import { connect as netConnect, createServer, Socket } from 'node:net';
 import { connect as tlsConnect, TLSSocket } from 'node:tls';
 import { createSocket, Socket as DgramSocket } from 'node:dgram';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import {
   NETWORK_MAX_SOCKET_BUFFER_BYTES,
   NETWORK_MAX_SOCKET_HANDLES,
@@ -102,9 +102,7 @@ function drainRing(
 }
 
 function closeResource(resource: unknown): void {
-  if (resource instanceof WebSocket) {
-    resource.close();
-  } else if (resource instanceof Socket || resource instanceof TLSSocket) {
+  if (resource instanceof Socket || resource instanceof TLSSocket) {
     resource.destroy();
   } else if (resource instanceof DgramSocket) {
     resource.close();
@@ -116,6 +114,97 @@ function closeResource(resource: unknown): void {
     // net.Server: stop accepting and destroy accepted connections.
     (resource as { close(): void }).close();
   }
+}
+
+/**
+ * §SEC-03 WebSocket handshake + RFC 6455 framing implemented over the raw
+ * socket. undici's WebSocket does not expose the connected socket, so a
+ * post-connect `remoteAddress` verification was impossible; this client owns
+ * the socket end to end: it connects to the policy-approved IP (hostname only
+ * in Host/SNI), verifies `remoteAddress` after connect, then performs the
+ * HTTP Upgrade handshake itself. The plugin still only sees opaque handle ids.
+ */
+
+/** RFC 6455 §1.3 fixed GUID used to compute Sec-WebSocket-Accept. */
+const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
+
+/** Server-side Sec-WebSocket-Accept for a client's Sec-WebSocket-Key. */
+export function wsAcceptHeader(key: string): string {
+  return createHash('sha1')
+    .update(key + WS_GUID)
+    .digest('base64');
+}
+
+/**
+ * Build one client→server frame (RFC 6455 §5): FIN set, text opcode 0x1 by
+ * default, payload masked with a fresh 4-byte key (clients MUST mask).
+ */
+export function wsClientFrame(payload: string | Buffer, opcode = 0x1): Buffer {
+  const data = typeof payload === 'string' ? Buffer.from(payload, 'utf8') : payload;
+  const len = data.byteLength;
+  let header: Buffer;
+  if (len < 126) {
+    header = Buffer.from([0x80 | opcode, 0x80 | len]);
+  } else if (len <= 0xffff) {
+    header = Buffer.alloc(4);
+    header[0] = 0x80 | opcode;
+    header[1] = 0x80 | 126;
+    header.writeUInt16BE(len, 2);
+  } else {
+    header = Buffer.alloc(10);
+    header[0] = 0x80 | opcode;
+    header[1] = 0x80 | 127;
+    header.writeBigUInt64BE(BigInt(len), 2);
+  }
+  const mask = randomBytes(4);
+  const masked = Buffer.allocUnsafe(len);
+  for (let i = 0; i < len; i += 1) masked[i] = (data[i] ?? 0) ^ (mask[i & 3] ?? 0);
+  return Buffer.concat([header, mask, masked]);
+}
+
+/** A parsed server→client frame (RFC 6455 §5.2; servers do NOT mask). */
+export interface WsServerFrame {
+  fin: boolean;
+  opcode: number;
+  payload: Buffer;
+}
+
+/**
+ * Parse one complete frame off the front of `buffer`, returning the frame and
+ * the remainder, or null when the buffer holds only a partial frame (caller
+ * keeps accumulating). Server frames must not be masked; a masked frame is a
+ * protocol violation and returns null after consuming nothing.
+ */
+export function wsParseFrame(buffer: Buffer): { frame: WsServerFrame; rest: Buffer } | null {
+  if (buffer.byteLength < 2) return null;
+  const first = buffer[0];
+  if (first === undefined) return null;
+  const b0 = first;
+  const second = buffer[1];
+  if (second === undefined) return null;
+  const b1 = second;
+  const fin = (b0 & 0x80) !== 0;
+  const opcode = b0 & 0x0f;
+  const masked = (b1 & 0x80) !== 0;
+  let len = b1 & 0x7f;
+  let offset = 2;
+  if (len === 126) {
+    if (buffer.byteLength < 4) return null;
+    len = buffer.readUInt16BE(2);
+    offset = 4;
+  } else if (len === 127) {
+    if (buffer.byteLength < 10) return null;
+    const big = buffer.readBigUInt64BE(2);
+    if (big > BigInt(Number.MAX_SAFE_INTEGER)) return null;
+    len = Number(big);
+    offset = 10;
+  }
+  if (masked) return null; // server frames are unmasked (RFC 6455 §5.1)
+  if (buffer.byteLength < offset + len) return null;
+  return {
+    frame: { fin, opcode, payload: buffer.subarray(offset, offset + len) },
+    rest: buffer.subarray(offset + len),
+  };
 }
 
 export interface SocketRegistry {
@@ -270,32 +359,196 @@ export function createSocketRegistry(deps: SocketRegistryDeps): SocketRegistry {
       if (parsed.protocol !== 'ws:' && parsed.protocol !== 'wss:') {
         throw new BrokerCallError('VALIDATION_FAILED', { message: 'websocket url must be ws/wss' });
       }
-      // The pre-connect policy check applies (§29.1); post-connect
-      // remoteAddress verification is a documented follow-up for WebSocket —
-      // undici's WebSocket does not expose the connected socket.
-      await deps.checkDestination(parsed.hostname, pluginId);
+      // §SEC-03: the approved set is the same resolution the policy check
+      // admitted; the client connects to a policy-approved IP (no DNS for the
+      // hostname in the stack), keeps the hostname only in Host/SNI, and
+      // verifies the connected remoteAddress BEFORE the HTTP Upgrade.
+      const approved = await deps.checkDestination(parsed.hostname, pluginId);
+      const isTls = parsed.protocol === 'wss:';
+      const connectHost = approved[0] ?? parsed.hostname;
+      const port = parsed.port === '' ? (isTls ? 443 : 80) : Number(parsed.port);
       const handle = allocate(pluginId, 'websocket');
-      const socket = new WebSocket(url, protocols);
+      const socket: Socket = isTls
+        ? tlsConnect({ host: connectHost, port, servername: parsed.hostname })
+        : netConnect({ host: connectHost, port });
       handle.resource = socket;
-      socket.addEventListener('message', (event) => {
-        if (typeof event.data !== 'string') return; // binary frames: out of v1 scope
-        pushRing(handle, event.data);
+      socket.setNoDelay(true);
+      // Post-connect verification (§SEC-03) before the handshake bytes leave.
+      await new Promise<void>((resolve, reject) => {
+        const onConnect = (): void => {
+          cleanup();
+          const mismatch = assertApprovedRemote(approved, socket.remoteAddress);
+          if (mismatch !== null) {
+            socket.destroy();
+            void closeHandle(handle.id);
+            reject(
+              new BrokerCallError('NETWORK_DESTINATION_DENIED', {
+                message: 'connected address not in the approved set',
+                details: { host: parsed.hostname, remoteAddress: socket.remoteAddress },
+              }),
+            );
+            return;
+          }
+          resolve();
+        };
+        const onError = (error: Error): void => {
+          cleanup();
+          socket.destroy();
+          void closeHandle(handle.id);
+          reject(
+            new BrokerCallError('NETWORK_DESTINATION_DENIED', {
+              message: 'websocket connect failed',
+              details: { host: parsed.hostname, port, cause: error.message },
+            }),
+          );
+        };
+        const cleanup = (): void => {
+          socket.removeListener('connect', onConnect);
+          socket.removeListener('error', onError);
+        };
+        socket.once('connect', onConnect);
+        socket.once('error', onError);
       });
-      socket.addEventListener('close', () => {
-        void closeHandle(handle.id);
+      // HTTP Upgrade (RFC 6455 §4): Sec-WebSocket-Key -> Accept must match.
+      const key = randomBytes(16).toString('base64');
+      const path = `${parsed.pathname === '' ? '/' : parsed.pathname}${parsed.search}`;
+      const protocolHeader =
+        protocols !== undefined && protocols.length > 0
+          ? `Sec-WebSocket-Protocol: ${protocols.join(', ')}\r\n`
+          : '';
+      const upgrade =
+        `GET ${path} HTTP/1.1\r\n` +
+        `Host: ${parsed.host}\r\n` +
+        'Upgrade: websocket\r\n' +
+        'Connection: Upgrade\r\n' +
+        `Sec-WebSocket-Key: ${key}\r\n` +
+        'Sec-WebSocket-Version: 13\r\n' +
+        protocolHeader +
+        '\r\n';
+      const expectedAccept = wsAcceptHeader(key);
+      let upgradeRemainder = Buffer.alloc(0);
+      await new Promise<void>((resolve, reject) => {
+        let buffer = Buffer.alloc(0);
+        const onData = (chunk: Buffer): void => {
+          buffer = Buffer.concat([buffer, chunk]);
+          const headEnd = buffer.indexOf('\r\n\r\n');
+          if (headEnd === -1) return; // response head still incomplete
+          cleanup();
+          upgradeRemainder = buffer.subarray(headEnd + 4);
+          const head = buffer.subarray(0, headEnd).toString('utf8');
+          const statusLine = head.split('\r\n')[0] ?? '';
+          const headers = new Map(
+            head
+              .split('\r\n')
+              .slice(1)
+              .map((line) => {
+                const idx = line.indexOf(':');
+                return [line.slice(0, idx).trim().toLowerCase(), line.slice(idx + 1).trim()];
+              }),
+          );
+          socket.removeListener('data', onData);
+          if (!statusLine.includes(' 101 ') || headers.get('upgrade') !== 'websocket') {
+            socket.destroy();
+            void closeHandle(handle.id);
+            reject(
+              new BrokerCallError('NETWORK_DESTINATION_DENIED', {
+                message: 'websocket upgrade rejected',
+                details: { status: statusLine },
+              }),
+            );
+            return;
+          }
+          const accept = headers.get('sec-websocket-accept');
+          if (accept !== expectedAccept) {
+            socket.destroy();
+            void closeHandle(handle.id);
+            reject(
+              new BrokerCallError('NETWORK_DESTINATION_DENIED', {
+                message: 'websocket accept mismatch',
+              }),
+            );
+            return;
+          }
+          resolve();
+        };
+        const onError = (error: Error): void => {
+          cleanup();
+          socket.destroy();
+          void closeHandle(handle.id);
+          reject(
+            new BrokerCallError('NETWORK_DESTINATION_DENIED', {
+              message: 'websocket upgrade failed',
+              details: { cause: error.message },
+            }),
+          );
+        };
+        const cleanup = (): void => {
+          socket.removeListener('data', onData);
+          socket.removeListener('error', onError);
+        };
+        socket.on('data', onData);
+        socket.once('error', onError);
+        socket.write(upgrade);
       });
-      socket.addEventListener('error', () => {
-        void closeHandle(handle.id);
+      // RFC 6455 §5 frame loop: text frames land in the ring, ping is
+      // answered with pong, close tears the handle down. Bytes that arrived
+      // in the same segment as the handshake head are drained first.
+      let frameBuffer: Buffer = Buffer.alloc(0);
+      let textFragment = '';
+      const consumeFrames = (chunk: Buffer): void => {
+        frameBuffer = Buffer.concat([frameBuffer, chunk]);
+        for (;;) {
+          const parsedFrame = wsParseFrame(frameBuffer);
+          if (parsedFrame === null) break;
+          frameBuffer = parsedFrame.rest;
+          const { fin, opcode, payload } = parsedFrame.frame;
+          if (opcode === 0x1) {
+            // Text frame (possibly fragmented: FIN=0 then continuation 0x0).
+            textFragment = fin ? payload.toString('utf8') : textFragment + payload.toString('utf8');
+            if (fin) {
+              pushRing(handle, textFragment);
+              textFragment = '';
+            }
+          } else if (opcode === 0x0) {
+            textFragment += payload.toString('utf8');
+            if (fin) {
+              pushRing(handle, textFragment);
+              textFragment = '';
+            }
+          } else if (opcode === 0x9) {
+            // Ping: echo the payload back as a pong.
+            if (!socket.destroyed) socket.write(wsClientFrame(payload, 0xa));
+          } else if (opcode === 0x8) {
+            // Close: mirror close, then release the handle.
+            if (!socket.destroyed) socket.write(wsClientFrame(Buffer.from([0x03, 0xe8]), 0x8));
+            socket.destroy();
+            void closeHandle(handle.id);
+            return;
+          }
+          // 0x2 (binary) and 0xa (pong) are intentionally ignored (v1 scope).
+        }
+      };
+      // The handshake reader already removed itself; drain any frame bytes
+      // that arrived with it, then stream the rest.
+      const firstBytes = upgradeRemainder;
+      upgradeRemainder = Buffer.alloc(0);
+      if (firstBytes.byteLength > 0) consumeFrames(firstBytes);
+      socket.on('data', consumeFrames);
+      socket.on('close', () => {
+        if (!handle.closed) void closeHandle(handle.id);
+      });
+      socket.on('error', () => {
+        if (!handle.closed) void closeHandle(handle.id);
       });
       return handle.id;
     },
     async websocketSend(pluginId, id, data) {
       const handle = requireHandle(pluginId, id);
       const socket = handle.resource;
-      if (!(socket instanceof WebSocket) || socket.readyState !== WebSocket.OPEN) {
+      if (!(socket instanceof Socket) || socket.destroyed || handle.closed) {
         throw new BrokerCallError('STREAM_ABORTED', { message: 'websocket not open' });
       }
-      socket.send(data);
+      socket.write(wsClientFrame(data));
     },
     async websocketReceive(pluginId, id, limit, waitMs, signal) {
       const handle = requireHandle(pluginId, id);
@@ -304,7 +557,11 @@ export function createSocketRegistry(deps: SocketRegistryDeps): SocketRegistry {
       return { messages, closed: handle.closed };
     },
     async websocketClose(pluginId, id) {
-      requireHandle(pluginId, id);
+      const handle = requireHandle(pluginId, id);
+      const socket = handle.resource;
+      if (socket instanceof Socket && !socket.destroyed) {
+        socket.write(wsClientFrame(Buffer.from([0x03, 0xe8]), 0x8));
+      }
       await closeHandle(id);
     },
     async tcpConnect(pluginId, host, port, tls) {

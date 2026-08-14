@@ -260,8 +260,11 @@ sockets host-side: the plugin holds only an opaque handle id; bounded message
 ring per handle (§17: 128 messages, 64 KiB/message, 8 MiB buffer,
 evict-oldest); receive/accept with bounded wait; destination policy — the same
 §29.1 SSRF check as for http (loopback requires `network.local`, etc.); §SEC-03
-verified-IP connects: tcpConnect/udpSend use the policy-approved address (no
-DNS for the hostname in the stack; TLS keeps the hostname as servername);
+verified-IP connects: tcpConnect/udpSend AND the WebSocket client (RFC 6455
+framing implemented in `socketHandles.ts` — undici's WebSocket does not expose
+the connected socket, so the client owns the socket end to end and connects to
+the policy-approved address, verifies `remoteAddress` after connect and
+performs the HTTP Upgrade itself; hostname survives only in Host/SNI);
 bind policy §29.1.4 — default loopback, `0.0.0.0`/`::` are forbidden,
 non-loopback binds require `network.listen.public`; revoking a network
 capability closes the plugin's handles (§10.2). SDK:
