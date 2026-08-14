@@ -24,6 +24,7 @@ import type {
   GenerationApi,
   LorebooksApi,
   NeoBackend,
+  PersonasApi,
   PresetsApi,
   ProvidersApi,
 } from './neobackend.js';
@@ -185,6 +186,18 @@ export class LegacyBackend implements NeoBackend {
 
   readonly lorebooks: LorebooksApi = {
     list: () => this.unsupported('lorebooks.list'),
+    get: () => this.unsupported('lorebooks.get'),
+    create: () => this.unsupported('lorebooks.create'),
+    update: () => this.unsupported('lorebooks.update'),
+    del: () => this.unsupported('lorebooks.delete'),
+  };
+
+  readonly personas: PersonasApi = {
+    list: () => this.unsupported('personas.list'),
+    get: () => this.unsupported('personas.get'),
+    create: () => this.unsupported('personas.create'),
+    update: () => this.unsupported('personas.update'),
+    del: () => this.unsupported('personas.delete'),
   };
 
   readonly presets: PresetsApi = {

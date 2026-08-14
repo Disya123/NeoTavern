@@ -13,7 +13,9 @@ import type {
   ChatDto,
   CreateCharacterRequestDto,
   CreateChatRequestDto,
+  CreateLorebookRequestDto,
   CreateMessageRequestDto,
+  CreatePersonaRequestDto,
   DeleteMessageRequestDto,
   EmptyResultDto,
   GenerationRunDto,
@@ -26,22 +28,27 @@ import type {
   ListGenerationEventsRequestDto,
   ListLorebooksResultDto,
   ListMessagesRequestDto,
+  ListPersonasResultDto,
   ListPresetsResultDto,
   ListProviderConfigsRequestDto,
   ListProviderConfigsResultDto,
   ListProvidersResultDto,
+  LorebookDto,
   MessageDto,
   MetaDto,
   PagedCharactersDto,
   PagedChatsDto,
   PagedGenerationEventsDto,
   PagedMessagesDto,
+  PersonaDto,
   ProviderConfigDto,
   StartGenerationRequestDto,
   SetProviderConfigRequestDto,
   UpdateCharacterRequestDto,
   UpdateChatRequestDto,
+  UpdateLorebookRequestDto,
   UpdateMessageRequestDto,
+  UpdatePersonaRequestDto,
 } from '@neotavern/contracts';
 
 /** Options accepted by facade calls (ТЗ §15). */
@@ -139,6 +146,28 @@ export interface BackupsApi {
 export interface LorebooksApi {
   /** List lorebooks. */
   list(): Promise<ListLorebooksResultDto>;
+  /** Fetch one lorebook. */
+  get(lorebookId: string, opts?: BackendCallOptions): Promise<LorebookDto>;
+  /** Create a lorebook (optionally with entries). */
+  create(req: CreateLorebookRequestDto, opts?: BackendCallOptions): Promise<LorebookDto>;
+  /** Update name/description/entries of one lorebook. */
+  update(req: UpdateLorebookRequestDto, opts?: BackendCallOptions): Promise<LorebookDto>;
+  /** Delete one lorebook (permanent). */
+  del(lorebookId: string, opts?: BackendCallOptions): Promise<EmptyResultDto>;
+}
+
+/** Persona domain operations (wire `personas.*`, Этап 4.1). */
+export interface PersonasApi {
+  /** List personas. */
+  list(): Promise<ListPersonasResultDto>;
+  /** Fetch one persona. */
+  get(personaId: string, opts?: BackendCallOptions): Promise<PersonaDto>;
+  /** Create a persona (optionally the default). */
+  create(req: CreatePersonaRequestDto, opts?: BackendCallOptions): Promise<PersonaDto>;
+  /** Update name/description/avatar/isDefault of one persona. */
+  update(req: UpdatePersonaRequestDto, opts?: BackendCallOptions): Promise<PersonaDto>;
+  /** Delete one persona (permanent). */
+  del(personaId: string, opts?: BackendCallOptions): Promise<EmptyResultDto>;
 }
 
 /** Preset domain operations (wire `presets.*`). */
@@ -189,6 +218,7 @@ export interface NeoBackend {
   characters: CharactersApi;
   chats: ChatsApi;
   lorebooks: LorebooksApi;
+  personas: PersonasApi;
   presets: PresetsApi;
   providers: ProvidersApi;
   generation: GenerationApi;

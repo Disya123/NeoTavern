@@ -23,9 +23,12 @@ import {
   type WireGenerationEvent,
   type ListBackupsResultDto,
   type ListLorebooksResultDto,
+  type ListPersonasResultDto,
   type ListPresetsResultDto,
   type ListProvidersResultDto,
   type ListProviderConfigsResultDto,
+  type LorebookDto,
+  type PersonaDto,
   type ProviderConfigDto,
   type MessageDto,
   type MetaDto,
@@ -43,6 +46,7 @@ import type {
   GenerationApi,
   LorebooksApi,
   NeoBackend,
+  PersonasApi,
   PresetsApi,
   ProvidersApi,
 } from './neobackend.js';
@@ -187,6 +191,7 @@ export class LocalBackend implements NeoBackend {
   readonly characters: CharactersApi;
   readonly chats: ChatsApi;
   readonly lorebooks: LorebooksApi;
+  readonly personas: PersonasApi;
   readonly presets: PresetsApi;
   readonly providers: ProvidersApi;
   readonly generation: GenerationApi;
@@ -255,6 +260,19 @@ export class LocalBackend implements NeoBackend {
     };
     this.lorebooks = {
       list: () => this.invoke<ListLorebooksResultDto>('lorebooks.list', {}, undefined),
+      get: (lorebookId, opts) =>
+        this.invoke<LorebookDto>('lorebooks.get', { lorebookId }, opts),
+      create: (req, opts) => this.invoke<LorebookDto>('lorebooks.create', req, opts),
+      update: (req, opts) => this.invoke<LorebookDto>('lorebooks.update', req, opts),
+      del: (lorebookId, opts) =>
+        this.invoke<EmptyResultDto>('lorebooks.delete', { lorebookId }, opts),
+    };
+    this.personas = {
+      list: () => this.invoke<ListPersonasResultDto>('personas.list', {}, undefined),
+      get: (personaId, opts) => this.invoke<PersonaDto>('personas.get', { personaId }, opts),
+      create: (req, opts) => this.invoke<PersonaDto>('personas.create', req, opts),
+      update: (req, opts) => this.invoke<PersonaDto>('personas.update', req, opts),
+      del: (personaId, opts) => this.invoke<EmptyResultDto>('personas.delete', { personaId }, opts),
     };
     this.presets = {
       list: () => this.invoke<ListPresetsResultDto>('presets.list', {}, undefined),

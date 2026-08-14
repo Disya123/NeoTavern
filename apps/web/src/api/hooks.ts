@@ -24,9 +24,7 @@ import type {
   ChatUpdate,
   CursorPage,
   InstructFormatListResponse,
-  Lorebook,
   LorebookCreate,
-  LorebookEntry,
   LorebookEntryCreate,
   LorebookEntryUpdate,
   LorebookUpdate,
@@ -69,16 +67,29 @@ import {
   continueCharacterChat as continueChat,
   createCharacter,
   createChat,
+  createLorebook,
+  createLorebookEntry,
+  createPersona,
   deleteCharacter,
   deleteChat,
+  deleteLorebook,
+  deleteLorebookEntry,
+  deletePersona,
   readCharacters,
   readCharacter,
   readChats,
   readRecentChats,
   readChat,
+  readLorebook,
+  readLorebookEntries,
+  readLorebooks,
   readMessages,
+  readPersonas,
   updateCharacter,
   updateChat,
+  updateLorebook,
+  updateLorebookEntry,
+  updatePersona,
   type ContinueCharacterChatInput,
   type ContinueCharacterChatResult,
 } from './wireBridge.js';
@@ -512,14 +523,14 @@ export function useDeletePreset() {
 export function usePersonas() {
   return useQuery({
     queryKey: ['personas'],
-    queryFn: () => api.get<{ items: Persona[] }>('/personas'),
+    queryFn: async () => ({ items: await readPersonas() }),
   });
 }
 
 export function useCreatePersona() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: PersonaCreate) => api.post<Persona>('/personas', input),
+    mutationFn: (input: PersonaCreate) => createPersona(input),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['personas'] }),
   });
 }
@@ -528,7 +539,7 @@ export function useUpdatePersona() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, update }: { id: string; update: PersonaUpdate }) =>
-      api.patch<Persona>(`/personas/${id}`, update),
+      updatePersona(id, update),
     onSuccess: (updated) => {
       qc.setQueryData<{ items: Persona[] }>(['personas'], (current) => {
         if (!current) return current;
@@ -543,7 +554,7 @@ export function useUpdatePersona() {
 export function useDeletePersona() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => api.del<{ ok: true }>(`/personas/${id}`),
+    mutationFn: (id: string) => deletePersona(id),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['personas'] }),
   });
 }
@@ -558,14 +569,7 @@ export interface LorebookListQuery {
 export function useLorebooks(query: LorebookListQuery = {}) {
   return useInfiniteQuery({
     queryKey: ['lorebooks', query],
-    queryFn: ({ pageParam }) =>
-      api.get<CursorPage<Lorebook>>(
-        `/lorebooks${encodeQuery({
-          characterId: query.characterId,
-          limit: query.limit,
-          cursor: pageParam as string | undefined,
-        })}`,
-      ),
+    queryFn: () => readLorebooks(query),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
     staleTime: 2 * MINUTE,
@@ -575,7 +579,7 @@ export function useLorebooks(query: LorebookListQuery = {}) {
 export function useLorebook(id: string | undefined) {
   return useQuery({
     queryKey: ['lorebook', id],
-    queryFn: () => api.get<Lorebook>(`/lorebooks/${id}`),
+    queryFn: () => readLorebook(id as string),
     enabled: id !== undefined,
   });
 }
@@ -583,7 +587,7 @@ export function useLorebook(id: string | undefined) {
 export function useLorebookEntries(bookId: string | undefined) {
   return useQuery({
     queryKey: ['lorebooks', bookId, 'entries'],
-    queryFn: () => api.get<{ items: LorebookEntry[] }>(`/lorebooks/${bookId}/entries`),
+    queryFn: async () => ({ items: await readLorebookEntries(bookId as string) }),
     enabled: bookId !== undefined,
   });
 }
@@ -591,7 +595,7 @@ export function useLorebookEntries(bookId: string | undefined) {
 export function useCreateLorebook() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: LorebookCreate) => api.post<Lorebook>('/lorebooks', input),
+    mutationFn: (input: LorebookCreate) => createLorebook(input),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['lorebooks'] });
       void qc.invalidateQueries({ queryKey: ['characters'] });
@@ -603,7 +607,7 @@ export function useUpdateLorebook() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, update }: { id: string; update: LorebookUpdate }) =>
-      api.patch<Lorebook>(`/lorebooks/${id}`, update),
+      updateLorebook(id, update),
     onSuccess: (book) => {
       qc.setQueryData(['lorebook', book.id], book);
       void qc.invalidateQueries({ queryKey: ['lorebooks'] });
@@ -615,7 +619,7 @@ export function useUpdateLorebook() {
 export function useDeleteLorebook() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => api.del<{ ok: true }>(`/lorebooks/${id}`),
+    mutationFn: (id: string) => deleteLorebook(id),
     onSuccess: (_result, id) => {
       qc.removeQueries({ queryKey: ['lorebook', id] });
       void qc.invalidateQueries({ queryKey: ['lorebooks'] });
@@ -628,7 +632,7 @@ export function useCreateLorebookEntry() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ bookId, input }: { bookId: string; input: LorebookEntryCreate }) =>
-      api.post<LorebookEntry>(`/lorebooks/${bookId}/entries`, input),
+      createLorebookEntry(bookId, input),
     onSuccess: (_entry, { bookId }) =>
       void qc.invalidateQueries({ queryKey: ['lorebooks', bookId, 'entries'] }),
   });
@@ -645,7 +649,7 @@ export function useUpdateLorebookEntry() {
       bookId: string;
       entryId: string;
       update: LorebookEntryUpdate;
-    }) => api.patch<LorebookEntry>(`/lorebooks/${bookId}/entries/${entryId}`, update),
+    }) => updateLorebookEntry(bookId, entryId, update),
     onSuccess: (_entry, { bookId }) =>
       void qc.invalidateQueries({ queryKey: ['lorebooks', bookId, 'entries'] }),
   });
@@ -655,7 +659,7 @@ export function useDeleteLorebookEntry() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ bookId, entryId }: { bookId: string; entryId: string }) =>
-      api.del<{ ok: true }>(`/lorebooks/${bookId}/entries/${entryId}`),
+      deleteLorebookEntry(bookId, entryId),
     onSuccess: (_result, { bookId }) =>
       void qc.invalidateQueries({ queryKey: ['lorebooks', bookId, 'entries'] }),
   });

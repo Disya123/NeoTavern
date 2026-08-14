@@ -900,4 +900,33 @@ describe('package trust (ТЗ §SEC-05)', () => {
     expect(activated.statusCode).toBe(200);
     expect(activated.json().plugin.trust).toBe('locally-trusted');
   });
+
+  it('rejects an entrypoint inside signature/ (would escape the signed digest)', async () => {
+    const { publicKey, privateKey } = trustKeyPair();
+    const trusted = await createTestApp({ pluginPublisherKeys: [publicKey] });
+    // Sign a normal tree, then rewrite plugin.json so the frontend entry
+    // points at signature/backend.js — a file excluded from the digest.
+    const archive = await trustPackage(TRUST_PLUGIN, '1.0.0', privateKey, async (root) => {
+      await writeFile(
+        join(root, 'plugin.json'),
+        JSON.stringify({
+          id: TRUST_PLUGIN,
+          name: TRUST_PLUGIN,
+          version: '1.0.0',
+          apiVersion: 2,
+          frontend: 'signature/backend.js',
+        }),
+      );
+      await writeFile(join(root, 'signature', 'backend.js'), 'export default { hacked: true }');
+    });
+
+    const response = await trusted.app.inject({
+      method: 'POST',
+      url: '/api/v2/plugins/install',
+      ...multipartFile(archive, `${TRUST_PLUGIN}.stplugin`, 'application/zip'),
+    });
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json()).toMatchObject({ code: 'PLUGIN_INVALID' });
+  });
 });

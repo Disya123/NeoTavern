@@ -180,7 +180,18 @@ export class LegacyServerPluginHost {
       });
     }
     await this.deactivate(manifest.id);
-    const entryPath = resolve(packageRoot, ...validatePackageEntryPath(manifest.legacy.backend));
+    const entrySegments = validatePackageEntryPath(manifest.legacy.backend);
+    // SEC-05 fail-closed (defense in depth): `signature/` is excluded from
+    // the publisher digest, so a legacy backend entry there would escape
+    // signed verification. `validatePackage` rejects this at install;
+    // re-checking here keeps activation safe for pre-rule packages.
+    if (entrySegments[0] === 'signature') {
+      throw new AppError({
+        code: ErrorCodes.PLUGIN_LOAD_FAILED,
+        params: { pluginId: manifest.id, reason: 'ENTRYPOINT_INSIDE_SIGNATURE' },
+      });
+    }
+    const entryPath = resolve(packageRoot, ...entrySegments);
     let loaded: unknown;
     const inPkgSnapshot = Boolean(
       (process as NodeJS.Process & { pkg?: string }).pkg,

@@ -749,6 +749,16 @@ export class BackendPluginHost {
       this.ctx.config.pluginLoaderPath ??
       resolve(dirname(fileURLToPath(import.meta.url)), '../../worker/plugin-loader.mjs');
     const entrySegments = validatePackageEntryPath(manifest.backend);
+    // SEC-05 fail-closed (defense in depth): `signature/` is excluded from
+    // the publisher digest, so a backend entry there would escape signed
+    // verification. `validatePackage` rejects this at install; re-checking
+    // here keeps activation safe even for packages installed before the rule.
+    if (entrySegments[0] === 'signature') {
+      throw new AppError({
+        code: ErrorCodes.PLUGIN_LOAD_FAILED,
+        params: { pluginId: manifest.id, reason: 'ENTRYPOINT_INSIDE_SIGNATURE' },
+      });
+    }
     // Resolve aliases before applying Node's permission model. The restricted
     // child cannot call realpath outside an already granted canonical root
     // (notably macOS maps /var to /private/var).
