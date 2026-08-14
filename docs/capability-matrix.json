@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-08-14T03:16:00.031Z",
+  "generatedAt": "2026-08-14T03:38:00.796Z",
   "rows": [
     {
       "hosts": {
@@ -151,9 +151,27 @@
         "headless": "Implemented",
         "webClient": "Implemented"
       },
+      "id": "providers.config",
+      "milestone": "M2",
+      "notes": "Kernel-owned ops with component tests (ТЗ §9.4, Этап 2.4): provider_configs rows hold non-secret config_json plus an opaque secret_ref; the API key is stored through the kernel's SecretStore seam (Kernel::set_secret_store) and never reaches the DB, the wire DTO, backups or diagnostics — get/list report only hasApiKey. Without a wired store, set with apiKey fails SECRET_UNAVAILABLE (fail-closed); delete revokes the stored secret. Hosts wire real SecretStore backends in M3 (OS vault / Keystore / portable).",
+      "title": "Provider configuration (secrets out of the DB)",
+      "wireOps": [
+        "providers.config.delete",
+        "providers.config.get",
+        "providers.config.list",
+        "providers.config.set"
+      ]
+    },
+    {
+      "hosts": {
+        "android": "Implemented",
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "webClient": "Implemented"
+      },
       "id": "providers.list",
       "milestone": "M2",
-      "notes": "Kernel op exists; provider configuration without secrets in DB arrives in M2/M3.",
+      "notes": "Kernel op exists; provider configuration without secrets in DB is delivered (providers.config.*).",
       "title": "Provider catalog read",
       "wireOps": ["providers.list"]
     },

@@ -10,19 +10,21 @@ use contracts_generated::generated::{
     decode_event_envelope, decode_generation_event, decode_generation_run,
     decode_generation_status, decode_lorebook_dto, decode_message_dto, decode_message_role,
     decode_meta_dto, decode_paged_characters, decode_paged_chats, decode_paged_generation_events,
-    decode_paged_messages, decode_preset_dto, decode_provider_availability, decode_provider_dto,
-    decode_provider_model, decode_request_cancel_generation, decode_request_create_character,
-    decode_request_create_chat, decode_request_create_message, decode_request_delete_character,
-    decode_request_delete_chat, decode_request_delete_message, decode_request_discard_generation,
-    decode_request_empty,
-    decode_request_envelope, decode_request_get_character, decode_request_get_chat,
-    decode_request_get_generation_run, decode_request_keep_partial_generation,
+    decode_paged_messages, decode_preset_dto, decode_provider_availability,
+    decode_provider_config_dto, decode_provider_dto, decode_provider_model,
+    decode_request_cancel_generation, decode_request_create_character, decode_request_create_chat,
+    decode_request_create_message, decode_request_delete_character, decode_request_delete_chat,
+    decode_request_delete_message, decode_request_delete_provider_config,
+    decode_request_discard_generation, decode_request_empty, decode_request_envelope,
+    decode_request_get_character, decode_request_get_chat, decode_request_get_generation_run,
+    decode_request_get_provider_config, decode_request_keep_partial_generation,
     decode_request_list_characters, decode_request_list_chats,
     decode_request_list_generation_events, decode_request_list_messages,
-    decode_request_retry_generation, decode_request_start_generation,
+    decode_request_list_provider_configs, decode_request_retry_generation,
+    decode_request_set_provider_config, decode_request_start_generation,
     decode_request_update_character, decode_request_update_chat, decode_request_update_message,
-    decode_response_envelope, decode_result_empty,
-    decode_result_list_backups, decode_result_list_lorebooks, decode_result_list_presets,
+    decode_response_envelope, decode_result_empty, decode_result_list_backups,
+    decode_result_list_lorebooks, decode_result_list_presets, decode_result_list_provider_configs,
     decode_result_list_providers,
 };
 use contracts_generated::{contract_schema_hash, wire_protocol, WireError};
@@ -78,21 +80,51 @@ fn dispatch(schema_id: &str, bytes: &[u8], valid: bool) {
         "wire.result.list-providers" => {
             corpus_case(schema_id, decode_result_list_providers, bytes, valid)
         }
+        "wire.provider.config.dto" => {
+            corpus_case(schema_id, decode_provider_config_dto, bytes, valid)
+        }
+        "wire.result.list-provider-configs" => {
+            corpus_case(schema_id, decode_result_list_provider_configs, bytes, valid)
+        }
+        "wire.request.set-provider-config" => {
+            corpus_case(schema_id, decode_request_set_provider_config, bytes, valid)
+        }
+        "wire.request.get-provider-config" => {
+            corpus_case(schema_id, decode_request_get_provider_config, bytes, valid)
+        }
+        "wire.request.list-provider-configs" => corpus_case(
+            schema_id,
+            decode_request_list_provider_configs,
+            bytes,
+            valid,
+        ),
+        "wire.request.delete-provider-config" => corpus_case(
+            schema_id,
+            decode_request_delete_provider_config,
+            bytes,
+            valid,
+        ),
         "wire.request.get-generation-run" => {
             corpus_case(schema_id, decode_request_get_generation_run, bytes, valid)
         }
         "wire.request.retry-generation" => {
             corpus_case(schema_id, decode_request_retry_generation, bytes, valid)
         }
-        "wire.request.keep-partial-generation" => {
-            corpus_case(schema_id, decode_request_keep_partial_generation, bytes, valid)
-        }
+        "wire.request.keep-partial-generation" => corpus_case(
+            schema_id,
+            decode_request_keep_partial_generation,
+            bytes,
+            valid,
+        ),
         "wire.request.discard-generation" => {
             corpus_case(schema_id, decode_request_discard_generation, bytes, valid)
         }
-        "wire.request.list-generation-events" => {
-            corpus_case(schema_id, decode_request_list_generation_events, bytes, valid)
-        }
+        "wire.request.list-generation-events" => corpus_case(
+            schema_id,
+            decode_request_list_generation_events,
+            bytes,
+            valid,
+        ),
         "wire.error.dto" => corpus_case(schema_id, decode_error_dto, bytes, valid),
         "wire.request.empty" => corpus_case(schema_id, decode_request_empty, bytes, valid),
         "wire.request.list-characters" => {
@@ -196,7 +228,7 @@ fn xorshift32(mut state: u32) -> u32 {
 /// coerces to a plain `fn` pointer.
 type DecoderFn = fn(&[u8]) -> Result<(), WireError>;
 
-fn all_decoders() -> [DecoderFn; 49] {
+fn all_decoders() -> [DecoderFn; 55] {
     [
         |b| decode_meta_dto(b).map(|_| ()),
         |b| decode_character_dto(b).map(|_| ()),
@@ -217,6 +249,12 @@ fn all_decoders() -> [DecoderFn; 49] {
         |b| decode_provider_model(b).map(|_| ()),
         |b| decode_provider_dto(b).map(|_| ()),
         |b| decode_result_list_providers(b).map(|_| ()),
+        |b| decode_provider_config_dto(b).map(|_| ()),
+        |b| decode_result_list_provider_configs(b).map(|_| ()),
+        |b| decode_request_set_provider_config(b).map(|_| ()),
+        |b| decode_request_get_provider_config(b).map(|_| ()),
+        |b| decode_request_list_provider_configs(b).map(|_| ()),
+        |b| decode_request_delete_provider_config(b).map(|_| ()),
         |b| decode_error_dto(b).map(|_| ()),
         |b| decode_request_empty(b).map(|_| ()),
         |b| decode_request_list_characters(b).map(|_| ()),

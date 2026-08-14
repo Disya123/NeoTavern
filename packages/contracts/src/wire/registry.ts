@@ -653,6 +653,62 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'providers.config.set',
+    'transactional',
+    'non-idempotent',
+    'none',
+    'app.write',
+    'wire.request.set-provider-config',
+    'wire.provider.config.dto',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'CONFLICT', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    131072,
+    262144,
+    undefined,
+  ),
+  op(
+    'providers.config.get',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.get-provider-config',
+    'wire.provider.config.dto',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    262144,
+    undefined,
+  ),
+  op(
+    'providers.config.list',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.list-provider-configs',
+    'wire.result.list-provider-configs',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    4096,
+    262144,
+    undefined,
+  ),
+  op(
+    'providers.config.delete',
+    'transactional',
+    'non-idempotent',
+    'none',
+    'app.write',
+    'wire.request.delete-provider-config',
+    'wire.result.empty',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    1024,
+    undefined,
+  ),
+  op(
     'backups.create',
     'workflow',
     'non-idempotent',
@@ -721,6 +777,7 @@ const UUID_BACKUP = '1a2b3c4d-5e6f-4a8b-9c0d-1e2f3a4b5c6d';
 const UUID_LOREBOOK = '2b3c4d5e-6f7a-4b9c-8d0e-1f2a3b4c5d6e';
 const UUID_PRESET = '3c4d5e6f-7a8b-4c0d-9e1f-2a3b4c5d6e7f';
 const UUID_WORKFLOW = '9c8b7a6e-5d4c-4b3a-9f8e-7d6c5b4a3f2e';
+const UUID_CONFIG = '4d5e6f70-8a9b-4c2d-9e3f-4a5b6c7d8e9f';
 const UUID_AVATAR = '5d6e7f80-9a1b-4c2d-8e3f-4a5b6c7d8e9f';
 const UUID_RUN = '6e7f8091-ab2c-4d3e-9f4a-5b6c7d8e9f01';
 const UUID_REQUEST = '8f901a2b-c3d4-4e5f-8a6b-7c8d9e0f1a2b';
@@ -819,6 +876,16 @@ const PROVIDER_VALUE = {
   models: [{ id: 'fake-1', name: 'Fake 1', contextLimit: 8192 }],
 };
 
+const PROVIDER_CONFIG_VALUE = {
+  id: UUID_CONFIG,
+  provider: 'fake',
+  name: 'local',
+  config: { temperature: 0.7, maxTokens: 2048 },
+  hasApiKey: true,
+  createdAt: TIMESTAMP,
+  updatedAt: TIMESTAMP,
+};
+
 function fx(
   id: string,
   operationId: string,
@@ -908,6 +975,21 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('lorebooks-list-request', 'lorebooks.list', 'request', true, {}),
   fx('presets-list-request', 'presets.list', 'request', true, {}),
   fx('providers-list-request', 'providers.list', 'request', true, {}),
+  fx('providers-config-set-request', 'providers.config.set', 'request', true, {
+    provider: 'fake',
+    name: 'local',
+    config: { temperature: 0.7 },
+    apiKey: 'sk-fixture-secret',
+  }),
+  fx('providers-config-get-request', 'providers.config.get', 'request', true, {
+    provider: 'fake',
+    name: 'local',
+  }),
+  fx('providers-config-list-request', 'providers.config.list', 'request', true, {}),
+  fx('providers-config-delete-request', 'providers.config.delete', 'request', true, {
+    provider: 'fake',
+    name: 'local',
+  }),
 
   // --- valid response fixtures.
   fx('meta-get-response', 'meta.get', 'response', true, META_VALUE),
@@ -954,6 +1036,24 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('lorebooks-list-response', 'lorebooks.list', 'response', true, { items: [LOREBOOK_VALUE] }),
   fx('presets-list-response', 'presets.list', 'response', true, { items: [PRESET_VALUE] }),
   fx('providers-list-response', 'providers.list', 'response', true, { items: [PROVIDER_VALUE] }),
+  fx(
+    'providers-config-set-response',
+    'providers.config.set',
+    'response',
+    true,
+    PROVIDER_CONFIG_VALUE,
+  ),
+  fx(
+    'providers-config-get-response',
+    'providers.config.get',
+    'response',
+    true,
+    PROVIDER_CONFIG_VALUE,
+  ),
+  fx('providers-config-list-response', 'providers.config.list', 'response', true, {
+    items: [PROVIDER_CONFIG_VALUE],
+  }),
+  fx('providers-config-delete-response', 'providers.config.delete', 'response', true, {}),
 
   // --- valid event fixture (generation.start streams events, no response).
   fx('generation-start-event', 'generation.start', 'event', true, {

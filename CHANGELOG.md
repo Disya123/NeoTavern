@@ -3,6 +3,27 @@
 ## Unreleased
 ### Added
 
+- **Provider configuration with secrets out of the database (M2 / Этап 2,
+  ТЗ §9.4, §SEC-01).** New wire operations `providers.config.set/get/list/
+  delete` with `wire.provider.config.dto` (non-secret `config` object plus
+  `hasApiKey` — never the value). The kernel implements them over the
+  `provider_configs` table (v4 migration): an API key passed to `set` is
+  stored through the host-provided SecretStore seam
+  (`Kernel::set_secret_store`, namespace `provider:<provider>` / id `<name>`)
+  and the row keeps only the opaque reference; `set` without `apiKey`
+  updates `config` and leaves the stored secret untouched; `delete` removes
+  the row and revokes the secret (best-effort). Fail-closed boundary: no
+  wired store → `SECRET_UNAVAILABLE` product error, no plaintext fallback;
+  read-only backends → `SECRET_STORE_READ_ONLY`; missing config →
+  `PROVIDER_CONFIG_NOT_FOUND` with `{provider, name}`. Config names are
+  wire-constrained slugs so the derived secret id stays colon-free and the
+  reference round-trips through the last-colon parse contract (ADR-0040).
+  `packages/neobackend` exposes `ProvidersApi.config` (set/get/list/del)
+  across LocalBackend (kernel), RemoteBackend (wire) and LegacyBackend
+  (typed UnsupportedError). 5 integration tests incl. plaintext-absence in
+  the raw database file, fail-closed without a seam, key replacement and
+  revocation.
+
 - **Chat and message CRUD in the Runtime Kernel (M2 / Этап 2, ТЗ §8.1
   Conversations, §78 Фаза 3).** The Product Wire registry grows six write
   operations — `chats.create/update/delete` and

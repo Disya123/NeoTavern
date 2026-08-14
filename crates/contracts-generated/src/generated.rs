@@ -2036,6 +2036,441 @@ pub fn decode_result_list_providers(bytes: &[u8]) -> Result<ResultListProviders,
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct ProviderConfigDto {
+    pub id: String,
+    pub provider: String,
+    pub name: String,
+    pub config: Value,
+    #[serde(rename = "hasApiKey")]
+    pub has_api_key: bool,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: String,
+}
+
+pub(crate) fn check_provider_config_dto(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{0,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_2: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{0,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_3: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_4: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("id").is_none() {
+            issues.push(Issue::new(join_path(path, "id"), "RequiredProperty"));
+        }
+        if value.get("provider").is_none() {
+            issues.push(Issue::new(join_path(path, "provider"), "RequiredProperty"));
+        }
+        if value.get("name").is_none() {
+            issues.push(Issue::new(join_path(path, "name"), "RequiredProperty"));
+        }
+        if value.get("config").is_none() {
+            issues.push(Issue::new(join_path(path, "config"), "RequiredProperty"));
+        }
+        if value.get("hasApiKey").is_none() {
+            issues.push(Issue::new(join_path(path, "hasApiKey"), "RequiredProperty"));
+        }
+        if value.get("createdAt").is_none() {
+            issues.push(Issue::new(join_path(path, "createdAt"), "RequiredProperty"));
+        }
+        if value.get("updatedAt").is_none() {
+            issues.push(Issue::new(join_path(path, "updatedAt"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("id") {
+            let child_path = join_path(path, "id");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("provider") {
+            let child_path = join_path(path, "provider");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("name") {
+            let child_path = join_path(path, "name");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_2.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("config") {
+            let child_path = join_path(path, "config");
+            if !child.is_object() {
+                issues.push(Issue::new(child_path.as_str(), "Object"));
+            } else {
+            }
+        }
+        if let Some(child) = value.get("hasApiKey") {
+            let child_path = join_path(path, "hasApiKey");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(child) = value.get("createdAt") {
+            let child_path = join_path(path, "createdAt");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_3.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("updatedAt") {
+            let child_path = join_path(path, "updatedAt");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_4.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "id" | "provider" | "name" | "config" | "hasApiKey" | "createdAt" | "updatedAt") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_provider_config_dto(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_provider_config_dto(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_provider_config_dto(bytes: &[u8]) -> Result<ProviderConfigDto, WireError> {
+    crate::decode::<ProviderConfigDto>(validate_provider_config_dto, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultListProviderConfigs {
+    pub items: Vec<ProviderConfigDto>,
+}
+
+pub(crate) fn check_result_list_provider_configs(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("items").is_none() {
+            issues.push(Issue::new(join_path(path, "items"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("items") {
+            let child_path = join_path(path, "items");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    check_provider_config_dto(item, &item_path, issues);
+                }
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "items") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_list_provider_configs(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_list_provider_configs(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_list_provider_configs(bytes: &[u8]) -> Result<ResultListProviderConfigs, WireError> {
+    crate::decode::<ResultListProviderConfigs>(validate_result_list_provider_configs, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestSetProviderConfig {
+    pub provider: String,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub config: Option<Value>,
+    #[serde(rename = "apiKey", default, skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<String>,
+}
+
+pub(crate) fn check_request_set_provider_config(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{0,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{0,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("provider").is_none() {
+            issues.push(Issue::new(join_path(path, "provider"), "RequiredProperty"));
+        }
+        if value.get("name").is_none() {
+            issues.push(Issue::new(join_path(path, "name"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("provider") {
+            let child_path = join_path(path, "provider");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("name") {
+            let child_path = join_path(path, "name");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("config") {
+            let child_path = join_path(path, "config");
+            if !child.is_object() {
+                issues.push(Issue::new(child_path.as_str(), "Object"));
+            } else {
+            }
+        }
+        if let Some(child) = value.get("apiKey") {
+            let child_path = join_path(path, "apiKey");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 100000 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "provider" | "name" | "config" | "apiKey") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_set_provider_config(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_set_provider_config(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_set_provider_config(bytes: &[u8]) -> Result<RequestSetProviderConfig, WireError> {
+    crate::decode::<RequestSetProviderConfig>(validate_request_set_provider_config, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestGetProviderConfig {
+    pub provider: String,
+    pub name: String,
+}
+
+pub(crate) fn check_request_get_provider_config(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{0,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{0,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("provider").is_none() {
+            issues.push(Issue::new(join_path(path, "provider"), "RequiredProperty"));
+        }
+        if value.get("name").is_none() {
+            issues.push(Issue::new(join_path(path, "name"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("provider") {
+            let child_path = join_path(path, "provider");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("name") {
+            let child_path = join_path(path, "name");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "provider" | "name") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_get_provider_config(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_get_provider_config(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_get_provider_config(bytes: &[u8]) -> Result<RequestGetProviderConfig, WireError> {
+    crate::decode::<RequestGetProviderConfig>(validate_request_get_provider_config, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestListProviderConfigs {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+}
+
+pub(crate) fn check_request_list_provider_configs(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{0,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if let Some(child) = value.get("provider") {
+            let child_path = join_path(path, "provider");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "provider") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_list_provider_configs(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_list_provider_configs(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_list_provider_configs(bytes: &[u8]) -> Result<RequestListProviderConfigs, WireError> {
+    crate::decode::<RequestListProviderConfigs>(validate_request_list_provider_configs, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestDeleteProviderConfig {
+    pub provider: String,
+    pub name: String,
+}
+
+pub(crate) fn check_request_delete_provider_config(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{0,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{0,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("provider").is_none() {
+            issues.push(Issue::new(join_path(path, "provider"), "RequiredProperty"));
+        }
+        if value.get("name").is_none() {
+            issues.push(Issue::new(join_path(path, "name"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("provider") {
+            let child_path = join_path(path, "provider");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("name") {
+            let child_path = join_path(path, "name");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "provider" | "name") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_delete_provider_config(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_delete_provider_config(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_delete_provider_config(bytes: &[u8]) -> Result<RequestDeleteProviderConfig, WireError> {
+    crate::decode::<RequestDeleteProviderConfig>(validate_request_delete_provider_config, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ErrorDto {
     pub code: String,
     pub params: Value,

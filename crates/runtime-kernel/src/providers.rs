@@ -17,6 +17,7 @@ use contracts_generated::generated::{
 };
 use provider_sdk::secret::SecretResolver;
 use provider_sdk::ProviderAdapter;
+use secret_store::SecretStore;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -71,16 +72,23 @@ pub(crate) struct ProviderState {
     pub registry: ProviderRegistry,
     /// Host-provided secret resolution seam; `None` until the host sets one.
     pub secret_resolver: Option<Arc<dyn SecretResolver>>,
+    /// Host-provided writable SecretStore seam (ТЗ §9.4, §SEC-01); `None`
+    /// until the host sets one via [`Kernel::set_secret_store`]. The
+    /// provider-config operations store API keys through this seam and only
+    /// the opaque reference reaches the database.
+    pub secret_store: Option<Arc<dyn SecretStore>>,
     /// Per-run provider deadline for new generations.
     pub run_timeout: Duration,
 }
 
 impl ProviderState {
-    /// Fresh writer state: built-in adapters, no resolver, default timeout.
+    /// Fresh writer state: built-in adapters, no resolver, no store, default
+    /// timeout.
     pub fn new_builtins() -> Self {
         Self {
             registry: ProviderRegistry::new_builtins(),
             secret_resolver: None,
+            secret_store: None,
             run_timeout: RUN_TIMEOUT,
         }
     }

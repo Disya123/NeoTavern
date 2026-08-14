@@ -25,6 +25,8 @@ import type {
   ListLorebooksResultDto,
   ListMessagesRequestDto,
   ListPresetsResultDto,
+  ListProviderConfigsRequestDto,
+  ListProviderConfigsResultDto,
   ListProvidersResultDto,
   MessageDto,
   MetaDto,
@@ -32,7 +34,9 @@ import type {
   PagedChatsDto,
   PagedGenerationEventsDto,
   PagedMessagesDto,
+  ProviderConfigDto,
   StartGenerationRequestDto,
+  SetProviderConfigRequestDto,
   UpdateCharacterRequestDto,
   UpdateChatRequestDto,
   UpdateMessageRequestDto,
@@ -128,6 +132,29 @@ export interface PresetsApi {
 export interface ProvidersApi {
   /** List providers. */
   list(): Promise<ListProvidersResultDto>;
+  /** Provider configuration (wire `providers.config.*`). */
+  config: ProviderConfigsApi;
+}
+
+/**
+ * Provider configuration operations (wire `providers.config.*`, ТЗ §9.4).
+ *
+ * Secrets are never part of the DTOs: `set` with `apiKey` stores the value
+ * through the SecretStore and the database keeps only the opaque reference;
+ * `get`/`list` report `hasApiKey` and nothing else.
+ */
+export interface ProviderConfigsApi {
+  /** Upsert a provider config (optionally storing/replacing the API key). */
+  set(req: SetProviderConfigRequestDto, opts?: BackendCallOptions): Promise<ProviderConfigDto>;
+  /** Fetch one config (no secret value — only `hasApiKey`). */
+  get(provider: string, name: string, opts?: BackendCallOptions): Promise<ProviderConfigDto>;
+  /** List configs, optionally filtered by provider. */
+  list(
+    req: ListProviderConfigsRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<ListProviderConfigsResultDto>;
+  /** Delete a config (revokes its stored secret). */
+  del(provider: string, name: string, opts?: BackendCallOptions): Promise<EmptyResultDto>;
 }
 
 /**
