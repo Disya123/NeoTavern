@@ -170,7 +170,7 @@
     {
       "source": "adr/0038-canonical-rust-kernel-core.md",
       "target": "adr/0038-canonical-rust-kernel-core.md",
-      "sha256": "ea01e5827fec4adde62fdbc63b18e4c834dc21f4b302fb4c91fda1d6a685d78f"
+      "sha256": "6ed2c9be48c85a72e74685cc9ac3737d36e4336c33c47cfd4565f1b1d07b3018"
     },
     {
       "source": "adr/0039-legacy-compatibility-authority-boundary.md",
@@ -210,7 +210,7 @@
     {
       "source": "architecture/operations-inventory.md",
       "target": "architecture/operations-inventory.md",
-      "sha256": "baf12c11a2d74638bedc15c2ed07eb72ca11aee72d6f3ec58622bf131fb8b234"
+      "sha256": "2d1189af84af411247a5a6172ceff4c19ef336a51c72b51f0cbf1de24cefed11"
     },
     {
       "source": "architecture/portable-data.md",
@@ -230,7 +230,7 @@
     {
       "source": "architecture/version-axes.md",
       "target": "architecture/version-axes.md",
-      "sha256": "bd1f6f631758b382df22c35672399a8a7ac48de52a60fc878048aecb9666fb0a"
+      "sha256": "7dcd21f6e165e4e80d8365c2230054128a83836d0e4685b8cbab4a6b904ded4f"
     },
     {
       "source": "architecture/wire-contracts.md",
@@ -240,7 +240,7 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "ea190ebc7b34dccf05091338dd3e7ccfb554722ac9937822e433d6d50d58e998"
+      "sha256": "49bfda8009f4179c16c9b3f3754cd6f4a916df1fff6cb30adab8b3bfdb05020b"
     },
     {
       "source": "data/README.md",

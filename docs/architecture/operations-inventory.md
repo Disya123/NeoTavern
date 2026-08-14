@@ -305,9 +305,10 @@ SillyTavern full-backup transfer (two-phase):
 
 - `GET /api/v2/profiles` — list.
 - `GET /api/v2/profiles/export` — portable profile export archive
-  (ZIP with `manifest.json` `{ format: "neotavern-profile-export", version: 1,
-appVersion, exportedAt, profile }`, a consistent `app.db` snapshot, and
-  `files/`; see [version-axes.md](version-axes.md)).
+  (SEC-02 logical allowlist, format v2: `manifest.json` with the exported
+  tables/counts, exclusions and redactions, one `data/<table>.jsonl` per
+  allowlisted table, and `files/`; no DB snapshot; see
+  [version-axes.md](version-axes.md)).
 - `PATCH /api/v2/profiles/:id` — update.
 
 ### providers — `apps/server/src/plugins/providers.ts`

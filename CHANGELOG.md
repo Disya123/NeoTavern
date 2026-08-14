@@ -3,6 +3,23 @@
 ## Unreleased
 ### Added
 
+- **SEC-02 — logical profile export (M1 / Wave 1, Immediate security).**
+  `apps/server/src/lib/profileExport.ts` no longer snapshots the full
+  `app.db` into the archive (ТЗ §SEC-02 forbids a DB snapshot as a profile
+  export). Export format is now **v2**: `manifest.json` records the envelope,
+  `schemaVersion`, per-table row counts, the exclusion list with reasons
+  (secret stores, plugin/theme installations, cache, diagnostics, import
+  bookkeeping) and the applied field redactions
+  (`provider_configs.api_key`, `provider_configs.settings.customIncludeHeaders`,
+  `connection_profiles.payload.includeHeaders`); product data is streamed as
+  one `data/<table>.jsonl` per allowlisted table; original files stay under
+  `files/`. New SEC-02 acceptance suite
+  (`apps/server/test/profileExport.spec.ts`) plants unique sentinel secrets in
+  every secret-bearing store and proves none appears anywhere in the archive,
+  plus route-level coverage of `GET /api/v2/profiles/export`. Export-format
+  axis bumped to 2 (`docs/architecture/version-axes.md`); v1 archives are
+  retired. Capability `ui.profile-export` is now `Implemented` on
+  desktop/headless/web-client hosts (`docs/release-manifest.json`).
 - **Architecture Convergence program — M1/Wave 0 governance (ТЗ 10/10 rev2).**
   The target-architecture
   [ТЗ 10/10 rev2](NeoTavern_architecture_10_of_10_spec_2026-08-13.md) is the

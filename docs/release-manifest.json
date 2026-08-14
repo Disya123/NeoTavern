@@ -189,12 +189,12 @@
       "title": "Logical profile export",
       "wireOps": [],
       "hosts": {
-        "desktop": "Designed",
-        "headless": "Designed",
+        "desktop": "Implemented",
+        "headless": "Implemented",
         "android": "Designed",
-        "webClient": "Designed"
+        "webClient": "Implemented"
       },
-      "notes": "SEC-02: Pending — the legacy profile export still snapshots the full app.db into the archive (ТЗ §SEC-02 forbids a full-DB snapshot as a profile export); an allowlist export lands in M1 Wave 1 (Immediate security), kernel export.profile in M3.",
+      "notes": "SEC-02: Implemented in M1 Wave 1 — the legacy export is now a logical allowlist archive (format v2: manifest.json with exported tables/counts, exclusions and redactions, one JSONL per allowlisted table, no DB snapshot; apps/server/src/lib/profileExport.ts). Sentinel tests prove provider/plugin secrets and OAuth material stay out of the archive; kernel export.profile lands in M3.",
       "milestone": "M1"
     },
     {

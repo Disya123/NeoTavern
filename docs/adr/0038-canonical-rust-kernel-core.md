@@ -108,9 +108,9 @@ before any migration work can be declared.
     legacy-surface gate ARC-02/03), the honest staged Desktop default in code
     and the single docs source tree;
   - **M1 / Wave 1 — Immediate security** (OPEN): SEC-01 SecretStore
-    hardening, SEC-02 legacy allowlist export (replacing the full-DB snapshot),
-    plugin networking and package verification; M1 is NOT closed until these
-    land;
+    hardening, SEC-02 legacy allowlist export (replacing the full-DB snapshot —
+    delivered in Wave 1, see CHANGELOG), plugin networking and package
+    verification; M1 is NOT closed until these land;
   - **M2 — Kernel Golden Foundation**, **M3 — Data Convergence**,
     **M4 — Product Convergence** (GEN-RUN 10C/10D).
     This ADR is the M1a/Wave-0 governance decision.
