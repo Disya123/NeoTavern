@@ -378,6 +378,47 @@ fn chats_and_messages_flow() {
     assert_eq!(page2.items[1].sequence, 3);
     assert!(page2.next_cursor.is_none());
 
+    // order: "desc" walks the same (sequence, id) order backward — newest
+    // first — so the UI can page older history without loading the whole chat
+    // (Этап 2.10 golden flow: message history over the wire).
+    let desc_page1 = dispatch_decoded::<PagedMessages>(
+        &kernel,
+        "chats.messages.list",
+        json!({ "chatId": chat_id, "limit": 2, "order": "desc" }),
+    )
+    .expect("messages desc page 1");
+    assert_eq!(desc_page1.items.len(), 2);
+    assert_eq!(desc_page1.items[0].sequence, 3);
+    assert_eq!(desc_page1.items[1].sequence, 2);
+    let desc_cursor = desc_page1.next_cursor.clone().expect("desc cursor");
+    let desc_page2 = dispatch_decoded::<PagedMessages>(
+        &kernel,
+        "chats.messages.list",
+        json!({ "chatId": chat_id, "limit": 2, "order": "desc", "cursor": desc_cursor }),
+    )
+    .expect("messages desc page 2");
+    assert_eq!(desc_page2.items.len(), 2);
+    assert_eq!(desc_page2.items[0].sequence, 1);
+    assert_eq!(desc_page2.items[1].sequence, 0);
+    assert!(desc_page2.next_cursor.is_none());
+
+    // default order stays ascending; unknown order values are rejected by the
+    // wire validator before dispatch.
+    let default_page = dispatch_decoded::<PagedMessages>(
+        &kernel,
+        "chats.messages.list",
+        json!({ "chatId": chat_id, "limit": 1 }),
+    )
+    .expect("messages default order page");
+    assert_eq!(default_page.items[0].sequence, 0);
+    let bad_order = dispatch_json(
+        &kernel,
+        "chats.messages.list",
+        json!({ "chatId": chat_id, "order": "sideways" }),
+    )
+    .expect_err("unknown order must be rejected");
+    assert_eq!(bad_order.code, KernelErrorCode::ContractViolation);
+
     // missing chat → CHAT_NOT_FOUND (not an empty page)
     let missing_chat = "99999999-9999-4999-8999-999999999999";
     let err = dispatch_json(

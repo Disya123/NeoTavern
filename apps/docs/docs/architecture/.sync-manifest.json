@@ -220,7 +220,7 @@
     {
       "source": "architecture/operations-inventory.md",
       "target": "architecture/operations-inventory.md",
-      "sha256": "95482c0682b49ef7cba58c853d698acadfe9e9eb6f872045534d8a06b6b6d7f0"
+      "sha256": "710a925008cb4d238982ae20d62e4a1bfa47c355d5d8b05ad036fabc5fd2e7a1"
     },
     {
       "source": "architecture/portable-data.md",
@@ -255,7 +255,7 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "102257dacd513a7c33810a8a0d2ecebed0f0f402c5b3f679cf8601e3d854c652"
+      "sha256": "57f999a7ef919851f1ec430212c443b3d7f0e2dfc09ac2b21c8a0b008271b67b"
     },
     {
       "source": "data/README.md",

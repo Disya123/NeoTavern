@@ -13,18 +13,14 @@ import type {
   BackgroundList,
   Backup,
   CacheCleanupResult,
-  Character,
   CharacterCreate,
   CharacterGallery,
   CharacterGalleryImage,
   CharacterImportResult,
   CharacterListQuery,
-  CharacterSummary,
   CharacterUpdate,
-  Chat,
   ChatCreate,
   ChatReorder,
-  ChatSummary,
   ChatUpdate,
   CursorPage,
   InstructFormatListResponse,
@@ -69,7 +65,25 @@ import type {
   VersionResponse,
 } from '@neotavern/contracts';
 import { api, setCsrfToken } from './client.js';
+import {
+  continueCharacterChat as continueChat,
+  createCharacter,
+  createChat,
+  deleteCharacter,
+  deleteChat,
+  readCharacters,
+  readCharacter,
+  readChats,
+  readRecentChats,
+  readChat,
+  readMessages,
+  updateCharacter,
+  updateChat,
+  type ContinueCharacterChatInput,
+  type ContinueCharacterChatResult,
+} from './wireBridge.js';
 export * from './providerHooks.js';
+export type { ContinueCharacterChatInput, ContinueCharacterChatResult } from './wireBridge.js';
 
 const MINUTE = 60_000;
 
@@ -138,10 +152,7 @@ export function useCharacters(query: CharacterListQuery = {}) {
   const isRandom = query.sort === 'random';
   return useInfiniteQuery({
     queryKey: ['characters', query],
-    queryFn: ({ pageParam }) =>
-      api.get<CursorPage<CharacterSummary>>(
-        `/characters${encodeQuery({ ...query, cursor: pageParam as string | undefined })}`,
-      ),
+    queryFn: ({ pageParam }) => readCharacters(query, pageParam as string | undefined),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
     staleTime: isRandom ? 0 : 2 * MINUTE,
@@ -152,7 +163,7 @@ export function useCharacters(query: CharacterListQuery = {}) {
 export function useCharacter(id: string | undefined) {
   return useQuery({
     queryKey: ['character', id],
-    queryFn: () => api.get<Character>(`/characters/${id}`),
+    queryFn: () => readCharacter(id as string),
     enabled: id !== undefined,
   });
 }
@@ -160,7 +171,7 @@ export function useCharacter(id: string | undefined) {
 export function useCreateCharacter() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: CharacterCreate) => api.post<Character>('/characters', input),
+    mutationFn: (input: CharacterCreate) => createCharacter(input),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['characters'] }),
   });
 }
@@ -169,7 +180,7 @@ export function useUpdateCharacter() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, patch }: { id: string; patch: CharacterUpdate }) =>
-      api.patch<Character>(`/characters/${id}`, patch),
+      updateCharacter(id, patch),
     onSuccess: (character) => {
       qc.setQueryData(['character', character.id], character);
       void qc.invalidateQueries({ queryKey: ['characters'] });
@@ -188,7 +199,7 @@ export function useImportCharacter() {
 export function useDeleteCharacter() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => api.del(`/characters/${id}`),
+    mutationFn: (id: string) => deleteCharacter(id),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['characters'] }),
   });
 }
@@ -227,14 +238,7 @@ export function useChats(characterId?: string, q?: string) {
   const query = q?.trim() || undefined;
   return useInfiniteQuery({
     queryKey: ['chats', characterId, query],
-    queryFn: ({ pageParam }) =>
-      api.get<CursorPage<ChatSummary>>(
-        `/chats${encodeQuery({
-          characterId,
-          q: query,
-          cursor: pageParam as string | undefined,
-        })}`,
-      ),
+    queryFn: ({ pageParam }) => readChats(characterId, query, pageParam as string | undefined),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
     staleTime: 30_000,
@@ -244,23 +248,9 @@ export function useChats(characterId?: string, q?: string) {
 export function useRecentChats(limit = 8, characterId?: string) {
   return useQuery({
     queryKey: ['chats', 'recent', characterId, limit],
-    queryFn: () =>
-      api.get<CursorPage<ChatSummary>>(
-        `/chats${encodeQuery({ characterId, limit, sort: 'recent' })}`,
-      ),
+    queryFn: () => readRecentChats(limit, characterId),
     staleTime: 30_000,
   });
-}
-
-export interface ContinueCharacterChatInput {
-  characterId: string;
-  title: string;
-  personaId?: string;
-}
-
-export interface ContinueCharacterChatResult {
-  chatId: string;
-  created: boolean;
 }
 
 const pendingCharacterContinuations = new Map<string, Promise<ContinueCharacterChatResult>>();
@@ -271,25 +261,10 @@ async function continueCharacterChat(
   const pending = pendingCharacterContinuations.get(input.characterId);
   if (pending) return pending;
 
-  const request = (async () => {
-    const recent = await api.get<CursorPage<ChatSummary>>(
-      `/chats${encodeQuery({
-        characterId: input.characterId,
-        limit: 1,
-        sort: 'recent',
-      })}`,
-    );
-    const existing = recent.items[0];
-    if (existing) return { chatId: existing.id, created: false };
-
-    const created = await api.post<Chat>('/chats', {
-      characterId: input.characterId,
-      title: input.title,
-      reuseUnstarted: true,
-      ...(input.personaId ? { personaId: input.personaId } : {}),
-    } satisfies ChatCreate);
-    return { chatId: created.id, created: true };
-  })();
+  // The transport branch (kernel continue vs legacy reuseUnstarted guard)
+  // lives in the API layer (ТЗ §13.1); this wrapper only deduplicates
+  // concurrent selections so they cannot create duplicate empty chats.
+  const request = continueChat(input);
 
   pendingCharacterContinuations.set(input.characterId, request);
   try {
@@ -319,7 +294,7 @@ export function useContinueCharacterChat() {
 export function useChat(id: string | undefined) {
   return useQuery({
     queryKey: ['chat', id],
-    queryFn: () => api.get<Chat>(`/chats/${id}`),
+    queryFn: () => readChat(id as string),
     enabled: id !== undefined,
   });
 }
@@ -353,7 +328,7 @@ export function usePromptContextPreview(
 export function useCreateChat() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: ChatCreate) => api.post<Chat>('/chats', input),
+    mutationFn: (input: ChatCreate) => createChat(input),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['chats'] }),
   });
 }
@@ -361,8 +336,7 @@ export function useCreateChat() {
 export function useUpdateChat() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, update }: { id: string; update: ChatUpdate }) =>
-      api.patch<Chat>(`/chats/${id}`, update),
+    mutationFn: ({ id, update }: { id: string; update: ChatUpdate }) => updateChat(id, update),
     onSuccess: (chat) => {
       void qc.invalidateQueries({ queryKey: ['chat', chat.id] });
       void qc.invalidateQueries({ queryKey: ['chats'] });
@@ -384,7 +358,7 @@ export function useReorderChats() {
 export function useDeleteChat() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => api.del(`/chats/${id}`),
+    mutationFn: (id: string) => deleteChat(id),
     onSuccess: (_result, id) => {
       qc.removeQueries({ queryKey: ['chat', id] });
       void qc.invalidateQueries({ queryKey: ['chats'] });
@@ -396,13 +370,7 @@ export function useMessages(chatId: string | undefined, branchId?: string) {
   return useInfiniteQuery({
     queryKey: ['messages', chatId, branchId],
     queryFn: ({ pageParam }) =>
-      api.get<CursorPage<Message>>(
-        `/chats/${chatId}/messages${encodeQuery({
-          order: 'desc',
-          branchId,
-          cursor: pageParam as string | undefined,
-        })}`,
-      ),
+      readMessages(chatId as string, branchId, pageParam as string | undefined),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
     enabled: chatId !== undefined,

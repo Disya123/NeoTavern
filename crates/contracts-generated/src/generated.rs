@@ -3269,6 +3269,8 @@ pub struct RequestListMessages {
     pub cursor: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub limit: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub order: Option<String>,
 }
 
 pub(crate) fn check_request_list_messages(value: &Value, path: &str, issues: &mut Vec<Issue>) {
@@ -3319,9 +3321,20 @@ pub(crate) fn check_request_list_messages(value: &Value, path: &str, issues: &mu
                 None => issues.push(Issue::new(child_path.as_str(), "Integer")),
             }
         }
+        if let Some(child) = value.get("order") {
+            let child_path = join_path(path, "order");
+            match child.as_str() {
+                Some(s) => {
+                    if !matches!(s, "asc" | "desc") {
+                        issues.push(Issue::new(child_path.as_str(), "Union"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
         if let Some(obj) = value.as_object() {
             for key in obj.keys() {
-                if !matches!(key.as_str(), "chatId" | "cursor" | "limit") {
+                if !matches!(key.as_str(), "chatId" | "cursor" | "limit" | "order") {
                     let key_path = join_path(path, key);
                     issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
                 }
