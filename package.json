@@ -57,6 +57,7 @@
     "ui:api:update": "node scripts/check-ui-api.mjs --update",
     "crates:test": "cargo test --manifest-path crates/Cargo.toml",
     "crates:test:adapter": "cargo test --manifest-path crates/Cargo.toml -p remote-http-adapter",
+    "upgrade:drill": "node scripts/upgrade-drill.mjs",
     "clean": "node scripts/clean.mjs"
   },
   "devDependencies": {
