@@ -394,6 +394,28 @@
         "c580388 (M2 library/chat CRUD over Product Wire)"
       ]
     },
+    "reCutGuide": {
+      "note": "Conflict map verified on 2026-08-14 by diffing every M2 commit's files against the executed M1 branch (ec127a4..HEAD). Every M2 commit touches the docs trio below, so each cherry-pick conflicts there — the resolution policy makes this mechanical. The M2 commit chain (b6d7dbe..c580388) is verified linear on m1-w1-security; re-cut order is the listed order.",
+      "commonPattern": "For EVERY cherry-picked M2 commit resolve: CHANGELOG.md -> ours (the M1 branch keeps only M1 entries; M2 entries are collected and written as one M2 CHANGELOG commit at the end); docs/capability-matrix.{json,md} + apps/docs/docs/architecture/capability-matrix.md -> take from commit, then run 'pnpm capability:matrix' and commit the regenerated output (23 rows baseline); apps/docs/docs/architecture/.sync-manifest.json -> regenerate last via 'pnpm docs:sync'.",
+      "perFile": {
+        "docs/release-manifest.json": "hand-maintained input to the matrix generator — take from commit, then verify 'pnpm capability:matrix:check'",
+        "docs/architecture/operations-inventory.md + apps/docs mirror": "hand-maintained routing table updated by the M2 author — take from commit, then 'pnpm docs:sync'",
+        "docs/architecture/README.md + apps/docs mirror": "ours, then verify docs:check (M2 adds sections only if they exist in the M2 content)",
+        "crates/Cargo.toml": "take from commit (adds the provider-openai-compat workspace member)",
+        "crates/Cargo.lock": "take from commit, then verify 'cargo test --manifest-path crates/Cargo.toml' (M1's +uuid hunk lives elsewhere in the lockfile)",
+        "apps/desktop/src-tauri/Cargo.lock": "take from commit (6d5af18), then verify the desktop crate builds",
+        "crates/contracts-generated/src/generated.rs + tests/wire_corpus.rs": "take from commit (regenerated for the M2-era contracts source), then verify 'node tools/contract-codegen/codegen.mjs --check'"
+      },
+      "verificationAfter": [
+        "pnpm capability:matrix:check",
+        "node tools/contract-codegen/codegen.mjs --check",
+        "pnpm docs:sync:check && pnpm docs:check",
+        "cargo test --manifest-path crates/Cargo.toml && cargo clippy --workspace --all-targets -- -D warnings",
+        "pnpm typecheck && pnpm lint",
+        "node scripts/check-milestone-gates.mjs --check && node scripts/check-milestone-gates.mjs --self-test",
+        "pnpm test (vitest + web)"
+      ]
+    },
     "pr-migration": {
       "when": "after M3 accepted",
       "commits": [
