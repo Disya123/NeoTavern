@@ -31,6 +31,19 @@
   "kernel flow smoke" (`run_kernel_flow_smoke`, docs updated) — the
   packaged golden E2E of ТЗ §17.2 with fault injection remains an open item.
 
+- **In-flight byte budgets for plugin network (SEC-04 Wave 2, ТЗ §SEC-04).**
+  `apps/plugin-runtime/src/host/memoryHost.ts` now enforces per-plugin and
+  global in-flight byte budgets while a fetch body is being streamed:
+  `NETWORK_MAX_INFLIGHT_BYTES_PER_PLUGIN` (16 MiB) and
+  `NETWORK_MAX_INFLIGHT_BYTES_GLOBAL` (64 MiB) in `packages/contracts`
+  (worst-case reservation per body = `NETWORK_MAX_BODY_BYTES`). A new
+  request that would exceed either budget fails BEFORE its body is read with
+  the stable `NETWORK_INFLIGHT_LIMIT` error (the response is destroyed, never
+  partially buffered) and the reservation is released on success, error or
+  cancellation. Tests: `memoryHost.test.ts` now 113 tests, including a
+  per-plugin trip (3rd concurrent fetch of one plugin denied) and a
+  cross-plugin global trip (9 plugins, 8 held fetches, 9th denied).
+
 - **Migration single-writer and pointer integrity fixes (audit P0 #3,
   ТЗ §10.3/§22.3).** `neotavern_storage::migration` is now session-based:
   `MigrationSession::begin` acquires the data-root lease and holds it for

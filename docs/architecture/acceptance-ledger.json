@@ -51,14 +51,14 @@
         "apps/server/src/lib/profileExport.ts (entity + per-table column allowlist, snapshot transaction, no DB snapshot, redactions)",
         "apps/plugin-runtime/src/host/networkPool.ts + socketHandles.ts (pre-connect policy)",
         "apps/server/test/secretStore.spec.ts, extensions-hardening.spec.ts",
-        "apps/server/test/profileExport.spec.ts (11 tests: sentinels, allowlist vs PRAGMA table_info, snapshotTransaction, rollback)"
+        "apps/server/test/profileExport.spec.ts (11 tests: sentinels, allowlist vs PRAGMA table_info, snapshotTransaction, rollback)",
+        "apps/plugin-runtime/src/host/memoryHost.ts (NETWORK_INFLIGHT_LIMIT per-plugin + global in-flight byte budgets) + memoryHost.test.ts (113 tests incl. both budget trips)"
       ],
       "blockingIssues": [
         "P0: session SecretStore destroyed legacy plaintext on bootstrap (FIXED in this milestone; portable/env flows verified in secretStore.spec.ts)",
         "P0: plugin entrypoint inside signature/ escaped the signed digest (FIXED: validatePackage + host-side defense-in-depth)",
         "P0: WebSocket post-connect remoteAddress verification missing (undici WebSocket does not expose the connected socket; documented follow-up in socketHandles.ts)",
         "P0: network broker TCP/proxy paths connect by hostname after checking a single DNS answer; verified-IP set not honored on every connect",
-        "P1: no global/per-plugin in-flight byte budget and decompressed-byte accounting for streaming bodies",
         "P1: legacy migrator does not yet carry settings/branches/revisions/assets (Этап 4 follow-ups; personas now migrated)"
       ],
       "waivers": []

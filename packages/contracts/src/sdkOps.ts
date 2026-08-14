@@ -185,6 +185,19 @@ export const NETWORK_MAX_BODY_BYTES = 8 * 1024 * 1024;
 /** Max redirect hops followed by the host executor (§29.1.3). */
 export const NETWORK_MAX_REDIRECTS = 8;
 /**
+ * §SEC-04 in-flight byte budgets. While a fetch body is being streamed
+ * (`readBoundedText`) its bytes are held host-side; the sum of ALL bodies
+ * currently in flight across a single plugin must stay under the per-plugin
+ * budget, and the sum across every plugin under the global budget. Exceeding
+ * either is a stable `NETWORK_INFLIGHT_LIMIT` error thrown BEFORE the excess
+ * body is read (the response is destroyed, never partially buffered).
+ * `NETWORK_MAX_BODY_BYTES` is the reservation per in-flight body (the worst
+ * case for a single body); the budgets below cap how many such bodies may be
+ * streamed concurrently before one finishes.
+ */
+export const NETWORK_MAX_INFLIGHT_BYTES_PER_PLUGIN = 16 * 1024 * 1024;
+export const NETWORK_MAX_INFLIGHT_BYTES_GLOBAL = 64 * 1024 * 1024;
+/**
  * §29.1.1 scope capabilities: `network.http` alone permits only public
  * Internet addresses. Loopback, RFC1918/link-local, cloud metadata and other
  * non-public destinations require these ADDITIONAL capabilities (granted to

@@ -35,6 +35,8 @@ import {
   MODELS_MAX_LIST,
   NETWORK_MAX_BODY_BYTES,
   NETWORK_MAX_HEADERS,
+  NETWORK_MAX_INFLIGHT_BYTES_GLOBAL,
+  NETWORK_MAX_INFLIGHT_BYTES_PER_PLUGIN,
   NETWORK_MAX_REDIRECTS,
   NETWORK_SCOPE_LOCAL,
   NETWORK_SCOPE_METADATA,
@@ -840,6 +842,54 @@ export function createMemoryHostExecutor(options: MemoryHostOptions = {}): Memor
     return approved;
   }
 
+  // ---- §SEC-04 in-flight byte budgets (per-plugin + global) ----
+  // While a fetch body is being streamed, its bytes are held host-side. The
+  // budgets below cap the sum of ALL concurrently streamed bodies: a plugin
+  // may never hold more than NETWORK_MAX_INFLIGHT_BYTES_PER_PLUGIN across its
+  // own requests, and all plugins together never exceed the global budget.
+  // The reservation is the worst case for one body (NETWORK_MAX_BODY_BYTES);
+  // exceeding either budget fails the NEW request with a stable
+  // NETWORK_INFLIGHT_LIMIT error before its body is read (the response is
+  // destroyed, never partially buffered — §SEC-04).
+  const inflightByPlugin = new Map<string, number>();
+  let inflightGlobal = 0;
+
+  function reserveInflight(pluginId: string): void {
+    const perPlugin = inflightByPlugin.get(pluginId) ?? 0;
+    const nextPerPlugin = perPlugin + NETWORK_MAX_BODY_BYTES;
+    const nextGlobal = inflightGlobal + NETWORK_MAX_BODY_BYTES;
+    if (nextPerPlugin > NETWORK_MAX_INFLIGHT_BYTES_PER_PLUGIN) {
+      throw new BrokerCallError('NETWORK_INFLIGHT_LIMIT', {
+        message: 'per-plugin in-flight byte budget exceeded',
+        details: {
+          inFlight: perPlugin,
+          limit: NETWORK_MAX_INFLIGHT_BYTES_PER_PLUGIN,
+          attempted: NETWORK_MAX_BODY_BYTES,
+        },
+      });
+    }
+    if (nextGlobal > NETWORK_MAX_INFLIGHT_BYTES_GLOBAL) {
+      throw new BrokerCallError('NETWORK_INFLIGHT_LIMIT', {
+        message: 'global in-flight byte budget exceeded',
+        details: {
+          inFlight: inflightGlobal,
+          limit: NETWORK_MAX_INFLIGHT_BYTES_GLOBAL,
+          attempted: NETWORK_MAX_BODY_BYTES,
+        },
+      });
+    }
+    inflightByPlugin.set(pluginId, nextPerPlugin);
+    inflightGlobal = nextGlobal;
+  }
+
+  function releaseInflight(pluginId: string): void {
+    const current = inflightByPlugin.get(pluginId) ?? 0;
+    const next = Math.max(0, current - NETWORK_MAX_BODY_BYTES);
+    if (next === 0) inflightByPlugin.delete(pluginId);
+    else inflightByPlugin.set(pluginId, next);
+    inflightGlobal = Math.max(0, inflightGlobal - NETWORK_MAX_BODY_BYTES);
+  }
+
   async function performFetch(
     args: SdkNetworkFetchArgs,
     signal: AbortSignal,
@@ -852,84 +902,96 @@ export function createMemoryHostExecutor(options: MemoryHostOptions = {}): Memor
     const method = args.method ?? 'GET';
     const resolvedSecret = resolveSecret(args, pluginId);
     let isRedirectHop = false;
-    for (let hop = 0; hop <= NETWORK_MAX_REDIRECTS; hop += 1) {
-      let parsed: URL;
-      try {
-        parsed = new URL(currentUrl);
-      } catch {
-        throw new BrokerCallError(BrokerErrorCode.VALIDATION_FAILED, {
-          message: 'invalid url',
-          details: { url: currentUrl },
-        });
-      }
-      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-        throw new BrokerCallError(
-          isRedirectHop ? 'NETWORK_REDIRECT_DENIED' : 'NETWORK_DESTINATION_DENIED',
-          {
-            message: 'non-http scheme rejected',
-            details: { scheme: parsed.protocol },
-          },
-        );
-      }
-      const approved = await checkDestination(parsed.hostname, isRedirectHop, scope);
-      // §29.1.5: a secret pins the destination policy — the first hop must
-      // stay inside the bound origin (no `use secret X + arbitrary Y`).
-      // Redirects do NOT reject: they simply continue WITHOUT the secret
-      // (a redirect never carries the injected secret to another origin).
-      if (
-        resolvedSecret !== null &&
-        !isRedirectHop &&
-        parsed.origin !== resolvedSecret.secretOrigin
-      ) {
-        throw new BrokerCallError('NETWORK_SECRET_ORIGIN_MISMATCH', {
-          message: 'secret is bound to a different origin',
-          details: { secretId: args.secretId, targetOrigin: parsed.origin },
-        });
-      }
-      // The injected secret travels only while the hop stays inside the
-      // secret's bound origin; a redirect that leaves it continues WITHOUT
-      // the secret headers.
-      let hopHeaders = headers;
-      if (resolvedSecret !== null && parsed.origin === resolvedSecret.secretOrigin) {
-        hopHeaders = { ...headers, ...resolvedSecret.secret.headers };
-      }
-      const init: RequestInit = { method, headers: hopHeaders, redirect: 'manual', signal };
-      if (args.body !== undefined && args.body !== null && method !== 'GET' && method !== 'HEAD') {
-        init.body = args.body;
-      }
-      let resp: Response;
-      try {
-        // The approved list is the same resolution the policy check above
-        // admitted: the transport connects to one of these IPs and verifies
-        // the connected remoteAddress against them (ТЗ §SEC-03).
-        resp = await fetchImpl(currentUrl, init, { ips: approved });
-      } catch (error) {
-        if (error instanceof VerifiedIpMismatchError) {
-          throw new BrokerCallError('NETWORK_DESTINATION_DENIED', {
-            message: 'connected address not in the approved set',
-            details: { hostname: parsed.hostname, remoteAddress: error.remoteAddress },
+    // §SEC-04: reserve the worst-case body size for the whole redirect chain
+    // up front; released on success, error or cancellation.
+    reserveInflight(pluginId);
+    try {
+      for (let hop = 0; hop <= NETWORK_MAX_REDIRECTS; hop += 1) {
+        let parsed: URL;
+        try {
+          parsed = new URL(currentUrl);
+        } catch {
+          throw new BrokerCallError(BrokerErrorCode.VALIDATION_FAILED, {
+            message: 'invalid url',
+            details: { url: currentUrl },
           });
         }
-        throw error;
-      }
-      const status = resp.status;
-      const location = resp.headers.get('location');
-      if (status >= 300 && status < 400 && location !== null) {
-        if (args.redirect === 'manual') {
-          return responseEnvelope(resp, currentUrl, redirects);
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+          throw new BrokerCallError(
+            isRedirectHop ? 'NETWORK_REDIRECT_DENIED' : 'NETWORK_DESTINATION_DENIED',
+            {
+              message: 'non-http scheme rejected',
+              details: { scheme: parsed.protocol },
+            },
+          );
         }
-        const nextUrl = new URL(location, currentUrl).toString();
-        redirects.push(nextUrl);
-        currentUrl = nextUrl;
-        isRedirectHop = true;
-        continue;
+        const approved = await checkDestination(parsed.hostname, isRedirectHop, scope);
+        // §29.1.5: a secret pins the destination policy — the first hop must
+        // stay inside the bound origin (no `use secret X + arbitrary Y`).
+        // Redirects do NOT reject: they simply continue WITHOUT the secret
+        // (a redirect never carries the injected secret to another origin).
+        if (
+          resolvedSecret !== null &&
+          !isRedirectHop &&
+          parsed.origin !== resolvedSecret.secretOrigin
+        ) {
+          throw new BrokerCallError('NETWORK_SECRET_ORIGIN_MISMATCH', {
+            message: 'secret is bound to a different origin',
+            details: { secretId: args.secretId, targetOrigin: parsed.origin },
+          });
+        }
+        // The injected secret travels only while the hop stays inside the
+        // secret's bound origin; a redirect that leaves it continues WITHOUT
+        // the secret headers.
+        let hopHeaders = headers;
+        if (resolvedSecret !== null && parsed.origin === resolvedSecret.secretOrigin) {
+          hopHeaders = { ...headers, ...resolvedSecret.secret.headers };
+        }
+        const init: RequestInit = { method, headers: hopHeaders, redirect: 'manual', signal };
+        if (
+          args.body !== undefined &&
+          args.body !== null &&
+          method !== 'GET' &&
+          method !== 'HEAD'
+        ) {
+          init.body = args.body;
+        }
+        let resp: Response;
+        try {
+          // The approved list is the same resolution the policy check above
+          // admitted: the transport connects to one of these IPs and verifies
+          // the connected remoteAddress against them (ТЗ §SEC-03).
+          resp = await fetchImpl(currentUrl, init, { ips: approved });
+        } catch (error) {
+          if (error instanceof VerifiedIpMismatchError) {
+            throw new BrokerCallError('NETWORK_DESTINATION_DENIED', {
+              message: 'connected address not in the approved set',
+              details: { hostname: parsed.hostname, remoteAddress: error.remoteAddress },
+            });
+          }
+          throw error;
+        }
+        const status = resp.status;
+        const location = resp.headers.get('location');
+        if (status >= 300 && status < 400 && location !== null) {
+          if (args.redirect === 'manual') {
+            return responseEnvelope(resp, currentUrl, redirects);
+          }
+          const nextUrl = new URL(location, currentUrl).toString();
+          redirects.push(nextUrl);
+          currentUrl = nextUrl;
+          isRedirectHop = true;
+          continue;
+        }
+        return responseEnvelope(resp, currentUrl, redirects);
       }
-      return responseEnvelope(resp, currentUrl, redirects);
+      throw new BrokerCallError('NETWORK_REDIRECT_DENIED', {
+        message: 'too many redirects',
+        details: { hops: NETWORK_MAX_REDIRECTS + 1 },
+      });
+    } finally {
+      releaseInflight(pluginId);
     }
-    throw new BrokerCallError('NETWORK_REDIRECT_DENIED', {
-      message: 'too many redirects',
-      details: { hops: NETWORK_MAX_REDIRECTS + 1 },
-    });
   }
 
   /**
