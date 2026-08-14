@@ -9,7 +9,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { UnsupportedError } from '@neotavern/neobackend';
-import type { CharacterDto, ChatDto, MessageDto } from '@neotavern/contracts';
+import type { CharacterDto, ChatDto, LorebookDto, MessageDto, PersonaDto } from '@neotavern/contracts';
 
 const mocks = vi.hoisted(() => {
   const characters = {
@@ -27,11 +27,30 @@ const mocks = vi.hoisted(() => {
     del: vi.fn(),
     listMessages: vi.fn(),
   };
-  return { characters, chats };
+  const lorebooks = {
+    list: vi.fn(),
+    get: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    del: vi.fn(),
+  };
+  const personas = {
+    list: vi.fn(),
+    get: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    del: vi.fn(),
+  };
+  return { characters, chats, lorebooks, personas };
 });
 
 vi.mock('./backend.js', () => ({
-  backend: { characters: mocks.characters, chats: mocks.chats },
+  backend: {
+    characters: mocks.characters,
+    chats: mocks.chats,
+    lorebooks: mocks.lorebooks,
+    personas: mocks.personas,
+  },
   isKernelMode: () => true,
 }));
 
@@ -39,21 +58,37 @@ import {
   continueCharacterChat,
   createCharacter,
   createChat,
+  createLorebook,
+  createLorebookEntry,
+  createPersona,
   deleteCharacter,
   deleteChat,
+  deleteLorebook,
+  deleteLorebookEntry,
+  deletePersona,
   readCharacters,
   readCharacter,
   readChats,
   readRecentChats,
   readChat,
+  readLorebook,
+  readLorebookEntries,
+  readLorebooks,
   readMessages,
+  readPersona,
+  readPersonas,
   translateCharacter,
   translateCharacterSummary,
   translateChat,
   translateChatSummary,
+  translateLorebook,
   translateMessage,
+  translatePersona,
   updateCharacter,
   updateChat,
+  updateLorebook,
+  updateLorebookEntry,
+  updatePersona,
 } from './wireBridge.js';
 
 const CHAR_ID = '11111111-2222-4333-8444-555555555555';
@@ -86,6 +121,24 @@ const WIRE_MESSAGE: MessageDto = {
   content: 'Hello',
   createdAt: NOW,
   sequence: 0,
+};
+
+const WIRE_LOREBOOK: LorebookDto = {
+  id: '33445566-7788-99aa-bbcc-ddeeff001122',
+  name: 'Arcanum',
+  description: 'A magic codex.',
+  entryCount: 0,
+  createdAt: NOW,
+  updatedAt: NOW,
+};
+
+const WIRE_PERSONA: PersonaDto = {
+  id: '44556677-8899-aabb-ccdd-eeff00112233',
+  name: 'Aria',
+  description: 'A traveler.',
+  isDefault: true,
+  createdAt: NOW,
+  updatedAt: NOW,
 };
 
 beforeEach(() => {
@@ -160,6 +213,32 @@ describe('wire→UI translation', () => {
       activeVariantPosition: null,
       contentRevisionCount: 0,
       checkpointChatId: null,
+    });
+  });
+
+  it('maps a wire lorebook onto the legacy Lorebook with neutral defaults', () => {
+    const book = translateLorebook(WIRE_LOREBOOK);
+    expect(book).toEqual({
+      id: WIRE_LOREBOOK.id,
+      name: 'Arcanum',
+      description: 'A magic codex.',
+      characterId: null,
+      metadata: {},
+      createdAt: NOW_MS,
+      updatedAt: NOW_MS,
+    });
+  });
+
+  it('maps a wire persona onto the legacy Persona with an honest avatar default', () => {
+    const persona = translatePersona(WIRE_PERSONA);
+    expect(persona).toEqual({
+      id: WIRE_PERSONA.id,
+      name: 'Aria',
+      description: 'A traveler.',
+      avatar: null,
+      isDefault: true,
+      createdAt: NOW_MS,
+      updatedAt: NOW_MS,
     });
   });
 });
@@ -315,5 +394,143 @@ describe('readMessages (kernel)', () => {
   it('rejects a branch id honestly (branches are not modelled yet)', async () => {
     await expect(readMessages(CHAT_ID, 'b1')).rejects.toBeInstanceOf(UnsupportedError);
     expect(mocks.chats.listMessages).not.toHaveBeenCalled();
+  });
+});
+
+describe('lorebook CRUD (kernel, Этап 4.1)', () => {
+  it('lists lorebooks in one page and translates them', async () => {
+    mocks.lorebooks.list.mockResolvedValue({ items: [WIRE_LOREBOOK] });
+    const page = await readLorebooks();
+    expect(mocks.lorebooks.list).toHaveBeenCalledWith();
+    expect(page).toEqual({
+      items: [expect.objectContaining({ id: WIRE_LOREBOOK.id, name: 'Arcanum' })],
+      nextCursor: null,
+      hasMore: false,
+    });
+  });
+
+  it('rejects a character-scoped catalog honestly (linkage not modelled)', async () => {
+    await expect(readLorebooks({ characterId: CHAR_ID })).rejects.toBeInstanceOf(
+      UnsupportedError,
+    );
+    expect(mocks.lorebooks.list).not.toHaveBeenCalled();
+  });
+
+  it('gets one lorebook and translates it', async () => {
+    mocks.lorebooks.get.mockResolvedValue(WIRE_LOREBOOK);
+    await expect(readLorebook(WIRE_LOREBOOK.id)).resolves.toMatchObject({
+      id: WIRE_LOREBOOK.id,
+      characterId: null,
+    });
+    expect(mocks.lorebooks.get).toHaveBeenCalledWith(WIRE_LOREBOOK.id);
+  });
+
+  it('creates a lorebook with entries', async () => {
+    mocks.lorebooks.create.mockResolvedValue(WIRE_LOREBOOK);
+    await createLorebook({
+      name: 'Arcanum',
+      description: 'A magic codex.',
+      entries: [{ keys: ['spell'], content: 'Mana flows.', enabled: true, constant: false }],
+    });
+    expect(mocks.lorebooks.create).toHaveBeenCalledWith({
+      name: 'Arcanum',
+      description: 'A magic codex.',
+      entries: [{ keys: ['spell'], content: 'Mana flows.', enabled: true, constant: false }],
+    });
+  });
+
+  it('rejects character-linked creation honestly', async () => {
+    await expect(createLorebook({ name: 'X', characterId: CHAR_ID })).rejects.toBeInstanceOf(
+      UnsupportedError,
+    );
+    expect(mocks.lorebooks.create).not.toHaveBeenCalled();
+  });
+
+  it('updates name/description and rejects character linkage', async () => {
+    mocks.lorebooks.update.mockResolvedValue(WIRE_LOREBOOK);
+    await updateLorebook(WIRE_LOREBOOK.id, { name: 'Renamed', description: 'd' });
+    expect(mocks.lorebooks.update).toHaveBeenCalledWith({
+      lorebookId: WIRE_LOREBOOK.id,
+      name: 'Renamed',
+      description: 'd',
+    });
+    await expect(
+      updateLorebook(WIRE_LOREBOOK.id, { characterId: CHAR_ID }),
+    ).rejects.toBeInstanceOf(UnsupportedError);
+  });
+
+  it('deletes a lorebook through the facade', async () => {
+    mocks.lorebooks.del.mockResolvedValue({ ok: true });
+    await deleteLorebook(WIRE_LOREBOOK.id);
+    expect(mocks.lorebooks.del).toHaveBeenCalledWith(WIRE_LOREBOOK.id);
+  });
+
+  it('surfaces entry-level operations as honest CAPABILITY_UNAVAILABLE', async () => {
+    await expect(readLorebookEntries(WIRE_LOREBOOK.id)).rejects.toBeInstanceOf(
+      UnsupportedError,
+    );
+    await expect(
+      createLorebookEntry(WIRE_LOREBOOK.id, { keys: ['k'], content: 'c' }),
+    ).rejects.toBeInstanceOf(UnsupportedError);
+    await expect(
+      updateLorebookEntry(WIRE_LOREBOOK.id, 'e1', { content: 'c2' }),
+    ).rejects.toBeInstanceOf(UnsupportedError);
+    await expect(deleteLorebookEntry(WIRE_LOREBOOK.id, 'e1')).rejects.toBeInstanceOf(
+      UnsupportedError,
+    );
+  });
+});
+
+describe('persona CRUD (kernel, Этап 4.1)', () => {
+  it('lists personas and translates them', async () => {
+    mocks.personas.list.mockResolvedValue({ items: [WIRE_PERSONA] });
+    const personas = await readPersonas();
+    expect(mocks.personas.list).toHaveBeenCalledWith();
+    expect(personas).toEqual([expect.objectContaining({ id: WIRE_PERSONA.id, name: 'Aria' })]);
+  });
+
+  it('gets one persona and translates it', async () => {
+    mocks.personas.get.mockResolvedValue(WIRE_PERSONA);
+    await expect(readPersona(WIRE_PERSONA.id)).resolves.toMatchObject({
+      id: WIRE_PERSONA.id,
+      avatar: null,
+    });
+    expect(mocks.personas.get).toHaveBeenCalledWith(WIRE_PERSONA.id);
+  });
+
+  it('creates a persona (default flag included)', async () => {
+    mocks.personas.create.mockResolvedValue(WIRE_PERSONA);
+    await createPersona({ name: 'Aria', description: 'A traveler.', isDefault: true });
+    expect(mocks.personas.create).toHaveBeenCalledWith({
+      name: 'Aria',
+      description: 'A traveler.',
+      isDefault: true,
+    });
+  });
+
+  it('rejects an explicit avatar clear on create honestly', async () => {
+    await expect(createPersona({ name: 'A', avatar: null })).rejects.toBeInstanceOf(
+      UnsupportedError,
+    );
+    expect(mocks.personas.create).not.toHaveBeenCalled();
+  });
+
+  it('updates name/avatar and rejects an explicit avatar clear', async () => {
+    mocks.personas.update.mockResolvedValue(WIRE_PERSONA);
+    await updatePersona(WIRE_PERSONA.id, { name: 'Aria II', avatar: 'aria.png' });
+    expect(mocks.personas.update).toHaveBeenCalledWith({
+      personaId: WIRE_PERSONA.id,
+      name: 'Aria II',
+      avatar: 'aria.png',
+    });
+    await expect(updatePersona(WIRE_PERSONA.id, { avatar: null })).rejects.toBeInstanceOf(
+      UnsupportedError,
+    );
+  });
+
+  it('deletes a persona through the facade', async () => {
+    mocks.personas.del.mockResolvedValue({ ok: true });
+    await deletePersona(WIRE_PERSONA.id);
+    expect(mocks.personas.del).toHaveBeenCalledWith(WIRE_PERSONA.id);
   });
 });

@@ -174,6 +174,20 @@ async function migrateLegacySecrets(
     log.warn('[secret-store] backend unavailable — legacy secret import skipped');
     return { provider: 0, plugin: 0 };
   }
+  // SEC-01.1 honesty: a non-persistent backend (session) must never destroy
+  // the only durable copy of a legacy plaintext secret. Importing into
+  // process memory and rewriting the row to a `session:` reference would make
+  // the secret unrecoverable after restart. Skipping keeps the rows intact so
+  // a later persistent setup (portable/env) can still migrate them; the
+  // runtime reports these secrets as unavailable until then (no plaintext
+  // fallback, no data loss).
+  if (!backend.describe().persistent) {
+    log.warn(
+      '[secret-store] non-persistent backend — legacy plaintext secrets left intact ' +
+        '(no data loss); configure NEOTA_SECRET_MODE=portable (or env) to migrate them',
+    );
+    return { provider: 0, plugin: 0 };
+  }
   const repos = ctx.database.repos;
   let provider = 0;
   let plugin = 0;

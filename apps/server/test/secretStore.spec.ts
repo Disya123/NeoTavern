@@ -199,7 +199,39 @@ describe('SEC-01: plugin secrets are stored out-of-band', () => {
 });
 
 describe('SEC-01: legacy plaintext import', () => {
-  it('moves pre-migration plaintext rows into the store at bootstrap', async () => {
+  it('keeps legacy plaintext intact under a non-persistent (session) backend — no data loss', async () => {
+    // Seed a pre-SEC-01 database: a provider config plus a plaintext secret.
+    const seed = createAppDatabase(':memory:');
+    const providerId = '018f0000-0000-7000-8000-0000000000ff';
+    seed.sqlite
+      .prepare(
+        `INSERT INTO provider_configs (id, kind, name, enabled, settings, created_at, updated_at)
+         VALUES (?, 'openai-compatible', 'legacy provider', 1, '{}', 1, 1)`,
+      )
+      .run(providerId);
+    seed.sqlite
+      .prepare(
+        `INSERT INTO provider_secrets (id, provider_id, label, value, value_ref, active, created_at)
+         VALUES ('018f0000-0000-7000-8000-0000000000aa', ?, 'legacy', 'sk-legacy-plaintext', NULL, 1, 1)`,
+      )
+      .run(providerId);
+
+    // buildApp runs the idempotent import at bootstrap. A session-only store
+    // cannot survive a restart, so the importer must NOT destroy the only
+    // durable copy: the row keeps its plaintext value.
+    const { database } = await createTestApp({ database: seed, secretMode: 'session' });
+
+    const row = await database.repos.providerSecrets.getFullById(
+      providerId,
+      '018f0000-0000-7000-8000-0000000000aa',
+    );
+    expect(row?.value).toBe('sk-legacy-plaintext');
+    expect(row?.valueRef).toBeNull();
+    // Still unmigrated — a later persistent setup can import it.
+    expect(await database.repos.providerSecrets.listUnmigrated()).toHaveLength(1);
+  });
+
+  it('moves pre-migration plaintext rows into a persistent (portable) store at bootstrap', async () => {
     // Seed a pre-SEC-01 database: a provider config plus a plaintext secret.
     const seed = createAppDatabase(':memory:');
     const providerId = '018f0000-0000-7000-8000-0000000000ff';
@@ -217,14 +249,18 @@ describe('SEC-01: legacy plaintext import', () => {
       .run(providerId);
 
     // buildApp runs the idempotent import at bootstrap with the live handle.
-    const { database, secrets } = await createTestApp({ database: seed });
+    const { database, secrets } = await createTestApp({
+      database: seed,
+      secretMode: 'portable',
+      secretPassphrase: 'test-passphrase',
+    });
 
     const row = await database.repos.providerSecrets.getFullById(
       providerId,
       '018f0000-0000-7000-8000-0000000000aa',
     );
     expect(row?.value).toBe('');
-    expect(row?.valueRef).toMatch(/^session:provider:/u);
+    expect(row?.valueRef).toMatch(/^portable:provider:/u);
     expect(await secrets.resolve(row?.valueRef ?? '')).toBe('sk-legacy-plaintext');
     // The import is idempotent: no rows are left unmigrated.
     expect(await database.repos.providerSecrets.listUnmigrated()).toHaveLength(0);

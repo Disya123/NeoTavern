@@ -12,7 +12,7 @@
  *   inputs surface as a typed `UnsupportedError` (CAPABILITY_UNAVAILABLE) —
  *   never a silent downgrade.
  * - **Browser/sidecar mode** (`LegacyBackend`): delegates to the existing
- *   `/api/v2` client unchanged (full-fidelity legacy entities).
+ *   legacy HTTP client unchanged (full-fidelity legacy entities).
  *
  * Every mapping decision is documented next to its translator; the migration
  * routing table (`docs/architecture/operations-inventory.md`) tracks the
@@ -28,10 +28,21 @@ import {
   type ChatSummary,
   type ChatUpdate,
   type CursorPage,
+  type Lorebook,
+  type LorebookCreate,
+  type LorebookEntry,
+  type LorebookEntryCreate,
+  type LorebookEntryUpdate,
+  type LorebookUpdate,
   type Message,
+  type Persona,
+  type PersonaCreate,
+  type PersonaUpdate,
   type CharacterDto,
   type ChatDto,
+  type LorebookDto,
   type MessageDto,
+  type PersonaDto,
 } from '@neotavern/contracts';
 import { UnsupportedError } from '@neotavern/neobackend';
 import { api } from './client.js';
@@ -165,6 +176,36 @@ export function translateMessage(dto: MessageDto): Message {
     activeVariantPosition: null,
     contentRevisionCount: 0,
     checkpointChatId: null,
+  };
+}
+
+/** Wire lorebook → legacy `Lorebook` (catalog rows). */
+export function translateLorebook(dto: LorebookDto): Lorebook {
+  return {
+    id: dto.id,
+    name: dto.name,
+    description: dto.description ?? '',
+    // Character↔lorebook linkage is not modelled by the kernel yet (Этап 4);
+    // a global book renders neutrally.
+    characterId: null,
+    metadata: {},
+    createdAt: toEpochMs(dto.createdAt),
+    updatedAt: toEpochMs(dto.updatedAt),
+  };
+}
+
+/** Wire persona → legacy `Persona`. */
+export function translatePersona(dto: PersonaDto): Persona {
+  return {
+    id: dto.id,
+    name: dto.name,
+    description: dto.description ?? '',
+    // Kernel avatar is a free-form reference; the UI avatar slot renders
+    // neutrally until assets migrate (Этап 4).
+    avatar: dto.avatar ?? null,
+    isDefault: dto.isDefault,
+    createdAt: toEpochMs(dto.createdAt),
+    updatedAt: toEpochMs(dto.updatedAt),
   };
 }
 
@@ -415,8 +456,222 @@ export async function readMessages(
 }
 
 /* --------------------------------------------------------------------------
+ * Lorebook operations (Этап 4.1).
+ * ------------------------------------------------------------------------ */
+
+/** List lorebooks (catalog). Kernel returns the full list in one page. */
+export async function readLorebooks(
+  query: { characterId?: string; limit?: number } = {},
+): Promise<CursorPage<Lorebook>> {
+  if (isKernelMode()) {
+    // Character↔lorebook linkage is not modelled by the kernel yet — the
+    // scoped catalog is an honest CAPABILITY_UNAVAILABLE, not a silent
+    // filter drop. Limit is a hint the kernel list ignores (plain list).
+    if (query.characterId !== undefined) {
+      throw new UnsupportedError('lorebooks.list.characterId');
+    }
+    const result = await backend.lorebooks.list();
+    return {
+      items: result.items.map(translateLorebook),
+      nextCursor: null,
+      hasMore: false,
+    };
+  }
+  return api.get<CursorPage<Lorebook>>(
+    `/lorebooks${encodeQuery({
+      characterId: query.characterId,
+      limit: query.limit,
+    })}`,
+  );
+}
+
+/** Fetch one lorebook. */
+export async function readLorebook(id: string): Promise<Lorebook> {
+  if (isKernelMode()) {
+    return translateLorebook(await backend.lorebooks.get(id));
+  }
+  return api.get<Lorebook>(`/lorebooks/${id}`);
+}
+
+/** Create a lorebook (optionally with entries). */
+export async function createLorebook(input: LorebookCreate): Promise<Lorebook> {
+  if (isKernelMode()) {
+    // Character linkage and rich entry fields (position/metadata) are not
+    // wire operations yet — honest CAPABILITY_UNAVAILABLE.
+    if (input.characterId) throw new UnsupportedError('lorebooks.create.characterId');
+    const created = await backend.lorebooks.create({
+      name: input.name,
+      ...(input.description !== undefined ? { description: input.description } : {}),
+      ...(input.entries !== undefined && input.entries.length > 0
+        ? { entries: input.entries.map((entry) => entryWireInput(entry)) }
+        : {}),
+    });
+    return translateLorebook(created);
+  }
+  return api.post<Lorebook>('/lorebooks', input);
+}
+
+/** Update a lorebook (name/description/entries). */
+export async function updateLorebook(id: string, update: LorebookUpdate): Promise<Lorebook> {
+  if (isKernelMode()) {
+    if (update.characterId !== undefined) throw new UnsupportedError('lorebooks.update.characterId');
+    const updated = await backend.lorebooks.update({
+      lorebookId: id,
+      ...(update.name !== undefined ? { name: update.name } : {}),
+      ...(update.description !== undefined ? { description: update.description } : {}),
+    });
+    return translateLorebook(updated);
+  }
+  return api.patch<Lorebook>(`/lorebooks/${id}`, update);
+}
+
+/** Delete a lorebook (permanent). */
+export async function deleteLorebook(id: string): Promise<void> {
+  if (isKernelMode()) {
+    await backend.lorebooks.del(id);
+    return;
+  }
+  await api.del(`/lorebooks/${id}`);
+}
+
+/* Entry-level lorebook operations: the wire contract models entries as the
+ * `entries` array of `lorebooks.create`/`lorebooks.update` — there is no
+ * per-entry id and no nested entry CRUD yet (Этап 4 follow-up). Kernel mode
+ * surfaces an honest CAPABILITY_UNAVAILABLE; legacy keeps the nested route. */
+
+export async function readLorebookEntries(bookId: string): Promise<LorebookEntry[]> {
+  if (isKernelMode()) {
+    throw new UnsupportedError('lorebooks.entries.list');
+  }
+  const page = await api.get<{ items: LorebookEntry[] }>(`/lorebooks/${bookId}/entries`);
+  return page.items;
+}
+
+export async function createLorebookEntry(
+  bookId: string,
+  input: LorebookEntryCreate,
+): Promise<LorebookEntry> {
+  if (isKernelMode()) {
+    throw new UnsupportedError('lorebooks.entries.create');
+  }
+  return api.post<LorebookEntry>(`/lorebooks/${bookId}/entries`, input);
+}
+
+export async function updateLorebookEntry(
+  bookId: string,
+  entryId: string,
+  update: LorebookEntryUpdate,
+): Promise<LorebookEntry> {
+  if (isKernelMode()) {
+    throw new UnsupportedError('lorebooks.entries.update');
+  }
+  return api.patch<LorebookEntry>(`/lorebooks/${bookId}/entries/${entryId}`, update);
+}
+
+export async function deleteLorebookEntry(bookId: string, entryId: string): Promise<void> {
+  if (isKernelMode()) {
+    throw new UnsupportedError('lorebooks.entries.delete');
+  }
+  await api.del(`/lorebooks/${bookId}/entries/${entryId}`);
+}
+
+/* --------------------------------------------------------------------------
+ * Persona operations (Этап 4.1).
+ * ------------------------------------------------------------------------ */
+
+/** List personas. */
+export async function readPersonas(): Promise<Persona[]> {
+  if (isKernelMode()) {
+    const result = await backend.personas.list();
+    return result.items.map(translatePersona);
+  }
+  const page = await api.get<{ items: Persona[] }>('/personas');
+  return page.items;
+}
+
+/** Fetch one persona. */
+export async function readPersona(id: string): Promise<Persona> {
+  if (isKernelMode()) {
+    return translatePersona(await backend.personas.get(id));
+  }
+  return api.get<Persona>(`/personas/${id}`);
+}
+
+/** Create a persona. */
+export async function createPersona(input: PersonaCreate): Promise<Persona> {
+  if (isKernelMode()) {
+    // The wire contract has no avatar-clearing signal (`avatar: null`) —
+    // absence means "no avatar" on create; an explicit null is honest
+    // CAPABILITY_UNAVAILABLE, not a silent drop.
+    if (input.avatar === null) throw new UnsupportedError('personas.create.avatar.clear');
+    const created = await backend.personas.create({
+      name: input.name,
+      ...(input.description !== undefined ? { description: input.description } : {}),
+      ...(input.avatar !== undefined ? { avatar: input.avatar } : {}),
+      ...(input.isDefault !== undefined ? { isDefault: input.isDefault } : {}),
+    });
+    return translatePersona(created);
+  }
+  return api.post<Persona>('/personas', input);
+}
+
+/** Update a persona. */
+export async function updatePersona(id: string, update: PersonaUpdate): Promise<Persona> {
+  if (isKernelMode()) {
+    // The wire contract has no avatar-clearing signal (`avatar: null`);
+    // absence means "unchanged" — an explicit clear is honest
+    // CAPABILITY_UNAVAILABLE, not a silent no-op.
+    if (update.avatar === null) throw new UnsupportedError('personas.update.avatar.clear');
+    const updated = await backend.personas.update({
+      personaId: id,
+      ...(update.name !== undefined ? { name: update.name } : {}),
+      ...(update.description !== undefined ? { description: update.description } : {}),
+      ...(update.avatar !== undefined ? { avatar: update.avatar } : {}),
+      ...(update.isDefault !== undefined ? { isDefault: update.isDefault } : {}),
+    });
+    return translatePersona(updated);
+  }
+  return api.patch<Persona>(`/personas/${id}`, update);
+}
+
+/** Delete a persona (permanent). */
+export async function deletePersona(id: string): Promise<void> {
+  if (isKernelMode()) {
+    await backend.personas.del(id);
+    return;
+  }
+  await api.del(`/personas/${id}`);
+}
+
+/* --------------------------------------------------------------------------
  * Honest-input guards.
  * ------------------------------------------------------------------------ */
+
+/** Legacy lorebook entry → wire `wire.lorebook.entry.input` (strict subset). */
+function entryWireInput(entry: {
+  keys: string[];
+  secondaryKeys?: string[];
+  content: string;
+  enabled?: boolean;
+  constant?: boolean;
+  selective?: boolean;
+}): {
+  keys: string[];
+  secondaryKeys?: string[];
+  content: string;
+  enabled?: boolean;
+  constant?: boolean;
+  selective?: boolean;
+} {
+  return {
+    keys: entry.keys,
+    ...(entry.secondaryKeys !== undefined ? { secondaryKeys: entry.secondaryKeys } : {}),
+    content: entry.content,
+    ...(entry.enabled !== undefined ? { enabled: entry.enabled } : {}),
+    ...(entry.constant !== undefined ? { constant: entry.constant } : {}),
+    ...(entry.selective !== undefined ? { selective: entry.selective } : {}),
+  };
+}
 
 /** Fields the wire character contract cannot carry (full card, Этап 4). */
 const NON_WIRE_CHARACTER_FIELDS = [

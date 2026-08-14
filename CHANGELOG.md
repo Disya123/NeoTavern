@@ -3,6 +3,69 @@
 ## Unreleased
 ### Added
 
+- **Lorebook and persona UI cutover over the facade (M4 / Этап 4.1, ТЗ
+  §13.1).** The lorebook and persona hooks in `apps/web/src/api/hooks.ts`
+  now route through the facade `apps/web/src/api/wireBridge.ts` in kernel
+  mode: `useLorebooks`/`useLorebook`/`useCreateLorebook`/
+  `useUpdateLorebook`/`useDeleteLorebook` and `usePersonas`/
+  `useCreatePersona`/`useUpdatePersona`/`useDeletePersona` call the
+  canonical wire ops via the `NeoBackend` facade (`LorebooksApi` gained
+  get/create/update/del; new `PersonasApi` with list/get/create/update/del
+  on `LocalBackend`, `RemoteBackend` and `LegacyBackend`). Wire→UI
+  translators (`translateLorebook`, `translatePersona`) fill honest
+  defaults for fields the kernel does not model (characterId null,
+  metadata {}, avatar null). Unsupported legacy inputs surface typed
+  `UnsupportedError` (CAPABILITY_UNAVAILABLE) — never a silent downgrade:
+  character-scoped lorebook catalog, character-linked lorebook
+  create/update, entry-level nested CRUD, and an explicit persona avatar
+  clear (`avatar: null`). Capability statuses in the release manifest move
+  from Implemented to Integrated on desktop; the browser/sidecar mode
+  keeps the legacy `/api/v2` routes unchanged. Tests: 13 new facade tests
+  in `wireBridge.test.ts` (lorebook + persona CRUD, honest-rejection
+  paths), full web suite green (579 tests), neobackend tests green.
+  Honest boundary: legacy `/api/v2/lorebooks` and `/api/v2/personas`
+  route removal remains Этап 4; character↔lorebook scoping and persona
+  chat linkage/`{{user}}` injection remain follow-ups.
+
+- **SEC-01 data-preservation fix: non-persistent backends no longer
+  destroy legacy plaintext secrets.** `migrateLegacySecrets` skipped the
+  import entirely when the active SecretStore is not persistent
+  (`describe().persistent === false`, i.e. the default `session` mode).
+  Previously the bootstrap import moved plaintext rows into process
+  memory and rewrote the database row to a `session:` reference — a
+  deterministic loss: after restart the memory store is empty and the
+  reference is unresolvable, so user provider/plugin keys were gone for
+  good. Now the rows stay intact and unmigrated until a persistent
+  backend (portable/env) is configured, which can still import them;
+  the runtime reports these secrets as unavailable until then (no
+  plaintext fallback, no data loss). Tests updated/added in
+  `secretStore.spec.ts`.
+
+- **SEC-05 fix: plugin entrypoints inside `signature/` are rejected.**
+  The publisher digest excludes the `signature/` directory, so a
+  manifest entrypoint pointing into it (e.g. `frontend:
+  "signature/backend.js"`) would load a file that escaped signed-content
+  verification. `validatePackage` now rejects any manifest-referenced
+  file under `signature/`, and both plugin hosts
+  (`backendHost.ts`, legacy `host.ts`) re-check the entrypoint segment
+  at activation as defense in depth. New negative install test in
+  `extensions-hardening.spec.ts`.
+
+- **`docs/architecture/acceptance-ledger.json` — machine-readable
+  milestone acceptance ledger (ТЗ §22, §18.3).** Records per-milestone
+  status, requirement/evidence lists, blocking issues and accepted
+  commits; a milestone not marked `accepted` is never treated as a
+  completed stage.
+
+- **`check-ui-api` baseline refreshed after M2 line shifts.** The
+  ARC-02/03 gate reported 16 "NEW" legacy-call sites against a stale
+  baseline even though no new calls existed — M2 comment blocks
+  mentioning `/api/v2` plus line movement in `generate.ts`,
+  `backend.ts` and `ChatPage.tsx` shifted every fingerprint. The
+  baseline was regenerated from the generator register (every product
+  site keeps its owner/removalIssue/milestone/deadline record); the
+  gate is green again at 67 allowed sites.
+
 - **Persona CRUD in the kernel (M4 / Этап 4.1, ТЗ §8.1 Library context).**
   Product Wire gains `personas.list` / `personas.get` / `personas.create` /
   `personas.update` / `personas.delete` backed by the new STRICT `personas`

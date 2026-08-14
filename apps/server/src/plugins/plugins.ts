@@ -276,6 +276,13 @@ async function assertRegularFile(
   relativePath: string,
   maxBytes: number,
 ): Promise<string> {
+  // SEC-05 fail-closed: `signature/` is excluded from the publisher digest
+  // (packageTrust.ts walk() skips it), so no manifest-referenced file may
+  // live there — a malicious entrypoint inside `signature/` would escape
+  // signed-content verification entirely.
+  if (relativePath === 'signature' || relativePath.startsWith('signature/')) {
+    throw invalidPlugin('required package file cannot live under signature/');
+  }
   const path = resolve(root, ...validatePackageEntryPath(relativePath));
   const info = await lstat(path).catch(() => null);
   if (!info?.isFile() || info.isSymbolicLink() || info.size > maxBytes) {
