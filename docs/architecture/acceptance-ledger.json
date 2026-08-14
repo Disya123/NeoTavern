@@ -63,9 +63,10 @@
     {
       "id": "M1-security",
       "name": "Этап 1 / Security blockers",
-      "status": "in_progress",
-      "acceptedCommit": null,
-      "acceptedBy": null,
+      "status": "accepted",
+      "acceptedCommit": "e17b58c",
+      "acceptedBy": "Deepseek",
+      "acceptedAt": "2026-08-14",
       "requirements": [
         "logical profile export (SEC-02: allowlist, no DB snapshot, no secrets)",
         "SecretStore abstraction + PortableEncryptedSecretStore + migration flow (SEC-01)",
