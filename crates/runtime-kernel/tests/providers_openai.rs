@@ -218,6 +218,143 @@ fn list_messages(kernel: &Kernel, chat_id: &str) -> PagedMessages {
     .expect("messages response shape")
 }
 
+/// A raw-TCP mock endpoint that serves TWO scripted chat-completions
+/// responses (first provider turn → tool call; resumed turn → final text),
+/// capturing each request body for assertions.
+struct MockToolServer {
+    addr: SocketAddr,
+    shutdown: Arc<AtomicBool>,
+    captured: Arc<Mutex<Vec<String>>>,
+}
+
+impl MockToolServer {
+    fn spawn(script: Vec<String>) -> Self {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("mock binds");
+        listener.set_nonblocking(true).expect("nonblocking");
+        let addr = listener.local_addr().expect("addr");
+        let shutdown = Arc::new(AtomicBool::new(false));
+        let shutdown_clone = Arc::clone(&shutdown);
+        let captured = Arc::new(Mutex::new(Vec::new()));
+        let captured_clone = Arc::clone(&captured);
+        std::thread::spawn(move || {
+            for (index, body) in script.iter().enumerate() {
+                // Block until the adapter connects for this turn.
+                loop {
+                    match listener.accept() {
+                        Ok((mut stream, _)) => {
+                            let request = read_request(&mut stream);
+                            captured_clone.lock().expect("lock").push(request);
+                            let response = format!(
+                                "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n{:x}\r\n{}\r\n0\r\n\r\n",
+                                body.len(),
+                                body
+                            );
+                            let _ = stream.write_all(response.as_bytes());
+                            let _ = stream.flush();
+                            break;
+                        }
+                        Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                            if shutdown_clone.load(Ordering::SeqCst) {
+                                return;
+                            }
+                            std::thread::sleep(Duration::from_millis(5));
+                        }
+                        Err(_) => return,
+                    }
+                }
+                let _ = index;
+            }
+        });
+        Self {
+            addr,
+            shutdown,
+            captured,
+        }
+    }
+
+    fn base_url(&self) -> String {
+        format!("http://{}", self.addr)
+    }
+
+    fn captured_requests(&self) -> Vec<String> {
+        self.captured.lock().expect("lock").clone()
+    }
+}
+
+impl Drop for MockToolServer {
+    fn drop(&mut self) {
+        self.shutdown.store(true, Ordering::SeqCst);
+        let _ = TcpStream::connect(self.addr);
+    }
+}
+
+fn tool_call_sse(id: &str, name: &str, arguments_json: &str) -> String {
+    format!(
+        r#"{{"choices":[{{"delta":{{"tool_calls":[{{"index":0,"id":"{id}","type":"function","function":{{"name":"{name}","arguments":"{arguments_json}"}}}}]}},"finish_reason":"tool_calls"}}]}}"#
+    )
+}
+
+/// The SSE event streamed for the FIRST provider turn: one tool call for
+/// `lookup_weather({"city":"Kyiv"})` (JSON-encoded arguments).
+fn tool_turn_body() -> String {
+    format!(
+        "data: {}\n\ndata: {}\n\ndata: [DONE]\n\n",
+        tool_call_sse("call_abc123", "lookup_weather", r#"{\"city\":\"Kyiv\"}"#),
+        "{\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}"
+    )
+}
+
+/// The SSE event stream for the RESUMED turn: deterministic final text.
+fn resumed_turn_body() -> String {
+    format!(
+        "data: {}\n\ndata: {}\n\ndata: {}\n\ndata: [DONE]\n\n",
+        delta("The weather in Kyiv is "),
+        delta("22"),
+        delta("°C.")
+    )
+}
+
+/// The registered tool contract for the golden tool round trip.
+const TOOL_SPEC: &str = r#"{
+  "id": "lookup-weather",
+  "name": "lookup_weather",
+  "description": "Look up the current weather for a city.",
+  "inputSchema": {
+    "type": "object",
+    "properties": { "city": { "type": "string" } },
+    "required": ["city"]
+  }
+}"#;
+
+/// The kernel-side implementation of `generation.tools.list`.
+fn list_tools(kernel: &Kernel) -> serde_json::Value {
+    serde_json::from_slice(&dispatch_bytes(kernel, "generation.tools.list", json!({})))
+        .expect("tools list response")
+}
+
+/// The toolCallId of the run's waiting tool_call step (kernel-assigned uuid).
+fn waiting_tool_call_id(kernel: &Kernel, run_id: &str) -> String {
+    let page: serde_json::Value = serde_json::from_slice(&dispatch_bytes(
+        kernel,
+        "generation.events",
+        json!({ "workflowId": run_id, "limit": 200 }),
+    ))
+    .expect("events response");
+    let step = page["items"]
+        .as_array()
+        .expect("items")
+        .iter()
+        .find(|e| {
+            e["type"] == json!("generation.step")
+                && e["payload"]["step"]["type"] == json!("tool_call")
+        })
+        .unwrap_or_else(|| panic!("no tool_call step event: {page:#?}"));
+    step["payload"]["step"]["input"]["toolCall"]["id"]
+        .as_str()
+        .expect("toolCall.id string")
+        .to_string()
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -415,5 +552,146 @@ fn openai_provider_run_without_config_key_fails_with_typed_error() {
     assert!(
         list_messages(&kernel, CHAT_ID).items.is_empty(),
         "no message row for the failed run"
+    );
+}
+
+/// Golden tool round trip through the REAL OpenAI-compatible adapter and the
+/// production SSE path (Этап 2.5 + Этап 2.7/§8.3):
+///
+/// 1. `generation.start` with the registered `openai` provider → the adapter
+///    streams a normalized `tool_calls` delta from the mock endpoint;
+/// 2. the kernel validates the call against the registered tool spec and
+///    commits the durable waiting transition (kernel-assigned uuid call id);
+/// 3. `generation.tool.result` resumes the SAME provider with the tool
+///    context (assistant tool_calls + tool message) → the adapter's second
+///    SSE turn streams the final text;
+/// 4. the run completes with exactly one assistant message, and both HTTP
+///    request bodies prove the serialization (`tools` on turn 1, resumed
+///    tool context on turn 2).
+#[test]
+fn openai_provider_tool_round_trip_through_the_kernel() {
+    let endpoint = MockToolServer::spawn(vec![tool_turn_body(), resumed_turn_body()]);
+    let root = tempfile::tempdir().expect("tempdir");
+    seed_chat(root.path());
+    let kernel = open_kernel(root.path());
+
+    // Secret seams: execution-time resolver + writable store (config time).
+    kernel.set_secret_resolver(Arc::new(FixedSecretResolver));
+    kernel.set_secret_store(Arc::new(MemorySecretStore::new()));
+
+    let config_dto: serde_json::Value = serde_json::from_slice(&dispatch_bytes(
+        &kernel,
+        "providers.config.set",
+        json!({
+            "provider": "openai",
+            "name": "local",
+            "config": { "baseUrl": endpoint.base_url(), "models": [{ "id": "mock-1" }] },
+            "apiKey": RESOLVED_KEY,
+        }),
+    ))
+    .expect("set must succeed");
+    let adapter =
+        provider_openai_compat::OpenAICompatProvider::from_config("openai", &config_dto["config"])
+            .expect("adapter builds from the stored config");
+    kernel.register_provider(Arc::new(adapter));
+
+    // Register the tool the mock will call (schema validation is kernel-side).
+    let spec: contracts_generated::generated::ToolSpec =
+        serde_json::from_str(TOOL_SPEC).expect("tool spec JSON");
+    kernel.register_tool(spec);
+
+    // Turn 1: stream → the run durably waits on the validated tool call.
+    let flag = CancellationFlag::new();
+    let mut stream = kernel
+        .dispatch_stream(
+            "generation.start",
+            &serde_json::to_vec(&json!({
+                "chatId": CHAT_ID,
+                "message": "What is the weather in Kyiv?",
+                "provider": "openai",
+                "model": "mock-1"
+            }))
+            .expect("serialize"),
+            &flag,
+        )
+        .expect("generation.start must succeed");
+    let run_id = stream.stream_id().to_string();
+    drain_until_terminal(&mut stream);
+
+    let run = get_run(&kernel, &run_id);
+    assert_eq!(run.status, GenerationStatus::WaitingForTool);
+    assert_eq!(run.error, None);
+    // The kernel assigns its own uuid call id (adapter ids are not uuids).
+    let tool_call_id = waiting_tool_call_id(&kernel, &run_id);
+    assert_ne!(tool_call_id, "call_abc123");
+    assert_eq!(tool_call_id.len(), 36, "kernel call id is a uuid");
+
+    // The tool registry serves the registered contract.
+    let tools = list_tools(&kernel);
+    assert_eq!(tools["items"].as_array().expect("items").len(), 1);
+    assert_eq!(tools["items"][0]["name"], json!("lookup_weather"));
+
+    // Turn 2: submit the tool result → the same provider resumes → completed.
+    let _result: serde_json::Value = serde_json::from_slice(&dispatch_bytes(
+        &kernel,
+        "generation.tool.result",
+        json!({
+            "runId": run_id,
+            "toolCallId": tool_call_id,
+            "result": { "celsius": 22 }
+        }),
+    ))
+    .expect("tool.result must succeed");
+    let run = get_run(&kernel, &run_id);
+    assert_eq!(run.status, GenerationStatus::Completed);
+    assert_eq!(run.error, None);
+
+    // Exactly one assistant message, from the resumed turn's final text.
+    let messages = list_messages(&kernel, CHAT_ID);
+    let assistant: Vec<_> = messages
+        .items
+        .iter()
+        .filter(|m| m.role == MessageRole::Assistant)
+        .collect();
+    assert_eq!(assistant.len(), 1, "exactly one assistant message");
+    assert_eq!(
+        assistant[0].content, "The weather in Kyiv is 22°C.",
+        "final message content"
+    );
+    assert_eq!(
+        assistant[0].generation_run_id.as_deref(),
+        Some(run_id.as_str()),
+        "message links the run"
+    );
+
+    // Wire serialization proof: turn 1 declares the tool, turn 2 resumes
+    // with the kernel-assigned tool_call id and the tool result message.
+    let requests = endpoint.captured_requests();
+    assert_eq!(requests.len(), 2, "two provider turns happened");
+    let turn1 = &requests[0];
+    assert!(
+        turn1.contains(r#""tools""#) && turn1.contains("lookup_weather"),
+        "turn 1 declares tools, got: {turn1}"
+    );
+    assert!(
+        turn1.contains(r#""city""#),
+        "turn 1 serializes the input schema, got: {turn1}"
+    );
+    let turn2 = &requests[1];
+    assert!(
+        turn2.contains(&format!(r#""tool_call_id":"{tool_call_id}""#)),
+        "turn 2 resumes with the kernel call id, got: {turn2}"
+    );
+    assert!(
+        turn2.contains(&format!(r#""id":"{tool_call_id}""#)),
+        "turn 2 replays the assistant tool_calls, got: {turn2}"
+    );
+    assert!(
+        turn2.contains(r#""role":"tool""#),
+        "turn 2 carries the tool result message, got: {turn2}"
+    );
+    assert!(
+        turn2.contains("22") && turn2.contains("celsius"),
+        "turn 2 carries the tool result payload, got: {turn2}"
     );
 }

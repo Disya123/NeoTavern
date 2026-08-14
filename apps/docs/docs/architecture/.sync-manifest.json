@@ -210,12 +210,12 @@
     {
       "source": "architecture/generation-durability.md",
       "target": "architecture/generation-durability.md",
-      "sha256": "bdd0a544de0f162bfebf6cdcad97f226d31811b6432f66cb289945ce38b3d123"
+      "sha256": "51ad2ebd383ea018a09eb2502515404111803adbe87fa3bd9d9d81fed94b1ffb"
     },
     {
       "source": "architecture/generation-run-steps.md",
       "target": "architecture/generation-run-steps.md",
-      "sha256": "b12151cbedf245370f7d4bca6871c0408a0929d63355302b5235c4d2a477de33"
+      "sha256": "413cc18e8f9984cf7d87c21393fd73bc5e312353cc76ab70797e05cb22d94666"
     },
     {
       "source": "architecture/operations-inventory.md",
@@ -255,7 +255,7 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "5a148f0a694fe4f37212b800459f9dcd29c940275aee610f02c0da0df84978c2"
+      "sha256": "15177ed468c0173cfbb025d42403a127aba871aa32ffc3971cb82fa8f8ccdc63"
     },
     {
       "source": "data/README.md",

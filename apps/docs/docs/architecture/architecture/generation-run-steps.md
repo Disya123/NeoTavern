@@ -9,7 +9,9 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/architecture/gener
 > status, the declarative tool registry, the kernel-side tool-call loop with
 > loop guard and stable terminal codes, and crash-at-wait recovery. The kernel
 > **never executes tools** — it validates the normalized call, durably waits,
-> and the host performs the effect and submits the result.
+> and the host performs the effect and submits the result. Round 13 added the
+> waiting-run cancel/retry semantics (§8.3) and the end-to-end tool round trip
+> through the real OpenAI-compatible adapter.
 
 ## The durable waiting state
 
@@ -102,6 +104,32 @@ generation.tool.result { runId, toolCallId, result }
   `interrupted` (retry-safe: no external effect ever ran, because the host
   only executes after the durable waiting commit).
 
+## Cancel and retry of waiting runs
+
+A waiting run has **no live executor**: its stream session ended at the
+durable waiting transition, so `generation.cancel` cannot rely on the
+executor observing `cancel_requested`. It therefore finalizes the terminal
+itself — `WaitingForTool → Cancelling → Cancelled` (§8.3), in the same
+operation:
+
+- `generation.cancel` on `{queued, preparing, streaming}` still only sets
+  `cancelling` + `cancel_requested` (an executor IS live there); on a
+  **waiting** run it commits the `cancelled` terminal directly.
+- **All four terminal writers clear `pending_tool_call_json`** (`completed`,
+  `failed`, `cancelled`, and startup `interrupted` recovery), so a terminal
+  run never reports a derived waiting status and a stale host submission is
+  rejected (`generation.tool.result` on a non-`streaming` run →
+  `TOOL_RESULT_STALE`). The host must not execute an effect after observing
+  cancellation.
+- The step journal survives cancellation unchanged (immutable evidence:
+  `provider_turn` + `tool_call` rows stay).
+- `generation.retry` from a **cancelled** waiting run starts attempt 2 (fresh
+  `source_run_id` link, full tool round trip). `generation.retry` on a run
+  still **waiting** (live `streaming` + marker) is `GENERATION_RUN_STATE_CONFLICT`
+  — the source must be terminal first.
+- `generation.discard` on a recoverable terminal run also clears the marker
+  (hygiene; the run was already terminal).
+
 ## Declarative tool registry
 
 Tools are **contracts, not code** (`wire.tool.spec`: `id` `^[a-z][a-z0-9-]{1,63}$`,
@@ -146,7 +174,13 @@ Terminal error codes added: `TOOL_NOT_FOUND`, `TOOL_ARGS_INVALID`,
   fragmented arguments, mixed text+call streams (2 adapter).
 - `crates/runtime-kernel/tests/tool_loop.rs` — golden round trip, tool listing,
   unregistered tool, invalid arguments, stale result, non-waiting stale,
-  loop limit, crash-at-wait reopen/resume (8 integration).
+  loop limit, crash-at-wait reopen/resume, cancel-on-waiting finalization,
+  retry-from-cancelled, retry-on-live-waiting conflict (10 integration).
+- `crates/runtime-kernel/tests/providers_openai.rs` — golden tool round trip
+  through the **real** OpenAI-compatible adapter and SSE path: turn 1 streams
+  a normalized tool call → durable waiting → `generation.tool.result` → turn 2
+  resumes with the tool context → completed with one message; both HTTP bodies
+  assert `tools` serialization and the resumed `tool_call_id` (1 integration).
 - `crates/storage/tests/open_migrate.rs` — migration 6 on a v5 data root.
 
 ## Related documents
