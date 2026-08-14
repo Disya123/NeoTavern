@@ -539,6 +539,27 @@ describe('socket registry (§29)', () => {
     }
   });
 
+  it('rejects websocket protocols that are not RFC 7230 tokens (§SEC-03 CRLF filter)', async () => {
+    // A plugin-supplied protocol can never smuggle extra headers into the
+    // upgrade request: CR/LF and separators are rejected up front.
+    const sockets = registry();
+    await expect(
+      sockets.websocketOpen('plugin-a', 'ws://localhost:1/x', ['evil\r\nX-Injected: 1']),
+    ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+    await expect(
+      sockets.websocketOpen('plugin-a', 'ws://localhost:1/x', ['a b']),
+    ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+    await expect(
+      sockets.websocketOpen('plugin-a', 'ws://localhost:1/x', ['']),
+    ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+    // A valid token passes validation and proceeds to the (failing) connect.
+    await expect(
+      sockets.websocketOpen('plugin-a', 'ws://localhost:1/x', ['ok-token']),
+    ).rejects.toThrow();
+    expect(sockets.size()).toBe(0);
+    await sockets.closeAll();
+  });
+
   it('tears down a websocket that goes idle after the upgrade (§SEC-04 slowloris)', async () => {
     // The peer completes the Upgrade and then sends NOTHING (no frames, no
     // pings): the upgraded connection must not hold the socket and its slot

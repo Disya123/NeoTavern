@@ -404,6 +404,20 @@ export function createSocketRegistry(deps: SocketRegistryDeps): SocketRegistry {
       if (parsed.protocol !== 'ws:' && parsed.protocol !== 'wss:') {
         throw new BrokerCallError('VALIDATION_FAILED', { message: 'websocket url must be ws/wss' });
       }
+      // §SEC-03: Sec-WebSocket-Protocol values are RFC 7230 tokens, and a
+      // token cannot contain CR/LF — validating the grammar doubles as an
+      // injection filter: a plugin-supplied protocol can never smuggle extra
+      // headers into the upgrade request block.
+      const WS_PROTOCOL_TOKEN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/u;
+      if (protocols !== undefined) {
+        for (const protocol of protocols) {
+          if (typeof protocol !== 'string' || !WS_PROTOCOL_TOKEN.test(protocol)) {
+            throw new BrokerCallError('VALIDATION_FAILED', {
+              message: 'websocket protocol must be an RFC 7230 token (no CR/LF or separators)',
+            });
+          }
+        }
+      }
       // §SEC-03: the approved set is the same resolution the policy check
       // admitted; the client connects to a policy-approved IP (no DNS for the
       // hostname in the stack), keeps the hostname only in Host/SNI, and

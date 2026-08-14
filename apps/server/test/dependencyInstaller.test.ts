@@ -20,6 +20,8 @@ interface FakeVersion {
   forbiddenFile?: string;
   /** Serve corrupted bytes while advertising a valid integrity. */
   corrupt?: boolean;
+  /** Override the tarball URL advertised in the packument (SSRF tests). */
+  tarballUrl?: string;
 }
 
 interface FakePackage {
@@ -111,7 +113,9 @@ function makeFakeRegistry(packages: Record<string, FakePackage>): FakeRegistry {
               version,
               dependencies: spec?.dependencies ?? {},
               dist: {
-                tarball: `${REGISTRY_URL}/tarballs/${encodeURIComponent(name)}@${version}.tgz`,
+                tarball:
+                  spec.tarballUrl ??
+                  `${REGISTRY_URL}/tarballs/${encodeURIComponent(name)}@${version}.tgz`,
                 integrity,
               },
             },
@@ -336,6 +340,52 @@ describe('installPluginDependencies', () => {
     );
 
     expect(registry.tarballFetches.get('cached@1.0.0')).toBe(1);
+  });
+
+  it('rejects a plaintext registry URL (§SEC-03)', async () => {
+    const packageRoot = await makePluginPackage({ dep: '^1.0.0' });
+    let error: unknown;
+    try {
+      await installPluginDependencies(
+        packageRoot,
+        readPluginDependencySpecs(
+          JSON.parse(await readFile(join(packageRoot, 'package.json'), 'utf8')),
+        ),
+        { registryUrl: 'http://registry.test' },
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    expect(isAppError(error)).toBe(true);
+    if (isAppError(error)) {
+      expect(error.code).toBe('PLUGIN_DEPS_FAILED');
+      expect(String(error.params['reason'])).toContain('https');
+    }
+  });
+
+  it('rejects a tarball URL targeting a forbidden destination (§SEC-03)', async () => {
+    const registry = makeFakeRegistry({
+      evil: { versions: { '1.0.0': { tarballUrl: 'https://127.0.0.1:8443/evil.tgz' } } },
+    });
+    const packageRoot = await makePluginPackage({ evil: '^1.0.0' });
+
+    let error: unknown;
+    try {
+      await installPluginDependencies(
+        packageRoot,
+        readPluginDependencySpecs(
+          JSON.parse(await readFile(join(packageRoot, 'package.json'), 'utf8')),
+        ),
+        { registryUrl: REGISTRY_URL, fetchImpl: registry.fetchImpl },
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    expect(isAppError(error)).toBe(true);
+    if (isAppError(error)) {
+      expect(error.code).toBe('PLUGIN_DEPS_FAILED');
+      expect(String(error.params['reason'])).toContain('forbidden destination');
+    }
   });
 
   it('leaves the package untouched when there are no dependencies', async () => {

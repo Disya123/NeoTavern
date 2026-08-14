@@ -21,7 +21,7 @@ import { copyFile, mkdir, open, readdir, rename, rm, stat } from 'node:fs/promis
 import { dirname, extname, join, resolve } from 'node:path';
 import { randomToken, AppError, ErrorCodes } from '@neotavern/shared';
 import { extractTarGzArchive } from '../lib/tarballArchive.js';
-import { downloadToFile } from '../lib/httpDownload.js';
+import { downloadToFile, isForbiddenDestinationHost } from '../lib/httpDownload.js';
 import { isValidRange, maxSatisfying } from './semver.js';
 
 export const DEPENDENCY_MARKER_FILE = '.neotavern-deps.json';
@@ -177,6 +177,11 @@ export async function installPluginDependencies(
   const fetchImpl = options.fetchImpl ?? fetch;
   const cacheDir = options.cacheDir ?? null;
 
+  // SEC-03: the registry endpoint is operator-configured (trusted), but it
+  // must still be HTTPS — a plaintext registry would let a network attacker
+  // rewrite packuments and tarball URLs (supply-chain MITM).
+  const registryHost = validateRegistryUrl(registryUrl);
+
   const stagingRoot = join(packageRoot, `.deps-staging-${randomToken(10)}`);
   const stagingModules = join(stagingRoot, 'node_modules');
   const scratch = join(stagingRoot, 'scratch');
@@ -216,6 +221,7 @@ export async function installPluginDependencies(
       const record = await resolveAndInstall(
         item,
         registryUrl,
+        registryHost,
         stagingModules,
         scratch,
         cacheDir,
@@ -264,6 +270,27 @@ function versionSatisfies(version: string, range: string): boolean {
   return maxSatisfying([version], range) !== null;
 }
 
+/**
+ * SEC-03: the registry endpoint must be HTTPS — a plaintext registry would
+ * let a network attacker rewrite packuments and tarball URLs (supply-chain
+ * MITM). Returns the registry hostname, the trust anchor for tarball URLs.
+ */
+function validateRegistryUrl(registryUrl: string): string {
+  let url: URL;
+  try {
+    url = new URL(registryUrl);
+  } catch {
+    throw depsFailed('(registry)', 'registry URL is not a valid URL');
+  }
+  if (url.protocol !== 'https:') {
+    throw depsFailed('(registry)', 'registry URL must use https:');
+  }
+  if (url.hostname.length === 0) {
+    throw depsFailed('(registry)', 'registry URL is missing a host');
+  }
+  return url.hostname.toLowerCase();
+}
+
 interface InstallOutcome {
   dependency: ResolvedDependency;
   dependencies: Record<string, string>;
@@ -273,6 +300,7 @@ interface InstallOutcome {
 async function resolveAndInstall(
   item: QueueItem,
   registryUrl: string,
+  registryHost: string,
   stagingModules: string,
   scratch: string,
   cacheDir: string | null,
@@ -300,6 +328,7 @@ async function resolveAndInstall(
     item.name,
     scratch,
     cacheDir,
+    registryHost,
     options,
     fetchImpl,
   );
@@ -402,11 +431,33 @@ async function obtainTarball(
   name: string,
   scratch: string,
   cacheDir: string | null,
+  registryHost: string,
   options: DependencyInstallerOptions,
   fetchImpl: typeof fetch,
 ): Promise<string> {
   const tarballPath = join(scratch, `${randomToken(12)}.tgz`);
   const maxBytes = 64 * 1024 * 1024;
+
+  // SEC-03: the tarball URL comes from registry data (untrusted), so it is
+  // validated against the same download policy as the hop itself. Hosts on
+  // the configured registry are operator-trusted (self-hosted registries may
+  // live on private or local addresses); every other host must be HTTPS and
+  // outside the always-forbidden ranges (loopback, link-local, multicast).
+  let parsedTarball: URL;
+  try {
+    parsedTarball = new URL(tarballUrl);
+  } catch {
+    throw depsFailed(name, 'registry returned a malformed tarball URL');
+  }
+  if (parsedTarball.protocol !== 'https:') {
+    throw depsFailed(name, 'tarball URL must use https:');
+  }
+  if (
+    parsedTarball.hostname.toLowerCase() !== registryHost &&
+    isForbiddenDestinationHost(parsedTarball.hostname)
+  ) {
+    throw depsFailed(name, 'tarball URL targets a forbidden destination');
+  }
 
   // Cache key: registry integrity hash when available, else the tarball URL.
   const cacheKey = cacheKeyFor(tarballUrl, registryIntegrity);
@@ -418,7 +469,13 @@ async function obtainTarball(
     await downloadToFile(
       tarballUrl,
       tarballPath,
-      { maxBytes, signal: options.signal, fetchImpl },
+      {
+        maxBytes,
+        signal: options.signal,
+        fetchImpl,
+        // Redirects are re-validated per hop; the registry host stays trusted.
+        trustedHop: (url) => url.hostname.toLowerCase() === registryHost,
+      },
       (reason, cause) => depsFailed(name, `tarball download failed (${reason})`, cause),
     );
     if (cachedPath && cacheDir) {
