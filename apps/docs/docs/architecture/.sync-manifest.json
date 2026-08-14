@@ -185,7 +185,7 @@
     {
       "source": "adr/0042-m1-waiver-per-profile-export-scoping.md",
       "target": "adr/0042-m1-waiver-per-profile-export-scoping.md",
-      "sha256": "caf6470808d8ba65b14c4544cbdb899cb4c43081f4f981ad4fb7e85eb0345f11"
+      "sha256": "e935adfb8f2d0e5936785b28da9d9afe0a0b053dd56e371b6cc666960918d649"
     },
     {
       "source": "adr/README.md",

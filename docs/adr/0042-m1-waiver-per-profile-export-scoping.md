@@ -30,13 +30,13 @@ canonical feature (double ownership, authority-non-expanding boundary).
 M1 waives **one and only one** blocking issue:
 
 > `P1: per-profile export scoping — the canonical schema must add per-profile
-> foreign keys and the export must filter by them (waived in M1 until this
-> cutover, SEC-02)`
+foreign keys and the export must filter by them (waived in M1 until this
+cutover, SEC-02)`
 
 under the following bounded conditions:
 
 1. **Severity:** P1 — not a P0. Secrets are already excluded from every export
-   today; the waived item is isolation *between profiles*, not secret leakage.
+   today; the waived item is isolation _between profiles_, not secret leakage.
 2. **Scope:** the single issue above and nothing else. No other M1 blocker may
    use this waiver mechanism.
 3. **Expiry:** the waiver expires at the **M4 cutover** — the canonical schema
@@ -60,7 +60,7 @@ under the following bounded conditions:
   bridges; this is a canonical-plane schema feature scheduled for M4.
 - **Waive without bounds.** Rejected: an unbounded waiver would not be an
   exception. The conditions above (single issue, P1, M4 expiry, human
-  sign-off) keep it a *limited* waiver as required by ТЗ.
+  sign-off) keep it a _limited_ waiver as required by ТЗ.
 
 ## Consequences
 

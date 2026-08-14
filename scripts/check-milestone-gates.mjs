@@ -151,7 +151,9 @@ function waiverFailures(milestoneLabel, blocker, waiver) {
   if (typeof waiver.by !== 'string' || waiver.by.length === 0) {
     out.push(`${at} must record who approved the waiver (by)`);
   } else if (AUTO_ACTOR_RE.test(waiver.by)) {
-    out.push(`${at}.by '${waiver.by}' looks like an automated actor — a person or an explicit human-ratified process signature must waive`);
+    out.push(
+      `${at}.by '${waiver.by}' looks like an automated actor — a person or an explicit human-ratified process signature must waive`,
+    );
   }
   if (typeof waiver.reason !== 'string' || waiver.reason.trim().length < 20) {
     out.push(`${at} must record a real reason (>= 20 characters)`);
@@ -160,16 +162,22 @@ function waiverFailures(milestoneLabel, blocker, waiver) {
   if (severity === undefined) {
     out.push(`${at}: cannot extract a severity (P0/P1/...) from the blocker to check the waiver`);
   } else if (waiver.severity !== severity) {
-    out.push(`${at}.severity '${String(waiver.severity)}' does not match the blocker severity ${severity}`);
+    out.push(
+      `${at}.severity '${String(waiver.severity)}' does not match the blocker severity ${severity}`,
+    );
   }
   if (typeof waiver.expiry !== 'string' || waiver.expiry.length === 0) {
-    out.push(`${at} must record an expiry (milestone or date) — a waiver without an expiry is not limited`);
+    out.push(
+      `${at} must record an expiry (milestone or date) — a waiver without an expiry is not limited`,
+    );
   }
   if (typeof waiver.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(waiver.date)) {
     out.push(`${at} must record the waiver date as YYYY-MM-DD`);
   }
   if (typeof waiver.adr !== 'string' || !waiver.adr.startsWith('docs/adr/')) {
-    out.push(`${at} must link the limited waiver ADR (docs/adr/NNNN-...) — ТЗ requires an ADR waiver`);
+    out.push(
+      `${at} must link the limited waiver ADR (docs/adr/NNNN-...) — ТЗ requires an ADR waiver`,
+    );
   } else {
     try {
       readFileSync(join(ROOT, waiver.adr), 'utf8');
