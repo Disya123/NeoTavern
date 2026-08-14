@@ -47,6 +47,10 @@ export interface SecretStoreHandle {
   storeValue(namespace: string, id: string, value: string): Promise<string>;
   /** Resolve an opaque reference to a value, or null when unavailable. */
   resolve(ref: string): Promise<string | null>;
+  /** Remove the stored value for (namespace, id). Returns true when a record
+   * was removed; callers invoke this when the referencing DB row is deleted
+   * so the store keeps no orphaned secrets (SEC-01). */
+  deleteValue(namespace: string, id: string): Promise<boolean>;
   /** Move pre-migration plaintext rows into the store. Returns migrated rows. */
   migrateLegacySecrets(ctx: AppContext): Promise<{ provider: number; plugin: number }>;
 }
@@ -111,6 +115,9 @@ export function createSecretStoreHandleForBackend(
     async storeValue(namespace: string, id: string, value: string): Promise<string> {
       const ref = await backend.put(namespace, id, value);
       return backend.ref(namespace, ref);
+    },
+    async deleteValue(namespace: string, id: string): Promise<boolean> {
+      return backend.delete(namespace, id);
     },
     async resolve(ref: string): Promise<string | null> {
       const parsed = parseSecretRef(ref);

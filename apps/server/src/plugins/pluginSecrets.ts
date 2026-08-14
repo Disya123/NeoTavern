@@ -145,6 +145,10 @@ export async function registerPluginSecretRoutes(
           params: { pluginId: request.params.id, scope, key: request.params.key },
         });
       }
+      // SEC-01: drop the stored value for the deleted reference too, so the
+      // store keeps no orphaned plugin secrets (no-op on env/read-only).
+      const id = ctx.secrets.pluginSecretId(scope, request.params.key);
+      await ctx.secrets.deleteValue(`plugin:${request.params.id}`, id);
       return { ok: true };
     },
   );

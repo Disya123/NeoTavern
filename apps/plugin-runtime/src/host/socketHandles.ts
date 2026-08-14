@@ -23,6 +23,7 @@ import { connect as tlsConnect, TLSSocket } from 'node:tls';
 import { createSocket, Socket as DgramSocket } from 'node:dgram';
 import { createHash, randomBytes } from 'node:crypto';
 import {
+  NETWORK_MAX_BODY_BYTES,
   NETWORK_MAX_SOCKET_BUFFER_BYTES,
   NETWORK_MAX_SOCKET_HANDLES,
   NETWORK_MAX_SOCKET_MESSAGES,
@@ -170,12 +171,24 @@ export interface WsServerFrame {
 }
 
 /**
+ * SEC-04 bound for a single WebSocket frame payload (and for the accumulated
+ * fragmented text between FINs). A server-declared length above this bound is
+ * a protocol violation: the frame is refused before it can accumulate in
+ * memory — the client never buffers a huge declared frame to full length.
+ */
+export const WS_MAX_FRAME_BYTES = NETWORK_MAX_BODY_BYTES;
+
+export type WsParseResult = { frame: WsServerFrame; rest: Buffer } | { tooLarge: true } | null;
+
+/**
  * Parse one complete frame off the front of `buffer`, returning the frame and
  * the remainder, or null when the buffer holds only a partial frame (caller
  * keeps accumulating). Server frames must not be masked; a masked frame is a
- * protocol violation and returns null after consuming nothing.
+ * protocol violation and returns null after consuming nothing. When the
+ * declared payload length exceeds `maxPayload` the result is `{ tooLarge:
+ * true }` (the caller must fail the connection, never keep buffering).
  */
-export function wsParseFrame(buffer: Buffer): { frame: WsServerFrame; rest: Buffer } | null {
+export function wsParseFrame(buffer: Buffer, maxPayload?: number): WsParseResult {
   if (buffer.byteLength < 2) return null;
   const first = buffer[0];
   if (first === undefined) return null;
@@ -200,6 +213,7 @@ export function wsParseFrame(buffer: Buffer): { frame: WsServerFrame; rest: Buff
     offset = 10;
   }
   if (masked) return null; // server frames are unmasked (RFC 6455 §5.1)
+  if (maxPayload !== undefined && len > maxPayload) return { tooLarge: true };
   if (buffer.byteLength < offset + len) return null;
   return {
     frame: { fin, opcode, payload: buffer.subarray(offset, offset + len) },
@@ -492,25 +506,54 @@ export function createSocketRegistry(deps: SocketRegistryDeps): SocketRegistry {
       });
       // RFC 6455 §5 frame loop: text frames land in the ring, ping is
       // answered with pong, close tears the handle down. Bytes that arrived
-      // in the same segment as the handshake head are drained first.
+      // in the same segment as the handshake head are drained first. SEC-04:
+      // a frame whose declared length exceeds WS_MAX_FRAME_BYTES is refused
+      // before it can accumulate — the client never buffers a huge declared
+      // frame to full length, and fragmented text is bounded too.
       let frameBuffer: Buffer = Buffer.alloc(0);
       let textFragment = '';
+      const failConnection = (): void => {
+        socket.destroy();
+        void closeHandle(handle.id);
+      };
       const consumeFrames = (chunk: Buffer): void => {
+        if (frameBuffer.byteLength + chunk.byteLength > WS_MAX_FRAME_BYTES) {
+          failConnection();
+          return;
+        }
         frameBuffer = Buffer.concat([frameBuffer, chunk]);
         for (;;) {
-          const parsedFrame = wsParseFrame(frameBuffer);
+          const parsedFrame = wsParseFrame(frameBuffer, WS_MAX_FRAME_BYTES);
           if (parsedFrame === null) break;
+          if ('tooLarge' in parsedFrame) {
+            // Declared length above the bound: refuse the connection rather
+            // than buffer the frame to its full declared size.
+            failConnection();
+            return;
+          }
           frameBuffer = parsedFrame.rest;
           const { fin, opcode, payload } = parsedFrame.frame;
           if (opcode === 0x1) {
             // Text frame (possibly fragmented: FIN=0 then continuation 0x0).
-            textFragment = fin ? payload.toString('utf8') : textFragment + payload.toString('utf8');
+            const nextFragment = fin
+              ? payload.toString('utf8')
+              : textFragment + payload.toString('utf8');
+            if (nextFragment.length > WS_MAX_FRAME_BYTES) {
+              failConnection();
+              return;
+            }
+            textFragment = nextFragment;
             if (fin) {
               pushRing(handle, textFragment);
               textFragment = '';
             }
           } else if (opcode === 0x0) {
-            textFragment += payload.toString('utf8');
+            const nextFragment = textFragment + payload.toString('utf8');
+            if (nextFragment.length > WS_MAX_FRAME_BYTES) {
+              failConnection();
+              return;
+            }
+            textFragment = nextFragment;
             if (fin) {
               pushRing(handle, textFragment);
               textFragment = '';

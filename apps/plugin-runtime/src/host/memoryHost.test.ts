@@ -705,6 +705,37 @@ describe('memory host network fetch (§29, SSRF-hardened)', () => {
     );
   });
 
+  it('denies IPv6 link-local fe80::/10 beyond the fe80 exact prefix (SEC-03)', async () => {
+    const host = createMemoryHostExecutor({
+      grants: { 'plugin-a': NETWORK_GRANTS },
+      fetchImpl: async () => mockResponse(200, 'should-not-reach'),
+      dnsLookupImpl: async () => ['febf::1'],
+    });
+    const core = wired(host);
+    // fe80::/10 spans the first hextet 0xfe80..0xfebf — a classifier checking
+    // only the exact `fe80` prefix labels febf::1 as public (the SSRF bypass
+    // this test pins shut).
+    await expectCode(
+      core.submit(networkCall('http://[febf::1]/admin')).promise,
+      'NETWORK_DESTINATION_DENIED',
+    );
+  });
+
+  it('denies IPv6 multicast ff00::/8 (SEC-03)', async () => {
+    const host = createMemoryHostExecutor({
+      grants: { 'plugin-a': NETWORK_GRANTS },
+      fetchImpl: async () => mockResponse(200, 'should-not-reach'),
+      dnsLookupImpl: async () => ['ff02::1'],
+    });
+    const core = wired(host);
+    // ff00::/8 is never a public destination — multicast must be denied
+    // without an explicit private/limited grant.
+    await expectCode(
+      core.submit(networkCall('http://[ff02::1]/admin')).promise,
+      'NETWORK_DESTINATION_DENIED',
+    );
+  });
+
   it('denies RFC1918 private ranges', async () => {
     const host = createMemoryHostExecutor({
       grants: { 'plugin-a': NETWORK_GRANTS },

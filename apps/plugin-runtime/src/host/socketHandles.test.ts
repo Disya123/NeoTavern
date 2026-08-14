@@ -8,7 +8,13 @@ import { describe, expect, it } from 'vitest';
 import { connect as netConnect, createServer, type Server, type Socket } from 'node:net';
 import { createSocket } from 'node:dgram';
 import type { AddressInfo } from 'node:net';
-import { createSocketRegistry, type SocketRegistry, wsAcceptHeader } from './socketHandles.js';
+import {
+  createSocketRegistry,
+  type SocketRegistry,
+  wsAcceptHeader,
+  wsParseFrame,
+  WS_MAX_FRAME_BYTES,
+} from './socketHandles.js';
 
 function registry(): SocketRegistry {
   return createSocketRegistry({
@@ -337,6 +343,68 @@ describe('socket registry (§29)', () => {
       expect(received.closed).toBe(false);
       await sockets.websocketClose('plugin-a', id);
       await expect.poll(() => sockets.size()).toBe(0);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+
+  it('refuses a declared frame length above the SEC-04 bound without buffering', async () => {
+    // A 127-bit declared length: wsParseFrame must answer tooLarge from the
+    // header alone (2 + 8 bytes), never wait for the full declared payload.
+    const huge = Buffer.alloc(10);
+    huge[0] = 0x80 | 0x1; // FIN + text
+    huge[1] = 127; // 64-bit length follows
+    huge.writeBigUInt64BE(BigInt(WS_MAX_FRAME_BYTES) + 1n, 2);
+    const parsed = wsParseFrame(huge, WS_MAX_FRAME_BYTES);
+    expect(parsed).not.toBeNull();
+    expect(parsed && 'tooLarge' in parsed).toBe(true);
+  });
+
+  it('accepts a declared frame length at the SEC-04 bound once the payload arrives', async () => {
+    const header = Buffer.alloc(10);
+    header[0] = 0x80 | 0x1;
+    header[1] = 127;
+    header.writeBigUInt64BE(BigInt(WS_MAX_FRAME_BYTES), 2);
+    // Only the header present: still partial (payload not yet arrived).
+    expect(wsParseFrame(header, WS_MAX_FRAME_BYTES)).toBeNull();
+    // Header + payload of exactly the bound: complete frame.
+    const full = Buffer.concat([header, Buffer.alloc(WS_MAX_FRAME_BYTES, 0x61)]);
+    const parsed = wsParseFrame(full, WS_MAX_FRAME_BYTES);
+    expect(parsed).not.toBeNull();
+    expect(parsed && 'frame' in parsed && parsed.frame.payload.byteLength).toBe(WS_MAX_FRAME_BYTES);
+  });
+
+  it('tears down a websocket whose peer declares an oversized frame (SEC-04)', async () => {
+    // After the upgrade the server immediately writes a text frame that
+    // declares 2^31 bytes. The client must refuse it from the header and
+    // close the handle instead of buffering toward the declared length.
+    const server = createServer((socket: Socket) => {
+      socket.on('error', () => undefined);
+      socket.on('data', (chunk: Buffer) => {
+        if (chunk.toString('utf8').includes('Sec-WebSocket-Key:')) {
+          const key = /Sec-WebSocket-Key: (.+)\r\n/i.exec(chunk.toString('utf8'))?.[1] ?? '';
+          const accept = wsAcceptHeader(key);
+          socket.write(
+            `HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`,
+          );
+          const huge = Buffer.alloc(10);
+          huge[0] = 0x80 | 0x1;
+          huge[1] = 127;
+          huge.writeBigUInt64BE(0x80000000n, 2); // declared 2 GiB payload
+          socket.write(huge);
+        }
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as AddressInfo).port;
+    try {
+      const sockets = registry();
+      const id = await sockets.websocketOpen('plugin-a', `ws://localhost:${port}/huge`, undefined);
+      // The oversized declaration closes the handle asynchronously.
+      await expect.poll(() => sockets.size()).toBe(0);
+      await expect(
+        sockets.websocketReceive('plugin-a', id, 1, 0, abortSignal()),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
     } finally {
       await new Promise((resolve) => server.close(resolve));
     }
