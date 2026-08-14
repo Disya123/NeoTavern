@@ -394,6 +394,18 @@
         "c580388 (M2 library/chat CRUD over Product Wire)"
       ]
     },
+    "m2-contentReview": {
+      "date": "2026-08-14",
+      "scope": "read-only review of crates/runtime-kernel/src/generation.rs (2208 lines), prompt.rs (647 lines), provider-openai-compat, packages/contracts/src/wire, and the M2 test files at 2c5e156 on m1-w1-security (source for pr-kernel-golden).",
+      "finding": "M2 generation content satisfies ТЗ §8.3/§9.2/§9.3/§9.4: CAS revision state machine with lost-CAS reaction (cancel wins, terminal wins, else retry — never blind retry); durable immutable step journal with per-run gapless sequence and idempotency keys (turn-{seq}/tool-call-{id}/tool-result-{id}); WaitingForTool is a durable pending_tool_call_json marker committed with the tool_call step in ONE transaction (no open DB transaction held); tool calls validated against the registry (TOOL_NOT_FOUND/TOOL_ARGS_INVALID) with MAX_TOOL_CALLS loop budget (TOOL_LOOP_LIMIT); exactly-once completed = assistant message INSERT + status CAS + terminal event in one transaction; stale tool result rejected (TOOL_RESULT_STALE); cancel re-read at every emit boundary and on waiting runs; crash recovery marks expired-lease runs 'interrupted' (recoverable); provider secrets resolved at execution time via the SecretResolver seam with fail-closed no-resolver policy (ProviderError::Unavailable, no plaintext fallback) and used only in the Authorization header, never stored/logged.",
+      "tests": "crates/runtime-kernel/tests/tool_loop.rs 10 cases: golden tool round trip, unregistered tool fails, invalid arguments fail, stale tool result rejected, tool result on non-waiting run is stale, cancel on waiting run finalizes cancelled, retry on waiting run is a state conflict, tool loop limit fails the run, crash at wait reopens and resumes, empty registry yields no tools. Plus generation.rs, providers_openai.rs, contracts wire_corpus.rs, built-in-providers conformance.rs, adapters/remote-http/tests/generation_stream.rs.",
+      "gaps": [
+        "plugin interceptors not yet in the PromptPlan (M2 uses INSTRUCT_FORMAT_PLAIN_MESSAGES 'plain-messages-v1'; interceptors and named instruct presets are a later milestone — M2 evidence must state this honestly)",
+        "response_reserved=0 and a heuristic token estimator (approximate budget at the boundary; exact tokenizer profiles are a later milestone)",
+        "interrupted runs are an explicit recoverable terminal state; resume is a UI/user retry, not automatic continuation",
+        "streaming runs on a synchronous writer thread with an mpsc channel; backpressure is EmitStatus::Stop at step boundaries, not an async stream"
+      ]
+    },
     "reCutGuide": {
       "note": "Conflict map verified on 2026-08-14 by diffing every M2 commit's files against the executed M1 branch (ec127a4..HEAD). Every M2 commit touches the docs trio below, so each cherry-pick conflicts there — the resolution policy makes this mechanical. The M2 commit chain (b6d7dbe..c580388) is verified linear on m1-w1-security; re-cut order is the listed order.",
       "commonPattern": "For EVERY cherry-picked M2 commit resolve: CHANGELOG.md -> ours (the M1 branch keeps only M1 entries; M2 entries are collected and written as one M2 CHANGELOG commit at the end); docs/capability-matrix.{json,md} + apps/docs/docs/architecture/capability-matrix.md -> take from commit, then run 'pnpm capability:matrix' and commit the regenerated output (23 rows baseline); apps/docs/docs/architecture/.sync-manifest.json -> regenerate last via 'pnpm docs:sync'.",
