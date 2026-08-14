@@ -3,6 +3,18 @@
 ## Unreleased
 ### Added
 
+- **Legacy compatibility authority boundary (ARC-11, M1 / Wave 1, ТЗ §14.2 /
+  ADR-0039).** The per-legacy-API authority map
+  (`packages/legacy-compat/COMPATIBILITY.md`) and its enforcement suite
+  (`apps/server/test/legacyAuthority.spec.ts`) are now shipped: legacy Express
+  routers are confined to `/api/plugins/{id}/...` and can never shadow core
+  `/api/v2` routes; legacy extension settings stay namespaced per installed
+  plugin (unknown namespace → `PLUGIN_NOT_FOUND`, >1 MiB → `FILE_TOO_LARGE`);
+  the scoped plugin VFS is wired to `<data-root>/plugins/{id}/data` — outside
+  the canonical DB and secrets — with `../` and backslash escapes rejected
+  (fail-closed) and `files.plugin` required (`PLUGIN_PERMISSION_DENIED`
+  without it). Capability `compat.authority-boundary` is now `Implemented` on
+  desktop/headless/web-client hosts (`docs/release-manifest.json`).
 - **Restore maintenance lock (M1 / Wave 1, ТЗ §10.4).** `POST
   /api/v2/backups/:id/restore` now runs exclusively under a global
   maintenance lock (`apps/server/src/lib/maintenance.ts`): while a restore is

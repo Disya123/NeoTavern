@@ -240,7 +240,7 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "94e51ae2cc30c2c6d4cbbbcc98c826ae5a9a72feef34afedbf16b5c2461ad15a"
+      "sha256": "8c62a2ad83465a63bf137888f98b900a6ca643a9eafdc79674afc73a032d3ca5"
     },
     {
       "source": "data/README.md",
@@ -260,7 +260,7 @@
     {
       "source": "plugin-sdk/README.md",
       "target": "plugin-sdk/README.md",
-      "sha256": "4d628a1b0a604ce67ae1eb4fa546afff628b6753814ff6d51c2ab2b1874e31c3"
+      "sha256": "abe59898a6657add051ccca644207c8524268baf97efa0f8dd135974a5758471"
     },
     {
       "source": "plugin-sdk/examples/rev4-overlay-game.md",
