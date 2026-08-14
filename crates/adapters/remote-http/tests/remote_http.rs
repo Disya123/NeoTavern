@@ -1353,3 +1353,72 @@ fn lorebook_crud_over_http() {
     assert_eq!(error.code, "LOREBOOK_NOT_FOUND");
     assert_eq!(error.params["lorebookId"], json!(lorebook_id));
 }
+
+/// 27. M4 slice 1 (Этап 4.1): the full persona CRUD over the HTTP host —
+///     create default → list → get → update (rename + avatar, demote via
+///     isDefault:false) → delete — with the product error
+///     `PERSONA_NOT_FOUND` (personaId param) copied verbatim into the error
+///     envelope after deletion (host parity with the direct kernel path).
+#[test]
+fn persona_crud_over_http() {
+    let server = TestServer::spawn();
+
+    let create = envelope_body(
+        &rid(1),
+        "personas.create",
+        json!({ "name": "Aria", "description": "Curious scholar", "isDefault": true }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &create);
+    assert_eq!(response.status, 200, "personas.create answers HTTP 200");
+    let (request_id, created) = expect_ok(decode_envelope(&response.body));
+    assert_eq!(request_id, rid(1), "requestId is echoed");
+    gen::validate_persona_dto(&created).expect("created persona DTO is wire-valid");
+    assert_eq!(created["name"], json!("Aria"));
+    assert_eq!(created["isDefault"], json!(true));
+    let persona_id = created["id"]
+        .as_str()
+        .expect("created persona has an id")
+        .to_string();
+
+    let list = envelope_body(&rid(2), "personas.list", json!({}));
+    let response = http_request(server.addr, "POST", "/rpc", &[], &list);
+    assert_eq!(response.status, 200);
+    let (_, result) = expect_ok(decode_envelope(&response.body));
+    gen::validate_result_list_personas(&result).expect("list-personas result is wire-valid");
+    assert_eq!(result["items"][0]["id"], json!(persona_id));
+
+    let get = envelope_body(&rid(3), "personas.get", json!({ "personaId": persona_id }));
+    let response = http_request(server.addr, "POST", "/rpc", &[], &get);
+    assert_eq!(response.status, 200);
+    let (_, fetched) = expect_ok(decode_envelope(&response.body));
+    gen::validate_persona_dto(&fetched).expect("fetched persona DTO is wire-valid");
+    assert_eq!(fetched["id"], json!(persona_id));
+
+    let update = envelope_body(
+        &rid(4),
+        "personas.update",
+        json!({ "personaId": persona_id, "name": "Aria the Voyager", "isDefault": false }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &update);
+    assert_eq!(response.status, 200);
+    let (_, updated) = expect_ok(decode_envelope(&response.body));
+    gen::validate_persona_dto(&updated).expect("updated persona DTO is wire-valid");
+    assert_eq!(updated["name"], json!("Aria the Voyager"));
+    assert_eq!(updated["isDefault"], json!(false));
+
+    let delete = envelope_body(
+        &rid(5),
+        "personas.delete",
+        json!({ "personaId": persona_id }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &delete);
+    assert_eq!(response.status, 200);
+    expect_ok(decode_envelope(&response.body));
+
+    // The follow-up get answers the stable product error verbatim.
+    let response = http_request(server.addr, "POST", "/rpc", &[], &get);
+    assert_eq!(response.status, 200);
+    let (_, error) = expect_error(decode_envelope(&response.body));
+    assert_eq!(error.code, "PERSONA_NOT_FOUND");
+    assert_eq!(error.params["personaId"], json!(persona_id));
+}

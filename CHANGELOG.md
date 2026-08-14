@@ -3,6 +3,31 @@
 ## Unreleased
 ### Added
 
+- **Persona CRUD in the kernel (M4 / Этап 4.1, ТЗ §8.1 Library context).**
+  Product Wire gains `personas.list` / `personas.get` / `personas.create` /
+  `personas.update` / `personas.delete` backed by the new STRICT `personas`
+  table (schema migration 7 `007_personas` — created/updated/ledgered,
+  `CURRENT_SCHEMA = 7`). The single-default invariant matches the legacy
+  `PersonaRepository`: create/update with `isDefault` clears the previous
+  default in the same transaction. Wire `wire.persona.dto` carries
+  `name`/`description`/`avatar`/`isDefault`/`createdAt`/`updatedAt`
+  (description/avatar optional). Stable errors: `PERSONA_NOT_FOUND`
+  (personaId param) and `CONTRACT_VIOLATION` for strict
+  unknown-field/empty-name rejection. Capability `personas.crud` added to the
+  release manifest (5 wire ops). Tests: 2 kernel integration tests (round
+  trip incl. default demotion + NOT_FOUND/contract paths), wire corpus (4
+  positive + 5 negative fixtures), remote-http host parity
+  (`persona_crud_over_http`). Also fixed a real classification gap surfaced
+  by the migration corpus: `StorageError::from_sqlite` now maps SQLite
+  `SQLITE_CORRUPT` (11) to `Corrupt` instead of a generic `Io` — a corrupt
+  page must never surface as an I/O error. Full cargo workspace green,
+  clippy clean, rustfmt clean, codegen `--check` clean (WIRE_SCHEMA_HASH
+  regenerated to `ca7464ef…`), upgrade drill PASS on the new schema. Honest
+  boundary: chat.persona_id linkage and prompt `{{user}}` injection from the
+  persona table are not wired yet (the prompt pipeline still reads the card
+  `ext_json.personality` persona block); legacy `/api/v2/personas` route
+  removal and the UI surface remain Этап 4 follow-ups.
+
 - **Full lorebook CRUD in the kernel (M4 / Этап 4.1, ТЗ §8.1 Library
   context).** Product Wire gains `lorebooks.get` / `lorebooks.create` /
   `lorebooks.update` / `lorebooks.delete` alongside `lorebooks.list`; the

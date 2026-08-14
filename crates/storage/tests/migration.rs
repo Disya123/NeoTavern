@@ -441,6 +441,7 @@ fn build_kernel_version(root: &Path, version: i64) -> rusqlite::Result<()> {
         MIGRATION_2_NAME, MIGRATION_2_SQL, MIGRATION_3_CHECKSUM, MIGRATION_3_NAME, MIGRATION_3_SQL,
         MIGRATION_4_CHECKSUM, MIGRATION_4_NAME, MIGRATION_4_SQL, MIGRATION_5_CHECKSUM,
         MIGRATION_5_NAME, MIGRATION_5_SQL, MIGRATION_6_CHECKSUM, MIGRATION_6_NAME, MIGRATION_6_SQL,
+        MIGRATION_7_CHECKSUM, MIGRATION_7_NAME, MIGRATION_7_SQL,
     };
     let conn = rusqlite::Connection::open(neotavern_storage::paths::db_path(root))?;
     let migrations: &[(i64, &str, &str, &str)] = &[
@@ -450,6 +451,7 @@ fn build_kernel_version(root: &Path, version: i64) -> rusqlite::Result<()> {
         (4, MIGRATION_4_NAME, MIGRATION_4_CHECKSUM, MIGRATION_4_SQL),
         (5, MIGRATION_5_NAME, MIGRATION_5_CHECKSUM, MIGRATION_5_SQL),
         (6, MIGRATION_6_NAME, MIGRATION_6_CHECKSUM, MIGRATION_6_SQL),
+        (7, MIGRATION_7_NAME, MIGRATION_7_CHECKSUM, MIGRATION_7_SQL),
     ];
     for (id, name, checksum, sql) in migrations.iter().take(version as usize) {
         conn.execute_batch(sql)?;

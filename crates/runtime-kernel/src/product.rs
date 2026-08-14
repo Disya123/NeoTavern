@@ -17,7 +17,8 @@
 use crate::{KernelError, KernelErrorCode};
 use contracts_generated::generated::{
     self, CharacterDto, ChatDto, LorebookDto, MessageDto, MessageRole, PagedCharacters, PagedChats,
-    PagedMessages, PresetDto, ResultEmpty, ResultListLorebooks, ResultListPresets,
+    PagedMessages, PersonaDto, PresetDto, ResultEmpty, ResultListLorebooks, ResultListPersonas,
+    ResultListPresets,
 };
 use contracts_generated::Issue;
 use neotavern_storage::open::Database;
@@ -155,6 +156,7 @@ fn not_found(entity: &str, id: &str) -> KernelError {
         "MESSAGE" => "messageId",
         "LOREBOOK" => "lorebookId",
         "PRESET" => "presetId",
+        "PERSONA" => "personaId",
         _ => "id",
     };
     KernelError::product(
@@ -282,6 +284,60 @@ fn row_to_preset(row: &rusqlite::Row) -> Result<PresetDto, KernelError> {
             .get(3)
             .map_err(|e| sqlite(e, "presets: read updated_at"))?,
     })
+}
+
+/// Renders a `personas` row (with the integer `is_default` flag as the wire
+/// boolean) as the wire [`PersonaDto`].
+fn row_to_persona(row: &rusqlite::Row) -> Result<PersonaDto, KernelError> {
+    let is_default: i64 = row
+        .get(4)
+        .map_err(|e| sqlite(e, "personas: read is_default"))?;
+    Ok(PersonaDto {
+        id: row.get(0).map_err(|e| sqlite(e, "personas: read id"))?,
+        name: row.get(1).map_err(|e| sqlite(e, "personas: read name"))?,
+        description: row
+            .get(2)
+            .map_err(|e| sqlite(e, "personas: read description"))?,
+        avatar: row.get(3).map_err(|e| sqlite(e, "personas: read avatar"))?,
+        is_default: is_default != 0,
+        created_at: row
+            .get(5)
+            .map_err(|e| sqlite(e, "personas: read created_at"))?,
+        updated_at: row
+            .get(6)
+            .map_err(|e| sqlite(e, "personas: read updated_at"))?,
+    })
+}
+
+/// Loads one persona by id; `None` when absent.
+fn query_persona(conn: &rusqlite::Connection, id: &str) -> Result<Option<PersonaDto>, KernelError> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, name, description, avatar, is_default, created_at, updated_at \
+             FROM personas WHERE id = ?1",
+        )
+        .map_err(|e| sqlite(e, "personas_get: prepare"))?;
+    let mut rows = stmt
+        .query([id])
+        .map_err(|e| sqlite(e, "personas_get: query"))?;
+    let row = rows
+        .next()
+        .map_err(|e| sqlite(e, "personas_get: read row"))?;
+    row.map(row_to_persona).transpose()
+}
+
+/// Clears the `is_default` flag on every persona — the single-default
+/// invariant (legacy `PersonaRepository.clearDefault`), called on create and
+/// update before a persona is marked default, inside the caller's
+/// transaction. Returns [`StorageError`] so the `Database::transaction`
+/// closure can `?` it directly.
+fn clear_persona_default(tx: &rusqlite::Transaction) -> Result<(), StorageError> {
+    tx.execute(
+        "UPDATE personas SET is_default = 0 WHERE is_default = 1",
+        [],
+    )
+    .map_err(|e| StorageError::from_sqlite(e, "personas: clear default"))?;
+    Ok(())
 }
 
 /// Loads one character by id; `None` when absent.
@@ -1015,5 +1071,141 @@ pub fn presets_list(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Kernel
     }
     let dto = ResultListPresets { items };
     validate(&dto, generated::validate_result_list_presets)?;
+    encode(&dto)
+}
+
+/// `personas.list` — all personas (plain list per the wire contract), newest
+/// first.
+pub fn personas_list(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    generated::decode_empty_request_dto(request)?;
+    let mut items: Vec<PersonaDto> = Vec::new();
+    {
+        let conn = db.conn();
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, name, description, avatar, is_default, created_at, updated_at \
+                 FROM personas ORDER BY created_at DESC, id DESC",
+            )
+            .map_err(|e| sqlite(e, "personas_list: prepare"))?;
+        let mut rows = stmt
+            .query([])
+            .map_err(|e| sqlite(e, "personas_list: query"))?;
+        while let Some(row) = rows
+            .next()
+            .map_err(|e| sqlite(e, "personas_list: read row"))?
+        {
+            items.push(row_to_persona(row)?);
+        }
+    }
+    let dto = ResultListPersonas { items };
+    validate(&dto, generated::validate_result_list_personas)?;
+    encode(&dto)
+}
+
+/// `personas.get` — one persona; missing → `PERSONA_NOT_FOUND`.
+pub fn personas_get(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_get_persona(request)?;
+    let dto = query_persona(db.conn(), &req.persona_id)?
+        .ok_or_else(|| not_found("PERSONA", &req.persona_id))?;
+    validate(&dto, generated::validate_persona_dto)?;
+    encode(&dto)
+}
+
+/// `personas.create` — insert a new persona and return it. Marking it default
+/// clears the previous default (single-default invariant).
+pub fn personas_create(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_create_persona(request)?;
+    let id = new_id();
+    let now = now();
+    let is_default = req.is_default.unwrap_or(false);
+    db.transaction(|tx| {
+        if is_default {
+            clear_persona_default(tx)?;
+        }
+        tx.execute(
+            "INSERT INTO personas (id, name, description, avatar, is_default, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                &id,
+                &req.name,
+                &req.description,
+                &req.avatar,
+                is_default as i64,
+                &now,
+                &now
+            ],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "personas_create: insert"))?;
+        Ok(())
+    })?;
+    let dto = query_persona(db.conn(), &id)?.ok_or_else(|| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            "personas_create: insert succeeded but select back found no row",
+        )
+    })?;
+    validate(&dto, generated::validate_persona_dto)?;
+    encode(&dto)
+}
+
+/// `personas.update` — update the provided fields (name, description, avatar,
+/// is_default); missing persona → `PERSONA_NOT_FOUND`. Marking default clears
+/// the previous default.
+pub fn personas_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_update_persona(request)?;
+    let id = req.persona_id.clone();
+    let now = now();
+    let changed = db.transaction(|tx| {
+        if req.is_default == Some(true) {
+            clear_persona_default(tx)?;
+        }
+        let mut sets: Vec<&str> = Vec::new();
+        let mut values: Vec<Value> = Vec::new();
+        if let Some(name) = &req.name {
+            sets.push("name = ?");
+            values.push(Value::Text(name.clone()));
+        }
+        if let Some(description) = &req.description {
+            sets.push("description = ?");
+            values.push(Value::Text(description.clone()));
+        }
+        if let Some(avatar) = &req.avatar {
+            sets.push("avatar = ?");
+            values.push(Value::Text(avatar.clone()));
+        }
+        if let Some(is_default) = req.is_default {
+            sets.push("is_default = ?");
+            values.push(Value::Integer(is_default as i64));
+        }
+        sets.push("updated_at = ?");
+        values.push(Value::Text(now.clone()));
+        let sql = format!("UPDATE personas SET {} WHERE id = ?", sets.join(", "));
+        values.push(Value::Text(id.clone()));
+        tx.execute(&sql, params_from_iter(values))
+            .map_err(|e| StorageError::from_sqlite(e, "personas_update: update"))
+    })?;
+    if changed == 0 {
+        return Err(not_found("PERSONA", &id));
+    }
+    let dto = query_persona(db.conn(), &id)?.ok_or_else(|| not_found("PERSONA", &id))?;
+    validate(&dto, generated::validate_persona_dto)?;
+    encode(&dto)
+}
+
+/// `personas.delete` — remove a persona; missing → `PERSONA_NOT_FOUND`.
+pub fn personas_delete(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_delete_persona(request)?;
+    let changed = db.transaction(|tx| {
+        tx.execute(
+            "DELETE FROM personas WHERE id = ?1",
+            params![&req.persona_id],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "personas_delete: delete"))
+    })?;
+    if changed == 0 {
+        return Err(not_found("PERSONA", &req.persona_id));
+    }
+    let dto = ResultEmpty {};
+    validate(&dto, generated::validate_result_empty)?;
     encode(&dto)
 }

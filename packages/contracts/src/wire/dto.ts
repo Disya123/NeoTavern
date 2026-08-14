@@ -133,6 +133,27 @@ export const PresetDtoSchema = Type.Object(
 );
 export type PresetDto = Static<typeof PresetDtoSchema>;
 
+/**
+ * Persona DTO (`wire.persona.dto`). The "user" identity injected into the
+ * prompt pipeline as `{{user}}` (legacy `PersonaSchema`). `isDefault` marks
+ * the fallback persona the prompt pipeline resolves when neither the chat nor
+ * the app selects one explicitly. `avatar` is an optional free-form reference
+ * (legacy avatar id/path); asset linkage is a later Этап 4 slice.
+ */
+export const PersonaDtoSchema = Type.Object(
+  {
+    id: Type.String({ format: 'uuid' }),
+    name: Type.String({ minLength: 1, maxLength: 200 }),
+    description: Type.Optional(Type.String({ minLength: 0, maxLength: 10000 })),
+    avatar: Type.Optional(Type.String({ minLength: 0, maxLength: 512 })),
+    isDefault: Type.Boolean(),
+    createdAt: Type.String({ format: 'rfc3339' }),
+    updatedAt: Type.String({ format: 'rfc3339' }),
+  },
+  { $id: 'wire.persona.dto', additionalProperties: false },
+);
+export type PersonaDto = Static<typeof PersonaDtoSchema>;
+
 /** Paged characters result (`wire.paged.characters`). */
 export const PagedCharactersDtoSchema = Type.Object(
   {
@@ -462,6 +483,49 @@ export const DeleteLorebookRequestDtoSchema = Type.Object(
   { $id: 'wire.request.delete-lorebook', additionalProperties: false },
 );
 export type DeleteLorebookRequestDto = Static<typeof DeleteLorebookRequestDtoSchema>;
+
+/** Get persona request DTO (`wire.request.get-persona`). */
+export const GetPersonaRequestDtoSchema = Type.Object(
+  {
+    personaId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.get-persona', additionalProperties: false },
+);
+export type GetPersonaRequestDto = Static<typeof GetPersonaRequestDtoSchema>;
+
+/** Create persona request DTO (`wire.request.create-persona`). */
+export const CreatePersonaRequestDtoSchema = Type.Object(
+  {
+    name: Type.String({ minLength: 1, maxLength: 200 }),
+    description: Type.Optional(Type.String({ minLength: 0, maxLength: 10000 })),
+    avatar: Type.Optional(Type.String({ minLength: 0, maxLength: 512 })),
+    isDefault: Type.Optional(Type.Boolean()),
+  },
+  { $id: 'wire.request.create-persona', additionalProperties: false },
+);
+export type CreatePersonaRequestDto = Static<typeof CreatePersonaRequestDtoSchema>;
+
+/** Update persona request DTO (`wire.request.update-persona`). */
+export const UpdatePersonaRequestDtoSchema = Type.Object(
+  {
+    personaId: Type.String({ format: 'uuid' }),
+    name: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
+    description: Type.Optional(Type.String({ minLength: 0, maxLength: 10000 })),
+    avatar: Type.Optional(Type.String({ minLength: 0, maxLength: 512 })),
+    isDefault: Type.Optional(Type.Boolean()),
+  },
+  { $id: 'wire.request.update-persona', additionalProperties: false },
+);
+export type UpdatePersonaRequestDto = Static<typeof UpdatePersonaRequestDtoSchema>;
+
+/** Delete persona request DTO (`wire.request.delete-persona`). */
+export const DeletePersonaRequestDtoSchema = Type.Object(
+  {
+    personaId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.delete-persona', additionalProperties: false },
+);
+export type DeletePersonaRequestDto = Static<typeof DeletePersonaRequestDtoSchema>;
 
 /** List chats request DTO (`wire.request.list-chats`). */
 export const ListChatsRequestDtoSchema = Type.Object(
@@ -953,6 +1017,15 @@ export const ListPresetsResultDtoSchema = Type.Object(
 );
 export type ListPresetsResultDto = Static<typeof ListPresetsResultDtoSchema>;
 
+/** List personas result DTO (`wire.result.list-personas`). */
+export const ListPersonasResultDtoSchema = Type.Object(
+  {
+    items: Type.Array(PersonaDtoSchema),
+  },
+  { $id: 'wire.result.list-personas', additionalProperties: false },
+);
+export type ListPersonasResultDto = Static<typeof ListPersonasResultDtoSchema>;
+
 /**
  * Every wire schema keyed by its `$id` (schemaId): all DTOs plus the error
  * DTO, the message role union and the three envelopes. This is the complete
@@ -967,6 +1040,7 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.backup.dto': BackupDtoSchema,
   'wire.lorebook.dto': LorebookDtoSchema,
   'wire.preset.dto': PresetDtoSchema,
+  'wire.persona.dto': PersonaDtoSchema,
   'wire.paged.characters': PagedCharactersDtoSchema,
   'wire.paged.chats': PagedChatsDtoSchema,
   'wire.paged.messages': PagedMessagesDtoSchema,
@@ -995,6 +1069,10 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.request.update-lorebook': UpdateLorebookRequestDtoSchema,
   'wire.request.delete-lorebook': DeleteLorebookRequestDtoSchema,
   'wire.lorebook.entry.input': LorebookEntryInputSchema,
+  'wire.request.get-persona': GetPersonaRequestDtoSchema,
+  'wire.request.create-persona': CreatePersonaRequestDtoSchema,
+  'wire.request.update-persona': UpdatePersonaRequestDtoSchema,
+  'wire.request.delete-persona': DeletePersonaRequestDtoSchema,
   'wire.request.list-chats': ListChatsRequestDtoSchema,
   'wire.request.get-chat': GetChatRequestDtoSchema,
   'wire.request.create-chat': CreateChatRequestDtoSchema,
@@ -1028,6 +1106,7 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.paged.generation-events': PagedGenerationEventsDtoSchema,
   'wire.result.list-lorebooks': ListLorebooksResultDtoSchema,
   'wire.result.list-presets': ListPresetsResultDtoSchema,
+  'wire.result.list-personas': ListPersonasResultDtoSchema,
   'wire.request.envelope': RequestEnvelopeSchema,
   'wire.response.envelope': ResponseEnvelopeSchema,
   'wire.event.envelope': EventEnvelopeSchema,

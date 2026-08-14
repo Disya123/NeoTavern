@@ -94,6 +94,10 @@ impl StorageError {
     /// - `SQLITE_BUSY`/`SQLITE_LOCKED` — primary codes 5/6 and extended codes
     ///   261 (`BUSY_RECOVERY`) / 517 (`BUSY_SNAPSHOT`) — map to
     ///   [`StorageErrorCode::Busy`];
+    /// - `SQLITE_CORRUPT` (code 11) — a page/structure integrity failure
+    ///   surfaced by SQLite itself — maps to [`StorageErrorCode::Corrupt`]
+    ///   (the same classification `quick_check` failures get; a corrupt page
+    ///   must never surface as a generic I/O error);
     /// - `SQLITE_FULL` (code 13) or an ENOSPC-flavoured failure map to
     ///   [`StorageErrorCode::DiskFull`];
     /// - everything else maps to [`StorageErrorCode::Io`].
@@ -108,6 +112,7 @@ impl StorageError {
         const SQLITE_LOCKED: i32 = 6;
         const SQLITE_BUSY_RECOVERY: i32 = 261; // 5 | (1 << 8)
         const SQLITE_BUSY_SNAPSHOT: i32 = 517; // 5 | (2 << 8)
+        const SQLITE_CORRUPT: i32 = 11;
         const SQLITE_FULL: i32 = 13;
 
         let mut code = StorageErrorCode::Io;
@@ -128,6 +133,8 @@ impl StorageError {
                 )
             {
                 code = StorageErrorCode::Busy;
+            } else if sqlite_code == SQLITE_CORRUPT {
+                code = StorageErrorCode::Corrupt;
             } else if ffi_err.code == SqliteErrorCode::DiskFull
                 || sqlite_code == SQLITE_FULL
                 || message.as_deref().is_some_and(mentions_no_space)
