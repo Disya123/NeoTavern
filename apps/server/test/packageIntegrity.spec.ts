@@ -49,9 +49,19 @@ function zipArchive(entries: Record<string, string>): Promise<Buffer> {
   });
 }
 
-function pluginPackage(id: string, version: string, frontend = 'export default {};'): Promise<Buffer> {
+function pluginPackage(
+  id: string,
+  version: string,
+  frontend = 'export default {};',
+): Promise<Buffer> {
   return zipArchive({
-    'plugin.json': JSON.stringify({ id, name: id, version, apiVersion: 2, frontend: 'frontend.js' }),
+    'plugin.json': JSON.stringify({
+      id,
+      name: id,
+      version,
+      apiVersion: 2,
+      frontend: 'frontend.js',
+    }),
     'frontend.js': frontend,
   });
 }
@@ -310,9 +320,9 @@ describe('install recovery journal (ТЗ §SEC-05, v2)', () => {
 
     await recoverInterruptedInstalls(pluginsDir, repo, logger);
 
-    expect(
-      readFile(join(pluginsDir, 'author.ok', 'package', 'plugin.json'), 'utf8'),
-    ).resolves.toBe('{"id":"x"}');
+    expect(readFile(join(pluginsDir, 'author.ok', 'package', 'plugin.json'), 'utf8')).resolves.toBe(
+      '{"id":"x"}',
+    );
     // The stray rollback is KEPT (restored semantics: never delete both).
     expect(
       await readFile(join(pluginsDir, 'author.ok', '.rollback-efgh', 'plugin.json'), 'utf8'),
@@ -352,7 +362,11 @@ describe('tamper-after-install refused at activation (ТЗ §SEC-05, end-to-end)
     const installed = await app.inject({
       method: 'POST',
       url: '/api/v2/plugins/install',
-      ...multipartFile(await pluginPackage(pluginId, '1.0.0'), 'plugin.stplugin', 'application/zip'),
+      ...multipartFile(
+        await pluginPackage(pluginId, '1.0.0'),
+        'plugin.stplugin',
+        'application/zip',
+      ),
     });
     expect(installed.statusCode, installed.payload).toBe(200);
 
@@ -366,7 +380,10 @@ describe('tamper-after-install refused at activation (ТЗ §SEC-05, end-to-end)
     expect(Object.keys(snapshot.digests).sort()).toEqual(['frontend.js', 'plugin.json']);
 
     // Tamper with a file after install.
-    await writeFile(join(paths.plugins, pluginId, 'package', 'frontend.js'), 'export default { hacked: true };');
+    await writeFile(
+      join(paths.plugins, pluginId, 'package', 'frontend.js'),
+      'export default { hacked: true };',
+    );
 
     const activate = await app.inject({
       method: 'POST',

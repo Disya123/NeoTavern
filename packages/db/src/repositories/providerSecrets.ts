@@ -192,9 +192,7 @@ export class ProviderSecretRepository {
       .select()
       .from(providerSecrets)
       .where(eq(providerSecrets.providerId, providerId));
-    return rows
-      .map((row) => row.valueRef ?? row.value ?? '')
-      .filter((ref) => ref.length > 0);
+    return rows.map((row) => row.valueRef ?? row.value ?? '').filter((ref) => ref.length > 0);
   }
 
   /** INTERNAL: whether the provider has a usable (active, non-empty) key. */

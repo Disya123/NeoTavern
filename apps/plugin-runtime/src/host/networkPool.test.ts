@@ -302,9 +302,7 @@ describe('network pool verified-IP connects and bounded bodies (ТЗ §SEC-03/§
     // direct evidence that the wire side is capped while streaming.
     const CAP = 512;
     const MEMBERS = 20;
-    const member = gzipSync(
-      Buffer.from(Array.from({ length: 16 }, (_, i) => (i * 37 + 11) % 256)),
-    );
+    const member = gzipSync(Buffer.from(Array.from({ length: 16 }, (_, i) => (i * 37 + 11) % 256)));
     const wire = Buffer.concat(Array.from({ length: MEMBERS }, () => member));
     expect(wire.byteLength).toBeGreaterThan(CAP);
     const server = createServer((_req, res) => {
