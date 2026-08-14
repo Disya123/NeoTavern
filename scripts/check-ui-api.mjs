@@ -74,9 +74,14 @@ const PRODUCT_METADATA = {
   },
   'apps/web/src/api/generate.ts': {
     owner: OWNER,
-    removalIssue: 'M2: cut the generation stream to the Product Wire (GEN-RUN 10A/10B)',
-    milestone: 'M2',
+    removalIssue: 'M4: cut the generation stream to the Product Wire (GEN-RUN 10A/10B)',
+    milestone: 'M4',
     deadline: M4.deadline,
+  },
+  'apps/web/src/api/wireBridge.ts': {
+    owner: OWNER,
+    removalIssue: 'M4: retire the wireBridge legacy delegation path with the sidecar (full-fidelity legacy entities only until then)',
+    ...M4,
   },
   'apps/web/src/components/AutoConnectSync.tsx': {
     owner: OWNER,
