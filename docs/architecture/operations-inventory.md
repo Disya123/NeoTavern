@@ -310,8 +310,10 @@ SillyTavern full-backup transfer (two-phase):
 - `GET /api/v2/profiles/export` — portable profile export archive
   (SEC-02 logical allowlist, format v2: `manifest.json` with the exported
   tables/counts, exclusions and redactions, one `data/<table>.jsonl` per
-  allowlisted table, and `files/`; no DB snapshot; see
-  [version-axes.md](version-axes.md)).
+  allowlisted table, and `files/`; no DB snapshot). Hardened: every table is
+  read inside one SQLite snapshot transaction (`snapshotTransaction: true` in
+  the manifest) and through an explicit per-table column allowlist verified
+  against the live schema — see [version-axes.md](version-axes.md)).
 - `PATCH /api/v2/profiles/:id` — update.
 
 ### providers — `apps/server/src/plugins/providers.ts`

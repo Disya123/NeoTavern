@@ -3,6 +3,30 @@
 ## Unreleased
 ### Added
 
+- **Logical profile export hardening (SEC-02 audit findings, ТЗ §SEC-02).**
+  `apps/server/src/lib/profileExport.ts` now reads every allowlisted table
+  inside ONE SQLite snapshot transaction (manifest records
+  `snapshotTransaction: true`), so a concurrent mutation can no longer split
+  the archive across two database states. `SELECT *` is gone: each table is
+  read through an explicit per-table column allowlist recorded in the
+  manifest, and the SEC-02 suite verifies the allowlist against the live
+  schema (`PRAGMA table_info`) — a column added by a future migration cannot
+  silently enter or silently drop out of the archive; only
+  `provider_configs.api_key` is an intentional partial allowlist (secret).
+  A failure inside the transaction rolls back and never leaks a temp
+  directory. Tests: `apps/server/test/profileExport.spec.ts` now 11 tests
+  (sentinels absent, per-table column allowlist exact-match, allowlist vs
+  schema, snapshot-transaction flag, rollback/no-dangling-transaction).
+
+- **Acceptance-ledger ordering gate (audit directive) and honest milestone
+  statuses.** New `scripts/check-milestone-gates.mjs` (wired into
+  `.github/workflows/ci.yml` and `pnpm milestone:gates:check`, with a
+  fixture self-test) fails CI when a milestone is marked `accepted` while an
+  earlier milestone is not — the audit's "CI gate blocking M2 while
+  M1.status != accepted". The ledger records later-stage milestones as
+  `in_progress` until their predecessors are formally accepted; M0 stays
+  `accepted`.
+
 - **SEC-01 kernel-plane SecretStore port (M1 / Wave 1, ТЗ §SEC-01.1 /
   ADR-0040).** New `crates/secret-store` implements the canonical portable
   `secrets.enc` **v2** format: AES-256-GCM over a JSON envelope with an

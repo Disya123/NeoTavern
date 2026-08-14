@@ -9,6 +9,18 @@
  * exactly what was exported and what was excluded in `manifest.json`, so an
  * importer and a reviewer can verify the archive's bounds.
  *
+ * Two hardening properties (SEC-02 audit findings, fixed):
+ *
+ * 1. **Snapshot transaction.** The whole export runs inside one SQLite
+ *    transaction (`BEGIN` … `COMMIT`, rollback on failure). Every table is
+ *    therefore read from a single consistent snapshot — a concurrent writer
+ *    can never split the archive between two states of the database.
+ * 2. **Explicit field allowlist.** Every table is read through an explicit
+ *    `SELECT <allowlisted columns>`, never `SELECT *`. A column added to a
+ *    table in a future migration cannot silently enter the archive: the
+ *    allowlist check in `apps/server/test/profileExport.spec.ts` compares the
+ *    exported keys against the current schema (`PRAGMA table_info`).
+ *
  * Archive layout (format version 2 — see docs/architecture/version-axes.md):
  *
  * ```text
@@ -52,11 +64,12 @@ export interface ProfileExportArchive {
 interface TableSpec {
   table: string;
   /**
-   * Explicit column allowlist. When absent, every column of the table is
-   * exported (the table's DDL is the field allowlist — no secret-bearing
-   * columns exist outside the redactions below).
+   * Explicit column allowlist — REQUIRED for every table (SEC-02): the export
+   * reads `SELECT <columns>`, never `SELECT *`, so future columns cannot leak
+   * into the archive silently. `apps/server/test/profileExport.spec.ts`
+   * verifies the allowlist matches the live schema (`PRAGMA table_info`).
    */
-  columns?: readonly string[];
+  columns: readonly string[];
   /** Redact secret-bearing JSON payloads inside a row before serialization. */
   transform?: (row: Record<string, unknown>) => Record<string, unknown>;
 }
@@ -64,30 +77,187 @@ interface TableSpec {
 /**
  * Entity allowlist (ТЗ §SEC-02). Rows are written as JSON Lines in stable
  * primary-key order (`rowid`) so the archive is deterministic and diffable.
+ * Column lists mirror `packages/db/src/schema/tables.ts` (the SQL DDL is the
+ * source of truth; the allowlist test re-checks against the live schema).
  */
 const EXPORTED_TABLES: readonly TableSpec[] = [
-  { table: 'profiles' },
-  { table: 'settings' },
-  { table: 'personas' },
-  { table: 'characters' },
-  { table: 'tags' },
-  { table: 'character_tags' },
-  { table: 'chats' },
-  { table: 'chat_branches' },
-  { table: 'messages' },
-  { table: 'message_variants' },
-  { table: 'message_content_revisions' },
-  { table: 'message_drafts' },
-  { table: 'message_block_attachments' },
+  {
+    table: 'profiles',
+    columns: ['id', 'name', 'created_at'],
+  },
+  { table: 'settings', columns: ['key', 'value'] },
+  {
+    table: 'personas',
+    columns: ['id', 'name', 'description', 'avatar', 'is_default', 'created_at', 'updated_at'],
+  },
+  {
+    table: 'characters',
+    columns: [
+      'id',
+      'name',
+      'avatar',
+      'description',
+      'personality',
+      'scenario',
+      'first_message',
+      'example_dialogues',
+      'system_prompt',
+      'post_history_instructions',
+      'creator',
+      'creator_notes',
+      'ext',
+      'created_at',
+      'updated_at',
+      'last_used_at',
+      'deleted_at',
+      'favorite',
+      'chat_count',
+      'token_count',
+    ],
+  },
+  { table: 'tags', columns: ['id', 'name'] },
+  { table: 'character_tags', columns: ['character_id', 'tag_id'] },
+  {
+    table: 'chats',
+    columns: [
+      'id',
+      'character_id',
+      'persona_id',
+      'title',
+      'active_branch_id',
+      'background_id',
+      'summary',
+      'message_count',
+      'created_at',
+      'updated_at',
+      'deleted_at',
+      'parent_chat_id',
+      'origin',
+      'source_message_id',
+      'sort_order',
+    ],
+  },
+  { table: 'chat_branches', columns: ['id', 'chat_id', 'name', 'created_at'] },
+  {
+    table: 'messages',
+    columns: [
+      'id',
+      'chat_id',
+      'branch_id',
+      'parent_id',
+      'role',
+      'content',
+      'name',
+      'meta',
+      'created_at',
+      'revision',
+      'updated_at',
+      'idempotency_key',
+      'variant_count',
+      'active_variant_position',
+      'content_revision_count',
+      'checkpoint_chat_id',
+    ],
+  },
+  { table: 'message_variants', columns: ['id', 'message_id', 'position', 'content', 'created_at'] },
+  {
+    table: 'message_content_revisions',
+    columns: ['id', 'message_id', 'position', 'content', 'created_at'],
+  },
+  {
+    table: 'message_drafts',
+    columns: [
+      'id',
+      'chat_id',
+      'branch_id',
+      'role',
+      'content',
+      'name',
+      'meta',
+      'sequence',
+      'revision',
+      'committed_message_id',
+      'created_at',
+      'updated_at',
+    ],
+  },
+  {
+    table: 'message_block_attachments',
+    columns: [
+      'id',
+      'message_id',
+      'plugin_id',
+      'block_type',
+      'renderer_id',
+      'descriptor_json',
+      'serialized_state_json',
+      'created_at',
+      'updated_at',
+    ],
+  },
   // `payload.includeHeaders` can carry credentials (write-only projection in
   // the connection-profile repo) — removed before export.
-  { table: 'connection_profiles', transform: redactConnectionProfile },
-  { table: 'character_versions' },
-  { table: 'attachments' },
-  { table: 'lorebooks' },
-  { table: 'lore_entries' },
-  { table: 'presets' },
-  { table: 'memories' },
+  {
+    table: 'connection_profiles',
+    columns: ['id', 'name', 'mode', 'payload', 'created_at', 'updated_at'],
+    transform: redactConnectionProfile,
+  },
+  {
+    table: 'character_versions',
+    columns: ['id', 'character_id', 'version', 'snapshot', 'created_at'],
+  },
+  {
+    table: 'attachments',
+    columns: [
+      'id',
+      'owner_type',
+      'owner_id',
+      'logical_name',
+      'relative_path',
+      'content_hash',
+      'mime',
+      'size_bytes',
+      'metadata',
+      'created_at',
+    ],
+  },
+  {
+    table: 'lorebooks',
+    columns: ['id', 'name', 'description', 'metadata', 'created_at', 'updated_at', 'deleted_at'],
+  },
+  {
+    table: 'lore_entries',
+    columns: [
+      'id',
+      'lorebook_id',
+      'keys_json',
+      'secondary_keys',
+      'content',
+      'enabled',
+      'position',
+      'constant',
+      'selective',
+      'metadata',
+      'created_at',
+      'updated_at',
+    ],
+  },
+  { table: 'presets', columns: ['id', 'kind', 'name', 'data', 'created_at', 'updated_at'] },
+  {
+    table: 'memories',
+    columns: [
+      'id',
+      'scope',
+      'character_id',
+      'keys_json',
+      'content',
+      'enabled',
+      'position',
+      'metadata',
+      'created_at',
+      'updated_at',
+    ],
+  },
   // Explicit column allowlist: the legacy `api_key` column is a secret.
   {
     table: 'provider_configs',
@@ -156,8 +326,18 @@ export async function buildProfileExportArchive(
   const tempDir = await mkdtemp(join(tmpdir(), 'neotavern-profile-export-'));
   try {
     const counts = new Map<string, number>();
-    for (const spec of EXPORTED_TABLES) {
-      counts.set(spec.table, await writeTable(tempDir, input.database, spec));
+    // SEC-02 snapshot transaction: one consistent read snapshot for ALL
+    // tables. A concurrent mutation between two table reads can no longer
+    // split the archive across two database states.
+    await input.database.sqlite.exec('BEGIN');
+    try {
+      for (const spec of EXPORTED_TABLES) {
+        counts.set(spec.table, await writeTable(tempDir, input.database, spec));
+      }
+      await input.database.sqlite.exec('COMMIT');
+    } catch (error) {
+      await input.database.sqlite.exec('ROLLBACK');
+      throw error;
     }
 
     const manifest = {
@@ -168,9 +348,12 @@ export async function buildProfileExportArchive(
       exportedAt: new Date().toISOString(),
       profile: input.profile,
       schemaVersion: input.database.diagnostics().schemaVersion,
+      /** SEC-02: every table was read inside one SQLite snapshot transaction. */
+      snapshotTransaction: true,
       tables: EXPORTED_TABLES.map((spec) => ({
         table: spec.table,
         rows: counts.get(spec.table) ?? 0,
+        columns: [...spec.columns],
       })),
       excluded: EXCLUDED_TABLES,
       redactions: REDACTIONS,
@@ -206,7 +389,7 @@ async function writeTable(
   database: AppDatabase,
   spec: TableSpec,
 ): Promise<number> {
-  const columns = spec.columns?.join(', ') ?? '*';
+  const columns = spec.columns.join(', ');
   const statement = database.sqlite.prepare(`SELECT ${columns} FROM ${spec.table} ORDER BY rowid`);
   const outPath = join(tempDir, `${spec.table}.jsonl`);
   const out = createWriteStream(outPath, { encoding: 'utf8' });

@@ -34,6 +34,8 @@
     "docs:build": "node scripts/docs-build.mjs",
     "docs:sync": "node scripts/docs-sync.mjs",
     "docs:sync:check": "node scripts/docs-sync.mjs --check",
+    "milestone:gates": "node scripts/check-milestone-gates.mjs",
+    "milestone:gates:check": "node scripts/check-milestone-gates.mjs --check && node scripts/check-milestone-gates.mjs --self-test",
     "docs:site": "pnpm --filter @neotavern/docs start",
     "docs:site:build": "node scripts/docs-sync.mjs && pnpm --filter @neotavern/docs build",
     "docs:translations": "pnpm --filter @neotavern/docs write-translations",
