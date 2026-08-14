@@ -80,7 +80,23 @@
           "date": "2026-08-14",
           "reason": "Limited waiver per ТЗ Этап 1 exit criteria ('P1 either closed or covered by a limited ADR waiver until cutover'). SEC-02 is satisfied for the current model: the export is allowlist-only (entity + per-table column allowlist), snapshot-transactional and secret-redacted, and the legacy model holds no per-profile rows to leak — the selected profile is the whole data set. Per-profile scoping requires per-profile foreign keys in the canonical schema; tracked in M4 blockingIssues. Waiver expires at M4 cutover, when the canonical export must filter by profile."
         }
-      ]
+      ],
+      "acceptanceProposal": {
+        "proposedAcceptedCommit": "bb283b7",
+        "proposedBy": "agent (round 34)",
+        "date": "2026-08-14",
+        "exitCriteriaMap": [
+          "1 logical profile export -> apps/server/src/lib/profileExport.ts + apps/server/test/profileExport.spec.ts (11 tests: sentinels, allowlist vs PRAGMA table_info, snapshot transaction, rollback, no DB snapshot)",
+          "2 SecretStore + PortableEncryptedSecretStore + migration -> apps/server/src/lib/secretStore.ts + packages/secret-store + apps/server/test/secretStore.spec.ts (plaintext never in DB/WAL, portable/env/session flows, orphan-free delete)",
+          "3 SSRF-safe network broker -> apps/plugin-runtime/src/host/networkPool.ts + socketHandles.ts + memoryHost.ts (verified-IP connect, post-connect remoteAddress, IPv6/multicast/link-local classifier) + memoryHost.test.ts (115) + networkPool.test.ts (21) + socketHandles.test.ts (16)",
+          "4 streaming byte budgets / backpressure -> NETWORK_INFLIGHT_LIMIT per-plugin + global budgets + bounded WS frames + bounded gzip/deflate/br decompression (gzip-bomb proof)",
+          "5 mandatory plugin signature/digest verification -> apps/server/src/lib/packageTrust.ts + packageIntegrity.ts (Ed25519 + per-file sha256, fail-closed, install-time + activation/startup re-verify, recovery journal) + packageTrust.test.ts + packageIntegrity.spec.ts (9)",
+          "6 maintenance lock for restore -> restore runs only under global maintenance mode; mutations rejected with MAINTENANCE_MODE (M1 Wave 1)",
+          "7 compatibility authority / VFS isolation tests -> ARC-11 suite: COMPATIBILITY.md authority map + router confinement + settings namespace isolation + scoped VFS wiring (b5e9add)",
+          "8 regression/security tests -> full suites: apps/server 597/597, apps/plugin-runtime 386/386, typecheck, lint, prettier, docs:check, milestone-gates self-test (round 34 rerun)"
+        ],
+        "verdictNeeded": "Acceptance is the human verdict: set status=accepted, acceptedCommit=<proposed>, acceptedBy=<name>; the gate then passes for M1 (single waived non-P0 blocker)."
+      }
     },
     {
       "id": "M2-kernel-golden",
