@@ -117,6 +117,29 @@ export async function registerSecretRoutes(app: TypedApp, ctx: AppContext): Prom
     '/api/v2/providers/:id/secrets/:secretId',
     { schema: { params: secretParams, response: { 200: AckSchema } } },
     async (req) => {
+      // SEC-01 owner-aware delete: read the row's SAVED reference first and
+      // remove the store value BEFORE the row. A failed store delete (locked
+      // or switched backend) leaves the DB row in place, so the reference
+      // survives for a retry — the value can never orphan behind a deleted
+      // row. `deleteRef` routes to the backend the reference itself names, so
+      // a `portable:` value is revoked even after a restart into session mode.
+      const full = await secrets.getFullById(req.params.id, req.params.secretId);
+      if (!full) {
+        throw new AppError({
+          code: ErrorCodes.PROVIDER_SECRET_NOT_FOUND,
+          params: { secretId: req.params.secretId },
+        });
+      }
+      const ref = full.valueRef ?? full.value;
+      if (ref) {
+        try {
+          await ctx.secrets.deleteRef(ref);
+        } catch (error) {
+          const mapped = toSecretStoreAppError(error);
+          if (mapped) throw mapped;
+          throw error;
+        }
+      }
       const deleted = await secrets.delete(req.params.id, req.params.secretId);
       if (!deleted) {
         throw new AppError({
@@ -124,10 +147,6 @@ export async function registerSecretRoutes(app: TypedApp, ctx: AppContext): Prom
           params: { secretId: req.params.secretId },
         });
       }
-      // SEC-01: the DB row is gone, so the stored value in the SecretStore is
-      // an orphan — remove it too (a no-op on env/read-only backends).
-      const namespace = ctx.secrets.providerNamespace(req.params.id);
-      await ctx.secrets.deleteValue(namespace, req.params.secretId);
       return { ok: true };
     },
   );

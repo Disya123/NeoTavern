@@ -138,6 +138,27 @@ export async function registerPluginSecretRoutes(
     async (request) => {
       requireCapability(request.params.id, 'secrets.manageOwn');
       const scope = request.query.scope as PluginSecretScope;
+      // SEC-01 owner-aware delete by the SAVED reference FIRST (same contract
+      // as provider secrets): a failed store delete leaves the row in place
+      // so the reference survives for a retry, and `deleteRef` revokes the
+      // value from the backend the reference itself names.
+      const entry = secrets.get(request.params.id, scope, request.params.key);
+      if (!entry) {
+        throw new AppError({
+          code: ErrorCodes.NOT_FOUND,
+          params: { pluginId: request.params.id, scope, key: request.params.key },
+        });
+      }
+      const ref = entry.valueRef ?? entry.value;
+      if (ref) {
+        try {
+          await ctx.secrets.deleteRef(ref);
+        } catch (error) {
+          const mapped = toSecretStoreAppError(error);
+          if (mapped) throw mapped;
+          throw error;
+        }
+      }
       const deleted = secrets.delete(request.params.id, scope, request.params.key);
       if (!deleted) {
         throw new AppError({
@@ -145,10 +166,6 @@ export async function registerPluginSecretRoutes(
           params: { pluginId: request.params.id, scope, key: request.params.key },
         });
       }
-      // SEC-01: drop the stored value for the deleted reference too, so the
-      // store keeps no orphaned plugin secrets (no-op on env/read-only).
-      const id = ctx.secrets.pluginSecretId(scope, request.params.key);
-      await ctx.secrets.deleteValue(`plugin:${request.params.id}`, id);
       return { ok: true };
     },
   );

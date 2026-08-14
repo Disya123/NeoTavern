@@ -41,6 +41,12 @@ export interface SocketRegistryDeps {
   checkDestination(host: string, pluginId: string): Promise<string[]>;
   /** §29.1.4 bind policy: throws unless the plugin may bind the host. */
   checkBind(host: string, pluginId: string): void;
+  /**
+   * §SEC-04 wall-clock bound for a WebSocket upgrade response head. Defaults
+   * to `WS_HANDSHAKE_TIMEOUT_MS`; a peer that never completes the handshake
+   * is torn down instead of holding the handle open indefinitely.
+   */
+  wsHandshakeTimeoutMs?: number;
 }
 
 interface RingHandle {
@@ -177,6 +183,17 @@ export interface WsServerFrame {
  * memory — the client never buffers a huge declared frame to full length.
  */
 export const WS_MAX_FRAME_BYTES = NETWORK_MAX_BODY_BYTES;
+
+/**
+ * SEC-04 bound for the WebSocket upgrade response head. A peer that streams
+ * an incomplete handshake (no `\r\n\r\n`) past this size is refused instead
+ * of letting `Buffer.concat` accumulate without limit — a "slowloris"-style
+ * incomplete header cannot grow memory or hold the handle open.
+ */
+export const WS_MAX_HANDSHAKE_BYTES = 16 * 1024;
+
+/** SEC-04 wall-clock bound to receive the complete upgrade response head. */
+export const WS_HANDSHAKE_TIMEOUT_MS = 10_000;
 
 export type WsParseResult = { frame: WsServerFrame; rest: Buffer } | { tooLarge: true } | null;
 
@@ -443,8 +460,39 @@ export function createSocketRegistry(deps: SocketRegistryDeps): SocketRegistry {
       let upgradeRemainder = Buffer.alloc(0);
       await new Promise<void>((resolve, reject) => {
         let buffer = Buffer.alloc(0);
+        // SEC-04: the upgrade response head is bounded in SIZE and in
+        // WALL-CLOCK TIME. A peer that streams an incomplete `\r\n\r\n`
+        // forever can neither grow memory (WS_MAX_HANDSHAKE_BYTES) nor keep
+        // the handle and its slot occupied indefinitely (timeout).
+        const timer = setTimeout(() => {
+          cleanup();
+          socket.destroy();
+          void closeHandle(handle.id);
+          reject(
+            new BrokerCallError('NETWORK_DESTINATION_DENIED', {
+              message: 'websocket upgrade timed out',
+              details: {
+                host: parsed.hostname,
+                timeoutMs: deps.wsHandshakeTimeoutMs ?? WS_HANDSHAKE_TIMEOUT_MS,
+              },
+            }),
+          );
+        }, deps.wsHandshakeTimeoutMs ?? WS_HANDSHAKE_TIMEOUT_MS);
+        timer.unref?.();
         const onData = (chunk: Buffer): void => {
           buffer = Buffer.concat([buffer, chunk]);
+          if (buffer.byteLength > WS_MAX_HANDSHAKE_BYTES) {
+            cleanup();
+            socket.destroy();
+            void closeHandle(handle.id);
+            reject(
+              new BrokerCallError('NETWORK_DESTINATION_DENIED', {
+                message: 'websocket upgrade head too large',
+                details: { host: parsed.hostname, maxBytes: WS_MAX_HANDSHAKE_BYTES },
+              }),
+            );
+            return;
+          }
           const headEnd = buffer.indexOf('\r\n\r\n');
           if (headEnd === -1) return; // response head still incomplete
           cleanup();
@@ -497,6 +545,7 @@ export function createSocketRegistry(deps: SocketRegistryDeps): SocketRegistry {
           );
         };
         const cleanup = (): void => {
+          clearTimeout(timer);
           socket.removeListener('data', onData);
           socket.removeListener('error', onError);
         };

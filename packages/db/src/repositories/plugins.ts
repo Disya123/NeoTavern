@@ -264,4 +264,53 @@ export class PluginRepository {
     });
     return transaction();
   }
+
+  /**
+   * Restore a registry row VERBATIM (crash-recovery journal rollback, SEC-05):
+   * every column is written back from the entry, including `enabled`,
+   * `installedAt`, `updatedAt`, `lastErrorCode`, grants and trust state. Used
+   * only by `recoverInterruptedInstalls` to roll an interrupted update back to
+   * the previous version's registry state — the business `install()` would
+   * re-derive grants/enabled and could not reproduce the row.
+   */
+  restoreEntry(entry: PluginRegistryEntry): void {
+    this.sqlite
+      .prepare(
+        `INSERT INTO plugin_registry (
+           id, name, version, enabled, manifest, permissions,
+           granted_permissions, installed_at, updated_at, last_error_code,
+           source, dependencies, trust_state, publisher_key_id
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           name = excluded.name,
+           version = excluded.version,
+           enabled = excluded.enabled,
+           manifest = excluded.manifest,
+           permissions = excluded.permissions,
+           granted_permissions = excluded.granted_permissions,
+           installed_at = excluded.installed_at,
+           updated_at = excluded.updated_at,
+           last_error_code = excluded.last_error_code,
+           source = excluded.source,
+           dependencies = excluded.dependencies,
+           trust_state = excluded.trust_state,
+           publisher_key_id = excluded.publisher_key_id`,
+      )
+      .run(
+        entry.id,
+        entry.name,
+        entry.version,
+        entry.enabled ? 1 : 0,
+        toJson(entry.manifest),
+        toJson(entry.requestedPermissions),
+        toJson(entry.grantedPermissions),
+        entry.installedAt,
+        entry.updatedAt,
+        entry.lastErrorCode,
+        entry.source ? toJson(entry.source) : null,
+        entry.dependencies && entry.dependencies.length > 0 ? toJson(entry.dependencies) : null,
+        entry.trust,
+        entry.publisherKeyId,
+      );
+  }
 }

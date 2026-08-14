@@ -9,13 +9,22 @@
  * pre-migration plaintext rows are imported at bootstrap, and backups /
  * exports never contain secret values.
  */
-import { readdir, readFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
 import { createAppDatabase } from '@neotavern/db';
-import { UnavailableSecretStore } from '@neotavern/secret-store';
+import { createLogger } from '@neotavern/shared';
+import {
+  FileEncryptedSecretStore,
+  MemorySecretStore,
+  UnavailableSecretStore,
+} from '@neotavern/secret-store';
+import { createSecretStoreHandleForBackend } from '../src/lib/secretStore.js';
 import { createTestApp } from './helpers.js';
 import type { TypedApp } from '../src/types.js';
+
+const logger = createLogger({ level: 'error' });
 
 let providerCounter = 0;
 
@@ -222,6 +231,45 @@ describe('SEC-01: plugin secrets are stored out-of-band', () => {
     // SEC-01: the stored value is removed with the reference — nothing orphaned.
     expect(await secrets.resolve(entry!.valueRef!)).toBeNull();
   });
+
+  it('revokes plugin secret values when the plugin is uninstalled (cascade, SEC-01)', async () => {
+    const { app, database, secrets } = await createTestApp({ allowSecretsExposure: true });
+    const pluginId = 'test.sec01.uninstall';
+    await database.repos.plugins.install({
+      id: pluginId,
+      name: 'sec01-uninstall',
+      version: '1.0.0',
+      manifest: {
+        id: pluginId,
+        name: 'sec01-uninstall',
+        version: '1.0.0',
+        apiVersion: 2,
+        requiredCapabilities: [{ name: 'secrets.manageOwn' }],
+      },
+      requestedPermissions: ['secrets.manageOwn'],
+      trust: 'locally-trusted',
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/api/v2/plugins/${pluginId}/activate`,
+      payload: { grantedPermissions: ['secrets.manageOwn'] },
+    });
+    await app.inject({
+      method: 'PUT',
+      url: `/api/v2/plugins/${pluginId}/secrets?scope=workspace`,
+      payload: { key: 'token', value: 'sk-uninstall-token' },
+    });
+    const entry = database.repos.pluginSecrets.get(pluginId, 'workspace', 'token');
+    expect(entry?.valueRef).toMatch(/^session:plugin:/u);
+    expect(await secrets.resolve(entry!.valueRef!)).toBe('sk-uninstall-token');
+
+    const del = await app.inject({ method: 'DELETE', url: `/api/v2/plugins/${pluginId}` });
+    expect(del.statusCode, del.payload).toBe(200);
+
+    // The cascade removed the rows AND revoked the values — nothing orphaned.
+    expect(database.repos.pluginSecrets.list(pluginId)).toEqual([]);
+    expect(await secrets.resolve(entry!.valueRef!)).toBeNull();
+  });
 });
 
 describe('SEC-01: legacy plaintext import', () => {
@@ -289,5 +337,83 @@ describe('SEC-01: backups and exports exclude secrets', () => {
     const exported = await app.inject({ method: 'GET', url: '/api/v2/profiles/export' });
     expect(exported.statusCode, exported.payload.slice(0, 200)).toBe(200);
     expect(exported.rawPayload.toString('latin1')).not.toContain('sk-export-sentinel-0x2');
+  });
+
+  it('revokes every SecretStore value when the provider is deleted (cascade, SEC-01)', async () => {
+    const { app, database, secrets } = await createTestApp();
+    const providerId = await makeProvider(app);
+    await app.inject({
+      method: 'POST',
+      url: `/api/v2/providers/${providerId}/secrets`,
+      payload: { value: 'sk-cascade-1', label: 'a' },
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/api/v2/providers/${providerId}/secrets`,
+      payload: { value: 'sk-cascade-2', label: 'b' },
+    });
+    const refs = await database.repos.providerSecrets.listRefsByProvider(providerId);
+    expect(refs).toHaveLength(2);
+    expect(refs.every((ref) => /^session:/.test(ref))).toBe(true);
+
+    const del = await app.inject({ method: 'DELETE', url: `/api/v2/providers/${providerId}` });
+    expect(del.statusCode, del.payload).toBe(200);
+
+    // The cascade deleted the rows AND revoked the stored values — no
+    // orphaned secret survives behind a deleted reference.
+    expect(await database.repos.providerSecrets.listRefsByProvider(providerId)).toEqual([]);
+    for (const ref of refs) {
+      expect(await secrets.resolve(ref)).toBeNull();
+    }
+  });
+
+  it('keeps the DB row when the store revocation fails — the reference survives for a retry (SEC-01)', async () => {
+    const { app, database, secrets } = await createTestApp({
+      secretMode: 'portable',
+      secretPassphrase: 'test-passphrase',
+    });
+    const providerId = await makeProvider(app);
+    const created = await app.inject({
+      method: 'POST',
+      url: `/api/v2/providers/${providerId}/secrets`,
+      payload: { value: 'sk-locked-cleanup', label: 'x' },
+    });
+    const secretId = (created.json() as { id: string }).id;
+    const ref = await database.repos.providerSecrets.getActiveReference(providerId);
+    expect(ref).toMatch(/^portable:/u);
+
+    // Lock the portable store: the revocation must fail, the DELETE must NOT
+    // remove the DB row (that would orphan the value behind a lost ref).
+    const backend = secrets.backend as FileEncryptedSecretStore;
+    await backend.lock();
+    const del = await app.inject({
+      method: 'DELETE',
+      url: `/api/v2/providers/${providerId}/secrets/${secretId}`,
+    });
+    expect(del.statusCode, del.payload).toBe(422);
+    expect(database.repos.providerSecrets.getFullById(providerId, secretId)).not.toBeNull();
+  });
+
+  it('revokes a portable value by its SAVED ref even after a restart into session mode (owner-aware, SEC-01)', async () => {
+    // Phase 1: the value is stored by the PORTABLE backend (secrets.enc file).
+    const dir = await mkdtemp(join(tmpdir(), 'neotavern-secret-owner-'));
+    const file = join(dir, 'secrets.enc');
+    const portable = new FileEncryptedSecretStore(file);
+    await portable.create('test-passphrase');
+    const handle = createSecretStoreHandleForBackend(portable, portable, logger);
+    const ref = await handle.storeValue('provider:p1', 'rec-1', 'sk-portable-owner');
+    expect(ref).toMatch(/^portable:/u);
+    expect(await handle.resolve(ref)).toBe('sk-portable-owner');
+
+    // Phase 2: the process restarted into SESSION mode — the default backend
+    // is now memory, but the config still knows the portable file. The old
+    // `deleteValue(namespace, id)` hit only the session store and orphaned
+    // the value; `deleteRef` must route to the backend the ref names.
+    const session = new MemorySecretStore();
+    const restarted = createSecretStoreHandleForBackend(session, portable, logger);
+    expect(await restarted.deleteRef(ref)).toBe(true);
+    expect(await session.has('provider:p1', 'rec-1')).toBe(false);
+    expect(await restarted.resolve(ref)).toBeNull();
+    await rm(dir, { recursive: true, force: true });
   });
 });

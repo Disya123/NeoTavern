@@ -257,7 +257,10 @@ export class FileEncryptedSecretStore implements SecretStore {
   }
 
   async delete(namespace: string, id: string): Promise<boolean> {
-    if (!this.isAvailable()) return false;
+    // Fail-closed: when the store is locked the caller cannot confirm the
+    // value was revoked — surface the error instead of a silent no-op, so
+    // secret cleanup keeps the DB reference for a retry (SEC-01).
+    this.assertUnlocked();
     let removed = false;
     await this.enqueue(async () => {
       const scope = this.payload!.records[namespace];

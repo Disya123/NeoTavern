@@ -15,23 +15,31 @@
  *   before this build, or a manually placed directory) is also refused: an
  *   unknown file set must never silently run.
  *
- * Install recovery journal: `install-journal.json` records the phases of a
- * package promotion (staging → committed / rolled_back). On startup,
- * `recoverInterruptedInstalls` scans the plugins directory: a journal that is
- * not `committed` means a crash between the rename and the registry write —
- * the half-promoted package and any `.incoming-*` / `.rollback-*` leftovers
- * are removed so the next install starts from a clean state.
+ * Install recovery journal (v2): `install-journal.json` is written durably
+ * BEFORE the first filesystem mutation of a promotion and records the full
+ * rollback contract — the new version, the previous version, the exact
+ * `.incoming-*` / `.rollback-*` paths, and the previous registry row (or
+ * `null` for a fresh install). On startup `recoverInterruptedInstalls`
+ * restores a CONSISTENT database + filesystem pair from every intermediate
+ * crash state:
+ *   - an update interrupted after the old package was moved to `.rollback-*`
+ *     is rolled back to the previous version on disk AND in the registry —
+ *     the crash can never leave both versions deleted;
+ *   - a fresh install interrupted after the registry write is rolled back to
+ *     "not installed" (row + half-promoted files removed);
+ *   - a committed journal is dropped as completed.
  */
 import { createHash } from 'node:crypto';
-import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { open, mkdir, readdir, readFile, rename, rm, stat } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import type { PluginRegistryEntry } from '@neotavern/db';
 import { AppError, ErrorCodes, type Logger } from '@neotavern/shared';
 import { collectFileDigests, verifyPackageTrust } from './packageTrust.js';
 
 export const INSTALLED_DIGESTS_FILE = 'installed-digests.json';
 export const INSTALL_JOURNAL_FILE = 'install-journal.json';
 const DIGESTS_FORMAT = 'neotavern.installed-digests.v1';
-const JOURNAL_FORMAT = 'neotavern.install-journal.v1';
+const JOURNAL_FORMAT = 'neotavern.install-journal.v2';
 
 export interface InstalledDigestsRecord {
   format: typeof DIGESTS_FORMAT;
@@ -41,23 +49,72 @@ export interface InstalledDigestsRecord {
   recordedAt: string;
 }
 
+/**
+ * Durable install journal (v2). Written BEFORE the first mutation of a
+ * promotion and updated to `committed` only after the registry write, so a
+ * crash at ANY point leaves enough information to restore the last-known-good
+ * pair (files + registry row).
+ */
 export interface InstallJournalEntry {
   format: typeof JOURNAL_FORMAT;
   pluginId: string;
+  /** The version being promoted. */
   version: string;
+  /** The version being replaced, or null for a fresh install. */
+  previousVersion: string | null;
+  /** The exact paths of the promotion (v2: recovery never guesses names). */
+  paths: {
+    /** Final package directory (`<pluginRoot>/package`). */
+    package: string;
+    /** Staged incoming directory (`.incoming-*`). */
+    incoming: string;
+    /** Previous package parked for rollback (`.rollback-*`), null on fresh install. */
+    rollback: string | null;
+  };
+  /** The registry state to restore on an interrupted promotion. */
+  registry: {
+    /** The full previous registry row, or null for a fresh install. */
+    previous: PluginRegistryEntry | null;
+  };
   state: 'staging' | 'committed' | 'rolled_back';
   updatedAt: string;
 }
 
-/** Write a file atomically (temp + rename on the same volume). */
+/**
+ * Minimal registry surface the recovery needs to restore a consistent
+ * database + filesystem pair (the server passes the plugins repository).
+ */
+export interface InstallRecoveryRepo {
+  /** Restore a registry row verbatim (crash rollback of an update). */
+  restoreEntry(entry: PluginRegistryEntry): void;
+  /** Remove a registry row (crash rollback of a fresh install). */
+  delete(id: string): boolean;
+}
+
+/** Write a file atomically with fsync (temp + fsync + rename + dir fsync). */
 async function writeFileAtomic(path: string, content: string): Promise<void> {
   const tmp = `${path}.tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  await writeFile(tmp, content, 'utf8');
+  const handle = await open(tmp, 'w');
+  try {
+    await handle.writeFile(content, 'utf8');
+    await handle.sync(); // the journal must be durable before any mutation
+  } finally {
+    await handle.close().catch(() => undefined);
+  }
   try {
     await rename(tmp, path);
   } catch (cause) {
     await rm(tmp, { force: true }).catch(() => undefined);
     throw cause;
+  }
+  // fsync the parent directory so the rename itself is durable (best effort —
+  // directory fsync is not supported on all platforms/filesystems).
+  try {
+    const dir = await open(join(path, '..'), 'r');
+    await dir.sync().catch(() => undefined);
+    await dir.close().catch(() => undefined);
+  } catch {
+    // best effort
   }
 }
 
@@ -193,12 +250,26 @@ export async function ensureInstalledIntegrity(
 /** Record an install phase durably (idempotent per plugin root). */
 export async function writeInstallJournal(
   pluginRoot: string,
-  entry: { pluginId: string; version: string; state: InstallJournalEntry['state'] },
+  entry: {
+    pluginId: string;
+    version: string;
+    previousVersion?: string | null;
+    paths?: InstallJournalEntry['paths'];
+    registry?: InstallJournalEntry['registry'];
+    state: InstallJournalEntry['state'];
+  },
 ): Promise<void> {
   const journal: InstallJournalEntry = {
     format: JOURNAL_FORMAT,
     pluginId: entry.pluginId,
     version: entry.version,
+    previousVersion: entry.previousVersion ?? null,
+    paths: entry.paths ?? {
+      package: join(pluginRoot, 'package'),
+      incoming: '',
+      rollback: null,
+    },
+    registry: entry.registry ?? { previous: null },
     state: entry.state,
     updatedAt: new Date().toISOString(),
   };
@@ -206,15 +277,59 @@ export async function writeInstallJournal(
   await writeFileAtomic(join(pluginRoot, INSTALL_JOURNAL_FILE), JSON.stringify(journal, null, 2));
 }
 
+async function exists(path: string): Promise<boolean> {
+  try {
+    const info = await stat(path);
+    return info.isDirectory() || info.isFile();
+  } catch {
+    return false;
+  }
+}
+
+/** Read a v2 journal, falling back to a legacy v1 shape (no paths/registry). */
+function readJournal(journalPath: string): Promise<InstallJournalEntry | null> {
+  return readFile(journalPath, 'utf8')
+    .then((raw) => {
+      const parsed: unknown = JSON.parse(raw) as unknown;
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null;
+      const value = parsed as Partial<InstallJournalEntry>;
+      if (typeof value.pluginId !== 'string' || typeof value.state !== 'string') return null;
+      if (value.format === JOURNAL_FORMAT && value.paths && value.registry) {
+        return value as InstallJournalEntry;
+      }
+      // Legacy v1 journal (no paths/registry): recover conservatively.
+      const pluginRoot = dirname(journalPath);
+      return {
+        format: JOURNAL_FORMAT,
+        pluginId: value.pluginId,
+        version: typeof value.version === 'string' ? value.version : 'unknown',
+        previousVersion: null,
+        paths: { package: join(pluginRoot, 'package'), incoming: '', rollback: null },
+        registry: { previous: null },
+        state: value.state as InstallJournalEntry['state'],
+        updatedAt: typeof value.updatedAt === 'string' ? value.updatedAt : '',
+      };
+    })
+    .catch(() => null); // no journal — nothing to recover
+}
+
 /**
- * Startup recovery (SEC-05): scan the plugins directory for interrupted
- * installs — a journal that is not `committed` means the process crashed
- * between staging and the registry write. The half-promoted package and any
- * `.incoming-*` / `.rollback-*` leftovers are removed so a retried install
- * starts clean; committed journals are dropped as completed.
+ * Startup recovery (SEC-05): restore a CONSISTENT database + filesystem pair
+ * from every intermediate crash state of a package promotion.
+ *
+ * The v2 journal is written BEFORE the first mutation and carries the exact
+ * `.incoming-*` / `.rollback-*` paths plus the previous registry row, so:
+ *   - an UPDATE interrupted after the old package was parked in `.rollback-*`
+ *     is rolled back to the previous version on disk AND in the registry
+ *     (recovery never deletes both versions — the user's exact failure mode);
+ *   - a FRESH INSTALL interrupted after the registry write is rolled back to
+ *     "not installed" (row removed, half-promoted files removed);
+ *   - a crash before ANY mutation (no incoming, no rollback) leaves the
+ *     previous install untouched — the journal is simply dropped.
  */
 export async function recoverInterruptedInstalls(
   pluginsDir: string,
+  repo: InstallRecoveryRepo,
   logger: Logger,
 ): Promise<void> {
   let pluginIds: string[];
@@ -229,51 +344,97 @@ export async function recoverInterruptedInstalls(
     if (pluginId.startsWith('.')) continue; // never touch dot-scratch dirs
     const pluginRoot = join(pluginsDir, pluginId);
     const journalPath = join(pluginRoot, INSTALL_JOURNAL_FILE);
-    let journal: InstallJournalEntry | null = null;
-    try {
-      const parsed: unknown = JSON.parse(await readFile(journalPath, 'utf8')) as unknown;
-      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-        const value = parsed as Partial<InstallJournalEntry>;
-        if (value.format === JOURNAL_FORMAT && typeof value.state === 'string') {
-          journal = value as InstallJournalEntry;
-        }
-      }
-    } catch {
-      journal = null; // no journal — nothing to recover
-    }
+    const journal = await readJournal(journalPath);
     if (journal === null) continue;
     if (journal.state === 'committed') {
       // Completed install: drop the journal marker.
       await rm(journalPath, { force: true }).catch(() => undefined);
       continue;
     }
-    // Interrupted: state is staging or rolled_back. Remove the half-promoted
-    // package (no registry row points at it) and the journal.
-    logger.warn(
-      `[plugin-install] recovering interrupted install of ${pluginId}@${journal.version} ` +
-        `(journal state: ${journal.state}) — removing the half-promoted package`,
-    );
-    await rm(join(pluginRoot, 'package'), { recursive: true, force: true }).catch(() => undefined);
+    const { paths } = journal;
+    const incomingExists = paths.incoming !== '' && (await exists(paths.incoming));
+    const rollbackExists = paths.rollback !== null && (await exists(paths.rollback));
+    if (!incomingExists && !rollbackExists) {
+      // Crash before ANY mutation: the previous install (files and registry
+      // row) is still the last-known-good state — drop the journal, touch
+      // nothing.
+      logger.warn(
+        `[plugin-install] dropping stale install journal of ${pluginId}@${journal.version} ` +
+          `(no promotion mutations were observed)`,
+      );
+      await rm(journalPath, { force: true }).catch(() => undefined);
+      continue;
+    }
+    if (rollbackExists) {
+      // UPDATE interrupted: the old version is parked in `.rollback-*`.
+      // Remove the half-promoted new package (it must not shadow the
+      // restored version), move the old one back, and restore the previous
+      // registry row.
+      logger.warn(
+        `[plugin-install] rolling back interrupted update of ${pluginId} ` +
+          `${journal.previousVersion ?? '?'} -> ${journal.version} (journal state: ${journal.state})`,
+      );
+      await rm(paths.package, { recursive: true, force: true }).catch(() => undefined);
+      await rm(paths.incoming, { recursive: true, force: true }).catch(() => undefined);
+      await rename(paths.rollback, paths.package).catch((error) => {
+        logger.error(
+          `[plugin-install] could not restore ${pluginId} from rollback: ${String(error)}`,
+        );
+      });
+      if (journal.registry.previous) {
+        repo.restoreEntry(journal.registry.previous);
+      }
+    } else {
+      // FRESH INSTALL interrupted: nothing to restore — remove the
+      // half-promoted files and any registry row the promotion may have
+      // written before the crash.
+      logger.warn(
+        `[plugin-install] removing interrupted fresh install of ${pluginId}@${journal.version} ` +
+          `(journal state: ${journal.state})`,
+      );
+      await rm(paths.package, { recursive: true, force: true }).catch(() => undefined);
+      await rm(paths.incoming, { recursive: true, force: true }).catch(() => undefined);
+      repo.delete(pluginId);
+    }
     await rm(journalPath, { force: true }).catch(() => undefined);
   }
-  // Clean any scratch leftovers at the plugins-dir level.
+  // Plugins-dir-level scratch leftovers (staged dirs / uninstall removals).
   for (const entry of await readdir(pluginsDir, { withFileTypes: true }).catch(() => [])) {
     if (entry.name.startsWith('.incoming-') || entry.name.startsWith('.remove-')) {
       await rm(join(pluginsDir, entry.name), { recursive: true, force: true }).catch(() => undefined);
     }
   }
-  // Plugin-root scratch leftovers (update rollback paths).
+  // Plugin-root scratch leftovers WITHOUT a journal (the journal is the only
+  // proof of intent). A stray `.rollback-*` may be the ONLY copy of the
+  // previous version — never delete it: restore it to `package` when the
+  // package is missing, otherwise leave it and warn.
   for (const pluginId of await readdir(pluginsDir, { withFileTypes: true }).catch(() => [])) {
     if (!pluginId.isDirectory() || pluginId.name.startsWith('.')) continue;
-    const entries = await readdir(join(pluginsDir, pluginId.name), { withFileTypes: true }).catch(
-      () => [],
-    );
+    const pluginRoot = join(pluginsDir, pluginId.name);
+    if (await exists(join(pluginRoot, INSTALL_JOURNAL_FILE))) continue; // handled above
+    const entries = await readdir(pluginRoot, { withFileTypes: true }).catch(() => []);
+    const rollbacks = entries
+      .filter((entry) => entry.isDirectory() && entry.name.startsWith('.rollback-'))
+      .map((entry) => join(pluginRoot, entry.name));
+    for (const rollback of rollbacks) {
+      if (await exists(join(pluginRoot, 'package'))) {
+        logger.warn(
+          `[plugin-install] keeping stray rollback ${rollback} (no journal; ` +
+            'a package is present — deleting it could remove the only copy of a version)',
+        );
+        continue;
+      }
+      logger.warn(
+        `[plugin-install] restoring stray rollback ${rollback} to package ` +
+          '(no journal; the promotion never committed)',
+      );
+      await rename(rollback, join(pluginRoot, 'package')).catch(() => undefined);
+    }
     for (const entry of entries) {
-      if (entry.name.startsWith('.incoming-') || entry.name.startsWith('.rollback-')) {
-        await rm(join(pluginsDir, pluginId.name, entry.name), {
-          recursive: true,
-          force: true,
-        }).catch(() => undefined);
+      if (entry.isDirectory() && entry.name.startsWith('.incoming-')) {
+        await rm(join(pluginRoot, entry.name), { recursive: true, force: true }).catch(
+          () => undefined,
+        );
       }
     }
   }

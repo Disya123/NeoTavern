@@ -54,6 +54,12 @@ export interface NetworkPoolOptions {
   keepAliveMsecs?: number;
   /** Socket inactivity timeout per request. Default 10 s. */
   connectTimeoutMs?: number;
+  /**
+   * Per-response body budget (§SEC-04). Both the COMPRESSED wire bytes and
+   * the DECOMPRESSED decoder output share this cap. Default
+   * `NETWORK_MAX_BODY_BYTES`.
+   */
+  maxBodyBytes?: number;
   /** Executor-level HTTP(S) proxy URL (http:// or https://). Default none. */
   proxyUrl?: string;
 }
@@ -185,12 +191,22 @@ function readResponse(res: IncomingMessage, maxBytes: number): Promise<Response>
           : encoding === 'deflate'
             ? createInflate()
             : createBrotliDecompress();
+      // §SEC-04: BOTH sides of the budget are accounted while streaming — the
+      // COMPRESSED wire bytes read from the response and the DECOMPRESSED
+      // decoder output each share the same cap. A response whose compressed
+      // form alone exceeds the budget (e.g. a flood of concatenated members)
+      // is destroyed immediately, and a zip bomb cannot expand past the cap.
+      let compressedBytes = 0;
+      const destroyAll = (): void => {
+        truncated = true;
+        res.destroy();
+        decoder.destroy();
+      };
       decoder.on('data', (chunk: Buffer) => {
         if (!pushOutput(chunk)) {
           // Cap exceeded on the DECODED stream: destroy the response
           // immediately instead of expanding the whole payload.
-          res.destroy();
-          decoder.destroy();
+          destroyAll();
         }
       });
       decoder.on('error', fail);
@@ -198,7 +214,27 @@ function readResponse(res: IncomingMessage, maxBytes: number): Promise<Response>
       decoder.on('close', () => {
         if (truncated) buildResponse();
       });
-      res.on('data', (chunk: Buffer) => decoder.write(chunk));
+      decoder.on('drain', () => {
+        // Backpressure: `decoder.write()` below returned false, so the
+        // response was paused; resume it once the decoder's queue drains.
+        res.resume();
+      });
+      res.on('data', (chunk: Buffer) => {
+        if (truncated) return;
+        const room = maxBytes - compressedBytes;
+        if (chunk.length > room) {
+          // The compressed wire bytes alone exceed the cap — destroy now,
+          // never accumulate a body that will be discarded.
+          destroyAll();
+          return;
+        }
+        compressedBytes += chunk.length;
+        if (!decoder.write(chunk)) {
+          // The decoder's internal queue is full — pause the response until
+          // it drains instead of letting the queue grow without bound.
+          res.pause();
+        }
+      });
       res.on('end', () => decoder.end());
       res.on('error', (error) => decoder.destroy(error));
       // The decoder's own end/close/error handlers settle the promise; the
@@ -253,6 +289,7 @@ export function createNetworkPool(options: NetworkPoolOptions = {}): NetworkPool
   const maxFreeSockets = options.maxFreeSockets ?? NETWORK_POOL_MAX_FREE_SOCKETS;
   const keepAliveMsecs = options.keepAliveMsecs ?? NETWORK_POOL_KEEP_ALIVE_MS;
   const connectTimeoutMs = options.connectTimeoutMs ?? NETWORK_POOL_CONNECT_TIMEOUT_MS;
+  const maxBodyBytes = options.maxBodyBytes ?? NETWORK_MAX_BODY_BYTES;
 
   const httpAgent = new HttpAgent({
     keepAlive: true,
@@ -298,7 +335,7 @@ export function createNetworkPool(options: NetworkPoolOptions = {}): NetworkPool
               headers: { ...toPlainHeaders(init.headers), host: target.host },
               ...(isHttps ? { servername: target.hostname } : {}),
             };
-      const req = lib(requestInit, (res) => resolve(readResponse(res, NETWORK_MAX_BODY_BYTES)));
+      const req = lib(requestInit, (res) => resolve(readResponse(res, maxBodyBytes)));
       if (verified !== undefined) {
         // §SEC-03: after connect, the address the connection actually landed
         // on must be in the approved set (DNS rebinding or agent reuse cannot
@@ -343,7 +380,7 @@ export function createNetworkPool(options: NetworkPoolOptions = {}): NetworkPool
           headers: { ...toPlainHeaders(init.headers), host: target.host },
           signal: init.signal ?? undefined,
         },
-        (res) => resolve(readResponse(res, NETWORK_MAX_BODY_BYTES)),
+        (res) => resolve(readResponse(res, maxBodyBytes)),
       );
       req.on('error', reject);
       req.setTimeout(connectTimeoutMs, () => req.destroy(new Error('proxy connect timeout')));
@@ -411,7 +448,7 @@ export function createNetworkPool(options: NetworkPoolOptions = {}): NetworkPool
             createConnection: () => tls,
           },
           (res2) => {
-            readResponse(res2, NETWORK_MAX_BODY_BYTES).then((result) => {
+            readResponse(res2, maxBodyBytes).then((result) => {
               tls.destroy();
               socket.destroy();
               resolve(result);

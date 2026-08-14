@@ -181,6 +181,22 @@ export class ProviderSecretRepository {
       .where(eq(providerSecrets.providerId, providerId));
   }
 
+  /**
+   * INTERNAL: the opaque references of a provider's secrets (cascade cleanup
+   * when the provider is deleted — `provider_secrets` rows cascade with the
+   * provider, so their SecretStore values must be revoked BEFORE the rows
+   * disappear). Never serialize refs into a response.
+   */
+  async listRefsByProvider(providerId: string): Promise<string[]> {
+    const rows = await this.db
+      .select()
+      .from(providerSecrets)
+      .where(eq(providerSecrets.providerId, providerId));
+    return rows
+      .map((row) => row.valueRef ?? row.value ?? '')
+      .filter((ref) => ref.length > 0);
+  }
+
   /** INTERNAL: whether the provider has a usable (active, non-empty) key. */
   async hasActive(providerId: string): Promise<boolean> {
     const row = await this.db

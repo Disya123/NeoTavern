@@ -53,6 +53,7 @@ import {
 } from '../lib/packageArchive.js';
 import { extractTarGzArchive } from '../lib/tarballArchive.js';
 import { enforceTrustPolicy, verifyPackageTrust } from '../lib/packageTrust.js';
+import { toSecretStoreAppError } from '../lib/secretStore.js';
 import {
   INSTALL_JOURNAL_FILE,
   ensureInstalledIntegrity,
@@ -425,21 +426,26 @@ async function installFromExtractedDir(
   const finalPath = join(pluginRoot, 'package');
   await mkdir(pluginRoot, { recursive: true });
   const incomingPath = join(pluginRoot, `.incoming-${randomToken(10)}`);
-  await rename(packageRoot, incomingPath);
   let rollbackPath: string | null = null;
   if (await exists(finalPath)) {
     rollbackPath = join(pluginRoot, `.rollback-${randomToken(10)}`);
-    await rename(finalPath, rollbackPath);
   }
-
-  // ТЗ §SEC-05 recovery journal: record the promotion phase durably BEFORE
-  // the rename so a crash between staging and the registry write is detected
-  // on the next startup and the half-promoted package is cleaned up.
+  // ТЗ §SEC-05 recovery journal (v2): written durably BEFORE the first
+  // mutation, carrying the exact promotion paths and the previous registry
+  // row — a crash at ANY point lets startup recovery restore the previous
+  // version (files AND registry) instead of deleting both copies.
   await writeInstallJournal(pluginRoot, {
     pluginId: manifest.id,
     version: manifest.version,
+    previousVersion: existing?.version ?? null,
     state: 'staging',
+    paths: { package: finalPath, incoming: incomingPath, rollback: rollbackPath },
+    registry: { previous: existing ?? null },
   });
+  await rename(packageRoot, incomingPath);
+  if (rollbackPath) {
+    await rename(finalPath, rollbackPath);
+  }
 
   try {
     await rename(incomingPath, finalPath);
@@ -939,6 +945,23 @@ export async function registerPluginRoutes(app: TypedApp, ctx: AppContext): Prom
       // rev4 §J2: the sandbox receives `uninstall` and can clean up
       // long-lived state before the plugin disappears.
       ctx.events.emit('plugin.uninstalling', { pluginId: request.params.id });
+      // SEC-01 cascade: `plugin_secrets` rows cascade-delete with the registry
+      // row, so their SecretStore values must be revoked BEFORE the rows
+      // disappear — a failed revocation aborts the uninstall (the plugin and
+      // its rows stay) so the cleanup can be retried instead of orphaning
+      // values behind deleted references.
+      const secretEntries = ctx.database.repos.pluginSecrets.list(request.params.id);
+      for (const entry of secretEntries) {
+        const ref = entry.valueRef ?? entry.value;
+        if (!ref) continue;
+        try {
+          await ctx.secrets.deleteRef(ref);
+        } catch (error) {
+          const mapped = toSecretStoreAppError(error);
+          if (mapped) throw mapped;
+          throw error;
+        }
+      }
       await Promise.all([
         backendHost.deactivate(request.params.id),
         legacyHost.deactivate(request.params.id),
@@ -1161,7 +1184,9 @@ export async function registerPluginRoutes(app: TypedApp, ctx: AppContext): Prom
   app.addHook('onReady', async () => {
     // ТЗ §SEC-05: clean up installs that a crash left half-promoted BEFORE
     // any plugin is activated, then re-verify every enabled plugin's files.
-    await recoverInterruptedInstalls(ctx.paths.plugins, ctx.logger);
+    // The recovery restores the previous version's files AND registry row
+    // from the durable journal — it never deletes both copies of a plugin.
+    await recoverInterruptedInstalls(ctx.paths.plugins, ctx.database.repos.plugins, ctx.logger);
     if (!runtimeSafeMode) {
       await activateEnabledPlugins(repo.list(), backendHost, legacyHost, ctx, broker, vnextRuntime);
     }

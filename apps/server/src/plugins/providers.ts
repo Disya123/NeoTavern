@@ -31,6 +31,7 @@ import {
 } from '@neotavern/provider-sdk';
 import { Type } from '@sinclair/typebox';
 import type { FastifyReply } from 'fastify';
+import { toSecretStoreAppError } from '../lib/secretStore.js';
 import type { AppContext, TypedApp } from '../types.js';
 
 const PROVIDER_CATALOG_RESPONSE = { items: [...PROVIDER_CATALOG] };
@@ -302,6 +303,21 @@ export async function registerProviderRoutes(app: TypedApp, ctx: AppContext): Pr
       schema: { params: Type.Object({ id: IdSchema }), response: { 200: AckSchema } },
     },
     async (req) => {
+      // SEC-01 cascade: `provider_secrets` rows cascade-delete with the
+      // provider, so their SecretStore values must be revoked BEFORE the rows
+      // disappear — otherwise they orphan behind references that no longer
+      // exist. A failed revocation aborts the delete and keeps the provider
+      // (and its rows) so the cleanup can be retried.
+      const refs = await ctx.database.repos.providerSecrets.listRefsByProvider(req.params.id);
+      for (const ref of refs) {
+        try {
+          await ctx.secrets.deleteRef(ref);
+        } catch (error) {
+          const mapped = toSecretStoreAppError(error);
+          if (mapped) throw mapped;
+          throw error;
+        }
+      }
       await repo.delete(req.params.id);
       return { ok: true };
     },

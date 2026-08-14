@@ -293,4 +293,51 @@ describe('network pool verified-IP connects and bounded bodies (ТЗ §SEC-03/§
     expect(body.length).toBe(NETWORK_MAX_BODY_BYTES);
     await pool.close();
   });
+
+  it('bounds the COMPRESSED wire bytes too — wire and decoded sides share the cap (§SEC-04)', async () => {
+    // Concatenated gzip members: each member decodes to 16 bytes but carries
+    // ~39 wire bytes. The decoded total (320 B) fits a 512 B cap while the
+    // compressed total (~780 B) does not — a decoder that counted only the
+    // decoded side would return all 320 bytes, so the shorter body below is
+    // direct evidence that the wire side is capped while streaming.
+    const CAP = 512;
+    const MEMBERS = 20;
+    const member = gzipSync(
+      Buffer.from(Array.from({ length: 16 }, (_, i) => (i * 37 + 11) % 256)),
+    );
+    const wire = Buffer.concat(Array.from({ length: MEMBERS }, () => member));
+    expect(wire.byteLength).toBeGreaterThan(CAP);
+    const server = createServer((_req, res) => {
+      res.writeHead(200, { 'content-encoding': 'gzip' });
+      const chunks: Buffer[] = [];
+      for (let i = 0; i < wire.byteLength; i += 48) chunks.push(wire.subarray(i, i + 48));
+      const timer = setInterval(() => {
+        if (res.destroyed) {
+          clearInterval(timer);
+          return;
+        }
+        const chunk = chunks.shift();
+        if (chunk === undefined) {
+          clearInterval(timer);
+          res.end();
+          return;
+        }
+        res.write(chunk);
+      }, 1);
+      res.on('close', () => clearInterval(timer));
+    });
+    const port = await listen(server);
+
+    // Control: without the wire cap the whole body decodes (multi-member
+    // gzip is processed by the streaming decoder, not just the first member).
+    const full = await (await createNetworkPool().fetch(`http://127.0.0.1:${port}/`)).text();
+    expect(full.length).toBe(MEMBERS * 16);
+
+    // With the wire cap the response is cut before all members arrive.
+    const pool = createNetworkPool({ maxBodyBytes: CAP });
+    const resp = await pool.fetch(`http://127.0.0.1:${port}/`);
+    const body = await resp.text();
+    expect(body.length).toBeLessThan(MEMBERS * 16);
+    await pool.close();
+  });
 });

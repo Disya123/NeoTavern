@@ -14,6 +14,7 @@ import {
   wsAcceptHeader,
   wsParseFrame,
   WS_MAX_FRAME_BYTES,
+  WS_MAX_HANDSHAKE_BYTES,
 } from './socketHandles.js';
 
 function registry(): SocketRegistry {
@@ -428,6 +429,69 @@ describe('socket registry (§29)', () => {
       await expect(
         mismatchRegistry.websocketOpen('plugin-a', `ws://127.0.0.1:${port}/`, undefined),
       ).rejects.toMatchObject({ code: 'NETWORK_DESTINATION_DENIED' });
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+
+  it('refuses a websocket whose upgrade head exceeds the SEC-04 size bound (§SEC-04)', async () => {
+    // A peer that streams an incomplete handshake (no `\r\n\r\n`) past
+    // WS_MAX_HANDSHAKE_BYTES must be torn down instead of letting the client
+    // accumulate an unbounded response head.
+    const server = createServer((socket: Socket) => {
+      socket.on('error', () => undefined);
+      socket.on('data', () => {
+        // Stream one large chunk that never terminates the header. The write
+        // is capped below the socket high-water mark so it lands in one or a
+        // few 'data' events — the client must still refuse on the size bound.
+        socket.write(Buffer.alloc(WS_MAX_HANDSHAKE_BYTES + 1024, 0x41));
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as AddressInfo).port;
+    try {
+      const sockets = registry();
+      await expect(
+        sockets.websocketOpen('plugin-a', `ws://localhost:${port}/head`, undefined),
+      ).rejects.toMatchObject({
+        code: 'NETWORK_DESTINATION_DENIED',
+        message: 'websocket upgrade head too large',
+      });
+      // The handle slot was released — no leak behind the failed open.
+      await expect.poll(() => sockets.size()).toBe(0);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+
+  it('times out a websocket whose peer never completes the upgrade head (§SEC-04)', async () => {
+    // The TCP peer accepts the connection and reads the upgrade request but
+    // never writes a response: the handshake must fail after the configured
+    // wall-clock bound and release the handle.
+    const server = createServer((socket: Socket) => {
+      socket.on('error', () => undefined);
+      socket.on('data', () => undefined); // swallow the upgrade request
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as AddressInfo).port;
+    try {
+      const timeoutRegistry = createSocketRegistry({
+        checkDestination: async (host) => {
+          if (host !== 'localhost' && host !== '127.0.0.1') throw new Error('denied');
+          return ['127.0.0.1'];
+        },
+        checkBind: () => undefined,
+        wsHandshakeTimeoutMs: 150,
+      });
+      const started = Date.now();
+      await expect(
+        timeoutRegistry.websocketOpen('plugin-a', `ws://localhost:${port}/slow`, undefined),
+      ).rejects.toMatchObject({
+        code: 'NETWORK_DESTINATION_DENIED',
+        message: 'websocket upgrade timed out',
+      });
+      expect(Date.now() - started).toBeGreaterThanOrEqual(120);
+      await expect.poll(() => timeoutRegistry.size()).toBe(0);
     } finally {
       await new Promise((resolve) => server.close(resolve));
     }

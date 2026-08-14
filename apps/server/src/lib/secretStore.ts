@@ -51,6 +51,16 @@ export interface SecretStoreHandle {
    * was removed; callers invoke this when the referencing DB row is deleted
    * so the store keeps no orphaned secrets (SEC-01). */
   deleteValue(namespace: string, id: string): Promise<boolean>;
+  /**
+   * Owner-aware delete by the SAVED opaque reference (SEC-01). The reference
+   * names its own backend (`portable:` / `session:` / `env:`), so the value
+   * is removed from the store that actually owns it even when the process
+   * restarted with a different default backend — a `portable:` value is never
+   * orphaned just because the server now runs in session mode. Callers delete
+   * the store value FIRST and keep the DB row when this fails, so the
+   * reference is never lost before the cleanup can be retried.
+   */
+  deleteRef(ref: string): Promise<boolean>;
   /** Move pre-migration plaintext rows into the store. Returns migrated rows. */
   migrateLegacySecrets(ctx: AppContext): Promise<{ provider: number; plugin: number }>;
 }
@@ -118,6 +128,13 @@ export function createSecretStoreHandleForBackend(
     },
     async deleteValue(namespace: string, id: string): Promise<boolean> {
       return backend.delete(namespace, id);
+    },
+    async deleteRef(ref: string): Promise<boolean> {
+      const parsed = parseSecretRef(ref);
+      if (!parsed) return false;
+      const owner = ownerFor(parsed.kind, portable, backend);
+      if (!owner) return false;
+      return owner.delete(parsed.namespace, parsed.id);
     },
     async resolve(ref: string): Promise<string | null> {
       const parsed = parseSecretRef(ref);
