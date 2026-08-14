@@ -1396,6 +1396,7 @@ export const en = {
     BACKUP_FAILED: 'Backup failed.',
     RESTORE_FAILED: 'Restore failed.',
     MIGRATION_FAILED: 'A database migration failed.',
+    MAINTENANCE_MODE: 'Maintenance in progress — mutations are paused.',
     SEARCH_FAILED: 'Search failed.',
     UNKNOWN: 'Unknown error.',
   },

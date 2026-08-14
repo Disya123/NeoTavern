@@ -190,7 +190,7 @@
     {
       "source": "api/README.md",
       "target": "api/README.md",
-      "sha256": "b91015d2d2405ff36c7e85dda78f9363c86fc6c67feb339c6c1e622b1aee3f1b"
+      "sha256": "8bd506ae691b4ac4c808f48e3e6840b71f7455db19c105121057883b35df1d67"
     },
     {
       "source": "architecture/README.md",
@@ -210,7 +210,7 @@
     {
       "source": "architecture/operations-inventory.md",
       "target": "architecture/operations-inventory.md",
-      "sha256": "2d1189af84af411247a5a6172ceff4c19ef336a51c72b51f0cbf1de24cefed11"
+      "sha256": "2ca0a47734984eff4831c4e13acf02b9f642c37e935f13b760d6250aa2b7b204"
     },
     {
       "source": "architecture/portable-data.md",
@@ -240,7 +240,7 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "eb9235fc60af110bf3841ec35e95d2cd24737edebaa88f12db606a6a182ffd30"
+      "sha256": "94e51ae2cc30c2c6d4cbbbcc98c826ae5a9a72feef34afedbf16b5c2461ad15a"
     },
     {
       "source": "data/README.md",
@@ -255,7 +255,7 @@
     {
       "source": "migrations/README.md",
       "target": "migrations/README.md",
-      "sha256": "1b2922859edb7d6753f9ae4e0836836f0d8533581ee9b85a11354a27ef1a48fb"
+      "sha256": "c56ec7d1ec74cc88abbd975def0dbe1c32284ba209932e16374d5b4e7ff6260c"
     },
     {
       "source": "plugin-sdk/README.md",

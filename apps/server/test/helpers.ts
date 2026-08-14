@@ -15,6 +15,7 @@ import { createAppDatabase, type AppDatabase } from '@neotavern/db';
 import { DEFAULT_PROVIDER_TIMEOUTS, ProviderRegistry } from '@neotavern/provider-sdk';
 import { createLogger } from '@neotavern/shared';
 import { buildApp } from '../src/app.js';
+import type { MaintenanceController } from '../src/lib/maintenance.js';
 import { ensureDataDirs, resolveDataPaths, type DataPaths } from '../src/lib/paths.js';
 import { ContextStrategyRegistry } from '../src/pipeline/contextShift.js';
 import { PostProcessorRegistry } from '../src/pipeline/postProcess.js';
@@ -45,6 +46,8 @@ export interface TestAppOptions {
   pluginPublisherKeys?: string[];
   /** Reject unsigned plugin packages at install (ТЗ §SEC-05); default false. */
   pluginRequireSignature?: boolean;
+  /** Pre-built maintenance controller to share with the app (ТЗ §10.4). */
+  maintenance?: MaintenanceController;
   /** Serve the built SPA from this directory (single-process mode, NEOTA_WEB_DIR). */
   webDir?: string | null;
   /** CORS allowlist origin; defaults to the dev Vite origin. */
@@ -115,6 +118,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
       pluginRequireSignature: options.pluginRequireSignature ?? false,
       providerTimeouts: DEFAULT_PROVIDER_TIMEOUTS,
     },
+    maintenance: options.maintenance,
     logger: createLogger({ level: 'error' }),
     paths,
   });

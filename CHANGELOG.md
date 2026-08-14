@@ -3,6 +3,18 @@
 ## Unreleased
 ### Added
 
+- **Restore maintenance lock (M1 / Wave 1, ТЗ §10.4).** `POST
+  /api/v2/backups/:id/restore` now runs exclusively under a global
+  maintenance lock (`apps/server/src/lib/maintenance.ts`): while a restore is
+  in progress, new product mutations — including plugin activation — are
+  rejected with the stable `MAINTENANCE_MODE` error (503) via a Fastify
+  `onRequest` gate, and a second restore is refused. Read-only requests and
+  backup/diagnostics tooling keep working so the UI can show an honest
+  maintenance state. The lock is released on every exit path (success and
+  failure). Tests: `maintenance.test.ts` (exclusive acquire, mutation gate,
+  restore-under-lock, release after success and after failure). Capability
+  `security.restore-maintenance-lock` is now `Implemented` on
+  desktop/headless/web-client hosts (`docs/release-manifest.json`).
 - **SEC-05 — plugin package trust (M1 / Wave 1, Immediate security).**
   Publisher signature + per-file digest verification runs BEFORE consent or
   filesystem promotion: a signed package carries

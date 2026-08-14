@@ -6,7 +6,7 @@
 import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import multipart from '@fastify/multipart';
-import { ErrorCodes, randomToken } from '@neotavern/shared';
+import { AppError, ErrorCodes, randomToken } from '@neotavern/shared';
 import { EventBus } from '@neotavern/plugin-sdk';
 import {
   createAppInstance,
@@ -15,6 +15,7 @@ import {
   type TypedApp,
 } from './types.js';
 import { registerErrorHandler } from './lib/errors.js';
+import { MaintenanceController } from './lib/maintenance.js';
 import { CONTENT_SECURITY_POLICY } from './lib/security.js';
 import { isTrustedOrigin, registerRemoteAuth } from './plugins/remoteAuth.js';
 import { registerMetaRoutes } from './plugins/meta.js';
@@ -47,6 +48,7 @@ export async function buildApp(input: AppContextInput): Promise<TypedApp> {
   const ctx: AppContext = {
     ...input,
     events: input.events ?? new EventBus(),
+    maintenance: input.maintenance ?? new MaintenanceController(),
   };
   const app = createAppInstance();
 
@@ -78,6 +80,32 @@ export async function buildApp(input: AppContextInput): Promise<TypedApp> {
     reply.header('Referrer-Policy', 'no-referrer');
     reply.header('X-Frame-Options', 'SAMEORIGIN');
     return payload;
+  });
+
+  // Global maintenance gate (ТЗ §10.4): while maintenance is active (a restore
+  // holds the exclusive lock), new product mutations are rejected with the
+  // stable MAINTENANCE_MODE error. Read-only requests and maintenance tooling
+  // (backup create/list/delete, diagnostics) keep working so the UI can show
+  // an honest maintenance state. Backend-internal work (the restore itself,
+  // plugin state restoration) is repository-level and unaffected.
+  app.addHook('onRequest', async (request) => {
+    if (!ctx.maintenance.isActive()) return;
+    if (request.method === 'GET' || request.method === 'HEAD' || request.method === 'OPTIONS') {
+      return;
+    }
+    const url = (request.url.split('?')[0] ?? '').replace(/\/+$/u, '');
+    if (
+      url === '/api/v2/backups' ||
+      url.startsWith('/api/v2/backups/') ||
+      url.startsWith('/api/v2/diagnostics')
+    ) {
+      return;
+    }
+    throw new AppError({
+      code: ErrorCodes.MAINTENANCE_MODE,
+      params: { reason: 'MUTATION_BLOCKED' },
+      message: 'mutations are paused during maintenance',
+    });
   });
 
   registerErrorHandler(app, ctx.logger);

@@ -224,6 +224,19 @@
       "milestone": "M1"
     },
     {
+      "id": "security.restore-maintenance-lock",
+      "title": "Restore maintenance lock (global maintenance mode)",
+      "wireOps": [],
+      "hosts": {
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "android": "Designed",
+        "webClient": "Implemented"
+      },
+      "notes": "M1 Wave 1 (ТЗ §10.4): restore runs exclusively under a global maintenance lock (apps/server/src/lib/maintenance.ts) — while held, new product mutations are rejected with the stable MAINTENANCE_MODE error (503), plugin activation is blocked and no second restore can enter; read-only requests and backup/diagnostics tooling keep working; the lock is released on every exit path (success and failure). Full stop-the-world (suspending in-flight generations, staged data-root activation) is the M3 DATA-ACTIVATE slice.",
+      "milestone": "M1"
+    },
+    {
       "id": "ui.portable-data",
       "title": "Portable data / activation / restore",
       "wireOps": [],

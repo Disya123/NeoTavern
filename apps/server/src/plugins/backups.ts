@@ -281,24 +281,32 @@ export async function registerBackupRoutes(app: TypedApp, ctx: AppContext): Prom
       if (!sourceInfo) {
         throw new AppError({ code: ErrorCodes.RESTORE_FAILED, params: { backupId: id } });
       }
-      // Safety backup of the current database before overwriting.
-      const safety = join(
-        ctx.paths.backups,
-        `${PRE_RESTORE_PREFIX}${new Date().toISOString().replaceAll(/[:.]/g, '-')}.db`,
-      );
+      // ТЗ §10.4: restore runs exclusively under global maintenance mode —
+      // while it is held, the mutation gate rejects new product mutations and
+      // no second restore can enter. The lock is released on every exit path.
+      const releaseMaintenance = ctx.maintenance.acquire();
       try {
-        await ctx.database.backup(safety);
-        rotatePrefixedBackups(ctx.paths.backups, PRE_RESTORE_PREFIX, AUTO_BACKUP_RETENTION);
-        await ctx.database.restore(source);
-        // Apply the additive plugin-namespaces section (conflict-skip).
-        await restorePluginNamespaces(ctx, id);
-        return { restored: true, restartRequired: false };
-      } catch (cause) {
-        throw new AppError({
-          code: ErrorCodes.RESTORE_FAILED,
-          params: { backupId: id },
-          cause,
-        });
+        // Safety backup of the current database before overwriting.
+        const safety = join(
+          ctx.paths.backups,
+          `${PRE_RESTORE_PREFIX}${new Date().toISOString().replaceAll(/[:.]/g, '-')}.db`,
+        );
+        try {
+          await ctx.database.backup(safety);
+          rotatePrefixedBackups(ctx.paths.backups, PRE_RESTORE_PREFIX, AUTO_BACKUP_RETENTION);
+          await ctx.database.restore(source);
+          // Apply the additive plugin-namespaces section (conflict-skip).
+          await restorePluginNamespaces(ctx, id);
+          return { restored: true, restartRequired: false };
+        } catch (cause) {
+          throw new AppError({
+            code: ErrorCodes.RESTORE_FAILED,
+            params: { backupId: id },
+            cause,
+          });
+        }
+      } finally {
+        releaseMaintenance();
       }
     },
   );
