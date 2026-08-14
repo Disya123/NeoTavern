@@ -152,6 +152,7 @@ fn not_found(entity: &str, id: &str) -> KernelError {
     let param = match entity {
         "CHARACTER" => "characterId",
         "CHAT" => "chatId",
+        "MESSAGE" => "messageId",
         "LOREBOOK" => "lorebookId",
         "PRESET" => "presetId",
         _ => "id",
@@ -593,13 +594,237 @@ pub fn messages_list(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Kerne
 pub(crate) fn chat_exists(conn: &rusqlite::Connection, chat_id: &str) -> Result<bool, KernelError> {
     let mut stmt = conn
         .prepare("SELECT 1 FROM chats WHERE id = ?1")
-        .map_err(|e| sqlite(e, "messages_list: chat existence prepare"))?;
+        .map_err(|e| sqlite(e, "chat_exists: prepare"))?;
     let mut rows = stmt
         .query(params![chat_id])
-        .map_err(|e| sqlite(e, "messages_list: chat existence query"))?;
+        .map_err(|e| sqlite(e, "chat_exists: query"))?;
     rows.next()
-        .map_err(|e| sqlite(e, "messages_list: chat existence row"))
+        .map_err(|e| sqlite(e, "chat_exists: row"))
         .map(|row| row.is_some())
+}
+
+fn character_exists(conn: &rusqlite::Connection, character_id: &str) -> Result<bool, KernelError> {
+    let mut stmt = conn
+        .prepare("SELECT 1 FROM characters WHERE id = ?1")
+        .map_err(|e| sqlite(e, "character_exists: prepare"))?;
+    let mut rows = stmt
+        .query(params![character_id])
+        .map_err(|e| sqlite(e, "character_exists: query"))?;
+    rows.next()
+        .map_err(|e| sqlite(e, "character_exists: row"))
+        .map(|row| row.is_some())
+}
+
+/// Selects one chat (with message count) back out of the database.
+fn query_chat(conn: &rusqlite::Connection, chat_id: &str) -> Result<Option<ChatDto>, KernelError> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT c.id, c.title, c.character_id, COALESCE(m.cnt, 0), c.created_at, c.updated_at \
+             FROM chats c \
+             LEFT JOIN (SELECT chat_id, COUNT(*) AS cnt FROM messages GROUP BY chat_id) m \
+               ON m.chat_id = c.id \
+             WHERE c.id = ?1",
+        )
+        .map_err(|e| sqlite(e, "query_chat: prepare"))?;
+    let mut rows = stmt
+        .query(params![chat_id])
+        .map_err(|e| sqlite(e, "query_chat: query"))?;
+    match rows.next().map_err(|e| sqlite(e, "query_chat: read row"))? {
+        Some(row) => Ok(Some(row_to_chat(row)?)),
+        None => Ok(None),
+    }
+}
+
+/// Selects one message back out of the database, scoped to its chat.
+fn query_message(
+    conn: &rusqlite::Connection,
+    chat_id: &str,
+    message_id: &str,
+) -> Result<Option<MessageDto>, KernelError> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, chat_id, role, content, created_at, sequence, generation_run_id \
+             FROM messages WHERE id = ?1 AND chat_id = ?2",
+        )
+        .map_err(|e| sqlite(e, "query_message: prepare"))?;
+    let mut rows = stmt
+        .query(params![message_id, chat_id])
+        .map_err(|e| sqlite(e, "query_message: query"))?;
+    match rows
+        .next()
+        .map_err(|e| sqlite(e, "query_message: read row"))?
+    {
+        Some(row) => Ok(Some(row_to_message(row)?)),
+        None => Ok(None),
+    }
+}
+
+/// Returns the next message sequence for a chat: `MAX(sequence) + 1`, or 0
+/// for an empty chat. Runs inside the caller's transaction so the sequence
+/// is allocated and consumed atomically.
+fn next_message_sequence(conn: &rusqlite::Connection, chat_id: &str) -> Result<i64, StorageError> {
+    conn.query_row(
+        "SELECT COALESCE(MAX(sequence) + 1, 0) FROM messages WHERE chat_id = ?1",
+        params![chat_id],
+        |row| row.get(0),
+    )
+    .map_err(|e| StorageError::from_sqlite(e, "next_message_sequence: query"))
+}
+
+fn role_sql(role: &MessageRole) -> &'static str {
+    match role {
+        MessageRole::System => "system",
+        MessageRole::User => "user",
+        MessageRole::Assistant => "assistant",
+        MessageRole::Tool => "tool",
+    }
+}
+
+/// `chats.create` — create a chat for an existing character and return it;
+/// missing character → `CHARACTER_NOT_FOUND`. A missing title defaults to
+/// "New chat".
+pub fn chats_create(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_create_chat(request)?;
+    let character_id = req.character_id.clone();
+    if !character_exists(db.conn(), &character_id)? {
+        return Err(not_found("CHARACTER", &character_id));
+    }
+    let id = new_id();
+    let now = now();
+    let title = req.title.unwrap_or_else(|| "New chat".to_string());
+    db.transaction(|tx| {
+        tx.execute(
+            "INSERT INTO chats (id, title, character_id, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![&id, &title, &character_id, &now, &now],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "chats_create: insert"))?;
+        Ok(())
+    })?;
+    let dto = query_chat(db.conn(), &id)?.ok_or_else(|| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            "chats_create: insert succeeded but select back found no row",
+        )
+    })?;
+    validate(&dto, generated::validate_chat_dto)?;
+    encode(&dto)
+}
+
+/// `chats.update` — rename a chat; missing chat → `CHAT_NOT_FOUND`.
+pub fn chats_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_update_chat(request)?;
+    let chat_id = req.chat_id.clone();
+    let now = now();
+    let changed = db.transaction(|tx| {
+        tx.execute(
+            "UPDATE chats SET title = ?1, updated_at = ?2 WHERE id = ?3",
+            params![&req.title, &now, &chat_id],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "chats_update: update"))
+    })?;
+    if changed == 0 {
+        return Err(not_found("CHAT", &chat_id));
+    }
+    let dto = query_chat(db.conn(), &chat_id)?.ok_or_else(|| not_found("CHAT", &chat_id))?;
+    validate(&dto, generated::validate_chat_dto)?;
+    encode(&dto)
+}
+
+/// `chats.delete` — delete a chat (cascades to its messages); missing chat →
+/// `CHAT_NOT_FOUND`.
+pub fn chats_delete(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_delete_chat(request)?;
+    let changed = db.transaction(|tx| {
+        tx.execute("DELETE FROM chats WHERE id = ?1", params![&req.chat_id])
+            .map_err(|e| StorageError::from_sqlite(e, "chats_delete: delete"))
+    })?;
+    if changed == 0 {
+        return Err(not_found("CHAT", &req.chat_id));
+    }
+    let dto = ResultEmpty {};
+    validate(&dto, generated::validate_result_empty)?;
+    encode(&dto)
+}
+
+/// `chats.messages.create` — append a message to a chat; missing chat →
+/// `CHAT_NOT_FOUND`. The sequence is allocated atomically as
+/// `MAX(sequence) + 1` within the chat.
+pub fn messages_create(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_create_message(request)?;
+    let chat_id = req.chat_id.clone();
+    if !chat_exists(db.conn(), &chat_id)? {
+        return Err(not_found("CHAT", &chat_id));
+    }
+    let id = new_id();
+    let now = now();
+    let role = role_sql(&req.role);
+    let sequence = db.transaction(|tx| {
+        let sequence = next_message_sequence(tx, &chat_id)?;
+        tx.execute(
+            "INSERT INTO messages (id, chat_id, role, content, sequence, generation_run_id, created_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                &id,
+                &chat_id,
+                role,
+                &req.content,
+                sequence,
+                &req.generation_run_id,
+                &now
+            ],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "messages_create: insert"))?;
+        Ok(sequence)
+    })?;
+    let dto = query_message(db.conn(), &chat_id, &id)?.ok_or_else(|| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            "messages_create: insert succeeded but select back found no row",
+        )
+    })?;
+    debug_assert_eq!(dto.sequence, sequence);
+    validate(&dto, generated::validate_message_dto)?;
+    encode(&dto)
+}
+
+/// `chats.messages.update` — edit a message's content; missing message →
+/// `MESSAGE_NOT_FOUND` (the chat id scopes the update).
+pub fn messages_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_update_message(request)?;
+    let changed = db.transaction(|tx| {
+        tx.execute(
+            "UPDATE messages SET content = ?1 WHERE id = ?2 AND chat_id = ?3",
+            params![&req.content, &req.message_id, &req.chat_id],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "messages_update: update"))
+    })?;
+    if changed == 0 {
+        return Err(not_found("MESSAGE", &req.message_id));
+    }
+    let dto = query_message(db.conn(), &req.chat_id, &req.message_id)?
+        .ok_or_else(|| not_found("MESSAGE", &req.message_id))?;
+    validate(&dto, generated::validate_message_dto)?;
+    encode(&dto)
+}
+
+/// `chats.messages.delete` — delete a message; missing message →
+/// `MESSAGE_NOT_FOUND` (the chat id scopes the delete).
+pub fn messages_delete(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_delete_message(request)?;
+    let changed = db.transaction(|tx| {
+        tx.execute(
+            "DELETE FROM messages WHERE id = ?1 AND chat_id = ?2",
+            params![&req.message_id, &req.chat_id],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "messages_delete: delete"))
+    })?;
+    if changed == 0 {
+        return Err(not_found("MESSAGE", &req.message_id));
+    }
+    let dto = ResultEmpty {};
+    validate(&dto, generated::validate_result_empty)?;
+    encode(&dto)
 }
 
 /// `lorebooks.list` — all lorebooks (plain list per the wire contract),

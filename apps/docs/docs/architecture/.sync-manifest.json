@@ -145,12 +145,12 @@
     {
       "source": "adr/0033-desktop-local-kernel-transport.md",
       "target": "adr/0033-desktop-local-kernel-transport.md",
-      "sha256": "dd2d014ddce78664472d9a2ce4e4b536c6d0e1a9f25be9ca1c59db8d5e755d58"
+      "sha256": "87253c0f98ef415914aba72dadc1a91e36f467ee32fd54029f42c079dba64d93"
     },
     {
       "source": "adr/0034-android-local-host-jni-transport.md",
       "target": "adr/0034-android-local-host-jni-transport.md",
-      "sha256": "98fd9898abbb0492fd663e1328620a397cc4aecd07d1b2635520eaa5db862729"
+      "sha256": "e8d9021c9ea90530534cdb671a2854449a6f3ed2e451275bb210b939d7ee0719"
     },
     {
       "source": "adr/0035-desktop-remote-access.md",
@@ -180,22 +180,12 @@
     {
       "source": "adr/0040-secret-store-port-format.md",
       "target": "adr/0040-secret-store-port-format.md",
-      "sha256": "101f19c6043c8d1ed40a3a3c1909f3ed09c7a30d063aee1e239628dbbfc175d4"
-    },
-    {
-      "source": "adr/0042-m1-waiver-per-profile-export-scoping.md",
-      "target": "adr/0042-m1-waiver-per-profile-export-scoping.md",
-      "sha256": "e935adfb8f2d0e5936785b28da9d9afe0a0b053dd56e371b6cc666960918d649"
-    },
-    {
-      "source": "adr/0043-web-client-remote-only.md",
-      "target": "adr/0043-web-client-remote-only.md",
-      "sha256": "589d8d320611f2c29fc6bd1d417b9474e9563e0490a791337d64811c3e8b03b7"
+      "sha256": "75f6ba9c6432785c647f11b2de5e007c918bf13596726e15b991f56fa29098e4"
     },
     {
       "source": "adr/README.md",
       "target": "adr/README.md",
-      "sha256": "e733a921082b4f6f0e0e65ec1ab06c83d3e5d7d33a1f7b4a2f08d38b5e31674a"
+      "sha256": "22f63e8c4f40bc744f805f2e3ed871db08ebf02f78e6f69b4ae84e64d2f29709"
     },
     {
       "source": "android/README.md",
@@ -225,7 +215,7 @@
     {
       "source": "architecture/operations-inventory.md",
       "target": "architecture/operations-inventory.md",
-      "sha256": "3d358036515d9914d5df8f5339280ce2cc6c7d35880190dc425cc52c6228b955"
+      "sha256": "2ca0a47734984eff4831c4e13acf02b9f642c37e935f13b760d6250aa2b7b204"
     },
     {
       "source": "architecture/portable-data.md",
@@ -245,17 +235,17 @@
     {
       "source": "architecture/version-axes.md",
       "target": "architecture/version-axes.md",
-      "sha256": "35ea380754114143098a7c6e37316eac8ff936e6c1785dd74b0b7160e795875b"
+      "sha256": "7dcd21f6e165e4e80d8365c2230054128a83836d0e4685b8cbab4a6b904ded4f"
     },
     {
       "source": "architecture/wire-contracts.md",
       "target": "architecture/wire-contracts.md",
-      "sha256": "ed7cc1e669eabe4afdaf9e29645343e5c4b6359bda6f9a5207de5518eaf6620c"
+      "sha256": "292d39477199460f0221cfd491277643eb64cd54d6ad8cbc2fa59a2cbf6f61a4"
     },
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "8331d9be50f973eb8b7b91cdf1f3484f20664107bd1aed75858a9c8453c7291c"
+      "sha256": "301a542ac6bb42141dd84c87fdb3839937c4aca828c85e940b5c66cc69931ee2"
     },
     {
       "source": "data/README.md",

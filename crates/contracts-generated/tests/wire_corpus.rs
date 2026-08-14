@@ -12,13 +12,16 @@ use contracts_generated::generated::{
     decode_meta_dto, decode_paged_characters, decode_paged_chats, decode_paged_generation_events,
     decode_paged_messages, decode_preset_dto, decode_provider_availability, decode_provider_dto,
     decode_provider_model, decode_request_cancel_generation, decode_request_create_character,
-    decode_request_delete_character, decode_request_discard_generation, decode_request_empty,
+    decode_request_create_chat, decode_request_create_message, decode_request_delete_character,
+    decode_request_delete_chat, decode_request_delete_message, decode_request_discard_generation,
+    decode_request_empty,
     decode_request_envelope, decode_request_get_character, decode_request_get_chat,
     decode_request_get_generation_run, decode_request_keep_partial_generation,
     decode_request_list_characters, decode_request_list_chats,
     decode_request_list_generation_events, decode_request_list_messages,
     decode_request_retry_generation, decode_request_start_generation,
-    decode_request_update_character, decode_response_envelope, decode_result_empty,
+    decode_request_update_character, decode_request_update_chat, decode_request_update_message,
+    decode_response_envelope, decode_result_empty,
     decode_result_list_backups, decode_result_list_lorebooks, decode_result_list_presets,
     decode_result_list_providers,
 };
@@ -111,8 +114,26 @@ fn dispatch(schema_id: &str, bytes: &[u8], valid: bool) {
             corpus_case(schema_id, decode_request_list_chats, bytes, valid)
         }
         "wire.request.get-chat" => corpus_case(schema_id, decode_request_get_chat, bytes, valid),
+        "wire.request.create-chat" => {
+            corpus_case(schema_id, decode_request_create_chat, bytes, valid)
+        }
+        "wire.request.update-chat" => {
+            corpus_case(schema_id, decode_request_update_chat, bytes, valid)
+        }
+        "wire.request.delete-chat" => {
+            corpus_case(schema_id, decode_request_delete_chat, bytes, valid)
+        }
         "wire.request.list-messages" => {
             corpus_case(schema_id, decode_request_list_messages, bytes, valid)
+        }
+        "wire.request.create-message" => {
+            corpus_case(schema_id, decode_request_create_message, bytes, valid)
+        }
+        "wire.request.update-message" => {
+            corpus_case(schema_id, decode_request_update_message, bytes, valid)
+        }
+        "wire.request.delete-message" => {
+            corpus_case(schema_id, decode_request_delete_message, bytes, valid)
         }
         "wire.request.start-generation" => {
             corpus_case(schema_id, decode_request_start_generation, bytes, valid)
@@ -175,7 +196,7 @@ fn xorshift32(mut state: u32) -> u32 {
 /// coerces to a plain `fn` pointer.
 type DecoderFn = fn(&[u8]) -> Result<(), WireError>;
 
-fn all_decoders() -> [DecoderFn; 43] {
+fn all_decoders() -> [DecoderFn; 49] {
     [
         |b| decode_meta_dto(b).map(|_| ()),
         |b| decode_character_dto(b).map(|_| ()),
@@ -205,7 +226,13 @@ fn all_decoders() -> [DecoderFn; 43] {
         |b| decode_request_delete_character(b).map(|_| ()),
         |b| decode_request_list_chats(b).map(|_| ()),
         |b| decode_request_get_chat(b).map(|_| ()),
+        |b| decode_request_create_chat(b).map(|_| ()),
+        |b| decode_request_update_chat(b).map(|_| ()),
+        |b| decode_request_delete_chat(b).map(|_| ()),
         |b| decode_request_list_messages(b).map(|_| ()),
+        |b| decode_request_create_message(b).map(|_| ()),
+        |b| decode_request_update_message(b).map(|_| ()),
+        |b| decode_request_delete_message(b).map(|_| ()),
         |b| decode_request_start_generation(b).map(|_| ()),
         |b| decode_request_cancel_generation(b).map(|_| ()),
         |b| decode_request_get_generation_run(b).map(|_| ()),

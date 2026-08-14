@@ -463,7 +463,13 @@ fn handle_unary(
         "characters.delete" => with_db_opt(db, |db| product::characters_delete(db, req)),
         "chats.list" => with_db_opt(db, |db| product::chats_list(db, req)),
         "chats.get" => with_db_opt(db, |db| product::chats_get(db, req)),
+        "chats.create" => with_db_opt(db, |db| product::chats_create(db, req)),
+        "chats.update" => with_db_opt(db, |db| product::chats_update(db, req)),
+        "chats.delete" => with_db_opt(db, |db| product::chats_delete(db, req)),
         "chats.messages.list" => with_db_opt(db, |db| product::messages_list(db, req)),
+        "chats.messages.create" => with_db_opt(db, |db| product::messages_create(db, req)),
+        "chats.messages.update" => with_db_opt(db, |db| product::messages_update(db, req)),
+        "chats.messages.delete" => with_db_opt(db, |db| product::messages_delete(db, req)),
         "lorebooks.list" => with_db_opt(db, |db| product::lorebooks_list(db, req)),
         "presets.list" => with_db_opt(db, |db| product::presets_list(db, req)),
         // Phase 6 generation operations.
