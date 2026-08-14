@@ -4,6 +4,26 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/adr/README.md
 
 # Architecture Decision Records
 
+## ADR-0044: Provider execution and the generation run/step/tool model
+
+The Kernel models a durable `GenerationRun` composed of `GenerationStep`s
+(ТЗ §8.3): a CAS-validated state machine (`Created → Planning → Running ↔
+WaitingForTool → Committing → Completed`, `Cancelling`, `Failed`), a durable
+step/event journal with idempotency keys (`turn-{seq}`/`tool-call-{id}`/
+`tool-result-{id}`), run leases with `interrupted` as an explicit recoverable
+terminal state, a `MAX_TOOL_CALLS = 8` loop budget, an immutable `PromptPlan`
+built before any network request (character/persona/lorebook/history blocks,
+heuristic token budget, exclusion reasons), provider secrets resolved only at
+execution time via `SecretStore` (fail-closed without a resolver; the key
+lives only in the `Authorization` header), and a typed streaming event model
+with synchronous-writer mpsc backpressure. Tool calls are validated against a
+declarative registry and executed by the host, never by the provider or the
+kernel. Honest boundaries recorded in the ADR: plugin interceptors and named
+instruct presets deferred, heuristic tokenizer with `response_reserved = 0`
+until the exact-tokenizer ADR, manual resume for interrupted runs. Full
+decision, alternatives and consequences:
+[ADR-0044](0044-generation-run-step-model.md).
+
 ## ADR-0043: Web Client — Remote-Only Mode and Standalone Browser Runtime Decision
 
 The installable web artifact is a **Remote/Installable Web Client**: the

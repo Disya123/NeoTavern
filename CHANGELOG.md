@@ -3,6 +3,354 @@
 ## Unreleased
 ### Added
 
+- **Durable run/step journal and the tool-call loop (M2 / Этап 2.7, ТЗ
+  §8.3).** The kernel now journals every generation step in the new
+  `generation_steps` table (schema migration 6 — `ALTER TABLE` + `CREATE
+  TABLE`, no rebuild) and streams `generation.step` wire events
+  (`provider_turn` / `tool_call` / `tool_result` / `final_commit`; DTOs
+  `wire.generation.step` / `.type` / `.status`). A provider turn that emits a
+  normalized tool call is validated against the **declarative tool registry**
+  (capability + minimal JSON-Schema argument check; `Kernel::register_tool`,
+  `generation.tools.list` `app.read`) and durably transitions the run to the
+  derived wire status **`waiting_for_tool`** (DB `status` stays `streaming`;
+  the marker column `pending_tool_call_json` is the source of truth — the v3
+  CHECK is untouched). The kernel **never executes tools**: the host performs
+  the effect once and submits `generation.tool.result` (non-idempotent,
+  `app.write`), which journals the `tool_result` step, clears the marker and
+  resumes the provider turn with the assistant `tool_calls` + `tool`-role
+  result messages. Stable terminal codes: `TOOL_NOT_FOUND`,
+  `TOOL_ARGS_INVALID`, `TOOL_LOOP_LIMIT` (max 8 tool calls per run),
+  `TOOL_RESULT_STALE` (replay/foreign submission). Crash-at-wait: the waiting
+  transition refreshed the run lease, so a reopen with a fresh lease resumes;
+  an expired lease → `interrupted` (retry-safe — no external effect ever ran).
+  Provider SDK: `ProviderEvent::ToolCall`, `PromptMessage.tool_calls` /
+  `.tool_call_id`, `ProviderRequest.tools`. OpenAI-compatible adapter
+  serializes `tools` and the resumed-turn context and accumulates SSE
+  `delta.tool_calls[]` fragments into a normalized `ToolCall`. Fake provider
+  gains `tool=<name>` and `tool-loop=<name>` grammar. Tests: 7 `tools.rs`
+  unit (registry + schema subset), 2 fake unit, 2 adapter (fragmented
+  arguments, mixed text+call), 8 `tool_loop.rs` kernel integration (golden
+  round trip, listing, rejections, loop limit, crash-at-wait reopen-resume),
+  1 storage migration test (v5→v6 with data). Honest boundary: JSON-Schema
+  validation covers a documented subset (object/required/additionalProperties
+  + scalar/array/object types); the full schema engine is a follow-up.
+
+- **Waiting-run cancel/retry semantics and the OpenAI tool round trip (M2 /
+  Этап 2.8, ТЗ §8.3).** `generation.cancel` on a **waiting-for-tool** run now
+  finalizes the `cancelled` terminal itself (no live executor exists to
+  observe the flag — `WaitingForTool → Cancelling → Cancelled`); all terminal
+  writers (`completed` / `failed` / `cancelled` / startup `interrupted`
+  recovery) clear `pending_tool_call_json`, so a terminal run never reports a
+  derived waiting status and a late `generation.tool.result` is
+  `TOOL_RESULT_STALE`. `generation.discard` on a terminal run clears the
+  marker too. `generation.retry` from a cancelled waiting run starts attempt 2
+  with a full tool round trip; retry on a still-waiting run is
+  `GENERATION_RUN_STATE_CONFLICT`. New kernel integration test drives the
+  **real OpenAI-compatible adapter over raw TCP**: turn 1 streams a
+  normalized tool call (SSE `delta.tool_calls[]`), the kernel validates and
+  waits, `generation.tool.result` resumes turn 2 with the tool context, and
+  the run completes with exactly one assistant message; both HTTP bodies are
+  asserted (`tools` serialization + resumed `tool_call_id`).
+
+- **Packaged golden slice on the Desktop host (M2 / Этап 2.9, ТЗ §17.2).**
+  `NEOTA_DESKTOP_SMOKE=1` on the packaged shell now runs the full user flow
+  headless over the real Tauri host path (`shell → KernelHost envelope →
+  kernel → SQLite`): handshake + `meta.get` + `characters.list` +
+  `backups.list`, then character → chat → user message, `generation.start`
+  (deterministic fake grammar) → `completed` with exactly one 24-char
+  assistant message, then a complete tool round trip — `KernelHost::
+  register_tool` (new host seam), a second run durably waits
+  (`waiting_for_tool`), `generation.tools.list` serves the contract,
+  `generation.tool.result` resumes and completes it with a second assistant
+  message. The smoke exits 0 only when every step and assertion holds.
+  Bug fix found by the smoke: the **Tauri-local and remote-http stream
+  pollers now close the consumer stream when a run's session ends durably
+  waiting for a tool result** (previously an unbounded poll loop — the
+  kernel's `Terminal` notice was ignored); a new adapter integration test
+  covers the waiting-run closure, and the remote-http live SSE worker gets
+  the same `stream.closed` handling. Capability matrix: desktop host →
+  `Integrated` for `characters.crud`, `chats.crud`, `chats.messages.crud`,
+  `generation.workflow`, `generation.tool-loop`.
+
+- **UI generation + message edit/delete over the Product Wire (M2 / Этап
+  2.10, ТЗ §13.1/§11.2).** The chat page's golden path now runs through the
+  `NeoBackend` facade instead of raw `/api/v2` calls: in kernel mode the send
+  flow durably persists the user message via `chats.messages.create` and
+  streams `generation.start` wire events (`generation.delta` /
+  `generation.completed` / `generation.failed` / `generation.cancelled`)
+  through `LocalBackend` over Tauri IPC — no `/api/v2` on that path; the
+  browser/sidecar mode keeps the legacy SSE route. Regeneration and frontend
+  prompt interceptors are legacy-only and surface an honest
+  `UnsupportedError` on the kernel instead of a silent downgrade (kernel
+  prompt pipeline owns the prompt; interceptors deferred to the plugin
+  cutover). Message edit/delete run through
+  `backend.chats.updateMessage`/`delMessage` in both modes (the legacy
+  `expectedRevision` CAS is not part of the wire contract — kernel updates
+  are last-write-wins). Facade additions: `GenerationApi.tools` —
+  `generation.tools.list` / `generation.tool.result` implemented on
+  `LocalBackend` (wire) and `RemoteBackend` (SDK); `LegacyBackend` throws an
+  honest `UnsupportedError` (no legacy route) and gains migration shims for
+  `chats.messages.update`/`delete` over the existing legacy routes. Tests:
+  4 new neobackend parity/shim tests (34 total), 6 new web unit tests for the
+  wire generation path; full web suite green. Docs:
+  `docs/architecture/operations-inventory.md` routing table (golden-flow ops
+  + tools), release-manifest notes (webClient `generation.workflow` →
+  `Integrated`; `generation.tool-loop` desktop → `Integrated`), capability
+  matrix, CHANGELOG.
+
+- **Library/chat CRUD over the Product Wire (M2 / Этап 2.10, шаг 2, ТЗ
+  §13.1/§14.3).** The golden-flow library/chat hooks now route through the
+  facade via the new `apps/web/src/api/wireBridge.ts` data plane: in kernel
+  mode every read/write goes over the canonical wire ops
+  (`characters.list/get/create/update/delete`, `chats.list/get/create/update/
+  delete`, `chats.messages.list`) with wire→UI translation onto the legacy
+  shapes (honest defaults: `avatar: null`, card fields `''`/`null`, `meta: {}`,
+  `variantCount: 0`, `activeVariantPosition: null`, `checkpointChatId: null`,
+  `branchId: chatId` — the kernel keeps one linear sequence per chat);
+  browser/sidecar mode keeps the legacy `/api/v2` routes byte-for-byte.
+  Unsupported inputs surface a typed `UnsupportedError`
+  (CAPABILITY_UNAVAILABLE) instead of a silent downgrade: character search/
+  tag/non-default sorts, chat search, personaId/greetingIndex on chat create,
+  persona/card fields on character create/update, branchId on message list,
+  non-title chat updates. Kernel `chats.create` makes an **empty** chat
+  (greeting insertion is a legacy pipeline feature; the continue hook already
+  reproduced the `reuseUnstarted` guard client-side), and kernel chat delete
+  is **permanent** (cascade; legacy soft-delete/trash is Этап 4). The wire
+  `chats.messages.list` request gains an additive `order: 'asc'|'desc'` field
+  (Этап 2.10): `desc` walks the durable `(sequence,id)` cursor backward from
+  the newest message, matching the UI history loading (`useMessages` pages
+  arrive newest-first; kernel was asc-only). Tests: 25 new web unit tests for
+  the bridge (translation + kernel branch); hooks suite green.
+  Docs: `operations-inventory.md` (list-messages order + UI cutover note),
+  release-manifest notes (characters.crud / chats.crud / chats.messages.crud),
+  CHANGELOG.
+
+- **Versioned data roots, activation journal and Windows restart-to-complete
+  (M3 / Этап 3, DATA-ACTIVATE, ТЗ §10.2–§10.4, ADR-0041).** The storage
+  foundation for the data cutover: a new `neotavern_storage::activation`
+  module implements the canonical v2 layout (versions under
+  `roots/root-<id>/`, a small `active-root.json` pointer written atomically
+  as the commit point), the durable `activation-journal.json` with the ТЗ
+  §10.3 statuses `prepared` → `validated` → `activation_pending` →
+  `committed` / `rolled_back`, and the Windows activation protocol: the
+  pointer switch runs through bounded retry with exponential backoff + jitter
+  for classified transient errors only (`ERROR_SHARING_VIOLATION` 32,
+  `ERROR_LOCK_VIOLATION` 33, POSIX `WouldBlock`; access-denied is never
+  retried), and after the budget is exhausted the journal stays at
+  `activation_pending` with a stable recoverable error
+  (`activation_pending`) so the host can offer **Restart to finish
+  migration**. `open::open` runs `resolve_pending_activation` right after the
+  data-root lease and before any SQLite open: a pending switch completes
+  (restart-to-complete) when the target carries a database, or records
+  `rolled_back` and keeps the previous root active when the target is
+  missing; the old and new roots are never opened writable simultaneously.
+  The v1 flat layout remains fully supported (a data root without
+  `active-root.json` — the active root IS the data root, and the ADR-0032
+  candidate-swap restore path is unchanged), and `open`/`open_read_only` now
+  resolve the active root first so product reads/writes always hit the
+  current version. Unknown future journal/pointer formats fail closed.
+  Tests: 21 new `tests/activation.rs` integration tests (journal
+  round-trip/transitions/idempotency, corrupt & future-format rejection,
+  pointer round-trip and missing-target failure, the kill-matrix recovery
+  — complete / roll back / no-op, transient-error classification and bounded
+  retry, full `activate` lifecycle, open-path integration on the active
+  root); storage suite and full cargo workspace green; clippy/rustfmt clean.
+  Docs: ADR-0041, `portable-data.md` (versioned roots + journal + Windows
+  protocol), CHANGELOG. The staged converter wiring this protocol into the
+  application flow and the migration corpus are the next Этап 3 slices.
+
+- **Staged legacy→kernel migration in the application flow (M3 / Этап 3,
+  ТЗ §10.3, ADR-0041).** A new `neotavern_storage::migration` module
+  orchestrates the full ТЗ §10.3 sequence for converting a legacy
+  (pre-kernel Drizzle) database into a fresh versioned kernel root:
+  detect → acquire the data-root lease as the exclusive maintenance lock →
+  preflight (missing/non-file source → `NotFound`, non-legacy source →
+  `UnsupportedStorageFormat`, free space below 3× source + 64 MiB →
+  `DiskFull`, all before any write) → verified safety copy
+  (`backups/pre-migration-*/database.sqlite` + `checksum.sha256`) →
+  convert through the existing read-only `convert_legacy` into a staging
+  versioned root (`roots/root-<id>/`, same volume by construction) →
+  validate (normal kernel open + `foreign_key_check` + current schema
+  revision) → human-readable report (per-table counts + skipped orphans) →
+  platform-aware commit via the ADR-0041 activation journal (bounded
+  transient retry on the pointer switch; `activation_pending` +
+  restart-to-complete on budget exhaustion) → previous root retained as the
+  rollback pointer. `prepare`/`commit`/`cancel` split the lifecycle so the
+  user can cancel before activation (`rolled_back`, staging removed, safety
+  copy retained); re-running is idempotent (a committed entry is reported,
+  no second staging root); provider configs/secrets are never copied.
+  **Migration corpus (ТЗ §17.4)** in `tests/migration.rs`: kernel databases
+  at every released schema revision (1..6) open and upgrade with seeds
+  preserved, a future schema fails closed (`SchemaTooNew`), a corrupted
+  database is detected (`Corrupt`), and an interrupted legacy migration
+  recovers with a fresh staging root. Tests: 15 new migration integration
+  tests; storage suite and full cargo workspace green; clippy/rustfmt clean.
+  Docs: `portable-data.md` (staged migration section), CHANGELOG. The
+  Windows lock-contention E2E on packaged artifacts and the switch of the
+  canonical data-root remain the later Этап 3 slices.
+
+- **Migration corpus and real-schema mapping completeness (M3 / Этап 3,
+  ТЗ §17.4, §10.3).** The legacy converter now maps the REAL Drizzle layout
+  (`packages/db` migrations 0000…0024), not just the minimal fixture:
+  known character-card fields (`personality`, `scenario`, `first_message`,
+  `example_dialogues`, `system_prompt`, `post_history_instructions`,
+  `creator`, `creator_notes`) survive into the kernel `ext_json` under
+  stable keys — the Kernel prompt pipeline already reads
+  `ext_json.personality`/`persona` for the persona block, so converted
+  characters keep their persona; tags are read from the real
+  `character_tags`/`tags` join tables and merged, sorted and deduplicated
+  into `tags_json`; unknown `ext` fields are preserved verbatim; soft-deleted
+  rows (`deleted_at IS NOT NULL`) are skipped and reported as orphans
+  (the kernel has no `deleted_at`, so deleted characters/chats are not
+  resurrected); legacy `messages.branch_id`/`parent_id`/`meta`/`name` are
+  flattened (no kernel columns — rows keep chat ordering). **Migration
+  corpus (ТЗ §17.4)** extends `tests/migration.rs` with: the real Drizzle
+  schema mapping test (card fields → ext_json, join tags → tags_json,
+  unknown ext preserved, soft-delete skipped, unicode/RTL/20k-char values
+  round-trip), a 1000-character/1000-chat/3000-message library with exact
+  counts, branch-flattening, and the **Windows platform corpus**: a real
+  file handle held without `FILE_SHARE_DELETE` makes the pointer switch
+  exhaust the bounded retry budget, `commit` returns the stable recoverable
+  `ActivationPending`, the journal stays `activation_pending` with the
+  previous root active, and releasing the handle lets the next `open`
+  resolve the pending activation (restart-to-complete). Tests: 19 migration
+  integration tests; storage suite and full cargo workspace green;
+  clippy/rustfmt clean. Docs: `portable-data.md` (schema mapping + corpus
+  sections), CHANGELOG. The Windows E2E on packaged artifacts and the
+  canonical data-root switch remain the later Этап 3 slices.
+
+- **CLI host flow for the data cutover (M3 / Этап 3, ТЗ §10.3 work 7–8).**
+  `neotavern-cli --root <data-root> --migrate-legacy <legacy.db> [--no-backup]`
+  is now the maintenance-mode host that runs the staged legacy→kernel
+  converter with the kernel **closed**, then opens the kernel on the
+  activated root — the canonical data-root switch. Progress stages
+  (`preflight`/`backup`/`convert`/`validate`/`activate`) go to stderr; the
+  committed report (entry id, active root, retained previous root, per-table
+  counts, skipped orphans) and the kernel-open confirmation go to stdout.
+  Missing `--root` → usage error (exit 2); a non-legacy/missing source →
+  controlled storage diagnostic on stderr and exit 1 with no journal written
+  (fail-closed before any write). The CLI's `neotavern-storage` dependency
+  moves from dev-only to runtime (the CLI now owns the offline migration
+  entry point). Tests: `crates/adapters/cli/tests/cli.rs` spawns the real
+  binary — full migration + `characters.get` round-trip over the versioned
+  root, missing-`--root` usage error, non-legacy rejection; 13 CLI tests
+  total; full cargo workspace green; clippy/rustfmt clean. Docs:
+  `portable-data.md` (host-flow section), CHANGELOG. Remaining Этап 3
+  slices: Windows/macOS/Linux upgrade drills on packaged artifacts.
+
+- **Cross-platform upgrade drill (M3 / Этап 3 work 7, ТЗ §10.3).**
+  `node scripts/upgrade-drill.mjs` (`pnpm upgrade:drill`) proves the upgrade
+  cycle on the real CLI artifact on Windows/macOS/Linux (Node 24 built-in
+  `node:sqlite`, no external dependencies): builds a Drizzle-style legacy
+  fixture, runs `neotavern-cli --migrate-legacy`, and asserts the migration
+  commits with the kernel opening on the active root, `characters.get`
+  returns the migrated character, the legacy database stays byte-identical
+  (immutable source), re-running is idempotent (one committed entry, one
+  staging root), the pre-migration safety copy matches the source checksum,
+  and the activation journal ends `committed` with the rollback pointer
+  retained. PASS on Windows in this session; macOS/Linux runs gate the
+  release branch in CI. The Windows lock-contention/restart-to-complete
+  corpus remains the Rust held-handle test. Docs: `portable-data.md`
+  (upgrade-drill section), `package.json` (`upgrade:drill` script),
+  CHANGELOG.
+
+- **Prompt pipeline in the Kernel (M2 / Этап 2.6, ТЗ §9.1–§9.2).** Every
+  generation run now builds an immutable **PromptPlan** before the provider
+  attempt: character/persona system blocks (from the chat's character card,
+  including the `ext_json.personality` persona field), lorebook keyword
+  activation (constant/selective rules mirroring the legacy retrieval,
+  disabled entries skipped, defensive parsing), bounded history selection
+  (last 128 non-tool messages), a local heuristic token budget
+  (`heuristic-v1`, explicitly flagged approximate) with response-room
+  reservation and oldest-unpinned truncation that records every excluded
+  message id with reason. The plan is stored durably in the new
+  `prompt_plans` table (schema migration 5) and served by the new wire op
+  `generation.prompt.plan` (`app.read`; DTOs `wire.prompt.plan` /
+  `wire.prompt.message` / `wire.prompt.block` / `wire.prompt.excluded`;
+  stable `PROMPT_PLAN_NOT_FOUND`). The instruct-neutral message array is
+  passed to adapters via the new `ProviderRequest.messages` field
+  (`provider-sdk::PromptMessage`); the OpenAI-compatible adapter serializes
+  it verbatim as the chat-completions `messages` (falling back to the single
+  `input` message for plan-less calls). A plan that cannot be built or
+  stored fails the run with the stable terminal `PROMPT_PLAN_FAILED`. Tests:
+  5 unit tests in `crates/runtime-kernel/src/prompt.rs` (estimator,
+  system-block merging, budget truncation with excluded ids, lorebook
+  activation, camelCase plan shape), 2 kernel integration tests
+  (`tests/prompt_plan.rs`: golden path proves the durable plan row survives
+  a kernel reopen and `generation.prompt.plan` serves character+persona
+  blocks, history + pinned user message, empty `excluded` at the default
+  budget; unknown run → `PROMPT_PLAN_NOT_FOUND`), plus an adapter test for
+  plan serialization. Honest boundaries: tokenization is approximate
+  (model-specific registry is future work), instruct-format template
+  rendering is deferred, and lorebook scoping to characters awaits the
+  lorebook cutover.
+
+- **OpenAI-compatible production provider (M2 / Этап 2.5, ТЗ §9.3/§9.4).**
+  New crate `crates/provider-openai-compat`: a `ProviderAdapter` speaking the
+  OpenAI chat-completions streaming protocol (`POST {baseUrl}/chat/completions`,
+  SSE `data:` frames) against OpenAI and OpenAI-compatible endpoints (vLLM,
+  llama.cpp, LocalAI, gateways). Config-driven from the non-secret
+  `provider_configs.config_json` (`baseUrl`, `models`, `timeoutMs`,
+  `maxResponseBytes`, `organization`, `maxTokens`). Transport is a minimal
+  blocking HTTP/1.1 client over `std::net::TcpStream` with rustls TLS verified
+  against the OS trust store (`rustls-platform-verifier`), bounded SSE reads
+  (SEC-04: body capped at `maxResponseBytes`, connection destroyed on breach)
+  and normalized errors (HTTP statuses + SSE error events → stable
+  `ProviderErrorCode`s with advisory retryable flags). **Secret handling at
+  execution time (§9.4):** the kernel executor now resolves the run provider's
+  `secret_ref` (first config alphabetically by name) through the host
+  `SecretResolver` seam just-in-time and hands the value via
+  `ProviderRequest::api_key`; the adapter uses it only for the
+  `Authorization` header — never in the body, errors, logs, snapshots or the
+  DB; a `secret_ref` without a resolver fails closed (`PROVIDER_UNAVAILABLE`).
+  New kernel seam `Kernel::register_provider` (Command::RegisterProvider) for
+  hosts to register config-built adapters. 12 adapter unit tests against a
+  raw-TCP mock endpoint (chunked/content-length SSE, HTTP errors, cancel
+  mid-stream, deadline, byte budget, key-not-in-body) + 3 kernel integration
+  tests proving config → SecretStore → register → `providers.list` →
+  `generation.start` streams deltas and saves the assistant message durably
+  with the resolved key on the wire and no plaintext in `database.sqlite`.
+
+- **Provider configuration with secrets out of the database (M2 / Этап 2,
+  ТЗ §9.4, §SEC-01).** New wire operations `providers.config.set/get/list/
+  delete` with `wire.provider.config.dto` (non-secret `config` object plus
+  `hasApiKey` — never the value). The kernel implements them over the
+  `provider_configs` table (v4 migration): an API key passed to `set` is
+  stored through the host-provided SecretStore seam
+  (`Kernel::set_secret_store`, namespace `provider:<provider>` / id `<name>`)
+  and the row keeps only the opaque reference; `set` without `apiKey`
+  updates `config` and leaves the stored secret untouched; `delete` removes
+  the row and revokes the secret (best-effort). Fail-closed boundary: no
+  wired store → `SECRET_UNAVAILABLE` product error, no plaintext fallback;
+  read-only backends → `SECRET_STORE_READ_ONLY`; missing config →
+  `PROVIDER_CONFIG_NOT_FOUND` with `{provider, name}`. Config names are
+  wire-constrained slugs so the derived secret id stays colon-free and the
+  reference round-trips through the last-colon parse contract (ADR-0040).
+  `packages/neobackend` exposes `ProvidersApi.config` (set/get/list/del)
+  across LocalBackend (kernel), RemoteBackend (wire) and LegacyBackend
+  (typed UnsupportedError). 5 integration tests incl. plaintext-absence in
+  the raw database file, fail-closed without a seam, key replacement and
+  revocation.
+
+- **Chat and message CRUD in the Runtime Kernel (M2 / Этап 2, ТЗ §8.1
+  Conversations, §78 Фаза 3).** The Product Wire registry grows six write
+  operations — `chats.create/update/delete` and
+  `chats.messages.create/update/delete` (request DTOs
+  `wire.request.create-chat` / `update-chat` / `delete-chat` /
+  `create-message` / `update-message` / `delete-message`; schema hash
+  bumped). The kernel implements them over the canonical SQLite schema:
+  chats carry `messageCount` via subquery, message `sequence` is allocated
+  atomically as `MAX(sequence)+1` inside the transaction, message
+  update/delete are chat-scoped, chat delete cascades to messages, missing
+  entities surface stable product errors (`CHARACTER_NOT_FOUND` for a create
+  against an unknown character, `CHAT_NOT_FOUND`, `MESSAGE_NOT_FOUND` with
+  the request's id in `params`). `packages/neobackend` exposes the new
+  operations on the `NeoBackend` facade (`ChatsApi.create/update/del`,
+  `createMessage/updateMessage/delMessage`) across `LocalBackend` (kernel
+  transport), `RemoteBackend` (wire) and `LegacyBackend` (typed
+  `UnsupportedError` until cutover). Integration tests cover the full
+  round-trip, sequence ordering, scoped not-found and cascade semantics.
+
 - **M1 governance — ADR-0043 records the Web Client remote-only decision.**
   The installable web artifact is documented as a Remote/Installable Web
   Client to a user-controlled Headless/Desktop host, not a standalone

@@ -180,12 +180,27 @@
     {
       "source": "adr/0040-secret-store-port-format.md",
       "target": "adr/0040-secret-store-port-format.md",
-      "sha256": "75f6ba9c6432785c647f11b2de5e007c918bf13596726e15b991f56fa29098e4"
+      "sha256": "101f19c6043c8d1ed40a3a3c1909f3ed09c7a30d063aee1e239628dbbfc175d4"
+    },
+    {
+      "source": "adr/0042-m1-waiver-per-profile-export-scoping.md",
+      "target": "adr/0042-m1-waiver-per-profile-export-scoping.md",
+      "sha256": "e935adfb8f2d0e5936785b28da9d9afe0a0b053dd56e371b6cc666960918d649"
+    },
+    {
+      "source": "adr/0043-web-client-remote-only.md",
+      "target": "adr/0043-web-client-remote-only.md",
+      "sha256": "589d8d320611f2c29fc6bd1d417b9474e9563e0490a791337d64811c3e8b03b7"
+    },
+    {
+      "source": "adr/0044-generation-run-step-model.md",
+      "target": "adr/0044-generation-run-step-model.md",
+      "sha256": "781127164ab859c7cb2c5581c44a78235df2daeae246dec1a85a27645eb89776"
     },
     {
       "source": "adr/README.md",
       "target": "adr/README.md",
-      "sha256": "22f63e8c4f40bc744f805f2e3ed871db08ebf02f78e6f69b4ae84e64d2f29709"
+      "sha256": "f845e2c4abfa4612a297e8e9b4b230e6c3ec6b893ecc8015394b2f4ea2402cfb"
     },
     {
       "source": "android/README.md",
@@ -220,7 +235,7 @@
     {
       "source": "architecture/operations-inventory.md",
       "target": "architecture/operations-inventory.md",
-      "sha256": "710a925008cb4d238982ae20d62e4a1bfa47c355d5d8b05ad036fabc5fd2e7a1"
+      "sha256": "b8c876c9a863a988c4228162c4f95eca3b7a9b46026b5edd01e4815f741e4c88"
     },
     {
       "source": "architecture/portable-data.md",
@@ -245,7 +260,7 @@
     {
       "source": "architecture/version-axes.md",
       "target": "architecture/version-axes.md",
-      "sha256": "7dcd21f6e165e4e80d8365c2230054128a83836d0e4685b8cbab4a6b904ded4f"
+      "sha256": "35ea380754114143098a7c6e37316eac8ff936e6c1785dd74b0b7160e795875b"
     },
     {
       "source": "architecture/wire-contracts.md",
@@ -255,7 +270,7 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "57f999a7ef919851f1ec430212c443b3d7f0e2dfc09ac2b21c8a0b008271b67b"
+      "sha256": "deecb09f5232f212beb11ad123c8da5b5695e9d23c73be44c03d7caf7e839034"
     },
     {
       "source": "data/README.md",

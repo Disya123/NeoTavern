@@ -326,14 +326,15 @@
         "direct /api/v2 removal for this flow"
       ],
       "evidence": [
-        "crates/runtime-kernel + crates/adapters/* kernel tests (on the accumulated branch m1-w1-security at b20b79c; nothing delivered on the M1 branch)",
+        "crates/runtime-kernel + crates/adapters/* kernel tests (DELIVERED on pr-kernel-golden 6b8096f after the round-71 re-cut onto the accepted M1 HEAD; source was the accumulated branch m1-w1-security at b20b79c)",
         "packages/neobackend Local/Remote parity tests",
         "apps/web/src/api/wireBridge.ts facade (golden-flow cutover)",
         "contracts wire registry + codegen + corpus",
-        "crates/adapters/remote-http host parity tests"
+        "crates/adapters/remote-http host parity tests",
+        "ADR-0044 generation-run-step-model.md (ТЗ §19.2 #6) + companion docs generation-run-steps.md / generation-durability.md / providers.md"
       ],
       "blockingIssues": [
-        "ORDERING (audit gate): M1 (Этап 1 security blockers) is not yet accepted — M2 may only be marked accepted after M1 is accepted (scripts/check-milestone-gates.mjs). The M2 works live on the accumulated branch (b20b79c) and will be re-cut as pr-kernel-golden per prSplitPlan after M1 is accepted; nothing is delivered on this M1 branch.",
+        "RE-CUT EXECUTED 2026-08-14 (round 71): pr-kernel-golden created from the accepted M1 HEAD (8a5b22c) and the full M2 chain b6d7dbe..c580388 (9 commits) cherry-picked in order with the reCutGuide per-file policy — ZERO source-code conflicts (only the mechanical docs set: CHANGELOG->ours, capability-matrix trio -> theirs + regenerated to 27 rows, release-manifest -> theirs, sync-manifest -> docs:sync regenerated 63 files). crates/Cargo.toml carries both members (secret-store M1 + provider-openai-compat M2). ADR-0044 (generation run/step/tool model, ТЗ §19.2 #6) created from m2-adr6-draft and indexed; M2 CHANGELOG entries appended. Branch head 6b8096f, pushed as pr-kernel-golden; verification suite (codegen/matrix/docs/cargo/vitest/lint/tsc/gate) ran green at the re-cut head. M1 is ACCEPTED (8a5b22c) so the ordering gate is satisfied — M2 now awaits the human acceptance verdict (step 9 pattern identical to M1).",
         "The packaged golden E2E of ТЗ §17.2 (with tool-call/yield/resume fault injection) does not exist yet — the current packaged self-check is honestly named a 'kernel flow smoke' (NEOTA_DESKTOP_SMOKE=1, renamed from 'golden smoke' per audit); the golden E2E remains an open acceptance item."
       ],
       "waivers": []
@@ -445,7 +446,7 @@
       ]
     },
     "pr-kernel-golden": {
-      "when": "after M2 accepted",
+      "when": "RE-CUT EXECUTED 2026-08-14 (round 71) onto the accepted M1 HEAD — branch pr-kernel-golden, head 6b8096f, pushed. Acceptance (human verdict) pending.",
       "commits": [
         "b6d7dbe (M2 chats/messages CRUD)",
         "87dd73a (M2 provider config, secrets out of DB)",

@@ -47,6 +47,11 @@ impl MockServer {
         let handle = std::thread::spawn(move || loop {
             match listener.accept() {
                 Ok((mut stream, _)) => {
+                    // The listener is non-blocking and on Windows an accepted
+                    // socket inherits that mode; make the peer socket blocking
+                    // so read_request never trips on a WouldBlock race (the
+                    // adapter's request may not have landed yet under load).
+                    let _ = stream.set_nonblocking(false);
                     let request = read_request(&mut stream);
                     let _ = handler(request, stream);
                     return;
