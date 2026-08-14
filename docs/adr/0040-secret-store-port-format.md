@@ -31,13 +31,13 @@ SecretStore port (ТЗ §5.1 Ports) with the same invariants:
 
 ### 1. Host backend matrix
 
-| Host / mode         | Backend                                    | Persistent |
-| ------------------- | ------------------------------------------ | ---------- |
-| Desktop installed   | OS credential vault / keychain adapter     | Yes        |
-| Desktop portable    | `secrets.enc` (this ADR, v2 format)        | Yes        |
-| Android             | Android Keystore-backed adapter            | Yes        |
-| Headless            | explicit env/file provider or `secrets.enc`; chosen policy documented at deploy | Yes |
-| Session-only        | in-memory store                            | No         |
+| Host / mode       | Backend                                                                         | Persistent |
+| ----------------- | ------------------------------------------------------------------------------- | ---------- |
+| Desktop installed | OS credential vault / keychain adapter                                          | Yes        |
+| Desktop portable  | `secrets.enc` (this ADR, v2 format)                                             | Yes        |
+| Android           | Android Keystore-backed adapter                                                 | Yes        |
+| Headless          | explicit env/file provider or `secrets.enc`; chosen policy documented at deploy | Yes        |
+| Session-only      | in-memory store                                                                 | No         |
 
 Absence of a usable backend is an explicit configuration error; the runtime
 then reports `SECRET_UNAVAILABLE_ON_THIS_DEVICE` / read-only errors — never a
@@ -52,18 +52,18 @@ all backends implement.
 - **Header layout** (big-endian, fixed offsets; the AAD covers the header so
   every field that affects decryption is authenticated):
 
-  | Offset | Size | Field      | Value                                         |
-  | ------ | ---- | ---------- | --------------------------------------------- |
-  | 0      | 8    | magic      | ASCII `NEOTASEC`                              |
-  | 8      | 4    | formatVer  | `2`                                           |
-  | 12     | 1    | kdfId      | `2` = Argon2id                                |
-  | 13     | 4    | argon2 m   | 65536 KiB (64 MiB)                            |
-  | 17     | 4    | argon2 t   | 3                                             |
-  | 21     | 1    | argon2 p   | 1                                             |
-  | 22     | 1    | argon2 out | 32                                            |
-  | 23     | 16   | salt       | random, stable per passphrase (KDF input)     |
-  | 39     | 12   | nonce      | fresh random per write (not in AAD)           |
-  | 51     | …    | ciphertext | AES-256-GCM over the JSON payload             |
+  | Offset | Size | Field      | Value                                     |
+  | ------ | ---- | ---------- | ----------------------------------------- |
+  | 0      | 8    | magic      | ASCII `NEOTASEC`                          |
+  | 8      | 4    | formatVer  | `2`                                       |
+  | 12     | 1    | kdfId      | `2` = Argon2id                            |
+  | 13     | 4    | argon2 m   | 65536 KiB (64 MiB)                        |
+  | 17     | 4    | argon2 t   | 3                                         |
+  | 21     | 1    | argon2 p   | 1                                         |
+  | 22     | 1    | argon2 out | 32                                        |
+  | 23     | 16   | salt       | random, stable per passphrase (KDF input) |
+  | 39     | 12   | nonce      | fresh random per write (not in AAD)       |
+  | 51     | …    | ciphertext | AES-256-GCM over the JSON payload         |
 
   AAD = header bytes `[0, 39)` (magic … salt). Nonce is fresh for every
   write; the salt is reused for the lifetime of the store (changing it would
@@ -72,8 +72,11 @@ all backends implement.
 - **Payload** (JSON, forward-compatible envelope):
 
   ```json
-  { "format": "neotavern-secrets", "version": 2,
-    "records": { "<namespace>": { "<id>": { "value": "...", "createdAt": 123, "updatedAt": 123 } } } }
+  {
+    "format": "neotavern-secrets",
+    "version": 2,
+    "records": { "<namespace>": { "<id>": { "value": "...", "createdAt": 123, "updatedAt": 123 } } }
+  }
   ```
 
 - **Reference syntax** (what the DB stores, never the value):

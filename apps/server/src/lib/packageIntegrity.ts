@@ -401,7 +401,9 @@ export async function recoverInterruptedInstalls(
   // Plugins-dir-level scratch leftovers (staged dirs / uninstall removals).
   for (const entry of await readdir(pluginsDir, { withFileTypes: true }).catch(() => [])) {
     if (entry.name.startsWith('.incoming-') || entry.name.startsWith('.remove-')) {
-      await rm(join(pluginsDir, entry.name), { recursive: true, force: true }).catch(() => undefined);
+      await rm(join(pluginsDir, entry.name), { recursive: true, force: true }).catch(
+        () => undefined,
+      );
     }
   }
   // Plugin-root scratch leftovers WITHOUT a journal (the journal is the only
