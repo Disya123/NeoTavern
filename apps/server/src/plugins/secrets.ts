@@ -1,9 +1,11 @@
 /**
  * Provider secret routes: /api/v2/providers/:id/secrets (+ /api/v2/secrets/exposure).
  *
- * Secret values are write-only. List responses are masked; the plaintext is
- * returned only by `/reveal`, and only when secrets exposure is enabled
- * server-side (`NEOTA_ALLOW_SECRETS_EXPOSURE`, default off). Mirrors SillyTavern's
+ * Secret values are write-only. Since ТЗ §SEC-01 the value never enters the
+ * database: it is stored in the SecretStore and the database keeps only an
+ * opaque reference. List responses are masked; the plaintext is returned only
+ * by `/reveal`, and only when secrets exposure is enabled server-side
+ * (`NEOTA_ALLOW_SECRETS_EXPOSURE`, default off). Mirrors SillyTavern's
  * `allowKeysExposure` gate (AGENTS.md §4, §11).
  */
 import {
@@ -17,8 +19,9 @@ import {
   ProviderSecretUpdateSchema,
   SecretsExposureSchema,
 } from '@neotavern/contracts';
-import { AppError, ErrorCodes } from '@neotavern/shared';
+import { AppError, ErrorCodes, uuidv7 } from '@neotavern/shared';
 import { Type } from '@sinclair/typebox';
+import { toSecretStoreAppError } from '../lib/secretStore.js';
 import type { AppContext, TypedApp } from '../types.js';
 
 const providerParams = Type.Object({ id: IdSchema });
@@ -64,10 +67,23 @@ export async function registerSecretRoutes(app: TypedApp, ctx: AppContext): Prom
     },
     async (req) => {
       await assertProvider(req.params.id);
+      const namespace = ctx.secrets.providerNamespace(req.params.id);
+      // Persist the value in the SecretStore first; the DB row stores only
+      // the opaque reference, keyed by the same record id.
+      const rowId = uuidv7();
+      let ref: string;
+      try {
+        ref = await ctx.secrets.storeValue(namespace, rowId, req.body.value);
+      } catch (error) {
+        const mapped = toSecretStoreAppError(error);
+        if (mapped) throw mapped;
+        throw error;
+      }
       const id = await secrets.create(
         req.params.id,
-        req.body.value,
+        ref,
         req.body.label?.trim() ? req.body.label.trim() : null,
+        rowId,
       );
       return { id };
     },
@@ -134,7 +150,15 @@ export async function registerSecretRoutes(app: TypedApp, ctx: AppContext): Prom
           params: { secretId: req.params.secretId },
         });
       }
-      return { value: full.value };
+      const ref = full.valueRef ?? full.value;
+      const value = ref ? await ctx.secrets.resolve(ref) : null;
+      if (value === null) {
+        throw new AppError({
+          code: ErrorCodes.SECRET_UNAVAILABLE_ON_THIS_DEVICE,
+          params: { secretId: req.params.secretId },
+        });
+      }
+      return { value };
     },
   );
 }

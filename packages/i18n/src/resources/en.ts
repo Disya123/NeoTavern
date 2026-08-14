@@ -1373,6 +1373,9 @@ export const en = {
     PROVIDER_SECRET_NOT_FOUND: 'That stored key was not found.',
     SECRETS_EXPOSURE_DISABLED:
       'Viewing stored keys is disabled. Set NEOTA_ALLOW_SECRETS_EXPOSURE=true on the server to enable it.',
+    SECRET_UNAVAILABLE_ON_THIS_DEVICE:
+      'This key is not available on this device (it is stored in the session or on another device). Re-enter it to continue.',
+    SECRET_STORE_READ_ONLY: 'The secret store is read-only in the current configuration.',
     PLUGIN_NOT_FOUND: 'Plugin "{{pluginId}}" was not found.',
     PLUGIN_PERMISSION_DENIED: 'The plugin lacks the required permission.',
     PLUGIN_INVALID: 'The plugin package is invalid.',

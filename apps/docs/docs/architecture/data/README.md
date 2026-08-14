@@ -52,14 +52,51 @@ the row; migration 0017 (`docs/migrations/README.md`).
 
 ### Provider secrets
 
-`provider_secrets` stores API keys: several named rows per provider,
-exactly one active. The value is write-only: the repository only exposes a
-masked preview (`masked`) to the outside; the plaintext key is available via
-the internal methods `getFullById`/`getActiveValue` (provider runtime) and the
-`/reveal` route when `NEOTA_ALLOW_SECRETS_EXPOSURE` is enabled. The legacy
-column `provider_configs.api_key` is not used for writes — only as a read
-fallback for non-migrated databases (see migration 0009). Cascade: deleting a
-provider deletes its secrets.
+Since migration 0024 (ТЗ §SEC-01) `provider_secrets` stores **opaque
+references**, never plaintext: the `value_ref` column holds
+`portable:<namespace>:<id>` / `session:<namespace>:<id>` / `env:<namespace>:<id>`
+and the actual value lives in the SecretStore (`packages/secret-store`,
+`apps/server/src/lib/secretStore.ts`). The legacy `value` column exists only
+as the import source for pre-migration rows — the bootstrap importer moves
+them into the store and rewrites them as references (idempotent, skipped
+while the store is locked). The value is write-only: the repository only
+exposes a masked preview (`masked`) to the outside; the plaintext resolves
+through `ctx.secrets.resolve()` for the provider runtime and the `/reveal`
+route when `NEOTA_ALLOW_SECRETS_EXPOSURE` is enabled. A reference whose
+backend cannot produce the value (store moved to another device, session
+ended) returns the stable `SECRET_UNAVAILABLE_ON_THIS_DEVICE` error — never
+a plaintext fallback. The legacy column `provider_configs.api_key` is not
+used for writes — only as a read fallback for non-migrated databases (see
+migration 0009). Cascade: deleting a provider deletes its secret
+references.
+
+Plugin secrets (`plugin_secrets`, migration 0022) follow the same pattern
+since migration 0024: `value_ref` holds the reference, per-plugin namespace
+`plugin:<plugin-id>`, and the gated reveal route resolves it through the
+store. Plugin OAuth material in `plugin_auth_connections` (tokens, PKCE
+state/verifier) is the documented residual — it moves behind the SecretStore
+in a dedicated slice.
+
+### SecretStore and secrets.enc
+
+`packages/secret-store` implements the ТЗ §SEC-01 port with three explicit
+backends (there is no silent plaintext fallback):
+
+- **portable** — `secrets.enc` inside the data root (`NEOTA_SECRET_MODE=portable`
+  plus `NEOTA_SECRET_PASSPHRASE` or `NEOTA_SECRET_PASSPHRASE_FILE`):
+  AES-256-GCM, versioned scrypt KDF (salt/parameters authenticated as AAD, a
+  tampered header can never downgrade), fresh nonce per write, atomic
+  temp+rename writes, machine-independent key derivation (copy the file plus
+  the passphrase to any machine), `lock()` and staged `reEncrypt()`.
+- **session** (default when no passphrase is configured) — values live in
+  process memory only and are gone after restart; the DB keeps references and
+  the provider reports `SECRET_UNAVAILABLE_ON_THIS_DEVICE` until the user
+  re-enters the key.
+- **env** — read-only headless provider (`NEOTA_SECRET_*` variables).
+
+`secrets.enc` is never included in profile exports, backups or diagnostics.
+Full OS-vault / Android Keystore adapters and the passphrase UX belong to
+the kernel-plane M3 slice.
 
 ## FTS5
 

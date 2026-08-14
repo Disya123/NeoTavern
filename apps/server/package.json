@@ -33,6 +33,7 @@
     "@neotavern/plugin-runtime": "workspace:*",
     "@neotavern/plugin-sdk": "workspace:*",
     "@neotavern/provider-sdk": "workspace:*",
+    "@neotavern/secret-store": "workspace:*",
     "@neotavern/shared": "workspace:*",
     "@neotavern/theme-sdk": "workspace:*",
     "express": "^5.2.1",

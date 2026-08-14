@@ -20,7 +20,7 @@ import {
   TranscriptionResultSchema,
   type ModelInfo,
 } from '@neotavern/contracts';
-import { AppError, ErrorCodes, LruCache } from '@neotavern/shared';
+import { AppError, ErrorCodes, LruCache, uuidv7 } from '@neotavern/shared';
 import {
   PROVIDER_CATALOG,
   findProviderCatalogEntry,
@@ -191,6 +191,20 @@ export async function assertProviderConfigValid(
 
 export async function registerProviderRoutes(app: TypedApp, ctx: AppContext): Promise<void> {
   const repo = ctx.database.repos.providerConfigs;
+
+  /**
+   * Secret values never reach the database (ТЗ §SEC-01): a plaintext apiKey
+   * is stored in the SecretStore and only its opaque reference is persisted.
+   * Returns the reference (or the original null/empty value).
+   */
+  async function secretRefFor(
+    providerId: string,
+    apiKey: string | null | undefined,
+  ): Promise<string | null | undefined> {
+    if (typeof apiKey !== 'string' || apiKey.length === 0) return apiKey;
+    const recordId = uuidv7();
+    return ctx.secrets.storeValue(ctx.secrets.providerNamespace(providerId), recordId, apiKey);
+  }
   // Bounded model-list cache (ТЗ §11.2): keyed by config revision, so editing
   // a provider implicitly invalidates; TTL covers server-side model changes.
   const modelCache = new LruCache<ModelInfo[]>({ maxSize: 32, ttlMs: 60_000 });
@@ -222,11 +236,17 @@ export async function registerProviderRoutes(app: TypedApp, ctx: AppContext): Pr
         },
         { allowMissingApiKey: true },
       );
-      return repo.create({
-        ...req.body,
-        baseUrl: normalized.baseUrl,
-        settings: normalized.settings,
-      });
+      const providerId = uuidv7();
+      const apiKeyRef = await secretRefFor(providerId, req.body.apiKey);
+      return repo.create(
+        {
+          ...req.body,
+          apiKey: apiKeyRef ?? null,
+          baseUrl: normalized.baseUrl,
+          settings: normalized.settings,
+        },
+        providerId,
+      );
     },
   );
 
@@ -255,8 +275,13 @@ export async function registerProviderRoutes(app: TypedApp, ctx: AppContext): Pr
         apiKey: req.body.apiKey !== undefined ? req.body.apiKey : existing.apiKey,
         settings: { ...existing.settings, ...req.body.settings },
       });
+      const apiKeyRef =
+        req.body.apiKey !== undefined
+          ? await secretRefFor(req.params.id, req.body.apiKey)
+          : undefined;
       const updated = await repo.update(req.params.id, {
         ...req.body,
+        apiKey: apiKeyRef,
         kind,
         baseUrl: normalized.baseUrl,
         model: normalized.model,

@@ -384,9 +384,12 @@ describe('plugin SecretStore (ТЗ §54)', () => {
     expect(got.statusCode).toBe(200);
     const body = JSON.stringify(got.json());
     expect(body).not.toContain(SECRET_VALUE);
-    expect(got.json().items).toEqual([
-      expect.objectContaining({ key: 'apiKey', scope: 'user', masked: '••••••••2345' }),
-    ]);
+    // The mask derives from the opaque reference (ТЗ §SEC-01) — non-empty,
+    // but never a fragment of the actual key.
+    const items = got.json().items as Array<{ key: string; scope: string; masked: string }>;
+    expect(items).toEqual([expect.objectContaining({ key: 'apiKey', scope: 'user' })]);
+    expect(items[0]?.masked.length).toBeGreaterThan(0);
+    expect(items[0]?.masked).not.toContain(SECRET_VALUE.slice(-4));
   });
 
   it('keeps the plaintext behind the exposure gate and the secrets.reveal grant', async () => {

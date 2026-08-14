@@ -23,6 +23,7 @@ import { migration as swipeHistoryAndChildChats } from './0020_swipe_history_and
 import { migration as messageContentRevisions } from './0021_message_content_revisions.js';
 import { migration as pluginSecrets } from './0022_plugin_secrets.js';
 import { migration as pluginTrust } from './0023_plugin_trust.js';
+import { migration as secretValueRefs } from './0024_secret_value_refs.js';
 
 /** All migrations in ascending version order. */
 export const migrations: readonly Migration[] = [
@@ -50,6 +51,7 @@ export const migrations: readonly Migration[] = [
   messageContentRevisions,
   pluginSecrets,
   pluginTrust,
+  secretValueRefs,
 ];
 
 export type { Migration } from './types.js';

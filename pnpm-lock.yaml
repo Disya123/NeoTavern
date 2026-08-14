@@ -199,6 +199,9 @@ importers:
       '@neotavern/provider-sdk':
         specifier: workspace:*
         version: link:../../packages/provider-sdk
+      '@neotavern/secret-store':
+        specifier: workspace:*
+        version: link:../../packages/secret-store
       '@neotavern/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -486,6 +489,12 @@ importers:
       js-tiktoken:
         specifier: ^1.0.21
         version: 1.0.21
+
+  packages/secret-store:
+    dependencies:
+      '@neotavern/shared':
+        specifier: workspace:*
+        version: link:../shared
 
   packages/shared: {}
 

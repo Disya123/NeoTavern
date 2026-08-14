@@ -323,8 +323,10 @@ export const providerConfigs = sqliteTable('provider_configs', {
 
 /**
  * Stored provider API keys. A provider may hold several labelled keys; exactly
- * one is `active` and used for generation. The plaintext `value` is write-only
- * at the API boundary — repositories expose it only to the provider runtime.
+ * one is `active` and used for generation. Since migration 0024 (ТЗ §SEC-01)
+ * the plaintext never enters the database: `value_ref` holds an opaque
+ * SecretStore reference and the legacy `value` column exists only as the
+ * import source for pre-migration rows (cleared after a successful import).
  */
 export const providerSecrets = sqliteTable(
   'provider_secrets',
@@ -334,7 +336,8 @@ export const providerSecrets = sqliteTable(
       .notNull()
       .references(() => providerConfigs.id, { onDelete: 'cascade' }),
     label: text('label'),
-    value: text('value').notNull(),
+    value: text('value'),
+    valueRef: text('value_ref'),
     active: integer('active', { mode: 'boolean' }).notNull().default(false),
     createdAt: integer('created_at').notNull(),
   },
@@ -432,7 +435,9 @@ export const pluginCapabilityGrants = sqliteTable('plugin_capability_grants', {
 /**
  * Plugin SecretStore (ТЗ §54): write-only per-plugin secrets. Values are never
  * serialized in list/state/backup/export/diagnostics surfaces; the plaintext
- * is only reachable through the gated reveal route. The DDL lives in
+ * is only reachable through the gated reveal route. Since migration 0024
+ * (ТЗ §SEC-01) `value_ref` holds an opaque SecretStore reference; the legacy
+ * `value` column is the pre-migration import source. The DDL lives in
  * migration 0022; `plugin_id` cascades with plugin deletion.
  */
 export const pluginSecrets = sqliteTable(
@@ -443,7 +448,8 @@ export const pluginSecrets = sqliteTable(
       .references(() => pluginRegistry.id, { onDelete: 'cascade' }),
     scope: text('scope').notNull(),
     key: text('key').notNull(),
-    value: text('value').notNull(),
+    value: text('value'),
+    valueRef: text('value_ref'),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),
   },

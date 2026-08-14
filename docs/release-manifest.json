@@ -181,7 +181,7 @@
         "android": "Designed",
         "webClient": "Designed"
       },
-      "notes": "SEC-01: SecretStore + portable secrets.enc in M3; no reveal op by design.",
+      "notes": "SEC-01: backend SecretStore + portable secrets.enc delivered in the legacy contour (M1, see security.secret-store); the passphrase entry UX, auto-lock UI and OS vault / Keystore adapters remain M3; no reveal op by design.",
       "milestone": "M3"
     },
     {
@@ -234,6 +234,19 @@
         "webClient": "Implemented"
       },
       "notes": "M1 Wave 1 (ТЗ §10.4): restore runs exclusively under a global maintenance lock (apps/server/src/lib/maintenance.ts) — while held, new product mutations are rejected with the stable MAINTENANCE_MODE error (503), plugin activation is blocked and no second restore can enter; read-only requests and backup/diagnostics tooling keep working; the lock is released on every exit path (success and failure). Full stop-the-world (suspending in-flight generations, staged data-root activation) is the M3 DATA-ACTIVATE slice.",
+      "milestone": "M1"
+    },
+    {
+      "id": "security.secret-store",
+      "title": "SecretStore (secrets out of the main DB, portable secrets.enc)",
+      "wireOps": [],
+      "hosts": {
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "android": "Designed",
+        "webClient": "Implemented"
+      },
+      "notes": "SEC-01 (M1 Wave 1, legacy contour): new SecretStore port package (packages/secret-store) with three explicit backends — portable encrypted secrets.enc (AES-256-GCM, versioned scrypt KDF, authenticated header, atomic writes, fresh nonce per write, machine-independent key derivation, lock/re-encrypt), session-only memory (no plaintext fallback) and a read-only env provider for headless (NEOTA_SECRET_*). Provider and plugin secrets no longer live in app.db: migration 0024 adds value_ref columns and the DB stores only opaque references (portable:/session:/env:), resolved at runtime via ctx.secrets (migration 0023/0024; apps/server/src/lib/secretStore.ts, migration 0024). Pre-migration plaintext rows are imported at bootstrap (idempotent). A reference whose backend cannot produce the value surfaces SECRET_UNAVAILABLE_ON_THIS_DEVICE (422) — never a plaintext fallback; backups and profile exports contain no secrets. Kernel-plane SecretStore port, OS vault / Android Keystore adapters and the full portable UX (passphrase prompt, auto-lock UI) remain M3.",
       "milestone": "M1"
     },
     {

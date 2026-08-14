@@ -13,8 +13,14 @@ import { join } from 'node:path';
 import { afterEach } from 'vitest';
 import { createAppDatabase, type AppDatabase } from '@neotavern/db';
 import { DEFAULT_PROVIDER_TIMEOUTS, ProviderRegistry } from '@neotavern/provider-sdk';
+import { MemorySecretStore, type SecretStore } from '@neotavern/secret-store';
 import { createLogger } from '@neotavern/shared';
 import { buildApp } from '../src/app.js';
+import {
+  createSecretStoreHandle,
+  createSecretStoreHandleForBackend,
+  type SecretStoreHandle,
+} from '../src/lib/secretStore.js';
 import type { MaintenanceController } from '../src/lib/maintenance.js';
 import { ensureDataDirs, resolveDataPaths, type DataPaths } from '../src/lib/paths.js';
 import { ContextStrategyRegistry } from '../src/pipeline/contextShift.js';
@@ -29,6 +35,8 @@ export interface TestAppHandle {
   postProcessors: PostProcessorRegistry;
   paths: DataPaths;
   dataDir: string;
+  /** The SecretStore handle wired into the app (ТЗ §SEC-01). */
+  secrets: SecretStoreHandle;
 }
 
 export interface TestAppOptions {
@@ -48,6 +56,16 @@ export interface TestAppOptions {
   pluginRequireSignature?: boolean;
   /** Pre-built maintenance controller to share with the app (ТЗ §10.4). */
   maintenance?: MaintenanceController;
+  /**
+   * SecretStore backend (ТЗ §SEC-01). Default: a fresh session (memory) store,
+   * so tests assert the DB holds opaque references while values resolve for
+   * the same process.
+   */
+  secretStore?: SecretStore;
+  /** SecretStore mode for the app config; default 'session'. */
+  secretMode?: 'portable' | 'session' | 'env';
+  /** Master passphrase for portable mode (default 'test-passphrase'). */
+  secretPassphrase?: string;
   /** Serve the built SPA from this directory (single-process mode, NEOTA_WEB_DIR). */
   webDir?: string | null;
   /** CORS allowlist origin; defaults to the dev Vite origin. */
@@ -64,10 +82,32 @@ const trackedApps: TypedApp[] = [];
 const trackedDatabases: AppDatabase[] = [];
 const trackedDirs: string[] = [];
 
+/**
+ * Remove a directory with bounded retries. Windows worker child processes may
+ * briefly hold file handles after app.close() returns (EBUSY/EPERM/ENOTEMPTY);
+ * retry instead of failing the whole suite on a cleanup race.
+ */
+async function removeDirWithRetry(dir: string, attempts = 12): Promise<void> {
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      await rm(dir, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === 'EBUSY' || code === 'EPERM' || code === 'ENOTEMPTY') {
+        if (attempt === attempts) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 100 * attempt));
+        continue;
+      }
+      throw error;
+    }
+  }
+}
+
 afterEach(async () => {
   await Promise.all(trackedApps.splice(0).map((app) => app.close()));
   for (const database of trackedDatabases.splice(0)) database.close();
-  await Promise.all(trackedDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+  await Promise.all(trackedDirs.splice(0).map((dir) => removeDirWithRetry(dir)));
 });
 
 /**
@@ -79,11 +119,26 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
   trackedDirs.push(dataDir);
   const paths = resolveDataPaths(dataDir);
   ensureDataDirs(paths);
+  const secretMode = options.secretMode ?? 'session';
+  let secretsHandle: SecretStoreHandle;
+  if (options.secretStore) {
+    secretsHandle = createSecretStoreHandleForBackend(options.secretStore);
+  } else if (secretMode === 'portable') {
+    secretsHandle = await createSecretStoreHandle(
+      'portable',
+      options.secretPassphrase ?? 'test-passphrase',
+      dataDir,
+      createLogger({ level: 'error' }),
+    );
+  } else {
+    secretsHandle = createSecretStoreHandleForBackend(new MemorySecretStore());
+  }
+  const secretResolver = (ref: string): Promise<string | null> => secretsHandle.resolve(ref);
   const database =
     options.database ??
     (options.useFileDatabase
-      ? createAppDatabase(paths.dbFile, { autoBackupDir: paths.backups })
-      : createAppDatabase(':memory:'));
+      ? createAppDatabase(paths.dbFile, { autoBackupDir: paths.backups, secretResolver })
+      : createAppDatabase(':memory:', { secretResolver }));
   if (!options.database) trackedDatabases.push(database);
   const providers = new ProviderRegistry();
   const contextStrategies = new ContextStrategyRegistry();
@@ -116,14 +171,26 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
       pluginDepsMaxBytes: 200 * 1024 * 1024,
       pluginPublisherKeys: options.pluginPublisherKeys ?? [],
       pluginRequireSignature: options.pluginRequireSignature ?? false,
+      secretMode,
+      secretPassphrase: options.secretPassphrase ?? null,
       providerTimeouts: DEFAULT_PROVIDER_TIMEOUTS,
     },
     maintenance: options.maintenance,
+    secrets: secretsHandle,
     logger: createLogger({ level: 'error' }),
     paths,
   });
   trackedApps.push(app);
-  return { app, database, providers, contextStrategies, postProcessors, paths, dataDir };
+  return {
+    app,
+    database,
+    providers,
+    contextStrategies,
+    postProcessors,
+    paths,
+    dataDir,
+    secrets: secretsHandle,
+  };
 }
 
 /** Build a multipart/form-data body with a single file part (inject-friendly). */

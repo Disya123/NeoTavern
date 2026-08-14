@@ -6,8 +6,9 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/adr/0038-canonical
 
 Date: 2026-08-13. Status: Accepted — **Milestone 1a / Wave 0 (Governance)**
 accepted 2026-08-13; **Milestone 1 / Wave 1 (Immediate security) remains
-open** (SEC-01 SecretStore hardening, SEC-02 legacy allowlist export, plugin
-networking and package verification — tracked in
+open** (SEC-01 kernel-plane slices — OS vault / Keystore adapters and the
+portable passphrase UX — plus the final regression sweep; the legacy-contour
+SecretStore hardening is delivered, see CHANGELOG — tracked in
 [release-manifest.json](https://github.com/Disya123/NeoTavern/blob/main/docs/release-manifest.json) and
 `docs/architecture/exceptions.json`).
 Related documents: [Target architecture ТЗ 10/10 rev2](https://github.com/Disya123/NeoTavern/blob/main/NeoTavern_architecture_10_of_10_spec_2026-08-13.md),
@@ -111,12 +112,15 @@ before any migration work can be declared.
     governance tooling (capability matrix ARC-10, exceptions registry ARC-09,
     legacy-surface gate ARC-02/03), the honest staged Desktop default in code
     and the single docs source tree;
-  - **M1 / Wave 1 — Immediate security** (OPEN): SEC-01 SecretStore
-    hardening, SEC-02 legacy allowlist export (replacing the full-DB snapshot —
-    delivered in Wave 1, see CHANGELOG), plugin networking (SSRF policy +
-    bounded streaming hardening delivered in Wave 1) and package verification
-    (publisher signature/digest verification + trust states delivered in Wave 1,
-    see CHANGELOG); M1 is NOT closed until these land;
+  - **M1 / Wave 1 — Immediate security** (OPEN — SEC-01 SecretStore
+    hardening delivered in the legacy contour in Wave 1, see CHANGELOG): SEC-02
+    legacy allowlist export (replacing the full-DB snapshot — delivered in
+    Wave 1, see CHANGELOG), plugin networking (SSRF policy + bounded streaming
+    hardening delivered in Wave 1) and package verification (publisher
+    signature/digest verification + trust states delivered in Wave 1, see
+    CHANGELOG); M1 is NOT closed until the remaining SEC-01 kernel-plane
+    slices (OS vault / Keystore adapters, portable UX) and the regression
+    sweep land;
   - **M2 — Kernel Golden Foundation**, **M3 — Data Convergence**,
     **M4 — Product Convergence** (GEN-RUN 10C/10D).
     This ADR is the M1a/Wave-0 governance decision.

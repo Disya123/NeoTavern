@@ -8,6 +8,7 @@ import type { Logger } from '@neotavern/shared';
 import type { ServerConfig } from './config.js';
 import type { DataPaths } from './lib/paths.js';
 import type { MaintenanceController } from './lib/maintenance.js';
+import type { SecretStoreHandle } from './lib/secretStore.js';
 import type { ContextStrategyRegistry } from './pipeline/contextShift.js';
 import type { PostProcessorRegistry } from './pipeline/postProcess.js';
 
@@ -38,10 +39,13 @@ export interface AppContext {
   paths: DataPaths;
   /** Global maintenance lock (ТЗ §10.4): restore runs under it exclusively. */
   maintenance: MaintenanceController;
+  /** SecretStore handle (ТЗ §SEC-01): opaque refs, never plaintext in the DB. */
+  secrets: SecretStoreHandle;
 }
 
 /** Dependencies accepted by app assembly; an event bus is created when omitted. */
-export type AppContextInput = Omit<AppContext, 'events' | 'maintenance'> & {
+export type AppContextInput = Omit<AppContext, 'events' | 'maintenance' | 'secrets'> & {
   events?: PluginEventBus;
   maintenance?: MaintenanceController;
+  secrets?: SecretStoreHandle;
 };

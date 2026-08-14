@@ -394,17 +394,26 @@ describe('database + repositories', () => {
   });
 
   it('never exposes provider API keys in the public config', async () => {
-    const created = await db.repos.providerConfigs.create({
-      kind: 'openai-compatible',
-      name: 'Local',
-      apiKey: 'sk-secret-123',
-      baseUrl: 'http://localhost:11434/v1',
+    // The repo stores only an opaque reference; the value resolves through the
+    // injected SecretStore resolver (ТЗ §SEC-01) used by the server layer.
+    const resolverDb = createAppDatabase(':memory:', {
+      secretResolver: async (ref) => (ref.startsWith('ref:') ? ref.slice(4) : null),
     });
-    expect(created.hasApiKey).toBe(true);
-    expect(JSON.stringify(created)).not.toContain('sk-secret-123');
+    try {
+      const created = await resolverDb.repos.providerConfigs.create({
+        kind: 'openai-compatible',
+        name: 'Local',
+        apiKey: 'ref:sk-secret-123',
+        baseUrl: 'http://localhost:11434/v1',
+      });
+      expect(created.hasApiKey).toBe(true);
+      expect(JSON.stringify(created)).not.toContain('sk-secret-123');
 
-    const full = await db.repos.providerConfigs.getFullConfig(created.id);
-    expect(full?.apiKey).toBe('sk-secret-123');
+      const full = await resolverDb.repos.providerConfigs.getFullConfig(created.id);
+      expect(full?.apiKey).toBe('sk-secret-123');
+    } finally {
+      resolverDb.close();
+    }
   });
 
   describe('provider secrets', () => {
@@ -437,7 +446,7 @@ describe('database + repositories', () => {
       const active = secrets.filter((s) => s.active);
       expect(active).toHaveLength(1);
       expect(active[0]?.masked.endsWith('y')).toBe(true); // "second-key"
-      expect(await db.repos.providerSecrets.getActiveValue(providerId)).toBe('second-key');
+      expect(await db.repos.providerSecrets.getActiveReference(providerId)).toBe('second-key');
     });
 
     it('keeps an empty value inactive so it never masks a usable key', async () => {
@@ -445,7 +454,7 @@ describe('database + repositories', () => {
       await db.repos.providerSecrets.create(providerId, 'real-key', null);
       await db.repos.providerSecrets.create(providerId, '', 'placeholder');
 
-      expect(await db.repos.providerSecrets.getActiveValue(providerId)).toBe('real-key');
+      expect(await db.repos.providerSecrets.getActiveReference(providerId)).toBe('real-key');
       expect(await db.repos.providerSecrets.hasActive(providerId)).toBe(true);
     });
 
@@ -456,7 +465,7 @@ describe('database + repositories', () => {
       const updated = await db.repos.providerSecrets.update(providerId, id, { label: 'new' });
       expect(updated?.label).toBe('new');
       expect(updated?.active).toBe(true);
-      expect(await db.repos.providerSecrets.getActiveValue(providerId)).toBe('some-key');
+      expect(await db.repos.providerSecrets.getActiveReference(providerId)).toBe('some-key');
     });
 
     it('switches the active key via update and deactivates the previous one', async () => {
@@ -470,7 +479,7 @@ describe('database + repositories', () => {
       expect(reactivated?.active).toBe(true);
       const secrets = await db.repos.providerSecrets.listByProvider(providerId);
       expect(secrets.filter((s) => s.active).map((s) => s.id)).toEqual([first]);
-      expect(await db.repos.providerSecrets.getActiveValue(providerId)).toBe('key-one');
+      expect(await db.repos.providerSecrets.getActiveReference(providerId)).toBe('key-one');
       // The previously-active sibling is now inactive.
       expect(secrets.find((s) => s.id === second)?.active).toBe(false);
     });
@@ -483,7 +492,7 @@ describe('database + repositories', () => {
 
       // "newest-key" is active; deleting it should reactivate "middle-key".
       expect(await db.repos.providerSecrets.delete(providerId, newest)).toBe(true);
-      expect(await db.repos.providerSecrets.getActiveValue(providerId)).toBe('middle-key');
+      expect(await db.repos.providerSecrets.getActiveReference(providerId)).toBe('middle-key');
 
       const remaining = await db.repos.providerSecrets.listByProvider(providerId);
       expect(remaining).toHaveLength(2);
@@ -499,7 +508,7 @@ describe('database + repositories', () => {
       expect(await db.repos.providerSecrets.update(otherId, id, { label: 'x' })).toBeNull();
       expect(await db.repos.providerSecrets.delete(otherId, id)).toBe(false);
       // The secret is untouched.
-      expect(await db.repos.providerSecrets.getActiveValue(providerId)).toBe('scoped-key');
+      expect(await db.repos.providerSecrets.getActiveReference(providerId)).toBe('scoped-key');
     });
 
     it('clears the active key and reports hasActive=false', async () => {
@@ -509,7 +518,7 @@ describe('database + repositories', () => {
 
       await db.repos.providerSecrets.clearActive(providerId);
       expect(await db.repos.providerSecrets.hasActive(providerId)).toBe(false);
-      expect(await db.repos.providerSecrets.getActiveValue(providerId)).toBeNull();
+      expect(await db.repos.providerSecrets.getActiveReference(providerId)).toBeNull();
     });
 
     it('cascade-deletes secrets when the provider is removed', async () => {
@@ -608,8 +617,8 @@ describe('database + repositories', () => {
 
     expect(db.diagnostics()).toMatchObject({
       integrity: 'ok',
-      schemaVersion: 23,
-      migrationCount: 24,
+      schemaVersion: 24,
+      migrationCount: 25,
       entities: { characters: 1 },
       providers: { configured: 1, enabled: 1 },
       plugins: { installed: 0, enabled: 0 },

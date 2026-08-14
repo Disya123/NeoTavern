@@ -1,0 +1,24 @@
+{
+  "name": "@neotavern/secret-store",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "SecretStore port (ТЗ §SEC-01): versioned records, namespace isolation, enumerate/revoke, verifiable backend metadata — with session (memory), portable encrypted (secrets.enc) and env backends",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "clean": "tsc -b --clean"
+  },
+  "dependencies": {
+    "@neotavern/shared": "workspace:*"
+  }
+}

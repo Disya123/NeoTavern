@@ -1399,6 +1399,9 @@ export const ru: Resources = {
     PROVIDER_SECRET_NOT_FOUND: 'Сохранённый ключ не найден.',
     SECRETS_EXPOSURE_DISABLED:
       'Просмотр сохранённых ключей отключён. Установите NEOTA_ALLOW_SECRETS_EXPOSURE=true на сервере, чтобы включить его.',
+    SECRET_UNAVAILABLE_ON_THIS_DEVICE:
+      'Ключ недоступен на этом устройстве (он хранится в сессии или на другом устройстве). Введите его заново, чтобы продолжить.',
+    SECRET_STORE_READ_ONLY: 'Хранилище секретов доступно только для чтения в текущей конфигурации.',
     PLUGIN_NOT_FOUND: 'Плагин «{{pluginId}}» не найден.',
     PLUGIN_PERMISSION_DENIED: 'Плагину не хватает необходимого разрешения.',
     PLUGIN_INVALID: 'Пакет плагина повреждён или имеет неверный формат.',
