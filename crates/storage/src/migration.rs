@@ -31,18 +31,23 @@
 //!   unactivated staging can be resumed (`commit`) or cancelled
 //!   (`cancel`) — the staging root is retained for retry until the user
 //!   confirms cancellation, exactly as ТЗ §10.3 requires.
-//! - **Cancellable before activation**: [`prepare`] stops at `validated`;
-//!   the caller (host) may commit or cancel. After cancellation the journal
-//!   records `rolled_back` and the previous root remains the only active one.
+//! - **Cancellable before activation**: [`MigrationSession::begin`] stops at
+//!   `validated`; the caller may commit or cancel. After cancellation the
+//!   journal records `rolled_back` and the previous root remains the only
+//!   active one.
 //! - **Unknown future schema versions fail closed** (the converter's
 //!   `UnsupportedStorageFormat` / the open path's `SchemaTooNew`).
 //!
 //! The data-root lease is the maintenance lock: the host must close the
-//! kernel (releasing the lease) before migrating, and [`prepare`] acquires
-//! the lease itself so no second writer can enter while the staging is built.
+//! kernel (releasing the lease) before migrating, and
+//! [`MigrationSession::begin`] acquires the lease itself and holds it for the
+//! whole session (staging → commit/cancel), so no second writer can enter
+//! between the phases.
 
 use std::fs;
 use std::path::{Path, PathBuf};
+
+use rusqlite::Connection;
 
 use crate::activation::{
     self, active_root, begin_activation, latest_entry, transition_status, write_pointer,
@@ -67,7 +72,8 @@ pub const PRE_MIGRATION_COPY_PREFIX: &str = "pre-migration-";
 /// database size (staging DB + WAL + safety copy headroom), in bytes.
 const MIN_FREE_SPACE_HEADROOM: u64 = 64 * 1024 * 1024;
 
-/// Progress stages reported by [`prepare`] (ТЗ §10.3 sequence).
+/// Progress stages reported by [`MigrationSession::begin`] (ТЗ §10.3
+/// sequence).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MigrationStage {
     /// Acquiring the maintenance lock (data-root lease) and probing the
@@ -99,8 +105,11 @@ impl MigrationStage {
 /// Result of a prepared (staged, validated, NOT yet activated) migration.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PreparedMigration {
-    /// Activation-journal entry id (used by [`commit`] / [`cancel`]).
+    /// Activation-journal entry id (used by [`MigrationSession::commit`] /
+    /// [`MigrationSession::cancel`]).
     pub entry_id: String,
+    /// The data root that owns this migration (the lease target).
+    pub data_root: PathBuf,
     /// Absolute path of the staged versioned root.
     pub staging_root: PathBuf,
     /// Absolute path of the verified safety copy of the legacy database
@@ -124,101 +133,180 @@ pub struct MigrationOutcome {
     pub previous_root: Option<PathBuf>,
 }
 
-/// Stage a legacy database into a fresh versioned root WITHOUT activating it
-/// (ТЗ §10.3 steps 1–7; the caller decides to [`commit`] or [`cancel`]).
+/// A staged legacy migration that holds the data-root lease for its whole
+/// lifetime — from [`MigrationSession::begin`] (which acquires the exclusive
+/// maintenance lock of ТЗ §10.3) through [`MigrationSession::commit`] or
+/// [`MigrationSession::cancel`].
 ///
-/// The data-root lease is acquired (and held) for the whole preparation — the
-/// maintenance lock of ТЗ §10.3. When the data root is already migrated
-/// (active-root pointer exists and points at a root that opened as a kernel
-/// root), this is a controlled no-op returning the existing committed entry.
-///
-/// `progress` receives [`MigrationStage`] notifications.
-pub fn prepare(
-    data_root: &Path,
-    source_db: &Path,
-    backup: bool,
-    progress: &mut dyn FnMut(MigrationStage),
-) -> Result<PreparedMigration> {
-    progress(MigrationStage::Preflight);
+/// Holding the lease across the phases is what makes the migration
+/// single-writer: no second process can open or write the data root between
+/// staging and activation (ADR-0041, ТЗ §10.3). Dropping the session without
+/// committing or cancelling releases the lease and leaves the prepared entry
+/// at `validated` in the journal — a kill at that point is recovered on the
+/// next run exactly as the corpus expects.
+#[derive(Debug)]
+pub struct MigrationSession {
+    /// The exclusive data-root lease (the maintenance lock). Released when the
+    /// session is dropped, after commit, or after cancel.
+    lease: DataRootLease,
+    /// The staged, validated migration (never activated yet).
+    prepared: PreparedMigration,
+}
 
-    // Idempotency: an already-committed migration is a no-op (report the
-    // committed entry, never a second migration).
-    if let Some(entry) = latest_entry(data_root)? {
-        if entry.kind == MIGRATION_KIND && entry.status == ActivationStatus::Committed {
-            let staging = entry.to_root;
-            let report = read_conversion_report(&staging)?;
-            return Ok(PreparedMigration {
-                entry_id: entry.id,
-                staging_root: staging,
-                backup_path: None,
-                report,
-            });
+impl MigrationSession {
+    /// Stages a legacy database into a fresh versioned root WITHOUT activating
+    /// it (ТЗ §10.3 steps 1–7; the caller decides to [`Self::commit`] or
+    /// [`Self::cancel`]).
+    ///
+    /// The data-root lease is acquired here and held for the whole session —
+    /// the maintenance lock of ТЗ §10.3. When the data root is already
+    /// migrated (active-root pointer exists and points at a root that opened
+    /// as a kernel root), this is a controlled no-op returning a session over
+    /// the existing committed entry.
+    ///
+    /// `progress` receives [`MigrationStage`] notifications.
+    pub fn begin(
+        data_root: &Path,
+        source_db: &Path,
+        backup: bool,
+        progress: &mut dyn FnMut(MigrationStage),
+    ) -> Result<MigrationSession> {
+        progress(MigrationStage::Preflight);
+
+        // The lease is the maintenance lock; it also guarantees the staging
+        // directory is private to this writer. Held for the whole session so
+        // no second writer can enter between staging and activation.
+        let lease = DataRootLease::acquire(data_root)?;
+
+        // Idempotency: an already-committed migration is a no-op (report the
+        // committed entry, never a second migration).
+        if let Some(entry) = latest_entry(data_root)? {
+            if entry.kind == MIGRATION_KIND && entry.status == ActivationStatus::Committed {
+                let staging = entry.to_root;
+                let report = read_conversion_report(&staging)?;
+                return Ok(MigrationSession {
+                    lease,
+                    prepared: PreparedMigration {
+                        entry_id: entry.id,
+                        data_root: data_root.to_path_buf(),
+                        staging_root: staging,
+                        backup_path: None,
+                        report,
+                    },
+                });
+            }
         }
+
+        preflight(data_root, source_db)?;
+
+        let backup_path = if backup {
+            progress(MigrationStage::Backup);
+            Some(create_safety_copy(data_root, source_db)?)
+        } else {
+            None
+        };
+
+        // Fresh versioned root as the staging directory (same volume by
+        // construction). A fresh id per attempt keeps retry independent.
+        progress(MigrationStage::Convert);
+        let staging_root = fresh_staging_root(data_root)?;
+        let report = convert_legacy(
+            source_db,
+            &Candidate {
+                path: staging_root.clone(),
+            },
+        )?;
+
+        progress(MigrationStage::Validate);
+        validate_staged_root(&staging_root)?;
+
+        // Record intent BEFORE the caller can commit: `prepared` → `validated`.
+        let entry_id = new_id();
+        let from_root = active_root(data_root)?;
+        begin_activation(
+            data_root,
+            &entry_id,
+            MIGRATION_KIND,
+            &from_root,
+            &staging_root,
+        )?;
+        transition_status(data_root, &entry_id, ActivationStatus::Validated, None)?;
+
+        Ok(MigrationSession {
+            lease,
+            prepared: PreparedMigration {
+                entry_id,
+                data_root: data_root.to_path_buf(),
+                staging_root,
+                backup_path,
+                report,
+            },
+        })
     }
 
-    // The lease is the maintenance lock; it also guarantees the staging
-    // directory is private to this writer.
-    let _lease = DataRootLease::acquire(data_root)?;
+    /// Commits the prepared migration: `activation_pending` → pointer switch →
+    /// `committed` (ADR-0041 platform-aware activation with bounded transient
+    /// retry). After this the staging root is the active root; the previous
+    /// root is retained as the rollback pointer. The session (and thus the
+    /// data-root lease) is consumed by the commit.
+    pub fn commit(self, progress: &mut dyn FnMut(MigrationStage)) -> Result<MigrationOutcome> {
+        let outcome = commit_inner(&self.prepared, progress)?;
+        drop(self.lease);
+        Ok(outcome)
+    }
 
-    preflight(data_root, source_db)?;
+    /// Cancels the prepared migration before activation: records
+    /// `rolled_back`, keeps the previous root active, and removes the staging
+    /// root. The safety copy (if any) is retained — it is the verified
+    /// pre-migration snapshot. The session (and thus the lease) is consumed.
+    pub fn cancel(self) -> Result<()> {
+        cancel_inner(&self.prepared)?;
+        drop(self.lease);
+        Ok(())
+    }
 
-    let backup_path = if backup {
-        progress(MigrationStage::Backup);
-        Some(create_safety_copy(data_root, source_db)?)
-    } else {
-        None
-    };
+    /// Activation-journal entry id of the prepared migration.
+    pub fn entry_id(&self) -> &str {
+        &self.prepared.entry_id
+    }
 
-    // Fresh versioned root as the staging directory (same volume by
-    // construction). A fresh id per attempt keeps retry independent.
-    progress(MigrationStage::Convert);
-    let staging_root = fresh_staging_root(data_root)?;
-    let report = convert_legacy(
-        source_db,
-        &Candidate {
-            path: staging_root.clone(),
-        },
-    )?;
+    /// Absolute path of the staged versioned root.
+    pub fn staging_root(&self) -> &Path {
+        &self.prepared.staging_root
+    }
 
-    progress(MigrationStage::Validate);
-    validate_staged_root(&staging_root)?;
+    /// Absolute path of the verified safety copy (`Some` when requested).
+    pub fn backup_path(&self) -> Option<&Path> {
+        self.prepared.backup_path.as_deref()
+    }
 
-    // Record intent BEFORE the caller can commit: `prepared` → `validated`.
-    let entry_id = new_id();
-    let from_root = active_root(data_root)?;
-    begin_activation(
-        data_root,
-        &entry_id,
-        MIGRATION_KIND,
-        &from_root,
-        &staging_root,
-    )?;
-    transition_status(data_root, &entry_id, ActivationStatus::Validated, None)?;
-
-    Ok(PreparedMigration {
-        entry_id,
-        staging_root,
-        backup_path,
-        report,
-    })
+    /// Per-table conversion counts and skipped/orphaned records.
+    pub fn report(&self) -> &ConversionReport {
+        &self.prepared.report
+    }
 }
 
 /// Commits a prepared migration: `activation_pending` → pointer switch →
 /// `committed` (ADR-0041 platform-aware activation with bounded transient
 /// retry). After this the staging root is the active root; the previous root
 /// is retained as the rollback pointer.
-pub fn commit(
-    data_root: &Path,
-    entry_id: &str,
+///
+/// `entry_id` must be the id of a live [`MigrationSession`] (the session holds
+/// the data-root lease, so this is always single-writer); the id is taken from
+/// `prepared` so callers cannot commit a foreign entry.
+fn commit_inner(
+    prepared: &PreparedMigration,
     progress: &mut dyn FnMut(MigrationStage),
 ) -> Result<MigrationOutcome> {
+    let data_root = data_root_of(prepared)?;
+    let entry_id = &prepared.entry_id;
     progress(MigrationStage::Activate);
 
     let journal = activation::read_journal(data_root)?;
     let entry = journal
         .entries
         .iter()
-        .find(|e| e.id == entry_id)
+        .find(|e| e.id == *entry_id)
         .ok_or_else(|| {
             StorageError::with(
                 StorageErrorCode::NotFound,
@@ -281,12 +369,14 @@ pub fn commit(
 /// Cancels a prepared migration before activation: records `rolled_back`,
 /// keeps the previous root active, and removes the staging root. The safety
 /// copy (if any) is retained — it is the verified pre-migration snapshot.
-pub fn cancel(data_root: &Path, entry_id: &str) -> Result<()> {
+fn cancel_inner(prepared: &PreparedMigration) -> Result<()> {
+    let data_root = data_root_of(prepared)?;
+    let entry_id = &prepared.entry_id;
     let journal = activation::read_journal(data_root)?;
     let entry = journal
         .entries
         .iter()
-        .find(|e| e.id == entry_id)
+        .find(|e| e.id == *entry_id)
         .ok_or_else(|| {
             StorageError::with(
                 StorageErrorCode::NotFound,
@@ -311,19 +401,25 @@ pub fn cancel(data_root: &Path, entry_id: &str) -> Result<()> {
     Ok(())
 }
 
-/// One-shot convenience: [`prepare`] + [`commit`] under the caller's
-/// maintenance window. Equivalent to the host calling prepare, then commit.
+/// One-shot convenience: [`MigrationSession::begin`] + [`Self::commit`] under
+/// one lease — equivalent to the host staging, then committing, with the
+/// lease held for the whole sequence.
 pub fn migrate(
     data_root: &Path,
     source_db: &Path,
     backup: bool,
     progress: &mut dyn FnMut(MigrationStage),
 ) -> Result<MigrationOutcome> {
-    let prepared = prepare(data_root, source_db, backup, progress)?;
-    commit(data_root, &prepared.entry_id, progress)
+    MigrationSession::begin(data_root, source_db, backup, progress)?.commit(progress)
 }
 
 // --- internals ---------------------------------------------------------------
+
+/// Derives the data root from a prepared migration (stored explicitly so the
+/// inner commit/cancel paths never depend on path arithmetic).
+fn data_root_of(prepared: &PreparedMigration) -> Result<&Path> {
+    Ok(&prepared.data_root)
+}
 
 /// Preflight (ТЗ §10.3): the source exists and is a file, the data root is
 /// writable, and the target volume has enough free space for the conversion
@@ -376,7 +472,17 @@ fn preflight(data_root: &Path, source_db: &Path) -> Result<()> {
 /// `<data-root>/backups/pre-migration-<ts>/database.sqlite` and writes
 /// `checksum.sha256` next to it (hex of the copy, computed after the copy
 /// completes). Returns the copy's directory path.
+///
+/// The copy is made through the SQLite online-backup API, NOT a plain
+/// `fs::copy`: the source is opened read-only (so the copy never modifies or
+/// locks out the legacy app) and the backup API produces a consistent
+/// snapshot that includes committed WAL frames — a byte copy of just
+/// `database.sqlite` could silently miss WAL data and yield a corrupt safety
+/// copy (audit P0 #3, ТЗ §10.3 "Create verified backup").
 fn create_safety_copy(data_root: &Path, source_db: &Path) -> Result<PathBuf> {
+    use rusqlite::backup::Backup;
+    use rusqlite::OpenFlags;
+
     let backups = crate::paths::backups_dir(data_root);
     let dir = backups.join(format!(
         "{PRE_MIGRATION_COPY_PREFIX}{}",
@@ -384,7 +490,38 @@ fn create_safety_copy(data_root: &Path, source_db: &Path) -> Result<PathBuf> {
     ));
     fs::create_dir_all(&dir).map_err(|e| io_err(e, "create safety copy dir"))?;
     let target = dir.join("database.sqlite");
-    fs::copy(source_db, &target).map_err(|e| io_err(e, "copy legacy database to safety copy"))?;
+
+    // Source opened strictly read-only (same as the converter); the target is
+    // a fresh file created by the backup API.
+    let source = Connection::open_with_flags(source_db, OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .map_err(|e| StorageError::from_sqlite(e, "safety copy: open source read-only"))?;
+    let mut target_conn = Connection::open(&target)
+        .map_err(|e| StorageError::from_sqlite(e, "safety copy: open target"))?;
+    let backup = Backup::new(&source, &mut target_conn)
+        .map_err(|e| StorageError::from_sqlite(e, "safety copy: begin backup"))?;
+    // One step copies the whole database (WAL frames included); -1 means "run
+    // until completion". A `Completion::Done` is required for a valid copy.
+    backup
+        .step(-1)
+        .map_err(|e| StorageError::from_sqlite(e, "safety copy: copy pages"))?;
+    drop(backup); // finalizes the backup (rusqlite Backup has no finish())
+    drop(target_conn);
+    drop(source);
+
+    // Verify the copy reads cleanly before it is declared a safety copy.
+    let verify = Connection::open(&target)
+        .map_err(|e| StorageError::from_sqlite(e, "safety copy: reopen for verification"))?;
+    let quick_check: String = verify
+        .query_row("PRAGMA quick_check", [], |r| r.get(0))
+        .map_err(|e| StorageError::from_sqlite(e, "safety copy: quick_check"))?;
+    if quick_check != "ok" {
+        return Err(StorageError::new(
+            StorageErrorCode::Corrupt,
+            format!("safety copy failed quick_check: {quick_check}"),
+        ));
+    }
+    drop(verify);
+
     let checksum = crate::snapshot::sha256_file_hex(&target)?;
     fs::write(dir.join("checksum.sha256"), checksum.as_bytes())
         .map_err(|e| io_err(e, "write safety copy checksum"))?;
@@ -440,7 +577,7 @@ fn validate_staged_root(staging_root: &Path) -> Result<()> {
 }
 
 /// Reads the per-table conversion counts back from a converted kernel root
-/// (used by the idempotent no-op path and by [`commit`]).
+/// (used by the idempotent no-op path and by [`MigrationSession::commit`]).
 fn read_conversion_report(root: &Path) -> Result<ConversionReport> {
     let mut progress = |_: MigrationProgress| {};
     let db = open(root, &ConnectionPolicy::default(), &mut progress)?;
@@ -457,6 +594,7 @@ fn read_conversion_report(root: &Path) -> Result<ConversionReport> {
         messages: count("messages")?,
         lorebooks: count("lorebooks")?,
         presets: count("presets")?,
+        personas: count("personas")?,
         // Counts from a committed root cannot report per-row orphans; the
         // full report is available from the `prepare` step.
         skipped: 0,
