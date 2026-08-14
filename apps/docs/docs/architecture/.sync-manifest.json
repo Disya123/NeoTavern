@@ -208,9 +208,14 @@
       "sha256": "d53cafc24e3207d092015eae0586ea10a07c89c40fa8b4172e1747131376d130"
     },
     {
+      "source": "adr/0046-m3-limited-waivers.md",
+      "target": "adr/0046-m3-limited-waivers.md",
+      "sha256": "41185c69649e017a90163fb4eb648bba789a6c7de5c4eea9fd8b85e2bb8031aa"
+    },
+    {
       "source": "adr/README.md",
       "target": "adr/README.md",
-      "sha256": "76943492519d2affd7a61b06014e6bfbb475425496d8db56b5a8006fa4b44051"
+      "sha256": "3db5f31f0088932ba4919a224c067a2bcc4437f258df9db9df5eb1eced197c10"
     },
     {
       "source": "android/README.md",

@@ -4,6 +4,21 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/adr/README.md
 
 # Architecture Decision Records
 
+## ADR-0046: M3 limited waivers — data-cutover residual P1 items
+
+The M3 (Этап 3) data-cutover acceptance records eight limited P1 waivers
+(ТЗ §10.3–§10.4): parent-directory fsync after the pointer rename is a
+platform best-effort (release-gate expiry); pointer containment without
+canonicalization is defense-in-depth (release-gate hardening); `--no-backup`
+is a documented escape hatch (permanent); legacy-sidecar stop/block, restore
+convergence on the shared activation protocol, the in-app
+migration/restart-to-complete UX and the settings/branches/revisions/assets
+conversion are tracked to the M4 cutover; recovery re-verification is a
+release-gate item. Every waiver has an exact issue text, severity P1 and an
+expiry; an expired waiver re-opens its blocker via the gate. Full decision,
+alternatives and consequences:
+[ADR-0046](0046-m3-limited-waivers.md).
+
 ## ADR-0045: M2 packaged golden E2E with fault injection — limited waiver
 
 M2's packaged-flow exit criterion is satisfied by the honest **kernel-flow

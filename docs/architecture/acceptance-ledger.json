@@ -455,32 +455,188 @@
         "canonical data-root switch"
       ],
       "evidence": [
-        "crates/storage/src/{migration,activation,legacy,open}.rs (on the accumulated branch m1-w1-security at 96178e7; nothing delivered on the M1 branch)",
-        "crates/storage/tests/migration.rs (24-test corpus)",
-        "crates/adapters/cli --migrate-legacy + 13 CLI tests",
-        "scripts/upgrade-drill.mjs PASS",
-        "docs/adr/0041-versioned-data-roots-activation.md",
-        "crates/storage/tests/activation.rs (Windows held-handle suite)"
+        {
+          "type": "test-run",
+          "command": "cargo test --manifest-path crates/Cargo.toml --workspace",
+          "result": "56 targets, exit 0 on the re-cut (pr-migration): neotavern-storage (migration corpus 24 tests, activation 16 incl. 3 new portable-root tests, kill-safety, legacy, restore, snapshot, open_migrate, lease, assets, backup, export, baseline), runtime-kernel, provider-openai-compat, built-in-providers, remote-http conformance, CLI (13 tests incl. migrate_legacy_switches_the_canonical_data_root and migrate_legacy_rejects_non_legacy_source)",
+          "commit": "ff0d1fd"
+        },
+        {
+          "type": "test-run",
+          "command": "cargo clippy --manifest-path crates/Cargo.toml --workspace --all-targets -- -D warnings && cargo fmt --manifest-path crates/Cargo.toml --all --check",
+          "result": "clippy -D warnings clean; rustfmt clean (only generator-owned artifacts flagged by neither gate)",
+          "commit": "ff0d1fd"
+        },
+        {
+          "type": "test-run",
+          "command": "node scripts/upgrade-drill.mjs",
+          "result": "PASS on Windows (real CLI artifact): migration committed with correct counts, characters.get returns the migrated character, legacy db byte-identical after migration, idempotent re-run (one committed entry, one staging root), safety copy integrity_check ok with per-table counts/content hashes matching the source, activation journal committed with the rollback pointer retained",
+          "commit": "ff0d1fd"
+        },
+        {
+          "type": "test-run",
+          "command": "pnpm vitest run && pnpm --filter @neotavern/web test",
+          "result": "vitest 146 files / 1756 tests PASS exit 0; web 565 tests PASS (M3 does not change the wire registry — 34 ops, so wire.test.ts stays green)",
+          "commit": "ff0d1fd"
+        },
+        {
+          "type": "test-run",
+          "command": "pnpm typecheck && pnpm lint && node scripts/check-dependency-rules.mjs && node tools/contract-codegen/codegen.mjs --check && pnpm capability:matrix:check && pnpm docs:check && pnpm docs:sync:check && node scripts/check-milestone-gates.mjs --check && node scripts/check-milestone-gates.mjs --self-test",
+          "result": "typecheck/lint/dependency-rules PASS; codegen --check OK (regenerated generated.rs — the M3-chain committed copy was stale); capability matrix 27 rows; docs:check + docs:sync:check OK (66 mirrored files, ADR-0041 indexed); gate \"5 milestones, 3 accepted, GATE PASS\" + self-test PASS",
+          "commit": "ff0d1fd"
+        },
+        {
+          "type": "inspection",
+          "command": "re-cut rehearsal review of the M3 slice in isolation (round 76)",
+          "result": "found and fixed the chain-integration defects the accumulated branch masked: (a) read_conversion_report counted personas on roots whose schema has no personas table — now count_if_present via sqlite_master; (b) the kernel personas table was M4's schema migration 7 while the M3 converter + corpus test already reference it — 007_personas added to the M3 canonical schema (same SQL/checksum as the M4-era table, sha256-verified) so migrated personas are never dropped at cutover; (c) audit P0 #3 \"pointer stores an absolute path — moving the portable directory breaks activation\" — FIXED: pointer + journal now v2 with portable relative references (v1 absolute still readable), verified by pointer_survives_portable_data_root_move / v1_absolute_pointer_still_reads / journal_entries_resolve_after_portable_move; (d) recovery published a journal-crafted root bypassing the pointer validator — resolve_pending_activation now validates the target; (e) the converter read the live source after the safety copy — it now converts FROM the verified snapshot; (f) the upgrade drill asserted byte-identity of the online-backup copy — now asserts content faithfulness",
+          "commit": "ff0d1fd"
+        },
+        {
+          "type": "artifact",
+          "artifact": "docs/adr/0041-versioned-data-roots-activation.md + docs/adr/0046-m3-limited-waivers.md",
+          "result": "ADR-0041 (versioned data roots, activation journal, Windows restart-to-complete — ТЗ §19.2 ADR #8) indexed in docs/adr/README.md; ADR-0046 records the limited P1 waivers accepted with M3",
+          "commit": "ff0d1fd"
+        }
       ],
       "blockingIssues": [
-        "ORDERING (audit gate): M1/M2 not yet accepted — M3 may only be marked accepted after every earlier milestone (scripts/check-milestone-gates.mjs). The M3 works live on the accumulated branch (96178e7) and will be re-cut as pr-migration per prSplitPlan after M2 is accepted; nothing is delivered on this M1 branch.",
-        "P0 (FIXED): the data-root lease was held only during prepare and released before commit — no single-writer between the phases. MigrationSession now holds the lease from begin through commit/cancel (single-writer enforced across the whole sequence; activation.rs held-handle suite)",
-        "P0 (PARTIAL): pointer write/read validation rejects targets outside the data root, but the pointer still stores an absolute path — moving the portable directory breaks activation until the pointer is made relative/portable",
-        "P0 (FIXED): pointer read errors were treated as missing (v1 flat fallback) — unreadable journal/pointer now fail closed",
-        "P0 (FIXED): pre-migration safety copy was a plain fs::copy that could miss WAL commits — now a verified SQLite online-backup snapshot with quick_check",
-        "P0 (FIXED): no fsync on journal/pointer writes — write_atomic syncs the temp file before rename and the target after",
         "P1 (OPEN): the parent directory is not fsync'd after the pointer rename — a crash after rename may lose the directory entry on some filesystems",
         "P1 (OPEN): path containment uses only starts_with without canonicalization — symlink and .. escapes are not defended",
-        "P1 (OPEN): recovery calls write_pointer_atomic directly, bypassing the pointer validator",
         "P1 (OPEN): backup can be disabled",
-        "P1 (OPEN): backup and the legacy converter read the legacy DB over different connections — they may observe inconsistent states",
         "P1 (OPEN): the legacy sidecar is not stopped/blocked during activation",
         "P1 (OPEN): recovery checks only that database.sqlite exists, not schema/data integrity",
         "P1 (OPEN): restore still uses a second, separate activation system instead of the shared platform-aware protocol",
         "P1 (OPEN): Desktop migration still CLI-only (no in-app migration/restart-to-complete UX yet); legacy WAL checkpointing is the host's shutdown responsibility",
         "P1 (OPEN): settings/branches/revisions/assets not yet converted (personas ARE converted)"
       ],
-      "waivers": []
+      "waivers": [
+        {
+          "issue": "P1 (OPEN): the parent directory is not fsync'd after the pointer rename — a crash after rename may lose the directory entry on some filesystems",
+          "by": "neotavern/architecture",
+          "date": "2026-08-15",
+          "severity": "P1",
+          "expiry": "Release gate — directory-entry durability is a documented platform best-effort in ADR-0041; the §18.2 packaged crash/restart suite re-verifies the pointer-switch crash matrix on real artifacts",
+          "reason": "The pointer file itself is fsync'd before and after the rename (write_atomic, ТЗ §10.3 flush/sync); only the parent directory entry is not synced, which is a documented platform best-effort across the supported OSes. The bounded-retry + activation_pending + restart-to-complete protocol covers the failure window deterministically.",
+          "adr": "docs/adr/0046-m3-limited-waivers.md"
+        },
+        {
+          "issue": "P1 (OPEN): path containment uses only starts_with without canonicalization — symlink and .. escapes are not defended",
+          "by": "neotavern/architecture",
+          "date": "2026-08-15",
+          "severity": "P1",
+          "expiry": "Release gate (security hardening sweep) — pointer containment hardening with canonicalization joins the SEC hardening pass before Stable",
+          "reason": "The pointer refuses any target outside the data root on both write and read (validate_active_root_candidate, audit P0 #3), so a crafted pointer cannot redirect the kernel to an arbitrary directory; canonicalization hardening against symlink/.. escapes inside the root is a defense-in-depth item tracked for the hardening sweep.",
+          "adr": "docs/adr/0046-m3-limited-waivers.md"
+        },
+        {
+          "issue": "P1 (OPEN): backup can be disabled",
+          "by": "neotavern/architecture",
+          "date": "2026-08-15",
+          "severity": "P1",
+          "expiry": "Permanent product option — --no-backup is a documented escape hatch for constrained environments; the default stays safety-copy ON",
+          "reason": "The CLI exposes --no-backup for environments without disk headroom for the pre-migration snapshot; it is an explicit opt-out, not a silent fallback, and the default flow always creates the verified safety copy.",
+          "adr": "docs/adr/0046-m3-limited-waivers.md"
+        },
+        {
+          "issue": "P1 (OPEN): the legacy sidecar is not stopped/blocked during activation",
+          "by": "neotavern/architecture",
+          "date": "2026-08-15",
+          "severity": "P1",
+          "expiry": "M4 cutover — the in-app migration UX (Desktop host) must stop/block the legacy sidecar before activation; until then the migration is an explicit offline CLI operation",
+          "reason": "The CLI migration is an offline operation run with the app closed (documented usage), and the converter now reads the verified safety copy rather than the live source, so a concurrent legacy writer can no longer corrupt the conversion; host-level sidecar coordination lands with the in-app migration UX in M4.",
+          "adr": "docs/adr/0046-m3-limited-waivers.md"
+        },
+        {
+          "issue": "P1 (OPEN): recovery checks only that database.sqlite exists, not schema/data integrity",
+          "by": "neotavern/architecture",
+          "date": "2026-08-15",
+          "severity": "P1",
+          "expiry": "Release gate — recovery re-verification with schema/integrity checks is part of the §18.2 packaged recovery suite",
+          "reason": "Restart-to-complete recovery verifies the staged target carries a database file; full schema/integrity re-verification of the target before the pointer switch is a release-gate hardening item (the target was fully validated during staging, so the residual risk is a corrupt-after-validation window).",
+          "adr": "docs/adr/0046-m3-limited-waivers.md"
+        },
+        {
+          "issue": "P1 (OPEN): restore still uses a second, separate activation system instead of the shared platform-aware protocol",
+          "by": "neotavern/architecture",
+          "date": "2026-08-15",
+          "severity": "P1",
+          "expiry": "M4 cutover — restore must converge on the shared platform-aware activation protocol (ТЗ §10.4)",
+          "reason": "The restore path works (restore.rs suite green, kill-safe staging) but predates the shared activation module; converging it on the versioned-roots + journal + platform-aware protocol is tracked for the M4 slice so one activation implementation serves migration, restore and import.",
+          "adr": "docs/adr/0046-m3-limited-waivers.md"
+        },
+        {
+          "issue": "P1 (OPEN): Desktop migration still CLI-only (no in-app migration/restart-to-complete UX yet); legacy WAL checkpointing is the host's shutdown responsibility",
+          "by": "neotavern/architecture",
+          "date": "2026-08-15",
+          "severity": "P1",
+          "expiry": "M4 cutover — the in-app migration/restart-to-complete UI is an M4 Desktop slice (ТЗ §10.3.1 user-facing actions)",
+          "reason": "The migration protocol, journal and restart-to-complete recovery are fully implemented and tested in the kernel; only the UI surface (progress, Retry/Restart/Open help/Export diagnostics) is behind the CLI host until the M4 Desktop slice wires it into the app.",
+          "adr": "docs/adr/0046-m3-limited-waivers.md"
+        },
+        {
+          "issue": "P1 (OPEN): settings/branches/revisions/assets not yet converted (personas ARE converted)",
+          "by": "neotavern/architecture",
+          "date": "2026-08-15",
+          "severity": "P1",
+          "expiry": "M4 cutover — the remaining entity conversion (settings, branches/revisions, assets) lands with the M4 vertical slices, mirroring the M1 SEC-02 waiver expiry pattern",
+          "reason": "The converter preserves unknown character metadata (ТЗ §10.3) and converts characters/chats/messages/lorebooks/presets/personas now; settings, message branches/revisions and asset files are explicitly tracked as the next conversion slices so no legacy entity class is silently dropped.",
+          "adr": "docs/adr/0046-m3-limited-waivers.md"
+        }
+      ],
+      "acceptanceProposal": {
+        "proposedAcceptedCommit": "ff0d1fd",
+        "proposedBy": "neotavern/architecture",
+        "date": "2026-08-15",
+        "proposalUpdatedAt": "2026-08-15 (round 76) — M3 re-cut EXECUTED as pr-migration on the accepted M2 HEAD (1448b55): 6 cherry-picked M3 commits (b6246b0..96178e7, conflicts per reCutGuide: CHANGELOG/ledger/ADR-README ours, matrix/sync/release-manifest theirs-then-regen) + adaptation commit ff0d1fd (007_personas schema migration, portable pointer/journal v2, recovery validator, convert-from-verified-snapshot, tolerant personas count, drill content-faithfulness, regenerated generated.rs/matrix/docs, M3 CHANGELOG + ADR-0041 index). Full parity re-verified at ff0d1fd: cargo test --workspace 56 targets exit 0, clippy/fmt clean, upgrade-drill PASS, vitest 146/1756, web 565, typecheck/lint/dependency-rules/codegen/matrix/docs checks PASS, gate --check 5 milestones / 3 accepted GATE PASS + self-test PASS. Round-76 rehearsal found and fixed six chain-integration defects (see evidence inspection item)."
+      },
+      "reviewFeedback": {},
+      "humanReviewSteps": [
+        {
+          "directive": "1. Clean branch / gates / acceptance on actual HEAD",
+          "what": "Branch pr-migration is rooted at 1448b55 (accepted M2 HEAD) and carries only the 6 M3 commits + the adaptation commit; every gate has been run at the pushed head; the acceptance target is proposedAcceptedCommit ff0d1fd (in HEAD ancestry).",
+          "howToVerify": "git log --oneline 1448b55..HEAD (expect 7 commits: 6 M3 + adaptation); git diff main...HEAD --stat; node scripts/check-milestone-gates.mjs --check (5 milestones, 3 accepted, GATE PASS) && node scripts/check-milestone-gates.mjs --self-test && node scripts/check-milestone-gates.mjs --acceptance-drill."
+        },
+        {
+          "directive": "2. Staged converter + verified safety copy (ТЗ §10.3 sequence)",
+          "what": "MigrationSession runs detect -> preflight (MIN_FREE_SPACE_HEADROOM 64MiB) -> verified safety copy (SQLite online-backup API, quick_check + checksum) -> convert into a fresh staging root on the same volume -> validate schema/FK/counts/hashes -> report -> activate. With a backup requested the converter reads the VERIFIED safety copy (consistent snapshot), never the live source.",
+          "howToVerify": "cargo test --manifest-path crates/Cargo.toml -p neotavern-storage --test migration (24 tests incl. safety-copy-matches-source, WAL-commits-included, reject-non-legacy); inspect crates/storage/src/migration.rs MigrationSession::begin (conversion_source = backup snapshot when present); node scripts/upgrade-drill.mjs (integrity + per-table content parity)."
+        },
+        {
+          "directive": "3. Versioned roots + activation journal + Windows restart-to-complete",
+          "what": "roots/root-<id> + active-root.json + activation-journal.json with the five statuses (prepared/validated/activation_pending/committed/rolled_back); begin_activation writes prepared BEFORE any mutation; the pointer switch is the commit point under bounded retry (base delay doubled, ±20% jitter, Windows sharing/lock transient classification 32/33/36); exhausted budget leaves activation_pending and returns ActivationPending (restart to finish migration); resolve_pending_activation completes the switch at next bootstrap or rolls back when the target is missing.",
+          "howToVerify": "cargo test --manifest-path crates/Cargo.toml -p neotavern-storage --test activation (16 tests: journal round-trip, idempotent transitions, corrupt journal rejected, future format fails closed, pending completion, missing-target rollback, transient classification, retry recovers/ exhausts budget, flat-root unchanged, migration lifecycle, kill matrix)."
+        },
+        {
+          "directive": "4. Portable pointer/journal (audit P0 #3) + out-of-root refusal",
+          "what": "Pointer and journal are v2 with portable relative references (\".\" for the data root itself, otherwise a path relative to the data root); v1 absolute files stay readable. Moving the portable data root keeps the active root resolvable (3 new tests). Any pointer/journal target outside the data root is refused on both write and read (IntegrityViolation), including recovery.",
+          "howToVerify": "cargo test --manifest-path crates/Cargo.toml -p neotavern-storage --test activation pointer_survives_portable_data_root_move / v1_absolute_pointer_still_reads / journal_entries_resolve_after_portable_move; migration.rs tests pointer-refused-on-read-and-write; inspect activation.rs read_pointer/write_pointer/resolve_pending_activation."
+        },
+        {
+          "directive": "5. Single-writer lease held across the whole sequence",
+          "what": "MigrationSession::begin acquires the data-root lease and holds it through staging -> commit/cancel (session.commit()/session.cancel()); no second writer can enter between phases.",
+          "howToVerify": "cargo test --manifest-path crates/Cargo.toml -p neotavern-storage --test migration (session holds the lease between phases); inspect migration.rs MigrationSession + crates/storage/tests/activation.rs held-handle suite."
+        },
+        {
+          "directive": "6. Migration corpus + idempotency + future-schema fail-closed",
+          "what": "24-test corpus: full lifecycle, idempotent prepare-after-commit (one committed entry, one staging root), cancel keeps the previous root, safety copy matches source content, rejects non-legacy/missing sources, kill-safety (uncommitted lost / committed survives), personas migrate with a single default, unknown future schema versions fail closed.",
+          "howToVerify": "cargo test --manifest-path crates/Cargo.toml -p neotavern-storage --test migration + kill_safety; node scripts/upgrade-drill.mjs (idempotent re-run step)."
+        },
+        {
+          "directive": "7. CLI --migrate-legacy + upgrade drill on Windows",
+          "what": "neotavern-cli --root <data-root> --migrate-legacy <legacy.db> [--no-backup] runs the offline staged migration, prints progress on stderr + the committed report on stdout, then opens the kernel on the activated root. The upgrade drill proves the cross-platform cycle on the real CLI artifact (PASS on Windows in this session; macOS/Linux runs gate the release branch in CI).",
+          "howToVerify": "cargo test --manifest-path crates/Cargo.toml -p neotavern-cli (13 CLI tests incl. canonical data-root switch, --root required, non-legacy source rejected); node scripts/upgrade-drill.mjs."
+        },
+        {
+          "directive": "8. Honest gaps stated (waived P1s, no silent data loss)",
+          "what": "The PR/ledger state the eight limited P1 waivers (ADR-0046): parent-dir fsync best-effort, starts_with containment without canonicalization, --no-backup escape hatch, sidecar stop/block at the M4 in-app UX, recovery db-exists-only check, restore on a second activation system, CLI-only migration UX, settings/branches/revisions/assets conversion at M4. Each has an expiry; none permits silent data loss or a second product-data writer.",
+          "howToVerify": "see the M3 blockingIssues + waivers in the ledger and docs/adr/0046-m3-limited-waivers.md; the converter preserves unknown character metadata and converts characters/chats/messages/lorebooks/presets/personas now."
+        },
+        {
+          "directive": "9. How to accept (exact ledger edit)",
+          "what": "Edit docs/architecture/acceptance-ledger.json milestone M3-data-cutover: status -> \"accepted\", acceptedCommit -> ff0d1fd (or any later tip in HEAD ancestry), acceptedBy -> your human name (AUTO_ACTOR_RE rejects agent/assistant/system/bot/llm/claude/gpt), acceptedAt -> today (YYYY-MM-DD).",
+          "howToVerify": "node scripts/check-milestone-gates.mjs --check must report M3 accepted (4 milestones accepted); commit with a human-signed message. Acceptance cannot be self-certified: acceptedBy must be a person."
+        }
+      ],
+      "verdictNeeded": "HUMAN acceptance packet for M3 (branch pr-migration, base 1448b55 = accepted M2 HEAD, tree clean; review surface = the full branch diff 1448b55..HEAD; concrete acceptance target = acceptanceProposal.proposedAcceptedCommit ff0d1fd). Packet contents: 6 cherry-picked M3 commits (b6246b0..96178e7: staged legacy->kernel migration in the application flow, versioned data roots + activation journal + Windows restart-to-complete, migration corpus + real-schema mapping, CLI host flow, cross-platform upgrade drill, single-writer + pointer integrity + verified safety copy + personas conversion) + adaptation commit ff0d1fd (007_personas schema migration, portable pointer/journal v2, recovery validator, convert-from-verified-snapshot, tolerant personas count, drill content-faithfulness, regenerated generated.rs/matrix/docs, M3 CHANGELOG, ADR-0041 index). Parity at the proposed commit: cargo test --workspace 56 targets exit 0; clippy -D warnings clean; rustfmt clean; upgrade-drill PASS on Windows; vitest 146 files / 1756 tests exit 0; web 565; typecheck/lint/dependency-rules/codegen/matrix/docs checks PASS; gate --check \"5 milestones, 3 accepted, GATE PASS\" + self-test PASS. Eight limited P1 waivers recorded in blockingIssues/waivers (ADR-0046, expiries at release gate or M4 cutover). Round-76 rehearsal fixed six chain-integration defects the accumulated branch masked (personas schema split, portable pointer, recovery validator, snapshot-consistent conversion, stale generated.rs, drill byte-identity assertion)."
     },
     {
       "id": "M4-ui-api-cutover",
