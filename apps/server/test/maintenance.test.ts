@@ -3,7 +3,7 @@
  * restore»): exclusive acquisition, the mutation gate, restore-under-lock,
  * and lock release on both the success and the failure path.
  */
-import { writeFile } from 'node:fs/promises';
+import { rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { isAppError } from '@neotavern/shared';
@@ -170,5 +170,31 @@ describe('restore under the maintenance lock (ТЗ §10.4)', () => {
       payload: { title: 'Created after failed restore' },
     });
     expect(writable.statusCode, writable.payload).toBe(200);
+  });
+
+  it('failed restore leaves no locked file handle behind (Windows §10.3.1)', async () => {
+    const { app, paths } = await createTestApp({ useFileDatabase: true });
+    const backup = await app.inject({ method: 'POST', url: '/api/v2/backups' });
+    expect(backup.statusCode, backup.payload).toBe(200);
+    const backupId = backup.json().id as string;
+    const backupPath = join(paths.backups, `${backupId}.db`);
+
+    // Corrupt the backup so the SQLite restore fails *while opening* the file.
+    await writeFile(backupPath, 'not a sqlite database at all');
+
+    const failed = await app.inject({
+      method: 'POST',
+      url: `/api/v2/backups/${backupId}/restore`,
+    });
+    expect(failed.statusCode).toBe(500);
+    expect(failed.json()).toMatchObject({ code: 'RESTORE_FAILED' });
+
+    // Handle hygiene (ТЗ §10.3.1, §17.4): a failed restore must not leave the
+    // OS file handle open. The old implementation opened the corrupted backup
+    // with better-sqlite3 and dropped the instance without close() when a
+    // pragma failed — on Windows the file stays locked without
+    // FILE_SHARE_DELETE and cannot be removed until the process exits
+    // (EBUSY/EPERM). Delete must succeed immediately after the failure.
+    await expect(rm(backupPath)).resolves.toBeUndefined();
   });
 });

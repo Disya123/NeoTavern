@@ -41,16 +41,30 @@ export function openDatabase(options: OpenDatabaseOptions): SqliteConnection {
     options.path,
     options.readonly ? { readonly: true, fileMustExist: true } : undefined,
   );
-  if (!options.readonly) {
-    // WAL must be set outside a transaction; it persists per-database file.
-    sqlite.pragma('journal_mode = WAL');
+  try {
+    if (!options.readonly) {
+      // WAL must be set outside a transaction; it persists per-database file.
+      sqlite.pragma('journal_mode = WAL');
+    }
+    sqlite.pragma('foreign_keys = ON');
+    sqlite.pragma(`busy_timeout = ${options.busyTimeoutMs ?? 5000}`);
+    if (!options.readonly) {
+      sqlite.pragma(`synchronous = ${options.synchronous ?? 'NORMAL'}`);
+    }
+    // Reasonable cache size (-64000 = ~64MB page cache).
+    sqlite.pragma('cache_size = -64000');
+  } catch (cause) {
+    // Handle hygiene (ТЗ §10.3.1, §17.4): the constructor already opened the
+    // OS file handle. A pragma that fails on a corrupted/foreign file (e.g.
+    // SQLITE_NOTADB) must not leak that handle — on Windows the file stays
+    // locked without FILE_SHARE_DELETE until the process exits. Close before
+    // rethrowing; the original error is the one to surface.
+    try {
+      sqlite.close();
+    } catch {
+      // Best-effort close; a close failure must not mask the pragma error.
+    }
+    throw cause;
   }
-  sqlite.pragma('foreign_keys = ON');
-  sqlite.pragma(`busy_timeout = ${options.busyTimeoutMs ?? 5000}`);
-  if (!options.readonly) {
-    sqlite.pragma(`synchronous = ${options.synchronous ?? 'NORMAL'}`);
-  }
-  // Reasonable cache size (-64000 = ~64MB page cache).
-  sqlite.pragma('cache_size = -64000');
   return sqlite;
 }

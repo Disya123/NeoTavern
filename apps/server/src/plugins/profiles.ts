@@ -1,6 +1,8 @@
 /**
  * Profile routes: /api/v2/profiles (ТЗ §10.2, §10.4). Includes the portable
- * profile export — a single archive with a database snapshot and user files.
+ * profile export — a single archive built from an entity/field allowlist plus
+ * the user's original files (SEC-02: a full-DB snapshot is forbidden as a
+ * profile export; see src/lib/profileExport.ts).
  */
 import {
   IdSchema,

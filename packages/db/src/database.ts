@@ -189,8 +189,12 @@ export function createAppDatabase(path: string, options: CreateDatabaseOptions =
       if (path === ':memory:') {
         throw new Error('Cannot restore a file snapshot into an in-memory database');
       }
-      const source = openDatabase({ path: sourcePath, readonly: true });
+      // Handle hygiene (ТЗ §10.3.1, §17.4): the source handle must be closed on
+      // every exit path, including a failed openDatabase() (openDatabase itself
+      // closes on pragma failure — the null guard here is defense in depth).
+      let source: SqliteConnection | null = null;
       try {
+        source = openDatabase({ path: sourcePath, readonly: true });
         const checks = source.pragma('quick_check') as Array<Record<string, unknown>>;
         const valid =
           checks.length > 0 &&
@@ -198,7 +202,7 @@ export function createAppDatabase(path: string, options: CreateDatabaseOptions =
         if (!valid) throw new Error('Backup database failed SQLite quick_check');
         await source.backup(path);
       } finally {
-        source.close();
+        source?.close();
       }
     },
     diagnostics: () => readDiagnostics(sqlite),
