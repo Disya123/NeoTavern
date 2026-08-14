@@ -108,6 +108,45 @@ orphans are skipped and reported, and secrets/provider configs/plugins/
 themes are never copied. The source is never mutated in place; unsupported
 layouts yield a controlled incompatibility error.
 
+## Staged migration into the application flow (ТЗ §10.3, Этап 3)
+
+`neotavern_storage::migration` orchestrates the full ТЗ §10.3 sequence for
+converting a legacy database into a fresh versioned kernel root:
+
+```text
+Detect legacy data
+→ Acquire exclusive maintenance lock (the data-root lease)
+→ Preflight disk space and versions
+→ Create verified backup (pre-migration-* safety copy + sha256)
+→ Convert into staging data-root (versioned root under roots/)
+→ Validate schema, FK, counts and hashes
+→ Produce human-readable report (per-table counts + skipped orphans)
+→ Platform-aware commit/activation (activation journal, ADR-0041)
+→ Retain rollback pointer (previous root stays until first open after)
+```
+
+- **`migration::prepare`** stages and validates without activating: the
+  caller (host) can still cancel; **`migration::commit`** publishes the
+  staged root through the journal (`activation_pending` → pointer switch with
+  bounded transient retry → `committed`); **`migration::cancel`** records
+  `rolled_back`, keeps the previous root active and removes the staging root
+  (the safety copy is retained). **`migration::migrate`** is the one-shot
+  convenience (prepare + commit).
+- **Immutable source**: the legacy database is opened strictly read-only;
+  only the safety copy reads its bytes. **No live dual-write**: staging is a
+  fresh versioned root on the same volume, published by the pointer switch.
+- **Preflight** refuses a non-file or missing source (`NotFound`), a
+  non-legacy source (`UnsupportedStorageFormat`), and a target volume with
+  less than 3× the source size + 64 MiB free (`DiskFull`) before any write.
+- **Idempotent**: re-running `prepare` after a committed migration reports
+  the existing committed entry without staging a second root; re-committing a
+  committed entry is a no-op.
+- **Migration corpus** (ТЗ §17.4) is covered by `crates/storage/tests/
+  migration.rs`: kernel databases at every released schema revision (1..6)
+  upgrade with seeds preserved, a future schema fails closed
+  (`SchemaTooNew`), a corrupted page is detected (`Corrupt`), and an
+  interrupted legacy migration recovers with a fresh staging root.
+
 ## Versioned data roots and the activation journal (ADR-0041, Этап 3)
 
 The canonical v2 layout keeps every version of a data root under

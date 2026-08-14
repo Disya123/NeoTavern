@@ -230,7 +230,7 @@
     {
       "source": "architecture/portable-data.md",
       "target": "architecture/portable-data.md",
-      "sha256": "5535815984ac95c71069a264a17a229639632ff060f864a165968379cb79d26f"
+      "sha256": "583bc25a2532282e791c83684fc12b7c37b3a24bc6834c99ba0ccd64e1029e44"
     },
     {
       "source": "architecture/prompt-pipeline.md",
@@ -260,7 +260,7 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "59c987879f8da345d8c9c3f1734278a1668ede2c49d44d1874b7af28230e7ed1"
+      "sha256": "5d37708ad0daa2191b7cda69c357f6b8b0533e9aa17ba3ecdf8f4ec5bd125e75"
     },
     {
       "source": "data/README.md",

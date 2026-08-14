@@ -2165,6 +2165,7 @@ dependencies = [
  "sha2",
  "tempfile",
  "time",
+ "uuid",
 ]
 
 [[package]]

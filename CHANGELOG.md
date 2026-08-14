@@ -159,6 +159,36 @@
   protocol), CHANGELOG. The staged converter wiring this protocol into the
   application flow and the migration corpus are the next Этап 3 slices.
 
+- **Staged legacy→kernel migration in the application flow (M3 / Этап 3,
+  ТЗ §10.3, ADR-0041).** A new `neotavern_storage::migration` module
+  orchestrates the full ТЗ §10.3 sequence for converting a legacy
+  (pre-kernel Drizzle) database into a fresh versioned kernel root:
+  detect → acquire the data-root lease as the exclusive maintenance lock →
+  preflight (missing/non-file source → `NotFound`, non-legacy source →
+  `UnsupportedStorageFormat`, free space below 3× source + 64 MiB →
+  `DiskFull`, all before any write) → verified safety copy
+  (`backups/pre-migration-*/database.sqlite` + `checksum.sha256`) →
+  convert through the existing read-only `convert_legacy` into a staging
+  versioned root (`roots/root-<id>/`, same volume by construction) →
+  validate (normal kernel open + `foreign_key_check` + current schema
+  revision) → human-readable report (per-table counts + skipped orphans) →
+  platform-aware commit via the ADR-0041 activation journal (bounded
+  transient retry on the pointer switch; `activation_pending` +
+  restart-to-complete on budget exhaustion) → previous root retained as the
+  rollback pointer. `prepare`/`commit`/`cancel` split the lifecycle so the
+  user can cancel before activation (`rolled_back`, staging removed, safety
+  copy retained); re-running is idempotent (a committed entry is reported,
+  no second staging root); provider configs/secrets are never copied.
+  **Migration corpus (ТЗ §17.4)** in `tests/migration.rs`: kernel databases
+  at every released schema revision (1..6) open and upgrade with seeds
+  preserved, a future schema fails closed (`SchemaTooNew`), a corrupted
+  database is detected (`Corrupt`), and an interrupted legacy migration
+  recovers with a fresh staging root. Tests: 15 new migration integration
+  tests; storage suite and full cargo workspace green; clippy/rustfmt clean.
+  Docs: `portable-data.md` (staged migration section), CHANGELOG. The
+  Windows lock-contention E2E on packaged artifacts and the switch of the
+  canonical data-root remain the later Этап 3 slices.
+
 - **Prompt pipeline in the Kernel (M2 / Этап 2.6, ТЗ §9.1–§9.2).** Every
   generation run now builds an immutable **PromptPlan** before the provider
   attempt: character/persona system blocks (from the chat's character card,
