@@ -14,6 +14,10 @@ runtime-kernel = { path = "../../runtime-kernel" }
 # byte-identical envelopes (§6.3: transports do not define their own DTOs).
 neotavern-envelope = { path = "../envelope" }
 uuid = { version = "1", features = ["v4"] }
+# Offline host-side legacy→kernel migration (ТЗ §10.3): the CLI is the
+# maintenance-mode host that runs the staged converter with the kernel
+# closed, then opens the kernel on the activated root (data-root switch).
+neotavern-storage = { path = "../../storage" }
 
 [dev-dependencies]
 tempfile = "3"

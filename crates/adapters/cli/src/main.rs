@@ -15,11 +15,15 @@
 //! ```text
 //! neotavern-cli --root <data-root> --operation <operationId> '<payload JSON>' [--request-id <uuid>]
 //! neotavern-cli --root <data-root> --envelope            # read a full request envelope JSON from stdin
+//! neotavern-cli --root <data-root> --migrate-legacy <legacy.db> [--no-backup]  # offline migration (ТЗ §10.3)
 //! neotavern-cli --help
 //! ```
 //!
 //! Without `--root` the kernel is stateless: `meta.get` works, storage
-//! operations answer a controlled error envelope.
+//! operations answer a controlled error envelope. `--migrate-legacy` is the
+//! maintenance-mode host flow: it runs the staged legacy→kernel converter
+//! with the kernel CLOSED, then opens the kernel on the activated root
+//! (canonical data-root switch, Этап 3 work 8).
 //!
 //! ## Exit codes (stable contract)
 //!
@@ -34,7 +38,7 @@
 
 use std::env;
 use std::io::Read;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use neotavern_envelope as envelope;
@@ -70,6 +74,14 @@ enum Invocation {
         payload: serde_json::Value,
         request_id: String,
     },
+    /// Offline host-side legacy→kernel migration (ТЗ §10.3): run the staged
+    /// converter with the kernel CLOSED, then open the kernel on the
+    /// activated root. `--source` is the legacy database path.
+    MigrateLegacy {
+        source: PathBuf,
+        /// `false` → create the verified pre-migration safety copy.
+        backup: bool,
+    },
 }
 
 /// Parsed command line.
@@ -81,7 +93,8 @@ struct Args {
 
 const USAGE: &str = "\
 usage: neotavern-cli [--root <data-root>] \
-(--operation <operationId> '<payload JSON>' [--request-id <uuid>] | --envelope)";
+(--operation <operationId> '<payload JSON>' [--request-id <uuid>] | --envelope)
+       neotavern-cli --root <data-root> --migrate-legacy <legacy.db> [--no-backup]";
 
 fn main() -> ExitCode {
     match run() {
@@ -101,8 +114,18 @@ fn main() -> ExitCode {
 fn run() -> Result<u8, CliError> {
     let args = parse_args()?;
 
+    // Offline host-side migration runs with the kernel CLOSED (ТЗ §10.3:
+    // all SQLite handles closed before activation). It is not a wire
+    // operation — it is the maintenance-mode host flow, so it bypasses the
+    // envelope layer entirely and reports progress/result on stdout/stderr.
+    if let Invocation::MigrateLegacy { source, backup } = &args.invocation {
+        return run_migrate_legacy(args.root.as_deref(), source, *backup);
+    }
+
     // Build the request envelope bytes from the invocation.
     let envelope_bytes = match &args.invocation {
+        // Handled by the early return above; unreachable here.
+        Invocation::MigrateLegacy { .. } => unreachable!("migrate-legacy exits earlier"),
         Invocation::EnvelopeFromStdin => read_stdin_bounded()?,
         Invocation::Operation {
             operation_id,
@@ -211,6 +234,57 @@ fn run() -> Result<u8, CliError> {
 /// (never payload-driven).
 const INTERNAL_FALLBACK_BODY: &str = r#"{"kind":"error","requestId":"","error":{"code":"INTERNAL","params":{"rule":"envelope_build_failed"}}}"#;
 
+/// Runs the offline staged legacy→kernel migration (ТЗ §10.3): the staged
+/// converter with progress on stderr, then a kernel open on the activated
+/// root to confirm the canonical data-root switch (work 8 of Этап 3).
+///
+/// Exit codes: `0` = migrated and the kernel opened on the active root;
+/// `1` = migration failed (controlled storage error, diagnostic on stderr);
+/// `2` = usage error (missing `--root`).
+fn run_migrate_legacy(root: Option<&Path>, source: &Path, backup: bool) -> Result<u8, CliError> {
+    let data_root = root.ok_or_else(|| {
+        CliError::Usage("--migrate-legacy requires --root <data-root>".to_string())
+    })?;
+
+    let mut progress = |stage: neotavern_storage::migration::MigrationStage| {
+        eprintln!("[migrate] stage: {}", stage.as_str());
+    };
+    let outcome = neotavern_storage::migration::migrate(data_root, source, backup, &mut progress)
+        .map_err(|err| CliError::Transport(format!("legacy migration failed: {err}")))?;
+
+    println!("migration committed");
+    println!("  entry_id:     {}", outcome.entry_id);
+    println!("  active_root:  {}", outcome.active_root.display());
+    if let Some(previous) = &outcome.previous_root {
+        println!("  previous_root: {}", previous.display());
+    }
+    println!(
+        "  converted:    characters={} chats={} messages={} lorebooks={} presets={}",
+        outcome.report.characters,
+        outcome.report.chats,
+        outcome.report.messages,
+        outcome.report.lorebooks,
+        outcome.report.presets
+    );
+    println!("  skipped:      {}", outcome.report.skipped);
+    for orphan in &outcome.report.orphans {
+        println!("  - {orphan}");
+    }
+
+    // Confirm the canonical data-root switch: open the kernel on the now
+    // active root. Any error here is a real activation problem, not a
+    // cosmetic one (the previous root is still retained for rollback).
+    let kernel = Kernel::open(KernelConfig {
+        expected_schema_hash: contracts_generated::contract_schema_hash().to_string(),
+        ffi_abi_version: runtime_kernel::FFI_ABI_VERSION,
+        data_root: Some(data_root.to_path_buf()),
+    })
+    .map_err(|err| CliError::Transport(format!("kernel open on active root failed: {err}")))?;
+    drop(kernel);
+    println!("kernel opened on the active root: data-root switch verified");
+    Ok(EXIT_OK)
+}
+
 /// Builds a `{"kind":"error", ...}` envelope body with the given code/rule.
 fn error_envelope_body(code: &str, rule: &str) -> Vec<u8> {
     envelope::build_error_response("", code, vec![("rule".to_string(), rule.to_string())])
@@ -273,6 +347,8 @@ fn parse_args() -> Result<Args, CliError> {
     let mut operation: Option<(String, serde_json::Value)> = None;
     let mut request_id: Option<String> = None;
     let mut from_stdin = false;
+    let mut migrate_legacy: Option<PathBuf> = None;
+    let mut migrate_backup = true;
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -307,35 +383,59 @@ fn parse_args() -> Result<Args, CliError> {
                 request_id = Some(value);
             }
             "--envelope" => from_stdin = true,
+            "--migrate-legacy" => {
+                let value = args.next().ok_or_else(|| {
+                    CliError::Usage("--migrate-legacy requires a legacy database path".to_string())
+                })?;
+                migrate_legacy = Some(PathBuf::from(value));
+            }
+            "--no-backup" => migrate_backup = false,
             other => {
                 return Err(CliError::Usage(format!("unknown argument {other:?}")));
             }
         }
     }
 
-    let invocation = match (operation, from_stdin) {
-        (Some((operation_id, payload)), false) => Invocation::Operation {
-            operation_id,
-            payload,
-            request_id: request_id.unwrap_or_else(|| Uuid::new_v4().to_string()),
-        },
-        (None, true) => {
-            if request_id.is_some() {
+    let invocation = if let Some(source) = migrate_legacy {
+        if operation.is_some() || from_stdin {
+            return Err(CliError::Usage(
+                "--migrate-legacy excludes --operation/--envelope".to_string(),
+            ));
+        }
+        if request_id.is_some() {
+            return Err(CliError::Usage(
+                "--request-id applies only to --operation".to_string(),
+            ));
+        }
+        Invocation::MigrateLegacy {
+            source,
+            backup: migrate_backup,
+        }
+    } else {
+        match (operation, from_stdin) {
+            (Some((operation_id, payload)), false) => Invocation::Operation {
+                operation_id,
+                payload,
+                request_id: request_id.unwrap_or_else(|| Uuid::new_v4().to_string()),
+            },
+            (None, true) => {
+                if request_id.is_some() {
+                    return Err(CliError::Usage(
+                        "--request-id applies only to --operation".to_string(),
+                    ));
+                }
+                Invocation::EnvelopeFromStdin
+            }
+            (Some(_), true) => {
                 return Err(CliError::Usage(
-                    "--request-id applies only to --operation".to_string(),
+                    "--operation and --envelope are mutually exclusive".to_string(),
                 ));
             }
-            Invocation::EnvelopeFromStdin
-        }
-        (Some(_), true) => {
-            return Err(CliError::Usage(
-                "--operation and --envelope are mutually exclusive".to_string(),
-            ));
-        }
-        (None, false) => {
-            return Err(CliError::Usage(
-                "nothing to run: pass --operation or --envelope".to_string(),
-            ));
+            (None, false) => {
+                return Err(CliError::Usage(
+                    "nothing to run: pass --operation or --envelope".to_string(),
+                ));
+            }
         }
     };
 

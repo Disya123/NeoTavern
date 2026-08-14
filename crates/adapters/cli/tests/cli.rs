@@ -346,3 +346,180 @@ fn oversized_stdin_is_bounded() {
         stderr_text(&output)
     );
 }
+
+// --- offline migration flow (ТЗ §10.3) ---------------------------------------
+
+/// Builds a minimal legacy Drizzle database (five product tables, no kernel
+/// meta) with one character and one chat+message.
+fn build_legacy(path: &std::path::Path) -> rusqlite::Result<()> {
+    let conn = rusqlite::Connection::open(path)?;
+    conn.execute_batch(
+        "CREATE TABLE characters (
+            id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT, avatar TEXT,
+            ext TEXT DEFAULT '{}', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        );
+        CREATE TABLE chats (
+            id TEXT PRIMARY KEY, title TEXT, character_id TEXT,
+            created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        );
+        CREATE TABLE messages (
+            id TEXT PRIMARY KEY, chat_id TEXT NOT NULL, role TEXT, content TEXT NOT NULL,
+            created_at INTEGER NOT NULL
+        );
+        CREATE TABLE lorebooks (
+            id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT,
+            created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        );
+        CREATE TABLE presets (
+            id TEXT PRIMARY KEY, kind TEXT NOT NULL, name TEXT NOT NULL, data TEXT DEFAULT '{}',
+            created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        );
+        CREATE TABLE provider_configs (
+            id TEXT PRIMARY KEY, provider TEXT NOT NULL, name TEXT NOT NULL, config TEXT, api_key TEXT
+        );",
+    )?;
+    conn.execute(
+        "INSERT INTO characters (id, name, created_at, updated_at) \
+         VALUES ('c1c1c1c1-0000-4000-8000-000000000001', 'Migrated', 1700000000000, 1700000001000)",
+        [],
+    )?;
+    conn.execute(
+        "INSERT INTO chats (id, title, character_id, created_at, updated_at) \
+         VALUES ('c1c1c1c1-0000-4000-8000-000000000002', 'Chat', 'c1c1c1c1-0000-4000-8000-000000000001', 1700000002000, 1700000003000)",
+        [],
+    )?;
+    conn.execute(
+        "INSERT INTO messages (id, chat_id, role, content, created_at) \
+         VALUES ('c1c1c1c1-0000-4000-8000-000000000003', 'c1c1c1c1-0000-4000-8000-000000000002', 'user', 'Hello', 1700000004000)",
+        [],
+    )?;
+    Ok(())
+}
+
+/// 11. `--migrate-legacy` runs the offline staged migration: progress on
+///     stderr, the committed report on stdout, then the kernel opens on the
+///     activated (versioned) root — the canonical data-root switch.
+#[test]
+fn migrate_legacy_switches_the_canonical_data_root() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let data_root = dir.path().join("data");
+    let source = dir.path().join("legacy.db");
+    build_legacy(&source).expect("build legacy db");
+
+    let output = cli(
+        &[
+            "--root",
+            data_root.to_str().unwrap(),
+            "--migrate-legacy",
+            source.to_str().unwrap(),
+        ],
+        None,
+    );
+    assert_eq!(exit_code(&output), 0, "stderr: {}", stderr_text(&output));
+    let stdout = stdout_text(&output);
+    assert!(stdout.contains("migration committed"), "stdout: {stdout}");
+    assert!(stdout.contains("characters=1"), "stdout: {stdout}");
+    assert!(stdout.contains("chats=1"), "stdout: {stdout}");
+    assert!(stdout.contains("messages=1"), "stdout: {stdout}");
+    assert!(
+        stdout.contains("kernel opened on the active root"),
+        "stdout: {stdout}"
+    );
+    assert!(
+        stdout.contains("active_root:"),
+        "stdout reports the active root path"
+    );
+    let stderr = stderr_text(&output);
+    for stage in ["preflight", "convert", "validate", "activate"] {
+        assert!(
+            stderr.contains(stage),
+            "stderr reports the {stage} stage: {stderr}"
+        );
+    }
+
+    // The kernel really opens on the active root and reads migrated data
+    // through the generated wire client (characters.get round-trip).
+    let kernel = Kernel::open(KernelConfig {
+        expected_schema_hash: contracts_generated::contract_schema_hash().to_string(),
+        ffi_abi_version: runtime_kernel::FFI_ABI_VERSION,
+        data_root: Some(data_root.clone()),
+    })
+    .expect("kernel opens on the migrated root");
+    let payload = serde_json::to_vec(
+        &serde_json::json!({ "characterId": "c1c1c1c1-0000-4000-8000-000000000001" }),
+    )
+    .expect("payload");
+    let result = kernel
+        .dispatch(
+            "characters.get",
+            &payload,
+            &runtime_kernel::CancellationFlag::new(),
+        )
+        .expect("characters.get after migration");
+    let value: serde_json::Value = serde_json::from_slice(&result).expect("result JSON");
+    assert_eq!(value["name"], "Migrated", "result: {value}");
+    drop(kernel);
+
+    // The previous (flat) root is retained as the rollback pointer and the
+    // pointer file points into roots/.
+    let journal = neotavern_storage::activation::read_journal(&data_root).expect("journal");
+    let entry = journal.entries.last().expect("migration entry");
+    assert_eq!(entry.kind, "migration");
+    let active = neotavern_storage::activation::active_root(&data_root).expect("active root");
+    assert_ne!(
+        active, data_root,
+        "active root is a versioned root, not the flat root"
+    );
+    assert!(
+        active.starts_with(data_root.join("roots")),
+        "active root under roots/: {}",
+        active.display()
+    );
+}
+
+/// 12. `--migrate-legacy` without `--root` is a usage error (exit 2).
+#[test]
+fn migrate_legacy_requires_root() {
+    let output = cli(&["--migrate-legacy", "whatever.db"], None);
+    assert_eq!(exit_code(&output), 2);
+    assert!(
+        stdout_text(&output).is_empty(),
+        "no envelope on usage error"
+    );
+}
+
+/// 13. Migrating a non-legacy source fails with exit 1 and a controlled
+///     storage diagnostic (fail-closed, ТЗ §10.3); the data root is left
+///     without any journal (no writes before validation).
+#[test]
+fn migrate_legacy_rejects_non_legacy_source() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let data_root = dir.path().join("data");
+    let foreign = dir.path().join("foreign.db");
+    {
+        let conn = rusqlite::Connection::open(&foreign).expect("open foreign");
+        conn.execute_batch("CREATE TABLE foo (id TEXT PRIMARY KEY)")
+            .expect("create");
+    }
+
+    let output = cli(
+        &[
+            "--root",
+            data_root.to_str().unwrap(),
+            "--migrate-legacy",
+            foreign.to_str().unwrap(),
+        ],
+        None,
+    );
+    assert_eq!(exit_code(&output), 1, "stderr: {}", stderr_text(&output));
+    assert!(
+        stderr_text(&output).contains("UnsupportedStorageFormat")
+            || stderr_text(&output).contains("unsupported"),
+        "diagnostic names the incompatibility: {}",
+        stderr_text(&output)
+    );
+    assert!(
+        !data_root.join("activation-journal.json").exists(),
+        "no journal written for a refused migration"
+    );
+}
