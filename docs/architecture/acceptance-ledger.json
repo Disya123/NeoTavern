@@ -255,7 +255,7 @@
           {
             "directive": "3. Compressed-input accounting + backpressure",
             "what": "Wire and decoded byte counts share the cap (gzip bomb cannot expand past it); per-plugin and global in-flight byte budgets are enforced; oversized bodies are destroyed at the cap.",
-            "howToVerify": "npx vitest run apps/plugin-runtime/src/host/networkPool.test.ts apps/plugin-runtime/src/host/memoryHost.test.ts — see 'bounds the DECOMPRESSED size — a tiny gzip bomb cannot expand past the cap', 'bounds the COMPRESSED wire bytes too', 'enforces the per-plugin in-flight byte budget (SEC-04)', 'enforces the global in-flight byte budget across plugins (SEC-04)'."
+            "howToVerify": "npx vitest run apps/plugin-runtime/src/host/networkPool.test.ts apps/plugin-runtime/src/host/memoryHost.test.ts apps/server/test/backendHostStream.spec.ts apps/plugin-runtime/src/host/responseStreamer.test.ts — see 'bounds the DECOMPRESSED size — a tiny gzip bomb cannot expand past the cap', 'bounds the COMPRESSED wire bytes too', 'enforces the per-plugin in-flight byte budget (SEC-04)', 'enforces the global in-flight byte budget across plugins (SEC-04)', 'grants credit back to the worker as the consumer drains the pipe' (16 stream-credit tests + 58 SEC-04/05/01 tests verified green at HEAD). Implementation of the pause/drain claim: apps/plugin-runtime/src/host/networkPool.ts lines 217-235 — decoder.on('drain') resumes the paused response, and a false decoder.write(chunk) result pauses it until the queue drains."
           },
           {
             "directive": "4. Crash-recovery plugin install journal",
