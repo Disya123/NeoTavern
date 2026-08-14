@@ -24,11 +24,20 @@
  * Acceptance integrity (an `accepted` milestone must be provable):
  *   - `acceptedCommit` is a non-empty git commit that exists and is an
  *     ancestor of HEAD;
- *   - `acceptedBy` is recorded;
+ *   - `acceptedBy` is a person or an explicit human-ratified signature, never
+ *     an automated actor (acceptance is a human verdict);
  *   - `blockingIssues` is empty, or every issue is covered by a formal
- *     `waivers` entry (`{ issue, by, date, reason }`);
+ *     `waivers` entry `{ issue, by, date, severity, expiry, reason, adr }`
+ *     whose fields are validated: `by` is human (not the agent), `severity`
+ *     matches the blocker's P-level, `expiry` bounds the exception, and `adr`
+ *     links a real limited-waiver ADR document in `docs/adr/` (ТЗ requires an
+ *     ADR waiver, not just a JSON record);
  *   - any `P0` blocking issue forbids acceptance even with a waiver;
- *   - `evidence` is a non-empty array of strings (checkable statements);
+ *   - `evidence` is a non-empty array of STRUCTURED, reproducible items —
+ *     `{ type: "test-run"|"ci"|"artifact"|"inspection", command, result,
+ *     commit, ciRun, artifact }` — a test-run item must record the exact
+ *     command and a commit in HEAD's ancestry, a ci item the CI run URL;
+ *     bare "597/597" strings are rejected;
  *   - the ledger itself is non-empty and structurally valid — an empty or
  *     broken ledger exits 1 (no ignored failures).
  *
@@ -64,6 +73,112 @@ const P0_RE = /\bP0\b/i;
 
 /** Non-empty sha1/sha256-looking git revision. */
 const COMMIT_RE = /^[0-9a-fA-F]{7,64}$/;
+
+/** Evidence item types the gate accepts (see validateEvidence). */
+const EVIDENCE_TYPES = new Set(['test-run', 'ci', 'artifact', 'inspection']);
+
+/**
+ * Automated actors can never waive or accept a milestone — the waiver's `by`
+ * (and an accepted milestone's `acceptedBy`) must be a person or an explicit
+ * human-ratified process signature, not the implementing agent.
+ */
+const AUTO_ACTOR_RE = /\b(agent|assistant|system|bot|llm|claude|gpt)\b/i;
+
+/**
+ * Validate one structured evidence item (audit: evidence must be
+ * REPRODUCIBLE, not a bare statement — record the command, the commit it ran
+ * on, and/or the CI run / artifact). When `requireAncestry` is true (real
+ * gate / drill, not self-test), a test-run evidence commit must be a git
+ * commit in HEAD's ancestry.
+ */
+function evidenceFailures(milestoneLabel, item, index, requireAncestry) {
+  const out = [];
+  const at = `${milestoneLabel}: evidence[${index}]`;
+  if (typeof item === 'string') {
+    out.push(
+      `${at} is a bare string — record structured evidence ` +
+        '{ type: "test-run"|"ci"|"artifact"|"inspection", command, result, commit, ciRun, artifact }',
+    );
+    return out;
+  }
+  if (typeof item !== 'object' || item === null || Array.isArray(item)) {
+    out.push(`${at} must be a structured evidence object`);
+    return out;
+  }
+  if (!EVIDENCE_TYPES.has(item.type)) {
+    out.push(
+      `${at}.type must be one of ${[...EVIDENCE_TYPES].join('|')} (got '${String(item.type)}')`,
+    );
+  }
+  if (typeof item.result !== 'string' || item.result.length === 0) {
+    out.push(`${at} must carry a non-empty result statement`);
+  }
+  if (item.type === 'test-run') {
+    if (typeof item.command !== 'string' || item.command.length === 0) {
+      out.push(`${at} (test-run) must record the exact command that was run`);
+    }
+    if (typeof item.commit !== 'string' || !COMMIT_RE.test(item.commit)) {
+      out.push(`${at} (test-run) must record the commit the command ran on`);
+    } else if (requireAncestry && !commitExistsAndIsAncestor(item.commit)) {
+      out.push(
+        `${at}.commit '${item.commit}' is not a git commit in HEAD's ancestry — ` +
+          'the evidence is not reproducible from this branch',
+      );
+    }
+  }
+  if (item.type === 'ci') {
+    if (typeof item.ciRun !== 'string' || !/^https?:\/\//.test(item.ciRun)) {
+      out.push(`${at} (ci) must record the ciRun URL of the CI run`);
+    }
+  }
+  if (item.type === 'artifact') {
+    if (typeof item.artifact !== 'string' || item.artifact.length === 0) {
+      out.push(`${at} (artifact) must record the artifact path or id`);
+    }
+  }
+  return out;
+}
+
+/**
+ * Validate the waiver that covers a blocker (audit: the gate must check
+ * `by` / `reason` / `severity` / `expiry`, not just the `issue` match, and
+ * the ТЗ requires a limited ADR waiver — so a waiver must link a real ADR
+ * document in docs/adr/).
+ */
+function waiverFailures(milestoneLabel, blocker, waiver) {
+  const out = [];
+  const at = `${milestoneLabel}: waiver for '${blocker.slice(0, 80)}'`;
+  if (typeof waiver.by !== 'string' || waiver.by.length === 0) {
+    out.push(`${at} must record who approved the waiver (by)`);
+  } else if (AUTO_ACTOR_RE.test(waiver.by)) {
+    out.push(`${at}.by '${waiver.by}' looks like an automated actor — a person or an explicit human-ratified process signature must waive`);
+  }
+  if (typeof waiver.reason !== 'string' || waiver.reason.trim().length < 20) {
+    out.push(`${at} must record a real reason (>= 20 characters)`);
+  }
+  const severity = /(P[0-9])(?:\b|:)/.exec(blocker)?.[1];
+  if (severity === undefined) {
+    out.push(`${at}: cannot extract a severity (P0/P1/...) from the blocker to check the waiver`);
+  } else if (waiver.severity !== severity) {
+    out.push(`${at}.severity '${String(waiver.severity)}' does not match the blocker severity ${severity}`);
+  }
+  if (typeof waiver.expiry !== 'string' || waiver.expiry.length === 0) {
+    out.push(`${at} must record an expiry (milestone or date) — a waiver without an expiry is not limited`);
+  }
+  if (typeof waiver.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(waiver.date)) {
+    out.push(`${at} must record the waiver date as YYYY-MM-DD`);
+  }
+  if (typeof waiver.adr !== 'string' || !waiver.adr.startsWith('docs/adr/')) {
+    out.push(`${at} must link the limited waiver ADR (docs/adr/NNNN-...) — ТЗ requires an ADR waiver`);
+  } else {
+    try {
+      readFileSync(join(ROOT, waiver.adr), 'utf8');
+    } catch {
+      out.push(`${at}: the linked ADR '${waiver.adr}' does not exist`);
+    }
+  }
+  return out;
+}
 
 function fail(message) {
   console.error(`[milestone-gates] FAIL: ${message}`);
@@ -148,16 +263,23 @@ function validate(milestones, policy) {
       }
       if (!m.acceptedBy) {
         ok = recordFail(label, `${label}: accepted milestone must record acceptedBy`) && ok;
-      }
-      // --- evidence must be checkable.
-      if (
-        !Array.isArray(m.evidence) ||
-        m.evidence.length === 0 ||
-        !m.evidence.every((e) => typeof e === 'string')
-      ) {
+      } else if (AUTO_ACTOR_RE.test(m.acceptedBy)) {
         ok =
-          recordFail(label, `${label}: accepted milestone must carry non-empty string evidence`) &&
-          ok;
+          recordFail(
+            label,
+            `${label}: acceptedBy '${m.acceptedBy}' looks like an automated actor — ` +
+              'acceptance is a human verdict',
+          ) && ok;
+      }
+      // --- evidence must be reproducible, not a bare statement.
+      const ev = Array.isArray(m.evidence) ? m.evidence : [];
+      if (ev.length === 0) {
+        ok = recordFail(label, `${label}: accepted milestone must carry non-empty evidence`) && ok;
+      }
+      for (let e = 0; e < ev.length; e += 1) {
+        for (const message of evidenceFailures(label, ev[e], e, !SELF_TEST)) {
+          ok = recordFail(label, message) && ok;
+        }
       }
       // --- blockers: empty, or every issue formally waived; P0 never waivable.
       const blockers = Array.isArray(m.blockingIssues) ? m.blockingIssues : [];
@@ -176,14 +298,18 @@ function validate(milestones, policy) {
             ) && ok;
           continue;
         }
-        const covered = waivers.some((w) => w && typeof w === 'object' && w.issue === blocker);
-        if (!covered) {
+        const waiver = waivers.find((w) => w && typeof w === 'object' && w.issue === blocker);
+        if (!waiver) {
           ok =
             recordFail(
               label,
               `${label}: accepted milestone has an un-waived blocking issue — ` +
-                `'${blocker.slice(0, 120)}' (waive it in waivers[] with issue/by/date/reason)`,
+                `'${blocker.slice(0, 120)}' (waive it in waivers[] with issue/by/date/severity/expiry/reason/adr)`,
             ) && ok;
+        } else {
+          for (const message of waiverFailures(label, blocker, waiver)) {
+            ok = recordFail(label, message) && ok;
+          }
         }
       }
     } else if (m.status === 'in_progress') {
@@ -227,13 +353,29 @@ function selfTest() {
     name: 'fixture',
     status,
     requirements: [],
-    evidence: ['fixture evidence'],
+    evidence: [
+      {
+        type: 'test-run',
+        command: 'pnpm test -- fixture',
+        result: 'fixture suite passed',
+        commit: 'f00df00',
+      },
+    ],
     blockingIssues: [],
     waivers: [],
     ...(status === 'accepted'
-      ? { acceptedCommit: 'f00df00', acceptedBy: 'self-test' }
+      ? { acceptedCommit: 'f00df00', acceptedBy: 'self-test human' }
       : { acceptedCommit: null, acceptedBy: null }),
   });
+  const goodWaiver = {
+    issue: 'P1: fixture waived issue',
+    by: 'fixture human reviewer',
+    date: '2026-01-01',
+    severity: 'P1',
+    expiry: 'M4 cutover',
+    reason: 'fixture waiver with a sufficiently long and real reason text',
+    adr: 'docs/adr/0038-canonical-rust-kernel-core.md',
+  };
   const cases = [
     // accepted → accepted → accepted : holds
     [
@@ -267,10 +409,81 @@ function selfTest() {
       'waived blocker holds',
       () => {
         const m = base('accepted');
-        m.blockingIssues = ['waived issue'];
-        m.waivers = [
-          { issue: 'waived issue', by: 'self-test', date: '2026-01-01', reason: 'fixture' },
+        m.blockingIssues = [goodWaiver.issue];
+        m.waivers = [goodWaiver];
+        return validate([m], { parallelDevelopment: false });
+      },
+    ],
+    // waiver signed by an automated actor : fail (human verdict)
+    [
+      'waiver by automated actor fails',
+      () => {
+        const m = base('accepted');
+        m.blockingIssues = [goodWaiver.issue];
+        m.waivers = [{ ...goodWaiver, by: 'agent (fixture round)' }];
+        return validate([m], { parallelDevelopment: false });
+      },
+    ],
+    // waiver with the wrong severity : fail
+    [
+      'waiver severity mismatch fails',
+      () => {
+        const m = base('accepted');
+        m.blockingIssues = [goodWaiver.issue];
+        m.waivers = [{ ...goodWaiver, severity: 'P2' }];
+        return validate([m], { parallelDevelopment: false });
+      },
+    ],
+    // waiver without an expiry : fail (must be limited)
+    [
+      'waiver without expiry fails',
+      () => {
+        const m = base('accepted');
+        m.blockingIssues = [goodWaiver.issue];
+        const { expiry, ...rest } = goodWaiver;
+        void expiry;
+        m.waivers = [rest];
+        return validate([m], { parallelDevelopment: false });
+      },
+    ],
+    // waiver without a linked ADR : fail (ТЗ requires an ADR waiver)
+    [
+      'waiver without ADR fails',
+      () => {
+        const m = base('accepted');
+        m.blockingIssues = [goodWaiver.issue];
+        const { adr, ...rest } = goodWaiver;
+        void adr;
+        m.waivers = [rest];
+        return validate([m], { parallelDevelopment: false });
+      },
+    ],
+    // bare-string evidence : fail (evidence must be reproducible)
+    [
+      'bare-string evidence fails',
+      () => {
+        const m = base('accepted');
+        m.evidence = ['597/597 tests passed'];
+        return validate([m], { parallelDevelopment: false });
+      },
+    ],
+    // test-run evidence without a commit : fail
+    [
+      'test-run evidence without commit fails',
+      () => {
+        const m = base('accepted');
+        m.evidence = [
+          { type: 'test-run', command: 'pnpm test', result: 'passed' }, // no commit
         ];
+        return validate([m], { parallelDevelopment: false });
+      },
+    ],
+    // ci evidence without a URL : fail
+    [
+      'ci evidence without URL fails',
+      () => {
+        const m = base('accepted');
+        m.evidence = [{ type: 'ci', result: 'run green' }];
         return validate([m], { parallelDevelopment: false });
       },
     ],
@@ -280,9 +493,7 @@ function selfTest() {
       () => {
         const m = base('accepted');
         m.blockingIssues = ['P0: critical'];
-        m.waivers = [
-          { issue: 'P0: critical', by: 'self-test', date: '2026-01-01', reason: 'fixture' },
-        ];
+        m.waivers = [{ ...goodWaiver, issue: 'P0: critical' }];
         return validate([m], { parallelDevelopment: false });
       },
     ],
@@ -292,6 +503,15 @@ function selfTest() {
       () => {
         const m = base('accepted');
         delete m.acceptedCommit;
+        return validate([m], { parallelDevelopment: false });
+      },
+    ],
+    // accepted by an automated actor : fail
+    [
+      'acceptedBy automated actor fails',
+      () => {
+        const m = base('accepted');
+        m.acceptedBy = 'the assistant';
         return validate([m], { parallelDevelopment: false });
       },
     ],
@@ -322,8 +542,16 @@ function selfTest() {
     'ordering fail': false,
     'unwaived blocker fail': false,
     'waived blocker holds': true,
+    'waiver by automated actor fails': false,
+    'waiver severity mismatch fails': false,
+    'waiver without expiry fails': false,
+    'waiver without ADR fails': false,
+    'bare-string evidence fails': false,
+    'test-run evidence without commit fails': false,
+    'ci evidence without URL fails': false,
     'P0 never waivable': false,
     'missing acceptedCommit': false,
+    'acceptedBy automated actor fails': false,
     'empty ledger fails': false,
     'strict delivered-while-open fails': false,
     'parallel policy allows delivered': true,
@@ -388,6 +616,16 @@ function acceptanceDrill() {
   target.status = 'accepted';
   target.acceptedCommit = commit;
   target.acceptedBy = '<acceptance-drill>';
+  // The drill validates the PROPOSED evidence: the proposal's exit criteria
+  // map carries the structured, reproducible evidence the acceptance would
+  // record (command / result / commit / ciRun per exit criterion).
+  const proposedEvidence =
+    Array.isArray(proposal?.exitCriteriaMap) || typeof proposal?.exitCriteriaMap === 'object'
+      ? Object.values(proposal.exitCriteriaMap)
+      : target.evidence;
+  if (Array.isArray(proposedEvidence) && proposedEvidence.length > 0) {
+    target.evidence = proposedEvidence;
+  }
   const result = validate(drill.milestones, drill.policy);
   const targetFails = result.failures.filter((f) => f.milestone.includes(firstOpen.id));
   if (targetFails.length === 0) {
