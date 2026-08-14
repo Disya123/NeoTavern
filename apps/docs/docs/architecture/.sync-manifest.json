@@ -183,9 +183,14 @@
       "sha256": "75f6ba9c6432785c647f11b2de5e007c918bf13596726e15b991f56fa29098e4"
     },
     {
+      "source": "adr/0042-m1-waiver-per-profile-export-scoping.md",
+      "target": "adr/0042-m1-waiver-per-profile-export-scoping.md",
+      "sha256": "caf6470808d8ba65b14c4544cbdb899cb4c43081f4f981ad4fb7e85eb0345f11"
+    },
+    {
       "source": "adr/README.md",
       "target": "adr/README.md",
-      "sha256": "22f63e8c4f40bc744f805f2e3ed871db08ebf02f78e6f69b4ae84e64d2f29709"
+      "sha256": "c4775fce7903736deae775d25263c4b4474a07b1b86c48c98d4fb10bc18cf611"
     },
     {
       "source": "android/README.md",
@@ -215,7 +220,7 @@
     {
       "source": "architecture/operations-inventory.md",
       "target": "architecture/operations-inventory.md",
-      "sha256": "2ca0a47734984eff4831c4e13acf02b9f642c37e935f13b760d6250aa2b7b204"
+      "sha256": "3d358036515d9914d5df8f5339280ce2cc6c7d35880190dc425cc52c6228b955"
     },
     {
       "source": "architecture/portable-data.md",
@@ -235,7 +240,7 @@
     {
       "source": "architecture/version-axes.md",
       "target": "architecture/version-axes.md",
-      "sha256": "7dcd21f6e165e4e80d8365c2230054128a83836d0e4685b8cbab4a6b904ded4f"
+      "sha256": "35ea380754114143098a7c6e37316eac8ff936e6c1785dd74b0b7160e795875b"
     },
     {
       "source": "architecture/wire-contracts.md",
@@ -245,7 +250,7 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "120392ac8a5770a32e8e3aa0120a1498584b4652764dd76679953442cc41c085"
+      "sha256": "8331d9be50f973eb8b7b91cdf1f3484f20664107bd1aed75858a9c8453c7291c"
     },
     {
       "source": "data/README.md",

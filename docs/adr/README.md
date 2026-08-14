@@ -1,5 +1,20 @@
 # Architecture Decision Records
 
+## ADR-0042: Limited waiver — per-profile export scoping (M1, SEC-02)
+
+A bounded exception to the M1 SEC-02 blocker list: **one** P1 issue
+(per-profile export scoping — the canonical schema must add per-profile
+foreign keys and the export must filter by them) is waived for M1, under
+strict conditions: severity P1 (not P0), scope limited to the single issue,
+expiry at the **M4 cutover** (the canonical schema + export filtering must
+land before M4 acceptance), no silent fallback (secrets stay excluded today),
+and human sign-off by the same person who accepts M1. Alternatives — hold M1
+open (forces a canonical feature into the feature-frozen legacy contour) or
+implement in legacy now (double ownership across two planes) — were rejected.
+The gate validates the waiver's fields and the ledger records it. Full
+decision, alternatives and consequences:
+[ADR-0042](0042-m1-waiver-per-profile-export-scoping.md).
+
 ## ADR-0040: SecretStore port — host backends, portable format, crypto parameters
 
 The canonical kernel SecretStore port (ТЗ §SEC-01 / §19.2 ADR #5): host
