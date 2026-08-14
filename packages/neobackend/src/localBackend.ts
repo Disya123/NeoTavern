@@ -24,6 +24,7 @@ import {
   type ListLorebooksResultDto,
   type ListPresetsResultDto,
   type ListProvidersResultDto,
+  type MessageDto,
   type MetaDto,
   type PagedCharactersDto,
   type PagedChatsDto,
@@ -217,9 +218,15 @@ export class LocalBackend implements NeoBackend {
         this.invoke<EmptyResultDto>('characters.delete', { characterId }, opts),
     };
     this.chats = {
-      list: (req) => this.invoke<PagedChatsDto>('chats.list', req, undefined),
-      get: (chatId) => this.invoke<ChatDto>('chats.get', { chatId }, undefined),
-      listMessages: (req) => this.invoke<PagedMessagesDto>('chats.messages.list', req, undefined),
+      list: (req, opts) => this.invoke<PagedChatsDto>('chats.list', req, opts),
+      get: (chatId, opts) => this.invoke<ChatDto>('chats.get', { chatId }, opts),
+      create: (req, opts) => this.invoke<ChatDto>('chats.create', req, opts),
+      update: (req, opts) => this.invoke<ChatDto>('chats.update', req, opts),
+      del: (chatId, opts) => this.invoke<EmptyResultDto>('chats.delete', { chatId }, opts),
+      listMessages: (req, opts) => this.invoke<PagedMessagesDto>('chats.messages.list', req, opts),
+      createMessage: (req, opts) => this.invoke<MessageDto>('chats.messages.create', req, opts),
+      updateMessage: (req, opts) => this.invoke<MessageDto>('chats.messages.update', req, opts),
+      delMessage: (req, opts) => this.invoke<EmptyResultDto>('chats.messages.delete', req, opts),
     };
     this.generation = {
       start: (req, opts) => this.stream('generation.start', req, opts),
@@ -227,10 +234,8 @@ export class LocalBackend implements NeoBackend {
         this.invoke<EmptyResultDto>('generation.cancel', { workflowId }, undefined),
       get: (workflowId, opts) =>
         this.invoke<GenerationRunDto>('generation.get', { workflowId }, opts),
-      events: (req, opts) =>
-        this.invoke<PagedGenerationEventsDto>('generation.events', req, opts),
-      retry: (sourceRunId, opts) =>
-        this.stream('generation.retry', { sourceRunId }, opts),
+      events: (req, opts) => this.invoke<PagedGenerationEventsDto>('generation.events', req, opts),
+      retry: (sourceRunId, opts) => this.stream('generation.retry', { sourceRunId }, opts),
       keep: (workflowId, opts) =>
         this.invoke<GenerationRunDto>('generation.keep', { workflowId }, opts),
       discard: (workflowId, opts) =>

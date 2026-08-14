@@ -306,6 +306,68 @@ export const ListMessagesRequestDtoSchema = Type.Object(
 );
 export type ListMessagesRequestDto = Static<typeof ListMessagesRequestDtoSchema>;
 
+/** Create chat request DTO (`wire.request.create-chat`). */
+export const CreateChatRequestDtoSchema = Type.Object(
+  {
+    characterId: Type.String({ format: 'uuid' }),
+    title: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
+  },
+  { $id: 'wire.request.create-chat', additionalProperties: false },
+);
+export type CreateChatRequestDto = Static<typeof CreateChatRequestDtoSchema>;
+
+/** Update chat request DTO (`wire.request.update-chat`). */
+export const UpdateChatRequestDtoSchema = Type.Object(
+  {
+    chatId: Type.String({ format: 'uuid' }),
+    title: Type.String({ minLength: 1, maxLength: 200 }),
+  },
+  { $id: 'wire.request.update-chat', additionalProperties: false },
+);
+export type UpdateChatRequestDto = Static<typeof UpdateChatRequestDtoSchema>;
+
+/** Delete chat request DTO (`wire.request.delete-chat`). */
+export const DeleteChatRequestDtoSchema = Type.Object(
+  {
+    chatId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.delete-chat', additionalProperties: false },
+);
+export type DeleteChatRequestDto = Static<typeof DeleteChatRequestDtoSchema>;
+
+/** Create message request DTO (`wire.request.create-message`). */
+export const CreateMessageRequestDtoSchema = Type.Object(
+  {
+    chatId: Type.String({ format: 'uuid' }),
+    role: WireMessageRole,
+    content: Type.String({ minLength: 0, maxLength: 1000000 }),
+    generationRunId: Type.Optional(Type.String({ format: 'uuid' })),
+  },
+  { $id: 'wire.request.create-message', additionalProperties: false },
+);
+export type CreateMessageRequestDto = Static<typeof CreateMessageRequestDtoSchema>;
+
+/** Update message request DTO (`wire.request.update-message`). */
+export const UpdateMessageRequestDtoSchema = Type.Object(
+  {
+    chatId: Type.String({ format: 'uuid' }),
+    messageId: Type.String({ format: 'uuid' }),
+    content: Type.String({ minLength: 0, maxLength: 1000000 }),
+  },
+  { $id: 'wire.request.update-message', additionalProperties: false },
+);
+export type UpdateMessageRequestDto = Static<typeof UpdateMessageRequestDtoSchema>;
+
+/** Delete message request DTO (`wire.request.delete-message`). */
+export const DeleteMessageRequestDtoSchema = Type.Object(
+  {
+    chatId: Type.String({ format: 'uuid' }),
+    messageId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.delete-message', additionalProperties: false },
+);
+export type DeleteMessageRequestDto = Static<typeof DeleteMessageRequestDtoSchema>;
+
 /** Start generation request DTO (`wire.request.start-generation`). */
 export const StartGenerationRequestDtoSchema = Type.Object(
   {
@@ -570,7 +632,13 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.request.delete-character': DeleteCharacterRequestDtoSchema,
   'wire.request.list-chats': ListChatsRequestDtoSchema,
   'wire.request.get-chat': GetChatRequestDtoSchema,
+  'wire.request.create-chat': CreateChatRequestDtoSchema,
+  'wire.request.update-chat': UpdateChatRequestDtoSchema,
+  'wire.request.delete-chat': DeleteChatRequestDtoSchema,
   'wire.request.list-messages': ListMessagesRequestDtoSchema,
+  'wire.request.create-message': CreateMessageRequestDtoSchema,
+  'wire.request.update-message': UpdateMessageRequestDtoSchema,
+  'wire.request.delete-message': DeleteMessageRequestDtoSchema,
   'wire.request.start-generation': StartGenerationRequestDtoSchema,
   'wire.request.cancel-generation': CancelGenerationRequestDtoSchema,
   'wire.request.get-generation-run': GetGenerationRunRequestDtoSchema,

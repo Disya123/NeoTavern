@@ -12,6 +12,9 @@ import type {
   CharacterDto,
   ChatDto,
   CreateCharacterRequestDto,
+  CreateChatRequestDto,
+  CreateMessageRequestDto,
+  DeleteMessageRequestDto,
   EmptyResultDto,
   GenerationRunDto,
   WireGenerationEvent,
@@ -23,6 +26,7 @@ import type {
   ListMessagesRequestDto,
   ListPresetsResultDto,
   ListProvidersResultDto,
+  MessageDto,
   MetaDto,
   PagedCharactersDto,
   PagedChatsDto,
@@ -30,6 +34,8 @@ import type {
   PagedMessagesDto,
   StartGenerationRequestDto,
   UpdateCharacterRequestDto,
+  UpdateChatRequestDto,
+  UpdateMessageRequestDto,
 } from '@neotavern/contracts';
 
 /** Options accepted by facade calls (ТЗ §15). */
@@ -55,11 +61,23 @@ export interface CharactersApi {
 /** Chat and message domain operations (wire `chats.*`). */
 export interface ChatsApi {
   /** List chats (cursor-paginated, optionally scoped to a character). */
-  list(req: ListChatsRequestDto): Promise<PagedChatsDto>;
+  list(req: ListChatsRequestDto, opts?: BackendCallOptions): Promise<PagedChatsDto>;
   /** Fetch one chat by id. */
-  get(chatId: string): Promise<ChatDto>;
+  get(chatId: string, opts?: BackendCallOptions): Promise<ChatDto>;
+  /** Create a chat for an existing character. */
+  create(req: CreateChatRequestDto, opts?: BackendCallOptions): Promise<ChatDto>;
+  /** Rename a chat. */
+  update(req: UpdateChatRequestDto, opts?: BackendCallOptions): Promise<ChatDto>;
+  /** Delete a chat (cascades to its messages). */
+  del(chatId: string, opts?: BackendCallOptions): Promise<EmptyResultDto>;
   /** List messages of a chat (cursor-paginated). */
-  listMessages(req: ListMessagesRequestDto): Promise<PagedMessagesDto>;
+  listMessages(req: ListMessagesRequestDto, opts?: BackendCallOptions): Promise<PagedMessagesDto>;
+  /** Append a message to a chat (sequence allocated atomically). */
+  createMessage(req: CreateMessageRequestDto, opts?: BackendCallOptions): Promise<MessageDto>;
+  /** Edit a message's content. */
+  updateMessage(req: UpdateMessageRequestDto, opts?: BackendCallOptions): Promise<MessageDto>;
+  /** Delete a message. */
+  delMessage(req: DeleteMessageRequestDto, opts?: BackendCallOptions): Promise<EmptyResultDto>;
 }
 
 /** Generation domain operations (wire `generation.*`). */

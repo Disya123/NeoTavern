@@ -16,6 +16,7 @@ import type {
   ListLorebooksResultDto,
   ListPresetsResultDto,
   ListProvidersResultDto,
+  MessageDto,
   MetaDto,
   PagedCharactersDto,
   PagedChatsDto,
@@ -78,7 +79,13 @@ export class RemoteBackend implements NeoBackend {
   readonly chats: ChatsApi = {
     list: (req) => this.sdk.call<PagedChatsDto>('chats.list', req),
     get: (chatId) => this.sdk.call<ChatDto>('chats.get', { chatId }),
+    create: (req) => this.sdk.call<ChatDto>('chats.create', req),
+    update: (req) => this.sdk.call<ChatDto>('chats.update', req),
+    del: (chatId) => this.sdk.call<EmptyResultDto>('chats.delete', { chatId }),
     listMessages: (req) => this.sdk.call<PagedMessagesDto>('chats.messages.list', req),
+    createMessage: (req) => this.sdk.call<MessageDto>('chats.messages.create', req),
+    updateMessage: (req) => this.sdk.call<MessageDto>('chats.messages.update', req),
+    delMessage: (req) => this.sdk.call<EmptyResultDto>('chats.messages.delete', req),
   };
 
   readonly generation: GenerationApi = {
@@ -90,16 +97,23 @@ export class RemoteBackend implements NeoBackend {
       this.sdk.call<PagedGenerationEventsDto>('generation.events', req, {
         signal: opts?.signal,
       }),
-    retry: (sourceRunId, opts) =>
-      this.streamOperation('generation.retry', { sourceRunId }, opts),
+    retry: (sourceRunId, opts) => this.streamOperation('generation.retry', { sourceRunId }, opts),
     keep: (workflowId, opts) =>
-      this.sdk.call<GenerationRunDto>('generation.keep', { workflowId }, {
-        signal: opts?.signal,
-      }),
+      this.sdk.call<GenerationRunDto>(
+        'generation.keep',
+        { workflowId },
+        {
+          signal: opts?.signal,
+        },
+      ),
     discard: (workflowId, opts) =>
-      this.sdk.call<GenerationRunDto>('generation.discard', { workflowId }, {
-        signal: opts?.signal,
-      }),
+      this.sdk.call<GenerationRunDto>(
+        'generation.discard',
+        { workflowId },
+        {
+          signal: opts?.signal,
+        },
+      ),
   };
 
   readonly backups: BackupsApi = {

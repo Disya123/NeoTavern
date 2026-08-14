@@ -34,29 +34,40 @@
       "milestone": "M2"
     },
     {
-      "id": "chats.read",
-      "title": "Chat read",
-      "wireOps": ["chats.list", "chats.get"],
+      "id": "chats.crud",
+      "title": "Chat CRUD",
+      "wireOps": [
+        "chats.list",
+        "chats.get",
+        "chats.create",
+        "chats.update",
+        "chats.delete"
+      ],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
         "android": "Implemented",
         "webClient": "Implemented"
       },
-      "notes": "Kernel ops exist; chats.create arrives in M2.",
+      "notes": "Kernel-owned ops with component tests (round-trip, CHARACTER/CHAT_NOT_FOUND, title rename, message-count subquery, cascade delete); UI still routes through legacy /api/v2 until M2 golden flow cutover.",
       "milestone": "M2"
     },
     {
-      "id": "chats.messages.list",
-      "title": "Message read",
-      "wireOps": ["chats.messages.list"],
+      "id": "chats.messages.crud",
+      "title": "Message CRUD",
+      "wireOps": [
+        "chats.messages.list",
+        "chats.messages.create",
+        "chats.messages.update",
+        "chats.messages.delete"
+      ],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
         "android": "Implemented",
         "webClient": "Implemented"
       },
-      "notes": "Kernel op exists; message create/update/delete arrive in M2.",
+      "notes": "Kernel-owned ops with component tests (atomic sequence allocation per chat, role/content edit, scoped MESSAGE_NOT_FOUND, chat-scoped delete); UI still routes through legacy /api/v2 until M2 golden flow cutover.",
       "milestone": "M2"
     },
     {

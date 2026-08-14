@@ -1,14 +1,15 @@
 //! Phase 3 kernel product-CRUD integration tests (ТЗ §78 Фаза 3).
 //!
-//! Exercises the ten product operations over a durable data root. The frozen
-//! registry has no create wire operations for chats, messages, lorebooks or
-//! presets, so those tables are seeded directly through `neotavern_storage`
-//! BEFORE the kernel opens (the kernel then holds the single writable
-//! connection for its lifetime).
+//! Exercises the product operations over a durable data root. Characters,
+//! chats and messages are created/updated/deleted over the wire
+//! (`chats_and_messages_crud_round_trip`); `chats_and_messages_flow` and the
+//! list-only tests still seed lorebooks/presets/cursor fixtures directly
+//! through `neotavern_storage` BEFORE the kernel opens (the kernel then holds
+//! the single writable connection for its lifetime).
 
 use contracts_generated::generated::{
-    CharacterDto, ChatDto, MessageRole, PagedCharacters, PagedChats, PagedMessages, ResultEmpty,
-    ResultListLorebooks, ResultListPresets,
+    CharacterDto, ChatDto, MessageDto, MessageRole, PagedCharacters, PagedChats, PagedMessages,
+    ResultEmpty, ResultListLorebooks, ResultListPresets,
 };
 use runtime_kernel::{CancellationFlag, Kernel, KernelConfig, KernelError, KernelErrorCode};
 use rusqlite::params;
@@ -388,6 +389,211 @@ fn chats_and_messages_flow() {
     let product = err.product.expect("product error");
     assert_eq!(product.code, "CHAT_NOT_FOUND");
     assert_eq!(product.params["chatId"], json!(missing_chat));
+}
+
+#[test]
+fn chats_and_messages_crud_round_trip() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel_with_root(root.path());
+
+    // --- chats.create.
+    let character =
+        dispatch_decoded::<CharacterDto>(&kernel, "characters.create", json!({ "name": "Aria" }))
+            .expect("character must be created");
+    let character_id = character.id.clone();
+
+    // default title when omitted
+    let default_chat = dispatch_decoded::<ChatDto>(
+        &kernel,
+        "chats.create",
+        json!({ "characterId": character_id }),
+    )
+    .expect("chats.create with default title");
+    assert_eq!(default_chat.title, "New chat");
+    assert_eq!(default_chat.character_id, character_id);
+    assert_eq!(default_chat.message_count, 0);
+    assert!(uuid::Uuid::parse_str(&default_chat.id).is_ok());
+
+    // explicit title
+    let chat = dispatch_decoded::<ChatDto>(
+        &kernel,
+        "chats.create",
+        json!({ "characterId": character_id, "title": "The journey" }),
+    )
+    .expect("chats.create with explicit title");
+    assert_eq!(chat.title, "The journey");
+    assert_eq!(chat.message_count, 0);
+    let chat_id = chat.id.clone();
+
+    // missing character → CHARACTER_NOT_FOUND
+    let missing_character = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+    let err = dispatch_json(
+        &kernel,
+        "chats.create",
+        json!({ "characterId": missing_character }),
+    )
+    .expect_err("chats.create for a missing character must fail");
+    assert_eq!(err.code, KernelErrorCode::NotFound);
+    let product = err.product.expect("product error must carry the wire dto");
+    assert_eq!(product.code, "CHARACTER_NOT_FOUND");
+    assert_eq!(product.params["characterId"], json!(missing_character));
+
+    // --- chats.update.
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+    let renamed = dispatch_decoded::<ChatDto>(
+        &kernel,
+        "chats.update",
+        json!({ "chatId": chat_id, "title": "The journey, part two" }),
+    )
+    .expect("chats.update must succeed");
+    assert_eq!(renamed.title, "The journey, part two");
+    assert_eq!(renamed.message_count, 0);
+    assert_ne!(renamed.updated_at, chat.updated_at, "updatedAt must change");
+    assert_eq!(
+        renamed.created_at, chat.created_at,
+        "createdAt must not change"
+    );
+
+    let missing_chat = "99999999-9999-4999-8999-999999999999";
+    let err = dispatch_json(
+        &kernel,
+        "chats.update",
+        json!({ "chatId": missing_chat, "title": "Ghost" }),
+    )
+    .expect_err("chats.update on a missing chat must fail");
+    let product = err.product.expect("product error");
+    assert_eq!(product.code, "CHAT_NOT_FOUND");
+    assert_eq!(product.params["chatId"], json!(missing_chat));
+
+    // --- chats.messages.create: sequences are allocated atomically 0..2.
+    let m0 = dispatch_decoded::<MessageDto>(
+        &kernel,
+        "chats.messages.create",
+        json!({ "chatId": chat_id, "role": "user", "content": "Hello" }),
+    )
+    .expect("first message");
+    assert_eq!(m0.sequence, 0);
+    assert_eq!(m0.role, MessageRole::User);
+    assert_eq!(m0.generation_run_id, None);
+
+    let m1 = dispatch_decoded::<MessageDto>(
+        &kernel,
+        "chats.messages.create",
+        json!({ "chatId": chat_id, "role": "assistant", "content": "Hi there" }),
+    )
+    .expect("second message");
+    assert_eq!(m1.sequence, 1);
+    assert_eq!(m1.role, MessageRole::Assistant);
+
+    // generationRunId passthrough
+    let run_id = "6e7f8091-ab2c-4d3e-9f4a-5b6c7d8e9f01";
+    let m2 = dispatch_decoded::<MessageDto>(
+        &kernel,
+        "chats.messages.create",
+        json!({
+            "chatId": chat_id,
+            "role": "tool",
+            "content": "{\"ok\":true}",
+            "generationRunId": run_id
+        }),
+    )
+    .expect("third message");
+    assert_eq!(m2.sequence, 2);
+    assert_eq!(m2.role, MessageRole::Tool);
+    assert_eq!(m2.generation_run_id.as_deref(), Some(run_id));
+
+    // chat messageCount now reflects the three appended messages
+    let chat_after =
+        dispatch_decoded::<ChatDto>(&kernel, "chats.get", json!({ "chatId": chat_id }))
+            .expect("chats.get after append");
+    assert_eq!(chat_after.message_count, 3);
+
+    // missing chat → CHAT_NOT_FOUND
+    let err = dispatch_json(
+        &kernel,
+        "chats.messages.create",
+        json!({ "chatId": missing_chat, "role": "user", "content": "x" }),
+    )
+    .expect_err("messages.create for a missing chat must fail");
+    let product = err.product.expect("product error");
+    assert_eq!(product.code, "CHAT_NOT_FOUND");
+    assert_eq!(product.params["chatId"], json!(missing_chat));
+
+    // --- chats.messages.update: content edit, role/sequence preserved.
+    let edited = dispatch_decoded::<MessageDto>(
+        &kernel,
+        "chats.messages.update",
+        json!({ "chatId": chat_id, "messageId": m1.id, "content": "Hello yourself" }),
+    )
+    .expect("messages.update must succeed");
+    assert_eq!(edited.content, "Hello yourself");
+    assert_eq!(edited.role, MessageRole::Assistant);
+    assert_eq!(edited.sequence, 1);
+    assert_eq!(edited.id, m1.id);
+
+    // update with the wrong chatId → MESSAGE_NOT_FOUND
+    let err = dispatch_json(
+        &kernel,
+        "chats.messages.update",
+        json!({ "chatId": missing_chat, "messageId": m1.id, "content": "x" }),
+    )
+    .expect_err("messages.update scoped to a missing chat must fail");
+    let product = err.product.expect("product error");
+    assert_eq!(product.code, "MESSAGE_NOT_FOUND");
+    assert_eq!(product.params["messageId"], json!(m1.id));
+
+    // --- chats.messages.delete.
+    let deleted = dispatch_decoded::<ResultEmpty>(
+        &kernel,
+        "chats.messages.delete",
+        json!({ "chatId": chat_id, "messageId": m2.id }),
+    )
+    .expect("messages.delete must succeed");
+    assert_eq!(deleted, ResultEmpty {});
+    let remaining = dispatch_decoded::<PagedMessages>(
+        &kernel,
+        "chats.messages.list",
+        json!({ "chatId": chat_id }),
+    )
+    .expect("messages.list after delete");
+    assert_eq!(remaining.items.len(), 2);
+    assert!(remaining.items.iter().all(|m| m.id != m2.id));
+
+    // delete again → MESSAGE_NOT_FOUND
+    let err = dispatch_json(
+        &kernel,
+        "chats.messages.delete",
+        json!({ "chatId": chat_id, "messageId": m2.id }),
+    )
+    .expect_err("messages.delete after delete must fail");
+    let product = err.product.expect("product error");
+    assert_eq!(product.code, "MESSAGE_NOT_FOUND");
+    assert_eq!(product.params["messageId"], json!(m2.id));
+
+    // --- chats.delete cascades to messages.
+    let deleted =
+        dispatch_decoded::<ResultEmpty>(&kernel, "chats.delete", json!({ "chatId": chat_id }))
+            .expect("chats.delete must succeed");
+    assert_eq!(deleted, ResultEmpty {});
+
+    let err = dispatch_json(&kernel, "chats.get", json!({ "chatId": chat_id }))
+        .expect_err("chats.get after delete must fail");
+    let product = err.product.expect("product error");
+    assert_eq!(product.code, "CHAT_NOT_FOUND");
+    assert_eq!(product.params["chatId"], json!(chat_id));
+
+    // the default-title chat survives; its message count stays 0
+    let survived =
+        dispatch_decoded::<ChatDto>(&kernel, "chats.get", json!({ "chatId": default_chat.id }))
+            .expect("the other chat must survive");
+    assert_eq!(survived.message_count, 0);
+
+    // chats.delete again → CHAT_NOT_FOUND
+    let err = dispatch_json(&kernel, "chats.delete", json!({ "chatId": chat_id }))
+        .expect_err("chats.delete after delete must fail");
+    let product = err.product.expect("product error");
+    assert_eq!(product.code, "CHAT_NOT_FOUND");
+    assert_eq!(product.params["chatId"], json!(chat_id));
 }
 
 #[test]

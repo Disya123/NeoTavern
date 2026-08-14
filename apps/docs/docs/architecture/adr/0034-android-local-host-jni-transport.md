@@ -27,8 +27,8 @@ showed the pattern (ADR-0033: embedded kernel, no HTTP, bundled web assets,
 typed TS `LocalTransport`), yet Android differs materially: the JNI boundary
 is a second marshalling layer, the WebView is the only UI surface, secrets
 must come from the Android Keystore, and the APK build is a separate
-Gradle/cargo-ndk pipeline. The wire contract is frozen (`WIRE_SCHEMA_HASH`,
-21 operations), so the host surface is exactly the frozen registry.
+Gradle/cargo-ndk pipeline. The wire contract is frozen (`WIRE_SCHEMA_HASH`),
+so the host surface is exactly the frozen registry.
 
 ## Decision
 

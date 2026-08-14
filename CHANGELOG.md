@@ -3,6 +3,25 @@
 ## Unreleased
 ### Added
 
+- **Chat and message CRUD in the Runtime Kernel (M2 / Этап 2, ТЗ §8.1
+  Conversations, §78 Фаза 3).** The Product Wire registry grows six write
+  operations — `chats.create/update/delete` and
+  `chats.messages.create/update/delete` (request DTOs
+  `wire.request.create-chat` / `update-chat` / `delete-chat` /
+  `create-message` / `update-message` / `delete-message`; schema hash
+  bumped). The kernel implements them over the canonical SQLite schema:
+  chats carry `messageCount` via subquery, message `sequence` is allocated
+  atomically as `MAX(sequence)+1` inside the transaction, message
+  update/delete are chat-scoped, chat delete cascades to messages, missing
+  entities surface stable product errors (`CHARACTER_NOT_FOUND` for a create
+  against an unknown character, `CHAT_NOT_FOUND`, `MESSAGE_NOT_FOUND` with
+  the request's id in `params`). `packages/neobackend` exposes the new
+  operations on the `NeoBackend` facade (`ChatsApi.create/update/del`,
+  `createMessage/updateMessage/delMessage`) across `LocalBackend` (kernel
+  transport), `RemoteBackend` (wire) and `LegacyBackend` (typed
+  `UnsupportedError` until cutover). Integration tests cover the full
+  round-trip, sequence ordering, scoped not-found and cascade semantics.
+
 - **SEC-01 kernel-plane SecretStore port (M1 / Wave 1, ТЗ §SEC-01.1 /
   ADR-0040).** New `crates/secret-store` implements the canonical portable
   `secrets.enc` **v2** format: AES-256-GCM over a JSON envelope with an

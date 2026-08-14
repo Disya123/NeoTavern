@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-08-14T03:04:25.109Z",
+  "generatedAt": "2026-08-14T03:16:00.031Z",
   "rows": [
     {
       "hosts": {
@@ -41,11 +41,17 @@
         "headless": "Implemented",
         "webClient": "Implemented"
       },
-      "id": "chats.messages.list",
+      "id": "chats.crud",
       "milestone": "M2",
-      "notes": "Kernel op exists; message create/update/delete arrive in M2.",
-      "title": "Message read",
-      "wireOps": ["chats.messages.list"]
+      "notes": "Kernel-owned ops with component tests (round-trip, CHARACTER/CHAT_NOT_FOUND, title rename, message-count subquery, cascade delete); UI still routes through legacy /api/v2 until M2 golden flow cutover.",
+      "title": "Chat CRUD",
+      "wireOps": [
+        "chats.create",
+        "chats.delete",
+        "chats.get",
+        "chats.list",
+        "chats.update"
+      ]
     },
     {
       "hosts": {
@@ -54,11 +60,16 @@
         "headless": "Implemented",
         "webClient": "Implemented"
       },
-      "id": "chats.read",
+      "id": "chats.messages.crud",
       "milestone": "M2",
-      "notes": "Kernel ops exist; chats.create arrives in M2.",
-      "title": "Chat read",
-      "wireOps": ["chats.get", "chats.list"]
+      "notes": "Kernel-owned ops with component tests (atomic sequence allocation per chat, role/content edit, scoped MESSAGE_NOT_FOUND, chat-scoped delete); UI still routes through legacy /api/v2 until M2 golden flow cutover.",
+      "title": "Message CRUD",
+      "wireOps": [
+        "chats.messages.create",
+        "chats.messages.delete",
+        "chats.messages.list",
+        "chats.messages.update"
+      ]
     },
     {
       "hosts": {

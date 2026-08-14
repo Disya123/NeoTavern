@@ -21,9 +21,9 @@ durable surface (storage, generation, backup primitives, Phase 0–2), and
 `packages/neobackend` already provided `LocalBackend` over a caller-supplied
 `LocalTransport`, but no transport, no shell wiring and no envelope layer
 existed for the Tauri boundary. The wire contract is frozen
-(`WIRE_SCHEMA_HASH`, 21 operations), so the cutover surface is exactly the
-frozen registry: `meta.get`, characters CRUD, chats read, messages read,
-generation workflows, providers/backups/lorebooks/presets lists.
+(`WIRE_SCHEMA_HASH`), so the cutover surface is exactly the registry:
+`meta.get`, characters CRUD, chats CRUD, messages CRUD, generation
+workflows, providers/backups/lorebooks/presets lists.
 
 ## Decision
 
@@ -69,9 +69,10 @@ localhost`), no HTTP server/listener exists, and the legacy Node sidecar
   metadata (`meta.get`) and backup count (`backups.list`) rendered through
   the `NeoBackend` facade, visible only in the desktop shell. The read
   surfaces (character/chat browse, generation page) remain legacy-shaped
-  because the frozen wire registry carries no avatar URLs or
-  `chats.create`/message-write operations; those slices move after the
-  contract grows (documented in the routing table).
+  because the frozen wire registry carries no avatar URLs; chat/message
+  write operations landed with the M2 golden slice (chats CRUD +
+  `chats.messages.*`), so those slices move once the UI cutover is
+  scheduled (documented in the routing table).
 
 ## Alternatives
 

@@ -183,7 +183,13 @@ ops (eventSchemaId) carrying a response schema; empty/unknown
 | `characters.delete`   | transactional | non-idempotent | none  | app.write | 2048   | 1024   | –      |
 | `chats.list`          | transactional | idempotent     | safe  | app.read  | 4096   | 262144 | –      |
 | `chats.get`           | transactional | idempotent     | safe  | app.read  | 2048   | 262144 | –      |
+| `chats.create`        | transactional | non-idempotent | none  | app.write | 4096   | 262144 | –      |
+| `chats.update`        | transactional | non-idempotent | none  | app.write | 2048   | 262144 | –      |
+| `chats.delete`        | transactional | non-idempotent | none  | app.write | 2048   | 1024   | –      |
 | `chats.messages.list` | transactional | idempotent     | safe  | app.read  | 4096   | 262144 | –      |
+| `chats.messages.create` | transactional | non-idempotent | none | app.write | 1048576 | 262144 | –    |
+| `chats.messages.update` | transactional | non-idempotent | none | app.write | 1048576 | 262144 | –    |
+| `chats.messages.delete` | transactional | non-idempotent | none | app.write | 2048   | 1024   | –      |
 | `generation.start`    | workflow      | non-idempotent | none  | app.write | 131072 | –      | 65536  |
 | `generation.cancel`   | transactional | idempotent     | safe  | app.write | 2048   | 1024   | –      |
 | `generation.get`      | transactional | idempotent     | safe  | app.read  | 2048   | 65536  | –      |
