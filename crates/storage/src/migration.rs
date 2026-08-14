@@ -17,8 +17,11 @@
 //!
 //! Design invariants (ADR-0041, ТЗ §10.3):
 //!
-//! - The **source legacy database is never modified** — it is opened strictly
-//!   read-only by `convert_legacy` and the safety copy reads its bytes only.
+//! - The **source legacy database is never modified** — the safety copy
+//!   reads its bytes through the SQLite online-backup API, and when a backup
+//!   is requested the converter reads the verified safety copy (a consistent
+//!   snapshot) rather than the live source, so a concurrent legacy writer
+//!   can never make the converted data diverge from the verified backup.
 //! - **No live dual-write**: the migration stages a fresh versioned root
 //!   (`roots/root-<id>/`) and publishes it through the activation journal; the
 //!   old root is never written in place and stays active until the pointer
@@ -210,8 +213,20 @@ impl MigrationSession {
         // construction). A fresh id per attempt keeps retry independent.
         progress(MigrationStage::Convert);
         let staging_root = fresh_staging_root(data_root)?;
+        // With a backup requested, convert from the VERIFIED safety copy
+        // (a consistent snapshot taken through the SQLite online-backup API),
+        // never from the live legacy source: a second connection (legacy
+        // sidecar, indexer) could mutate the source between the backup and
+        // this read, and the converted data must match the verified snapshot
+        // byte-for-byte (audit P1, ТЗ §10.3 "Create verified backup").
+        // `create_safety_copy` returns the snapshot DIRECTORY; the database
+        // file inside it is the conversion source.
+        let conversion_source = match backup_path {
+            Some(ref dir) => dir.join("database.sqlite"),
+            None => source_db.to_path_buf(),
+        };
         let report = convert_legacy(
-            source_db,
+            &conversion_source,
             &Candidate {
                 path: staging_root.clone(),
             },
@@ -581,6 +596,22 @@ fn validate_staged_root(staging_root: &Path) -> Result<()> {
 fn read_conversion_report(root: &Path) -> Result<ConversionReport> {
     let mut progress = |_: MigrationProgress| {};
     let db = open(root, &ConnectionPolicy::default(), &mut progress)?;
+    // A count of a table that does not exist in this kernel schema version
+    // contributes 0: the personas table is introduced by a later schema
+    // migration (007_personas, Этап 4), so an Этап 3 converted root has no
+    // such table. Without this guard the committed-root report would fail
+    // with "no such table" on the full canonical data-root switch.
+    let table_exists = |table: &str| -> Result<bool> {
+        let n: i64 = db
+            .conn()
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
+                [table],
+                |r| r.get(0),
+            )
+            .map_err(|e| StorageError::from_sqlite(e, "migration: table existence"))?;
+        Ok(n > 0)
+    };
     let count = |table: &str| -> Result<u64> {
         let n: i64 = db
             .conn()
@@ -588,13 +619,20 @@ fn read_conversion_report(root: &Path) -> Result<ConversionReport> {
             .map_err(|e| StorageError::from_sqlite(e, "migration: count"))?;
         Ok(n as u64)
     };
+    let count_if_present = |table: &str| -> Result<u64> {
+        if table_exists(table)? {
+            count(table)
+        } else {
+            Ok(0)
+        }
+    };
     let report = ConversionReport {
         characters: count("characters")?,
         chats: count("chats")?,
         messages: count("messages")?,
         lorebooks: count("lorebooks")?,
         presets: count("presets")?,
-        personas: count("personas")?,
+        personas: count_if_present("personas")?,
         // Counts from a committed root cannot report per-row orphans; the
         // full report is available from the `prepare` step.
         skipped: 0,

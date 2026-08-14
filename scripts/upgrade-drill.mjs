@@ -203,7 +203,11 @@ function run(cli, dataRoot, legacyDb) {
   }
   ok('re-run idempotent: one committed entry, one staging root');
 
-  // --- Step 5: the safety copy exists and matches the legacy source
+  // --- Step 5: the safety copy exists and is a faithful snapshot
+  // The copy is made through the SQLite online-backup API (audit P0 #3: it
+  // must include committed WAL frames), so its raw bytes legitimately differ
+  // from the source file — faithfulness means the same CONTENT: a clean
+  // integrity check plus per-table row-count and content-hash parity.
   const backupsDir = join(dataRoot, 'backups');
   if (!existsSync(backupsDir)) fail('no pre-migration safety copy directory');
   const copyEntries = [];
@@ -214,10 +218,37 @@ function run(cli, dataRoot, legacyDb) {
     }
   }
   if (copyEntries.length !== 1) fail(`expected one pre-migration copy, got ${copyEntries.length}`);
-  if (sha256File(copyEntries[0]) !== sourceHashBefore) {
-    fail('safety copy does not match the legacy source');
+  {
+    const copyDb = new DatabaseSync(copyEntries[0], { readOnly: true });
+    const integrity = copyDb.prepare('PRAGMA integrity_check').get().integrity_check;
+    if (integrity !== 'ok') fail(`safety copy failed integrity_check: ${integrity}`);
+    const sourceDb = new DatabaseSync(legacyDb, { readOnly: true });
+    for (const table of [
+      'characters',
+      'chats',
+      'messages',
+      'lorebooks',
+      'presets',
+      'provider_configs',
+      'tags',
+      'character_tags',
+    ]) {
+      const count = (db) => db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n;
+      const srcCount = count(sourceDb);
+      const copyCount = count(copyDb);
+      if (srcCount !== copyCount) {
+        fail(`table ${table}: source has ${srcCount} rows, copy has ${copyCount}`);
+      }
+      const srcHash = dumpHash(sourceDb, table);
+      const copyHash = dumpHash(copyDb, table);
+      if (srcHash !== copyHash) {
+        fail(`table ${table}: content hash mismatch (${srcHash} vs ${copyHash})`);
+      }
+    }
+    sourceDb.close();
+    copyDb.close();
   }
-  ok('pre-migration safety copy matches the legacy database checksum');
+  ok('pre-migration safety copy: integrity ok; per-table counts and content hashes match the legacy source');
 
   // --- Step 6: activation journal is committed; versioned root active
   const journal = JSON.parse(readFileSync(join(dataRoot, 'activation-journal.json'), 'utf8'));
@@ -233,6 +264,12 @@ function readdirSyncSafe(dir) {
   } catch {
     return [];
   }
+}
+
+/** Deterministic content fingerprint of a table (all rows, rowid order). */
+function dumpHash(db, table) {
+  const rows = db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all();
+  return createHash('sha256').update(JSON.stringify(rows)).digest('hex');
 }
 
 // Top-level (ESM).

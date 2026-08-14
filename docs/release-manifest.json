@@ -4,7 +4,9 @@
     {
       "id": "meta.get",
       "title": "Kernel handshake / meta",
-      "wireOps": ["meta.get"],
+      "wireOps": [
+        "meta.get"
+      ],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Integrated",
@@ -94,7 +96,9 @@
     {
       "id": "providers.list",
       "title": "Provider catalog read",
-      "wireOps": ["providers.list"],
+      "wireOps": [
+        "providers.list"
+      ],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
@@ -138,7 +142,10 @@
     {
       "id": "generation.tool-loop",
       "title": "Durable run/step journal + tool-call loop (waiting_for_tool)",
-      "wireOps": ["generation.tools.list", "generation.tool.result"],
+      "wireOps": [
+        "generation.tools.list",
+        "generation.tool.result"
+      ],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
@@ -151,7 +158,9 @@
     {
       "id": "generation.prompt.plan",
       "title": "Prompt pipeline: durable PromptPlan (history/character/lorebook/token budget)",
-      "wireOps": ["generation.prompt.plan"],
+      "wireOps": [
+        "generation.prompt.plan"
+      ],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
@@ -164,7 +173,10 @@
     {
       "id": "backups",
       "title": "Backup create/list",
-      "wireOps": ["backups.create", "backups.list"],
+      "wireOps": [
+        "backups.create",
+        "backups.list"
+      ],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
@@ -175,22 +187,26 @@
       "milestone": "M3"
     },
     {
-      "id": "lorebooks.crud",
-      "title": "Lorebook CRUD",
-      "wireOps": ["lorebooks.list", "lorebooks.get", "lorebooks.create", "lorebooks.update", "lorebooks.delete"],
+      "id": "lorebooks.read",
+      "title": "Lorebook read",
+      "wireOps": [
+        "lorebooks.list"
+      ],
       "hosts": {
-        "desktop": "Integrated",
+        "desktop": "Implemented",
         "headless": "Implemented",
         "android": "Implemented",
         "webClient": "Implemented"
       },
-      "notes": "M4 slice 1 (Этап 4.1): full lorebook CRUD in the kernel through Product Wire — lorebooks.get/create/update/delete joined the existing lorebooks.list; entries travel as wire.lorebook.entry.input objects (keys/secondaryKeys/content/enabled/constant/selective) that the prompt pipeline already activates (constant always, keyword case-insensitive substring, selective primary+secondary), stored into entries_json with entryCount derived via json_array_length. Stable product errors: LOREBOOK_NOT_FOUND with lorebookId param; strict unknown-field rejection. Tested at three levels: 2 kernel integration tests (full create→get→update→delete round trip + NOT_FOUND/CONTRACT_VIOLATION paths), wire corpus (5 new positive + 6 new negative fixtures), and a remote-http host-parity test (lorebook_crud_over_http, error copied verbatim into the envelope). Desktop Integrated via the facade `apps/web/src/api/wireBridge.ts`: the lorebook hooks (useLorebooks/useLorebook/useCreateLorebook/useUpdateLorebook/useDeleteLorebook) route through the wire ops in kernel mode with honest wire→UI translation (characterId null, metadata {}); character-scoped catalog queries and character-linked create/update surface CAPABILITY_UNAVAILABLE (never a silent filter drop), and entry-level nested CRUD (no per-entry wire contract yet) throws UnsupportedError in kernel mode while the legacy /api/v2 nested route stays for sidecar mode. Honest boundary: legacy /api/v2/lorebooks route removal remains Этап 4; character↔lorebook scoping (characterId link) is not yet modeled in the kernel schema.",
-      "milestone": "M4"
+      "notes": "Kernel op exists; full lorebook CRUD and prompt integration in M2.",
+      "milestone": "M2"
     },
     {
       "id": "presets.read",
       "title": "Preset read",
-      "wireOps": ["presets.list"],
+      "wireOps": [
+        "presets.list"
+      ],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
@@ -198,25 +214,6 @@
         "webClient": "Implemented"
       },
       "notes": "Kernel op exists; preset CRUD in M4.",
-      "milestone": "M4"
-    },
-    {
-      "id": "personas.crud",
-      "title": "Persona CRUD",
-      "wireOps": [
-        "personas.list",
-        "personas.get",
-        "personas.create",
-        "personas.update",
-        "personas.delete"
-      ],
-      "hosts": {
-        "desktop": "Integrated",
-        "headless": "Implemented",
-        "android": "Implemented",
-        "webClient": "Implemented"
-      },
-      "notes": "M4 slice 1 (Этап 4.1, ТЗ §8.1 Library context): full persona CRUD in the kernel through Product Wire (personas.list/get/create/update/delete) backed by the STRICT personas table (schema migration 7). The single-default invariant matches the legacy PersonaRepository: create/update with isDefault clears the previous default in the same transaction. Wire DTO wire.persona.dto carries name/description/avatar/isDefault/createdAt/updatedAt (description/avatar optional); stable PERSONA_NOT_FOUND with personaId param. Tested at three levels: 2 kernel integration tests (round trip incl. default demotion + NOT_FOUND/contract paths), wire corpus (4 positive + 5 negative fixtures), and a remote-http host-parity test (persona_crud_over_http). Desktop Integrated via the facade `apps/web/src/api/wireBridge.ts`: the persona hooks (usePersonas/useCreatePersona/useUpdatePersona/useDeletePersona) route through the wire ops in kernel mode with honest wire→UI translation (avatar null default); an explicit avatar clear (avatar: null) is not expressible in the wire contract and surfaces CAPABILITY_UNAVAILABLE, never a silent no-op. Legacy→kernel migration now carries the personas table (audit P0 #3 fix): rows land in the kernel personas table with honest description/avatar defaults and the single-default invariant enforced on insert; sources without the table contribute 0. Honest boundary: chat.persona_id linkage and prompt {{user}} injection from the persona table are not wired yet (the prompt pipeline still reads the card ext_json.personality persona block); legacy /api/v2/personas route removal remains Этап 4.",
       "milestone": "M4"
     },
     {
@@ -294,7 +291,7 @@
         "android": "Designed",
         "webClient": "Implemented"
       },
-      "notes": "SEC-03/SEC-04 (M1 Wave 1): plugin network.http.fetch and socket destinations pass the §29.1 SSRF scope policy — every DNS answer checked, bracketed IPv6 and IPv4-mapped literals normalized, per-hop redirect re-checks, connect to the policy-approved IP with the hostname only in Host/SNI and post-connect remoteAddress verification; response bodies are capped while streaming and the connection is destroyed on exceed (apps/plugin-runtime/src/host). WebSocket post-connect verification is a documented follow-up.",
+      "notes": "SEC-03/SEC-04 (M1 Wave 1 + Wave 2 + Wave 3): plugin network.http.fetch and socket destinations pass the §29.1 SSRF scope policy — every DNS answer checked, bracketed IPv6 and IPv4-mapped literals normalized, per-hop redirect re-checks, connect to the policy-approved IP with the hostname only in Host/SNI and post-connect remoteAddress verification; response bodies are capped while streaming and the connection is destroyed on exceed (apps/plugin-runtime/src/host). Wave 2 (SEC-04): global and per-plugin in-flight byte budgets (NETWORK_MAX_INFLIGHT_BYTES_GLOBAL=64 MiB, NETWORK_MAX_INFLIGHT_BYTES_PER_PLUGIN=16 MiB, worst-case reservation per fetch body NETWORK_MAX_BODY_BYTES) fail a NEW request with the stable NETWORK_INFLIGHT_LIMIT before its body is read, and release on success/error/cancel; two host tests cover both budgets (including a cross-plugin global trip with 8 concurrent held fetches). Wave 3 (SEC-03): the verified-IP set is now honored on EVERY connect — direct fetch, HTTP absolute-form proxy hops (verified IP in the request-target, Host keeps the hostname), HTTPS CONNECT tunnels (verified IP in the CONNECT authority, TLS validates the hostname), tcpConnect, udpSend AND WebSocket (the undici WebSocket was replaced by a socketHandles RFC 6455 client that connects to a policy-approved address, verifies remoteAddress after connect and performs the HTTP Upgrade itself — no DNS for the hostname in the stack).",
       "milestone": "M1"
     },
     {

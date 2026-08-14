@@ -220,6 +220,125 @@ fn pointer_to_missing_root_is_not_found() {
     assert_eq!(err.code, StorageErrorCode::NotFound);
 }
 
+/// The v2 pointer stores a portable RELATIVE reference, so moving the whole
+/// portable data root keeps the active root resolvable (audit P0 #3
+/// "moving the portable directory breaks activation"; M3 portable-root fix).
+#[test]
+fn pointer_survives_portable_data_root_move() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let data_root = temp.path().join("data");
+    let target = data_root
+        .join(ROOTS_DIR)
+        .join(format!("{ROOT_DIR_PREFIX}t1"));
+    fs::create_dir_all(&target).expect("create target root");
+    fs::write(target.join("database.sqlite"), b"seed").expect("seed db");
+
+    write_pointer(&data_root, &target).expect("write pointer");
+    assert_eq!(active_root(&data_root).expect("active root"), target);
+
+    // The stored reference must be relative (portable), not absolute.
+    let raw = fs::read_to_string(data_root.join(ACTIVE_ROOT_FILE)).expect("read pointer file");
+    let value: serde_json::Value = serde_json::from_str(&raw).expect("pointer is valid JSON");
+    let stored = value
+        .get("root")
+        .and_then(|v| v.as_str())
+        .expect("root field");
+    assert!(
+        !Path::new(stored).is_absolute(),
+        "pointer root must be relative for portability, got: {stored}"
+    );
+    assert!(stored.starts_with(ROOTS_DIR), "stored ref: {stored}");
+
+    // Move the entire data root to a new location (portable folder move).
+    let moved = temp.path().join("moved-data");
+    fs::rename(&data_root, &moved).expect("move portable data root");
+
+    let pointer = read_pointer(&moved)
+        .expect("read pointer")
+        .expect("pointer present after move");
+    assert_eq!(
+        pointer.root,
+        moved.join(ROOTS_DIR).join(format!("{ROOT_DIR_PREFIX}t1")),
+        "active root must resolve under the moved data root"
+    );
+    assert_eq!(active_root(&moved).expect("active root"), pointer.root);
+}
+
+/// v1 pointers (absolute `root`) stay readable (backwards compatibility).
+#[test]
+fn v1_absolute_pointer_still_reads() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let data_root = temp.path().join("data");
+    let target = data_root
+        .join(ROOTS_DIR)
+        .join(format!("{ROOT_DIR_PREFIX}t1"));
+    fs::create_dir_all(&target).expect("create target root");
+
+    let body = serde_json::json!({
+        "formatVersion": 1,
+        "root": target.to_string_lossy(),
+        "activatedAt": "2026-01-01T00:00:00Z",
+    });
+    fs::write(data_root.join(ACTIVE_ROOT_FILE), body.to_string()).expect("write v1 pointer");
+
+    let pointer = read_pointer(&data_root)
+        .expect("read pointer")
+        .expect("pointer present");
+    assert_eq!(pointer.root, target);
+    assert_eq!(pointer.format_version, 1);
+}
+
+/// v2 journal entries store portable relative references: after moving the
+/// data root, recovery still resolves the staged target under the new
+/// location (M3 portable-root fix).
+#[test]
+fn journal_entries_resolve_after_portable_move() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let data_root = temp.path().join("data");
+    let from = data_root
+        .join(ROOTS_DIR)
+        .join(format!("{ROOT_DIR_PREFIX}from"));
+    let to = data_root
+        .join(ROOTS_DIR)
+        .join(format!("{ROOT_DIR_PREFIX}to"));
+    fs::create_dir_all(&from).expect("create from root");
+    fs::create_dir_all(&to).expect("create to root");
+
+    begin_activation(&data_root, "e1", "migration", &from, &to).expect("begin");
+    let entry = latest_entry(&data_root)
+        .expect("journal")
+        .expect("entry present");
+    assert_eq!(entry.from_root, from);
+    assert_eq!(entry.to_root, to);
+
+    // The stored journal fields must be relative (portable).
+    let raw = fs::read_to_string(data_root.join(ACTIVATION_JOURNAL_FILE)).expect("read journal");
+    let value: serde_json::Value = serde_json::from_str(&raw).expect("journal is valid JSON");
+    let entries = value
+        .get("entries")
+        .and_then(|v| v.as_array())
+        .expect("entries");
+    let stored_from = entries[0]
+        .get("fromRoot")
+        .and_then(|v| v.as_str())
+        .expect("fromRoot");
+    assert!(
+        !Path::new(stored_from).is_absolute(),
+        "journal fromRoot must be relative for portability, got: {stored_from}"
+    );
+
+    let moved = temp.path().join("moved-data");
+    fs::rename(&data_root, &moved).expect("move portable data root");
+    let entry = latest_entry(&moved)
+        .expect("journal")
+        .expect("entry present after move");
+    assert_eq!(
+        entry.to_root,
+        moved.join(ROOTS_DIR).join(format!("{ROOT_DIR_PREFIX}to")),
+        "staged target must resolve under the moved data root"
+    );
+}
+
 // --- kill-matrix recovery ---------------------------------------------------
 
 /// Kill after `begin` (prepared, no pending switch): resolve is a no-op; the

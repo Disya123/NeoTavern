@@ -47,10 +47,22 @@ pub const ROOT_DIR_PREFIX: &str = "root-";
 pub const JOURNAL_FORMAT: &str = "neotavern-activation-journal";
 
 /// Journal format version understood by this build.
-pub const JOURNAL_FORMAT_VERSION: i64 = 1;
+///
+/// v1: `fromRoot`/`toRoot` store absolute paths. v2 (2026-08-15, M3
+/// portable-root fix): the same fields store a **portable relative
+/// reference** (`.` for the data root itself, otherwise a path relative to
+/// the data root), so moving the portable data root keeps pending
+/// activation recoverable. v1 journals remain readable.
+pub const JOURNAL_FORMAT_VERSION: i64 = 2;
 
 /// Pointer format version understood by this build.
-pub const ACTIVE_ROOT_FORMAT_VERSION: i64 = 1;
+///
+/// v1: `root` stores an absolute path. v2 (2026-08-15, M3 portable-root
+/// fix): `root` stores a portable relative reference (`.` for the data root
+/// itself, otherwise a path relative to the data root), so moving the
+/// portable data root does not break the active-root resolution. v1
+/// pointers remain readable.
+pub const ACTIVE_ROOT_FORMAT_VERSION: i64 = 2;
 
 /// Activation stage statuses (ТЗ §10.3).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -102,9 +114,11 @@ pub struct JournalEntry {
     pub kind: String,
     /// Current stage status.
     pub status: ActivationStatus,
-    /// Absolute path of the previous/current active root.
+    /// Absolute path of the previous/current active root (resolved from the
+    /// portable relative reference stored by v2 journals).
     pub from_root: PathBuf,
-    /// Absolute path of the staged target root.
+    /// Absolute path of the staged target root (resolved from the portable
+    /// relative reference stored by v2 journals).
     pub to_root: PathBuf,
     /// RFC 3339 creation timestamp.
     pub created_at: String,
@@ -131,7 +145,8 @@ pub struct ActivationJournal {
 pub struct ActiveRootPointer {
     /// Format version, always [`ACTIVE_ROOT_FORMAT_VERSION`].
     pub format_version: i64,
-    /// Absolute path of the active root directory.
+    /// Absolute path of the active root directory (v2 pointers resolve the
+    /// stored portable relative reference against the data root on read).
     pub root: PathBuf,
     /// RFC 3339 activation timestamp.
     pub activated_at: String,
@@ -221,7 +236,7 @@ pub fn read_journal(data_root: &Path) -> Result<ActivationJournal> {
         .ok_or_else(|| corrupt_journal(&path, "missing entries array"))?;
     let entries = entries
         .iter()
-        .map(parse_entry)
+        .map(|entry| parse_entry(data_root, format_version, entry))
         .collect::<Result<Vec<_>>>()?;
     Ok(ActivationJournal {
         format: format.to_string(),
@@ -248,7 +263,7 @@ pub fn write_entry(data_root: &Path, entry: JournalEntry) -> Result<()> {
         "entries": journal
             .entries
             .iter()
-            .map(entry_json)
+            .map(|entry| entry_json(data_root, journal.format_version, entry))
             .collect::<Vec<_>>(),
     });
     write_atomic(&journal_path(data_root), body.to_string().as_bytes())
@@ -306,11 +321,19 @@ pub fn read_pointer(data_root: &Path) -> Result<Option<ActiveRootPointer>> {
             ],
         ));
     }
-    let root = value
+    let root_ref = value
         .get("root")
         .and_then(|v| v.as_str())
-        .map(PathBuf::from)
         .ok_or_else(|| corrupt_pointer(&path, "missing root"))?;
+    // v2 stores a portable relative reference (`.` for the data root itself,
+    // otherwise a path relative to the data root); v1 stored an absolute
+    // path. Resolving against the CURRENT data root is what makes a moved
+    // portable directory keep working (M3 portable-root fix).
+    let root = if format_version >= 2 {
+        resolve_root_ref(data_root, root_ref)
+    } else {
+        PathBuf::from(root_ref)
+    };
     if !root.is_dir() {
         return Err(StorageError::with(
             StorageErrorCode::NotFound,
@@ -356,7 +379,7 @@ pub fn active_root(data_root: &Path) -> Result<PathBuf> {
 /// make the kernel open a foreign directory (ТЗ §22.3).
 pub fn write_pointer(data_root: &Path, root: &Path) -> Result<()> {
     validate_active_root_candidate(data_root, root)?;
-    write_pointer_atomic(&pointer_path(data_root), root)
+    write_pointer_atomic(data_root, &pointer_path(data_root), root)
 }
 
 /// Validates that `root` is a legal active-root target for `data_root`: the
@@ -432,7 +455,7 @@ pub fn transition_status(
         "entries": journal
             .entries
             .iter()
-            .map(entry_json)
+            .map(|entry| entry_json(data_root, journal.format_version, entry))
             .collect::<Vec<_>>(),
     });
     write_atomic(&journal_path(data_root), body.to_string().as_bytes())
@@ -485,11 +508,15 @@ pub fn resolve_pending_activation(data_root: &Path) -> Result<ActivationResoluti
         )?;
         return Ok(ActivationResolution::RolledBack { entry_id: entry.id });
     }
+    // The journal lives on disk and could be crafted: never let recovery
+    // publish a root outside the data root (mirrors write_pointer's
+    // validation — recovery must not bypass the pointer validator).
+    validate_active_root_candidate(data_root, &entry.to_root)?;
     // The pointer switch is the commit point. The target root is already
     // fully verified by the staged conversion; here we only publish it.
     let pointer = pointer_path(data_root);
     with_transient_retry(RetryPolicy::default(), || {
-        write_pointer_atomic(&pointer, &entry.to_root)
+        write_pointer_atomic(data_root, &pointer, &entry.to_root)
     })
     .map_err(|e| {
         StorageError::with(
@@ -531,7 +558,7 @@ pub fn activate(
     transition_status(data_root, id, ActivationStatus::ActivationPending, None)?;
     let pointer = pointer_path(data_root);
     with_transient_retry(RetryPolicy::default(), || {
-        write_pointer_atomic(&pointer, to_root)
+        write_pointer_atomic(data_root, &pointer, to_root)
     })
     .map_err(|e| {
         StorageError::with(
@@ -669,8 +696,14 @@ pub fn prune_previous_roots(data_root: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Parses one journal entry object.
-fn parse_entry(value: &serde_json::Value) -> Result<JournalEntry> {
+/// Parses one journal entry object. `format_version` selects the root
+/// encoding: v1 stores absolute paths, v2+ stores portable relative
+/// references resolved against `data_root`.
+fn parse_entry(
+    data_root: &Path,
+    format_version: i64,
+    value: &serde_json::Value,
+) -> Result<JournalEntry> {
     let id = value
         .get("id")
         .and_then(|v| v.as_str())
@@ -686,16 +719,24 @@ fn parse_entry(value: &serde_json::Value) -> Result<JournalEntry> {
         .and_then(|v| v.as_str())
         .and_then(ActivationStatus::parse)
         .ok_or_else(|| corrupt_journal_entry(value, "invalid status"))?;
-    let from_root = value
+    let from_root_ref = value
         .get("fromRoot")
         .and_then(|v| v.as_str())
-        .map(PathBuf::from)
         .ok_or_else(|| corrupt_journal_entry(value, "missing fromRoot"))?;
-    let to_root = value
+    let to_root_ref = value
         .get("toRoot")
         .and_then(|v| v.as_str())
-        .map(PathBuf::from)
         .ok_or_else(|| corrupt_journal_entry(value, "missing toRoot"))?;
+    let from_root = if format_version >= 2 {
+        resolve_root_ref(data_root, from_root_ref)
+    } else {
+        PathBuf::from(from_root_ref)
+    };
+    let to_root = if format_version >= 2 {
+        resolve_root_ref(data_root, to_root_ref)
+    } else {
+        PathBuf::from(to_root_ref)
+    };
     let created_at = value
         .get("createdAt")
         .and_then(|v| v.as_str())
@@ -722,25 +763,66 @@ fn parse_entry(value: &serde_json::Value) -> Result<JournalEntry> {
     })
 }
 
-/// JSON object form of one entry.
-fn entry_json(entry: &JournalEntry) -> serde_json::Value {
+/// JSON object form of one entry. v1 journals keep absolute `fromRoot`/
+/// `toRoot`; v2+ journals store portable relative references.
+fn entry_json(data_root: &Path, format_version: i64, entry: &JournalEntry) -> serde_json::Value {
+    let (from_root, to_root) = if format_version >= 2 {
+        (
+            root_ref(data_root, &entry.from_root),
+            root_ref(data_root, &entry.to_root),
+        )
+    } else {
+        (
+            entry.from_root.to_string_lossy().into_owned(),
+            entry.to_root.to_string_lossy().into_owned(),
+        )
+    };
     serde_json::json!({
         "id": entry.id,
         "kind": entry.kind,
         "status": entry.status.as_str(),
-        "fromRoot": entry.from_root.to_string_lossy(),
-        "toRoot": entry.to_root.to_string_lossy(),
+        "fromRoot": from_root,
+        "toRoot": to_root,
         "createdAt": entry.created_at,
         "updatedAt": entry.updated_at,
         "error": entry.error,
     })
 }
 
-/// Atomic pointer write (temp+rename in the data root).
-fn write_pointer_atomic(pointer: &Path, root: &Path) -> Result<()> {
+/// Portable relative root reference: `.` for the data root itself, otherwise
+/// the root path relative to the data root (e.g. `roots/root-<id>`), using
+/// `/` separators so the reference is platform-independent.
+fn root_ref(data_root: &Path, root: &Path) -> String {
+    match root.strip_prefix(data_root) {
+        Ok(rel) if rel.as_os_str().is_empty() => ".".to_string(),
+        Ok(rel) => rel.to_string_lossy().replace('\\', "/"),
+        Err(_) => {
+            // Only reachable when the caller bypassed validation; keep the
+            // absolute form so the pointer remains meaningful.
+            root.to_string_lossy().into_owned()
+        }
+    }
+}
+
+/// Resolves a portable relative root reference against `data_root`.
+fn resolve_root_ref(data_root: &Path, reference: &str) -> PathBuf {
+    if reference == "." {
+        data_root.to_path_buf()
+    } else {
+        // References are written with '/' separators for portability; join
+        // accepts them verbatim on every platform (Windows normalizes '/'),
+        // and joining keeps the result relative to `data_root`.
+        data_root.join(reference)
+    }
+}
+
+/// Atomic pointer write (temp+rename in the data root). v2 format: stores
+/// the portable relative reference, so a moved portable data root keeps
+/// resolving.
+fn write_pointer_atomic(data_root: &Path, pointer: &Path, root: &Path) -> Result<()> {
     let body = serde_json::json!({
         "formatVersion": ACTIVE_ROOT_FORMAT_VERSION,
-        "root": root.to_string_lossy(),
+        "root": root_ref(data_root, root),
         "activatedAt": now_utc_rfc3339(),
     });
     write_atomic(pointer, body.to_string().as_bytes())

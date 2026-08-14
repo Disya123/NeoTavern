@@ -3,6 +3,31 @@
 ## Unreleased
 ### Added
 
+- **Migration single-writer and pointer integrity fixes (audit P0 #3,
+  ТЗ §10.3/§22.3).** `neotavern_storage::migration` is now session-based:
+  `MigrationSession::begin` acquires the data-root lease and holds it for
+  the whole staging→commit/cancel sequence (`session.commit()` /
+  `session.cancel()`), so no second writer can enter between the phases —
+  the old free `prepare`/`commit`/`cancel` split released the lease before
+  commit. The active-root pointer is only ever written/read for the data
+  root itself or a versioned root under `<data-root>/roots/` (an arbitrary
+  absolute path is refused with `IntegrityViolation` on both write and
+  read), and a pointer/journal that exists but cannot be read fails closed
+  with `Corrupt` instead of being treated as missing (v1-flat fallback).
+  `write_atomic` now fsyncs the temp file before the rename and the target
+  after it (ТЗ §10.3 flush/sync requirement). The pre-migration safety copy
+  is created with the SQLite online-backup API (not a plain `fs::copy`), so
+  committed WAL frames are included and the copy passes `quick_check`
+  before its checksum is written. The legacy→kernel converter now migrates
+  the `personas` table (canonical schema migration 7 — added to the Этап 3
+  cutover so migrated personas are never dropped; the Этап 4.1 kernel CRUD
+  builds on the same table) with honest description/avatar defaults and the
+  single-default invariant enforced on insert. Tests: migration suite 24
+  tests (new: session holds the lease between phases, WAL commits included
+  in the safety copy, unreadable pointer is not missing, out-of-root
+  pointer refused on read and write, personas migrate with a single
+  default), full `cargo test --workspace` green, clippy + rustfmt clean.
+
 - **Durable run/step journal and the tool-call loop (M2 / Этап 2.7, ТЗ
   §8.3).** The kernel now journals every generation step in the new
   `generation_steps` table (schema migration 6 — `ALTER TABLE` + `CREATE

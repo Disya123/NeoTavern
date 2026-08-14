@@ -17,7 +17,7 @@ use crate::schema::{
     MIGRATION_2_CHECKSUM, MIGRATION_2_NAME, MIGRATION_2_SQL, MIGRATION_3_CHECKSUM,
     MIGRATION_3_NAME, MIGRATION_3_SQL, MIGRATION_4_CHECKSUM, MIGRATION_4_NAME, MIGRATION_4_SQL,
     MIGRATION_5_CHECKSUM, MIGRATION_5_NAME, MIGRATION_5_SQL, MIGRATION_6_CHECKSUM,
-    MIGRATION_6_NAME, MIGRATION_6_SQL,
+    MIGRATION_6_NAME, MIGRATION_6_SQL, MIGRATION_7_CHECKSUM, MIGRATION_7_NAME, MIGRATION_7_SQL,
 };
 use crate::{
     now_utc_rfc3339, APPLICATION_ID, CURRENT_SCHEMA, META_KEY_STORAGE_FORMAT, STORAGE_FORMAT,
@@ -107,6 +107,14 @@ pub const MIGRATIONS: &[Migration] = &[
         transactional: true,
         sql: MIGRATION_6_SQL,
         checksum: MIGRATION_6_CHECKSUM,
+    },
+    Migration {
+        id: 7,
+        name: MIGRATION_7_NAME,
+        risk: MigrationRisk::Low,
+        transactional: true,
+        sql: MIGRATION_7_SQL,
+        checksum: MIGRATION_7_CHECKSUM,
     },
 ];
 

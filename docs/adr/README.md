@@ -86,6 +86,22 @@ input rejected with an explicit code until the Этап 3 converter; stable
 error codes. Full decision, alternatives and consequences:
 [ADR-0040](0040-secret-store-port-format.md).
 
+## ADR-0041: Versioned Data Roots — Activation Journal and Windows Restart-to-Complete
+
+The Этап 3 data-cutover layout (ТЗ §10.2–§10.4 / §19.2 ADR #8): versioned
+data roots under `data-root/roots/` with a small `active-root.json` pointer
+and a durable `activation-journal.json` (`prepared` → `validated` →
+`activation_pending` → `committed` | `rolled_back`); the Windows activation
+protocol uses a verified platform-specific replace primitive with bounded
+retry/backoff for classified transient sharing/lock errors, never deletes
+the old root before commit confirmation, writes `activation_pending` +
+clean exit + **Restart to finish migration** after the retry budget is
+exhausted, and completes activation at next bootstrap before plugins/UI
+queries/SQLite/background services start; the old root stays the only
+active root on failed activation; rollback is available until the first new
+mutation or via an immutable safety copy. Full decision, alternatives and
+consequences: [ADR-0041](0041-versioned-data-roots-activation.md).
+
 ## ADR-0039: Legacy Compatibility Authority Boundary
 
 Legacy compatibility is an **authority-non-expanding boundary** (ТЗ 10/10
