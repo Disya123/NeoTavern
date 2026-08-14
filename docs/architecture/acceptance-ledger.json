@@ -57,21 +57,30 @@
         "apps/server/test/secretStore.spec.ts, extensions-hardening.spec.ts",
         "apps/server/test/profileExport.spec.ts (11 tests: sentinels, allowlist vs PRAGMA table_info, snapshotTransaction, rollback)",
         "apps/plugin-runtime/src/host/memoryHost.ts (NETWORK_INFLIGHT_LIMIT per-plugin + global in-flight byte budgets) + memoryHost.test.ts (113 tests incl. both budget trips)",
-        "apps/plugin-runtime/src/host/networkPool.ts + socketHandles.ts (verified-IP honored on every connect: direct, HTTP absolute-form proxy, HTTPS CONNECT proxy, tcp, udp, WebSocket) + networkPool.test.ts (21) + socketHandles.test.ts (13, incl. RFC 6455 WebSocket client over the verified IP)"
+        "apps/plugin-runtime/src/host/networkPool.ts + socketHandles.ts (verified-IP honored on every connect: direct, HTTP absolute-form proxy, HTTPS CONNECT proxy, tcp, udp, WebSocket) + networkPool.test.ts (21) + socketHandles.test.ts (13, incl. RFC 6455 WebSocket client over the verified IP)",
+        "Re-scoped: legacy migrator completeness (settings/branches/revisions/assets) is Этап 3/4 data-cutover work, already tracked in M3 blockingIssues ('settings/branches/revisions/assets not yet converted (personas ARE converted)') — not an M1 security blocker"
       ],
       "blockingIssues": [
+        "P1: profile export per-profile scoping (SEC-02 follow-up — the legacy single-app.db model has no per-profile foreign keys; per-profile scoping is a canonical-plane schema decision)"
+      ],
+      "resolvedIssues": [
         "P0: session SecretStore destroyed legacy plaintext on bootstrap (FIXED in this milestone; portable/env flows verified in secretStore.spec.ts)",
         "P0: plugin entrypoint inside signature/ escaped the signed digest (FIXED: validatePackage + host-side defense-in-depth)",
-        "P1: legacy migrator does not yet carry settings/branches/revisions/assets (Этап 4 follow-ups; personas now migrated)",
         "P1: IPv6 link-local classifier only blocked addresses starting with fe80 while link-local is fe80::/10, and multicast ff00::/8 passed as public (FIXED: classifier now covers the fe80..febf hextet range and ff00::/8; memoryHost.test.ts pins febf::1 and ff02::1 as denied without a private grant, SEC-03)",
         "P1: WebSocket handshake and incoming frame buffer lacked size/timeout limits — a declared huge frame could accumulate to full length before the bounded ring (FIXED: WS_MAX_FRAME_BYTES caps the declared payload and the fragmented-text accumulation; wsParseFrame answers tooLarge from the header alone and socketHandles tears the connection down; socketHandles.test.ts pins the 2-GiB declaration, SEC-04)",
         "P1: networkPool did not decode gzip/br although the decompressed-bytes budget was claimed (FIXED: content-encoding gzip/deflate/br is decoded through a bounded streaming decoder — the compressed wire bytes and the decompressed result share the same cap, a gzip bomb cannot expand past it; networkPool.test.ts pins decode + header drop + bomb truncation, SEC-04)",
-        "P1: profile export carries the selected profile only in manifest.json — the legacy single-app.db model has no per-profile foreign keys, so the allowlisted tables and files/ are exported wholesale (per-profile scoping is a canonical-plane schema decision, tracked for M4; export itself remains allowlist-only, snapshot-transactional, secret-redacted, SEC-02)",
         "P1: deleting a DB secret reference did not call SecretStore.delete (FIXED: SecretStoreHandle.deleteValue wired into the provider-secret and plugin-secret DELETE routes — the stored value is removed together with the referencing row, no orphaned secrets; secretStore.spec.ts asserts the value no longer resolves after delete, SEC-01)",
         "P1: the whole signature/ directory was excluded from the digest — a signed entrypoint could import an unsigned signature/module.js (FIXED: verifyPackageTrust now recurses into signature/ and allows ONLY manifest.json + package.sig there; any other file in the directory is recorded with a forbidden sentinel so the strict file-set comparison rejects the package; packageTrust.test.ts pins the forged signature/module.js case, SEC-05)",
         "P1: package digest was not re-verified at activation/startup and installs had no recovery journal (FIXED: install writes an installed-digests.json snapshot next to the promoted package plus a durable install-journal.json (staging→committed/rolled_back); every activation and the startup auto-activation re-verify the files against the snapshot and refuse with PLUGIN_SIGNATURE_INVALID TAMPERED_AFTER_INSTALL when anything was added/removed/modified; pre-upgrade installs get a baseline from the publisher signature; recoverInterruptedInstalls cleans half-promoted packages and .incoming-*/.rollback-* leftovers on boot; packageIntegrity.spec.ts 9 tests incl. end-to-end install→tamper→activate-refused, SEC-05)"
       ],
-      "waivers": []
+      "waivers": [
+        {
+          "issue": "P1: profile export per-profile scoping (SEC-02 follow-up — the legacy single-app.db model has no per-profile foreign keys; per-profile scoping is a canonical-plane schema decision)",
+          "by": "agent (round 33, M1 closure prep)",
+          "date": "2026-08-14",
+          "reason": "Limited waiver per ТЗ Этап 1 exit criteria ('P1 either closed or covered by a limited ADR waiver until cutover'). SEC-02 is satisfied for the current model: the export is allowlist-only (entity + per-table column allowlist), snapshot-transactional and secret-redacted, and the legacy model holds no per-profile rows to leak — the selected profile is the whole data set. Per-profile scoping requires per-profile foreign keys in the canonical schema; tracked in M4 blockingIssues. Waiver expires at M4 cutover, when the canonical export must filter by profile."
+        }
+      ]
     },
     {
       "id": "M2-kernel-golden",
@@ -180,9 +189,66 @@
         "legacy /api/v2/lorebooks and /api/v2/personas route removal still pending (after parity)",
         "entry-level lorebook nested CRUD has no per-entry wire contract yet (honest CAPABILITY_UNAVAILABLE in kernel mode)",
         "character↔lorebook scoping not modeled in the kernel schema",
-        "chat.persona_id linkage and prompt {{user}} injection from the personas table not wired"
+        "chat.persona_id linkage and prompt {{user}} injection from the personas table not wired",
+        "per-profile export scoping — the canonical schema must add per-profile foreign keys and the export must filter by them (waived in M1 until this cutover, SEC-02)"
       ],
       "waivers": []
     }
-  ]
+  ],
+  "prSplitPlan": {
+    "note": "Audit directive 'split the accumulated branch into security / kernel flow / migration / separate M4 PRs'. The branch history (main..HEAD) interleaves stages chronologically, so no single linear range is a clean topic. History will NOT be rewritten: after each milestone is accepted, its PR is cut by cherry-picking the listed commits onto main (conflict resolution against main is expected — the tail M1 commits were written against the accumulated tree). The strict sequential policy now prevents further stage mixing, so the branch stops growing.",
+    "pr-security-m1": {
+      "when": "after M1 accepted",
+      "commits": [
+        "e7691bb (SEC-02 logical profile export)",
+        "a7e8d40 (SEC-03/SEC-04 network broker)",
+        "237fcfd (SEC-05 plugin package trust)",
+        "4f6bfb1 (restore maintenance lock)",
+        "b5e9add (ARC-11 compatibility authority)",
+        "3399a68 (SEC-01 legacy SecretStore)",
+        "a17a276 (M1 Wave 1 close-out docs)",
+        "bab452f (SEC-01 kernel SecretStore + ADR-0040)",
+        "5f1b8eb (M1 audit: export snapshot + ordering gate + kernel-smoke rename)",
+        "082e45e (SEC-04 Wave 2 in-flight budgets)",
+        "a02fbfb (SEC-03 Wave 3 verified-IP on every connect)",
+        "1390f25 (SEC-03 Wave 3 WebSocket client)",
+        "b6284c1 (M1 audit r31: real acceptance gate + IPv6/multicast + WS frames + decompression bounds + secret delete + signature-dir)",
+        "bdbcfed (M1 SEC-05 r32: installed-package digest re-verification + install recovery journal)"
+      ]
+    },
+    "pr-kernel-golden": {
+      "when": "after M2 accepted",
+      "commits": [
+        "b6d7dbe (M2 chats/messages CRUD)",
+        "87dd73a (M2 provider config, secrets out of DB)",
+        "395d29b (M2 OpenAI-compatible provider)",
+        "46cefa0 (M2 durable prompt pipeline + PromptPlan)",
+        "70f90d4 (M2 run/step journal + tool-call loop)",
+        "95e00fd (M2 cancel/retry + tool E2E)",
+        "6d5af18 (M2 packaged golden slice)",
+        "7672eef (M2 generation data plane)",
+        "c580388 (M2 library/chat CRUD over Product Wire)"
+      ]
+    },
+    "pr-migration": {
+      "when": "after M3 accepted",
+      "commits": [
+        "b6246b0 (M3 versioned roots + activation journal + Windows restart-to-complete)",
+        "152bf71 (M3 staged migration in the application flow)",
+        "ebe0ada (M3 migration corpus + schema mapping)",
+        "18338f5 (M3 CLI host flow)",
+        "9ef5284 (M3 cross-platform upgrade drill)",
+        "96178e7 (M3 audit: single-writer + pointer integrity + verified safety copy + personas)"
+      ]
+    },
+    "pr-m4-slices": {
+      "when": "per slice after M4 acceptance (slices are STOPPED until M1 is accepted)",
+      "commits": [
+        "b20b79c (M4 slice 1: lorebook CRUD in kernel)",
+        "cf35302 (M4 slice 1: persona CRUD in kernel)",
+        "9496d7a (M4 slice 1: lorebook/persona UI cutover + SEC fixes)",
+        "398ca0e (M4 slice 1: entry-level lorebook CRUD over Product Wire)"
+      ]
+    }
+  }
 }
