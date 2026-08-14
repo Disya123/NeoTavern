@@ -157,9 +157,9 @@
         },
         {
           "type": "test-run",
-          "command": "npx vitest run (workspace) && pnpm typecheck && cargo test --manifest-path crates/Cargo.toml && node scripts/docs-sync.mjs --check && node scripts/check-milestone-gates.mjs --self-test",
-          "result": "full verification on the clean branch: vitest 145 files / 1724 tests PASS; tsc -b PASS; cargo 279 tests PASS; docs mirror in sync; gate self-test 17 cases PASS",
-          "commit": "7893268"
+          "command": "npx vitest run (workspace) && pnpm --filter @neotavern/web test && pnpm typecheck && cargo test --manifest-path crates/Cargo.toml && node scripts/docs-check.mjs && node scripts/docs-sync.mjs --check && node scripts/check-milestone-gates.mjs --self-test && node scripts/check-milestone-gates.mjs --check && node scripts/check-milestone-gates.mjs --acceptance-drill",
+          "result": "full verification on the clean branch at the final HEAD: vitest 145 files / 1724 tests PASS; web 59 files / 534 tests PASS; tsc -b PASS; cargo 279 tests PASS; docs:check OK; docs mirror in sync; eslint on changed files PASS; prettier on touched files PASS; gate self-test 17 cases PASS; gate --check GATE PASS; acceptance drill PASS",
+          "commit": "fc1ec87"
         }
       ],
       "blockingIssues": [
@@ -236,8 +236,8 @@
           "8": {
             "type": "test-run",
             "command": "npx vitest run (workspace) && pnpm typecheck && cargo test --manifest-path crates/Cargo.toml && node scripts/check-milestone-gates.mjs --self-test",
-            "result": "regression/security suites green — vitest 145 files / 1724 tests, tsc -b, cargo 279 tests, gate self-test 17 cases",
-            "commit": "7893268"
+            "result": "regression/security suites green — vitest 145 files / 1724 tests, web 534 tests, tsc -b, cargo 279 tests, gate self-test 17 cases",
+            "commit": "fc1ec87"
           }
         },
         "verdictNeeded": "Acceptance is the human verdict: set status=accepted, acceptedCommit=<the exact HEAD of this branch you reviewed (the drill proves the proposal's mechanics at the proposed commit 711b063; any later ancestor also passes)>, acceptedBy=<your name>. The gate then passes for M1 — one waived non-P0 blocker covered by a real limited ADR waiver (ADR-0042)."
