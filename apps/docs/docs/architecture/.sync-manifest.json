@@ -188,9 +188,14 @@
       "sha256": "e935adfb8f2d0e5936785b28da9d9afe0a0b053dd56e371b6cc666960918d649"
     },
     {
+      "source": "adr/0043-web-client-remote-only.md",
+      "target": "adr/0043-web-client-remote-only.md",
+      "sha256": "589d8d320611f2c29fc6bd1d417b9474e9563e0490a791337d64811c3e8b03b7"
+    },
+    {
       "source": "adr/README.md",
       "target": "adr/README.md",
-      "sha256": "c4775fce7903736deae775d25263c4b4474a07b1b86c48c98d4fb10bc18cf611"
+      "sha256": "e733a921082b4f6f0e0e65ec1ab06c83d3e5d7d33a1f7b4a2f08d38b5e31674a"
     },
     {
       "source": "android/README.md",

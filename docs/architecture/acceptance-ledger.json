@@ -417,6 +417,26 @@
         "migration report and cancel UX live behind the CLI host; the UI-facing migration progress screen is a later milestone"
       ]
     },
+    "adrAudit-19-2": {
+      "date": "2026-08-14",
+      "note": "ТЗ §19.2 mandates 12 ADRs before Stable; audited the repo at the M1 branch HEAD and the accumulated branch (2c5e156).",
+      "covered": {
+        "1 canonical core + Fastify fate": "ADR-0038",
+        "2 module boundaries + dependency direction": "ADR-0038 + scripts/check-dependency-rules.mjs (CI-enforced)",
+        "3 canonical storage schema + data-root": "ADR-0032 + ADR-0041 (lands with M3)",
+        "4 Product Wire versioning": "ADR-0029",
+        "5 secret storage per host + portable + crypto": "ADR-0040",
+        "7 plugin isolation + capability model": "ADR-0007/0014/0015/0037",
+        "8 backup/restore + migration activation incl. Windows": "ADR-0032 + ADR-0041 (lands with M3)",
+        "9 host support tiers": "ADR-0038",
+        "11 Web Client remote-only + standalone browser decision": "ADR-0043 — file created this round (was referenced by ADR-0038/AGENTS.md but missing)",
+        "12 legacy compat authority model": "ADR-0039"
+      },
+      "pending": {
+        "6 provider execution + generation run/step/tool model": "design docs exist in the M2 content (docs/architecture/generation-run-steps.md, generation-durability.md, providers.md); a dedicated ADR should be added with the M2 PR (pr-kernel-golden)",
+        "10 performance reference environment": "requires the benchmark ADR (ТЗ §16) — a later hardening/benchmark milestone item; ADR-0040's provisional Argon2id parameters are also gated on it"
+      }
+    },
     "reCutGuide": {
       "note": "Conflict map verified on 2026-08-14 by diffing every M2 commit's files against the executed M1 branch (ec127a4..HEAD). Every M2 commit touches the docs trio below, so each cherry-pick conflicts there — the resolution policy makes this mechanical. The M2 commit chain (b6d7dbe..c580388) is verified linear on m1-w1-security; re-cut order is the listed order.",
       "commonPattern": "For EVERY cherry-picked M2 commit resolve: CHANGELOG.md -> ours (the M1 branch keeps only M1 entries; M2 entries are collected and written as one M2 CHANGELOG commit at the end); docs/capability-matrix.{json,md} + apps/docs/docs/architecture/capability-matrix.md -> take from commit, then run 'pnpm capability:matrix' and commit the regenerated output (23 rows baseline); apps/docs/docs/architecture/.sync-manifest.json -> regenerate last via 'pnpm docs:sync'.",

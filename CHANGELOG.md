@@ -3,6 +3,17 @@
 ## Unreleased
 ### Added
 
+- **M1 governance — ADR-0043 records the Web Client remote-only decision.**
+  The installable web artifact is documented as a Remote/Installable Web
+  Client to a user-controlled Headless/Desktop host, not a standalone
+  offline runtime: the service worker caches only the app shell and public
+  static assets, and the offline state is an honest connection screen with no
+  product mutations. The standalone browser/WASM runtime remains a separate
+  product track (ТЗ §11.3.2) requiring its own ADR; until then standalone
+  capability stays `Not supported` (ARC-12). The decision was already
+  referenced by ADR-0038 and `AGENTS.md`; this ADR closes the dangling
+  reference.
+
 - **M1 review round 2 — WS handshake bounds, compressed wire accounting,
   crash-safe install journal v2, owner-aware secret cleanup (ТЗ §SEC-01 /
   §SEC-04 / §SEC-05).** The plugin-runtime WebSocket upgrade handshake is now

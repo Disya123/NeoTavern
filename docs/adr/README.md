@@ -1,5 +1,23 @@
 # Architecture Decision Records
 
+## ADR-0043: Web Client — Remote-Only Mode and Standalone Browser Runtime Decision
+
+The installable web artifact is a **Remote/Installable Web Client**: the
+browser runs the UI shell and talks to the Kernel on a user-controlled
+Headless/Desktop host through the authenticated Product Wire HTTP/stream
+transport. It is **not** a standalone offline runtime: the service worker
+caches only the versioned app shell and public static assets (never API/SSE
+responses, prompts, provider events or secrets), and without a connection the
+Web Client shows an honest connection/offline screen with no product
+mutations. The standalone browser/WASM runtime is a separate product track —
+if ever required it needs its own ADR/RFC passing the ТЗ §11.3.2 criteria
+(browser-compatible core, SQLite WASM + OPFS single-writer, quota/eviction,
+browser secrets, provider CORS model, mobile Safari lifecycle, offline E2E);
+until then standalone capability is `Not supported` (ARC-12). This ADR records
+the decision that ADR-0038 and `AGENTS.md` already reference as "ADR-0043".
+Full decision, alternatives and consequences:
+[ADR-0043](0043-web-client-remote-only.md).
+
 ## ADR-0042: Limited waiver — per-profile export scoping (M1, SEC-02)
 
 A bounded exception to the M1 SEC-02 blocker list: **one** P1 issue
