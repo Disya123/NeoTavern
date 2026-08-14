@@ -211,6 +211,19 @@
       "milestone": "M1"
     },
     {
+      "id": "security.plugin-package-trust",
+      "title": "Plugin package trust (signature/digest verification)",
+      "wireOps": [],
+      "hosts": {
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "android": "Designed",
+        "webClient": "Implemented"
+      },
+      "notes": "SEC-05 (M1 Wave 1): publisher Ed25519 signature + per-file sha256 digest verification before consent/install (format neotavern.package-signature.v1, apps/server/src/lib/packageTrust.ts); trust states built-in / verified-publisher / locally-trusted / unsigned-untrusted recorded in the plugin registry (migration 0023) and surfaced as InstalledPlugin.trust; NEOTA_PLUGIN_PUBLISHER_KEYS keyring + NEOTA_PLUGIN_REQUIRE_SIGNATURE policy; unsigned packages enabled via consent become locally-trusted; ZIP/tar.gz reject duplicate normalized paths, symlinks, traversal, encrypted entries and bounded zip bombs.",
+      "milestone": "M1"
+    },
+    {
       "id": "ui.portable-data",
       "title": "Portable data / activation / restore",
       "wireOps": [],

@@ -3655,7 +3655,7 @@ describe('diagnostics and regenerable cache', () => {
     expect(response.statusCode, response.payload).toBe(200);
     expect(response.json()).toMatchObject({
       formatVersion: 1,
-      database: { integrity: 'ok', schemaVersion: 22 },
+      database: { integrity: 'ok', schemaVersion: 23 },
       providers: { configured: expect.any(Number), enabled: expect.any(Number) },
       themes: { safeModeAvailable: true },
       privacy: {

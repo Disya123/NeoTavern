@@ -1397,6 +1397,9 @@ async function importLegacyExtensions(context: ImportContext): Promise<void> {
           legacy: { frontend: 'index.js' },
         },
         requestedPermissions: ['legacy.trusted'],
+        // The user explicitly picked this local directory for import: an
+        // explicit local trust decision (ТЗ §SEC-05), not a verified signature.
+        trust: 'locally-trusted',
       });
       if (result.replaced) context.counts.legacyExtensions.reused += 1;
       else context.counts.legacyExtensions.imported += 1;

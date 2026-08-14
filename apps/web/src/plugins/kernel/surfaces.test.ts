@@ -63,6 +63,7 @@ function installedPlugin(): InstalledPlugin {
     hasLegacyFrontend: false,
     hasLegacyBackend: false,
     compatibilityLevel: 'native-v2',
+    trust: 'unsigned-untrusted',
     lastErrorCode: null,
   };
 }

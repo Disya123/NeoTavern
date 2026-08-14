@@ -100,6 +100,12 @@ export const ErrorCodes = {
   PLUGIN_RUNTIME_UNAVAILABLE: 'PLUGIN_RUNTIME_UNAVAILABLE',
   /** The Plugin Runtime process died unexpectedly; workers are gone (§20.13). */
   PLUGIN_RUNTIME_CRASHED: 'PLUGIN_RUNTIME_CRASHED',
+  /** Package signature/per-file digest verification failed (ТЗ §SEC-05). */
+  PLUGIN_SIGNATURE_INVALID: 'PLUGIN_SIGNATURE_INVALID',
+  /** Package is signed, but by a publisher outside the trusted keyring (ТЗ §SEC-05). */
+  PLUGIN_SIGNATURE_UNTRUSTED: 'PLUGIN_SIGNATURE_UNTRUSTED',
+  /** Install policy requires a publisher signature (ТЗ §SEC-05). */
+  PLUGIN_SIGNATURE_REQUIRED: 'PLUGIN_SIGNATURE_REQUIRED',
 
   // Plugin resource governance (ТЗ Plugin SDK vNext §8, §19)
   RESOURCE_PRESSURE: 'RESOURCE_PRESSURE',
@@ -197,6 +203,9 @@ const DEFAULT_STATUS: Record<ErrorCode, number> = {
   [ErrorCodes.STATE_QUOTA_EXCEEDED]: 413,
   [ErrorCodes.PLUGIN_RUNTIME_UNAVAILABLE]: 503,
   [ErrorCodes.PLUGIN_RUNTIME_CRASHED]: 503,
+  [ErrorCodes.PLUGIN_SIGNATURE_INVALID]: 422,
+  [ErrorCodes.PLUGIN_SIGNATURE_UNTRUSTED]: 422,
+  [ErrorCodes.PLUGIN_SIGNATURE_REQUIRED]: 422,
   [ErrorCodes.RESOURCE_PRESSURE]: 503,
   [ErrorCodes.RESOURCE_LIMIT_EXCEEDED]: 503,
   [ErrorCodes.RESOURCE_PROFILE_DENIED]: 403,

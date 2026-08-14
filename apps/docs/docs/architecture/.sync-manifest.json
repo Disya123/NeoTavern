@@ -170,7 +170,7 @@
     {
       "source": "adr/0038-canonical-rust-kernel-core.md",
       "target": "adr/0038-canonical-rust-kernel-core.md",
-      "sha256": "9a6503680b5b6b44f30cd438478bdf2fe35ef63ce4f41007f85bf28468482bb6"
+      "sha256": "1c10c6d9d3639961d01fe1c67bcab67ff396bd445ff99180211f754af6367126"
     },
     {
       "source": "adr/0039-legacy-compatibility-authority-boundary.md",
@@ -240,7 +240,7 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "5014d50150334e1b3308403da6654e9c8628bcbb943fd3d438be26cc0978f2be"
+      "sha256": "eb9235fc60af110bf3841ec35e95d2cd24737edebaa88f12db606a6a182ffd30"
     },
     {
       "source": "data/README.md",
@@ -260,7 +260,7 @@
     {
       "source": "plugin-sdk/README.md",
       "target": "plugin-sdk/README.md",
-      "sha256": "e35a0c2ab268c4f2302581ca5a06a0b036564a488c033de75bcab29c5fbe498b"
+      "sha256": "4d628a1b0a604ce67ae1eb4fa546afff628b6753814ff6d51c2ab2b1874e31c3"
     },
     {
       "source": "plugin-sdk/examples/rev4-overlay-game.md",

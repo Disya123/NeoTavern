@@ -13,7 +13,13 @@ async function writeZip(
   entries: Array<{ name: string; content: string }>,
 ): Promise<void> {
   const zip = new yazl.ZipFile();
-  for (const entry of entries) zip.addBuffer(Buffer.from(entry.content), entry.name);
+  for (const entry of entries) {
+    if (entry.name.endsWith('/')) {
+      zip.addEmptyDirectory(entry.name);
+    } else {
+      zip.addBuffer(Buffer.from(entry.content), entry.name);
+    }
+  }
   zip.end();
   const output = createWriteStream(path);
   zip.outputStream.pipe(output);
@@ -72,5 +78,47 @@ describe('package archive extraction', () => {
     }
     expect(isAppError(error)).toBe(true);
     if (isAppError(error)) expect(error.code).toBe('ABORTED');
+  });
+
+  it('rejects duplicate normalized paths (ТЗ §SEC-05)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'neotavern-package-dup-'));
+    const archive = join(root, 'dup.zip');
+    // A later entry must never silently overwrite an earlier one.
+    await writeZip(archive, [
+      { name: 'plugin.json', content: '{"first":true}' },
+      { name: 'plugin.json', content: '{"second":true}' },
+    ]);
+
+    await expect(extractPackageArchive(archive, join(root, 'stage'))).rejects.toThrow(
+      'duplicate entry path',
+    );
+  });
+
+  it('rejects a file colliding with a directory of the same name (ТЗ §SEC-05)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'neotavern-package-collide-'));
+    const archive = join(root, 'collide.zip');
+    await writeZip(archive, [
+      { name: 'dist/', content: '' },
+      { name: 'dist', content: 'file where a directory was promised' },
+    ]);
+
+    await expect(extractPackageArchive(archive, join(root, 'stage'))).rejects.toThrow(
+      'duplicate entry path',
+    );
+  });
+
+  it('allows repeated directory entries (ТЗ §SEC-05)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'neotavern-package-dirs-'));
+    const archive = join(root, 'dirs.zip');
+    await writeZip(archive, [
+      { name: 'dist/', content: '' },
+      { name: 'dist/', content: '' },
+      { name: 'dist/index.js', content: 'export default {}' },
+    ]);
+
+    const result = await extractPackageArchive(archive, join(root, 'stage'));
+
+    expect(result.entries).toBe(3);
+    expect(await readFile(join(root, 'stage', 'dist/index.js'), 'utf8')).toBe('export default {}');
   });
 });

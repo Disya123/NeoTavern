@@ -32,6 +32,7 @@ function legacyPlugin(overrides: Partial<InstalledPlugin> = {}): InstalledPlugin
     hasLegacyFrontend: true,
     hasLegacyBackend: false,
     compatibilityLevel: 'legacy-trusted',
+    trust: 'locally-trusted',
     lastErrorCode: null,
     ...overrides,
   };

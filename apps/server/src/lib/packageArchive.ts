@@ -112,6 +112,11 @@ export async function extractPackageArchive(
   const zip = await openZip(archivePath);
   let entries = 0;
   let expandedBytes = 0;
+  // ТЗ §SEC-05: duplicate normalized paths are rejected — a later entry must
+  // never silently overwrite an earlier one. Directories may repeat (harmless
+  // idempotent mkdir), but a file colliding with an earlier file or with a
+  // directory of the same name is refused.
+  const seenPaths = new Set<string>();
 
   try {
     return await new Promise<ExtractedPackage>((resolveExtraction, reject) => {
@@ -149,6 +154,17 @@ export async function extractPackageArchive(
           }
 
           const segments = validatePackageEntryPath(entry.fileName);
+          if (entry.fileName.endsWith('/')) {
+            if (seenPaths.has(entry.fileName.slice(0, -1))) {
+              throw invalidArchive('duplicate entry path');
+            }
+            seenPaths.add(entry.fileName);
+          } else {
+            if (seenPaths.has(entry.fileName) || seenPaths.has(`${entry.fileName}/`)) {
+              throw invalidArchive('duplicate entry path');
+            }
+            seenPaths.add(entry.fileName);
+          }
           expandedBytes += entry.uncompressedSize;
           if (
             entry.uncompressedSize > limits.maxEntryBytes ||

@@ -16,6 +16,21 @@ export const PluginRuntimeStatusSchema = Type.Union([
 ]);
 export type PluginRuntimeStatus = Static<typeof PluginRuntimeStatusSchema>;
 
+/**
+ * Package trust state (ТЗ §SEC-05): how the installed package content was
+ * vouched for. `built-in` packages ship with the product; `verified-publisher`
+ * packages carry a signature from a trusted publisher key; `locally-trusted`
+ * packages are unsigned but were explicitly accepted by the local user;
+ * `unsigned-untrusted` packages have no signature and no local trust decision.
+ */
+export const PluginPackageTrustSchema = Type.Union([
+  Type.Literal('built-in'),
+  Type.Literal('verified-publisher'),
+  Type.Literal('locally-trusted'),
+  Type.Literal('unsigned-untrusted'),
+]);
+export type PluginPackageTrust = Static<typeof PluginPackageTrustSchema>;
+
 /** Where an installed plugin package came from. */
 export const PluginSourceSchema = Type.Union([
   Type.Object({ type: Type.Literal('zip') }, { additionalProperties: false }),
@@ -98,6 +113,10 @@ export const InstalledPluginSchema = Type.Object({
   source: Type.Optional(PluginSourceSchema),
   dependencies: Type.Optional(Type.Array(PluginDependencyRecordSchema)),
   grantedCapabilities: Type.Array(CapabilityGrantWireSchema),
+  /** Package trust state (ТЗ §SEC-05); defaults to unsigned-untrusted. */
+  trust: PluginPackageTrustSchema,
+  /** Publisher key fingerprint for verified-publisher packages. */
+  publisherKeyId: Type.Optional(Type.String()),
 });
 export type InstalledPlugin = Static<typeof InstalledPluginSchema>;
 

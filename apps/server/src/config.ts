@@ -62,6 +62,14 @@ export interface ServerConfig {
   pluginPolicyFile: string | null;
   /** Global trusted-native switch; false for remote/public instances. */
   pluginTrustedNative: boolean;
+  /**
+   * Base64-encoded Ed25519 public keys of trusted plugin publishers
+   * (ТЗ §SEC-05). Packages carrying a signature from one of these keys are
+   * installed as `verified-publisher`.
+   */
+  pluginPublisherKeys: string[];
+  /** Reject unsigned plugin packages at install (ТЗ §SEC-05). */
+  pluginRequireSignature: boolean;
   /** Deadlines enforced by provider adapters (ТЗ §4.3). */
   providerTimeouts: ProviderTimeouts;
 }
@@ -312,13 +320,21 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     resources,
     pluginPolicyFile: env['NEOTA_PLUGIN_POLICY_FILE'] ?? null,
     pluginTrustedNative: env['NEOTA_PLUGIN_TRUSTED_NATIVE'] === 'true',
+    pluginPublisherKeys: parsePublisherKeys(env['NEOTA_PLUGIN_PUBLISHER_KEYS']),
+    pluginRequireSignature: env['NEOTA_PLUGIN_REQUIRE_SIGNATURE'] === 'true',
     providerTimeouts: {
       connectMs: positiveIntEnv(
         env['NEOTA_PROVIDER_CONNECT_TIMEOUT_MS'],
         DEFAULT_PROVIDER_TIMEOUTS.connectMs,
       ),
-      idleMs: positiveIntEnv(env['NEOTA_PROVIDER_IDLE_TIMEOUT_MS'], DEFAULT_PROVIDER_TIMEOUTS.idleMs),
-      readMs: positiveIntEnv(env['NEOTA_PROVIDER_READ_TIMEOUT_MS'], DEFAULT_PROVIDER_TIMEOUTS.readMs),
+      idleMs: positiveIntEnv(
+        env['NEOTA_PROVIDER_IDLE_TIMEOUT_MS'],
+        DEFAULT_PROVIDER_TIMEOUTS.idleMs,
+      ),
+      readMs: positiveIntEnv(
+        env['NEOTA_PROVIDER_READ_TIMEOUT_MS'],
+        DEFAULT_PROVIDER_TIMEOUTS.readMs,
+      ),
     },
   };
 }
@@ -328,6 +344,15 @@ function positiveIntEnv(value: string | undefined, fallback: number): number {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
   return parsed;
+}
+
+/** Comma-separated base64-encoded Ed25519 public keys (ТЗ §SEC-05). */
+function parsePublisherKeys(value: string | undefined): string[] {
+  if (value === undefined || value.trim().length === 0) return [];
+  return value
+    .split(',')
+    .map((key) => key.trim())
+    .filter((key) => key.length > 0);
 }
 
 /**
