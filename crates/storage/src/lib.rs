@@ -20,6 +20,7 @@ pub mod error;
 pub mod export;
 pub mod lease;
 pub mod legacy;
+pub mod migration;
 pub mod migrations;
 pub mod open;
 pub mod paths;

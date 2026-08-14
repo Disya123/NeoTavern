@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-08-14T07:58:52.050Z",
+  "generatedAt": "2026-08-14T08:16:27.856Z",
   "rows": [
     {
       "hosts": {
@@ -314,7 +314,7 @@
       },
       "id": "ui.portable-data",
       "milestone": "M3",
-      "notes": "M3 (ADR-0041): versioned data roots (roots/root-<id>/ + active-root.json pointer), durable activation journal with prepared/validated/activation_pending/committed/rolled_back statuses, and the Windows restart-to-complete protocol (bounded transient retry, activation_pending after budget, resolve at open) implemented in neotavern_storage::activation with 21 integration tests; v1 flat layout still fully supported. The staged converter in the application flow and the migration corpus are the remaining Этап 3 slices.",
+      "notes": "M3 (ADR-0041): versioned data roots (roots/root-<id>/ + active-root.json pointer), durable activation journal with prepared/validated/activation_pending/committed/rolled_back statuses, and the Windows restart-to-complete protocol (bounded transient retry, activation_pending after budget, resolve at open) implemented in neotavern_storage::activation with 21 integration tests; v1 flat layout still fully supported. The staged legacy→kernel migration in the application flow (neotavern_storage::migration: lease-locked preflight incl. disk space, verified pre-migration-* safety copy, convert into a staging versioned root, FK/current-revision validation, report, journaled commit with bounded retry, idempotent re-run, cancel-before-activation) is implemented with 15 integration tests including the migration corpus (all released schema revisions 1..6 upgrade, future schema fails closed, corrupted DB detected, interrupted migration recovers). The Windows lock-contention E2E on packaged artifacts and the canonical data-root switch remain the later Этап 3 slices.",
       "title": "Portable data / activation / restore",
       "wireOps": []
     },
