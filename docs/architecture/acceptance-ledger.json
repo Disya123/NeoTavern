@@ -379,6 +379,8 @@
       ],
       "acceptanceProposal": {
         "proposedAcceptedCommit": "df23f19",
+        "proposedBy": "neotavern/architecture",
+        "date": "2026-08-15",
         "proposalUpdatedAt": "2026-08-15 (round 73) — M2 packet prepared at the pushed pr-kernel-golden head df23f19 (12 commits in 8a5b22c..HEAD: 9 cherry-picked M2 commits b6d7dbe..c580388 + close-out cdd798f (CHANGELOG, regenerated matrix 27 rows, ADR-0044, mock-server flake fix) + e2e7384 (format 11 real M2 sources, mirrors re-synced) + df23f19 (ledger: M3 dry-run record)). Full parity re-verified at df23f19: vitest 146/1756 exit 0, web 565, cargo test + clippy clean, build exit 0, docs:build 63 pages OK, codegen/matrix/docs checks PASS, lint/typecheck PASS, gate --check 5 milestones / 2 accepted GATE PASS + self-test PASS. Round-72 adversarial review of the M2 high-risk surfaces (generation crash-recovery/tool-loop CAS, provider secret handling, PromptPlan budget, wire registry<->kernel 1:1, desktop smoke honesty) found NO A-grade defects. format:check baseline established (96 pre-existing at 8a5b22c; M2 real sources clean; 26 remaining findings are generated artifacts whose own --check gates pass)."
       },
       "reviewFeedback": {},
