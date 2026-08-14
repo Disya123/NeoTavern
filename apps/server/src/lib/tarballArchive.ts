@@ -64,6 +64,11 @@ export async function extractTarGzArchive(
 
   let entries = 0;
   let expandedBytes = 0;
+  // ТЗ §SEC-05: duplicate normalized paths are rejected — a later entry must
+  // never silently overwrite an earlier one. Directories may repeat (harmless
+  // idempotent mkdir), but a file colliding with an earlier file or with a
+  // directory of the same name is refused.
+  const seenPaths = new Set<string>();
   // Serialize per-entry filesystem work; the parser only advances once the
   // current entry stream is fully consumed, so a chained promise keeps the
   // accounting correct even if an entry handler is async.
@@ -136,6 +141,12 @@ export async function extractTarGzArchive(
     const type = entry.type;
     if (type === 'Directory') {
       const segments = validatePackageEntryPath(normalizeDirPath(entry.path));
+      const normalized = normalizeDirPath(entry.path);
+      if (seenPaths.has(normalized.slice(0, -1))) {
+        await drain(entry);
+        throw invalidTarball('duplicate entry path');
+      }
+      seenPaths.add(normalized);
       await mkdir(resolve(destination, ...segments), { recursive: true });
       await drain(entry);
       return;
@@ -151,6 +162,11 @@ export async function extractTarGzArchive(
         throw invalidTarball('archive exceeds the expanded size limit');
       }
       const segments = validatePackageEntryPath(entry.path);
+      if (seenPaths.has(entry.path) || seenPaths.has(`${entry.path}/`)) {
+        await drain(entry);
+        throw invalidTarball('duplicate entry path');
+      }
+      seenPaths.add(entry.path);
       const target = resolve(destination, ...segments);
       await mkdir(dirname(target), { recursive: true });
       const temporary = `${target}.partial-${randomToken(8)}`;

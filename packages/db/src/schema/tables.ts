@@ -373,6 +373,10 @@ export const pluginRegistry = sqliteTable('plugin_registry', {
   source: text('source'),
   /** Installer-produced npm dependency list JSON. */
   dependencies: text('dependencies'),
+  /** Package trust state (ТЗ §SEC-05): built-in / verified-publisher / locally-trusted / unsigned-untrusted. */
+  trustState: text('trust_state').notNull().default('unsigned-untrusted'),
+  /** Publisher key fingerprint for verified-publisher packages. */
+  publisherKeyId: text('publisher_key_id'),
   installedAt: integer('installed_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
 });

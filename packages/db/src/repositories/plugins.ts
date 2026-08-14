@@ -1,5 +1,10 @@
 /** Installed-plugin registry and explicit permission-consent state. */
-import type { PluginDependencyRecord, PluginRuntimeStatus, PluginSource } from '@neotavern/contracts';
+import type {
+  PluginDependencyRecord,
+  PluginPackageTrust,
+  PluginRuntimeStatus,
+  PluginSource,
+} from '@neotavern/contracts';
 import type { SqliteConnection } from '../connection.js';
 import { parseJson, toJson } from '../json.js';
 
@@ -18,6 +23,10 @@ export interface PluginRegistryEntry {
   source: PluginSource | null;
   /** npm dependencies installed alongside the package, null when none. */
   dependencies: PluginDependencyRecord[] | null;
+  /** Package trust state (ТЗ §SEC-05); pre-trust rows default to unsigned-untrusted. */
+  trust: PluginPackageTrust;
+  /** Publisher key fingerprint for verified-publisher packages. */
+  publisherKeyId: string | null;
 }
 
 interface PluginRow {
@@ -33,11 +42,13 @@ interface PluginRow {
   last_error_code: string | null;
   source: string | null;
   dependencies: string | null;
+  trust_state: string | null;
+  publisher_key_id: string | null;
 }
 
 const SELECT_COLUMNS = `SELECT id, name, version, enabled, manifest, permissions,
                 granted_permissions, installed_at, updated_at, last_error_code,
-                source, dependencies`;
+                source, dependencies, trust_state, publisher_key_id`;
 
 function toEntry(row: PluginRow): PluginRegistryEntry {
   return {
@@ -53,7 +64,22 @@ function toEntry(row: PluginRow): PluginRegistryEntry {
     lastErrorCode: row.last_error_code,
     source: parseJson<PluginSource | null>(row.source, null),
     dependencies: parseDependencyRecords(row.dependencies),
+    trust: parseTrustState(row.trust_state),
+    publisherKeyId: row.publisher_key_id ?? null,
   };
+}
+
+/** Trust state is an open set in the DB so older builds never fail to read. */
+function parseTrustState(value: string | null): PluginPackageTrust {
+  switch (value) {
+    case 'built-in':
+    case 'verified-publisher':
+    case 'locally-trusted':
+    case 'unsigned-untrusted':
+      return value;
+    default:
+      return 'unsigned-untrusted';
+  }
 }
 
 function parseDependencyRecords(json: string | null): PluginDependencyRecord[] | null {
@@ -117,6 +143,10 @@ export class PluginRepository {
     requestedPermissions: string[];
     source?: PluginSource;
     dependencies?: PluginDependencyRecord[];
+    /** Package trust state (ТЗ §SEC-05); defaults to unsigned-untrusted. */
+    trust?: PluginPackageTrust;
+    /** Publisher key fingerprint for verified-publisher packages. */
+    publisherKeyId?: string | null;
   }): { plugin: PluginRegistryEntry; replaced: boolean; addedPermissions: string[] } {
     const existing = this.getById(input.id);
     const granted = new Set(existing?.grantedPermissions ?? []);
@@ -126,14 +156,23 @@ export class PluginRepository {
     const now = Date.now();
     const installedAt = existing?.installedAt ?? now;
     const keepEnabled = existing?.enabled === true && addedPermissions.length === 0;
+    // A locally-trusted plugin keeps its local trust across unsigned updates
+    // of the same plugin id (the user accepted that publisher lineage);
+    // a fresh signature is always re-verified and wins.
+    const trust =
+      (input.trust ?? 'unsigned-untrusted') === 'unsigned-untrusted' &&
+      existing?.trust === 'locally-trusted'
+        ? 'locally-trusted'
+        : (input.trust ?? 'unsigned-untrusted');
+    const publisherKeyId = input.publisherKeyId ?? null;
 
     this.sqlite
       .prepare(
         `INSERT INTO plugin_registry (
            id, name, version, enabled, manifest, permissions,
            granted_permissions, installed_at, updated_at, last_error_code,
-           source, dependencies
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)
+           source, dependencies, trust_state, publisher_key_id
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            name = excluded.name,
            version = excluded.version,
@@ -144,7 +183,9 @@ export class PluginRepository {
            updated_at = excluded.updated_at,
            last_error_code = NULL,
            source = excluded.source,
-           dependencies = excluded.dependencies`,
+           dependencies = excluded.dependencies,
+           trust_state = excluded.trust_state,
+           publisher_key_id = excluded.publisher_key_id`,
       )
       .run(
         input.id,
@@ -158,10 +199,28 @@ export class PluginRepository {
         now,
         input.source ? toJson(input.source) : null,
         input.dependencies && input.dependencies.length > 0 ? toJson(input.dependencies) : null,
+        trust,
+        publisherKeyId,
       );
     const plugin = this.getById(input.id);
     if (!plugin) throw new Error('Plugin registry write did not return a row');
     return { plugin, replaced: existing !== null, addedPermissions };
+  }
+
+  /**
+   * Record the user's explicit local trust decision: an unsigned package that
+   * the consent flow enables becomes `locally-trusted` (ТЗ §SEC-05). Only
+   * upgrades from `unsigned-untrusted`; a verified publisher never regresses.
+   */
+  markLocallyTrusted(id: string): PluginRegistryEntry | null {
+    this.sqlite
+      .prepare(
+        `UPDATE plugin_registry
+         SET trust_state = 'locally-trusted', updated_at = ?
+         WHERE id = ? AND trust_state = 'unsigned-untrusted'`,
+      )
+      .run(Date.now(), id);
+    return this.getById(id);
   }
 
   grantAndEnable(id: string, permissions: string[]): PluginRegistryEntry | null {

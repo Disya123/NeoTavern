@@ -52,6 +52,7 @@ import {
   validatePackageEntryPath,
 } from '../lib/packageArchive.js';
 import { extractTarGzArchive } from '../lib/tarballArchive.js';
+import { enforceTrustPolicy, verifyPackageTrust } from '../lib/packageTrust.js';
 import { DEFAULT_RESOURCE_CONFIG } from '../config.js';
 import type { AppContext, TypedApp } from '../types.js';
 import { BackendPluginHost } from '../plugin/backendHost.js';
@@ -195,6 +196,8 @@ function toInstalledPlugin(
         ? 'native-v3'
         : 'native-v2',
     grantedCapabilities: [...grantedCapabilities],
+    trust: entry.trust,
+    publisherKeyId: entry.publisherKeyId ?? undefined,
   };
 }
 
@@ -338,6 +341,8 @@ interface PluginInstallEnvironment {
   safeMode: boolean;
   /** Provenance recorded in the plugin registry. */
   source?: PluginSource;
+  /** The user explicitly accepted an unsigned package (ТЗ §SEC-05). */
+  trustLocal?: boolean;
 }
 
 /**
@@ -354,6 +359,15 @@ async function installFromExtractedDir(
   const packageRoot = await findPackageRoot(extractedRoot);
   const manifest = await readManifest(packageRoot);
   await validatePackage(packageRoot, manifest);
+  // ТЗ §SEC-05: publisher signature and per-file digests are verified before
+  // any consent or filesystem promotion. A broken or untrusted signature
+  // rejects the install outright; an unsigned package passes through only if
+  // the policy allows it (and records the trust state honestly).
+  const trustVerdict = enforceTrustPolicy(
+    await verifyPackageTrust(packageRoot, ctx.config.pluginPublisherKeys),
+    ctx.config.pluginRequireSignature,
+    env.trustLocal === true,
+  );
 
   const existing = repo.getById(manifest.id);
   // ТЗ §76: engines are enforced at install. An incompatible update never
@@ -421,6 +435,8 @@ async function installFromExtractedDir(
       requestedPermissions: requestedConsentItems(manifest),
       source: env.source,
       dependencies,
+      trust: trustVerdict.trust,
+      publisherKeyId: trustVerdict.publisherKeyId,
     });
     if (rollbackPath) {
       await rm(rollbackPath, { recursive: true, force: true }).catch(() => undefined);
@@ -817,7 +833,11 @@ export async function registerPluginRoutes(app: TypedApp, ctx: AppContext): Prom
           params: { pluginId: request.params.id },
         });
       }
-      const activated = toInstalledPlugin(plugin, broker.activeGrants(plugin.id));
+      // ТЗ §SEC-05: enabling an unsigned package through the consent flow is
+      // an explicit local trust decision — record it so the UI can tell
+      // "the user accepted this unsigned package" from "never decided".
+      const activatedEntry = repo.markLocallyTrusted(request.params.id) ?? plugin;
+      const activated = toInstalledPlugin(activatedEntry, broker.activeGrants(activatedEntry.id));
       ctx.events.emit('plugin.activated', { pluginId: plugin.id });
       return { plugin: activated };
     },

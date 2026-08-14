@@ -11,10 +11,11 @@
  *     manifest/entrypoint, quota 413;
  *   - the server-registered `extensions.legacyFrontend` settings default.
  */
+import { createHash, generateKeyPairSync, sign, type KeyObject } from 'node:crypto';
 import { mkdtempSync } from 'node:fs';
-import { readFile, rm } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative as pathRelative } from 'node:path';
 import { beforeEach, afterEach, describe, expect, it } from 'vitest';
 import * as yazl from 'yazl';
 import { createAppDatabase, type AppDatabase } from '@neotavern/db';
@@ -715,5 +716,185 @@ describe('extensions.legacyFrontend setting', () => {
     const response = await app.inject({ method: 'GET', url: '/api/v2/settings' });
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({ 'extensions.legacyFrontend': false });
+  });
+});
+
+// ── package trust (ТЗ §SEC-05) ─────────────────────────────────────────────
+
+const TRUST_PLUGIN = 'test.trust';
+
+function trustKeyPair(): { publicKey: string; privateKey: KeyObject } {
+  const { publicKey, privateKey } = generateKeyPairSync('ed25519');
+  const jwk = publicKey.export({ format: 'jwk' }) as { x: string };
+  return { publicKey: Buffer.from(jwk.x, 'base64url').toString('base64'), privateKey };
+}
+
+/** Sign every file under `root` (excluding signature/) into signature/*. */
+async function signDirectory(root: string, privateKey: KeyObject): Promise<void> {
+  const digests: Record<string, string> = {};
+  const walk = async (dir: string): Promise<void> => {
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      const rel = pathRelative(root, full).split('\\').join('/');
+      if (entry.isDirectory()) {
+        await walk(full);
+      } else if (entry.isFile() && !rel.startsWith('signature/')) {
+        digests[rel] = createHash('sha256')
+          .update(await readFile(full))
+          .digest('hex');
+      }
+    }
+  };
+  await walk(root);
+  const manifestBytes = Buffer.from(
+    JSON.stringify(
+      {
+        format: 'neotavern.package-signature.v1',
+        algorithm: 'ed25519',
+        hash: 'sha256',
+        files: digests,
+      },
+      null,
+      2,
+    ),
+    'utf8',
+  );
+  await mkdir(join(root, 'signature'), { recursive: true });
+  await writeFile(join(root, 'signature', 'manifest.json'), manifestBytes);
+  await writeFile(join(root, 'signature', 'package.sig'), sign(null, manifestBytes, privateKey));
+}
+
+/** Materialize, optionally sign, and zip a package directory. */
+async function trustPackage(
+  id: string,
+  version: string,
+  signWith: KeyObject | null,
+  mutate: (root: string) => Promise<void> = async () => undefined,
+): Promise<Buffer> {
+  const root = await mkdir(join(tmpdir(), `neotavern-trust-pkg-${Date.now()}-${Math.random()}`), {
+    recursive: true,
+  });
+  try {
+    await writeFile(
+      join(root, 'plugin.json'),
+      JSON.stringify({ id, name: id, version, apiVersion: 2, frontend: 'frontend.js' }),
+    );
+    await writeFile(join(root, 'frontend.js'), 'export default {}');
+    // Sign first, then let `mutate` tamper with the signed tree — so the
+    // signature manifest covers the original bytes and any later change to a
+    // signed file is a digest mismatch at verification time.
+    if (signWith !== null) await signDirectory(root, signWith);
+    await mutate(root);
+    const zip = new yazl.ZipFile();
+    const add = async (dir: string, prefix: string): Promise<void> => {
+      for (const entry of await readdir(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name);
+        const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+        if (entry.isDirectory()) await add(full, rel);
+        else zip.addFile(full, rel);
+      }
+    };
+    await add(root, '');
+    zip.end();
+    return await new Promise((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      zip.outputStream.on('data', (chunk: Buffer) => chunks.push(chunk));
+      zip.outputStream.on('error', reject);
+      zip.outputStream.on('end', () => resolve(Buffer.concat(chunks)));
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+describe('package trust (ТЗ §SEC-05)', () => {
+  it('verifies a publisher-signed package at install and records verified-publisher', async () => {
+    const { publicKey, privateKey } = trustKeyPair();
+    const trusted = await createTestApp({ pluginPublisherKeys: [publicKey] });
+    const archive = await trustPackage(TRUST_PLUGIN, '1.0.0', privateKey);
+
+    const response = await trusted.app.inject({
+      method: 'POST',
+      url: '/api/v2/plugins/install',
+      ...multipartFile(archive, `${TRUST_PLUGIN}.stplugin`, 'application/zip'),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().plugin).toMatchObject({ trust: 'verified-publisher' });
+    expect(response.json().plugin.publisherKeyId).toEqual(expect.stringMatching(/^[0-9a-f]{16}$/u));
+  });
+
+  it('rejects a package signed by an unknown publisher (fail-closed)', async () => {
+    const { privateKey } = trustKeyPair();
+    const trusted = await createTestApp({ pluginPublisherKeys: [] });
+    const archive = await trustPackage(TRUST_PLUGIN, '1.0.0', privateKey);
+
+    const response = await trusted.app.inject({
+      method: 'POST',
+      url: '/api/v2/plugins/install',
+      ...multipartFile(archive, `${TRUST_PLUGIN}.stplugin`, 'application/zip'),
+    });
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json()).toMatchObject({ code: 'PLUGIN_SIGNATURE_UNTRUSTED' });
+  });
+
+  it('rejects a tampered signed package (per-file digest mismatch)', async () => {
+    const { publicKey, privateKey } = trustKeyPair();
+    const trusted = await createTestApp({ pluginPublisherKeys: [publicKey] });
+    const archive = await trustPackage(TRUST_PLUGIN, '1.0.0', privateKey, async (root) => {
+      await writeFile(join(root, 'frontend.js'), 'export default { hacked: true }');
+    });
+
+    const response = await trusted.app.inject({
+      method: 'POST',
+      url: '/api/v2/plugins/install',
+      ...multipartFile(archive, `${TRUST_PLUGIN}.stplugin`, 'application/zip'),
+    });
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json()).toMatchObject({ code: 'PLUGIN_SIGNATURE_INVALID' });
+  });
+
+  it('records unsigned packages honestly and rejects them under requireSignature', async () => {
+    const archive = await trustPackage(TRUST_PLUGIN, '1.0.0', null);
+
+    const lax = await createTestApp();
+    const accepted = await lax.app.inject({
+      method: 'POST',
+      url: '/api/v2/plugins/install',
+      ...multipartFile(archive, `${TRUST_PLUGIN}.stplugin`, 'application/zip'),
+    });
+    expect(accepted.statusCode).toBe(200);
+    expect(accepted.json().plugin).toMatchObject({ trust: 'unsigned-untrusted' });
+
+    const strict = await createTestApp({ pluginRequireSignature: true });
+    const refused = await strict.app.inject({
+      method: 'POST',
+      url: '/api/v2/plugins/install',
+      ...multipartFile(archive, `${TRUST_PLUGIN}.stplugin`, 'application/zip'),
+    });
+    expect(refused.statusCode).toBe(422);
+    expect(refused.json()).toMatchObject({ code: 'PLUGIN_SIGNATURE_REQUIRED' });
+  });
+
+  it('records local trust when the user enables an unsigned package via consent', async () => {
+    const archive = await trustPackage(TRUST_PLUGIN, '1.0.0', null);
+
+    const installed = await app.inject({
+      method: 'POST',
+      url: '/api/v2/plugins/install',
+      ...multipartFile(archive, `${TRUST_PLUGIN}.stplugin`, 'application/zip'),
+    });
+    expect(installed.statusCode).toBe(200);
+    expect(installed.json().plugin.trust).toBe('unsigned-untrusted');
+
+    const activated = await app.inject({
+      method: 'POST',
+      url: `/api/v2/plugins/${TRUST_PLUGIN}/activate`,
+      payload: { grantedPermissions: [] },
+    });
+    expect(activated.statusCode).toBe(200);
+    expect(activated.json().plugin.trust).toBe('locally-trusted');
   });
 });

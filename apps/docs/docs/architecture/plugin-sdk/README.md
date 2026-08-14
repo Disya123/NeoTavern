@@ -366,6 +366,44 @@ Installation is atomic and rolls back on error.
 `POST /api/v2/plugins/install-git` (see [API](../api/README.md#plugins));
 disabled with `NEOTA_PLUGIN_GIT_INSTALL=false`.
 
+## Package trust (ТЗ §SEC-05)
+
+Every installed package carries an explicit trust state, recorded in
+`InstalledPlugin.trust`:
+
+| State                | Meaning                                                                                      |
+| -------------------- | -------------------------------------------------------------------------------------------- |
+| `built-in`           | Package ships with the product (reserved for preinstalled packages; none today).             |
+| `verified-publisher` | Package carries a signature from a trusted publisher key; every file digest was verified.    |
+| `locally-trusted`    | Package is unsigned but the local user explicitly accepted it (via the consent/enable flow). |
+| `unsigned-untrusted` | Package has no signature and no local trust decision yet.                                    |
+
+Verification happens **before** any consent or filesystem promotion and is
+fail-closed:
+
+- a signed package contains `signature/manifest.json` (format
+  `neotavern.package-signature.v1`, Ed25519, sha256) plus the raw 64-byte
+  `signature/package.sig` over the exact manifest bytes;
+- the manifest pins the sha256 digest of **every** file in the package — any
+  extra, missing or modified file rejects the install;
+- the signature is checked against the trusted publisher keyring
+  (`NEOTA_PLUGIN_PUBLISHER_KEYS` — comma-separated base64-encoded raw Ed25519
+  public keys);
+- a signature from an unknown publisher rejects the install
+  (`PLUGIN_SIGNATURE_UNTRUSTED`) — it is **never** downgraded to unsigned;
+- a broken signature/digest rejects with `PLUGIN_SIGNATURE_INVALID`;
+- unsigned packages install as `unsigned-untrusted` unless
+  `NEOTA_PLUGIN_REQUIRE_SIGNATURE=true` rejects them with
+  `PLUGIN_SIGNATURE_REQUIRED`;
+- enabling an unsigned package through the consent flow records it as
+  `locally-trusted`; local trust persists across unsigned updates of the same
+  plugin id, while a fresh signature is always re-verified and wins.
+
+Archive hardening (both ZIP and tar.gz, ТЗ §SEC-05): path traversal,
+absolute/backslash paths, symlinks, encrypted entries, native/executable
+payloads and duplicate normalized paths are rejected, and entry/expansion
+limits bound zip bombs.
+
 ## Plugin dependencies (npm)
 
 > **⚠️ Mandatory reading for plugin authors.**

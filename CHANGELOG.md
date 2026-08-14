@@ -3,6 +3,27 @@
 ## Unreleased
 ### Added
 
+- **SEC-05 — plugin package trust (M1 / Wave 1, Immediate security).**
+  Publisher signature + per-file digest verification runs BEFORE consent or
+  filesystem promotion: a signed package carries
+  `signature/manifest.json` (format `neotavern.package-signature.v1`,
+  Ed25519) pinning the sha256 of every file plus `signature/package.sig`
+  over the manifest bytes. Verification is fail-closed — a broken signature
+  (`PLUGIN_SIGNATURE_INVALID`) or a signature from an unknown publisher
+  (`PLUGIN_SIGNATURE_UNTRUSTED`) rejects the install. Trust states
+  (`built-in` / `verified-publisher` / `locally-trusted` /
+  `unsigned-untrusted`) are recorded in the plugin registry (migration 0023)
+  and surfaced as `InstalledPlugin.trust`; enabling an unsigned package via
+  the consent flow records `locally-trusted`. Policy knobs:
+  `NEOTA_PLUGIN_PUBLISHER_KEYS` (comma-separated base64 Ed25519 public keys)
+  and `NEOTA_PLUGIN_REQUIRE_SIGNATURE`. ZIP and tar.gz extraction now also
+  reject duplicate normalized paths (a later entry can never overwrite an
+  earlier one); traversal, symlinks, encrypted entries, native payloads and
+  bounded zip bombs were already rejected. Tests: `packageTrust.test.ts`,
+  duplicate-path cases in `packageArchive.test.ts`, install-flow trust tests
+  in `extensions-hardening.spec.ts`. Capability
+  `security.plugin-package-trust` is now `Implemented` on
+  desktop/headless/web-client hosts (`docs/release-manifest.json`).
 - **SEC-03/SEC-04 — plugin network broker hardening (M1 / Wave 1).** The
   plugin `network.http.fetch` transport now connects to the policy-approved
   IP (no DNS in the connect path) with the hostname preserved only in `Host` /

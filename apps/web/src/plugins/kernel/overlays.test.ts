@@ -58,6 +58,7 @@ function installedPlugin(grantedCapabilities: string[] = ['ui.overlay']): Instal
     hasLegacyFrontend: false,
     hasLegacyBackend: false,
     compatibilityLevel: 'native-v2',
+    trust: 'unsigned-untrusted',
     lastErrorCode: null,
   };
 }

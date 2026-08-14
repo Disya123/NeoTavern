@@ -114,8 +114,9 @@ before any migration work can be declared.
   - **M1 / Wave 1 — Immediate security** (OPEN): SEC-01 SecretStore
     hardening, SEC-02 legacy allowlist export (replacing the full-DB snapshot —
     delivered in Wave 1, see CHANGELOG), plugin networking (SSRF policy +
-    bounded streaming hardening delivered in Wave 1) and package
-    verification; M1 is NOT closed until these land;
+    bounded streaming hardening delivered in Wave 1) and package verification
+    (publisher signature/digest verification + trust states delivered in Wave 1,
+    see CHANGELOG); M1 is NOT closed until these land;
   - **M2 — Kernel Golden Foundation**, **M3 — Data Convergence**,
     **M4 — Product Convergence** (GEN-RUN 10C/10D).
     This ADR is the M1a/Wave-0 governance decision.

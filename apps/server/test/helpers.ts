@@ -41,6 +41,10 @@ export interface TestAppOptions {
   useFileDatabase?: boolean;
   allowSecretsExposure?: boolean;
   safeMode?: boolean;
+  /** Trusted plugin publisher keys (ТЗ §SEC-05); default: none. */
+  pluginPublisherKeys?: string[];
+  /** Reject unsigned plugin packages at install (ТЗ §SEC-05); default false. */
+  pluginRequireSignature?: boolean;
   /** Serve the built SPA from this directory (single-process mode, NEOTA_WEB_DIR). */
   webDir?: string | null;
   /** CORS allowlist origin; defaults to the dev Vite origin. */
@@ -107,6 +111,8 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
       pluginRegistryUrl: 'https://registry.npmjs.org',
       pluginDepsMaxPackages: 300,
       pluginDepsMaxBytes: 200 * 1024 * 1024,
+      pluginPublisherKeys: options.pluginPublisherKeys ?? [],
+      pluginRequireSignature: options.pluginRequireSignature ?? false,
       providerTimeouts: DEFAULT_PROVIDER_TIMEOUTS,
     },
     logger: createLogger({ level: 'error' }),
