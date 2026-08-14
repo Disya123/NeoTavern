@@ -180,32 +180,17 @@
     {
       "source": "adr/0040-secret-store-port-format.md",
       "target": "adr/0040-secret-store-port-format.md",
-      "sha256": "101f19c6043c8d1ed40a3a3c1909f3ed09c7a30d063aee1e239628dbbfc175d4"
+      "sha256": "75f6ba9c6432785c647f11b2de5e007c918bf13596726e15b991f56fa29098e4"
     },
     {
-      "source": "adr/0042-m1-waiver-per-profile-export-scoping.md",
-      "target": "adr/0042-m1-waiver-per-profile-export-scoping.md",
-      "sha256": "e935adfb8f2d0e5936785b28da9d9afe0a0b053dd56e371b6cc666960918d649"
-    },
-    {
-      "source": "adr/0043-web-client-remote-only.md",
-      "target": "adr/0043-web-client-remote-only.md",
-      "sha256": "589d8d320611f2c29fc6bd1d417b9474e9563e0490a791337d64811c3e8b03b7"
-    },
-    {
-      "source": "adr/0044-generation-run-step-model.md",
-      "target": "adr/0044-generation-run-step-model.md",
-      "sha256": "b6a0e4a5570be44d757dc81b7fe4b5b8096e2ca020c92b434134d1d5140e1454"
-    },
-    {
-      "source": "adr/0045-m2-golden-e2e-waiver.md",
-      "target": "adr/0045-m2-golden-e2e-waiver.md",
-      "sha256": "d53cafc24e3207d092015eae0586ea10a07c89c40fa8b4172e1747131376d130"
+      "source": "adr/0041-versioned-data-roots-activation.md",
+      "target": "adr/0041-versioned-data-roots-activation.md",
+      "sha256": "4c1620ceb27769ccbf3b020c7d9a9fba438ed68a6bc69e412f519f919078d801"
     },
     {
       "source": "adr/README.md",
       "target": "adr/README.md",
-      "sha256": "39236a0be22855006d9b6311cc464b5019ff28c82b5e9c13024b47b79460e0a9"
+      "sha256": "552662666f9636f00b61b58fbfdbf459530f672ff7ee3691c06289eebc957dc1"
     },
     {
       "source": "android/README.md",
@@ -230,32 +215,32 @@
     {
       "source": "architecture/generation-durability.md",
       "target": "architecture/generation-durability.md",
-      "sha256": "c08f3149f5d32df99bd146c4d6fce09125feaa060207c4039ed43e5da5128a0e"
+      "sha256": "51ad2ebd383ea018a09eb2502515404111803adbe87fa3bd9d9d81fed94b1ffb"
     },
     {
       "source": "architecture/generation-run-steps.md",
       "target": "architecture/generation-run-steps.md",
-      "sha256": "59cbf7d3dd4e68bb7528c554e65706f6f324096392f704c63b2f3852ac158e32"
+      "sha256": "413cc18e8f9984cf7d87c21393fd73bc5e312353cc76ab70797e05cb22d94666"
     },
     {
       "source": "architecture/operations-inventory.md",
       "target": "architecture/operations-inventory.md",
-      "sha256": "3fe0695eea5db963544839e63adf206ac31a6d2eda77225369282e2e10c7336b"
+      "sha256": "710a925008cb4d238982ae20d62e4a1bfa47c355d5d8b05ad036fabc5fd2e7a1"
     },
     {
       "source": "architecture/portable-data.md",
       "target": "architecture/portable-data.md",
-      "sha256": "270061de29500e3f7b8f1d1869d0cc5bd53f0328dd68997fb336f0091546ed04"
+      "sha256": "5535815984ac95c71069a264a17a229639632ff060f864a165968379cb79d26f"
     },
     {
       "source": "architecture/prompt-pipeline.md",
       "target": "architecture/prompt-pipeline.md",
-      "sha256": "58562fd4243d78de6dbc4f2426be6dba48ac93dfb18d1b6137d3c96bef0959c8"
+      "sha256": "2456f31dd93ed8d7950e6bc6a77146f8c69af330ead9cf3500c1393d99cf49cd"
     },
     {
       "source": "architecture/providers.md",
       "target": "architecture/providers.md",
-      "sha256": "0eb8969f55eb5323e83b8903f3cc6146211e6342eb01151dbdf3da7ebaa405ac"
+      "sha256": "f1612e44b8834421b0a0700ae6061d0bb586965a38d4cd0cecd3cdbe01e785aa"
     },
     {
       "source": "architecture/ui-legacy-surface.md",
@@ -265,17 +250,17 @@
     {
       "source": "architecture/version-axes.md",
       "target": "architecture/version-axes.md",
-      "sha256": "35ea380754114143098a7c6e37316eac8ff936e6c1785dd74b0b7160e795875b"
+      "sha256": "7dcd21f6e165e4e80d8365c2230054128a83836d0e4685b8cbab4a6b904ded4f"
     },
     {
       "source": "architecture/wire-contracts.md",
       "target": "architecture/wire-contracts.md",
-      "sha256": "ba2562a4ec37546ff9fa43e8daf1304119ee5d8ff0d934aeafa1e5247cc49225"
+      "sha256": "c652fee9deb23cae938672b6f154dc6386e3c643790d380a964789b8390c5996"
     },
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "deecb09f5232f212beb11ad123c8da5b5695e9d23c73be44c03d7caf7e839034"
+      "sha256": "59c987879f8da345d8c9c3f1734278a1668ede2c49d44d1874b7af28230e7ed1"
     },
     {
       "source": "data/README.md",

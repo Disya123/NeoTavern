@@ -276,6 +276,14 @@ pub fn open(
         e
     })?;
 
+    // Этап 3 (ADR-0041): complete or discard an interrupted versioned
+    // activation BEFORE any database open. The activation journal is the
+    // recovery source of truth; the resolve is idempotent and never opens the
+    // old and new roots writable simultaneously. It runs under the lease and
+    // before the legacy candidate-swap resolution below (which stays for v1
+    // flat roots).
+    crate::activation::resolve_pending_activation(root)?;
+
     // Phase 11 (ТЗ §42): complete or discard an interrupted candidate
     // activation before any database open. Completing a swap renames the
     // root, which on Windows requires no open handles inside it — so when a
@@ -296,7 +304,14 @@ pub fn open(
         crate::restore::resolve_pending_restore(root)?;
     }
 
-    let inspection = inspect(root)?;
+    // ADR-0041: after recovery resolution the ACTIVE root is the pointer
+    // target in v2 layout (roots/root-<id>/), or the data root itself in v1
+    // flat layout. Everything below — inspection, the database path, and the
+    // Database handle the kernel uses for assets/snapshots/backups — operates
+    // on the active root, while the lease stays on the data root.
+    let active = crate::activation::active_root(root)?;
+
+    let inspection = inspect(&active)?;
 
     // Compatibility decision — before any writable open, so the SchemaTooNew
     // and UnsupportedStorageFormat paths can never touch a writable connection.
@@ -337,7 +352,7 @@ pub fn open(
     }
 
     // Only now open writable. The lease already created the root directory.
-    let path = db_path(root);
+    let path = db_path(&active);
     let conn = rusqlite::Connection::open(&path)
         .map_err(|e| StorageError::from_sqlite(e, "open: connect database"))?;
     configure_connection(&conn, policy)?;
@@ -354,7 +369,7 @@ pub fn open(
 
     Ok(Database {
         conn,
-        root: root.to_path_buf(),
+        root: active,
         writable: true,
         lease: Some(lease),
     })
@@ -393,7 +408,11 @@ impl ReadOnlyDatabase {
 pub fn open_read_only(root: &Path) -> Result<ReadOnlyDatabase> {
     assert_baseline(sqlite_libversion())?;
 
-    let path = db_path(root);
+    // ADR-0041: recovery reads the ACTIVE root (pointer target in v2 layout,
+    // data root itself in v1 flat layout). No activation resolution is run
+    // here — read-only recovery never mutates the journal.
+    let active = crate::activation::active_root(root)?;
+    let path = db_path(&active);
     let conn = rusqlite::Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY)
         .map_err(|e| classify_open_error(e, "open_read_only: open read-only"))?;
 
@@ -401,10 +420,7 @@ pub fn open_read_only(root: &Path) -> Result<ReadOnlyDatabase> {
     verify_connection(&conn)?;
     quick_check_ok(&conn, "open_read_only")?;
 
-    Ok(ReadOnlyDatabase {
-        conn,
-        root: root.to_path_buf(),
-    })
+    Ok(ReadOnlyDatabase { conn, root: active })
 }
 
 /// An `Inspection` for an absent/empty database file: fresh, all `None`,

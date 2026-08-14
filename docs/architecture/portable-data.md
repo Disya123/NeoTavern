@@ -1,10 +1,13 @@
-# Portable Data: Backup, Restore, Export, Legacy Conversion (Phase 11)
+# Portable Data: Backup, Restore, Export, Legacy Conversion, Versioned Roots (Phase 11 / M3)
 
 > **Status.** Phase 11 implemented: public backup containers, kill-safe
 > staged restore with atomic activation, Portable Export/import, and the
 > read-only legacy converter. Internal recovery snapshots (Phase 2) remain
-> the primitive the public formats build on. Decision record:
-> [ADR-0032](../adr/0032-portable-data.md).
+> the primitive the public formats build on. **Этап 3 (M3, DATA-ACTIVATE)**
+> adds the versioned data-root layout, the durable activation journal and the
+> Windows restart-to-complete protocol (ADR-0041). Decision records:
+> [ADR-0032](../adr/0032-portable-data.md),
+> [ADR-0041](../adr/0041-versioned-data-roots-activation.md).
 
 ## Backup container (ТЗ §40–§41)
 
@@ -101,9 +104,57 @@ orphans are skipped and reported, and secrets/provider configs/plugins/
 themes are never copied. The source is never mutated in place; unsupported
 layouts yield a controlled incompatibility error.
 
+## Versioned data roots and the activation journal (ADR-0041, Этап 3)
+
+The canonical v2 layout keeps every version of a data root under
+`roots/root-<id>/` and points at the active one with a small
+`active-root.json` pointer written atomically (temp+rename):
+
+```text
+<data-root>/
+├── roots/
+│   ├── root-<id>/          # immutable versioned root: database.sqlite + assets/ + ...
+│   └── root-<id2>/
+├── active-root.json        # {"formatVersion":1, "root": "<abs path>", "activatedAt": ...}
+└── activation-journal.json # durable stage history (ТЗ §10.3)
+```
+
+- **v1 flat layout remains valid input**: a data root without
+  `active-root.json` is fully supported (the active root IS the data root),
+  and the ADR-0032 candidate-swap restore path keeps working unchanged.
+  `open::open` and `open_read_only` resolve the active root first, so product
+  reads/writes always hit the current version.
+- **The pointer switch is the commit point** — a tiny file replace, never a
+  directory rename — so Windows lock contention (sharing/lock violation from
+  antivirus, indexers, backup/sync clients) targets one small file.
+- **Activation journal**: every staged activation (migration, restore, import,
+  rollback) records `prepared` → `validated` → `activation_pending` →
+  `committed` (or `rolled_back`) in `activation-journal.json` (atomic writes).
+  The newest entry is the recovery source of truth; unknown future formats
+  fail closed.
+- **Windows restart-to-complete** (ТЗ §10.3.1): the pointer switch runs
+  through bounded retry with exponential backoff + jitter for classified
+  transient errors only (`ERROR_SHARING_VIOLATION` 32, `ERROR_LOCK_VIOLATION`
+  33, POSIX `WouldBlock`; access-denied is never retried). When the budget is
+  exhausted the journal stays at `activation_pending` and the caller gets a
+  stable recoverable error — the host shuts down cleanly and offers
+  **Restart to finish migration**.
+- **Recovery**: `open::open` runs `resolve_pending_activation` right after
+  the data-root lease and before any SQLite open: a pending switch completes
+  (restart-to-complete) when the target carries a database, or records
+  `rolled_back` and keeps the previous root when the target is missing.
+  Exactly one fully-verified root is ever active; the previous root is never
+  deleted before the switch is confirmed and is retained until the first
+  successful open after activation (rollback point).
+
+The kill matrix (journal write, pointer write, first rename) is covered by
+`crates/storage/tests/activation.rs`.
+
 ## Related documents
 
 - [Data and SQLite](../data/README.md) — storage foundation.
 - [Migrations](../migrations/README.md) — schema/migration engine.
 - [ADR-0032](../adr/0032-portable-data.md) — decisions and alternatives.
+- [ADR-0041](../adr/0041-versioned-data-roots-activation.md) — versioned
+  roots, activation journal, Windows restart-to-complete.
 - [Benchmarks](benchmarks.md) — measured backup/restore/export budgets.
