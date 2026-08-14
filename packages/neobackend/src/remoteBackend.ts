@@ -15,6 +15,7 @@ import type {
   ListBackupsResultDto,
   ListLorebooksResultDto,
   ListPresetsResultDto,
+  ListProviderConfigsResultDto,
   ListProvidersResultDto,
   MessageDto,
   MetaDto,
@@ -22,6 +23,7 @@ import type {
   PagedChatsDto,
   PagedGenerationEventsDto,
   PagedMessagesDto,
+  ProviderConfigDto,
 } from '@neotavern/contracts';
 import type {
   BackendCallOptions,
@@ -131,6 +133,14 @@ export class RemoteBackend implements NeoBackend {
 
   readonly providers: ProvidersApi = {
     list: () => this.sdk.call<ListProvidersResultDto>('providers.list', {}),
+    config: {
+      set: (req) => this.sdk.call<ProviderConfigDto>('providers.config.set', req),
+      get: (provider, name) =>
+        this.sdk.call<ProviderConfigDto>('providers.config.get', { provider, name }),
+      list: (req) => this.sdk.call<ListProviderConfigsResultDto>('providers.config.list', req),
+      del: (provider, name) =>
+        this.sdk.call<EmptyResultDto>('providers.config.delete', { provider, name }),
+    },
   };
 
   private async *streamOperation(

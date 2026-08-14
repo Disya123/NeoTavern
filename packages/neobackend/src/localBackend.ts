@@ -24,6 +24,8 @@ import {
   type ListLorebooksResultDto,
   type ListPresetsResultDto,
   type ListProvidersResultDto,
+  type ListProviderConfigsResultDto,
+  type ProviderConfigDto,
   type MessageDto,
   type MetaDto,
   type PagedCharactersDto,
@@ -253,6 +255,15 @@ export class LocalBackend implements NeoBackend {
     };
     this.providers = {
       list: () => this.invoke<ListProvidersResultDto>('providers.list', {}, undefined),
+      config: {
+        set: (req, opts) => this.invoke<ProviderConfigDto>('providers.config.set', req, opts),
+        get: (provider, name, opts) =>
+          this.invoke<ProviderConfigDto>('providers.config.get', { provider, name }, opts),
+        list: (req, opts) =>
+          this.invoke<ListProviderConfigsResultDto>('providers.config.list', req, opts),
+        del: (provider, name, opts) =>
+          this.invoke<EmptyResultDto>('providers.config.delete', { provider, name }, opts),
+      },
     };
   }
 

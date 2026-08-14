@@ -565,6 +565,76 @@ export const ListProvidersResultDtoSchema = Type.Object(
 );
 export type ListProvidersResultDto = Static<typeof ListProvidersResultDtoSchema>;
 
+/**
+ * Provider config DTO (`wire.provider.config.dto`) — a stored provider
+ * instance. `config` holds non-secret settings only; the secret (e.g. API
+ * key) is stored in the SecretStore and is **never** part of any DTO —
+ * `hasApiKey` is the only observable signal.
+ */
+export const ProviderConfigDtoSchema = Type.Object(
+  {
+    id: Type.String({ format: 'uuid' }),
+    provider: Type.String({ pattern: '^[a-z][a-z0-9-]{0,63}$' }),
+    name: Type.String({ pattern: '^[a-z][a-z0-9-]{0,63}$' }),
+    config: Type.Object({}, { additionalProperties: true }),
+    hasApiKey: Type.Boolean(),
+    createdAt: Type.String({ format: 'rfc3339' }),
+    updatedAt: Type.String({ format: 'rfc3339' }),
+  },
+  { $id: 'wire.provider.config.dto', additionalProperties: false },
+);
+export type ProviderConfigDto = Static<typeof ProviderConfigDtoSchema>;
+
+/** List provider configs result DTO (`wire.result.list-provider-configs`). */
+export const ListProviderConfigsResultDtoSchema = Type.Object(
+  {
+    items: Type.Array(ProviderConfigDtoSchema),
+  },
+  { $id: 'wire.result.list-provider-configs', additionalProperties: false },
+);
+export type ListProviderConfigsResultDto = Static<typeof ListProviderConfigsResultDtoSchema>;
+
+/** Set provider config request DTO (`wire.request.set-provider-config`). */
+export const SetProviderConfigRequestDtoSchema = Type.Object(
+  {
+    provider: Type.String({ pattern: '^[a-z][a-z0-9-]{0,63}$' }),
+    name: Type.String({ pattern: '^[a-z][a-z0-9-]{0,63}$' }),
+    config: Type.Optional(Type.Object({}, { additionalProperties: true })),
+    apiKey: Type.Optional(Type.String({ minLength: 1, maxLength: 100000 })),
+  },
+  { $id: 'wire.request.set-provider-config', additionalProperties: false },
+);
+export type SetProviderConfigRequestDto = Static<typeof SetProviderConfigRequestDtoSchema>;
+
+/** Get provider config request DTO (`wire.request.get-provider-config`). */
+export const GetProviderConfigRequestDtoSchema = Type.Object(
+  {
+    provider: Type.String({ pattern: '^[a-z][a-z0-9-]{0,63}$' }),
+    name: Type.String({ pattern: '^[a-z][a-z0-9-]{0,63}$' }),
+  },
+  { $id: 'wire.request.get-provider-config', additionalProperties: false },
+);
+export type GetProviderConfigRequestDto = Static<typeof GetProviderConfigRequestDtoSchema>;
+
+/** List provider configs request DTO (`wire.request.list-provider-configs`). */
+export const ListProviderConfigsRequestDtoSchema = Type.Object(
+  {
+    provider: Type.Optional(Type.String({ pattern: '^[a-z][a-z0-9-]{0,63}$' })),
+  },
+  { $id: 'wire.request.list-provider-configs', additionalProperties: false },
+);
+export type ListProviderConfigsRequestDto = Static<typeof ListProviderConfigsRequestDtoSchema>;
+
+/** Delete provider config request DTO (`wire.request.delete-provider-config`). */
+export const DeleteProviderConfigRequestDtoSchema = Type.Object(
+  {
+    provider: Type.String({ pattern: '^[a-z][a-z0-9-]{0,63}$' }),
+    name: Type.String({ pattern: '^[a-z][a-z0-9-]{0,63}$' }),
+  },
+  { $id: 'wire.request.delete-provider-config', additionalProperties: false },
+);
+export type DeleteProviderConfigRequestDto = Static<typeof DeleteProviderConfigRequestDtoSchema>;
+
 /** Empty result DTO (`wire.result.empty`). */
 export const EmptyResultDtoSchema = Type.Object(
   {},
@@ -623,6 +693,12 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.provider.model': ProviderModelDtoSchema,
   'wire.provider.dto': ProviderDtoSchema,
   'wire.result.list-providers': ListProvidersResultDtoSchema,
+  'wire.provider.config.dto': ProviderConfigDtoSchema,
+  'wire.result.list-provider-configs': ListProviderConfigsResultDtoSchema,
+  'wire.request.set-provider-config': SetProviderConfigRequestDtoSchema,
+  'wire.request.get-provider-config': GetProviderConfigRequestDtoSchema,
+  'wire.request.list-provider-configs': ListProviderConfigsRequestDtoSchema,
+  'wire.request.delete-provider-config': DeleteProviderConfigRequestDtoSchema,
   'wire.error.dto': ProductErrorDtoSchema,
   'wire.request.empty': EmptyRequestDtoSchema,
   'wire.request.list-characters': ListCharactersRequestDtoSchema,

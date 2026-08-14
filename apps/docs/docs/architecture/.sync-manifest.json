@@ -240,12 +240,12 @@
     {
       "source": "architecture/wire-contracts.md",
       "target": "architecture/wire-contracts.md",
-      "sha256": "292d39477199460f0221cfd491277643eb64cd54d6ad8cbc2fa59a2cbf6f61a4"
+      "sha256": "c652fee9deb23cae938672b6f154dc6386e3c643790d380a964789b8390c5996"
     },
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "301a542ac6bb42141dd84c87fdb3839937c4aca828c85e940b5c66cc69931ee2"
+      "sha256": "0598e04716d9b9a1394dd2b6bd895069879591f9fe958d24fccb115189b130a1"
     },
     {
       "source": "data/README.md",

@@ -185,6 +185,12 @@ export class LegacyBackend implements NeoBackend {
 
   readonly providers: ProvidersApi = {
     list: () => this.unsupported('providers.list'),
+    config: {
+      set: () => this.unsupported('providers.config.set'),
+      get: () => this.unsupported('providers.config.get'),
+      list: () => this.unsupported('providers.config.list'),
+      del: () => this.unsupported('providers.config.delete'),
+    },
   };
 
   private async listCharacters(req: ListCharactersRequestDto): Promise<PagedCharactersDto> {

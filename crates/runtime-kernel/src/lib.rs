@@ -22,6 +22,7 @@
 use contracts_generated::generated::{self, MetaDto, MetaDtoApi, MetaDtoProductWire};
 use contracts_generated::{Issue, WireError};
 use provider_sdk::secret::SecretResolver;
+use secret_store::SecretStore;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
@@ -34,6 +35,7 @@ pub mod headless;
 pub mod local;
 pub mod product;
 pub mod providers;
+pub mod providers_config;
 
 /// FFI ABI version this kernel implements. Must match the embedded manifest's
 /// `ffiAbiVersion` (see `contracts_generated::contract_schema_hash`).
@@ -330,6 +332,14 @@ enum Command {
         resolver: Arc<dyn SecretResolver>,
         reply: mpsc::SyncSender<()>,
     },
+    /// Sets the host-provided writable SecretStore seam (ТЗ §9.4, §SEC-01).
+    /// Used by the provider-config operations to store API keys; only the
+    /// opaque reference lands in `provider_configs`. Applied immediately and
+    /// acknowledged.
+    SetSecretStore {
+        store: Arc<dyn SecretStore>,
+        reply: mpsc::SyncSender<()>,
+    },
     /// Sets the per-run provider deadline for future generations (default
     /// [`generation::RUN_TIMEOUT`]). Applied immediately and acknowledged.
     SetRunTimeout {
@@ -439,7 +449,7 @@ where
 fn handle_unary(
     db: Option<&mut neotavern_storage::open::Database>,
     meta: &MetaDto,
-    registry: &providers::ProviderRegistry,
+    state: &providers::ProviderState,
     op: &str,
     req: &[u8],
     cancel: &CancellationFlag,
@@ -454,7 +464,7 @@ fn handle_unary(
         "meta.get" => handle_meta_get(meta, req),
         // Phase 7: stateless provider registry listing (like meta.get — no
         // durable storage required).
-        "providers.list" => providers::handle_providers_list(registry, req),
+        "providers.list" => providers::handle_providers_list(&state.registry, req),
         // Phase 3 product CRUD over durable storage.
         "characters.list" => with_db_opt(db, |db| product::characters_list(db, req)),
         "characters.get" => with_db_opt(db, |db| product::characters_get(db, req)),
@@ -472,6 +482,20 @@ fn handle_unary(
         "chats.messages.delete" => with_db_opt(db, |db| product::messages_delete(db, req)),
         "lorebooks.list" => with_db_opt(db, |db| product::lorebooks_list(db, req)),
         "presets.list" => with_db_opt(db, |db| product::presets_list(db, req)),
+        // Provider configuration (ТЗ §9.4): secrets go to the SecretStore
+        // seam, only opaque references reach the database.
+        "providers.config.set" => with_db_opt(db, |db| {
+            providers_config::set(db, state.secret_store.as_ref(), req)
+        }),
+        "providers.config.get" => with_db_opt(db, |db| {
+            providers_config::get(db, state.secret_store.as_ref(), req)
+        }),
+        "providers.config.list" => with_db_opt(db, |db| {
+            providers_config::list(db, state.secret_store.as_ref(), req)
+        }),
+        "providers.config.delete" => with_db_opt(db, |db| {
+            providers_config::delete(db, state.secret_store.as_ref(), req)
+        }),
         // Phase 6 generation operations.
         "generation.cancel" => with_db_opt(db, |db| generation::generation_cancel(db, req)),
         "generation.get" => with_db_opt(db, |db| generation::generation_get(db, req)),
@@ -513,7 +537,7 @@ fn drain_pending(
                 cancel,
                 reply,
             } => {
-                let result = handle_unary(Some(db), meta, &state.registry, &op, &req, &cancel);
+                let result = handle_unary(Some(db), meta, state, &op, &req, &cancel);
                 let _ = reply.send(result);
             }
             Command::Stream {
@@ -533,6 +557,10 @@ fn drain_pending(
             }
             Command::SetSecretResolver { resolver, reply } => {
                 state.secret_resolver = Some(resolver);
+                let _ = reply.send(());
+            }
+            Command::SetSecretStore { store, reply } => {
+                state.secret_store = Some(store);
                 let _ = reply.send(());
             }
             Command::SetRunTimeout { timeout, reply } => {
@@ -585,7 +613,7 @@ fn writer_main(
                 cancel,
                 reply,
             } => {
-                let result = handle_unary(db.as_mut(), &meta, &state.registry, &op, &req, &cancel);
+                let result = handle_unary(db.as_mut(), &meta, &state, &op, &req, &cancel);
                 let _ = reply.send(result);
             }
             Command::Stream {
@@ -647,6 +675,10 @@ fn writer_main(
             }
             Command::SetSecretResolver { resolver, reply } => {
                 state.secret_resolver = Some(resolver);
+                let _ = reply.send(());
+            }
+            Command::SetSecretStore { store, reply } => {
+                state.secret_store = Some(store);
                 let _ = reply.send(());
             }
             Command::SetRunTimeout { timeout, reply } => {
@@ -881,6 +913,23 @@ impl Kernel {
         let (reply_tx, reply_rx) = mpsc::sync_channel(1);
         let _ = self.cmd_tx.send(Command::SetRunTimeout {
             timeout,
+            reply: reply_tx,
+        });
+        let _ = reply_rx.recv_timeout(Duration::from_secs(5));
+    }
+
+    /// Sets the host-provided writable SecretStore seam (ТЗ §9.4, §SEC-01).
+    ///
+    /// The provider-config operations store API keys through this seam; the
+    /// database keeps only the opaque reference. Without a seam,
+    /// `providers.config.set` with an `apiKey` fails with the stable
+    /// `SECRET_UNAVAILABLE` product error — there is never a plaintext
+    /// fallback. Fire-and-forget ack like
+    /// [`set_secret_resolver`](Self::set_secret_resolver).
+    pub fn set_secret_store(&self, store: Arc<dyn SecretStore>) {
+        let (reply_tx, reply_rx) = mpsc::sync_channel(1);
+        let _ = self.cmd_tx.send(Command::SetSecretStore {
+            store,
             reply: reply_tx,
         });
         let _ = reply_rx.recv_timeout(Duration::from_secs(5));

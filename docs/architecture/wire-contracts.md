@@ -194,6 +194,10 @@ ops (eventSchemaId) carrying a response schema; empty/unknown
 | `generation.keep`     | transactional | idempotent     | safe  | app.write | 2048   | 65536  | –      |
 | `generation.discard`  | transactional | idempotent     | safe  | app.write | 2048   | 65536  | –      |
 | `providers.list`      | transactional | idempotent     | safe  | app.read  | 1024   | 262144 | –      |
+| `providers.config.set` | transactional | non-idempotent | none | app.write | 131072 | 262144 | –      |
+| `providers.config.get` | transactional | idempotent    | safe  | app.read  | 2048   | 262144 | –      |
+| `providers.config.list` | transactional | idempotent   | safe  | app.read  | 4096   | 262144 | –      |
+| `providers.config.delete` | transactional | non-idempotent | none | app.write | 2048 | 1024 | –      |
 | `backups.create`      | workflow      | non-idempotent | none  | app.write | 1024   | 262144 | –      |
 | `backups.list`        | transactional | idempotent     | safe  | app.read  | 1024   | 262144 | –      |
 | `lorebooks.list`      | transactional | idempotent     | safe  | app.read  | 1024   | 262144 | –      |
@@ -215,6 +219,19 @@ over a partial artifact (ТЗ §63).
 `wire.provider.availability` union (`available` | `degraded{code,detail?}` |
 `unavailable{code,detail?}`) and the model list — see
 [Providers](providers.md).
+
+`providers.config.*` manages stored provider instances (ТЗ §9.4, Этап 2.4).
+`wire.provider.config.dto` carries the non-secret `config` object plus
+`hasApiKey` — the secret value is never part of any DTO. `set` (upsert;
+`apiKey` optional) stores the API key through the kernel's SecretStore seam
+and the `provider_configs` row keeps only the opaque reference; a set
+without `apiKey` updates `config` and leaves the stored secret untouched.
+Without a wired SecretStore, `set` with `apiKey` fails with the stable
+`SECRET_UNAVAILABLE` product error (fail-closed, no plaintext fallback);
+read-only backends surface `SECRET_STORE_READ_ONLY`. `delete` removes the
+row and revokes the stored secret (best-effort). `get`/`list` report only
+`hasApiKey`; a missing config yields `PROVIDER_CONFIG_NOT_FOUND` with
+`{provider, name}` params.
 
 ## 6. Handshake and negotiation (§6.5)
 

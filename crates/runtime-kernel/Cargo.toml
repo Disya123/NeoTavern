@@ -12,6 +12,9 @@ neotavern-storage = { path = "../storage" }
 # built-in adapters registered by `providers::ProviderRegistry`.
 provider-sdk = { path = "../provider-sdk" }
 built-in-providers = { path = "../built-in-providers" }
+# Provider-config secrets (ТЗ §9.4, §SEC-01): the kernel holds the SecretStore
+# port handle and stores only opaque references in provider_configs.
+secret-store = { path = "../secret-store" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # Same pin as neotavern-storage so both crates share one compiled rusqlite
