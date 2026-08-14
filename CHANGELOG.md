@@ -3,6 +3,24 @@
 ## Unreleased
 ### Added
 
+- **SEC-01 kernel-plane SecretStore port (M1 / Wave 1, ТЗ §SEC-01.1 /
+  ADR-0040).** New `crates/secret-store` implements the canonical portable
+  `secrets.enc` **v2** format: AES-256-GCM over a JSON envelope with an
+  Argon2id key (m=64 MiB / t=3 / p=1, fixed provisionally by ADR-0040 and
+  gated by a pre-Stable benchmark), authenticated header (magic, formatVer,
+  KDF id/params, salt) so a tampered header can never downgrade the KDF,
+  fresh nonce per write, salt stable per passphrase, atomic temp+rename
+  writes, machine-independent derivation (file + passphrase only), `lock()`
+  and staged re-encryption (the new file is verified before the old one is
+  replaced). Session (`MemorySecretStore`), read-only env
+  (`EnvSecretStore`, `NEOTA_SECRET_*`) and explicit unavailable backends;
+  opaque references (`portable:`/`session:`/`env:` with last-colon split
+  mirroring the legacy contract); stable error codes
+  (`SECRET_STORE_LOCKED`/`CORRUPT`/`AUTH_FAILED`/`READ_ONLY`). Legacy v1
+  (scrypt) files are rejected with an explicit code until the Этап 3
+  converter. 15 tests including cross-machine portability, tamper
+  detection, wrong-passphrase fail-closed and re-encryption.
+
 - **SEC-01 — SecretStore, secrets out of the main DB (M1 / Wave 1, ТЗ §SEC-01 /
   §SEC-01.1).** New `packages/secret-store` port with three explicit backends —
   no silent plaintext fallback: **portable** `secrets.enc` in the data root

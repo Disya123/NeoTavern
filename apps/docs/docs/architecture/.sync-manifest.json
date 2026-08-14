@@ -170,7 +170,7 @@
     {
       "source": "adr/0038-canonical-rust-kernel-core.md",
       "target": "adr/0038-canonical-rust-kernel-core.md",
-      "sha256": "d70998e979b3a75d1c18b59dfccc2df70832d7f18764c5b3eeaf7ebcd3a83ce4"
+      "sha256": "098acfc420099f1bdfa70f3cee93e9e9b938691a54297543bdaa106fa2462ba6"
     },
     {
       "source": "adr/0039-legacy-compatibility-authority-boundary.md",
@@ -178,9 +178,14 @@
       "sha256": "7ec410a1ef231e09c217c1b2a6a4a1f8363b177aaa663b3857df770b9107b129"
     },
     {
+      "source": "adr/0040-secret-store-port-format.md",
+      "target": "adr/0040-secret-store-port-format.md",
+      "sha256": "75f6ba9c6432785c647f11b2de5e007c918bf13596726e15b991f56fa29098e4"
+    },
+    {
       "source": "adr/README.md",
       "target": "adr/README.md",
-      "sha256": "baee9fd39e706ea7de3483544b606c3027cd8cb57bae25043db680666bd5b4c8"
+      "sha256": "22f63e8c4f40bc744f805f2e3ed871db08ebf02f78e6f69b4ae84e64d2f29709"
     },
     {
       "source": "android/README.md",
@@ -195,7 +200,7 @@
     {
       "source": "architecture/README.md",
       "target": "architecture/README.md",
-      "sha256": "9a41779a5368ef7bf8badb277473bd60edbf56bc30f6571cdf2274ef368ef094"
+      "sha256": "8cc44dfa93637c36c44b7daee45c5501c7fbc652d6376d2467d7fc4a23dce935"
     },
     {
       "source": "architecture/benchmarks.md",
@@ -240,12 +245,12 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "91dc5afee4ce53b5bb9f1e92d3ea6cedd63f8e3ede0cf57eaf0ff88fe07c259f"
+      "sha256": "120392ac8a5770a32e8e3aa0120a1498584b4652764dd76679953442cc41c085"
     },
     {
       "source": "data/README.md",
       "target": "data/README.md",
-      "sha256": "c6c48cd83d9e4a74d64339c66b1e183ace56d980c7f85f69bff5f5a08722d1c8"
+      "sha256": "fd8d2facab5a2e976cf892ff8c959de201730b5ae94b291df0417f0fb1884977"
     },
     {
       "source": "desktop/README.md",

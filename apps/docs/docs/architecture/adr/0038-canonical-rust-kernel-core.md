@@ -8,7 +8,8 @@ Date: 2026-08-13. Status: Accepted — **Milestone 1a / Wave 0 (Governance)**
 accepted 2026-08-13; **Milestone 1 / Wave 1 (Immediate security) remains
 open** (SEC-01 kernel-plane slices — OS vault / Keystore adapters and the
 portable passphrase UX — plus the final regression sweep; the legacy-contour
-SecretStore hardening is delivered, see CHANGELOG — tracked in
+SecretStore hardening and the kernel SecretStore port with the canonical
+portable format are delivered, see CHANGELOG and ADR-0040 — tracked in
 [release-manifest.json](https://github.com/Disya123/NeoTavern/blob/main/docs/release-manifest.json) and
 `docs/architecture/exceptions.json`).
 Related documents: [Target architecture ТЗ 10/10 rev2](https://github.com/Disya123/NeoTavern/blob/main/NeoTavern_architecture_10_of_10_spec_2026-08-13.md),
@@ -113,7 +114,9 @@ before any migration work can be declared.
     legacy-surface gate ARC-02/03), the honest staged Desktop default in code
     and the single docs source tree;
   - **M1 / Wave 1 — Immediate security** (OPEN — SEC-01 SecretStore
-    hardening delivered in the legacy contour in Wave 1, see CHANGELOG): SEC-02
+    hardening delivered: legacy contour in Wave 1 plus the kernel-plane port
+    `crates/secret-store` with the canonical portable v2 format, ADR-0040;
+    OS-vault / Keystore adapters and the portable UX remain): SEC-02
     legacy allowlist export (replacing the full-DB snapshot — delivered in
     Wave 1, see CHANGELOG), plugin networking (SSRF policy + bounded streaming
     hardening delivered in Wave 1) and package verification (publisher

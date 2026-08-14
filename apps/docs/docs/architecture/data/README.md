@@ -95,8 +95,11 @@ backends (there is no silent plaintext fallback):
 - **env** — read-only headless provider (`NEOTA_SECRET_*` variables).
 
 `secrets.enc` is never included in profile exports, backups or diagnostics.
-Full OS-vault / Android Keystore adapters and the passphrase UX belong to
-the kernel-plane M3 slice.
+The canonical kernel-plane port (`crates/secret-store`, ADR-0040) implements
+the same invariants with the **v2** portable format — AES-256-GCM + Argon2id
+(m=64 MiB / t=3 / p=1), authenticated header, staged re-encryption, atomic
+writes — plus session/env/unavailable backends. Full OS-vault / Android
+Keystore adapters and the passphrase UX belong to the kernel-plane M3 slice.
 
 ## FTS5
 

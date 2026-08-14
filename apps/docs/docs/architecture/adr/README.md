@@ -4,6 +4,23 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/adr/README.md
 
 # Architecture Decision Records
 
+## ADR-0040: SecretStore port — host backends, portable format, crypto parameters
+
+The canonical kernel SecretStore port (ТЗ §SEC-01 / §19.2 ADR #5): host
+backend matrix (OS vault on Desktop, Keystore on Android, explicit env/file
+on Headless, in-memory session-only, portable `secrets.enc`); portable v2
+format — AES-256-GCM over a JSON envelope, Argon2id KDF with the header
+(magic, formatVer, KDF id and parameters, salt) authenticated as AAD so a
+tampered header can never downgrade the KDF, fresh nonce per write, salt
+stable per passphrase, best-effort zeroization; Argon2id m=64 MiB / t=3 / p=1
+fixed provisionally and gated by a pre-Stable benchmark ADR (parameters are
+versioned in the header, so tuning is non-breaking); machine-independent
+portable key derivation (file + passphrase only); atomic temp+rename writes;
+`lock()` and staged re-encryption; legacy v1 (scrypt) files are a migration
+input rejected with an explicit code until the Этап 3 converter; stable
+error codes. Full decision, alternatives and consequences:
+[ADR-0040](0040-secret-store-port-format.md).
+
 ## ADR-0039: Legacy Compatibility Authority Boundary
 
 Legacy compatibility is an **authority-non-expanding boundary** (ТЗ 10/10
