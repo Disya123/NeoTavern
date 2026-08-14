@@ -127,6 +127,7 @@ import { mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from 
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createNetworkPool, type NetworkPool, type NetworkPoolOptions } from './networkPool.js';
+import { mappedIpv4, normalizeIpLiteral, VerifiedIpMismatchError } from './netPolicy.js';
 import { createSocketRegistry, type SocketRegistry } from './socketHandles.js';
 import {
   assertUnrestrictedOrScope,
@@ -191,9 +192,12 @@ export interface MemoryHostOptions {
   grants?: Record<string, string[]>;
   /** Injectable clock (tests use a fake clock for TTL eviction). */
   now?: () => number;
-  /** Injectable fetch (tests stub network + SSRF edges). Defaults to the
-   * global `fetch`. */
-  fetchImpl?: (url: string, init: RequestInit) => Promise<Response>;
+  /** Injectable fetch (tests stub network + SSRF edges). Defaults to the §29
+   * network pool with verified-IP connects. When provided, the executor
+   * passes the policy-approved address list as the third argument so a
+   * transport can connect to a verified IP and check `remoteAddress`
+   * post-connect (ТЗ §SEC-03); a stub may ignore it. */
+  fetchImpl?: (url: string, init: RequestInit, verified?: { ips: string[] }) => Promise<Response>;
   /** Injectable DNS lookup (tests stub rebinding edges). Defaults to
    * `node:dns/promises` `lookup`. */
   dnsLookupImpl?: (hostname: string) => Promise<string[]>;
@@ -377,7 +381,8 @@ export function createMemoryHostExecutor(options: MemoryHostOptions = {}): Memor
     }
     return pool;
   }
-  const fetchImpl = options.fetchImpl ?? ((url, init) => getPool().fetch(url, init));
+  const fetchImpl =
+    options.fetchImpl ?? ((url, init, verified) => getPool().fetch(url, init, verified));
   const dnsLookupImpl =
     options.dnsLookupImpl ??
     (async (hostname: string) => {
@@ -747,8 +752,9 @@ export function createMemoryHostExecutor(options: MemoryHostOptions = {}): Memor
    * when the plugin's effective `NetworkScope` has the matching flag set.
    */
   function classifyAddress(ip: string): 'public' | 'local' | 'private' | 'metadata' {
+    const normalized = normalizeIpLiteral(ip);
     // IPv4 literal.
-    const v4 = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    const v4 = normalized.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
     if (v4 !== null) {
       const [a, b] = [Number(v4[1]), Number(v4[2])];
       if (a === 127 || a === 0) return 'local'; // loopback / 0.0.0.0/8
@@ -764,18 +770,16 @@ export function createMemoryHostExecutor(options: MemoryHostOptions = {}): Memor
       if (a >= 224) return 'private'; // multicast / reserved
       return 'public';
     }
-    // IPv6 literal (bare).
-    const lower = ip.toLowerCase();
-    if (lower === '::1') return 'local'; // loopback
-    if (lower === '::') return 'local'; // unspecified
+    // IPv6 literal. Brackets are already stripped by normalizeIpLiteral;
+    // IPv4-mapped spellings (dotted `::ffff:127.0.0.1` or hex `::ffff:7f00:1`)
+    // are re-checked against the v4 rules so loopback/private can never hide
+    // behind the mapped form (ТЗ §SEC-03).
+    const lower = normalized.toLowerCase();
+    if (lower === '::1' || lower === '::') return 'local'; // loopback / unspecified
     if (lower.startsWith('fe80')) return 'private'; // link-local
     if (lower.startsWith('fc') || lower.startsWith('fd')) return 'private'; // ULA fc00::/7
-    if (lower === '::' || lower.startsWith('::ffff:')) {
-      // IPv4-mapped: re-check the embedded v4.
-      const mapped = lower.split(':').pop();
-      if (mapped !== undefined) return classifyAddress(mapped);
-      return 'local';
-    }
+    const mapped = mappedIpv4(lower);
+    if (mapped !== null) return classifyAddress(mapped);
     return 'public';
   }
 
@@ -786,19 +790,30 @@ export function createMemoryHostExecutor(options: MemoryHostOptions = {}): Memor
    * `NETWORK_DESTINATION_DENIED` (or `NETWORK_REDIRECT_DENIED` on a redirect
    * hop, §29.1.3). The error's `details.requiredScope` names the missing
    * capability so the frontend can localize a helpful message.
+   *
+   * Returns the approved address list: the transport connects to one of these
+   * IPs and verifies the connected `remoteAddress` against the same set
+   * (ТЗ §SEC-03 — the policy decision and the actual connection share one
+   * resolution, closing the DNS-rebinding window).
    */
   async function checkDestination(
     hostname: string,
     isRedirect: boolean,
     scope: NetworkScope,
-  ): Promise<void> {
+  ): Promise<string[]> {
     // Bare IP literal: parse directly. Otherwise resolve and policy-check
-    // every resolved address (§29.1.2 DNS rebinding).
+    // every resolved address (§29.1.2 DNS rebinding). Bracketed IPv6 literals
+    // ("[::1]") are normalized before classification.
     const looksLikeIp = hostname.includes(':') || /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname);
     const ips = looksLikeIp ? [hostname] : await dnsLookupImpl(hostname);
-    for (const ip of ips) {
+    const approved: string[] = [];
+    for (const raw of ips) {
+      const ip = normalizeIpLiteral(raw);
       const classification = classifyAddress(ip);
-      if (classification === 'public') continue;
+      if (classification === 'public') {
+        approved.push(ip);
+        continue;
+      }
       const requiredScope =
         classification === 'local'
           ? NETWORK_SCOPE_LOCAL
@@ -820,7 +835,9 @@ export function createMemoryHostExecutor(options: MemoryHostOptions = {}): Memor
           },
         );
       }
+      approved.push(ip);
     }
+    return approved;
   }
 
   async function performFetch(
@@ -854,7 +871,7 @@ export function createMemoryHostExecutor(options: MemoryHostOptions = {}): Memor
           },
         );
       }
-      await checkDestination(parsed.hostname, isRedirectHop, scope);
+      const approved = await checkDestination(parsed.hostname, isRedirectHop, scope);
       // §29.1.5: a secret pins the destination policy — the first hop must
       // stay inside the bound origin (no `use secret X + arbitrary Y`).
       // Redirects do NOT reject: they simply continue WITHOUT the secret
@@ -880,7 +897,21 @@ export function createMemoryHostExecutor(options: MemoryHostOptions = {}): Memor
       if (args.body !== undefined && args.body !== null && method !== 'GET' && method !== 'HEAD') {
         init.body = args.body;
       }
-      const resp = await fetchImpl(currentUrl, init);
+      let resp: Response;
+      try {
+        // The approved list is the same resolution the policy check above
+        // admitted: the transport connects to one of these IPs and verifies
+        // the connected remoteAddress against them (ТЗ §SEC-03).
+        resp = await fetchImpl(currentUrl, init, { ips: approved });
+      } catch (error) {
+        if (error instanceof VerifiedIpMismatchError) {
+          throw new BrokerCallError('NETWORK_DESTINATION_DENIED', {
+            message: 'connected address not in the approved set',
+            details: { hostname: parsed.hostname, remoteAddress: error.remoteAddress },
+          });
+        }
+        throw error;
+      }
       const status = resp.status;
       const location = resp.headers.get('location');
       if (status >= 300 && status < 400 && location !== null) {
@@ -956,8 +987,7 @@ export function createMemoryHostExecutor(options: MemoryHostOptions = {}): Memor
       headers[name] = value;
       count += 1;
     }
-    const raw = await resp.text();
-    const body = raw.length > NETWORK_MAX_BODY_BYTES ? raw.slice(0, NETWORK_MAX_BODY_BYTES) : raw;
+    const body = await readBoundedText(resp, NETWORK_MAX_BODY_BYTES);
     return {
       status: resp.status,
       statusText: resp.statusText,
@@ -968,11 +998,53 @@ export function createMemoryHostExecutor(options: MemoryHostOptions = {}): Memor
     };
   }
 
+  /**
+   * §SEC-04 bounded read: stream the (possibly decompressed) body and stop at
+   * the cap, destroying the response immediately once it is exceeded — the
+   * body must never be accumulated in memory beyond the cap just to be
+   * truncated. The truncation contract (a body of at most `cap` bytes) is
+   * preserved. Non-streaming responses (body-less HEAD/204/304 and test
+   * stubs without a `body` property) fall back to `text()` + slice.
+   */
+  async function readBoundedText(resp: Response, cap: number): Promise<string> {
+    const body = resp.body;
+    if (body === null || body === undefined || typeof body.getReader !== 'function') {
+      const text = await resp.text();
+      return text.length > cap ? text.slice(0, cap) : text;
+    }
+    const reader = body.getReader();
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value.byteLength === 0) continue;
+        const room = cap - total;
+        if (room <= 0) {
+          await reader.cancel().catch(() => undefined);
+          break;
+        }
+        if (value.byteLength > room) {
+          chunks.push(value.subarray(0, room));
+          total = cap;
+          await reader.cancel().catch(() => undefined);
+          break;
+        }
+        chunks.push(value);
+        total += value.byteLength;
+      }
+    } finally {
+      reader.releaseLock();
+    }
+    return Buffer.concat(chunks, total).toString('utf8');
+  }
+
   // ---- §29 Socket API (Stage E): websocket / tcp / listen / udp ----
   // Trusted sockets live host-side; the plugin only ever holds opaque ids.
   const sockets: SocketRegistry = createSocketRegistry({
     checkDestination: async (host, pluginId) => {
-      await checkDestination(host, false, scopeProvider(pluginId));
+      return checkDestination(host, false, scopeProvider(pluginId));
     },
     checkBind: (host, pluginId) => {
       // §29.1.4: unspecified addresses (0.0.0.0 / ::) mean "all interfaces" —

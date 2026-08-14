@@ -28,10 +28,16 @@ import {
   NETWORK_MAX_SOCKET_MESSAGES,
 } from '@neotavern/contracts';
 import { BrokerCallError } from '../broker/capabilityBroker.js';
+import { assertApprovedRemote } from './netPolicy.js';
 
 export interface SocketRegistryDeps {
-  /** §29.1 SSRF scope policy for outbound destinations. Throws on deny. */
-  checkDestination(host: string, pluginId: string): Promise<void>;
+  /**
+   * §29.1 SSRF scope policy for outbound destinations. Throws on deny and
+   * returns the policy-approved address list, so a caller can verify the
+   * address a connection actually landed on (ТЗ §SEC-03: "после connect
+   * проверяется remoteAddress").
+   */
+  checkDestination(host: string, pluginId: string): Promise<string[]>;
   /** §29.1.4 bind policy: throws unless the plugin may bind the host. */
   checkBind(host: string, pluginId: string): void;
 }
@@ -264,6 +270,9 @@ export function createSocketRegistry(deps: SocketRegistryDeps): SocketRegistry {
       if (parsed.protocol !== 'ws:' && parsed.protocol !== 'wss:') {
         throw new BrokerCallError('VALIDATION_FAILED', { message: 'websocket url must be ws/wss' });
       }
+      // The pre-connect policy check applies (§29.1); post-connect
+      // remoteAddress verification is a documented follow-up for WebSocket —
+      // undici's WebSocket does not expose the connected socket.
       await deps.checkDestination(parsed.hostname, pluginId);
       const handle = allocate(pluginId, 'websocket');
       const socket = new WebSocket(url, protocols);
@@ -299,7 +308,9 @@ export function createSocketRegistry(deps: SocketRegistryDeps): SocketRegistry {
       await closeHandle(id);
     },
     async tcpConnect(pluginId, host, port, tls) {
-      await deps.checkDestination(host, pluginId);
+      // The approved set is the same resolution the policy check admitted;
+      // after connect the socket's remoteAddress must be in it (ТЗ §SEC-03).
+      const approved = await deps.checkDestination(host, pluginId);
       const handle = allocate(pluginId, 'tcp');
       const socket = tls ? tlsConnect({ host, port }) : netConnect({ host, port });
       handle.resource = socket;
@@ -315,6 +326,19 @@ export function createSocketRegistry(deps: SocketRegistryDeps): SocketRegistry {
       });
       await new Promise<void>((resolve, reject) => {
         const onConnect = (): void => {
+          const mismatch = assertApprovedRemote(approved, socket.remoteAddress);
+          if (mismatch !== null) {
+            cleanup();
+            socket.destroy();
+            void closeHandle(handle.id);
+            reject(
+              new BrokerCallError('NETWORK_DESTINATION_DENIED', {
+                message: 'connected address not in the approved set',
+                details: { host, port, remoteAddress: socket.remoteAddress },
+              }),
+            );
+            return;
+          }
           cleanup();
           resolve();
         };

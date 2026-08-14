@@ -170,7 +170,7 @@
     {
       "source": "adr/0038-canonical-rust-kernel-core.md",
       "target": "adr/0038-canonical-rust-kernel-core.md",
-      "sha256": "6ed2c9be48c85a72e74685cc9ac3737d36e4336c33c47cfd4565f1b1d07b3018"
+      "sha256": "9a6503680b5b6b44f30cd438478bdf2fe35ef63ce4f41007f85bf28468482bb6"
     },
     {
       "source": "adr/0039-legacy-compatibility-authority-boundary.md",
@@ -240,7 +240,7 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "49bfda8009f4179c16c9b3f3754cd6f4a916df1fff6cb30adab8b3bfdb05020b"
+      "sha256": "5014d50150334e1b3308403da6654e9c8628bcbb943fd3d438be26cc0978f2be"
     },
     {
       "source": "data/README.md",

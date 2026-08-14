@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-08-14T00:51:53.786Z",
+  "generatedAt": "2026-08-14T01:15:06.037Z",
   "rows": [
     {
       "hosts": {
@@ -132,6 +132,19 @@
       "notes": "Kernel op exists; provider configuration without secrets in DB arrives in M2/M3.",
       "title": "Provider catalog read",
       "wireOps": ["providers.list"]
+    },
+    {
+      "hosts": {
+        "android": "Designed",
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "webClient": "Implemented"
+      },
+      "id": "security.plugin-network",
+      "milestone": "M1",
+      "notes": "SEC-03/SEC-04 (M1 Wave 1): plugin network.http.fetch and socket destinations pass the §29.1 SSRF scope policy — every DNS answer checked, bracketed IPv6 and IPv4-mapped literals normalized, per-hop redirect re-checks, connect to the policy-approved IP with the hostname only in Host/SNI and post-connect remoteAddress verification; response bodies are capped while streaming and the connection is destroyed on exceed (apps/plugin-runtime/src/host). WebSocket post-connect verification is a documented follow-up.",
+      "title": "Plugin network broker (SSRF policy + bounded streaming)",
+      "wireOps": []
     },
     {
       "hosts": {

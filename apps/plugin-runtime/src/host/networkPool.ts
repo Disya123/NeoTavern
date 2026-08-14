@@ -10,9 +10,18 @@
  * over the tunneled socket.
  *
  * The pool never follows redirects (the executor's §29.1.3 policy loop does)
- * and never decodes bodies (it returns a buffered `Response` — producer-side
- * streaming of bodies is a documented follow-up). Socket limits mirror the
- * contracts pins (`NETWORK_POOL_*`).
+ * and never decodes bodies (it returns a buffered `Response`; producer-side
+ * streaming of bodies is a documented follow-up). Both limits are enforced
+ * while streaming: a response body over the cap destroys the connection
+ * immediately and returns the truncated prefix (ТЗ §SEC-04 — never accumulate
+ * a body that will be discarded).
+ *
+ * Verified connections (ТЗ §SEC-03): when the caller passes the policy-approved
+ * address list, the pool connects straight to the approved IP (no DNS in the
+ * stack), preserves the hostname only in `Host` / TLS `servername`, and after
+ * connect verifies the socket's `remoteAddress` is in the approved set. Such
+ * connections bypass the keep-alive agents on purpose — socket reuse across
+ * different approved IPs would make the post-connect check unsound.
  */
 import {
   Agent as HttpAgent,
@@ -24,11 +33,13 @@ import { Agent as HttpsAgent, request as httpsRequest } from 'node:https';
 import { connect as tlsConnect, type TLSSocket } from 'node:tls';
 import type { Socket } from 'node:net';
 import {
+  NETWORK_MAX_BODY_BYTES,
   NETWORK_POOL_CONNECT_TIMEOUT_MS,
   NETWORK_POOL_KEEP_ALIVE_MS,
   NETWORK_POOL_MAX_FREE_SOCKETS,
   NETWORK_POOL_MAX_SOCKETS_PER_ORIGIN,
 } from '@neotavern/contracts';
+import { assertApprovedRemote, VerifiedIpMismatchError } from './netPolicy.js';
 
 export interface NetworkPoolOptions {
   /** Max concurrent sockets per origin (direct connections). Default 6. */
@@ -57,7 +68,13 @@ export interface NetworkPoolMetrics {
 }
 
 export interface NetworkPool {
-  fetch(url: string, init?: RequestInit): Promise<Response>;
+  /**
+   * Fetch one URL. `verified` carries the policy-approved addresses for this
+   * request (ТЗ §SEC-03): when present, the pool connects to the approved IP
+   * (no DNS in the stack), keeps the hostname only in Host/SNI, verifies the
+   * connected `remoteAddress` against the set, and bypasses keep-alive reuse.
+   */
+  fetch(url: string, init?: RequestInit, verified?: { ips: string[] }): Promise<Response>;
   metrics(): NetworkPoolMetrics;
   /**
    * Destroy both agents and their idle sockets; future fetches reject.
@@ -99,13 +116,16 @@ function toPlainHeaders(headers: RequestInit['headers']): Record<string, string>
   return result;
 }
 
-function readResponse(res: IncomingMessage): Promise<Response> {
+function readResponse(res: IncomingMessage, maxBytes: number): Promise<Response> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    res.on('data', (chunk: Buffer) => chunks.push(chunk));
-    res.on('error', reject);
-    res.on('end', () => {
-      const body = Buffer.concat(chunks);
+    let total = 0;
+    let truncated = false;
+    let settled = false;
+    const buildResponse = (): void => {
+      if (settled) return;
+      settled = true;
+      const body = Buffer.concat(chunks, Math.min(total, maxBytes));
       const headers = new Headers();
       for (const [name, value] of Object.entries(res.headers)) {
         if (value === undefined) continue;
@@ -122,7 +142,34 @@ function readResponse(res: IncomingMessage): Promise<Response> {
           headers,
         }),
       );
+    };
+    res.on('data', (chunk: Buffer) => {
+      if (truncated) return;
+      const room = maxBytes - total;
+      if (chunk.length > room) {
+        // §SEC-04: bound compressed AND decompressed bytes before the body is
+        // accumulated; destroy the response immediately once the cap is
+        // exceeded instead of downloading a body that will be discarded.
+        if (room > 0) {
+          chunks.push(chunk.subarray(0, room));
+          total = maxBytes;
+        }
+        truncated = true;
+        res.destroy();
+        return;
+      }
+      chunks.push(chunk);
+      total += chunk.length;
     });
+    res.on('error', (error) => {
+      // After an intentional cap-destroy the truncated prefix is the answer;
+      // any other error fails the fetch.
+      if (truncated) buildResponse();
+      else reject(error);
+    });
+    res.on('end', buildResponse);
+    // 'close' fires without 'end' after `res.destroy()` (cap exceeded).
+    res.on('close', buildResponse);
   });
 }
 
@@ -152,20 +199,47 @@ export function createNetworkPool(options: NetworkPoolOptions = {}): NetworkPool
   let closed = false;
   let totalRequests = 0;
 
-  function directFetch(target: URL, init: RequestInit): Promise<Response> {
-    const agent: HttpAgentLike = target.protocol === 'https:' ? httpsAgent : httpAgent;
+  function directFetch(
+    target: URL,
+    init: RequestInit,
+    verified?: { ips: string[] },
+  ): Promise<Response> {
+    const isHttps = target.protocol === 'https:';
+    const lib = isHttps ? httpsRequest : httpRequest;
+    const agent: HttpAgentLike = isHttps ? httpsAgent : httpAgent;
+    const common = {
+      port: target.port === '' ? (isHttps ? 443 : 80) : Number(target.port),
+      path: `${target.pathname}${target.search}`,
+      method: init.method ?? 'GET',
+      signal: init.signal ?? undefined,
+    };
     return new Promise((resolve, reject) => {
-      const request = target.protocol === 'https:' ? httpsRequest : httpRequest;
-      const req = request(
-        target,
-        {
-          method: init.method ?? 'GET',
-          headers: toPlainHeaders(init.headers),
-          agent,
-          signal: init.signal ?? undefined,
-        },
-        (res) => resolve(readResponse(res)),
-      );
+      const requestInit =
+        verified === undefined
+          ? { ...common, hostname: target.hostname, agent }
+          : {
+              ...common,
+              // §SEC-03: connect to the policy-approved IP — the Node stack
+              // performs no DNS for the hostname. The hostname survives only
+              // in the Host header (HTTP) and servername (TLS/SNI + cert
+              // verification).
+              hostname: verified.ips[0] ?? target.hostname,
+              headers: { ...toPlainHeaders(init.headers), host: target.host },
+              ...(isHttps ? { servername: target.hostname } : {}),
+            };
+      const req = lib(requestInit, (res) => resolve(readResponse(res, NETWORK_MAX_BODY_BYTES)));
+      if (verified !== undefined) {
+        // §SEC-03: after connect, the address the connection actually landed
+        // on must be in the approved set (DNS rebinding or agent reuse cannot
+        // silently change the peer).
+        req.on('socket', (socket) => {
+          socket.once('connect', () => {
+            const remote = (socket as Socket).remoteAddress;
+            const mismatch = assertApprovedRemote(verified.ips, remote);
+            if (mismatch !== null) req.destroy(new VerifiedIpMismatchError(remote, mismatch));
+          });
+        });
+      }
       req.on('error', reject);
       req.setTimeout(connectTimeoutMs, () => req.destroy(new Error('connect timeout')));
       if (init.body !== undefined && init.body !== null) req.write(String(init.body));
@@ -187,7 +261,7 @@ export function createNetworkPool(options: NetworkPoolOptions = {}): NetworkPool
           headers: { ...toPlainHeaders(init.headers), host: target.host },
           signal: init.signal ?? undefined,
         },
-        (res) => resolve(readResponse(res)),
+        (res) => resolve(readResponse(res, NETWORK_MAX_BODY_BYTES)),
       );
       req.on('error', reject);
       req.setTimeout(connectTimeoutMs, () => req.destroy(new Error('proxy connect timeout')));
@@ -247,7 +321,7 @@ export function createNetworkPool(options: NetworkPoolOptions = {}): NetworkPool
             createConnection: () => tls,
           },
           (res2) => {
-            readResponse(res2).then((result) => {
+            readResponse(res2, NETWORK_MAX_BODY_BYTES).then((result) => {
               tls.destroy();
               socket.destroy();
               resolve(result);
@@ -265,7 +339,7 @@ export function createNetworkPool(options: NetworkPoolOptions = {}): NetworkPool
   }
 
   return {
-    fetch(url, init) {
+    fetch(url, init, verified) {
       if (closed) return Promise.reject(new Error('network pool is closed'));
       totalRequests += 1;
       const target = new URL(url);
@@ -275,7 +349,7 @@ export function createNetworkPool(options: NetworkPoolOptions = {}): NetworkPool
           ? proxyConnectTunnel(target, requestInit)
           : proxyAbsoluteForm(target, requestInit);
       }
-      return directFetch(target, requestInit);
+      return directFetch(target, requestInit, verified);
     },
     metrics() {
       const http = {
