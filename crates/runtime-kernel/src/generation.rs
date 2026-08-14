@@ -422,7 +422,16 @@ fn run_status_enum(run: &RunRow) -> Result<GenerationStatus, KernelError> {
 /// boundary and commits `cancelled` + the terminal event. Cancelling an
 /// already-`cancelling` run is idempotent. A terminal or `interrupted` run
 /// yields `GENERATION_RUN_STATE_CONFLICT`.
-pub(crate) fn generation_cancel(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+///
+/// A **waiting-for-tool** run (§8.3) has NO live executor — its stream
+/// session ended at the durable waiting transition — so `generation.cancel`
+/// finalizes the `cancelled` terminal itself (marker cleared), matching
+/// `WaitingForTool → Cancelling → Cancelled`.
+pub(crate) fn generation_cancel(
+    db: &mut Database,
+    request: &[u8],
+    lease_owner: &str,
+) -> Result<Vec<u8>, KernelError> {
     let req = generated::decode_request_cancel_generation(request)?;
     let run_id = req.workflow_id.clone();
     let mut run = load_run(db.conn(), &run_id)?.ok_or_else(|| run_not_found(&run_id))?;
@@ -431,6 +440,7 @@ pub(crate) fn generation_cancel(db: &mut Database, request: &[u8]) -> Result<Vec
     for _ in 0..8 {
         match run.status.as_str() {
             "queued" | "preparing" | "streaming" => {
+                let was_waiting = run.pending_tool_call_json.is_some();
                 let changed = db.transaction(|tx| {
                     tx.execute(
                         "UPDATE generation_runs SET status = 'cancelling', cancel_requested = 1, \
@@ -443,6 +453,12 @@ pub(crate) fn generation_cancel(db: &mut Database, request: &[u8]) -> Result<Vec
                     // CAS lost: re-read and react (never a blind retry).
                     run = reload(db, &run_id)?;
                     continue;
+                }
+                // No executor is left to observe the flag on a waiting run:
+                // finalize the cancel durably (clears the pending marker).
+                if was_waiting {
+                    run = reload(db, &run_id)?;
+                    let _seq = terminal_cancelled(db, run, lease_owner)?;
                 }
                 done = true;
                 break;
@@ -627,7 +643,8 @@ pub(crate) fn generation_discard(
             // CAS first: on conflict, the events stay untouched.
             let changed = tx
                 .execute(
-                    "UPDATE generation_runs SET partial_length = 0, revision = revision + 1, \
+                    "UPDATE generation_runs SET partial_length = 0, \
+                     pending_tool_call_json = NULL, revision = revision + 1, \
                      updated_at = ?1 WHERE id = ?2 AND revision = ?3",
                     params![&updated_at, &run_id, run.revision],
                 )
@@ -1491,7 +1508,8 @@ fn terminal_completed(
             let changed = tx
                 .execute(
                     "UPDATE generation_runs SET status = 'completed', message_id = ?1, \
-                     last_event_sequence = ?2, revision = revision + 1, lease_owner = ?3, \
+                     pending_tool_call_json = NULL, last_event_sequence = ?2, \
+                     revision = revision + 1, lease_owner = ?3, \
                      lease_expires_at = ?4, updated_at = ?5 WHERE id = ?6 AND revision = ?7",
                     params![&message_id, seq, lease_owner, lease_expires(), &created_at, run.run_id, run.revision],
                 )
@@ -1551,7 +1569,8 @@ fn terminal_failed(
             let changed = tx
                 .execute(
                     "UPDATE generation_runs SET status = 'failed', error_json = ?1, \
-                     last_event_sequence = ?2, revision = revision + 1, lease_owner = ?3, \
+                     pending_tool_call_json = NULL, last_event_sequence = ?2, \
+                     revision = revision + 1, lease_owner = ?3, \
                      lease_expires_at = ?4, updated_at = ?5 WHERE id = ?6 AND revision = ?7",
                     params![
                         &error_json,
@@ -1607,7 +1626,8 @@ fn terminal_cancelled(
             let changed = tx
                 .execute(
                     "UPDATE generation_runs SET status = 'cancelled', \
-                     last_event_sequence = ?1, revision = revision + 1, lease_owner = ?2, \
+                     pending_tool_call_json = NULL, last_event_sequence = ?1, \
+                     revision = revision + 1, lease_owner = ?2, \
                      lease_expires_at = ?3, updated_at = ?4 WHERE id = ?5 AND revision = ?6",
                     params![
                         seq,
@@ -2249,7 +2269,8 @@ pub(crate) fn recover(db: &mut Database) -> Result<(), KernelError> {
     let updated_at = now();
     db.transaction(|tx| {
         tx.execute(
-            "UPDATE generation_runs SET status = 'interrupted', lease_expires_at = NULL, \
+            "UPDATE generation_runs SET status = 'interrupted', \
+             pending_tool_call_json = NULL, lease_expires_at = NULL, \
              revision = revision + 1, updated_at = ?1 \
              WHERE status IN ('queued','preparing','streaming','cancelling') \
                AND (lease_expires_at IS NULL OR lease_expires_at < ?1)",

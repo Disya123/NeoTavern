@@ -57,6 +57,12 @@ so **late provider output after cancellation never reaches the chat**. Cancel
 is a request until the executor commits `cancelled` — the operation is
 idempotent while `cancelling` and a `CONFLICT`
 (`GENERATION_RUN_STATE_CONFLICT`, params `runId`, `status`) once terminal.
+Exception (Этап 2.7): a **waiting-for-tool** run has no live executor — its
+stream session ended at the durable waiting transition — so
+`generation.cancel` on it finalizes the `cancelled` terminal itself
+(`WaitingForTool → Cancelling → Cancelled`). All terminal writers clear
+`pending_tool_call_json`, so a terminal run never reports a derived waiting
+status and a late `generation.tool.result` is `TOOL_RESULT_STALE`.
 
 ## Writer coordinator (§22)
 

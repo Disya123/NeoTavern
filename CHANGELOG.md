@@ -35,6 +35,23 @@
   validation covers a documented subset (object/required/additionalProperties
   + scalar/array/object types); the full schema engine is a follow-up.
 
+- **Waiting-run cancel/retry semantics and the OpenAI tool round trip (M2 /
+  Этап 2.8, ТЗ §8.3).** `generation.cancel` on a **waiting-for-tool** run now
+  finalizes the `cancelled` terminal itself (no live executor exists to
+  observe the flag — `WaitingForTool → Cancelling → Cancelled`); all terminal
+  writers (`completed` / `failed` / `cancelled` / startup `interrupted`
+  recovery) clear `pending_tool_call_json`, so a terminal run never reports a
+  derived waiting status and a late `generation.tool.result` is
+  `TOOL_RESULT_STALE`. `generation.discard` on a terminal run clears the
+  marker too. `generation.retry` from a cancelled waiting run starts attempt 2
+  with a full tool round trip; retry on a still-waiting run is
+  `GENERATION_RUN_STATE_CONFLICT`. New kernel integration test drives the
+  **real OpenAI-compatible adapter over raw TCP**: turn 1 streams a
+  normalized tool call (SSE `delta.tool_calls[]`), the kernel validates and
+  waits, `generation.tool.result` resumes turn 2 with the tool context, and
+  the run completes with exactly one assistant message; both HTTP bodies are
+  asserted (`tools` serialization + resumed `tool_call_id`).
+
 - **Prompt pipeline in the Kernel (M2 / Этап 2.6, ТЗ §9.1–§9.2).** Every
   generation run now builds an immutable **PromptPlan** before the provider
   attempt: character/persona system blocks (from the chat's character card,

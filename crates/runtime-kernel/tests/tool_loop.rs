@@ -432,6 +432,91 @@ fn tool_result_on_non_waiting_run_is_stale() {
     assert_eq!(err.product.as_ref().unwrap().code, "TOOL_RESULT_STALE");
 }
 
+// ---------------------------------------------------------------------------
+// Cancel/retry semantics for waiting runs (§8.3)
+// ---------------------------------------------------------------------------
+
+/// `generation.cancel` on a waiting-for-tool run must FINALIZE the cancelled
+/// terminal itself — no executor is left to observe the cancel flag — and
+/// clear the pending marker; the journal survives; a later tool result is
+/// stale; `generation.retry` from the cancelled run starts attempt 2.
+#[test]
+fn cancel_on_waiting_run_finalizes_cancelled() {
+    let (_root, kernel, run_id, _terminal) = run_to_waiting("tool=lookup_weather");
+    let tool_call_id = waiting_tool_call_id(&kernel, &run_id);
+    assert_eq!(
+        get_run(&kernel, &run_id).status,
+        GenerationStatus::WaitingForTool
+    );
+
+    // Cancel: the kernel commits the durable cancelled terminal directly
+    // (WaitingForTool → Cancelling → Cancelled, marker cleared).
+    dispatch_json(
+        &kernel,
+        "generation.cancel",
+        serde_json::json!({ "workflowId": run_id }),
+    )
+    .expect("generation.cancel must succeed");
+    let run = get_run(&kernel, &run_id);
+    assert_eq!(run.status, GenerationStatus::Cancelled);
+    assert_eq!(
+        run.message_id, None,
+        "a cancelled run has no assistant message"
+    );
+
+    // The step journal survives the cancel (immutable evidence).
+    assert_eq!(
+        step_types(&kernel, &run_id),
+        vec!["provider_turn", "tool_call"]
+    );
+
+    // The tool result for the cancelled run is stale (the host must not
+    // execute the effect after cancellation).
+    let err = dispatch_json(
+        &kernel,
+        "generation.tool.result",
+        serde_json::json!({
+            "runId": run_id,
+            "toolCallId": tool_call_id,
+            "result": { "celsius": 1 }
+        }),
+    )
+    .expect_err("result after cancel must be stale");
+    assert_eq!(err.product.as_ref().unwrap().code, "TOOL_RESULT_STALE");
+
+    // Retry from the cancelled run → attempt 2 (fresh tool round trip).
+    let mut retry_stream = start_stream(
+        &kernel,
+        "generation.retry",
+        serde_json::json!({ "sourceRunId": run_id }),
+    )
+    .expect("retry from a cancelled waiting run must succeed");
+    let retry_id = retry_stream.stream_id().to_string();
+    drain_until_terminal(&mut retry_stream, Duration::from_secs(30));
+    let retry = get_run(&kernel, &retry_id);
+    assert_eq!(retry.status, GenerationStatus::WaitingForTool);
+    assert_eq!(retry.attempt, 2);
+    assert_eq!(retry.source_run_id.as_deref(), Some(run_id.as_str()));
+    assert_eq!(retry.chat_id, CHAT_ID);
+}
+
+/// `generation.retry` on a run still waiting (live `streaming` + pending
+/// marker) is a state conflict — the source must be terminal first.
+#[test]
+fn retry_on_waiting_run_is_a_state_conflict() {
+    let (_root, kernel, run_id, _terminal) = run_to_waiting("tool=lookup_weather");
+    let err = start_stream(
+        &kernel,
+        "generation.retry",
+        serde_json::json!({ "sourceRunId": run_id }),
+    )
+    .expect_err("retry on a live waiting run must be rejected");
+    assert_eq!(
+        err.product.as_ref().unwrap().code,
+        "GENERATION_RUN_STATE_CONFLICT"
+    );
+}
+
 #[test]
 fn tool_loop_limit_fails_the_run() {
     let root = tempfile::tempdir().expect("tempdir");

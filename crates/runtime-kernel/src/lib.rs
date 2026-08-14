@@ -518,7 +518,9 @@ fn handle_unary(
             providers_config::delete(db, state.secret_store.as_ref(), req)
         }),
         // Phase 6 generation operations.
-        "generation.cancel" => with_db_opt(db, |db| generation::generation_cancel(db, req)),
+        "generation.cancel" => {
+            with_db_opt(db, |db| generation::generation_cancel(db, req, lease_owner))
+        }
         "generation.get" => with_db_opt(db, |db| generation::generation_get(db, req)),
         "generation.events" => with_db_opt(db, |db| generation::generation_events(db, req)),
         "generation.keep" => with_db_opt(db, |db| generation::generation_keep(db, req)),
