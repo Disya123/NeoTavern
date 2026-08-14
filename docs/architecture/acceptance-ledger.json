@@ -149,15 +149,14 @@
         "legacy Fastify no longer owns product data"
       ],
       "evidence": [
-        "lorebooks.crud (5 wire ops) + personas.crud (5 wire ops) kernel-side complete",
-        "wireBridge.ts lorebook/persona hooks route through the facade in kernel mode",
-        "release-manifest.json lorebooks.crud/personas.crud desktop=Integrated",
-        "wire corpus + remote-http host parity + kernel integration tests",
+        "lorebooks.crud (5 wire ops) + lorebooks.entries.crud (4 wire ops: list/create/update/delete) + personas.crud (5 wire ops) kernel-side complete",
+        "wireBridge.ts lorebook/persona/entry hooks route through the facade in kernel mode (entry ops: kernel assigns id/position/metadata/timestamps; position/metadata patch is honest CAPABILITY_UNAVAILABLE)",
+        "release-manifest.json lorebooks.crud/lorebooks.entries.crud/personas.crud desktop=Integrated",
+        "wire corpus + remote-http host parity + kernel integration tests (lorebook_entries_crud_round_trip, lorebook_entries_error_paths, lorebook_crud_over_http)",
         "check-ui-api --check OK (67 allowed sites, all with removal records)"
       ],
       "blockingIssues": [
         "legacy /api/v2/lorebooks and /api/v2/personas route removal still pending (after parity)",
-        "entry-level lorebook nested CRUD has no per-entry wire contract yet (honest CAPABILITY_UNAVAILABLE in kernel mode)",
         "character↔lorebook scoping not modeled in the kernel schema",
         "chat.persona_id linkage and prompt {{user}} injection from the personas table not wired"
       ],

@@ -1325,8 +1325,66 @@ fn lorebook_crud_over_http() {
     gen::validate_lorebook_dto(&fetched).expect("fetched lorebook DTO is wire-valid");
     assert_eq!(fetched["id"], json!(lorebook_id));
 
-    let update = envelope_body(
+    // Entry-level ops over HTTP (M4 slice 1): list → create → update →
+    // delete all answer HTTP 200 with wire-valid payloads.
+    let list_entries = envelope_body(
         &rid(3),
+        "lorebooks.entries.list",
+        json!({ "lorebookId": lorebook_id }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &list_entries);
+    assert_eq!(response.status, 200);
+    let (_, listed) = expect_ok(decode_envelope(&response.body));
+    gen::validate_result_list_lorebook_entries(&listed).expect("list entries result is wire-valid");
+    assert_eq!(listed["items"].as_array().map(Vec::len), Some(1));
+    let entry_id = listed["items"][0]["id"]
+        .as_str()
+        .expect("entry has a kernel-assigned id")
+        .to_string();
+
+    let create_entry = envelope_body(
+        &rid(4),
+        "lorebooks.entries.create",
+        json!({
+            "lorebookId": lorebook_id,
+            "entry": { "keys": ["citadel"], "content": "The citadel towers." }
+        }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &create_entry);
+    assert_eq!(response.status, 200);
+    let (_, created_entry) = expect_ok(decode_envelope(&response.body));
+    gen::validate_lorebook_entry_dto(&created_entry).expect("created entry DTO is wire-valid");
+    assert_ne!(created_entry["id"], json!(entry_id));
+
+    let update_entry = envelope_body(
+        &rid(5),
+        "lorebooks.entries.update",
+        json!({
+            "lorebookId": lorebook_id,
+            "entryId": entry_id,
+            "patch": { "content": "The harbor freezes in winter." }
+        }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &update_entry);
+    assert_eq!(response.status, 200);
+    let (_, updated_entry) = expect_ok(decode_envelope(&response.body));
+    gen::validate_lorebook_entry_dto(&updated_entry).expect("updated entry DTO is wire-valid");
+    assert_eq!(
+        updated_entry["content"],
+        json!("The harbor freezes in winter.")
+    );
+
+    let delete_entry = envelope_body(
+        &rid(6),
+        "lorebooks.entries.delete",
+        json!({ "lorebookId": lorebook_id, "entryId": entry_id }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &delete_entry);
+    assert_eq!(response.status, 200);
+    expect_ok(decode_envelope(&response.body));
+
+    let update = envelope_body(
+        &rid(7),
         "lorebooks.update",
         json!({ "lorebookId": lorebook_id, "name": "Harbor world v2", "entries": [] }),
     );
@@ -1338,7 +1396,7 @@ fn lorebook_crud_over_http() {
     assert_eq!(updated["entryCount"], json!(0));
 
     let delete = envelope_body(
-        &rid(4),
+        &rid(8),
         "lorebooks.delete",
         json!({ "lorebookId": lorebook_id }),
     );

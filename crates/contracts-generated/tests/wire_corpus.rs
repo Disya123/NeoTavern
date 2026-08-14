@@ -9,27 +9,31 @@ use contracts_generated::generated::{
     decode_backup_dto, decode_character_dto, decode_chat_dto, decode_error_dto,
     decode_event_envelope, decode_generation_event, decode_generation_run,
     decode_generation_status, decode_generation_step, decode_generation_step_status,
-    decode_generation_step_type, decode_lorebook_dto, decode_lorebook_entry_input,
-    decode_message_dto, decode_message_role, decode_meta_dto, decode_paged_characters,
-    decode_paged_chats, decode_paged_generation_events, decode_paged_messages, decode_persona_dto,
-    decode_preset_dto, decode_prompt_block, decode_prompt_excluded, decode_prompt_message,
-    decode_prompt_plan, decode_provider_availability, decode_provider_config_dto,
-    decode_provider_dto, decode_provider_model, decode_request_cancel_generation,
-    decode_request_create_character, decode_request_create_chat, decode_request_create_lorebook,
-    decode_request_create_message, decode_request_create_persona, decode_request_delete_character,
-    decode_request_delete_chat, decode_request_delete_lorebook, decode_request_delete_message,
-    decode_request_delete_persona, decode_request_delete_provider_config,
-    decode_request_discard_generation, decode_request_empty, decode_request_envelope,
-    decode_request_generation_tool_result, decode_request_get_character, decode_request_get_chat,
-    decode_request_get_generation_run, decode_request_get_lorebook, decode_request_get_persona,
-    decode_request_get_prompt_plan, decode_request_get_provider_config,
+    decode_generation_step_type, decode_lorebook_dto, decode_lorebook_entry_dto,
+    decode_lorebook_entry_input, decode_lorebook_entry_patch, decode_message_dto,
+    decode_message_role, decode_meta_dto, decode_paged_characters, decode_paged_chats,
+    decode_paged_generation_events, decode_paged_messages, decode_persona_dto, decode_preset_dto,
+    decode_prompt_block, decode_prompt_excluded, decode_prompt_message, decode_prompt_plan,
+    decode_provider_availability, decode_provider_config_dto, decode_provider_dto,
+    decode_provider_model, decode_request_cancel_generation, decode_request_create_character,
+    decode_request_create_chat, decode_request_create_lorebook,
+    decode_request_create_lorebook_entry, decode_request_create_message,
+    decode_request_create_persona, decode_request_delete_character, decode_request_delete_chat,
+    decode_request_delete_lorebook, decode_request_delete_lorebook_entry,
+    decode_request_delete_message, decode_request_delete_persona,
+    decode_request_delete_provider_config, decode_request_discard_generation, decode_request_empty,
+    decode_request_envelope, decode_request_generation_tool_result, decode_request_get_character,
+    decode_request_get_chat, decode_request_get_generation_run, decode_request_get_lorebook,
+    decode_request_get_persona, decode_request_get_prompt_plan, decode_request_get_provider_config,
     decode_request_keep_partial_generation, decode_request_list_characters,
-    decode_request_list_chats, decode_request_list_generation_events, decode_request_list_messages,
+    decode_request_list_chats, decode_request_list_generation_events,
+    decode_request_list_lorebook_entries, decode_request_list_messages,
     decode_request_list_provider_configs, decode_request_retry_generation,
     decode_request_set_provider_config, decode_request_start_generation,
     decode_request_update_character, decode_request_update_chat, decode_request_update_lorebook,
-    decode_request_update_message, decode_request_update_persona, decode_response_envelope,
-    decode_result_empty, decode_result_list_backups, decode_result_list_lorebooks,
+    decode_request_update_lorebook_entry, decode_request_update_message,
+    decode_request_update_persona, decode_response_envelope, decode_result_empty,
+    decode_result_list_backups, decode_result_list_lorebook_entries, decode_result_list_lorebooks,
     decode_result_list_personas, decode_result_list_presets, decode_result_list_provider_configs,
     decode_result_list_providers, decode_result_list_tools, decode_tool_call, decode_tool_spec,
 };
@@ -162,6 +166,39 @@ fn dispatch(schema_id: &str, bytes: &[u8], valid: bool) {
         }
         "wire.lorebook.entry.input" => {
             corpus_case(schema_id, decode_lorebook_entry_input, bytes, valid)
+        }
+        "wire.lorebook.entry.dto" => {
+            corpus_case(schema_id, decode_lorebook_entry_dto, bytes, valid)
+        }
+        "wire.lorebook.entry.patch" => {
+            corpus_case(schema_id, decode_lorebook_entry_patch, bytes, valid)
+        }
+        "wire.request.list-lorebook-entries" => corpus_case(
+            schema_id,
+            decode_request_list_lorebook_entries,
+            bytes,
+            valid,
+        ),
+        "wire.request.create-lorebook-entry" => corpus_case(
+            schema_id,
+            decode_request_create_lorebook_entry,
+            bytes,
+            valid,
+        ),
+        "wire.request.update-lorebook-entry" => corpus_case(
+            schema_id,
+            decode_request_update_lorebook_entry,
+            bytes,
+            valid,
+        ),
+        "wire.request.delete-lorebook-entry" => corpus_case(
+            schema_id,
+            decode_request_delete_lorebook_entry,
+            bytes,
+            valid,
+        ),
+        "wire.result.list-lorebook-entries" => {
+            corpus_case(schema_id, decode_result_list_lorebook_entries, bytes, valid)
         }
         "wire.persona.dto" => corpus_case(schema_id, decode_persona_dto, bytes, valid),
         "wire.result.list-personas" => {

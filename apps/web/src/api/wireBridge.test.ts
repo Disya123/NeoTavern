@@ -9,7 +9,14 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { UnsupportedError } from '@neotavern/neobackend';
-import type { CharacterDto, ChatDto, LorebookDto, MessageDto, PersonaDto } from '@neotavern/contracts';
+import type {
+  CharacterDto,
+  ChatDto,
+  LorebookDto,
+  LorebookEntryDto,
+  MessageDto,
+  PersonaDto,
+} from '@neotavern/contracts';
 
 const mocks = vi.hoisted(() => {
   const characters = {
@@ -33,6 +40,10 @@ const mocks = vi.hoisted(() => {
     create: vi.fn(),
     update: vi.fn(),
     del: vi.fn(),
+    listEntries: vi.fn(),
+    createEntry: vi.fn(),
+    updateEntry: vi.fn(),
+    deleteEntry: vi.fn(),
   };
   const personas = {
     list: vi.fn(),
@@ -130,6 +141,15 @@ const WIRE_LOREBOOK: LorebookDto = {
   entryCount: 0,
   createdAt: NOW,
   updatedAt: NOW,
+};
+
+const WIRE_LOREBOOK_ENTRY: LorebookEntryDto = {
+  id: '44556677-8899-aabb-ccdd-eeff00112233',
+  keys: ['castle'],
+  content: 'The castle is carved from living stone.',
+  enabled: true,
+  constant: false,
+  selective: false,
 };
 
 const WIRE_PERSONA: PersonaDto = {
@@ -465,19 +485,46 @@ describe('lorebook CRUD (kernel, Этап 4.1)', () => {
     expect(mocks.lorebooks.del).toHaveBeenCalledWith(WIRE_LOREBOOK.id);
   });
 
-  it('surfaces entry-level operations as honest CAPABILITY_UNAVAILABLE', async () => {
-    await expect(readLorebookEntries(WIRE_LOREBOOK.id)).rejects.toBeInstanceOf(
-      UnsupportedError,
+  it('routes entry-level operations through the facade (M4 slice 1)', async () => {
+    mocks.lorebooks.listEntries.mockResolvedValue({ items: [WIRE_LOREBOOK_ENTRY] });
+    const entries = await readLorebookEntries(WIRE_LOREBOOK.id);
+    expect(mocks.lorebooks.listEntries).toHaveBeenCalledWith(WIRE_LOREBOOK.id);
+    expect(entries).toEqual([
+      expect.objectContaining({
+        id: WIRE_LOREBOOK_ENTRY.id,
+        keys: WIRE_LOREBOOK_ENTRY.keys,
+        content: WIRE_LOREBOOK_ENTRY.content,
+        lorebookId: WIRE_LOREBOOK.id,
+      }),
+    ]);
+
+    mocks.lorebooks.createEntry.mockResolvedValue(WIRE_LOREBOOK_ENTRY);
+    await createLorebookEntry(WIRE_LOREBOOK.id, { keys: ['k'], content: 'c' });
+    expect(mocks.lorebooks.createEntry).toHaveBeenCalledWith({
+      lorebookId: WIRE_LOREBOOK.id,
+      entry: { keys: ['k'], content: 'c' },
+    });
+
+    mocks.lorebooks.updateEntry.mockResolvedValue(WIRE_LOREBOOK_ENTRY);
+    await updateLorebookEntry(WIRE_LOREBOOK.id, WIRE_LOREBOOK_ENTRY.id, { content: 'c2' });
+    expect(mocks.lorebooks.updateEntry).toHaveBeenCalledWith({
+      lorebookId: WIRE_LOREBOOK.id,
+      entryId: WIRE_LOREBOOK_ENTRY.id,
+      patch: { content: 'c2' },
+    });
+
+    mocks.lorebooks.deleteEntry.mockResolvedValue({ ok: true });
+    await deleteLorebookEntry(WIRE_LOREBOOK.id, WIRE_LOREBOOK_ENTRY.id);
+    expect(mocks.lorebooks.deleteEntry).toHaveBeenCalledWith(
+      WIRE_LOREBOOK.id,
+      WIRE_LOREBOOK_ENTRY.id,
     );
+  });
+
+  it('keeps position/metadata patching honest in kernel mode', async () => {
     await expect(
-      createLorebookEntry(WIRE_LOREBOOK.id, { keys: ['k'], content: 'c' }),
+      updateLorebookEntry(WIRE_LOREBOOK.id, 'e1', { position: 3 }),
     ).rejects.toBeInstanceOf(UnsupportedError);
-    await expect(
-      updateLorebookEntry(WIRE_LOREBOOK.id, 'e1', { content: 'c2' }),
-    ).rejects.toBeInstanceOf(UnsupportedError);
-    await expect(deleteLorebookEntry(WIRE_LOREBOOK.id, 'e1')).rejects.toBeInstanceOf(
-      UnsupportedError,
-    );
   });
 });
 

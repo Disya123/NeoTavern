@@ -1008,6 +1008,100 @@ export const ListLorebooksResultDtoSchema = Type.Object(
 );
 export type ListLorebooksResultDto = Static<typeof ListLorebooksResultDtoSchema>;
 
+/**
+ * Lorebook entry DTO (`wire.lorebook.entry.dto`). One entry of a book, as the
+ * wire exposes it: the stable `id` plus the product-owned fields
+ * (keys/secondaryKeys/content/enabled/constant/selective). Position and
+ * metadata stay inside the stored `entries_json` and are not wire fields yet
+ * (Этап 4 follow-up), so the UI receives only what the contract owns.
+ */
+export const LorebookEntryDtoSchema = Type.Object(
+  {
+    id: Type.String({ format: 'uuid' }),
+    keys: Type.Array(Type.String({ minLength: 1, maxLength: 200 }), {
+      maxItems: 100,
+    }),
+    secondaryKeys: Type.Optional(
+      Type.Array(Type.String({ minLength: 1, maxLength: 200 }), { maxItems: 100 }),
+    ),
+    content: Type.String({ minLength: 1, maxLength: 20_000 }),
+    enabled: Type.Boolean(),
+    constant: Type.Boolean(),
+    selective: Type.Boolean(),
+  },
+  { $id: 'wire.lorebook.entry.dto', additionalProperties: false },
+);
+export type LorebookEntryDto = Static<typeof LorebookEntryDtoSchema>;
+
+/**
+ * Lorebook entry partial-update payload (`wire.lorebook.entry.patch`). Every
+ * field is optional; only the provided ones are replaced. The entry `id` is
+ * in the request path, not here.
+ */
+export const LorebookEntryPatchSchema = Type.Object(
+  {
+    keys: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 200 }), { maxItems: 100 })),
+    secondaryKeys: Type.Optional(
+      Type.Array(Type.String({ minLength: 1, maxLength: 200 }), { maxItems: 100 }),
+    ),
+    content: Type.Optional(Type.String({ minLength: 1, maxLength: 20_000 })),
+    enabled: Type.Optional(Type.Boolean()),
+    constant: Type.Optional(Type.Boolean()),
+    selective: Type.Optional(Type.Boolean()),
+  },
+  { $id: 'wire.lorebook.entry.patch', additionalProperties: false },
+);
+export type LorebookEntryPatch = Static<typeof LorebookEntryPatchSchema>;
+
+/** List lorebook entries request DTO (`wire.request.list-lorebook-entries`). */
+export const ListLorebookEntriesRequestDtoSchema = Type.Object(
+  {
+    lorebookId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.list-lorebook-entries', additionalProperties: false },
+);
+export type ListLorebookEntriesRequestDto = Static<typeof ListLorebookEntriesRequestDtoSchema>;
+
+/** Create lorebook entry request DTO (`wire.request.create-lorebook-entry`). */
+export const CreateLorebookEntryRequestDtoSchema = Type.Object(
+  {
+    lorebookId: Type.String({ format: 'uuid' }),
+    entry: LorebookEntryInputSchema,
+  },
+  { $id: 'wire.request.create-lorebook-entry', additionalProperties: false },
+);
+export type CreateLorebookEntryRequestDto = Static<typeof CreateLorebookEntryRequestDtoSchema>;
+
+/** Update lorebook entry request DTO (`wire.request.update-lorebook-entry`). */
+export const UpdateLorebookEntryRequestDtoSchema = Type.Object(
+  {
+    lorebookId: Type.String({ format: 'uuid' }),
+    entryId: Type.String({ format: 'uuid' }),
+    patch: LorebookEntryPatchSchema,
+  },
+  { $id: 'wire.request.update-lorebook-entry', additionalProperties: false },
+);
+export type UpdateLorebookEntryRequestDto = Static<typeof UpdateLorebookEntryRequestDtoSchema>;
+
+/** Delete lorebook entry request DTO (`wire.request.delete-lorebook-entry`). */
+export const DeleteLorebookEntryRequestDtoSchema = Type.Object(
+  {
+    lorebookId: Type.String({ format: 'uuid' }),
+    entryId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.delete-lorebook-entry', additionalProperties: false },
+);
+export type DeleteLorebookEntryRequestDto = Static<typeof DeleteLorebookEntryRequestDtoSchema>;
+
+/** List lorebook entries result DTO (`wire.result.list-lorebook-entries`). */
+export const ListLorebookEntriesResultDtoSchema = Type.Object(
+  {
+    items: Type.Array(LorebookEntryDtoSchema),
+  },
+  { $id: 'wire.result.list-lorebook-entries', additionalProperties: false },
+);
+export type ListLorebookEntriesResultDto = Static<typeof ListLorebookEntriesResultDtoSchema>;
+
 /** List presets result DTO (`wire.result.list-presets`). */
 export const ListPresetsResultDtoSchema = Type.Object(
   {
@@ -1069,6 +1163,13 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.request.update-lorebook': UpdateLorebookRequestDtoSchema,
   'wire.request.delete-lorebook': DeleteLorebookRequestDtoSchema,
   'wire.lorebook.entry.input': LorebookEntryInputSchema,
+  'wire.lorebook.entry.dto': LorebookEntryDtoSchema,
+  'wire.lorebook.entry.patch': LorebookEntryPatchSchema,
+  'wire.request.list-lorebook-entries': ListLorebookEntriesRequestDtoSchema,
+  'wire.request.create-lorebook-entry': CreateLorebookEntryRequestDtoSchema,
+  'wire.request.update-lorebook-entry': UpdateLorebookEntryRequestDtoSchema,
+  'wire.request.delete-lorebook-entry': DeleteLorebookEntryRequestDtoSchema,
+  'wire.result.list-lorebook-entries': ListLorebookEntriesResultDtoSchema,
   'wire.request.get-persona': GetPersonaRequestDtoSchema,
   'wire.request.create-persona': CreatePersonaRequestDtoSchema,
   'wire.request.update-persona': UpdatePersonaRequestDtoSchema,

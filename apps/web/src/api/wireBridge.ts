@@ -41,6 +41,7 @@ import {
   type CharacterDto,
   type ChatDto,
   type LorebookDto,
+  type LorebookEntryDto,
   type MessageDto,
   type PersonaDto,
 } from '@neotavern/contracts';
@@ -514,7 +515,8 @@ export async function createLorebook(input: LorebookCreate): Promise<Lorebook> {
 /** Update a lorebook (name/description/entries). */
 export async function updateLorebook(id: string, update: LorebookUpdate): Promise<Lorebook> {
   if (isKernelMode()) {
-    if (update.characterId !== undefined) throw new UnsupportedError('lorebooks.update.characterId');
+    if (update.characterId !== undefined)
+      throw new UnsupportedError('lorebooks.update.characterId');
     const updated = await backend.lorebooks.update({
       lorebookId: id,
       ...(update.name !== undefined ? { name: update.name } : {}),
@@ -534,14 +536,16 @@ export async function deleteLorebook(id: string): Promise<void> {
   await api.del(`/lorebooks/${id}`);
 }
 
-/* Entry-level lorebook operations: the wire contract models entries as the
- * `entries` array of `lorebooks.create`/`lorebooks.update` — there is no
- * per-entry id and no nested entry CRUD yet (Этап 4 follow-up). Kernel mode
- * surfaces an honest CAPABILITY_UNAVAILABLE; legacy keeps the nested route. */
+/* Entry-level lorebook operations (M4 slice 1): the wire contract now has
+ * per-entry operations (`lorebooks.entries.list/create/update/delete`) —
+ * kernel mode routes through the facade; legacy keeps the nested route.
+ * The wire entry DTO carries only the product-owned fields, so the
+ * translation reconstructs the UI entry from the wire subset. */
 
 export async function readLorebookEntries(bookId: string): Promise<LorebookEntry[]> {
   if (isKernelMode()) {
-    throw new UnsupportedError('lorebooks.entries.list');
+    const result = await backend.lorebooks.listEntries(bookId);
+    return result.items.map((entry) => translateLorebookEntry(bookId, entry));
   }
   const page = await api.get<{ items: LorebookEntry[] }>(`/lorebooks/${bookId}/entries`);
   return page.items;
@@ -552,7 +556,13 @@ export async function createLorebookEntry(
   input: LorebookEntryCreate,
 ): Promise<LorebookEntry> {
   if (isKernelMode()) {
-    throw new UnsupportedError('lorebooks.entries.create');
+    // The wire entry input has no position/metadata — those are kernel-owned
+    // (appended at the end); the caller cannot position the new entry.
+    const created = await backend.lorebooks.createEntry({
+      lorebookId: bookId,
+      entry: entryWireInput(input),
+    });
+    return translateLorebookEntry(bookId, created);
   }
   return api.post<LorebookEntry>(`/lorebooks/${bookId}/entries`, input);
 }
@@ -563,14 +573,24 @@ export async function updateLorebookEntry(
   update: LorebookEntryUpdate,
 ): Promise<LorebookEntry> {
   if (isKernelMode()) {
-    throw new UnsupportedError('lorebooks.entries.update');
+    // position/metadata cannot be patched over the wire (kernel-owned).
+    if (update.position !== undefined || update.metadata !== undefined) {
+      throw new UnsupportedError('lorebooks.entries.update.position-metadata');
+    }
+    const updated = await backend.lorebooks.updateEntry({
+      lorebookId: bookId,
+      entryId,
+      patch: entryPatchInput(update),
+    });
+    return translateLorebookEntry(bookId, updated);
   }
   return api.patch<LorebookEntry>(`/lorebooks/${bookId}/entries/${entryId}`, update);
 }
 
 export async function deleteLorebookEntry(bookId: string, entryId: string): Promise<void> {
   if (isKernelMode()) {
-    throw new UnsupportedError('lorebooks.entries.delete');
+    await backend.lorebooks.deleteEntry(bookId, entryId);
+    return;
   }
   await api.del(`/lorebooks/${bookId}/entries/${entryId}`);
 }
@@ -670,6 +690,38 @@ function entryWireInput(entry: {
     ...(entry.enabled !== undefined ? { enabled: entry.enabled } : {}),
     ...(entry.constant !== undefined ? { constant: entry.constant } : {}),
     ...(entry.selective !== undefined ? { selective: entry.selective } : {}),
+  };
+}
+
+/** Partial entry update → wire `wire.lorebook.entry.patch` (strict subset). */
+function entryPatchInput(update: LorebookEntryUpdate): Record<string, unknown> {
+  const patch: Record<string, unknown> = {};
+  if (update.keys !== undefined) patch.keys = update.keys;
+  if (update.secondaryKeys !== undefined) patch.secondaryKeys = update.secondaryKeys;
+  if (update.content !== undefined) patch.content = update.content;
+  if (update.enabled !== undefined) patch.enabled = update.enabled;
+  if (update.constant !== undefined) patch.constant = update.constant;
+  if (update.selective !== undefined) patch.selective = update.selective;
+  return patch;
+}
+
+/** Wire `wire.lorebook.entry.dto` → legacy UI entry (honest subset: the wire
+ * entry carries no position/metadata/lorebookId — those are filled from the
+ * call context and neutral defaults; the UI must not display them as truth). */
+function translateLorebookEntry(bookId: string, entry: LorebookEntryDto): LorebookEntry {
+  return {
+    id: entry.id,
+    lorebookId: bookId,
+    keys: entry.keys,
+    secondaryKeys: entry.secondaryKeys ?? [],
+    content: entry.content,
+    enabled: entry.enabled,
+    position: 0,
+    constant: entry.constant,
+    selective: entry.selective,
+    metadata: {},
+    createdAt: 0,
+    updatedAt: 0,
   };
 }
 

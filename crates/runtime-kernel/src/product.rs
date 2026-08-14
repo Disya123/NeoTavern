@@ -165,6 +165,14 @@ fn not_found(entity: &str, id: &str) -> KernelError {
     )
 }
 
+/// Stable `LOREBOOK_ENTRY_NOT_FOUND` product error (`entryId` param).
+fn entry_not_found(entry_id: &str) -> KernelError {
+    KernelError::product(
+        "LOREBOOK_ENTRY_NOT_FOUND".to_string(),
+        vec![("entryId".to_string(), entry_id.to_string())],
+    )
+}
+
 /// Renders a `characters` row as the wire [`CharacterDto`].
 fn row_to_character(row: &rusqlite::Row) -> Result<CharacterDto, KernelError> {
     let tags_json: String = row
@@ -944,8 +952,18 @@ fn query_lorebook(
 }
 
 /// Serializes the wire entry inputs into the stored `entries_json` array.
+///
+/// The kernel owns the per-entry `id`, `position`, `metadata` and timestamps
+/// (the wire input has none of them) — without this the stored rows would not
+/// satisfy the portable `ExportLoreEntry` shape that export/import and the
+/// entry-level CRUD rely on (M4 slice 1).
 fn entries_json(entries: &[generated::LorebookEntryInput]) -> Result<String, KernelError> {
-    serde_json::to_string(entries).map_err(|err| {
+    let stored: Result<Vec<serde_json::Value>, KernelError> = entries
+        .iter()
+        .enumerate()
+        .map(|(index, entry)| entry_input_to_stored(entry, index as i64))
+        .collect();
+    serde_json::to_string(&stored?).map_err(|err| {
         KernelError::new(
             KernelErrorCode::Internal,
             format!("failed to serialize lorebook entries: {err}"),
@@ -1041,6 +1059,292 @@ pub fn lorebooks_delete(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Ke
     if changed == 0 {
         return Err(not_found("LOREBOOK", &req.lorebook_id));
     }
+    let dto = ResultEmpty {};
+    validate(&dto, generated::validate_result_empty)?;
+    encode(&dto)
+}
+
+// ---------------------------------------------------------------------------
+// Entry-level lorebook operations (M4 slice 1, wire `lorebooks.entries.*`).
+//
+// The stored `entries_json` array keeps the full portable entry shape
+// (`ExportLoreEntry`: id, keys, secondaryKeys, content, enabled, position,
+// constant, selective, metadata, createdAt, updatedAt) so the export/import
+// format stays lossless and unknown fields survive. The wire DTO only exposes
+// the product-owned fields (id + keys/secondaryKeys/content/enabled/constant/
+// selective); position/metadata/timestamps are preserved untouched on update.
+// ---------------------------------------------------------------------------
+
+/// Decodes the stored `entries_json` column into a JSON array (`[]` on
+/// malformed content, never fails the call — unknown shapes are preserved).
+fn read_entries_array(entries_json: &str) -> Vec<serde_json::Value> {
+    serde_json::from_str::<serde_json::Value>(entries_json)
+        .ok()
+        .and_then(|value| value.as_array().cloned())
+        .unwrap_or_default()
+}
+
+/// Serializes the entry array back into the `entries_json` column.
+fn write_entries_array(entries: &[serde_json::Value]) -> Result<String, KernelError> {
+    serde_json::to_string(entries).map_err(|err| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            format!("failed to serialize lorebook entries: {err}"),
+        )
+    })
+}
+
+/// Projects one stored entry object into the wire [`generated::LorebookEntryDto`].
+/// Entries without a usable `id` are skipped by callers; unknown fields are
+/// ignored here (the DTO is the strict wire subset).
+fn entry_to_dto(entry: &serde_json::Value) -> Option<generated::LorebookEntryDto> {
+    let obj = entry.as_object()?;
+    let id = obj.get("id")?.as_str()?;
+    let content = obj.get("content")?.as_str()?;
+    let str_vec = |key: &str| -> Vec<String> {
+        obj.get(key)
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    let flag = |key: &str, default: bool| -> bool {
+        obj.get(key).and_then(|v| v.as_bool()).unwrap_or(default)
+    };
+    Some(generated::LorebookEntryDto {
+        id: id.to_string(),
+        keys: str_vec("keys"),
+        secondary_keys: {
+            let secondary = str_vec("secondaryKeys");
+            if secondary.is_empty() {
+                None
+            } else {
+                Some(secondary)
+            }
+        },
+        content: content.to_string(),
+        enabled: flag("enabled", true),
+        constant: flag("constant", false),
+        selective: flag("selective", false),
+    })
+}
+
+/// Builds a fresh stored entry object from the wire input: the kernel owns
+/// `id`, `position`, `metadata` and the timestamps; unknown input fields are
+/// preserved as-is (AGENTS.md §11).
+fn entry_input_to_stored(
+    input: &generated::LorebookEntryInput,
+    position: i64,
+) -> Result<serde_json::Value, KernelError> {
+    let now = now();
+    let mut stored = serde_json::Map::new();
+    stored.insert("id".to_string(), serde_json::Value::String(new_id()));
+    stored.insert(
+        "keys".to_string(),
+        serde_json::Value::Array(
+            input
+                .keys
+                .iter()
+                .cloned()
+                .map(serde_json::Value::String)
+                .collect(),
+        ),
+    );
+    if let Some(secondary) = &input.secondary_keys {
+        stored.insert(
+            "secondaryKeys".to_string(),
+            serde_json::Value::Array(
+                secondary
+                    .iter()
+                    .cloned()
+                    .map(serde_json::Value::String)
+                    .collect(),
+            ),
+        );
+    }
+    stored.insert(
+        "content".to_string(),
+        serde_json::Value::String(input.content.clone()),
+    );
+    stored.insert(
+        "enabled".to_string(),
+        serde_json::Value::Bool(input.enabled.unwrap_or(true)),
+    );
+    stored.insert(
+        "position".to_string(),
+        serde_json::Value::Number(position.into()),
+    );
+    stored.insert(
+        "constant".to_string(),
+        serde_json::Value::Bool(input.constant.unwrap_or(false)),
+    );
+    stored.insert(
+        "selective".to_string(),
+        serde_json::Value::Bool(input.selective.unwrap_or(false)),
+    );
+    stored.insert(
+        "metadata".to_string(),
+        serde_json::Value::Object(serde_json::Map::new()),
+    );
+    stored.insert(
+        "createdAt".to_string(),
+        serde_json::Value::String(now.clone()),
+    );
+    stored.insert("updatedAt".to_string(), serde_json::Value::String(now));
+    Ok(serde_json::Value::Object(stored))
+}
+
+/// Loads the stored entries of one lorebook; missing book → `LOREBOOK_NOT_FOUND`.
+fn load_entries(
+    db: &mut Database,
+    lorebook_id: &str,
+) -> Result<Vec<serde_json::Value>, KernelError> {
+    let exists: bool = db
+        .conn()
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM lorebooks WHERE id = ?1)",
+            params![lorebook_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| sqlite(e, "lorebooks_entries: book exists"))?;
+    if !exists {
+        return Err(not_found("LOREBOOK", lorebook_id));
+    }
+    let entries_json: String = db
+        .conn()
+        .query_row(
+            "SELECT entries_json FROM lorebooks WHERE id = ?1",
+            params![lorebook_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| sqlite(e, "lorebooks_entries: read entries"))?;
+    Ok(read_entries_array(&entries_json))
+}
+
+/// Persists the entry array of one lorebook (bumps `updated_at`).
+fn save_entries(
+    db: &mut Database,
+    lorebook_id: &str,
+    entries: &[serde_json::Value],
+) -> Result<(), KernelError> {
+    let serialized = write_entries_array(entries)?;
+    let now = now();
+    Ok(db.transaction(|tx| {
+        tx.execute(
+            "UPDATE lorebooks SET entries_json = ?1, updated_at = ?2 WHERE id = ?3",
+            params![&serialized, &now, lorebook_id],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "lorebooks_entries: update"))?;
+        Ok(())
+    })?)
+}
+
+/// `lorebooks.entries.list` — the entries of one book, in stored order
+/// (position-ordered by construction); missing book → `LOREBOOK_NOT_FOUND`.
+pub fn lorebooks_entries_list(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_list_lorebook_entries(request)?;
+    let stored = load_entries(db, &req.lorebook_id)?;
+    let items: Vec<generated::LorebookEntryDto> = stored.iter().filter_map(entry_to_dto).collect();
+    let dto = generated::ResultListLorebookEntries { items };
+    validate(&dto, generated::validate_result_list_lorebook_entries)?;
+    encode(&dto)
+}
+
+/// `lorebooks.entries.create` — append one entry; the kernel assigns the
+/// entry id/position/metadata/timestamps. Missing book → `LOREBOOK_NOT_FOUND`.
+pub fn lorebooks_entries_create(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_create_lorebook_entry(request)?;
+    let mut stored = load_entries(db, &req.lorebook_id)?;
+    let position = stored
+        .iter()
+        .filter_map(|entry| entry.get("position").and_then(|v| v.as_i64()))
+        .max()
+        .map(|max| max + 1)
+        .unwrap_or(0);
+    let new_entry = entry_input_to_stored(&req.entry, position)?;
+    stored.push(new_entry.clone());
+    save_entries(db, &req.lorebook_id, &stored)?;
+    let dto = entry_to_dto(&new_entry).ok_or_else(|| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            "lorebooks_entries.create: stored entry did not project to the wire dto",
+        )
+    })?;
+    validate(&dto, generated::validate_lorebook_entry_dto)?;
+    encode(&dto)
+}
+
+/// `lorebooks.entries.update` — apply a partial patch to one entry; missing
+/// book → `LOREBOOK_NOT_FOUND`, missing entry → `LOREBOOK_ENTRY_NOT_FOUND`.
+/// Only the provided fields are replaced; position/metadata/createdAt and
+/// unknown fields are preserved.
+pub fn lorebooks_entries_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_update_lorebook_entry(request)?;
+    let mut stored = load_entries(db, &req.lorebook_id)?;
+    let index = stored
+        .iter()
+        .position(|entry| entry.get("id").and_then(|v| v.as_str()) == Some(req.entry_id.as_str()));
+    let Some(index) = index else {
+        return Err(entry_not_found(&req.entry_id));
+    };
+    let mut entry = stored[index].clone();
+    let patch = &req.patch;
+    if let Some(keys) = &patch.keys {
+        entry["keys"] = serde_json::Value::Array(
+            keys.iter()
+                .cloned()
+                .map(serde_json::Value::String)
+                .collect(),
+        );
+    }
+    if let Some(secondary) = &patch.secondary_keys {
+        entry["secondaryKeys"] = serde_json::Value::Array(
+            secondary
+                .iter()
+                .cloned()
+                .map(serde_json::Value::String)
+                .collect(),
+        );
+    }
+    if let Some(content) = &patch.content {
+        entry["content"] = serde_json::Value::String(content.clone());
+    }
+    if let Some(enabled) = patch.enabled {
+        entry["enabled"] = serde_json::Value::Bool(enabled);
+    }
+    if let Some(constant) = patch.constant {
+        entry["constant"] = serde_json::Value::Bool(constant);
+    }
+    if let Some(selective) = patch.selective {
+        entry["selective"] = serde_json::Value::Bool(selective);
+    }
+    entry["updatedAt"] = serde_json::Value::String(now());
+    stored[index] = entry.clone();
+    save_entries(db, &req.lorebook_id, &stored)?;
+    let dto = entry_to_dto(&entry).ok_or_else(|| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            "lorebooks_entries.update: stored entry did not project to the wire dto",
+        )
+    })?;
+    validate(&dto, generated::validate_lorebook_entry_dto)?;
+    encode(&dto)
+}
+
+/// `lorebooks.entries.delete` — remove one entry; missing book →
+/// `LOREBOOK_NOT_FOUND`, missing entry → `LOREBOOK_ENTRY_NOT_FOUND`.
+pub fn lorebooks_entries_delete(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_delete_lorebook_entry(request)?;
+    let mut stored = load_entries(db, &req.lorebook_id)?;
+    let before = stored.len();
+    stored.retain(|entry| entry.get("id").and_then(|v| v.as_str()) != Some(req.entry_id.as_str()));
+    if stored.len() == before {
+        return Err(entry_not_found(&req.entry_id));
+    }
+    save_entries(db, &req.lorebook_id, &stored)?;
     let dto = ResultEmpty {};
     validate(&dto, generated::validate_result_empty)?;
     encode(&dto)

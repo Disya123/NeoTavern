@@ -3,6 +3,28 @@
 ## Unreleased
 ### Added
 
+- **Entry-level lorebook CRUD over Product Wire (M4 slice 1 follow-up
+  closed).** Four new wire operations `lorebooks.entries.list/create/update/
+  delete` join the existing `lorebooks.*` book ops: the kernel owns each
+  entry's `id`/`position`/`metadata`/timestamps (stored rows now always
+  satisfy the portable `ExportLoreEntry` shape, so export/import stay
+  lossless), create appends, update is a partial patch that preserves
+  position/metadata/createdAt, delete removes exactly one entry; stable
+  product errors `LOREBOOK_NOT_FOUND` (`lorebookId`) and
+  `LOREBOOK_ENTRY_NOT_FOUND` (`entryId`). `packages/contracts` gained the
+  `wire.lorebook.entry.dto`/`wire.lorebook.entry.patch` DTOs and 7 new
+  negative + 4 positive fixtures (wire corpus regenerated); the facade
+  (`LorebooksApi.listEntries/createEntry/updateEntry/deleteEntry` in
+  Local/Remote backends) and the UI hooks route through the wire ops in
+  kernel mode with an honest translation (the wire DTO has no
+  position/metadata, so an explicit position/metadata patch is
+  CAPABILITY_UNAVAILABLE; legacy `/api/v2` nested routes stay for sidecar
+  mode). Tests: kernel `lorebook_entries_crud_round_trip` +
+  `lorebook_entries_error_paths` (14 kernel CRUD tests total),
+  `lorebook_crud_over_http` extended with the entry cycle, web wireBridge
+  suite re-pointed from CAPABILITY_UNAVAILABLE to facade routing (582 web
+  tests green).
+
 - **Logical profile export hardening (SEC-02 audit findings, ТЗ §SEC-02).**
   `apps/server/src/lib/profileExport.ts` now reads every allowlisted table
   inside ONE SQLite snapshot transaction (manifest records

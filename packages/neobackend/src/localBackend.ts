@@ -22,12 +22,14 @@ import {
   type ListToolsResultDto,
   type WireGenerationEvent,
   type ListBackupsResultDto,
+  type ListLorebookEntriesResultDto,
   type ListLorebooksResultDto,
   type ListPersonasResultDto,
   type ListPresetsResultDto,
   type ListProvidersResultDto,
   type ListProviderConfigsResultDto,
   type LorebookDto,
+  type LorebookEntryDto,
   type PersonaDto,
   type ProviderConfigDto,
   type MessageDto,
@@ -266,6 +268,14 @@ export class LocalBackend implements NeoBackend {
       update: (req, opts) => this.invoke<LorebookDto>('lorebooks.update', req, opts),
       del: (lorebookId, opts) =>
         this.invoke<EmptyResultDto>('lorebooks.delete', { lorebookId }, opts),
+      listEntries: (lorebookId, opts) =>
+        this.invoke<ListLorebookEntriesResultDto>('lorebooks.entries.list', { lorebookId }, opts),
+      createEntry: (req, opts) =>
+        this.invoke<LorebookEntryDto>('lorebooks.entries.create', req, opts),
+      updateEntry: (req, opts) =>
+        this.invoke<LorebookEntryDto>('lorebooks.entries.update', req, opts),
+      deleteEntry: (lorebookId, entryId, opts) =>
+        this.invoke<EmptyResultDto>('lorebooks.entries.delete', { lorebookId, entryId }, opts),
     };
     this.personas = {
       list: () => this.invoke<ListPersonasResultDto>('personas.list', {}, undefined),
