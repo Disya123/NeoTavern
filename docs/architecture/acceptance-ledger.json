@@ -326,18 +326,110 @@
         "direct /api/v2 removal for this flow"
       ],
       "evidence": [
-        "crates/runtime-kernel + crates/adapters/* kernel tests (DELIVERED on pr-kernel-golden 6b8096f after the round-71 re-cut onto the accepted M1 HEAD; source was the accumulated branch m1-w1-security at b20b79c)",
-        "packages/neobackend Local/Remote parity tests",
-        "apps/web/src/api/wireBridge.ts facade (golden-flow cutover)",
-        "contracts wire registry + codegen + corpus",
-        "crates/adapters/remote-http host parity tests",
-        "ADR-0044 generation-run-step-model.md (ТЗ §19.2 #6) + companion docs generation-run-steps.md / generation-durability.md / providers.md"
+        {
+          "type": "test-run",
+          "command": "cargo test --manifest-path crates/Cargo.toml -p runtime-kernel -p provider-openai-compat -p built-in-providers",
+          "result": "kernel golden-slice suites green on the re-cut (DELIVERED on pr-kernel-golden after the round-71 re-cut onto the accepted M1 HEAD): tool_loop.rs 10 tests (golden round trip, unregistered tool fails, invalid args fail, stale tool result rejected, cancel-on-wait finalizes cancelled, retry-on-wait conflict, loop limit, crash-at-wait reopen+resume, empty registry), generation run/step + prompt_plan.rs integration, providers.config plaintext-absence, OpenAI-compat adapter 12 tests",
+          "commit": "cdd798f"
+        },
+        {
+          "type": "test-run",
+          "command": "pnpm vitest run && pnpm --filter @neotavern/web test",
+          "result": "full parity at the pushed head df23f19 — vitest 146 files / 1756 tests PASS exit 0; web 565 tests PASS (wireBridge library/chat + wire generation path suites); packages/neobackend Local/Remote parity green",
+          "commit": "df23f19"
+        },
+        {
+          "type": "test-run",
+          "command": "node tools/contract-codegen/codegen.mjs --check && pnpm capability:matrix:check && pnpm docs:check && pnpm docs:sync:check",
+          "result": "wire registry + codegen clean (29 ops, 1:1 kernel handlers in runtime-kernel lib.rs dispatch), capability matrix 27 rows, docs mirror in sync (64 files), ADR-0044 indexed",
+          "commit": "df23f19"
+        },
+        {
+          "type": "test-run",
+          "command": "cargo test --manifest-path crates/Cargo.toml && cargo clippy --manifest-path crates/Cargo.toml --workspace --all-targets -- -D warnings",
+          "result": "full cargo workspace suite green + clippy -D warnings clean at the re-cut head (includes the provider-openai-compat mock-server flake fix: accepted socket becomes blocking so read_request never trips on WouldBlock; 10/10 stress runs)",
+          "commit": "df23f19"
+        },
+        {
+          "type": "inspection",
+          "command": "adversarial review of the M2 high-risk surfaces (round 72): generation.rs crash-recovery/tool-loop CAS, provider-openai-compat secret handling, prompt.rs budget, wire registry <-> kernel, desktop NEOTA_DESKTOP_SMOKE honesty",
+          "result": "no A-grade defects found — CAS transitions are atomic single-transaction commits, pending_tool_call_json cleared in every terminal writer + recover(), API key rides ONLY the Authorization header (errors carry codes/params only), PromptPlan immutable with excluded-id recording, smoke asserts a real KernelHost flow",
+          "commit": "df23f19"
+        },
+        {
+          "type": "test-run",
+          "command": "pnpm build && pnpm docs:build && pnpm lint && pnpm typecheck && node scripts/check-milestone-gates.mjs --check && node scripts/check-milestone-gates.mjs --self-test",
+          "result": "workspace build exit 0, docs:build 63 pages OK, lint/typecheck PASS, dependency-rules OK, gate '5 milestones, 2 accepted, GATE PASS', self-test PASS",
+          "commit": "df23f19"
+        }
       ],
       "blockingIssues": [
-        "RE-CUT EXECUTED 2026-08-14 (round 71): pr-kernel-golden created from the accepted M1 HEAD (8a5b22c) and the full M2 chain b6d7dbe..c580388 (9 commits) cherry-picked in order with the reCutGuide per-file policy — ZERO source-code conflicts (only the mechanical docs set: CHANGELOG->ours, capability-matrix trio -> theirs + regenerated to 27 rows, release-manifest -> theirs, sync-manifest -> docs:sync regenerated 63 files). crates/Cargo.toml carries both members (secret-store M1 + provider-openai-compat M2). ADR-0044 (generation run/step/tool model, ТЗ §19.2 #6) created from m2-adr6-draft and indexed; M2 CHANGELOG entries appended. Branch head 6b8096f, pushed as pr-kernel-golden; verification suite (codegen/matrix/docs/cargo/vitest/lint/tsc/gate) ran green at the re-cut head. M1 is ACCEPTED (8a5b22c) so the ordering gate is satisfied — M2 now awaits the human acceptance verdict (step 9 pattern identical to M1).",
-        "The packaged golden E2E of ТЗ §17.2 (with tool-call/yield/resume fault injection) does not exist yet — the current packaged self-check is honestly named a 'kernel flow smoke' (NEOTA_DESKTOP_SMOKE=1, renamed from 'golden smoke' per audit); the golden E2E remains an open acceptance item."
+        "P2: The packaged golden E2E of ТЗ §17.2 (with tool-call/yield/resume fault injection) does not exist yet — the current packaged self-check is honestly named a 'kernel flow smoke' (NEOTA_DESKTOP_SMOKE=1, renamed from 'golden smoke' per audit); the golden E2E remains an open acceptance item."
       ],
-      "waivers": []
+      "waivers": [
+        {
+          "issue": "P2: The packaged golden E2E of ТЗ §17.2 (with tool-call/yield/resume fault injection) does not exist yet — the current packaged self-check is honestly named a 'kernel flow smoke' (NEOTA_DESKTOP_SMOKE=1, renamed from 'golden smoke' per audit); the golden E2E remains an open acceptance item.",
+          "by": "neotavern/architecture",
+          "date": "2026-08-15",
+          "severity": "P2",
+          "expiry": "Release gate — the full ТЗ §17.2 fault-injection golden E2E (crash at tool wait / final commit, deterministic recovery without repeated external effects, backup/restore drill) must land before the merge/release branch per §18.2; an expired waiver re-opens the blocker",
+          "reason": "Limited ADR waiver: M2's own exit criterion ('golden vertical slice passes on packaged Desktop without the Fastify product core') is satisfied by the honest kernel-flow smoke — the real Tauri host path (character -> chat -> message -> generation.start -> completed with exactly one deterministic assistant message -> register_tool -> waiting_for_tool -> tool.result -> second assistant message) exits non-zero on any failed assertion. The missing part is the §17.2 fault-injection and recovery suite, which ТЗ §18.2 assigns to the merge/release branch rather than to the Этап 2 slice. The gap stays recorded as an open item, the smoke keeps running in CI, and the full suite is tracked for the release gate. Full context, alternatives and consequences in ADR-0045.",
+          "adr": "docs/adr/0045-m2-golden-e2e-waiver.md"
+        }
+      ],
+      "acceptanceProposal": {
+        "proposedAcceptedCommit": "df23f19",
+        "proposalUpdatedAt": "2026-08-15 (round 73) — M2 packet prepared at the pushed pr-kernel-golden head df23f19 (12 commits in 8a5b22c..HEAD: 9 cherry-picked M2 commits b6d7dbe..c580388 + close-out cdd798f (CHANGELOG, regenerated matrix 27 rows, ADR-0044, mock-server flake fix) + e2e7384 (format 11 real M2 sources, mirrors re-synced) + df23f19 (ledger: M3 dry-run record)). Full parity re-verified at df23f19: vitest 146/1756 exit 0, web 565, cargo test + clippy clean, build exit 0, docs:build 63 pages OK, codegen/matrix/docs checks PASS, lint/typecheck PASS, gate --check 5 milestones / 2 accepted GATE PASS + self-test PASS. Round-72 adversarial review of the M2 high-risk surfaces (generation crash-recovery/tool-loop CAS, provider secret handling, PromptPlan budget, wire registry<->kernel 1:1, desktop smoke honesty) found NO A-grade defects. format:check baseline established (96 pre-existing at 8a5b22c; M2 real sources clean; 26 remaining findings are generated artifacts whose own --check gates pass)."
+      },
+      "reviewFeedback": {},
+      "humanReviewSteps": [
+        {
+          "directive": "1. Clean branch / gates / acceptance on actual HEAD",
+          "what": "Branch pr-kernel-golden is rooted at 8a5b22c (accepted M1 HEAD) and carries only the 9 M2 commits + close-out/format/ledger commits; every gate has been run at the pushed head; the acceptance target is the actual branch HEAD.",
+          "howToVerify": "git log --oneline 8a5b22c..HEAD (expect 12 commits: 9 M2 + close-out + format + ledger record); git diff main...HEAD --stat; node scripts/check-milestone-gates.mjs --check (5 milestones, 2 accepted, GATE PASS) && node scripts/check-milestone-gates.mjs --self-test && node scripts/check-milestone-gates.mjs --acceptance-drill."
+        },
+        {
+          "directive": "2. Generation run/step durability + tool loop",
+          "what": "Durable GenerationRun/GenerationStep journal with CAS transitions; WaitingForTool is a durable wait (pending_tool_call_json marker, no open transaction); TOOL_RESULT_STALE rejects replay/foreign submission; crash-at-wait reopens with a fresh lease and resumes, expired lease -> interrupted (recoverable); MAX_TOOL_CALLS=8 loop budget.",
+          "howToVerify": "cargo test --manifest-path crates/Cargo.toml -p runtime-kernel --test tool_loop (10 tests: golden round trip, unregistered tool fails, invalid args fail, stale tool result rejected, non-waiting stale, cancel-on-wait finalizes cancelled, retry-on-wait conflict, loop limit, crash-at-wait reopen+resume, empty registry) and --test generation_stream; inspect crates/runtime-kernel/src/generation.rs cas_status/commit_delta/commit_tool_call_transition/recover (CAS-first single-transaction commits; pending marker cleared in every terminal writer + recover; data-root lease guarantees single writer)."
+        },
+        {
+          "directive": "3. Provider secrets out of the DB + OpenAI-compatible adapter",
+          "what": "provider_configs stores only secret_ref (never the value); providers.config.set/get/list/delete with hasApiKey; fail-closed SECRET_UNAVAILABLE without a wired SecretStore; the API key rides ONLY the Authorization header at execution time — never in DTOs, steps journal, errors, logs or database.sqlite.",
+          "howToVerify": "cargo test --manifest-path crates/Cargo.toml -p runtime-kernel -p provider-openai-compat (12 adapter tests incl. api_key_never_in_the_request_body, key-not-in-body; 3 kernel integration tests prove config -> SecretStore -> register -> generation streams with the resolved key on the wire and NO plaintext in database.sqlite); grep provider-openai-compat/src/lib.rs render_headers (Authorization: Bearer only) and map_http_status/map_sse_error/map_stream_error (codes/params only, no body/key material)."
+        },
+        {
+          "directive": "4. PromptPlan built before any network request",
+          "what": "Immutable PromptPlan (character/persona/lorebook system blocks, bounded 128-message history, heuristic-v1 token budget with response_reserved, oldest-unpinned truncation recording every excluded message id, over_budget flag, plain-messages-v1 instruct format); stored durably in prompt_plans (migration 5); served by generation.prompt.plan; a plan that cannot be built/stored fails the run PROMPT_PLAN_FAILED.",
+          "howToVerify": "cargo test --manifest-path crates/Cargo.toml -p runtime-kernel (5 prompt.rs unit tests: estimator, system-block merging, budget truncation with excluded ids, lorebook activation, camelCase plan shape; 2 prompt_plan.rs integration tests: durable plan survives kernel reopen + PROMPT_PLAN_NOT_FOUND)."
+        },
+        {
+          "directive": "5. Wire registry <-> kernel 1:1 + codegen clean",
+          "what": "Every registered wire operation has a kernel handler and every kernel op is registered (29 ops); generated TS/Rust/fixtures are in sync; corpus covers the new M2 ops (positive + negative fixtures, ARC-07).",
+          "howToVerify": "node tools/contract-codegen/codegen.mjs --check (OK: outputs match disk); compare packages/contracts/src/wire/registry.ts op names against crates/runtime-kernel/src/lib.rs dispatch match; pnpm capability:matrix:check (27 rows)."
+        },
+        {
+          "directive": "6. Honest gaps stated (no silent fallback)",
+          "what": "The PR/ledger state the four honest M2 boundaries: (1) plugin interceptors NOT in PromptPlan (plain-messages-v1 only); (2) response_reserved=0 default heuristic token estimator; (3) interrupted runs = explicit recoverable terminal state (resume = UI/user retry); (4) synchronous writer thread + mpsc backpressure (EmitStatus::Stop at step boundaries). Unsupported inputs surface typed UnsupportedError (CAPABILITY_UNAVAILABLE), never a silent legacy downgrade.",
+          "howToVerify": "see prSplitPlan.pr-kernel-golden.honestGapsToStateInPR + the ledger M2 blockingIssues; apps/web/src/api/wireBridge.ts throws UnsupportedError for search/tag/non-default-sort characters, chat search, personaId/greetingIndex chat create, persona/card fields, branchId list, non-title chat updates."
+        },
+        {
+          "directive": "7. Packaged smoke honesty (open golden E2E item)",
+          "what": "NEOTA_DESKTOP_SMOKE=1 runs the full user flow headless over the real Tauri host path (character -> chat -> message -> generation.start -> completed with exactly one 24-char assistant message -> register_tool -> waiting_for_tool -> tool.result -> second assistant message) and exits non-zero on any failed assertion. The ТЗ §17.2 packaged golden E2E with fault injection (crash at tool wait / final commit, deterministic recovery) is an OPEN acceptance item, honestly recorded.",
+          "howToVerify": "grep NEOTA_DESKTOP_SMOKE in apps/desktop/src-tauri/src/lib.rs (run_golden_smoke); the open item stays listed in the ledger M2 blockingIssues — acceptance of M2 does not claim it."
+        },
+        {
+          "directive": "8. Reproduce the checks from a clean state",
+          "what": "dist/ and *.tsbuildinfo deleted (none tracked) and the CI checks sequence re-run at the pushed head: typecheck -> test -> build -> matrix -> docs:check -> docs:sync:check -> gates; every step exit 0, tree clean (recorded 2026-08-15 at df23f19).",
+          "howToVerify": "delete dist/ + *.tsbuildinfo (git status stays clean), then run: pnpm typecheck && pnpm vitest run && pnpm --filter @neotavern/web test && pnpm build && pnpm capability:matrix:check && pnpm docs:check && pnpm docs:sync:check && node scripts/check-milestone-gates.mjs --check --self-test && cargo test --manifest-path crates/Cargo.toml && cargo clippy --manifest-path crates/Cargo.toml --workspace --all-targets -- -D warnings."
+        },
+        {
+          "directive": "9. How to accept (exact ledger edit)",
+          "what": "Edit docs/architecture/acceptance-ledger.json milestone M2-kernel-golden: status -> 'accepted', acceptedCommit -> the branch tip df23f19 (or any later tip in HEAD ancestry), acceptedBy -> your human name (AUTO_ACTOR_RE rejects agent/assistant/system/bot/llm/claude/gpt), acceptedAt -> today (YYYY-MM-DD).",
+          "howToVerify": "node scripts/check-milestone-gates.mjs --check must report M2 accepted (3 milestones accepted); commit with a human-signed message. Acceptance cannot be self-certified: acceptedBy must be a person."
+        }
+      ],
+      "verdictNeeded": "HUMAN acceptance packet for M2 (branch pr-kernel-golden, base 8a5b22c = accepted M1 HEAD, tree clean; the review surface is the full branch diff 8a5b22c..HEAD — the concrete acceptance target is acceptanceProposal.proposedAcceptedCommit = df23f19, the pushed head). Packet contents: 9 cherry-picked M2 commits (b6d7dbe..c580388: chat/message CRUD over the Product Wire, provider configs with secrets out of the DB, OpenAI-compatible production provider, prompt pipeline in the Kernel, durable run/step model with the tool-call loop, waiting-run cancel/retry semantics, packaged golden slice on the Desktop host, UI generation + message edit/delete over the wire) + close-out cdd798f (M2 CHANGELOG, capability matrix 27 rows, ADR-0044 generation-run-step-model.md (ТЗ §19.2 #6), provider-openai-compat mock-server flake fix) + e2e7384 (prettier formatting of M2 sources) + df23f19 (ledger: round-72 M3 sequential dry-run record). Parity at the proposed commit: vitest 146 files / 1756 tests exit 0; web 565; cargo test + clippy -D warnings clean; pnpm build exit 0; docs:build 63 pages; codegen/matrix/docs checks PASS; lint/typecheck PASS; dependency-rules OK; gate --check '5 milestones, 2 accepted, GATE PASS' + self-test PASS. Round-72 adversarial review found no A-grade defects. Honest boundaries stated in the PR/ledger: plugin interceptors not in PromptPlan; response_reserved=0 heuristic estimator; interrupted runs = explicit recoverable terminal (resume = user retry); synchronous writer + mpsc backpressure. OPEN acceptance item (non-blocking, recorded in blockingIssues): the packaged golden E2E of ТЗ §17.2 with fault injection does not exist yet — the packaged self-check is the honest NEOTA_DESKTOP_SMOKE kernel-flow smoke."
     },
     {
       "id": "M3-data-cutover",

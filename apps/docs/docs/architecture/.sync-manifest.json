@@ -198,9 +198,14 @@
       "sha256": "b6a0e4a5570be44d757dc81b7fe4b5b8096e2ca020c92b434134d1d5140e1454"
     },
     {
+      "source": "adr/0045-m2-golden-e2e-waiver.md",
+      "target": "adr/0045-m2-golden-e2e-waiver.md",
+      "sha256": "d53cafc24e3207d092015eae0586ea10a07c89c40fa8b4172e1747131376d130"
+    },
+    {
       "source": "adr/README.md",
       "target": "adr/README.md",
-      "sha256": "f845e2c4abfa4612a297e8e9b4b230e6c3ec6b893ecc8015394b2f4ea2402cfb"
+      "sha256": "39236a0be22855006d9b6311cc464b5019ff28c82b5e9c13024b47b79460e0a9"
     },
     {
       "source": "android/README.md",

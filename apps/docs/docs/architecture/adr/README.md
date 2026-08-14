@@ -4,6 +4,22 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/adr/README.md
 
 # Architecture Decision Records
 
+## ADR-0045: M2 packaged golden E2E with fault injection — limited waiver
+
+M2's packaged-flow exit criterion is satisfied by the honest **kernel-flow
+smoke** (`NEOTA_DESKTOP_SMOKE=1`): the full user flow runs headless over the
+real Tauri host path (character → chat → message → `generation.start` →
+`completed` with exactly one deterministic assistant message →
+`register_tool` → `waiting_for_tool` → `tool.result` → second assistant
+message) and exits non-zero on any failed assertion. The ТЗ §17.2
+**fault-injection and recovery suite** (crash at tool wait / final commit,
+deterministic recovery without repeated external effects, backup/restore
+drill) is a §18.2 merge/release-branch check, not an Этап 2 exit criterion;
+it is waived for M2 as a limited P2 waiver with expiry at the release gate.
+The gap stays recorded as an open item and the smoke keeps running in CI.
+Full decision, alternatives and consequences:
+[ADR-0045](0045-m2-golden-e2e-waiver.md).
+
 ## ADR-0044: Provider execution and the generation run/step/tool model
 
 The Kernel models a durable `GenerationRun` composed of `GenerationStep`s
