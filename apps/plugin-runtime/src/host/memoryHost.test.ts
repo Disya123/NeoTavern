@@ -530,6 +530,9 @@ describe('memory host network fetch (§29, SSRF-hardened)', () => {
       method: 'network.http.fetch',
       capability: { name: 'network.http' },
       args: { url },
+      // Unique per call: concurrent in-flight submissions must not collide
+      // on the broker's requestId (SEC-04 budget tests hold several open).
+      requestId: `req-net-${Math.random().toString(36).slice(2, 10)}`,
       ...extra,
     });
   }
@@ -550,6 +553,105 @@ describe('memory host network fetch (§29, SSRF-hardened)', () => {
       url: 'https://example.com',
       redirects: [],
     });
+  });
+
+  it('enforces the per-plugin in-flight byte budget (SEC-04)', async () => {
+    // Hold two fetches open (worst-case reservation = NETWORK_MAX_BODY_BYTES
+    // each); a third concurrent fetch of the SAME plugin must fail with the
+    // stable NETWORK_INFLIGHT_LIMIT before any body is read.
+    let releaseFirst: (() => void) | undefined;
+    let releaseSecond: (() => void) | undefined;
+    const firstGate = new Promise<void>((resolve) => (releaseFirst = resolve));
+    const secondGate = new Promise<void>((resolve) => (releaseSecond = resolve));
+    const fetchImpl = async (url: string) => {
+      if (url.endsWith('/first')) await firstGate;
+      if (url.endsWith('/second')) await secondGate;
+      return mockResponse(200, 'ok');
+    };
+    const host = createMemoryHostExecutor({
+      grants: { 'plugin-a': NETWORK_GRANTS },
+      fetchImpl,
+      dnsLookupImpl: async () => ['93.184.216.34'],
+    });
+    const core = wired(host);
+    const first = core.submit(networkCall('https://example.com/first'));
+    const second = core.submit(networkCall('https://example.com/second'));
+    // Both in flight: per-plugin budget (16 MiB) is exactly 2 × 8 MiB, so the
+    // third concurrent fetch exceeds it.
+    await expect(
+      core.submit(networkCall('https://example.com/third')).promise,
+    ).rejects.toMatchObject({ code: 'NETWORK_INFLIGHT_LIMIT' });
+    releaseFirst?.();
+    releaseSecond?.();
+    await expect(first.promise).resolves.toMatchObject({ body: 'ok' });
+    await expect(second.promise).resolves.toMatchObject({ body: 'ok' });
+    // Budget released: a new fetch now succeeds.
+    await expect(
+      core.submit(networkCall('https://example.com/after')).promise,
+    ).resolves.toMatchObject({ body: 'ok' });
+  });
+
+  it('enforces the global in-flight byte budget across plugins (SEC-04)', async () => {
+    // Global budget = 64 MiB = 8 × 8 MiB worst-case reservations. Nine
+    // plugins each holding one fetch open must trip the GLOBAL budget on the
+    // ninth (each plugin alone stays under its per-plugin budget).
+    const gates: Array<() => void> = [];
+    let released = false;
+    const fetchImpl = async () => {
+      if (released) return mockResponse(200, 'ok');
+      const gate = new Promise<void>((resolve) => gates.push(resolve));
+      await gate;
+      return mockResponse(200, 'ok');
+    };
+    const grants: Record<string, string[]> = {};
+    for (let i = 0; i < 9; i += 1) grants[`plugin-${i}`] = NETWORK_GRANTS;
+    grants['plugin-new'] = NETWORK_GRANTS;
+    const host = createMemoryHostExecutor({
+      grants,
+      fetchImpl,
+      dnsLookupImpl: async () => ['93.184.216.34'],
+    });
+    const core = wired(host);
+    const submitted = Array.from({ length: 8 }, (_, i) =>
+      core.submit(
+        networkCall('https://example.com/x', {
+          caller: {
+            pluginId: `plugin-${i}`,
+            installationId: `inst-${i}`,
+            trustLevel: 'sandbox',
+          },
+        }),
+      ),
+    );
+    // Deterministic: wait until all 8 have reserved their worst-case budget
+    // (they are all parked inside fetchImpl), THEN submit the ninth — it must
+    // fail on the GLOBAL budget (8 × 8 MiB = 64 MiB already reserved).
+    for (let i = 0; gates.length < 8 && i < 500; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    expect(gates.length).toBe(8);
+    await expect(
+      core.submit(
+        networkCall('https://example.com/x', {
+          caller: {
+            pluginId: 'plugin-8',
+            installationId: 'inst-8',
+            trustLevel: 'sandbox',
+          },
+        }),
+      ).promise,
+    ).rejects.toMatchObject({ code: 'NETWORK_INFLIGHT_LIMIT' });
+    for (const release of gates) release();
+    released = true;
+    await expect(Promise.all(submitted.map((s) => s.promise))).resolves.toHaveLength(8);
+    // Global budget released: a fresh plugin fetch succeeds.
+    await expect(
+      core.submit(
+        networkCall('https://example.com/y', {
+          caller: { pluginId: 'plugin-new', installationId: 'inst-new', trustLevel: 'sandbox' },
+        }),
+      ).promise,
+    ).resolves.toMatchObject({ body: 'ok' });
   });
 
   it('denies loopback destinations (§29.1.1)', async () => {

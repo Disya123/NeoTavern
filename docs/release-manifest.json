@@ -207,7 +207,7 @@
         "android": "Designed",
         "webClient": "Implemented"
       },
-      "notes": "SEC-03/SEC-04 (M1 Wave 1): plugin network.http.fetch and socket destinations pass the §29.1 SSRF scope policy — every DNS answer checked, bracketed IPv6 and IPv4-mapped literals normalized, per-hop redirect re-checks, connect to the policy-approved IP with the hostname only in Host/SNI and post-connect remoteAddress verification; response bodies are capped while streaming and the connection is destroyed on exceed (apps/plugin-runtime/src/host). WebSocket post-connect verification is a documented follow-up.",
+      "notes": "SEC-03/SEC-04 (M1 Wave 1 + Wave 2): plugin network.http.fetch and socket destinations pass the §29.1 SSRF scope policy — every DNS answer checked, bracketed IPv6 and IPv4-mapped literals normalized, per-hop redirect re-checks, connect to the policy-approved IP with the hostname only in Host/SNI and post-connect remoteAddress verification; response bodies are capped while streaming and the connection is destroyed on exceed (apps/plugin-runtime/src/host). Wave 2 (SEC-04): global and per-plugin in-flight byte budgets (NETWORK_MAX_INFLIGHT_BYTES_GLOBAL=64 MiB, NETWORK_MAX_INFLIGHT_BYTES_PER_PLUGIN=16 MiB, worst-case reservation per fetch body NETWORK_MAX_BODY_BYTES) fail a NEW request with the stable NETWORK_INFLIGHT_LIMIT before its body is read, and release on success/error/cancel; two host tests cover both budgets (including a cross-plugin global trip with 8 concurrent held fetches). WebSocket post-connect verification is a documented follow-up.",
       "milestone": "M1"
     },
     {

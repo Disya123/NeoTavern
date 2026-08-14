@@ -93,7 +93,16 @@ options)` (the plugin's only path to the Broker): builds a BrokerCallRequest
   - `src/host/networkPool.ts` — §29 transport: keep-alive pool on
     `http.Agent`/`https.Agent` (bounded per-origin, idle TTL), executor-level
     HTTP(S) proxy (absolute-form for http, CONNECT tunnel for https),
-    `close()` releasing idle sockets, pool metrics.
+    `close()` releasing idle sockets, pool metrics. Verified-IP connects
+    (ТЗ §SEC-03) bypass the pool: they connect to the policy-approved address
+    (hostname only in Host/SNI) and verify the connected `remoteAddress`;
+  - `src/host/memoryHost.ts` — reference host executor. In-flight network
+    byte budgets (ТЗ §SEC-04): while a fetch body is streamed its worst-case
+    size is reserved against
+    `NETWORK_MAX_INFLIGHT_BYTES_PER_PLUGIN` (16 MiB) and
+    `NETWORK_MAX_INFLIGHT_BYTES_GLOBAL` (64 MiB); a request that would exceed
+    either fails with the stable `NETWORK_INFLIGHT_LIMIT` before its body is
+    read, and the reservation releases on success/error/cancel.
 
 Deliberately NOT implemented at this stage (Stage D part 9c → G):
 
