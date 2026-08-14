@@ -19,6 +19,7 @@ import {
   type ChatDto,
   type EmptyResultDto,
   type GenerationRunDto,
+  type ListToolsResultDto,
   type WireGenerationEvent,
   type ListBackupsResultDto,
   type ListLorebooksResultDto,
@@ -242,6 +243,11 @@ export class LocalBackend implements NeoBackend {
         this.invoke<GenerationRunDto>('generation.keep', { workflowId }, opts),
       discard: (workflowId, opts) =>
         this.invoke<GenerationRunDto>('generation.discard', { workflowId }, opts),
+      tools: {
+        list: (opts) => this.invoke<ListToolsResultDto>('generation.tools.list', {}, opts),
+        result: (req, opts) =>
+          this.invoke<GenerationRunDto>('generation.tool.result', req, opts),
+      },
     };
     this.backups = {
       create: () => this.invoke<BackupDto>('backups.create', {}, undefined),

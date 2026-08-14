@@ -34,9 +34,13 @@ const VALID_META_OP: WireOperation = {
 };
 
 describe('product wire registry', () => {
-  it('compiles the canonical 21-operation registry with zero violations', () => {
+  it('compiles the canonical registry with zero violations', () => {
     const registry = buildProductWireRegistry();
-    expect(registry.operations).toHaveLength(21);
+    // The Phase 0 registry (21 ops) grew to the full M2 registry (34 ops):
+    // chats/chats.messages CRUD, generation keep/discard/prompt.plan/tools,
+    // providers.config.*. The exact operation set is asserted so a registry
+    // edit that drops or renames an op fails loudly here.
+    expect(registry.operations).toHaveLength(34);
     expect(registry.operations.map((op) => op.operationId)).toEqual([
       'meta.get',
       'characters.list',
@@ -47,6 +51,12 @@ describe('product wire registry', () => {
       'chats.list',
       'chats.get',
       'chats.messages.list',
+      'chats.create',
+      'chats.update',
+      'chats.delete',
+      'chats.messages.create',
+      'chats.messages.update',
+      'chats.messages.delete',
       'generation.start',
       'generation.cancel',
       'generation.get',
@@ -54,7 +64,14 @@ describe('product wire registry', () => {
       'generation.retry',
       'generation.keep',
       'generation.discard',
+      'generation.prompt.plan',
+      'generation.tools.list',
+      'generation.tool.result',
       'providers.list',
+      'providers.config.set',
+      'providers.config.get',
+      'providers.config.list',
+      'providers.config.delete',
       'backups.create',
       'backups.list',
       'lorebooks.list',
@@ -180,16 +197,35 @@ describe('checkWireSchema rules', () => {
 });
 
 describe('fixture corpus', () => {
-  it('contains one valid request and response per operation plus twelve negatives', () => {
+  it('contains one valid request and response per operation plus the negative corpus', () => {
     const registry = buildProductWireRegistry();
     const valid = PRODUCT_WIRE_FIXTURES.filter((fixture) => fixture.valid);
     const invalid = PRODUCT_WIRE_FIXTURES.filter((fixture) => !fixture.valid);
-    expect(valid).toHaveLength(42);
+    // The negative corpus is hand-authored and stays stable as operations
+    // grow; the valid corpus must cover every operation with at least one
+    // request and one response fixture (counts drift with the registry, so
+    // the coverage is asserted structurally instead of by a fixed number).
     expect(invalid).toHaveLength(13);
+    const counts = new Map<string, { request: number; response: number }>();
+    for (const fixture of valid) {
+      const entry = counts.get(fixture.operationId) ?? { request: 0, response: 0 };
+      if (fixture.kind === 'request') entry.request += 1;
+      if (fixture.kind === 'response') entry.response += 1;
+      counts.set(fixture.operationId, entry);
+    }
     for (const operation of registry.operations) {
-      expect(
-        valid.some((f) => f.operationId === operation.operationId && f.kind === 'request'),
-      ).toBe(true);
+      const entry = counts.get(operation.operationId);
+      if (entry === undefined) {
+        throw new Error(`no valid fixtures for operation ${operation.operationId}`);
+      }
+      expect(entry.request, `${operation.operationId} request fixture`).toBeGreaterThanOrEqual(1);
+      // Streaming operations have no unary response schema (events carry the
+      // response); only transactional ops must have a response fixture.
+      if (operation.responseSchemaId !== undefined) {
+        expect(entry.response, `${operation.operationId} response fixture`).toBeGreaterThanOrEqual(
+          1,
+        );
+      }
     }
   });
 

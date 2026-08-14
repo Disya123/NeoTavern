@@ -72,6 +72,32 @@
   `Integrated` for `characters.crud`, `chats.crud`, `chats.messages.crud`,
   `generation.workflow`, `generation.tool-loop`.
 
+- **UI generation + message edit/delete over the Product Wire (M2 / Этап
+  2.10, ТЗ §13.1/§11.2).** The chat page's golden path now runs through the
+  `NeoBackend` facade instead of raw `/api/v2` calls: in kernel mode the send
+  flow durably persists the user message via `chats.messages.create` and
+  streams `generation.start` wire events (`generation.delta` /
+  `generation.completed` / `generation.failed` / `generation.cancelled`)
+  through `LocalBackend` over Tauri IPC — no `/api/v2` on that path; the
+  browser/sidecar mode keeps the legacy SSE route. Regeneration and frontend
+  prompt interceptors are legacy-only and surface an honest
+  `UnsupportedError` on the kernel instead of a silent downgrade (kernel
+  prompt pipeline owns the prompt; interceptors deferred to the plugin
+  cutover). Message edit/delete run through
+  `backend.chats.updateMessage`/`delMessage` in both modes (the legacy
+  `expectedRevision` CAS is not part of the wire contract — kernel updates
+  are last-write-wins). Facade additions: `GenerationApi.tools` —
+  `generation.tools.list` / `generation.tool.result` implemented on
+  `LocalBackend` (wire) and `RemoteBackend` (SDK); `LegacyBackend` throws an
+  honest `UnsupportedError` (no legacy route) and gains migration shims for
+  `chats.messages.update`/`delete` over the existing legacy routes. Tests:
+  4 new neobackend parity/shim tests (34 total), 6 new web unit tests for the
+  wire generation path; full web suite green. Docs:
+  `docs/architecture/operations-inventory.md` routing table (golden-flow ops
+  + tools), release-manifest notes (webClient `generation.workflow` →
+  `Integrated`; `generation.tool-loop` desktop → `Integrated`), capability
+  matrix, CHANGELOG.
+
 - **Prompt pipeline in the Kernel (M2 / Этап 2.6, ТЗ §9.1–§9.2).** Every
   generation run now builds an immutable **PromptPlan** before the provider
   attempt: character/persona system blocks (from the chat's character card,
