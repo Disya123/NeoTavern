@@ -867,6 +867,129 @@ pub fn lorebooks_list(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Kern
     encode(&dto)
 }
 
+/// Loads one lorebook row by id; `None` when absent.
+fn query_lorebook(
+    conn: &rusqlite::Connection,
+    id: &str,
+) -> Result<Option<LorebookDto>, KernelError> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, name, description, json_array_length(entries_json), created_at, updated_at \
+             FROM lorebooks WHERE id = ?1",
+        )
+        .map_err(|e| sqlite(e, "lorebooks_get: prepare"))?;
+    let mut rows = stmt
+        .query([id])
+        .map_err(|e| sqlite(e, "lorebooks_get: query"))?;
+    let row = rows
+        .next()
+        .map_err(|e| sqlite(e, "lorebooks_get: read row"))?;
+    row.map(row_to_lorebook).transpose()
+}
+
+/// Serializes the wire entry inputs into the stored `entries_json` array.
+fn entries_json(entries: &[generated::LorebookEntryInput]) -> Result<String, KernelError> {
+    serde_json::to_string(entries).map_err(|err| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            format!("failed to serialize lorebook entries: {err}"),
+        )
+    })
+}
+
+/// `lorebooks.get` — one lorebook; missing → `LOREBOOK_NOT_FOUND`.
+pub fn lorebooks_get(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_get_lorebook(request)?;
+    let dto = query_lorebook(db.conn(), &req.lorebook_id)?
+        .ok_or_else(|| not_found("LOREBOOK", &req.lorebook_id))?;
+    validate(&dto, generated::validate_lorebook_dto)?;
+    encode(&dto)
+}
+
+/// `lorebooks.create` — insert a new lorebook (with optional entries) and
+/// return it.
+pub fn lorebooks_create(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_create_lorebook(request)?;
+    let id = new_id();
+    let now = now();
+    let entries = entries_json(req.entries.as_deref().unwrap_or(&[]))?;
+    db.transaction(|tx| {
+        tx.execute(
+            "INSERT INTO lorebooks (id, name, description, entries_json, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![&id, &req.name, &req.description, &entries, &now, &now],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "lorebooks_create: insert"))?;
+        Ok(())
+    })?;
+    let dto = query_lorebook(db.conn(), &id)?.ok_or_else(|| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            "lorebooks_create: insert succeeded but select back found no row",
+        )
+    })?;
+    validate(&dto, generated::validate_lorebook_dto)?;
+    encode(&dto)
+}
+
+/// `lorebooks.update` — update the provided fields (name, description,
+/// entries); missing lorebook → `LOREBOOK_NOT_FOUND`.
+pub fn lorebooks_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_update_lorebook(request)?;
+    let id = req.lorebook_id.clone();
+    let now = now();
+    let entries = match &req.entries {
+        Some(entries) => Some(entries_json(entries)?),
+        None => None,
+    };
+    let changed = db.transaction(|tx| {
+        let mut sets: Vec<&str> = Vec::new();
+        let mut values: Vec<Value> = Vec::new();
+        if let Some(name) = &req.name {
+            sets.push("name = ?");
+            values.push(Value::Text(name.clone()));
+        }
+        if let Some(description) = &req.description {
+            sets.push("description = ?");
+            values.push(Value::Text(description.clone()));
+        }
+        if let Some(entries) = &entries {
+            sets.push("entries_json = ?");
+            values.push(Value::Text(entries.clone()));
+        }
+        sets.push("updated_at = ?");
+        values.push(Value::Text(now.clone()));
+        let sql = format!("UPDATE lorebooks SET {} WHERE id = ?", sets.join(", "));
+        values.push(Value::Text(id.clone()));
+        tx.execute(&sql, params_from_iter(values))
+            .map_err(|e| StorageError::from_sqlite(e, "lorebooks_update: update"))
+    })?;
+    if changed == 0 {
+        return Err(not_found("LOREBOOK", &id));
+    }
+    let dto = query_lorebook(db.conn(), &id)?.ok_or_else(|| not_found("LOREBOOK", &id))?;
+    validate(&dto, generated::validate_lorebook_dto)?;
+    encode(&dto)
+}
+
+/// `lorebooks.delete` — remove a lorebook; missing → `LOREBOOK_NOT_FOUND`.
+pub fn lorebooks_delete(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_delete_lorebook(request)?;
+    let changed = db.transaction(|tx| {
+        tx.execute(
+            "DELETE FROM lorebooks WHERE id = ?1",
+            params![&req.lorebook_id],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "lorebooks_delete: delete"))
+    })?;
+    if changed == 0 {
+        return Err(not_found("LOREBOOK", &req.lorebook_id));
+    }
+    let dto = ResultEmpty {};
+    validate(&dto, generated::validate_result_empty)?;
+    encode(&dto)
+}
+
 /// `presets.list` — all presets (plain list per the wire contract), newest
 /// first.
 pub fn presets_list(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {

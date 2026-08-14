@@ -502,6 +502,10 @@ fn handle_unary(
         "chats.messages.update" => with_db_opt(db, |db| product::messages_update(db, req)),
         "chats.messages.delete" => with_db_opt(db, |db| product::messages_delete(db, req)),
         "lorebooks.list" => with_db_opt(db, |db| product::lorebooks_list(db, req)),
+        "lorebooks.get" => with_db_opt(db, |db| product::lorebooks_get(db, req)),
+        "lorebooks.create" => with_db_opt(db, |db| product::lorebooks_create(db, req)),
+        "lorebooks.update" => with_db_opt(db, |db| product::lorebooks_update(db, req)),
+        "lorebooks.delete" => with_db_opt(db, |db| product::lorebooks_delete(db, req)),
         "presets.list" => with_db_opt(db, |db| product::presets_list(db, req)),
         // Provider configuration (ТЗ §9.4): secrets go to the SecretStore
         // seam, only opaque references reach the database.

@@ -3,6 +3,27 @@
 ## Unreleased
 ### Added
 
+- **Full lorebook CRUD in the kernel (M4 / Этап 4.1, ТЗ §8.1 Library
+  context).** Product Wire gains `lorebooks.get` / `lorebooks.create` /
+  `lorebooks.update` / `lorebooks.delete` alongside `lorebooks.list`; the
+  kernel implements all five with the same transaction/validation pattern as
+  the character CRUD. Entries travel as the new `wire.lorebook.entry.input`
+  object (`keys`/`secondaryKeys`/`content`/`enabled`/`constant`/`selective`)
+  and are stored into `entries_json`; `entryCount` derives from
+  `json_array_length` and the prompt pipeline already activates the stored
+  entries (constant always, keyword case-insensitive substring, selective
+  primary+secondary). Stable errors: `LOREBOOK_NOT_FOUND` (lorebookId param),
+  `CONTRACT_VIOLATION` for strict unknown-field/empty-name rejection. The
+  `lorebooks.read` capability becomes `lorebooks.crud` (5 wire ops). Tests:
+  2 kernel integration tests (full create→get→update→delete round trip;
+  NOT_FOUND/contract paths), wire corpus (5 positive + 6 negative fixtures),
+  remote-http host parity (`lorebook_crud_over_http`, product error copied
+  verbatim into the envelope); full cargo workspace green, clippy clean,
+  codegen `--check` clean (WIRE_SCHEMA_HASH regenerated). Honest boundary:
+  the UI surface and the legacy `/api/v2/lorebooks` route removal remain
+  Этап 4 follow-ups; character↔lorebook scoping is not yet in the kernel
+  schema.
+
 - **Durable run/step journal and the tool-call loop (M2 / Этап 2.7, ТЗ
   §8.3).** The kernel now journals every generation step in the new
   `generation_steps` table (schema migration 6 — `ALTER TABLE` + `CREATE

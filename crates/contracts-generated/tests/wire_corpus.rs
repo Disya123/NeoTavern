@@ -9,26 +9,28 @@ use contracts_generated::generated::{
     decode_backup_dto, decode_character_dto, decode_chat_dto, decode_error_dto,
     decode_event_envelope, decode_generation_event, decode_generation_run,
     decode_generation_status, decode_generation_step, decode_generation_step_status,
-    decode_generation_step_type, decode_lorebook_dto, decode_message_dto, decode_message_role,
-    decode_meta_dto, decode_paged_characters, decode_paged_chats, decode_paged_generation_events,
-    decode_paged_messages, decode_preset_dto, decode_prompt_block, decode_prompt_excluded,
-    decode_prompt_message, decode_prompt_plan, decode_provider_availability,
-    decode_provider_config_dto, decode_provider_dto, decode_provider_model,
-    decode_request_cancel_generation, decode_request_create_character, decode_request_create_chat,
-    decode_request_create_message, decode_request_delete_character, decode_request_delete_chat,
+    decode_generation_step_type, decode_lorebook_dto, decode_lorebook_entry_input,
+    decode_message_dto, decode_message_role, decode_meta_dto, decode_paged_characters,
+    decode_paged_chats, decode_paged_generation_events, decode_paged_messages, decode_preset_dto,
+    decode_prompt_block, decode_prompt_excluded, decode_prompt_message, decode_prompt_plan,
+    decode_provider_availability, decode_provider_config_dto, decode_provider_dto,
+    decode_provider_model, decode_request_cancel_generation, decode_request_create_character,
+    decode_request_create_chat, decode_request_create_lorebook, decode_request_create_message,
+    decode_request_delete_character, decode_request_delete_chat, decode_request_delete_lorebook,
     decode_request_delete_message, decode_request_delete_provider_config,
     decode_request_discard_generation, decode_request_empty, decode_request_envelope,
     decode_request_generation_tool_result, decode_request_get_character, decode_request_get_chat,
-    decode_request_get_generation_run, decode_request_get_prompt_plan,
+    decode_request_get_generation_run, decode_request_get_lorebook, decode_request_get_prompt_plan,
     decode_request_get_provider_config, decode_request_keep_partial_generation,
     decode_request_list_characters, decode_request_list_chats,
     decode_request_list_generation_events, decode_request_list_messages,
     decode_request_list_provider_configs, decode_request_retry_generation,
     decode_request_set_provider_config, decode_request_start_generation,
-    decode_request_update_character, decode_request_update_chat, decode_request_update_message,
-    decode_response_envelope, decode_result_empty, decode_result_list_backups,
-    decode_result_list_lorebooks, decode_result_list_presets, decode_result_list_provider_configs,
-    decode_result_list_providers, decode_result_list_tools, decode_tool_call, decode_tool_spec,
+    decode_request_update_character, decode_request_update_chat, decode_request_update_lorebook,
+    decode_request_update_message, decode_response_envelope, decode_result_empty,
+    decode_result_list_backups, decode_result_list_lorebooks, decode_result_list_presets,
+    decode_result_list_provider_configs, decode_result_list_providers, decode_result_list_tools,
+    decode_tool_call, decode_tool_spec,
 };
 use contracts_generated::{contract_schema_hash, wire_protocol, WireError};
 use serde::de::DeserializeOwned;
@@ -145,6 +147,21 @@ fn dispatch(schema_id: &str, bytes: &[u8], valid: bool) {
         "wire.request.delete-character" => {
             corpus_case(schema_id, decode_request_delete_character, bytes, valid)
         }
+        "wire.request.get-lorebook" => {
+            corpus_case(schema_id, decode_request_get_lorebook, bytes, valid)
+        }
+        "wire.request.create-lorebook" => {
+            corpus_case(schema_id, decode_request_create_lorebook, bytes, valid)
+        }
+        "wire.request.update-lorebook" => {
+            corpus_case(schema_id, decode_request_update_lorebook, bytes, valid)
+        }
+        "wire.request.delete-lorebook" => {
+            corpus_case(schema_id, decode_request_delete_lorebook, bytes, valid)
+        }
+        "wire.lorebook.entry.input" => {
+            corpus_case(schema_id, decode_lorebook_entry_input, bytes, valid)
+        }
         "wire.request.list-chats" => {
             corpus_case(schema_id, decode_request_list_chats, bytes, valid)
         }
@@ -255,7 +272,7 @@ fn xorshift32(mut state: u32) -> u32 {
 /// coerces to a plain `fn` pointer.
 type DecoderFn = fn(&[u8]) -> Result<(), WireError>;
 
-fn all_decoders() -> [DecoderFn; 55] {
+fn all_decoders() -> [DecoderFn; 60] {
     [
         |b| decode_meta_dto(b).map(|_| ()),
         |b| decode_character_dto(b).map(|_| ()),
@@ -309,6 +326,11 @@ fn all_decoders() -> [DecoderFn; 55] {
         |b| decode_result_list_backups(b).map(|_| ()),
         |b| decode_result_list_lorebooks(b).map(|_| ()),
         |b| decode_result_list_presets(b).map(|_| ()),
+        |b| decode_request_get_lorebook(b).map(|_| ()),
+        |b| decode_request_create_lorebook(b).map(|_| ()),
+        |b| decode_request_update_lorebook(b).map(|_| ()),
+        |b| decode_request_delete_lorebook(b).map(|_| ()),
+        |b| decode_lorebook_entry_input(b).map(|_| ()),
         |b| decode_request_envelope(b).map(|_| ()),
         |b| decode_response_envelope(b).map(|_| ()),
         |b| decode_event_envelope(b).map(|_| ()),

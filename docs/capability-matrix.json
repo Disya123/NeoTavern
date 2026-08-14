@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-08-14T08:51:10.921Z",
+  "generatedAt": "2026-08-14T09:08:40.267Z",
   "rows": [
     {
       "hosts": {
@@ -138,11 +138,17 @@
         "headless": "Implemented",
         "webClient": "Implemented"
       },
-      "id": "lorebooks.read",
-      "milestone": "M2",
-      "notes": "Kernel op exists; full lorebook CRUD and prompt integration in M2.",
-      "title": "Lorebook read",
-      "wireOps": ["lorebooks.list"]
+      "id": "lorebooks.crud",
+      "milestone": "M4",
+      "notes": "M4 slice 1 (Этап 4.1): full lorebook CRUD in the kernel through Product Wire — lorebooks.get/create/update/delete joined the existing lorebooks.list; entries travel as wire.lorebook.entry.input objects (keys/secondaryKeys/content/enabled/constant/selective) that the prompt pipeline already activates (constant always, keyword case-insensitive substring, selective primary+secondary), stored into entries_json with entryCount derived via json_array_length. Stable product errors: LOREBOOK_NOT_FOUND with lorebookId param; strict unknown-field rejection. Tested at three levels: 2 kernel integration tests (full create→get→update→delete round trip + NOT_FOUND/CONTRACT_VIOLATION paths), wire corpus (5 new positive + 6 new negative fixtures), and a remote-http host-parity test (lorebook_crud_over_http, error copied verbatim into the envelope). Honest boundary: UI surface and legacy /api/v2/lorebooks route removal remain Этап 4; character↔lorebook scoping (characterId link) is not yet modeled in the kernel schema.",
+      "title": "Lorebook CRUD",
+      "wireOps": [
+        "lorebooks.create",
+        "lorebooks.delete",
+        "lorebooks.get",
+        "lorebooks.list",
+        "lorebooks.update"
+      ]
     },
     {
       "hosts": {

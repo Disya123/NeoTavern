@@ -397,6 +397,72 @@ export const DeleteCharacterRequestDtoSchema = Type.Object(
 );
 export type DeleteCharacterRequestDto = Static<typeof DeleteCharacterRequestDtoSchema>;
 
+/**
+ * Lorebook entry payload for create/update (`wire.lorebook.entry.input`).
+ * Mirrors the runtime `entries_json` object shape the prompt pipeline reads
+ * (`crates/runtime-kernel/src/prompt.rs`): `keys`/`secondaryKeys` activation
+ * keywords, `constant`/`selective` rules and `enabled`. Unknown entry fields
+ * are preserved untouched by the kernel (AGENTS.md §11) — the wire input only
+ * names the fields the product owns.
+ */
+export const LorebookEntryInputSchema = Type.Object(
+  {
+    keys: Type.Array(Type.String({ minLength: 1, maxLength: 200 }), {
+      maxItems: 100,
+    }),
+    secondaryKeys: Type.Optional(
+      Type.Array(Type.String({ minLength: 1, maxLength: 200 }), { maxItems: 100 }),
+    ),
+    content: Type.String({ minLength: 1, maxLength: 20_000 }),
+    enabled: Type.Optional(Type.Boolean()),
+    constant: Type.Optional(Type.Boolean()),
+    selective: Type.Optional(Type.Boolean()),
+  },
+  { $id: 'wire.lorebook.entry.input', additionalProperties: false },
+);
+export type LorebookEntryInput = Static<typeof LorebookEntryInputSchema>;
+
+/** Get lorebook request DTO (`wire.request.get-lorebook`). */
+export const GetLorebookRequestDtoSchema = Type.Object(
+  {
+    lorebookId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.get-lorebook', additionalProperties: false },
+);
+export type GetLorebookRequestDto = Static<typeof GetLorebookRequestDtoSchema>;
+
+/** Create lorebook request DTO (`wire.request.create-lorebook`). */
+export const CreateLorebookRequestDtoSchema = Type.Object(
+  {
+    name: Type.String({ minLength: 1, maxLength: 200 }),
+    description: Type.Optional(Type.String({ minLength: 0, maxLength: 10000 })),
+    entries: Type.Optional(Type.Array(LorebookEntryInputSchema, { maxItems: 1000 })),
+  },
+  { $id: 'wire.request.create-lorebook', additionalProperties: false },
+);
+export type CreateLorebookRequestDto = Static<typeof CreateLorebookRequestDtoSchema>;
+
+/** Update lorebook request DTO (`wire.request.update-lorebook`). */
+export const UpdateLorebookRequestDtoSchema = Type.Object(
+  {
+    lorebookId: Type.String({ format: 'uuid' }),
+    name: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
+    description: Type.Optional(Type.String({ minLength: 0, maxLength: 10000 })),
+    entries: Type.Optional(Type.Array(LorebookEntryInputSchema, { maxItems: 1000 })),
+  },
+  { $id: 'wire.request.update-lorebook', additionalProperties: false },
+);
+export type UpdateLorebookRequestDto = Static<typeof UpdateLorebookRequestDtoSchema>;
+
+/** Delete lorebook request DTO (`wire.request.delete-lorebook`). */
+export const DeleteLorebookRequestDtoSchema = Type.Object(
+  {
+    lorebookId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.delete-lorebook', additionalProperties: false },
+);
+export type DeleteLorebookRequestDto = Static<typeof DeleteLorebookRequestDtoSchema>;
+
 /** List chats request DTO (`wire.request.list-chats`). */
 export const ListChatsRequestDtoSchema = Type.Object(
   {
@@ -924,6 +990,11 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.request.create-character': CreateCharacterRequestDtoSchema,
   'wire.request.update-character': UpdateCharacterRequestDtoSchema,
   'wire.request.delete-character': DeleteCharacterRequestDtoSchema,
+  'wire.request.get-lorebook': GetLorebookRequestDtoSchema,
+  'wire.request.create-lorebook': CreateLorebookRequestDtoSchema,
+  'wire.request.update-lorebook': UpdateLorebookRequestDtoSchema,
+  'wire.request.delete-lorebook': DeleteLorebookRequestDtoSchema,
+  'wire.lorebook.entry.input': LorebookEntryInputSchema,
   'wire.request.list-chats': ListChatsRequestDtoSchema,
   'wire.request.get-chat': GetChatRequestDtoSchema,
   'wire.request.create-chat': CreateChatRequestDtoSchema,

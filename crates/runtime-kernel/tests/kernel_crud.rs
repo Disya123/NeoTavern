@@ -8,8 +8,8 @@
 //! the single writable connection for its lifetime).
 
 use contracts_generated::generated::{
-    CharacterDto, ChatDto, MessageDto, MessageRole, PagedCharacters, PagedChats, PagedMessages,
-    ResultEmpty, ResultListLorebooks, ResultListPresets,
+    CharacterDto, ChatDto, LorebookDto, MessageDto, MessageRole, PagedCharacters, PagedChats,
+    PagedMessages, ResultEmpty, ResultListLorebooks, ResultListPresets,
 };
 use runtime_kernel::{CancellationFlag, Kernel, KernelConfig, KernelError, KernelErrorCode};
 use rusqlite::params;
@@ -788,4 +788,130 @@ fn update_on_missing_returns_product_error() {
     let product = err.product.expect("product error must carry the wire dto");
     assert_eq!(product.code, "CHARACTER_NOT_FOUND");
     assert_eq!(product.params["characterId"], json!(missing));
+}
+
+/// M4 slice 1 (Этап 4.1, ТЗ §10.3/§8.1 Library context): the full lorebook
+/// CRUD cycle over the wire — create with entries, get, update name+entries,
+/// delete, and the NOT_FOUND / CONTRACT_VIOLATION error paths.
+#[test]
+fn lorebook_crud_round_trip() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel_with_root(root.path());
+
+    // create with one keyword entry.
+    let created = dispatch_decoded::<LorebookDto>(
+        &kernel,
+        "lorebooks.create",
+        json!({
+            "name": "World lore",
+            "description": "Shared world facts",
+            "entries": [
+                {
+                    "keys": ["castle", "fortress"],
+                    "secondaryKeys": ["stone"],
+                    "content": "The castle is carved from living stone.",
+                    "enabled": true,
+                    "constant": false,
+                    "selective": true
+                }
+            ]
+        }),
+    )
+    .expect("lorebooks.create must succeed");
+    assert_eq!(created.name, "World lore");
+    assert_eq!(created.description.as_deref(), Some("Shared world facts"));
+    assert_eq!(created.entry_count, 1);
+    let id = created.id.clone();
+
+    // get returns the same row.
+    let fetched =
+        dispatch_decoded::<LorebookDto>(&kernel, "lorebooks.get", json!({ "lorebookId": id }))
+            .expect("lorebooks.get must succeed");
+    assert_eq!(fetched, created);
+
+    // list sees it (list-only test covers ordering; here just the row).
+    let listed = dispatch_decoded::<ResultListLorebooks>(&kernel, "lorebooks.list", json!({}))
+        .expect("lorebooks.list must succeed");
+    assert_eq!(listed.items.len(), 1);
+    assert_eq!(listed.items[0].entry_count, 1);
+
+    // update: rename and replace the entries; entry_count reflects the new
+    // array length.
+    let updated = dispatch_decoded::<LorebookDto>(
+        &kernel,
+        "lorebooks.update",
+        json!({
+            "lorebookId": id,
+            "name": "World lore v2",
+            "entries": [
+                { "keys": ["harbor"], "content": "The harbor never freezes." },
+                { "keys": ["citadel"], "content": "The citadel towers above the harbor." }
+            ]
+        }),
+    )
+    .expect("lorebooks.update must succeed");
+    assert_eq!(updated.name, "World lore v2");
+    assert_eq!(updated.entry_count, 2);
+    assert_eq!(updated.created_at, created.created_at);
+
+    // delete removes the row.
+    let empty =
+        dispatch_decoded::<ResultEmpty>(&kernel, "lorebooks.delete", json!({ "lorebookId": id }))
+            .expect("lorebooks.delete must succeed");
+    assert_eq!(empty, ResultEmpty {});
+
+    // deleted lorebook is gone.
+    let err = dispatch_json(&kernel, "lorebooks.get", json!({ "lorebookId": id }))
+        .expect_err("get on a deleted lorebook must fail");
+    assert_eq!(err.code, KernelErrorCode::NotFound);
+    let product = err.product.expect("product error must carry the wire dto");
+    assert_eq!(product.code, "LOREBOOK_NOT_FOUND");
+    assert_eq!(product.params["lorebookId"], json!(id));
+}
+
+/// M4 slice 1: update/delete on a missing lorebook and contract violations
+/// answer the stable error codes.
+#[test]
+fn lorebook_crud_error_paths() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel_with_root(root.path());
+    let missing = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+
+    let update_err = dispatch_json(
+        &kernel,
+        "lorebooks.update",
+        json!({ "lorebookId": missing, "name": "Ghost" }),
+    )
+    .expect_err("update on a missing lorebook must fail");
+    assert_eq!(update_err.code, KernelErrorCode::NotFound);
+    assert_eq!(
+        update_err.product.expect("product dto").code,
+        "LOREBOOK_NOT_FOUND"
+    );
+
+    let delete_err = dispatch_json(
+        &kernel,
+        "lorebooks.delete",
+        json!({ "lorebookId": missing }),
+    )
+    .expect_err("delete on a missing lorebook must fail");
+    assert_eq!(delete_err.code, KernelErrorCode::NotFound);
+    assert_eq!(
+        delete_err.product.expect("product dto").code,
+        "LOREBOOK_NOT_FOUND"
+    );
+
+    // Empty name violates the wire contract before any storage write.
+    let violation = dispatch_json(&kernel, "lorebooks.create", json!({ "name": "" }))
+        .expect_err("empty name must fail wire validation");
+    assert_eq!(violation.code, KernelErrorCode::ContractViolation);
+
+    // Unknown request fields are rejected (strict, ARC-07).
+    let extra = dispatch_json(
+        &kernel,
+        "lorebooks.create",
+        json!({ "name": "World lore", "hacked": true }),
+    )
+    .expect_err("extra fields must fail wire validation");
+    assert_eq!(extra.code, KernelErrorCode::ContractViolation);
 }
