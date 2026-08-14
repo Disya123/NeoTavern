@@ -181,6 +181,11 @@ automatically at server startup, and tracked in the `_migrations` table
   restart;
 - restore requires no external SQLite tools. A snapshot or copy error returns
   `RESTORE_FAILED`, and the safety backup is kept.
+- restore runs exclusively under a global maintenance lock (ТЗ §10.4): while
+  it is held, new product mutations — including plugin activation — are
+  rejected with `MAINTENANCE_MODE` (503), and a second restore is refused.
+  Read-only requests and backup/diagnostics tooling keep working; the lock is
+  released on every exit path (success and failure).
 
 ## Manual run
 

@@ -1421,6 +1421,7 @@ export const ru: Resources = {
     BACKUP_FAILED: 'Не удалось создать резервную копию.',
     RESTORE_FAILED: 'Не удалось восстановить.',
     MIGRATION_FAILED: 'Ошибка миграции базы данных.',
+    MAINTENANCE_MODE: 'Идёт обслуживание — изменения приостановлены.',
     SEARCH_FAILED: 'Ошибка поиска.',
     UNKNOWN: 'Неизвестная ошибка.',
   },

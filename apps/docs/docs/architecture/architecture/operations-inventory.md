@@ -168,7 +168,10 @@ Constants live here: `APP_VERSION = '0.1.0'`, `API_VERSION = 2`.
   (`packages/contracts/src/backup.ts`).
 - `DELETE /api/v2/backups/:id` — delete a snapshot.
 - `POST /api/v2/backups/:id/restore` — restore; a safety backup of the current
-  database is always taken before restoring.
+  database is always taken before restoring. Runs exclusively under the global
+  maintenance lock (ТЗ §10.4): while held, new product mutations are rejected
+  with `MAINTENANCE_MODE` (503) and no second restore can enter
+  (`apps/server/src/lib/maintenance.ts`).
 
 ### chats — `apps/server/src/plugins/chats.ts`
 

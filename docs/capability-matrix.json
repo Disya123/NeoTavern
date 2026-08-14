@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-08-14T01:32:43.212Z",
+  "generatedAt": "2026-08-14T01:46:29.425Z",
   "rows": [
     {
       "hosts": {
@@ -157,6 +157,19 @@
       "milestone": "M1",
       "notes": "SEC-05 (M1 Wave 1): publisher Ed25519 signature + per-file sha256 digest verification before consent/install (format neotavern.package-signature.v1, apps/server/src/lib/packageTrust.ts); trust states built-in / verified-publisher / locally-trusted / unsigned-untrusted recorded in the plugin registry (migration 0023) and surfaced as InstalledPlugin.trust; NEOTA_PLUGIN_PUBLISHER_KEYS keyring + NEOTA_PLUGIN_REQUIRE_SIGNATURE policy; unsigned packages enabled via consent become locally-trusted; ZIP/tar.gz reject duplicate normalized paths, symlinks, traversal, encrypted entries and bounded zip bombs.",
       "title": "Plugin package trust (signature/digest verification)",
+      "wireOps": []
+    },
+    {
+      "hosts": {
+        "android": "Designed",
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "webClient": "Implemented"
+      },
+      "id": "security.restore-maintenance-lock",
+      "milestone": "M1",
+      "notes": "M1 Wave 1 (ТЗ §10.4): restore runs exclusively under a global maintenance lock (apps/server/src/lib/maintenance.ts) — while held, new product mutations are rejected with the stable MAINTENANCE_MODE error (503), plugin activation is blocked and no second restore can enter; read-only requests and backup/diagnostics tooling keep working; the lock is released on every exit path (success and failure). Full stop-the-world (suspending in-flight generations, staged data-root activation) is the M3 DATA-ACTIVATE slice.",
+      "title": "Restore maintenance lock (global maintenance mode)",
       "wireOps": []
     },
     {

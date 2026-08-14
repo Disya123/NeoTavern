@@ -641,6 +641,11 @@ built-in default remains available without a DB row.
   through the online backup API. Response:
   `{ restored: true, restartRequired: false }`; existing repositories and
   subsequent records remain functional. Errors use `RESTORE_FAILED`.
+- Restore runs exclusively under a global maintenance lock (ТЗ §10.4): while
+  it is held, new product mutations — including plugin activation — are
+  rejected with `MAINTENANCE_MODE` (503), and a second restore is refused.
+  Read-only requests and backup/diagnostics tooling keep working. The lock is
+  released on every exit path (success and failure).
 
 ### Diagnostics and recovery
 

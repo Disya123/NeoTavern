@@ -7,6 +7,7 @@ import type { PluginEventBus } from '@neotavern/plugin-sdk';
 import type { Logger } from '@neotavern/shared';
 import type { ServerConfig } from './config.js';
 import type { DataPaths } from './lib/paths.js';
+import type { MaintenanceController } from './lib/maintenance.js';
 import type { ContextStrategyRegistry } from './pipeline/contextShift.js';
 import type { PostProcessorRegistry } from './pipeline/postProcess.js';
 
@@ -35,9 +36,12 @@ export interface AppContext {
   config: ServerConfig;
   logger: Logger;
   paths: DataPaths;
+  /** Global maintenance lock (ТЗ §10.4): restore runs under it exclusively. */
+  maintenance: MaintenanceController;
 }
 
 /** Dependencies accepted by app assembly; an event bus is created when omitted. */
-export type AppContextInput = Omit<AppContext, 'events'> & {
+export type AppContextInput = Omit<AppContext, 'events' | 'maintenance'> & {
   events?: PluginEventBus;
+  maintenance?: MaintenanceController;
 };

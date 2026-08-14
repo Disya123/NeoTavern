@@ -125,6 +125,8 @@ export const ErrorCodes = {
   BACKUP_FAILED: 'BACKUP_FAILED',
   RESTORE_FAILED: 'RESTORE_FAILED',
   MIGRATION_FAILED: 'MIGRATION_FAILED',
+  /** Global maintenance mode is active: mutations are paused (ТЗ §10.4). */
+  MAINTENANCE_MODE: 'MAINTENANCE_MODE',
 
   // Search
   SEARCH_FAILED: 'SEARCH_FAILED',
@@ -218,6 +220,7 @@ const DEFAULT_STATUS: Record<ErrorCode, number> = {
   [ErrorCodes.BACKUP_FAILED]: 500,
   [ErrorCodes.RESTORE_FAILED]: 500,
   [ErrorCodes.MIGRATION_FAILED]: 500,
+  [ErrorCodes.MAINTENANCE_MODE]: 503,
   [ErrorCodes.SEARCH_FAILED]: 500,
 };
 
