@@ -53,7 +53,9 @@ Runtime Kernel → SQLite` (ТЗ §11.1/§15.1).
 - Tools: `KernelHost::register_tool` (the host seam for `Kernel::register_tool`,
   Этап 2.7) validates the `wire.tool.spec` by deserialization; tool execution
   stays kernel-side orchestrated (wait → host effect → `generation.tool.result`).
-- **Packaged golden slice** (Этап 2.9): `NEOTA_DESKTOP_SMOKE=1` runs the full
+- **Packaged kernel smoke** (Этап 2.9/2.10; a kernel smoke, not yet the
+  packaged golden E2E of ТЗ §17.2, which additionally requires fault injection
+  and yield/resume approval flows): `NEOTA_DESKTOP_SMOKE=1` runs the full
   user flow headless on the packaged shell — handshake, character → chat →
   user message, `generation.start` (deterministic fake) → durable assistant
   message, then a complete tool round trip (register → `waiting_for_tool` →
@@ -75,7 +77,7 @@ Runtime Kernel → SQLite` (ТЗ §11.1/§15.1).
 > `.github/workflows/desktop-release.yml`: the bundle is launched with
 > `NEOTA_DESKTOP_SMOKE=1`, waits for sidecar readiness (sidecar mode) or runs
 > the kernel self-check (kernel mode: handshake + `meta.get` +
-> `characters.list` + `backups.list` + the golden slice above), checks SQLite
+> `characters.list` + `backups.list` + the kernel flow smoke above), checks SQLite
 > creation and the absence of orphan processes. Node.js, `better-sqlite3`,
 > Sharp and production web assets are included in every sidecar-mode package;
 > the first launch does not run `npm install`.

@@ -71,6 +71,13 @@ jobs:
       - name: Docs mirror divergence check (single source tree)
         run: pnpm docs:sync:check
 
+      # Acceptance-ledger ordering gate (audit directive): a milestone may
+      # only be marked accepted after every earlier milestone is accepted —
+      # an accepted M2 with M1 in_progress would claim an impossible stage
+      # order (ТЗ 10/10 rev2 §22). Also runs its fixture self-test.
+      - name: Acceptance-ledger ordering gate
+        run: node scripts/check-milestone-gates.mjs --check && node scripts/check-milestone-gates.mjs --self-test
+
   e2e:
     name: Playwright E2E + accessibility (shard ${{ matrix.shard }}/4)
     # Visual baselines are intentionally recorded on Windows; keep the

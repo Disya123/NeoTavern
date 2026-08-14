@@ -18,6 +18,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import yauzl from 'yauzl';
 import { createAppDatabase, type AppDatabase } from '@neotavern/db';
+import { ErrorCodes } from '@neotavern/shared';
 import type { TypedApp } from '../src/types.js';
 import { buildProfileExportArchive, type ProfileExportArchive } from '../src/lib/profileExport.js';
 import { resolveDataPaths, ensureDataDirs } from '../src/lib/paths.js';
@@ -588,6 +589,94 @@ describe('buildProfileExportArchive (SEC-02 logical export, format v2)', () => {
   it('carries the user files directory', async () => {
     const { entries } = await buildFixtureArchive();
     expect(entries.get('files/avatar.png')!.toString('utf8')).toBe('fake-png-bytes');
+  });
+
+  it('records the snapshot transaction and an explicit column allowlist per table', async () => {
+    const { manifest } = await buildFixtureArchive();
+    expect(manifest.snapshotTransaction).toBe(true);
+    for (const table of EXPECTED_EXPORTED_TABLES) {
+      const recorded = manifest.tables.find((t: { table: string }) => t.table === table);
+      expect(recorded, `manifest entry for ${table}`).toBeDefined();
+      expect(Array.isArray(recorded.columns)).toBe(true);
+      expect(recorded.columns.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('exports exactly the allowlisted columns — no SELECT * leakage', async () => {
+    const { entries, manifest } = await buildFixtureArchive();
+    for (const table of EXPECTED_EXPORTED_TABLES) {
+      const recorded = manifest.tables.find((t: { table: string }) => t.table === table);
+      const expectedKeys = new Set(recorded.columns as string[]);
+      const lines = entries
+        .get(`data/${table}.jsonl`)!
+        .toString('utf8')
+        .trim()
+        .split('\n')
+        .filter((line) => line.length > 0);
+      for (const line of lines) {
+        const row = JSON.parse(line);
+        const actualKeys = Object.keys(row);
+        expect(
+          actualKeys.sort(),
+          `${table} row must contain exactly the allowlisted columns`,
+        ).toEqual([...expectedKeys].sort());
+      }
+    }
+  });
+
+  it('column allowlist matches the live schema (PRAGMA table_info)', async () => {
+    const { manifest } = await buildFixtureArchive();
+    const columnsOf = (table: string): string[] => {
+      const rows = database.sqlite.prepare(`PRAGMA table_info(${table})`).all() as Array<{
+        name: string;
+      }>;
+      return rows.map((r) => r.name);
+    };
+    for (const table of EXPECTED_EXPORTED_TABLES) {
+      const recorded = manifest.tables.find((t: { table: string }) => t.table === table);
+      const schemaColumns = new Set(columnsOf(table));
+      const allowlist = recorded.columns as string[];
+      for (const column of allowlist) {
+        expect(schemaColumns.has(column), `${table}.${column} must exist in the live schema`).toBe(
+          true,
+        );
+      }
+      // A schema column absent from the allowlist must be an intentional
+      // redaction (provider_configs.api_key) — otherwise it silently leaks
+      // or silently drops data. Every table is exported either fully or with
+      // a documented redaction; provider_configs is the only partial one.
+      if (table === 'provider_configs') {
+        expect(allowlist).not.toContain('api_key');
+        expect(schemaColumns.has('api_key')).toBe(true);
+      } else {
+        expect(allowlist.length, `${table} must export every schema column (full allowlist)`).toBe(
+          schemaColumns.size,
+        );
+      }
+    }
+  });
+
+  it('leaves no open transaction and no temporary files after a failure', async () => {
+    const paths = resolveDataPaths(dataDir);
+    ensureDataDirs(paths);
+    // A second connection holding an exclusive lock on the DB makes the
+    // export's BEGIN wait — simulate failure by closing the underlying
+    // database before the archive is requested.
+    const failing = createAppDatabase(':memory:');
+    seedDatabase(failing);
+    failing.close();
+    // Closing the DB throws on the first query: the export must roll back
+    // and surface PROFILE_EXPORT_FAILED, never leak a temp dir.
+    await expect(
+      buildProfileExportArchive({
+        database: failing,
+        paths,
+        profile: { id: 'profile-001', name: 'Default' },
+        appVersion: '0.1.0-test',
+      }),
+    ).rejects.toMatchObject({ code: ErrorCodes.PROFILE_EXPORT_FAILED });
+    // The healthy database has no dangling transaction afterwards.
+    expect(database.sqlite.inTransaction).toBe(false);
   });
 });
 

@@ -1,5 +1,5 @@
 {
-  "$comment": "Machine-readable acceptance ledger (ТЗ 10/10 rev2 §22, §18.3). One entry per program milestone: status, requirement/evidence lists, blocking issues, waivers and the accepted commit. A milestone whose status is NOT 'accepted' must not be treated as a completed stage: downstream milestones may proceed only with evidence that this ledger records. No user consent, debug mode or high-risk grant can override a blocked requirement.",
+  "$comment": "Machine-readable acceptance ledger (ТЗ 10/10 rev2 §22, §18.3). One entry per program milestone: status, requirement/evidence lists, blocking issues, waivers and the accepted commit. A milestone whose status is NOT 'accepted' must not be treated as a completed stage: downstream milestones may proceed only with evidence that this ledger records. No user consent, debug mode or high-risk grant can override a blocked requirement. Ordering gate (audit 'CI gate blocking M2 while M1.status != accepted'): a milestone may only be marked 'accepted' when EVERY earlier milestone is 'accepted'; scripts/check-milestone-gates.mjs --check enforces this in CI. A milestone whose works are shipped but whose predecessors are not yet accepted is recorded as 'in_progress' with a 'deliveredCommit'.",
   "formatVersion": 1,
   "milestones": [
     {
@@ -48,9 +48,10 @@
       "evidence": [
         "apps/server/src/lib/secretStore.ts + packages/secret-store (portable/session/env, opaque refs)",
         "apps/server/src/lib/packageTrust.ts (Ed25519 + per-file sha256 digest, fail-closed)",
-        "apps/server/src/lib/profileExport.ts (entity allowlist + EXCLUDED_TABLES + redactions)",
+        "apps/server/src/lib/profileExport.ts (entity + per-table column allowlist, snapshot transaction, no DB snapshot, redactions)",
         "apps/plugin-runtime/src/host/networkPool.ts + socketHandles.ts (pre-connect policy)",
-        "apps/server/test/secretStore.spec.ts, extensions-hardening.spec.ts"
+        "apps/server/test/secretStore.spec.ts, extensions-hardening.spec.ts",
+        "apps/server/test/profileExport.spec.ts (11 tests: sentinels, allowlist vs PRAGMA table_info, snapshotTransaction, rollback)"
       ],
       "blockingIssues": [
         "P0: session SecretStore destroyed legacy plaintext on bootstrap (FIXED in this milestone; portable/env flows verified in secretStore.spec.ts)",
@@ -58,7 +59,6 @@
         "P0: WebSocket post-connect remoteAddress verification missing (undici WebSocket does not expose the connected socket; documented follow-up in socketHandles.ts)",
         "P0: network broker TCP/proxy paths connect by hostname after checking a single DNS answer; verified-IP set not honored on every connect",
         "P1: no global/per-plugin in-flight byte budget and decompressed-byte accounting for streaming bodies",
-        "P1: profile export reads tables without a snapshot transaction and exports unknown future columns of allowlisted tables",
         "P1: legacy migrator does not yet carry settings/branches/revisions/assets (Этап 4 follow-ups; personas now migrated)"
       ],
       "waivers": []
@@ -66,9 +66,10 @@
     {
       "id": "M2-kernel-golden",
       "name": "Этап 2 / Golden Kernel vertical slice",
-      "status": "accepted",
-      "acceptedCommit": "b20b79c",
-      "acceptedBy": "neotavern/architecture",
+      "status": "in_progress",
+      "acceptedCommit": null,
+      "acceptedBy": null,
+      "deliveredCommit": "b20b79c",
       "requirements": [
         "Character CRUD + assets",
         "Chat CRUD",
@@ -89,16 +90,18 @@
         "crates/adapters/remote-http host parity tests"
       ],
       "blockingIssues": [
-        "golden scenario (ТЗ §17.2) is exercised as a kernel smoke, not yet as the full packaged E2E with tool-call/yield/resume fault injection — rename 'golden' to 'kernel smoke' in docs until the packaged golden E2E exists"
+        "ORDERING (audit gate): M1 (Этап 1 security blockers) is not yet accepted — M2 may only be marked accepted after M1 is accepted (scripts/check-milestone-gates.mjs). Works are delivered (deliveredCommit b20b79c) but formal acceptance waits.",
+        "The packaged golden E2E of ТЗ §17.2 (with tool-call/yield/resume fault injection) does not exist yet — the current packaged self-check is honestly named a 'kernel flow smoke' (NEOTA_DESKTOP_SMOKE=1, renamed from 'golden smoke' per audit); the golden E2E remains an open acceptance item."
       ],
       "waivers": []
     },
     {
       "id": "M3-data-cutover",
       "name": "Этап 3 / Data cutover",
-      "status": "accepted",
-      "acceptedCommit": "9ef5284",
-      "acceptedBy": "neotavern/architecture",
+      "status": "in_progress",
+      "acceptedCommit": null,
+      "acceptedBy": null,
+      "deliveredCommit": "96178e7",
       "requirements": [
         "schema mapping complete",
         "staged converter in the application flow",
@@ -111,13 +114,14 @@
       ],
       "evidence": [
         "crates/storage/src/{migration,activation,legacy,open}.rs",
-        "crates/storage/tests/migration.rs (19-test corpus)",
+        "crates/storage/tests/migration.rs (24-test corpus)",
         "crates/adapters/cli --migrate-legacy + 13 CLI tests",
         "scripts/upgrade-drill.mjs PASS",
         "docs/adr/0041-versioned-data-roots-activation.md",
         "crates/storage/tests/activation.rs (Windows held-handle suite)"
       ],
       "blockingIssues": [
+        "ORDERING (audit gate): M1/M2 not yet accepted — M3 may only be marked accepted after every earlier milestone (scripts/check-milestone-gates.mjs). Works are delivered (deliveredCommit 96178e7) but formal acceptance waits.",
         "P0 (FIXED): the data-root lease was held only during prepare and released before commit — no single-writer between the phases. MigrationSession now holds the lease from begin through commit/cancel (single-writer enforced across the whole sequence)",
         "P0 (FIXED): active-root pointer accepted arbitrary absolute paths — write/read now validate the target is the data root or a root under <data-root>/roots/",
         "P0 (FIXED): pointer read errors were treated as missing (v1 flat fallback) — unreadable journal/pointer now fail closed",

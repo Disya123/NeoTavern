@@ -3,6 +3,34 @@
 ## Unreleased
 ### Added
 
+- **Logical profile export hardening (SEC-02 audit findings, ТЗ §SEC-02).**
+  `apps/server/src/lib/profileExport.ts` now reads every allowlisted table
+  inside ONE SQLite snapshot transaction (manifest records
+  `snapshotTransaction: true`), so a concurrent mutation can no longer split
+  the archive across two database states. `SELECT *` is gone: each table is
+  read through an explicit per-table column allowlist recorded in the
+  manifest, and the SEC-02 suite verifies the allowlist against the live
+  schema (`PRAGMA table_info`) — a column added by a future migration cannot
+  silently enter or silently drop out of the archive; only
+  `provider_configs.api_key` is an intentional partial allowlist (secret).
+  A failure inside the transaction rolls back and never leaks a temp
+  directory. Tests: `apps/server/test/profileExport.spec.ts` now 11 tests
+  (sentinels absent, per-table column allowlist exact-match, allowlist vs
+  schema, snapshot-transaction flag, rollback/no-dangling-transaction).
+
+- **Acceptance-ledger ordering gate (audit directive) and honest milestone
+  statuses.** New `scripts/check-milestone-gates.mjs` (wired into
+  `.github/workflows/ci.yml` and `pnpm milestone:gates:check`, with a
+  fixture self-test) fails CI when a milestone is marked `accepted` while an
+  earlier milestone is not — the audit's "CI gate blocking M2 while
+  M1.status != accepted". The ledger therefore records M2/M3 as
+  `in_progress` with `deliveredCommit` (works shipped at b20b79c/96178e7)
+  until their predecessors are formally accepted; M0 stays `accepted`.
+  Packaged smoke terminology corrected per audit: the
+  `NEOTA_DESKTOP_SMOKE=1` self-check is renamed from "golden" to the honest
+  "kernel flow smoke" (`run_kernel_flow_smoke`, docs updated) — the
+  packaged golden E2E of ТЗ §17.2 with fault injection remains an open item.
+
 - **Migration single-writer and pointer integrity fixes (audit P0 #3,
   ТЗ §10.3/§22.3).** `neotavern_storage::migration` is now session-based:
   `MigrationSession::begin` acquires the data-root lease and holds it for

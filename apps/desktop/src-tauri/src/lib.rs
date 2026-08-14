@@ -577,7 +577,7 @@ fn setup_local_kernel_mode(
     }
 
     if std::env::var("NEOTA_DESKTOP_SMOKE").as_deref() == Ok("1") {
-        let smoke = run_kernel_smoke(app.handle()).and_then(|_| run_golden_smoke(app.handle()));
+        let smoke = run_kernel_smoke(app.handle()).and_then(|_| run_kernel_flow_smoke(app.handle()));
         if let Err(error) = smoke {
             eprintln!("[smoke] FAILED: {error}");
             std::process::exit(1);
@@ -705,7 +705,7 @@ fn run_stream(
     Ok((stream_id, events))
 }
 
-/// The packaged golden vertical slice (Этап 2.9/2.10): the SAME user flow the
+/// The packaged kernel flow smoke (Этап 2.9/2.10): the user flow the
 /// UI drives through the generated client, exercised over the REAL Tauri host
 /// path (shell → KernelHost envelope → kernel → SQLite) on a fresh data root:
 ///
@@ -717,10 +717,12 @@ fn run_stream(
 ///    contract, `generation.tool.result` resumes and completes the run with a
 ///    second assistant message.
 ///
+/// This is a KERNEL smoke, not the packaged golden E2E of ТЗ §17.2 (which
+/// additionally requires fault injection and yield/resume approval flows).
 /// No HTTP, no sidecar, no UI: this is the packaged host's own self-check,
 /// runnable headless via `NEOTA_DESKTOP_SMOKE=1`.
 #[cfg(desktop)]
-fn run_golden_smoke(app: &AppHandle) -> Result<(), String> {
+fn run_kernel_flow_smoke(app: &AppHandle) -> Result<(), String> {
     let host = app.state::<KernelHost>();
 
     // 1. Library + conversation setup (wire CRUD).
@@ -729,7 +731,7 @@ fn run_golden_smoke(app: &AppHandle) -> Result<(), String> {
         "characters.create",
         serde_json::json!({
             "name": "Aria",
-            "description": "Golden slice character",
+            "description": "Kernel flow smoke character",
             "tags": [],
         }),
     )?;
@@ -742,7 +744,7 @@ fn run_golden_smoke(app: &AppHandle) -> Result<(), String> {
         "chats.create",
         serde_json::json!({
             "characterId": character_id,
-            "title": "Golden slice",
+            "title": "Kernel flow smoke",
         }),
     )?;
     let chat_id = chat["id"]
@@ -758,7 +760,7 @@ fn run_golden_smoke(app: &AppHandle) -> Result<(), String> {
             "content": "Hello",
         }),
     )?;
-    eprintln!("[smoke] golden: character/chat/message created");
+    eprintln!("[smoke] kernel flow: character/chat/message created");
 
     // 2. Plain generation → durable save (fake provider, deterministic
     //    grammar: one step × 24 chars).
@@ -802,7 +804,7 @@ fn run_golden_smoke(app: &AppHandle) -> Result<(), String> {
             assistant_content.chars().count()
         ));
     }
-    eprintln!("[smoke] golden: generation completed, one assistant message saved");
+    eprintln!("[smoke] kernel flow: generation completed, one assistant message saved");
 
     // 3. Tool round trip (§8.3). The fake adapter calls with
     //    `{"query": "<input>"}`, so the registered schema accepts exactly
@@ -818,7 +820,7 @@ fn run_golden_smoke(app: &AppHandle) -> Result<(), String> {
             "additionalProperties": false
         },
     }))?;
-    eprintln!("[smoke] golden: tool registered");
+    eprintln!("[smoke] kernel flow: tool registered");
     let (tool_run_id, _events) = run_stream(
         &host,
         "generation.start",
@@ -881,7 +883,7 @@ fn run_golden_smoke(app: &AppHandle) -> Result<(), String> {
             "tool round trip must save exactly one more assistant message, found {assistant_count}"
         ));
     }
-    eprintln!("[smoke] golden: tool round trip completed, two assistant messages saved");
+    eprintln!("[smoke] kernel flow: tool round trip completed, two assistant messages saved");
     Ok(())
 }
 
