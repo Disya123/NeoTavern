@@ -987,7 +987,7 @@ fn lorebook_entries_crud_round_trip() {
     .expect("lorebooks.entries.update must succeed");
     assert_eq!(updated.content, "The harbor freezes in winter.");
     assert_eq!(updated.keys, vec!["harbor".to_string()], "patch is partial");
-    assert_eq!(updated.constant, true, "unchanged fields survive the patch");
+    assert!(updated.constant, "unchanged fields survive the patch");
 
     // entries.delete removes exactly that entry.
     dispatch_decoded::<ResultEmpty>(

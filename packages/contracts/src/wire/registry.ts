@@ -1428,6 +1428,10 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('backups-create-response', 'backups.create', 'response', true, BACKUP_VALUE),
   fx('backups-list-response', 'backups.list', 'response', true, { items: [BACKUP_VALUE] }),
   fx('lorebooks-list-response', 'lorebooks.list', 'response', true, { items: [LOREBOOK_VALUE] }),
+  fx('lorebooks-get-response', 'lorebooks.get', 'response', true, LOREBOOK_VALUE),
+  fx('lorebooks-create-response', 'lorebooks.create', 'response', true, LOREBOOK_VALUE),
+  fx('lorebooks-update-response', 'lorebooks.update', 'response', true, LOREBOOK_VALUE),
+  fx('lorebooks-delete-response', 'lorebooks.delete', 'response', true, {}),
   fx(
     'lorebooks-entries-list-response',
     'lorebooks.entries.list',

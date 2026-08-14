@@ -1,5 +1,23 @@
 # Architecture Decision Records
 
+## ADR-0047: M4 limited waivers — slice-1 scope and full-cutover residual items
+
+The M4 (Этап 4, full UI/API cutover) acceptance covers the delivered
+**slice-1 scope** (personas + full lorebook CRUD incl. entry level,
+contract → kernel → facade → UI → corpus → host parity, plus the SEC-01
+and SEC-05 audit fixes) and records seven limited P1 waivers for the rest:
+legacy `/api/v2/lorebooks` + `/api/v2/personas` route removal (next slice);
+character↔lorebook scoping, `chat.persona_id`/`{{user}}` wiring, the
+per-profile export scoping (SEC-02 — this waiver supersedes the ADR-0042
+M4-cutover expiry, ratified by the human verdict) and the two full-cutover
+exit criteria (zero production legacy calls, legacy Fastify product-data
+ownership) expire at the release gate; slices 2–7 are the tracked remainder
+of Этап 4 with per-slice verdicts. No P0 remains open; the slice-1
+conformance work (47-op wire registry, clippy/assert fix, regenerated
+generated.rs, check-ui-api baseline) is recorded in the ledger evidence.
+Full decision, alternatives and consequences:
+[ADR-0047](0047-m4-limited-waivers.md).
+
 ## ADR-0046: M3 limited waivers — data-cutover residual P1 items
 
 The M3 (Этап 3) data-cutover acceptance records eight limited P1 waivers

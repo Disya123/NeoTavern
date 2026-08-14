@@ -3,6 +3,65 @@
 ## Unreleased
 ### Added
 
+- **Entry-level lorebook CRUD over Product Wire (M4 / Этап 4.1, slice
+  follow-up).** Four new wire operations `lorebooks.entries.list/create/
+  update/delete` join the `lorebooks.*` book ops: the kernel owns each
+  entry's `id`/`position`/`metadata`/timestamps (stored rows now always
+  satisfy the portable `ExportLoreEntry` shape), batch create/update writes
+  the full stored entry shape, and the stable `LOREBOOK_ENTRY_NOT_FOUND`
+  error carries `entryId`. The facade exposes
+  `LorebooksApi.listEntries/createEntry/updateEntry/deleteEntry` in Local/
+  Remote backends (legacy stays unsupported — the UI keeps `/api/v2` nested
+  there); `wireBridge` routes the entry ops through the facade in kernel
+  mode with honest translation (wire DTO has no position/metadata — neutral
+  defaults, an explicit position/metadata patch is `CAPABILITY_UNAVAILABLE`).
+  Tests at three levels: kernel `lorebook_entries_crud_round_trip` + error
+  paths (14 kernel CRUD tests), wire corpus (+4 positive, +7 negative
+  fixtures), remote-http host parity with the entry cycle.
+- **Lorebook and persona UI cutover over the facade (M4 / Этап 4.1, ТЗ
+  §8.1 Library context).** `wireBridge` gains
+  `readLorebooks/readLorebook/createLorebook/updateLorebook/deleteLorebook`
+  and `readPersonas/readPersona/createPersona/updatePersona/deletePersona`
+  with honest wire-to-UI translators and `UnsupportedError` for unimodelled
+  inputs (character scope, entry-level CRUD on the book shape, avatar
+  clear); `NeoBackend`'s `LorebooksApi` gains get/create/update/del and a
+  new `PersonasApi` exists on Local/Remote/Legacy backends; UI hooks route
+  through the facade in kernel mode.
+- **SEC-01 data-preservation fix: non-persistent backends no longer
+  destroy legacy plaintext.** The session (non-persistent) SecretStore
+  keeps legacy plaintext rows until a persistent backend is configured
+  instead of destroying them at bootstrap.
+- **SEC-05 fix: plugin entrypoints inside `signature/` are rejected.** A
+  plugin manifest whose entrypoints live under `signature/` is refused at
+  install and at host activation (the signature digest would not cover
+  them); negative test added.
+- **Full lorebook CRUD in the kernel (M4 / Этап 4.1, ТЗ §8.1 Library
+  context).** Product Wire gains `lorebooks.get/create/update/delete`
+  alongside `lorebooks.list`; the kernel implements all five with the same
+  transaction/validation pattern as character CRUD. Entries travel as the
+  `wire.lorebook.entry.input` object, are stored into `entries_json`,
+  `entryCount` derives from `json_array_length`, and the prompt pipeline
+  activates the stored entries (constant always, keyword substring,
+  selective primary+secondary). Stable errors: `LOREBOOK_NOT_FOUND` with
+  `lorebookId`; strict unknown-field/empty-name rejection
+  (`CONTRACT_VIOLATION`). `lorebooks.read` capability becomes
+  `lorebooks.crud` (5 wire ops).
+- **Persona CRUD in the kernel (M4 / Этап 4.1, ТЗ §8.1 Library context).**
+  Product Wire gains `personas.list/get/create/update/delete` backed by the
+  STRICT `personas` table (canonical schema migration 7 `007_personas`,
+  delivered with the Этап 3 cutover so migrated personas are never
+  dropped). The single-default invariant matches the legacy
+  `PersonaRepository`: create/update with `isDefault` clears the previous
+  default in the same transaction. Stable errors: `PERSONA_NOT_FOUND` with
+  `personaId`; `CONTRACT_VIOLATION` for strict unknown-field/empty-name
+  rejection.
+- **`check-ui-api` baseline regenerated (M4 / legacy-UI surface gate).**
+  The 65-site M1-era baseline was regenerated to the current surface (68
+  sites at the M3 head, 67 after the M4 slice) with full
+  owner/removalIssue/milestone/deadline records; `wireBridge.ts` gained its
+  removal record and the `generate.ts` record was corrected to milestone M4
+  (the generation-stream cut did not land in M2). `pnpm ui:api:check`
+  passes at every re-cut head.
 - **Migration single-writer and pointer integrity fixes (audit P0 #3,
   ТЗ §10.3/§22.3).** `neotavern_storage::migration` is now session-based:
   `MigrationSession::begin` acquires the data-root lease and holds it for

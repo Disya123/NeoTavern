@@ -180,7 +180,7 @@
     {
       "source": "adr/0040-secret-store-port-format.md",
       "target": "adr/0040-secret-store-port-format.md",
-      "sha256": "75f6ba9c6432785c647f11b2de5e007c918bf13596726e15b991f56fa29098e4"
+      "sha256": "101f19c6043c8d1ed40a3a3c1909f3ed09c7a30d063aee1e239628dbbfc175d4"
     },
     {
       "source": "adr/0041-versioned-data-roots-activation.md",
@@ -188,9 +188,34 @@
       "sha256": "4c1620ceb27769ccbf3b020c7d9a9fba438ed68a6bc69e412f519f919078d801"
     },
     {
+      "source": "adr/0042-m1-waiver-per-profile-export-scoping.md",
+      "target": "adr/0042-m1-waiver-per-profile-export-scoping.md",
+      "sha256": "e935adfb8f2d0e5936785b28da9d9afe0a0b053dd56e371b6cc666960918d649"
+    },
+    {
+      "source": "adr/0043-web-client-remote-only.md",
+      "target": "adr/0043-web-client-remote-only.md",
+      "sha256": "589d8d320611f2c29fc6bd1d417b9474e9563e0490a791337d64811c3e8b03b7"
+    },
+    {
+      "source": "adr/0044-generation-run-step-model.md",
+      "target": "adr/0044-generation-run-step-model.md",
+      "sha256": "b6a0e4a5570be44d757dc81b7fe4b5b8096e2ca020c92b434134d1d5140e1454"
+    },
+    {
+      "source": "adr/0045-m2-golden-e2e-waiver.md",
+      "target": "adr/0045-m2-golden-e2e-waiver.md",
+      "sha256": "d53cafc24e3207d092015eae0586ea10a07c89c40fa8b4172e1747131376d130"
+    },
+    {
+      "source": "adr/0046-m3-limited-waivers.md",
+      "target": "adr/0046-m3-limited-waivers.md",
+      "sha256": "41185c69649e017a90163fb4eb648bba789a6c7de5c4eea9fd8b85e2bb8031aa"
+    },
+    {
       "source": "adr/README.md",
       "target": "adr/README.md",
-      "sha256": "552662666f9636f00b61b58fbfdbf459530f672ff7ee3691c06289eebc957dc1"
+      "sha256": "3db5f31f0088932ba4919a224c067a2bcc4437f258df9db9df5eb1eced197c10"
     },
     {
       "source": "android/README.md",
@@ -215,17 +240,17 @@
     {
       "source": "architecture/generation-durability.md",
       "target": "architecture/generation-durability.md",
-      "sha256": "51ad2ebd383ea018a09eb2502515404111803adbe87fa3bd9d9d81fed94b1ffb"
+      "sha256": "c08f3149f5d32df99bd146c4d6fce09125feaa060207c4039ed43e5da5128a0e"
     },
     {
       "source": "architecture/generation-run-steps.md",
       "target": "architecture/generation-run-steps.md",
-      "sha256": "413cc18e8f9984cf7d87c21393fd73bc5e312353cc76ab70797e05cb22d94666"
+      "sha256": "59cbf7d3dd4e68bb7528c554e65706f6f324096392f704c63b2f3852ac158e32"
     },
     {
       "source": "architecture/operations-inventory.md",
       "target": "architecture/operations-inventory.md",
-      "sha256": "06f5a868b87dfac4e7fd30878a8b3dd2ce5a3e4990c6adeade184f5cc873a832"
+      "sha256": "7d1db5f594842de6e97b10360e6f5f0ef9aae2ccd906ece2a9de0b5f7b53eead"
     },
     {
       "source": "architecture/portable-data.md",
@@ -235,17 +260,17 @@
     {
       "source": "architecture/prompt-pipeline.md",
       "target": "architecture/prompt-pipeline.md",
-      "sha256": "2456f31dd93ed8d7950e6bc6a77146f8c69af330ead9cf3500c1393d99cf49cd"
+      "sha256": "58562fd4243d78de6dbc4f2426be6dba48ac93dfb18d1b6137d3c96bef0959c8"
     },
     {
       "source": "architecture/providers.md",
       "target": "architecture/providers.md",
-      "sha256": "f1612e44b8834421b0a0700ae6061d0bb586965a38d4cd0cecd3cdbe01e785aa"
+      "sha256": "0eb8969f55eb5323e83b8903f3cc6146211e6342eb01151dbdf3da7ebaa405ac"
     },
     {
       "source": "architecture/ui-legacy-surface.md",
       "target": "architecture/ui-legacy-surface.md",
-      "sha256": "75abcc76d714a8bd5ac1e38e306360e162de5d720459d99e44846ffaea9b1dd5"
+      "sha256": "066ae248037bd614b85cb27a14362f248ba9ade599da9e298b61abeb3e93fe6e"
     },
     {
       "source": "architecture/version-axes.md",
@@ -255,7 +280,7 @@
     {
       "source": "architecture/wire-contracts.md",
       "target": "architecture/wire-contracts.md",
-      "sha256": "c652fee9deb23cae938672b6f154dc6386e3c643790d380a964789b8390c5996"
+      "sha256": "ba2562a4ec37546ff9fa43e8daf1304119ee5d8ff0d934aeafa1e5247cc49225"
     },
     {
       "source": "capability-matrix.md",
@@ -270,7 +295,7 @@
     {
       "source": "desktop/README.md",
       "target": "desktop/README.md",
-      "sha256": "5e4e0d9d8b9580a67873c30657fe4a4a16821c70ee0b13b48ec4496704b4eb1b"
+      "sha256": "53b938aa0e0ecfdb351e2ae5c6cdf212c40e8a387f2cb69d289e866c6e0852a8"
     },
     {
       "source": "migrations/README.md",

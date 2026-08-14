@@ -36,11 +36,12 @@ const VALID_META_OP: WireOperation = {
 describe('product wire registry', () => {
   it('compiles the canonical registry with zero violations', () => {
     const registry = buildProductWireRegistry();
-    // The Phase 0 registry (21 ops) grew to the full M2 registry (34 ops):
-    // chats/chats.messages CRUD, generation keep/discard/prompt.plan/tools,
-    // providers.config.*. The exact operation set is asserted so a registry
+    // The Phase 0 registry (21 ops) grew to the full M2 registry (34 ops),
+    // then to the M4 registry (47 ops): lorebooks get/create/update/delete +
+    // lorebooks.entries.* CRUD + personas.* CRUD joined lorebooks.list and
+    // presets.list. The exact operation set is asserted so a registry
     // edit that drops or renames an op fails loudly here.
-    expect(registry.operations).toHaveLength(34);
+    expect(registry.operations).toHaveLength(47);
     expect(registry.operations.map((op) => op.operationId)).toEqual([
       'meta.get',
       'characters.list',
@@ -75,7 +76,20 @@ describe('product wire registry', () => {
       'backups.create',
       'backups.list',
       'lorebooks.list',
+      'lorebooks.get',
+      'lorebooks.create',
+      'lorebooks.update',
+      'lorebooks.delete',
+      'lorebooks.entries.list',
+      'lorebooks.entries.create',
+      'lorebooks.entries.update',
+      'lorebooks.entries.delete',
       'presets.list',
+      'personas.list',
+      'personas.get',
+      'personas.create',
+      'personas.update',
+      'personas.delete',
     ]);
   });
 
