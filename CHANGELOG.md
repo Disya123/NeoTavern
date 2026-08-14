@@ -3,6 +3,27 @@
 ## Unreleased
 ### Added
 
+- **Installed-package integrity + install recovery journal (SEC-05).** After
+  the publisher signature/digest verification at install, the computed
+  per-file digests are snapshotted next to the promoted package
+  (`<pluginRoot>/installed-digests.json`) and a durable install journal
+  (`install-journal.json`, `staging → committed / rolled_back`) is written
+  before the filesystem promotion. Every later activation — the
+  `POST /api/v2/plugins/:id/activate` route and the startup auto-activation —
+  re-verifies the installed files against the snapshot and refuses to load
+  the package with `PLUGIN_SIGNATURE_INVALID`
+  (`TAMPERED_AFTER_INSTALL:{NO_DIGEST_SNAPSHOT|FILE_SET_MISMATCH|DIGEST_MISMATCH|PLUGIN_ID_MISMATCH}`)
+  when anything was added, removed or modified after install (fail-closed).
+  Packages installed before this build get a baseline from their publisher
+  signature on first activation (an unsigned one is snapshotted as-is), so an
+  upgrade does not silently break existing plugins — and every later tamper
+  is caught. `recoverInterruptedInstalls` runs at startup before any plugin
+  activates: a journal that is not `committed` (crash between staging and the
+  registry write) removes the half-promoted package, and `.incoming-*` /
+  `.rollback-*` scratch leftovers are cleaned. Tests:
+  `apps/server/test/packageIntegrity.spec.ts` (9 tests, including the
+  end-to-end install → tamper → activate-refused route).
+
 - **Acceptance ledger gate is now a real gate (audit directive).**
   `scripts/check-milestone-gates.mjs` (CI + `--check`) now fails on an empty
   or structurally broken ledger (the ignored `main()` result is fixed), an
