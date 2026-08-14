@@ -8,6 +8,7 @@
     { "path": "packages/contracts" },
     { "path": "packages/db" },
     { "path": "packages/neobackend" },
+    { "path": "packages/secret-store" },
     { "path": "packages/provider-sdk" },
     { "path": "packages/plugin-sdk" },
     { "path": "packages/plugin-build" },
