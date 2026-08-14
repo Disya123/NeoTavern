@@ -365,22 +365,31 @@ export async function recoverInterruptedInstalls(
       await rm(journalPath, { force: true }).catch(() => undefined);
       continue;
     }
-    if (rollbackExists && paths.rollback) {
-      // UPDATE interrupted: the old version is parked in `.rollback-*`.
-      // Remove the half-promoted new package (it must not shadow the
-      // restored version), move the old one back, and restore the previous
-      // registry row.
+    if (paths.rollback !== null) {
+      // UPDATE interrupted. Branch on the journal's DECLARED intent, not the
+      // disk state: an update declares a rollback path even when the old copy
+      // has NOT been parked yet (crash between the incoming rename and the
+      // rollback move). Judging by the rollback directory alone would
+      // misclassify that window as a fresh install and delete the previous
+      // version's files AND registry row — the very both-versions-lost
+      // failure the v2 journal exists to prevent.
       logger.warn(
         `[plugin-install] rolling back interrupted update of ${pluginId} ` +
           `${journal.previousVersion ?? '?'} -> ${journal.version} (journal state: ${journal.state})`,
       );
-      await rm(paths.package, { recursive: true, force: true }).catch(() => undefined);
       await rm(paths.incoming, { recursive: true, force: true }).catch(() => undefined);
-      await rename(paths.rollback, paths.package).catch((error) => {
-        logger.error(
-          `[plugin-install] could not restore ${pluginId} from rollback: ${String(error)}`,
-        );
-      });
+      if (rollbackExists) {
+        // The old version is parked in `.rollback-*`: remove the half-promoted
+        // new package (it must not shadow the restored version) and move the
+        // old one back.
+        await rm(paths.package, { recursive: true, force: true }).catch(() => undefined);
+        await rename(paths.rollback, paths.package).catch((error) => {
+          logger.error(
+            `[plugin-install] could not restore ${pluginId} from rollback: ${String(error)}`,
+          );
+        });
+      }
+      // Else: `package` still holds the previous version — leave it untouched.
       if (journal.registry.previous) {
         repo.restoreEntry(journal.registry.previous);
       }

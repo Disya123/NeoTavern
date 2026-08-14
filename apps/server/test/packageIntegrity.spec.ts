@@ -221,6 +221,62 @@ describe('install recovery journal (ТЗ §SEC-05, v2)', () => {
     await expect(readFile(join(pluginRoot, INSTALL_JOURNAL_FILE), 'utf8')).rejects.toThrow();
   });
 
+  it('keeps the previous version when an UPDATE crashed before the old copy was parked — files AND registry row survive', async () => {
+    const root = await tempDir();
+    const pluginsDir = join(root, 'plugins');
+    const pluginRoot = join(pluginsDir, 'author.between');
+    const packageRoot = join(pluginRoot, 'package');
+    const incomingPath = join(pluginRoot, '.incoming-4');
+    const rollbackPath = join(pluginRoot, '.rollback-5');
+    // Crash state: the NEW package was staged into .incoming-4 but the OLD
+    // version was never parked (still at `package`) — the rollback path is
+    // declared in the journal but absent on disk. Recovery must NOT classify
+    // this as a fresh install (that would delete the previous version).
+    await mkdir(packageRoot, { recursive: true });
+    await writeFile(join(packageRoot, 'plugin.json'), '{"id":"x","version":"1.0.0"}');
+    await mkdir(incomingPath, { recursive: true });
+    await writeFile(join(incomingPath, 'plugin.json'), '{"id":"x","version":"2.0.0"}');
+    const previous = {
+      id: 'author.between',
+      name: 'Between',
+      version: '1.0.0',
+      enabled: true,
+      manifest: { id: 'author.between' },
+      requestedPermissions: [] as string[],
+      grantedPermissions: [] as string[],
+      installedAt: 1,
+      updatedAt: 2,
+      lastErrorCode: null,
+      source: null,
+      dependencies: null,
+      trust: 'locally-trusted',
+      publisherKeyId: null,
+    };
+    await writeInstallJournal(pluginRoot, {
+      pluginId: 'author.between',
+      version: '2.0.0',
+      previousVersion: '1.0.0',
+      state: 'staging',
+      paths: { package: packageRoot, incoming: incomingPath, rollback: rollbackPath },
+      registry: { previous },
+    });
+    const repo = fakeRepo();
+
+    await recoverInterruptedInstalls(pluginsDir, repo, logger);
+
+    // The PREVIOUS version is still on disk, the registry row is restored,
+    // and the half-promoted new package was dropped — both versions never
+    // deleted.
+    expect(await readFile(join(packageRoot, 'plugin.json'), 'utf8')).toBe(
+      '{"id":"x","version":"1.0.0"}',
+    );
+    await expect(readFile(join(incomingPath, 'plugin.json'), 'utf8')).rejects.toThrow();
+    await expect(readFile(join(rollbackPath, 'plugin.json'), 'utf8')).rejects.toThrow();
+    expect(repo.restoreEntry).toHaveBeenCalledWith(previous);
+    expect(repo.delete).not.toHaveBeenCalled();
+    await expect(readFile(join(pluginRoot, INSTALL_JOURNAL_FILE), 'utf8')).rejects.toThrow();
+  });
+
   it('rolls an interrupted FRESH install back to "not installed" (row + half-promoted files)', async () => {
     const root = await tempDir();
     const pluginsDir = join(root, 'plugins');

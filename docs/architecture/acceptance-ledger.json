@@ -260,7 +260,7 @@
           {
             "directive": "4. Crash-recovery plugin install journal",
             "what": "Install/update journal is written before mutation with the old/new paths and expected registry state; interrupted update rolls back files AND registry (never both deleted), interrupted fresh install rolls back to 'not installed', crash-before-mutation leaves the previous install untouched.",
-            "howToVerify": "npx vitest run apps/server/test/packageIntegrity.spec.ts — describe 'install recovery journal (ТЗ §SEC-05, v2)': interrupted UPDATE rollback, interrupted FRESH rollback, pre-mutation untouched, committed package keeps + journal marker dropped."
+            "howToVerify": "npx vitest run apps/server/test/packageIntegrity.spec.ts — describe 'install recovery journal (ТЗ §SEC-05, v2)': interrupted UPDATE rollback, UPDATE crash before the old copy was parked (files AND registry row survive — journal intent, not disk state, decides update-vs-fresh), interrupted FRESH rollback, pre-mutation untouched, committed package keeps + journal marker dropped."
           },
           {
             "directive": "5. Owner-aware secret cleanup by saved valueRef + cascade",
