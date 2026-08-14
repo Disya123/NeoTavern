@@ -506,6 +506,16 @@ fn handle_unary(
         "lorebooks.create" => with_db_opt(db, |db| product::lorebooks_create(db, req)),
         "lorebooks.update" => with_db_opt(db, |db| product::lorebooks_update(db, req)),
         "lorebooks.delete" => with_db_opt(db, |db| product::lorebooks_delete(db, req)),
+        "lorebooks.entries.list" => with_db_opt(db, |db| product::lorebooks_entries_list(db, req)),
+        "lorebooks.entries.create" => {
+            with_db_opt(db, |db| product::lorebooks_entries_create(db, req))
+        }
+        "lorebooks.entries.update" => {
+            with_db_opt(db, |db| product::lorebooks_entries_update(db, req))
+        }
+        "lorebooks.entries.delete" => {
+            with_db_opt(db, |db| product::lorebooks_entries_delete(db, req))
+        }
         "presets.list" => with_db_opt(db, |db| product::presets_list(db, req)),
         "personas.list" => with_db_opt(db, |db| product::personas_list(db, req)),
         "personas.get" => with_db_opt(db, |db| product::personas_get(db, req)),

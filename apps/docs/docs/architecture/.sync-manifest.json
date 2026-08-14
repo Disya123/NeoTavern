@@ -225,12 +225,12 @@
     {
       "source": "architecture/operations-inventory.md",
       "target": "architecture/operations-inventory.md",
-      "sha256": "2f710a9e32faffe3ae467338bd6e5d66b07e81f6d9d58daffe8f8db7e3b86bad"
+      "sha256": "06f5a868b87dfac4e7fd30878a8b3dd2ce5a3e4990c6adeade184f5cc873a832"
     },
     {
       "source": "architecture/portable-data.md",
       "target": "architecture/portable-data.md",
-      "sha256": "72b35d74ffc2cb6d45658950f69d150244e8d600e5310dd117c31382b334974a"
+      "sha256": "67d3eae6b8956244fa7c0a123caeba961c3c85e056b8154a35442e4173706366"
     },
     {
       "source": "architecture/prompt-pipeline.md",
@@ -245,12 +245,12 @@
     {
       "source": "architecture/ui-legacy-surface.md",
       "target": "architecture/ui-legacy-surface.md",
-      "sha256": "a0cc19e162357efa6328604420aa72eb408cbff1a16e4fb1c8c0e32c3cfcacd6"
+      "sha256": "75abcc76d714a8bd5ac1e38e306360e162de5d720459d99e44846ffaea9b1dd5"
     },
     {
       "source": "architecture/version-axes.md",
       "target": "architecture/version-axes.md",
-      "sha256": "7dcd21f6e165e4e80d8365c2230054128a83836d0e4685b8cbab4a6b904ded4f"
+      "sha256": "35ea380754114143098a7c6e37316eac8ff936e6c1785dd74b0b7160e795875b"
     },
     {
       "source": "architecture/wire-contracts.md",
@@ -260,7 +260,7 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "1c72e9274f702a091cc22a3db4baed2d2dcb6b6fb29b505e6873c0f34eedc627"
+      "sha256": "c8707be37c40573c2ab36e926c0dc935b97906274b585b4440246fd49d4638ac"
     },
     {
       "source": "data/README.md",
@@ -270,7 +270,7 @@
     {
       "source": "desktop/README.md",
       "target": "desktop/README.md",
-      "sha256": "53b938aa0e0ecfdb351e2ae5c6cdf212c40e8a387f2cb69d289e866c6e0852a8"
+      "sha256": "5e4e0d9d8b9580a67873c30657fe4a4a16821c70ee0b13b48ec4496704b4eb1b"
     },
     {
       "source": "migrations/README.md",

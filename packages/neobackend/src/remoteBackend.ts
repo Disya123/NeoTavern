@@ -14,12 +14,14 @@ import type {
   ListToolsResultDto,
   WireGenerationEvent,
   ListBackupsResultDto,
+  ListLorebookEntriesResultDto,
   ListLorebooksResultDto,
   ListPersonasResultDto,
   ListPresetsResultDto,
   ListProviderConfigsResultDto,
   ListProvidersResultDto,
   LorebookDto,
+  LorebookEntryDto,
   MessageDto,
   MetaDto,
   PagedCharactersDto,
@@ -142,6 +144,12 @@ export class RemoteBackend implements NeoBackend {
     create: (req) => this.sdk.call<LorebookDto>('lorebooks.create', req),
     update: (req) => this.sdk.call<LorebookDto>('lorebooks.update', req),
     del: (lorebookId) => this.sdk.call<EmptyResultDto>('lorebooks.delete', { lorebookId }),
+    listEntries: (lorebookId) =>
+      this.sdk.call<ListLorebookEntriesResultDto>('lorebooks.entries.list', { lorebookId }),
+    createEntry: (req) => this.sdk.call<LorebookEntryDto>('lorebooks.entries.create', req),
+    updateEntry: (req) => this.sdk.call<LorebookEntryDto>('lorebooks.entries.update', req),
+    deleteEntry: (lorebookId, entryId) =>
+      this.sdk.call<EmptyResultDto>('lorebooks.entries.delete', { lorebookId, entryId }),
   };
 
   readonly personas: PersonasApi = {

@@ -857,6 +857,62 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'lorebooks.entries.list',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.list-lorebook-entries',
+    'wire.result.list-lorebook-entries',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    65536,
+    undefined,
+  ),
+  op(
+    'lorebooks.entries.create',
+    'transactional',
+    'non-idempotent',
+    'none',
+    'app.write',
+    'wire.request.create-lorebook-entry',
+    'wire.lorebook.entry.dto',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    262144,
+    undefined,
+  ),
+  op(
+    'lorebooks.entries.update',
+    'transactional',
+    'non-idempotent',
+    'none',
+    'app.write',
+    'wire.request.update-lorebook-entry',
+    'wire.lorebook.entry.dto',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    262144,
+    undefined,
+  ),
+  op(
+    'lorebooks.entries.delete',
+    'transactional',
+    'non-idempotent',
+    'none',
+    'app.write',
+    'wire.request.delete-lorebook-entry',
+    'wire.result.empty',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    1024,
+    undefined,
+  ),
+  op(
     'presets.list',
     'transactional',
     'idempotent',
@@ -951,6 +1007,7 @@ const UUID_CHAT = '7f3a2b4c-1d2e-4f5a-8b9c-0d1e2f3a4b5c';
 const UUID_MESSAGE = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
 const UUID_BACKUP = '1a2b3c4d-5e6f-4a8b-9c0d-1e2f3a4b5c6d';
 const UUID_LOREBOOK = '2b3c4d5e-6f7a-4b9c-8d0e-1f2a3b4c5d6e';
+const UUID_LOREBOOK_ENTRY = '7e8f9012-3a4b-4c5d-9e0f-1a2b3c4d5e6f';
 const UUID_PRESET = '3c4d5e6f-7a8b-4c0d-9e1f-2a3b4c5d6e7f';
 const UUID_PERSONA = '0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f';
 const UUID_WORKFLOW = '9c8b7a6e-5d4c-4b3a-9f8e-7d6c5b4a3f2e';
@@ -1187,6 +1244,29 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('lorebooks-delete-request', 'lorebooks.delete', 'request', true, {
     lorebookId: UUID_LOREBOOK,
   }),
+  fx('lorebooks-entries-list-request', 'lorebooks.entries.list', 'request', true, {
+    lorebookId: UUID_LOREBOOK,
+  }),
+  fx('lorebooks-entries-create-request', 'lorebooks.entries.create', 'request', true, {
+    lorebookId: UUID_LOREBOOK,
+    entry: {
+      keys: ['castle', 'fortress'],
+      secondaryKeys: ['stone'],
+      content: 'The castle is carved from living stone.',
+      enabled: true,
+      constant: false,
+      selective: true,
+    },
+  }),
+  fx('lorebooks-entries-update-request', 'lorebooks.entries.update', 'request', true, {
+    lorebookId: UUID_LOREBOOK,
+    entryId: UUID_LOREBOOK_ENTRY,
+    patch: { content: 'The harbor never freezes.' },
+  }),
+  fx('lorebooks-entries-delete-request', 'lorebooks.entries.delete', 'request', true, {
+    lorebookId: UUID_LOREBOOK,
+    entryId: UUID_LOREBOOK_ENTRY,
+  }),
   fx('personas-get-request', 'personas.get', 'request', true, {
     personaId: UUID_PERSONA,
   }),
@@ -1348,6 +1428,43 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('backups-create-response', 'backups.create', 'response', true, BACKUP_VALUE),
   fx('backups-list-response', 'backups.list', 'response', true, { items: [BACKUP_VALUE] }),
   fx('lorebooks-list-response', 'lorebooks.list', 'response', true, { items: [LOREBOOK_VALUE] }),
+  fx(
+    'lorebooks-entries-list-response',
+    'lorebooks.entries.list',
+    'response',
+    true,
+    {
+      items: [
+        {
+          id: UUID_LOREBOOK_ENTRY,
+          keys: ['castle', 'fortress'],
+          secondaryKeys: ['stone'],
+          content: 'The castle is carved from living stone.',
+          enabled: true,
+          constant: false,
+          selective: true,
+        },
+      ],
+    },
+  ),
+  fx('lorebooks-entries-create-response', 'lorebooks.entries.create', 'response', true, {
+    id: UUID_LOREBOOK_ENTRY,
+    keys: ['castle', 'fortress'],
+    secondaryKeys: ['stone'],
+    content: 'The castle is carved from living stone.',
+    enabled: true,
+    constant: false,
+    selective: true,
+  }),
+  fx('lorebooks-entries-update-response', 'lorebooks.entries.update', 'response', true, {
+    id: UUID_LOREBOOK_ENTRY,
+    keys: ['harbor'],
+    content: 'The harbor never freezes.',
+    enabled: true,
+    constant: false,
+    selective: false,
+  }),
+  fx('lorebooks-entries-delete-response', 'lorebooks.entries.delete', 'response', true, {}),
   fx('presets-list-response', 'presets.list', 'response', true, { items: [PRESET_VALUE] }),
   fx('personas-list-response', 'personas.list', 'response', true, { items: [PERSONA_VALUE] }),
   fx('personas-get-response', 'personas.get', 'response', true, PERSONA_VALUE),
@@ -1421,6 +1538,25 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     entries: [{ keys: ['castle'], content: '' }],
   }),
   fx('neg-lorebook-delete-missing-field', 'lorebooks.delete', 'request', false, {}),
+  fx('neg-lorebook-entries-list-missing-field', 'lorebooks.entries.list', 'request', false, {}),
+  fx('neg-lorebook-entries-create-missing-book', 'lorebooks.entries.create', 'request', false, {
+    entry: { keys: ['k'], content: 'c' },
+  }),
+  fx('neg-lorebook-entries-create-missing-payload', 'lorebooks.entries.create', 'request', false, {
+    lorebookId: UUID_LOREBOOK,
+  }),
+  fx('neg-lorebook-entries-update-missing-id', 'lorebooks.entries.update', 'request', false, {
+    lorebookId: UUID_LOREBOOK,
+    patch: { content: 'x' },
+  }),
+  fx('neg-lorebook-entries-update-bad-id-type', 'lorebooks.entries.update', 'request', false, {
+    lorebookId: UUID_LOREBOOK,
+    entryId: 42,
+    patch: { content: 'x' },
+  }),
+  fx('neg-lorebook-entries-delete-missing-id', 'lorebooks.entries.delete', 'request', false, {
+    lorebookId: UUID_LOREBOOK,
+  }),
   fx('neg-persona-get-missing-field', 'personas.get', 'request', false, {}),
   fx('neg-persona-get-wrong-type', 'personas.get', 'request', false, { personaId: 42 }),
   fx('neg-persona-create-extra-field', 'personas.create', 'request', false, {

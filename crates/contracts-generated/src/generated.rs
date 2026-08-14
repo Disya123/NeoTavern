@@ -1209,9 +1209,17 @@ pub struct PersonaDto {
 }
 
 pub(crate) fn check_persona_dto(value: &Value, path: &str, issues: &mut Vec<Issue>) {
-    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
-    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
-    static RE_2: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap())
+    });
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$")
+            .unwrap_or_else(|_| Regex::new("$^").unwrap())
+    });
+    static RE_2: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$")
+            .unwrap_or_else(|_| Regex::new("$^").unwrap())
+    });
     if !value.is_object() {
         issues.push(Issue::new(path, "Object"));
     } else {
@@ -1310,7 +1318,15 @@ pub(crate) fn check_persona_dto(value: &Value, path: &str, issues: &mut Vec<Issu
         }
         if let Some(obj) = value.as_object() {
             for key in obj.keys() {
-                if !matches!(key.as_str(), "id" | "name" | "description" | "avatar" | "isDefault" | "createdAt" | "updatedAt") {
+                if !matches!(
+                    key.as_str(),
+                    "id" | "name"
+                        | "description"
+                        | "avatar"
+                        | "isDefault"
+                        | "createdAt"
+                        | "updatedAt"
+                ) {
                     let key_path = join_path(path, key);
                     issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
                 }
@@ -1322,7 +1338,11 @@ pub(crate) fn check_persona_dto(value: &Value, path: &str, issues: &mut Vec<Issu
 pub fn validate_persona_dto(value: &Value) -> Result<(), Vec<Issue>> {
     let mut issues = Vec::new();
     check_persona_dto(value, "", &mut issues);
-    if issues.is_empty() { Ok(()) } else { Err(issues) }
+    if issues.is_empty() {
+        Ok(())
+    } else {
+        Err(issues)
+    }
 }
 
 pub fn decode_persona_dto(bytes: &[u8]) -> Result<PersonaDto, WireError> {
@@ -3590,12 +3610,17 @@ pub struct RequestGetLorebook {
 }
 
 pub(crate) fn check_request_get_lorebook(value: &Value, path: &str, issues: &mut Vec<Issue>) {
-    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap())
+    });
     if !value.is_object() {
         issues.push(Issue::new(path, "Object"));
     } else {
         if value.get("lorebookId").is_none() {
-            issues.push(Issue::new(join_path(path, "lorebookId"), "RequiredProperty"));
+            issues.push(Issue::new(
+                join_path(path, "lorebookId"),
+                "RequiredProperty",
+            ));
         }
         if let Some(child) = value.get("lorebookId") {
             let child_path = join_path(path, "lorebookId");
@@ -3622,7 +3647,11 @@ pub(crate) fn check_request_get_lorebook(value: &Value, path: &str, issues: &mut
 pub fn validate_request_get_lorebook(value: &Value) -> Result<(), Vec<Issue>> {
     let mut issues = Vec::new();
     check_request_get_lorebook(value, "", &mut issues);
-    if issues.is_empty() { Ok(()) } else { Err(issues) }
+    if issues.is_empty() {
+        Ok(())
+    } else {
+        Err(issues)
+    }
 }
 
 pub fn decode_request_get_lorebook(bytes: &[u8]) -> Result<RequestGetLorebook, WireError> {
@@ -3701,7 +3730,11 @@ pub(crate) fn check_request_create_lorebook(value: &Value, path: &str, issues: &
 pub fn validate_request_create_lorebook(value: &Value) -> Result<(), Vec<Issue>> {
     let mut issues = Vec::new();
     check_request_create_lorebook(value, "", &mut issues);
-    if issues.is_empty() { Ok(()) } else { Err(issues) }
+    if issues.is_empty() {
+        Ok(())
+    } else {
+        Err(issues)
+    }
 }
 
 pub fn decode_request_create_lorebook(bytes: &[u8]) -> Result<RequestCreateLorebook, WireError> {
@@ -3722,12 +3755,17 @@ pub struct RequestUpdateLorebook {
 }
 
 pub(crate) fn check_request_update_lorebook(value: &Value, path: &str, issues: &mut Vec<Issue>) {
-    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap())
+    });
     if !value.is_object() {
         issues.push(Issue::new(path, "Object"));
     } else {
         if value.get("lorebookId").is_none() {
-            issues.push(Issue::new(join_path(path, "lorebookId"), "RequiredProperty"));
+            issues.push(Issue::new(
+                join_path(path, "lorebookId"),
+                "RequiredProperty",
+            ));
         }
         if let Some(child) = value.get("lorebookId") {
             let child_path = join_path(path, "lorebookId");
@@ -3783,7 +3821,10 @@ pub(crate) fn check_request_update_lorebook(value: &Value, path: &str, issues: &
         }
         if let Some(obj) = value.as_object() {
             for key in obj.keys() {
-                if !matches!(key.as_str(), "lorebookId" | "name" | "description" | "entries") {
+                if !matches!(
+                    key.as_str(),
+                    "lorebookId" | "name" | "description" | "entries"
+                ) {
                     let key_path = join_path(path, key);
                     issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
                 }
@@ -3795,7 +3836,11 @@ pub(crate) fn check_request_update_lorebook(value: &Value, path: &str, issues: &
 pub fn validate_request_update_lorebook(value: &Value) -> Result<(), Vec<Issue>> {
     let mut issues = Vec::new();
     check_request_update_lorebook(value, "", &mut issues);
-    if issues.is_empty() { Ok(()) } else { Err(issues) }
+    if issues.is_empty() {
+        Ok(())
+    } else {
+        Err(issues)
+    }
 }
 
 pub fn decode_request_update_lorebook(bytes: &[u8]) -> Result<RequestUpdateLorebook, WireError> {
@@ -3810,12 +3855,17 @@ pub struct RequestDeleteLorebook {
 }
 
 pub(crate) fn check_request_delete_lorebook(value: &Value, path: &str, issues: &mut Vec<Issue>) {
-    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap())
+    });
     if !value.is_object() {
         issues.push(Issue::new(path, "Object"));
     } else {
         if value.get("lorebookId").is_none() {
-            issues.push(Issue::new(join_path(path, "lorebookId"), "RequiredProperty"));
+            issues.push(Issue::new(
+                join_path(path, "lorebookId"),
+                "RequiredProperty",
+            ));
         }
         if let Some(child) = value.get("lorebookId") {
             let child_path = join_path(path, "lorebookId");
@@ -3842,7 +3892,11 @@ pub(crate) fn check_request_delete_lorebook(value: &Value, path: &str, issues: &
 pub fn validate_request_delete_lorebook(value: &Value) -> Result<(), Vec<Issue>> {
     let mut issues = Vec::new();
     check_request_delete_lorebook(value, "", &mut issues);
-    if issues.is_empty() { Ok(()) } else { Err(issues) }
+    if issues.is_empty() {
+        Ok(())
+    } else {
+        Err(issues)
+    }
 }
 
 pub fn decode_request_delete_lorebook(bytes: &[u8]) -> Result<RequestDeleteLorebook, WireError> {
@@ -3853,7 +3907,11 @@ pub fn decode_request_delete_lorebook(bytes: &[u8]) -> Result<RequestDeleteLoreb
 #[serde(deny_unknown_fields)]
 pub struct LorebookEntryInput {
     pub keys: Vec<String>,
-    #[serde(rename = "secondaryKeys", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "secondaryKeys",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub secondary_keys: Option<Vec<String>>,
     pub content: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -3959,7 +4017,10 @@ pub(crate) fn check_lorebook_entry_input(value: &Value, path: &str, issues: &mut
         }
         if let Some(obj) = value.as_object() {
             for key in obj.keys() {
-                if !matches!(key.as_str(), "keys" | "secondaryKeys" | "content" | "enabled" | "constant" | "selective") {
+                if !matches!(
+                    key.as_str(),
+                    "keys" | "secondaryKeys" | "content" | "enabled" | "constant" | "selective"
+                ) {
                     let key_path = join_path(path, key);
                     issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
                 }
@@ -3971,11 +4032,677 @@ pub(crate) fn check_lorebook_entry_input(value: &Value, path: &str, issues: &mut
 pub fn validate_lorebook_entry_input(value: &Value) -> Result<(), Vec<Issue>> {
     let mut issues = Vec::new();
     check_lorebook_entry_input(value, "", &mut issues);
-    if issues.is_empty() { Ok(()) } else { Err(issues) }
+    if issues.is_empty() {
+        Ok(())
+    } else {
+        Err(issues)
+    }
 }
 
 pub fn decode_lorebook_entry_input(bytes: &[u8]) -> Result<LorebookEntryInput, WireError> {
     crate::decode::<LorebookEntryInput>(validate_lorebook_entry_input, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LorebookEntryDto {
+    pub id: String,
+    pub keys: Vec<String>,
+    #[serde(
+        rename = "secondaryKeys",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub secondary_keys: Option<Vec<String>>,
+    pub content: String,
+    pub enabled: bool,
+    pub constant: bool,
+    pub selective: bool,
+}
+
+pub(crate) fn check_lorebook_entry_dto(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap())
+    });
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("id").is_none() {
+            issues.push(Issue::new(join_path(path, "id"), "RequiredProperty"));
+        }
+        if value.get("keys").is_none() {
+            issues.push(Issue::new(join_path(path, "keys"), "RequiredProperty"));
+        }
+        if value.get("content").is_none() {
+            issues.push(Issue::new(join_path(path, "content"), "RequiredProperty"));
+        }
+        if value.get("enabled").is_none() {
+            issues.push(Issue::new(join_path(path, "enabled"), "RequiredProperty"));
+        }
+        if value.get("constant").is_none() {
+            issues.push(Issue::new(join_path(path, "constant"), "RequiredProperty"));
+        }
+        if value.get("selective").is_none() {
+            issues.push(Issue::new(join_path(path, "selective"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("id") {
+            let child_path = join_path(path, "id");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("keys") {
+            let child_path = join_path(path, "keys");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                if arr.len() > 100 {
+                    issues.push(Issue::new(child_path.as_str(), "ArrayMaxItems"));
+                }
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    match item.as_str() {
+                        Some(s) => {
+                            let len = s.encode_utf16().count();
+                            if len < 1 {
+                                issues.push(Issue::new(item_path.as_str(), "StringMinLength"));
+                            }
+                            if len > 200 {
+                                issues.push(Issue::new(item_path.as_str(), "StringMaxLength"));
+                            }
+                        }
+                        None => issues.push(Issue::new(item_path.as_str(), "String")),
+                    }
+                }
+            }
+        }
+        if let Some(child) = value.get("secondaryKeys") {
+            let child_path = join_path(path, "secondaryKeys");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                if arr.len() > 100 {
+                    issues.push(Issue::new(child_path.as_str(), "ArrayMaxItems"));
+                }
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    match item.as_str() {
+                        Some(s) => {
+                            let len = s.encode_utf16().count();
+                            if len < 1 {
+                                issues.push(Issue::new(item_path.as_str(), "StringMinLength"));
+                            }
+                            if len > 200 {
+                                issues.push(Issue::new(item_path.as_str(), "StringMaxLength"));
+                            }
+                        }
+                        None => issues.push(Issue::new(item_path.as_str(), "String")),
+                    }
+                }
+            }
+        }
+        if let Some(child) = value.get("content") {
+            let child_path = join_path(path, "content");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 20000 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("enabled") {
+            let child_path = join_path(path, "enabled");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(child) = value.get("constant") {
+            let child_path = join_path(path, "constant");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(child) = value.get("selective") {
+            let child_path = join_path(path, "selective");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(
+                    key.as_str(),
+                    "id" | "keys"
+                        | "secondaryKeys"
+                        | "content"
+                        | "enabled"
+                        | "constant"
+                        | "selective"
+                ) {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_lorebook_entry_dto(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_lorebook_entry_dto(value, "", &mut issues);
+    if issues.is_empty() {
+        Ok(())
+    } else {
+        Err(issues)
+    }
+}
+
+pub fn decode_lorebook_entry_dto(bytes: &[u8]) -> Result<LorebookEntryDto, WireError> {
+    crate::decode::<LorebookEntryDto>(validate_lorebook_entry_dto, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LorebookEntryPatch {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keys: Option<Vec<String>>,
+    #[serde(
+        rename = "secondaryKeys",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub secondary_keys: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub constant: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selective: Option<bool>,
+}
+
+pub(crate) fn check_lorebook_entry_patch(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if let Some(child) = value.get("keys") {
+            let child_path = join_path(path, "keys");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                if arr.len() > 100 {
+                    issues.push(Issue::new(child_path.as_str(), "ArrayMaxItems"));
+                }
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    match item.as_str() {
+                        Some(s) => {
+                            let len = s.encode_utf16().count();
+                            if len < 1 {
+                                issues.push(Issue::new(item_path.as_str(), "StringMinLength"));
+                            }
+                            if len > 200 {
+                                issues.push(Issue::new(item_path.as_str(), "StringMaxLength"));
+                            }
+                        }
+                        None => issues.push(Issue::new(item_path.as_str(), "String")),
+                    }
+                }
+            }
+        }
+        if let Some(child) = value.get("secondaryKeys") {
+            let child_path = join_path(path, "secondaryKeys");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                if arr.len() > 100 {
+                    issues.push(Issue::new(child_path.as_str(), "ArrayMaxItems"));
+                }
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    match item.as_str() {
+                        Some(s) => {
+                            let len = s.encode_utf16().count();
+                            if len < 1 {
+                                issues.push(Issue::new(item_path.as_str(), "StringMinLength"));
+                            }
+                            if len > 200 {
+                                issues.push(Issue::new(item_path.as_str(), "StringMaxLength"));
+                            }
+                        }
+                        None => issues.push(Issue::new(item_path.as_str(), "String")),
+                    }
+                }
+            }
+        }
+        if let Some(child) = value.get("content") {
+            let child_path = join_path(path, "content");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 20000 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("enabled") {
+            let child_path = join_path(path, "enabled");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(child) = value.get("constant") {
+            let child_path = join_path(path, "constant");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(child) = value.get("selective") {
+            let child_path = join_path(path, "selective");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(
+                    key.as_str(),
+                    "keys" | "secondaryKeys" | "content" | "enabled" | "constant" | "selective"
+                ) {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_lorebook_entry_patch(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_lorebook_entry_patch(value, "", &mut issues);
+    if issues.is_empty() {
+        Ok(())
+    } else {
+        Err(issues)
+    }
+}
+
+pub fn decode_lorebook_entry_patch(bytes: &[u8]) -> Result<LorebookEntryPatch, WireError> {
+    crate::decode::<LorebookEntryPatch>(validate_lorebook_entry_patch, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestListLorebookEntries {
+    #[serde(rename = "lorebookId")]
+    pub lorebook_id: String,
+}
+
+pub(crate) fn check_request_list_lorebook_entries(
+    value: &Value,
+    path: &str,
+    issues: &mut Vec<Issue>,
+) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap())
+    });
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("lorebookId").is_none() {
+            issues.push(Issue::new(
+                join_path(path, "lorebookId"),
+                "RequiredProperty",
+            ));
+        }
+        if let Some(child) = value.get("lorebookId") {
+            let child_path = join_path(path, "lorebookId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "lorebookId") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_list_lorebook_entries(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_list_lorebook_entries(value, "", &mut issues);
+    if issues.is_empty() {
+        Ok(())
+    } else {
+        Err(issues)
+    }
+}
+
+pub fn decode_request_list_lorebook_entries(
+    bytes: &[u8],
+) -> Result<RequestListLorebookEntries, WireError> {
+    crate::decode::<RequestListLorebookEntries>(validate_request_list_lorebook_entries, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestCreateLorebookEntry {
+    #[serde(rename = "lorebookId")]
+    pub lorebook_id: String,
+    pub entry: LorebookEntryInput,
+}
+
+pub(crate) fn check_request_create_lorebook_entry(
+    value: &Value,
+    path: &str,
+    issues: &mut Vec<Issue>,
+) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap())
+    });
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("lorebookId").is_none() {
+            issues.push(Issue::new(
+                join_path(path, "lorebookId"),
+                "RequiredProperty",
+            ));
+        }
+        if value.get("entry").is_none() {
+            issues.push(Issue::new(join_path(path, "entry"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("lorebookId") {
+            let child_path = join_path(path, "lorebookId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("entry") {
+            let child_path = join_path(path, "entry");
+            check_lorebook_entry_input(child, &child_path, issues);
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "lorebookId" | "entry") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_create_lorebook_entry(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_create_lorebook_entry(value, "", &mut issues);
+    if issues.is_empty() {
+        Ok(())
+    } else {
+        Err(issues)
+    }
+}
+
+pub fn decode_request_create_lorebook_entry(
+    bytes: &[u8],
+) -> Result<RequestCreateLorebookEntry, WireError> {
+    crate::decode::<RequestCreateLorebookEntry>(validate_request_create_lorebook_entry, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestUpdateLorebookEntry {
+    #[serde(rename = "lorebookId")]
+    pub lorebook_id: String,
+    #[serde(rename = "entryId")]
+    pub entry_id: String,
+    pub patch: LorebookEntryPatch,
+}
+
+pub(crate) fn check_request_update_lorebook_entry(
+    value: &Value,
+    path: &str,
+    issues: &mut Vec<Issue>,
+) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap())
+    });
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap())
+    });
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("lorebookId").is_none() {
+            issues.push(Issue::new(
+                join_path(path, "lorebookId"),
+                "RequiredProperty",
+            ));
+        }
+        if value.get("entryId").is_none() {
+            issues.push(Issue::new(join_path(path, "entryId"), "RequiredProperty"));
+        }
+        if value.get("patch").is_none() {
+            issues.push(Issue::new(join_path(path, "patch"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("lorebookId") {
+            let child_path = join_path(path, "lorebookId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("entryId") {
+            let child_path = join_path(path, "entryId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("patch") {
+            let child_path = join_path(path, "patch");
+            check_lorebook_entry_patch(child, &child_path, issues);
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "lorebookId" | "entryId" | "patch") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_update_lorebook_entry(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_update_lorebook_entry(value, "", &mut issues);
+    if issues.is_empty() {
+        Ok(())
+    } else {
+        Err(issues)
+    }
+}
+
+pub fn decode_request_update_lorebook_entry(
+    bytes: &[u8],
+) -> Result<RequestUpdateLorebookEntry, WireError> {
+    crate::decode::<RequestUpdateLorebookEntry>(validate_request_update_lorebook_entry, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestDeleteLorebookEntry {
+    #[serde(rename = "lorebookId")]
+    pub lorebook_id: String,
+    #[serde(rename = "entryId")]
+    pub entry_id: String,
+}
+
+pub(crate) fn check_request_delete_lorebook_entry(
+    value: &Value,
+    path: &str,
+    issues: &mut Vec<Issue>,
+) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap())
+    });
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap())
+    });
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("lorebookId").is_none() {
+            issues.push(Issue::new(
+                join_path(path, "lorebookId"),
+                "RequiredProperty",
+            ));
+        }
+        if value.get("entryId").is_none() {
+            issues.push(Issue::new(join_path(path, "entryId"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("lorebookId") {
+            let child_path = join_path(path, "lorebookId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("entryId") {
+            let child_path = join_path(path, "entryId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "lorebookId" | "entryId") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_delete_lorebook_entry(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_delete_lorebook_entry(value, "", &mut issues);
+    if issues.is_empty() {
+        Ok(())
+    } else {
+        Err(issues)
+    }
+}
+
+pub fn decode_request_delete_lorebook_entry(
+    bytes: &[u8],
+) -> Result<RequestDeleteLorebookEntry, WireError> {
+    crate::decode::<RequestDeleteLorebookEntry>(validate_request_delete_lorebook_entry, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultListLorebookEntries {
+    pub items: Vec<LorebookEntryDto>,
+}
+
+pub(crate) fn check_result_list_lorebook_entries(
+    value: &Value,
+    path: &str,
+    issues: &mut Vec<Issue>,
+) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("items").is_none() {
+            issues.push(Issue::new(join_path(path, "items"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("items") {
+            let child_path = join_path(path, "items");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    check_lorebook_entry_dto(item, &item_path, issues);
+                }
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "items") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_list_lorebook_entries(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_list_lorebook_entries(value, "", &mut issues);
+    if issues.is_empty() {
+        Ok(())
+    } else {
+        Err(issues)
+    }
+}
+
+pub fn decode_result_list_lorebook_entries(
+    bytes: &[u8],
+) -> Result<ResultListLorebookEntries, WireError> {
+    crate::decode::<ResultListLorebookEntries>(validate_result_list_lorebook_entries, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -3986,7 +4713,9 @@ pub struct RequestGetPersona {
 }
 
 pub(crate) fn check_request_get_persona(value: &Value, path: &str, issues: &mut Vec<Issue>) {
-    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap())
+    });
     if !value.is_object() {
         issues.push(Issue::new(path, "Object"));
     } else {
@@ -4018,7 +4747,11 @@ pub(crate) fn check_request_get_persona(value: &Value, path: &str, issues: &mut 
 pub fn validate_request_get_persona(value: &Value) -> Result<(), Vec<Issue>> {
     let mut issues = Vec::new();
     check_request_get_persona(value, "", &mut issues);
-    if issues.is_empty() { Ok(()) } else { Err(issues) }
+    if issues.is_empty() {
+        Ok(())
+    } else {
+        Err(issues)
+    }
 }
 
 pub fn decode_request_get_persona(bytes: &[u8]) -> Result<RequestGetPersona, WireError> {
@@ -4091,7 +4824,10 @@ pub(crate) fn check_request_create_persona(value: &Value, path: &str, issues: &m
         }
         if let Some(obj) = value.as_object() {
             for key in obj.keys() {
-                if !matches!(key.as_str(), "name" | "description" | "avatar" | "isDefault") {
+                if !matches!(
+                    key.as_str(),
+                    "name" | "description" | "avatar" | "isDefault"
+                ) {
                     let key_path = join_path(path, key);
                     issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
                 }
@@ -4103,7 +4839,11 @@ pub(crate) fn check_request_create_persona(value: &Value, path: &str, issues: &m
 pub fn validate_request_create_persona(value: &Value) -> Result<(), Vec<Issue>> {
     let mut issues = Vec::new();
     check_request_create_persona(value, "", &mut issues);
-    if issues.is_empty() { Ok(()) } else { Err(issues) }
+    if issues.is_empty() {
+        Ok(())
+    } else {
+        Err(issues)
+    }
 }
 
 pub fn decode_request_create_persona(bytes: &[u8]) -> Result<RequestCreatePersona, WireError> {
@@ -4126,7 +4866,9 @@ pub struct RequestUpdatePersona {
 }
 
 pub(crate) fn check_request_update_persona(value: &Value, path: &str, issues: &mut Vec<Issue>) {
-    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap())
+    });
     if !value.is_object() {
         issues.push(Issue::new(path, "Object"));
     } else {
@@ -4191,7 +4933,10 @@ pub(crate) fn check_request_update_persona(value: &Value, path: &str, issues: &m
         }
         if let Some(obj) = value.as_object() {
             for key in obj.keys() {
-                if !matches!(key.as_str(), "personaId" | "name" | "description" | "avatar" | "isDefault") {
+                if !matches!(
+                    key.as_str(),
+                    "personaId" | "name" | "description" | "avatar" | "isDefault"
+                ) {
                     let key_path = join_path(path, key);
                     issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
                 }
@@ -4203,7 +4948,11 @@ pub(crate) fn check_request_update_persona(value: &Value, path: &str, issues: &m
 pub fn validate_request_update_persona(value: &Value) -> Result<(), Vec<Issue>> {
     let mut issues = Vec::new();
     check_request_update_persona(value, "", &mut issues);
-    if issues.is_empty() { Ok(()) } else { Err(issues) }
+    if issues.is_empty() {
+        Ok(())
+    } else {
+        Err(issues)
+    }
 }
 
 pub fn decode_request_update_persona(bytes: &[u8]) -> Result<RequestUpdatePersona, WireError> {
@@ -4218,7 +4967,9 @@ pub struct RequestDeletePersona {
 }
 
 pub(crate) fn check_request_delete_persona(value: &Value, path: &str, issues: &mut Vec<Issue>) {
-    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap())
+    });
     if !value.is_object() {
         issues.push(Issue::new(path, "Object"));
     } else {
@@ -4250,7 +5001,11 @@ pub(crate) fn check_request_delete_persona(value: &Value, path: &str, issues: &m
 pub fn validate_request_delete_persona(value: &Value) -> Result<(), Vec<Issue>> {
     let mut issues = Vec::new();
     check_request_delete_persona(value, "", &mut issues);
-    if issues.is_empty() { Ok(()) } else { Err(issues) }
+    if issues.is_empty() {
+        Ok(())
+    } else {
+        Err(issues)
+    }
 }
 
 pub fn decode_request_delete_persona(bytes: &[u8]) -> Result<RequestDeletePersona, WireError> {
@@ -6929,7 +7684,11 @@ pub(crate) fn check_result_list_personas(value: &Value, path: &str, issues: &mut
 pub fn validate_result_list_personas(value: &Value) -> Result<(), Vec<Issue>> {
     let mut issues = Vec::new();
     check_result_list_personas(value, "", &mut issues);
-    if issues.is_empty() { Ok(()) } else { Err(issues) }
+    if issues.is_empty() {
+        Ok(())
+    } else {
+        Err(issues)
+    }
 }
 
 pub fn decode_result_list_personas(bytes: &[u8]) -> Result<ResultListPersonas, WireError> {

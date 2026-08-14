@@ -190,6 +190,10 @@ export class LegacyBackend implements NeoBackend {
     create: () => this.unsupported('lorebooks.create'),
     update: () => this.unsupported('lorebooks.update'),
     del: () => this.unsupported('lorebooks.delete'),
+    listEntries: () => this.unsupported('lorebooks.entries.list'),
+    createEntry: () => this.unsupported('lorebooks.entries.create'),
+    updateEntry: () => this.unsupported('lorebooks.entries.update'),
+    deleteEntry: () => this.unsupported('lorebooks.entries.delete'),
   };
 
   readonly personas: PersonasApi = {

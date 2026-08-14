@@ -8,9 +8,9 @@
 //! the single writable connection for its lifetime).
 
 use contracts_generated::generated::{
-    CharacterDto, ChatDto, LorebookDto, MessageDto, MessageRole, PagedCharacters, PagedChats,
-    PagedMessages, PersonaDto, ResultEmpty, ResultListLorebooks, ResultListPersonas,
-    ResultListPresets,
+    CharacterDto, ChatDto, LorebookDto, LorebookEntryDto, MessageDto, MessageRole, PagedCharacters,
+    PagedChats, PagedMessages, PersonaDto, ResultEmpty, ResultListLorebookEntries,
+    ResultListLorebooks, ResultListPersonas, ResultListPresets,
 };
 use runtime_kernel::{CancellationFlag, Kernel, KernelConfig, KernelError, KernelErrorCode};
 use rusqlite::params;
@@ -915,6 +915,179 @@ fn lorebook_crud_error_paths() {
     )
     .expect_err("extra fields must fail wire validation");
     assert_eq!(extra.code, KernelErrorCode::ContractViolation);
+}
+
+/// M4 slice 1: the entry-level lorebook CRUD cycle over the wire
+/// (`lorebooks.entries.list/create/update/delete`) — the kernel owns the
+/// entry id/position/metadata/timestamps, updates are partial patches, and
+/// the error paths answer stable codes.
+#[test]
+fn lorebook_entries_crud_round_trip() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel_with_root(root.path());
+
+    // Start from a book created with one entry (the batch wire input).
+    let book = dispatch_decoded::<LorebookDto>(
+        &kernel,
+        "lorebooks.create",
+        json!({ "name": "World lore", "entries": [{ "keys": ["castle"], "content": "A castle." }] }),
+    )
+    .expect("lorebooks.create must succeed");
+    let book_id = book.id.clone();
+    assert_eq!(book.entry_count, 1);
+
+    // entries.list projects the stored entry (kernel-assigned id).
+    let listed = dispatch_decoded::<ResultListLorebookEntries>(
+        &kernel,
+        "lorebooks.entries.list",
+        json!({ "lorebookId": book_id }),
+    )
+    .expect("lorebooks.entries.list must succeed");
+    assert_eq!(listed.items.len(), 1);
+    let first_id = listed.items[0].id.clone();
+    assert_eq!(listed.items[0].keys, vec!["castle".to_string()]);
+    assert_eq!(listed.items[0].content, "A castle.");
+    assert!(listed.items[0].enabled, "enabled defaults to true");
+
+    // entries.create appends a second entry and returns the wire DTO.
+    let created = dispatch_decoded::<LorebookEntryDto>(
+        &kernel,
+        "lorebooks.entries.create",
+        json!({
+            "lorebookId": book_id,
+            "entry": {
+                "keys": ["harbor"],
+                "secondaryKeys": ["stone"],
+                "content": "The harbor never freezes.",
+                "constant": true
+            }
+        }),
+    )
+    .expect("lorebooks.entries.create must succeed");
+    assert_ne!(created.id, first_id, "the kernel assigns a fresh entry id");
+    assert_eq!(created.keys, vec!["harbor".to_string()]);
+    assert!(created.constant);
+
+    // The book's entry_count reflects the append.
+    let after =
+        dispatch_decoded::<LorebookDto>(&kernel, "lorebooks.get", json!({ "lorebookId": book_id }))
+            .expect("lorebooks.get must succeed");
+    assert_eq!(after.entry_count, 2);
+
+    // entries.update is a partial patch: only content changes, keys survive.
+    let updated = dispatch_decoded::<LorebookEntryDto>(
+        &kernel,
+        "lorebooks.entries.update",
+        json!({
+            "lorebookId": book_id,
+            "entryId": created.id,
+            "patch": { "content": "The harbor freezes in winter.", "selective": false }
+        }),
+    )
+    .expect("lorebooks.entries.update must succeed");
+    assert_eq!(updated.content, "The harbor freezes in winter.");
+    assert_eq!(updated.keys, vec!["harbor".to_string()], "patch is partial");
+    assert_eq!(updated.constant, true, "unchanged fields survive the patch");
+
+    // entries.delete removes exactly that entry.
+    dispatch_decoded::<ResultEmpty>(
+        &kernel,
+        "lorebooks.entries.delete",
+        json!({ "lorebookId": book_id, "entryId": created.id }),
+    )
+    .expect("lorebooks.entries.delete must succeed");
+    let final_list = dispatch_decoded::<ResultListLorebookEntries>(
+        &kernel,
+        "lorebooks.entries.list",
+        json!({ "lorebookId": book_id }),
+    )
+    .expect("lorebooks.entries.list must succeed");
+    assert_eq!(final_list.items.len(), 1);
+    assert_eq!(final_list.items[0].id, first_id);
+}
+
+/// M4 slice 1 error paths: missing book and missing entry answer the stable
+/// product codes; wire violations are CONTRACT_VIOLATION.
+#[test]
+fn lorebook_entries_error_paths() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel_with_root(root.path());
+    let missing_book = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+    let missing_entry = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+
+    let list_err = dispatch_json(
+        &kernel,
+        "lorebooks.entries.list",
+        json!({ "lorebookId": missing_book }),
+    )
+    .expect_err("list on a missing book must fail");
+    assert_eq!(list_err.code, KernelErrorCode::NotFound);
+    assert_eq!(
+        list_err.product.expect("product dto").code,
+        "LOREBOOK_NOT_FOUND"
+    );
+
+    let create_err = dispatch_json(
+        &kernel,
+        "lorebooks.entries.create",
+        json!({ "lorebookId": missing_book, "entry": { "keys": ["k"], "content": "c" } }),
+    )
+    .expect_err("create on a missing book must fail");
+    assert_eq!(
+        create_err.product.expect("product dto").code,
+        "LOREBOOK_NOT_FOUND"
+    );
+
+    // A book exists but the entry id does not.
+    let book = dispatch_decoded::<LorebookDto>(
+        &kernel,
+        "lorebooks.create",
+        json!({ "name": "Empty world" }),
+    )
+    .expect("lorebooks.create must succeed");
+
+    let update_err = dispatch_json(
+        &kernel,
+        "lorebooks.entries.update",
+        json!({
+            "lorebookId": book.id,
+            "entryId": missing_entry,
+            "patch": { "content": "x" }
+        }),
+    )
+    .expect_err("update on a missing entry must fail");
+    assert_eq!(update_err.code, KernelErrorCode::NotFound);
+    let product = update_err.product.expect("product dto");
+    assert_eq!(product.code, "LOREBOOK_ENTRY_NOT_FOUND");
+    assert_eq!(product.params["entryId"], json!(missing_entry));
+
+    let delete_err = dispatch_json(
+        &kernel,
+        "lorebooks.entries.delete",
+        json!({ "lorebookId": book.id, "entryId": missing_entry }),
+    )
+    .expect_err("delete on a missing entry must fail");
+    assert_eq!(
+        delete_err.product.expect("product dto").code,
+        "LOREBOOK_ENTRY_NOT_FOUND"
+    );
+
+    // Wire violations: missing payload and a bad entryId type.
+    let violation = dispatch_json(
+        &kernel,
+        "lorebooks.entries.create",
+        json!({ "lorebookId": book.id }),
+    )
+    .expect_err("missing entry payload must fail wire validation");
+    assert_eq!(violation.code, KernelErrorCode::ContractViolation);
+
+    let bad_type = dispatch_json(
+        &kernel,
+        "lorebooks.entries.update",
+        json!({ "lorebookId": book.id, "entryId": 42, "patch": { "content": "x" } }),
+    )
+    .expect_err("entryId of the wrong type must fail wire validation");
+    assert_eq!(bad_type.code, KernelErrorCode::ContractViolation);
 }
 
 /// M4 slice 1 (Этап 4.1, ТЗ §8.1 Library context): the full persona CRUD

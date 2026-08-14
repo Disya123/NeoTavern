@@ -104,6 +104,29 @@ fn decode_probes() -> Vec<(&'static str, Probe)> {
         probe!("generation_run", decode_generation_run),
         probe!("generation_status", decode_generation_status),
         probe!("lorebook_dto", decode_lorebook_dto),
+        probe!("lorebook_entry_dto", decode_lorebook_entry_dto),
+        probe!("lorebook_entry_input", decode_lorebook_entry_input),
+        probe!("lorebook_entry_patch", decode_lorebook_entry_patch),
+        probe!(
+            "request_list_lorebook_entries",
+            decode_request_list_lorebook_entries
+        ),
+        probe!(
+            "request_create_lorebook_entry",
+            decode_request_create_lorebook_entry
+        ),
+        probe!(
+            "request_update_lorebook_entry",
+            decode_request_update_lorebook_entry
+        ),
+        probe!(
+            "request_delete_lorebook_entry",
+            decode_request_delete_lorebook_entry
+        ),
+        probe!(
+            "result_list_lorebook_entries",
+            decode_result_list_lorebook_entries
+        ),
         probe!("message_dto", decode_message_dto),
         probe!("message_role", decode_message_role),
         probe!("meta_dto", decode_meta_dto),

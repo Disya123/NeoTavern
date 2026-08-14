@@ -13,6 +13,7 @@ import type {
   ChatDto,
   CreateCharacterRequestDto,
   CreateChatRequestDto,
+  CreateLorebookEntryRequestDto,
   CreateLorebookRequestDto,
   CreateMessageRequestDto,
   CreatePersonaRequestDto,
@@ -26,6 +27,7 @@ import type {
   ListCharactersRequestDto,
   ListChatsRequestDto,
   ListGenerationEventsRequestDto,
+  ListLorebookEntriesResultDto,
   ListLorebooksResultDto,
   ListMessagesRequestDto,
   ListPersonasResultDto,
@@ -34,6 +36,7 @@ import type {
   ListProviderConfigsResultDto,
   ListProvidersResultDto,
   LorebookDto,
+  LorebookEntryDto,
   MessageDto,
   MetaDto,
   PagedCharactersDto,
@@ -46,6 +49,7 @@ import type {
   SetProviderConfigRequestDto,
   UpdateCharacterRequestDto,
   UpdateChatRequestDto,
+  UpdateLorebookEntryRequestDto,
   UpdateLorebookRequestDto,
   UpdateMessageRequestDto,
   UpdatePersonaRequestDto,
@@ -154,6 +158,20 @@ export interface LorebooksApi {
   update(req: UpdateLorebookRequestDto, opts?: BackendCallOptions): Promise<LorebookDto>;
   /** Delete one lorebook (permanent). */
   del(lorebookId: string, opts?: BackendCallOptions): Promise<EmptyResultDto>;
+  /** List the entries of one lorebook (wire `lorebooks.entries.list`). */
+  listEntries(lorebookId: string, opts?: BackendCallOptions): Promise<ListLorebookEntriesResultDto>;
+  /** Append one entry to a lorebook (wire `lorebooks.entries.create`). */
+  createEntry(
+    req: CreateLorebookEntryRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<LorebookEntryDto>;
+  /** Patch one entry (wire `lorebooks.entries.update`). */
+  updateEntry(
+    req: UpdateLorebookEntryRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<LorebookEntryDto>;
+  /** Delete one entry (wire `lorebooks.entries.delete`). */
+  deleteEntry(lorebookId: string, entryId: string, opts?: BackendCallOptions): Promise<EmptyResultDto>;
 }
 
 /** Persona domain operations (wire `personas.*`, Этап 4.1). */
