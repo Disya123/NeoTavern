@@ -3,6 +3,52 @@
 ## Unreleased
 ### Added
 
+- **M1 review round 2 — WS handshake bounds, compressed wire accounting,
+  crash-safe install journal v2, owner-aware secret cleanup (ТЗ §SEC-01 /
+  §SEC-04 / §SEC-05).** The plugin-runtime WebSocket upgrade handshake is now
+  bounded: `WS_MAX_HANDSHAKE_BYTES` (16 KiB) and `WS_HANDSHAKE_TIMEOUT_MS`
+  (10 s) reject an oversized or stalled upgrade with
+  `NETWORK_DESTINATION_DENIED` (timer cleared on cleanup).
+  `networkPool` counts the **compressed wire bytes** against the same cap as
+  the decompressed result, and `decoder.write()` backpressure pauses the
+  response (`drain` resumes it), so a gzip bomb cannot expand past the budget
+  on either side. The install journal is now written **before** the first
+  filesystem mutation with the exact `.incoming-*`/`.rollback-*` paths and
+  the previous registry row; startup recovery restores a consistent
+  DB+FS pair from every intermediate crash state (rolled-back updates,
+  fresh-install cleanup, pre-mutation crashes dropped untouched) and never
+  deletes both versions. Secret cleanup is owner-aware: `deleteRef` routes by
+  the **saved** opaque reference (`portable:`/`session:`/`env:`) to the
+  backend that owns the value, provider/plugin DELETE revokes the store value
+  before deleting the row (a failed revocation keeps the row for a retry),
+  and provider/plugin deletion cascades revocation to every referenced value.
+  Tests: `socketHandles.test.ts` (18), `networkPool.test.ts` (14),
+  `packageIntegrity.spec.ts` (12), `secretStore.spec.ts` (14) incl. the
+  negative end-to-end cases for each fix.
+
+- **M1 governance — limited ADR waiver (ADR-0042) and a gate that validates
+  it.** `docs/adr/0042-m1-waiver-per-profile-export-scoping.md` records the
+  single limited waiver the ТЗ allows (one P1 issue: per-profile export
+  scoping is a canonical-plane schema change, expiry at the M4 cutover,
+  human sign-off at M1 acceptance). `scripts/check-milestone-gates.mjs` now
+  validates every waiver's `by` (automated actors rejected), `reason`,
+  `severity` (must match the blocker's P-level), `expiry`, `date` and `adr`
+  (must link a real document in `docs/adr/`); accepted milestones must carry
+  **structured, reproducible evidence** (`{type, command, result, commit,
+  ciRun, artifact}` — test-run items need the exact command and a commit in
+  HEAD ancestry; bare "597/597" strings are rejected); `acceptedBy` must be a
+  person or an explicit human-ratified signature; the `--acceptance-drill`
+  now validates the proposal's exit-criteria evidence map. Self-test: 17
+  cases.
+
+- **Clean M1 PR branch.** Per the audit directive the M1 work was split onto
+  `m1-w1-security-clean` (rooted at `ec127a4` — origin/main plus the accepted
+  M0 governance commits, so the gate's M0 ancestry check holds) containing
+  only M1 commits; `origin/main` was never touched. The acceptance ledger now
+  records this branch honestly: M2/M3/M4 carry no `deliveredCommit` here, the
+  M1 waiver has real `by`/`severity`/`expiry`/`adr` fields, and the
+  acceptance proposal's evidence is reproducible (commands + commits).
+
 - **Logical profile export hardening (SEC-02 audit findings, ТЗ §SEC-02).**
   `apps/server/src/lib/profileExport.ts` now reads every allowlisted table
   inside ONE SQLite snapshot transaction (manifest records
