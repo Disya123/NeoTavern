@@ -445,7 +445,7 @@
         "docs/release-manifest.json": "hand-maintained input to the matrix generator — take from commit, then verify 'pnpm capability:matrix:check'",
         "docs/architecture/operations-inventory.md + apps/docs mirror": "hand-maintained routing table updated by the M2 author — take from commit, then 'pnpm docs:sync'",
         "docs/architecture/README.md + apps/docs mirror": "ours, then verify docs:check (M2 adds sections only if they exist in the M2 content)",
-        "crates/Cargo.toml": "take from commit (adds the provider-openai-compat workspace member)",
+        "crates/Cargo.toml": "applies CLEANLY during the re-cut (verified 2026-08-14): only M2 commit 395d29b touches it, its parent already carries M1's secret-store member, and diff c580388..HEAD shows the sole difference is provider-openai-compat — so the hunk context matches the M1 branch and git 3-way merges without conflict; result == M2-era file (BOTH members preserved). If a conflict ever appears anyway, take from commit (the M2-era file already contains M1's secret-store member).",
         "crates/Cargo.lock": "take from commit, then verify 'cargo test --manifest-path crates/Cargo.toml' (M1's +uuid hunk lives elsewhere in the lockfile)",
         "apps/desktop/src-tauri/Cargo.lock": "take from commit (6d5af18), then verify the desktop crate builds",
         "crates/contracts-generated/src/generated.rs + tests/wire_corpus.rs": "take from commit (regenerated for the M2-era contracts source), then verify 'node tools/contract-codegen/codegen.mjs --check'"
