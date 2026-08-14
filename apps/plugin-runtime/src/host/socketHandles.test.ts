@@ -538,4 +538,51 @@ describe('socket registry (§29)', () => {
       await new Promise((resolve) => server.close(resolve));
     }
   });
+
+  it('tears down a websocket that goes idle after the upgrade (§SEC-04 slowloris)', async () => {
+    // The peer completes the Upgrade and then sends NOTHING (no frames, no
+    // pings): the upgraded connection must not hold the socket and its slot
+    // indefinitely — memory was already bounded, this bounds the TIME.
+    const server = createServer((socket: Socket) => {
+      let buffer: Buffer = Buffer.alloc(0);
+      let upgraded = false;
+      socket.on('error', () => undefined);
+      socket.on('data', (chunk: Buffer) => {
+        if (upgraded) return;
+        buffer = Buffer.concat([buffer, chunk]);
+        const headEnd = buffer.indexOf('\r\n\r\n');
+        if (headEnd === -1) return;
+        const head = buffer.subarray(0, headEnd).toString('utf8');
+        const key = /Sec-WebSocket-Key: (.+)\r\n/i.exec(head)?.[1] ?? '';
+        socket.write(
+          `HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${wsAcceptHeader(key)}\r\n\r\n`,
+        );
+        upgraded = true;
+        socket.removeAllListeners('data'); // silence after the upgrade
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as AddressInfo).port;
+    try {
+      const idleRegistry = createSocketRegistry({
+        checkDestination: async (host) => {
+          if (host !== 'localhost' && host !== '127.0.0.1') throw new Error('denied');
+          return ['127.0.0.1'];
+        },
+        checkBind: () => undefined,
+        wsIdleTimeoutMs: 100,
+      });
+      const id = await idleRegistry.websocketOpen(
+        'plugin-a',
+        `ws://localhost:${port}/idle`,
+        undefined,
+      );
+      expect(id).toBeTruthy();
+      expect(idleRegistry.size()).toBe(1);
+      // The idle bound fires without any peer traffic: the handle is released.
+      await expect.poll(() => idleRegistry.size()).toBe(0);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
 });

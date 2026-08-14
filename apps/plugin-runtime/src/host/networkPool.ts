@@ -280,6 +280,14 @@ function absoluteFormWithVerifiedIp(target: URL, ip: string): string {
   return withIp.toString();
 }
 
+/**
+ * RFC 7231 §4.3.6: a CONNECT authority host that is an IPv6 literal must be
+ * bracketed (`[2001:db8::1]:443`). Hostnames and IPv4 are returned unchanged.
+ */
+function formatConnectAuthorityHost(host: string): string {
+  return host.includes(':') && !host.startsWith('[') ? `[${host}]` : host;
+}
+
 export function createNetworkPool(options: NetworkPoolOptions = {}): NetworkPool {
   const proxyUrl = options.proxyUrl === undefined ? null : new URL(options.proxyUrl);
   if (proxyUrl !== null && proxyUrl.protocol !== 'http:' && proxyUrl.protocol !== 'https:') {
@@ -361,8 +369,11 @@ export function createNetworkPool(options: NetworkPoolOptions = {}): NetworkPool
     init: RequestInit,
     verified?: { ips: string[] },
   ): Promise<Response> {
+    if (proxyUrl === null) throw new Error('proxy path used without a proxy URL');
+    const proxy = proxyUrl;
+    const proxyIsTls = proxy.protocol === 'https:';
     const proxyPort =
-      proxyUrl?.port !== '' && proxyUrl?.port !== undefined ? Number(proxyUrl.port) : 80;
+      proxy.port !== '' && proxy.port !== undefined ? Number(proxy.port) : proxyIsTls ? 443 : 80;
     return new Promise((resolve, reject) => {
       // §SEC-03: when the policy approved specific addresses, the absolute-form
       // URI carries the verified IP (the proxy resolves no DNS for the
@@ -371,14 +382,21 @@ export function createNetworkPool(options: NetworkPoolOptions = {}): NetworkPool
         verified === undefined
           ? target.toString()
           : absoluteFormWithVerifiedIp(target, verified.ips[0] ?? target.hostname);
+      // An https:// proxy requires a TLS hop even when the TARGET is plaintext
+      // http — an https-proxy must never receive the absolute-form request in
+      // plaintext on its TLS port (SEC-03 proxy-path review fix).
+      const tlsSocket = proxyIsTls
+        ? tlsConnect({ host: proxy.hostname, port: proxyPort, servername: proxy.hostname })
+        : undefined;
       const req = httpRequest(
         {
-          host: proxyUrl?.hostname,
+          host: proxy.hostname,
           port: proxyPort,
           method: init.method ?? 'GET',
           path: targetUri,
           headers: { ...toPlainHeaders(init.headers), host: target.host },
           signal: init.signal ?? undefined,
+          ...(tlsSocket !== undefined ? { createConnection: () => tlsSocket } : {}),
         },
         (res) => resolve(readResponse(res, maxBodyBytes)),
       );
@@ -395,18 +413,21 @@ export function createNetworkPool(options: NetworkPoolOptions = {}): NetworkPool
     init: RequestInit,
     verified?: { ips: string[] },
   ): Promise<Response> {
-    const proxyPort =
-      proxyUrl?.port !== '' && proxyUrl?.port !== undefined ? Number(proxyUrl.port) : 80;
+    if (proxyUrl === null) throw new Error('proxy path used without a proxy URL');
+    const proxy = proxyUrl;
+    const proxyPort = proxy.port !== '' && proxy.port !== undefined ? Number(proxy.port) : 80;
     return new Promise((resolve, reject) => {
-      // CONNECT requires an authority with an explicit port (RFC 7231 §4.3.6).
+      // CONNECT requires an authority with an explicit port (RFC 7231 §4.3.6),
+      // and IPv6 literals must be bracketed: `[2001:db8::1]:443`, never
+      // `2001:db8::1:443` (SEC-03 proxy-path review fix).
       // §SEC-03: the CONNECT authority carries the verified IP — the proxy
       // connects to the policy-approved address, and TLS still validates the
       // certificate against the hostname (servername), never the IP.
       const connectHost = verified?.ips[0] ?? target.hostname;
-      const authority = `${connectHost}:${target.port === '' ? '443' : target.port}`;
+      const authority = `${formatConnectAuthorityHost(connectHost)}:${target.port === '' ? '443' : target.port}`;
       const connectReq = httpRequest(
         {
-          host: proxyUrl?.hostname,
+          host: proxy.hostname,
           port: proxyPort,
           method: 'CONNECT',
           path: authority,
@@ -443,7 +464,11 @@ export function createNetworkPool(options: NetworkPoolOptions = {}): NetworkPool
           {
             method: init.method ?? 'GET',
             path: `${target.pathname}${target.search}`,
-            headers: toPlainHeaders(init.headers),
+            // The tunneled request must carry the TARGET's host, never the
+            // stack default `localhost` (the pool connects via createConnection
+            // and would otherwise send Host: localhost — SEC-03 proxy-path
+            // review fix, same rule as the absolute-form path above).
+            headers: { ...toPlainHeaders(init.headers), host: target.host },
             signal: init.signal ?? undefined,
             createConnection: () => tls,
           },

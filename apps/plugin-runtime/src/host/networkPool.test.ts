@@ -180,6 +180,44 @@ describe('network pool (§29 proxy)', () => {
     await pool.close();
   });
 
+  it('CONNECT authority brackets IPv6 literals in the verified IP (§SEC-03)', async () => {
+    const connectTargets: string[] = [];
+    const proxy = createServer();
+    proxy.on('connect', (req, socket) => {
+      connectTargets.push(req.url ?? '');
+      socket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+      setTimeout(() => socket.destroy(), 50);
+    });
+    const proxyPort = await listen(proxy);
+
+    const pool = createNetworkPool({ proxyUrl: `http://127.0.0.1:${proxyPort}` });
+    // The TLS handshake fails (dropped tunnel) — the observable is the
+    // CONNECT authority form: RFC 7231 §4.3.6 requires the IPv6 literal to be
+    // bracketed, `[2001:db8::1]:443`, never `2001:db8::1:443`.
+    await expect(
+      pool.fetch('https://example.com/secure', undefined, { ips: ['2001:db8::1'] }),
+    ).rejects.toThrow();
+    expect(connectTargets).toEqual(['[2001:db8::1]:443']);
+    await pool.close();
+  });
+
+  it('https-proxy to an http target speaks TLS to the proxy, never plaintext (§SEC-03)', async () => {
+    // The proxy URL claims https: but the listener is a plaintext HTTP server.
+    // With the fix the pool attempts a TLS handshake to the proxy, which a
+    // plaintext server cannot satisfy — the fetch must FAIL. Before the fix
+    // the pool sent the absolute-form request in plaintext to the proxy's TLS
+    // port and the request "succeeded", which is exactly the plaintext-on-TLS
+    // port bug (SEC-03 proxy-path review).
+    const proxy = createServer((_req, res) => {
+      res.end('proxied');
+    });
+    const proxyPort = await listen(proxy);
+
+    const pool = createNetworkPool({ proxyUrl: `https://127.0.0.1:${proxyPort}` });
+    await expect(pool.fetch('http://example.com/resource')).rejects.toThrow();
+    await pool.close();
+  });
+
   it('rejects a non-http proxy URL at creation', () => {
     expect(() => createNetworkPool({ proxyUrl: 'ftp://proxy.local' })).toThrow(
       'proxy URL must use http: or https:',

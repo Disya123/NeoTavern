@@ -47,6 +47,12 @@ export interface SocketRegistryDeps {
    * is torn down instead of holding the handle open indefinitely.
    */
   wsHandshakeTimeoutMs?: number;
+  /**
+   * §SEC-04 post-upgrade idle bound. Defaults to `WS_IDLE_TIMEOUT_MS`; a
+   * peer that stops sending entirely (not even pings) holds the socket and
+   * its slot for at most this long, then is torn down.
+   */
+  wsIdleTimeoutMs?: number;
 }
 
 interface RingHandle {
@@ -194,6 +200,14 @@ export const WS_MAX_HANDSHAKE_BYTES = 16 * 1024;
 
 /** SEC-04 wall-clock bound to receive the complete upgrade response head. */
 export const WS_HANDSHAKE_TIMEOUT_MS = 10_000;
+
+/**
+ * SEC-04 slowloris bound for an upgraded WebSocket: memory is already capped
+ * (frame/ring budgets), this closes the TIME dimension — a peer that sends no
+ * data for this long is torn down. 5 minutes is generous for a plugin channel
+ * (RFC 6455 mandates no minimum idle) while bounding the worst case.
+ */
+export const WS_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 
 export type WsParseResult = { frame: WsServerFrame; rest: Buffer } | { tooLarge: true } | null;
 
@@ -561,11 +575,33 @@ export function createSocketRegistry(deps: SocketRegistryDeps): SocketRegistry {
       // frame to full length, and fragmented text is bounded too.
       let frameBuffer: Buffer = Buffer.alloc(0);
       let textFragment = '';
+      // §SEC-04 slowloris: the upgraded connection is bounded in TIME as well
+      // as memory — a peer that stops sending entirely (not even pings) for
+      // wsIdleTimeoutMs is torn down instead of holding the socket and its
+      // slot indefinitely. Refreshed on every frame-arrival path.
+      let idleTimer: ReturnType<typeof setTimeout> | null = null;
+      const resetIdle = (): void => {
+        if (idleTimer !== null) clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => {
+          idleTimer = null;
+          failConnection();
+        }, deps.wsIdleTimeoutMs ?? WS_IDLE_TIMEOUT_MS);
+        // An idle WebSocket must not keep the process alive.
+        idleTimer.unref();
+      };
+      const releaseIdle = (): void => {
+        if (idleTimer !== null) {
+          clearTimeout(idleTimer);
+          idleTimer = null;
+        }
+      };
       const failConnection = (): void => {
+        releaseIdle();
         socket.destroy();
         void closeHandle(handle.id);
       };
       const consumeFrames = (chunk: Buffer): void => {
+        resetIdle();
         if (frameBuffer.byteLength + chunk.byteLength > WS_MAX_FRAME_BYTES) {
           failConnection();
           return;
@@ -637,11 +673,16 @@ export function createSocketRegistry(deps: SocketRegistryDeps): SocketRegistry {
       }
       socket.on('data', consumeFrames);
       socket.on('close', () => {
+        releaseIdle();
         if (!handle.closed) void closeHandle(handle.id);
       });
       socket.on('error', () => {
+        releaseIdle();
         if (!handle.closed) void closeHandle(handle.id);
       });
+      // Start the post-upgrade idle clock (the handshake phase has its own
+      // wall-clock bound).
+      resetIdle();
       return handle.id;
     },
     async websocketSend(pluginId, id, data) {
