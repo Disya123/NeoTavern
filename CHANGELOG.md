@@ -189,6 +189,36 @@
   Windows lock-contention E2E on packaged artifacts and the switch of the
   canonical data-root remain the later Этап 3 slices.
 
+- **Migration corpus and real-schema mapping completeness (M3 / Этап 3,
+  ТЗ §17.4, §10.3).** The legacy converter now maps the REAL Drizzle layout
+  (`packages/db` migrations 0000…0024), not just the minimal fixture:
+  known character-card fields (`personality`, `scenario`, `first_message`,
+  `example_dialogues`, `system_prompt`, `post_history_instructions`,
+  `creator`, `creator_notes`) survive into the kernel `ext_json` under
+  stable keys — the Kernel prompt pipeline already reads
+  `ext_json.personality`/`persona` for the persona block, so converted
+  characters keep their persona; tags are read from the real
+  `character_tags`/`tags` join tables and merged, sorted and deduplicated
+  into `tags_json`; unknown `ext` fields are preserved verbatim; soft-deleted
+  rows (`deleted_at IS NOT NULL`) are skipped and reported as orphans
+  (the kernel has no `deleted_at`, so deleted characters/chats are not
+  resurrected); legacy `messages.branch_id`/`parent_id`/`meta`/`name` are
+  flattened (no kernel columns — rows keep chat ordering). **Migration
+  corpus (ТЗ §17.4)** extends `tests/migration.rs` with: the real Drizzle
+  schema mapping test (card fields → ext_json, join tags → tags_json,
+  unknown ext preserved, soft-delete skipped, unicode/RTL/20k-char values
+  round-trip), a 1000-character/1000-chat/3000-message library with exact
+  counts, branch-flattening, and the **Windows platform corpus**: a real
+  file handle held without `FILE_SHARE_DELETE` makes the pointer switch
+  exhaust the bounded retry budget, `commit` returns the stable recoverable
+  `ActivationPending`, the journal stays `activation_pending` with the
+  previous root active, and releasing the handle lets the next `open`
+  resolve the pending activation (restart-to-complete). Tests: 19 migration
+  integration tests; storage suite and full cargo workspace green;
+  clippy/rustfmt clean. Docs: `portable-data.md` (schema mapping + corpus
+  sections), CHANGELOG. The Windows E2E on packaged artifacts and the
+  canonical data-root switch remain the later Этап 3 slices.
+
 - **Prompt pipeline in the Kernel (M2 / Этап 2.6, ТЗ §9.1–§9.2).** Every
   generation run now builds an immutable **PromptPlan** before the provider
   attempt: character/persona system blocks (from the chat's character card,

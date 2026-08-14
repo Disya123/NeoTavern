@@ -578,3 +578,385 @@ fn corpus_interrupted_migration_recovers() {
     );
     assert!(read_name(&data_root, "leg-c1") == "Alice", "data migrated");
 }
+
+// --- migration corpus: real Drizzle schema (ТЗ §17.4) ------------------------
+
+/// Builds a legacy database matching the REAL Drizzle layout (0000_init +
+/// later ALTERs): the inline `tags` column is absent, tags live in the
+/// `character_tags`/`tags` join, characters carry the known card columns
+/// (personality, scenario, first_message, example_dialogues, system_prompt,
+/// post_history_instructions, creator, creator_notes), and rows can be
+/// soft-deleted via `deleted_at`.
+fn build_real_legacy(path: &Path) -> rusqlite::Result<()> {
+    let conn = rusqlite::Connection::open(path)?;
+    conn.execute_batch(
+        "CREATE TABLE characters (
+            id TEXT PRIMARY KEY, name TEXT NOT NULL, avatar TEXT, description TEXT NOT NULL DEFAULT '',
+            personality TEXT NOT NULL DEFAULT '', scenario TEXT NOT NULL DEFAULT '',
+            first_message TEXT NOT NULL DEFAULT '', example_dialogues TEXT NOT NULL DEFAULT '',
+            system_prompt TEXT, post_history_instructions TEXT, creator TEXT, creator_notes TEXT,
+            ext TEXT NOT NULL DEFAULT '{}', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+            deleted_at INTEGER
+        );
+        CREATE TABLE tags (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE);
+        CREATE TABLE character_tags (
+            character_id TEXT NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+            tag_id TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+            PRIMARY KEY (character_id, tag_id)
+        );
+        CREATE TABLE chats (
+            id TEXT PRIMARY KEY, character_id TEXT, persona_id TEXT,
+            title TEXT NOT NULL DEFAULT 'New chat', active_branch_id TEXT,
+            summary TEXT NOT NULL DEFAULT '', message_count INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER
+        );
+        CREATE TABLE messages (
+            id TEXT PRIMARY KEY, chat_id TEXT NOT NULL, branch_id TEXT NOT NULL, parent_id TEXT,
+            role TEXT NOT NULL, content TEXT NOT NULL, name TEXT, meta TEXT NOT NULL DEFAULT '{}',
+            created_at INTEGER NOT NULL
+        );
+        CREATE TABLE lorebooks (
+            id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT,
+            created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        );
+        CREATE TABLE lore_entries (
+            id TEXT PRIMARY KEY, lorebook_id TEXT NOT NULL, keys_json TEXT, secondary_keys TEXT,
+            content TEXT NOT NULL, enabled INTEGER DEFAULT 1, position INTEGER DEFAULT 0,
+            constant INTEGER DEFAULT 0, selective INTEGER DEFAULT 0, metadata TEXT DEFAULT '{}',
+            created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        );
+        CREATE TABLE presets (
+            id TEXT PRIMARY KEY, kind TEXT NOT NULL, name TEXT NOT NULL, data TEXT DEFAULT '{}',
+            created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        );
+        CREATE TABLE provider_configs (
+            id TEXT PRIMARY KEY, provider TEXT NOT NULL, name TEXT NOT NULL, config TEXT, api_key TEXT
+        );",
+    )?;
+    conn.execute(
+        "INSERT INTO characters (id, name, description, personality, scenario, first_message, \
+         example_dialogues, system_prompt, post_history_instructions, creator, creator_notes, \
+         ext, created_at, updated_at) VALUES \
+         ('real-c1', 'שרה', 'RTL: تَقْدِيم', 'Brave heart', 'A far land', 'Hello there', \
+          'Example: *waves*', 'System: be kind', 'After: continue', 'creator@example.com', \
+          'notes in Hebrew עברית', '{\"unknown\":\"kept\",\"nested\":{\"a\":1}}', \
+          1700000000000, 1700000001000)",
+        [],
+    )?;
+    conn.execute(
+        "INSERT INTO characters (id, name, description, ext, created_at, updated_at, deleted_at) \
+         VALUES ('real-c2', 'Deleted', '', '{}', 1700000002000, 1700000003000, 1700000004000)",
+        [],
+    )?;
+    for (id, name) in [("t1", "knight"), ("t2", "NSFW"), ("t3", "עברית")] {
+        conn.execute(
+            "INSERT INTO tags (id, name) VALUES (?1, ?2)",
+            rusqlite::params![id, name],
+        )?;
+    }
+    for (character, tag) in [("real-c1", "t1"), ("real-c1", "t3"), ("real-c1", "t1")] {
+        conn.execute(
+            "INSERT OR IGNORE INTO character_tags (character_id, tag_id) VALUES (?1, ?2)",
+            rusqlite::params![character, tag],
+        )?;
+    }
+    conn.execute(
+        "INSERT INTO chats (id, character_id, persona_id, title, active_branch_id, summary, \
+         message_count, created_at, updated_at) VALUES \
+         ('real-h1', 'real-c1', NULL, 'חדר המבחן', 'b1', 'summary', 2, 1700000005000, 1700000006000)",
+        [],
+    )?;
+    conn.execute(
+        "INSERT INTO chats (id, character_id, title, created_at, updated_at, deleted_at) \
+         VALUES ('real-h2', 'real-c1', 'Deleted chat', 1700000007000, 1700000008000, 1700000009000)",
+        [],
+    )?;
+    // A very long message (unicode/RTL/long-value corpus item).
+    let long = "ל".repeat(20_000);
+    conn.execute(
+        "INSERT INTO messages (id, chat_id, branch_id, parent_id, role, content, name, meta, created_at) \
+         VALUES ('real-m1', 'real-h1', 'b1', NULL, 'user', ?1, 'name', '{\"swipes\":2}', 1700000010000)",
+        [&long],
+    )?;
+    conn.execute(
+        "INSERT INTO messages (id, chat_id, branch_id, parent_id, role, content, name, meta, created_at) \
+         VALUES ('real-m2', 'real-h1', 'b1', 'real-m1', 'assistant', 'ردّ بالعربية', NULL, '{}', 1700000011000)",
+        [],
+    )?;
+    conn.execute(
+        "INSERT INTO presets (id, kind, name, data, created_at, updated_at) \
+         VALUES ('real-p1', 'default', 'Preset', '{\"temp\":0.7}', 1700000012000, 1700000013000)",
+        [],
+    )?;
+    Ok(())
+}
+
+fn read_ext_json(root: &Path, id: &str) -> serde_json::Value {
+    let mut progress = |_: MigrationProgress| {};
+    let db = open(root, &ConnectionPolicy::default(), &mut progress).expect("open");
+    let ext: String = db
+        .conn()
+        .query_row(
+            "SELECT ext_json FROM characters WHERE id = ?1",
+            [id],
+            |row| row.get(0),
+        )
+        .expect("read ext_json");
+    drop(db);
+    serde_json::from_str(&ext).expect("valid ext_json")
+}
+
+fn read_tags_json(root: &Path, id: &str) -> Vec<String> {
+    let mut progress = |_: MigrationProgress| {};
+    let db = open(root, &ConnectionPolicy::default(), &mut progress).expect("open");
+    let tags: String = db
+        .conn()
+        .query_row(
+            "SELECT tags_json FROM characters WHERE id = ?1",
+            [id],
+            |row| row.get(0),
+        )
+        .expect("read tags_json");
+    drop(db);
+    serde_json::from_str(&tags).expect("valid tags_json")
+}
+
+/// Corpus: the REAL Drizzle layout converts completely — known card fields
+/// land in `ext_json` under stable keys, join-table tags land in `tags_json`,
+/// unknown ext fields are preserved, soft-deleted characters/chats are
+/// skipped and reported (ТЗ §17.4 "unknown extension fields", "orphaned
+/// records", "unicode/RTL/длинные значения").
+#[test]
+fn corpus_real_drizzle_schema_maps_completely() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let data_root = dir.path().join("data");
+    fs::create_dir_all(&data_root).expect("create data root");
+    let source = dir.path().join("legacy.db");
+    build_real_legacy(&source).expect("build real legacy");
+
+    let prepared = prepare(&data_root, &source, false, &mut nop_stage).expect("prepare");
+    assert_eq!(
+        prepared.report.characters, 1,
+        "soft-deleted character skipped"
+    );
+    assert_eq!(prepared.report.chats, 1, "soft-deleted chat skipped");
+    assert_eq!(prepared.report.messages, 2);
+    assert_eq!(
+        prepared.report.skipped, 2,
+        "both soft-deleted rows reported"
+    );
+    assert!(
+        prepared
+            .report
+            .orphans
+            .iter()
+            .any(|o| o.contains("soft-deleted")),
+        "orphans describe the skips: {:?}",
+        prepared.report.orphans
+    );
+
+    commit(&data_root, &prepared.entry_id, &mut nop_stage).expect("commit");
+
+    // Known fields preserved under stable keys.
+    let ext = read_ext_json(&data_root, "real-c1");
+    assert_eq!(ext["personality"], "Brave heart");
+    assert_eq!(ext["scenario"], "A far land");
+    assert_eq!(ext["first_message"], "Hello there");
+    assert_eq!(ext["example_dialogues"], "Example: *waves*");
+    assert_eq!(ext["system_prompt"], "System: be kind");
+    assert_eq!(ext["post_history_instructions"], "After: continue");
+    assert_eq!(ext["creator"], "creator@example.com");
+    assert_eq!(ext["creator_notes"], "notes in Hebrew עברית");
+    // Unknown ext fields preserved (ТЗ §10.3).
+    assert_eq!(ext["unknown"], "kept");
+    assert_eq!(ext["nested"]["a"], 1);
+    // Join-table tags merged into tags_json, deduplicated.
+    let tags = read_tags_json(&data_root, "real-c1");
+    assert_eq!(tags, vec!["knight", "עברית"], "sorted deduplicated tags");
+
+    // Description/name preserved; unicode round-trips.
+    assert_eq!(read_name(&data_root, "real-c1"), "שרה");
+    let mut progress = |_: MigrationProgress| {};
+    let db = open(&data_root, &ConnectionPolicy::default(), &mut progress).expect("open");
+    let len: i64 = db
+        .conn()
+        .query_row(
+            "SELECT length(content) FROM messages WHERE id = 'real-m1'",
+            [],
+            |r| r.get(0),
+        )
+        .expect("message length");
+    assert_eq!(len, 20_000, "long unicode message preserved");
+    let rtl: String = db
+        .conn()
+        .query_row(
+            "SELECT content FROM messages WHERE id = 'real-m2'",
+            [],
+            |r| r.get(0),
+        )
+        .expect("rtl message");
+    assert_eq!(rtl, "ردّ بالعربية");
+    drop(db);
+}
+
+/// Corpus: a large library (1000 characters, 1000 chats, 3000 messages)
+/// converts in one pass with exact counts (ТЗ §17.4 "большие библиотеки").
+#[test]
+fn corpus_large_library_converts_with_exact_counts() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let data_root = dir.path().join("data");
+    fs::create_dir_all(&data_root).expect("create data root");
+    let source = dir.path().join("legacy.db");
+    {
+        let conn = rusqlite::Connection::open(&source).expect("open");
+        conn.execute_batch(
+            "CREATE TABLE characters (
+                id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT, ext TEXT DEFAULT '{}',
+                created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+            );
+            CREATE TABLE chats (
+                id TEXT PRIMARY KEY, title TEXT, character_id TEXT,
+                created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+            );
+            CREATE TABLE messages (
+                id TEXT PRIMARY KEY, chat_id TEXT NOT NULL, role TEXT, content TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            );
+            CREATE TABLE lorebooks (
+                id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT,
+                created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+            );
+            CREATE TABLE presets (
+                id TEXT PRIMARY KEY, kind TEXT NOT NULL, name TEXT NOT NULL, data TEXT DEFAULT '{}',
+                created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+            );
+            CREATE TABLE provider_configs (
+                id TEXT PRIMARY KEY, provider TEXT NOT NULL, name TEXT NOT NULL, config TEXT, api_key TEXT
+            );",
+        )
+        .expect("schema");
+        let n = 1_000usize;
+        for i in 0..n {
+            let id = format!("big-c{i}");
+            conn.execute(
+                "INSERT INTO characters (id, name, description, ext, created_at, updated_at) \
+                 VALUES (?1, ?2, '', '{}', 1700000000000, 1700000000000)",
+                rusqlite::params![id, format!("Character {i}")],
+            )
+            .expect("insert character");
+            conn.execute(
+                "INSERT INTO chats (id, title, character_id, created_at, updated_at) \
+                 VALUES (?1, ?2, ?3, 1700000000000, 1700000000000)",
+                rusqlite::params![format!("big-h{i}"), format!("Chat {i}"), id],
+            )
+            .expect("insert chat");
+            for m in 0..3 {
+                conn.execute(
+                    "INSERT INTO messages (id, chat_id, role, content, created_at) \
+                     VALUES (?1, ?2, 'user', ?3, 1700000000000)",
+                    rusqlite::params![
+                        format!("big-m{i}_{m}"),
+                        format!("big-h{i}"),
+                        format!("Message {i}-{m}"),
+                    ],
+                )
+                .expect("insert message");
+            }
+        }
+    }
+
+    let prepared = prepare(&data_root, &source, false, &mut nop_stage).expect("prepare");
+    assert_eq!(prepared.report.characters, 1_000);
+    assert_eq!(prepared.report.chats, 1_000);
+    assert_eq!(prepared.report.messages, 3_000);
+    assert_eq!(prepared.report.skipped, 0);
+}
+
+/// Corpus: a message referencing a branch that does not exist is converted
+/// anyway (the kernel flattens legacy branches; branch id is not a kernel
+/// column) — the corpus item "orphaned records" for messages.
+#[test]
+fn corpus_message_branch_is_flattened() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let data_root = dir.path().join("data");
+    fs::create_dir_all(&data_root).expect("create data root");
+    let source = dir.path().join("legacy.db");
+    build_real_legacy(&source).expect("build real legacy");
+
+    let prepared = prepare(&data_root, &source, false, &mut nop_stage).expect("prepare");
+    assert_eq!(
+        prepared.report.messages, 2,
+        "branch references are flattened"
+    );
+}
+
+// --- Windows platform corpus (ТЗ §17.4, §10.3.1) ----------------------------
+
+/// Windows-only: a file handle held WITHOUT `FILE_SHARE_DELETE` on the data
+/// root's lock/target makes the pointer switch fail with a classified
+/// transient error; `commit` exhausts the bounded retry budget and returns
+/// the stable recoverable `ActivationPending`. Releasing the handle lets the
+/// next `open` (restart-to-complete) resolve the pending activation.
+#[cfg(target_os = "windows")]
+#[test]
+fn windows_held_handle_leads_to_activation_pending_and_resolves() {
+    use std::os::windows::fs::OpenOptionsExt;
+    use std::os::windows::io::AsRawHandle;
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let data_root = dir.path().join("data");
+    fs::create_dir_all(&data_root).expect("create data root");
+    let source = dir.path().join("legacy.db");
+    build_legacy(&source).expect("build legacy");
+
+    let prepared = prepare(&data_root, &source, false, &mut nop_stage).expect("prepare");
+    let staging = prepared.staging_root.clone();
+
+    // Hold the staging root's database file open without delete sharing —
+    // exactly the Windows contention ТЗ §10.3.1 describes (Defender/indexer/
+    // sync client). The pointer switch does not touch that file, so to make
+    // the *activation* itself contend we instead hold the journal's target
+    // resolution: commit's pointer write replaces `active-root.json`, which
+    // we create and hold open without FILE_SHARE_DELETE.
+    let pointer = neotavern_storage::activation::pointer_path(&data_root);
+    fs::write(
+        &pointer,
+        b"{\"formatVersion\":1,\"root\":\"\",\"activatedAt\":\"\"}",
+    )
+    .expect("pre-create pointer");
+    let held = fs::OpenOptions::new()
+        .read(true)
+        .share_mode(0) // no FILE_SHARE_READ/WRITE/DELETE
+        .open(&pointer)
+        .expect("open pointer without sharing");
+    let _raw = held.as_raw_handle(); // keep the handle alive for the retry loop
+
+    let err = commit(&data_root, &prepared.entry_id, &mut nop_stage)
+        .expect_err("commit must exhaust the retry budget");
+    assert_eq!(err.code, StorageErrorCode::ActivationPending);
+    assert_eq!(
+        latest_entry(&data_root)
+            .expect("latest")
+            .expect("entry")
+            .status,
+        ActivationStatus::ActivationPending,
+        "journal stays activation_pending after budget exhaustion"
+    );
+    assert_eq!(
+        active_root(&data_root).expect("active root"),
+        data_root,
+        "previous root still active during contention"
+    );
+
+    // Release the handle → the next open resolves the pending activation
+    // (restart-to-complete, ТЗ §10.3.1 item 5).
+    drop(held);
+    let mut progress = |_: MigrationProgress| {};
+    let db = open(&data_root, &ConnectionPolicy::default(), &mut progress).expect("open");
+    assert_eq!(
+        active_root(&data_root).expect("active root"),
+        staging,
+        "pending activation completed at next open"
+    );
+    drop(db);
+}

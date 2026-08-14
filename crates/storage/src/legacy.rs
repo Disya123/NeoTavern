@@ -147,10 +147,23 @@ fn convert_characters(
             "avatar",
             "tags",
             "ext",
+            "personality",
+            "scenario",
+            "first_message",
+            "example_dialogues",
+            "system_prompt",
+            "post_history_instructions",
+            "creator",
+            "creator_notes",
+            "deleted_at",
             "created_at",
             "updated_at",
         ],
     );
+    // Legacy (Drizzle) stores tags as a `character_tags`/`tags` join; the
+    // converter fixture's inline `tags` column is also supported. Either way
+    // the merged list lands in the kernel `tags_json`.
+    let tags_by_id = read_character_tags(legacy)?;
     let sql = format!(
         "SELECT {} FROM characters ORDER BY id",
         quote_columns(&selected)
@@ -172,6 +185,13 @@ fn convert_characters(
             skip(report, "character: missing id");
             continue;
         };
+        // Soft-deleted characters are not revived by the migration
+        // (ТЗ §17.4 corpus: orphaned/deleted records are reported, not
+        // resurrected).
+        if as_i64(get("deleted_at")).is_some() {
+            skip(report, &format!("character {id}: soft-deleted, skipped"));
+            continue;
+        }
         let Some(name) = as_text(get("name")) else {
             skip(report, &format!("character {id}: missing name"));
             continue;
@@ -185,8 +205,38 @@ fn convert_characters(
             continue;
         };
         let description = as_text(get("description")).map(str::to_owned);
-        let tags = parse_json_array(get("tags"));
-        let ext = parse_json(get("ext"));
+        let mut tags = parse_json_array(get("tags"));
+        if let Some(joined) = tags_by_id.get(id) {
+            for tag in joined {
+                if !tags.contains(tag) {
+                    tags.push(tag.clone());
+                }
+            }
+        }
+        // Known legacy card fields survive into `ext_json` under stable keys
+        // (kernel prompt reads `ext_json.personality` / `persona` for the
+        // persona block; ТЗ §10.3 "unknown character metadata сохраняются").
+        let mut ext = parse_json(get("ext"));
+        if !ext.is_object() {
+            ext = serde_json::json!({});
+        }
+        let ext_obj = ext.as_object_mut().expect("ext is an object");
+        for (key, column) in [
+            ("personality", "personality"),
+            ("scenario", "scenario"),
+            ("first_message", "first_message"),
+            ("example_dialogues", "example_dialogues"),
+            ("system_prompt", "system_prompt"),
+            ("post_history_instructions", "post_history_instructions"),
+            ("creator", "creator"),
+            ("creator_notes", "creator_notes"),
+        ] {
+            if let Some(text) = as_text(get(column)) {
+                ext_obj
+                    .entry(key)
+                    .or_insert_with(|| serde_json::Value::String(text.to_string()));
+            }
+        }
         // `avatar` is intentionally not copied: legacy avatar strings are
         // not managed asset keys (ТЗ §34: avatar→asset skip).
         tx.execute(
@@ -210,6 +260,39 @@ fn convert_characters(
     Ok(ids)
 }
 
+/// Reads the `character_tags`/`tags` join (the real Drizzle legacy layout)
+/// into `character_id → [tag names]` (sorted, deduplicated). Missing join
+/// tables → empty map (the inline `tags` column is then the only source).
+fn read_character_tags(legacy: &Connection) -> Result<HashMap<String, Vec<String>>> {
+    let mut out: HashMap<String, Vec<String>> = HashMap::new();
+    if !table_exists(legacy, "character_tags")? || !table_exists(legacy, "tags")? {
+        return Ok(out);
+    }
+    let mut stmt = legacy
+        .prepare(
+            "SELECT ct.character_id, t.name \
+             FROM character_tags ct JOIN tags t ON t.id = ct.tag_id \
+             ORDER BY t.name",
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "legacy: prepare character_tags"))?;
+    let mut rows = stmt
+        .query([])
+        .map_err(|e| StorageError::from_sqlite(e, "legacy: query character_tags"))?;
+    while let Some(row) = rows
+        .next()
+        .map_err(|e| StorageError::from_sqlite(e, "legacy: read character_tags"))?
+    {
+        let character_id: String = row
+            .get(0)
+            .map_err(|e| StorageError::from_sqlite(e, "legacy: tag character id"))?;
+        let name: String = row
+            .get(1)
+            .map_err(|e| StorageError::from_sqlite(e, "legacy: tag name"))?;
+        out.entry(character_id).or_default().push(name);
+    }
+    Ok(out)
+}
+
 fn convert_chats(
     legacy: &Connection,
     tx: &rusqlite::Transaction,
@@ -220,7 +303,14 @@ fn convert_chats(
     require_columns(&cols, "chats", &["id", "created_at", "updated_at"])?;
     let selected = select_columns(
         &cols,
-        &["id", "title", "character_id", "created_at", "updated_at"],
+        &[
+            "id",
+            "title",
+            "character_id",
+            "deleted_at",
+            "created_at",
+            "updated_at",
+        ],
     );
     let sql = format!("SELECT {} FROM chats ORDER BY id", quote_columns(&selected));
     let mut stmt = legacy
@@ -240,6 +330,12 @@ fn convert_chats(
             skip(report, "chat: missing id");
             continue;
         };
+        // Soft-deleted chats are not revived either (kernel has no
+        // `deleted_at`; resurrection would break FK and user expectations).
+        if as_i64(get("deleted_at")).is_some() {
+            skip(report, &format!("chat {id}: soft-deleted, skipped"));
+            continue;
+        }
         let Some(created_at) = ms_to_rfc3339_checked(get("created_at")) else {
             skip(report, &format!("chat {id}: invalid created_at"));
             continue;

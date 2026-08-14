@@ -108,6 +108,26 @@ orphans are skipped and reported, and secrets/provider configs/plugins/
 themes are never copied. The source is never mutated in place; unsupported
 layouts yield a controlled incompatibility error.
 
+**Schema mapping (Этап 3, work 1)** covers the real Drizzle layout
+(`packages/db` migrations 0000…0024), not just the minimal fixture:
+
+- **Known character-card fields survive** into the kernel `ext_json` under
+  stable keys: `personality`, `scenario`, `first_message`,
+  `example_dialogues`, `system_prompt`, `post_history_instructions`,
+  `creator`, `creator_notes` — the Kernel prompt pipeline already reads
+  `ext_json.personality` / `persona` for the persona block, so converted
+  characters keep their persona.
+- **Tags** are read from the real `character_tags`/`tags` join tables (the
+  inline `tags` column of the legacy fixture is also supported) and merged,
+  sorted and deduplicated into the kernel `tags_json`.
+- **Unknown ext fields are preserved** verbatim (ТЗ §10.3).
+- **Soft-deleted rows** (`deleted_at IS NOT NULL`) are skipped and reported
+  as orphans — the kernel has no `deleted_at`, so the migration must not
+  resurrect deleted characters/chats (ТЗ §17.4 corpus "orphaned records").
+- Legacy `messages.branch_id`/`parent_id`/`meta`/`name` have no kernel
+  columns; branches are flattened (rows keep chat ordering), matching the
+  current kernel message model.
+
 ## Staged migration into the application flow (ТЗ §10.3, Этап 3)
 
 `neotavern_storage::migration` orchestrates the full ТЗ §10.3 sequence for
@@ -144,8 +164,17 @@ Detect legacy data
 - **Migration corpus** (ТЗ §17.4) is covered by `crates/storage/tests/
   migration.rs`: kernel databases at every released schema revision (1..6)
   upgrade with seeds preserved, a future schema fails closed
-  (`SchemaTooNew`), a corrupted page is detected (`Corrupt`), and an
-  interrupted legacy migration recovers with a fresh staging root.
+  (`SchemaTooNew`), a corrupted page is detected (`Corrupt`), an interrupted
+  legacy migration recovers with a fresh staging root, the real Drizzle
+  layout maps completely (card fields → `ext_json`, join-table tags →
+  `tags_json`, unknown ext preserved, soft-deleted rows skipped), a 1000×1000
+  library converts with exact counts, unicode/RTL/20k-char values round-trip,
+  and **the Windows platform corpus** holds a real file handle without
+  `FILE_SHARE_DELETE` (ТЗ §17.4 platform corpus): the pointer switch exhausts
+  the bounded retry budget, `commit` returns the stable recoverable
+  `ActivationPending`, the journal stays `activation_pending`, the previous
+  root stays active, and releasing the handle lets the next `open` resolve
+  the pending activation (restart-to-complete).
 
 ## Versioned data roots and the activation journal (ADR-0041, Этап 3)
 
