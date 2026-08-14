@@ -20,7 +20,10 @@ import {
   MemorySecretStore,
   UnavailableSecretStore,
 } from '@neotavern/secret-store';
-import { createSecretStoreHandleForBackend } from '../src/lib/secretStore.js';
+import {
+  createSecretStoreHandle,
+  createSecretStoreHandleForBackend,
+} from '../src/lib/secretStore.js';
 import { createTestApp } from './helpers.js';
 import type { TypedApp } from '../src/types.js';
 
@@ -415,5 +418,48 @@ describe('SEC-01: backups and exports exclude secrets', () => {
     expect(await session.has('provider:p1', 'rec-1')).toBe(false);
     expect(await restarted.resolve(ref)).toBeNull();
     await rm(dir, { recursive: true, force: true });
+  });
+
+  it('attaches the portable store in session mode for owner-aware revocation (SEC-01, production path)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'neotavern-secret-prod-'));
+    try {
+      // Phase 1: a value is stored by the PORTABLE backend (secrets.enc file).
+      const portable = new FileEncryptedSecretStore(join(dir, 'secrets.enc'));
+      await portable.create('test-passphrase');
+      const seeded = createSecretStoreHandleForBackend(portable, portable, logger);
+      const ref = await seeded.storeValue('provider:p1', 'rec-1', 'sk-prod-owner');
+      expect(ref).toMatch(/^portable:/u);
+
+      // Phase 2: restart into SESSION mode through the PRODUCTION factory —
+      // the active backend is memory, but the handle must attach the existing
+      // secrets.enc so the saved `portable:` ref can still be revoked instead
+      // of being silently orphaned.
+      const restarted = await createSecretStoreHandle('session', 'test-passphrase', dir, logger);
+      expect(await restarted.deleteRef(ref)).toBe(true);
+      expect(await restarted.resolve(ref)).toBeNull();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('fails closed when the portable file cannot be unlocked in session mode (SEC-01)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'neotavern-secret-prod-lock-'));
+    try {
+      const portable = new FileEncryptedSecretStore(join(dir, 'secrets.enc'));
+      await portable.create('test-passphrase');
+      const seeded = createSecretStoreHandleForBackend(portable, portable, logger);
+      const ref = await seeded.storeValue('provider:p1', 'rec-1', 'sk-locked');
+
+      // Wrong passphrase on restart: the store attaches LOCKED, so revocation
+      // throws instead of silently orphaning the value; resolve is
+      // unavailable (fail-closed, never a plaintext fallback).
+      const restarted = await createSecretStoreHandle('session', 'wrong-passphrase', dir, logger);
+      await expect(restarted.deleteRef(ref)).rejects.toMatchObject({
+        code: 'SECRET_STORE_LOCKED',
+      });
+      expect(await restarted.resolve(ref)).toBeNull();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

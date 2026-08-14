@@ -14,7 +14,7 @@
  * fallback. `migrateLegacySecrets()` moves pre-migration plaintext rows into
  * the store (idempotent, skipped while the store is locked).
  */
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { AppError, ErrorCodes, type Logger } from '@neotavern/shared';
 import {
@@ -100,6 +100,29 @@ export async function createSecretStoreHandle(
     backend = new MemorySecretStore();
   } else {
     backend = new UnavailableSecretStore();
+  }
+
+  // Owner-aware revocation (SEC-01): whenever a portable `secrets.enc` exists
+  // in the data root, attach it to the handle even when the ACTIVE backend is
+  // session/env. The reference's own kind (`portable:`) then routes
+  // `deleteRef`/`resolve` to the file store instead of the default backend, so
+  // a value stored under portable mode is never silently orphaned just
+  // because the process restarted into another mode. A file that cannot be
+  // unlocked (wrong passphrase, corruption) stays attached in the LOCKED
+  // state: `deleteRef` then throws `SECRET_STORE_LOCKED` (fail-closed) and the
+  // caller keeps the DB row for a retry — never a silent no-op. No file means
+  // nothing portable was ever stored here, so there is nothing to attach.
+  if (portable === null && existsSync(join(dataDir, 'secrets.enc'))) {
+    portable = new FileEncryptedSecretStore(join(dataDir, 'secrets.enc'));
+    try {
+      await portable.open(passphrase ?? '');
+      logger.info('[secret-store] portable store attached for owner-aware revocation');
+    } catch {
+      // Attach locked: revocation of `portable:` refs now fails closed.
+      logger.warn(
+        '[secret-store] portable secrets.enc present but not unlocked — portable refs will fail closed on revocation',
+      );
+    }
   }
 
   return createSecretStoreHandleForBackend(backend, portable, logger);
