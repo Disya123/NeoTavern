@@ -1028,7 +1028,7 @@
           "type": "artifact",
           "artifact": "wallpaperBackgroundUrl(backgroundId) transport helper in wireBridge — legacy plane keeps the /api/v2/assets/backgrounds/:id URL, kernel plane honestly returns null (backgrounds are a legacy file contour with no kernel store) — replaces the inline background literals in ChatPage and HomePage + wireBridge 95/95 (+1 wallpaper routing test)",
           "result": "Two more component sites left the legacy surface (M5 slice 12, Этап 4 context 5 part): the chat and home wallpaper URLs are now built by the wireBridge routing table, so components contain no /api/v2 literal and never branch on the backend kind for this surface. On the legacy plane the transport returns the asset-route URL (encodeURIComponent preserved, escape-verified); on the kernel plane it honestly returns null — the kernel models no background store (backgrounds are legacy files, not kernel assets), so the wallpaper simply does not render rather than fabricating a URL. ui:api:check drops 57 -> 56 sites (ChatPage -1, HomePage -1, wireBridge +1 transport site). Verified: web vitest 644/644 (wireBridge 95/95 incl. 1 new wallpaper test), web typecheck clean, eslint clean, prettier clean, ui:api:check 56 sites OK, docs:check + docs:sync:check OK, gates GATE PASS.",
-          "commit": "pending"
+          "commit": "1522553"
         },
         {
           "type": "artifact",
