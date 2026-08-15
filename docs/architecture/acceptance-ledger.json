@@ -1046,7 +1046,7 @@
           "type": "artifact",
           "artifact": "connectAppEvents kernel honest mode (events.ts)",
           "result": "M5 slice 15 (ARC-02 kernel-mode truthfulness): the app-level SSE subscriber previously opened the legacy event stream on EVERY backend, including kernel mode — a direct legacy-surface call from kernel mode. connectAppEvents now returns an honest no-op teardown on the kernel plane (the kernel is the single writer; every mutation flows through the same in-process TanStack Query caches, and there is no SSE channel — ТЗ §13.1: never silently touch the other backend) and keeps the real stream on the legacy contour (sidecar / remote Web Client). The module docs/comment literals were also rewritten so the recorder counts only the real EventSource call: ui:api:check 54 → 53 sites (events.ts 2 → 1). Verified: events 15/15 (+1 kernel no-op test: no EventSource constructed, teardown safe), full web vitest green, web typecheck/eslint/prettier clean, ui:api:check 53, docs:check + docs:sync:check, gates GATE PASS.",
-          "commit": "pending"
+          "commit": "c9bfaac"
         },
         {
           "type": "artifact",
