@@ -1,13 +1,23 @@
 /**
  * App-level subscription to the server event channel (ТЗ §4.2, §11.1).
  *
- * The `GET /api/v2/events` stream exists so backend-driven changes — another
- * tab, the legacy bridge, server plugins — invalidate the relevant TanStack
- * Query caches instead of silently going stale. Before this subscriber, the
- * stream was only relayed into plugin sandboxes.
+ * The legacy SSE event stream (`GET` on the events route of the legacy
+ * surface) exists so backend-driven changes — another tab, the legacy
+ * bridge, server plugins — invalidate the relevant TanStack Query caches
+ * instead of silently going stale. Before this subscriber, the stream was
+ * only relayed into plugin sandboxes.
+ *
+ * **Kernel plane** (desktop local kernel): there is no SSE channel and no
+ * second writer — the kernel is the single writer and every mutation flows
+ * through the same TanStack Query caches in this process. Opening the legacy
+ * event stream here would be a silent legacy call (ARC-02), so the honest
+ * kernel behavior is a no-op subscription (ТЗ §13.1: never silently touch the
+ * other backend). The legacy contour (sidecar / remote Web Client) keeps the
+ * real stream.
  */
 import type { QueryClient } from '@tanstack/react-query';
 import type { BrowserAppEvent } from '@neotavern/contracts';
+import { isKernelMode } from './backend.js';
 
 /**
  * Server frame on the wire. The event names come from the shared contract
@@ -25,6 +35,11 @@ interface AppEventEnvelope {
  * function. EventSource reconnects on its own after network interruptions.
  */
 export function connectAppEvents(queryClient: QueryClient): () => void {
+  // Kernel plane: honest no-op (see the module docs) — never a silent legacy
+  // surface call from kernel mode.
+  if (isKernelMode()) {
+    return () => undefined;
+  }
   const source = new EventSource('/api/v2/events');
 
   const invalidate = (key: readonly unknown[]): void => {

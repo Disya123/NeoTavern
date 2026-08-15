@@ -3,6 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient } from '@tanstack/react-query';
 import { connectAppEvents } from './events.js';
 
+// Kernel-mode honesty (slice 15): the transport consults `isKernelMode`; the
+// default here is the legacy plane so the existing SSE tests stay as they
+// were.
+const mocks = vi.hoisted(() => ({ isKernelMode: vi.fn(() => false) }));
+vi.mock('./backend.js', () => ({ isKernelMode: mocks.isKernelMode }));
+
 class FakeEventSource {
   static instances: FakeEventSource[] = [];
   readonly url: string;
@@ -141,5 +147,15 @@ describe('connectAppEvents', () => {
   it('teardown closes the event source', () => {
     teardown();
     expect(source.close).toHaveBeenCalledOnce();
+  });
+
+  it('is an honest no-op on the kernel plane (no silent /api/v2 stream)', () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const kernelTeardown = connectAppEvents(queryClient);
+    // Only the beforeEach legacy-plane stream exists — kernel mode opens
+    // nothing.
+    expect(FakeEventSource.instances).toHaveLength(1);
+    expect(() => kernelTeardown()).not.toThrow();
+    mocks.isKernelMode.mockReturnValue(false);
   });
 });

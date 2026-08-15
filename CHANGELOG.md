@@ -3,6 +3,19 @@
 ## Unreleased
 ### Added
 
+- **`connectAppEvents` is an honest no-op on the kernel plane (M5 slice 15,
+  ARC-02 kernel-mode truthfulness).** The app-level SSE subscriber
+  (`GET /api/v2/events`) existed to invalidate TanStack Query caches on
+  backend-driven changes (other tabs, the legacy bridge, server plugins).
+  In kernel mode that channel does not exist — the kernel is the single
+  writer and every mutation flows through the same in-process query caches —
+  so the subscriber silently opened `/api/v2/events` anyway (a direct legacy
+  call from kernel mode, ARC-02). `connectAppEvents` now returns a no-op
+  teardown on the kernel plane (ТЗ §13.1: never silently touch the other
+  backend) and keeps the real stream on the legacy contour (sidecar / remote
+  Web Client). Tests: events 15/15 (+1 kernel no-op: no EventSource is
+  constructed, teardown is safe), full web vitest green.
+
 - **Kernel chat snapshots (checkpoint/branch) — `chats.snapshots.create`
   (M5 slice 14, Этап 4 context 5 closure).** The canonical Conversations
   model (ТЗ §8.1) now owns the snapshot capability instead of refusing it: a
