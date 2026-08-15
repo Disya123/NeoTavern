@@ -16,9 +16,24 @@ details.
 ## Public API
 
 - `NeoBackend` — `meta()` plus domain groups: `characters`, `chats`,
-  `lorebooks`, `presets`, `generation` (streaming), `backups`.
+  `lorebooks`, `presets`, `memories`, `providers`, `generation` (streaming),
+  `backups`, `plugins`, `themes`, `profiles`, `settings`, `diagnostics`,
+  `secrets`.
 - `CharactersApi`, `ChatsApi`, `GenerationApi`, `BackupsApi`, `LorebooksApi`,
-  `PresetsApi` — operation contracts per group.
+  `PresetsApi`, `MemoriesApi`, `ProvidersApi`, `PluginsApi`, `ThemesApi`,
+  `ProfilesApi`, `SettingsApi`, `DiagnosticsApi`, `SecretsApi` — operation
+  contracts per group.
+- Canonical kernel-only domains (M5 slices 6–7): `plugins`
+  (`plugins.list/install/uninstall/enable/disable`, SEC-05 trust +
+  granted-permission consent), `themes` (`themes.list/install/uninstall/
+activate`, CSS as content-addressed asset, single active theme),
+  `profiles` (`profiles.list/create/rename/delete`, Configuration
+  bounded context), `settings` (`settings.get/update`, non-secret JSON
+  upserts), `diagnostics` (`diagnostics.export`, SEC-07 redacted
+  allowlist bundle), `secrets` (`secrets.status`, SEC-01.1 value-free
+  store-mode report). On `LegacyBackend` every one of these throws
+  `UnsupportedError` — the legacy plane must never fake a canonical
+  capability (ТЗ §13.1).
 - `LocalBackend({ transport, expectedSchemaHash? })` — validates every
   outbound request against the registry `requestSchemaId` before the transport
   call (`ValidationError`, never a transport call), and every response/event

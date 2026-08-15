@@ -17,8 +17,15 @@ import {
   type BackupDto,
   type CharacterDto,
   type ChatDto,
+  type CreateProfileResultDto,
+  type DiagnosticsExportResultDto,
   type EmptyResultDto,
   type GenerationRunDto,
+  type InstallPluginResultDto,
+  type InstallThemeResultDto,
+  type ListPluginsResultDto,
+  type ListProfilesResultDto,
+  type ListThemesResultDto,
   type ListToolsResultDto,
   type WireGenerationEvent,
   type ListBackupsResultDto,
@@ -33,8 +40,13 @@ import {
   type LorebookEntryDto,
   type MemoryDto,
   type PersonaDto,
+  type PluginDto,
   type PresetDto,
+  type ProfileDto,
   type ProviderConfigDto,
+  type ResultSettingsDto,
+  type SecretsStatusResultDto,
+  type ThemeDto,
   type MessageDto,
   type MessageDraftDto,
   type MessageVariantDto,
@@ -52,13 +64,19 @@ import type {
   BackupsApi,
   CharactersApi,
   ChatsApi,
+  DiagnosticsApi,
   GenerationApi,
   LorebooksApi,
   MemoriesApi,
   NeoBackend,
   PersonasApi,
+  PluginsApi,
   PresetsApi,
+  ProfilesApi,
   ProvidersApi,
+  SecretsApi,
+  SettingsApi,
+  ThemesApi,
 } from './neobackend.js';
 
 /** A single schema validation issue (JSON pointer path + human message). */
@@ -207,6 +225,12 @@ export class LocalBackend implements NeoBackend {
   readonly providers: ProvidersApi;
   readonly generation: GenerationApi;
   readonly backups: BackupsApi;
+  readonly plugins: PluginsApi;
+  readonly themes: ThemesApi;
+  readonly profiles: ProfilesApi;
+  readonly settings: SettingsApi;
+  readonly diagnostics: DiagnosticsApi;
+  readonly secrets: SecretsApi;
 
   private readonly transport: LocalTransport;
   private readonly operations: ReadonlyMap<string, CompiledOperation>;
@@ -279,8 +303,7 @@ export class LocalBackend implements NeoBackend {
         this.invoke<GenerationRunDto>('generation.discard', { workflowId }, opts),
       tools: {
         list: (opts) => this.invoke<ListToolsResultDto>('generation.tools.list', {}, opts),
-        result: (req, opts) =>
-          this.invoke<GenerationRunDto>('generation.tool.result', req, opts),
+        result: (req, opts) => this.invoke<GenerationRunDto>('generation.tool.result', req, opts),
       },
     };
     this.backups = {
@@ -289,8 +312,7 @@ export class LocalBackend implements NeoBackend {
     };
     this.lorebooks = {
       list: () => this.invoke<ListLorebooksResultDto>('lorebooks.list', {}, undefined),
-      get: (lorebookId, opts) =>
-        this.invoke<LorebookDto>('lorebooks.get', { lorebookId }, opts),
+      get: (lorebookId, opts) => this.invoke<LorebookDto>('lorebooks.get', { lorebookId }, opts),
       create: (req, opts) => this.invoke<LorebookDto>('lorebooks.create', req, opts),
       update: (req, opts) => this.invoke<LorebookDto>('lorebooks.update', req, opts),
       del: (lorebookId, opts) =>
@@ -335,6 +357,39 @@ export class LocalBackend implements NeoBackend {
         del: (provider, name, opts) =>
           this.invoke<EmptyResultDto>('providers.config.delete', { provider, name }, opts),
       },
+    };
+    this.plugins = {
+      list: (opts) => this.invoke<ListPluginsResultDto>('plugins.list', {}, opts),
+      install: (req, opts) => this.invoke<InstallPluginResultDto>('plugins.install', req, opts),
+      uninstall: (pluginId, opts) =>
+        this.invoke<EmptyResultDto>('plugins.uninstall', { id: pluginId }, opts),
+      enable: (pluginId, opts) => this.invoke<PluginDto>('plugins.enable', { id: pluginId }, opts),
+      disable: (pluginId, opts) =>
+        this.invoke<PluginDto>('plugins.disable', { id: pluginId }, opts),
+    };
+    this.themes = {
+      list: (opts) => this.invoke<ListThemesResultDto>('themes.list', {}, opts),
+      install: (req, opts) => this.invoke<InstallThemeResultDto>('themes.install', req, opts),
+      uninstall: (themeId, opts) =>
+        this.invoke<EmptyResultDto>('themes.uninstall', { id: themeId }, opts),
+      activate: (themeId, opts) => this.invoke<ThemeDto>('themes.activate', { id: themeId }, opts),
+    };
+    this.profiles = {
+      list: (opts) => this.invoke<ListProfilesResultDto>('profiles.list', {}, opts),
+      create: (req, opts) => this.invoke<CreateProfileResultDto>('profiles.create', req, opts),
+      rename: (req, opts) => this.invoke<ProfileDto>('profiles.rename', req, opts),
+      del: (profileId, opts) =>
+        this.invoke<EmptyResultDto>('profiles.delete', { id: profileId }, opts),
+    };
+    this.settings = {
+      get: (req, opts) => this.invoke<ResultSettingsDto>('settings.get', req ?? {}, opts),
+      update: (req, opts) => this.invoke<ResultSettingsDto>('settings.update', req, opts),
+    };
+    this.diagnostics = {
+      export: (opts) => this.invoke<DiagnosticsExportResultDto>('diagnostics.export', {}, opts),
+    };
+    this.secrets = {
+      status: (opts) => this.invoke<SecretsStatusResultDto>('secrets.status', {}, opts),
     };
   }
 

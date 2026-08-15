@@ -3,6 +3,25 @@
 ## Unreleased
 ### Added
 
+- **NeoBackend facade for the canonical kernel domains (M5 web-facade
+  foundation, ТЗ §15/§13.1).** The single UI-facing surface now covers
+  `plugins` (list/install/uninstall/enable/disable — SEC-05 trust +
+  granted-permission consent), `themes` (list/install/uninstall/activate —
+  CSS as content-addressed asset, single active theme), `profiles`
+  (list/create/rename/delete — Configuration bounded context), `settings`
+  (get/update — non-secret JSON upserts), `diagnostics` (export — SEC-07
+  redacted allowlist bundle) and `secrets` (status — SEC-01.1 value-free
+  store-mode report). Implemented in `LocalBackend` (kernel transport with
+  per-request schema validation) and `RemoteBackend` (SDK delegation);
+  `LegacyBackend` throws `UnsupportedError` for every one of them — the
+  legacy plane must never fake a canonical capability (ТЗ §13.1), it stays
+  an explicit temporary bridge. 11 new parity tests
+  (`packages/neobackend/test/parity.test.ts`): Local/Remote deep-equal
+  results + exact payload forwarding for all six domains, outbound
+  `ValidationError` before any transport call, legacy `UnsupportedError`;
+  the pre-existing providers fixture gained the required
+  `capabilities` declaration (ТЗ §9.3). 65/65 neobackend tests; README
+  updated.
 - **Canonical Configuration profiles (ТЗ §8.1 Configuration, M5 slice 5
   remainder part 2).** Schema v14 (STRICT `profiles` table) + four new wire
   operations (86 total): `profiles.list` / `profiles.create` /

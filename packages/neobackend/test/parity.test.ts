@@ -7,10 +7,17 @@ import { describe, expect, it } from 'vitest';
 import {
   WIRE_SCHEMA_HASH,
   type CharacterDto,
+  type CreateProfileResultDto,
+  type DiagnosticsExportResultDto,
   type GenerationRunDto,
+  type InstallPluginResultDto,
+  type InstallThemeResultDto,
   type ListMemoriesResultDto,
+  type ListPluginsResultDto,
   type ListPresetsResultDto,
+  type ListProfilesResultDto,
   type ListProvidersResultDto,
+  type ListThemesResultDto,
   type ListToolsResultDto,
   type ListMessageRevisionsResultDto,
   type ListMessageVariantsResultDto,
@@ -23,7 +30,12 @@ import {
   type PagedCharactersDto,
   type PagedGenerationEventsDto,
   type PagedMessagesDto,
+  type PluginDto,
   type PresetDto,
+  type ProfileDto,
+  type ResultSettingsDto,
+  type SecretsStatusResultDto,
+  type ThemeDto,
   type WireGenerationEvent,
 } from '@neotavern/contracts';
 import { ClientSdk, HttpTransport, ProductError, type StreamEvent } from '@neotavern/client-sdk';
@@ -68,6 +80,13 @@ const PROVIDERS: ListProvidersResultDto = {
       name: 'Fake Provider',
       builtin: true,
       availability: { status: 'available' },
+      capabilities: {
+        tools: false,
+        vision: false,
+        thinking: false,
+        jsonMode: false,
+        streaming: true,
+      },
       models: [{ id: 'fake-1', name: 'Fake 1', contextLimit: 8192 }],
     },
   ],
@@ -107,6 +126,82 @@ const MEMORY: MemoryDto = {
 };
 
 const MEMORY_LIST: ListMemoriesResultDto = { items: [MEMORY] };
+
+// --- M5 slice 6/7 canonical fixtures (wire fixture shapes from
+// `packages/contracts/src/wire/registry.ts`: PLUGIN_VALUE, THEME_VALUE,
+// PROFILE_VALUE, SETTINGS_VALUE, DIAGNOSTICS_VALUE, SECRETS_STATUS_VALUE). ---
+const PLUGIN: PluginDto = {
+  id: 'lorebook-searcher',
+  name: 'Lorebook Searcher',
+  version: '1.2.0',
+  enabled: false,
+  trustState: 'verified-publisher',
+  publisherKeyId: 'fp-9f2c7a1b',
+  permissions: ['plugin.storage', 'lorebooks.list'],
+  installedAt: TIMESTAMP,
+  updatedAt: TIMESTAMP,
+  manifest: { id: 'lorebook-searcher', main: 'dist/index.js' },
+};
+const PLUGIN_LIST: ListPluginsResultDto = { items: [PLUGIN] };
+const PLUGIN_INSTALL: InstallPluginResultDto = { plugin: PLUGIN };
+const ENABLED_PLUGIN: PluginDto = { ...PLUGIN, enabled: true };
+
+const THEME: ThemeDto = {
+  id: 'wii-u-dark',
+  name: 'Wii U Dark',
+  version: '2.0.1',
+  active: false,
+  trustState: 'verified-publisher',
+  publisherKeyId: 'fp-9f2c7a1b',
+  cssAssetId: '5d6e7f80-9a1b-4c2d-8e3f-4a5b6c7d8e9f',
+  installedAt: TIMESTAMP,
+  updatedAt: TIMESTAMP,
+  manifest: { id: 'wii-u-dark', level: 'shell' },
+};
+const THEME_LIST: ListThemesResultDto = { items: [THEME] };
+const THEME_INSTALL: InstallThemeResultDto = { theme: THEME };
+const ACTIVE_THEME: ThemeDto = { ...THEME, active: true };
+
+const PROFILE_ID = 'aaaaaaa4-4444-4444-8444-444444444444';
+const PROFILE: ProfileDto = {
+  id: PROFILE_ID,
+  name: 'Main',
+  createdAt: TIMESTAMP,
+  updatedAt: TIMESTAMP,
+};
+const PROFILE_LIST: ListProfilesResultDto = { items: [PROFILE] };
+const PROFILE_CREATE: CreateProfileResultDto = { profile: PROFILE };
+
+const SETTINGS: ResultSettingsDto = {
+  items: [
+    { key: 'ui.theme', value: { theme: 'dark' }, updatedAt: TIMESTAMP },
+    { key: 'app.language', value: { locale: 'en' }, updatedAt: TIMESTAMP },
+  ],
+};
+
+const DIAGNOSTICS: DiagnosticsExportResultDto = {
+  generatedAt: TIMESTAMP,
+  traceId: RUN_ID,
+  schemaHash: 'a'.repeat(64),
+  schemaRevision: 14,
+  storageFormat: 1,
+  sqliteVersion: '3.49.0',
+  appVersion: '0.1.0',
+  wireVersion: { major: 1, minor: 0 },
+  redaction: 'allowlist',
+  sections: ['meta', 'storage', 'settings', 'generation'],
+  settings: { count: 2 },
+  generationRuns: { total: 1, completed: 1, failed: 0, waiting: 0 },
+};
+
+const SECRETS_STATUS: SecretsStatusResultDto = {
+  kind: 'portable',
+  persistent: true,
+  writable: true,
+  available: true,
+  recordCount: 2,
+  formatVersion: 1,
+};
 
 /** `chats.messages.list` response: one canonical wire message (Этап 2.10). */
 const PAGED_MESSAGES: PagedMessagesDto = {
@@ -298,6 +393,39 @@ class FakeKernelTransport implements LocalTransport {
         return { ok: true, value: MEMORY };
       case 'memories.delete':
         return { ok: true, value: EMPTY_RESULT };
+      case 'plugins.list':
+        return { ok: true, value: PLUGIN_LIST };
+      case 'plugins.install':
+        return { ok: true, value: PLUGIN_INSTALL };
+      case 'plugins.enable':
+        return { ok: true, value: ENABLED_PLUGIN };
+      case 'plugins.disable':
+        return { ok: true, value: PLUGIN };
+      case 'plugins.uninstall':
+        return { ok: true, value: EMPTY_RESULT };
+      case 'themes.list':
+        return { ok: true, value: THEME_LIST };
+      case 'themes.install':
+        return { ok: true, value: THEME_INSTALL };
+      case 'themes.activate':
+        return { ok: true, value: ACTIVE_THEME };
+      case 'themes.uninstall':
+        return { ok: true, value: EMPTY_RESULT };
+      case 'profiles.list':
+        return { ok: true, value: PROFILE_LIST };
+      case 'profiles.create':
+        return { ok: true, value: PROFILE_CREATE };
+      case 'profiles.rename':
+        return { ok: true, value: PROFILE };
+      case 'profiles.delete':
+        return { ok: true, value: EMPTY_RESULT };
+      case 'settings.get':
+      case 'settings.update':
+        return { ok: true, value: SETTINGS };
+      case 'diagnostics.export':
+        return { ok: true, value: DIAGNOSTICS };
+      case 'secrets.status':
+        return { ok: true, value: SECRETS_STATUS };
       default:
         return { ok: false, error: { code: 'NOT_FOUND', params: {}, traceId: 'kernel-trace' } };
     }
@@ -377,6 +505,39 @@ function rpcResult(operationId: string | undefined): unknown {
       return MEMORY;
     case 'memories.delete':
       return EMPTY_RESULT;
+    case 'plugins.list':
+      return PLUGIN_LIST;
+    case 'plugins.install':
+      return PLUGIN_INSTALL;
+    case 'plugins.enable':
+      return ENABLED_PLUGIN;
+    case 'plugins.disable':
+      return PLUGIN;
+    case 'plugins.uninstall':
+      return EMPTY_RESULT;
+    case 'themes.list':
+      return THEME_LIST;
+    case 'themes.install':
+      return THEME_INSTALL;
+    case 'themes.activate':
+      return ACTIVE_THEME;
+    case 'themes.uninstall':
+      return EMPTY_RESULT;
+    case 'profiles.list':
+      return PROFILE_LIST;
+    case 'profiles.create':
+      return PROFILE_CREATE;
+    case 'profiles.rename':
+      return PROFILE;
+    case 'profiles.delete':
+      return EMPTY_RESULT;
+    case 'settings.get':
+    case 'settings.update':
+      return SETTINGS;
+    case 'diagnostics.export':
+      return DIAGNOSTICS;
+    case 'secrets.status':
+      return SECRETS_STATUS;
     default:
       return null;
   }
@@ -402,10 +563,12 @@ class StubFetch {
       payload?: unknown;
     };
     if (pathname === '/stream') {
-      if (envelope.operationId === 'generation.start' || envelope.operationId === 'generation.retry') {
-        const body = GENERATION_STREAM_EVENTS.map(
-          (event, index) =>
-            JSON.stringify({ streamId: RUN_ID, sequence: index, type: event.type, payload: event }),
+      if (
+        envelope.operationId === 'generation.start' ||
+        envelope.operationId === 'generation.retry'
+      ) {
+        const body = GENERATION_STREAM_EVENTS.map((event, index) =>
+          JSON.stringify({ streamId: RUN_ID, sequence: index, type: event.type, payload: event }),
         ).join('\n');
         return new Response(body, {
           status: 200,
@@ -799,8 +962,16 @@ describe('Message variants/revisions/drafts Local vs Remote parity (Этап 4 s
     const remote = makeRemoteBackend();
 
     const [localResult, remoteResult] = await Promise.all([
-      local.chats.activateMessageVariant({ chatId: CHAT_ID, messageId: MESSAGE_ID, variantId: VARIANT_ID }),
-      remote.chats.activateMessageVariant({ chatId: CHAT_ID, messageId: MESSAGE_ID, variantId: VARIANT_ID }),
+      local.chats.activateMessageVariant({
+        chatId: CHAT_ID,
+        messageId: MESSAGE_ID,
+        variantId: VARIANT_ID,
+      }),
+      remote.chats.activateMessageVariant({
+        chatId: CHAT_ID,
+        messageId: MESSAGE_ID,
+        variantId: VARIANT_ID,
+      }),
     ]);
 
     expect(localResult).toEqual(remoteResult);
@@ -812,8 +983,16 @@ describe('Message variants/revisions/drafts Local vs Remote parity (Этап 4 s
     const remote = makeRemoteBackend();
 
     const [localResult, remoteResult] = await Promise.all([
-      local.chats.delMessageVariant({ chatId: CHAT_ID, messageId: MESSAGE_ID, variantId: VARIANT_ID }),
-      remote.chats.delMessageVariant({ chatId: CHAT_ID, messageId: MESSAGE_ID, variantId: VARIANT_ID }),
+      local.chats.delMessageVariant({
+        chatId: CHAT_ID,
+        messageId: MESSAGE_ID,
+        variantId: VARIANT_ID,
+      }),
+      remote.chats.delMessageVariant({
+        chatId: CHAT_ID,
+        messageId: MESSAGE_ID,
+        variantId: VARIANT_ID,
+      }),
     ]);
 
     expect(localResult).toEqual(remoteResult);
@@ -862,7 +1041,13 @@ describe('Message variants/revisions/drafts Local vs Remote parity (Этап 4 s
     expect(kernel.requests).toEqual([
       {
         operationId: 'chats.messages.drafts.save',
-        payload: { chatId: CHAT_ID, draftId: DRAFT_ID, role: 'assistant', content: 'Streaming…', sequence: 3 },
+        payload: {
+          chatId: CHAT_ID,
+          draftId: DRAFT_ID,
+          role: 'assistant',
+          content: 'Streaming…',
+          sequence: 3,
+        },
       },
     ]);
   });
@@ -1197,7 +1382,9 @@ describe('LegacyBackend', () => {
     });
     const result = await backend.raw.request<{ items: never[] }>('GET', '/chats/c1/messages');
     expect(result).toEqual({ items: [] });
-    expect(calls).toEqual([{ method: 'GET', path: '/chats/c1/messages', body: undefined, signal: undefined }]);
+    expect(calls).toEqual([
+      { method: 'GET', path: '/chats/c1/messages', body: undefined, signal: undefined },
+    ]);
   });
 
   it('raw passthrough throws UnsupportedError without a transport', () => {
@@ -1237,9 +1424,7 @@ describe('LegacyBackend', () => {
   };
 
   it('presets.list() maps ms timestamps and the kind filter over GET /api/v2/presets', async () => {
-    const backend = makeLegacyBackend(
-      new Map([['/api/v2/presets', { items: [LEGACY_PRESET] }]]),
-    );
+    const backend = makeLegacyBackend(new Map([['/api/v2/presets', { items: [LEGACY_PRESET] }]]));
     await expect(backend.presets.list({ kind: 'generation' })).resolves.toEqual({
       items: [PRESET],
     });
@@ -1264,9 +1449,9 @@ describe('LegacyBackend', () => {
       },
     });
 
-    await expect(
-      backend.presets.create({ kind: 'generation', name: 'Balanced' }),
-    ).resolves.toEqual(PRESET);
+    await expect(backend.presets.create({ kind: 'generation', name: 'Balanced' })).resolves.toEqual(
+      PRESET,
+    );
     await expect(
       backend.presets.update({ presetId: PRESET.id, name: 'Balanced v2' }),
     ).resolves.toEqual(PRESET);
@@ -1278,7 +1463,11 @@ describe('LegacyBackend', () => {
         path: '/api/v2/presets/3c4d5e6f-7a8b-4c0d-9e1f-2a3b4c5d6e7f',
         body: { name: 'Balanced v2' },
       },
-      { method: 'DELETE', path: '/api/v2/presets/3c4d5e6f-7a8b-4c0d-9e1f-2a3b4c5d6e7f', body: undefined },
+      {
+        method: 'DELETE',
+        path: '/api/v2/presets/3c4d5e6f-7a8b-4c0d-9e1f-2a3b4c5d6e7f',
+        body: undefined,
+      },
     ]);
   });
 
@@ -1290,7 +1479,12 @@ describe('LegacyBackend', () => {
           {
             items: [
               LEGACY_MEMORY,
-              { ...LEGACY_MEMORY, id: '5e6f7081-9a8b-4c2d-8e3f-4a5b6c7d8e91', scope: 'global', characterId: null },
+              {
+                ...LEGACY_MEMORY,
+                id: '5e6f7081-9a8b-4c2d-8e3f-4a5b6c7d8e91',
+                scope: 'global',
+                characterId: null,
+              },
             ],
           },
         ],
@@ -1344,7 +1538,11 @@ describe('LegacyBackend', () => {
         path: '/api/v2/memories/4d5e6f70-8a9b-4c1d-9e2f-3a4b5c6d7e80',
         body: { content: 'Updated.' },
       },
-      { method: 'DELETE', path: '/api/v2/memories/4d5e6f70-8a9b-4c1d-9e2f-3a4b5c6d7e80', body: undefined },
+      {
+        method: 'DELETE',
+        path: '/api/v2/memories/4d5e6f70-8a9b-4c1d-9e2f-3a4b5c6d7e80',
+        body: undefined,
+      },
     ]);
   });
 
@@ -1355,5 +1553,234 @@ describe('LegacyBackend', () => {
     await expect(getPreset).rejects.toMatchObject({ code: 'NOT_FOUND', traceId: 'legacy' });
     const getMemory = backend.memories.del(MEMORY.id);
     await expect(getMemory).rejects.toMatchObject({ code: 'NOT_FOUND', traceId: 'legacy' });
+  });
+});
+
+describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote parity (M5 slices 6-7)', () => {
+  it('plugins.list returns deep-equal ListPluginsResultDto from both backends', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const [localResult, remoteResult] = await Promise.all([
+      local.plugins.list(),
+      remote.plugins.list(),
+    ]);
+    expect(kernel.requests).toEqual([{ operationId: 'plugins.list', payload: {} }]);
+    expect(localResult).toEqual(remoteResult);
+    expect(localResult).toEqual(PLUGIN_LIST);
+  });
+
+  it('plugins.install forwards the consent payload and decodes InstallPluginResultDto', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const req = {
+      id: 'lorebook-searcher',
+      name: 'Lorebook Searcher',
+      version: '1.2.0',
+      trustState: 'verified-publisher' as const,
+      permissions: ['plugin.storage'],
+    };
+    const [localResult, remoteResult] = await Promise.all([
+      local.plugins.install(req),
+      remote.plugins.install(req),
+    ]);
+    expect(kernel.requests).toEqual([{ operationId: 'plugins.install', payload: req }]);
+    expect(localResult).toEqual(remoteResult);
+    expect(localResult).toEqual(PLUGIN_INSTALL);
+  });
+
+  it('plugins.enable/disable/uninstall forward the id and decode canonical DTOs', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const [enableLocal, enableRemote] = await Promise.all([
+      local.plugins.enable(PLUGIN.id),
+      remote.plugins.enable(PLUGIN.id),
+    ]);
+    expect(enableLocal).toEqual(enableRemote);
+    expect(enableLocal).toEqual(ENABLED_PLUGIN);
+
+    const [disableLocal, disableRemote] = await Promise.all([
+      local.plugins.disable(PLUGIN.id),
+      remote.plugins.disable(PLUGIN.id),
+    ]);
+    expect(disableLocal).toEqual(disableRemote);
+    expect(disableLocal).toEqual(PLUGIN);
+
+    const [uninstallLocal, uninstallRemote] = await Promise.all([
+      local.plugins.uninstall(PLUGIN.id),
+      remote.plugins.uninstall(PLUGIN.id),
+    ]);
+    expect(uninstallLocal).toEqual(uninstallRemote);
+    expect(uninstallLocal).toEqual(EMPTY_RESULT);
+
+    expect(kernel.requests).toEqual([
+      { operationId: 'plugins.enable', payload: { id: PLUGIN.id } },
+      { operationId: 'plugins.disable', payload: { id: PLUGIN.id } },
+      { operationId: 'plugins.uninstall', payload: { id: PLUGIN.id } },
+    ]);
+  });
+
+  it('themes.list/install/activate/uninstall forward payloads and decode canonical DTOs', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const [listLocal, listRemote] = await Promise.all([local.themes.list(), remote.themes.list()]);
+    expect(listLocal).toEqual(listRemote);
+    expect(listLocal).toEqual(THEME_LIST);
+
+    const installReq = {
+      id: 'wii-u-dark',
+      name: 'Wii U Dark',
+      version: '2.0.1',
+      trustState: 'verified-publisher' as const,
+      cssAssetId: '5d6e7f80-9a1b-4c2d-8e3f-4a5b6c7d8e9f',
+    };
+    const [installLocal, installRemote] = await Promise.all([
+      local.themes.install(installReq),
+      remote.themes.install(installReq),
+    ]);
+    expect(installLocal).toEqual(installRemote);
+    expect(installLocal).toEqual(THEME_INSTALL);
+
+    const [activateLocal, activateRemote] = await Promise.all([
+      local.themes.activate(THEME.id),
+      remote.themes.activate(THEME.id),
+    ]);
+    expect(activateLocal).toEqual(activateRemote);
+    expect(activateLocal).toEqual(ACTIVE_THEME);
+
+    const [uninstallLocal, uninstallRemote] = await Promise.all([
+      local.themes.uninstall(THEME.id),
+      remote.themes.uninstall(THEME.id),
+    ]);
+    expect(uninstallLocal).toEqual(uninstallRemote);
+    expect(uninstallLocal).toEqual(EMPTY_RESULT);
+
+    expect(kernel.requests).toEqual([
+      { operationId: 'themes.list', payload: {} },
+      { operationId: 'themes.install', payload: installReq },
+      { operationId: 'themes.activate', payload: { id: THEME.id } },
+      { operationId: 'themes.uninstall', payload: { id: THEME.id } },
+    ]);
+  });
+
+  it('profiles.list/create/rename/del forward payloads and decode canonical DTOs', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const [listLocal, listRemote] = await Promise.all([
+      local.profiles.list(),
+      remote.profiles.list(),
+    ]);
+    expect(listLocal).toEqual(listRemote);
+    expect(listLocal).toEqual(PROFILE_LIST);
+
+    const [createLocal, createRemote] = await Promise.all([
+      local.profiles.create({ name: 'Main' }),
+      remote.profiles.create({ name: 'Main' }),
+    ]);
+    expect(createLocal).toEqual(createRemote);
+    expect(createLocal).toEqual(PROFILE_CREATE);
+
+    const renameReq = { id: PROFILE_ID, name: 'Primary' };
+    const [renameLocal, renameRemote] = await Promise.all([
+      local.profiles.rename(renameReq),
+      remote.profiles.rename(renameReq),
+    ]);
+    expect(renameLocal).toEqual(renameRemote);
+    expect(renameLocal).toEqual(PROFILE);
+
+    const [delLocal, delRemote] = await Promise.all([
+      local.profiles.del(PROFILE_ID),
+      remote.profiles.del(PROFILE_ID),
+    ]);
+    expect(delLocal).toEqual(delRemote);
+    expect(delLocal).toEqual(EMPTY_RESULT);
+
+    expect(kernel.requests).toEqual([
+      { operationId: 'profiles.list', payload: {} },
+      { operationId: 'profiles.create', payload: { name: 'Main' } },
+      { operationId: 'profiles.rename', payload: renameReq },
+      { operationId: 'profiles.delete', payload: { id: PROFILE_ID } },
+    ]);
+  });
+
+  it('settings.get/update return deep-equal ResultSettingsDto from both backends', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const [getLocal, getRemote] = await Promise.all([local.settings.get(), remote.settings.get()]);
+    expect(getLocal).toEqual(getRemote);
+    expect(getLocal).toEqual(SETTINGS);
+
+    const updateReq = { settings: [{ key: 'ui.theme', value: { theme: 'dark' } }] };
+    const [updateLocal, updateRemote] = await Promise.all([
+      local.settings.update(updateReq),
+      remote.settings.update(updateReq),
+    ]);
+    expect(updateLocal).toEqual(updateRemote);
+    expect(updateLocal).toEqual(SETTINGS);
+
+    expect(kernel.requests).toEqual([
+      { operationId: 'settings.get', payload: {} },
+      { operationId: 'settings.update', payload: updateReq },
+    ]);
+  });
+
+  it('diagnostics.export returns the redacted allowlist bundle from both backends', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const [localResult, remoteResult] = await Promise.all([
+      local.diagnostics.export(),
+      remote.diagnostics.export(),
+    ]);
+    expect(kernel.requests).toEqual([{ operationId: 'diagnostics.export', payload: {} }]);
+    expect(localResult).toEqual(remoteResult);
+    expect(localResult).toEqual(DIAGNOSTICS);
+    expect(localResult.redaction).toBe('allowlist');
+  });
+
+  it('secrets.status reports the value-free store mode from both backends', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const [localResult, remoteResult] = await Promise.all([
+      local.secrets.status(),
+      remote.secrets.status(),
+    ]);
+    expect(kernel.requests).toEqual([{ operationId: 'secrets.status', payload: {} }]);
+    expect(localResult).toEqual(remoteResult);
+    expect(localResult).toEqual(SECRETS_STATUS);
+  });
+
+  it('profiles.rename with a non-uuid id throws ValidationError before any transport call', async () => {
+    const kernel = new FakeKernelTransport();
+    const backend = new LocalBackend({ transport: kernel });
+
+    await expect(backend.profiles.rename({ id: 'nope', name: 'x' })).rejects.toThrow(
+      ValidationError,
+    );
+    expect(kernel.calls).toBe(0);
+  });
+
+  it('legacy backend throws UnsupportedError for every kernel-only canonical domain', () => {
+    const backend = new LegacyBackend({ baseUrl: 'http://legacy.local' });
+    expect(() => backend.plugins.list()).toThrow(UnsupportedError);
+    expect(() => backend.themes.activate('wii-u-dark')).toThrow(UnsupportedError);
+    expect(() => backend.profiles.create({ name: 'Main' })).toThrow(UnsupportedError);
+    expect(() => backend.settings.get()).toThrow(UnsupportedError);
+    expect(() => backend.diagnostics.export()).toThrow(UnsupportedError);
+    expect(() => backend.secrets.status()).toThrow(UnsupportedError);
   });
 });

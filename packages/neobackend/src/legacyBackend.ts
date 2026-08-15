@@ -31,13 +31,19 @@ import type {
   BackupsApi,
   CharactersApi,
   ChatsApi,
+  DiagnosticsApi,
   GenerationApi,
   LorebooksApi,
   MemoriesApi,
   NeoBackend,
   PersonasApi,
+  PluginsApi,
   PresetsApi,
+  ProfilesApi,
   ProvidersApi,
+  SecretsApi,
+  SettingsApi,
+  ThemesApi,
 } from './neobackend.js';
 
 /**
@@ -247,6 +253,47 @@ export class LegacyBackend implements NeoBackend {
       list: () => this.unsupported('providers.config.list'),
       del: () => this.unsupported('providers.config.delete'),
     },
+  };
+
+  /**
+   * Canonical kernel-only domains (ТЗ §13.1: a capability that lives in the
+   * kernel must never be silently served by the legacy plane). These throw
+   * `UnsupportedError` on the legacy backend until the UI runs on the kernel
+   * facade only.
+   */
+  readonly plugins: PluginsApi = {
+    list: () => this.unsupported('plugins.list'),
+    install: () => this.unsupported('plugins.install'),
+    uninstall: () => this.unsupported('plugins.uninstall'),
+    enable: () => this.unsupported('plugins.enable'),
+    disable: () => this.unsupported('plugins.disable'),
+  };
+
+  readonly themes: ThemesApi = {
+    list: () => this.unsupported('themes.list'),
+    install: () => this.unsupported('themes.install'),
+    uninstall: () => this.unsupported('themes.uninstall'),
+    activate: () => this.unsupported('themes.activate'),
+  };
+
+  readonly profiles: ProfilesApi = {
+    list: () => this.unsupported('profiles.list'),
+    create: () => this.unsupported('profiles.create'),
+    rename: () => this.unsupported('profiles.rename'),
+    del: () => this.unsupported('profiles.delete'),
+  };
+
+  readonly settings: SettingsApi = {
+    get: () => this.unsupported('settings.get'),
+    update: () => this.unsupported('settings.update'),
+  };
+
+  readonly diagnostics: DiagnosticsApi = {
+    export: () => this.unsupported('diagnostics.export'),
+  };
+
+  readonly secrets: SecretsApi = {
+    status: () => this.unsupported('secrets.status'),
   };
 
   private async listCharacters(req: ListCharactersRequestDto): Promise<PagedCharactersDto> {
@@ -472,10 +519,7 @@ export class LegacyBackend implements NeoBackend {
 
   /** M5 slice 3: `presets.delete` over `DELETE /api/v2/presets/:id`. */
   private async deletePreset(presetId: string): Promise<EmptyResultDto> {
-    await this.sendRequest<unknown>(
-      'DELETE',
-      `/api/v2/presets/${encodeURIComponent(presetId)}`,
-    );
+    await this.sendRequest<unknown>('DELETE', `/api/v2/presets/${encodeURIComponent(presetId)}`);
     return { ok: true };
   }
 

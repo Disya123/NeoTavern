@@ -22,13 +22,21 @@ import type {
   CreateMessageVariantRequestDto,
   CreatePersonaRequestDto,
   CreatePresetRequestDto,
+  CreateProfileRequestDto,
+  CreateProfileResultDto,
   DeleteMessageRequestDto,
   DeleteMessageVariantRequestDto,
+  DiagnosticsExportResultDto,
   DiscardMessageDraftRequestDto,
   EmptyResultDto,
   GenerationRunDto,
   GenerationToolResultRequestDto,
   GetMessageDraftRequestDto,
+  GetSettingsRequestDto,
+  InstallPluginRequestDto,
+  InstallPluginResultDto,
+  InstallThemeRequestDto,
+  InstallThemeResultDto,
   ListToolsResultDto,
   WireGenerationEvent,
   ListBackupsResultDto,
@@ -45,11 +53,14 @@ import type {
   ListMessageVariantsRequestDto,
   ListMessageVariantsResultDto,
   ListPersonasResultDto,
+  ListPluginsResultDto,
   ListPresetsRequestDto,
   ListPresetsResultDto,
+  ListProfilesResultDto,
   ListProviderConfigsRequestDto,
   ListProviderConfigsResultDto,
   ListProvidersResultDto,
+  ListThemesResultDto,
   LorebookDto,
   LorebookEntryDto,
   MemoryDto,
@@ -62,11 +73,17 @@ import type {
   PagedGenerationEventsDto,
   PagedMessagesDto,
   PersonaDto,
+  PluginDto,
   PresetDto,
+  ProfileDto,
   ProviderConfigDto,
+  RenameProfileRequestDto,
+  ResultSettingsDto,
   SaveMessageDraftRequestDto,
+  SecretsStatusResultDto,
   StartGenerationRequestDto,
   SetProviderConfigRequestDto,
+  ThemeDto,
   UpdateCharacterRequestDto,
   UpdateChatRequestDto,
   UpdateLorebookEntryRequestDto,
@@ -75,6 +92,7 @@ import type {
   UpdateMessageRequestDto,
   UpdatePersonaRequestDto,
   UpdatePresetRequestDto,
+  UpdateSettingsRequestDto,
 } from '@neotavern/contracts';
 
 /** Options accepted by facade calls (ТЗ §15). */
@@ -143,7 +161,10 @@ export interface ChatsApi {
     opts?: BackendCallOptions,
   ): Promise<ListMessageRevisionsResultDto>;
   /** Fetch one server-side draft (wire `chats.messages.drafts.get`). */
-  getMessageDraft(req: GetMessageDraftRequestDto, opts?: BackendCallOptions): Promise<MessageDraftDto>;
+  getMessageDraft(
+    req: GetMessageDraftRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<MessageDraftDto>;
   /** Create or update a server-side draft (upsert by id; wire `chats.messages.drafts.save`). */
   saveMessageDraft(
     req: SaveMessageDraftRequestDto,
@@ -235,7 +256,11 @@ export interface LorebooksApi {
     opts?: BackendCallOptions,
   ): Promise<LorebookEntryDto>;
   /** Delete one entry (wire `lorebooks.entries.delete`). */
-  deleteEntry(lorebookId: string, entryId: string, opts?: BackendCallOptions): Promise<EmptyResultDto>;
+  deleteEntry(
+    lorebookId: string,
+    entryId: string,
+    opts?: BackendCallOptions,
+  ): Promise<EmptyResultDto>;
 }
 
 /** Persona domain operations (wire `personas.*`, Этап 4.1). */
@@ -276,6 +301,104 @@ export interface MemoriesApi {
   update(req: UpdateMemoryRequestDto, opts?: BackendCallOptions): Promise<MemoryDto>;
   /** Delete one memory (permanent). */
   del(memoryId: string, opts?: BackendCallOptions): Promise<EmptyResultDto>;
+}
+
+/**
+ * Extensions registry operations (wire `plugins.*`, ТЗ §8.1 Extensions,
+ * §SEC-05, ARC-08, Этап 4 slice 6).
+ *
+ * The kernel durably records what the host ALREADY verified (publisher
+ * signature + per-file digest + ZIP traversal/symlink/bomb rejection stays
+ * in the host package verifier) and the GRANTED permission set — the
+ * install/update request IS the consent moment. Install/enable/disable/
+ * uninstall are idempotent; a version change that would lower the recorded
+ * SEC-05 trust rank is rejected by the kernel (PLUGIN_TRUST_DOWNGRADE).
+ */
+export interface PluginsApi {
+  /** List installed plugins. */
+  list(opts?: BackendCallOptions): Promise<ListPluginsResultDto>;
+  /** Install a verified plugin package (records trust + granted permissions). */
+  install(req: InstallPluginRequestDto, opts?: BackendCallOptions): Promise<InstallPluginResultDto>;
+  /** Uninstall a plugin (executor archive cleanup is host-side). */
+  uninstall(pluginId: string, opts?: BackendCallOptions): Promise<EmptyResultDto>;
+  /** Enable a plugin (idempotent flag transition). */
+  enable(pluginId: string, opts?: BackendCallOptions): Promise<PluginDto>;
+  /** Disable a plugin (idempotent; runtime cleanup is the executor's job, SEC-06). */
+  disable(pluginId: string, opts?: BackendCallOptions): Promise<PluginDto>;
+}
+
+/**
+ * Theme-SDK registry operations (wire `themes.*`, ТЗ §5.2 theme-sdk,
+ * §SEC-05, AGENTS.md §19, Этап 4 slice 6 part 2).
+ *
+ * A theme is DATA, never code: the CSS lives as a content-addressed asset
+ * (`assets.put` kind `theme-css`, existence validated by the kernel at
+ * install). The single active theme is switched by `activate`; uninstalling
+ * the active theme clears the flag so the shell falls back to the default
+ * (a broken theme must never block the interface reset).
+ */
+export interface ThemesApi {
+  /** List installed themes. */
+  list(opts?: BackendCallOptions): Promise<ListThemesResultDto>;
+  /** Install a verified theme (records trust + CSS asset reference). */
+  install(req: InstallThemeRequestDto, opts?: BackendCallOptions): Promise<InstallThemeResultDto>;
+  /** Uninstall a theme (clears `active` if it was the applied theme). */
+  uninstall(themeId: string, opts?: BackendCallOptions): Promise<EmptyResultDto>;
+  /** Activate one theme (idempotent; exactly one active at a time). */
+  activate(themeId: string, opts?: BackendCallOptions): Promise<ThemeDto>;
+}
+
+/**
+ * Configuration profiles operations (wire `profiles.*`, ТЗ §8.1
+ * Configuration, Этап 4 slice 5 remainder part 2).
+ *
+ * Named user contexts; per-profile FK columns on product tables and SEC-02
+ * export filtering (ADR-0047 waiver 4) are the slice-5 remainder follow-up
+ * this model unblocks.
+ */
+export interface ProfilesApi {
+  /** List profiles (ordered by name, case-insensitive). */
+  list(opts?: BackendCallOptions): Promise<ListProfilesResultDto>;
+  /** Create a named profile (uuid-v7 id, idempotent by nature). */
+  create(req: CreateProfileRequestDto, opts?: BackendCallOptions): Promise<CreateProfileResultDto>;
+  /** Rename a profile (fresh `updatedAt`). */
+  rename(req: RenameProfileRequestDto, opts?: BackendCallOptions): Promise<ProfileDto>;
+  /** Delete a profile (unknown id is PROFILE_NOT_FOUND). */
+  del(profileId: string, opts?: BackendCallOptions): Promise<EmptyResultDto>;
+}
+
+/**
+ * Non-secret settings operations (wire `settings.*`, ТЗ §8.1 Configuration,
+ * Этап 4 slice 7). Transactional key → JSON-object upserts over the STRICT
+ * settings table; values are never secrets (SEC-07 structural redaction).
+ */
+export interface SettingsApi {
+  /** Read a settings snapshot (absent `keys` = all). */
+  get(req?: GetSettingsRequestDto, opts?: BackendCallOptions): Promise<ResultSettingsDto>;
+  /** Upsert the provided settings; resolves with the post-update snapshot. */
+  update(req: UpdateSettingsRequestDto, opts?: BackendCallOptions): Promise<ResultSettingsDto>;
+}
+
+/**
+ * Diagnostics operations (wire `diagnostics.export`, ТЗ §15, SEC-07, Этап 4
+ * slice 7). Allowlist redacted bundle: app/wire versions, schema hash +
+ * revision, storage format, SQLite version, setting count and
+ * generation-run counters. Provider configs, secret refs and message
+ * content are never read.
+ */
+export interface DiagnosticsApi {
+  /** Export the redacted allowlist diagnostics bundle. */
+  export(opts?: BackendCallOptions): Promise<DiagnosticsExportResultDto>;
+}
+
+/**
+ * Secret-store status operations (wire `secrets.status`, SEC-01.1, Этап 4
+ * slice 7 remainder). Reports the explicit store mode WITHOUT invoking get —
+ * a value can never cross the DTO.
+ */
+export interface SecretsApi {
+  /** Report the explicit secret-store mode and backend metadata. */
+  status(opts?: BackendCallOptions): Promise<SecretsStatusResultDto>;
 }
 
 /** Provider domain operations (wire `providers.*`). */
@@ -326,4 +449,10 @@ export interface NeoBackend {
   providers: ProvidersApi;
   generation: GenerationApi;
   backups: BackupsApi;
+  plugins: PluginsApi;
+  themes: ThemesApi;
+  profiles: ProfilesApi;
+  settings: SettingsApi;
+  diagnostics: DiagnosticsApi;
+  secrets: SecretsApi;
 }

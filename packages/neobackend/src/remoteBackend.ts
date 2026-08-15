@@ -9,8 +9,15 @@ import type {
   BackupDto,
   CharacterDto,
   ChatDto,
+  CreateProfileResultDto,
+  DiagnosticsExportResultDto,
   EmptyResultDto,
   GenerationRunDto,
+  InstallPluginResultDto,
+  InstallThemeResultDto,
+  ListPluginsResultDto,
+  ListProfilesResultDto,
+  ListThemesResultDto,
   ListToolsResultDto,
   WireGenerationEvent,
   ListBackupsResultDto,
@@ -35,21 +42,32 @@ import type {
   PagedGenerationEventsDto,
   PagedMessagesDto,
   PersonaDto,
+  PluginDto,
   PresetDto,
+  ProfileDto,
   ProviderConfigDto,
+  ResultSettingsDto,
+  SecretsStatusResultDto,
+  ThemeDto,
 } from '@neotavern/contracts';
 import type {
   BackendCallOptions,
   BackupsApi,
   CharactersApi,
   ChatsApi,
+  DiagnosticsApi,
   GenerationApi,
   LorebooksApi,
   MemoriesApi,
   NeoBackend,
   PersonasApi,
+  PluginsApi,
   PresetsApi,
+  ProfilesApi,
   ProvidersApi,
+  SecretsApi,
+  SettingsApi,
+  ThemesApi,
 } from './neobackend.js';
 
 /** RemoteBackend constructor options. */
@@ -208,6 +226,61 @@ export class RemoteBackend implements NeoBackend {
       del: (provider, name) =>
         this.sdk.call<EmptyResultDto>('providers.config.delete', { provider, name }),
     },
+  };
+
+  readonly plugins: PluginsApi = {
+    list: (opts) =>
+      this.sdk.call<ListPluginsResultDto>('plugins.list', {}, { signal: opts?.signal }),
+    install: (req, opts) =>
+      this.sdk.call<InstallPluginResultDto>('plugins.install', req, { signal: opts?.signal }),
+    uninstall: (pluginId, opts) =>
+      this.sdk.call<EmptyResultDto>(
+        'plugins.uninstall',
+        { id: pluginId },
+        { signal: opts?.signal },
+      ),
+    enable: (pluginId, opts) =>
+      this.sdk.call<PluginDto>('plugins.enable', { id: pluginId }, { signal: opts?.signal }),
+    disable: (pluginId, opts) =>
+      this.sdk.call<PluginDto>('plugins.disable', { id: pluginId }, { signal: opts?.signal }),
+  };
+
+  readonly themes: ThemesApi = {
+    list: (opts) => this.sdk.call<ListThemesResultDto>('themes.list', {}, { signal: opts?.signal }),
+    install: (req, opts) =>
+      this.sdk.call<InstallThemeResultDto>('themes.install', req, { signal: opts?.signal }),
+    uninstall: (themeId, opts) =>
+      this.sdk.call<EmptyResultDto>('themes.uninstall', { id: themeId }, { signal: opts?.signal }),
+    activate: (themeId, opts) =>
+      this.sdk.call<ThemeDto>('themes.activate', { id: themeId }, { signal: opts?.signal }),
+  };
+
+  readonly profiles: ProfilesApi = {
+    list: (opts) =>
+      this.sdk.call<ListProfilesResultDto>('profiles.list', {}, { signal: opts?.signal }),
+    create: (req, opts) =>
+      this.sdk.call<CreateProfileResultDto>('profiles.create', req, { signal: opts?.signal }),
+    rename: (req, opts) =>
+      this.sdk.call<ProfileDto>('profiles.rename', req, { signal: opts?.signal }),
+    del: (profileId, opts) =>
+      this.sdk.call<EmptyResultDto>('profiles.delete', { id: profileId }, { signal: opts?.signal }),
+  };
+
+  readonly settings: SettingsApi = {
+    get: (req, opts) =>
+      this.sdk.call<ResultSettingsDto>('settings.get', req ?? {}, { signal: opts?.signal }),
+    update: (req, opts) =>
+      this.sdk.call<ResultSettingsDto>('settings.update', req, { signal: opts?.signal }),
+  };
+
+  readonly diagnostics: DiagnosticsApi = {
+    export: (opts) =>
+      this.sdk.call<DiagnosticsExportResultDto>('diagnostics.export', {}, { signal: opts?.signal }),
+  };
+
+  readonly secrets: SecretsApi = {
+    status: (opts) =>
+      this.sdk.call<SecretsStatusResultDto>('secrets.status', {}, { signal: opts?.signal }),
   };
 
   private async *streamOperation(
