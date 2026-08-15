@@ -3,6 +3,13 @@
 ## Unreleased
 ### Added
 
+- **App version reads the kernel wire metadata (M5 slice 7 part 1, Этап 4
+  context 7 start).** `readAppVersion` in `wireBridge` maps `meta.get`
+  (app version + API major) onto the legacy `VersionResponse`; the static
+  product name is identity (the UI renders only the version string), never
+  fabricated data. `useAppVersion` now goes through the transport. Tests:
+  wireBridge 83/83 (+1 meta mapping).
+
 - **Plugins reach the kernel plane (M5 slice 6 part 4, Этап 4 context 6,
   ТЗ §SEC-05/§SEC-06).** `readPlugins`/`activatePlugin`/`disablePlugin`/
   `deletePlugin` in `wireBridge` call the wire `plugins.*` operations and

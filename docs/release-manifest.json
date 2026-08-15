@@ -232,7 +232,7 @@
         "android": "Integrated",
         "webClient": "Integrated"
       },
-      "notes": "Exact local handshake (schemaHash + FFI ABI) enforced at kernel open; exercised by desktop smoke and JNI bridge.",
+      "notes": "Exact local handshake (schemaHash + FFI ABI) enforced at kernel open; exercised by desktop smoke and JNI bridge. Slice 7 part 1 (M5): the web transport maps meta.get onto the legacy VersionResponse (appVersion -> version, api.major -> apiVersion; the static product name is identity, the UI renders only the version string) and useAppVersion routes through the transport — the HomePage version label now reads the kernel on the kernel plane.",
       "milestone": "M0"
     },
     {

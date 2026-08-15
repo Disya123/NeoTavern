@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-08-15T20:07:34.291Z",
+  "generatedAt": "2026-08-15T20:17:54.990Z",
   "rows": [
     {
       "hosts": {
@@ -212,7 +212,7 @@
       },
       "id": "meta.get",
       "milestone": "M0",
-      "notes": "Exact local handshake (schemaHash + FFI ABI) enforced at kernel open; exercised by desktop smoke and JNI bridge.",
+      "notes": "Exact local handshake (schemaHash + FFI ABI) enforced at kernel open; exercised by desktop smoke and JNI bridge. Slice 7 part 1 (M5): the web transport maps meta.get onto the legacy VersionResponse (appVersion -> version, api.major -> apiVersion; the static product name is identity, the UI renders only the version string) and useAppVersion routes through the transport — the HomePage version label now reads the kernel on the kernel plane.",
       "title": "Kernel handshake / meta",
       "wireOps": ["meta.get"]
     },

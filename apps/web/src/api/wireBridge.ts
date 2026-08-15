@@ -78,6 +78,8 @@ import {
   type MessageVariantDto,
   type PersonaDto,
   type PresetDto,
+  type VersionResponse,
+  type MetaDto,
 } from '@neotavern/contracts';
 import { type BackendCallOptions, UnsupportedError } from '@neotavern/neobackend';
 import { api } from './client.js';
@@ -103,6 +105,26 @@ function encodeQuery(params: Record<string, string | number | boolean | undefine
   }
   const qs = search.toString();
   return qs.length > 0 ? `?${qs}` : '';
+}
+
+/** Wire `meta.dto` → legacy `VersionResponse` (app version + API major). */
+export function translateMeta(dto: MetaDto): VersionResponse {
+  return {
+    // The wire carries no product name; the legacy shape requires one and
+    // the UI only renders the version string — the static product name is
+    // identity, not fabricated data.
+    name: 'NeoTavern',
+    version: dto.appVersion,
+    apiVersion: dto.api.major,
+  };
+}
+
+/** Read the application version (kernel: wire `meta.get`). */
+export async function readAppVersion(): Promise<VersionResponse> {
+  if (isKernelMode()) {
+    return translateMeta(await backend.meta());
+  }
+  return api.get<VersionResponse>('/version');
 }
 
 /* --------------------------------------------------------------------------

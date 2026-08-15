@@ -45,7 +45,6 @@ import type {
   PluginAuthRevokeRequest,
   PluginGitInstallRequest,
   DiagnosticsSnapshot,
-  VersionResponse,
 } from '@neotavern/contracts';
 import { api, setCsrfToken } from './client.js';
 import {
@@ -103,6 +102,7 @@ import {
   readPluginAuthConnections,
   connectPluginAuth,
   revokePluginAuth,
+  readAppVersion,
   type ContinueCharacterChatInput,
   type ContinueCharacterChatResult,
 } from './wireBridge.js';
@@ -129,7 +129,7 @@ export function useAuthSession() {
 export function useAppVersion() {
   return useQuery({
     queryKey: ['app-version'],
-    queryFn: () => api.get<VersionResponse>('/version'),
+    queryFn: () => readAppVersion(),
     staleTime: Number.POSITIVE_INFINITY,
     retry: false,
   });

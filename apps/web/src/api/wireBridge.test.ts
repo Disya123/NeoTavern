@@ -102,6 +102,10 @@ const mocks = vi.hoisted(() => {
     enable: vi.fn(),
     disable: vi.fn(),
   };
+  const meta = {
+    get: vi.fn(),
+  };
+  const metaFn = vi.fn();
   return {
     characters,
     chats,
@@ -112,6 +116,8 @@ const mocks = vi.hoisted(() => {
     assets,
     themes,
     plugins,
+    meta,
+    metaFn,
     isKernelMode,
   };
 });
@@ -127,6 +133,7 @@ vi.mock('./backend.js', () => ({
     assets: mocks.assets,
     themes: mocks.themes,
     plugins: mocks.plugins,
+    meta: mocks.metaFn,
   },
   isKernelMode: mocks.isKernelMode,
 }));
@@ -207,6 +214,7 @@ import {
   readPluginAuthConnections,
   connectPluginAuth,
   revokePluginAuth,
+  readAppVersion,
 } from './wireBridge.js';
 
 const CHAR_ID = '11111111-2222-4333-8444-555555555555';
@@ -1318,5 +1326,22 @@ describe('plugins (Этап 4 context 6 part 4, wire plugins.*)', () => {
     await expect(
       revokePluginAuth('lorebook-searcher', { connectionId: 'c1' }),
     ).rejects.toBeInstanceOf(UnsupportedError);
+  });
+});
+
+describe('meta (wire meta.get)', () => {
+  it('reads the app version through the facade', async () => {
+    mocks.metaFn.mockResolvedValue({
+      appVersion: '4.5.0',
+      api: { major: 3, minor: 2 },
+      productWire: { major: 1, minor: 0 },
+      minimumClientVersion: '4.0.0',
+      features: { 'characters.list': 1 },
+    });
+    const version = await readAppVersion();
+    expect(version.name).toBe('NeoTavern');
+    expect(version.version).toBe('4.5.0');
+    expect(version.apiVersion).toBe(3);
+    expect(mocks.metaFn).toHaveBeenCalledWith();
   });
 });
