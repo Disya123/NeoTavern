@@ -23,6 +23,6 @@
     "@sinclair/typebox": "^0.34.52"
   },
   "devDependencies": {
-    "fast-check": "^4.9.0"
+    "fast-check": "4.9.0"
   }
 }

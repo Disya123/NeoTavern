@@ -29,7 +29,6 @@ const CHILD = new URL('./_bench-child.mjs', import.meta.url).pathname.replace(
   /^\/([A-Za-z]:)/,
   '$1',
 );
-const requestLimit = 1024 * 1024; // registry requestLimitBytes
 const networkLimit = 8 * 1024 * 1024; // NETWORK_MAX_BODY_BYTES
 
 interface BenchRow {
@@ -83,18 +82,22 @@ async function runCase(
 }
 
 describe('wire validation benchmarks (boundary payloads)', () => {
-  it('1 MiB request body passes in linear time (loose bound)', async () => {
-    const result = await runCase('request@1MiB', {
+  it('message at the schema ceiling (100k chars) passes in linear time', async () => {
+    // The start-generation request's `message` field caps at 100_000 chars —
+    // that is the TIGHTEST bound a VALID payload can reach, so the bench
+    // validates right below it (a payload near the 1 MiB op limit but past
+    // the field max is invalid by design and belongs to the reject case).
+    const result = await runCase('request@schema-ceiling', {
       case: 'request',
       schemaId: 'wire.request.start-generation',
-      bytes: requestLimit - 4096,
-      iterations: boundedIterations(requestLimit, 30),
+      bytes: 100_000,
+      iterations: boundedIterations(100_000, 30),
     });
     if (!result.ok) throw new Error(result.error);
     expect(result.metrics.verdict).toBe(true);
     expect(
       result.metrics.msPerOp,
-      `1 MiB request check took ${result.metrics.msPerOp.toFixed(1)} ms/op`,
+      `100k message check took ${result.metrics.msPerOp.toFixed(1)} ms/op`,
     ).toBeLessThan(3000);
   });
 
@@ -117,18 +120,20 @@ describe('wire validation benchmarks (boundary payloads)', () => {
     ).toBeLessThan(64 * 1024 * 1024);
   });
 
-  it('1 MiB field at the response ceiling validates in linear time', async () => {
-    const result = await runCase('paged-field@1MiB', {
+  it('content at the response ceiling (1e6 chars) validates in linear time', async () => {
+    // Message content maxLength is 1_000_000 chars — the tightest valid
+    // bound for a single field at the response ceiling.
+    const result = await runCase('paged-field@1e6', {
       case: 'page',
       schemaId: 'wire.paged.messages',
-      bytes: requestLimit - 1024,
-      iterations: boundedIterations(requestLimit, 30),
+      bytes: 1_000_000,
+      iterations: boundedIterations(1_000_000, 30),
     });
     if (!result.ok) throw new Error(result.error);
     expect(result.metrics.verdict).toBe(true);
     expect(
       result.metrics.msPerOp,
-      `1 MiB field check took ${result.metrics.msPerOp.toFixed(1)} ms/op`,
+      `1e6 field check took ${result.metrics.msPerOp.toFixed(1)} ms/op`,
     ).toBeLessThan(3000);
   });
 

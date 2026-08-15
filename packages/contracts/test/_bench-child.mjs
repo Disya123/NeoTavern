@@ -41,7 +41,6 @@ function buildPayload(spec) {
             createdAt: '2026-08-13T00:00:00Z',
           },
         ],
-        hasMore: false,
       };
     case 'deep': {
       let v = 'x';
