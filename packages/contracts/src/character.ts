@@ -13,6 +13,8 @@ export const CharacterSchema = Type.Object({
   id: IdSchema,
   name: Type.String({ minLength: 1 }),
   avatar: Type.Union([Type.String(), Type.Null()]),
+  /** Canonical asset reference (kernel plane); the legacy plane has no asset store. */
+  avatarAssetId: Type.Optional(Type.Union([Type.String(), Type.Null()])),
   description: Type.String(),
   personality: Type.String(),
   scenario: Type.String(),
@@ -47,6 +49,8 @@ export const CharacterSummarySchema = Type.Object({
   id: IdSchema,
   name: Type.String(),
   avatar: Type.Union([Type.String(), Type.Null()]),
+  /** Canonical asset reference (kernel plane); `null` on the legacy plane. */
+  avatarAssetId: Type.Optional(Type.Union([Type.String(), Type.Null()])),
   description: Type.String(),
   tags: Type.Array(Type.String()),
   createdAt: TimestampSchema,

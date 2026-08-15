@@ -59,7 +59,7 @@ import {
   type PersonaDto,
   type PresetDto,
 } from '@neotavern/contracts';
-import { UnsupportedError } from '@neotavern/neobackend';
+import { type BackendCallOptions, UnsupportedError } from '@neotavern/neobackend';
 import { api } from './client.js';
 import { backend, isKernelMode } from './backend.js';
 
@@ -105,8 +105,10 @@ export function translateCharacterSummary(dto: CharacterDto): CharacterSummary {
     id: dto.id,
     name: dto.name,
     // Kernel has no asset URL surface (avatarAssetId is a storage reference);
-    // the UI shows its placeholder until assets migrate (Этап 4).
+    // the UI resolves the original through `readAssetContentDataUrl` when the
+    // character carries an avatar asset (mirrors ТЗ §34 avatar→asset).
     avatar: null,
+    avatarAssetId: dto.avatarAssetId ?? null,
     description: dto.description ?? '',
     tags: dto.tags,
     createdAt: toEpochMs(dto.createdAt),
@@ -132,6 +134,42 @@ export function translateCharacter(dto: CharacterDto): Character {
     lastUsedAt: null,
     deletedAt: null,
   };
+}
+
+/**
+ * Resolve an avatar asset's original bytes as a `data:` URI over the kernel
+ * plane (transport helper — components never branch on the backend kind, ТЗ
+ * §13.1). The legacy plane has no asset store: calling this there is an
+ * honest `UnsupportedError`, but components only invoke it when the
+ * character carries `avatarAssetId` (kernel data), so the legacy path never
+ * reaches it. `contentType` from the wire record is preserved; the
+ * `image/png` fallback is only used when the record omits it.
+ */
+export async function readAssetContentDataUrl(
+  assetId: string,
+  opts?: BackendCallOptions,
+): Promise<string> {
+  if (!isKernelMode()) {
+    throw new UnsupportedError('assets.content');
+  }
+  const record = await backend.assets.content(assetId, opts);
+  return `data:${record.contentType ?? 'image/png'};base64,${record.contentBase64}`;
+}
+
+/**
+ * Legacy avatar-original URL (transport helper). The legacy plane serves the
+ * full-resolution original through the character route; the kernel plane has
+ * no URL surface and renders the asset through `readAssetContentDataUrl`
+ * instead. Returns `null` when the character has no legacy avatar (or no id).
+ */
+export function avatarOriginalUrl(
+  characterId: string | undefined,
+  avatar: string | null,
+): string | null {
+  return avatar && characterId
+    ? // eslint-disable-next-line @neotavern/no-legacy-api-surface
+      `/api/v2/characters/${characterId}/avatar-original`
+    : null;
 }
 
 /** Wire chat → legacy `ChatSummary` (catalog rows). */

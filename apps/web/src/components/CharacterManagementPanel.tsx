@@ -59,6 +59,8 @@ import {
   useUpdateLorebook,
   useUploadCharacterImage,
 } from '../api/hooks.js';
+import { useAvatarDataUrl } from '../api/avatarHooks.js';
+import { avatarOriginalUrl } from '../api/wireBridge.js';
 import { renderMarkdownDocument } from '../lib/markdown.js';
 import { createCreatorNotesPreviewDocument } from '../lib/creatorNotes.js';
 import { SlotHost } from '../plugins/slots.js';
@@ -93,6 +95,8 @@ interface CharacterManagementPanelProps {
 interface CharacterDraft {
   name: string;
   avatar: string;
+  /** Canonical asset reference (kernel plane); `null` on the legacy plane. */
+  avatarAssetId: string | null;
   description: string;
   personality: string;
   scenario: string;
@@ -187,6 +191,7 @@ function characterToDraft(character: Character): CharacterDraft {
   return {
     name: character.name,
     avatar: character.avatar ?? '',
+    avatarAssetId: character.avatarAssetId ?? null,
     description: character.description,
     personality: character.personality,
     scenario: character.scenario,
@@ -226,17 +231,21 @@ function CharacterAvatar({
   className,
   decorative = false,
 }: {
-  character: Pick<CharacterSummary, 'name' | 'avatar'> | undefined;
+  character: Pick<CharacterSummary, 'name' | 'avatar' | 'avatarAssetId'> | undefined;
   className: string | undefined;
   decorative?: boolean;
 }) {
   const { t } = useTranslation();
-  if (character?.avatar) {
+  // Kernel plane: the avatar is a canonical asset reference; resolve the
+  // original bytes as a data: URI (transport layer, ТЗ §13.1).
+  const assetDataUrl = useAvatarDataUrl(character?.avatarAssetId);
+  const source = assetDataUrl.data ?? character?.avatar ?? null;
+  if (source) {
     return (
       <img
         className={className}
-        src={character.avatar}
-        alt={decorative ? '' : t('characters:avatarAlt', { name: character.name })}
+        src={source}
+        alt={decorative ? '' : t('characters:avatarAlt', { name: character?.name })}
       />
     );
   }
@@ -893,7 +902,11 @@ function EditTab({
           aria-label={t('characters:changeAvatar')}
         >
           <CharacterAvatar
-            character={{ name: draft.name, avatar: draft.avatar || null }}
+            character={{
+              name: draft.name,
+              avatar: draft.avatar || null,
+              avatarAssetId: draft.avatarAssetId,
+            }}
             className={styles.editorAvatar}
           />
           <span>
@@ -1059,11 +1072,12 @@ function CharacterCardViewer({
   const greetings = [draft.firstMessage, ...draft.alternateGreetings].filter((value) =>
     value.trim(),
   );
-  const avatarOriginalUrl =
-    characterId && draft.avatar
-      ? // eslint-disable-next-line @neotavern/no-legacy-api-surface
-        `/api/v2/characters/${characterId}/avatar-original`
-      : draft.avatar;
+  // Kernel plane: resolve the canonical avatar asset as a data: URI (transport
+  // layer); legacy plane: the avatar-original route (transport helper).
+  const assetDataUrl = useAvatarDataUrl(draft.avatarAssetId);
+  const avatarSource = assetDataUrl.isError
+    ? null
+    : (assetDataUrl.data ?? avatarOriginalUrl(characterId, draft.avatar) ?? draft.avatar);
   const characterName = draft.name || t('characters:unnamed');
   return (
     <div
@@ -1073,15 +1087,15 @@ function CharacterCardViewer({
       data-state="read-only"
     >
       <section className={styles.viewerIdentity} data-part="character-viewer-identity">
-        {avatarOriginalUrl ? (
+        {avatarSource ? (
           <img
             className={styles.viewerAvatar}
-            src={avatarOriginalUrl}
+            src={avatarSource}
             alt={t('characters:avatarAlt', { name: characterName })}
           />
         ) : (
           <CharacterAvatar
-            character={{ name: draft.name, avatar: null }}
+            character={{ name: draft.name, avatar: null, avatarAssetId: draft.avatarAssetId }}
             className={styles.viewerAvatarFallback}
           />
         )}
@@ -1633,8 +1647,7 @@ function GalleryTab({
             <GalleryFigure
               name={character.name}
               thumbnailUrl={character.avatar}
-              // eslint-disable-next-line @neotavern/no-legacy-api-surface
-              originalUrl={`/api/v2/characters/${character.id}/avatar-original`}
+              originalUrl={avatarOriginalUrl(character.id, character.avatar) ?? ''}
               primary
             />
           ) : null}

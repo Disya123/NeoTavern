@@ -24,6 +24,7 @@ import type {
 } from '@neotavern/contracts';
 
 const mocks = vi.hoisted(() => {
+  const isKernelMode = vi.fn(() => true);
   const characters = {
     list: vi.fn(),
     get: vi.fn(),
@@ -82,7 +83,13 @@ const mocks = vi.hoisted(() => {
     update: vi.fn(),
     del: vi.fn(),
   };
-  return { characters, chats, lorebooks, personas, presets, memories };
+  const assets = {
+    get: vi.fn(),
+    content: vi.fn(),
+    put: vi.fn(),
+    del: vi.fn(),
+  };
+  return { characters, chats, lorebooks, personas, presets, memories, assets, isKernelMode };
 });
 
 vi.mock('./backend.js', () => ({
@@ -93,12 +100,14 @@ vi.mock('./backend.js', () => ({
     personas: mocks.personas,
     presets: mocks.presets,
     memories: mocks.memories,
+    assets: mocks.assets,
   },
-  isKernelMode: () => true,
+  isKernelMode: mocks.isKernelMode,
 }));
 
 import {
   activateMessageVariant,
+  avatarOriginalUrl,
   commitMessageDraft,
   continueCharacterChat,
   createCharacter,
@@ -134,6 +143,7 @@ import {
   readPersona,
   readPersonas,
   readPresets,
+  readAssetContentDataUrl,
   restoreMessageRevision,
   saveMessageDraft,
   translateCharacter,
@@ -288,11 +298,21 @@ describe('wire→UI translation', () => {
       id: CHAR_ID,
       name: 'Alice',
       avatar: null,
+      avatarAssetId: null,
       description: 'A test character.',
       tags: ['test'],
       createdAt: NOW_MS,
       updatedAt: NOW_MS,
     });
+  });
+
+  it('carries the canonical avatar asset reference through the summary translation', () => {
+    const summary = translateCharacterSummary({
+      ...WIRE_CHARACTER,
+      avatarAssetId: '0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f',
+    });
+    expect(summary.avatarAssetId).toBe('0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f');
+    expect(summary.avatar).toBeNull();
   });
 
   it('maps a wire character onto the full Character with empty card fields', () => {
@@ -305,7 +325,47 @@ describe('wire→UI translation', () => {
     expect(character.deletedAt).toBeNull();
     expect(character.lastUsedAt).toBeNull();
   });
+});
 
+describe('avatar data plane (M5 slice 6, ТЗ §34 avatar→asset)', () => {
+  it('resolves a canonical avatar asset to a data: URI over the kernel plane', async () => {
+    mocks.assets.content.mockResolvedValue({
+      assetId: '0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f',
+      contentType: 'image/png',
+      contentBase64: 'aGVsbG8=',
+    });
+    const dataUrl = await readAssetContentDataUrl('0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f');
+    expect(dataUrl).toBe('data:image/png;base64,aGVsbG8=');
+    expect(mocks.assets.content).toHaveBeenCalledWith(
+      '0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f',
+      undefined,
+    );
+  });
+
+  it('falls back to image/png when the wire record omits the content type', async () => {
+    mocks.assets.content.mockResolvedValue({
+      assetId: '0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f',
+      contentBase64: 'aGVsbG8=',
+    });
+    const dataUrl = await readAssetContentDataUrl('0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f');
+    expect(dataUrl).toBe('data:image/png;base64,aGVsbG8=');
+  });
+
+  it('builds the legacy avatar-original URL only for characters with a legacy avatar', () => {
+    expect(avatarOriginalUrl(CHAR_ID, '/api/v2/assets/avatars/abc.png')).toBe(
+      `/api/v2/characters/${CHAR_ID}/avatar-original`,
+    );
+    expect(avatarOriginalUrl(CHAR_ID, null)).toBeNull();
+  });
+
+  it('refuses asset content on the legacy plane honestly (no silent downgrade)', async () => {
+    mocks.isKernelMode.mockReturnValue(false);
+    await expect(readAssetContentDataUrl(CHAR_ID)).rejects.toBeInstanceOf(UnsupportedError);
+    mocks.isKernelMode.mockReturnValue(true);
+  });
+});
+
+describe('wire→UI translation', () => {
   it('maps a wire chat onto ChatSummary with null joined identity', () => {
     const summary = translateChatSummary(WIRE_CHAT);
     expect(summary).toEqual({

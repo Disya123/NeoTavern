@@ -3,6 +3,18 @@
 ## Unreleased
 ### Added
 
+- **Kernel avatar display surface (M5 slice 6 remainder web, ТЗ §13.1).**
+  Characters converted from legacy data (or linked to a canonical asset)
+  now render their avatar in the kernel plane: `CharacterSummary`/`Character`
+  carry the canonical `avatarAssetId`, and the UI resolves it through the
+  new `readAssetContentDataUrl` transport helper (`assets.content` →
+  `data:` URI; the legacy plane has no asset store and refuses honestly).
+  The legacy avatar-original route moved out of React components into the
+  `avatarOriginalUrl` transport helper — components no longer build `/api/v2`
+  URLs (ui:api:check product sites 38 → 37). `useAvatarDataUrl` hook keeps
+  the resolved bytes in server state. Tests: wireBridge translation +
+  asset data-URI round trip + legacy refusal (68/68).
+
 - **Legacy avatar originals convert into canonical assets (M5 slice 6,
   ADR-0046 waiver 8 assets part).** The legacy converter now maps
   `characters.avatar` — a content-addressed URL
