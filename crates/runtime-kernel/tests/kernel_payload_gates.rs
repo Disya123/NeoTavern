@@ -45,9 +45,7 @@ fn over_limit_invalid_json_is_payload_too_large_not_validation() {
     let over = (META_REQUEST_LIMIT + 1024) as usize;
     let mut body = Vec::with_capacity(over);
     body.push(b'{'); // start a JSON object, then garbage
-    for _ in 0..over - 2 {
-        body.push(b'x');
-    }
+    body.extend(std::iter::repeat_n(b'x', over - 2));
     body.push(b'}');
 
     let err = kernel

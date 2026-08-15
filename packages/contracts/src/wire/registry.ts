@@ -930,6 +930,48 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'settings.get',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.settings.get',
+    'wire.result.settings',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    4096,
+    262144,
+    undefined,
+  ),
+  op(
+    'settings.update',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.write',
+    'wire.request.settings.update',
+    'wire.result.settings',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    65536,
+    262144,
+    undefined,
+  ),
+  op(
+    'diagnostics.export',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.empty',
+    'wire.result.diagnostics-export',
+    undefined,
+    ['INTERNAL', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    1024,
+    262144,
+    undefined,
+  ),
+  op(
     'lorebooks.list',
     'transactional',
     'idempotent',
@@ -1485,6 +1527,28 @@ const PROVIDER_CONFIG_VALUE = {
   updatedAt: TIMESTAMP,
 };
 
+const SETTINGS_VALUE = {
+  items: [
+    { key: 'ui.theme', value: { theme: 'dark' }, updatedAt: TIMESTAMP },
+    { key: 'app.language', value: { locale: 'en' }, updatedAt: TIMESTAMP },
+  ],
+};
+
+const DIAGNOSTICS_VALUE = {
+  generatedAt: TIMESTAMP,
+  traceId: UUID_RUN,
+  schemaHash: 'a'.repeat(64),
+  schemaRevision: 11,
+  storageFormat: 1,
+  sqliteVersion: '3.49.0',
+  appVersion: '0.1.0',
+  wireVersion: { major: 1, minor: 0 },
+  redaction: 'allowlist',
+  sections: ['meta', 'storage', 'settings', 'generation'],
+  settings: { count: 2 },
+  generationRuns: { total: 1, completed: 1, failed: 0, waiting: 0 },
+};
+
 const PROMPT_PLAN_VALUE = {
   runId: UUID_RUN,
   chatId: UUID_CHAT,
@@ -1721,6 +1785,17 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     provider: 'fake',
     name: 'local',
   }),
+  fx('settings-get-request', 'settings.get', 'request', true, {
+    keys: ['ui.theme', 'app.language'],
+  }),
+  fx('settings-get-request-default', 'settings.get', 'request', true, {}),
+  fx('settings-update-request', 'settings.update', 'request', true, {
+    settings: [
+      { key: 'ui.theme', value: { theme: 'dark' } },
+      { key: 'app.language', value: { locale: 'en' } },
+    ],
+  }),
+  fx('diagnostics-export-request', 'diagnostics.export', 'request', true, {}),
 
   // --- valid response fixtures.
   fx('meta-get-response', 'meta.get', 'response', true, META_VALUE),
@@ -1948,6 +2023,9 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     items: [PROVIDER_CONFIG_VALUE],
   }),
   fx('providers-config-delete-response', 'providers.config.delete', 'response', true, {}),
+  fx('settings-get-response', 'settings.get', 'response', true, SETTINGS_VALUE),
+  fx('settings-update-response', 'settings.update', 'response', true, SETTINGS_VALUE),
+  fx('diagnostics-export-response', 'diagnostics.export', 'response', true, DIAGNOSTICS_VALUE),
 
   // --- valid event fixture (generation.start streams events, no response).
   fx('generation-start-event', 'generation.start', 'event', true, {
@@ -1983,6 +2061,19 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
         },
       },
     ],
+  }),
+  fx('neg-settings-get-bad-key', 'settings.get', 'request', false, {
+    keys: ['UPPER_CASE'],
+  }),
+  fx('neg-settings-update-empty', 'settings.update', 'request', false, {
+    settings: [],
+  }),
+  fx('neg-settings-update-bad-key', 'settings.update', 'request', false, {
+    settings: [{ key: 'no spaces', value: {} }],
+  }),
+  fx('neg-diagnostics-export-bad-redaction', 'diagnostics.export', 'response', false, {
+    ...DIAGNOSTICS_VALUE,
+    redaction: 'everything',
   }),
 
   // --- negative fixtures (one per rule family).

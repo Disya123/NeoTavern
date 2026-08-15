@@ -304,6 +304,21 @@ macro_rules! migration_10_sql {
     };
 }
 
+/// Literal body of the settings (v11) schema migration — the
+/// `migration_11_sql!()` literal. Adds the STRICT `settings` table: the
+/// canonical non-secret settings store (key → JSON object value, ТЗ §8.1
+/// Configuration). Secrets NEVER live here — provider keys live in the
+/// SecretStore (ТЗ §9.4, SEC-01); the table carries no secret material.
+macro_rules! migration_11_sql {
+    () => {
+        r#"CREATE TABLE settings (
+    key TEXT PRIMARY KEY,
+    value_json TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+) STRICT;"#
+    };
+}
+
 /// Name of the initial (v1) schema migration.
 pub const MIGRATION_1_NAME: &str = "001_initial_schema";
 
@@ -469,6 +484,22 @@ pub const MIGRATION_10_SQL: &str = migration_10_sql!();
 pub const MIGRATION_10_CHECKSUM: &str =
     "72ed2c1fc51ba5f5c0f722bd2b98aeda371caa0c45745ee9fd5e945cf22f1c2c";
 
+/// Name of the settings (v11) schema migration.
+pub const MIGRATION_11_NAME: &str = "011_settings";
+
+/// Exact SQL of the settings schema migration (v11) — the
+/// `migration_11_sql!()` literal. Adds the STRICT `settings` table (key →
+/// JSON object value) for non-secret application settings (Этап 4 slice 7).
+pub const MIGRATION_11_SQL: &str = migration_11_sql!();
+
+/// Lowercase sha256 hex of the `MIGRATION_11_SQL` string bytes.
+///
+/// Computed via node (`crypto.createHash('sha256')` over the exact literal
+/// bytes, no trailing newline) and asserted by the migration test suite
+/// against the ledger.
+pub const MIGRATION_11_CHECKSUM: &str =
+    "6f0cc38177e6c0dc14c8c2522f01fe671d64dad61ded5ba0a1e9752456cf595a";
+
 /// A fresh install runs every migration in order, so `FRESH_SCHEMA_SQL` is the
 /// concatenation of all migration literals with a single newline between them
 /// (the same statement separator `execute_batch` applies).
@@ -495,7 +526,9 @@ pub const FRESH_SCHEMA_SQL: &str = concat!(
     "\n",
     migration_9_sql!(),
     "\n",
-    migration_10_sql!()
+    migration_10_sql!(),
+    "\n",
+    migration_11_sql!()
 );
 
 /// sha256 hex of the `FRESH_SCHEMA_SQL` bytes — the fresh-install fingerprint.

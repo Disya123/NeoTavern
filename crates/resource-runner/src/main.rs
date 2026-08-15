@@ -579,6 +579,7 @@ fn main() {
 mod tests {
     use super::*;
 
+    #[allow(dead_code)]
     fn opts(cmd: &str) -> Options {
         Options {
             cap_bytes: 4096 * 1024 * 1024,

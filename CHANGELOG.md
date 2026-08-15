@@ -3,6 +3,26 @@
 ## Unreleased
 ### Added
 
+- **Canonical non-secret settings + SEC-07 diagnostics export (ТЗ §8.1,
+  §15, M5 slice 7).** Two new wire operations — `settings.get` /
+  `settings.update` (`wire.request.settings.get` / `wire.request.settings.update`
+  / `wire.result.settings`, capability `settings`) backed by the STRICT
+  `settings` table (schema migration 11, `CURRENT_SCHEMA` 11): a key →
+  JSON-object store; `settings.update` is a transactional upsert returning
+  the post-update snapshot, `settings.get` reads a key subset or all keys.
+  Secrets never live here — provider keys stay in the SecretStore (ТЗ §9.4).
+  `diagnostics.export` (capability `ui.diagnostics`) returns a redacted
+  ALLOWLIST bundle pinned to `redaction: 'allowlist'`: app/wire versions,
+  schema hash + revision, storage format, SQLite version, setting count and
+  generation-run counters (total/completed/failed/waiting, derived
+  waiting-for-tool). Provider configs, secret refs, setting values and
+  message content are never read (structural redaction, fail-closed by
+  omission). Behavioral proof
+  `crates/runtime-kernel/tests/kernel_settings_diagnostics.rs` (4 tests):
+  settings round trip incl. idempotent upsert, wire validation, sentinel
+  redaction (a sentinel API key + message token never appear in the bundle)
+  and run counters. Capability matrix rows updated (ui.diagnostics,
+  settings).
 - **Provider capability declaration + `CAPABILITY_UNAVAILABLE` pre-negotiation
   (ТЗ §9.3, M5 slice 4).** The provider port (`ProviderAdapter`) now declares
   capabilities (`ProviderCapabilities`: tools/vision/thinking/jsonMode/

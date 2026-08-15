@@ -307,7 +307,7 @@ fn prompt_plan_without_persona_passes_message_verbatim() {
     seed_chat_with_persona(root.path());
     {
         let mut progress = |_p: neotavern_storage::migrations::MigrationProgress| {};
-        let mut db = neotavern_storage::open::open(
+        let db = neotavern_storage::open::open(
             root.path(),
             &neotavern_storage::baseline::ConnectionPolicy::default(),
             &mut progress,

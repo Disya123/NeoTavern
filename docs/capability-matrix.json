@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-08-15T13:31:13.605Z",
+  "generatedAt": "2026-08-15T14:05:35.050Z",
   "rows": [
     {
       "hosts": {
@@ -340,15 +340,28 @@
     {
       "hosts": {
         "android": "Implemented",
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "webClient": "Implemented"
+      },
+      "id": "settings",
+      "milestone": "M5",
+      "notes": "M5 slice 7 (Этап 4.7, ТЗ §8.1 Configuration): canonical key → JSON-object settings store backed by the STRICT settings table (schema migration 11). settings.update is a transactional upsert returning the post-update snapshot; settings.get reads a key subset or the full snapshot. Secrets never live here — provider keys are in the SecretStore (ТЗ §9.4, SEC-01); the wire DTO carries object values only (scalar preferences wrapped at the UI boundary).",
+      "title": "Non-secret settings (kernel)",
+      "wireOps": ["settings.get", "settings.update"]
+    },
+    {
+      "hosts": {
+        "android": "Implemented",
         "desktop": "Integrated",
         "headless": "Implemented",
         "webClient": "Implemented"
       },
       "id": "ui.diagnostics",
       "milestone": "M1a",
-      "notes": "First vertical slice through the NeoBackend facade; legacy sections remain on /api/v2 until M4. Delivered in M1a (Wave 0 Governance).",
+      "notes": "First vertical slice through the NeoBackend facade; legacy sections remain on /api/v2 until M4. Delivered in M1a (Wave 0 Governance). M5 slice 7 (Этап 4.7, ТЗ §15, SEC-07): canonical diagnostics.export builds a redacted ALLOWLIST bundle — versions (app/wire/schema hash + revision + storage format + SQLite), setting count and generation-run counters (total/completed/failed/waiting), pinned redaction: 'allowlist'. Provider configs, secret refs, setting values and message content are never read (structural redaction, fail-closed by omission); kernel tests prove a sentinel secret and message token never reach the bundle.",
       "title": "Diagnostics panel (kernel section)",
-      "wireOps": []
+      "wireOps": ["diagnostics.export"]
     },
     {
       "hosts": {

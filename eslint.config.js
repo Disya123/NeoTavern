@@ -80,6 +80,18 @@ export default tseslint.config(
     },
   },
   {
+    // Contracts' own tests may import the compiled dist: the heavy-battery
+    // bench child (_bench-child.mjs) is spawned by a parent test and MUST
+    // resolve the built package, not the source tree.
+    files: ['packages/contracts/test/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        { patterns: ['@neotavern/*', '!@neotavern/shared', '!@neotavern/contracts'] },
+      ],
+    },
+  },
+  {
     files: [
       'packages/db/**',
       'packages/provider-sdk/**',

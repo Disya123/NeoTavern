@@ -264,12 +264,8 @@ fn pathological_payloads_never_panic() {
 
     // Depth bomb: 10_000 nested objects (serde_json's parse recursion limit
     // is 128, so this must fail as a controlled parse error, not overflow).
-    let mut deep_objects = String::from("{\"a\":".repeat(10_000));
-    deep_objects.push('0');
-    deep_objects.push_str(&"}".repeat(10_000));
-    let mut deep_arrays = String::from("[".repeat(10_000));
-    deep_arrays.push('0');
-    deep_arrays.push_str(&"]".repeat(10_000));
+    let deep_objects = "{\"a\":".repeat(10_000) + "0" + &"}".repeat(10_000);
+    let deep_arrays = "[".repeat(10_000) + "0" + &"]".repeat(10_000);
 
     // Size bombs: structurally valid JSON that no DTO matches.
     let nulls_100k = format!("[{}]", vec!["null"; 100_000].join(","));
@@ -282,10 +278,7 @@ fn pathological_payloads_never_panic() {
     );
     let big_string = format!("\"{}\"", "x".repeat(8 * 1024 * 1024));
     // Number bombs: exponent overflow and a 400-digit integer literal.
-    let number_bombs = [
-        format!(r#"{{"n": 1e400}}"#),
-        format!(r#"{{"n": {}}}"#, "9".repeat(400)),
-    ];
+    let number_bombs = [r#"{"n": 1e400}"#.to_string(), format!(r#"{{"n": {}}}"#, "9".repeat(400))];
 
     let mut bombs: Vec<(String, Vec<u8>)> = vec![
         ("deep-objects-10000".to_string(), deep_objects.into_bytes()),
@@ -353,7 +346,7 @@ fn pathological_payloads_never_panic() {
     // Sanity: the loop above must have driven every bomb through every probe.
     assert_eq!(calls, bombs.len() * probes.len());
     assert!(
-        tree_bytes.len() > 0,
+        !tree_bytes.is_empty(),
         "random-tree fuzz must have produced input"
     );
 }

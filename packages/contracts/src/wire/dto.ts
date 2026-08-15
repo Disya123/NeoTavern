@@ -1504,6 +1504,106 @@ export const ProfileExportResultDtoSchema = Type.Object(
 export type ProfileExportResultDto = Static<typeof ProfileExportResultDtoSchema>;
 
 /**
+ * Settings item DTO (`wire.settings.item`): one non-secret application
+ * setting. Values are JSON objects (the wire has no untyped JSON scalar);
+ * scalar preferences are wrapped at the UI boundary, e.g.
+ * `{ "value": "dark" }`. Secrets NEVER live here — provider keys live in the
+ * SecretStore (ТЗ §9.4, SEC-01).
+ */
+export const SettingsItemDtoSchema = Type.Object(
+  {
+    key: Type.String({ pattern: '^[a-z][a-z0-9._-]{1,127}$' }),
+    value: Type.Object({}, { additionalProperties: true }),
+    updatedAt: Type.String({ format: 'rfc3339' }),
+  },
+  { $id: 'wire.settings.item', additionalProperties: false },
+);
+export type SettingsItemDto = Static<typeof SettingsItemDtoSchema>;
+
+/** Settings snapshot DTO (`wire.result.settings`). */
+export const ResultSettingsDtoSchema = Type.Object(
+  {
+    items: Type.Array(SettingsItemDtoSchema, { maxItems: 64 }),
+  },
+  { $id: 'wire.result.settings', additionalProperties: false },
+);
+export type ResultSettingsDto = Static<typeof ResultSettingsDtoSchema>;
+
+/** `settings.get` request DTO (`wire.request.settings.get`): absent `keys` = all. */
+export const GetSettingsRequestDtoSchema = Type.Object(
+  {
+    keys: Type.Optional(
+      Type.Array(Type.String({ pattern: '^[a-z][a-z0-9._-]{1,127}$' }), { maxItems: 64 }),
+    ),
+  },
+  { $id: 'wire.request.settings.get', additionalProperties: false },
+);
+export type GetSettingsRequestDto = Static<typeof GetSettingsRequestDtoSchema>;
+
+/** `settings.update` request DTO (`wire.request.settings.update`). */
+export const UpdateSettingsRequestDtoSchema = Type.Object(
+  {
+    settings: Type.Array(
+      Type.Object(
+        {
+          key: Type.String({ pattern: '^[a-z][a-z0-9._-]{1,127}$' }),
+          value: Type.Object({}, { additionalProperties: true }),
+        },
+        { additionalProperties: false },
+      ),
+      { minItems: 1, maxItems: 64 },
+    ),
+  },
+  { $id: 'wire.request.settings.update', additionalProperties: false },
+);
+export type UpdateSettingsRequestDto = Static<typeof UpdateSettingsRequestDtoSchema>;
+
+/**
+ * Diagnostics export result DTO (`wire.result.diagnostics-export`) — SEC-07:
+ * an ALLOWLIST diagnostic bundle. It carries versions, counts and setting
+ * keys/values AFTER central redaction; it never includes provider configs,
+ * secret references or message content. `redaction: 'allowlist'` is a
+ * contract constant.
+ */
+export const DiagnosticsExportResultDtoSchema = Type.Object(
+  {
+    generatedAt: Type.String({ format: 'rfc3339' }),
+    traceId: Type.String({ format: 'uuid' }),
+    schemaHash: Type.String({ minLength: 64, maxLength: 64 }),
+    schemaRevision: Type.Integer({ minimum: 0 }),
+    storageFormat: Type.Optional(Type.Integer({ minimum: 0 })),
+    sqliteVersion: Type.String({ minLength: 1, maxLength: 64 }),
+    appVersion: Type.String({ minLength: 1, maxLength: 64 }),
+    wireVersion: Type.Object(
+      {
+        major: Type.Integer({ minimum: 1 }),
+        minor: Type.Integer({ minimum: 0 }),
+      },
+      { additionalProperties: false },
+    ),
+    redaction: Type.Literal('allowlist'),
+    sections: Type.Array(Type.String({ minLength: 1, maxLength: 32 }), { maxItems: 16 }),
+    settings: Type.Object(
+      {
+        count: Type.Integer({ minimum: 0 }),
+      },
+      { additionalProperties: false },
+    ),
+    generationRuns: Type.Object(
+      {
+        total: Type.Integer({ minimum: 0 }),
+        completed: Type.Integer({ minimum: 0 }),
+        failed: Type.Integer({ minimum: 0 }),
+        waiting: Type.Integer({ minimum: 0 }),
+      },
+      { additionalProperties: false },
+    ),
+  },
+  { $id: 'wire.result.diagnostics-export', additionalProperties: false },
+);
+export type DiagnosticsExportResultDto = Static<typeof DiagnosticsExportResultDtoSchema>;
+
+/**
  * Every wire schema keyed by its `$id` (schemaId): all DTOs plus the error
  * DTO, the message role union and the three envelopes. This is the complete
  * schema registry the codegen tool and `compileWireContract` operate on.
@@ -1536,6 +1636,11 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.request.profile-export': ProfileExportRequestDtoSchema,
   'wire.result.profile-export': ProfileExportResultDtoSchema,
   'wire.profile-export.counts': ProfileExportCountsDtoSchema,
+  'wire.settings.item': SettingsItemDtoSchema,
+  'wire.result.settings': ResultSettingsDtoSchema,
+  'wire.request.settings.get': GetSettingsRequestDtoSchema,
+  'wire.request.settings.update': UpdateSettingsRequestDtoSchema,
+  'wire.result.diagnostics-export': DiagnosticsExportResultDtoSchema,
   'wire.request.set-provider-config': SetProviderConfigRequestDtoSchema,
   'wire.request.get-provider-config': GetProviderConfigRequestDtoSchema,
   'wire.request.list-provider-configs': ListProviderConfigsRequestDtoSchema,

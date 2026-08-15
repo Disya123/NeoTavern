@@ -4,9 +4,7 @@
     {
       "id": "meta.get",
       "title": "Kernel handshake / meta",
-      "wireOps": [
-        "meta.get"
-      ],
+      "wireOps": ["meta.get"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Integrated",
@@ -38,13 +36,7 @@
     {
       "id": "chats.crud",
       "title": "Chat CRUD",
-      "wireOps": [
-        "chats.list",
-        "chats.get",
-        "chats.create",
-        "chats.update",
-        "chats.delete"
-      ],
+      "wireOps": ["chats.list", "chats.get", "chats.create", "chats.update", "chats.delete"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
@@ -119,9 +111,7 @@
     {
       "id": "providers.list",
       "title": "Provider catalog read",
-      "wireOps": [
-        "providers.list"
-      ],
+      "wireOps": ["providers.list"],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
@@ -165,10 +155,7 @@
     {
       "id": "generation.tool-loop",
       "title": "Durable run/step journal + tool-call loop (waiting_for_tool)",
-      "wireOps": [
-        "generation.tools.list",
-        "generation.tool.result"
-      ],
+      "wireOps": ["generation.tools.list", "generation.tool.result"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
@@ -181,9 +168,7 @@
     {
       "id": "generation.prompt.plan",
       "title": "Prompt pipeline: durable PromptPlan (history/character/lorebook/token budget)",
-      "wireOps": [
-        "generation.prompt.plan"
-      ],
+      "wireOps": ["generation.prompt.plan"],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
@@ -196,10 +181,7 @@
     {
       "id": "backups",
       "title": "Backup create/list",
-      "wireOps": [
-        "backups.create",
-        "backups.list"
-      ],
+      "wireOps": ["backups.create", "backups.list"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
@@ -254,12 +236,7 @@
     {
       "id": "memories.crud",
       "title": "Memory CRUD (ТЗ §4.4)",
-      "wireOps": [
-        "memories.list",
-        "memories.create",
-        "memories.update",
-        "memories.delete"
-      ],
+      "wireOps": ["memories.list", "memories.create", "memories.update", "memories.delete"],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
@@ -291,15 +268,28 @@
     {
       "id": "ui.diagnostics",
       "title": "Diagnostics panel (kernel section)",
-      "wireOps": [],
+      "wireOps": ["diagnostics.export"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
         "android": "Implemented",
         "webClient": "Implemented"
       },
-      "notes": "First vertical slice through the NeoBackend facade; legacy sections remain on /api/v2 until M4. Delivered in M1a (Wave 0 Governance).",
+      "notes": "First vertical slice through the NeoBackend facade; legacy sections remain on /api/v2 until M4. Delivered in M1a (Wave 0 Governance). M5 slice 7 (Этап 4.7, ТЗ §15, SEC-07): canonical diagnostics.export builds a redacted ALLOWLIST bundle — versions (app/wire/schema hash + revision + storage format + SQLite), setting count and generation-run counters (total/completed/failed/waiting), pinned redaction: 'allowlist'. Provider configs, secret refs, setting values and message content are never read (structural redaction, fail-closed by omission); kernel tests prove a sentinel secret and message token never reach the bundle.",
       "milestone": "M1a"
+    },
+    {
+      "id": "settings",
+      "title": "Non-secret settings (kernel)",
+      "wireOps": ["settings.get", "settings.update"],
+      "hosts": {
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "android": "Implemented",
+        "webClient": "Implemented"
+      },
+      "notes": "M5 slice 7 (Этап 4.7, ТЗ §8.1 Configuration): canonical key → JSON-object settings store backed by the STRICT settings table (schema migration 11). settings.update is a transactional upsert returning the post-update snapshot; settings.get reads a key subset or the full snapshot. Secrets never live here — provider keys are in the SecretStore (ТЗ §9.4, SEC-01); the wire DTO carries object values only (scalar preferences wrapped at the UI boundary).",
+      "milestone": "M5"
     },
     {
       "id": "ui.message-editing",
@@ -343,9 +333,7 @@
     {
       "id": "ui.profile-export",
       "title": "Logical profile export",
-      "wireOps": [
-        "profile.export"
-      ],
+      "wireOps": ["profile.export"],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
