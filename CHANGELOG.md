@@ -3,6 +3,26 @@
 ## Unreleased
 ### Added
 
+- **Memory settings editor UI (M5 / Этап 4, slice 3).** A new
+  `MemoryEditor` tab inside AI settings delivers memory CRUD over the wire
+  ops in kernel mode: create/edit content, comma-separated activation keys,
+  scope (global / character with a character picker), enabled toggle and
+  delete with confirmation. Component tests cover list rendering, create
+  through the API and the enabled toggle (2/2). New i18n keys (en/ru).
+
+- **Memory/RAG retrieval into the prompt plan (M5 / Этап 4, slice 3, ТЗ
+  §4.4).** The kernel prompt pipeline now injects keyword-activated memory
+  blocks between the lorebook stage and the history: rows scoped to the
+  chat's character (`global` or `character` matching the chat's character)
+  activate when any non-empty `keys` value appears in the user message +
+  history tail (honest `memory-keyword-v1` heuristic — the kernel has no FTS
+  yet; `memories_fts` stays unconverted and semantic/vector retrieval remains
+  a later slice). Disabled rows, other characters' memories and key-less
+  notes never activate; blocks are `source: 'memory'` system blocks (new
+  member of the `wire.prompt.block` source union), bounded at 1000 rows
+  scanned / 24 blocks injected. Wire registry hash updated; test:
+  `kernel_persona_application` prompt-plan memory retrieval (5/5).
+
 - **User persona application: `chat.personaId` + prompt `{{user}}` (M5 /
   Этап 4, slice 3, closes ADR-0047 waiver 3).** Schema migration 010 adds
   `chats.persona_id` (FK to `personas`, `ON DELETE SET NULL`);

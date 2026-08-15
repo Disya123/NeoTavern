@@ -366,3 +366,111 @@ fn persona_list_after_chat_linkage() {
         .expect("personas.list must succeed");
     assert_eq!(list.items.len(), 1);
 }
+
+/// Memory/RAG retrieval (ТЗ §4.4, Этап 4 slice 3): the prompt plan injects
+/// keyword-activated memory blocks scoped to the chat's character, skipping
+/// disabled rows, other characters' memories and key-less passive notes.
+#[test]
+fn prompt_plan_retrieves_scoped_memories_by_keyword() {
+    let root = tempfile::tempdir().expect("tempdir");
+    seed_chat_with_persona(root.path());
+    {
+        let mut progress = |_p: neotavern_storage::migrations::MigrationProgress| {};
+        let mut db = neotavern_storage::open::open(
+            root.path(),
+            &neotavern_storage::baseline::ConnectionPolicy::default(),
+            &mut progress,
+        )
+        .expect("root must open");
+        db.transaction(|tx| {
+            for (id, scope, character_id, keys, content, enabled) in [
+                ("mem-1", "global", None, r#"["city"]"#, "The city sleeps.", 1),
+                (
+                    "mem-2",
+                    "character",
+                    Some(CHARACTER_ID),
+                    r#"["tea"]"#,
+                    "Alice likes tea.",
+                    1,
+                ),
+                ("mem-3", "global", None, r#"["city"]"#, "Should not appear.", 0),
+                (
+                    "mem-4",
+                    "character",
+                    Some("00000000-0000-4000-8000-00000000dead"),
+                    r#"["ghost"]"#,
+                    "Other character's memory.",
+                    1,
+                ),
+                ("mem-5", "global", None, "[]", "Passive note.", 1),
+            ] {
+                tx.execute(
+                    "INSERT INTO memories (id, scope, character_id, keys_json, content, enabled, position, metadata_json, created_at, updated_at) \
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, '{}', '2026-08-13T00:05:00Z', '2026-08-13T00:05:00Z')",
+                    rusqlite::params![id, scope, character_id, keys, content, enabled],
+                )
+                .expect("seed memory");
+            }
+            Ok::<(), neotavern_storage::StorageError>(())
+        })
+        .expect("memory seeding transaction must succeed");
+        drop(db);
+    }
+    let kernel = open_kernel(root.path());
+
+    let mut stream = start_stream(
+        &kernel,
+        "generation.start",
+        serde_json::json!({
+            "chatId": CHAT_ID,
+            "message": "tea in the city",
+            "provider": "fake",
+            "model": "steps=4",
+        }),
+    )
+    .expect("generation.start must open a stream");
+    let run_id = stream.stream_id().to_string();
+    drain_until_terminal(&mut stream, Duration::from_secs(30));
+
+    let plan_bytes = dispatch_json(
+        &kernel,
+        "generation.prompt.plan",
+        serde_json::json!({ "runId": run_id }),
+    );
+    let plan = decode_prompt_plan(&serde_json::to_vec(&plan_bytes).expect("plan to bytes"))
+        .expect("schema-valid plan");
+
+    let memory_texts: Vec<&str> = plan
+        .system_blocks
+        .iter()
+        .filter(|b| b.source == "memory")
+        .map(|b| b.text.as_str())
+        .collect();
+    assert!(
+        memory_texts.contains(&"The city sleeps."),
+        "global memory activated: {memory_texts:?}"
+    );
+    assert!(
+        memory_texts.contains(&"Alice likes tea."),
+        "character memory activated for the chat's character: {memory_texts:?}"
+    );
+    assert!(
+        !memory_texts.contains(&"Should not appear."),
+        "disabled memory must not activate: {memory_texts:?}"
+    );
+    assert!(
+        !memory_texts
+            .iter()
+            .any(|t| t.contains("Other character's memory.")),
+        "other-character memory must not activate: {memory_texts:?}"
+    );
+    assert!(
+        !memory_texts.iter().any(|t| t.contains("Passive note.")),
+        "key-less memory must not activate: {memory_texts:?}"
+    );
+    assert_eq!(
+        plan.user_name.as_deref(),
+        Some("Aria User"),
+        "persona resolution is independent of memory retrieval"
+    );
+}

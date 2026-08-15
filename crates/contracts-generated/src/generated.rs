@@ -7544,7 +7544,7 @@ pub(crate) fn check_prompt_block(value: &Value, path: &str, issues: &mut Vec<Iss
             let child_path = join_path(path, "source");
             match child.as_str() {
                 Some(s) => {
-                    if !matches!(s, "character" | "persona" | "lorebook" | "instruct") {
+                    if !matches!(s, "character" | "persona" | "lorebook" | "memory" | "instruct") {
                         issues.push(Issue::new(child_path.as_str(), "Union"));
                     }
                 }

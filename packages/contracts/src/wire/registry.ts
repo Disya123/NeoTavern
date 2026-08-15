@@ -1464,7 +1464,11 @@ const PROMPT_PLAN_VALUE = {
   inputTokens: 96,
   overBudget: false,
   userName: 'Aria',
-  systemBlocks: [{ source: 'character', text: 'Aria is a cheerful guide.' }],
+  systemBlocks: [
+    { source: 'character', text: 'Aria is a cheerful guide.' },
+    { source: 'lorebook', text: 'Sword lore.' },
+    { source: 'memory', text: 'The city sleeps.' },
+  ],
   messages: [
     { role: 'system', content: 'Aria is a cheerful guide.' },
     { role: 'user', content: 'Earlier message' },

@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-08-15T10:49:05.165Z",
+  "generatedAt": "2026-08-15T11:02:26.785Z",
   "rows": [
     {
       "hosts": {
@@ -186,7 +186,7 @@
       },
       "id": "memories.crud",
       "milestone": "M5",
-      "notes": "Этап 4 slice 3: memory CRUD in the kernel through Product Wire (memories.list/create/update/delete) backed by the STRICT memories table with scope/keys/content/enabled/position/metadata (schema migration 9). Character-scoped create requires characterId (unknown character → CHARACTER_NOT_FOUND); list filters scope/characterId/enabled and orders by position, created_at, id. Legacy→kernel migration maps the memories table (scope validated, dangling character_id preserved — no FK by design). Facade: NeoBackend.memories + LegacyBackend over /api/v2/memories + web hooks (useMemories/useCreateMemory/useUpdateMemory/useDeleteMemory) route through the wire ops in kernel mode. Honest boundaries: the wire DTO cannot express `characterId: null` (un-scoping is CAPABILITY_UNAVAILABLE), the kernel has no memory FTS/retrieval stage yet (memories_fts is not converted), and the memory settings editor UI panel is pending within M5.",
+      "notes": "Этап 4 slice 3: memory CRUD in the kernel through Product Wire (memories.list/create/update/delete) backed by the STRICT memories table with scope/keys/content/enabled/position/metadata (schema migration 9). Character-scoped create requires characterId (unknown character → CHARACTER_NOT_FOUND); list filters scope/characterId/enabled and orders by position, created_at, id. Legacy→kernel migration maps the memories table (scope validated, dangling character_id preserved — no FK by design). Facade: NeoBackend.memories + LegacyBackend over /api/v2/memories + web hooks (useMemories/useCreateMemory/useUpdateMemory/useDeleteMemory) route through the wire ops in kernel mode. Prompt integration (same slice): the kernel prompt plan injects keyword-activated memory blocks scoped to the chat's character as source:'memory' system blocks (honest memory-keyword-v1 heuristic — the kernel has no FTS yet; memories_fts is not converted; semantic/vector retrieval stays a later slice). The memory settings editor UI (MemoryEditor tab in AI settings) delivers CRUD: content/keys/scope/character picker/enabled toggle + delete confirm (component tests 2/2). Honest boundaries: the wire DTO cannot express `characterId: null` (un-scoping is CAPABILITY_UNAVAILABLE).",
       "title": "Memory CRUD (ТЗ §4.4)",
       "wireOps": ["memories.create", "memories.delete", "memories.list", "memories.update"]
     },

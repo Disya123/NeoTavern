@@ -31,6 +31,10 @@ const DEFAULT_CONTEXT_LIMIT: i64 = 8192;
 const MAX_LOREBOOK_BLOCKS: usize = 24;
 /// Cap on lorebook entries scanned per plan.
 const MAX_LOREBOOK_ENTRIES: usize = 2000;
+/// Cap on memory rows scanned per plan (SEC/resource bound).
+const MAX_MEMORY_ROWS: usize = 1000;
+/// Cap on injected memory blocks per plan (SEC/resource bound).
+const MAX_MEMORY_BLOCKS: usize = 24;
 /// Per-message token overhead charged by the heuristic estimator.
 const MESSAGE_OVERHEAD_TOKENS: u64 = 3;
 /// Stable id of the instruct-neutral message form this pipeline emits.
@@ -286,6 +290,69 @@ fn retrieve_lorebook_blocks(db: &Database, context_text: &str) -> Vec<PromptBloc
     blocks
 }
 
+/// Retrieves memory blocks (ТЗ §4.4, Этап 4 slice 3): rows scoped to the
+/// chat's character (`scope = 'global'` or `'character'` matching the chat's
+/// character) are activated when any non-empty `keys` value appears in the
+/// context text. The kernel table has no FTS, so retrieval is the honest
+/// keyword heuristic `memory-keyword-v1` — keys matched against a lowercase
+/// haystack, bounded by [`MAX_MEMORY_ROWS`] scanned and
+/// [`MAX_MEMORY_BLOCKS`] injected, ordered by `position` then recency.
+fn retrieve_memory_blocks(db: &Database, chat_id: &str, context_text: &str) -> Vec<PromptBlock> {
+    let mut stmt = match db.conn().prepare(
+        "SELECT m.keys_json, m.content FROM memories m \
+         JOIN chats ch ON ch.id = ?1 \
+         WHERE m.enabled = 1 AND (m.scope = 'global' OR m.character_id = ch.character_id) \
+         ORDER BY m.position ASC, m.created_at DESC, m.id DESC",
+    ) {
+        Ok(stmt) => stmt,
+        Err(_) => return Vec::new(),
+    };
+    let rows = match stmt.query_map(params![chat_id], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+        ))
+    }) {
+        Ok(rows) => rows,
+        Err(_) => return Vec::new(),
+    };
+    let mut blocks: Vec<PromptBlock> = Vec::new();
+    let mut scanned: usize = 0;
+    let haystack = context_text.to_lowercase();
+    for row in rows {
+        let Ok((keys_json, content)) = row else { continue };
+        scanned += 1;
+        if scanned > MAX_MEMORY_ROWS {
+            break;
+        }
+        let keys: Vec<String> = match serde_json::from_str(&keys_json) {
+            Ok(keys) => keys,
+            Err(_) => continue,
+        };
+        if keys.is_empty() {
+            continue;
+        }
+        let matched = keys
+            .iter()
+            .filter(|key| {
+                let key = key.trim().to_lowercase();
+                !key.is_empty() && haystack.contains(&key)
+            })
+            .count();
+        if matched == 0 {
+            continue;
+        }
+        blocks.push(PromptBlock {
+            source: "memory".to_string(),
+            text: content,
+        });
+        if blocks.len() >= MAX_MEMORY_BLOCKS {
+            break;
+        }
+    }
+    blocks
+}
+
 /// Loads the chat's character (name/description) and the character-card
 /// persona (`ext_json.personality`, SillyTavern card field) as system blocks.
 fn character_system_blocks(db: &Database, chat_id: &str) -> Result<Vec<PromptBlock>, KernelError> {
@@ -428,9 +495,17 @@ pub fn build_prompt_plan(db: &Database, input: &PlanInput<'_>) -> Result<PromptP
         .collect::<Vec<_>>()
         .join("\n");
     let lorebook_blocks = retrieve_lorebook_blocks(db, &format!("{}\n{tail}", input.message));
+    // Memory/RAG (ТЗ §4.4, Этап 4 slice 3): keyword activation on the user
+    // message + recent history tail, scoped to the chat's character. The
+    // kernel has no FTS yet — retrieval is the documented `memory-keyword-v1`
+    // heuristic (keys matched against the haystack), never a silent claim of
+    // semantic retrieval.
+    let memory_blocks = retrieve_memory_blocks(db, &input.chat_id, &format!("{}\n{tail}", input.message));
 
+    // Stage order mirrors AGENTS §8: character/persona → lorebook → memory.
     let mut system_blocks = character_blocks;
     system_blocks.extend(lorebook_blocks);
+    system_blocks.extend(memory_blocks);
     system_blocks.retain(|b| !b.text.trim().is_empty());
 
     // System message: merge all system blocks (kept under the budget).

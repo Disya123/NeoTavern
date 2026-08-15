@@ -41,6 +41,21 @@ persona) is a legacy-server feature; in kernel mode only the chat-level link
 applies. Other macros (`{{char}}`, custom variables) remain a later stage of
 the kernel pipeline.
 
+## Memory / RAG (ТЗ §4.4, Этап 4 slice 3)
+
+The kernel plan injects memory blocks between the lorebook stage and the
+history (AGENTS §8 stage order). Retrieval is the honest **`memory-keyword-v1`
+heuristic**: rows from the STRICT `memories` table scoped to the chat's
+character (`scope = 'global'` or `'character'` matching the chat's character)
+are activated when any non-empty `keys` value appears in the user message +
+recent history tail (lowercased haystack). Disabled rows (`enabled = 0`),
+other characters' memories and key-less passive notes never activate. Blocks
+are injected as `source: 'memory'` system blocks (a valid member of the
+`wire.prompt.block` source union), bounded by 1000 rows scanned and 24 blocks
+injected, ordered by `position` then recency. The kernel has no FTS yet and
+the legacy `memories_fts` table is not converted — semantic/vector retrieval
+remains a later slice.
+
 ## Instruct formats
 
 Rendering via Handlebars in an isolated environment (no Node/FS/code, only

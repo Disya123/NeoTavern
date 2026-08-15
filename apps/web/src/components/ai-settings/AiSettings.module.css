@@ -847,3 +847,62 @@
     }
   }
 }
+
+@layer components {
+  /* Memory settings editor (ТЗ §4.4, Этап 4 slice 3) */
+  .inlineHint {
+    color: var(--st-color-text-secondary);
+    font-size: var(--st-font-size-sm);
+  }
+
+  .memoryList {
+    display: grid;
+    gap: var(--st-space-sm);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .memoryCard {
+    display: grid;
+    gap: var(--st-space-sm);
+    padding: var(--st-space-sm);
+    border: 1px solid var(--st-color-border-subtle);
+    border-radius: var(--st-radius-control);
+    background: var(--st-color-surface-secondary);
+  }
+
+  .memoryCard[data-state='disabled'] {
+    opacity: 0.65;
+  }
+
+  .memoryCardHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--st-space-sm);
+  }
+
+  .memoryMeta {
+    color: var(--st-color-text-secondary);
+    font-size: var(--st-font-size-sm);
+  }
+
+  .memoryContent {
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .memoryCreate {
+    display: grid;
+    gap: var(--st-space-sm);
+    padding-top: var(--st-space-sm);
+    border-top: 1px solid var(--st-color-border-subtle);
+  }
+
+  .memoryTextarea {
+    min-block-size: calc(var(--st-control-height) * 2);
+    resize: vertical;
+  }
+}

@@ -9,6 +9,7 @@ import { FloatingTabContent } from '../FloatingTabContent.js';
 import { FloatingTabPanel } from '../FloatingTabPanel.js';
 import { ChatTemplateEditor } from './ChatTemplateEditor.js';
 import { GenerationPresetEditor } from './GenerationPresetEditor.js';
+import { MemoryEditor } from './MemoryEditor.js';
 import { ProviderProfileEditor } from './ProviderProfileEditor.js';
 import { PromptTemplateEditor } from './PromptTemplateEditor.js';
 import styles from './AiSettings.module.css';
@@ -59,6 +60,17 @@ export function AiSettingsPanel({ onClose }: AiSettingsPanelProps) {
               <FloatingTabContent>
                 <div className={styles.tabBody}>
                   <ProviderProfileEditor />
+                </div>
+              </FloatingTabContent>
+            ),
+          },
+          {
+            value: 'memories',
+            label: t('settings:memoriesTab'),
+            content: (
+              <FloatingTabContent>
+                <div className={styles.tabBody}>
+                  <MemoryEditor />
                 </div>
               </FloatingTabContent>
             ),

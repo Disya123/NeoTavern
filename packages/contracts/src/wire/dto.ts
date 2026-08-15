@@ -1022,6 +1022,7 @@ export const PromptBlockDtoSchema = Type.Object(
         Type.Literal('character'),
         Type.Literal('persona'),
         Type.Literal('lorebook'),
+        Type.Literal('memory'),
         Type.Literal('instruct'),
       ],
       { 'x-wire-unknown-behavior': 'reject' },

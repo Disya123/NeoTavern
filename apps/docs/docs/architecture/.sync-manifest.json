@@ -295,7 +295,7 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "8f05f5ff0b828c474d56bbe057476b8644ba43aa4fe570d70d989136ba1ea909"
+      "sha256": "d2673b73dd12b325e627cc09216ed4d910e2419fed2eab2a126c322feb2a4a8b"
     },
     {
       "source": "data/README.md",
@@ -330,7 +330,7 @@
     {
       "source": "prompt-pipeline/README.md",
       "target": "prompt-pipeline/README.md",
-      "sha256": "aea12f05b496f8ab3f8c7ba982910e59b75f0ec3c57d004e958d32422de20542"
+      "sha256": "508378f9fbd3fa62c22de2312cf9bb7379c49aa0aaa4435c9433ccac2bc2c04f"
     },
     {
       "source": "theme-sdk/README.md",
