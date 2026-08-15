@@ -1604,6 +1604,29 @@ export const DiagnosticsExportResultDtoSchema = Type.Object(
 export type DiagnosticsExportResultDto = Static<typeof DiagnosticsExportResultDtoSchema>;
 
 /**
+ * Secrets status result DTO (`wire.result.secrets-status`) — SEC-01.1: the
+ * canonical, VALUE-FREE surface for the secret backend. It reports which
+ * explicit mode is active (portable encrypted / machine-bound / session-only
+ * / unavailable), whether it persists and is writable, the record count and
+ * the portable `secrets.enc` format version. Secret VALUES never cross this
+ * DTO — the UI uses it to render the honest mode state and the
+ * `SECRET_UNAVAILABLE` / `SECRET_UNAVAILABLE_ON_THIS_DEVICE` flows, never to
+ * read secrets.
+ */
+export const SecretsStatusResultDtoSchema = Type.Object(
+  {
+    kind: Type.String({ minLength: 1, maxLength: 64 }),
+    persistent: Type.Boolean(),
+    writable: Type.Boolean(),
+    available: Type.Boolean(),
+    recordCount: Type.Integer({ minimum: 0 }),
+    formatVersion: Type.Optional(Type.Integer({ minimum: 1 })),
+  },
+  { $id: 'wire.result.secrets-status', additionalProperties: false },
+);
+export type SecretsStatusResultDto = Static<typeof SecretsStatusResultDtoSchema>;
+
+/**
  * Every wire schema keyed by its `$id` (schemaId): all DTOs plus the error
  * DTO, the message role union and the three envelopes. This is the complete
  * schema registry the codegen tool and `compileWireContract` operate on.
@@ -1641,6 +1664,7 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.request.settings.get': GetSettingsRequestDtoSchema,
   'wire.request.settings.update': UpdateSettingsRequestDtoSchema,
   'wire.result.diagnostics-export': DiagnosticsExportResultDtoSchema,
+  'wire.result.secrets-status': SecretsStatusResultDtoSchema,
   'wire.request.set-provider-config': SetProviderConfigRequestDtoSchema,
   'wire.request.get-provider-config': GetProviderConfigRequestDtoSchema,
   'wire.request.list-provider-configs': ListProviderConfigsRequestDtoSchema,

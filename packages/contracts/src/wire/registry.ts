@@ -972,6 +972,20 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'secrets.status',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.empty',
+    'wire.result.secrets-status',
+    undefined,
+    ['INTERNAL', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    1024,
+    262144,
+    undefined,
+  ),
+  op(
     'lorebooks.list',
     'transactional',
     'idempotent',
@@ -1549,6 +1563,15 @@ const DIAGNOSTICS_VALUE = {
   generationRuns: { total: 1, completed: 1, failed: 0, waiting: 0 },
 };
 
+const SECRETS_STATUS_VALUE = {
+  kind: 'portable',
+  persistent: true,
+  writable: true,
+  available: true,
+  recordCount: 2,
+  formatVersion: 1,
+};
+
 const PROMPT_PLAN_VALUE = {
   runId: UUID_RUN,
   chatId: UUID_CHAT,
@@ -1796,6 +1819,7 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     ],
   }),
   fx('diagnostics-export-request', 'diagnostics.export', 'request', true, {}),
+  fx('secrets-status-request', 'secrets.status', 'request', true, {}),
 
   // --- valid response fixtures.
   fx('meta-get-response', 'meta.get', 'response', true, META_VALUE),
@@ -2026,6 +2050,7 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('settings-get-response', 'settings.get', 'response', true, SETTINGS_VALUE),
   fx('settings-update-response', 'settings.update', 'response', true, SETTINGS_VALUE),
   fx('diagnostics-export-response', 'diagnostics.export', 'response', true, DIAGNOSTICS_VALUE),
+  fx('secrets-status-response', 'secrets.status', 'response', true, SECRETS_STATUS_VALUE),
 
   // --- valid event fixture (generation.start streams events, no response).
   fx('generation-start-event', 'generation.start', 'event', true, {
@@ -2074,6 +2099,10 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('neg-diagnostics-export-bad-redaction', 'diagnostics.export', 'response', false, {
     ...DIAGNOSTICS_VALUE,
     redaction: 'everything',
+  }),
+  fx('neg-secrets-status-empty-kind', 'secrets.status', 'response', false, {
+    ...SECRETS_STATUS_VALUE,
+    kind: '',
   }),
 
   // --- negative fixtures (one per rule family).

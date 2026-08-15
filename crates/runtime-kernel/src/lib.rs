@@ -39,6 +39,7 @@ pub mod product;
 pub mod prompt;
 pub mod providers;
 pub mod providers_config;
+pub mod secrets;
 pub mod settings;
 pub mod tools;
 
@@ -598,6 +599,8 @@ fn handle_unary(
         "settings.get" => with_db_opt(db, |db| settings::settings_get(db, req)),
         "settings.update" => with_db_opt(db, |db| settings::settings_update(db, req)),
         "diagnostics.export" => with_db_opt(db, |db| settings::diagnostics_export(db, req)),
+        // SEC-01.1: value-free secret-backend mode surface (stateless seam).
+        "secrets.status" => secrets::secrets_status(state.secret_store.as_ref(), req),
         // Phase 6 generation operations.
         "generation.cancel" => {
             with_db_opt(db, |db| generation::generation_cancel(db, req, lease_owner))

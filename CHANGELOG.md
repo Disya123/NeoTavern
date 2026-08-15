@@ -3,6 +3,19 @@
 ## Unreleased
 ### Added
 
+- **Value-free secret-backend surface `secrets.status` (SEC-01.1, M5 slice
+  7).** New wire operation (69 total) `secrets.status`
+  (`wire.result.secrets-status`) reports the explicit secret-store MODE
+  without ever invoking `get`: kind `portable` (encrypted `secrets.enc` with
+  its formatVersion), `env`, `session` (session-only) or `unavailable`,
+  plus persistent/writable/available flags and the record count. The UI
+  renders the honest SEC-01.1 state (portable encrypted / machine-bound /
+  session-only / fail-closed unavailable) from this DTO; a value cannot
+  cross it. Kernel tests (`kernel_secrets_status.rs`, 3): unavailable
+  without a store, session-mode reporting with a sentinel value proven
+  absent from the response bytes, and a REAL portable store (create +
+  put) reporting kind portable + formatVersion 2. Capability matrix rows
+  updated (ui.secrets, ui.portable-data).
 - **Canonical non-secret settings + SEC-07 diagnostics export (ТЗ §8.1,
   §15, M5 slice 7).** Two new wire operations — `settings.get` /
   `settings.update` (`wire.request.settings.get` / `wire.request.settings.update`

@@ -65,6 +65,7 @@ pub fn operation_request_limit(operation_id: &str) -> Option<u64> {
         "settings.get" => Some(4096),
         "settings.update" => Some(65536),
         "diagnostics.export" => Some(1024),
+        "secrets.status" => Some(1024),
         "lorebooks.list" => Some(1024),
         "lorebooks.get" => Some(2048),
         "lorebooks.create" => Some(65536),
@@ -141,6 +142,7 @@ pub fn operation_response_limit(operation_id: &str) -> Option<u64> {
         "settings.get" => Some(262144),
         "settings.update" => Some(262144),
         "diagnostics.export" => Some(262144),
+        "secrets.status" => Some(262144),
         "lorebooks.list" => Some(262144),
         "lorebooks.get" => Some(262144),
         "lorebooks.create" => Some(262144),
@@ -3809,6 +3811,114 @@ pub fn validate_result_diagnostics_export(value: &Value) -> Result<(), Vec<Issue
 
 pub fn decode_result_diagnostics_export(bytes: &[u8]) -> Result<ResultDiagnosticsExport, WireError> {
     crate::decode::<ResultDiagnosticsExport>(validate_result_diagnostics_export, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultSecretsStatus {
+    pub kind: String,
+    pub persistent: bool,
+    pub writable: bool,
+    pub available: bool,
+    #[serde(rename = "recordCount")]
+    pub record_count: i64,
+    #[serde(rename = "formatVersion", default, skip_serializing_if = "Option::is_none")]
+    pub format_version: Option<i64>,
+}
+
+pub(crate) fn check_result_secrets_status(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("kind").is_none() {
+            issues.push(Issue::new(join_path(path, "kind"), "RequiredProperty"));
+        }
+        if value.get("persistent").is_none() {
+            issues.push(Issue::new(join_path(path, "persistent"), "RequiredProperty"));
+        }
+        if value.get("writable").is_none() {
+            issues.push(Issue::new(join_path(path, "writable"), "RequiredProperty"));
+        }
+        if value.get("available").is_none() {
+            issues.push(Issue::new(join_path(path, "available"), "RequiredProperty"));
+        }
+        if value.get("recordCount").is_none() {
+            issues.push(Issue::new(join_path(path, "recordCount"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("kind") {
+            let child_path = join_path(path, "kind");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 64 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("persistent") {
+            let child_path = join_path(path, "persistent");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(child) = value.get("writable") {
+            let child_path = join_path(path, "writable");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(child) = value.get("available") {
+            let child_path = join_path(path, "available");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(child) = value.get("recordCount") {
+            let child_path = join_path(path, "recordCount");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("formatVersion") {
+            let child_path = join_path(path, "formatVersion");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "kind" | "persistent" | "writable" | "available" | "recordCount" | "formatVersion") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_secrets_status(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_secrets_status(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_secrets_status(bytes: &[u8]) -> Result<ResultSecretsStatus, WireError> {
+    crate::decode::<ResultSecretsStatus>(validate_result_secrets_status, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
