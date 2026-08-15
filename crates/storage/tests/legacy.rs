@@ -47,7 +47,8 @@ fn build_legacy(path: &Path) -> rusqlite::Result<()> {
         );
         CREATE TABLE lorebooks (
             id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT,
-            created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+            created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+            metadata TEXT DEFAULT '{}'
         );
         CREATE TABLE lore_entries (
             id TEXT PRIMARY KEY, lorebook_id TEXT NOT NULL, keys_json TEXT, secondary_keys TEXT,
@@ -235,6 +236,18 @@ fn build_legacy(path: &Path) -> rusqlite::Result<()> {
         [],
     )?;
     conn.execute(
+        "INSERT INTO lorebooks (id, name, created_at, updated_at, metadata) \
+         VALUES ('leg-l3', 'Aria notes', 1700000018000, 1700000019000, \
+         '{\"characterId\":\"leg-c1\"}')",
+        [],
+    )?;
+    conn.execute(
+        "INSERT INTO lorebooks (id, name, created_at, updated_at, metadata) \
+         VALUES ('leg-l4', 'Ghost notes', 1700000020000, 1700000021000, \
+         '{\"characterId\":\"leg-missing\"}')",
+        [],
+    )?;
+    conn.execute(
         "INSERT INTO lore_entries (id, lorebook_id, keys_json, secondary_keys, content, enabled, \
          position, constant, selective, metadata, created_at, updated_at) \
          VALUES (?1, 'leg-l1', ?2, ?3, ?4, 1, 0, 0, 0, '{}', 1700000016000, 1700000017000)",
@@ -367,7 +380,10 @@ fn legacy_conversion_maps_rows_skips_orphans_and_never_copies_secrets(
         report.message_drafts, 2,
         "plugin-role, orphan-chat and dangling-commit drafts skipped"
     );
-    assert_eq!(report.lorebooks, 2);
+    assert_eq!(
+        report.lorebooks, 4,
+        "three books + the character-linked one convert"
+    );
     assert_eq!(report.presets, 1);
     assert_eq!(
         report.memories, 3,
@@ -381,7 +397,11 @@ fn legacy_conversion_maps_rows_skips_orphans_and_never_copies_secrets(
         report.skipped, 8,
         "orphan chat + orphan message + orphan swipe + orphan revision + 3 drafts + invalid-scope memory"
     );
-    assert_eq!(report.orphans.len(), 8);
+    assert_eq!(
+        report.orphans.len(),
+        9,
+        "the 8 skipped rows + the ghost-owned lorebook link"
+    );
 
     // The source file is byte- and mtime-identical (opened strictly read-only).
     assert_eq!(
@@ -404,7 +424,7 @@ fn legacy_conversion_maps_rows_skips_orphans_and_never_copies_secrets(
         ("message_variants", 2),
         ("message_content_revisions", 1),
         ("message_drafts", 2),
-        ("lorebooks", 2),
+        ("lorebooks", 4),
         ("presets", 1),
         ("memories", 3),
         ("personas", 2),
@@ -543,6 +563,35 @@ fn legacy_conversion_maps_rows_skips_orphans_and_never_copies_secrets(
         |r| r.get(0),
     )?;
     assert_eq!(empty, "[]");
+
+    // Character↔lorebook scoping (ADR-0047 waiver 2): `lorebooks.metadata.
+    // characterId` converts into the canonical `character_lorebooks` link;
+    // a book whose owner did not survive the conversion stays shared and is
+    // reported as an orphan.
+    let linked: Option<String> = db.conn().query_row(
+        "SELECT character_id FROM character_lorebooks WHERE lorebook_id = 'leg-l3'",
+        [],
+        |r| r.get(0),
+    )?;
+    assert_eq!(
+        linked.as_deref(),
+        Some("leg-c1"),
+        "metadata.characterId → link"
+    );
+    let unlinked: i64 = db.conn().query_row(
+        "SELECT COUNT(*) FROM character_lorebooks WHERE lorebook_id = 'leg-l4'",
+        [],
+        |r| r.get(0),
+    )?;
+    assert_eq!(unlinked, 0, "orphan-owned book stays in the shared library");
+    assert!(
+        report
+            .orphans
+            .iter()
+            .any(|o| o.contains("leg-l4") && o.contains("leg-missing")),
+        "orphan link reported: {:?}",
+        report.orphans
+    );
 
     // Presets: legacy data → settings_json; legacy kind maps 1:1.
     let (settings, kind): (String, String) = db.conn().query_row(

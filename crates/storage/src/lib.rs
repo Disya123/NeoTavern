@@ -38,7 +38,7 @@ use std::time::Duration;
 pub const STORAGE_FORMAT: i64 = 1;
 
 /// Current schema revision (`PRAGMA user_version`).
-pub const CURRENT_SCHEMA: i64 = 15;
+pub const CURRENT_SCHEMA: i64 = 16;
 
 /// Lowest schema revision that can be opened directly; anything older requires
 /// a legacy converter that lives outside this crate.

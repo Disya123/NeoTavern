@@ -3,6 +3,21 @@
 ## Unreleased
 ### Added
 
+- **Character↔lorebook scoping (M5 slice 6, ADR-0047 waiver 2 closed).**
+  The canonical schema now models the character↔lorebook link: migration 016
+  adds the STRICT `character_lorebooks` table (one optional owner per book —
+  a book is either shared-library or bound to exactly one character).
+  `LorebookDto` gained an optional `characterId`; `lorebooks.create/update`
+  bind it (unknown character → `CHARACTER_NOT_FOUND`) and
+  `lorebooks.list` accepts an optional `characterId` filter. Prompt retrieval
+  is scoped by the chat's character while books without a link stay global.
+  The legacy converter maps `lorebooks.metadata.characterId` into the
+  canonical link (orphaned links are reported, the book stays shared). The
+  NeoBackend `LorebooksApi.list` forwards the scoped request (Local/Remote
+  parity-tested) and `wireBridge` no longer throws CAPABILITY_UNAVAILABLE
+  for scoped lorebook catalogs. Kernel tests: scoping round trip + prompt
+  scoping; neobackend parity 69.
+
 - **AssetsApi in the NeoBackend facade (M5 slice 7 remainder web).** The
   facade gained `assets.get`/`assets.content`/`assets.put`/`assets.del` —
   the last Product Wire domain without a facade surface, so every wire

@@ -1057,6 +1057,8 @@ pub struct LorebookDto {
     pub description: Option<String>,
     #[serde(rename = "entryCount")]
     pub entry_count: i64,
+    #[serde(rename = "characterId", default, skip_serializing_if = "Option::is_none")]
+    pub character_id: Option<String>,
     #[serde(rename = "createdAt")]
     pub created_at: String,
     #[serde(rename = "updatedAt")]
@@ -1065,8 +1067,9 @@ pub struct LorebookDto {
 
 pub(crate) fn check_lorebook_dto(value: &Value, path: &str, issues: &mut Vec<Issue>) {
     static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
-    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
     static RE_2: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_3: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
     if !value.is_object() {
         issues.push(Issue::new(path, "Object"));
     } else {
@@ -1134,11 +1137,22 @@ pub(crate) fn check_lorebook_dto(value: &Value, path: &str, issues: &mut Vec<Iss
                 None => issues.push(Issue::new(child_path.as_str(), "Integer")),
             }
         }
+        if let Some(child) = value.get("characterId") {
+            let child_path = join_path(path, "characterId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
         if let Some(child) = value.get("createdAt") {
             let child_path = join_path(path, "createdAt");
             match child.as_str() {
                 Some(s) => {
-                    if !RE_1.is_match(s) {
+                    if !RE_2.is_match(s) {
                         issues.push(Issue::new(child_path.as_str(), "StringFormat"));
                     }
                 }
@@ -1149,7 +1163,7 @@ pub(crate) fn check_lorebook_dto(value: &Value, path: &str, issues: &mut Vec<Iss
             let child_path = join_path(path, "updatedAt");
             match child.as_str() {
                 Some(s) => {
-                    if !RE_2.is_match(s) {
+                    if !RE_3.is_match(s) {
                         issues.push(Issue::new(child_path.as_str(), "StringFormat"));
                     }
                 }
@@ -1158,7 +1172,7 @@ pub(crate) fn check_lorebook_dto(value: &Value, path: &str, issues: &mut Vec<Iss
         }
         if let Some(obj) = value.as_object() {
             for key in obj.keys() {
-                if !matches!(key.as_str(), "id" | "name" | "description" | "entryCount" | "createdAt" | "updatedAt") {
+                if !matches!(key.as_str(), "id" | "name" | "description" | "entryCount" | "characterId" | "createdAt" | "updatedAt") {
                     let key_path = join_path(path, key);
                     issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
                 }
@@ -6846,15 +6860,62 @@ pub fn decode_request_get_lorebook(bytes: &[u8]) -> Result<RequestGetLorebook, W
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct RequestListLorebooks {
+    #[serde(rename = "characterId", default, skip_serializing_if = "Option::is_none")]
+    pub character_id: Option<String>,
+}
+
+pub(crate) fn check_request_list_lorebooks(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if let Some(child) = value.get("characterId") {
+            let child_path = join_path(path, "characterId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "characterId") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_list_lorebooks(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_list_lorebooks(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_list_lorebooks(bytes: &[u8]) -> Result<RequestListLorebooks, WireError> {
+    crate::decode::<RequestListLorebooks>(validate_request_list_lorebooks, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RequestCreateLorebook {
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub entries: Option<Vec<LorebookEntryInput>>,
+    #[serde(rename = "characterId", default, skip_serializing_if = "Option::is_none")]
+    pub character_id: Option<String>,
 }
 
 pub(crate) fn check_request_create_lorebook(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
     if !value.is_object() {
         issues.push(Issue::new(path, "Object"));
     } else {
@@ -6902,9 +6963,20 @@ pub(crate) fn check_request_create_lorebook(value: &Value, path: &str, issues: &
                 }
             }
         }
+        if let Some(child) = value.get("characterId") {
+            let child_path = join_path(path, "characterId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
         if let Some(obj) = value.as_object() {
             for key in obj.keys() {
-                if !matches!(key.as_str(), "name" | "description" | "entries") {
+                if !matches!(key.as_str(), "name" | "description" | "entries" | "characterId") {
                     let key_path = join_path(path, key);
                     issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
                 }
@@ -6934,10 +7006,13 @@ pub struct RequestUpdateLorebook {
     pub description: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub entries: Option<Vec<LorebookEntryInput>>,
+    #[serde(rename = "characterId", default, skip_serializing_if = "Option::is_none")]
+    pub character_id: Option<String>,
 }
 
 pub(crate) fn check_request_update_lorebook(value: &Value, path: &str, issues: &mut Vec<Issue>) {
     static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
     if !value.is_object() {
         issues.push(Issue::new(path, "Object"));
     } else {
@@ -6996,9 +7071,20 @@ pub(crate) fn check_request_update_lorebook(value: &Value, path: &str, issues: &
                 }
             }
         }
+        if let Some(child) = value.get("characterId") {
+            let child_path = join_path(path, "characterId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
         if let Some(obj) = value.as_object() {
             for key in obj.keys() {
-                if !matches!(key.as_str(), "lorebookId" | "name" | "description" | "entries") {
+                if !matches!(key.as_str(), "lorebookId" | "name" | "description" | "entries" | "characterId") {
                     let key_path = join_path(path, key);
                     issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
                 }

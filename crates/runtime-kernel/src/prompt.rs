@@ -220,23 +220,28 @@ fn parse_lorebook_entries(entries_json: &str) -> Vec<LorebookEntry> {
     out
 }
 
-/// Scans every lorebook for activated entries (constant entries always;
+/// Scans the chat's lorebooks for activated entries (constant entries always;
 /// keyword entries on case-insensitive substring match; selective entries
 /// additionally need a secondary key) and returns the ranked blocks.
 ///
-/// Limitation (documented): the kernel schema has no character↔lorebook
-/// linkage yet, so all books are scanned; scoping arrives with lorebook CRUD
-/// cutover. The activation rules mirror the legacy retrieval
+/// Scoping (ADR-0047 waiver 2, character↔lorebook linkage): shared-library
+/// books (no `character_lorebooks` link) are scanned for every chat;
+/// character-bound books are scanned only for chats of that character. The
+/// activation rules mirror the legacy retrieval
 /// (`apps/server/src/lib/lorebookRetrieval.ts`).
-fn retrieve_lorebook_blocks(db: &Database, context_text: &str) -> Vec<PromptBlock> {
-    let mut stmt = match db
-        .conn()
-        .prepare("SELECT entries_json FROM lorebooks ORDER BY created_at DESC, id DESC")
-    {
+fn retrieve_lorebook_blocks(db: &Database, chat_id: &str, context_text: &str) -> Vec<PromptBlock> {
+    let mut stmt = match db.conn().prepare(
+        "SELECT l.entries_json FROM lorebooks l \
+         JOIN chats ch ON ch.id = ?1 \
+         WHERE NOT EXISTS (SELECT 1 FROM character_lorebooks cl WHERE cl.lorebook_id = l.id) \
+            OR EXISTS (SELECT 1 FROM character_lorebooks cl \
+                       WHERE cl.lorebook_id = l.id AND cl.character_id = ch.character_id) \
+         ORDER BY l.created_at DESC, l.id DESC",
+    ) {
         Ok(stmt) => stmt,
         Err(_) => return Vec::new(),
     };
-    let rows = match stmt.query_map([], |row| row.get::<_, String>(0)) {
+    let rows = match stmt.query_map(params![chat_id], |row| row.get::<_, String>(0)) {
         Ok(rows) => rows,
         Err(_) => return Vec::new(),
     };
@@ -493,7 +498,8 @@ pub fn build_prompt_plan(db: &Database, input: &PlanInput<'_>) -> Result<PromptP
         .map(|(_, m)| m.content.as_str())
         .collect::<Vec<_>>()
         .join("\n");
-    let lorebook_blocks = retrieve_lorebook_blocks(db, &format!("{}\n{tail}", input.message));
+    let lorebook_blocks =
+        retrieve_lorebook_blocks(db, &input.chat_id, &format!("{}\n{tail}", input.message));
     // Memory/RAG (ТЗ §4.4, Этап 4 slice 3): keyword activation on the user
     // message + recent history tail, scoped to the chat's character. The
     // kernel has no FTS yet — retrieval is the documented `memory-keyword-v1`
@@ -742,6 +748,92 @@ mod tests {
         assert!(
             !plan2.system_blocks.iter().any(|b| b.source == "lorebook"),
             "no keyword → no lorebook block"
+        );
+    }
+
+    /// ADR-0047 waiver 2 scoping: a character-bound lorebook is retrieved
+    /// only for chats of that character; shared-library books (no link) are
+    /// scanned for every chat. The test chat belongs to the character
+    /// `33333333-...`; the bound book references it and a second chat of the
+    /// other character `55555555-...` must NOT see it.
+    #[test]
+    fn lorebook_character_scoping_in_prompt() {
+        let _temp = tempfile::tempdir().expect("tempdir");
+        let db = open_test_db(_temp.path());
+        db.conn()
+            .execute(
+                "INSERT INTO characters (id, name, description, avatar_asset_id, tags_json, ext_json, created_at, updated_at) \
+                 VALUES ('55555555-5555-4555-8555-555555555555', 'Brio', 'The other guide.', NULL, '[]', '{}', \
+                 '2026-08-13T00:00:00Z', '2026-08-13T00:00:00Z')",
+                [],
+            )
+            .expect("second character insert");
+        db.conn()
+            .execute(
+                "INSERT INTO lorebooks (id, name, description, entries_json, created_at, updated_at) \
+                 VALUES ('44444444-4444-4444-8444-444444444444', 'aria-notes', NULL, \
+                 '[{\"keys\":[\"crystal\"],\"content\":\"Aria''s crystal hums.\",\"enabled\":true}]', '2026-08-13T00:00:00Z', '2026-08-13T00:00:00Z')",
+                [],
+            )
+            .expect("bound lorebook insert");
+        db.conn()
+            .execute(
+                "INSERT INTO character_lorebooks (character_id, lorebook_id) VALUES \
+                 ('33333333-3333-4333-8333-333333333333', '44444444-4444-4444-8444-444444444444')",
+                [],
+            )
+            .expect("character link insert");
+        db.conn()
+            .execute(
+                "INSERT INTO chats (id, title, character_id, created_at, updated_at) \
+                 VALUES ('66666666-6666-4666-8666-666666666666', 'other', \
+                 '55555555-5555-4555-8555-555555555555', '2026-08-13T00:00:00Z', '2026-08-13T00:00:00Z')",
+                [],
+            )
+            .expect("other chat insert");
+
+        // The bound book activates in the owning character's chat.
+        let owning = build_prompt_plan(&db, &plan_input("where is the crystal?", 8192))
+            .expect("plan for the owning chat");
+        assert!(
+            owning
+                .system_blocks
+                .iter()
+                .any(|b| b.source == "lorebook" && b.text.contains("Aria's crystal")),
+            "bound book must activate in the owning character's chat"
+        );
+
+        // A shared-library book (no link) is scanned for any chat.
+        db.conn()
+            .execute(
+                "INSERT INTO lorebooks (id, name, description, entries_json, created_at, updated_at) \
+                 VALUES ('77777777-7777-4777-8777-777777777777', 'world', NULL, \
+                 '[{\"keys\":[\"crystal\"],\"content\":\"The world crystal hums.\",\"enabled\":true}]', '2026-08-13T00:00:00Z', '2026-08-13T00:00:00Z')",
+                [],
+            )
+            .expect("shared lorebook insert");
+        let other_input = PlanInput {
+            run_id: "11111111-1111-4111-8111-111111111111".to_string(),
+            chat_id: "66666666-6666-4666-8666-666666666666".to_string(),
+            message: "where is the crystal?",
+            provider: "fake",
+            model: "fake-1",
+            context_limit: 8192,
+            response_reserved: 0,
+        };
+        let other = build_prompt_plan(&db, &other_input).expect("plan for the other chat");
+        let blocks = &other.system_blocks;
+        assert!(
+            blocks
+                .iter()
+                .any(|b| b.source == "lorebook" && b.text.contains("world crystal")),
+            "shared book must activate in every chat"
+        );
+        assert!(
+            !blocks
+                .iter()
+                .any(|b| b.source == "lorebook" && b.text.contains("Aria's crystal")),
+            "bound book must NOT activate in another character's chat"
         );
     }
 

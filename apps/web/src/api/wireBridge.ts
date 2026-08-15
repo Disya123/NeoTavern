@@ -203,9 +203,9 @@ export function translateLorebook(dto: LorebookDto): Lorebook {
     id: dto.id,
     name: dto.name,
     description: dto.description ?? '',
-    // Character↔lorebook linkage is not modelled by the kernel yet (Этап 4);
-    // a global book renders neutrally.
-    characterId: null,
+    // Character↔lorebook linkage (ADR-0047 waiver 2): a bound book renders
+    // with its owner; a shared-library book renders neutral.
+    characterId: dto.characterId ?? null,
     metadata: {},
     createdAt: toEpochMs(dto.createdAt),
     updatedAt: toEpochMs(dto.updatedAt),
@@ -719,7 +719,10 @@ export async function saveMessageDraft(input: MessageDraftSaveInput): Promise<Me
   }
   const { chatId, draftId, role, content, sequence } = input;
   if (draftId === undefined) {
-    return api.post<MessageDraft>(`/chats/${chatId}/drafts`, { role, ...(content ? { content } : {}) });
+    return api.post<MessageDraft>(`/chats/${chatId}/drafts`, {
+      role,
+      ...(content ? { content } : {}),
+    });
   }
   return api.patch<MessageDraft>(`/chats/${chatId}/drafts/${draftId}`, { content, sequence });
 }
@@ -760,13 +763,13 @@ export async function readLorebooks(
   query: { characterId?: string; limit?: number } = {},
 ): Promise<CursorPage<Lorebook>> {
   if (isKernelMode()) {
-    // Character↔lorebook linkage is not modelled by the kernel yet — the
-    // scoped catalog is an honest CAPABILITY_UNAVAILABLE, not a silent
-    // filter drop. Limit is a hint the kernel list ignores (plain list).
-    if (query.characterId !== undefined) {
-      throw new UnsupportedError('lorebooks.list.characterId');
-    }
-    const result = await backend.lorebooks.list();
+    // Character↔lorebook scoping (ADR-0047 waiver 2): the kernel filters the
+    // list by the character-bound `character_lorebooks` link when requested;
+    // absent characterId lists the whole shared library. Limit is a hint the
+    // kernel list ignores (plain list).
+    const result = await backend.lorebooks.list(
+      query.characterId !== undefined ? { characterId: query.characterId } : {},
+    );
     return {
       items: result.items.map(translateLorebook),
       nextCursor: null,
@@ -792,12 +795,13 @@ export async function readLorebook(id: string): Promise<Lorebook> {
 /** Create a lorebook (optionally with entries). */
 export async function createLorebook(input: LorebookCreate): Promise<Lorebook> {
   if (isKernelMode()) {
-    // Character linkage and rich entry fields (position/metadata) are not
-    // wire operations yet — honest CAPABILITY_UNAVAILABLE.
-    if (input.characterId) throw new UnsupportedError('lorebooks.create.characterId');
+    // Rich entry fields (position/metadata) are not wire operations yet —
+    // honest CAPABILITY_UNAVAILABLE. Character linkage is a wire operation
+    // (character↔lorebook scoping, ADR-0047 waiver 2).
     const created = await backend.lorebooks.create({
       name: input.name,
       ...(input.description !== undefined ? { description: input.description } : {}),
+      ...(input.characterId != null ? { characterId: input.characterId } : {}),
       ...(input.entries !== undefined && input.entries.length > 0
         ? { entries: input.entries.map((entry) => entryWireInput(entry)) }
         : {}),
@@ -810,12 +814,13 @@ export async function createLorebook(input: LorebookCreate): Promise<Lorebook> {
 /** Update a lorebook (name/description/entries). */
 export async function updateLorebook(id: string, update: LorebookUpdate): Promise<Lorebook> {
   if (isKernelMode()) {
-    if (update.characterId !== undefined)
-      throw new UnsupportedError('lorebooks.update.characterId');
+    // Character linkage moves/creates the character↔lorebook link (ADR-0047
+    // waiver 2); rich entry fields (position/metadata) stay CAPABILITY_UNAVAILABLE.
     const updated = await backend.lorebooks.update({
       lorebookId: id,
       ...(update.name !== undefined ? { name: update.name } : {}),
       ...(update.description !== undefined ? { description: update.description } : {}),
+      ...(update.characterId != null ? { characterId: update.characterId } : {}),
     });
     return translateLorebook(updated);
   }

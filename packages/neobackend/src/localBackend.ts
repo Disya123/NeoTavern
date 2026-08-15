@@ -317,7 +317,7 @@ export class LocalBackend implements NeoBackend {
       list: () => this.invoke<ListBackupsResultDto>('backups.list', {}, undefined),
     };
     this.lorebooks = {
-      list: () => this.invoke<ListLorebooksResultDto>('lorebooks.list', {}, undefined),
+      list: (req, opts) => this.invoke<ListLorebooksResultDto>('lorebooks.list', req ?? {}, opts),
       get: (lorebookId, opts) => this.invoke<LorebookDto>('lorebooks.get', { lorebookId }, opts),
       create: (req, opts) => this.invoke<LorebookDto>('lorebooks.create', req, opts),
       update: (req, opts) => this.invoke<LorebookDto>('lorebooks.update', req, opts),

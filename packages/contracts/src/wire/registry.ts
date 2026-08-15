@@ -1229,7 +1229,7 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     'idempotent',
     'safe',
     'app.read',
-    'wire.request.empty',
+    'wire.request.list-lorebooks',
     'wire.result.list-lorebooks',
     undefined,
     ['INTERNAL', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
@@ -1668,6 +1668,7 @@ const LOREBOOK_VALUE = {
   name: 'World lore',
   description: 'Setting notes',
   entryCount: 12,
+  characterId: UUID_CHARACTER,
   createdAt: TIMESTAMP,
   updatedAt: TIMESTAMP,
 };
@@ -1970,6 +1971,7 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('lorebooks-create-request', 'lorebooks.create', 'request', true, {
     name: 'World lore',
     description: 'Shared world facts',
+    characterId: UUID_CHARACTER,
     entries: [
       {
         keys: ['castle', 'fortress'],
@@ -2094,7 +2096,7 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   }),
   fx('backups-create-request', 'backups.create', 'request', true, {}),
   fx('backups-list-request', 'backups.list', 'request', true, {}),
-  fx('lorebooks-list-request', 'lorebooks.list', 'request', true, {}),
+  fx('lorebooks-list-request', 'lorebooks.list', 'request', true, { characterId: UUID_CHARACTER }),
   fx('presets-list-request', 'presets.list', 'request', true, { kind: 'generation' }),
   fx('presets-get-request', 'presets.get', 'request', true, { presetId: UUID_PRESET }),
   fx('presets-create-request', 'presets.create', 'request', true, {

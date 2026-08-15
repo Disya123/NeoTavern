@@ -393,7 +393,10 @@ pub(crate) fn row_to_message(row: &rusqlite::Row) -> Result<MessageDto, KernelEr
 }
 
 /// Renders a `lorebooks` row (with `entry_count` from
-/// `json_array_length(entries_json)`) as the wire [`LorebookDto`].
+/// `json_array_length(entries_json)`) as the wire [`LorebookDto`]. The
+/// optional `character_id` (column 6, from the `character_lorebooks` link —
+/// `NULL` for shared-library books) binds the book to one character
+/// (character↔lorebook scoping, ADR-0047 waiver 2).
 fn row_to_lorebook(row: &rusqlite::Row) -> Result<LorebookDto, KernelError> {
     Ok(LorebookDto {
         id: row.get(0).map_err(|e| sqlite(e, "lorebooks: read id"))?,
@@ -404,6 +407,9 @@ fn row_to_lorebook(row: &rusqlite::Row) -> Result<LorebookDto, KernelError> {
         entry_count: row
             .get(3)
             .map_err(|e| sqlite(e, "lorebooks: read entry_count"))?,
+        character_id: row
+            .get(6)
+            .map_err(|e| sqlite(e, "lorebooks: read character_id"))?,
         created_at: row
             .get(4)
             .map_err(|e| sqlite(e, "lorebooks: read created_at"))?,
@@ -412,6 +418,14 @@ fn row_to_lorebook(row: &rusqlite::Row) -> Result<LorebookDto, KernelError> {
             .map_err(|e| sqlite(e, "lorebooks: read updated_at"))?,
     })
 }
+
+/// Column list shared by every lorebook SELECT: the six `lorebooks` columns
+/// plus the optional `character_lorebooks.character_id` subquery (column 6).
+const LOREBOOK_SELECT: &str = "SELECT l.id, l.name, l.description, \
+     json_array_length(l.entries_json), l.created_at, l.updated_at, \
+     (SELECT cl.character_id FROM character_lorebooks cl \
+      WHERE cl.lorebook_id = l.id LIMIT 1) AS character_id \
+     FROM lorebooks l";
 
 /// Renders a `presets` row (kind + `settings_json` as the wire `data`) as the
 /// wire [`PresetDto`].
@@ -1667,22 +1681,36 @@ pub fn message_drafts_discard(db: &mut Database, request: &[u8]) -> Result<Vec<u
     encode(&dto)
 }
 
-/// `lorebooks.list` — all lorebooks (plain list per the wire contract),
-/// newest first, each with its entry count.
+/// `lorebooks.list` — the lorebooks, newest first, each with its entry count.
+/// Optional `characterId` filters to the books bound to one character
+/// (character↔lorebook scoping, ADR-0047 waiver 2); absent lists the whole
+/// shared library.
 pub fn lorebooks_list(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
-    generated::decode_empty_request_dto(request)?;
+    let req = generated::decode_request_list_lorebooks(request)?;
     let mut items: Vec<LorebookDto> = Vec::new();
     {
         let conn = db.conn();
-        let mut stmt = conn
-            .prepare(
-                "SELECT id, name, description, json_array_length(entries_json), created_at, updated_at \
-                 FROM lorebooks ORDER BY created_at DESC, id DESC",
-            )
-            .map_err(|e| sqlite(e, "lorebooks_list: prepare"))?;
-        let mut rows = stmt
-            .query([])
-            .map_err(|e| sqlite(e, "lorebooks_list: query"))?;
+        let mut stmt = match &req.character_id {
+            Some(_) => conn
+                .prepare(&format!(
+                    "{LOREBOOK_SELECT} JOIN character_lorebooks cl ON cl.lorebook_id = l.id \
+                         WHERE cl.character_id = ?1 ORDER BY l.created_at DESC, l.id DESC"
+                ))
+                .map_err(|e| sqlite(e, "lorebooks_list: prepare"))?,
+            None => conn
+                .prepare(&format!(
+                    "{LOREBOOK_SELECT} ORDER BY l.created_at DESC, l.id DESC"
+                ))
+                .map_err(|e| sqlite(e, "lorebooks_list: prepare"))?,
+        };
+        let mut rows = match &req.character_id {
+            Some(character_id) => stmt
+                .query(params![character_id])
+                .map_err(|e| sqlite(e, "lorebooks_list: query"))?,
+            None => stmt
+                .query([])
+                .map_err(|e| sqlite(e, "lorebooks_list: query"))?,
+        };
         while let Some(row) = rows
             .next()
             .map_err(|e| sqlite(e, "lorebooks_list: read row"))?
@@ -1701,10 +1729,7 @@ fn query_lorebook(
     id: &str,
 ) -> Result<Option<LorebookDto>, KernelError> {
     let mut stmt = conn
-        .prepare(
-            "SELECT id, name, description, json_array_length(entries_json), created_at, updated_at \
-             FROM lorebooks WHERE id = ?1",
-        )
+        .prepare(&format!("{LOREBOOK_SELECT} WHERE l.id = ?1"))
         .map_err(|e| sqlite(e, "lorebooks_get: prepare"))?;
     let mut rows = stmt
         .query([id])
@@ -1745,12 +1770,20 @@ pub fn lorebooks_get(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Kerne
 }
 
 /// `lorebooks.create` — insert a new lorebook (with optional entries) and
-/// return it.
+/// return it. Optional `characterId` binds the book to one character
+/// (character↔lorebook scoping, ADR-0047 waiver 2); an unknown character is
+/// rejected (`CHARACTER_NOT_FOUND`).
 pub fn lorebooks_create(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
     let req = generated::decode_request_create_lorebook(request)?;
     let id = new_id();
     let now = now();
     let entries = entries_json(req.entries.as_deref().unwrap_or(&[]))?;
+    if let Some(character_id) = &req.character_id {
+        let exists = character_exists(db.conn(), character_id)?;
+        if !exists {
+            return Err(not_found("CHARACTER", character_id));
+        }
+    }
     db.transaction(|tx| {
         tx.execute(
             "INSERT INTO lorebooks (id, name, description, entries_json, created_at, updated_at) \
@@ -1758,6 +1791,13 @@ pub fn lorebooks_create(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Ke
             params![&id, &req.name, &req.description, &entries, &now, &now],
         )
         .map_err(|e| StorageError::from_sqlite(e, "lorebooks_create: insert"))?;
+        if let Some(character_id) = &req.character_id {
+            tx.execute(
+                "INSERT INTO character_lorebooks (character_id, lorebook_id) VALUES (?1, ?2)",
+                params![character_id, &id],
+            )
+            .map_err(|e| StorageError::from_sqlite(e, "lorebooks_create: link insert"))?;
+        }
         Ok(())
     })?;
     let dto = query_lorebook(db.conn(), &id)?.ok_or_else(|| {
@@ -1771,7 +1811,9 @@ pub fn lorebooks_create(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Ke
 }
 
 /// `lorebooks.update` — update the provided fields (name, description,
-/// entries); missing lorebook → `LOREBOOK_NOT_FOUND`.
+/// entries); missing lorebook → `LOREBOOK_NOT_FOUND`. Optional `characterId`
+/// moves/creates the character↔lorebook link (unknown character →
+/// `CHARACTER_NOT_FOUND`).
 pub fn lorebooks_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
     let req = generated::decode_request_update_lorebook(request)?;
     let id = req.lorebook_id.clone();
@@ -1780,6 +1822,12 @@ pub fn lorebooks_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Ke
         Some(entries) => Some(entries_json(entries)?),
         None => None,
     };
+    if let Some(character_id) = &req.character_id {
+        let exists = character_exists(db.conn(), character_id)?;
+        if !exists {
+            return Err(not_found("CHARACTER", character_id));
+        }
+    }
     let changed = db.transaction(|tx| {
         let mut sets: Vec<&str> = Vec::new();
         let mut values: Vec<Value> = Vec::new();
@@ -1799,8 +1847,18 @@ pub fn lorebooks_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Ke
         values.push(Value::Text(now.clone()));
         let sql = format!("UPDATE lorebooks SET {} WHERE id = ?", sets.join(", "));
         values.push(Value::Text(id.clone()));
-        tx.execute(&sql, params_from_iter(values))
-            .map_err(|e| StorageError::from_sqlite(e, "lorebooks_update: update"))
+        let changed = tx
+            .execute(&sql, params_from_iter(values))
+            .map_err(|e| StorageError::from_sqlite(e, "lorebooks_update: update"))?;
+        if let Some(character_id) = &req.character_id {
+            tx.execute(
+                "INSERT INTO character_lorebooks (character_id, lorebook_id) VALUES (?1, ?2) \
+                 ON CONFLICT(lorebook_id) DO UPDATE SET character_id = excluded.character_id",
+                params![character_id, &id],
+            )
+            .map_err(|e| StorageError::from_sqlite(e, "lorebooks_update: link upsert"))?;
+        }
+        Ok(changed)
     })?;
     if changed == 0 {
         return Err(not_found("LOREBOOK", &id));

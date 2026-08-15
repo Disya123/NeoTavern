@@ -416,6 +416,26 @@ CREATE INDEX idx_characters_profile_id ON characters(profile_id);"#
     };
 }
 
+/// Literal body of the character-lorebook scoping (v16) schema migration —
+/// the `migration_16_sql!()` literal. Adds the STRICT `character_lorebooks`
+/// link table (ТЗ §8.1 Library context, ADR-0047 waiver 2): one optional
+/// character per lorebook, so a book is either part of the shared library
+/// (no link row) or bound to exactly one character. The unique index on
+/// `lorebook_id` enforces one-owner-per-book (a book cannot be shared and
+/// character-bound at once), and the composite PK + `character_id` index back
+/// the scoped list/retrieval filters.
+macro_rules! migration_16_sql {
+    () => {
+        r#"CREATE TABLE character_lorebooks (
+    character_id TEXT NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+    lorebook_id TEXT NOT NULL REFERENCES lorebooks(id) ON DELETE CASCADE,
+    PRIMARY KEY (lorebook_id, character_id),
+    UNIQUE (lorebook_id)
+) STRICT;
+CREATE INDEX idx_character_lorebooks_character_id ON character_lorebooks(character_id);"#
+    };
+}
+
 /// Name of the initial (v1) schema migration.
 pub const MIGRATION_1_NAME: &str = "001_initial_schema";
 
@@ -661,6 +681,22 @@ pub const MIGRATION_15_SQL: &str = migration_15_sql!();
 pub const MIGRATION_15_CHECKSUM: &str =
     "6f7d896fcfb67e9c7036a58a448e67286af5b7b612d25e44f88d1c86ae9c37f2";
 
+/// Name of the character-lorebook scoping (v16) schema migration.
+pub const MIGRATION_16_NAME: &str = "016_character_lorebooks";
+
+/// Exact SQL of the character-lorebook scoping schema migration (v16) — the
+/// `migration_16_sql!()` literal. Adds the STRICT `character_lorebooks` link
+/// (ADR-0047 waiver 2).
+pub const MIGRATION_16_SQL: &str = migration_16_sql!();
+
+/// Lowercase sha256 hex of the `MIGRATION_16_SQL` string bytes.
+///
+/// Computed via node (`crypto.createHash('sha256')` over the exact literal
+/// bytes, no trailing newline) and asserted by the migration test suite
+/// against the ledger.
+pub const MIGRATION_16_CHECKSUM: &str =
+    "8f8309b986b3152b5e14207b2ade95e8a2d32d0f5922abf6af41a86a7d8c0778";
+
 /// A fresh install runs every migration in order, so `FRESH_SCHEMA_SQL` is the
 /// concatenation of all migration literals with a single newline between them
 /// (the same statement separator `execute_batch` applies).
@@ -697,7 +733,9 @@ pub const FRESH_SCHEMA_SQL: &str = concat!(
     "\n",
     migration_14_sql!(),
     "\n",
-    migration_15_sql!()
+    migration_15_sql!(),
+    "\n",
+    migration_16_sql!()
 );
 
 /// sha256 hex of the `FRESH_SCHEMA_SQL` bytes — the fresh-install fingerprint.

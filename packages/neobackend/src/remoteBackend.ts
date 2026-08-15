@@ -185,8 +185,10 @@ export class RemoteBackend implements NeoBackend {
   };
 
   readonly lorebooks: LorebooksApi = {
-    list: () => this.sdk.call<ListLorebooksResultDto>('lorebooks.list', {}),
-    get: (lorebookId) => this.sdk.call<LorebookDto>('lorebooks.get', { lorebookId }),
+    list: (req, opts) =>
+      this.sdk.call<ListLorebooksResultDto>('lorebooks.list', req ?? {}, { signal: opts?.signal }),
+    get: (lorebookId, opts) =>
+      this.sdk.call<LorebookDto>('lorebooks.get', { lorebookId }, { signal: opts?.signal }),
     create: (req) => this.sdk.call<LorebookDto>('lorebooks.create', req),
     update: (req) => this.sdk.call<LorebookDto>('lorebooks.update', req),
     del: (lorebookId) => this.sdk.call<EmptyResultDto>('lorebooks.delete', { lorebookId }),

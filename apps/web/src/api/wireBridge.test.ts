@@ -537,9 +537,7 @@ describe('readChat / createChat / updateChat / deleteChat (kernel)', () => {
       personaId: '0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f',
     });
     await expect(updateChat(CHAT_ID, { summary: 's' })).rejects.toBeInstanceOf(UnsupportedError);
-    await expect(updateChat(CHAT_ID, { personaId: null })).rejects.toBeInstanceOf(
-      UnsupportedError,
-    );
+    await expect(updateChat(CHAT_ID, { personaId: null })).rejects.toBeInstanceOf(UnsupportedError);
     await expect(updateChat(CHAT_ID, {})).rejects.toBeInstanceOf(UnsupportedError);
   });
 
@@ -727,7 +725,7 @@ describe('lorebook CRUD (kernel, Этап 4.1)', () => {
   it('lists lorebooks in one page and translates them', async () => {
     mocks.lorebooks.list.mockResolvedValue({ items: [WIRE_LOREBOOK] });
     const page = await readLorebooks();
-    expect(mocks.lorebooks.list).toHaveBeenCalledWith();
+    expect(mocks.lorebooks.list).toHaveBeenCalledWith({});
     expect(page).toEqual({
       items: [expect.objectContaining({ id: WIRE_LOREBOOK.id, name: 'Arcanum' })],
       nextCursor: null,
@@ -735,11 +733,11 @@ describe('lorebook CRUD (kernel, Этап 4.1)', () => {
     });
   });
 
-  it('rejects a character-scoped catalog honestly (linkage not modelled)', async () => {
-    await expect(readLorebooks({ characterId: CHAR_ID })).rejects.toBeInstanceOf(
-      UnsupportedError,
-    );
-    expect(mocks.lorebooks.list).not.toHaveBeenCalled();
+  it('forwards a character-scoped catalog to the kernel (ADR-0047 waiver 2)', async () => {
+    mocks.lorebooks.list.mockResolvedValue({ items: [WIRE_LOREBOOK] });
+    const page = await readLorebooks({ characterId: CHAR_ID });
+    expect(mocks.lorebooks.list).toHaveBeenCalledWith({ characterId: CHAR_ID });
+    expect(page.items).toHaveLength(1);
   });
 
   it('gets one lorebook and translates it', async () => {
@@ -765,14 +763,16 @@ describe('lorebook CRUD (kernel, Этап 4.1)', () => {
     });
   });
 
-  it('rejects character-linked creation honestly', async () => {
-    await expect(createLorebook({ name: 'X', characterId: CHAR_ID })).rejects.toBeInstanceOf(
-      UnsupportedError,
-    );
-    expect(mocks.lorebooks.create).not.toHaveBeenCalled();
+  it('creates a lorebook bound to a character (ADR-0047 waiver 2)', async () => {
+    mocks.lorebooks.create.mockResolvedValue(WIRE_LOREBOOK);
+    await createLorebook({ name: 'X', characterId: CHAR_ID });
+    expect(mocks.lorebooks.create).toHaveBeenCalledWith({
+      name: 'X',
+      characterId: CHAR_ID,
+    });
   });
 
-  it('updates name/description and rejects character linkage', async () => {
+  it('updates name/description and forwards a character link move', async () => {
     mocks.lorebooks.update.mockResolvedValue(WIRE_LOREBOOK);
     await updateLorebook(WIRE_LOREBOOK.id, { name: 'Renamed', description: 'd' });
     expect(mocks.lorebooks.update).toHaveBeenCalledWith({
@@ -780,9 +780,11 @@ describe('lorebook CRUD (kernel, Этап 4.1)', () => {
       name: 'Renamed',
       description: 'd',
     });
-    await expect(
-      updateLorebook(WIRE_LOREBOOK.id, { characterId: CHAR_ID }),
-    ).rejects.toBeInstanceOf(UnsupportedError);
+    await updateLorebook(WIRE_LOREBOOK.id, { characterId: CHAR_ID });
+    expect(mocks.lorebooks.update).toHaveBeenCalledWith({
+      lorebookId: WIRE_LOREBOOK.id,
+      characterId: CHAR_ID,
+    });
   });
 
   it('deletes a lorebook through the facade', async () => {
@@ -944,9 +946,9 @@ describe('memory CRUD (kernel, Этап 4 slice 3)', () => {
       createdAt: NOW_MS,
       updatedAt: NOW_MS,
     });
-    expect(
-      translateMemory({ ...WIRE_MEMORY, scope: 'global', characterId: undefined }),
-    ).toEqual(expect.objectContaining({ scope: 'global', characterId: null }));
+    expect(translateMemory({ ...WIRE_MEMORY, scope: 'global', characterId: undefined })).toEqual(
+      expect.objectContaining({ scope: 'global', characterId: null }),
+    );
   });
 
   it('lists memories with filters through the facade', async () => {

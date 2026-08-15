@@ -48,6 +48,7 @@ import type {
   ListLorebookEntriesResultDto,
   ListLorebooksResultDto,
   ListMemoriesRequestDto,
+  ListLorebooksRequestDto,
   ListMemoriesResultDto,
   ListMessageRevisionsRequestDto,
   ListMessageRevisionsResultDto,
@@ -239,8 +240,9 @@ export interface BackupsApi {
 
 /** Lorebook domain operations (wire `lorebooks.*`). */
 export interface LorebooksApi {
-  /** List lorebooks. */
-  list(): Promise<ListLorebooksResultDto>;
+  /** List lorebooks; optional `characterId` filters to one character's books
+   * (character↔lorebook scoping, ADR-0047 waiver 2). */
+  list(req?: ListLorebooksRequestDto, opts?: BackendCallOptions): Promise<ListLorebooksResultDto>;
   /** Fetch one lorebook. */
   get(lorebookId: string, opts?: BackendCallOptions): Promise<LorebookDto>;
   /** Create a lorebook (optionally with entries). */

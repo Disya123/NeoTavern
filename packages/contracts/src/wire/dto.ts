@@ -156,13 +156,17 @@ export const BackupDtoSchema = Type.Object(
 );
 export type BackupDto = Static<typeof BackupDtoSchema>;
 
-/** Lorebook DTO (`wire.lorebook.dto`). */
+/** Lorebook DTO (`wire.lorebook.dto`). `characterId` (optional) binds the
+ * book to one character (legacy `character_lorebooks` link, ТЗ §8.1 Library
+ * context, ADR-0047 waiver 2): absent means a shared-library book scanned
+ * for every chat; present means the book belongs to that character only. */
 export const LorebookDtoSchema = Type.Object(
   {
     id: Type.String({ format: 'uuid' }),
     name: Type.String({ minLength: 1, maxLength: 200 }),
     description: Type.Optional(Type.String({ minLength: 0, maxLength: 10000 })),
     entryCount: Type.Integer({ minimum: 0 }),
+    characterId: Type.Optional(Type.String({ format: 'uuid' })),
     createdAt: Type.String({ format: 'rfc3339' }),
     updatedAt: Type.String({ format: 'rfc3339' }),
   },
@@ -544,24 +548,30 @@ export const GetLorebookRequestDtoSchema = Type.Object(
 );
 export type GetLorebookRequestDto = Static<typeof GetLorebookRequestDtoSchema>;
 
-/** Create lorebook request DTO (`wire.request.create-lorebook`). */
+/** Create lorebook request DTO (`wire.request.create-lorebook`). Optional
+ * `characterId` binds the new book to one character (character↔lorebook
+ * scoping, ADR-0047 waiver 2); the kernel validates the character exists. */
 export const CreateLorebookRequestDtoSchema = Type.Object(
   {
     name: Type.String({ minLength: 1, maxLength: 200 }),
     description: Type.Optional(Type.String({ minLength: 0, maxLength: 10000 })),
     entries: Type.Optional(Type.Array(LorebookEntryInputSchema, { maxItems: 1000 })),
+    characterId: Type.Optional(Type.String({ format: 'uuid' })),
   },
   { $id: 'wire.request.create-lorebook', additionalProperties: false },
 );
 export type CreateLorebookRequestDto = Static<typeof CreateLorebookRequestDtoSchema>;
 
-/** Update lorebook request DTO (`wire.request.update-lorebook`). */
+/** Update lorebook request DTO (`wire.request.update-lorebook`). Optional
+ * `characterId` moves/creates the character↔lorebook link (`null` is not
+ * expressible yet — clearing the scope is a follow-up wire extension). */
 export const UpdateLorebookRequestDtoSchema = Type.Object(
   {
     lorebookId: Type.String({ format: 'uuid' }),
     name: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
     description: Type.Optional(Type.String({ minLength: 0, maxLength: 10000 })),
     entries: Type.Optional(Type.Array(LorebookEntryInputSchema, { maxItems: 1000 })),
+    characterId: Type.Optional(Type.String({ format: 'uuid' })),
   },
   { $id: 'wire.request.update-lorebook', additionalProperties: false },
 );
@@ -1341,6 +1351,18 @@ export const ListBackupsResultDtoSchema = Type.Object(
 );
 export type ListBackupsResultDto = Static<typeof ListBackupsResultDtoSchema>;
 
+/** List lorebooks request DTO (`wire.request.list-lorebooks`). Optional
+ * `characterId` filters to the books bound to one character
+ * (character↔lorebook scoping, ADR-0047 waiver 2); absent means all books
+ * (the shared library). */
+export const ListLorebooksRequestDtoSchema = Type.Object(
+  {
+    characterId: Type.Optional(Type.String({ format: 'uuid' })),
+  },
+  { $id: 'wire.request.list-lorebooks', additionalProperties: false },
+);
+export type ListLorebooksRequestDto = Static<typeof ListLorebooksRequestDtoSchema>;
+
 /** List lorebooks result DTO (`wire.result.list-lorebooks`). */
 export const ListLorebooksResultDtoSchema = Type.Object(
   {
@@ -2100,6 +2122,7 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.request.update-character': UpdateCharacterRequestDtoSchema,
   'wire.request.delete-character': DeleteCharacterRequestDtoSchema,
   'wire.request.get-lorebook': GetLorebookRequestDtoSchema,
+  'wire.request.list-lorebooks': ListLorebooksRequestDtoSchema,
   'wire.request.create-lorebook': CreateLorebookRequestDtoSchema,
   'wire.request.update-lorebook': UpdateLorebookRequestDtoSchema,
   'wire.request.delete-lorebook': DeleteLorebookRequestDtoSchema,

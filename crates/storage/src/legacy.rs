@@ -161,7 +161,7 @@ fn convert(legacy: &Connection, tx: &rusqlite::Transaction) -> Result<Conversion
     convert_message_variants(legacy, tx, &message_ids, &mut report)?;
     convert_content_revisions(legacy, tx, &message_ids, &mut report)?;
     convert_message_drafts(legacy, tx, &chat_ids, &message_ids, &mut report)?;
-    convert_lorebooks(legacy, tx, &mut report)?;
+    convert_lorebooks(legacy, tx, &character_ids, &mut report)?;
     convert_presets(legacy, tx, &mut report)?;
     convert_memories(legacy, tx, &mut report)?;
     Ok(report)
@@ -838,6 +838,7 @@ fn convert_message_drafts(
 fn convert_lorebooks(
     legacy: &Connection,
     tx: &rusqlite::Transaction,
+    character_ids: &HashSet<String>,
     report: &mut ConversionReport,
 ) -> Result<()> {
     let cols = column_names(legacy, "lorebooks")?;
@@ -846,10 +847,11 @@ fn convert_lorebooks(
         "lorebooks",
         &["id", "name", "created_at", "updated_at"],
     )?;
-    let selected = select_columns(
-        &cols,
-        &["id", "name", "description", "created_at", "updated_at"],
-    );
+    let has_metadata = cols.iter().any(|c| c == "metadata");
+    let mut selected = vec!["id", "name", "description", "created_at", "updated_at"];
+    if has_metadata {
+        selected.push("metadata");
+    }
     let sql = format!(
         "SELECT {} FROM lorebooks ORDER BY id",
         quote_columns(&selected)
@@ -863,7 +865,7 @@ fn convert_lorebooks(
 
     // Book rows are collected first so entries referencing a book that does
     // not survive the conversion can be reported as orphans.
-    let mut books: Vec<(String, String, String, String, String)> = Vec::new();
+    let mut books: Vec<(String, String, String, String, String, serde_json::Value)> = Vec::new();
     while let Some(row) = rows
         .next()
         .map_err(|e| StorageError::from_sqlite(e, "legacy: read lorebooks"))?
@@ -886,12 +888,18 @@ fn convert_lorebooks(
             skip(report, &format!("lorebook {id}: invalid updated_at"));
             continue;
         };
+        let metadata = if has_metadata {
+            parse_json(get("metadata"))
+        } else {
+            serde_json::Value::Null
+        };
         books.push((
             id.to_string(),
             name.to_string(),
             as_text(get("description")).unwrap_or("").to_string(),
             created_at,
             updated_at,
+            metadata,
         ));
     }
 
@@ -910,7 +918,7 @@ fn convert_lorebooks(
         }
     }
 
-    for (id, name, description, created_at, updated_at) in &books {
+    for (id, name, description, created_at, updated_at, metadata) in &books {
         let entries = entries_by_book.get(id).cloned().unwrap_or_default();
         tx.execute(
             "INSERT INTO lorebooks (id, name, description, entries_json, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
@@ -925,6 +933,29 @@ fn convert_lorebooks(
         )
         .map_err(|e| StorageError::from_sqlite(e, "legacy: insert lorebook"))?;
         report.lorebooks += 1;
+
+        // Character↔lorebook scoping (ADR-0047 waiver 2): the legacy plane
+        // records the owner as `lorebooks.metadata.characterId` (Drizzle
+        // `json_extract(metadata, '$.characterId')`); convert it into the
+        // canonical `character_lorebooks` link. A link to a character that
+        // did not survive the conversion is reported as an orphan and the
+        // book stays in the shared library (no silent data loss).
+        let character_id = metadata.get("characterId").and_then(|v| v.as_str());
+        if let Some(character_id) = character_id {
+            if character_ids.contains(character_id) {
+                tx.execute(
+                    "INSERT INTO character_lorebooks (character_id, lorebook_id) VALUES (?1, ?2)",
+                    rusqlite::params![character_id, id],
+                )
+                .map_err(|e| {
+                    StorageError::from_sqlite(e, "legacy: insert character_lorebooks link")
+                })?;
+            } else {
+                report.orphans.push(format!(
+                    "lorebook {id} references missing character {character_id}"
+                ));
+            }
+        }
     }
     Ok(())
 }

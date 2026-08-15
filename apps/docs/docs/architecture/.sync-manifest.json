@@ -215,7 +215,7 @@
     {
       "source": "adr/0047-m4-limited-waivers.md",
       "target": "adr/0047-m4-limited-waivers.md",
-      "sha256": "2dea47bfbed152d1062c92df8d73560e6adf4fed3e7bfeeb958b551d63fd5103"
+      "sha256": "8cb6515755b3a2f1e894130a1d5e0c212120052a792bf03a842f6387e41569ec"
     },
     {
       "source": "adr/0048-m5-slice2-route-removal.md",
@@ -300,7 +300,7 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "f087d7b6c521c9f5fcb4b1fe45b1d9f9de9f357a2111287acc8bc50f5be861f1"
+      "sha256": "896f529c7388ed7a62d07a80dd4435d376b8aeeef7072c338e68220d39d0263b"
     },
     {
       "source": "data/README.md",

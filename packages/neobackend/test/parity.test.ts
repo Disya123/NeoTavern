@@ -15,7 +15,9 @@ import {
   type GetAssetResultDto,
   type InstallPluginResultDto,
   type InstallThemeResultDto,
+  type ListLorebooksResultDto,
   type ListMemoriesResultDto,
+  type LorebookDto,
   type ListPluginsResultDto,
   type ListPresetsResultDto,
   type ListProfilesResultDto,
@@ -131,6 +133,17 @@ const MEMORY: MemoryDto = {
 };
 
 const MEMORY_LIST: ListMemoriesResultDto = { items: [MEMORY] };
+
+const LOREBOOK: LorebookDto = {
+  id: '4d5e6f70-8a9b-4c1d-9e2f-3a4b5c6d7e81',
+  name: 'World lore',
+  description: 'Shared world facts',
+  entryCount: 2,
+  characterId: CHARACTER.id,
+  createdAt: TIMESTAMP,
+  updatedAt: TIMESTAMP,
+};
+const LOREBOOK_LIST: ListLorebooksResultDto = { items: [LOREBOOK] };
 
 // --- M5 slice 6/7 canonical fixtures (wire fixture shapes from
 // `packages/contracts/src/wire/registry.ts`: PLUGIN_VALUE, THEME_VALUE,
@@ -462,6 +475,10 @@ class FakeKernelTransport implements LocalTransport {
         return { ok: true, value: DIAGNOSTICS };
       case 'secrets.status':
         return { ok: true, value: SECRETS_STATUS };
+      case 'lorebooks.list':
+        return { ok: true, value: LOREBOOK_LIST };
+      case 'lorebooks.create':
+        return { ok: true, value: LOREBOOK };
       case 'assets.get':
         return { ok: true, value: ASSET_GET };
       case 'assets.content':
@@ -584,6 +601,10 @@ function rpcResult(operationId: string | undefined): unknown {
       return DIAGNOSTICS;
     case 'secrets.status':
       return SECRETS_STATUS;
+    case 'lorebooks.list':
+      return LOREBOOK_LIST;
+    case 'lorebooks.create':
+      return LOREBOOK;
     case 'assets.get':
       return ASSET_GET;
     case 'assets.content':
@@ -1902,6 +1923,33 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
       backend.assets.put({ kind: 'avatar', filename: 'a.png', contentBase64: 'nope!' }),
     ).rejects.toThrow(ValidationError);
     expect(kernel.calls).toBe(0);
+  });
+
+  it('lorebooks.list with characterId and lorebooks.create forward the scoped request from both backends', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const scopedReq = { characterId: CHARACTER.id };
+    const [listLocal, listRemote] = await Promise.all([
+      local.lorebooks.list(scopedReq),
+      remote.lorebooks.list(scopedReq),
+    ]);
+    expect(listLocal).toEqual(listRemote);
+    expect(listLocal).toEqual(LOREBOOK_LIST);
+
+    const createReq = { name: 'World lore', characterId: CHARACTER.id };
+    const [createLocal, createRemote] = await Promise.all([
+      local.lorebooks.create(createReq),
+      remote.lorebooks.create(createReq),
+    ]);
+    expect(createLocal).toEqual(createRemote);
+    expect(createLocal).toEqual(LOREBOOK);
+
+    expect(kernel.requests).toEqual([
+      { operationId: 'lorebooks.list', payload: scopedReq },
+      { operationId: 'lorebooks.create', payload: createReq },
+    ]);
   });
 
   it('profiles.rename with a non-uuid id throws ValidationError before any transport call', async () => {

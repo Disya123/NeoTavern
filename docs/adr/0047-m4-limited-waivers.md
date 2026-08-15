@@ -42,7 +42,11 @@ prohibitions of ТЗ §14.2.2 stay intact.
    legacy `character_lorebooks` link is not yet in the canonical schema;
    kernel-mode lorebooks are global. **Expiry:** release gate — the
    character-scope mapping is part of the full Library cutover before
-   Stable.
+   Stable. **Status: honored in M5 slice 6** — schema migration 016
+   `character_lorebooks` (STRICT link table, one optional owner per book),
+   `LorebookDto.characterId` + scoped `lorebooks.list`, create/update
+   binding with `CHARACTER_NOT_FOUND`, prompt retrieval scoped by the
+   chat's character (shared-library books stay global).
 
 3. **`chat.persona_id` linkage and prompt `{{user}}` injection from the
    personas table not wired.** Personas CRUD is delivered; the chat

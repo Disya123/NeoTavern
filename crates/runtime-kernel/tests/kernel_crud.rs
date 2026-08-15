@@ -873,6 +873,119 @@ fn lorebook_crud_round_trip() {
     assert_eq!(product.params["lorebookId"], json!(id));
 }
 
+/// M5 slice 6 (ADR-0047 waiver 2, ТЗ §8.1 Library context): the
+/// character↔lorebook scoping over the wire — create with `characterId`
+/// binds the book to one character, `lorebooks.list` filters by the link,
+/// get reports the owner, update moves the link, and an unknown character
+/// is rejected (`CHARACTER_NOT_FOUND`).
+#[test]
+fn lorebook_character_scoping() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel_with_root(root.path());
+
+    let char_a =
+        dispatch_decoded::<CharacterDto>(&kernel, "characters.create", json!({ "name": "Aria" }))
+            .expect("character A must be created");
+    let char_b =
+        dispatch_decoded::<CharacterDto>(&kernel, "characters.create", json!({ "name": "Brio" }))
+            .expect("character B must be created");
+
+    // A character-bound book and a shared-library book.
+    let scoped = dispatch_decoded::<LorebookDto>(
+        &kernel,
+        "lorebooks.create",
+        json!({
+            "name": "Aria's journal",
+            "characterId": char_a.id,
+            "entries": [{ "keys": ["aria"], "content": "Aria hums near the orchard." }]
+        }),
+    )
+    .expect("character-bound lorebook must be created");
+    assert_eq!(scoped.character_id.as_deref(), Some(char_a.id.as_str()));
+    let scoped_id = scoped.id.clone();
+
+    let shared = dispatch_decoded::<LorebookDto>(
+        &kernel,
+        "lorebooks.create",
+        json!({ "name": "World lore", "description": "Shared facts" }),
+    )
+    .expect("shared lorebook must be created");
+    assert_eq!(shared.character_id, None);
+    let shared_id = shared.id.clone();
+
+    // list with characterId → only the bound book; absent → the whole library.
+    let scoped_list = dispatch_decoded::<ResultListLorebooks>(
+        &kernel,
+        "lorebooks.list",
+        json!({ "characterId": char_a.id }),
+    )
+    .expect("scoped lorebooks.list must succeed");
+    assert_eq!(scoped_list.items.len(), 1);
+    assert_eq!(scoped_list.items[0].id, scoped_id);
+    assert_eq!(
+        scoped_list.items[0].character_id.as_deref(),
+        Some(char_a.id.as_str())
+    );
+
+    let scoped_b = dispatch_decoded::<ResultListLorebooks>(
+        &kernel,
+        "lorebooks.list",
+        json!({ "characterId": char_b.id }),
+    )
+    .expect("scoped lorebooks.list for B must succeed");
+    assert_eq!(scoped_b.items.len(), 0);
+
+    let all = dispatch_decoded::<ResultListLorebooks>(&kernel, "lorebooks.list", json!({}))
+        .expect("unscoped lorebooks.list must succeed");
+    assert_eq!(all.items.len(), 2);
+    assert!(all
+        .items
+        .iter()
+        .all(|b| b.character_id == scoped.character_id || b.id == shared_id));
+
+    // get reports the owner.
+    let fetched = dispatch_decoded::<LorebookDto>(
+        &kernel,
+        "lorebooks.get",
+        json!({ "lorebookId": scoped_id }),
+    )
+    .expect("lorebooks.get must succeed");
+    assert_eq!(fetched.character_id.as_deref(), Some(char_a.id.as_str()));
+
+    // update moves the link to another character.
+    let moved = dispatch_decoded::<LorebookDto>(
+        &kernel,
+        "lorebooks.update",
+        json!({ "lorebookId": scoped_id, "characterId": char_b.id }),
+    )
+    .expect("lorebooks.update moving the link must succeed");
+    assert_eq!(moved.character_id.as_deref(), Some(char_b.id.as_str()));
+
+    let moved_list = dispatch_decoded::<ResultListLorebooks>(
+        &kernel,
+        "lorebooks.list",
+        json!({ "characterId": char_b.id }),
+    )
+    .expect("scoped lorebooks.list for B after move must succeed");
+    assert_eq!(moved_list.items.len(), 1);
+    assert_eq!(moved_list.items[0].id, scoped_id);
+
+    // An unknown character is rejected with CHARACTER_NOT_FOUND.
+    let err = dispatch_json(
+        &kernel,
+        "lorebooks.create",
+        json!({ "name": "Ghost book", "characterId": "00000000-0000-4000-8000-000000000000" }),
+    )
+    .expect_err("create with an unknown character must fail");
+    assert_eq!(err.code, KernelErrorCode::NotFound);
+    let product = err.product.expect("product error must carry the wire dto");
+    assert_eq!(product.code, "CHARACTER_NOT_FOUND");
+    assert_eq!(
+        product.params["characterId"],
+        json!("00000000-0000-4000-8000-000000000000")
+    );
+}
+
 /// M4 slice 1: update/delete on a missing lorebook and contract violations
 /// answer the stable error codes.
 #[test]

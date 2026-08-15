@@ -36,6 +36,7 @@ use contracts_generated::generated::{
     decode_request_message_draft_save, decode_request_message_revisions_list,
     decode_request_message_variant_activate, decode_request_message_variant_create,
     decode_request_message_variant_delete, decode_request_message_variants_list,
+    decode_request_list_lorebooks,
     decode_request_retry_generation, decode_request_set_provider_config,
     decode_request_start_generation, decode_request_update_character, decode_request_update_chat,
     decode_request_update_lorebook, decode_request_update_lorebook_entry,
@@ -271,6 +272,9 @@ fn dispatch(schema_id: &str, bytes: &[u8], valid: bool) {
         "wire.result.empty" => corpus_case(schema_id, decode_result_empty, bytes, valid),
         "wire.result.list-backups" => {
             corpus_case(schema_id, decode_result_list_backups, bytes, valid)
+        }
+        "wire.request.list-lorebooks" => {
+            corpus_case(schema_id, decode_request_list_lorebooks, bytes, valid)
         }
         "wire.result.list-lorebooks" => {
             corpus_case(schema_id, decode_result_list_lorebooks, bytes, valid)
