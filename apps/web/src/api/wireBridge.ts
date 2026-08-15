@@ -131,6 +131,59 @@ export async function readAppVersion(): Promise<VersionResponse> {
   return api.get<VersionResponse>('/version');
 }
 
+/** Character card export format (PNG card or standalone JSON). */
+export type CharacterCardExportFormat = 'png' | 'json';
+
+/** Triggers a browser download of `url` through a temporary anchor. */
+function triggerDownload(url: string): void {
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = '';
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+}
+
+/**
+ * Export one character card (PNG/JSON). Kernel: no wire operation models the
+ * SillyTavern card container, so this is an honest CAPABILITY_UNAVAILABLE —
+ * the legacy download URL is served by the legacy contour only.
+ */
+export async function exportCharacterCard(
+  characterId: string,
+  format: CharacterCardExportFormat,
+): Promise<void> {
+  if (isKernelMode()) {
+    throw new UnsupportedError('characters.export.card');
+  }
+  // Legacy-only capability: the URL is served by the legacy contour, and
+  // wireBridge is the migration routing table (legacy branch lives here).
+  // eslint-disable-next-line @neotavern/no-legacy-api-surface
+  triggerDownload(`/api/v2/characters/${encodeURIComponent(characterId)}/export?format=${format}`);
+}
+
+/** Export one chat snapshot. Kernel: no wire operation models the container. */
+export async function exportChat(chatId: string): Promise<void> {
+  if (isKernelMode()) {
+    throw new UnsupportedError('chats.export');
+  }
+  // Legacy-only capability (see exportCharacterCard).
+  // eslint-disable-next-line @neotavern/no-legacy-api-surface
+  triggerDownload(`/api/v2/chats/${encodeURIComponent(chatId)}/export`);
+}
+
+/**
+ * Import a character card file (PNG/JSON). Kernel: card parsing is a
+ * host-side/legacy capability with no wire operation — honest refusal on the
+ * kernel plane; the legacy contour keeps the real import.
+ */
+export async function importCharacter(file: File): Promise<unknown> {
+  if (isKernelMode()) {
+    throw new UnsupportedError('characters.import');
+  }
+  return api.upload('/characters/import', file);
+}
+
 /**
  * Defaults mirrored from the legacy `SettingsRepository.DEFAULTS`
  * (`apps/server`): the wire store carries only saved keys, and the legacy

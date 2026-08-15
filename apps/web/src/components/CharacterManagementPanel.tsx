@@ -61,7 +61,7 @@ import {
   useUploadCharacterImage,
 } from '../api/hooks.js';
 import { useAvatarDataUrl } from '../api/avatarHooks.js';
-import { avatarOriginalUrl } from '../api/wireBridge.js';
+import { avatarOriginalUrl, exportCharacterCard } from '../api/wireBridge.js';
 import { renderMarkdownDocument } from '../lib/markdown.js';
 import { createCreatorNotesPreviewDocument } from '../lib/creatorNotes.js';
 import { SlotHost } from '../plugins/slots.js';
@@ -884,7 +884,7 @@ function EditTab({
         >
           <Star size={18} weight={draft.favorite ? 'fill' : 'regular'} aria-hidden="true" />
         </IconButton>
-        {characterId ? <ExportMenu characterId={characterId} /> : null}
+        {characterId ? <ExportMenu characterId={characterId} onError={onError} /> : null}
         <IconButton
           className={styles.iconButton}
           onClick={onDuplicate}
@@ -1248,8 +1248,17 @@ function MarkdownContent({ value }: { value: string }) {
    (ARCH-14): security-boundary code must be reviewable and unit-testable
    outside this component. */
 
-function ExportMenu({ characterId }: { characterId: string }) {
+function ExportMenu({
+  characterId,
+  onError,
+}: {
+  characterId: string;
+  onError: (error: unknown) => void;
+}) {
   const { t } = useTranslation();
+  const download = (format: 'png' | 'json'): void => {
+    exportCharacterCard(characterId, format).catch(onError);
+  };
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -1258,19 +1267,13 @@ function ExportMenu({ characterId }: { characterId: string }) {
         </IconButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem asChild>
-          {/* eslint-disable-next-line @neotavern/no-legacy-api-surface */}
-          <a href={`/api/v2/characters/${characterId}/export?format=png`}>
-            <strong>PNG</strong>
-            <small>{t('characters:exportPngHint')}</small>
-          </a>
+        <DropdownMenuItem onSelect={() => download('png')}>
+          <strong>PNG</strong>
+          <small>{t('characters:exportPngHint')}</small>
         </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          {/* eslint-disable-next-line @neotavern/no-legacy-api-surface */}
-          <a href={`/api/v2/characters/${characterId}/export?format=json`}>
-            <strong>JSON</strong>
-            <small>{t('characters:exportJsonHint')}</small>
-          </a>
+        <DropdownMenuItem onSelect={() => download('json')}>
+          <strong>JSON</strong>
+          <small>{t('characters:exportJsonHint')}</small>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

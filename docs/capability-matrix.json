@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-08-15T20:33:16.177Z",
+  "generatedAt": "2026-08-15T20:47:02.063Z",
   "rows": [
     {
       "hosts": {
@@ -362,6 +362,19 @@
       "notes": "M5 slice 7 (Этап 4.7, ТЗ §8.1 Configuration): canonical key → JSON-object settings store backed by the STRICT settings table (schema migration 11). settings.update is a transactional upsert returning the post-update snapshot; settings.get reads a key subset or the full snapshot. Secrets never live here — provider keys are in the SecretStore (ТЗ §9.4, SEC-01); the wire DTO carries object values only (scalar preferences wrapped at the UI boundary). Slice 7 part 2 (M5): the web transport maps the typed AppSettings projection onto the wire store — camelCase fields to wire-valid kebab keys (maxContextTokens -> max-context-tokens, extensions.legacyFrontend -> extensions.legacy-frontend), scalar preferences round-trip in { value: X } form, post-update snapshot contract preserved; settings.get wraps non-object stored values (legacy bare scalars) and the legacy converter normalizes camelCase settings keys to kebab form, so converted stores stay wire-readable. useSettings/useUpdateSettings (and the AutoConnectSync last-server/auto-connect writes) now route through the transport.",
       "title": "Non-secret settings (kernel)",
       "wireOps": ["settings.get", "settings.update"]
+    },
+    {
+      "hosts": {
+        "android": "Designed",
+        "desktop": "Designed",
+        "headless": "Designed",
+        "webClient": "Designed"
+      },
+      "id": "ui.card-exports",
+      "milestone": "M5",
+      "notes": "SillyTavern card containers (PNG/JSON card export, chat snapshot export, card import parsing) have no wire operation — the kernel plane refuses them honestly (M5 slice 8: exportCharacterCard/exportChat/importCharacter throw UnsupportedError on the kernel plane and keep the legacy download/upload on the legacy plane; useErrorText localizes the refusal via errors:UNSUPPORTED instead of INTERNAL). The legacy /api/v2/characters/:id/export, /api/v2/chats/:id/export and /characters/import routes stay the implemented surface until a canonical container/parse operation is specified (ТЗ §14.2 authority-non-expanding boundary).",
+      "title": "Character card / chat exports & character import (legacy containers)",
+      "wireOps": []
     },
     {
       "hosts": {

@@ -223,6 +223,9 @@ import {
   readAppVersion,
   readSettings,
   updateSettings,
+  exportCharacterCard,
+  exportChat,
+  importCharacter,
 } from './wireBridge.js';
 
 const CHAR_ID = '11111111-2222-4333-8444-555555555555';
@@ -1406,5 +1409,22 @@ describe('settings (wire settings.get/update)', () => {
     expect(mocks.settings.update).toHaveBeenCalledWith({
       settings: [{ key: 'extensions.legacy-frontend', value: { value: true } }],
     });
+  });
+});
+
+describe('imports/exports (kernel plane honest refusals)', () => {
+  it('refuses character card export on the kernel plane', async () => {
+    await expect(exportCharacterCard('c1', 'png')).rejects.toBeInstanceOf(UnsupportedError);
+    await expect(exportCharacterCard('c1', 'json')).rejects.toBeInstanceOf(UnsupportedError);
+  });
+
+  it('refuses chat export on the kernel plane', async () => {
+    await expect(exportChat('chat-1')).rejects.toBeInstanceOf(UnsupportedError);
+  });
+
+  it('refuses character import on the kernel plane', async () => {
+    await expect(importCharacter(new File(['x'], 'card.png'))).rejects.toBeInstanceOf(
+      UnsupportedError,
+    );
   });
 });

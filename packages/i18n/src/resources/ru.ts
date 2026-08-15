@@ -1383,6 +1383,7 @@ export const ru: Resources = {
   },
   errors: {
     INTERNAL: 'Что-то пошло не так. Попробуйте ещё раз.',
+    UNSUPPORTED: 'Эта функция недоступна в этой сборке ({{feature}}).',
     BAD_REQUEST: 'Некорректный запрос.',
     NOT_FOUND: 'Не найдено.',
     CONFLICT: 'Конфликт с существующими данными.',

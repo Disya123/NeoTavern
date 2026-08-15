@@ -3,6 +3,21 @@
 ## Unreleased
 ### Added
 
+- **Imports/exports report CAPABILITY_UNAVAILABLE honestly (M5 slice 8,
+  Этап 4 context 5 part).** `exportCharacterCard`/`exportChat`/`importCharacter`
+  in `wireBridge` route through the transport: on the legacy plane they keep
+  the download/upload behaviour (downloads now trigger programmatically), on
+  the kernel plane they throw `UnsupportedError` (card containers and card
+  parsing have no wire operation). `useErrorText` now localizes
+  `UnsupportedError` via the new `errors:UNSUPPORTED` string (en/ru) with the
+  feature name instead of degrading to INTERNAL — every honest refusal
+  (themes install, plugins install, imports/exports) is now user-visible.
+  `useImportCharacter` routes through the transport. ExportMenu and the chat
+  export menu item became buttons that surface the refusal. ui:api:check 63
+  sites (the two character-export sites moved into the wireBridge migration
+  routing table; the chat-export site is gone). Tests: wireBridge 90/90 (+3
+  refusals), useErrorText 2/2.
+
 - **Settings reach the kernel plane (M5 slice 7 part 2, Этап 4 context 7).**
   `readSettings`/`updateSettings` in `wireBridge` map the typed
   `AppSettings` projection onto the canonical wire `settings.get`/`update`

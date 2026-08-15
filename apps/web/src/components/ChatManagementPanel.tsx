@@ -36,6 +36,7 @@ import {
   useReorderChats,
   useUpdateChat,
 } from '../api/hooks.js';
+import { exportChat } from '../api/wireBridge.js';
 import { useErrorText } from '../lib/useErrorText.js';
 import { useUiStore } from '../state/ui.js';
 import { ConfirmActionDialog } from './ConfirmActionDialog.js';
@@ -414,12 +415,15 @@ export function ChatManagementPanel({ onClose }: ChatManagementPanelProps) {
                           <PencilSimple aria-hidden="true" />
                           {t('chat:rename')}
                         </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                          {/* eslint-disable-next-line @neotavern/no-legacy-api-surface */}
-                          <a href={`/api/v2/chats/${chatItem.id}/export`}>
-                            <DownloadSimple aria-hidden="true" />
-                            {t('chat:export')}
-                          </a>
+                        <DropdownMenuItem
+                          onSelect={() =>
+                            exportChat(chatItem.id).catch((error) =>
+                              setPanelError(errorText(error)),
+                            )
+                          }
+                        >
+                          <DownloadSimple aria-hidden="true" />
+                          {t('chat:export')}
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem

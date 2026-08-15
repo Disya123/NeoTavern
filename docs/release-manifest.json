@@ -538,6 +538,19 @@
       },
       "notes": "ARC-12 / ТЗ 10/10 rev2 §11.3.2: Web Client is remote-only; standalone Browser Runtime is a separate product track with its own ADR.",
       "milestone": "n/a"
+    },
+    {
+      "id": "ui.card-exports",
+      "title": "Character card / chat exports & character import (legacy containers)",
+      "wireOps": [],
+      "hosts": {
+        "desktop": "Designed",
+        "headless": "Designed",
+        "android": "Designed",
+        "webClient": "Designed"
+      },
+      "notes": "SillyTavern card containers (PNG/JSON card export, chat snapshot export, card import parsing) have no wire operation — the kernel plane refuses them honestly (M5 slice 8: exportCharacterCard/exportChat/importCharacter throw UnsupportedError on the kernel plane and keep the legacy download/upload on the legacy plane; useErrorText localizes the refusal via errors:UNSUPPORTED instead of INTERNAL). The legacy /api/v2/characters/:id/export, /api/v2/chats/:id/export and /characters/import routes stay the implemented surface until a canonical container/parse operation is specified (ТЗ §14.2 authority-non-expanding boundary).",
+      "milestone": "M5"
     }
   ]
 }

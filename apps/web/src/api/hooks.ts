@@ -104,6 +104,7 @@ import {
   readAppVersion,
   readSettings,
   updateSettings,
+  importCharacter,
   type ContinueCharacterChatInput,
   type ContinueCharacterChatResult,
 } from './wireBridge.js';
@@ -207,7 +208,7 @@ export function useUpdateCharacter() {
 export function useImportCharacter() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (file: File) => api.upload<CharacterImportResult>('/characters/import', file),
+    mutationFn: (file: File) => importCharacter(file) as Promise<CharacterImportResult>,
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['characters'] }),
   });
 }

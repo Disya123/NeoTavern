@@ -1357,6 +1357,7 @@ export const en = {
   },
   errors: {
     INTERNAL: 'Something went wrong. Please try again.',
+    UNSUPPORTED: 'This feature is not available in this build ({{feature}}).',
     BAD_REQUEST: 'The request was invalid.',
     NOT_FOUND: 'Not found.',
     CONFLICT: 'This conflicts with existing data.',
