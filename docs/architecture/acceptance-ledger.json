@@ -992,7 +992,7 @@
           "type": "artifact",
           "artifact": "app version on the kernel plane: wireBridge readAppVersion (translateMeta maps meta.get appVersion/api.major onto the legacy VersionResponse; static product name is identity — the UI renders only the version string) + useAppVersion over the transport + wireBridge tests 83/83",
           "result": "The HomePage version label now reads the kernel on the kernel plane (M5 slice 7 part 1, Этап 4 context 7 start): readAppVersion maps meta.get (appVersion -> version, api.major -> apiVersion) onto the legacy VersionResponse; the name field is the static product name (identity, not fabricated data) because the wire carries no product name and the UI renders only the version string. useAppVersion routes through the transport with the same staleTime/retry contract. Verified: web vitest 632/632 (wireBridge 83/83 incl. 1 new meta test), web typecheck clean, eslint clean, prettier clean, ui:api:check 64 sites OK.",
-          "commit": "pending"
+          "commit": "2f64573"
         },
         {
           "type": "artifact",

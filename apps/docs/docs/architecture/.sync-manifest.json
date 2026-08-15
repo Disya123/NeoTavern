@@ -285,7 +285,7 @@
     {
       "source": "architecture/ui-legacy-surface.md",
       "target": "architecture/ui-legacy-surface.md",
-      "sha256": "c5f888ff435192187142ed00e197c3359df41e0a8ae67356cb79009f71c30571"
+      "sha256": "f6740b82b26e67fa68fb5a6930f124cf5a26f64aeb2e46e4db8c81af546ccf9a"
     },
     {
       "source": "architecture/version-axes.md",
