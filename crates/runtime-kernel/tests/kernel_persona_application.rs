@@ -362,8 +362,9 @@ fn persona_list_after_chat_linkage() {
         serde_json::json!({ "name": "Aria User" }),
     )
     .expect("personas.create must succeed");
-    let list = dispatch_decoded::<ResultListPersonas>(&kernel, "personas.list", serde_json::json!({}))
-        .expect("personas.list must succeed");
+    let list =
+        dispatch_decoded::<ResultListPersonas>(&kernel, "personas.list", serde_json::json!({}))
+            .expect("personas.list must succeed");
     assert_eq!(list.items.len(), 1);
 }
 

@@ -3,7 +3,9 @@
 //! presets CRUD (`presets.list/get/create/update/delete`), including the
 //! character-scope validation and the `(kind, name)` uniqueness conflict.
 
-use contracts_generated::generated::{CharacterDto, MemoryDto, PresetDto, ResultListMemories, ResultListPresets};
+use contracts_generated::generated::{
+    CharacterDto, MemoryDto, PresetDto, ResultListMemories, ResultListPresets,
+};
 use runtime_kernel::{CancellationFlag, Kernel, KernelConfig, KernelError, KernelErrorCode};
 use serde_json::{json, Value};
 
@@ -87,7 +89,10 @@ fn preset_crud_round_trip() {
         dispatch_decoded::<PresetDto>(&kernel, "presets.get", json!({ "presetId": created.id }))
             .expect("presets.get must succeed");
     assert_eq!(fetched.id, created.id);
-    assert_eq!(fetched.data["generationDefaults"]["temperature"], json!(0.8));
+    assert_eq!(
+        fetched.data["generationDefaults"]["temperature"],
+        json!(0.8)
+    );
 
     // update name + data.
     let updated = dispatch_decoded::<PresetDto>(
@@ -98,7 +103,10 @@ fn preset_crud_round_trip() {
     .expect("presets.update must succeed");
     assert_eq!(updated.name, "Balanced v2");
     assert_eq!(updated.data["maxContextTokens"], json!(16384));
-    assert_eq!(updated.created_at, created.created_at, "created_at untouched");
+    assert_eq!(
+        updated.created_at, created.created_at,
+        "created_at untouched"
+    );
 
     // delete → empty result; follow-up get answers PRESET_NOT_FOUND.
     dispatch_decoded::<contracts_generated::generated::ResultEmpty>(
@@ -185,12 +193,9 @@ fn memory_crud_round_trip() {
     let kernel = open_kernel_with_root(root.path());
 
     // a character to scope memories against.
-    let character = dispatch_decoded::<CharacterDto>(
-        &kernel,
-        "characters.create",
-        json!({ "name": "Aria" }),
-    )
-    .expect("characters.create must succeed");
+    let character =
+        dispatch_decoded::<CharacterDto>(&kernel, "characters.create", json!({ "name": "Aria" }))
+            .expect("characters.create must succeed");
 
     // character-scoped memory (requires the character id).
     let scoped = dispatch_decoded::<MemoryDto>(
@@ -205,9 +210,15 @@ fn memory_crud_round_trip() {
         }),
     )
     .expect("memories.create (character scope) must succeed");
-    assert_eq!(scoped.scope, contracts_generated::generated::MemoryScope::Character);
+    assert_eq!(
+        scoped.scope,
+        contracts_generated::generated::MemoryScope::Character
+    );
     assert_eq!(scoped.character_id.as_deref(), Some(character.id.as_str()));
-    assert_eq!(scoped.keys, vec!["aria".to_string(), "clockwork".to_string()]);
+    assert_eq!(
+        scoped.keys,
+        vec!["aria".to_string(), "clockwork".to_string()]
+    );
     assert!(scoped.enabled, "enabled defaults to true");
     assert_eq!(scoped.position, 1);
 
@@ -218,7 +229,10 @@ fn memory_crud_round_trip() {
         json!({ "content": "The orchard blooms only at midnight.", "keys": ["orchard"] }),
     )
     .expect("memories.create (global) must succeed");
-    assert_eq!(global.scope, contracts_generated::generated::MemoryScope::Global);
+    assert_eq!(
+        global.scope,
+        contracts_generated::generated::MemoryScope::Global
+    );
     assert!(global.character_id.is_none());
 
     // list filters: all / by scope / by character / by enabled.
@@ -265,11 +279,24 @@ fn memory_crud_round_trip() {
         }),
     )
     .expect("memories.update must succeed");
-    assert_eq!(updated.content, "Aria guards the clockwork orchard and its brass trees.");
+    assert_eq!(
+        updated.content,
+        "Aria guards the clockwork orchard and its brass trees."
+    );
     assert!(!updated.enabled, "enabled: false is honoured");
     assert_eq!(updated.position, 0);
-    assert_eq!(updated.keys, vec!["aria".to_string(), "brass".to_string(), "orchard".to_string()]);
-    assert_eq!(updated.created_at, scoped.created_at, "created_at untouched");
+    assert_eq!(
+        updated.keys,
+        vec![
+            "aria".to_string(),
+            "brass".to_string(),
+            "orchard".to_string()
+        ]
+    );
+    assert_eq!(
+        updated.created_at, scoped.created_at,
+        "created_at untouched"
+    );
 
     // now visible under enabled=false.
     let disabled_now = dispatch_decoded::<ResultListMemories>(
@@ -331,16 +358,16 @@ fn memory_error_paths() {
     )
     .expect_err("update on a missing memory must fail");
     assert_eq!(update_err.code, KernelErrorCode::NotFound);
-    let delete_err = dispatch_json(&kernel, "memories.delete", json!({ "memoryId": missing_memory }))
-        .expect_err("delete on a missing memory must fail");
+    let delete_err = dispatch_json(
+        &kernel,
+        "memories.delete",
+        json!({ "memoryId": missing_memory }),
+    )
+    .expect_err("delete on a missing memory must fail");
     assert_eq!(delete_err.code, KernelErrorCode::NotFound);
 
     // malformed request → contract violation.
-    let violation = dispatch_json(
-        &kernel,
-        "memories.create",
-        json!({ "content": 42 }),
-    )
-    .expect_err("non-string content must be a contract violation");
+    let violation = dispatch_json(&kernel, "memories.create", json!({ "content": 42 }))
+        .expect_err("non-string content must be a contract violation");
     assert_eq!(violation.code, KernelErrorCode::ContractViolation);
 }

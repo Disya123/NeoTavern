@@ -128,7 +128,13 @@ fn build_legacy(path: &Path) -> rusqlite::Result<()> {
     )?;
     for (id, message, position, content, created) in [
         ("leg-v1", "leg-m1", 0, "Hello (swipe)", 1_700_000_020_000i64),
-        ("leg-v2", "leg-m1", 1, "Hello (swipe 2)", 1_700_000_021_000i64),
+        (
+            "leg-v2",
+            "leg-m1",
+            1,
+            "Hello (swipe 2)",
+            1_700_000_021_000i64,
+        ),
         // orphan: leg-m4 sits in the orphan chat and never converts
         ("leg-v3", "leg-m4", 0, "orphan swipe", 1_700_000_022_000i64),
     ] {
@@ -140,7 +146,13 @@ fn build_legacy(path: &Path) -> rusqlite::Result<()> {
     }
     for (id, message, position, content, created) in [
         ("leg-r1", "leg-m2", 0, "Hi!", 1_700_000_023_000i64),
-        ("leg-r2", "leg-m4", 0, "orphan revision", 1_700_000_024_000i64),
+        (
+            "leg-r2",
+            "leg-m4",
+            0,
+            "orphan revision",
+            1_700_000_024_000i64,
+        ),
     ] {
         conn.execute(
             "INSERT INTO message_content_revisions (id, message_id, position, content, created_at) \
@@ -466,7 +478,11 @@ fn legacy_conversion_maps_rows_skips_orphans_and_never_copies_secrets(
         |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
     )?;
     assert_eq!(character_id, "leg-c1");
-    assert_eq!(persona_id.as_deref(), Some("leg-p1"), "legacy persona reference maps");
+    assert_eq!(
+        persona_id.as_deref(),
+        Some("leg-p1"),
+        "legacy persona reference maps"
+    );
     assert_eq!(title, "First chat");
 
     // Personas: names/timestamps converted; only ONE default survives the
@@ -479,9 +495,11 @@ fn legacy_conversion_maps_rows_skips_orphans_and_never_copies_secrets(
     assert_eq!(name, "Aria");
     assert_eq!(is_default, 1);
     assert_eq!(created, "2023-11-14T22:14:08Z", "persona ms timestamp maps");
-    let is_default: i64 = db
-        .conn()
-        .query_row("SELECT is_default FROM personas WHERE id = 'leg-p2'", [], |r| r.get(0))?;
+    let is_default: i64 = db.conn().query_row(
+        "SELECT is_default FROM personas WHERE id = 'leg-p2'",
+        [],
+        |r| r.get(0),
+    )?;
     assert_eq!(is_default, 0, "second legacy default demoted");
 
     // Messages: no legacy sequence column → per-chat row numbers ordered by
@@ -537,20 +555,25 @@ fn legacy_conversion_maps_rows_skips_orphans_and_never_copies_secrets(
 
     // Memories: scope/keys/content/metadata mapped, timestamps RFC 3339; the
     // dangling character reference of leg-mem3 is preserved (no FK).
-    let (scope, character_id, keys, content, created): (String, Option<String>, String, String, String) =
-        db.conn().query_row(
-            "SELECT scope, character_id, keys_json, content, created_at \
+    let (scope, character_id, keys, content, created): (
+        String,
+        Option<String>,
+        String,
+        String,
+        String,
+    ) = db.conn().query_row(
+        "SELECT scope, character_id, keys_json, content, created_at \
              FROM memories WHERE id = 'leg-mem1'",
-            [],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
-        )?;
+        [],
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+    )?;
     assert_eq!(scope, "global");
     assert_eq!(character_id, None);
     assert_eq!(keys, r#"["city"]"#);
     assert_eq!(content, "The city sleeps.");
     assert_eq!(created, "2023-11-14T22:14:00Z", "memory ms timestamp maps");
-    let (scope, character_id, keys, metadata): (String, Option<String>, String, String) = db.conn()
-        .query_row(
+    let (scope, character_id, keys, metadata): (String, Option<String>, String, String) =
+        db.conn().query_row(
             "SELECT scope, character_id, keys_json, metadata_json \
              FROM memories WHERE id = 'leg-mem1'",
             [],
@@ -560,8 +583,8 @@ fn legacy_conversion_maps_rows_skips_orphans_and_never_copies_secrets(
     assert_eq!(character_id, None);
     assert_eq!(keys, r#"["city"]"#);
     assert_eq!(metadata, r#"{"source":"manual"}"#);
-    let (scope, character_id, keys, content): (String, String, String, String) = db.conn()
-        .query_row(
+    let (scope, character_id, keys, content): (String, String, String, String) =
+        db.conn().query_row(
             "SELECT scope, character_id, keys_json, content \
              FROM memories WHERE id = 'leg-mem2'",
             [],

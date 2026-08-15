@@ -564,7 +564,10 @@ fn convert_message_variants(
             continue;
         };
         let Some(message_id) = as_text(get("message_id")).map(str::to_owned) else {
-            skip(report, &format!("message_variant {id}: missing message reference"));
+            skip(
+                report,
+                &format!("message_variant {id}: missing message reference"),
+            );
             continue;
         };
         if !message_ids.contains(&message_id) {
@@ -651,7 +654,10 @@ fn convert_content_revisions(
             continue;
         };
         let Some(message_id) = as_text(get("message_id")).map(str::to_owned) else {
-            skip(report, &format!("content_revision {id}: missing message reference"));
+            skip(
+                report,
+                &format!("content_revision {id}: missing message reference"),
+            );
             continue;
         };
         if !message_ids.contains(&message_id) {
@@ -666,7 +672,10 @@ fn convert_content_revisions(
             continue;
         };
         let Some(created_at) = ms_to_rfc3339_checked(get("created_at")) else {
-            skip(report, &format!("content_revision {id}: invalid created_at"));
+            skip(
+                report,
+                &format!("content_revision {id}: invalid created_at"),
+            );
             continue;
         };
         let position = if cols.iter().any(|c| c == "position") {
@@ -752,7 +761,10 @@ fn convert_message_drafts(
             continue;
         };
         let Some(chat_id) = as_text(get("chat_id")).map(str::to_owned) else {
-            skip(report, &format!("message_draft {id}: missing chat reference"));
+            skip(
+                report,
+                &format!("message_draft {id}: missing chat reference"),
+            );
             continue;
         };
         if !chat_ids.contains(&chat_id) {

@@ -396,7 +396,9 @@ fn oversized_content_length_is_413_without_reading_the_body() {
         "POST /rpc HTTP/1.1\r\nHost: {}\r\nConnection: close\r\nContent-Length: 1048576\r\n\r\n",
         server.addr
     );
-    stream.write_all(head.as_bytes()).expect("write the request head");
+    stream
+        .write_all(head.as_bytes())
+        .expect("write the request head");
     // Intentionally send NO body bytes — the 413 must still arrive.
 
     let raw = common::read_response(&mut stream).expect("adapter must answer without the body");

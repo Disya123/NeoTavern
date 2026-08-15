@@ -13,11 +13,11 @@ use contracts_generated::generated::{
     ResultListLorebookEntries, ResultListLorebooks, ResultListPersonas, ResultListPresets,
     ResultMessageRevisionList, ResultMessageVariantList,
 };
+use neotavern_storage::legacy::convert_legacy;
+use neotavern_storage::restore::stage_candidate;
 use runtime_kernel::{CancellationFlag, Kernel, KernelConfig, KernelError, KernelErrorCode};
 use rusqlite::params;
 use serde_json::{json, Value};
-use neotavern_storage::legacy::convert_legacy;
-use neotavern_storage::restore::stage_candidate;
 
 /// A kernel over `root` with the correct, manifest-derived contract
 /// expectations.
@@ -1416,7 +1416,10 @@ fn message_variants_revisions_drafts_round_trip() {
         json!({ "chatId": chat_id, "draftId": draft_id }),
     )
     .expect("draft commit replay must succeed");
-    assert_eq!(replayed.id, committed.id, "commit replay must not duplicate");
+    assert_eq!(
+        replayed.id, committed.id,
+        "commit replay must not duplicate"
+    );
 
     let draft_after_commit = dispatch_decoded::<MessageDraftDto>(
         &kernel,
@@ -1513,7 +1516,10 @@ fn message_variants_revisions_drafts_error_paths() {
         "MESSAGE_VARIANT_NOT_FOUND"
     );
 
-    for op in ["chats.messages.variants.list", "chats.messages.revisions.list"] {
+    for op in [
+        "chats.messages.variants.list",
+        "chats.messages.revisions.list",
+    ] {
         let err = dispatch_json(
             &kernel,
             op,
@@ -1531,9 +1537,15 @@ fn message_variants_revisions_drafts_error_paths() {
     )
     .expect_err("variant create on a missing message must fail");
     assert_eq!(create_err.code, KernelErrorCode::NotFound);
-    assert_eq!(create_err.product.expect("product dto").code, "MESSAGE_NOT_FOUND");
+    assert_eq!(
+        create_err.product.expect("product dto").code,
+        "MESSAGE_NOT_FOUND"
+    );
 
-    for op in ["chats.messages.variants.delete", "chats.messages.variants.activate"] {
+    for op in [
+        "chats.messages.variants.delete",
+        "chats.messages.variants.activate",
+    ] {
         let err = dispatch_json(
             &kernel,
             op,
@@ -1566,9 +1578,15 @@ fn message_variants_revisions_drafts_error_paths() {
     )
     .expect_err("draft save on a missing chat must fail");
     assert_eq!(save_err.code, KernelErrorCode::NotFound);
-    assert_eq!(save_err.product.expect("product dto").code, "CHAT_NOT_FOUND");
+    assert_eq!(
+        save_err.product.expect("product dto").code,
+        "CHAT_NOT_FOUND"
+    );
 
-    for op in ["chats.messages.drafts.commit", "chats.messages.drafts.discard"] {
+    for op in [
+        "chats.messages.drafts.commit",
+        "chats.messages.drafts.discard",
+    ] {
         let err = dispatch_json(
             &kernel,
             op,

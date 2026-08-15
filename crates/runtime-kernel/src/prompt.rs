@@ -308,10 +308,7 @@ fn retrieve_memory_blocks(db: &Database, chat_id: &str, context_text: &str) -> V
         Err(_) => return Vec::new(),
     };
     let rows = match stmt.query_map(params![chat_id], |row| {
-        Ok((
-            row.get::<_, String>(0)?,
-            row.get::<_, String>(1)?,
-        ))
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
     }) {
         Ok(rows) => rows,
         Err(_) => return Vec::new(),
@@ -320,7 +317,9 @@ fn retrieve_memory_blocks(db: &Database, chat_id: &str, context_text: &str) -> V
     let mut scanned: usize = 0;
     let haystack = context_text.to_lowercase();
     for row in rows {
-        let Ok((keys_json, content)) = row else { continue };
+        let Ok((keys_json, content)) = row else {
+            continue;
+        };
         scanned += 1;
         if scanned > MAX_MEMORY_ROWS {
             break;
@@ -500,7 +499,8 @@ pub fn build_prompt_plan(db: &Database, input: &PlanInput<'_>) -> Result<PromptP
     // kernel has no FTS yet — retrieval is the documented `memory-keyword-v1`
     // heuristic (keys matched against the haystack), never a silent claim of
     // semantic retrieval.
-    let memory_blocks = retrieve_memory_blocks(db, &input.chat_id, &format!("{}\n{tail}", input.message));
+    let memory_blocks =
+        retrieve_memory_blocks(db, &input.chat_id, &format!("{}\n{tail}", input.message));
 
     // Stage order mirrors AGENTS §8: character/persona → lorebook → memory.
     let mut system_blocks = character_blocks;
