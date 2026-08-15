@@ -207,6 +207,35 @@ ops (eventSchemaId) carrying a response schema; empty/unknown
 | `lorebooks.list`          | transactional | idempotent     | safe  | app.read  | 1024    | 262144 | –      |
 | `presets.list`            | transactional | idempotent     | safe  | app.read  | 1024    | 262144 | –      |
 
+The table above is the historical **Phase 0** registry (21 ops). The live
+registry has grown with each milestone — 34 ops at M2, 47 at M4 (lorebooks
+CRUD + entries + personas), and **56 ops** at Этап 4 slice 2, which adds nine
+message variants/revisions/drafts operations (all `transactional`, strict
+`additionalProperties: false`, ARC-07):
+
+| operationId                        | class         | idempotency    | retry | auth      | reqB   | respB  | eventB |
+| ---------------------------------- | ------------- | -------------- | ----- | --------- | ------ | ------ | ------ |
+| `chats.messages.variants.list`     | transactional | idempotent     | safe  | app.read  | 2048   | 262144 | –      |
+| `chats.messages.variants.create`   | transactional | non-idempotent | none  | app.write | 1048576| 262144 | –      |
+| `chats.messages.variants.delete`   | transactional | non-idempotent | none  | app.write | 2048   | 1024   | –      |
+| `chats.messages.variants.activate` | transactional | non-idempotent | none  | app.write | 2048   | 262144 | –      |
+| `chats.messages.revisions.list`    | transactional | idempotent     | safe  | app.read  | 2048   | 262144 | –      |
+| `chats.messages.drafts.get`        | transactional | idempotent     | safe  | app.read  | 2048   | 262144 | –      |
+| `chats.messages.drafts.save`       | transactional | idempotent     | safe  | app.write | 1048576| 262144 | –      |
+| `chats.messages.drafts.commit`     | transactional | idempotent     | none  | app.write | 2048   | 262144 | –      |
+| `chats.messages.drafts.discard`    | transactional | idempotent     | safe  | app.write | 2048   | 1024   | –      |
+
+The canonical message model (Этап 4 slice 2, schema migration 008): the
+message text is the **active variant**; `message_variants` rows hold
+alternative swipe contents (position ordered, `activate` copies the content
+into the message and records the replaced text); `message_content_revisions`
+is the immutable manual-edit history written on every real content change;
+`message_drafts` is the server-side streaming object whose `commit`
+materializes a message exactly once (`committed_message_id` makes replay
+idempotent — the outbox contract). The chat sequence is allocated atomically
+at commit. `chats.messages.update` records the previous text as a revision
+before applying the change.
+
 `generation.start` and `generation.retry` are the two streaming operations:
 both emit `wire.generation.event` frames (`generation.delta`,
 `generation.checkpoint`, `generation.completed`, `generation.failed`,

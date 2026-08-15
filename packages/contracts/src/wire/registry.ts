@@ -524,6 +524,132 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'chats.messages.variants.list',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.message-variants-list',
+    'wire.result.message-variant-list',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    262144,
+    undefined,
+  ),
+  op(
+    'chats.messages.variants.create',
+    'transactional',
+    'non-idempotent',
+    'none',
+    'app.write',
+    'wire.request.message-variant-create',
+    'wire.message.variant.dto',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    1048576,
+    262144,
+    undefined,
+  ),
+  op(
+    'chats.messages.variants.delete',
+    'transactional',
+    'non-idempotent',
+    'none',
+    'app.write',
+    'wire.request.message-variant-delete',
+    'wire.result.empty',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    1024,
+    undefined,
+  ),
+  op(
+    'chats.messages.variants.activate',
+    'transactional',
+    'non-idempotent',
+    'none',
+    'app.write',
+    'wire.request.message-variant-activate',
+    'wire.message.dto',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    262144,
+    undefined,
+  ),
+  op(
+    'chats.messages.revisions.list',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.message-revisions-list',
+    'wire.result.message-revision-list',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    262144,
+    undefined,
+  ),
+  op(
+    'chats.messages.drafts.get',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.message-draft-get',
+    'wire.message.draft.dto',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    262144,
+    undefined,
+  ),
+  op(
+    'chats.messages.drafts.save',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.write',
+    'wire.request.message-draft-save',
+    'wire.message.draft.dto',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    1048576,
+    262144,
+    undefined,
+  ),
+  op(
+    'chats.messages.drafts.commit',
+    'transactional',
+    'idempotent',
+    'none',
+    'app.write',
+    'wire.request.message-draft-commit',
+    'wire.message.dto',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONFLICT', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    262144,
+    undefined,
+  ),
+  op(
+    'chats.messages.drafts.discard',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.write',
+    'wire.request.message-draft-discard',
+    'wire.result.empty',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    1024,
+    undefined,
+  ),
+  op(
     'generation.start',
     'workflow',
     'non-idempotent',
@@ -1008,6 +1134,9 @@ const UUID_MESSAGE = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
 const UUID_BACKUP = '1a2b3c4d-5e6f-4a8b-9c0d-1e2f3a4b5c6d';
 const UUID_LOREBOOK = '2b3c4d5e-6f7a-4b9c-8d0e-1f2a3b4c5d6e';
 const UUID_LOREBOOK_ENTRY = '7e8f9012-3a4b-4c5d-9e0f-1a2b3c4d5e6f';
+const UUID_MESSAGE_VARIANT = '8f9a0b1c-2d3e-4f6a-9b0c-1d2e3f4a5b6c';
+const UUID_MESSAGE_REVISION = '9a0b1c2d-3e4f-4a7b-8c0d-1e2f3a4b5c6d';
+const UUID_MESSAGE_DRAFT = '0b1c2d3e-4f5a-4b8c-9d0e-1f2a3b4c5d6e';
 const UUID_PRESET = '3c4d5e6f-7a8b-4c0d-9e1f-2a3b4c5d6e7f';
 const UUID_PERSONA = '0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f';
 const UUID_WORKFLOW = '9c8b7a6e-5d4c-4b3a-9f8e-7d6c5b4a3f2e';
@@ -1054,6 +1183,33 @@ const MESSAGE_VALUE = {
   createdAt: TIMESTAMP,
   sequence: 0,
   generationRunId: UUID_RUN,
+};
+
+const MESSAGE_VARIANT_VALUE = {
+  id: UUID_MESSAGE_VARIANT,
+  messageId: UUID_MESSAGE,
+  content: 'Hello there (swipe)',
+  position: 0,
+  createdAt: TIMESTAMP,
+};
+
+const MESSAGE_REVISION_VALUE = {
+  id: UUID_MESSAGE_REVISION,
+  messageId: UUID_MESSAGE,
+  content: 'Earlier draft text',
+  position: 0,
+  createdAt: TIMESTAMP,
+};
+
+const MESSAGE_DRAFT_VALUE = {
+  id: UUID_MESSAGE_DRAFT,
+  chatId: UUID_CHAT,
+  role: 'assistant',
+  content: 'Streaming partial…',
+  sequence: 1,
+  revision: 1,
+  createdAt: TIMESTAMP,
+  updatedAt: TIMESTAMP,
 };
 
 const BACKUP_VALUE = {
@@ -1388,6 +1544,78 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('chats-messages-create-response', 'chats.messages.create', 'response', true, MESSAGE_VALUE),
   fx('chats-messages-update-response', 'chats.messages.update', 'response', true, MESSAGE_VALUE),
   fx('chats-messages-delete-response', 'chats.messages.delete', 'response', true, {}),
+  // --- message variants / revisions / drafts (Этап 4, slice 2).
+  fx('message-variants-list-request', 'chats.messages.variants.list', 'request', true, {
+    chatId: UUID_CHAT,
+    messageId: UUID_MESSAGE,
+  }),
+  fx('message-variants-list-response', 'chats.messages.variants.list', 'response', true, {
+    items: [MESSAGE_VARIANT_VALUE],
+  }),
+  fx('message-variant-create-request', 'chats.messages.variants.create', 'request', true, {
+    chatId: UUID_CHAT,
+    messageId: UUID_MESSAGE,
+    content: 'Hello there (swipe)',
+  }),
+  fx('message-variant-create-response', 'chats.messages.variants.create', 'response', true, {
+    ...MESSAGE_VARIANT_VALUE,
+    id: 'ab0c1d2e-3f4a-4b5c-9d0e-1f2a3b4c5d6e',
+    position: 1,
+  }),
+  fx('message-variant-delete-request', 'chats.messages.variants.delete', 'request', true, {
+    chatId: UUID_CHAT,
+    messageId: UUID_MESSAGE,
+    variantId: UUID_MESSAGE_VARIANT,
+  }),
+  fx('message-variant-delete-response', 'chats.messages.variants.delete', 'response', true, {}),
+  fx('message-variant-activate-request', 'chats.messages.variants.activate', 'request', true, {
+    chatId: UUID_CHAT,
+    messageId: UUID_MESSAGE,
+    variantId: UUID_MESSAGE_VARIANT,
+  }),
+  fx('message-variant-activate-response', 'chats.messages.variants.activate', 'response', true, {
+    ...MESSAGE_VALUE,
+    content: 'Hello there (swipe)',
+  }),
+  fx('message-revisions-list-request', 'chats.messages.revisions.list', 'request', true, {
+    chatId: UUID_CHAT,
+    messageId: UUID_MESSAGE,
+  }),
+  fx('message-revisions-list-response', 'chats.messages.revisions.list', 'response', true, {
+    items: [MESSAGE_REVISION_VALUE],
+  }),
+  fx('message-draft-get-request', 'chats.messages.drafts.get', 'request', true, {
+    chatId: UUID_CHAT,
+    draftId: UUID_MESSAGE_DRAFT,
+  }),
+  fx('message-draft-get-response', 'chats.messages.drafts.get', 'response', true, MESSAGE_DRAFT_VALUE),
+  fx('message-draft-save-request', 'chats.messages.drafts.save', 'request', true, {
+    chatId: UUID_CHAT,
+    role: 'assistant',
+    content: 'Streaming partial…',
+  }),
+  fx('message-draft-save-response', 'chats.messages.drafts.save', 'response', true, MESSAGE_DRAFT_VALUE),
+  fx('message-draft-commit-request', 'chats.messages.drafts.commit', 'request', true, {
+    chatId: UUID_CHAT,
+    draftId: UUID_MESSAGE_DRAFT,
+  }),
+  fx('message-draft-commit-response', 'chats.messages.drafts.commit', 'response', true, MESSAGE_VALUE),
+  fx('message-draft-discard-request', 'chats.messages.drafts.discard', 'request', true, {
+    chatId: UUID_CHAT,
+    draftId: UUID_MESSAGE_DRAFT,
+  }),
+  fx('message-draft-discard-response', 'chats.messages.drafts.discard', 'response', true, {}),
+  // negative corpus for the new ops
+  fx('neg-message-variant-create-wrong-type', 'chats.messages.variants.create', 'request', false, {
+    chatId: UUID_CHAT,
+    messageId: UUID_MESSAGE,
+    content: 42,
+  }),
+  fx('neg-message-draft-save-bad-role', 'chats.messages.drafts.save', 'request', false, {
+    chatId: UUID_CHAT,
+    role: 'narrator',
+    content: 'x',
+  }),
   fx('generation-cancel-response', 'generation.cancel', 'response', true, {}),
   fx('generation-get-response', 'generation.get', 'response', true, GENERATION_RUN_VALUE),
   fx('generation-events-response', 'generation.events', 'response', true, {

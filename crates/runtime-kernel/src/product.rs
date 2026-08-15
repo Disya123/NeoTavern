@@ -16,15 +16,16 @@
 
 use crate::{KernelError, KernelErrorCode};
 use contracts_generated::generated::{
-    self, CharacterDto, ChatDto, LorebookDto, MessageDto, MessageRole, PagedCharacters, PagedChats,
-    PagedMessages, PersonaDto, PresetDto, ResultEmpty, ResultListLorebooks, ResultListPersonas,
-    ResultListPresets,
+    self, CharacterDto, ChatDto, LorebookDto, MessageDraftDto, MessageDto, MessageRevisionDto,
+    MessageRole, MessageVariantDto, PagedCharacters, PagedChats, PagedMessages, PersonaDto,
+    PresetDto, ResultEmpty, ResultListLorebooks, ResultListPersonas, ResultListPresets,
+    ResultMessageRevisionList, ResultMessageVariantList,
 };
 use contracts_generated::Issue;
 use neotavern_storage::open::Database;
 use neotavern_storage::StorageError;
 use rusqlite::types::Value;
-use rusqlite::{params, params_from_iter};
+use rusqlite::{params, params_from_iter, OptionalExtension};
 
 /// UTC now as an RFC 3339 wire timestamp (seconds precision).
 pub(crate) fn now() -> String {
@@ -154,6 +155,9 @@ fn not_found(entity: &str, id: &str) -> KernelError {
         "CHARACTER" => "characterId",
         "CHAT" => "chatId",
         "MESSAGE" => "messageId",
+        "MESSAGE_VARIANT" => "variantId",
+        "MESSAGE_REVISION" => "revisionId",
+        "MESSAGE_DRAFT" => "draftId",
         "LOREBOOK" => "lorebookId",
         "PRESET" => "presetId",
         "PERSONA" => "personaId",
@@ -735,6 +739,134 @@ fn query_message(
     }
 }
 
+/// Selects one `message_variants` row back as the wire [`MessageVariantDto`].
+fn query_message_variant(
+    conn: &rusqlite::Connection,
+    message_id: &str,
+    variant_id: &str,
+) -> Result<Option<MessageVariantDto>, KernelError> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, message_id, position, content, created_at \
+             FROM message_variants WHERE id = ?1 AND message_id = ?2",
+        )
+        .map_err(|e| sqlite(e, "query_message_variant: prepare"))?;
+    let mut rows = stmt
+        .query(params![variant_id, message_id])
+        .map_err(|e| sqlite(e, "query_message_variant: query"))?;
+    match rows
+        .next()
+        .map_err(|e| sqlite(e, "query_message_variant: read row"))?
+    {
+        Some(row) => Ok(Some(MessageVariantDto {
+            id: row.get(0).map_err(|e| sqlite(e, "query_message_variant: id"))?,
+            message_id: row
+                .get(1)
+                .map_err(|e| sqlite(e, "query_message_variant: message_id"))?,
+            position: row
+                .get(2)
+                .map_err(|e| sqlite(e, "query_message_variant: position"))?,
+            content: row
+                .get(3)
+                .map_err(|e| sqlite(e, "query_message_variant: content"))?,
+            created_at: row
+                .get(4)
+                .map_err(|e| sqlite(e, "query_message_variant: created_at"))?,
+        })),
+        None => Ok(None),
+    }
+}
+
+/// Selects one `message_drafts` row as the wire [`MessageDraftDto`]. The
+/// chat id scopes the read: a draft id alone does not identify a chat.
+fn query_message_draft(
+    conn: &rusqlite::Connection,
+    chat_id: &str,
+    draft_id: &str,
+) -> Result<Option<MessageDraftDto>, KernelError> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, chat_id, role, content, sequence, revision, committed_message_id, \
+             created_at, updated_at FROM message_drafts WHERE id = ?1 AND chat_id = ?2",
+        )
+        .map_err(|e| sqlite(e, "query_message_draft: prepare"))?;
+    let mut rows = stmt
+        .query(params![draft_id, chat_id])
+        .map_err(|e| sqlite(e, "query_message_draft: query"))?;
+    match rows
+        .next()
+        .map_err(|e| sqlite(e, "query_message_draft: read row"))?
+    {
+        Some(row) => {
+            let role: String = row
+                .get(2)
+                .map_err(|e| sqlite(e, "query_message_draft: read role"))?;
+            let role = match role.as_str() {
+                "system" => MessageRole::System,
+                "user" => MessageRole::User,
+                "assistant" => MessageRole::Assistant,
+                "tool" => MessageRole::Tool,
+                other => {
+                    return Err(KernelError::new(
+                        KernelErrorCode::Internal,
+                        format!("invalid draft role in database: {other}"),
+                    ));
+                }
+            };
+            Ok(Some(MessageDraftDto {
+                id: row.get(0).map_err(|e| sqlite(e, "query_message_draft: id"))?,
+                chat_id: row
+                    .get(1)
+                    .map_err(|e| sqlite(e, "query_message_draft: chat_id"))?,
+                role,
+                content: row
+                    .get(3)
+                    .map_err(|e| sqlite(e, "query_message_draft: content"))?,
+                sequence: row
+                    .get(4)
+                    .map_err(|e| sqlite(e, "query_message_draft: sequence"))?,
+                revision: row
+                    .get(5)
+                    .map_err(|e| sqlite(e, "query_message_draft: revision"))?,
+                committed_message_id: row
+                    .get(6)
+                    .map_err(|e| sqlite(e, "query_message_draft: committed_message_id"))?,
+                created_at: row
+                    .get(7)
+                    .map_err(|e| sqlite(e, "query_message_draft: created_at"))?,
+                updated_at: row
+                    .get(8)
+                    .map_err(|e| sqlite(e, "query_message_draft: updated_at"))?,
+            }))
+        }
+        None => Ok(None),
+    }
+}
+
+/// Records the previous text of a message as an immutable content revision
+/// when `previous != next`. Returns whether a revision row was inserted.
+/// Runs inside the caller's transaction.
+fn record_content_revision(
+    tx: &rusqlite::Transaction,
+    message_id: &str,
+    previous: &str,
+    next: &str,
+    created_at: &str,
+) -> Result<bool, StorageError> {
+    if previous == next {
+        return Ok(false);
+    }
+    let inserted = tx
+        .execute(
+            "INSERT INTO message_content_revisions (id, message_id, position, content, created_at) \
+             SELECT ?1, ?2, COALESCE(MAX(position) + 1, 0), ?3, ?4 \
+             FROM message_content_revisions WHERE message_id = ?2",
+            params![&new_id(), message_id, previous, created_at],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "record_content_revision: insert"))?;
+    Ok(inserted > 0)
+}
+
 /// Returns the next message sequence for a chat: `MAX(sequence) + 1`, or 0
 /// for an empty chat. Runs inside the caller's transaction so the sequence
 /// is allocated and consumed atomically.
@@ -865,18 +997,36 @@ pub fn messages_create(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Ker
 }
 
 /// `chats.messages.update` — edit a message's content; missing message →
-/// `MESSAGE_NOT_FOUND` (the chat id scopes the update).
+/// `MESSAGE_NOT_FOUND` (the chat id scopes the update). A content change
+/// records the previous text as an immutable `message_content_revisions`
+/// row (Этап 4 slice 2); an identical no-op edit is idempotent.
 pub fn messages_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
     let req = generated::decode_request_update_message(request)?;
-    let changed = db.transaction(|tx| {
-        tx.execute(
-            "UPDATE messages SET content = ?1 WHERE id = ?2 AND chat_id = ?3",
-            params![&req.content, &req.message_id, &req.chat_id],
+    let now_ts = now();
+    // Pre-check outside the transaction (single-writer dispatch): a missing
+    // message is a stable `MESSAGE_NOT_FOUND`, never a storage error.
+    let previous: Option<String> = db
+        .conn()
+        .query_row(
+            "SELECT content FROM messages WHERE id = ?1 AND chat_id = ?2",
+            params![&req.message_id, &req.chat_id],
+            |row| row.get(0),
         )
-        .map_err(|e| StorageError::from_sqlite(e, "messages_update: update"))
-    })?;
-    if changed == 0 {
+        .optional()
+        .map_err(|e| sqlite(e, "messages_update: read previous"))?;
+    let Some(previous) = previous else {
         return Err(not_found("MESSAGE", &req.message_id));
+    };
+    if previous != req.content {
+        db.transaction(|tx| {
+            record_content_revision(tx, &req.message_id, &previous, &req.content, &now_ts)?;
+            tx.execute(
+                "UPDATE messages SET content = ?1, updated_at = ?2 WHERE id = ?3 AND chat_id = ?4",
+                params![&req.content, &now_ts, &req.message_id, &req.chat_id],
+            )
+            .map_err(|e| StorageError::from_sqlite(e, "messages_update: update"))?;
+            Ok(())
+        })?;
     }
     let dto = query_message(db.conn(), &req.chat_id, &req.message_id)?
         .ok_or_else(|| not_found("MESSAGE", &req.message_id))?;
@@ -897,6 +1047,342 @@ pub fn messages_delete(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Ker
     })?;
     if changed == 0 {
         return Err(not_found("MESSAGE", &req.message_id));
+    }
+    let dto = ResultEmpty {};
+    validate(&dto, generated::validate_result_empty)?;
+    encode(&dto)
+}
+
+/// `chats.messages.variants.list` — all swipe variants of a message in
+/// creation order (position ascending); missing message →
+/// `MESSAGE_NOT_FOUND` (the chat id scopes the read).
+pub fn message_variants_list(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_message_variants_list(request)?;
+    if query_message(db.conn(), &req.chat_id, &req.message_id)?.is_none() {
+        return Err(not_found("MESSAGE", &req.message_id));
+    }
+    let mut items: Vec<MessageVariantDto> = Vec::new();
+    {
+        let conn = db.conn();
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, message_id, position, content, created_at FROM message_variants \
+                 WHERE message_id = ?1 ORDER BY position ASC, created_at ASC",
+            )
+            .map_err(|e| sqlite(e, "message_variants_list: prepare"))?;
+        let mut rows = stmt
+            .query(params![&req.message_id])
+            .map_err(|e| sqlite(e, "message_variants_list: query"))?;
+        while let Some(row) = rows
+            .next()
+            .map_err(|e| sqlite(e, "message_variants_list: read row"))?
+        {
+            items.push(MessageVariantDto {
+                id: row.get(0).map_err(|e| sqlite(e, "message_variants_list: id"))?,
+                message_id: row
+                    .get(1)
+                    .map_err(|e| sqlite(e, "message_variants_list: message_id"))?,
+                position: row
+                    .get(2)
+                    .map_err(|e| sqlite(e, "message_variants_list: position"))?,
+                content: row
+                    .get(3)
+                    .map_err(|e| sqlite(e, "message_variants_list: content"))?,
+                created_at: row
+                    .get(4)
+                    .map_err(|e| sqlite(e, "message_variants_list: created_at"))?,
+            });
+        }
+    }
+    let dto = ResultMessageVariantList { items };
+    validate(&dto, generated::validate_result_message_variant_list)?;
+    encode(&dto)
+}
+
+/// `chats.messages.variants.create` — append a swipe variant to a message;
+/// missing message → `MESSAGE_NOT_FOUND`. The position is allocated
+/// atomically as `MAX(position) + 1` within the message.
+pub fn message_variants_create(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_message_variant_create(request)?;
+    if query_message(db.conn(), &req.chat_id, &req.message_id)?.is_none() {
+        return Err(not_found("MESSAGE", &req.message_id));
+    }
+    let id = new_id();
+    let now_ts = now();
+    let position = db.transaction(|tx| {
+        let next: i64 = tx
+            .query_row(
+                "SELECT COALESCE(MAX(position) + 1, 0) FROM message_variants \
+                 WHERE message_id = ?1",
+                params![&req.message_id],
+                |row| row.get(0),
+            )
+            .map_err(|e| StorageError::from_sqlite(e, "message_variants_create: next position"))?;
+        tx.execute(
+            "INSERT INTO message_variants (id, message_id, position, content, created_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![&id, &req.message_id, next, &req.content, &now_ts],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "message_variants_create: insert"))?;
+        Ok(next)
+    })?;
+    let dto = query_message_variant(db.conn(), &req.message_id, &id)?.ok_or_else(|| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            "message_variants_create: insert succeeded but select back found no row",
+        )
+    })?;
+    debug_assert_eq!(dto.position, position);
+    validate(&dto, generated::validate_message_variant_dto)?;
+    encode(&dto)
+}
+
+/// `chats.messages.variants.delete` — remove a swipe variant; missing
+/// variant → `MESSAGE_VARIANT_NOT_FOUND` (message id scopes the delete).
+pub fn message_variants_delete(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_message_variant_delete(request)?;
+    let changed = db.transaction(|tx| {
+        tx.execute(
+            "DELETE FROM message_variants WHERE id = ?1 AND message_id = ?2",
+            params![&req.variant_id, &req.message_id],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "message_variants_delete: delete"))
+    })?;
+    if changed == 0 {
+        return Err(not_found("MESSAGE_VARIANT", &req.variant_id));
+    }
+    let dto = ResultEmpty {};
+    validate(&dto, generated::validate_result_empty)?;
+    encode(&dto)
+}
+
+/// `chats.messages.variants.activate` — copy a swipe variant's content into
+/// the message, atomically (the message text is the active variant). The
+/// replaced text is recorded as an immutable content revision. Missing
+/// variant → `MESSAGE_VARIANT_NOT_FOUND`.
+pub fn message_variants_activate(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_message_variant_activate(request)?;
+    // Pre-checks outside the transaction: the single-writer dispatch means
+    // the rows cannot change between check and write.
+    let variant = query_message_variant(db.conn(), &req.message_id, &req.variant_id)?
+        .ok_or_else(|| not_found("MESSAGE_VARIANT", &req.variant_id))?;
+    let previous: Option<String> = db
+        .conn()
+        .query_row(
+            "SELECT content FROM messages WHERE id = ?1 AND chat_id = ?2",
+            params![&req.message_id, &req.chat_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| sqlite(e, "message_variants_activate: read content"))?;
+    let Some(previous) = previous else {
+        return Err(not_found("MESSAGE", &req.message_id));
+    };
+    let now_ts = now();
+    db.transaction(|tx| {
+        record_content_revision(tx, &req.message_id, &previous, &variant.content, &now_ts)?;
+        tx.execute(
+            "UPDATE messages SET content = ?1, updated_at = ?2 WHERE id = ?3 AND chat_id = ?4",
+            params![&variant.content, &now_ts, &req.message_id, &req.chat_id],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "message_variants_activate: update"))?;
+        Ok(())
+    })?;
+    let dto = query_message(db.conn(), &req.chat_id, &req.message_id)?
+        .ok_or_else(|| not_found("MESSAGE", &req.message_id))?;
+    validate(&dto, generated::validate_message_dto)?;
+    encode(&dto)
+}
+
+/// `chats.messages.revisions.list` — all immutable content revisions of a
+/// message in chronological order (position ascending); missing message →
+/// `MESSAGE_NOT_FOUND`.
+pub fn message_revisions_list(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_message_revisions_list(request)?;
+    if query_message(db.conn(), &req.chat_id, &req.message_id)?.is_none() {
+        return Err(not_found("MESSAGE", &req.message_id));
+    }
+    let mut items: Vec<MessageRevisionDto> = Vec::new();
+    {
+        let conn = db.conn();
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, message_id, position, content, created_at \
+                 FROM message_content_revisions WHERE message_id = ?1 \
+                 ORDER BY position ASC, created_at ASC",
+            )
+            .map_err(|e| sqlite(e, "message_revisions_list: prepare"))?;
+        let mut rows = stmt
+            .query(params![&req.message_id])
+            .map_err(|e| sqlite(e, "message_revisions_list: query"))?;
+        while let Some(row) = rows
+            .next()
+            .map_err(|e| sqlite(e, "message_revisions_list: read row"))?
+        {
+            items.push(MessageRevisionDto {
+                id: row.get(0).map_err(|e| sqlite(e, "message_revisions_list: id"))?,
+                message_id: row
+                    .get(1)
+                    .map_err(|e| sqlite(e, "message_revisions_list: message_id"))?,
+                position: row
+                    .get(2)
+                    .map_err(|e| sqlite(e, "message_revisions_list: position"))?,
+                content: row
+                    .get(3)
+                    .map_err(|e| sqlite(e, "message_revisions_list: content"))?,
+                created_at: row
+                    .get(4)
+                    .map_err(|e| sqlite(e, "message_revisions_list: created_at"))?,
+            });
+        }
+    }
+    let dto = ResultMessageRevisionList { items };
+    validate(&dto, generated::validate_result_message_revision_list)?;
+    encode(&dto)
+}
+
+/// `chats.messages.drafts.get` — read one server-side draft; missing draft →
+/// `MESSAGE_DRAFT_NOT_FOUND` (the chat id scopes the read).
+pub fn message_drafts_get(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_message_draft_get(request)?;
+    let dto = query_message_draft(db.conn(), &req.chat_id, &req.draft_id)?
+        .ok_or_else(|| not_found("MESSAGE_DRAFT", &req.draft_id))?;
+    validate(&dto, generated::validate_message_draft_dto)?;
+    encode(&dto)
+}
+
+/// `chats.messages.drafts.save` — create or update a server-side streaming
+/// draft. Idempotent upsert: a save without `draftId` inserts a new draft
+/// (revision 1); a save with a known `draftId` bumps `revision`; a save
+/// with an unknown `draftId` creates the draft under that id so a retried
+/// create replay converges. Missing chat → `CHAT_NOT_FOUND`.
+pub fn message_drafts_save(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_message_draft_save(request)?;
+    let chat_id = req.chat_id.clone();
+    if !chat_exists(db.conn(), &chat_id)? {
+        return Err(not_found("CHAT", &chat_id));
+    }
+    let now_ts = now();
+    let id = req.draft_id.clone().unwrap_or_else(new_id);
+    let draft_id = id.clone();
+    let _inserted = db.transaction(|tx| {
+        let exists: bool = tx
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM message_drafts WHERE id = ?1 AND chat_id = ?2)",
+                params![&id, &chat_id],
+                |row| row.get(0),
+            )
+            .map_err(|e| StorageError::from_sqlite(e, "message_drafts_save: exists"))?;
+        if exists {
+            tx.execute(
+                "UPDATE message_drafts SET role = ?1, content = ?2, sequence = ?3, \
+                 revision = revision + 1, updated_at = ?4 WHERE id = ?5 AND chat_id = ?6",
+                params![
+                    role_sql(&req.role),
+                    &req.content,
+                    req.sequence.unwrap_or(0),
+                    &now_ts,
+                    &id,
+                    &chat_id
+                ],
+            )
+            .map_err(|e| StorageError::from_sqlite(e, "message_drafts_save: update"))?;
+            Ok(false)
+        } else {
+            tx.execute(
+                "INSERT INTO message_drafts \
+                 (id, chat_id, role, content, sequence, revision, created_at, updated_at) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, 1, ?6, ?7)",
+                params![
+                    &id,
+                    &chat_id,
+                    role_sql(&req.role),
+                    &req.content,
+                    req.sequence.unwrap_or(0),
+                    &now_ts,
+                    &now_ts
+                ],
+            )
+            .map_err(|e| StorageError::from_sqlite(e, "message_drafts_save: insert"))?;
+            Ok(true)
+        }
+    })?;
+    let dto = query_message_draft(db.conn(), &chat_id, &draft_id)?.ok_or_else(|| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            "message_drafts_save: write succeeded but select back found no row",
+        )
+    })?;
+    validate(&dto, generated::validate_message_draft_dto)?;
+    encode(&dto)
+}
+
+/// `chats.messages.drafts.commit` — materialize a draft as a real message
+/// atomically. Idempotent: a committed draft returns its committed message
+/// on replay instead of duplicating it (the outbox contract). The chat
+/// sequence is allocated atomically at commit. Missing draft →
+/// `MESSAGE_DRAFT_NOT_FOUND`.
+pub fn message_drafts_commit(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_message_draft_commit(request)?;
+    let chat_id = req.chat_id.clone();
+    let draft_id = req.draft_id.clone();
+    // Pre-check outside the transaction (single-writer dispatch): a missing
+    // draft is a stable `MESSAGE_DRAFT_NOT_FOUND`, never a storage error.
+    if query_message_draft(db.conn(), &chat_id, &draft_id)?.is_none() {
+        return Err(not_found("MESSAGE_DRAFT", &draft_id));
+    }
+    let message_id = db.transaction(|tx| {
+        let (role, content, committed): (String, String, Option<String>) = tx
+            .query_row(
+                "SELECT role, content, committed_message_id FROM message_drafts \
+                 WHERE id = ?1 AND chat_id = ?2",
+                params![&draft_id, &chat_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .map_err(|e| StorageError::from_sqlite(e, "message_drafts_commit: read draft"))?;
+        if let Some(message_id) = committed {
+            return Ok(message_id);
+        }
+        let message_id = new_id();
+        let now_ts = now();
+        let sequence = next_message_sequence(tx, &chat_id)?;
+        tx.execute(
+            "INSERT INTO messages (id, chat_id, role, content, sequence, generation_run_id, created_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, NULL, ?6)",
+            params![&message_id, &chat_id, &role, &content, sequence, &now_ts],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "message_drafts_commit: insert message"))?;
+        tx.execute(
+            "UPDATE message_drafts SET committed_message_id = ?1, revision = revision + 1, \
+             updated_at = ?2 WHERE id = ?3 AND chat_id = ?4",
+            params![&message_id, &now_ts, &draft_id, &chat_id],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "message_drafts_commit: mark committed"))?;
+        Ok(message_id)
+    })?;
+    let dto = query_message(db.conn(), &chat_id, &message_id)?.ok_or_else(|| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            "message_drafts_commit: commit succeeded but select back found no row",
+        )
+    })?;
+    validate(&dto, generated::validate_message_dto)?;
+    encode(&dto)
+}
+
+/// `chats.messages.drafts.discard` — delete a server-side draft; missing
+/// draft → `MESSAGE_DRAFT_NOT_FOUND`. A committed draft can be discarded
+/// without touching the materialized message.
+pub fn message_drafts_discard(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_message_draft_discard(request)?;
+    let changed = db.transaction(|tx| {
+        tx.execute(
+            "DELETE FROM message_drafts WHERE id = ?1 AND chat_id = ?2",
+            params![&req.draft_id, &req.chat_id],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "message_drafts_discard: delete"))
+    })?;
+    if changed == 0 {
+        return Err(not_found("MESSAGE_DRAFT", &req.draft_id));
     }
     let dto = ResultEmpty {};
     validate(&dto, generated::validate_result_empty)?;

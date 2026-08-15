@@ -90,6 +90,49 @@ export const MessageDtoSchema = Type.Object(
 );
 export type MessageDto = Static<typeof MessageDtoSchema>;
 
+/** Message variant (swipe) DTO (`wire.message.variant.dto`). */
+export const MessageVariantDtoSchema = Type.Object(
+  {
+    id: Type.String({ format: 'uuid' }),
+    messageId: Type.String({ format: 'uuid' }),
+    content: Type.String({ minLength: 0, maxLength: 1000000 }),
+    position: Type.Integer({ minimum: 0 }),
+    createdAt: Type.String({ format: 'rfc3339' }),
+  },
+  { $id: 'wire.message.variant.dto', additionalProperties: false },
+);
+export type MessageVariantDto = Static<typeof MessageVariantDtoSchema>;
+
+/** Immutable manual content revision DTO (`wire.message.revision.dto`). */
+export const MessageRevisionDtoSchema = Type.Object(
+  {
+    id: Type.String({ format: 'uuid' }),
+    messageId: Type.String({ format: 'uuid' }),
+    content: Type.String({ minLength: 0, maxLength: 1000000 }),
+    position: Type.Integer({ minimum: 0 }),
+    createdAt: Type.String({ format: 'rfc3339' }),
+  },
+  { $id: 'wire.message.revision.dto', additionalProperties: false },
+);
+export type MessageRevisionDto = Static<typeof MessageRevisionDtoSchema>;
+
+/** Server-side message draft DTO (`wire.message.draft.dto`). */
+export const MessageDraftDtoSchema = Type.Object(
+  {
+    id: Type.String({ format: 'uuid' }),
+    chatId: Type.String({ format: 'uuid' }),
+    role: WireMessageRole,
+    content: Type.String({ minLength: 0, maxLength: 1000000 }),
+    sequence: Type.Integer({ minimum: 0 }),
+    revision: Type.Integer({ minimum: 1 }),
+    committedMessageId: Type.Optional(Type.String({ format: 'uuid' })),
+    createdAt: Type.String({ format: 'rfc3339' }),
+    updatedAt: Type.String({ format: 'rfc3339' }),
+  },
+  { $id: 'wire.message.draft.dto', additionalProperties: false },
+);
+export type MessageDraftDto = Static<typeof MessageDraftDtoSchema>;
+
 /** Backup DTO (`wire.backup.dto`). */
 export const BackupDtoSchema = Type.Object(
   {
@@ -631,6 +674,120 @@ export const DeleteMessageRequestDtoSchema = Type.Object(
   { $id: 'wire.request.delete-message', additionalProperties: false },
 );
 export type DeleteMessageRequestDto = Static<typeof DeleteMessageRequestDtoSchema>;
+
+/** List message variants request DTO (`wire.request.message-variants-list`). */
+export const ListMessageVariantsRequestDtoSchema = Type.Object(
+  {
+    chatId: Type.String({ format: 'uuid' }),
+    messageId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.message-variants-list', additionalProperties: false },
+);
+export type ListMessageVariantsRequestDto = Static<typeof ListMessageVariantsRequestDtoSchema>;
+
+/** Create message variant request DTO (`wire.request.message-variant-create`). */
+export const CreateMessageVariantRequestDtoSchema = Type.Object(
+  {
+    chatId: Type.String({ format: 'uuid' }),
+    messageId: Type.String({ format: 'uuid' }),
+    content: Type.String({ minLength: 0, maxLength: 1000000 }),
+  },
+  { $id: 'wire.request.message-variant-create', additionalProperties: false },
+);
+export type CreateMessageVariantRequestDto = Static<typeof CreateMessageVariantRequestDtoSchema>;
+
+/** Delete message variant request DTO (`wire.request.message-variant-delete`). */
+export const DeleteMessageVariantRequestDtoSchema = Type.Object(
+  {
+    chatId: Type.String({ format: 'uuid' }),
+    messageId: Type.String({ format: 'uuid' }),
+    variantId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.message-variant-delete', additionalProperties: false },
+);
+export type DeleteMessageVariantRequestDto = Static<typeof DeleteMessageVariantRequestDtoSchema>;
+
+/** Activate message variant request DTO (`wire.request.message-variant-activate`). */
+export const ActivateMessageVariantRequestDtoSchema = Type.Object(
+  {
+    chatId: Type.String({ format: 'uuid' }),
+    messageId: Type.String({ format: 'uuid' }),
+    variantId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.message-variant-activate', additionalProperties: false },
+);
+export type ActivateMessageVariantRequestDto = Static<typeof ActivateMessageVariantRequestDtoSchema>;
+
+/** List message revisions request DTO (`wire.request.message-revisions-list`). */
+export const ListMessageRevisionsRequestDtoSchema = Type.Object(
+  {
+    chatId: Type.String({ format: 'uuid' }),
+    messageId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.message-revisions-list', additionalProperties: false },
+);
+export type ListMessageRevisionsRequestDto = Static<typeof ListMessageRevisionsRequestDtoSchema>;
+
+/** Get message draft request DTO (`wire.request.message-draft-get`). */
+export const GetMessageDraftRequestDtoSchema = Type.Object(
+  {
+    chatId: Type.String({ format: 'uuid' }),
+    draftId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.message-draft-get', additionalProperties: false },
+);
+export type GetMessageDraftRequestDto = Static<typeof GetMessageDraftRequestDtoSchema>;
+
+/** Save message draft request DTO (`wire.request.message-draft-save`). */
+export const SaveMessageDraftRequestDtoSchema = Type.Object(
+  {
+    chatId: Type.String({ format: 'uuid' }),
+    draftId: Type.Optional(Type.String({ format: 'uuid' })),
+    role: WireMessageRole,
+    content: Type.String({ minLength: 0, maxLength: 1000000 }),
+    sequence: Type.Optional(Type.Integer({ minimum: 0 })),
+  },
+  { $id: 'wire.request.message-draft-save', additionalProperties: false },
+);
+export type SaveMessageDraftRequestDto = Static<typeof SaveMessageDraftRequestDtoSchema>;
+
+/** Commit message draft request DTO (`wire.request.message-draft-commit`). */
+export const CommitMessageDraftRequestDtoSchema = Type.Object(
+  {
+    chatId: Type.String({ format: 'uuid' }),
+    draftId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.message-draft-commit', additionalProperties: false },
+);
+export type CommitMessageDraftRequestDto = Static<typeof CommitMessageDraftRequestDtoSchema>;
+
+/** Discard message draft request DTO (`wire.request.message-draft-discard`). */
+export const DiscardMessageDraftRequestDtoSchema = Type.Object(
+  {
+    chatId: Type.String({ format: 'uuid' }),
+    draftId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.message-draft-discard', additionalProperties: false },
+);
+export type DiscardMessageDraftRequestDto = Static<typeof DiscardMessageDraftRequestDtoSchema>;
+
+/** List message variants result DTO (`wire.result.message-variant-list`). */
+export const ListMessageVariantsResultDtoSchema = Type.Object(
+  {
+    items: Type.Array(MessageVariantDtoSchema),
+  },
+  { $id: 'wire.result.message-variant-list', additionalProperties: false },
+);
+export type ListMessageVariantsResultDto = Static<typeof ListMessageVariantsResultDtoSchema>;
+
+/** List message revisions result DTO (`wire.result.message-revision-list`). */
+export const ListMessageRevisionsResultDtoSchema = Type.Object(
+  {
+    items: Type.Array(MessageRevisionDtoSchema),
+  },
+  { $id: 'wire.result.message-revision-list', additionalProperties: false },
+);
+export type ListMessageRevisionsResultDto = Static<typeof ListMessageRevisionsResultDtoSchema>;
 
 /** Start generation request DTO (`wire.request.start-generation`). */
 export const StartGenerationRequestDtoSchema = Type.Object(
@@ -1183,6 +1340,20 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.request.create-message': CreateMessageRequestDtoSchema,
   'wire.request.update-message': UpdateMessageRequestDtoSchema,
   'wire.request.delete-message': DeleteMessageRequestDtoSchema,
+  'wire.message.variant.dto': MessageVariantDtoSchema,
+  'wire.message.revision.dto': MessageRevisionDtoSchema,
+  'wire.message.draft.dto': MessageDraftDtoSchema,
+  'wire.request.message-variants-list': ListMessageVariantsRequestDtoSchema,
+  'wire.request.message-variant-create': CreateMessageVariantRequestDtoSchema,
+  'wire.request.message-variant-delete': DeleteMessageVariantRequestDtoSchema,
+  'wire.request.message-variant-activate': ActivateMessageVariantRequestDtoSchema,
+  'wire.request.message-revisions-list': ListMessageRevisionsRequestDtoSchema,
+  'wire.request.message-draft-get': GetMessageDraftRequestDtoSchema,
+  'wire.request.message-draft-save': SaveMessageDraftRequestDtoSchema,
+  'wire.request.message-draft-commit': CommitMessageDraftRequestDtoSchema,
+  'wire.request.message-draft-discard': DiscardMessageDraftRequestDtoSchema,
+  'wire.result.message-variant-list': ListMessageVariantsResultDtoSchema,
+  'wire.result.message-revision-list': ListMessageRevisionsResultDtoSchema,
   'wire.request.start-generation': StartGenerationRequestDtoSchema,
   'wire.request.cancel-generation': CancelGenerationRequestDtoSchema,
   'wire.request.get-generation-run': GetGenerationRunRequestDtoSchema,

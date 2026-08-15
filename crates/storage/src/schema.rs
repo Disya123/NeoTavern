@@ -227,6 +227,44 @@ macro_rules! migration_7_sql {
     };
 }
 
+macro_rules! migration_8_sql {
+    () => {
+        r#"ALTER TABLE messages ADD COLUMN updated_at TEXT;
+
+CREATE TABLE message_variants (
+  id TEXT PRIMARY KEY,
+  message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL CHECK (position >= 0),
+  content TEXT NOT NULL,
+  created_at TEXT NOT NULL
+) STRICT;
+CREATE UNIQUE INDEX idx_message_variants_position ON message_variants(message_id, position);
+
+CREATE TABLE message_content_revisions (
+  id TEXT PRIMARY KEY,
+  message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL CHECK (position >= 0),
+  content TEXT NOT NULL,
+  created_at TEXT NOT NULL
+) STRICT;
+CREATE UNIQUE INDEX idx_message_content_revisions_position
+  ON message_content_revisions(message_id, position);
+
+CREATE TABLE message_drafts (
+  id TEXT PRIMARY KEY,
+  chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  role TEXT NOT NULL CHECK (role IN ('system', 'user', 'assistant', 'tool')),
+  content TEXT NOT NULL DEFAULT '',
+  sequence INTEGER NOT NULL DEFAULT 0 CHECK (sequence >= 0),
+  revision INTEGER NOT NULL DEFAULT 1 CHECK (revision >= 1),
+  committed_message_id TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+) STRICT;
+CREATE INDEX idx_message_drafts_chat ON message_drafts(chat_id);"#
+    };
+}
+
 /// Name of the initial (v1) schema migration.
 pub const MIGRATION_1_NAME: &str = "001_initial_schema";
 
@@ -342,6 +380,24 @@ pub const MIGRATION_7_SQL: &str = migration_7_sql!();
 pub const MIGRATION_7_CHECKSUM: &str =
     "43535151094b3e5c1b18ea38c4024e4c3edfb86489755ecb6d1374a3b9b9b9cb";
 
+/// Name of the message variants/revisions/drafts (v8) schema migration.
+pub const MIGRATION_8_NAME: &str = "008_message_variants_revisions_drafts";
+
+/// Exact SQL of the message variants/revisions/drafts schema migration (v8) —
+/// the `migration_8_sql!()` literal. Adds the STRICT child tables for swipe
+/// variants, immutable manual content revisions and server-side streaming
+/// drafts (Этап 4 slice 2), plus `messages.updated_at`. Variant/revision
+/// counts are derived (COUNT over the child tables), so no counter columns.
+pub const MIGRATION_8_SQL: &str = migration_8_sql!();
+
+/// Lowercase sha256 hex of the `MIGRATION_8_SQL` string bytes.
+///
+/// Computed on 2026-08-15 via node (`crypto.createHash('sha256')` over the
+/// literal bytes, no trailing newline) and asserted by the migration test
+/// suite against the ledger.
+pub const MIGRATION_8_CHECKSUM: &str =
+    "d8af5103543deaced7f1eabf9b35d4ad528df4645fffe4a45f506a569bdea653";
+
 /// A fresh install runs every migration in order, so `FRESH_SCHEMA_SQL` is the
 /// concatenation of all migration literals with a single newline between them
 /// (the same statement separator `execute_batch` applies).
@@ -362,7 +418,9 @@ pub const FRESH_SCHEMA_SQL: &str = concat!(
     "\n",
     migration_6_sql!(),
     "\n",
-    migration_7_sql!()
+    migration_7_sql!(),
+    "\n",
+    migration_8_sql!()
 );
 
 /// sha256 hex of the `FRESH_SCHEMA_SQL` bytes — the fresh-install fingerprint.

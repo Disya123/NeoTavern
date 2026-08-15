@@ -501,6 +501,29 @@ fn handle_unary(
         "chats.messages.create" => with_db_opt(db, |db| product::messages_create(db, req)),
         "chats.messages.update" => with_db_opt(db, |db| product::messages_update(db, req)),
         "chats.messages.delete" => with_db_opt(db, |db| product::messages_delete(db, req)),
+        "chats.messages.variants.list" => {
+            with_db_opt(db, |db| product::message_variants_list(db, req))
+        }
+        "chats.messages.variants.create" => {
+            with_db_opt(db, |db| product::message_variants_create(db, req))
+        }
+        "chats.messages.variants.delete" => {
+            with_db_opt(db, |db| product::message_variants_delete(db, req))
+        }
+        "chats.messages.variants.activate" => {
+            with_db_opt(db, |db| product::message_variants_activate(db, req))
+        }
+        "chats.messages.revisions.list" => {
+            with_db_opt(db, |db| product::message_revisions_list(db, req))
+        }
+        "chats.messages.drafts.get" => with_db_opt(db, |db| product::message_drafts_get(db, req)),
+        "chats.messages.drafts.save" => with_db_opt(db, |db| product::message_drafts_save(db, req)),
+        "chats.messages.drafts.commit" => {
+            with_db_opt(db, |db| product::message_drafts_commit(db, req))
+        }
+        "chats.messages.drafts.discard" => {
+            with_db_opt(db, |db| product::message_drafts_discard(db, req))
+        }
         "lorebooks.list" => with_db_opt(db, |db| product::lorebooks_list(db, req)),
         "lorebooks.get" => with_db_opt(db, |db| product::lorebooks_get(db, req)),
         "lorebooks.create" => with_db_opt(db, |db| product::lorebooks_create(db, req)),

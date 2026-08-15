@@ -8,9 +8,10 @@
 //! the single writable connection for its lifetime).
 
 use contracts_generated::generated::{
-    CharacterDto, ChatDto, LorebookDto, LorebookEntryDto, MessageDto, MessageRole, PagedCharacters,
-    PagedChats, PagedMessages, PersonaDto, ResultEmpty, ResultListLorebookEntries,
-    ResultListLorebooks, ResultListPersonas, ResultListPresets,
+    CharacterDto, ChatDto, LorebookDto, LorebookEntryDto, MessageDraftDto, MessageDto, MessageRole,
+    MessageVariantDto, PagedCharacters, PagedChats, PagedMessages, PersonaDto, ResultEmpty,
+    ResultListLorebookEntries, ResultListLorebooks, ResultListPersonas, ResultListPresets,
+    ResultMessageRevisionList, ResultMessageVariantList,
 };
 use runtime_kernel::{CancellationFlag, Kernel, KernelConfig, KernelError, KernelErrorCode};
 use rusqlite::params;
@@ -1229,4 +1230,378 @@ fn persona_crud_error_paths() {
     let no_id = dispatch_json(&kernel, "personas.update", json!({ "name": "No id" }))
         .expect_err("update without personaId must fail wire validation");
     assert_eq!(no_id.code, KernelErrorCode::ContractViolation);
+}
+
+/// Этап 4 slice 2: message variants (swipes), immutable content revisions
+/// and server-side drafts round trip over the wire against a durable root.
+#[test]
+fn message_variants_revisions_drafts_round_trip() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let character_id = "11111111-1111-4111-8111-111111111111";
+    let chat_id = "22222222-2222-4222-8222-222222222222";
+    seed_data_root(root.path(), |tx| {
+        tx.execute(
+            "INSERT INTO characters (id, name, description, avatar_asset_id, tags_json, ext_json, created_at, updated_at) \
+             VALUES (?1, 'Aria', NULL, NULL, '[]', '{}', '2026-08-13T00:00:00Z', '2026-08-13T00:00:00Z')",
+            params![character_id],
+        )
+        .expect("seed character");
+        tx.execute(
+            "INSERT INTO chats (id, title, character_id, created_at, updated_at) \
+             VALUES (?1, 'First chat', ?2, '2026-08-13T00:01:00Z', '2026-08-13T00:01:00Z')",
+            params![chat_id, character_id],
+        )
+        .expect("seed chat");
+    });
+
+    let kernel = open_kernel_with_root(root.path());
+
+    // --- variants ---
+    let msg = dispatch_decoded::<MessageDto>(
+        &kernel,
+        "chats.messages.create",
+        json!({ "chatId": chat_id, "role": "user", "content": "Hello" }),
+    )
+    .expect("create message must succeed");
+    let message_id = msg.id.clone();
+
+    let empty_variants = dispatch_decoded::<ResultMessageVariantList>(
+        &kernel,
+        "chats.messages.variants.list",
+        json!({ "chatId": chat_id, "messageId": message_id }),
+    )
+    .expect("variants.list on a variantless message");
+    assert!(empty_variants.items.is_empty());
+
+    let v1 = dispatch_decoded::<MessageVariantDto>(
+        &kernel,
+        "chats.messages.variants.create",
+        json!({ "chatId": chat_id, "messageId": message_id, "content": "Hello (swipe 1)" }),
+    )
+    .expect("variant create must succeed");
+    assert_eq!(v1.position, 0);
+    let v2 = dispatch_decoded::<MessageVariantDto>(
+        &kernel,
+        "chats.messages.variants.create",
+        json!({ "chatId": chat_id, "messageId": message_id, "content": "Hello (swipe 2)" }),
+    )
+    .expect("second variant create must succeed");
+    assert_eq!(v2.position, 1);
+
+    let listed = dispatch_decoded::<ResultMessageVariantList>(
+        &kernel,
+        "chats.messages.variants.list",
+        json!({ "chatId": chat_id, "messageId": message_id }),
+    )
+    .expect("variants.list must succeed");
+    assert_eq!(listed.items.len(), 2);
+    assert_eq!(listed.items[0].content, "Hello (swipe 1)");
+    assert_eq!(listed.items[1].content, "Hello (swipe 2)");
+
+    // activating a variant copies its content into the message and records
+    // the replaced text as an immutable revision.
+    let activated = dispatch_decoded::<MessageDto>(
+        &kernel,
+        "chats.messages.variants.activate",
+        json!({ "chatId": chat_id, "messageId": message_id, "variantId": v1.id }),
+    )
+    .expect("activate must succeed");
+    assert_eq!(activated.content, "Hello (swipe 1)");
+
+    // --- revisions ---
+    let edited = dispatch_decoded::<MessageDto>(
+        &kernel,
+        "chats.messages.update",
+        json!({ "chatId": chat_id, "messageId": message_id, "content": "Edited" }),
+    )
+    .expect("update must succeed");
+    assert_eq!(edited.content, "Edited");
+    let _edited_again = dispatch_decoded::<MessageDto>(
+        &kernel,
+        "chats.messages.update",
+        json!({ "chatId": chat_id, "messageId": message_id, "content": "Edited again" }),
+    )
+    .expect("second update must succeed");
+
+    let revisions = dispatch_decoded::<ResultMessageRevisionList>(
+        &kernel,
+        "chats.messages.revisions.list",
+        json!({ "chatId": chat_id, "messageId": message_id }),
+    )
+    .expect("revisions.list must succeed");
+    // Chronological previous texts: "Hello" (activation), "Hello (swipe 1)"
+    // (first update), "Edited" (second update).
+    assert_eq!(revisions.items.len(), 3);
+    assert_eq!(revisions.items[0].content, "Hello");
+    assert_eq!(revisions.items[0].position, 0);
+    assert_eq!(revisions.items[1].content, "Hello (swipe 1)");
+    assert_eq!(revisions.items[2].content, "Edited");
+    assert_eq!(revisions.items[2].position, 2);
+
+    // An identical no-op edit records no extra revision.
+    let _noop = dispatch_decoded::<MessageDto>(
+        &kernel,
+        "chats.messages.update",
+        json!({ "chatId": chat_id, "messageId": message_id, "content": "Edited again" }),
+    )
+    .expect("no-op update must succeed");
+    let revisions_after_noop = dispatch_decoded::<ResultMessageRevisionList>(
+        &kernel,
+        "chats.messages.revisions.list",
+        json!({ "chatId": chat_id, "messageId": message_id }),
+    )
+    .expect("revisions.list after no-op");
+    assert_eq!(revisions_after_noop.items.len(), 3);
+
+    // --- variant delete ---
+    let _deleted = dispatch_decoded::<ResultEmpty>(
+        &kernel,
+        "chats.messages.variants.delete",
+        json!({ "chatId": chat_id, "messageId": message_id, "variantId": v2.id }),
+    )
+    .expect("variant delete must succeed");
+    let after_delete = dispatch_decoded::<ResultMessageVariantList>(
+        &kernel,
+        "chats.messages.variants.list",
+        json!({ "chatId": chat_id, "messageId": message_id }),
+    )
+    .expect("variants.list after delete");
+    assert_eq!(after_delete.items.len(), 1);
+
+    // --- drafts ---
+    let draft = dispatch_decoded::<MessageDraftDto>(
+        &kernel,
+        "chats.messages.drafts.save",
+        json!({ "chatId": chat_id, "role": "assistant", "content": "Streaming…" }),
+    )
+    .expect("draft save (create) must succeed");
+    assert_eq!(draft.revision, 1);
+    assert_eq!(draft.committed_message_id, None);
+    let draft_id = draft.id.clone();
+
+    let updated_draft = dispatch_decoded::<MessageDraftDto>(
+        &kernel,
+        "chats.messages.drafts.save",
+        json!({ "chatId": chat_id, "draftId": draft_id, "role": "assistant", "content": "Streaming… more" }),
+    )
+    .expect("draft save (update) must succeed");
+    assert_eq!(updated_draft.revision, 2);
+    assert_eq!(updated_draft.id, draft_id);
+
+    let fetched = dispatch_decoded::<MessageDraftDto>(
+        &kernel,
+        "chats.messages.drafts.get",
+        json!({ "chatId": chat_id, "draftId": draft_id }),
+    )
+    .expect("draft get must succeed");
+    assert_eq!(fetched.content, "Streaming… more");
+    assert_eq!(fetched.revision, 2);
+
+    // commit materializes the message once; replay is idempotent.
+    let committed = dispatch_decoded::<MessageDto>(
+        &kernel,
+        "chats.messages.drafts.commit",
+        json!({ "chatId": chat_id, "draftId": draft_id }),
+    )
+    .expect("draft commit must succeed");
+    assert_eq!(committed.role, MessageRole::Assistant);
+    assert_eq!(committed.content, "Streaming… more");
+    assert_eq!(committed.sequence, 1); // second message in the chat
+
+    let replayed = dispatch_decoded::<MessageDto>(
+        &kernel,
+        "chats.messages.drafts.commit",
+        json!({ "chatId": chat_id, "draftId": draft_id }),
+    )
+    .expect("draft commit replay must succeed");
+    assert_eq!(replayed.id, committed.id, "commit replay must not duplicate");
+
+    let draft_after_commit = dispatch_decoded::<MessageDraftDto>(
+        &kernel,
+        "chats.messages.drafts.get",
+        json!({ "chatId": chat_id, "draftId": draft_id }),
+    )
+    .expect("draft get after commit");
+    assert_eq!(
+        draft_after_commit.committed_message_id.as_deref(),
+        Some(committed.id.as_str())
+    );
+
+    let _discarded = dispatch_decoded::<ResultEmpty>(
+        &kernel,
+        "chats.messages.drafts.discard",
+        json!({ "chatId": chat_id, "draftId": draft_id }),
+    )
+    .expect("draft discard must succeed");
+
+    // the committed message is a real chat message, listed once.
+    let messages = dispatch_decoded::<PagedMessages>(
+        &kernel,
+        "chats.messages.list",
+        json!({ "chatId": chat_id }),
+    )
+    .expect("messages.list must succeed");
+    assert_eq!(messages.items.len(), 2);
+    assert_eq!(messages.items[0].content, "Edited again");
+    assert_eq!(messages.items[1].id, committed.id);
+}
+
+/// Этап 4 slice 2 error paths: scoped not-found errors and contract
+/// violations for variants/revisions/drafts.
+#[test]
+fn message_variants_revisions_drafts_error_paths() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let character_id = "11111111-1111-4111-8111-111111111111";
+    let chat_id = "22222222-2222-4222-8222-222222222222";
+    let chat_id2 = "33333333-3333-4333-8333-333333333333";
+    seed_data_root(root.path(), |tx| {
+        tx.execute(
+            "INSERT INTO characters (id, name, description, avatar_asset_id, tags_json, ext_json, created_at, updated_at) \
+             VALUES (?1, 'Aria', NULL, NULL, '[]', '{}', '2026-08-13T00:00:00Z', '2026-08-13T00:00:00Z')",
+            params![character_id],
+        )
+        .expect("seed character");
+        for (id, title) in [(chat_id, "First chat"), (chat_id2, "Second chat")] {
+            tx.execute(
+                "INSERT INTO chats (id, title, character_id, created_at, updated_at) \
+                 VALUES (?1, ?2, ?3, '2026-08-13T00:01:00Z', '2026-08-13T00:01:00Z')",
+                params![id, title, character_id],
+            )
+            .expect("seed chat");
+        }
+    });
+
+    let kernel = open_kernel_with_root(root.path());
+    let missing_message = "44444444-4444-4444-8444-444444444444";
+    let missing_variant = "55555555-5555-4555-8555-555555555555";
+    let missing_draft = "66666666-6666-4666-8666-666666666666";
+
+    let msg = dispatch_decoded::<MessageDto>(
+        &kernel,
+        "chats.messages.create",
+        json!({ "chatId": chat_id, "role": "user", "content": "Hello" }),
+    )
+    .expect("create message must succeed");
+    let message_id = msg.id.clone();
+
+    // Variant created on the first chat, then scoped against the second:
+    // the variant id does not identify the message, so cross-chat scoping
+    // still resolves (the message scopes the variant).
+    let variant = dispatch_decoded::<MessageVariantDto>(
+        &kernel,
+        "chats.messages.variants.create",
+        json!({ "chatId": chat_id, "messageId": message_id, "content": "Swipe" }),
+    )
+    .expect("variant create must succeed");
+    let cross_message = dispatch_decoded::<MessageDto>(
+        &kernel,
+        "chats.messages.create",
+        json!({ "chatId": chat_id2, "role": "user", "content": "Other chat" }),
+    )
+    .expect("second message must succeed");
+    let scoped = dispatch_json(
+        &kernel,
+        "chats.messages.variants.activate",
+        json!({ "chatId": chat_id2, "messageId": cross_message.id, "variantId": variant.id }),
+    )
+    .expect_err("variant belongs to another message");
+    assert_eq!(scoped.code, KernelErrorCode::NotFound);
+    assert_eq!(
+        scoped.product.expect("product dto").code,
+        "MESSAGE_VARIANT_NOT_FOUND"
+    );
+
+    for op in ["chats.messages.variants.list", "chats.messages.revisions.list"] {
+        let err = dispatch_json(
+            &kernel,
+            op,
+            json!({ "chatId": chat_id, "messageId": missing_message }),
+        )
+        .expect_err("list on a missing message must fail");
+        assert_eq!(err.code, KernelErrorCode::NotFound);
+        assert_eq!(err.product.expect("product dto").code, "MESSAGE_NOT_FOUND");
+    }
+
+    let create_err = dispatch_json(
+        &kernel,
+        "chats.messages.variants.create",
+        json!({ "chatId": chat_id, "messageId": missing_message, "content": "X" }),
+    )
+    .expect_err("variant create on a missing message must fail");
+    assert_eq!(create_err.code, KernelErrorCode::NotFound);
+    assert_eq!(create_err.product.expect("product dto").code, "MESSAGE_NOT_FOUND");
+
+    for op in ["chats.messages.variants.delete", "chats.messages.variants.activate"] {
+        let err = dispatch_json(
+            &kernel,
+            op,
+            json!({ "chatId": chat_id, "messageId": message_id, "variantId": missing_variant }),
+        )
+        .expect_err("variant op on a missing variant must fail");
+        assert_eq!(err.code, KernelErrorCode::NotFound);
+        assert_eq!(
+            err.product.expect("product dto").code,
+            "MESSAGE_VARIANT_NOT_FOUND"
+        );
+    }
+
+    let draft_get_err = dispatch_json(
+        &kernel,
+        "chats.messages.drafts.get",
+        json!({ "chatId": chat_id, "draftId": missing_draft }),
+    )
+    .expect_err("draft get on a missing draft must fail");
+    assert_eq!(draft_get_err.code, KernelErrorCode::NotFound);
+    assert_eq!(
+        draft_get_err.product.expect("product dto").code,
+        "MESSAGE_DRAFT_NOT_FOUND"
+    );
+
+    let save_err = dispatch_json(
+        &kernel,
+        "chats.messages.drafts.save",
+        json!({ "chatId": "99999999-9999-4999-8999-999999999999", "role": "user", "content": "X" }),
+    )
+    .expect_err("draft save on a missing chat must fail");
+    assert_eq!(save_err.code, KernelErrorCode::NotFound);
+    assert_eq!(save_err.product.expect("product dto").code, "CHAT_NOT_FOUND");
+
+    for op in ["chats.messages.drafts.commit", "chats.messages.drafts.discard"] {
+        let err = dispatch_json(
+            &kernel,
+            op,
+            json!({ "chatId": chat_id, "draftId": missing_draft }),
+        )
+        .expect_err("draft op on a missing draft must fail");
+        assert_eq!(err.code, KernelErrorCode::NotFound);
+        assert_eq!(
+            err.product.expect("product dto").code,
+            "MESSAGE_DRAFT_NOT_FOUND"
+        );
+    }
+
+    // Contract violations: wrong-typed content, unknown role, extra fields.
+    let wrong_type = dispatch_json(
+        &kernel,
+        "chats.messages.variants.create",
+        json!({ "chatId": chat_id, "messageId": message_id, "content": 42 }),
+    )
+    .expect_err("wrong-typed content must fail wire validation");
+    assert_eq!(wrong_type.code, KernelErrorCode::ContractViolation);
+
+    let bad_role = dispatch_json(
+        &kernel,
+        "chats.messages.drafts.save",
+        json!({ "chatId": chat_id, "role": "narrator", "content": "X" }),
+    )
+    .expect_err("unknown role must fail wire validation");
+    assert_eq!(bad_role.code, KernelErrorCode::ContractViolation);
+
+    let extra = dispatch_json(
+        &kernel,
+        "chats.messages.drafts.save",
+        json!({ "chatId": chat_id, "role": "user", "content": "X", "hacked": true }),
+    )
+    .expect_err("extra fields must fail wire validation");
+    assert_eq!(extra.code, KernelErrorCode::ContractViolation);
 }

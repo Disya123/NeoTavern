@@ -3,6 +3,28 @@
 ## Unreleased
 ### Added
 
+- **Message variants/revisions/drafts over Product Wire (M5 / Этап 4, slice
+  2, kernel + contract part).** Nine new wire operations
+  `chats.messages.variants.list/create/delete/activate`,
+  `chats.messages.revisions.list` and
+  `chats.messages.drafts.get/save/commit/discard` (registry 47 → 56 ops).
+  Schema migration 008 adds the STRICT `message_variants`,
+  `message_content_revisions` and `message_drafts` tables plus
+  `messages.updated_at` (variant/revision counts are derived, no counter
+  columns). The kernel models the message text as the active variant:
+  `activate` copies the variant content into the message and records the
+  replaced text as an immutable revision; `chats.messages.update` records
+  the previous text before applying a real change (no-op edits add nothing);
+  `drafts.commit` materializes a message exactly once and is replay-safe via
+  `committed_message_id` (the outbox contract), with the chat sequence
+  allocated atomically at commit. Error paths are scoped and stable:
+  `MESSAGE_VARIANT_NOT_FOUND`/`MESSAGE_DRAFT_NOT_FOUND` with
+  `variantId`/`draftId` params.
+  Tests: kernel `message_variants_revisions_drafts_round_trip` + error-path
+  suite in `kernel_crud`; storage migration corpus accepts migration 008.
+  The UI/facade cutover, legacy swipe/draft route removal and the legacy
+  converter mapping are the remaining slice-2 work within M5.
+
 - **Entry-level lorebook CRUD over Product Wire (M4 / Этап 4.1, slice
   follow-up).** Four new wire operations `lorebooks.entries.list/create/
   update/delete` join the `lorebooks.*` book ops: the kernel owns each

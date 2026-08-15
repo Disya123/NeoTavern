@@ -285,12 +285,12 @@
     {
       "source": "architecture/wire-contracts.md",
       "target": "architecture/wire-contracts.md",
-      "sha256": "ba2562a4ec37546ff9fa43e8daf1304119ee5d8ff0d934aeafa1e5247cc49225"
+      "sha256": "b13523b3d5f6dee27851ef1d0172a0faee74f1e712627d772d899673693bddc1"
     },
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "c8707be37c40573c2ab36e926c0dc935b97906274b585b4440246fd49d4638ac"
+      "sha256": "02c41bab9a8d830d6a955557e47e1a174d46fcd87be8160456f146babdca13b0"
     },
     {
       "source": "data/README.md",

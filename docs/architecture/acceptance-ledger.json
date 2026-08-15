@@ -844,6 +844,48 @@
       ],
       "verdictNeeded": "HUMAN acceptance packet for M4 (branch pr-m4-slices, base f58491d = accepted M3 head, tree clean; review surface = the full branch diff f58491d..HEAD; concrete acceptance target = acceptanceProposal.proposedAcceptedCommit 9e92bda). Packet contents: 4 cherry-picked M4 commits (b20b79c..398ca0e: full lorebook CRUD in the kernel; persona CRUD; lorebook/persona UI cutover + SEC-01/SEC-05; entry-level lorebook CRUD) + adaptation commit 9e92bda (47-op wire.test assertion + 4 lorebook response fixtures, codegen regen, clippy bool-assert fix, check-ui-api baseline 67 sites, CHANGELOG M4 entries, ADR-0047). Scope: M4 acceptance is PROPOSED for the delivered slice-1 (personas + full lorebook CRUD end-to-end + the SEC audit fixes); slices 2-7 and the full-cutover exit criteria stay open with seven limited P1 waivers (ADR-0047, expiries at the next slice, subsequent milestones or the release gate; the SEC-02 M1-waiver expiry is superseded to the release gate by waiver 4, ratified by this verdict). Parity at the proposed commit: cargo test --workspace 56 targets exit 0; clippy -D warnings clean; contracts 62/62; vitest 146/1758; web 582/582 on the clean run; typecheck/lint/dependency-rules/codegen/matrix/docs/ui:api:check PASS; gates --check 5 milestones / 4 accepted + self-test PASS; --acceptance-drill valid. Two timing-sensitive tests flaked once under heavy concurrent load and are green in isolation + clean runs (documented in the evidence).",
       "acceptedAt": "2026-08-15"
+    },
+    {
+      "id": "M5-etap4-slices",
+      "name": "Этап 4: полный UI/API cutover (slices 2–7)",
+      "status": "in_progress",
+      "description": "Этап 4 remainder after the slice-1 M4 acceptance: message variants/revisions/drafts (2), memories and presets (3), remaining providers (4), imports/exports/assets/thumbnails (5), plugins/themes (6), diagnostics and remaining settings (7). Each slice migrates contract → kernel application → adapter → UI → E2E → legacy route removal (ТЗ §20, §21).",
+      "requirements": [
+        "slice 2: message variants/revisions/drafts — wire ops chats.messages.variants.{list,create,delete,activate}, chats.messages.revisions.list, chats.messages.drafts.{get,save,commit,discard}; schema migration 008; legacy swipe/draft/content-revision conversion",
+        "slice 3: memories and presets — kernel memories CRUD + Memory/RAG context; presets full CRUD + instruct-preset application; ui.prompt-pipeline integrated",
+        "slice 4: remaining providers — Anthropic adapter (@anthropic-ai/sdk documented exception) + custom OpenAI-compatible; capability declaration; CAPABILITY_UNAVAILABLE pre-negotiation",
+        "slice 5: imports/exports/assets/thumbnails — AssetStore port; thumbnail cache; logical profile export with SEC-02 per-profile FKs + export filtering (closes ADR-0047 waiver 4 / supersedes ADR-0042); idempotent re-import",
+        "slice 6: plugins/themes — kernel Extensions context + versioned capability protocol (no SQLite/SecretStore access); plugin-runtime as isolated Node executor; legacy-compat ST API v1 translation; removes 27 plugins/kernel/* + LegacyBridgeSync/AutoConnectSync/ThemeSync sites; no new plugin capability for migration ease (§24)",
+        "slice 7: diagnostics/settings — diagnostics.export (allowlist/redaction/trace); settings.get/update; ui.secrets + ui.portable-data (SEC-01.1 UX)",
+        "exit: ui:api:check product sites = 0 (no production /api/v2 or legacyRaw() calls)",
+        "exit: legacy Fastify no longer owns product data — operations-inventory product families removed or compat-proxy; only the canonical adapter writes product data",
+        "exit: ADR-0047 slice-1 waivers honored or re-waived via ADR-0048",
+        "exit: capability matrix shows the migrated contexts Integrated on desktop"
+      ],
+      "evidence": [
+        {
+          "type": "inspection",
+          "result": "M5 opened after the M4 human verdict (c615c31). No slice acceptance packet yet; slice 2 kernel/contract work in progress on pr-m5-slices.",
+          "commit": "c615c31"
+        }
+      ],
+      "blockingIssues": [
+        "legacy route removal for messages/swipes/drafts (ADR-0047 waiver 1) — slice 2/5",
+        "character↔lorebook scoping (ADR-0047 waiver 2) — slice 6",
+        "chat.persona_id and {{user}} persona application (ADR-0047 waiver 5) — slice 3",
+        "SEC-02 logical export with per-profile FK filtering (ADR-0047 waiver 4) — slice 5",
+        "zero-legacy-scan exit (ADR-0047 waiver 6) — M5 exit",
+        "branches/revisions/assets legacy conversion (M3 ADR-0046 waiver 8) — slices 2/5",
+        "Fastify product-data ownership (ADR-0047 waiver 7) — passes to M6"
+      ],
+      "waivers": [],
+      "acceptanceProposal": {},
+      "humanReviewSteps": [],
+      "verdictNeeded": false,
+      "reviewFeedback": [],
+      "acceptedCommit": null,
+      "acceptedBy": null,
+      "acceptedAt": null
     }
   ],
   "prSplitPlan": {

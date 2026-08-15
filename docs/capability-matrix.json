@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-08-14T22:12:11.869Z",
+  "generatedAt": "2026-08-15T08:08:46.360Z",
   "rows": [
     {
       "hosts": {
@@ -62,13 +62,36 @@
       },
       "id": "chats.messages.crud",
       "milestone": "M2",
-      "notes": "Kernel-owned ops with component tests (atomic sequence allocation per chat, role/content edit, scoped MESSAGE_NOT_FOUND, chat-scoped delete). Этап 2.10: UI edit/delete run through the facade (`backend.chats.updateMessage/delMessage` — wire on the kernel, legacy-route bridge on the sidecar; the legacy `expectedRevision` CAS is not part of the wire contract, kernel updates are last-write-wins); message create runs over the wire in the kernel-mode send flow; the message-list hook (useMessages) now loads newest-first over the wire `order: 'desc'` pages in kernel mode (additive wire field, Этап 2.10) with wire→UI translation (branchId defaults to the chat id — the kernel keeps one linear sequence per chat; variants/revisions/checkpoints/meta are not modelled yet and render as neutral defaults). branchId input on the kernel → UnsupportedError (branches — Этап 4).",
+      "notes": "Kernel-owned ops with component tests (atomic sequence allocation per chat, role/content edit, scoped MESSAGE_NOT_FOUND, chat-scoped delete). Этап 2.10: UI edit/delete run through the facade (`backend.chats.updateMessage/delMessage` — wire on the kernel, legacy-route bridge on the sidecar; the legacy `expectedRevision` CAS is not part of the wire contract, kernel updates are last-write-wins); message create runs over the wire in the kernel-mode send flow; the message-list hook (useMessages) now loads newest-first over the wire `order: 'desc'` pages in kernel mode (additive wire field, Этап 2.10) with wire→UI translation (branchId defaults to the chat id — the kernel keeps one linear sequence per chat; checkpoints/meta are not modelled yet and render as neutral defaults (variants/revisions/drafts wire ops landed in M5 slice 2; the facade/UI cutover is pending)). branchId input on the kernel → UnsupportedError (branches — Этап 4).",
       "title": "Message CRUD",
       "wireOps": [
         "chats.messages.create",
         "chats.messages.delete",
         "chats.messages.list",
         "chats.messages.update"
+      ]
+    },
+    {
+      "hosts": {
+        "android": "Implemented",
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "webClient": "Implemented"
+      },
+      "id": "chats.messages.variants-revisions-drafts",
+      "milestone": "M5",
+      "notes": "Этап 4 slice 2: kernel wire ops (schema migration 008; swipe variants list/create/delete/activate, immutable content revisions recorded on content change, server-side streaming drafts get/save/commit/discard with idempotent commit) with component tests in kernel_crud. UI/facade cutover and legacy route removal are pending within M5.",
+      "title": "Message variants, revisions and drafts",
+      "wireOps": [
+        "chats.messages.drafts.commit",
+        "chats.messages.drafts.discard",
+        "chats.messages.drafts.get",
+        "chats.messages.drafts.save",
+        "chats.messages.revisions.list",
+        "chats.messages.variants.activate",
+        "chats.messages.variants.create",
+        "chats.messages.variants.delete",
+        "chats.messages.variants.list"
       ]
     },
     {

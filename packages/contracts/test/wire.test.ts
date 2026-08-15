@@ -39,9 +39,11 @@ describe('product wire registry', () => {
     // The Phase 0 registry (21 ops) grew to the full M2 registry (34 ops),
     // then to the M4 registry (47 ops): lorebooks get/create/update/delete +
     // lorebooks.entries.* CRUD + personas.* CRUD joined lorebooks.list and
-    // presets.list. The exact operation set is asserted so a registry
-    // edit that drops or renames an op fails loudly here.
-    expect(registry.operations).toHaveLength(47);
+    // presets.list. Этап 4 slice 2 (message variants/revisions/drafts) adds
+    // 9 ops (56 total): variants list/create/delete/activate, revisions
+    // list, drafts get/save/commit/discard. The exact operation set is
+    // asserted so a registry edit that drops or renames an op fails loudly.
+    expect(registry.operations).toHaveLength(56);
     expect(registry.operations.map((op) => op.operationId)).toEqual([
       'meta.get',
       'characters.list',
@@ -58,6 +60,15 @@ describe('product wire registry', () => {
       'chats.messages.create',
       'chats.messages.update',
       'chats.messages.delete',
+      'chats.messages.variants.list',
+      'chats.messages.variants.create',
+      'chats.messages.variants.delete',
+      'chats.messages.variants.activate',
+      'chats.messages.revisions.list',
+      'chats.messages.drafts.get',
+      'chats.messages.drafts.save',
+      'chats.messages.drafts.commit',
+      'chats.messages.drafts.discard',
       'generation.start',
       'generation.cancel',
       'generation.get',
