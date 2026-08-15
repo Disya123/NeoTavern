@@ -1016,7 +1016,7 @@
           "type": "artifact",
           "artifact": "legacy bridge sendChatMessage on the Product Wire transport: wireBridge createBridgeChatMessage(chatId, text) — kernel plane creates via wire chats.messages.create and projects the lean MessageDto onto the documented BridgeChatMessage surface (id/chatId/role/content/createdAt; createdAt RFC3339 on kernel vs epoch-ms on legacy, never fabricated), legacy plane keeps the full legacy message — replaces the legacyRaw POST in LegacyBridgeSync + wireBridge tests 91/91",
           "result": "One more product mutation left the component layer (M5 slice 10, Этап 4 context 5 part): the legacy bridge sendChatMessage (SillyTavern window bridge) now routes through wireBridge instead of legacyRaw (ARC-03) — on the kernel plane the message is created via wire chats.messages.create and returned as the lean MessageDto projected onto the documented BridgeChatMessage surface, so plugin callers get exactly what the kernel guarantees and nothing fabricated (legacy-only fields are absent, and createdAt is RFC3339 there vs epoch-ms on the legacy plane — documented on the type); on the legacy plane the full legacy message is returned as before. The remaining two LegacyBridgeSync legacyRaw calls are extension-settings reads/writes — a plugin-facing legacy contour (window.extension_settings), not product UI. ui:api:check drops 61 -> 60 sites. Verified: web vitest 642/642 (wireBridge 91/91 incl. 1 new bridge test), web typecheck clean, eslint clean, prettier clean, ui:api:check 60 sites OK, docs:check + docs:sync:check OK, gates GATE PASS.",
-          "commit": "pending"
+          "commit": "38b1acd"
         },
         {
           "type": "artifact",
