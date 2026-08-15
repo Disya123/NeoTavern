@@ -36,6 +36,7 @@ pub mod export;
 pub mod generation;
 pub mod headless;
 pub mod local;
+pub mod plugins;
 pub mod product;
 pub mod prompt;
 pub mod providers;
@@ -601,6 +602,12 @@ fn handle_unary(
         "assets.get" => with_db_opt(db, |db| assets::assets_get(db, req)),
         "assets.content" => with_db_opt(db, |db| assets::assets_content(db, req)),
         "assets.delete" => with_db_opt(db, |db| assets::assets_delete(db, req)),
+        // Этап 4 slice 6: canonical Extensions-context registry (SEC-05).
+        "plugins.list" => with_db_opt(db, |db| plugins::plugins_list(db, req)),
+        "plugins.install" => with_db_opt(db, |db| plugins::plugins_install(db, req)),
+        "plugins.uninstall" => with_db_opt(db, |db| plugins::plugins_uninstall(db, req)),
+        "plugins.enable" => with_db_opt(db, |db| plugins::plugins_enable(db, req)),
+        "plugins.disable" => with_db_opt(db, |db| plugins::plugins_disable(db, req)),
         // Этап 4 slice 7: canonical non-secret settings + SEC-07 diagnostics.
         "settings.get" => with_db_opt(db, |db| settings::settings_get(db, req)),
         "settings.update" => with_db_opt(db, |db| settings::settings_update(db, req)),

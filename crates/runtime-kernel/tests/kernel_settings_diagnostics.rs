@@ -189,7 +189,7 @@ fn diagnostics_export_is_allowlisted_and_redacted() {
         bundle["schemaHash"],
         contracts_generated::contract_schema_hash()
     );
-    assert_eq!(bundle["schemaRevision"].as_i64().expect("revision"), 11);
+    assert_eq!(bundle["schemaRevision"].as_i64().expect("revision"), 12);
     assert_eq!(bundle["settings"]["count"].as_i64().expect("count"), 1);
     assert_eq!(
         bundle["generationRuns"]["total"].as_i64().expect("total"),

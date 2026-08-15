@@ -319,6 +319,37 @@ macro_rules! migration_11_sql {
     };
 }
 
+/// Literal body of the plugins (v12) schema migration — the
+/// `migration_12_sql!()` literal. Adds the STRICT `plugins` table: the
+/// canonical Extensions-context registry (ТЗ §8.1 Extensions, §SEC-05,
+/// Этап 4 slice 6). Each row is the DURABLE lifecycle state of one plugin:
+/// version, `enabled`, the package-trust state (`built-in` /
+/// `verified-publisher` / `locally-trusted` / `unsigned-untrusted`), the
+/// optional publisher key fingerprint, the GRANTED permission set (recorded
+/// at install/update — the install/update request IS the consent moment) and
+/// the opaque manifest. The table holds NO code, NO secrets and NO handles —
+/// execution and cleanup live in the isolated host executor behind the
+/// versioned capability protocol (ТЗ §14.1); the kernel only records what
+/// was verified and consented.
+macro_rules! migration_12_sql {
+    () => {
+        r#"CREATE TABLE plugins (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    version TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 0,
+    manifest_json TEXT NOT NULL DEFAULT '{}',
+    permissions_json TEXT NOT NULL DEFAULT '[]',
+    last_error_code TEXT,
+    source_json TEXT,
+    trust_state TEXT NOT NULL DEFAULT 'unsigned-untrusted',
+    publisher_key_id TEXT,
+    installed_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+) STRICT;"#
+    };
+}
+
 /// Name of the initial (v1) schema migration.
 pub const MIGRATION_1_NAME: &str = "001_initial_schema";
 
@@ -500,6 +531,22 @@ pub const MIGRATION_11_SQL: &str = migration_11_sql!();
 pub const MIGRATION_11_CHECKSUM: &str =
     "6f0cc38177e6c0dc14c8c2522f01fe671d64dad61ded5ba0a1e9752456cf595a";
 
+/// Name of the plugins (v12) schema migration.
+pub const MIGRATION_12_NAME: &str = "012_plugins";
+
+/// Exact SQL of the plugins schema migration (v12) — the
+/// `migration_12_sql!()` literal. Adds the STRICT `plugins` registry table
+/// (ТЗ §8.1 Extensions, §SEC-05, Этап 4 slice 6).
+pub const MIGRATION_12_SQL: &str = migration_12_sql!();
+
+/// Lowercase sha256 hex of the `MIGRATION_12_SQL` string bytes.
+///
+/// Computed via node (`crypto.createHash('sha256')` over the exact literal
+/// bytes, no trailing newline) and asserted by the migration test suite
+/// against the ledger.
+pub const MIGRATION_12_CHECKSUM: &str =
+    "d6c71609e5e9bf2496123313a7a43151d8a9b0f98cc4082f488cfd0e2dfcfad9";
+
 /// A fresh install runs every migration in order, so `FRESH_SCHEMA_SQL` is the
 /// concatenation of all migration literals with a single newline between them
 /// (the same statement separator `execute_batch` applies).
@@ -528,7 +575,9 @@ pub const FRESH_SCHEMA_SQL: &str = concat!(
     "\n",
     migration_10_sql!(),
     "\n",
-    migration_11_sql!()
+    migration_11_sql!(),
+    "\n",
+    migration_12_sql!()
 );
 
 /// sha256 hex of the `FRESH_SCHEMA_SQL` bytes — the fresh-install fingerprint.

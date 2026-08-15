@@ -1,0 +1,1 @@
+{"id":"lorebook-searcher","manifest":{"id":"lorebook-searcher","main":"dist/index.js"},"name":"Lorebook Searcher","permissions":["plugin.storage","lorebooks.list"],"publisherKeyId":"fp-9f2c7a1b","trustState":"super-trusted","version":"1.2.0"}

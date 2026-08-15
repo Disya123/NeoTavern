@@ -3,6 +3,27 @@
 ## Unreleased
 ### Added
 
+- **Canonical Extensions-context registry (ТЗ §8.1 Extensions, §SEC-05,
+  ARC-08, M5 slice 6 part 1).** Schema v12 (STRICT `plugins` table) + five
+  new wire operations (78 total): `plugins.list` /
+  `plugins.install` / `plugins.uninstall` / `plugins.enable` /
+  `plugins.disable`. The kernel durably records what the host ALREADY
+  verified (SEC-05 signature + per-file digest + ZIP traversal/symlink/
+  bomb rejection stays in the legacy host `packageTrust.ts`) and what the
+  user consented to: version, trust state (`built-in` /
+  `verified-publisher` / `locally-trusted` / `unsigned-untrusted`),
+  publisher key fingerprint and the GRANTED permission set — the
+  install/update request IS the consent moment. Fail-closed: an install
+  that would LOWER the recorded trust rank is rejected with the stable
+  `PLUGIN_TRUST_DOWNGRADE` product code (an unsigned package can never
+  silently replace a verified one), same id+version re-install is
+  idempotent, enable/disable are idempotent flag transitions, uninstall
+  of an unknown plugin is `PLUGIN_NOT_FOUND`. The table holds NO code,
+  NO secrets and NO runtime handles — execution and cleanup (SEC-06) live
+  in the isolated host executor behind the versioned capability protocol
+  (ТЗ §14.1). 4 kernel tests (`kernel_plugins.rs`). Capability matrix
+  `ui.plugins` updated (wireOps + notes); themes and the legacy ST v1
+  translation remain slice 6 parts 2–3.
 - **Canonical content-addressed AssetStore (ТЗ §5.1, AGENTS.md §11/§12, M5
   slice 5 remainder).** Four new wire operations (73 total) over the
   crash-safe `neotavern_storage::assets` publisher: `assets.put` publishes

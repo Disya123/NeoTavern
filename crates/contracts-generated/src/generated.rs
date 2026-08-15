@@ -66,6 +66,11 @@ pub fn operation_request_limit(operation_id: &str) -> Option<u64> {
         "assets.get" => Some(1024),
         "assets.content" => Some(1024),
         "assets.delete" => Some(1024),
+        "plugins.list" => Some(1024),
+        "plugins.install" => Some(65536),
+        "plugins.uninstall" => Some(1024),
+        "plugins.enable" => Some(1024),
+        "plugins.disable" => Some(1024),
         "settings.get" => Some(4096),
         "settings.update" => Some(65536),
         "diagnostics.export" => Some(1024),
@@ -147,6 +152,11 @@ pub fn operation_response_limit(operation_id: &str) -> Option<u64> {
         "assets.get" => Some(262144),
         "assets.content" => Some(4194304),
         "assets.delete" => Some(1024),
+        "plugins.list" => Some(262144),
+        "plugins.install" => Some(262144),
+        "plugins.uninstall" => Some(1024),
+        "plugins.enable" => Some(262144),
+        "plugins.disable" => Some(262144),
         "settings.get" => Some(262144),
         "settings.update" => Some(262144),
         "diagnostics.export" => Some(262144),
@@ -4502,6 +4512,601 @@ pub fn validate_request_assets_delete(value: &Value) -> Result<(), Vec<Issue>> {
 
 pub fn decode_request_assets_delete(bytes: &[u8]) -> Result<RequestAssetsDelete, WireError> {
     crate::decode::<RequestAssetsDelete>(validate_request_assets_delete, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PluginsItem {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub enabled: bool,
+    #[serde(rename = "trustState")]
+    pub trust_state: String,
+    #[serde(rename = "publisherKeyId", default, skip_serializing_if = "Option::is_none")]
+    pub publisher_key_id: Option<String>,
+    pub permissions: Vec<String>,
+    #[serde(rename = "lastErrorCode", default, skip_serializing_if = "Option::is_none")]
+    pub last_error_code: Option<String>,
+    #[serde(rename = "installedAt")]
+    pub installed_at: String,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub manifest: Option<Value>,
+}
+
+pub(crate) fn check_plugins_item(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{1,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_2: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("id").is_none() {
+            issues.push(Issue::new(join_path(path, "id"), "RequiredProperty"));
+        }
+        if value.get("name").is_none() {
+            issues.push(Issue::new(join_path(path, "name"), "RequiredProperty"));
+        }
+        if value.get("version").is_none() {
+            issues.push(Issue::new(join_path(path, "version"), "RequiredProperty"));
+        }
+        if value.get("enabled").is_none() {
+            issues.push(Issue::new(join_path(path, "enabled"), "RequiredProperty"));
+        }
+        if value.get("trustState").is_none() {
+            issues.push(Issue::new(join_path(path, "trustState"), "RequiredProperty"));
+        }
+        if value.get("permissions").is_none() {
+            issues.push(Issue::new(join_path(path, "permissions"), "RequiredProperty"));
+        }
+        if value.get("installedAt").is_none() {
+            issues.push(Issue::new(join_path(path, "installedAt"), "RequiredProperty"));
+        }
+        if value.get("updatedAt").is_none() {
+            issues.push(Issue::new(join_path(path, "updatedAt"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("id") {
+            let child_path = join_path(path, "id");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("name") {
+            let child_path = join_path(path, "name");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 128 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("version") {
+            let child_path = join_path(path, "version");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 64 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("enabled") {
+            let child_path = join_path(path, "enabled");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(child) = value.get("trustState") {
+            let child_path = join_path(path, "trustState");
+            match child.as_str() {
+                Some(s) => {
+                    if !matches!(s, "built-in" | "verified-publisher" | "locally-trusted" | "unsigned-untrusted") {
+                        issues.push(Issue::new(child_path.as_str(), "Union"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("publisherKeyId") {
+            let child_path = join_path(path, "publisherKeyId");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 128 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("permissions") {
+            let child_path = join_path(path, "permissions");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                if arr.len() > 64 {
+                    issues.push(Issue::new(child_path.as_str(), "ArrayMaxItems"));
+                }
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    match item.as_str() {
+                        Some(s) => {
+                            let len = s.encode_utf16().count();
+                            if len < 1 {
+                                issues.push(Issue::new(item_path.as_str(), "StringMinLength"));
+                            }
+                            if len > 64 {
+                                issues.push(Issue::new(item_path.as_str(), "StringMaxLength"));
+                            }
+                        }
+                        None => issues.push(Issue::new(item_path.as_str(), "String")),
+                    }
+                }
+            }
+        }
+        if let Some(child) = value.get("lastErrorCode") {
+            let child_path = join_path(path, "lastErrorCode");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 256 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("installedAt") {
+            let child_path = join_path(path, "installedAt");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("updatedAt") {
+            let child_path = join_path(path, "updatedAt");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_2.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("manifest") {
+            let child_path = join_path(path, "manifest");
+            if !child.is_object() {
+                issues.push(Issue::new(child_path.as_str(), "Object"));
+            } else {
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "id" | "name" | "version" | "enabled" | "trustState" | "publisherKeyId" | "permissions" | "lastErrorCode" | "installedAt" | "updatedAt" | "manifest") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_plugins_item(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_plugins_item(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_plugins_item(bytes: &[u8]) -> Result<PluginsItem, WireError> {
+    crate::decode::<PluginsItem>(validate_plugins_item, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultPluginsList {
+    pub items: Vec<PluginsItem>,
+}
+
+pub(crate) fn check_result_plugins_list(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("items").is_none() {
+            issues.push(Issue::new(join_path(path, "items"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("items") {
+            let child_path = join_path(path, "items");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                if arr.len() > 256 {
+                    issues.push(Issue::new(child_path.as_str(), "ArrayMaxItems"));
+                }
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    check_plugins_item(item, &item_path, issues);
+                }
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "items") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_plugins_list(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_plugins_list(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_plugins_list(bytes: &[u8]) -> Result<ResultPluginsList, WireError> {
+    crate::decode::<ResultPluginsList>(validate_result_plugins_list, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestPluginsInstall {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    #[serde(rename = "trustState")]
+    pub trust_state: String,
+    #[serde(rename = "publisherKeyId", default, skip_serializing_if = "Option::is_none")]
+    pub publisher_key_id: Option<String>,
+    pub permissions: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub manifest: Option<Value>,
+}
+
+pub(crate) fn check_request_plugins_install(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{1,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("id").is_none() {
+            issues.push(Issue::new(join_path(path, "id"), "RequiredProperty"));
+        }
+        if value.get("name").is_none() {
+            issues.push(Issue::new(join_path(path, "name"), "RequiredProperty"));
+        }
+        if value.get("version").is_none() {
+            issues.push(Issue::new(join_path(path, "version"), "RequiredProperty"));
+        }
+        if value.get("trustState").is_none() {
+            issues.push(Issue::new(join_path(path, "trustState"), "RequiredProperty"));
+        }
+        if value.get("permissions").is_none() {
+            issues.push(Issue::new(join_path(path, "permissions"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("id") {
+            let child_path = join_path(path, "id");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("name") {
+            let child_path = join_path(path, "name");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 128 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("version") {
+            let child_path = join_path(path, "version");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 64 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("trustState") {
+            let child_path = join_path(path, "trustState");
+            match child.as_str() {
+                Some(s) => {
+                    if !matches!(s, "built-in" | "verified-publisher" | "locally-trusted" | "unsigned-untrusted") {
+                        issues.push(Issue::new(child_path.as_str(), "Union"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("publisherKeyId") {
+            let child_path = join_path(path, "publisherKeyId");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 128 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("permissions") {
+            let child_path = join_path(path, "permissions");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                if arr.len() > 64 {
+                    issues.push(Issue::new(child_path.as_str(), "ArrayMaxItems"));
+                }
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    match item.as_str() {
+                        Some(s) => {
+                            let len = s.encode_utf16().count();
+                            if len < 1 {
+                                issues.push(Issue::new(item_path.as_str(), "StringMinLength"));
+                            }
+                            if len > 64 {
+                                issues.push(Issue::new(item_path.as_str(), "StringMaxLength"));
+                            }
+                        }
+                        None => issues.push(Issue::new(item_path.as_str(), "String")),
+                    }
+                }
+            }
+        }
+        if let Some(child) = value.get("manifest") {
+            let child_path = join_path(path, "manifest");
+            if !child.is_object() {
+                issues.push(Issue::new(child_path.as_str(), "Object"));
+            } else {
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "id" | "name" | "version" | "trustState" | "publisherKeyId" | "permissions" | "manifest") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_plugins_install(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_plugins_install(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_plugins_install(bytes: &[u8]) -> Result<RequestPluginsInstall, WireError> {
+    crate::decode::<RequestPluginsInstall>(validate_request_plugins_install, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultPluginsInstall {
+    pub plugin: PluginsItem,
+}
+
+pub(crate) fn check_result_plugins_install(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("plugin").is_none() {
+            issues.push(Issue::new(join_path(path, "plugin"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("plugin") {
+            let child_path = join_path(path, "plugin");
+            check_plugins_item(child, &child_path, issues);
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "plugin") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_plugins_install(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_plugins_install(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_plugins_install(bytes: &[u8]) -> Result<ResultPluginsInstall, WireError> {
+    crate::decode::<ResultPluginsInstall>(validate_result_plugins_install, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestPluginsUninstall {
+    pub id: String,
+}
+
+pub(crate) fn check_request_plugins_uninstall(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{1,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("id").is_none() {
+            issues.push(Issue::new(join_path(path, "id"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("id") {
+            let child_path = join_path(path, "id");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "id") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_plugins_uninstall(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_plugins_uninstall(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_plugins_uninstall(bytes: &[u8]) -> Result<RequestPluginsUninstall, WireError> {
+    crate::decode::<RequestPluginsUninstall>(validate_request_plugins_uninstall, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestPluginsEnable {
+    pub id: String,
+}
+
+pub(crate) fn check_request_plugins_enable(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{1,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("id").is_none() {
+            issues.push(Issue::new(join_path(path, "id"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("id") {
+            let child_path = join_path(path, "id");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "id") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_plugins_enable(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_plugins_enable(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_plugins_enable(bytes: &[u8]) -> Result<RequestPluginsEnable, WireError> {
+    crate::decode::<RequestPluginsEnable>(validate_request_plugins_enable, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestPluginsDisable {
+    pub id: String,
+}
+
+pub(crate) fn check_request_plugins_disable(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{1,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("id").is_none() {
+            issues.push(Issue::new(join_path(path, "id"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("id") {
+            let child_path = join_path(path, "id");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "id") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_plugins_disable(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_plugins_disable(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_plugins_disable(bytes: &[u8]) -> Result<RequestPluginsDisable, WireError> {
+    crate::decode::<RequestPluginsDisable>(validate_request_plugins_disable, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

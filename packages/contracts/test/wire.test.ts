@@ -48,9 +48,11 @@ describe('product wire registry', () => {
     // adds settings.get/settings.update/diagnostics.export (68 total);
     // secrets.status (SEC-01.1 value-free backend surface) makes 69;
     // Этап 4 slice 5 remainder (assets) adds assets.put/get/content/delete
-    // (73 total). The exact operation set is asserted so a registry edit
-    // that drops or renames an op fails loudly.
-    expect(registry.operations).toHaveLength(73);
+    // (73 total); Этап 4 slice 6 (extensions registry) adds
+    // plugins.list/install/uninstall/enable/disable (78 total). The exact
+    // operation set is asserted so a registry edit that drops or renames
+    // an op fails loudly.
+    expect(registry.operations).toHaveLength(78);
     expect(registry.operations.map((op) => op.operationId)).toEqual([
       'meta.get',
       'characters.list',
@@ -98,6 +100,11 @@ describe('product wire registry', () => {
       'assets.get',
       'assets.content',
       'assets.delete',
+      'plugins.list',
+      'plugins.install',
+      'plugins.uninstall',
+      'plugins.enable',
+      'plugins.disable',
       'settings.get',
       'settings.update',
       'diagnostics.export',

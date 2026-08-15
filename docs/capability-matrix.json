@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-08-15T14:42:57.951Z",
+  "generatedAt": "2026-08-15T14:54:07.727Z",
   "rows": [
     {
       "hosts": {
@@ -398,9 +398,15 @@
       },
       "id": "ui.plugins",
       "milestone": "M4",
-      "notes": "Legacy /api/v2 plugin surface; kernel capability protocol is the long-term path (M4).",
+      "notes": "Этап 4 slice 6 part 1 (M5): canonical Extensions-context registry over Product Wire (78 ops total) — schema v12 STRICT plugins table + 5 ops. The kernel durably records what the host ALREADY verified (SEC-05: publisher Ed25519 signature + per-file digest + ZIP traversal/symlink/bomb rejection stays in the legacy host packageTrust.ts) and what the user consented to: version, trust state (built-in / verified-publisher / locally-trusted / unsigned-untrusted), publisher key fingerprint and the GRANTED permission set — the install/update request IS the consent moment (ARC-08). Fail-closed: an install that would LOWER the recorded trust rank is rejected (stable PLUGIN_TRUST_DOWNGRADE product code — an unsigned package can never silently replace a verified one), same id+version re-install is idempotent, enable/disable are idempotent flag transitions, uninstall of an unknown plugin is PLUGIN_NOT_FOUND. The table holds NO code, NO secrets and NO runtime handles — execution and cleanup (SEC-06) live in the isolated host executor behind the versioned capability protocol (ТЗ §14.1); themes (Theme SDK registry) and the legacy ST v1 translation remain slice 6 parts 2-3. 4 kernel tests cover the round trip, idempotent re-install, trust-downgrade rejection and wire validation.",
       "title": "Plugin management UI",
-      "wireOps": []
+      "wireOps": [
+        "plugins.disable",
+        "plugins.enable",
+        "plugins.install",
+        "plugins.list",
+        "plugins.uninstall"
+      ]
     },
     {
       "hosts": {

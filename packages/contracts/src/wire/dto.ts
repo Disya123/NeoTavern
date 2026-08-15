@@ -1745,6 +1745,113 @@ export const DeleteAssetRequestDtoSchema = Type.Object(
 );
 export type DeleteAssetRequestDto = Static<typeof DeleteAssetRequestDtoSchema>;
 
+/** Plugin package-trust states (ТЗ §SEC-05, mirrored from `PluginPackageTrust`). */
+export const PluginTrustStateSchema = Type.Union(
+  [
+    Type.Literal('built-in'),
+    Type.Literal('verified-publisher'),
+    Type.Literal('locally-trusted'),
+    Type.Literal('unsigned-untrusted'),
+  ],
+  { 'x-wire-unknown-behavior': 'reject' },
+);
+export type PluginTrustState = Static<typeof PluginTrustStateSchema>;
+
+/**
+ * Plugin DTO (`wire.plugins.item`) — the DURABLE lifecycle state of one
+ * installed plugin (ТЗ §8.1 Extensions, Этап 4 slice 6). Records the
+ * version, `enabled` flag, package-trust state and publisher key
+ * fingerprint (SEC-05), the GRANTED permission set (the install/update
+ * request is the consent moment) and the opaque manifest. It carries NO
+ * code, NO secrets and NO runtime handles — execution and cleanup live in
+ * the isolated host executor behind the versioned capability protocol.
+ */
+export const PluginDtoSchema = Type.Object(
+  {
+    id: Type.String({ pattern: '^[a-z][a-z0-9-]{1,63}$' }),
+    name: Type.String({ minLength: 1, maxLength: 128 }),
+    version: Type.String({ minLength: 1, maxLength: 64 }),
+    enabled: Type.Boolean(),
+    trustState: PluginTrustStateSchema,
+    publisherKeyId: Type.Optional(Type.String({ minLength: 1, maxLength: 128 })),
+    permissions: Type.Array(Type.String({ minLength: 1, maxLength: 64 }), { maxItems: 64 }),
+    lastErrorCode: Type.Optional(Type.String({ minLength: 1, maxLength: 256 })),
+    installedAt: Type.String({ format: 'rfc3339' }),
+    updatedAt: Type.String({ format: 'rfc3339' }),
+    manifest: Type.Optional(Type.Object({}, { additionalProperties: true })),
+  },
+  { $id: 'wire.plugins.item', additionalProperties: false },
+);
+export type PluginDto = Static<typeof PluginDtoSchema>;
+
+/** Plugin list result (`wire.result.plugins.list`). */
+export const ListPluginsResultDtoSchema = Type.Object(
+  {
+    items: Type.Array(PluginDtoSchema, { maxItems: 256 }),
+  },
+  { $id: 'wire.result.plugins.list', additionalProperties: false },
+);
+export type ListPluginsResultDto = Static<typeof ListPluginsResultDtoSchema>;
+
+/**
+ * Plugin install request (`wire.request.plugins.install`). The host has
+ * ALREADY verified the package (publisher signature + per-file digest,
+ * ZIP path-traversal/symlink/bomb rejection — SEC-05) before this op runs;
+ * the kernel durably records the verified trust state, version and the
+ * GRANTED permission set (the install/update request is the consent
+ * moment). Re-installing the same id+version is idempotent; a version
+ * change that would LOWER the recorded trust rank is rejected (Conflict).
+ */
+export const InstallPluginRequestDtoSchema = Type.Object(
+  {
+    id: Type.String({ pattern: '^[a-z][a-z0-9-]{1,63}$' }),
+    name: Type.String({ minLength: 1, maxLength: 128 }),
+    version: Type.String({ minLength: 1, maxLength: 64 }),
+    trustState: PluginTrustStateSchema,
+    publisherKeyId: Type.Optional(Type.String({ minLength: 1, maxLength: 128 })),
+    permissions: Type.Array(Type.String({ minLength: 1, maxLength: 64 }), { maxItems: 64 }),
+    manifest: Type.Optional(Type.Object({}, { additionalProperties: true })),
+  },
+  { $id: 'wire.request.plugins.install', additionalProperties: false },
+);
+export type InstallPluginRequestDto = Static<typeof InstallPluginRequestDtoSchema>;
+
+/** Plugin install result (`wire.result.plugins.install`). */
+export const InstallPluginResultDtoSchema = Type.Object(
+  {
+    plugin: PluginDtoSchema,
+  },
+  { $id: 'wire.result.plugins.install', additionalProperties: false },
+);
+export type InstallPluginResultDto = Static<typeof InstallPluginResultDtoSchema>;
+
+/** Plugin uninstall request (`wire.request.plugins.uninstall`). */
+export const UninstallPluginRequestDtoSchema = Type.Object(
+  {
+    id: Type.String({ pattern: '^[a-z][a-z0-9-]{1,63}$' }),
+  },
+  { $id: 'wire.request.plugins.uninstall', additionalProperties: false },
+);
+export type UninstallPluginRequestDto = Static<typeof UninstallPluginRequestDtoSchema>;
+
+/** Plugin enable request (`wire.request.plugins.enable`). */
+export const EnablePluginRequestDtoSchema = Type.Object(
+  {
+    id: Type.String({ pattern: '^[a-z][a-z0-9-]{1,63}$' }),
+  },
+  { $id: 'wire.request.plugins.enable', additionalProperties: false },
+);
+export type EnablePluginRequestDto = Static<typeof EnablePluginRequestDtoSchema>;
+
+/** Plugin disable request (`wire.request.plugins.disable`). */
+export const DisablePluginRequestDtoSchema = Type.Object(
+  {
+    id: Type.String({ pattern: '^[a-z][a-z0-9-]{1,63}$' }),
+  },
+  { $id: 'wire.request.plugins.disable', additionalProperties: false },
+);
+export type DisablePluginRequestDto = Static<typeof DisablePluginRequestDtoSchema>;
+
 /**
  * Every wire schema keyed by its `$id` (schemaId): all DTOs plus the error
  * DTO, the message role union and the three envelopes. This is the complete
@@ -1792,6 +1899,13 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.request.assets.content': GetAssetContentRequestDtoSchema,
   'wire.result.assets.content': GetAssetContentResultDtoSchema,
   'wire.request.assets.delete': DeleteAssetRequestDtoSchema,
+  'wire.plugins.item': PluginDtoSchema,
+  'wire.result.plugins.list': ListPluginsResultDtoSchema,
+  'wire.request.plugins.install': InstallPluginRequestDtoSchema,
+  'wire.result.plugins.install': InstallPluginResultDtoSchema,
+  'wire.request.plugins.uninstall': UninstallPluginRequestDtoSchema,
+  'wire.request.plugins.enable': EnablePluginRequestDtoSchema,
+  'wire.request.plugins.disable': DisablePluginRequestDtoSchema,
   'wire.request.set-provider-config': SetProviderConfigRequestDtoSchema,
   'wire.request.get-provider-config': GetProviderConfigRequestDtoSchema,
   'wire.request.list-provider-configs': ListProviderConfigsRequestDtoSchema,
