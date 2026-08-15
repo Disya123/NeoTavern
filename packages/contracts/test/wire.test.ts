@@ -43,9 +43,10 @@ describe('product wire registry', () => {
     // 9 ops (56 total): variants list/create/delete/activate, revisions
     // list, drafts get/save/commit/discard. Этап 4 slice 3 (memories and
     // presets) adds 8 ops (64 total): presets get/create/update/delete and
-    // memories list/create/update/delete. The exact operation set is
-    // asserted so a registry edit that drops or renames an op fails loudly.
-    expect(registry.operations).toHaveLength(64);
+    // memories list/create/update/delete. Этап 4 slice 5 (profile export)
+    // adds profile.export (65 total). The exact operation set is asserted so
+    // a registry edit that drops or renames an op fails loudly.
+    expect(registry.operations).toHaveLength(65);
     expect(registry.operations.map((op) => op.operationId)).toEqual([
       'meta.get',
       'characters.list',
@@ -88,6 +89,7 @@ describe('product wire registry', () => {
       'providers.config.delete',
       'backups.create',
       'backups.list',
+      'profile.export',
       'lorebooks.list',
       'lorebooks.get',
       'lorebooks.create',

@@ -26,6 +26,9 @@ pub const LOCK_FILE: &str = ".neotavern.lock";
 /// Backups directory name inside a data root (Phase 11 backup containers).
 pub const BACKUPS_DIR: &str = "backups";
 
+/// Profile-export containers directory name inside a data root (SEC-02).
+pub const EXPORTS_DIR: &str = "exports";
+
 /// Absolute path of the SQLite database for `root`.
 pub fn db_path(root: &Path) -> PathBuf {
     root.join(DB_FILE_NAME)
@@ -49,6 +52,12 @@ pub fn lock_path(root: &Path) -> PathBuf {
 /// Absolute path of the backups directory for `root` (Phase 11).
 pub fn backups_dir(root: &Path) -> PathBuf {
     root.join(BACKUPS_DIR)
+}
+
+/// Absolute path of the profile-export containers directory for `root`
+/// (SEC-02; each export gets its own subdirectory beneath this).
+pub fn exports_dir(root: &Path) -> PathBuf {
+    root.join(EXPORTS_DIR)
 }
 
 /// Validates a managed relative key for asset storage.

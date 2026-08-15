@@ -31,6 +31,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 pub mod backup;
+pub mod export;
 pub mod generation;
 pub mod headless;
 pub mod local;
@@ -619,6 +620,8 @@ fn handle_unary(
         // Phase 11 portable data (ТЗ §40–§41): backup containers.
         "backups.create" => with_db_opt(db, |db| backup::backups_create(db, req)),
         "backups.list" => with_db_opt(db, |db| backup::backups_list(db, req)),
+        // Phase 11 / SEC-02: logical allowlist profile export.
+        "profile.export" => with_db_opt(db, |db| export::profile_export(db, req)),
         _ => Err(KernelError::new(
             KernelErrorCode::OperationNotFound,
             format!("unknown operation: {op}"),

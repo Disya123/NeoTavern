@@ -183,10 +183,10 @@ export type PresetDto = Static<typeof PresetDtoSchema>;
 
 /** Memory scope union (`wire.memory.scope`). Closed enum: unknown scopes are
  * rejected on the wire. */
-export const WireMemoryScope = Type.Union(
-  [Type.Literal('global'), Type.Literal('character')],
-  { $id: 'wire.memory.scope', 'x-wire-unknown-behavior': 'reject' },
-);
+export const WireMemoryScope = Type.Union([Type.Literal('global'), Type.Literal('character')], {
+  $id: 'wire.memory.scope',
+  'x-wire-unknown-behavior': 'reject',
+});
 export type WireMemoryScope = Static<typeof WireMemoryScope>;
 
 /** Memory DTO (`wire.memory.dto`). Long-lived knowledge fragments the prompt
@@ -577,7 +577,9 @@ export const CreateMemoryRequestDtoSchema = Type.Object(
   {
     scope: Type.Optional(WireMemoryScope),
     characterId: Type.Optional(Type.String({ format: 'uuid' })),
-    keys: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 500 }), { maxItems: 100 })),
+    keys: Type.Optional(
+      Type.Array(Type.String({ minLength: 1, maxLength: 500 }), { maxItems: 100 }),
+    ),
     content: Type.String({ minLength: 1, maxLength: 100000 }),
     enabled: Type.Optional(Type.Boolean()),
     position: Type.Optional(Type.Integer({ minimum: 0, maximum: 1000000 })),
@@ -593,7 +595,9 @@ export const UpdateMemoryRequestDtoSchema = Type.Object(
     memoryId: Type.String({ format: 'uuid' }),
     scope: Type.Optional(WireMemoryScope),
     characterId: Type.Optional(Type.String({ format: 'uuid' })),
-    keys: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 500 }), { maxItems: 100 })),
+    keys: Type.Optional(
+      Type.Array(Type.String({ minLength: 1, maxLength: 500 }), { maxItems: 100 }),
+    ),
     content: Type.Optional(Type.String({ minLength: 1, maxLength: 100000 })),
     enabled: Type.Optional(Type.Boolean()),
     position: Type.Optional(Type.Integer({ minimum: 0, maximum: 1000000 })),
@@ -615,7 +619,9 @@ export type DeleteMemoryRequestDto = Static<typeof DeleteMemoryRequestDtoSchema>
 /** List presets request DTO (`wire.request.list-presets`). */
 export const ListPresetsRequestDtoSchema = Type.Object(
   {
-    kind: Type.Optional(Type.String({ minLength: 1, maxLength: 50, pattern: '^[a-z0-9][a-z0-9-]*$' })),
+    kind: Type.Optional(
+      Type.String({ minLength: 1, maxLength: 50, pattern: '^[a-z0-9][a-z0-9-]*$' }),
+    ),
   },
   { $id: 'wire.request.list-presets', additionalProperties: false },
 );
@@ -855,7 +861,9 @@ export const ActivateMessageVariantRequestDtoSchema = Type.Object(
   },
   { $id: 'wire.request.message-variant-activate', additionalProperties: false },
 );
-export type ActivateMessageVariantRequestDto = Static<typeof ActivateMessageVariantRequestDtoSchema>;
+export type ActivateMessageVariantRequestDto = Static<
+  typeof ActivateMessageVariantRequestDtoSchema
+>;
 
 /** List message revisions request DTO (`wire.request.message-revisions-list`). */
 export const ListMessageRevisionsRequestDtoSchema = Type.Object(
@@ -1338,7 +1346,9 @@ export type LorebookEntryDto = Static<typeof LorebookEntryDtoSchema>;
  */
 export const LorebookEntryPatchSchema = Type.Object(
   {
-    keys: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 200 }), { maxItems: 100 })),
+    keys: Type.Optional(
+      Type.Array(Type.String({ minLength: 1, maxLength: 200 }), { maxItems: 100 }),
+    ),
     secondaryKeys: Type.Optional(
       Type.Array(Type.String({ minLength: 1, maxLength: 200 }), { maxItems: 100 }),
     ),
@@ -1428,6 +1438,53 @@ export const ListPersonasResultDtoSchema = Type.Object(
 export type ListPersonasResultDto = Static<typeof ListPersonasResultDtoSchema>;
 
 /**
+ * Profile export request DTO (`wire.request.profile-export`). An export is a
+ * logical allowlist container (SEC-02): only product entities are exported,
+ * secrets/provider configs/session data are never part of the container.
+ */
+export const ProfileExportRequestDtoSchema = Type.Object(
+  {
+    includeAssets: Type.Optional(Type.Boolean()),
+  },
+  { $id: 'wire.request.profile-export', additionalProperties: false },
+);
+export type ProfileExportRequestDto = Static<typeof ProfileExportRequestDtoSchema>;
+
+/** Per-section record counts of a profile export (`wire.result.profile-export`). */
+export const ProfileExportCountsDtoSchema = Type.Object(
+  {
+    characters: Type.Integer({ minimum: 0 }),
+    chats: Type.Integer({ minimum: 0 }),
+    messages: Type.Integer({ minimum: 0 }),
+    lorebooks: Type.Integer({ minimum: 0 }),
+    presets: Type.Integer({ minimum: 0 }),
+  },
+  { $id: 'wire.profile-export.counts', additionalProperties: false },
+);
+export type ProfileExportCountsDto = Static<typeof ProfileExportCountsDtoSchema>;
+
+/**
+ * Profile export result DTO (`wire.result.profile-export`): the verified
+ * container's metadata. The container itself is written by the kernel under
+ * the data root's `exports/` directory; `containerPath` is relative to the
+ * data root so hosts can resolve and stream it without transport-specific
+ * knowledge of the archive format.
+ */
+export const ProfileExportResultDtoSchema = Type.Object(
+  {
+    containerPath: Type.String({ minLength: 1, maxLength: 512 }),
+    formatVersion: Type.Integer({ minimum: 1 }),
+    createdAt: Type.String({ format: 'rfc3339' }),
+    records: ProfileExportCountsDtoSchema,
+    assets: Type.Integer({ minimum: 0 }),
+    sizeBytes: Type.Integer({ minimum: 0 }),
+    manifestSha256: Type.String({ minLength: 64, maxLength: 64 }),
+  },
+  { $id: 'wire.result.profile-export', additionalProperties: false },
+);
+export type ProfileExportResultDto = Static<typeof ProfileExportResultDtoSchema>;
+
+/**
  * Every wire schema keyed by its `$id` (schemaId): all DTOs plus the error
  * DTO, the message role union and the three envelopes. This is the complete
  * schema registry the codegen tool and `compileWireContract` operate on.
@@ -1456,6 +1513,9 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.result.list-providers': ListProvidersResultDtoSchema,
   'wire.provider.config.dto': ProviderConfigDtoSchema,
   'wire.result.list-provider-configs': ListProviderConfigsResultDtoSchema,
+  'wire.request.profile-export': ProfileExportRequestDtoSchema,
+  'wire.result.profile-export': ProfileExportResultDtoSchema,
+  'wire.profile-export.counts': ProfileExportCountsDtoSchema,
   'wire.request.set-provider-config': SetProviderConfigRequestDtoSchema,
   'wire.request.get-provider-config': GetProviderConfigRequestDtoSchema,
   'wire.request.list-provider-configs': ListProviderConfigsRequestDtoSchema,

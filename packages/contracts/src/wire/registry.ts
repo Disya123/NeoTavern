@@ -913,6 +913,20 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'profile.export',
+    'workflow',
+    'non-idempotent',
+    'none',
+    'app.write',
+    'wire.request.profile-export',
+    'wire.result.profile-export',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    4096,
+    262144,
+    undefined,
+  ),
+  op(
     'lorebooks.list',
     'transactional',
     'idempotent',
@@ -1335,6 +1349,16 @@ const BACKUP_VALUE = {
   status: 'completed',
 };
 
+const PROFILE_EXPORT_VALUE = {
+  containerPath: 'exports/profile-export-0c0a/',
+  formatVersion: 1,
+  createdAt: TIMESTAMP,
+  records: { characters: 1, chats: 1, messages: 2, lorebooks: 1, presets: 0 },
+  assets: 0,
+  sizeBytes: 4096,
+  manifestSha256: 'b'.repeat(64),
+};
+
 const LOREBOOK_VALUE = {
   id: UUID_LOREBOOK,
   name: 'World lore',
@@ -1669,6 +1693,8 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   }),
   fx('memories-delete-request', 'memories.delete', 'request', true, { memoryId: UUID_MEMORY }),
   fx('personas-list-request', 'personas.list', 'request', true, {}),
+  fx('profile-export-request', 'profile.export', 'request', true, { includeAssets: false }),
+  fx('profile-export-request-default', 'profile.export', 'request', true, {}),
   fx('providers-list-request', 'providers.list', 'request', true, {}),
   fx('providers-config-set-request', 'providers.config.set', 'request', true, {
     provider: 'fake',
@@ -1751,18 +1777,36 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     chatId: UUID_CHAT,
     draftId: UUID_MESSAGE_DRAFT,
   }),
-  fx('message-draft-get-response', 'chats.messages.drafts.get', 'response', true, MESSAGE_DRAFT_VALUE),
+  fx(
+    'message-draft-get-response',
+    'chats.messages.drafts.get',
+    'response',
+    true,
+    MESSAGE_DRAFT_VALUE,
+  ),
   fx('message-draft-save-request', 'chats.messages.drafts.save', 'request', true, {
     chatId: UUID_CHAT,
     role: 'assistant',
     content: 'Streaming partial…',
   }),
-  fx('message-draft-save-response', 'chats.messages.drafts.save', 'response', true, MESSAGE_DRAFT_VALUE),
+  fx(
+    'message-draft-save-response',
+    'chats.messages.drafts.save',
+    'response',
+    true,
+    MESSAGE_DRAFT_VALUE,
+  ),
   fx('message-draft-commit-request', 'chats.messages.drafts.commit', 'request', true, {
     chatId: UUID_CHAT,
     draftId: UUID_MESSAGE_DRAFT,
   }),
-  fx('message-draft-commit-response', 'chats.messages.drafts.commit', 'response', true, MESSAGE_VALUE),
+  fx(
+    'message-draft-commit-response',
+    'chats.messages.drafts.commit',
+    'response',
+    true,
+    MESSAGE_VALUE,
+  ),
   fx('message-draft-discard-request', 'chats.messages.drafts.discard', 'request', true, {
     chatId: UUID_CHAT,
     draftId: UUID_MESSAGE_DRAFT,
@@ -1818,30 +1862,25 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   }),
   fx('backups-create-response', 'backups.create', 'response', true, BACKUP_VALUE),
   fx('backups-list-response', 'backups.list', 'response', true, { items: [BACKUP_VALUE] }),
+  fx('profile-export-response', 'profile.export', 'response', true, PROFILE_EXPORT_VALUE),
   fx('lorebooks-list-response', 'lorebooks.list', 'response', true, { items: [LOREBOOK_VALUE] }),
   fx('lorebooks-get-response', 'lorebooks.get', 'response', true, LOREBOOK_VALUE),
   fx('lorebooks-create-response', 'lorebooks.create', 'response', true, LOREBOOK_VALUE),
   fx('lorebooks-update-response', 'lorebooks.update', 'response', true, LOREBOOK_VALUE),
   fx('lorebooks-delete-response', 'lorebooks.delete', 'response', true, {}),
-  fx(
-    'lorebooks-entries-list-response',
-    'lorebooks.entries.list',
-    'response',
-    true,
-    {
-      items: [
-        {
-          id: UUID_LOREBOOK_ENTRY,
-          keys: ['castle', 'fortress'],
-          secondaryKeys: ['stone'],
-          content: 'The castle is carved from living stone.',
-          enabled: true,
-          constant: false,
-          selective: true,
-        },
-      ],
-    },
-  ),
+  fx('lorebooks-entries-list-response', 'lorebooks.entries.list', 'response', true, {
+    items: [
+      {
+        id: UUID_LOREBOOK_ENTRY,
+        keys: ['castle', 'fortress'],
+        secondaryKeys: ['stone'],
+        content: 'The castle is carved from living stone.',
+        enabled: true,
+        constant: false,
+        selective: true,
+      },
+    ],
+  }),
   fx('lorebooks-entries-create-response', 'lorebooks.entries.create', 'response', true, {
     id: UUID_LOREBOOK_ENTRY,
     keys: ['castle', 'fortress'],
@@ -2019,6 +2058,13 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('neg-backup-bad-checksum', 'backups.create', 'response', false, {
     ...BACKUP_VALUE,
     checksumSha256: 'xyz',
+  }),
+  fx('neg-profile-export-bad-counts', 'profile.export', 'response', false, {
+    ...PROFILE_EXPORT_VALUE,
+    records: { ...PROFILE_EXPORT_VALUE.records, chats: 'one' },
+  }),
+  fx('neg-profile-export-bad-request', 'profile.export', 'request', false, {
+    includeAssets: 'yes',
   }),
   fx('neg-meta-bad-timestamp', 'characters.create', 'response', false, {
     ...CHARACTER_VALUE,

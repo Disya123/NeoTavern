@@ -103,7 +103,7 @@ fn export_verify_import_round_trip_and_idempotent_reimport(
     seed_kernel_db(&mut db_a)?;
 
     let dest = dir.path().join("export");
-    let report = create_export(&db_a, &dest)?;
+    let report = create_export(&db_a, &dest, true)?;
     assert_eq!(report.counts.characters, 2);
     assert_eq!(report.counts.chats, 2);
     assert_eq!(report.counts.messages, 3);
@@ -184,11 +184,21 @@ fn export_verify_import_round_trip_and_idempotent_reimport(
     assert!(again.orphans.is_empty());
     assert_eq!(count_rows(&db_b, "characters")?, 2);
 
+    // Data-only export (include_assets = false): same records, no assets.
+    let dest_no_assets = dir.path().join("export-no-assets");
+    let report_no_assets = create_export(&db_a, &dest_no_assets, false)?;
+    assert_eq!(report_no_assets.counts, report.counts, "records unaffected");
+    assert_eq!(report_no_assets.assets, 0, "no asset bytes when skipped");
+    assert!(!dest_no_assets.join("assets").exists(), "assets dir absent");
+    let verified_no_assets = verify_export(&dest_no_assets)?;
+    assert_eq!(verified_no_assets.records, report.counts);
+    assert_eq!(verified_no_assets.size_bytes, report_no_assets.size_bytes);
+
     // Import into a non-empty destination is refused before any write.
     let dest2 = dir.path().join("export2");
     std::fs::create_dir_all(&dest2)?;
     std::fs::write(dest2.join("stray.txt"), b"x")?;
-    let err = create_export(&db_a, &dest2).unwrap_err();
+    let err = create_export(&db_a, &dest2, true).unwrap_err();
     assert_eq!(err.code, StorageErrorCode::Conflict);
     Ok(())
 }
@@ -201,7 +211,7 @@ fn tampered_checksum_traversal_and_unknown_version_rejected(
     let mut db = open_root(&root)?;
     seed_kernel_db(&mut db)?;
     let dest = dir.path().join("export");
-    create_export(&db, &dest)?;
+    create_export(&db, &dest, true)?;
 
     // 1. Tampered payload byte → inventory checksum mismatch at verify.
     let chars_path = dest.join("characters.ndjson");
@@ -295,7 +305,7 @@ fn import_reports_orphans_and_applies_policies() -> Result<(), Box<dyn std::erro
     db.conn().execute_batch("PRAGMA foreign_keys = ON")?;
 
     let dest = dir.path().join("export");
-    create_export(&db, &dest)?;
+    create_export(&db, &dest, true)?;
     let verified = verify_export(&dest)?;
     assert_eq!(verified.records.chats, 3);
     assert_eq!(verified.records.messages, 4);

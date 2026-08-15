@@ -74,7 +74,7 @@ fn main() {
     let db = open::open(&root, &ConnectionPolicy::default(), &mut nop).expect("open");
     let export_dir = temp.path().join("export");
     let started = Instant::now();
-    let report = create_export(&db, &export_dir).expect("export");
+    let report = create_export(&db, &export_dir, true).expect("export");
     let export_ms = started.elapsed().as_millis();
     drop(db);
 

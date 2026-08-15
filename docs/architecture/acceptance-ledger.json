@@ -867,12 +867,18 @@
           "type": "inspection",
           "result": "M5 opened after the M4 human verdict (c615c31). No slice acceptance packet yet; slice 2 kernel/contract work in progress on pr-m5-slices.",
           "commit": "c615c31"
+        },
+        {
+          "type": "artifact",
+          "artifact": "wire op profile.export (registry + wire.request/result.profile-export DTOs + fixtures + generated.rs + corpus) + crates/runtime-kernel/src/export.rs + storage create_export(include_assets) + kernel_profile_export.rs (SEC-02 sentinel test) + release-manifest/capability-matrix ui.profile-export -> profile.export (M5, Implemented)",
+          "result": "Slice 5 canonical-plane export surface: profile.export builds a fresh verified allowlist container under data-root exports/ (5 product sections + optional assets + manifest written last atomically) and returns the verified report with relative containerPath + manifest sha256; provider configs/secrets are not export sections by construction and the kernel negative test proves a sentinel SecretStore value never appears in any container byte (wire get never echoes it either). Verified contained: kernel suite 15/15 binaries green (incl. kernel_profile_export), storage suite green (incl. export tests + new data-only case), contracts vitest 89/89, codegen --check OK, matrix/docs/gates green. Per-profile FK filtering (ADR-0047 waiver 4) stays open: it needs the canonical profiles model, tracked in slice 5 remainder.",
+          "commit": "PENDING-SLICE-5"
         }
       ],
       "blockingIssues": [
         "legacy route removal for messages/swipes/drafts — re-waived via ADR-0048 (UI cutover delivered in slice 2; routes remain as the facade's browser/legacy-sidecar transport until Этап 6, expiry release gate)",
         "character↔lorebook scoping (ADR-0047 waiver 2) — slice 6",
-        "SEC-02 logical export with per-profile FK filtering (ADR-0047 waiver 4) — slice 5",
+        "SEC-02 per-profile FK filtering (ADR-0047 waiver 4) — slice 5 remainder: canonical export surface delivered (wire profile.export + allowlist container + sentinel test); filtering awaits the canonical profiles model + UI/facade cutover",
         "zero-legacy-scan exit (ADR-0047 waiver 6) — M5 exit",
         "branches/revisions/assets legacy conversion (M3 ADR-0046 waiver 8) — slices 2/5",
         "Fastify product-data ownership (ADR-0047 waiver 7) — passes to M6"

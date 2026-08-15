@@ -263,13 +263,13 @@ fn default_true() -> bool {
 /// Writes a portable export of `db`'s product data into `dest`.
 ///
 /// `dest` must be absent or an empty directory. Product tables are read
-/// ordered by id and written as NDJSON; every referenced asset
-/// (`characters.avatar_asset_id` → `__neotavern_assets`) is byte-copied into
-/// `dest/assets/<key>` and size+sha256 verified after the copy; the inventory
-/// (sorted by logical path) and the `manifest.json` are written LAST via an
-/// atomic temp+rename, so a partially-written container never carries a
-/// manifest.
-pub fn create_export(db: &Database, dest: &Path) -> Result<ExportReport> {
+/// ordered by id and written as NDJSON; when `include_assets` is true, every
+/// referenced asset (`characters.avatar_asset_id` → `__neotavern_assets`) is
+/// byte-copied into `dest/assets/<key>` and size+sha256 verified after the
+/// copy; the inventory (sorted by logical path) and the `manifest.json` are
+/// written LAST via an atomic temp+rename, so a partially-written container
+/// never carries a manifest.
+pub fn create_export(db: &Database, dest: &Path, include_assets: bool) -> Result<ExportReport> {
     if dest.exists() {
         if !dest.is_dir() {
             return Err(StorageError::new(
@@ -310,17 +310,20 @@ pub fn create_export(db: &Database, dest: &Path) -> Result<ExportReport> {
         presets: presets.len() as u64,
     };
 
-    // Referenced assets, deterministic order (sorted, deduped ids).
-    let mut referenced: Vec<&str> = characters
-        .iter()
-        .filter_map(|c| c.avatar_asset_id.as_deref())
-        .collect();
-    referenced.sort_unstable();
-    referenced.dedup();
-    let mut inventory: Vec<InventoryEntry> =
-        Vec::with_capacity(referenced.len() + NDJSON_FILES.len());
-    for id in referenced {
-        inventory.push(copy_asset(db, id, dest)?);
+    // Referenced assets, deterministic order (sorted, deduped ids). Skipped
+    // entirely when the caller asked for a data-only export (SEC-02 allows
+    // the UI to omit asset bytes for lightweight transfers).
+    let mut inventory: Vec<InventoryEntry> = Vec::with_capacity(NDJSON_FILES.len());
+    if include_assets {
+        let mut referenced: Vec<&str> = characters
+            .iter()
+            .filter_map(|c| c.avatar_asset_id.as_deref())
+            .collect();
+        referenced.sort_unstable();
+        referenced.dedup();
+        for id in referenced {
+            inventory.push(copy_asset(db, id, dest)?);
+        }
     }
 
     // NDJSON inventory entries.

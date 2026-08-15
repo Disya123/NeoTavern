@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-08-15T11:02:26.785Z",
+  "generatedAt": "2026-08-15T13:10:47.356Z",
   "rows": [
     {
       "hosts": {
@@ -397,10 +397,10 @@
         "webClient": "Implemented"
       },
       "id": "ui.profile-export",
-      "milestone": "M1",
-      "notes": "SEC-02: Implemented in M1 Wave 1 and hardened in M1 Wave 2 — the legacy export is a logical allowlist archive (format v2: manifest.json with exported tables/counts, exclusions and redactions, one JSONL per allowlisted table, no DB snapshot; apps/server/src/lib/profileExport.ts). Wave 2 hardening (audit SEC-02 findings): the whole export now runs inside ONE SQLite snapshot transaction (manifest.snapshotTransaction=true), every table is read through an explicit column allowlist — never SELECT * — recorded per-table in the manifest, and the allowlist is verified against the live schema (PRAGMA table_info) so a future column cannot silently enter or leave the archive; failures roll back and never leak a temp dir. Sentinel tests prove provider/plugin secrets and OAuth material stay out of the archive; kernel export.profile lands in M3.",
+      "milestone": "M5",
+      "notes": "SEC-02: legacy export (apps/server/src/lib/profileExport.ts) implemented in M1 Wave 1 and hardened in Wave 2 - logical allowlist archive (format v2, snapshot transaction, explicit column allowlist verified via PRAGMA table_info, sentinel negative tests). M5 slice 5 adds the canonical-plane op profile.export over Product Wire: the kernel builds a fresh verified container under the data root's exports/ (characters/chats/messages/lorebooks/presets + optional assets via storage create_export/verify_export) and returns the verified report; provider configs and secrets are not export sections by construction and the kernel negative test proves a sentinel SecretStore value never reaches any container byte. UI/facade cutover and per-profile FK filtering (needs the canonical profiles model) remain tracked within M5.",
       "title": "Logical profile export",
-      "wireOps": []
+      "wireOps": ["profile.export"]
     },
     {
       "hosts": {

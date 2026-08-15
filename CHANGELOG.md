@@ -3,6 +3,21 @@
 ## Unreleased
 ### Added
 
+- **Logical profile export over Product Wire (SEC-02, M5 slice 5).** New wire
+  operation `profile.export` (`wire.request.profile-export` /
+  `wire.result.profile-export`, capability `ui.profile-export`): the kernel
+  builds a fresh, **verified** logical allowlist container under the data
+  root's `exports/` via `neotavern_storage::export::create_export` +
+  `verify_export` (characters/chats/messages/lorebooks/presets NDJSON +
+  optional asset bytes + `manifest.json` written last atomically) and returns
+  the report with a data-root-relative `containerPath` and manifest sha256.
+  Provider configs and secrets are not export sections by construction; the
+  kernel negative test (`kernel_profile_export.rs`) stores a sentinel API key
+  through the SecretStore seam and proves it never appears in any container
+  byte. `create_export` gains an `include_assets` flag (data-only exports);
+  `storage::snapshot::sha256_file_hex` and `storage::paths::exports_dir` are
+  now public. Capability matrix `ui.profile-export` updated to `profile.export`
+  (Implemented; UI/facade cutover and per-profile FK filtering tracked in M5).
 - **Resource containment (plan rev 2.2).** Two halves so pathological fuzz /
   bench inputs can never take the host down again (root cause fixed:
   uncontrolled combined resource pressure from heavy suites without
