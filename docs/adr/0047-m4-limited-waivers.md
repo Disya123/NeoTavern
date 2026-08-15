@@ -48,7 +48,13 @@ prohibitions of ТЗ §14.2.2 stay intact.
    personas table not wired.** Personas CRUD is delivered; the chat
    attachment + prompt interpolation uses the wire `chat.personaId` field
    with honest defaults. **Expiry:** release gate — the persona→prompt
-   wiring lands before Stable.
+   wiring lands before Stable. **Status: honored in Этап 4 slice 3**
+   (schema migration 010 `chats.persona_id`, `chats.create/update`
+   `personaId` with `PERSONA_NOT_FOUND`, plan `userName` + `{{user}}`
+   substitution; kernel tests `kernel_persona_application.rs`; the ledger
+   M5 `resolvedIssues` records the delivery). Remaining honest boundary: no
+   global active-persona fallback in the kernel (legacy
+   `resolveActive(chat, appSettings)` stays a legacy-server behavior).
 
 4. **Per-profile export scoping (SEC-02, M1 waiver expiry).** The M1
    ADR-0042 waiver expired at this cutover; the canonical schema per-profile

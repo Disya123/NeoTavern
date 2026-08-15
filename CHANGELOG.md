@@ -3,6 +3,30 @@
 ## Unreleased
 ### Added
 
+- **User persona application: `chat.personaId` + prompt `{{user}}` (M5 /
+  Этап 4, slice 3, closes ADR-0047 waiver 3).** Schema migration 010 adds
+  `chats.persona_id` (FK to `personas`, `ON DELETE SET NULL`);
+  `CURRENT_SCHEMA` is now 10. `chats.create` and `chats.update` accept an
+  optional `personaId` (stable `PERSONA_NOT_FOUND` with a `personaId` param
+  for an unknown reference); `chats.update` no longer requires `title` — an
+  empty update is a no-op returning the unchanged chat. The prompt pipeline
+  resolves the chat's linked persona name into the plan as `userName` and
+  substitutes it for the `{{user}}` macro across the selected history and the
+  current input (a chat without a persona passes messages through verbatim;
+  the kernel has no global active-persona fallback — documented honest
+  boundary). No new wire operations — additive optional fields only
+  (`wire.chat.dto.personaId`, `chats.create/update.personaId`,
+  `wire.prompt.plan.userName`); registry stays at 64 ops. The legacy converter
+  maps `chats.persona_id` (personas convert before chats so the FK holds;
+  pre-persona sources convert with NULL) and the facade/wireBridge pass
+  `personaId` through for create/update/continue-chat in kernel mode (a `null`
+  persona clear is not expressible on the wire → `CAPABILITY_UNAVAILABLE`).
+  Tests: kernel `kernel_persona_application.rs` 4/4 (chat linkage round trip,
+  `PERSONA_NOT_FOUND`, `ON DELETE SET NULL`, plan `userName` + macro
+  substitution, verbatim pass-through), legacy conversion fixture with
+  personas + chat persona reference, wire corpus 2 new negative fixtures,
+  web wireBridge chat create/update persona tests.
+
 - **Memories + presets CRUD over Product Wire (M5 / Этап 4, slice 3,
   kernel + contract part).** Eight new wire operations — `presets.get`,
   `presets.create`, `presets.update`, `presets.delete` and

@@ -215,7 +215,7 @@
     {
       "source": "adr/0047-m4-limited-waivers.md",
       "target": "adr/0047-m4-limited-waivers.md",
-      "sha256": "6f0d0e8b599f15dfa67daee0978ca6c7a47d3c865ea498690d3b447fa5533de6"
+      "sha256": "2dea47bfbed152d1062c92df8d73560e6adf4fed3e7bfeeb958b551d63fd5103"
     },
     {
       "source": "adr/0048-m5-slice2-route-removal.md",
@@ -260,12 +260,12 @@
     {
       "source": "architecture/operations-inventory.md",
       "target": "architecture/operations-inventory.md",
-      "sha256": "91b9635c336518db840154cc32aeeb0706db48a9a92b191fb5a881f39bc566c9"
+      "sha256": "7ac7863b07edbb6f76b7fea48c90cfbf0be4e5fb8337947b96faebf7586aff3f"
     },
     {
       "source": "architecture/portable-data.md",
       "target": "architecture/portable-data.md",
-      "sha256": "8980fce83c5b2524d1cec21bb969d7755ff8c9e6ec70f71b9c7a0eff3cce7ec6"
+      "sha256": "b65cd3d14c7d2209a46f6c20d0c824d9f6c9a5b8dd235b90bc2ef87ceb165d03"
     },
     {
       "source": "architecture/prompt-pipeline.md",
@@ -280,7 +280,7 @@
     {
       "source": "architecture/ui-legacy-surface.md",
       "target": "architecture/ui-legacy-surface.md",
-      "sha256": "a927f1d6384c0e7281fd213f178b9382cd9f716cbff5d9a179b6ac4e7090d3e0"
+      "sha256": "e687ef884d85d75ce5c83501488b59d925f8cbfccb58e9deb88f53a35fcd1aca"
     },
     {
       "source": "architecture/version-axes.md",
@@ -290,12 +290,12 @@
     {
       "source": "architecture/wire-contracts.md",
       "target": "architecture/wire-contracts.md",
-      "sha256": "e25bd1ed9b18d3d74675ed817ee9a9a4c9f429be9a32e831924b0864a92319e4"
+      "sha256": "7b6d646949275ff9f77d63975d18b39a7b9be7b131cb1610e24344313ffdc8f4"
     },
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "64476f7ca67933f8789ed3bead4cf2b93fd5c43f4bef2b77b59809bfedad6c27"
+      "sha256": "8f05f5ff0b828c474d56bbe057476b8644ba43aa4fe570d70d989136ba1ea909"
     },
     {
       "source": "data/README.md",
@@ -330,7 +330,7 @@
     {
       "source": "prompt-pipeline/README.md",
       "target": "prompt-pipeline/README.md",
-      "sha256": "b03ae1eb8a99e16f2ba0cf26ae82f8689b41057be3ae933ee4acc7ee0bd9a40c"
+      "sha256": "aea12f05b496f8ab3f8c7ba982910e59b75f0ec3c57d004e958d32422de20542"
     },
     {
       "source": "theme-sdk/README.md",

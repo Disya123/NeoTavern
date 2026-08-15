@@ -235,6 +235,17 @@ filtered `wire.request.list-presets` schema (kind filter). `presets.create` /
 | `memories.update`                  | transactional | non-idempotent | none  | app.write | 65536  | 262144 | –      |
 | `memories.delete`                  | transactional | non-idempotent | none  | app.write | 2048   | 1024   | –      |
 
+The user-persona application slice (ADR-0047 waiver 3, closed in slice 3)
+adds **no new operations** — only additive optional fields on the existing
+schemas: `wire.chat.dto` and `chats.create`/`chats.update` accept an optional
+`personaId` (uuid; the kernel answers `PERSONA_NOT_FOUND` with a `personaId`
+param for an unknown reference and clears the link on persona delete via the
+`ON DELETE SET NULL` FK), `chats.update` no longer requires `title` (an empty
+update is a no-op returning the unchanged chat), and `wire.prompt.plan` carries
+an optional `userName` — the resolved persona name the prompt pipeline
+substitutes for the `{{user}}` macro (see
+[Prompt pipeline](../prompt-pipeline/README.md)).
+
 The canonical message model (Этап 4 slice 2, schema migration 008): the
 message text is the **active variant**; `message_variants` rows hold
 alternative swipe contents (position ordered, `activate` copies the content

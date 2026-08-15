@@ -50,12 +50,14 @@ export const CharacterDtoSchema = Type.Object(
 );
 export type CharacterDto = Static<typeof CharacterDtoSchema>;
 
-/** Chat DTO (`wire.chat.dto`). */
+/** Chat DTO (`wire.chat.dto`). `personaId` (optional) is the user persona
+ * applied by the prompt pipeline (ADR-0047 waiver 5, Этап 4 slice 3). */
 export const ChatDtoSchema = Type.Object(
   {
     id: Type.String({ format: 'uuid' }),
     title: Type.String({ minLength: 1, maxLength: 200 }),
     characterId: Type.String({ format: 'uuid' }),
+    personaId: Type.Optional(Type.String({ format: 'uuid' })),
     messageCount: Type.Integer({ minimum: 0 }),
     createdAt: Type.String({ format: 'rfc3339' }),
     updatedAt: Type.String({ format: 'rfc3339' }),
@@ -745,21 +747,26 @@ export const ListMessagesRequestDtoSchema = Type.Object(
 );
 export type ListMessagesRequestDto = Static<typeof ListMessagesRequestDtoSchema>;
 
-/** Create chat request DTO (`wire.request.create-chat`). */
+/** Create chat request DTO (`wire.request.create-chat`). Optional `personaId`
+ * links the chat to a user persona (ADR-0047 waiver 5). */
 export const CreateChatRequestDtoSchema = Type.Object(
   {
     characterId: Type.String({ format: 'uuid' }),
     title: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
+    personaId: Type.Optional(Type.String({ format: 'uuid' })),
   },
   { $id: 'wire.request.create-chat', additionalProperties: false },
 );
 export type CreateChatRequestDto = Static<typeof CreateChatRequestDtoSchema>;
 
-/** Update chat request DTO (`wire.request.update-chat`). */
+/** Update chat request DTO (`wire.request.update-chat`). At least one of the
+ * optional fields must be present (kernel no-op guards); `personaId` sets or
+ * changes the user persona, `title` renames. */
 export const UpdateChatRequestDtoSchema = Type.Object(
   {
     chatId: Type.String({ format: 'uuid' }),
-    title: Type.String({ minLength: 1, maxLength: 200 }),
+    title: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
+    personaId: Type.Optional(Type.String({ format: 'uuid' })),
   },
   { $id: 'wire.request.update-chat', additionalProperties: false },
 );
@@ -1054,6 +1061,7 @@ export const PromptPlanDtoSchema = Type.Object(
     responseReserved: Type.Integer({ minimum: 0, maximum: 9_007_199_254_740_991 }),
     inputTokens: Type.Integer({ minimum: 0, maximum: 9_007_199_254_740_991 }),
     overBudget: Type.Boolean(),
+    userName: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
     systemBlocks: Type.Array(PromptBlockDtoSchema),
     messages: Type.Array(PromptMessageDtoSchema),
     excluded: Type.Array(PromptExcludedDtoSchema),

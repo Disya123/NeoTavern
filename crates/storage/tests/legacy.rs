@@ -24,7 +24,7 @@ fn build_legacy(path: &Path) -> rusqlite::Result<()> {
             ext TEXT DEFAULT '{}', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
         );
         CREATE TABLE chats (
-            id TEXT PRIMARY KEY, title TEXT, character_id TEXT,
+            id TEXT PRIMARY KEY, title TEXT, character_id TEXT, persona_id TEXT,
             created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
         );
         CREATE TABLE messages (
@@ -89,8 +89,8 @@ fn build_legacy(path: &Path) -> rusqlite::Result<()> {
         [],
     )?;
     conn.execute(
-        "INSERT INTO chats (id, title, character_id, created_at, updated_at) \
-         VALUES ('leg-h1', 'First chat', 'leg-c1', 1700000004000, 1700000005000)",
+        "INSERT INTO chats (id, title, character_id, persona_id, created_at, updated_at) \
+         VALUES ('leg-h1', 'First chat', 'leg-c1', 'leg-p1', 1700000004000, 1700000005000)",
         [],
     )?;
     conn.execute(
@@ -293,6 +293,25 @@ fn build_legacy(path: &Path) -> rusqlite::Result<()> {
          VALUES ('leg-mem4', 'weird', '[]', 'Bad scope.', 1700000046000, 1700000047000)",
         [],
     )?;
+    // personas: two rows; both legacy-declared defaults collapse to ONE kernel
+    // default (the single-default invariant). leg-h1 references leg-p1.
+    conn.execute(
+        "CREATE TABLE personas (
+            id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT, avatar TEXT,
+            is_default INTEGER DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        )",
+        [],
+    )?;
+    conn.execute(
+        "INSERT INTO personas (id, name, description, is_default, created_at, updated_at) \
+         VALUES ('leg-p1', 'Aria', 'The user.', 1, 1700000048000, 1700000049000)",
+        [],
+    )?;
+    conn.execute(
+        "INSERT INTO personas (id, name, description, is_default, created_at, updated_at) \
+         VALUES ('leg-p2', 'Zoe', 'Second user.', 1, 1700000050000, 1700000051000)",
+        [],
+    )?;
     conn.execute(
         "INSERT INTO provider_configs (id, provider, name, config, api_key) \
          VALUES ('pc1', 'openai', 'default', '{}', 'sk-fake-api-key-123')",
@@ -343,6 +362,10 @@ fn legacy_conversion_maps_rows_skips_orphans_and_never_copies_secrets(
         "global + character-scoped + dangling-character memories convert; invalid scope skipped"
     );
     assert_eq!(
+        report.personas, 2,
+        "both personas convert; only the first legacy default keeps the flag"
+    );
+    assert_eq!(
         report.skipped, 8,
         "orphan chat + orphan message + orphan swipe + orphan revision + 3 drafts + invalid-scope memory"
     );
@@ -372,6 +395,7 @@ fn legacy_conversion_maps_rows_skips_orphans_and_never_copies_secrets(
         ("lorebooks", 2),
         ("presets", 1),
         ("memories", 3),
+        ("personas", 2),
     ] {
         let count: i64 =
             db.conn()
@@ -435,14 +459,30 @@ fn legacy_conversion_maps_rows_skips_orphans_and_never_copies_secrets(
     )?;
     assert_eq!(tags, "[]", "no legacy tags column → default");
 
-    // Chat mapping: character reference preserved; orphan chat skipped.
-    let (character_id, title): (String, String) = db.conn().query_row(
-        "SELECT character_id, title FROM chats WHERE id = 'leg-h1'",
+    // Chat mapping: character + persona references preserved; orphan chat skipped.
+    let (character_id, persona_id, title): (String, Option<String>, String) = db.conn().query_row(
+        "SELECT character_id, persona_id, title FROM chats WHERE id = 'leg-h1'",
         [],
-        |r| Ok((r.get(0)?, r.get(1)?)),
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
     )?;
     assert_eq!(character_id, "leg-c1");
+    assert_eq!(persona_id.as_deref(), Some("leg-p1"), "legacy persona reference maps");
     assert_eq!(title, "First chat");
+
+    // Personas: names/timestamps converted; only ONE default survives the
+    // single-default invariant.
+    let (name, is_default, created): (String, i64, String) = db.conn().query_row(
+        "SELECT name, is_default, created_at FROM personas WHERE id = 'leg-p1'",
+        [],
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+    )?;
+    assert_eq!(name, "Aria");
+    assert_eq!(is_default, 1);
+    assert_eq!(created, "2023-11-14T22:14:08Z", "persona ms timestamp maps");
+    let is_default: i64 = db
+        .conn()
+        .query_row("SELECT is_default FROM personas WHERE id = 'leg-p2'", [], |r| r.get(0))?;
+    assert_eq!(is_default, 0, "second legacy default demoted");
 
     // Messages: no legacy sequence column → per-chat row numbers ordered by
     // created_at; plugin role mapped to the kernel-legal "user".

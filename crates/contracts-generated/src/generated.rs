@@ -381,6 +381,8 @@ pub struct ChatDto {
     pub title: String,
     #[serde(rename = "characterId")]
     pub character_id: String,
+    #[serde(rename = "personaId", default, skip_serializing_if = "Option::is_none")]
+    pub persona_id: Option<String>,
     #[serde(rename = "messageCount")]
     pub message_count: i64,
     #[serde(rename = "createdAt")]
@@ -392,8 +394,9 @@ pub struct ChatDto {
 pub(crate) fn check_chat_dto(value: &Value, path: &str, issues: &mut Vec<Issue>) {
     static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
     static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
-    static RE_2: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_2: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
     static RE_3: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_4: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
     if !value.is_object() {
         issues.push(Issue::new(path, "Object"));
     } else {
@@ -452,6 +455,17 @@ pub(crate) fn check_chat_dto(value: &Value, path: &str, issues: &mut Vec<Issue>)
                 None => issues.push(Issue::new(child_path.as_str(), "String")),
             }
         }
+        if let Some(child) = value.get("personaId") {
+            let child_path = join_path(path, "personaId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_2.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
         if let Some(child) = value.get("messageCount") {
             let child_path = join_path(path, "messageCount");
             match child.as_i64() {
@@ -467,7 +481,7 @@ pub(crate) fn check_chat_dto(value: &Value, path: &str, issues: &mut Vec<Issue>)
             let child_path = join_path(path, "createdAt");
             match child.as_str() {
                 Some(s) => {
-                    if !RE_2.is_match(s) {
+                    if !RE_3.is_match(s) {
                         issues.push(Issue::new(child_path.as_str(), "StringFormat"));
                     }
                 }
@@ -478,7 +492,7 @@ pub(crate) fn check_chat_dto(value: &Value, path: &str, issues: &mut Vec<Issue>)
             let child_path = join_path(path, "updatedAt");
             match child.as_str() {
                 Some(s) => {
-                    if !RE_3.is_match(s) {
+                    if !RE_4.is_match(s) {
                         issues.push(Issue::new(child_path.as_str(), "StringFormat"));
                     }
                 }
@@ -487,7 +501,7 @@ pub(crate) fn check_chat_dto(value: &Value, path: &str, issues: &mut Vec<Issue>)
         }
         if let Some(obj) = value.as_object() {
             for key in obj.keys() {
-                if !matches!(key.as_str(), "id" | "title" | "characterId" | "messageCount" | "createdAt" | "updatedAt") {
+                if !matches!(key.as_str(), "id" | "title" | "characterId" | "personaId" | "messageCount" | "createdAt" | "updatedAt") {
                     let key_path = join_path(path, key);
                     issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
                 }
@@ -5389,10 +5403,13 @@ pub struct RequestCreateChat {
     pub character_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+    #[serde(rename = "personaId", default, skip_serializing_if = "Option::is_none")]
+    pub persona_id: Option<String>,
 }
 
 pub(crate) fn check_request_create_chat(value: &Value, path: &str, issues: &mut Vec<Issue>) {
     static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
     if !value.is_object() {
         issues.push(Issue::new(path, "Object"));
     } else {
@@ -5425,9 +5442,20 @@ pub(crate) fn check_request_create_chat(value: &Value, path: &str, issues: &mut 
                 None => issues.push(Issue::new(child_path.as_str(), "String")),
             }
         }
+        if let Some(child) = value.get("personaId") {
+            let child_path = join_path(path, "personaId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
         if let Some(obj) = value.as_object() {
             for key in obj.keys() {
-                if !matches!(key.as_str(), "characterId" | "title") {
+                if !matches!(key.as_str(), "characterId" | "title" | "personaId") {
                     let key_path = join_path(path, key);
                     issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
                 }
@@ -5451,19 +5479,20 @@ pub fn decode_request_create_chat(bytes: &[u8]) -> Result<RequestCreateChat, Wir
 pub struct RequestUpdateChat {
     #[serde(rename = "chatId")]
     pub chat_id: String,
-    pub title: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(rename = "personaId", default, skip_serializing_if = "Option::is_none")]
+    pub persona_id: Option<String>,
 }
 
 pub(crate) fn check_request_update_chat(value: &Value, path: &str, issues: &mut Vec<Issue>) {
     static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
     if !value.is_object() {
         issues.push(Issue::new(path, "Object"));
     } else {
         if value.get("chatId").is_none() {
             issues.push(Issue::new(join_path(path, "chatId"), "RequiredProperty"));
-        }
-        if value.get("title").is_none() {
-            issues.push(Issue::new(join_path(path, "title"), "RequiredProperty"));
         }
         if let Some(child) = value.get("chatId") {
             let child_path = join_path(path, "chatId");
@@ -5491,9 +5520,20 @@ pub(crate) fn check_request_update_chat(value: &Value, path: &str, issues: &mut 
                 None => issues.push(Issue::new(child_path.as_str(), "String")),
             }
         }
+        if let Some(child) = value.get("personaId") {
+            let child_path = join_path(path, "personaId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
         if let Some(obj) = value.as_object() {
             for key in obj.keys() {
-                if !matches!(key.as_str(), "chatId" | "title") {
+                if !matches!(key.as_str(), "chatId" | "title" | "personaId") {
                     let key_path = join_path(path, key);
                     issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
                 }
@@ -7629,6 +7669,8 @@ pub struct PromptPlan {
     pub input_tokens: i64,
     #[serde(rename = "overBudget")]
     pub over_budget: bool,
+    #[serde(rename = "userName", default, skip_serializing_if = "Option::is_none")]
+    pub user_name: Option<String>,
     #[serde(rename = "systemBlocks")]
     pub system_blocks: Vec<PromptBlock>,
     pub messages: Vec<PromptMessage>,
@@ -7822,6 +7864,21 @@ pub(crate) fn check_prompt_plan(value: &Value, path: &str, issues: &mut Vec<Issu
                 issues.push(Issue::new(child_path.as_str(), "Boolean"));
             }
         }
+        if let Some(child) = value.get("userName") {
+            let child_path = join_path(path, "userName");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 200 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
         if let Some(child) = value.get("systemBlocks") {
             let child_path = join_path(path, "systemBlocks");
             if !child.is_array() {
@@ -7868,7 +7925,7 @@ pub(crate) fn check_prompt_plan(value: &Value, path: &str, issues: &mut Vec<Issu
         }
         if let Some(obj) = value.as_object() {
             for key in obj.keys() {
-                if !matches!(key.as_str(), "runId" | "chatId" | "provider" | "model" | "instructFormat" | "tokenizerProfile" | "approximateTokens" | "contextLimit" | "responseReserved" | "inputTokens" | "overBudget" | "systemBlocks" | "messages" | "excluded" | "createdAt") {
+                if !matches!(key.as_str(), "runId" | "chatId" | "provider" | "model" | "instructFormat" | "tokenizerProfile" | "approximateTokens" | "contextLimit" | "responseReserved" | "inputTokens" | "overBudget" | "userName" | "systemBlocks" | "messages" | "excluded" | "createdAt") {
                     let key_path = join_path(path, key);
                     issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
                 }

@@ -1283,6 +1283,7 @@ const CHAT_VALUE = {
   id: UUID_CHAT,
   title: 'First chat',
   characterId: UUID_CHARACTER,
+  personaId: UUID_PERSONA,
   messageCount: 2,
   createdAt: TIMESTAMP,
   updatedAt: TIMESTAMP,
@@ -1462,6 +1463,7 @@ const PROMPT_PLAN_VALUE = {
   responseReserved: 2048,
   inputTokens: 96,
   overBudget: false,
+  userName: 'Aria',
   systemBlocks: [{ source: 'character', text: 'Aria is a cheerful guide.' }],
   messages: [
     { role: 'system', content: 'Aria is a cheerful guide.' },
@@ -1575,10 +1577,12 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('chats-create-request', 'chats.create', 'request', true, {
     characterId: UUID_CHARACTER,
     title: 'New conversation',
+    personaId: UUID_PERSONA,
   }),
   fx('chats-update-request', 'chats.update', 'request', true, {
     chatId: UUID_CHAT,
     title: 'Renamed conversation',
+    personaId: UUID_PERSONA,
   }),
   fx('chats-delete-request', 'chats.delete', 'request', true, { chatId: UUID_CHAT }),
   fx('chats-messages-list-request', 'chats.messages.list', 'request', true, {
@@ -1979,6 +1983,14 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   }),
   fx('neg-persona-update-missing-field', 'personas.update', 'request', false, {
     name: 'No id',
+  }),
+  fx('neg-chat-create-bad-persona', 'chats.create', 'request', false, {
+    characterId: UUID_CHARACTER,
+    personaId: 'not-a-uuid',
+  }),
+  fx('neg-chat-response-bad-persona', 'chats.get', 'response', false, {
+    ...CHAT_VALUE,
+    personaId: 'also-not-a-uuid',
   }),
   fx('neg-messages-list-bad-order', 'chats.messages.list', 'request', false, {
     chatId: UUID_CHAT,

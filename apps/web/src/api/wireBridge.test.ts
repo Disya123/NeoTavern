@@ -172,6 +172,7 @@ const WIRE_CHAT: ChatDto = {
   id: CHAT_ID,
   title: 'First chat',
   characterId: CHAR_ID,
+  personaId: '0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f',
   messageCount: 2,
   createdAt: NOW,
   updatedAt: NOW,
@@ -322,12 +323,14 @@ describe('wire→UI translation', () => {
     });
   });
 
-  it('maps a wire chat onto the full Chat with null branch/persona state', () => {
+  it('maps a wire chat onto the full Chat with the persona link (Этап 4 slice 3)', () => {
     const chat = translateChat(WIRE_CHAT);
-    expect(chat.personaId).toBeNull();
+    expect(chat.personaId).toBe('0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f');
     expect(chat.activeBranchId).toBeNull();
     expect(chat.summary).toBe('');
     expect(chat.deletedAt).toBeNull();
+    // Without a linked persona the field is an honest null.
+    expect(translateChat({ ...WIRE_CHAT, personaId: undefined }).personaId).toBeNull();
   });
 
   it('maps a wire message onto the legacy Message with safe branch/variant defaults', () => {
@@ -473,10 +476,20 @@ describe('readChats / readRecentChats / continue (kernel)', () => {
     expect(mocks.chats.create).toHaveBeenCalledWith({ characterId: CHAR_ID, title: 'T' });
   });
 
-  it('rejects persona-scoped continuation honestly', async () => {
-    await expect(
-      continueCharacterChat({ characterId: CHAR_ID, title: 'T', personaId: 'p1' }),
-    ).rejects.toBeInstanceOf(UnsupportedError);
+  it('continues with a persona link (Этап 4 slice 3)', async () => {
+    mocks.chats.list.mockResolvedValue({ items: [], nextCursor: null });
+    mocks.chats.create.mockResolvedValue(WIRE_CHAT);
+    const result = await continueCharacterChat({
+      characterId: CHAR_ID,
+      title: 'T',
+      personaId: '0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f',
+    });
+    expect(result).toEqual({ chatId: CHAT_ID, created: true });
+    expect(mocks.chats.create).toHaveBeenCalledWith({
+      characterId: CHAR_ID,
+      title: 'T',
+      personaId: '0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f',
+    });
   });
 });
 
@@ -493,17 +506,40 @@ describe('readChat / createChat / updateChat / deleteChat (kernel)', () => {
     expect(mocks.chats.create).toHaveBeenCalledWith({ characterId: CHAR_ID, title: 'New chat' });
   });
 
-  it('rejects persona/greeting legacy inputs and missing character', async () => {
-    await expect(createChat({ personaId: 'p1' })).rejects.toBeInstanceOf(UnsupportedError);
+  it('creates a chat with a persona link (Этап 4 slice 3)', async () => {
+    mocks.chats.create.mockResolvedValue(WIRE_CHAT);
+    const chat = await createChat({
+      characterId: CHAR_ID,
+      personaId: '0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f',
+    });
+    expect(mocks.chats.create).toHaveBeenCalledWith({
+      characterId: CHAR_ID,
+      personaId: '0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f',
+    });
+    expect(chat.personaId).toBe('0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f');
+  });
+
+  it('rejects greeting inputs and missing character honestly', async () => {
     await expect(createChat({ greetingIndex: 2 })).rejects.toBeInstanceOf(UnsupportedError);
+    await expect(createChat({ personaId: 'p1' })).rejects.toBeInstanceOf(UnsupportedError);
     await expect(createChat({})).rejects.toBeInstanceOf(UnsupportedError);
   });
 
-  it('renames a chat (title-only) and rejects other fields', async () => {
+  it('renames and re-links the persona; rejects null clear and other fields', async () => {
     mocks.chats.update.mockResolvedValue(WIRE_CHAT);
     await updateChat(CHAT_ID, { title: 'Renamed' });
     expect(mocks.chats.update).toHaveBeenCalledWith({ chatId: CHAT_ID, title: 'Renamed' });
+    await updateChat(CHAT_ID, {
+      personaId: '0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f',
+    });
+    expect(mocks.chats.update).toHaveBeenCalledWith({
+      chatId: CHAT_ID,
+      personaId: '0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f',
+    });
     await expect(updateChat(CHAT_ID, { summary: 's' })).rejects.toBeInstanceOf(UnsupportedError);
+    await expect(updateChat(CHAT_ID, { personaId: null })).rejects.toBeInstanceOf(
+      UnsupportedError,
+    );
     await expect(updateChat(CHAT_ID, {})).rejects.toBeInstanceOf(UnsupportedError);
   });
 

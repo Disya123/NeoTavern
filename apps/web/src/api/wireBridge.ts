@@ -154,11 +154,14 @@ export function translateChatSummary(dto: ChatDto): ChatSummary {
   };
 }
 
-/** Wire chat → full legacy `Chat` (chat page). */
+/** Wire chat → full legacy `Chat` (chat page). The user persona link
+ * (`personaId`) is now part of the wire contract (Этап 4 slice 3,
+ * ADR-0047 waiver 5) and passes through; branch/background/summary state
+ * stays legacy-only with honest nulls. */
 export function translateChat(dto: ChatDto): Chat {
   return {
     ...translateChatSummary(dto),
-    personaId: null,
+    personaId: dto.personaId ?? null,
     activeBranchId: null,
     backgroundId: null,
     summary: '',
@@ -437,7 +440,6 @@ export async function continueCharacterChat(
   input: ContinueCharacterChatInput,
 ): Promise<ContinueCharacterChatResult> {
   if (isKernelMode()) {
-    if (input.personaId) throw new UnsupportedError('chats.create.personaId');
     // The continue contract is reproduced client-side (compare the legacy
     // `reuseUnstarted` server guard): return the most recent live chat, else
     // create one. Kernel chats are ordered by creation time.
@@ -447,6 +449,7 @@ export async function continueCharacterChat(
     const created = await backend.chats.create({
       characterId: input.characterId,
       title: input.title,
+      ...(input.personaId ? { personaId: input.personaId } : {}),
     });
     return { chatId: created.id, created: true };
   }
@@ -472,10 +475,9 @@ export async function readChat(id: string): Promise<Chat> {
   return api.get<Chat>(`/chats/${id}`);
 }
 
-/** Create a chat. */
+/** Create a chat. `personaId` links the user persona (Этап 4 slice 3). */
 export async function createChat(input: ChatCreate): Promise<Chat> {
   if (isKernelMode()) {
-    if (input.personaId) throw new UnsupportedError('chats.create.personaId');
     // Kernel chats are created empty: greeting insertion (greetingIndex) and
     // the reuseUnstarted server guard are legacy pipeline features (Этап 4) —
     // the continue hook already reproduced the guard above. The wire contract
@@ -484,27 +486,34 @@ export async function createChat(input: ChatCreate): Promise<Chat> {
     const created = await backend.chats.create({
       characterId: input.characterId,
       ...(input.title !== undefined ? { title: input.title } : {}),
+      ...(input.personaId ? { personaId: input.personaId } : {}),
     });
     return translateChat(created);
   }
   return api.post<Chat>('/chats', input);
 }
 
-/** Rename a chat. */
+/** Update a chat: rename and/or re-link the user persona (Этап 4 slice 3). */
 export async function updateChat(id: string, update: ChatUpdate): Promise<Chat> {
   if (isKernelMode()) {
-    // Wire chat update is title-only; persona/background/summary/branch
-    // mutation is legacy-only (Этап 4).
+    // background/summary/branch mutation stays legacy-only (Этап 4); a null
+    // persona clear is not expressible on the wire (personaId is optional,
+    // never null) → honest CAPABILITY_UNAVAILABLE.
     if (
-      update.personaId !== undefined ||
       update.backgroundId !== undefined ||
       update.summary !== undefined ||
       update.activeBranchId !== undefined
     ) {
       throw new UnsupportedError('chats.update.fields');
     }
-    if (update.title === undefined) throw new UnsupportedError('chats.update.title');
-    const updated = await backend.chats.update({ chatId: id, title: update.title });
+    if (update.personaId === null) throw new UnsupportedError('chats.update.personaId.null');
+    if (update.title === undefined && update.personaId === undefined) {
+      throw new UnsupportedError('chats.update.fields');
+    }
+    const patch: Parameters<typeof backend.chats.update>[0] = { chatId: id };
+    if (update.title !== undefined) patch.title = update.title;
+    if (update.personaId !== undefined) patch.personaId = update.personaId;
+    const updated = await backend.chats.update(patch);
     return translateChat(updated);
   }
   return api.patch<Chat>(`/chats/${id}`, update);

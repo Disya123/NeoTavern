@@ -217,7 +217,8 @@ fn row_to_character(row: &rusqlite::Row) -> Result<CharacterDto, KernelError> {
 }
 
 /// Renders a joined `chats` row (with `message_count`) as the wire
-/// [`ChatDto`].
+/// [`ChatDto`]. Column order: id, title, character_id, persona_id,
+/// message_count, created_at, updated_at.
 fn row_to_chat(row: &rusqlite::Row) -> Result<ChatDto, KernelError> {
     Ok(ChatDto {
         id: row.get(0).map_err(|e| sqlite(e, "chats: read id"))?,
@@ -225,14 +226,17 @@ fn row_to_chat(row: &rusqlite::Row) -> Result<ChatDto, KernelError> {
         character_id: row
             .get(2)
             .map_err(|e| sqlite(e, "chats: read character_id"))?,
-        message_count: row
+        persona_id: row
             .get(3)
+            .map_err(|e| sqlite(e, "chats: read persona_id"))?,
+        message_count: row
+            .get(4)
             .map_err(|e| sqlite(e, "chats: read message_count"))?,
         created_at: row
-            .get(4)
+            .get(5)
             .map_err(|e| sqlite(e, "chats: read created_at"))?,
         updated_at: row
-            .get(5)
+            .get(6)
             .map_err(|e| sqlite(e, "chats: read updated_at"))?,
     })
 }
@@ -609,7 +613,8 @@ pub fn chats_list(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelEr
     {
         let conn = db.conn();
         let mut sql = String::from(
-            "SELECT c.id, c.title, c.character_id, COALESCE(m.cnt, 0), c.created_at, c.updated_at \
+            "SELECT c.id, c.title, c.character_id, c.persona_id, COALESCE(m.cnt, 0), \
+             c.created_at, c.updated_at \
              FROM chats c \
              LEFT JOIN (SELECT chat_id, COUNT(*) AS cnt FROM messages GROUP BY chat_id) m \
                ON m.chat_id = c.id",
@@ -661,7 +666,8 @@ pub fn chats_get(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelErr
     let conn = db.conn();
     let mut stmt = conn
         .prepare(
-            "SELECT c.id, c.title, c.character_id, COALESCE(m.cnt, 0), c.created_at, c.updated_at \
+            "SELECT c.id, c.title, c.character_id, c.persona_id, COALESCE(m.cnt, 0), \
+             c.created_at, c.updated_at \
              FROM chats c \
              LEFT JOIN (SELECT chat_id, COUNT(*) AS cnt FROM messages GROUP BY chat_id) m \
                ON m.chat_id = c.id \
@@ -768,11 +774,24 @@ fn character_exists(conn: &rusqlite::Connection, character_id: &str) -> Result<b
         .map(|row| row.is_some())
 }
 
+fn persona_exists(conn: &rusqlite::Connection, persona_id: &str) -> Result<bool, KernelError> {
+    let mut stmt = conn
+        .prepare("SELECT 1 FROM personas WHERE id = ?1")
+        .map_err(|e| sqlite(e, "persona_exists: prepare"))?;
+    let mut rows = stmt
+        .query(params![persona_id])
+        .map_err(|e| sqlite(e, "persona_exists: query"))?;
+    rows.next()
+        .map_err(|e| sqlite(e, "persona_exists: row"))
+        .map(|row| row.is_some())
+}
+
 /// Selects one chat (with message count) back out of the database.
 fn query_chat(conn: &rusqlite::Connection, chat_id: &str) -> Result<Option<ChatDto>, KernelError> {
     let mut stmt = conn
         .prepare(
-            "SELECT c.id, c.title, c.character_id, COALESCE(m.cnt, 0), c.created_at, c.updated_at \
+            "SELECT c.id, c.title, c.character_id, c.persona_id, COALESCE(m.cnt, 0), \
+             c.created_at, c.updated_at \
              FROM chats c \
              LEFT JOIN (SELECT chat_id, COUNT(*) AS cnt FROM messages GROUP BY chat_id) m \
                ON m.chat_id = c.id \
@@ -970,14 +989,22 @@ pub fn chats_create(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Kernel
     if !character_exists(db.conn(), &character_id)? {
         return Err(not_found("CHARACTER", &character_id));
     }
+    // A provided personaId must reference an existing persona (the FK is
+    // enforced by the schema; the pre-check keeps the error stable and
+    // product-typed instead of a raw constraint violation).
+    if let Some(persona_id) = &req.persona_id {
+        if !persona_exists(db.conn(), persona_id)? {
+            return Err(not_found("PERSONA", persona_id));
+        }
+    }
     let id = new_id();
     let now = now();
     let title = req.title.unwrap_or_else(|| "New chat".to_string());
     db.transaction(|tx| {
         tx.execute(
-            "INSERT INTO chats (id, title, character_id, created_at, updated_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![&id, &title, &character_id, &now, &now],
+            "INSERT INTO chats (id, title, character_id, persona_id, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![&id, &title, &character_id, &req.persona_id, &now, &now],
         )
         .map_err(|e| StorageError::from_sqlite(e, "chats_create: insert"))?;
         Ok(())
@@ -992,20 +1019,42 @@ pub fn chats_create(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Kernel
     encode(&dto)
 }
 
-/// `chats.update` — rename a chat; missing chat → `CHAT_NOT_FOUND`.
+/// `chats.update` — rename and/or re-link the user persona of a chat; missing
+/// chat → `CHAT_NOT_FOUND`. A provided `personaId` must reference an existing
+/// persona (`PERSONA_NOT_FOUND`); an update with neither field is a no-op
+/// (returns the unchanged chat — the wire request has no required fields).
 pub fn chats_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
     let req = generated::decode_request_update_chat(request)?;
     let chat_id = req.chat_id.clone();
+    if let Some(persona_id) = &req.persona_id {
+        if !persona_exists(db.conn(), persona_id)? {
+            return Err(not_found("PERSONA", persona_id));
+        }
+    }
     let now = now();
-    let changed = db.transaction(|tx| {
-        tx.execute(
-            "UPDATE chats SET title = ?1, updated_at = ?2 WHERE id = ?3",
-            params![&req.title, &now, &chat_id],
-        )
-        .map_err(|e| StorageError::from_sqlite(e, "chats_update: update"))
-    })?;
-    if changed == 0 {
-        return Err(not_found("CHAT", &chat_id));
+    let mut sets: Vec<String> = Vec::new();
+    let mut params: Vec<Value> = Vec::new();
+    if let Some(title) = &req.title {
+        sets.push("title = ?".to_string());
+        params.push(Value::Text(title.clone()));
+    }
+    if let Some(persona_id) = &req.persona_id {
+        sets.push("persona_id = ?".to_string());
+        params.push(Value::Text(persona_id.clone()));
+    }
+    if !sets.is_empty() {
+        sets.push("updated_at = ?".to_string());
+        params.push(Value::Text(now));
+        let sql = format!("UPDATE chats SET {} WHERE id = ?", sets.join(", "));
+        params.push(Value::Text(chat_id.clone()));
+        let changed = db
+            .transaction(|tx| {
+                tx.execute(&sql, params_from_iter(params))
+                    .map_err(|e| StorageError::from_sqlite(e, "chats_update: update"))
+            })?;
+        if changed == 0 {
+            return Err(not_found("CHAT", &chat_id));
+        }
     }
     let dto = query_chat(db.conn(), &chat_id)?.ok_or_else(|| not_found("CHAT", &chat_id))?;
     validate(&dto, generated::validate_chat_dto)?;

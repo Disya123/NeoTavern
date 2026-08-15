@@ -156,6 +156,16 @@ layouts yield a controlled incompatibility error.
   being dropped or resurrected). The legacy `memories_fts` table is not
   converted — the kernel has no FTS yet; memory retrieval is a later slice
   (ТЗ §4.4). Counts are reported per table (`presets`/`memories`).
+- **User personas (Этап 4, slice 3).** The optional legacy `personas` table
+  maps into the kernel schema-007 `personas` table. The legacy Drizzle
+  boolean `is_default` (0/1 integer) converts to the kernel `is_default`;
+  when several legacy rows declare the default, only the **first** keeps the
+  flag (the single-default invariant matches `PersonaRepository`). Personas
+  convert **before** chats so the `chats.persona_id` FK (`ON DELETE SET
+  NULL`) is satisfied at insert time; a legacy `chats.persona_id` reference
+  is copied verbatim, and a pre-persona source without the `persona_id`
+  column converts with `NULL` (the wire keeps `personaId` optional).
+  Counts are reported (`personas`).
 
 ## Staged migration into the application flow (ТЗ §10.3, Этап 3)
 

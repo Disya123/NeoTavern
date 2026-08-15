@@ -25,6 +25,18 @@ Implementation: `apps/server/src/pipeline/`.
 `{{user}}`, `{{char}}` and custom variables are resolved before rendering
 (`replaceMacros`). Unknown macros are left as-is.
 
+**Kernel prompt pipeline (ADR-0047 waiver 3, Этап 4 slice 3):** the Runtime
+Kernel resolves the `{{user}}` macro at prompt-plan build time from the chat's
+linked user persona (`chats.persona_id` → `personas.name`, schema migration
+010). The resolved name is carried on the plan as `userName` and substituted
+across the selected history **and** the current input; a chat without a linked
+persona passes messages through verbatim with no `userName`. Honest boundary:
+the kernel has no global active-persona fallback — the legacy
+`resolveActive(chat, appSettings)` behavior (falling back to the global active
+persona) is a legacy-server feature; in kernel mode only the chat-level link
+applies. Other macros (`{{char}}`, custom variables) remain a later stage of
+the kernel pipeline.
+
 ## Instruct formats
 
 Rendering via Handlebars in an isolated environment (no Node/FS/code, only

@@ -556,8 +556,8 @@ uses the canonical wire ops:
 | `characters.delete`   | transactional         | `DELETE /api/v2/characters/:id`                                                                                                      |
 | `chats.list`          | transactional         | `GET /api/v2/chats`                                                                                                                  |
 | `chats.get`           | transactional         | `GET /api/v2/chats/:id`                                                                                                              |
-| `chats.create`        | transactional         | `POST /api/v2/chats`                                                                                                                 |
-| `chats.update`        | transactional         | `PATCH /api/v2/chats/:id`                                                                                                            |
+| `chats.create`        | transactional         | `POST /api/v2/chats` (kernel mode: accepts optional `personaId` linking the user persona — `PERSONA_NOT_FOUND` for an unknown reference; Этап 4 slice 3) |
+| `chats.update`        | transactional         | `PATCH /api/v2/chats/:id` (kernel mode: rename and/or re-link `personaId`; at least one field must be present, an empty update is a no-op; a `null` persona clear is not expressible on the wire — Этап 4 slice 3) |
 | `chats.delete`        | transactional         | `DELETE /api/v2/chats/:id`                                                                                                           |
 | `chats.messages.list` | transactional         | `GET /api/v2/chats/:id/messages` (wire request gained additive `order: 'asc'\|'desc'`, Этап 2.10: `desc` walks the durable `(sequence,id)` cursor backward from the newest message, matching the UI history loading; both directions share the same opaque cursor encoding) |
 | `chats.messages.create` | transactional       | `POST /api/v2/chats/:id/messages` (bridge; the kernel-mode send flow uses it before `generation.start`)                              |

@@ -152,6 +152,10 @@ fn convert(legacy: &Connection, tx: &rusqlite::Transaction) -> Result<Conversion
         orphans: Vec::new(),
     };
     let character_ids = convert_characters(legacy, tx, &mut report)?;
+    // Personas convert BEFORE chats: `chats.persona_id` has an FK to
+    // `personas` (ON DELETE SET NULL), so the persona rows must exist before
+    // any chat row references them (foreign_keys = ON during conversion).
+    convert_personas(legacy, tx, &mut report)?;
     let chat_ids = convert_chats(legacy, tx, &character_ids, &mut report)?;
     let message_ids = convert_messages(legacy, tx, &chat_ids, &mut report)?;
     convert_message_variants(legacy, tx, &message_ids, &mut report)?;
@@ -160,7 +164,6 @@ fn convert(legacy: &Connection, tx: &rusqlite::Transaction) -> Result<Conversion
     convert_lorebooks(legacy, tx, &mut report)?;
     convert_presets(legacy, tx, &mut report)?;
     convert_memories(legacy, tx, &mut report)?;
-    convert_personas(legacy, tx, &mut report)?;
     Ok(report)
 }
 
@@ -338,17 +341,24 @@ fn convert_chats(
 ) -> Result<HashSet<String>> {
     let cols = column_names(legacy, "chats")?;
     require_columns(&cols, "chats", &["id", "created_at", "updated_at"])?;
-    let selected = select_columns(
+    let has_persona_id = cols.iter().any(|c| c == "persona_id");
+    let mut selected = select_columns(
         &cols,
         &[
             "id",
             "title",
             "character_id",
+            "persona_id",
             "deleted_at",
             "created_at",
             "updated_at",
         ],
     );
+    if !has_persona_id {
+        // Pre-persona legacy roots (chats without the column) convert with a
+        // NULL persona — the wire contract keeps personaId optional.
+        selected.retain(|c| *c != "persona_id");
+    }
     let sql = format!("SELECT {} FROM chats ORDER BY id", quote_columns(&selected));
     let mut stmt = legacy
         .prepare(&sql)
@@ -393,9 +403,19 @@ fn convert_chats(
             );
             continue;
         }
+        // The legacy persona reference converts verbatim (the kernel FK is
+        // `ON DELETE SET NULL` — same semantics as legacy). A dangling
+        // persona_id (persona row already gone) survives as-is on the wire
+        // just like it did in the source: the FK fires only on *delete*.
+        let persona_id: Option<String> = if has_persona_id {
+            as_text(get("persona_id")).map(str::to_owned)
+        } else {
+            None
+        };
         tx.execute(
-            "INSERT INTO chats (id, title, character_id, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)",
-            rusqlite::params![id, title, character_id, created_at, updated_at],
+            "INSERT INTO chats (id, title, character_id, persona_id, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            rusqlite::params![id, title, character_id, persona_id, created_at, updated_at],
         )
         .map_err(|e| StorageError::from_sqlite(e, "legacy: insert chat"))?;
         report.chats += 1;

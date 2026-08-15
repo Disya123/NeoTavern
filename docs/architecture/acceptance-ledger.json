@@ -872,11 +872,13 @@
       "blockingIssues": [
         "legacy route removal for messages/swipes/drafts — re-waived via ADR-0048 (UI cutover delivered in slice 2; routes remain as the facade's browser/legacy-sidecar transport until Этап 6, expiry release gate)",
         "character↔lorebook scoping (ADR-0047 waiver 2) — slice 6",
-        "chat.persona_id and {{user}} persona application (ADR-0047 waiver 5) — slice 3",
         "SEC-02 logical export with per-profile FK filtering (ADR-0047 waiver 4) — slice 5",
         "zero-legacy-scan exit (ADR-0047 waiver 6) — M5 exit",
         "branches/revisions/assets legacy conversion (M3 ADR-0046 waiver 8) — slices 2/5",
         "Fastify product-data ownership (ADR-0047 waiver 7) — passes to M6"
+      ],
+      "resolvedIssues": [
+        "chat.persona_id linkage and prompt {{user}} persona application (ADR-0047 waiver 3, previously mislabeled waiver 5) — DELIVERED in slice 3: schema migration 010 (chats.persona_id, ON DELETE SET NULL), chats.create/update personaId (PERSONA_NOT_FOUND), prompt plan userName + {{user}} substitution across history and input (kernel_persona_application tests, 4/4), facade + wireBridge personaId pass-through, legacy converter maps chats.persona_id with personas converted before chats. Remaining honest boundary: no global active-persona fallback in the kernel (legacy resolveActive appSettings behavior documented)."
       ],
       "waivers": [],
       "acceptanceProposal": {},

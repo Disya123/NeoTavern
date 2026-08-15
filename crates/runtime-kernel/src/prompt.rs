@@ -18,6 +18,7 @@
 use neotavern_storage::open::Database;
 use neotavern_storage::StorageError;
 use rusqlite::params;
+use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 
 use crate::{KernelError, KernelErrorCode};
@@ -96,6 +97,12 @@ pub struct PromptPlan {
     /// `true` when the plan still exceeds the available budget after dropping
     /// all unpinned history (the provider may reject the request).
     pub over_budget: bool,
+    /// Resolved user persona name (`chats.persona_id` → `personas.name`,
+    /// ADR-0047 waiver 5) — the value substituted for `{{user}}`. Absent when
+    /// the chat has no linked persona (omitted from the wire payload, never
+    /// `null`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_name: Option<String>,
     /// System blocks (character / persona / lorebook) shown to the user.
     pub system_blocks: Vec<PromptBlock>,
     /// Final instruct-neutral message array (system + history + user).
@@ -371,6 +378,35 @@ fn chat_history(db: &Database, chat_id: &str) -> Result<Vec<(String, PromptMessa
     Ok(reversed)
 }
 
+/// Resolves the user persona name of a chat (`chats.persona_id` →
+/// `personas.name`, ADR-0047 waiver 5). `None` when the chat has no linked
+/// persona or the referenced persona was deleted (`ON DELETE SET NULL`).
+fn resolve_user_name(db: &Database, chat_id: &str) -> Result<Option<String>, KernelError> {
+    let name = db
+        .conn()
+        .query_row(
+            "SELECT p.name FROM personas p JOIN chats ch ON ch.persona_id = p.id \
+             WHERE ch.id = ?1",
+            params![chat_id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|e| StorageError::from_sqlite(e, "prompt plan: resolve user name"))?;
+    Ok(name.filter(|n| !n.trim().is_empty()))
+}
+
+/// Substitutes the `{{user}}` macro in a message content (ADR-0047 waiver 5)
+/// when a user persona name is resolved; otherwise the content passes through
+/// verbatim. Historical user-role messages are substituted too — mirroring
+/// the legacy macro stage, which renders `{{user}}` at prompt-build time
+/// across the selected history and the current input.
+fn apply_user_macro(content: &str, user_name: Option<&str>) -> String {
+    match user_name {
+        Some(name) if !name.is_empty() => content.replace("{{user}}", name),
+        _ => content.to_string(),
+    }
+}
+
 /// Builds the immutable [`PromptPlan`] for one generation run (ТЗ §9.2).
 ///
 /// Stages (AGENTS.md §8 order): character/persona → lorebook → history
@@ -379,6 +415,7 @@ fn chat_history(db: &Database, chat_id: &str) -> Result<Vec<(String, PromptMessa
 /// caller; this function performs no writes.
 pub fn build_prompt_plan(db: &Database, input: &PlanInput<'_>) -> Result<PromptPlan, KernelError> {
     let character_blocks = character_system_blocks(db, &input.chat_id)?;
+    let user_name = resolve_user_name(db, &input.chat_id)?;
     let history = chat_history(db, &input.chat_id)?;
 
     // Lorebook activation context: the user message plus the tail of recent
@@ -413,11 +450,16 @@ pub fn build_prompt_plan(db: &Database, input: &PlanInput<'_>) -> Result<PromptP
     let mut history_ids: Vec<String> = Vec::new();
     for (id, message) in history {
         history_ids.push(id);
-        messages.push(message);
+        // `{{user}}` is rendered at plan-build time across the selected
+        // history (ADR-0047 waiver 5) — mirroring the legacy macro stage.
+        messages.push(PromptMessage {
+            role: message.role,
+            content: apply_user_macro(&message.content, user_name.as_deref()),
+        });
     }
     messages.push(PromptMessage {
         role: "user".to_string(),
-        content: input.message.to_string(),
+        content: apply_user_macro(input.message, user_name.as_deref()),
     });
 
     // Token budget (heuristic): reserve response room, then drop the oldest
@@ -467,6 +509,7 @@ pub fn build_prompt_plan(db: &Database, input: &PlanInput<'_>) -> Result<PromptP
         response_reserved,
         input_tokens: tokens_of(&messages),
         over_budget,
+        user_name,
         system_blocks,
         messages,
         excluded,

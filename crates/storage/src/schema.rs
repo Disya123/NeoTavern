@@ -293,6 +293,17 @@ CREATE INDEX idx_memories_character ON memories(character_id);"#
     };
 }
 
+/// Literal body of the chat-persona (v10) schema migration (Этап 4 slice 3,
+/// ADR-0047 waiver 5): `chats.persona_id` — the "user persona" applied by the
+/// prompt pipeline. Mirrors the legacy Drizzle layout
+/// (`packages/db` migration 0000: `persona_id REFERENCES personas(id) ON
+/// DELETE SET NULL`); `SET NULL` keeps chats alive when a persona is deleted.
+macro_rules! migration_10_sql {
+    () => {
+        r#"ALTER TABLE chats ADD COLUMN persona_id TEXT REFERENCES personas(id) ON DELETE SET NULL;"#
+    };
+}
+
 /// Name of the initial (v1) schema migration.
 pub const MIGRATION_1_NAME: &str = "001_initial_schema";
 
@@ -442,6 +453,22 @@ pub const MIGRATION_9_SQL: &str = migration_9_sql!();
 pub const MIGRATION_9_CHECKSUM: &str =
     "0a27e95db6afa600c87900fcd6052c1070a9fc485eae0b141818f9e4a9f77aff";
 
+/// Name of the chat-persona (v10) schema migration.
+pub const MIGRATION_10_NAME: &str = "010_chat_persona";
+
+/// Exact SQL of the chat-persona schema migration (v10) — the
+/// `migration_10_sql!()` literal. Adds `chats.persona_id` (the user persona
+/// applied by the prompt pipeline, ON DELETE SET NULL).
+pub const MIGRATION_10_SQL: &str = migration_10_sql!();
+
+/// Lowercase sha256 hex of the `MIGRATION_10_SQL` string bytes.
+///
+/// Computed via node (`crypto.createHash('sha256')` over the exact literal
+/// bytes, no trailing newline) and asserted by the migration test suite
+/// against the ledger.
+pub const MIGRATION_10_CHECKSUM: &str =
+    "72ed2c1fc51ba5f5c0f722bd2b98aeda371caa0c45745ee9fd5e945cf22f1c2c";
+
 /// A fresh install runs every migration in order, so `FRESH_SCHEMA_SQL` is the
 /// concatenation of all migration literals with a single newline between them
 /// (the same statement separator `execute_batch` applies).
@@ -466,7 +493,9 @@ pub const FRESH_SCHEMA_SQL: &str = concat!(
     "\n",
     migration_8_sql!(),
     "\n",
-    migration_9_sql!()
+    migration_9_sql!(),
+    "\n",
+    migration_10_sql!()
 );
 
 /// sha256 hex of the `FRESH_SCHEMA_SQL` bytes — the fresh-install fingerprint.
