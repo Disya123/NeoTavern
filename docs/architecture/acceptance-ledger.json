@@ -1034,7 +1034,7 @@
           "type": "artifact",
           "artifact": "createChatSnapshot(chatId, {messageId, kind, replace}) transport helper in wireBridge — legacy plane keeps the real /chats/:id/snapshots flow (new child chat + prefix copy + checkpoint link), kernel plane refuses honestly with UnsupportedError('chats.snapshots.create') (ТЗ §8.1 Conversations has no snapshot entity) — replaces the last ChatPage legacyRaw call + wireBridge 96/96 (+2 snapshot tests)",
           "result": "ChatPage is now free of legacyRaw (M5 slice 13, Этап 4 context 5 part): checkpoint/branch snapshot creation routes through the wireBridge routing table. On the legacy plane the transport keeps the full snapshot semantics via the legacy endpoint (verified by a fetch-stub test asserting the POST path and body); on the kernel plane it throws UnsupportedError('chats.snapshots.create') — the canonical Conversations model (chats/messages/variants/revisions/drafts) has no snapshot/checkpoint entity and no wire operation, so the UI shows the localized CAPABILITY_UNAVAILABLE (errors:UNSUPPORTED) instead of fabricating a result; the snapshot capability stays legacy-documented until a kernel checkpoint model exists. ui:api:check drops 56 -> 54 sites (ChatPage legacyRaw import + createSnapshot gone, wireBridge +1 transport site). Verified: web vitest 644/644 (wireBridge 96/96 incl. 2 new snapshot tests), web typecheck clean, eslint clean, prettier clean, ui:api:check 54 sites OK, docs:check + docs:sync:check OK, gates GATE PASS.",
-          "commit": "pending"
+          "commit": "cb89fac"
         },
         {
           "type": "artifact",
