@@ -21,7 +21,8 @@
   `meta.checkpointChatId: null` on the kernel plane. Wire schema hash
   `9bd67389…`, codegen regenerated, generated Rust rebuilt. Tests: wireBridge
   94/94 (+3 meta patch tests), kernel messages meta round trip in
-  `kernel_crud`, storage migration ledger v17, web typecheck clean.
+  `kernel_crud`, storage migration ledger v17, web vitest 644/644, web
+  typecheck clean.
 
 - **Legacy bridge `sendChatMessage` routes through the Product Wire transport
   (M5 slice 10, Этап 4 context 5 part).** `createBridgeChatMessage(chatId,
