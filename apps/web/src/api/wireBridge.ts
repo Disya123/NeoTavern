@@ -21,6 +21,7 @@
 import {
   type Character,
   type CharacterCreate,
+  type CharacterGalleryImage,
   type CharacterSummary,
   type CharacterUpdate,
   type Chat,
@@ -170,6 +171,61 @@ export function avatarOriginalUrl(
     ? // eslint-disable-next-line @neotavern/no-legacy-api-surface
       `/api/v2/characters/${characterId}/avatar-original`
     : null;
+}
+
+/** Result of an avatar upload — the draft fields the caller should apply. */
+export interface CharacterAvatarUploadResult {
+  /** Legacy URL slot (`thumbnailUrl` on the legacy plane; always `null` on
+   * the kernel plane — the kernel has no asset URL surface). */
+  avatar: string | null;
+  /** Canonical asset reference (kernel plane; `null` on the legacy plane). */
+  avatarAssetId: string | null;
+  /** Uploaded image name (legacy gallery item name; `null` on the kernel
+   * plane, where the caller falls back to the file name). */
+  name: string | null;
+}
+
+function readFileBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error('avatar: read file failed'));
+    reader.onload = () => {
+      const result = reader.result;
+      resolve(typeof result === 'string' ? (result.split(',')[1] ?? '') : '');
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Upload a character avatar (M5 slice 6 remainder, ТЗ §34 avatar→asset).
+ * Transport helper: the kernel plane publishes the file as an immutable
+ * `avatar` asset (`assets.put`, content-addressed + idempotent) and links it
+ * through `characters.update(avatarAssetId)`; the legacy plane keeps the
+ * gallery upload path (`/characters/:id/gallery`) and returns the thumbnail
+ * URL. The wire `assets.put` request cap (~786 KiB of image bytes) surfaces
+ * as a transport error — never a silent downgrade.
+ */
+export async function uploadCharacterAvatar(
+  characterId: string,
+  file: File,
+): Promise<CharacterAvatarUploadResult> {
+  if (isKernelMode()) {
+    const contentBase64 = await readFileBase64(file);
+    const { asset } = await backend.assets.put({
+      kind: 'avatar',
+      filename: file.name || 'avatar.png',
+      ...(file.type ? { contentType: file.type } : {}),
+      contentBase64,
+    });
+    await backend.characters.update({
+      characterId,
+      avatarAssetId: asset.id,
+    });
+    return { avatar: null, avatarAssetId: asset.id, name: null };
+  }
+  const image = await api.upload<CharacterGalleryImage>(`/characters/${characterId}/gallery`, file);
+  return { avatar: image.thumbnailUrl, avatarAssetId: null, name: image.name };
 }
 
 /** Wire chat → legacy `ChatSummary` (catalog rows). */
@@ -414,6 +470,11 @@ export async function updateCharacter(id: string, patch: CharacterUpdate): Promi
       ...(patch.name !== undefined ? { name: patch.name } : {}),
       ...(patch.description !== undefined ? { description: patch.description } : {}),
       ...(patch.tags !== undefined && patch.tags.length > 0 ? { tags: patch.tags } : {}),
+      // Kernel avatar reference: the wire update takes the asset id; the
+      // legacy `avatar` URL slot is a non-wire field (honest
+      // CAPABILITY_UNAVAILABLE above). `null` would mean "clear the asset",
+      // which the wire contract cannot express — absence keeps the link.
+      ...(patch.avatarAssetId != null ? { avatarAssetId: patch.avatarAssetId } : {}),
     });
     return translateCharacter(updated);
   }

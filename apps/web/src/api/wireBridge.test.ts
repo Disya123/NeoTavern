@@ -162,6 +162,7 @@ import {
   updateMemory,
   updatePersona,
   updatePreset,
+  uploadCharacterAvatar,
 } from './wireBridge.js';
 
 const CHAR_ID = '11111111-2222-4333-8444-555555555555';
@@ -362,6 +363,57 @@ describe('avatar data plane (M5 slice 6, ТЗ §34 avatar→asset)', () => {
     mocks.isKernelMode.mockReturnValue(false);
     await expect(readAssetContentDataUrl(CHAR_ID)).rejects.toBeInstanceOf(UnsupportedError);
     mocks.isKernelMode.mockReturnValue(true);
+  });
+
+  it('publishes an avatar asset and links it via the kernel character update', async () => {
+    mocks.assets.put.mockResolvedValue({
+      asset: {
+        id: '0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f',
+        kind: 'avatar',
+        relativeKey: 'avatar/abc.png',
+        checksumSha256: 'abc',
+        sizeBytes: 1,
+        createdAt: NOW,
+      },
+      deduplicated: false,
+    });
+    mocks.characters.update.mockResolvedValue({
+      ...WIRE_CHARACTER,
+      avatarAssetId: '0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f',
+    });
+    const result = await uploadCharacterAvatar(
+      CHAR_ID,
+      new File(['x'], 'alice.png', { type: 'image/png' }),
+    );
+    expect(result.avatarAssetId).toBe('0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f');
+    expect(result.avatar).toBeNull();
+    expect(mocks.assets.put).toHaveBeenCalledWith({
+      kind: 'avatar',
+      filename: 'alice.png',
+      contentType: 'image/png',
+      contentBase64: 'eA==',
+    });
+    expect(mocks.characters.update).toHaveBeenCalledWith({
+      characterId: CHAR_ID,
+      avatarAssetId: '0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f',
+    });
+  });
+
+  it('forwards an avatarAssetId in the kernel character update patch', async () => {
+    mocks.characters.update.mockResolvedValue({
+      ...WIRE_CHARACTER,
+      avatarAssetId: '0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f',
+    });
+    const character = await updateCharacter(CHAR_ID, {
+      name: 'Alice II',
+      avatarAssetId: '0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f',
+    });
+    expect(character.avatarAssetId).toBe('0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f');
+    expect(mocks.characters.update).toHaveBeenCalledWith({
+      characterId: CHAR_ID,
+      name: 'Alice II',
+      avatarAssetId: '0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f',
+    });
   });
 });
 

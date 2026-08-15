@@ -215,7 +215,7 @@
     {
       "source": "adr/0047-m4-limited-waivers.md",
       "target": "adr/0047-m4-limited-waivers.md",
-      "sha256": "8cb6515755b3a2f1e894130a1d5e0c212120052a792bf03a842f6387e41569ec"
+      "sha256": "8850ca8a18950900a143b4182e03a302b9694633e63f46b8c458dfdb73cc189c"
     },
     {
       "source": "adr/0048-m5-slice2-route-removal.md",
@@ -285,7 +285,7 @@
     {
       "source": "architecture/ui-legacy-surface.md",
       "target": "architecture/ui-legacy-surface.md",
-      "sha256": "3340ded4a62e770afe684c753c988f562fc1df4546b4c2ead9fcdc95ec76cddb"
+      "sha256": "3baeda95b7db8bd512810a2a6a4a0b769a6f610bf63cce96bb667f112c1ec7b9"
     },
     {
       "source": "architecture/version-axes.md",
@@ -300,7 +300,7 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "d9419aee7289ef89aee786058614096c85aa43224b403339e7dec0dc9462f97c"
+      "sha256": "341e3ed081a111b195705c2fe7d4b81d68fd3cc522c9c5bb6b4052eae5930e4a"
     },
     {
       "source": "data/README.md",

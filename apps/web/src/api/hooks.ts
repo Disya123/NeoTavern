@@ -98,6 +98,7 @@ import {
   updateMemory,
   updatePersona,
   updatePreset,
+  uploadCharacterAvatar,
   type ContinueCharacterChatInput,
   type ContinueCharacterChatResult,
 } from './wireBridge.js';
@@ -229,6 +230,16 @@ export function useUploadCharacterImage() {
       api.upload<CharacterGalleryImage>(`/characters/${characterId}/gallery`, file),
     onSuccess: (_image, { characterId }) =>
       void qc.invalidateQueries({ queryKey: ['character-gallery', characterId] }),
+  });
+}
+
+export function useUploadCharacterAvatar() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ characterId, file }: { characterId: string; file: File }) =>
+      uploadCharacterAvatar(characterId, file),
+    onSuccess: (_result, { characterId }) =>
+      void qc.invalidateQueries({ queryKey: ['character', characterId] }),
   });
 }
 
@@ -503,8 +514,7 @@ export function useCreatePreset() {
 export function useUpdatePreset() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, update }: { id: string; update: PresetUpdate }) =>
-      updatePreset(id, update),
+    mutationFn: ({ id, update }: { id: string; update: PresetUpdate }) => updatePreset(id, update),
     onSuccess: (preset) => void qc.invalidateQueries({ queryKey: ['presets', preset.kind] }),
   });
 }
@@ -542,8 +552,7 @@ export function useCreateMemory() {
 export function useUpdateMemory() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, update }: { id: string; update: MemoryUpdate }) =>
-      updateMemory(id, update),
+    mutationFn: ({ id, update }: { id: string; update: MemoryUpdate }) => updateMemory(id, update),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['memories'] }),
   });
 }

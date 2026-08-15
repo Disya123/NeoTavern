@@ -57,6 +57,7 @@ import {
   useSettings,
   useUpdateCharacter,
   useUpdateLorebook,
+  useUploadCharacterAvatar,
   useUploadCharacterImage,
 } from '../api/hooks.js';
 import { useAvatarDataUrl } from '../api/avatarHooks.js';
@@ -132,6 +133,7 @@ function draftsEqual(left: CharacterDraft, right: CharacterDraft): boolean {
   return (
     left.name === right.name &&
     left.avatar === right.avatar &&
+    left.avatarAssetId === right.avatarAssetId &&
     left.description === right.description &&
     left.personality === right.personality &&
     left.scenario === right.scenario &&
@@ -160,6 +162,7 @@ function draftToPatch(draft: CharacterDraft) {
   return {
     name: draft.name.trim(),
     avatar: draft.avatar.trim() || null,
+    ...(draft.avatarAssetId != null ? { avatarAssetId: draft.avatarAssetId } : {}),
     description: draft.description,
     personality: draft.personality,
     scenario: draft.scenario,
@@ -799,7 +802,7 @@ function EditTab({
   onError: (error: unknown) => void;
 }) {
   const { t } = useTranslation();
-  const uploadImage = useUploadCharacterImage();
+  const uploadAvatar = useUploadCharacterAvatar();
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [expandedGreeting, setExpandedGreeting] = useState<number | null>(null);
   const [tagInput, setTagInput] = useState('');
@@ -808,12 +811,17 @@ function EditTab({
     return <CharacterCardViewer characterId={characterId} draft={draft} />;
   }
 
-  const uploadAvatar = async (file: File): Promise<void> => {
+  const applyAvatarUpload = async (file: File): Promise<void> => {
     if (!characterId) return;
     try {
-      const image = await uploadImage.mutateAsync({ characterId, file });
-      onPatch({ avatar: image.thumbnailUrl });
-      onStatus(t('characters:imageUploadSuccess', { name: image.name }));
+      // Transport helper: kernel publishes an avatar asset and links it via
+      // avatarAssetId; legacy uploads to the gallery and returns the URL.
+      const result = await uploadAvatar.mutateAsync({ characterId, file });
+      onPatch({
+        avatar: result.avatar ?? draft.avatar,
+        avatarAssetId: result.avatarAssetId ?? draft.avatarAssetId,
+      });
+      onStatus(t('characters:imageUploadSuccess', { name: result.name ?? file.name }));
     } catch (error) {
       onError(error);
     } finally {
@@ -925,7 +933,7 @@ function EditTab({
         hidden
         onChange={(event) => {
           const file = event.target.files?.[0];
-          if (file) void uploadAvatar(file);
+          if (file) void applyAvatarUpload(file);
         }}
       />
 

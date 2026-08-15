@@ -62,6 +62,9 @@ export type CharacterSummary = Static<typeof CharacterSummarySchema>;
 export const CharacterCreateSchema = Type.Object({
   name: Type.String({ minLength: 1, maxLength: 500 }),
   avatar: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  /** Canonical avatar asset reference (kernel plane; `avatar` stays the
+   * legacy URL slot). `null`/absent means "no avatar asset". */
+  avatarAssetId: Type.Optional(Type.Union([Type.String(), Type.Null()])),
   description: Type.Optional(Type.String()),
   personality: Type.Optional(Type.String()),
   scenario: Type.Optional(Type.String()),

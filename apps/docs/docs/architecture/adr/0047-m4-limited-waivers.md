@@ -71,6 +71,23 @@ prohibitions of ТЗ §14.2.2 stay intact.
    SEC-02 item to the release gate, superseding the ADR-0042 M4-cutover
    expiry; the human M4 verdict ratifies the extension. **Expiry:** release
    gate — the export scoping lands with slice 5 before Stable.
+   **Status: honored in M5 slice 5 remainder** — schema migration 014
+   (`profiles` STRICT table, ТЗ §8.1 Configuration) + migration 015
+   (`characters.profile_id` FK, `ON DELETE SET NULL`, indexed); the kernel
+   export is scoped by the profile: `read_characters` filters
+   `WHERE profile_id = ?`, chats and messages follow transitively through
+   the character, and the container verification cross-checks every
+   `profile_id` reference (missing profiles are reported, not silently
+   dropped). Wire surface: `profiles.list/create/rename/delete` +
+   `profile.export { profileId? }` with `PROFILE_NOT_FOUND`; the NeoBackend
+   facade exposes `ProfilesApi` incl. `export(profileId)`. Tests:
+   `kernel_profile_export.rs` — scoped export carries only the profile's
+   characters/chats/messages (echoed scope), the unscoped export carries
+   everything, rebinding a character re-scopes it, unknown profile is
+   rejected with the `profileId` param, and the sentinel test proves secrets
+   never enter the container. Remaining honest boundary: a UI profile
+   picker/host-side default-profile convention is a host-side follow-up;
+   the export filtering itself is delivered.
 
 5. **Slices 2–7 undelivered.** Message variants/revisions/drafts, memories
    and presets, remaining providers, imports/exports/assets/thumbnails,

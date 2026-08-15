@@ -3,6 +3,26 @@
 ## Unreleased
 ### Added
 
+- **Kernel avatar upload (M5 slice 6 remainder web, ТЗ §34 avatar→asset).**
+  The character editor can now set an avatar on the kernel plane: the new
+  `uploadCharacterAvatar` transport helper publishes the file as an
+  immutable `avatar` asset (`assets.put`, content-addressed + idempotent)
+  and links it through `characters.update(avatarAssetId)`; the legacy plane
+  keeps the gallery upload path. `updateCharacter` forwards a non-null
+  `avatarAssetId` to the wire patch, and `CharacterCreate`/`CharacterUpdate`
+  gained the additive optional `avatarAssetId` field. The wire `assets.put`
+  request cap (~786 KiB of image bytes) surfaces as a transport error —
+  never a silent downgrade. Tests: wireBridge kernel publish+link round
+  trip and avatarAssetId patch forwarding (70/70).
+
+- **SEC-02 per-profile export scoping declared delivered (ADR-0047
+  waiver 4).** The canonical schema (profiles v14 + `characters.profile_id`
+  v15), the profile-scoped kernel export (characters → chats → messages
+  transitively, container verification cross-checks profile references),
+  the `profiles.*` wire surface and the facade `ProfilesApi.export(profileId)`
+  were already shipped; the ledger now records waiver 4 as honored (the
+  remaining UI profile picker is a host-side follow-up).
+
 - **Legacy settings convert into the canonical settings store (M5 slice 6
   remainder, ADR-0046 waiver 8 settings part).** The legacy converter now
   maps the legacy `settings` table (`key → value` JSON text) into the kernel
