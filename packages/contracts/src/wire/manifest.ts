@@ -6,4 +6,4 @@
  * equal `schemaHash` in `packages/contracts/generated/contract-manifest.json`;
  * `pnpm contracts:check` fails on drift.
  */
-export const WIRE_SCHEMA_HASH = 'a2486b4748dfe4c94c7aeca5ebda47af5c90c298ad96a2f61d1571792630b622';
+export const WIRE_SCHEMA_HASH = '9bd67389d4d78f44af30c9888964da460c2e8c57e221c26ed93a4b1c83058b60';

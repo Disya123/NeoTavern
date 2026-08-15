@@ -20,6 +20,7 @@ const CREATED_USER_MESSAGE: MessageDto = {
   content: 'Hello there',
   createdAt: '2026-06-01T12:00:00.000Z',
   sequence: 3,
+  meta: {},
 };
 
 function recordingHandlers() {
@@ -67,6 +68,7 @@ describe('streamWireGeneration (kernel mode)', () => {
           createdAt: '2026-06-01T12:00:05.000Z',
           sequence: 4,
           generationRunId: RUN_ID,
+          meta: {},
         },
       },
     ]);

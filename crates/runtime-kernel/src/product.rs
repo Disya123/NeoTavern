@@ -16,15 +16,15 @@
 
 use crate::{KernelError, KernelErrorCode};
 use contracts_generated::generated::{
-    self, CharacterDto, ChatDto, LorebookDto, MemoryDto, MemoryScope, MessageDraftDto, MessageDto,
-    MessageRevisionDto, MessageRole, MessageVariantDto, PagedCharacters, PagedChats, PagedMessages,
-    PersonaDto, PresetDto, RequestListPresets, ResultEmpty, ResultListLorebooks,
+    self, CharacterDto, ChatDto, FreeObject, LorebookDto, MemoryDto, MemoryScope, MessageDraftDto,
+    MessageDto, MessageRevisionDto, MessageRole, MessageVariantDto, PagedCharacters, PagedChats,
+    PagedMessages, PersonaDto, PresetDto, RequestListPresets, ResultEmpty, ResultListLorebooks,
     ResultListMemories, ResultListPersonas, ResultListPresets, ResultMessageRevisionList,
     ResultMessageVariantList,
 };
 use contracts_generated::Issue;
 use neotavern_storage::open::Database;
-use neotavern_storage::StorageError;
+use neotavern_storage::{StorageError, StorageErrorCode};
 use rusqlite::types::Value;
 use rusqlite::{params, params_from_iter, OptionalExtension};
 
@@ -371,6 +371,18 @@ pub(crate) fn row_to_message(row: &rusqlite::Row) -> Result<MessageDto, KernelEr
             ));
         }
     };
+    // Column 7 is `meta_json` (v17). A row from a pre-v17 database that was
+    // never migrated would fail the get — the migration guarantees the column
+    // exists before any message query runs.
+    let meta_json: String = row
+        .get(7)
+        .map_err(|e| sqlite(e, "messages: read meta_json"))?;
+    let meta_value: serde_json::Value = serde_json::from_str(&meta_json).map_err(|err| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            format!("messages: invalid meta_json: {err}"),
+        )
+    })?;
     Ok(MessageDto {
         id: row.get(0).map_err(|e| sqlite(e, "messages: read id"))?,
         chat_id: row
@@ -389,6 +401,9 @@ pub(crate) fn row_to_message(row: &rusqlite::Row) -> Result<MessageDto, KernelEr
         generation_run_id: row
             .get(6)
             .map_err(|e| sqlite(e, "messages: read generation_run_id"))?,
+        meta: FreeObject {
+            payload: meta_value,
+        },
     })
 }
 
@@ -864,7 +879,7 @@ pub fn messages_list(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Kerne
     {
         let conn = db.conn();
         let mut sql = String::from(
-            "SELECT id, chat_id, role, content, created_at, sequence, generation_run_id \
+            "SELECT id, chat_id, role, content, created_at, sequence, generation_run_id, meta_json \
              FROM messages WHERE chat_id = ?",
         );
         let mut params: Vec<Value> = vec![Value::Text(chat_id.clone())];
@@ -975,7 +990,7 @@ fn query_message(
 ) -> Result<Option<MessageDto>, KernelError> {
     let mut stmt = conn
         .prepare(
-            "SELECT id, chat_id, role, content, created_at, sequence, generation_run_id \
+            "SELECT id, chat_id, role, content, created_at, sequence, generation_run_id, meta_json \
              FROM messages WHERE id = ?1 AND chat_id = ?2",
         )
         .map_err(|e| sqlite(e, "query_message: prepare"))?;
@@ -1255,8 +1270,8 @@ pub fn messages_create(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Ker
     let sequence = db.transaction(|tx| {
         let sequence = next_message_sequence(tx, &chat_id)?;
         tx.execute(
-            "INSERT INTO messages (id, chat_id, role, content, sequence, generation_run_id, created_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO messages (id, chat_id, role, content, sequence, generation_run_id, meta_json, created_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             params![
                 &id,
                 &chat_id,
@@ -1264,6 +1279,7 @@ pub fn messages_create(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Ker
                 &req.content,
                 sequence,
                 &req.generation_run_id,
+                "{}",
                 &now
             ],
         )
@@ -1281,10 +1297,13 @@ pub fn messages_create(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Ker
     encode(&dto)
 }
 
-/// `chats.messages.update` — edit a message's content; missing message →
-/// `MESSAGE_NOT_FOUND` (the chat id scopes the update). A content change
-/// records the previous text as an immutable `message_content_revisions`
-/// row (Этап 4 slice 2); an identical no-op edit is idempotent.
+/// `chats.messages.update` — edit a message's content and/or extension
+/// metadata; missing message → `MESSAGE_NOT_FOUND` (the chat id scopes the
+/// update). A content change records the previous text as an immutable
+/// `message_content_revisions` row (Этап 4 slice 2); an identical no-op edit
+/// is idempotent. `content` omitted keeps the current text; `meta` replaces
+/// the whole metadata object when present (Этап 4 slice 11) and leaves it
+/// untouched when omitted.
 pub fn messages_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
     let req = generated::decode_request_update_message(request)?;
     let now_ts = now();
@@ -1302,14 +1321,46 @@ pub fn messages_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Ker
     let Some(previous) = previous else {
         return Err(not_found("MESSAGE", &req.message_id));
     };
-    if previous != req.content {
-        db.transaction(|tx| {
-            record_content_revision(tx, &req.message_id, &previous, &req.content, &now_ts)?;
-            tx.execute(
-                "UPDATE messages SET content = ?1, updated_at = ?2 WHERE id = ?3 AND chat_id = ?4",
-                params![&req.content, &now_ts, &req.message_id, &req.chat_id],
+    let content_changed = req.content.is_some() && previous != req.content.as_deref().unwrap_or("");
+    // Serialize once, outside the closure: `meta_json` must outlive the
+    // params! borrows inside the transaction.
+    let meta_json: Option<String> = req
+        .meta
+        .as_ref()
+        .map(|meta| serde_json::to_string(&meta.payload))
+        .transpose()
+        .map_err(|e| {
+            StorageError::new(
+                StorageErrorCode::Io,
+                format!("messages_update: serialize meta: {e}"),
             )
-            .map_err(|e| StorageError::from_sqlite(e, "messages_update: update"))?;
+        })?;
+    let meta_ref: Option<&str> = meta_json.as_deref();
+    // The final content is the request value when given, else the stored text.
+    let final_content: String = req.content.clone().unwrap_or_else(|| previous.clone());
+    if content_changed || req.meta.is_some() {
+        db.transaction(|tx| {
+            if content_changed {
+                record_content_revision(tx, &req.message_id, &previous, &final_content, &now_ts)?;
+            }
+            match meta_ref {
+                Some(meta) => {
+                    tx.execute(
+                        "UPDATE messages SET content = ?1, meta_json = ?2, updated_at = ?3 \
+                         WHERE id = ?4 AND chat_id = ?5",
+                        params![&final_content, meta, &now_ts, &req.message_id, &req.chat_id],
+                    )
+                    .map_err(|e| StorageError::from_sqlite(e, "messages_update: update"))?;
+                }
+                None => {
+                    tx.execute(
+                        "UPDATE messages SET content = ?1, updated_at = ?2 \
+                         WHERE id = ?3 AND chat_id = ?4",
+                        params![&final_content, &now_ts, &req.message_id, &req.chat_id],
+                    )
+                    .map_err(|e| StorageError::from_sqlite(e, "messages_update: update"))?;
+                }
+            }
             Ok(())
         })?;
     }

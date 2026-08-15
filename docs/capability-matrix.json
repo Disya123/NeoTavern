@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-08-15T21:05:56.072Z",
+  "generatedAt": "2026-08-15T21:30:55.514Z",
   "rows": [
     {
       "hosts": {
@@ -398,7 +398,7 @@
       },
       "id": "ui.message-editing",
       "milestone": "M4",
-      "notes": "Legacy /api/v2 contour today; kernel message ops + UI cutover in M2/M4.",
+      "notes": "Legacy /api/v2 contour today; kernel message ops (chats.messages.crud) + UI cutover in M2/M4. Slice 11 (M5): wire chats.messages.update gains optional content + meta (free-object), MessageDto carries meta verbatim; toggleMessageContext / swipeGreeting / deleteCheckpoint now route through updateChatMessage on both planes (ui-legacy-surface 60 → 57). createSnapshot + checkpoint navigation stay legacy-documented (no wire snapshot op yet).",
       "title": "Message edit/delete/drafts/blocks UI",
       "wireOps": []
     },

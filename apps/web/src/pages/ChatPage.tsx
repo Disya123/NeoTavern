@@ -12,10 +12,16 @@ import { useTranslation } from 'react-i18next';
 import { Button, ErrorBoundary, Skeleton } from '@neotavern/ui';
 import type { ChatSnapshotResult, Message } from '@neotavern/contracts';
 import { findLegacySlashCommand, hasLegacyPromptInterceptors } from '@neotavern/legacy-compat';
-import { useCharacter, useChat, useMessages, useMessageVariants, useSettings } from '../api/hooks.js';
+import {
+  useCharacter,
+  useChat,
+  useMessages,
+  useMessageVariants,
+  useSettings,
+} from '../api/hooks.js';
 import { streamGeneration } from '../api/generate.js';
 import { backend, legacyRaw } from '../api/backend.js';
-import { swipeMessageToPosition } from '../api/wireBridge.js';
+import { swipeMessageToPosition, updateChatMessage } from '../api/wireBridge.js';
 import { clampSwipeIndex, readGreetingSwipes } from '@neotavern/shared';
 import { expandDisplayMacros, useMacroContext, type MacroContext } from '../lib/macros.js';
 import { useErrorText } from '../lib/useErrorText.js';
@@ -456,7 +462,7 @@ export function ChatPage() {
       setError(null);
       const excluded = message.meta['manualExcluded'] === true;
       try {
-        await legacyRaw().request<Message>('PATCH', `/chats/${chatId}/messages/${message.id}`, {
+        await updateChatMessage(chatId, message.id, {
           meta: { ...message.meta, manualExcluded: !excluded },
         });
         await queryClient.invalidateQueries({ queryKey: ['messages', chatId] });
@@ -478,7 +484,7 @@ export function ChatPage() {
       if (content === undefined || swipeId === greetingSwipes.swipeId) return;
       setError(null);
       try {
-        await legacyRaw().request<Message>('PATCH', `/chats/${chatId}/messages/${message.id}`, {
+        await updateChatMessage(chatId, message.id, {
           content,
           meta: {
             ...message.meta,
@@ -617,8 +623,8 @@ export function ChatPage() {
       if (!chatId) return;
       setError(null);
       try {
-        await legacyRaw().request<Message>('PATCH', `/chats/${chatId}/messages/${message.id}`, {
-          checkpointChatId: null,
+        await updateChatMessage(chatId, message.id, {
+          meta: { ...message.meta, checkpointChatId: null },
         });
         await queryClient.invalidateQueries({ queryKey: ['messages', chatId] });
       } catch (err) {

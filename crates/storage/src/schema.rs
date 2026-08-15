@@ -697,6 +697,31 @@ pub const MIGRATION_16_SQL: &str = migration_16_sql!();
 pub const MIGRATION_16_CHECKSUM: &str =
     "8f8309b986b3152b5e14207b2ade95e8a2d32d0f5922abf6af41a86a7d8c0778";
 
+/// Literal body of the message metadata (v17) schema migration: adds the
+/// `messages.meta_json` column (free-form extension metadata — tool calls,
+/// manual exclusion, swipe bookmarks) so the canonical message carries the
+/// wire `MessageDto.meta` object verbatim.
+macro_rules! migration_17_sql {
+    () => {
+        r#"ALTER TABLE messages ADD COLUMN meta_json TEXT NOT NULL DEFAULT '{}';"#
+    };
+}
+
+/// Name of the message metadata (v17) schema migration.
+pub const MIGRATION_17_NAME: &str = "017_message_meta";
+
+/// Exact SQL of the message metadata schema migration (v17) — the
+/// `migration_17_sql!()` literal.
+pub const MIGRATION_17_SQL: &str = migration_17_sql!();
+
+/// Lowercase sha256 hex of the `MIGRATION_17_SQL` string bytes.
+///
+/// Computed via node (`crypto.createHash('sha256')` over the exact literal
+/// bytes, no trailing newline) and asserted by the migration test suite
+/// against the ledger.
+pub const MIGRATION_17_CHECKSUM: &str =
+    "2b70fc5c47785022d84a4ccd416e2a100e1c4019d7bcaf971130b0b18ec55d83";
+
 /// A fresh install runs every migration in order, so `FRESH_SCHEMA_SQL` is the
 /// concatenation of all migration literals with a single newline between them
 /// (the same statement separator `execute_batch` applies).
@@ -735,7 +760,9 @@ pub const FRESH_SCHEMA_SQL: &str = concat!(
     "\n",
     migration_15_sql!(),
     "\n",
-    migration_16_sql!()
+    migration_16_sql!(),
+    "\n",
+    migration_17_sql!()
 );
 
 /// sha256 hex of the `FRESH_SCHEMA_SQL` bytes — the fresh-install fingerprint.

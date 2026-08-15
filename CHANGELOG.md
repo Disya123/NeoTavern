@@ -3,6 +3,26 @@
 ## Unreleased
 ### Added
 
+- **Message metadata rides the wire; edit flows leave the legacy surface
+  (M5 slice 11, Этап 4 context 5 part).** Wire `chats.messages.update` now
+  accepts optional `content` and `meta` (a new `wire.free-object` schema) and
+  `MessageDto` carries `meta` verbatim, backed by storage migration v17
+  (`messages.meta_json`, `ALTER TABLE` + fresh-schema concat, ledger
+  checksum); the kernel persists meta-only and content+meta edits (content
+  revisions unchanged) and returns meta on every message projection
+  (create/list/update). `updateChatMessage(chatId, messageId, patch)` in
+  `wireBridge` routes toggleMessageContext / swipeGreeting / deleteCheckpoint
+  on `ChatPage` through the transport on both planes (kernel
+  `chats.messages.update` → translated with meta carried; legacy partial
+  PATCH kept), so those three component sites leave the legacy surface:
+  ui:api:check drops to 57 sites. createSnapshot and the checkpoint
+  navigation stay legacy-documented (no wire snapshot op yet); kernel
+  `MessageDto` still carries no checkpoint id, so deleteCheckpoint writes
+  `meta.checkpointChatId: null` on the kernel plane. Wire schema hash
+  `9bd67389…`, codegen regenerated, generated Rust rebuilt. Tests: wireBridge
+  94/94 (+3 meta patch tests), kernel messages meta round trip in
+  `kernel_crud`, storage migration ledger v17, web typecheck clean.
+
 - **Legacy bridge `sendChatMessage` routes through the Product Wire transport
   (M5 slice 10, Этап 4 context 5 part).** `createBridgeChatMessage(chatId,
   text)` in `wireBridge` replaces the `legacyRaw()` POST in

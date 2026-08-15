@@ -186,6 +186,32 @@ export async function importCharacter(file: File): Promise<unknown> {
 }
 
 /**
+ * Patch one message's content and/or extension metadata. Kernel plane: wire
+ * `chats.messages.update` (content optional, meta optional, last-write-wins),
+ * response translated to the legacy message shape with `meta` carried
+ * verbatim. Legacy plane: the partial PATCH keeps its semantics.
+ */
+export async function updateChatMessage(
+  chatId: string,
+  messageId: string,
+  patch: { content?: string; meta?: Record<string, unknown> },
+): Promise<Message> {
+  if (isKernelMode()) {
+    const dto = await backend.chats.updateMessage({
+      chatId,
+      messageId,
+      ...(patch.content !== undefined ? { content: patch.content } : {}),
+      ...(patch.meta !== undefined ? { meta: patch.meta } : {}),
+    });
+    return translateMessage(dto);
+  }
+  return api.patch<Message>(
+    `/chats/${encodeURIComponent(chatId)}/messages/${encodeURIComponent(messageId)}`,
+    patch,
+  );
+}
+
+/**
  * Warm the provider model-discovery cache for `providerId`. The model list is
  * a legacy-contour mechanism (`/providers/:id/models` feeds the legacy
  * provider editor); on the kernel plane provider model discovery is a
@@ -550,9 +576,10 @@ export function translateMessage(dto: MessageDto): Message {
     role: dto.role,
     content: dto.content,
     name: null,
-    // Extension metadata (tool calls, generation usage, manual exclusion) is
-    // not modelled by the kernel yet; an empty record renders neutrally.
-    meta: {},
+    // Extension metadata is carried verbatim on the kernel plane (wire
+    // `MessageDto.meta`); legacy-only shapes are reported with neutral
+    // placeholders below.
+    meta: dto.meta,
     createdAt: toEpochMs(dto.createdAt),
     // Kernel updates are last-write-wins; the legacy CAS revision is
     // reported as its minimum (the UI no longer sends `expectedRevision`).

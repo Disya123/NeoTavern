@@ -725,7 +725,12 @@ function emitStructLines(schema, typeName, ctx) {
     lines.push('#[serde(deny_unknown_fields)]');
   }
   if (tolerant) {
-    lines.push(`pub struct ${typeName} {`, '    pub payload: Value,', '}');
+    lines.push(
+      '#[serde(transparent)]',
+      `pub struct ${typeName} {`,
+      '    pub payload: Value,',
+      '}',
+    );
     return lines;
   }
   const fieldLines = [];

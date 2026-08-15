@@ -587,6 +587,44 @@ fn chats_and_messages_crud_round_trip() {
     assert_eq!(product.code, "MESSAGE_NOT_FOUND");
     assert_eq!(product.params["messageId"], json!(m1.id));
 
+    // --- chats.messages.update: meta-only edit keeps content and replaces
+    // the metadata object verbatim (Этап 4 slice 11).
+    let meta_edited = dispatch_decoded::<MessageDto>(
+        &kernel,
+        "chats.messages.update",
+        json!({ "chatId": chat_id, "messageId": m1.id, "meta": { "manualExcluded": true } }),
+    )
+    .expect("meta-only messages.update must succeed");
+    assert_eq!(meta_edited.content, "Hello yourself");
+    assert_eq!(meta_edited.meta.payload["manualExcluded"], json!(true));
+    // content + meta together.
+    let both = dispatch_decoded::<MessageDto>(
+        &kernel,
+        "chats.messages.update",
+        json!({
+            "chatId": chat_id,
+            "messageId": m1.id,
+            "content": "Hello again",
+            "meta": { "greeting": true, "swipes": ["a", "b"], "swipeId": 1 }
+        }),
+    )
+    .expect("content+meta messages.update must succeed");
+    assert_eq!(both.content, "Hello again");
+    assert_eq!(both.meta.payload["swipeId"], json!(1));
+    // the list projection carries meta back verbatim.
+    let listed = dispatch_decoded::<PagedMessages>(
+        &kernel,
+        "chats.messages.list",
+        json!({ "chatId": chat_id }),
+    )
+    .expect("messages.list must succeed after meta update");
+    let listed_m1 = listed
+        .items
+        .iter()
+        .find(|m| m.id == m1.id)
+        .expect("m1 must still be listed");
+    assert_eq!(listed_m1.meta.payload["swipeId"], json!(1));
+
     // --- chats.messages.delete.
     let deleted = dispatch_decoded::<ResultEmpty>(
         &kernel,

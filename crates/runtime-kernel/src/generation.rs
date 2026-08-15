@@ -30,7 +30,7 @@ use crate::product;
 use crate::providers::ProviderRegistry;
 use crate::{CancellationFlag, KernelError, KernelErrorCode, StreamNotice};
 use contracts_generated::generated::{
-    self, ErrorDto, EventEnvelope, GenerationEvent, GenerationRun, GenerationStatus,
+    self, ErrorDto, EventEnvelope, FreeObject, GenerationEvent, GenerationRun, GenerationStatus,
     GenerationStep, MessageDto, MessageRole, PagedGenerationEvents, ResultEmpty,
 };
 use contracts_generated::Issue;
@@ -1500,6 +1500,9 @@ fn terminal_completed(
         created_at: created_at.clone(),
         sequence: msg_seq,
         generation_run_id: Some(run.run_id.clone()),
+        meta: FreeObject {
+            payload: serde_json::Value::Object(Default::default()),
+        },
     };
     validate(&message_dto, generated::validate_message_dto)?;
     let event_payload = event_payload(&GenerationEvent::GenerationCompleted {

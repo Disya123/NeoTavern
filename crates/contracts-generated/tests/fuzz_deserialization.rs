@@ -278,7 +278,10 @@ fn pathological_payloads_never_panic() {
     );
     let big_string = format!("\"{}\"", "x".repeat(8 * 1024 * 1024));
     // Number bombs: exponent overflow and a 400-digit integer literal.
-    let number_bombs = [r#"{"n": 1e400}"#.to_string(), format!(r#"{{"n": {}}}"#, "9".repeat(400))];
+    let number_bombs = [
+        r#"{"n": 1e400}"#.to_string(),
+        format!(r#"{{"n": {}}}"#, "9".repeat(400)),
+    ];
 
     let mut bombs: Vec<(String, Vec<u8>)> = vec![
         ("deep-objects-10000".to_string(), deep_objects.into_bytes()),

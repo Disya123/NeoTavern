@@ -197,6 +197,7 @@ import {
   translatePreset,
   updateCharacter,
   updateChat,
+  updateChatMessage,
   updateLorebook,
   updateLorebookEntry,
   updateMemory,
@@ -261,6 +262,7 @@ const WIRE_MESSAGE: MessageDto = {
   content: 'Hello',
   createdAt: NOW,
   sequence: 0,
+  meta: { manualExcluded: false },
 };
 
 const WIRE_LOREBOOK: LorebookDto = {
@@ -324,6 +326,7 @@ const WIRE_MESSAGE_DTO: MessageDto = {
   content: 'Hello (swipe)',
   createdAt: NOW,
   sequence: 0,
+  meta: {},
 };
 
 const WIRE_VARIANT: MessageVariantDto = {
@@ -520,7 +523,7 @@ describe('wire→UI translation', () => {
       role: 'user',
       content: 'Hello',
       name: null,
-      meta: {},
+      meta: { manualExcluded: false },
       createdAt: NOW_MS,
       revision: 1,
       updatedAt: null,
@@ -825,6 +828,42 @@ describe('message variants/revisions/drafts (kernel, Этап 4 slice 2)', () =>
       content: 'Hello',
     });
     expect(message.id).toBe(MESSAGE_ID);
+  });
+
+  it('patches message meta through the canonical messages.update op', async () => {
+    mocks.chats.updateMessage.mockResolvedValue({
+      ...WIRE_MESSAGE_DTO,
+      meta: { manualExcluded: true },
+    });
+    const message = await updateChatMessage(CHAT_ID, MESSAGE_ID, {
+      meta: { manualExcluded: true },
+    });
+    expect(mocks.chats.updateMessage).toHaveBeenCalledWith({
+      chatId: CHAT_ID,
+      messageId: MESSAGE_ID,
+      meta: { manualExcluded: true },
+    });
+    expect(message.meta).toEqual({ manualExcluded: true });
+  });
+
+  it('patches content + meta together on the kernel plane', async () => {
+    mocks.chats.updateMessage.mockResolvedValue({
+      ...WIRE_MESSAGE_DTO,
+      content: 'Rewritten',
+      meta: { greeting: true, swipes: ['a'], swipeId: 0 },
+    });
+    const message = await updateChatMessage(CHAT_ID, MESSAGE_ID, {
+      content: 'Rewritten',
+      meta: { greeting: true, swipes: ['a'], swipeId: 0 },
+    });
+    expect(mocks.chats.updateMessage).toHaveBeenCalledWith({
+      chatId: CHAT_ID,
+      messageId: MESSAGE_ID,
+      content: 'Rewritten',
+      meta: { greeting: true, swipes: ['a'], swipeId: 0 },
+    });
+    expect(message.content).toBe('Rewritten');
+    expect(message.meta.swipeId).toBe(0);
   });
 
   it('gets a draft through the facade and translates it with honest defaults', async () => {
@@ -1444,6 +1483,7 @@ describe('legacy bridge message creation', () => {
       content: 'Hello',
       createdAt: NOW_MS,
       sequence: 1,
+      meta: {},
     });
     const message = await createBridgeChatMessage(CHAT_ID, 'Hello');
     expect(mocks.chats.createMessage).toHaveBeenCalledWith({

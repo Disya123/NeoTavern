@@ -81,6 +81,13 @@ export const WireMessageRole = Type.Union(
 );
 export type WireMessageRole = Static<typeof WireMessageRole>;
 
+/** Free-form JSON object (`wire.free-object`) — values of arbitrary JSON shape. */
+export const WireFreeObjectSchema = Type.Object(
+  {},
+  { additionalProperties: true, $id: 'wire.free-object' },
+);
+export type WireFreeObject = Static<typeof WireFreeObjectSchema>;
+
 /** Message DTO (`wire.message.dto`). */
 export const MessageDtoSchema = Type.Object(
   {
@@ -91,6 +98,8 @@ export const MessageDtoSchema = Type.Object(
     createdAt: Type.String({ format: 'rfc3339' }),
     sequence: Type.Integer({ minimum: 0 }),
     generationRunId: Type.Optional(Type.String({ format: 'uuid' })),
+    /** Extension metadata (tool calls, manual exclusion, swipe bookmarks). */
+    meta: WireFreeObjectSchema,
   },
   { $id: 'wire.message.dto', additionalProperties: false },
 );
@@ -831,7 +840,10 @@ export const UpdateMessageRequestDtoSchema = Type.Object(
   {
     chatId: Type.String({ format: 'uuid' }),
     messageId: Type.String({ format: 'uuid' }),
-    content: Type.String({ minLength: 0, maxLength: 1000000 }),
+    /** New content; omitted keeps the current text (meta-only edits). */
+    content: Type.Optional(Type.String({ minLength: 0, maxLength: 1000000 })),
+    /** Replace the extension metadata object; omitted keeps it unchanged. */
+    meta: Type.Optional(WireFreeObjectSchema),
   },
   { $id: 'wire.request.update-message', additionalProperties: false },
 );
@@ -2051,6 +2063,7 @@ export type DeleteProfileRequestDto = Static<typeof DeleteProfileRequestDtoSchem
  */
 export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.meta.dto': MetaDtoSchema,
+  'wire.free-object': WireFreeObjectSchema,
   'wire.character.dto': CharacterDtoSchema,
   'wire.chat.dto': ChatDtoSchema,
   'wire.message.role': WireMessageRole,

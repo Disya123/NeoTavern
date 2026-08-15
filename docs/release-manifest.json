@@ -412,7 +412,7 @@
         "android": "Designed",
         "webClient": "Designed"
       },
-      "notes": "Legacy /api/v2 contour today; kernel message ops + UI cutover in M2/M4.",
+      "notes": "Legacy /api/v2 contour today; kernel message ops (chats.messages.crud) + UI cutover in M2/M4. Slice 11 (M5): wire chats.messages.update gains optional content + meta (free-object), MessageDto carries meta verbatim; toggleMessageContext / swipeGreeting / deleteCheckpoint now route through updateChatMessage on both planes (ui-legacy-surface 60 → 57). createSnapshot + checkpoint navigation stay legacy-documented (no wire snapshot op yet).",
       "milestone": "M4"
     },
     {

@@ -1609,6 +1609,7 @@ const MESSAGE_VALUE = {
   createdAt: TIMESTAMP,
   sequence: 0,
   generationRunId: UUID_RUN,
+  meta: { manualExcluded: false },
 };
 
 const MESSAGE_VARIANT_VALUE = {
@@ -2331,7 +2332,13 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('backups-create-response', 'backups.create', 'response', true, BACKUP_VALUE),
   fx('backups-list-response', 'backups.list', 'response', true, { items: [BACKUP_VALUE] }),
   fx('profile-export-response', 'profile.export', 'response', true, PROFILE_EXPORT_VALUE),
-  fx('profile-export-response-scoped', 'profile.export', 'response', true, PROFILE_EXPORT_SCOPED_VALUE),
+  fx(
+    'profile-export-response-scoped',
+    'profile.export',
+    'response',
+    true,
+    PROFILE_EXPORT_SCOPED_VALUE,
+  ),
   fx('assets-put-response', 'assets.put', 'response', true, ASSETS_PUT_VALUE),
   fx('assets-get-response', 'assets.get', 'response', true, { asset: ASSET_VALUE }),
   fx('assets-content-response', 'assets.content', 'response', true, ASSETS_CONTENT_VALUE),
