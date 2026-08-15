@@ -6,10 +6,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   WIRE_SCHEMA_HASH,
+  type AssetDto,
   type CharacterDto,
   type CreateProfileResultDto,
   type DiagnosticsExportResultDto,
   type GenerationRunDto,
+  type GetAssetContentResultDto,
+  type GetAssetResultDto,
   type InstallPluginResultDto,
   type InstallThemeResultDto,
   type ListMemoriesResultDto,
@@ -34,6 +37,7 @@ import {
   type PresetDto,
   type ProfileDto,
   type ProfileExportResultDto,
+  type PutAssetResultDto,
   type ResultSettingsDto,
   type SecretsStatusResultDto,
   type ThemeDto,
@@ -215,6 +219,23 @@ const SECRETS_STATUS: SecretsStatusResultDto = {
   recordCount: 2,
   formatVersion: 1,
 };
+
+const ASSET_ID = '5d6e7f80-9a1b-4c2d-8e3f-4a5b6c7d8e9f';
+const ASSET: AssetDto = {
+  id: ASSET_ID,
+  kind: 'avatar',
+  relativeKey: 'avatar/9f2c7a1b4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f80.png',
+  checksumSha256: '9f2c7a1b4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8',
+  sizeBytes: 512,
+  createdAt: TIMESTAMP,
+};
+const ASSET_GET: GetAssetResultDto = { asset: ASSET };
+const ASSET_CONTENT: GetAssetContentResultDto = {
+  assetId: ASSET_ID,
+  contentType: 'image/png',
+  contentBase64: 'iVBORw0KGgoAAAANSUhEUg==',
+};
+const ASSET_PUT: PutAssetResultDto = { asset: ASSET, deduplicated: false };
 
 /** `chats.messages.list` response: one canonical wire message (Этап 2.10). */
 const PAGED_MESSAGES: PagedMessagesDto = {
@@ -441,6 +462,14 @@ class FakeKernelTransport implements LocalTransport {
         return { ok: true, value: DIAGNOSTICS };
       case 'secrets.status':
         return { ok: true, value: SECRETS_STATUS };
+      case 'assets.get':
+        return { ok: true, value: ASSET_GET };
+      case 'assets.content':
+        return { ok: true, value: ASSET_CONTENT };
+      case 'assets.put':
+        return { ok: true, value: ASSET_PUT };
+      case 'assets.delete':
+        return { ok: true, value: EMPTY_RESULT };
       default:
         return { ok: false, error: { code: 'NOT_FOUND', params: {}, traceId: 'kernel-trace' } };
     }
@@ -555,6 +584,14 @@ function rpcResult(operationId: string | undefined): unknown {
       return DIAGNOSTICS;
     case 'secrets.status':
       return SECRETS_STATUS;
+    case 'assets.get':
+      return ASSET_GET;
+    case 'assets.content':
+      return ASSET_CONTENT;
+    case 'assets.put':
+      return ASSET_PUT;
+    case 'assets.delete':
+      return EMPTY_RESULT;
     default:
       return null;
   }
@@ -1809,6 +1846,64 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
     expect(localResult).toEqual(SECRETS_STATUS);
   });
 
+  it('assets.get/content/put/delete forward the canonical ops and decode the DTOs from both backends', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const [getLocal, getRemote] = await Promise.all([
+      local.assets.get(ASSET_ID),
+      remote.assets.get(ASSET_ID),
+    ]);
+    expect(getLocal).toEqual(getRemote);
+    expect(getLocal).toEqual(ASSET_GET);
+
+    const [contentLocal, contentRemote] = await Promise.all([
+      local.assets.content(ASSET_ID),
+      remote.assets.content(ASSET_ID),
+    ]);
+    expect(contentLocal).toEqual(contentRemote);
+    expect(contentLocal).toEqual(ASSET_CONTENT);
+
+    const putReq: PutAssetRequestDto = {
+      kind: 'avatar',
+      filename: 'avatar.png',
+      contentType: 'image/png',
+      contentBase64: 'iVBORw0KGgoAAAANSUhEUg==',
+    };
+    const [putLocal, putRemote] = await Promise.all([
+      local.assets.put(putReq),
+      remote.assets.put(putReq),
+    ]);
+    expect(putLocal).toEqual(putRemote);
+    expect(putLocal).toEqual(ASSET_PUT);
+
+    const [delLocal, delRemote] = await Promise.all([
+      local.assets.del(ASSET_ID),
+      remote.assets.del(ASSET_ID),
+    ]);
+    expect(delLocal).toEqual(delRemote);
+    expect(delLocal).toEqual(EMPTY_RESULT);
+
+    expect(kernel.requests).toEqual([
+      { operationId: 'assets.get', payload: { assetId: ASSET_ID } },
+      { operationId: 'assets.content', payload: { assetId: ASSET_ID } },
+      { operationId: 'assets.put', payload: putReq },
+      { operationId: 'assets.delete', payload: { assetId: ASSET_ID } },
+    ]);
+  });
+
+  it('assets.get with a non-uuid id throws ValidationError before any transport call', async () => {
+    const kernel = new FakeKernelTransport();
+    const backend = new LocalBackend({ transport: kernel });
+
+    await expect(backend.assets.get('nope')).rejects.toThrow(ValidationError);
+    await expect(
+      backend.assets.put({ kind: 'avatar', filename: 'a.png', contentBase64: 'nope!' }),
+    ).rejects.toThrow(ValidationError);
+    expect(kernel.calls).toBe(0);
+  });
+
   it('profiles.rename with a non-uuid id throws ValidationError before any transport call', async () => {
     const kernel = new FakeKernelTransport();
     const backend = new LocalBackend({ transport: kernel });
@@ -1828,5 +1923,11 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
     expect(() => backend.settings.get()).toThrow(UnsupportedError);
     expect(() => backend.diagnostics.export()).toThrow(UnsupportedError);
     expect(() => backend.secrets.status()).toThrow(UnsupportedError);
+    expect(() => backend.assets.get(ASSET_ID)).toThrow(UnsupportedError);
+    expect(() => backend.assets.content(ASSET_ID)).toThrow(UnsupportedError);
+    expect(() =>
+      backend.assets.put({ kind: 'avatar', filename: 'a.png', contentBase64: 'aGk=' }),
+    ).toThrow(UnsupportedError);
+    expect(() => backend.assets.del(ASSET_ID)).toThrow(UnsupportedError);
   });
 });

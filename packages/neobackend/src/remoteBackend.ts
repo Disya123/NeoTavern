@@ -50,9 +50,13 @@ import type {
   ResultSettingsDto,
   SecretsStatusResultDto,
   ThemeDto,
+  GetAssetContentResultDto,
+  GetAssetResultDto,
+  PutAssetResultDto,
 } from '@neotavern/contracts';
 import type {
   BackendCallOptions,
+  AssetsApi,
   BackupsApi,
   CharactersApi,
   ChatsApi,
@@ -286,6 +290,21 @@ export class RemoteBackend implements NeoBackend {
   readonly secrets: SecretsApi = {
     status: (opts) =>
       this.sdk.call<SecretsStatusResultDto>('secrets.status', {}, { signal: opts?.signal }),
+  };
+
+  readonly assets: AssetsApi = {
+    get: (assetId, opts) =>
+      this.sdk.call<GetAssetResultDto>('assets.get', { assetId }, { signal: opts?.signal }),
+    content: (assetId, opts) =>
+      this.sdk.call<GetAssetContentResultDto>(
+        'assets.content',
+        { assetId },
+        { signal: opts?.signal },
+      ),
+    put: (req, opts) =>
+      this.sdk.call<PutAssetResultDto>('assets.put', req, { signal: opts?.signal }),
+    del: (assetId, opts) =>
+      this.sdk.call<EmptyResultDto>('assets.delete', { assetId }, { signal: opts?.signal }),
   };
 
   private async *streamOperation(

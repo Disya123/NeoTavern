@@ -3,6 +3,20 @@
 ## Unreleased
 ### Added
 
+- **AssetsApi in the NeoBackend facade (M5 slice 7 remainder web).** The
+  facade gained `assets.get`/`assets.content`/`assets.put`/`assets.del` —
+  the last Product Wire domain without a facade surface, so every wire
+  operation is now reachable through the typed `NeoBackend` (ТЗ §13.1).
+  LocalBackend forwards over the kernel transport with request/response
+  validation, RemoteBackend forwards over the ClientSdk, LegacyBackend
+  throws `UnsupportedError` (the legacy plane has no assets route; avatars
+  and backgrounds remain on the legacy-raw path until their own cutover).
+  Tests: Local/Remote parity + validation + LegacyBackend unsupported
+  (neobackend vitest 68/68).
+- **ui:api:check regression fix (ARC-02).** A doc comment in
+  `apps/web/src/api/profilesHooks.ts` mentioned `/api/v2` and tripped the
+  legacy-surface scanner; the wording was removed and `ui:api:check` is
+  green again (65 baseline sites, all carrying owner/removalIssue/milestone).
 - **Secret-store status panel (SEC-01.1, M5 slice 7 remainder web).** The
   Settings panel gained a Security tab (`SecretsPanel`) rendering the honest
   value-free store mode from the canonical `secrets.status` DTO via the

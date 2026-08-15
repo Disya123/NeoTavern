@@ -1,7 +1,8 @@
 /**
  * Configuration profiles hooks (ТЗ §8.1 Configuration, Этап 4 slice 5
  * remainder). Server state belongs in TanStack Query (AGENTS.md §13); every
- * operation goes through the NeoBackend facade (ТЗ §13.1) — never /api/v2.
+ * operation goes through the NeoBackend facade (ТЗ §13.1) — never the
+ * legacy HTTP surface directly.
  *
  * Profile CRUD + the SEC-02 logical profile export (ADR-0047 waiver 4):
  * an optional profileId scopes the export to one profile's characters and

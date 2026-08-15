@@ -28,6 +28,7 @@ import {
 } from '@neotavern/contracts';
 import { ProductError } from '@neotavern/client-sdk';
 import type {
+  AssetsApi,
   BackupsApi,
   CharactersApi,
   ChatsApi,
@@ -295,6 +296,13 @@ export class LegacyBackend implements NeoBackend {
 
   readonly secrets: SecretsApi = {
     status: () => this.unsupported('secrets.status'),
+  };
+
+  readonly assets: AssetsApi = {
+    get: () => this.unsupported('assets.get'),
+    content: () => this.unsupported('assets.content'),
+    put: () => this.unsupported('assets.put'),
+    del: () => this.unsupported('assets.delete'),
   };
 
   private async listCharacters(req: ListCharactersRequestDto): Promise<PagedCharactersDto> {

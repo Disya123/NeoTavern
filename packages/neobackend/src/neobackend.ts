@@ -31,6 +31,8 @@ import type {
   EmptyResultDto,
   GenerationRunDto,
   GenerationToolResultRequestDto,
+  GetAssetContentResultDto,
+  GetAssetResultDto,
   GetMessageDraftRequestDto,
   GetSettingsRequestDto,
   InstallPluginRequestDto,
@@ -79,6 +81,8 @@ import type {
   ProfileExportRequestDto,
   ProfileExportResultDto,
   ProviderConfigDto,
+  PutAssetRequestDto,
+  PutAssetResultDto,
   RenameProfileRequestDto,
   ResultSettingsDto,
   SaveMessageDraftRequestDto,
@@ -411,6 +415,23 @@ export interface SecretsApi {
   status(opts?: BackendCallOptions): Promise<SecretsStatusResultDto>;
 }
 
+/**
+ * Asset domain operations (wire `assets.*`, ТЗ §5.1 AssetStore port,
+ * AGENTS.md §12). Metadata is served without content; bytes go through
+ * `content` (base64, size-capped by the wire response limit) and larger
+ * assets are addressed by `relativeKey` through host transports.
+ */
+export interface AssetsApi {
+  /** Asset metadata read (wire `assets.get`). */
+  get(assetId: string, opts?: BackendCallOptions): Promise<GetAssetResultDto>;
+  /** Asset content read (wire `assets.content`, base64 of the originals). */
+  content(assetId: string, opts?: BackendCallOptions): Promise<GetAssetContentResultDto>;
+  /** Asset publish (wire `assets.put`, idempotent re-import). */
+  put(req: PutAssetRequestDto, opts?: BackendCallOptions): Promise<PutAssetResultDto>;
+  /** Asset delete (wire `assets.delete`). */
+  del(assetId: string, opts?: BackendCallOptions): Promise<EmptyResultDto>;
+}
+
 /** Provider domain operations (wire `providers.*`). */
 export interface ProvidersApi {
   /** List providers. */
@@ -465,4 +486,5 @@ export interface NeoBackend {
   settings: SettingsApi;
   diagnostics: DiagnosticsApi;
   secrets: SecretsApi;
+  assets: AssetsApi;
 }

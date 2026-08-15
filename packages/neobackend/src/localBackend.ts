@@ -21,6 +21,8 @@ import {
   type DiagnosticsExportResultDto,
   type EmptyResultDto,
   type GenerationRunDto,
+  type GetAssetContentResultDto,
+  type GetAssetResultDto,
   type InstallPluginResultDto,
   type InstallThemeResultDto,
   type ListPluginsResultDto,
@@ -45,6 +47,7 @@ import {
   type ProfileDto,
   type ProfileExportResultDto,
   type ProviderConfigDto,
+  type PutAssetResultDto,
   type ResultSettingsDto,
   type SecretsStatusResultDto,
   type ThemeDto,
@@ -61,6 +64,7 @@ import {
 } from '@neotavern/contracts';
 import { ProductError, type StreamEvent } from '@neotavern/client-sdk';
 import type {
+  AssetsApi,
   BackendCallOptions,
   BackupsApi,
   CharactersApi,
@@ -232,6 +236,7 @@ export class LocalBackend implements NeoBackend {
   readonly settings: SettingsApi;
   readonly diagnostics: DiagnosticsApi;
   readonly secrets: SecretsApi;
+  readonly assets: AssetsApi;
 
   private readonly transport: LocalTransport;
   private readonly operations: ReadonlyMap<string, CompiledOperation>;
@@ -392,6 +397,13 @@ export class LocalBackend implements NeoBackend {
     };
     this.secrets = {
       status: (opts) => this.invoke<SecretsStatusResultDto>('secrets.status', {}, opts),
+    };
+    this.assets = {
+      get: (assetId, opts) => this.invoke<GetAssetResultDto>('assets.get', { assetId }, opts),
+      content: (assetId, opts) =>
+        this.invoke<GetAssetContentResultDto>('assets.content', { assetId }, opts),
+      put: (req, opts) => this.invoke<PutAssetResultDto>('assets.put', req, opts),
+      del: (assetId, opts) => this.invoke<EmptyResultDto>('assets.delete', { assetId }, opts),
     };
   }
 
