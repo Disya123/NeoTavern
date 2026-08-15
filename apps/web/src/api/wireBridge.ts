@@ -48,6 +48,12 @@ import {
   type Preset,
   type PresetCreate,
   type PresetUpdate,
+  type InstalledTheme,
+  type ThemeActivationResult,
+  type ThemeDeleteResult,
+  type ThemeInstallResult,
+  type ThemeListResponse,
+  type ThemeDto,
   type CharacterDto,
   type ChatDto,
   type LorebookDto,
@@ -1262,4 +1268,140 @@ export async function deleteMemory(id: string): Promise<void> {
     return;
   }
   await api.del(`/memories/${encodeURIComponent(id)}`);
+}
+
+/* --------------------------------------------------------------------------
+ * Themes (Этап 4 context 6 part 3, wire `themes.*`; ТЗ §5.2 theme-sdk).
+ *
+ * The kernel models a theme as DATA (opaque manifest + a content-addressed
+ * CSS asset reference, `cssAssetId` → `assets.put` kind `theme-css`); the
+ * legacy plane serves stylesheets as URLs. The transport maps the asset to a
+ * `data:` URI (`readAssetContentDataUrl`) so the UI keeps loading CSS through
+ * the plain `componentsCssUrl` slot. A theme whose CSS asset exceeds the wire
+ * content cap (262 144 response bytes) or cannot be read resolves to a
+ * no-CSS theme honestly — the shell falls back to built-in defaults.
+ * ------------------------------------------------------------------------ */
+
+/** Wire `themes.item` → legacy `InstalledTheme` (synchronous skeleton; the
+ * CSS asset is resolved by {@link themeToInstalled}). */
+export function translateTheme(dto: ThemeDto): InstalledTheme {
+  return {
+    id: dto.id,
+    name: dto.name,
+    version: dto.version,
+    // The kernel records the applied theme via the single `active` flag;
+    // there is no separate enabled/disabled state (uninstall removes).
+    enabled: true,
+    manifest: (dto.manifest ?? {}) as Record<string, unknown>,
+    installedAt: toEpochMs(dto.installedAt),
+    // Kernel has no asset URL surface: the CSS bytes are resolved to a
+    // `data:` URI below; previews and per-locale resources are not modelled
+    // by the wire contract yet (honest null/empty, not fabricated URLs).
+    componentsCssUrl: null,
+    shellCssUrl: null,
+    previewUrl: null,
+    localesUrls: {},
+  };
+}
+
+/** Wire `themes.item` → legacy `InstalledTheme` with the CSS asset resolved
+ * to a `data:` URI (kernel plane). Legacy items pass through untouched. */
+async function themeToInstalled(dto: ThemeDto): Promise<InstalledTheme> {
+  const theme = translateTheme(dto);
+  if (!dto.cssAssetId) return theme;
+  try {
+    const css = await readAssetContentDataUrl(dto.cssAssetId);
+    if (css) theme.componentsCssUrl = css;
+  } catch {
+    // Honest no-CSS theme: the shell applies the manifest tokens and falls
+    // back to built-in defaults for the stylesheet part.
+  }
+  return theme;
+}
+
+/** List installed themes with the active theme id. */
+export async function readThemes(): Promise<ThemeListResponse> {
+  if (isKernelMode()) {
+    const result = await backend.themes.list();
+    const items = await Promise.all(result.items.map(themeToInstalled));
+    const activeThemeId =
+      items.find((item) => {
+        const dto = result.items.find((candidate) => candidate.id === item.id);
+        return dto?.active ?? false;
+      })?.id ?? null;
+    return { items, activeThemeId };
+  }
+  return api.get<ThemeListResponse>('/themes');
+}
+
+/** Activate one theme (idempotent; exactly one active at a time). */
+export async function activateTheme(id: string): Promise<ThemeActivationResult> {
+  if (isKernelMode()) {
+    const activated = await backend.themes.activate(id);
+    return { activeThemeId: activated.id };
+  }
+  return api.post<ThemeActivationResult>(`/themes/${encodeURIComponent(id)}/activate`);
+}
+
+/** Clear the active theme (fall back to the built-in shell). The wire
+ * contract has no deactivate op — the legacy `DELETE /themes/active` has no
+ * kernel equivalent (honest CAPABILITY_UNAVAILABLE). */
+export async function resetActiveTheme(): Promise<ThemeActivationResult> {
+  if (isKernelMode()) {
+    throw new UnsupportedError('themes.reset.active');
+  }
+  return api.del<ThemeActivationResult>('/themes/active');
+}
+
+/** Uninstall one theme; deleting the active theme clears the active flag. */
+export async function deleteTheme(id: string): Promise<ThemeDeleteResult> {
+  if (isKernelMode()) {
+    await backend.themes.uninstall(id);
+    // The wire uninstall returns an empty result; re-read to report the
+    // truthful remaining active theme instead of fabricating one.
+    const next = await readThemes();
+    return { deleted: true, activeThemeId: next.activeThemeId };
+  }
+  return api.del<ThemeDeleteResult>(`/themes/${encodeURIComponent(id)}`);
+}
+
+/** Install a theme package. On the kernel plane the wire contract requires
+ * the HOST to have already verified the package (SEC-05 signature/digest)
+ * and published its CSS through `assets.put` before `themes.install` runs;
+ * the web transport has no such host command yet, so this is an honest
+ * CAPABILITY_UNAVAILABLE — never a silent skip of package verification. */
+export async function installTheme(file: File): Promise<ThemeInstallResult> {
+  if (isKernelMode()) {
+    throw new UnsupportedError('themes.install.host-verify');
+  }
+  return api.upload<ThemeInstallResult>('/themes/install', file);
+}
+
+/** Persisted theme-owned settings values (ТЗ §6.5). The wire contract does
+ * not model theme settings yet; the kernel plane honestly reports none
+ * (`undefined` → the theme applies its manifest defaults). */
+export async function readThemeSettings(
+  themeId: string,
+): Promise<Record<string, unknown> | undefined> {
+  if (isKernelMode()) {
+    return undefined;
+  }
+  const response = await fetch(
+    // eslint-disable-next-line @neotavern/no-legacy-api-surface
+    `/api/v2/themes/${encodeURIComponent(themeId)}/settings`,
+  );
+  if (!response.ok) return undefined;
+  const data = (await response.json()) as { values?: Record<string, unknown> };
+  return data.values;
+}
+
+/** Optional local user stylesheet (data/user.css, loaded last in the `user`
+ * cascade layer). The kernel does not serve a user stylesheet (no wire op);
+ * the legacy plane returns the documented route. */
+export function userCssUrl(): string | null {
+  if (isKernelMode()) {
+    return null;
+  }
+  // eslint-disable-next-line @neotavern/no-legacy-api-surface
+  return '/api/v2/user.css';
 }

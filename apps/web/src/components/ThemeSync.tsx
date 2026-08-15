@@ -6,6 +6,7 @@ import { validateThemeManifest } from '@neotavern/theme-sdk';
 import type { InstalledTheme } from '@neotavern/contracts';
 import { useUiStore, type InterfacePreferences } from '../state/ui.js';
 import { useThemes } from '../api/hooks.js';
+import { readThemeSettings, userCssUrl } from '../api/wireBridge.js';
 import {
   THEME_APPLY_FAILED_EVENT,
   applyInstalledTheme,
@@ -230,21 +231,20 @@ export function ThemeSync() {
   // Theme-owned settings (ТЗ §6.5): fetch persisted values and emit them as
   // the manifest-declared CSS custom properties. Depends on everything that
   // re-runs the apply effect above, because that effect clears setting
-  // variables along with the theme overrides (THEME-41).
+  // variables along with the theme overrides (THEME-41). The transport
+  // helper returns `undefined` on the kernel plane (the wire contract does
+  // not model theme settings yet) so the theme applies its defaults.
   useEffect(() => {
     if (safeMode || !activeTheme) return;
     const theme = activeTheme;
     let cancelled = false;
     void (async () => {
       try {
-        // eslint-disable-next-line @neotavern/no-legacy-api-surface
-        const response = await fetch(`/api/v2/themes/${encodeURIComponent(theme.id)}/settings`);
-        if (!response.ok || cancelled) return;
-        const data = (await response.json()) as { values?: Record<string, unknown> };
+        const values = await readThemeSettings(theme.id);
         if (cancelled) return;
         const validation = validateThemeManifest(theme.manifest);
         if (!validation.ok) return;
-        applyThemeSettings(validation.value, data.values);
+        applyThemeSettings(validation.value, values);
       } catch {
         // Theme settings are cosmetic; failure must not break the app.
       }
@@ -257,13 +257,15 @@ export function ThemeSync() {
   // Optional local user stylesheet (data/user.css) — documented to load last,
   // above the theme (served wrapped in the `user` cascade layer). Skipped in
   // safe mode like every other third-party style source. A missing file is a
-  // silent 404 the browser ignores.
+  // silent 404 the browser ignores; on the kernel plane there is no user
+  // stylesheet service, so no link is created.
   useEffect(() => {
     if (safeMode) return;
+    const href = userCssUrl();
+    if (!href) return;
     const link = document.createElement('link');
     link.rel = 'stylesheet';
-    // eslint-disable-next-line @neotavern/no-legacy-api-surface
-    link.href = '/api/v2/user.css';
+    link.href = href;
     link.dataset.neotavernUserStyle = 'user';
     document.head.append(link);
     return () => {

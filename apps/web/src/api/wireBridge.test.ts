@@ -89,7 +89,23 @@ const mocks = vi.hoisted(() => {
     put: vi.fn(),
     del: vi.fn(),
   };
-  return { characters, chats, lorebooks, personas, presets, memories, assets, isKernelMode };
+  const themes = {
+    list: vi.fn(),
+    install: vi.fn(),
+    uninstall: vi.fn(),
+    activate: vi.fn(),
+  };
+  return {
+    characters,
+    chats,
+    lorebooks,
+    personas,
+    presets,
+    memories,
+    assets,
+    themes,
+    isKernelMode,
+  };
 });
 
 vi.mock('./backend.js', () => ({
@@ -101,6 +117,7 @@ vi.mock('./backend.js', () => ({
     presets: mocks.presets,
     memories: mocks.memories,
     assets: mocks.assets,
+    themes: mocks.themes,
   },
   isKernelMode: mocks.isKernelMode,
 }));
@@ -163,6 +180,13 @@ import {
   updatePersona,
   updatePreset,
   uploadCharacterAvatar,
+  readThemes,
+  activateTheme,
+  resetActiveTheme,
+  deleteTheme,
+  installTheme,
+  readThemeSettings,
+  userCssUrl,
 } from './wireBridge.js';
 
 const CHAR_ID = '11111111-2222-4333-8444-555555555555';
@@ -1107,5 +1131,80 @@ describe('memory CRUD (kernel, Этап 4 slice 3)', () => {
     mocks.memories.del.mockResolvedValue({ ok: true });
     await deleteMemory(WIRE_MEMORY.id);
     expect(mocks.memories.del).toHaveBeenCalledWith(WIRE_MEMORY.id);
+  });
+});
+
+describe('themes (Этап 4 context 6 part 3, wire themes.*)', () => {
+  const THEME_DTO = {
+    id: 'wii-u-dark',
+    name: 'Wii U Dark',
+    version: '1.2.0',
+    active: true,
+    trustState: 'verified' as const,
+    cssAssetId: '0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f',
+    installedAt: NOW,
+    updatedAt: NOW,
+    manifest: { name: 'Wii U Dark', version: '1.2.0' },
+  };
+
+  it('lists themes and resolves the active id through the facade', async () => {
+    mocks.themes.list.mockResolvedValue({
+      items: [
+        THEME_DTO,
+        { ...THEME_DTO, id: 'plain', name: 'Plain', active: false, cssAssetId: undefined },
+      ],
+    });
+    mocks.assets.content.mockResolvedValue({
+      assetId: '0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f',
+      contentType: 'text/css',
+      contentBase64: 'Ym9keXt9',
+    });
+    const result = await readThemes();
+    expect(result.activeThemeId).toBe('wii-u-dark');
+    expect(result.items).toHaveLength(2);
+    expect(result.items[0].id).toBe('wii-u-dark');
+    expect(result.items[0].componentsCssUrl).toBe('data:text/css;base64,Ym9keXt9');
+    expect(result.items[0].shellCssUrl).toBeNull();
+    expect(result.items[0].previewUrl).toBeNull();
+    expect(result.items[1].componentsCssUrl).toBeNull();
+    expect(mocks.themes.list).toHaveBeenCalledWith();
+  });
+
+  it('degrades honestly when the css asset read fails', async () => {
+    mocks.themes.list.mockResolvedValue({ items: [THEME_DTO] });
+    mocks.assets.content.mockRejectedValue(new Error('cap'));
+    const result = await readThemes();
+    expect(result.items[0].componentsCssUrl).toBeNull();
+  });
+
+  it('activates a theme through the facade', async () => {
+    mocks.themes.activate.mockResolvedValue(THEME_DTO);
+    const result = await activateTheme('wii-u-dark');
+    expect(result.activeThemeId).toBe('wii-u-dark');
+    expect(mocks.themes.activate).toHaveBeenCalledWith('wii-u-dark');
+  });
+
+  it('deletes a theme and reports the truthful remaining active theme', async () => {
+    mocks.themes.uninstall.mockResolvedValue({ ok: true });
+    mocks.themes.list.mockResolvedValue({ items: [THEME_DTO] });
+    mocks.assets.content.mockResolvedValue({
+      assetId: '0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f',
+      contentType: 'text/css',
+      contentBase64: 'Ym9keXt9',
+    });
+    const result = await deleteTheme('plain');
+    expect(mocks.themes.uninstall).toHaveBeenCalledWith('plain');
+    expect(result.deleted).toBe(true);
+    expect(result.activeThemeId).toBe('wii-u-dark');
+  });
+
+  it('rejects install and reset on the kernel plane honestly', async () => {
+    await expect(installTheme(new File(['z'], 't.zip'))).rejects.toBeInstanceOf(UnsupportedError);
+    await expect(resetActiveTheme()).rejects.toBeInstanceOf(UnsupportedError);
+  });
+
+  it('reports no theme settings and no user css on the kernel plane', async () => {
+    expect(await readThemeSettings('wii-u-dark')).toBeUndefined();
+    expect(userCssUrl()).toBeNull();
   });
 });

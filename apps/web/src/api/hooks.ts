@@ -40,10 +40,6 @@ import type {
   SillyTavernImportAnalysis,
   SillyTavernImportExecute,
   SillyTavernImportResult,
-  ThemeActivationResult,
-  ThemeDeleteResult,
-  ThemeInstallResult,
-  ThemeListResponse,
   PluginActivateRequest,
   PluginAuthConnectRequest,
   PluginAuthConnectResult,
@@ -99,6 +95,11 @@ import {
   updatePersona,
   updatePreset,
   uploadCharacterAvatar,
+  readThemes,
+  activateTheme,
+  resetActiveTheme,
+  deleteTheme,
+  installTheme,
   type ContinueCharacterChatInput,
   type ContinueCharacterChatResult,
 } from './wireBridge.js';
@@ -743,7 +744,7 @@ export function useUpdateSettings() {
 export function useThemes(enabled = true) {
   return useQuery({
     queryKey: ['themes'],
-    queryFn: () => api.get<ThemeListResponse>('/themes'),
+    queryFn: () => readThemes(),
     staleTime: 5 * MINUTE,
     enabled,
   });
@@ -752,7 +753,7 @@ export function useThemes(enabled = true) {
 export function useInstallTheme() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (file: File) => api.upload<ThemeInstallResult>('/themes/install', file),
+    mutationFn: (file: File) => installTheme(file),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['themes'] });
     },
@@ -762,8 +763,7 @@ export function useInstallTheme() {
 export function useActivateTheme() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) =>
-      api.post<ThemeActivationResult>(`/themes/${encodeURIComponent(id)}/activate`),
+    mutationFn: (id: string) => activateTheme(id),
     onSuccess: async () => {
       await Promise.all([
         qc.invalidateQueries({ queryKey: ['themes'] }),
@@ -776,7 +776,7 @@ export function useActivateTheme() {
 export function useResetTheme() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => api.del<ThemeActivationResult>('/themes/active'),
+    mutationFn: () => resetActiveTheme(),
     onSuccess: async () => {
       await Promise.all([
         qc.invalidateQueries({ queryKey: ['themes'] }),
@@ -789,7 +789,7 @@ export function useResetTheme() {
 export function useDeleteTheme() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => api.del<ThemeDeleteResult>(`/themes/${encodeURIComponent(id)}`),
+    mutationFn: (id: string) => deleteTheme(id),
     onSuccess: async () => {
       await Promise.all([
         qc.invalidateQueries({ queryKey: ['themes'] }),

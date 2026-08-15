@@ -3,6 +3,25 @@
 ## Unreleased
 ### Added
 
+- **Themes reach the kernel plane (M5 slice 6 part 3, Этап 4 context 6,
+  ТЗ §5.2 theme-sdk).** `readThemes`/`activateTheme`/`deleteTheme` in
+  `wireBridge` call the wire `themes.*` operations and map the durable
+  theme row (opaque manifest + content-addressed `cssAssetId`) onto the
+  legacy `InstalledTheme` shape, resolving the CSS asset to a `data:` URI
+  so the shell keeps loading it through the plain `componentsCssUrl` slot.
+  The web transport honestly reports `CAPABILITY_UNAVAILABLE` where the
+  wire contract cannot express the legacy flow: theme-package install
+  needs host-side SEC-05 verification before `themes.install`, and
+  clearing the active theme has no deactivate op. Theme-owned settings
+  (`readThemeSettings`) and the user stylesheet (`userCssUrl`) moved from
+  direct `fetch` in ThemeSync into transport helpers — the kernel plane
+  reports none (the wire contract does not model them yet) so the theme
+  applies its defaults. ui:api:check stays 64 sites: the two ThemeSync
+  sites moved into the transport layer. Tests: wireBridge 76/76 (+6
+  themes: list/active-id resolution, honest css-read degradation, activate,
+  delete truthfulness, install/reset refusal, settings/user.css kernel
+  emptiness).
+
 - **Kernel avatar upload (M5 slice 6 remainder web, ТЗ §34 avatar→asset).**
   The character editor can now set an avatar on the kernel plane: the new
   `uploadCharacterAvatar` transport helper publishes the file as an
