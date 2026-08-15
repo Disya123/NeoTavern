@@ -930,6 +930,62 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'assets.put',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.write',
+    'wire.request.assets.put',
+    'wire.result.assets.put',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'CONFLICT', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    1048576,
+    262144,
+    undefined,
+  ),
+  op(
+    'assets.get',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.assets.get',
+    'wire.result.assets.get',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    1024,
+    262144,
+    undefined,
+  ),
+  op(
+    'assets.content',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.assets.content',
+    'wire.result.assets.content',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    1024,
+    4194304,
+    undefined,
+  ),
+  op(
+    'assets.delete',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.write',
+    'wire.request.assets.delete',
+    'wire.result.empty',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    1024,
+    1024,
+    undefined,
+  ),
+  op(
     'settings.get',
     'transactional',
     'idempotent',
@@ -1572,6 +1628,33 @@ const SECRETS_STATUS_VALUE = {
   formatVersion: 1,
 };
 
+const ASSET_VALUE = {
+  id: UUID_AVATAR,
+  kind: 'avatar',
+  relativeKey: 'avatar/9f2c7a1b3d5e8f0a2c4e6b8d0f1a3c5e7b9d2f4a6c8e0b1d3f5a7c9e2b4d6f8a',
+  checksumSha256: '9f2c7a1b3d5e8f0a2c4e6b8d0f1a3c5e7b9d2f4a6c8e0b1d3f5a7c9e2b4d6f8a',
+  sizeBytes: 5,
+  createdAt: TIMESTAMP,
+};
+
+const ASSETS_PUT_VALUE = {
+  asset: ASSET_VALUE,
+  deduplicated: false,
+};
+
+const ASSETS_CONTENT_VALUE = {
+  assetId: UUID_AVATAR,
+  contentType: 'image/png',
+  contentBase64: 'aGVsbG8=',
+};
+
+const ASSETS_PUT_REQUEST = {
+  kind: 'avatar',
+  filename: 'a.png',
+  contentType: 'image/png',
+  contentBase64: 'aGVsbG8=',
+};
+
 const PROMPT_PLAN_VALUE = {
   runId: UUID_RUN,
   chatId: UUID_CHAT,
@@ -1792,6 +1875,10 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('personas-list-request', 'personas.list', 'request', true, {}),
   fx('profile-export-request', 'profile.export', 'request', true, { includeAssets: false }),
   fx('profile-export-request-default', 'profile.export', 'request', true, {}),
+  fx('assets-put-request', 'assets.put', 'request', true, ASSETS_PUT_REQUEST),
+  fx('assets-get-request', 'assets.get', 'request', true, { assetId: UUID_AVATAR }),
+  fx('assets-content-request', 'assets.content', 'request', true, { assetId: UUID_AVATAR }),
+  fx('assets-delete-request', 'assets.delete', 'request', true, { assetId: UUID_AVATAR }),
   fx('providers-list-request', 'providers.list', 'request', true, {}),
   fx('providers-config-set-request', 'providers.config.set', 'request', true, {
     provider: 'fake',
@@ -1972,6 +2059,10 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('backups-create-response', 'backups.create', 'response', true, BACKUP_VALUE),
   fx('backups-list-response', 'backups.list', 'response', true, { items: [BACKUP_VALUE] }),
   fx('profile-export-response', 'profile.export', 'response', true, PROFILE_EXPORT_VALUE),
+  fx('assets-put-response', 'assets.put', 'response', true, ASSETS_PUT_VALUE),
+  fx('assets-get-response', 'assets.get', 'response', true, { asset: ASSET_VALUE }),
+  fx('assets-content-response', 'assets.content', 'response', true, ASSETS_CONTENT_VALUE),
+  fx('assets-delete-response', 'assets.delete', 'response', true, {}),
   fx('lorebooks-list-response', 'lorebooks.list', 'response', true, { items: [LOREBOOK_VALUE] }),
   fx('lorebooks-get-response', 'lorebooks.get', 'response', true, LOREBOOK_VALUE),
   fx('lorebooks-create-response', 'lorebooks.create', 'response', true, LOREBOOK_VALUE),
@@ -2209,6 +2300,30 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   }),
   fx('neg-profile-export-bad-request', 'profile.export', 'request', false, {
     includeAssets: 'yes',
+  }),
+  fx('neg-assets-put-bad-base64', 'assets.put', 'request', false, {
+    ...ASSETS_PUT_REQUEST,
+    contentBase64: '!!!not-base64!!!',
+  }),
+  fx('neg-assets-put-bad-kind', 'assets.put', 'request', false, {
+    ...ASSETS_PUT_REQUEST,
+    kind: 'UPPER',
+  }),
+  fx('neg-assets-get-bad-id', 'assets.get', 'request', false, { assetId: 'nope' }),
+  fx('neg-assets-item-bad-checksum', 'assets.get', 'response', false, {
+    asset: { ...ASSET_VALUE, checksumSha256: 'zzz' },
+  }),
+  fx('characters-create-request-with-avatar', 'characters.create', 'request', true, {
+    name: 'Aveline',
+    avatarAssetId: UUID_AVATAR,
+  }),
+  fx('characters-update-request-with-avatar', 'characters.update', 'request', true, {
+    characterId: UUID_CHARACTER,
+    avatarAssetId: UUID_AVATAR,
+  }),
+  fx('neg-characters-update-bad-avatar', 'characters.update', 'request', false, {
+    characterId: UUID_CHARACTER,
+    avatarAssetId: 'not-a-uuid',
   }),
   fx('neg-meta-bad-timestamp', 'characters.create', 'response', false, {
     ...CHARACTER_VALUE,

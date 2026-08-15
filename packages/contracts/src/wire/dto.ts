@@ -461,24 +461,34 @@ export const GetCharacterRequestDtoSchema = Type.Object(
 );
 export type GetCharacterRequestDto = Static<typeof GetCharacterRequestDtoSchema>;
 
-/** Create character request DTO (`wire.request.create-character`). */
+/**
+ * Create character request DTO (`wire.request.create-character`).
+ * `avatarAssetId` (optional) links the character to an asset published
+ * through `assets.put`; the kernel verifies the asset exists.
+ */
 export const CreateCharacterRequestDtoSchema = Type.Object(
   {
     name: Type.String({ minLength: 1, maxLength: 120 }),
     description: Type.Optional(Type.String({ minLength: 0, maxLength: 10000 })),
     tags: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 64 }), { maxItems: 32 })),
+    avatarAssetId: Type.Optional(Type.String({ format: 'uuid' })),
   },
   { $id: 'wire.request.create-character', additionalProperties: false },
 );
 export type CreateCharacterRequestDto = Static<typeof CreateCharacterRequestDtoSchema>;
 
-/** Update character request DTO (`wire.request.update-character`). */
+/**
+ * Update character request DTO (`wire.request.update-character`).
+ * `avatarAssetId` (optional) links the character to an asset published
+ * through `assets.put`; the kernel verifies the asset exists.
+ */
 export const UpdateCharacterRequestDtoSchema = Type.Object(
   {
     characterId: Type.String({ format: 'uuid' }),
     name: Type.Optional(Type.String({ minLength: 1, maxLength: 120 })),
     description: Type.Optional(Type.String({ minLength: 0, maxLength: 10000 })),
     tags: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 64 }), { maxItems: 32 })),
+    avatarAssetId: Type.Optional(Type.String({ format: 'uuid' })),
   },
   { $id: 'wire.request.update-character', additionalProperties: false },
 );
@@ -1627,6 +1637,115 @@ export const SecretsStatusResultDtoSchema = Type.Object(
 export type SecretsStatusResultDto = Static<typeof SecretsStatusResultDtoSchema>;
 
 /**
+ * Asset DTO (`wire.assets.item`) — metadata of an immutable content-
+ * addressed asset published into the canonical data root's `assets/`
+ * directory (ТЗ §5.1 AssetStore port, AGENTS.md §12). The `relativeKey` is
+ * the managed key `<kind>/<sha256>[.<ext>]`; the bytes are served through
+ * `assets.content`. Metadata only — never embeds content.
+ */
+export const AssetDtoSchema = Type.Object(
+  {
+    id: Type.String({ format: 'uuid' }),
+    kind: Type.String({ pattern: '^[a-z][a-z0-9.-]*$', minLength: 1, maxLength: 64 }),
+    relativeKey: Type.String({ minLength: 1, maxLength: 512 }),
+    checksumSha256: Type.String({ pattern: '^[a-f0-9]{64}$' }),
+    sizeBytes: Type.Integer({ minimum: 0 }),
+    createdAt: Type.String({ format: 'rfc3339' }),
+  },
+  { $id: 'wire.assets.item', additionalProperties: false },
+);
+export type AssetDto = Static<typeof AssetDtoSchema>;
+
+/**
+ * Asset publish request (`wire.request.assets.put`) — uploads an immutable
+ * asset. `kind` matches the storage grammar (`avatar`, `card`, ...),
+ * `filename` contributes only its extension to the content-derived managed
+ * key, and `contentBase64` is standard base64 of the bytes. Publishing the
+ * same bytes under the same `kind` again is an idempotent re-import: the
+ * existing record is returned with `deduplicated: true` (AGENTS.md §11:
+ * re-running an import must not create duplicates).
+ */
+export const PutAssetRequestDtoSchema = Type.Object(
+  {
+    kind: Type.String({ pattern: '^[a-z][a-z0-9.-]*$', minLength: 1, maxLength: 64 }),
+    filename: Type.String({ minLength: 1, maxLength: 255 }),
+    contentType: Type.Optional(Type.String({ minLength: 1, maxLength: 128 })),
+    contentBase64: Type.String({
+      pattern: '^[A-Za-z0-9+/]*={0,2}$',
+      minLength: 1,
+    }),
+  },
+  { $id: 'wire.request.assets.put', additionalProperties: false },
+);
+export type PutAssetRequestDto = Static<typeof PutAssetRequestDtoSchema>;
+
+/** Asset publish result (`wire.result.assets.put`). */
+export const PutAssetResultDtoSchema = Type.Object(
+  {
+    asset: AssetDtoSchema,
+    deduplicated: Type.Boolean(),
+    deduplicatedFromId: Type.Optional(Type.String({ format: 'uuid' })),
+  },
+  { $id: 'wire.result.assets.put', additionalProperties: false },
+);
+export type PutAssetResultDto = Static<typeof PutAssetResultDtoSchema>;
+
+/** Asset metadata read request (`wire.request.assets.get`). */
+export const GetAssetRequestDtoSchema = Type.Object(
+  {
+    assetId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.assets.get', additionalProperties: false },
+);
+export type GetAssetRequestDto = Static<typeof GetAssetRequestDtoSchema>;
+
+/** Asset metadata result (`wire.result.assets.get`). */
+export const GetAssetResultDtoSchema = Type.Object(
+  {
+    asset: AssetDtoSchema,
+  },
+  { $id: 'wire.result.assets.get', additionalProperties: false },
+);
+export type GetAssetResultDto = Static<typeof GetAssetResultDtoSchema>;
+
+/** Asset content read request (`wire.request.assets.content`). */
+export const GetAssetContentRequestDtoSchema = Type.Object(
+  {
+    assetId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.assets.content', additionalProperties: false },
+);
+export type GetAssetContentRequestDto = Static<typeof GetAssetContentRequestDtoSchema>;
+
+/**
+ * Asset content result (`wire.result.assets.content`). Base64 of the
+ * original bytes (AGENTS.md §12: originals are never lossy-compressed). The
+ * wire response limit caps the servable size; larger assets are addressed
+ * by `relativeKey` through host transports.
+ */
+export const GetAssetContentResultDtoSchema = Type.Object(
+  {
+    assetId: Type.String({ format: 'uuid' }),
+    contentType: Type.Optional(Type.String({ minLength: 1, maxLength: 128 })),
+    contentBase64: Type.String({
+      pattern: '^[A-Za-z0-9+/]*={0,2}$',
+      minLength: 1,
+    }),
+  },
+  { $id: 'wire.result.assets.content', additionalProperties: false },
+);
+export type GetAssetContentResultDto = Static<typeof GetAssetContentResultDtoSchema>;
+
+/** Asset delete request (`wire.request.assets.delete`). */
+export const DeleteAssetRequestDtoSchema = Type.Object(
+  {
+    assetId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.assets.delete', additionalProperties: false },
+);
+export type DeleteAssetRequestDto = Static<typeof DeleteAssetRequestDtoSchema>;
+
+/**
  * Every wire schema keyed by its `$id` (schemaId): all DTOs plus the error
  * DTO, the message role union and the three envelopes. This is the complete
  * schema registry the codegen tool and `compileWireContract` operate on.
@@ -1665,6 +1784,14 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.request.settings.update': UpdateSettingsRequestDtoSchema,
   'wire.result.diagnostics-export': DiagnosticsExportResultDtoSchema,
   'wire.result.secrets-status': SecretsStatusResultDtoSchema,
+  'wire.assets.item': AssetDtoSchema,
+  'wire.request.assets.put': PutAssetRequestDtoSchema,
+  'wire.result.assets.put': PutAssetResultDtoSchema,
+  'wire.request.assets.get': GetAssetRequestDtoSchema,
+  'wire.result.assets.get': GetAssetResultDtoSchema,
+  'wire.request.assets.content': GetAssetContentRequestDtoSchema,
+  'wire.result.assets.content': GetAssetContentResultDtoSchema,
+  'wire.request.assets.delete': DeleteAssetRequestDtoSchema,
   'wire.request.set-provider-config': SetProviderConfigRequestDtoSchema,
   'wire.request.get-provider-config': GetProviderConfigRequestDtoSchema,
   'wire.request.list-provider-configs': ListProviderConfigsRequestDtoSchema,

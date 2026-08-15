@@ -3,6 +3,27 @@
 ## Unreleased
 ### Added
 
+- **Canonical content-addressed AssetStore (ТЗ §5.1, AGENTS.md §11/§12, M5
+  slice 5 remainder).** Four new wire operations (73 total) over the
+  crash-safe `neotavern_storage::assets` publisher: `assets.put` publishes
+  immutable bytes under a content-derived managed key
+  `<kind>/<sha256>[.<ext>]` and is an **idempotent re-import** — identical
+  bytes under the same kind return the existing record with
+  `deduplicated: true` (no duplicate); `assets.get` returns metadata;
+  `assets.content` returns the ORIGINAL bytes (base64, never lossy; the
+  4 MiB wire response limit caps the servable size); `assets.delete`
+  removes the registry row first (orphan GC reclaims the file). Avatar
+  linkage is now writable: `characters.create`/`characters.update` accept
+  `avatarAssetId` and the kernel verifies the asset exists (stable
+  `ASSET_NOT_FOUND` product code; 3 new character fixtures + 1 negative).
+  Kernel tests (`kernel_assets.rs`, 5): put/get/content round-trip with
+  the file verified on disk, idempotent re-import (same bytes → same id,
+  deduplicated; different kind/bytes → distinct), character avatar
+  linkage round-trip + missing-asset rejection, delete → not-found, and
+  wire validation (bad base64, uppercase kind). Thumbnail cache
+  GENERATION stays the web/legacy side (canonical plane has no image
+  codec dependency by design); the key contract is documented in the
+  release manifest. Capability matrix row `library.assets` added.
 - **Value-free secret-backend surface `secrets.status` (SEC-01.1, M5 slice
   7).** New wire operation (69 total) `secrets.status`
   (`wire.result.secrets-status`) reports the explicit secret-store MODE

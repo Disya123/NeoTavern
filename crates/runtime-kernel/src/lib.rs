@@ -30,6 +30,7 @@ use std::sync::mpsc;
 use std::sync::Arc;
 use std::time::Duration;
 
+pub mod assets;
 pub mod backup;
 pub mod export;
 pub mod generation;
@@ -595,6 +596,11 @@ fn handle_unary(
         "providers.config.delete" => with_db_opt(db, |db| {
             providers_config::delete(db, state.secret_store.as_ref(), req)
         }),
+        // Этап 4 slice 5 remainder: canonical content-addressed AssetStore.
+        "assets.put" => with_db_opt(db, |db| assets::assets_put(db, req)),
+        "assets.get" => with_db_opt(db, |db| assets::assets_get(db, req)),
+        "assets.content" => with_db_opt(db, |db| assets::assets_content(db, req)),
+        "assets.delete" => with_db_opt(db, |db| assets::assets_delete(db, req)),
         // Этап 4 slice 7: canonical non-secret settings + SEC-07 diagnostics.
         "settings.get" => with_db_opt(db, |db| settings::settings_get(db, req)),
         "settings.update" => with_db_opt(db, |db| settings::settings_update(db, req)),

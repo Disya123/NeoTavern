@@ -247,6 +247,33 @@ fn entry_not_found(entry_id: &str) -> KernelError {
     )
 }
 
+/// Validate an optional character avatar reference: when present, the asset
+/// must already be registered (`assets.put`); otherwise `ASSET_NOT_FOUND`.
+/// Returns the id to persist, or `None` when the field was absent (Этап 4
+/// slice 5 remainder — closes the avatar write path).
+fn validate_avatar_asset(
+    db: &Database,
+    avatar_asset_id: Option<&str>,
+) -> Result<Option<String>, KernelError> {
+    let Some(id) = avatar_asset_id else {
+        return Ok(None);
+    };
+    let exists: bool = db
+        .conn()
+        .query_row(
+            "SELECT 1 FROM __neotavern_assets WHERE id = ?1",
+            params![id],
+            |_| Ok(true),
+        )
+        .optional()
+        .map_err(|e| sqlite(e, "characters: avatar asset lookup"))?
+        .unwrap_or(false);
+    if !exists {
+        return Err(crate::assets::asset_not_found(id));
+    }
+    Ok(Some(id.to_string()))
+}
+
 /// Renders a `characters` row as the wire [`CharacterDto`].
 fn row_to_character(row: &rusqlite::Row) -> Result<CharacterDto, KernelError> {
     let tags_json: String = row
@@ -584,11 +611,21 @@ pub fn characters_create(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, K
             format!("failed to serialize tags: {err}"),
         )
     })?;
+    // Avatar linkage: the referenced asset must exist (Этап 4 slice 5).
+    let avatar = validate_avatar_asset(db, req.avatar_asset_id.as_deref())?;
     db.transaction(|tx| {
         tx.execute(
             "INSERT INTO characters (id, name, description, avatar_asset_id, tags_json, ext_json, created_at, updated_at) \
-             VALUES (?1, ?2, ?3, NULL, ?4, '{}', ?5, ?6)",
-            params![&id, &req.name, &req.description, &tags_json, &now, &now],
+             VALUES (?1, ?2, ?3, ?4, ?5, '{}', ?6, ?7)",
+            params![
+                &id,
+                &req.name,
+                &req.description,
+                &avatar,
+                &tags_json,
+                &now,
+                &now
+            ],
         )
         .map_err(|e| StorageError::from_sqlite(e, "characters_create: insert"))?;
         Ok(())
@@ -618,6 +655,8 @@ pub fn characters_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, K
         })?),
         None => None,
     };
+    // Avatar linkage: the referenced asset must exist (Этап 4 slice 5).
+    let avatar = validate_avatar_asset(db, req.avatar_asset_id.as_deref())?;
     let changed = db.transaction(|tx| {
         let mut sets: Vec<&str> = Vec::new();
         let mut values: Vec<Value> = Vec::new();
@@ -632,6 +671,10 @@ pub fn characters_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, K
         if let Some(tags_json) = &tags_json {
             sets.push("tags_json = ?");
             values.push(Value::Text(tags_json.clone()));
+        }
+        if let Some(avatar) = &avatar {
+            sets.push("avatar_asset_id = ?");
+            values.push(Value::Text(avatar.clone()));
         }
         sets.push("updated_at = ?");
         values.push(Value::Text(now.clone()));
