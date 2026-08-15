@@ -75,6 +75,9 @@ fn build_legacy(path: &Path) -> rusqlite::Result<()> {
             metadata TEXT NOT NULL DEFAULT '{}',
             created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
         );
+        CREATE TABLE settings (
+            key TEXT PRIMARY KEY, value TEXT NOT NULL
+        );
         CREATE TABLE provider_configs (
             id TEXT PRIMARY KEY, provider TEXT NOT NULL, name TEXT NOT NULL, config TEXT, api_key TEXT
         );",
@@ -326,6 +329,21 @@ fn build_legacy(path: &Path) -> rusqlite::Result<()> {
          VALUES ('leg-mem4', 'weird', '[]', 'Bad scope.', 1700000046000, 1700000047000)",
         [],
     )?;
+    // settings (ADR-0046 waiver 8, settings part): a JSON-object value, a
+    // JSON-string value and a NON-JSON value that must survive as a JSON
+    // string (fail-closed — no setting is silently dropped).
+    conn.execute(
+        "INSERT INTO settings (key, value) VALUES ('theme', '{\"primary\":\"#123\"}')",
+        [],
+    )?;
+    conn.execute(
+        "INSERT INTO settings (key, value) VALUES ('app.language', '\"ru\"')",
+        [],
+    )?;
+    conn.execute(
+        "INSERT INTO settings (key, value) VALUES ('legacy.raw', 'not-json')",
+        [],
+    )?;
     // personas: two rows; both legacy-declared defaults collapse to ONE kernel
     // default (the single-default invariant). leg-h1 references leg-p1.
     conn.execute(
@@ -415,6 +433,10 @@ fn legacy_conversion_maps_rows_skips_orphans_and_never_copies_secrets(
         "both personas convert; only the first legacy default keeps the flag"
     );
     assert_eq!(
+        report.settings, 3,
+        "the three legacy settings (object, JSON-string and raw) convert verbatim"
+    );
+    assert_eq!(
         report.skipped, 9,
         "orphan chat + orphan message + orphan swipe + orphan revision + 3 drafts + invalid-scope memory + missing avatar original"
     );
@@ -449,6 +471,7 @@ fn legacy_conversion_maps_rows_skips_orphans_and_never_copies_secrets(
         ("presets", 1),
         ("memories", 3),
         ("personas", 2),
+        ("settings", 3),
         ("__neotavern_assets", 1),
     ] {
         let count: i64 =
@@ -545,6 +568,39 @@ fn legacy_conversion_maps_rows_skips_orphans_and_never_copies_secrets(
         |r| r.get(0),
     )?;
     assert_eq!(is_default, 0, "second legacy default demoted");
+
+    // Settings: JSON values copied verbatim; the non-JSON legacy value is
+    // preserved as a JSON string (fail-closed) with a conversion timestamp.
+    let theme: String = db.conn().query_row(
+        "SELECT value_json FROM settings WHERE key = 'theme'",
+        [],
+        |r| r.get(0),
+    )?;
+    assert_eq!(theme, r##"{"primary":"#123"}"##);
+    let language: String = db.conn().query_row(
+        "SELECT value_json FROM settings WHERE key = 'app.language'",
+        [],
+        |r| r.get(0),
+    )?;
+    assert_eq!(language, "\"ru\"");
+    let raw: String = db.conn().query_row(
+        "SELECT value_json FROM settings WHERE key = 'legacy.raw'",
+        [],
+        |r| r.get(0),
+    )?;
+    assert_eq!(
+        raw, "\"not-json\"",
+        "non-JSON legacy value wrapped, not dropped"
+    );
+    let updated_at: String = db.conn().query_row(
+        "SELECT updated_at FROM settings WHERE key = 'theme'",
+        [],
+        |r| r.get(0),
+    )?;
+    assert!(
+        updated_at.ends_with('Z') && !updated_at.is_empty(),
+        "settings row carries a conversion timestamp"
+    );
 
     // Messages: no legacy sequence column → per-chat row numbers ordered by
     // created_at; plugin role mapped to the kernel-legal "user".

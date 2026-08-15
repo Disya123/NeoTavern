@@ -210,7 +210,7 @@
     {
       "source": "adr/0046-m3-limited-waivers.md",
       "target": "adr/0046-m3-limited-waivers.md",
-      "sha256": "e5d3484211c5908bc3a33a8709019b06cbea2f7412b17de4a97f52eb10857ab9"
+      "sha256": "ac6e64c942317471f3ff00d38c5a51bc41e7178e7b762ab1b3bb8ef9d0a14f3a"
     },
     {
       "source": "adr/0047-m4-limited-waivers.md",
@@ -300,7 +300,7 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "013a0b9a995518cde8a902349e31c73bc0214e03eac278721d17a258d6018c99"
+      "sha256": "d9419aee7289ef89aee786058614096c85aa43224b403339e7dec0dc9462f97c"
     },
     {
       "source": "data/README.md",

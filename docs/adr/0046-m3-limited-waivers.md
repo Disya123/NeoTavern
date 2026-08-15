@@ -79,12 +79,20 @@ of ТЗ §14.2.2 stay intact.
    characters/chats/messages/lorebooks/presets/personas now; the remaining
    entity classes are explicitly tracked as the next conversion slices so
    no legacy entity class is silently dropped (mirrors the M1 SEC-02 waiver
-   expiry pattern). **Status: partially honored** — revisions (Этап 4
-   slice 2) and avatar originals (M5 slice 6, ADR-0046 assets part:
-   `characters.avatar` files under `files/avatars/` are published into the
-   canonical asset store as `avatar` assets and linked via
-   `characters.avatar_asset_id`) are delivered; settings and branches
-   remain open. **Expiry:** M4 cutover.
+   expiry pattern). **Status: honored** — revisions (Этап 4 slice 2),
+   avatar originals (M5 slice 6, ADR-0046 assets part: `characters.avatar`
+   files under `files/avatars/` are published into the canonical asset
+   store as `avatar` assets and linked via `characters.avatar_asset_id`)
+   and non-secret settings (M5 slice 6 remainder: legacy `key → value`
+   JSON text → kernel `settings.key → value_json`, non-JSON values
+   preserved as JSON strings, reported via `ConversionReport.settings`) are
+   delivered; branches are resolved as a documented limitation — the legacy
+   `messages.branch_id`/`chats.active_branch_id` have no kernel equivalent,
+   ALL messages (active and side branches) are preserved flattened into the
+   chat sequence so no message data is dropped, and branch semantics are
+   not reproduced (the canonical model has no branch entity; converter
+   module doc and this waiver record the limitation). **Expiry:** M4
+   cutover (resolved).
 
 ## Alternatives
 

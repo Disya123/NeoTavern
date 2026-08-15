@@ -4,7 +4,10 @@
     {
       "id": "backups",
       "title": "Backup create/list",
-      "wireOps": ["backups.create", "backups.list"],
+      "wireOps": [
+        "backups.create",
+        "backups.list"
+      ],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
@@ -36,7 +39,13 @@
     {
       "id": "chats.crud",
       "title": "Chat CRUD",
-      "wireOps": ["chats.list", "chats.get", "chats.create", "chats.update", "chats.delete"],
+      "wireOps": [
+        "chats.list",
+        "chats.get",
+        "chats.create",
+        "chats.update",
+        "chats.delete"
+      ],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
@@ -103,7 +112,9 @@
     {
       "id": "generation.prompt.plan",
       "title": "Prompt pipeline: durable PromptPlan (history/character/lorebook/token budget)",
-      "wireOps": ["generation.prompt.plan"],
+      "wireOps": [
+        "generation.prompt.plan"
+      ],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
@@ -116,7 +127,10 @@
     {
       "id": "generation.tool-loop",
       "title": "Durable run/step journal + tool-call loop (waiting_for_tool)",
-      "wireOps": ["generation.tools.list", "generation.tool.result"],
+      "wireOps": [
+        "generation.tools.list",
+        "generation.tool.result"
+      ],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
@@ -150,14 +164,19 @@
     {
       "id": "library.assets",
       "title": "Content-addressed asset store (put/get/content/delete, avatar linkage)",
-      "wireOps": ["assets.put", "assets.get", "assets.content", "assets.delete"],
+      "wireOps": [
+        "assets.put",
+        "assets.get",
+        "assets.content",
+        "assets.delete"
+      ],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
         "android": "Designed",
         "webClient": "Implemented"
       },
-      "notes": "Этап 4 slice 5 remainder (ТЗ §5.1 AssetStore port, AGENTS.md §11/§12): canonical assets over Product Wire (73 ops total). assets.put publishes immutable bytes under a content-derived managed key <kind>/<sha256>[.<ext>] via the crash-safe neotavern_storage::assets publisher (temp-write + sync + atomic rename + registry INSERT, symlink-safe resolution, orphan GC) and is an idempotent re-import — identical bytes under the same kind return the existing record with deduplicated:true (AGENTS.md: import must not create duplicates). assets.get returns metadata, assets.content returns the ORIGINAL bytes base64 (never lossy; the 4 MiB wire response limit caps the servable size, larger assets are addressed by relativeKey through host transports), assets.delete removes the registry row first (orphan GC covers the file). Avatar linkage is now writable: characters.create/update accept avatarAssetId and the kernel verifies the asset exists (stable ASSET_NOT_FOUND). Thumbnail CACHE generation (AGENTS.md §12 rules 4-9) remains the web/legacy side — the canonical plane deliberately has no image codec dependency; the thumbnail key contract (<original hash>+<size>+<algorithm version>, never regenerating when the key is unchanged) is documented and tracked within slice 5 remainder. 5 kernel tests cover round-trip, dedupe, avatar linkage, delete->not-found and validation. M5 slice 7 remainder web: the NeoBackend facade gained the AssetsApi (get/content/put/del) — the last wire domain without a facade surface, so every Product Wire operation is now reachable through the typed facade (ТЗ §13.1). LocalBackend forwards over the kernel transport with request/response validation, RemoteBackend forwards over the ClientSdk, LegacyBackend throws UnsupportedError (the legacy plane has no assets route — avatars/backgrounds remain legacy-raw until their own cutover). Parity + validation tests (68 neobackend). M5 slice 6 (ADR-0046 waiver 8 assets part): the legacy converter now maps avatar ORIGINALS into the canonical store — characters.avatar URLs (`/api/v2/assets/avatars/<sha256>.<ext>` or the thumbnail variant) resolve to `<data-dir>/files/avatars/<sha256>.<ext>`, the file is published as a `avatar` asset via the crash-safe publisher inside the conversion transaction (neotavern_storage::assets::publish_asset_in_tx) and `characters.avatar_asset_id` is linked; a missing file or unrecognizable avatar string is reported as an orphan (never silently dropped), and pre-avatar legacy schemas contribute 0. The legacy avatar string itself is still not copied verbatim (ТЗ §34 avatar→asset). Storage tests: avatar conversion round-trip + missing-original orphan in the legacy suite. M5 slice 6 remainder web (avatar display, ТЗ §13.1): the UI data plane gained `readAssetContentDataUrl` — the kernel plane resolves an `avatarAssetId`'s original bytes over `assets.content` into a `data:` URI (the legacy plane has no asset store and refuses honestly), and the legacy avatar-original route moved OUT of React components into the `avatarOriginalUrl` transport helper (components never build /api/v2 URLs). `CharacterSummary`/`Character` now carry the canonical `avatarAssetId` (translateCharacterSummary passes it through) and the character editor/viewer renders the kernel avatar through it — kernel avatars are visible in the UI once conversion links them. ui:api:check product sites 38 → 37 (CharacterManagementPanel −2 avatar-original sites, wireBridge +1 transport site).",
+      "notes": "Этап 4 slice 5 remainder (ТЗ §5.1 AssetStore port, AGENTS.md §11/§12): canonical assets over Product Wire (73 ops total). assets.put publishes immutable bytes under a content-derived managed key <kind>/<sha256>[.<ext>] via the crash-safe neotavern_storage::assets publisher (temp-write + sync + atomic rename + registry INSERT, symlink-safe resolution, orphan GC) and is an idempotent re-import — identical bytes under the same kind return the existing record with deduplicated:true (AGENTS.md: import must not create duplicates). assets.get returns metadata, assets.content returns the ORIGINAL bytes base64 (never lossy; the 4 MiB wire response limit caps the servable size, larger assets are addressed by relativeKey through host transports), assets.delete removes the registry row first (orphan GC covers the file). Avatar linkage is now writable: characters.create/update accept avatarAssetId and the kernel verifies the asset exists (stable ASSET_NOT_FOUND). Thumbnail CACHE generation (AGENTS.md §12 rules 4-9) remains the web/legacy side — the canonical plane deliberately has no image codec dependency; the thumbnail key contract (<original hash>+<size>+<algorithm version>, never regenerating when the key is unchanged) is documented and tracked within slice 5 remainder. 5 kernel tests cover round-trip, dedupe, avatar linkage, delete->not-found and validation. M5 slice 7 remainder web: the NeoBackend facade gained the AssetsApi (get/content/put/del) — the last wire domain without a facade surface, so every Product Wire operation is now reachable through the typed facade (ТЗ §13.1). LocalBackend forwards over the kernel transport with request/response validation, RemoteBackend forwards over the ClientSdk, LegacyBackend throws UnsupportedError (the legacy plane has no assets route — avatars/backgrounds remain legacy-raw until their own cutover). Parity + validation tests (68 neobackend). M5 slice 6 (ADR-0046 waiver 8 assets part): the legacy converter now maps avatar ORIGINALS into the canonical store — characters.avatar URLs (`/api/v2/assets/avatars/<sha256>.<ext>` or the thumbnail variant) resolve to `<data-dir>/files/avatars/<sha256>.<ext>`, the file is published as a `avatar` asset via the crash-safe publisher inside the conversion transaction (neotavern_storage::assets::publish_asset_in_tx) and `characters.avatar_asset_id` is linked; a missing file or unrecognizable avatar string is reported as an orphan (never silently dropped), and pre-avatar legacy schemas contribute 0. The legacy avatar string itself is still not copied verbatim (ТЗ §34 avatar→asset). Storage tests: avatar conversion round-trip + missing-original orphan in the legacy suite. M5 slice 6 remainder data (ADR-0046 waiver 8 settings + branches parts): the legacy settings table (key → value JSON text) converts verbatim into kernel settings (\u000balue_json), non-JSON values survive as JSON strings (fail-closed), ConversionReport.settings + committed migration report count them; branches are resolved as a documented limitation — messages.branch_id has no kernel equivalent, ALL messages (active and side branches) are preserved flattened into the chat sequence (no message data dropped; branch semantics not reproduced). M5 slice 6 remainder web (avatar display, ТЗ §13.1): the UI data plane gained `readAssetContentDataUrl` — the kernel plane resolves an `avatarAssetId`'s original bytes over `assets.content` into a `data:` URI (the legacy plane has no asset store and refuses honestly), and the legacy avatar-original route moved OUT of React components into the `avatarOriginalUrl` transport helper (components never build /api/v2 URLs). `CharacterSummary`/`Character` now carry the canonical `avatarAssetId` (translateCharacterSummary passes it through) and the character editor/viewer renders the kernel avatar through it — kernel avatars are visible in the UI once conversion links them. ui:api:check product sites 38 → 37 (CharacterManagementPanel −2 avatar-original sites, wireBridge +1 transport site).",
       "milestone": "M5"
     },
     {
@@ -186,7 +205,12 @@
     {
       "id": "memories.crud",
       "title": "Memory CRUD (ТЗ §4.4)",
-      "wireOps": ["memories.list", "memories.create", "memories.update", "memories.delete"],
+      "wireOps": [
+        "memories.list",
+        "memories.create",
+        "memories.update",
+        "memories.delete"
+      ],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
@@ -199,7 +223,9 @@
     {
       "id": "meta.get",
       "title": "Kernel handshake / meta",
-      "wireOps": ["meta.get"],
+      "wireOps": [
+        "meta.get"
+      ],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Integrated",
@@ -268,7 +294,9 @@
     {
       "id": "providers.list",
       "title": "Provider catalog read",
-      "wireOps": ["providers.list"],
+      "wireOps": [
+        "providers.list"
+      ],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
@@ -346,7 +374,10 @@
     {
       "id": "settings",
       "title": "Non-secret settings (kernel)",
-      "wireOps": ["settings.get", "settings.update"],
+      "wireOps": [
+        "settings.get",
+        "settings.update"
+      ],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
@@ -359,7 +390,9 @@
     {
       "id": "ui.diagnostics",
       "title": "Diagnostics panel (kernel section)",
-      "wireOps": ["diagnostics.export"],
+      "wireOps": [
+        "diagnostics.export"
+      ],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
@@ -417,7 +450,9 @@
     {
       "id": "ui.profile-export",
       "title": "Logical profile export",
-      "wireOps": ["profile.export"],
+      "wireOps": [
+        "profile.export"
+      ],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
@@ -430,7 +465,12 @@
     {
       "id": "ui.profiles",
       "title": "Profiles (Configuration)",
-      "wireOps": ["profiles.list", "profiles.create", "profiles.rename", "profiles.delete"],
+      "wireOps": [
+        "profiles.list",
+        "profiles.create",
+        "profiles.rename",
+        "profiles.delete"
+      ],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
@@ -456,7 +496,9 @@
     {
       "id": "ui.secrets",
       "title": "Secret management",
-      "wireOps": ["secrets.status"],
+      "wireOps": [
+        "secrets.status"
+      ],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
@@ -469,7 +511,12 @@
     {
       "id": "ui.themes",
       "title": "Themes",
-      "wireOps": ["themes.list", "themes.install", "themes.uninstall", "themes.activate"],
+      "wireOps": [
+        "themes.list",
+        "themes.install",
+        "themes.uninstall",
+        "themes.activate"
+      ],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",

@@ -646,6 +646,9 @@ fn read_conversion_report(root: &Path) -> Result<ConversionReport> {
         // are counted from the registry table; a committed root reports the
         // rows (the per-file breakdown is in the `prepare` report).
         assets: count_if_present("__neotavern_assets")?,
+        // settings is introduced by schema migration 011 (ТЗ §8.1
+        // Configuration); a committed root reports the rows.
+        settings: count_if_present("settings")?,
         // Counts from a committed root cannot report per-row orphans; the
         // full report is available from the `prepare` step.
         skipped: 0,

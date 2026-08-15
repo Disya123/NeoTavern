@@ -3,6 +3,19 @@
 ## Unreleased
 ### Added
 
+- **Legacy settings convert into the canonical settings store (M5 slice 6
+  remainder, ADR-0046 waiver 8 settings part).** The legacy converter now
+  maps the legacy `settings` table (`key → value` JSON text) into the kernel
+  `settings` table verbatim; a non-JSON legacy value is preserved as a JSON
+  string (fail-closed — no setting is silently dropped) and each row carries
+  the conversion timestamp. `ConversionReport.settings` and the committed
+  migration report count the rows. Branches are resolved as a documented
+  limitation: the legacy `messages.branch_id` has no kernel equivalent, so
+  ALL messages (active and side branches) are preserved flattened into the
+  chat sequence — no message data is dropped, branch semantics are not
+  reproduced (kernel has no branch entity). Tests: legacy settings round
+  trip (object / JSON-string / raw value) + storage suite green.
+
 - **Kernel avatar display surface (M5 slice 6 remainder web, ТЗ §13.1).**
   Characters converted from legacy data (or linked to a canonical asset)
   now render their avatar in the kernel plane: `CharacterSummary`/`Character`

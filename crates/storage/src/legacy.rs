@@ -29,10 +29,22 @@
 //!   values; `sequence` is taken from the column when present, otherwise
 //!   derived as a per-chat row number ordered by `created_at, id`;
 //!   messages referencing a skipped or missing chat are skipped and reported.
+//!   The legacy `branch_id` has no kernel equivalent (ADR-0046 waiver 8,
+//!   branches part): ALL messages — active and side branches alike — are
+//!   preserved flattened into the chat sequence in creation order, so no
+//!   message data is dropped, while branch semantics themselves are not
+//!   reproduced (the canonical model has no branch entity; ТЗ §34 keeps
+//!   unknown metadata, the kernel has no branch reader/writer).
 //! - `lorebooks` → kernel `lorebooks`: entries come from the legacy
 //!   `lore_entries` table (when present) and are stored as `entries_json`.
 //! - `presets` → kernel `presets`: `data` becomes `settings_json`; the
 //!   legacy `kind` column has no kernel equivalent and is not copied.
+//! - `settings` → kernel `settings` (ADR-0046 waiver 8, settings part;
+//!   ТЗ §8.1 Configuration): legacy `key → value` (JSON text) becomes
+//!   `key → value_json` verbatim; a non-JSON legacy value is preserved as a
+//!   JSON string so no setting is silently dropped. The legacy table has no
+//!   `updated_at` column — the kernel row takes the conversion timestamp.
+//!   The legacy table is optional: a pre-settings source contributes 0 rows.
 //! - `personas` → kernel `personas` (Этап 4.1): `is_default` maps from the
 //!   legacy boolean column (default 0); the single-default invariant is
 //!   enforced on insert. The legacy `personas` table is optional — sources
@@ -88,6 +100,10 @@ pub struct ConversionReport {
     /// assets part, ТЗ §34 avatar→asset): one per character whose legacy
     /// `avatar` URL resolved to a file under `files/avatars/`.
     pub assets: u64,
+    /// Non-secret settings copied from the legacy `settings` table
+    /// (ADR-0046 waiver 8, settings part, ТЗ §8.1 Configuration). The legacy
+    /// table is optional — a source without it contributes 0 rows.
+    pub settings: u64,
     /// Number of records skipped (orphaned references, invalid values).
     pub skipped: u64,
     /// Human-readable descriptions of every skipped record.
@@ -168,6 +184,7 @@ fn convert(
         memories: 0,
         personas: 0,
         assets: 0,
+        settings: 0,
         skipped: 0,
         orphans: Vec::new(),
     };
@@ -188,6 +205,7 @@ fn convert(
     convert_lorebooks(legacy, tx, &character_ids, &mut report)?;
     convert_presets(legacy, tx, &mut report)?;
     convert_memories(legacy, tx, &mut report)?;
+    convert_settings(legacy, tx, &mut report)?;
     Ok(report)
 }
 
@@ -1483,6 +1501,71 @@ fn convert_personas(
         .map_err(|e| StorageError::from_sqlite(e, "legacy: insert persona"))?;
         report.personas += 1;
     }
+    Ok(())
+}
+
+/// Maps the legacy `settings` table into the kernel `settings` table
+/// (ADR-0046 waiver 8, settings part; ТЗ §8.1 Configuration). The legacy
+/// table is optional (`packages/db` introduced it as `key → value` JSON
+/// text); a source without it contributes 0 rows.
+///
+/// Legacy `value` is already JSON text and is copied verbatim as the kernel
+/// `value_json`; a non-JSON legacy value is preserved as a JSON string so no
+/// setting is silently dropped (fail-closed, ТЗ §10.3 "unknown metadata
+/// сохраняются"). The legacy table has no `updated_at` column, so the kernel
+/// row takes the conversion timestamp. Secret material never lives in either
+/// settings table (ТЗ §9.4, SEC-01) — this converts non-secret settings only.
+fn convert_settings(
+    legacy: &Connection,
+    tx: &rusqlite::Transaction,
+    report: &mut ConversionReport,
+) -> Result<()> {
+    if !table_exists(legacy, "settings")? {
+        return Ok(());
+    }
+    let cols = column_names(legacy, "settings")?;
+    require_columns(&cols, "settings", &["key", "value"])?;
+    let selected = select_columns(&cols, &["key", "value"]);
+    let sql = format!(
+        "SELECT {} FROM settings ORDER BY key",
+        quote_columns(&selected)
+    );
+    let mut stmt = legacy
+        .prepare(&sql)
+        .map_err(|e| StorageError::from_sqlite(e, "legacy: prepare settings"))?;
+    let mut rows = stmt
+        .query([])
+        .map_err(|e| StorageError::from_sqlite(e, "legacy: query settings"))?;
+    let mut inserted = 0u64;
+    while let Some(row) = rows
+        .next()
+        .map_err(|e| StorageError::from_sqlite(e, "legacy: read settings"))?
+    {
+        let vals = read_values(&selected, row)?;
+        let get = |name: &str| selected.iter().position(|c| *c == name).map(|i| &vals[i]);
+        let Some(key) = as_text(get("key")) else {
+            skip(report, "setting: missing key");
+            continue;
+        };
+        let raw = as_text(get("value")).unwrap_or("null");
+        let value_json = match serde_json::from_str::<serde_json::Value>(raw) {
+            Ok(_) => raw.to_string(),
+            Err(_) => serde_json::to_string(raw).map_err(|e| {
+                StorageError::with(
+                    StorageErrorCode::IntegrityViolation,
+                    format!("legacy: serialize non-JSON setting {key:?}: {e}"),
+                    vec![],
+                )
+            })?,
+        };
+        tx.execute(
+            "INSERT INTO settings (key, value_json, updated_at) VALUES (?1, ?2, ?3)",
+            rusqlite::params![key, value_json, crate::now_utc_rfc3339()],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "legacy: insert setting"))?;
+        inserted += 1;
+    }
+    report.settings = inserted;
     Ok(())
 }
 
