@@ -33,6 +33,10 @@ import {
   type PersonaDto,
   type ProviderConfigDto,
   type MessageDto,
+  type MessageDraftDto,
+  type MessageVariantDto,
+  type ListMessageRevisionsResultDto,
+  type ListMessageVariantsResultDto,
   type MetaDto,
   type PagedCharactersDto,
   type PagedChatsDto,
@@ -237,6 +241,24 @@ export class LocalBackend implements NeoBackend {
       createMessage: (req, opts) => this.invoke<MessageDto>('chats.messages.create', req, opts),
       updateMessage: (req, opts) => this.invoke<MessageDto>('chats.messages.update', req, opts),
       delMessage: (req, opts) => this.invoke<EmptyResultDto>('chats.messages.delete', req, opts),
+      listMessageVariants: (req, opts) =>
+        this.invoke<ListMessageVariantsResultDto>('chats.messages.variants.list', req, opts),
+      createMessageVariant: (req, opts) =>
+        this.invoke<MessageVariantDto>('chats.messages.variants.create', req, opts),
+      delMessageVariant: (req, opts) =>
+        this.invoke<EmptyResultDto>('chats.messages.variants.delete', req, opts),
+      activateMessageVariant: (req, opts) =>
+        this.invoke<MessageDto>('chats.messages.variants.activate', req, opts),
+      listMessageRevisions: (req, opts) =>
+        this.invoke<ListMessageRevisionsResultDto>('chats.messages.revisions.list', req, opts),
+      getMessageDraft: (req, opts) =>
+        this.invoke<MessageDraftDto>('chats.messages.drafts.get', req, opts),
+      saveMessageDraft: (req, opts) =>
+        this.invoke<MessageDraftDto>('chats.messages.drafts.save', req, opts),
+      commitMessageDraft: (req, opts) =>
+        this.invoke<MessageDto>('chats.messages.drafts.commit', req, opts),
+      discardMessageDraft: (req, opts) =>
+        this.invoke<EmptyResultDto>('chats.messages.drafts.discard', req, opts),
     };
     this.generation = {
       start: (req, opts) => this.stream('generation.start', req, opts),

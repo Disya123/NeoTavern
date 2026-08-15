@@ -23,6 +23,10 @@ import type {
   LorebookDto,
   LorebookEntryDto,
   MessageDto,
+  MessageDraftDto,
+  MessageVariantDto,
+  ListMessageRevisionsResultDto,
+  ListMessageVariantsResultDto,
   MetaDto,
   PagedCharactersDto,
   PagedChatsDto,
@@ -95,6 +99,21 @@ export class RemoteBackend implements NeoBackend {
     createMessage: (req) => this.sdk.call<MessageDto>('chats.messages.create', req),
     updateMessage: (req) => this.sdk.call<MessageDto>('chats.messages.update', req),
     delMessage: (req) => this.sdk.call<EmptyResultDto>('chats.messages.delete', req),
+    listMessageVariants: (req) =>
+      this.sdk.call<ListMessageVariantsResultDto>('chats.messages.variants.list', req),
+    createMessageVariant: (req) =>
+      this.sdk.call<MessageVariantDto>('chats.messages.variants.create', req),
+    delMessageVariant: (req) =>
+      this.sdk.call<EmptyResultDto>('chats.messages.variants.delete', req),
+    activateMessageVariant: (req) =>
+      this.sdk.call<MessageDto>('chats.messages.variants.activate', req),
+    listMessageRevisions: (req) =>
+      this.sdk.call<ListMessageRevisionsResultDto>('chats.messages.revisions.list', req),
+    getMessageDraft: (req) => this.sdk.call<MessageDraftDto>('chats.messages.drafts.get', req),
+    saveMessageDraft: (req) => this.sdk.call<MessageDraftDto>('chats.messages.drafts.save', req),
+    commitMessageDraft: (req) => this.sdk.call<MessageDto>('chats.messages.drafts.commit', req),
+    discardMessageDraft: (req) =>
+      this.sdk.call<EmptyResultDto>('chats.messages.drafts.discard', req),
   };
 
   readonly generation: GenerationApi = {

@@ -10,6 +10,12 @@ import {
   type GenerationRunDto,
   type ListProvidersResultDto,
   type ListToolsResultDto,
+  type ListMessageRevisionsResultDto,
+  type ListMessageVariantsResultDto,
+  type EmptyResultDto,
+  type MessageDraftDto,
+  type MessageRevisionDto,
+  type MessageVariantDto,
   type MetaDto,
   type PagedCharactersDto,
   type PagedGenerationEventsDto,
@@ -122,6 +128,42 @@ const TOOLS: ListToolsResultDto = {
 /** `generation.tool.result` response: the resumed run (still waiting). */
 const TOOL_RESULT_RUN: GenerationRunDto = { ...GENERATION_RUN, status: 'waiting_for_tool' };
 
+// --- Этап 4 slice 2 fixtures: message variants / revisions / drafts. ---
+const VARIANT_ID = 'aaaaaaa1-1111-4111-8111-111111111111';
+const REVISION_ID = 'aaaaaaa2-2222-4222-8222-222222222222';
+const DRAFT_ID = 'aaaaaaa3-3333-4333-8333-333333333333';
+
+const WIRE_VARIANT: MessageVariantDto = {
+  id: VARIANT_ID,
+  messageId: MESSAGE_ID,
+  content: 'Hello (swipe)',
+  position: 0,
+  createdAt: TIMESTAMP,
+};
+const VARIANT_LIST: ListMessageVariantsResultDto = { items: [WIRE_VARIANT] };
+
+const WIRE_REVISION: MessageRevisionDto = {
+  id: REVISION_ID,
+  messageId: MESSAGE_ID,
+  content: 'Hello',
+  position: 0,
+  createdAt: TIMESTAMP,
+};
+const REVISION_LIST: ListMessageRevisionsResultDto = { items: [WIRE_REVISION] };
+
+const WIRE_DRAFT: MessageDraftDto = {
+  id: DRAFT_ID,
+  chatId: CHAT_ID,
+  role: 'assistant',
+  content: 'Streaming…',
+  sequence: 3,
+  revision: 2,
+  createdAt: TIMESTAMP,
+  updatedAt: TIMESTAMP,
+};
+
+const EMPTY_RESULT: EmptyResultDto = {};
+
 /** `generation.events` response: canonical event page. */
 const GENERATION_EVENTS: PagedGenerationEventsDto = {
   items: [
@@ -190,6 +232,24 @@ class FakeKernelTransport implements LocalTransport {
         return { ok: true, value: TOOLS };
       case 'generation.tool.result':
         return { ok: true, value: TOOL_RESULT_RUN };
+      case 'chats.messages.variants.list':
+        return { ok: true, value: VARIANT_LIST };
+      case 'chats.messages.variants.create':
+        return { ok: true, value: WIRE_VARIANT };
+      case 'chats.messages.variants.activate':
+        return { ok: true, value: PAGED_MESSAGES.items[0] };
+      case 'chats.messages.variants.delete':
+        return { ok: true, value: EMPTY_RESULT };
+      case 'chats.messages.revisions.list':
+        return { ok: true, value: REVISION_LIST };
+      case 'chats.messages.drafts.get':
+        return { ok: true, value: WIRE_DRAFT };
+      case 'chats.messages.drafts.save':
+        return { ok: true, value: WIRE_DRAFT };
+      case 'chats.messages.drafts.commit':
+        return { ok: true, value: PAGED_MESSAGES.items[0] };
+      case 'chats.messages.drafts.discard':
+        return { ok: true, value: EMPTY_RESULT };
       default:
         return { ok: false, error: { code: 'NOT_FOUND', params: {}, traceId: 'kernel-trace' } };
     }
@@ -236,6 +296,24 @@ function rpcResult(operationId: string | undefined): unknown {
       return TOOLS;
     case 'generation.tool.result':
       return TOOL_RESULT_RUN;
+    case 'chats.messages.variants.list':
+      return VARIANT_LIST;
+    case 'chats.messages.variants.create':
+      return WIRE_VARIANT;
+    case 'chats.messages.variants.activate':
+      return PAGED_MESSAGES.items[0];
+    case 'chats.messages.variants.delete':
+      return EMPTY_RESULT;
+    case 'chats.messages.revisions.list':
+      return REVISION_LIST;
+    case 'chats.messages.drafts.get':
+      return WIRE_DRAFT;
+    case 'chats.messages.drafts.save':
+      return WIRE_DRAFT;
+    case 'chats.messages.drafts.commit':
+      return PAGED_MESSAGES.items[0];
+    case 'chats.messages.drafts.discard':
+      return EMPTY_RESULT;
     default:
       return null;
   }
@@ -499,6 +577,149 @@ describe('Generation tools Local vs Remote parity (Этап 2.10)', () => {
     };
     await expect(backend.generation.tools.result(req)).resolves.toEqual(TOOL_RESULT_RUN);
     expect(kernel.requests).toEqual([{ operationId: 'generation.tool.result', payload: req }]);
+  });
+});
+
+describe('Message variants/revisions/drafts Local vs Remote parity (Этап 4 slice 2)', () => {
+  it('variants.list returns deep-equal ListMessageVariantsResultDto from both backends', async () => {
+    const local = new LocalBackend({ transport: new FakeKernelTransport() });
+    const remote = makeRemoteBackend();
+
+    const [localResult, remoteResult] = await Promise.all([
+      local.chats.listMessageVariants({ chatId: CHAT_ID, messageId: MESSAGE_ID }),
+      remote.chats.listMessageVariants({ chatId: CHAT_ID, messageId: MESSAGE_ID }),
+    ]);
+
+    expect(localResult).toEqual(remoteResult);
+    expect(localResult).toEqual(VARIANT_LIST);
+  });
+
+  it('variants.create forwards the content and resolves the created variant', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+
+    await expect(
+      local.chats.createMessageVariant({
+        chatId: CHAT_ID,
+        messageId: MESSAGE_ID,
+        content: 'Hello (swipe)',
+      }),
+    ).resolves.toEqual(WIRE_VARIANT);
+    expect(kernel.requests).toEqual([
+      {
+        operationId: 'chats.messages.variants.create',
+        payload: { chatId: CHAT_ID, messageId: MESSAGE_ID, content: 'Hello (swipe)' },
+      },
+    ]);
+  });
+
+  it('variants.activate resolves the updated MessageDto from both backends', async () => {
+    const local = new LocalBackend({ transport: new FakeKernelTransport() });
+    const remote = makeRemoteBackend();
+
+    const [localResult, remoteResult] = await Promise.all([
+      local.chats.activateMessageVariant({ chatId: CHAT_ID, messageId: MESSAGE_ID, variantId: VARIANT_ID }),
+      remote.chats.activateMessageVariant({ chatId: CHAT_ID, messageId: MESSAGE_ID, variantId: VARIANT_ID }),
+    ]);
+
+    expect(localResult).toEqual(remoteResult);
+    expect(localResult).toEqual(PAGED_MESSAGES.items[0]);
+  });
+
+  it('variants.delete resolves EmptyResultDto from both backends', async () => {
+    const local = new LocalBackend({ transport: new FakeKernelTransport() });
+    const remote = makeRemoteBackend();
+
+    const [localResult, remoteResult] = await Promise.all([
+      local.chats.delMessageVariant({ chatId: CHAT_ID, messageId: MESSAGE_ID, variantId: VARIANT_ID }),
+      remote.chats.delMessageVariant({ chatId: CHAT_ID, messageId: MESSAGE_ID, variantId: VARIANT_ID }),
+    ]);
+
+    expect(localResult).toEqual(remoteResult);
+    expect(localResult).toEqual(EMPTY_RESULT);
+  });
+
+  it('revisions.list returns deep-equal ListMessageRevisionsResultDto from both backends', async () => {
+    const local = new LocalBackend({ transport: new FakeKernelTransport() });
+    const remote = makeRemoteBackend();
+
+    const [localResult, remoteResult] = await Promise.all([
+      local.chats.listMessageRevisions({ chatId: CHAT_ID, messageId: MESSAGE_ID }),
+      remote.chats.listMessageRevisions({ chatId: CHAT_ID, messageId: MESSAGE_ID }),
+    ]);
+
+    expect(localResult).toEqual(remoteResult);
+    expect(localResult).toEqual(REVISION_LIST);
+  });
+
+  it('drafts.get resolves the canonical draft from both backends', async () => {
+    const local = new LocalBackend({ transport: new FakeKernelTransport() });
+    const remote = makeRemoteBackend();
+
+    const [localResult, remoteResult] = await Promise.all([
+      local.chats.getMessageDraft({ chatId: CHAT_ID, draftId: DRAFT_ID }),
+      remote.chats.getMessageDraft({ chatId: CHAT_ID, draftId: DRAFT_ID }),
+    ]);
+
+    expect(localResult).toEqual(remoteResult);
+    expect(localResult).toEqual(WIRE_DRAFT);
+  });
+
+  it('drafts.save forwards the upsert payload and resolves the canonical draft', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+
+    await expect(
+      local.chats.saveMessageDraft({
+        chatId: CHAT_ID,
+        draftId: DRAFT_ID,
+        role: 'assistant',
+        content: 'Streaming…',
+        sequence: 3,
+      }),
+    ).resolves.toEqual(WIRE_DRAFT);
+    expect(kernel.requests).toEqual([
+      {
+        operationId: 'chats.messages.drafts.save',
+        payload: { chatId: CHAT_ID, draftId: DRAFT_ID, role: 'assistant', content: 'Streaming…', sequence: 3 },
+      },
+    ]);
+  });
+
+  it('drafts.commit resolves the committed MessageDto from both backends', async () => {
+    const local = new LocalBackend({ transport: new FakeKernelTransport() });
+    const remote = makeRemoteBackend();
+
+    const [localResult, remoteResult] = await Promise.all([
+      local.chats.commitMessageDraft({ chatId: CHAT_ID, draftId: DRAFT_ID }),
+      remote.chats.commitMessageDraft({ chatId: CHAT_ID, draftId: DRAFT_ID }),
+    ]);
+
+    expect(localResult).toEqual(remoteResult);
+    expect(localResult).toEqual(PAGED_MESSAGES.items[0]);
+  });
+
+  it('drafts.discard resolves EmptyResultDto from both backends', async () => {
+    const local = new LocalBackend({ transport: new FakeKernelTransport() });
+    const remote = makeRemoteBackend();
+
+    const [localResult, remoteResult] = await Promise.all([
+      local.chats.discardMessageDraft({ chatId: CHAT_ID, draftId: DRAFT_ID }),
+      remote.chats.discardMessageDraft({ chatId: CHAT_ID, draftId: DRAFT_ID }),
+    ]);
+
+    expect(localResult).toEqual(remoteResult);
+    expect(localResult).toEqual(EMPTY_RESULT);
+  });
+
+  it('rejects a non-uuid draft id with ValidationError before any transport call', async () => {
+    const kernel = new FakeKernelTransport();
+    const backend = new LocalBackend({ transport: kernel });
+
+    await expect(
+      backend.chats.getMessageDraft({ chatId: CHAT_ID, draftId: 'not-a-uuid' }),
+    ).rejects.toThrow(ValidationError);
+    expect(kernel.calls).toBe(0);
   });
 });
 

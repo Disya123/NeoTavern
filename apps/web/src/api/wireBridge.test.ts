@@ -15,6 +15,9 @@ import type {
   LorebookDto,
   LorebookEntryDto,
   MessageDto,
+  MessageDraftDto,
+  MessageRevisionDto,
+  MessageVariantDto,
   PersonaDto,
 } from '@neotavern/contracts';
 
@@ -33,6 +36,18 @@ const mocks = vi.hoisted(() => {
     update: vi.fn(),
     del: vi.fn(),
     listMessages: vi.fn(),
+    createMessage: vi.fn(),
+    updateMessage: vi.fn(),
+    delMessage: vi.fn(),
+    listMessageVariants: vi.fn(),
+    createMessageVariant: vi.fn(),
+    delMessageVariant: vi.fn(),
+    activateMessageVariant: vi.fn(),
+    listMessageRevisions: vi.fn(),
+    getMessageDraft: vi.fn(),
+    saveMessageDraft: vi.fn(),
+    commitMessageDraft: vi.fn(),
+    discardMessageDraft: vi.fn(),
   };
   const lorebooks = {
     list: vi.fn(),
@@ -66,17 +81,22 @@ vi.mock('./backend.js', () => ({
 }));
 
 import {
+  activateMessageVariant,
+  commitMessageDraft,
   continueCharacterChat,
   createCharacter,
   createChat,
   createLorebook,
   createLorebookEntry,
+  createMessageVariant,
   createPersona,
   deleteCharacter,
   deleteChat,
   deleteLorebook,
   deleteLorebookEntry,
+  deleteMessageVariant,
   deletePersona,
+  discardMessageDraft,
   readCharacters,
   readCharacter,
   readChats,
@@ -86,8 +106,13 @@ import {
   readLorebookEntries,
   readLorebooks,
   readMessages,
+  readMessageDraft,
+  readMessageRevisions,
+  readMessageVariants,
   readPersona,
   readPersonas,
+  restoreMessageRevision,
+  saveMessageDraft,
   translateCharacter,
   translateCharacterSummary,
   translateChat,
@@ -157,6 +182,47 @@ const WIRE_PERSONA: PersonaDto = {
   name: 'Aria',
   description: 'A traveler.',
   isDefault: true,
+  createdAt: NOW,
+  updatedAt: NOW,
+};
+
+const MESSAGE_ID = '12345678-90ab-4cde-8f01-23456789abcd';
+const VARIANT_ID = 'aaaaaaa1-1111-4111-8111-111111111111';
+const REVISION_ID = 'aaaaaaa2-2222-4222-8222-222222222222';
+const DRAFT_ID = 'aaaaaaa3-3333-4333-8333-333333333333';
+
+const WIRE_MESSAGE_DTO: MessageDto = {
+  id: MESSAGE_ID,
+  chatId: CHAT_ID,
+  role: 'assistant',
+  content: 'Hello (swipe)',
+  createdAt: NOW,
+  sequence: 0,
+};
+
+const WIRE_VARIANT: MessageVariantDto = {
+  id: VARIANT_ID,
+  messageId: MESSAGE_ID,
+  content: 'Hello (swipe)',
+  position: 0,
+  createdAt: NOW,
+};
+
+const WIRE_REVISION: MessageRevisionDto = {
+  id: REVISION_ID,
+  messageId: MESSAGE_ID,
+  content: 'Hello',
+  position: 0,
+  createdAt: NOW,
+};
+
+const WIRE_DRAFT: MessageDraftDto = {
+  id: DRAFT_ID,
+  chatId: CHAT_ID,
+  role: 'assistant',
+  content: 'Streaming…',
+  sequence: 3,
+  revision: 2,
   createdAt: NOW,
   updatedAt: NOW,
 };
@@ -414,6 +480,161 @@ describe('readMessages (kernel)', () => {
   it('rejects a branch id honestly (branches are not modelled yet)', async () => {
     await expect(readMessages(CHAT_ID, 'b1')).rejects.toBeInstanceOf(UnsupportedError);
     expect(mocks.chats.listMessages).not.toHaveBeenCalled();
+  });
+});
+
+describe('message variants/revisions/drafts (kernel, Этап 4 slice 2)', () => {
+  it('lists variants through the facade and translates them', async () => {
+    mocks.chats.listMessageVariants.mockResolvedValue({ items: [WIRE_VARIANT] });
+    const items = await readMessageVariants(CHAT_ID, MESSAGE_ID);
+    expect(mocks.chats.listMessageVariants).toHaveBeenCalledWith({
+      chatId: CHAT_ID,
+      messageId: MESSAGE_ID,
+    });
+    expect(items).toEqual([
+      {
+        id: VARIANT_ID,
+        messageId: MESSAGE_ID,
+        position: 0,
+        content: 'Hello (swipe)',
+        createdAt: NOW_MS,
+      },
+    ]);
+  });
+
+  it('creates a variant through the facade', async () => {
+    mocks.chats.createMessageVariant.mockResolvedValue(WIRE_VARIANT);
+    const variant = await createMessageVariant(CHAT_ID, MESSAGE_ID, 'Hello (swipe)');
+    expect(mocks.chats.createMessageVariant).toHaveBeenCalledWith({
+      chatId: CHAT_ID,
+      messageId: MESSAGE_ID,
+      content: 'Hello (swipe)',
+    });
+    expect(variant.id).toBe(VARIANT_ID);
+  });
+
+  it('deletes a variant through the facade', async () => {
+    mocks.chats.delMessageVariant.mockResolvedValue({});
+    await deleteMessageVariant(CHAT_ID, MESSAGE_ID, VARIANT_ID);
+    expect(mocks.chats.delMessageVariant).toHaveBeenCalledWith({
+      chatId: CHAT_ID,
+      messageId: MESSAGE_ID,
+      variantId: VARIANT_ID,
+    });
+  });
+
+  it('activates a variant and translates the updated message', async () => {
+    mocks.chats.activateMessageVariant.mockResolvedValue(WIRE_MESSAGE_DTO);
+    const message = await activateMessageVariant(CHAT_ID, MESSAGE_ID, VARIANT_ID);
+    expect(mocks.chats.activateMessageVariant).toHaveBeenCalledWith({
+      chatId: CHAT_ID,
+      messageId: MESSAGE_ID,
+      variantId: VARIANT_ID,
+    });
+    expect(message).toMatchObject({ id: MESSAGE_ID, content: 'Hello (swipe)' });
+  });
+
+  it('lists revisions in one page through the facade', async () => {
+    mocks.chats.listMessageRevisions.mockResolvedValue({ items: [WIRE_REVISION] });
+    const page = await readMessageRevisions(CHAT_ID, MESSAGE_ID);
+    expect(mocks.chats.listMessageRevisions).toHaveBeenCalledWith({
+      chatId: CHAT_ID,
+      messageId: MESSAGE_ID,
+    });
+    expect(page).toEqual({
+      items: [
+        {
+          id: REVISION_ID,
+          messageId: MESSAGE_ID,
+          position: 0,
+          content: 'Hello',
+          createdAt: NOW_MS,
+        },
+      ],
+      nextCursor: null,
+      hasMore: false,
+    });
+  });
+
+  it('restores a revision through the canonical messages.update op', async () => {
+    mocks.chats.updateMessage.mockResolvedValue(WIRE_MESSAGE_DTO);
+    const message = await restoreMessageRevision(CHAT_ID, MESSAGE_ID, REVISION_ID, 'Hello');
+    expect(mocks.chats.updateMessage).toHaveBeenCalledWith({
+      chatId: CHAT_ID,
+      messageId: MESSAGE_ID,
+      content: 'Hello',
+    });
+    expect(message.id).toBe(MESSAGE_ID);
+  });
+
+  it('gets a draft through the facade and translates it with honest defaults', async () => {
+    mocks.chats.getMessageDraft.mockResolvedValue(WIRE_DRAFT);
+    const draft = await readMessageDraft(CHAT_ID, DRAFT_ID);
+    expect(mocks.chats.getMessageDraft).toHaveBeenCalledWith({
+      chatId: CHAT_ID,
+      draftId: DRAFT_ID,
+    });
+    expect(draft).toEqual({
+      id: DRAFT_ID,
+      chatId: CHAT_ID,
+      branchId: '',
+      role: 'assistant',
+      content: 'Streaming…',
+      name: null,
+      meta: {},
+      sequence: 3,
+      revision: 2,
+      committedMessageId: null,
+      createdAt: NOW_MS,
+      updatedAt: NOW_MS,
+    });
+  });
+
+  it('saves a new draft (no id) through the facade', async () => {
+    mocks.chats.saveMessageDraft.mockResolvedValue(WIRE_DRAFT);
+    await saveMessageDraft({ chatId: CHAT_ID, role: 'assistant', content: 'Streaming…' });
+    expect(mocks.chats.saveMessageDraft).toHaveBeenCalledWith({
+      chatId: CHAT_ID,
+      role: 'assistant',
+      content: 'Streaming…',
+    });
+  });
+
+  it('saves an update (with id + sequence) through the facade', async () => {
+    mocks.chats.saveMessageDraft.mockResolvedValue(WIRE_DRAFT);
+    await saveMessageDraft({
+      chatId: CHAT_ID,
+      draftId: DRAFT_ID,
+      role: 'assistant',
+      content: 'Streaming…',
+      sequence: 3,
+    });
+    expect(mocks.chats.saveMessageDraft).toHaveBeenCalledWith({
+      chatId: CHAT_ID,
+      draftId: DRAFT_ID,
+      role: 'assistant',
+      content: 'Streaming…',
+      sequence: 3,
+    });
+  });
+
+  it('commits a draft and returns the committed message id', async () => {
+    mocks.chats.commitMessageDraft.mockResolvedValue(WIRE_MESSAGE_DTO);
+    const result = await commitMessageDraft(CHAT_ID, DRAFT_ID);
+    expect(mocks.chats.commitMessageDraft).toHaveBeenCalledWith({
+      chatId: CHAT_ID,
+      draftId: DRAFT_ID,
+    });
+    expect(result).toEqual({ messageId: MESSAGE_ID });
+  });
+
+  it('discards a draft through the facade', async () => {
+    mocks.chats.discardMessageDraft.mockResolvedValue({});
+    await discardMessageDraft(CHAT_ID, DRAFT_ID);
+    expect(mocks.chats.discardMessageDraft).toHaveBeenCalledWith({
+      chatId: CHAT_ID,
+      draftId: DRAFT_ID,
+    });
   });
 });
 

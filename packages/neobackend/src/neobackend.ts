@@ -8,19 +8,25 @@
  * (`RemoteBackend`) or the legacy `/api/v2` server (`LegacyBackend`).
  */
 import type {
+  ActivateMessageVariantRequestDto,
   BackupDto,
   CharacterDto,
   ChatDto,
+  CommitMessageDraftRequestDto,
   CreateCharacterRequestDto,
   CreateChatRequestDto,
   CreateLorebookEntryRequestDto,
   CreateLorebookRequestDto,
   CreateMessageRequestDto,
+  CreateMessageVariantRequestDto,
   CreatePersonaRequestDto,
   DeleteMessageRequestDto,
+  DeleteMessageVariantRequestDto,
+  DiscardMessageDraftRequestDto,
   EmptyResultDto,
   GenerationRunDto,
   GenerationToolResultRequestDto,
+  GetMessageDraftRequestDto,
   ListToolsResultDto,
   WireGenerationEvent,
   ListBackupsResultDto,
@@ -29,7 +35,11 @@ import type {
   ListGenerationEventsRequestDto,
   ListLorebookEntriesResultDto,
   ListLorebooksResultDto,
+  ListMessageRevisionsRequestDto,
+  ListMessageRevisionsResultDto,
   ListMessagesRequestDto,
+  ListMessageVariantsRequestDto,
+  ListMessageVariantsResultDto,
   ListPersonasResultDto,
   ListPresetsResultDto,
   ListProviderConfigsRequestDto,
@@ -38,6 +48,8 @@ import type {
   LorebookDto,
   LorebookEntryDto,
   MessageDto,
+  MessageDraftDto,
+  MessageVariantDto,
   MetaDto,
   PagedCharactersDto,
   PagedChatsDto,
@@ -45,6 +57,7 @@ import type {
   PagedMessagesDto,
   PersonaDto,
   ProviderConfigDto,
+  SaveMessageDraftRequestDto,
   StartGenerationRequestDto,
   SetProviderConfigRequestDto,
   UpdateCharacterRequestDto,
@@ -95,6 +108,48 @@ export interface ChatsApi {
   updateMessage(req: UpdateMessageRequestDto, opts?: BackendCallOptions): Promise<MessageDto>;
   /** Delete a message. */
   delMessage(req: DeleteMessageRequestDto, opts?: BackendCallOptions): Promise<EmptyResultDto>;
+  /** List the swipe variants of one message (wire `chats.messages.variants.list`). */
+  listMessageVariants(
+    req: ListMessageVariantsRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<ListMessageVariantsResultDto>;
+  /** Append a swipe variant; the position is allocated atomically (MAX+1). */
+  createMessageVariant(
+    req: CreateMessageVariantRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<MessageVariantDto>;
+  /** Delete one variant (permanent). */
+  delMessageVariant(
+    req: DeleteMessageVariantRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<EmptyResultDto>;
+  /** Activate a variant; the previous active text is recorded as a revision. */
+  activateMessageVariant(
+    req: ActivateMessageVariantRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<MessageDto>;
+  /** List the immutable content revisions of one message (wire `chats.messages.revisions.list`). */
+  listMessageRevisions(
+    req: ListMessageRevisionsRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<ListMessageRevisionsResultDto>;
+  /** Fetch one server-side draft (wire `chats.messages.drafts.get`). */
+  getMessageDraft(req: GetMessageDraftRequestDto, opts?: BackendCallOptions): Promise<MessageDraftDto>;
+  /** Create or update a server-side draft (upsert by id; wire `chats.messages.drafts.save`). */
+  saveMessageDraft(
+    req: SaveMessageDraftRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<MessageDraftDto>;
+  /** Materialize a draft exactly once; resolves with the committed message. */
+  commitMessageDraft(
+    req: CommitMessageDraftRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<MessageDto>;
+  /** Discard a draft (permanent; never touches the committed message). */
+  discardMessageDraft(
+    req: DiscardMessageDraftRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<EmptyResultDto>;
 }
 
 /** Generation domain operations (wire `generation.*`). */

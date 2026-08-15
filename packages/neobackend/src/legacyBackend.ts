@@ -163,6 +163,15 @@ export class LegacyBackend implements NeoBackend {
     createMessage: () => this.unsupported('chats.messages.create'),
     updateMessage: (req) => this.updateMessage(req),
     delMessage: (req) => this.delMessage(req),
+    listMessageVariants: () => this.unsupported('chats.messages.variants.list'),
+    createMessageVariant: () => this.unsupported('chats.messages.variants.create'),
+    delMessageVariant: () => this.unsupported('chats.messages.variants.delete'),
+    activateMessageVariant: () => this.unsupported('chats.messages.variants.activate'),
+    listMessageRevisions: () => this.unsupported('chats.messages.revisions.list'),
+    getMessageDraft: () => this.unsupported('chats.messages.drafts.get'),
+    saveMessageDraft: () => this.unsupported('chats.messages.drafts.save'),
+    commitMessageDraft: () => this.unsupported('chats.messages.drafts.commit'),
+    discardMessageDraft: () => this.unsupported('chats.messages.drafts.discard'),
   };
 
   readonly generation: GenerationApi = {

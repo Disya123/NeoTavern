@@ -35,6 +35,9 @@ import {
   type LorebookEntryUpdate,
   type LorebookUpdate,
   type Message,
+  type MessageContentRevision,
+  type MessageDraft,
+  type MessageVariant,
   type Persona,
   type PersonaCreate,
   type PersonaUpdate,
@@ -43,6 +46,9 @@ import {
   type LorebookDto,
   type LorebookEntryDto,
   type MessageDto,
+  type MessageDraftDto,
+  type MessageRevisionDto,
+  type MessageVariantDto,
   type PersonaDto,
 } from '@neotavern/contracts';
 import { UnsupportedError } from '@neotavern/neobackend';
@@ -190,6 +196,49 @@ export function translateLorebook(dto: LorebookDto): Lorebook {
     // a global book renders neutrally.
     characterId: null,
     metadata: {},
+    createdAt: toEpochMs(dto.createdAt),
+    updatedAt: toEpochMs(dto.updatedAt),
+  };
+}
+
+/** Wire variant → legacy `MessageVariant` (both carry position; identity). */
+export function translateMessageVariant(dto: MessageVariantDto): MessageVariant {
+  return {
+    id: dto.id,
+    messageId: dto.messageId,
+    position: dto.position,
+    content: dto.content,
+    createdAt: toEpochMs(dto.createdAt),
+  };
+}
+
+/** Wire revision → legacy `MessageContentRevision` (identity). */
+export function translateMessageRevision(dto: MessageRevisionDto): MessageContentRevision {
+  return {
+    id: dto.id,
+    messageId: dto.messageId,
+    position: dto.position,
+    content: dto.content,
+    createdAt: toEpochMs(dto.createdAt),
+  };
+}
+
+/** Wire draft → legacy `MessageDraft` (kernel has no branches). */
+export function translateMessageDraft(dto: MessageDraftDto): MessageDraft {
+  return {
+    id: dto.id,
+    chatId: dto.chatId,
+    // The kernel keeps one linear sequence per chat; `branchId` is an honest
+    // empty default (no branch reference exists), matching translateMessage.
+    branchId: '',
+    role: dto.role,
+    content: dto.content,
+    // The kernel draft has no name/meta columns; null/{} render neutrally.
+    name: null,
+    meta: {},
+    sequence: dto.sequence,
+    revision: dto.revision,
+    committedMessageId: dto.committedMessageId ?? null,
     createdAt: toEpochMs(dto.createdAt),
     updatedAt: toEpochMs(dto.updatedAt),
   };
@@ -454,6 +503,182 @@ export async function readMessages(
   return api.get<CursorPage<Message>>(
     `/chats/${chatId}/messages${encodeQuery({ order: 'desc', branchId, cursor })}`,
   );
+}
+
+/* --------------------------------------------------------------------------
+ * Message variants/revisions/drafts (Этап 4 slice 2).
+ *
+ * The kernel owns swipe variants, immutable content revisions and
+ * server-side drafts over the wire (`chats.messages.{variants,revisions,
+ * drafts}.*`); kernel mode routes through the facade. The legacy /api/v2
+ * routes are kept for browser mode until the legacy-route-removal step of
+ * slice 2; operations with no legacy route are an honest
+ * CAPABILITY_UNAVAILABLE instead of a silent downgrade.
+ * ------------------------------------------------------------------------ */
+
+/** List the stored swipe variants of one message (positions ascending). */
+export async function readMessageVariants(
+  chatId: string,
+  messageId: string,
+): Promise<MessageVariant[]> {
+  if (isKernelMode()) {
+    const result = await backend.chats.listMessageVariants({ chatId, messageId });
+    return result.items.map(translateMessageVariant);
+  }
+  const page = await api.get<{ items: MessageVariant[] }>(
+    `/chats/${chatId}/messages/${messageId}/variants`,
+  );
+  return page.items;
+}
+
+/** Append a swipe variant (kernel allocates the position atomically). */
+export async function createMessageVariant(
+  chatId: string,
+  messageId: string,
+  content: string,
+): Promise<MessageVariant> {
+  if (isKernelMode()) {
+    return translateMessageVariant(
+      await backend.chats.createMessageVariant({ chatId, messageId, content }),
+    );
+  }
+  // The legacy server has no create-variant route (swipes are only produced
+  // by regeneration); honest CAPABILITY_UNAVAILABLE in browser mode.
+  throw new UnsupportedError('chats.messages.variants.create');
+}
+
+/** Delete one swipe variant (permanent). */
+export async function deleteMessageVariant(
+  chatId: string,
+  messageId: string,
+  variantId: string,
+): Promise<void> {
+  if (isKernelMode()) {
+    await backend.chats.delMessageVariant({ chatId, messageId, variantId });
+    return;
+  }
+  throw new UnsupportedError('chats.messages.variants.delete');
+}
+
+/** Activate a swipe variant; the previous active text becomes a revision. */
+export async function activateMessageVariant(
+  chatId: string,
+  messageId: string,
+  variantId: string,
+): Promise<Message> {
+  if (isKernelMode()) {
+    return translateMessage(
+      await backend.chats.activateMessageVariant({ chatId, messageId, variantId }),
+    );
+  }
+  return api.post<Message>(
+    `/chats/${chatId}/messages/${messageId}/variants/${variantId}/activate`,
+    {},
+  );
+}
+
+/**
+ * List the immutable content revisions of one message. The kernel returns
+ * the full list in one page; the legacy route is cursor-paginated.
+ */
+export async function readMessageRevisions(
+  chatId: string,
+  messageId: string,
+  cursor?: string,
+): Promise<CursorPage<MessageContentRevision>> {
+  if (isKernelMode()) {
+    const result = await backend.chats.listMessageRevisions({ chatId, messageId });
+    return { items: result.items.map(translateMessageRevision), nextCursor: null, hasMore: false };
+  }
+  return api.get<CursorPage<MessageContentRevision>>(
+    `/chats/${chatId}/messages/${messageId}/revisions${encodeQuery({ cursor })}`,
+  );
+}
+
+/**
+ * Restore an archived text as the active message content. Kernel mode maps
+ * this onto the existing `chats.messages.update` wire op (the canonical
+ * restore semantics: setting the content records the replaced text as a new
+ * revision); legacy keeps its dedicated restore route.
+ */
+export async function restoreMessageRevision(
+  chatId: string,
+  messageId: string,
+  revisionId: string,
+  content: string,
+): Promise<Message> {
+  if (isKernelMode()) {
+    return translateMessage(await backend.chats.updateMessage({ chatId, messageId, content }));
+  }
+  return api.post<Message>(
+    `/chats/${chatId}/messages/${messageId}/revisions/${revisionId}/restore`,
+    {},
+  );
+}
+
+/** Fetch one server-side draft (kernel mode; no legacy read route). */
+export async function readMessageDraft(chatId: string, draftId: string): Promise<MessageDraft> {
+  if (isKernelMode()) {
+    return translateMessageDraft(await backend.chats.getMessageDraft({ chatId, draftId }));
+  }
+  throw new UnsupportedError('chats.messages.drafts.get');
+}
+
+/** Input of `saveMessageDraft` (wire `chats.messages.drafts.save`). */
+export interface MessageDraftSaveInput {
+  chatId: string;
+  /** Omit to create a new draft; provide to update (upsert by id). */
+  draftId?: string;
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string;
+  /** Monotonic writer sequence; a stale save (≤ stored) is an idempotent no-op. */
+  sequence?: number;
+}
+
+/** Create or update a server-side draft. */
+export async function saveMessageDraft(input: MessageDraftSaveInput): Promise<MessageDraft> {
+  if (isKernelMode()) {
+    const saved = await backend.chats.saveMessageDraft({
+      chatId: input.chatId,
+      ...(input.draftId !== undefined ? { draftId: input.draftId } : {}),
+      role: input.role,
+      content: input.content,
+      ...(input.sequence !== undefined ? { sequence: input.sequence } : {}),
+    });
+    return translateMessageDraft(saved);
+  }
+  const { chatId, draftId, role, content, sequence } = input;
+  if (draftId === undefined) {
+    return api.post<MessageDraft>(`/chats/${chatId}/drafts`, { role, ...(content ? { content } : {}) });
+  }
+  return api.patch<MessageDraft>(`/chats/${chatId}/drafts/${draftId}`, { content, sequence });
+}
+
+/**
+ * Materialize a draft exactly once; resolves with the committed message id.
+ * Replays after success return the same id (commit is retry-safe).
+ */
+export async function commitMessageDraft(
+  chatId: string,
+  draftId: string,
+): Promise<{ messageId: string }> {
+  if (isKernelMode()) {
+    const message = await backend.chats.commitMessageDraft({ chatId, draftId });
+    return { messageId: message.id };
+  }
+  const result = await api.post<{ messageId: string; alreadyCommitted: boolean }>(
+    `/chats/${chatId}/drafts/${draftId}/commit`,
+  );
+  return { messageId: result.messageId };
+}
+
+/** Discard a draft (permanent; never touches the committed message). */
+export async function discardMessageDraft(chatId: string, draftId: string): Promise<void> {
+  if (isKernelMode()) {
+    await backend.chats.discardMessageDraft({ chatId, draftId });
+    return;
+  }
+  await api.del(`/chats/${chatId}/drafts/${draftId}`);
 }
 
 /* --------------------------------------------------------------------------

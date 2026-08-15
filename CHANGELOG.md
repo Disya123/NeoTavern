@@ -22,8 +22,8 @@
   `variantId`/`draftId` params.
   Tests: kernel `message_variants_revisions_drafts_round_trip` + error-path
   suite in `kernel_crud`; storage migration corpus accepts migration 008.
-  The UI/facade cutover, legacy swipe/draft route removal and the legacy
-  converter mapping are the remaining slice-2 work within M5.
+  The UI cutover and legacy swipe/draft route removal are the remaining
+  slice-2 work within M5.
 
 - **Legacy converter: message variants/revisions/drafts (M5 / Этап 4,
   slice 2).** The legacy `app.db` converter now maps the optional
@@ -42,6 +42,21 @@
   `converted_legacy_variants_usable_over_wire` (convert a legacy db with
   swipes/revisions/drafts, open the Kernel over the candidate root and serve
   the rows through the wire ops).
+
+- **Facade + wireBridge for message variants/revisions/drafts (M5 / Этап 4,
+  slice 2).** `NeoBackend.ChatsApi` gains the nine wire operations
+  (`listMessageVariants/createMessageVariant/delMessageVariant/
+  activateMessageVariant/listMessageRevisions/getMessageDraft/
+  saveMessageDraft/commitMessageDraft/discardMessageDraft`) on the Local and
+  Remote backends (LegacyBackend keeps them unsupported — browser mode keeps
+  the `/api/v2` routes). `wireBridge` routes the UI shapes through the
+  facade in kernel mode with honest translation (kernel drafts have no
+  `branchId`/`name`/`meta` — neutral defaults), maps `revisions.restore`
+  onto the canonical `chats.messages.update` op, and reports
+  `CAPABILITY_UNAVAILABLE` for the operations the legacy server has no route
+  for (`variants.create`, `variants.delete`, `drafts.get`). Tests: Local/
+  Remote parity + validation for the nine ops (neobackend `parity.test.ts`),
+  and kernel-mode wireBridge routing/translation coverage.
 
 - **Entry-level lorebook CRUD over Product Wire (M4 / Этап 4.1, slice
   follow-up).** Four new wire operations `lorebooks.entries.list/create/
