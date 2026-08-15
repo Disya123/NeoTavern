@@ -63,6 +63,7 @@ export const en = {
     personas: 'Personas',
     lorebooks: 'Lorebooks',
     backgrounds: 'Backgrounds',
+    profiles: 'Profiles',
   },
   home: {
     appName: 'NeoTavern',
@@ -1410,6 +1411,7 @@ export const en = {
       'The plugin dependency "{{dependency}}" contains a forbidden file ({{file}}).',
     THEME_NOT_FOUND: 'Theme was not found.',
     THEME_INVALID: 'The theme package is invalid.',
+    PROFILE_NOT_FOUND: 'Profile "{{profileId}}" was not found.',
     FILE_TOO_LARGE: 'The file is too large.',
     FILE_TYPE_NOT_ALLOWED: 'This file type is not allowed.',
     FILE_NOT_FOUND: 'The file was not found.',
@@ -1420,6 +1422,32 @@ export const en = {
     MAINTENANCE_MODE: 'Maintenance in progress — mutations are paused.',
     SEARCH_FAILED: 'Search failed.',
     UNKNOWN: 'Unknown error.',
+  },
+  profiles: {
+    title: 'Profiles',
+    titleHint:
+      "Named user contexts for the character library. Each profile can group characters, chats and messages; a scoped profile export carries only that profile's data (lorebooks and presets are always shared).",
+    createName: 'New profile name',
+    createPlaceholder: 'e.g. Friends',
+    create: 'Create',
+    createdNotice: 'Profile "{{name}}" created.',
+    listTitle: 'Profiles',
+    listHint: 'Rename or delete a profile, or export its scoped data container.',
+    empty: 'No profiles yet. Create one above.',
+    rename: 'Rename',
+    renamedNotice: 'Profile renamed to "{{name}}".',
+    cancel: 'Cancel',
+    delete: 'Delete',
+    deleteConfirmTitle: 'Delete profile?',
+    deleteConfirmDescription:
+      'Profile "{{name}}" will be deleted. Its characters remain in the library but become unassigned.',
+    deletedNotice: 'Profile "{{name}}" deleted.',
+    createdAt: 'Created {{date}}',
+    exportAction: 'Export',
+    exporting: 'Exporting…',
+    exportedNotice:
+      'Exported "{{name}}": {{characters}} characters, {{chats}} chats, {{messages}} messages.',
+    exportFailedHint: 'The export did not complete. Check the diagnostics panel for details.',
   },
   validation: {
     required: 'This field is required.',

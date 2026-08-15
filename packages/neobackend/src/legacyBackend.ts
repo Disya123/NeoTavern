@@ -281,6 +281,7 @@ export class LegacyBackend implements NeoBackend {
     create: () => this.unsupported('profiles.create'),
     rename: () => this.unsupported('profiles.rename'),
     del: () => this.unsupported('profiles.delete'),
+    export: () => this.unsupported('profile.export'),
   };
 
   readonly settings: SettingsApi = {

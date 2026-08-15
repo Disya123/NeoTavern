@@ -33,6 +33,7 @@ import {
   type PluginDto,
   type PresetDto,
   type ProfileDto,
+  type ProfileExportResultDto,
   type ResultSettingsDto,
   type SecretsStatusResultDto,
   type ThemeDto,
@@ -171,6 +172,18 @@ const PROFILE: ProfileDto = {
 };
 const PROFILE_LIST: ListProfilesResultDto = { items: [PROFILE] };
 const PROFILE_CREATE: CreateProfileResultDto = { profile: PROFILE };
+
+/** `profile.export` result (canonical `wire.result.profile-export` shape). */
+const PROFILE_EXPORT: ProfileExportResultDto = {
+  containerPath: 'exports/profile-aaaaaaa4-4444-4444-8444-444444444444.ndjson.zip',
+  formatVersion: 1,
+  createdAt: TIMESTAMP,
+  records: { characters: 2, chats: 2, messages: 4, lorebooks: 1, presets: 1 },
+  assets: 1,
+  sizeBytes: 2048,
+  manifestSha256: 'f'.repeat(64),
+  profileId: PROFILE_ID,
+};
 
 const SETTINGS: ResultSettingsDto = {
   items: [
@@ -419,6 +432,8 @@ class FakeKernelTransport implements LocalTransport {
         return { ok: true, value: PROFILE };
       case 'profiles.delete':
         return { ok: true, value: EMPTY_RESULT };
+      case 'profile.export':
+        return { ok: true, value: PROFILE_EXPORT };
       case 'settings.get':
       case 'settings.update':
         return { ok: true, value: SETTINGS };
@@ -531,6 +546,8 @@ function rpcResult(operationId: string | undefined): unknown {
       return PROFILE;
     case 'profiles.delete':
       return EMPTY_RESULT;
+    case 'profile.export':
+      return PROFILE_EXPORT;
     case 'settings.get':
     case 'settings.update':
       return SETTINGS;
@@ -1712,6 +1729,34 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
     ]);
   });
 
+  it('profile.export forwards the scope and decodes ProfileExportResultDto', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    // Scoped export (SEC-02 per-profile filtering, ADR-0047 waiver 4).
+    const scopedReq = { includeAssets: true, profileId: PROFILE_ID };
+    const [scopedLocal, scopedRemote] = await Promise.all([
+      local.profiles.export(scopedReq),
+      remote.profiles.export(scopedReq),
+    ]);
+    expect(scopedLocal).toEqual(scopedRemote);
+    expect(scopedLocal).toEqual(PROFILE_EXPORT);
+
+    // Unscoped export = full library, profileId absent in the request.
+    const [fullLocal, fullRemote] = await Promise.all([
+      local.profiles.export(),
+      remote.profiles.export(),
+    ]);
+    expect(fullLocal).toEqual(fullRemote);
+    expect(fullLocal).toEqual(PROFILE_EXPORT);
+
+    expect(kernel.requests).toEqual([
+      { operationId: 'profile.export', payload: scopedReq },
+      { operationId: 'profile.export', payload: {} },
+    ]);
+  });
+
   it('settings.get/update return deep-equal ResultSettingsDto from both backends', async () => {
     const kernel = new FakeKernelTransport();
     const local = new LocalBackend({ transport: kernel });
@@ -1779,6 +1824,7 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
     expect(() => backend.plugins.list()).toThrow(UnsupportedError);
     expect(() => backend.themes.activate('wii-u-dark')).toThrow(UnsupportedError);
     expect(() => backend.profiles.create({ name: 'Main' })).toThrow(UnsupportedError);
+    expect(() => backend.profiles.export({ profileId: PROFILE_ID })).toThrow(UnsupportedError);
     expect(() => backend.settings.get()).toThrow(UnsupportedError);
     expect(() => backend.diagnostics.export()).toThrow(UnsupportedError);
     expect(() => backend.secrets.status()).toThrow(UnsupportedError);

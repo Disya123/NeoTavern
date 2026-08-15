@@ -76,6 +76,8 @@ import type {
   PluginDto,
   PresetDto,
   ProfileDto,
+  ProfileExportRequestDto,
+  ProfileExportResultDto,
   ProviderConfigDto,
   RenameProfileRequestDto,
   ResultSettingsDto,
@@ -365,6 +367,14 @@ export interface ProfilesApi {
   rename(req: RenameProfileRequestDto, opts?: BackendCallOptions): Promise<ProfileDto>;
   /** Delete a profile (unknown id is PROFILE_NOT_FOUND). */
   del(profileId: string, opts?: BackendCallOptions): Promise<EmptyResultDto>;
+  /**
+   * Export a logical profile container (wire `profile.export`, SEC-02,
+   * ADR-0047 waiver 4). An optional `profileId` scopes the export to one
+   * Configuration profile: only its characters (and, transitively, their
+   * chats and messages) are exported; lorebooks and presets are the shared
+   * library and always included. Secrets never enter the container.
+   */
+  export(req?: ProfileExportRequestDto, opts?: BackendCallOptions): Promise<ProfileExportResultDto>;
 }
 
 /**

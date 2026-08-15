@@ -3,6 +3,24 @@
 ## Unreleased
 ### Added
 
+- **Profiles UI + facade export (M5 slice 5 remainder web).** The NeoBackend
+  facade now covers the full Configuration profile surface: `profiles.export`
+  was added to `ProfilesApi` (LocalBackend forwards `profile.export` over the
+  kernel transport, RemoteBackend over ClientSdk, LegacyBackend throws
+  `UnsupportedError` — the legacy plane must never fake a canonical
+  capability, ТЗ §13.1), and the Settings panel gained a Profiles tab:
+  list/create/rename/delete with confirmation plus a per-profile scoped
+  export action wired through TanStack Query hooks (`useProfiles`,
+  `useCreateProfile`, `useRenameProfile`, `useDeleteProfile`,
+  `useProfileExport`). The export action calls `profile.export` with the
+  profile's `profileId`, so the produced container carries only that
+  profile's characters and their chats/messages (lorebooks and presets are
+  always the shared library, SEC-02, ADR-0047 waiver 4) and reports the
+  per-section counts. `PROFILE_NOT_FOUND` error text added to i18n (en/ru).
+  Tests: facade parity (`profile.export` scoped/unscoped forwarding +
+  deep-equal Local/Remote, LegacyBackend UnsupportedError), ProfilesPanel
+  component tests (list, create, export, delete-with-confirm). Web vitest
+  610/610.
 - **Per-profile scoped profile export (SEC-02, ADR-0047 waiver 4, M5 slice 5
   remainder, schema v15).** The canonical Configuration profiles model now
   binds the character library: schema v15 adds the nullable `profile_id` FK

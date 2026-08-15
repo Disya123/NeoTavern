@@ -34,6 +34,7 @@ import { DiagnosticsPanel } from './DiagnosticsPanel.js';
 import { FloatingTabContent } from './FloatingTabContent.js';
 import { FloatingTabPanel } from './FloatingTabPanel.js';
 import { PluginSettingsPanels } from './PluginPanels.js';
+import { ProfilesPanel } from './ProfilesPanel.js';
 import { RemoteAccessPanel } from './RemoteAccessPanel.js';
 import { SlotHost } from '../plugins/slots.js';
 import { SystemSurfaceLink } from './SystemSurfaceLink.js';
@@ -108,6 +109,15 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             content: (
               <FloatingTabContent>
                 <DataTab />
+              </FloatingTabContent>
+            ),
+          },
+          {
+            value: 'profiles',
+            label: t('navigation:profiles'),
+            content: (
+              <FloatingTabContent>
+                <ProfilesPanel />
               </FloatingTabContent>
             ),
           },

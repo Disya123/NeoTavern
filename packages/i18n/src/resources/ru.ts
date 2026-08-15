@@ -64,6 +64,7 @@ export const ru: Resources = {
     personas: 'Персоны',
     lorebooks: 'Лорбуки',
     backgrounds: 'Фоны',
+    profiles: 'Профили',
   },
   home: {
     appName: 'NeoTavern',
@@ -1435,6 +1436,7 @@ export const ru: Resources = {
       'Зависимость плагина «{{dependency}}» содержит запрещённый файл ({{file}}).',
     THEME_NOT_FOUND: 'Тема не найдена.',
     THEME_INVALID: 'Пакет темы некорректен.',
+    PROFILE_NOT_FOUND: 'Профиль «{{profileId}}» не найден.',
     FILE_TOO_LARGE: 'Файл слишком большой.',
     FILE_TYPE_NOT_ALLOWED: 'Этот тип файла не разрешён.',
     FILE_NOT_FOUND: 'Файл не найден.',
@@ -1445,6 +1447,32 @@ export const ru: Resources = {
     MAINTENANCE_MODE: 'Идёт обслуживание — изменения приостановлены.',
     SEARCH_FAILED: 'Ошибка поиска.',
     UNKNOWN: 'Неизвестная ошибка.',
+  },
+  profiles: {
+    title: 'Профили',
+    titleHint:
+      'Именованные пользовательские контексты для библиотеки персонажей. Профиль группирует персонажей, чаты и сообщения; экспорт профиля включает только его данные (лорбуки и пресеты всегда общие).',
+    createName: 'Имя нового профиля',
+    createPlaceholder: 'например, Друзья',
+    create: 'Создать',
+    createdNotice: 'Профиль «{{name}}» создан.',
+    listTitle: 'Профили',
+    listHint: 'Переименуйте или удалите профиль либо экспортируйте его данные.',
+    empty: 'Профилей пока нет. Создайте первый выше.',
+    rename: 'Переименовать',
+    renamedNotice: 'Профиль переименован в «{{name}}».',
+    cancel: 'Отмена',
+    delete: 'Удалить',
+    deleteConfirmTitle: 'Удалить профиль?',
+    deleteConfirmDescription:
+      'Профиль «{{name}}» будет удалён. Его персонажи останутся в библиотеке без привязки.',
+    deletedNotice: 'Профиль «{{name}}» удалён.',
+    createdAt: 'Создан {{date}}',
+    exportAction: 'Экспорт',
+    exporting: 'Экспорт…',
+    exportedNotice:
+      'Экспортирован «{{name}}»: {{characters}} персонажей, {{chats}} чатов, {{messages}} сообщений.',
+    exportFailedHint: 'Экспорт не завершился. Подробности — на панели диагностики.',
   },
   validation: {
     required: 'Обязательное поле.',

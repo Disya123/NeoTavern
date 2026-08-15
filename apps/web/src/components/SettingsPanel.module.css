@@ -189,6 +189,34 @@
     font-size: var(--st-font-size-xs);
   }
 
+  .createRow {
+    display: flex;
+    gap: var(--st-space-sm);
+  }
+
+  .createRow > :first-child {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .renameRow {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    align-items: center;
+    gap: var(--st-space-xs);
+  }
+
+  .renameRow > :first-child {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .profileInitial {
+    font-size: var(--st-font-size-md);
+    font-weight: var(--st-font-weight-semibold);
+  }
+
   .error,
   .noBackups {
     margin: 0;

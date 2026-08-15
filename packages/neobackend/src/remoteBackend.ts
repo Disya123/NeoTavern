@@ -45,6 +45,7 @@ import type {
   PluginDto,
   PresetDto,
   ProfileDto,
+  ProfileExportResultDto,
   ProviderConfigDto,
   ResultSettingsDto,
   SecretsStatusResultDto,
@@ -264,6 +265,10 @@ export class RemoteBackend implements NeoBackend {
       this.sdk.call<ProfileDto>('profiles.rename', req, { signal: opts?.signal }),
     del: (profileId, opts) =>
       this.sdk.call<EmptyResultDto>('profiles.delete', { id: profileId }, { signal: opts?.signal }),
+    export: (req, opts) =>
+      this.sdk.call<ProfileExportResultDto>('profile.export', req ?? {}, {
+        signal: opts?.signal,
+      }),
   };
 
   readonly settings: SettingsApi = {

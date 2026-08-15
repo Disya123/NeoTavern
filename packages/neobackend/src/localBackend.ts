@@ -43,6 +43,7 @@ import {
   type PluginDto,
   type PresetDto,
   type ProfileDto,
+  type ProfileExportResultDto,
   type ProviderConfigDto,
   type ResultSettingsDto,
   type SecretsStatusResultDto,
@@ -380,6 +381,7 @@ export class LocalBackend implements NeoBackend {
       rename: (req, opts) => this.invoke<ProfileDto>('profiles.rename', req, opts),
       del: (profileId, opts) =>
         this.invoke<EmptyResultDto>('profiles.delete', { id: profileId }, opts),
+      export: (req, opts) => this.invoke<ProfileExportResultDto>('profile.export', req ?? {}, opts),
     };
     this.settings = {
       get: (req, opts) => this.invoke<ResultSettingsDto>('settings.get', req ?? {}, opts),
