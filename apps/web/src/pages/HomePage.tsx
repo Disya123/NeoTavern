@@ -28,6 +28,7 @@ import { expandDisplayMacros, useMacroContext } from '../lib/macros.js';
 import { useErrorText } from '../lib/useErrorText.js';
 import { setDocumentLanguage } from '../lib/lang.js';
 import { useConversationContextPreview } from '../lib/useConversationContextPreview.js';
+import { wallpaperBackgroundUrl } from '../api/wireBridge.js';
 import { useUiStore } from '../state/ui.js';
 import { ChatComposer } from '../components/ChatComposer.js';
 import { ChatHeader } from '../components/ChatHeader.js';
@@ -249,12 +250,10 @@ export function HomePage() {
   }
 
   const globalBackgroundId = useUiStore((state) => state.globalBackgroundId);
-  const wallpaperUrl = useMemo(() => {
-    return globalBackgroundId
-      ? // eslint-disable-next-line @neotavern/no-legacy-api-surface
-        `/api/v2/assets/backgrounds/${encodeURIComponent(globalBackgroundId)}`
-      : null;
-  }, [globalBackgroundId]);
+  const wallpaperUrl = useMemo(
+    () => wallpaperBackgroundUrl(globalBackgroundId),
+    [globalBackgroundId],
+  );
 
   return (
     <ErrorBoundary name="home">

@@ -473,6 +473,20 @@ export function avatarOriginalUrl(
     : null;
 }
 
+/**
+ * Wallpaper asset URL (transport helper). The legacy plane serves the
+ * background file through the asset route; the kernel plane models no
+ * background store (backgrounds are a legacy file contour, not a kernel
+ * asset), so it honestly reports `null` — the wallpaper simply does not
+ * render on the kernel plane instead of fabricating a URL.
+ */
+export function wallpaperBackgroundUrl(backgroundId: string | null | undefined): string | null {
+  if (!backgroundId) return null;
+  if (isKernelMode()) return null;
+  // eslint-disable-next-line @neotavern/no-legacy-api-surface
+  return `/api/v2/assets/backgrounds/${encodeURIComponent(backgroundId)}`;
+}
+
 /** Result of an avatar upload — the draft fields the caller should apply. */
 export interface CharacterAvatarUploadResult {
   /** Legacy URL slot (`thumbnailUrl` on the legacy plane; always `null` on

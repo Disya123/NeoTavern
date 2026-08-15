@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-08-15T21:30:55.514Z",
+  "generatedAt": "2026-08-15T21:46:25.946Z",
   "rows": [
     {
       "hosts": {
@@ -80,7 +80,7 @@
       },
       "id": "chats.messages.variants-revisions-drafts",
       "milestone": "M5",
-      "notes": "Этап 4 slice 2: kernel wire ops (schema migration 008; swipe variants list/create/delete/activate, immutable content revisions recorded on content change, server-side streaming drafts get/save/commit/discard with idempotent commit) with component tests in kernel_crud. UI/facade cutover and legacy route removal are pending within M5.",
+      "notes": "Этап 4 slice 2: kernel wire ops (schema migration 008; swipe variants list/create/delete/activate, immutable content revisions recorded on content change, server-side streaming drafts get/save/commit/discard with idempotent commit) with component tests in kernel_crud. UI/facade cutover and legacy route removal are pending within M5. M5 slice 11: chats.messages.update accepts optional content + meta (wire.free-object), MessageDto carries meta verbatim, ChatPage edit flows route through updateChatMessage (ui-legacy-surface 60 → 57); slice 12: the chat/home wallpaper URL moved into the wallpaperBackgroundUrl transport helper — the legacy plane keeps the asset route URL, the kernel plane honestly returns null (backgrounds are a legacy file contour with no kernel store), ui-legacy-surface 57 → 56.",
       "title": "Message variants, revisions and drafts",
       "wireOps": [
         "chats.messages.drafts.commit",

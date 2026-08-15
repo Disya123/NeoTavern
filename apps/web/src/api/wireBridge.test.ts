@@ -147,6 +147,7 @@ vi.mock('./backend.js', () => ({
 import {
   activateMessageVariant,
   avatarOriginalUrl,
+  wallpaperBackgroundUrl,
   commitMessageDraft,
   continueCharacterChat,
   createCharacter,
@@ -425,6 +426,18 @@ describe('avatar data plane (M5 slice 6, ТЗ §34 avatar→asset)', () => {
       `/api/v2/characters/${CHAR_ID}/avatar-original`,
     );
     expect(avatarOriginalUrl(CHAR_ID, null)).toBeNull();
+  });
+
+  it('routes the wallpaper URL through the transport: legacy URL on the legacy plane, honest null on the kernel plane', () => {
+    expect(wallpaperBackgroundUrl(undefined)).toBeNull();
+    mocks.isKernelMode.mockReturnValue(false);
+    expect(wallpaperBackgroundUrl('wall-of-storms.webp')).toBe(
+      '/api/v2/assets/backgrounds/wall-of-storms.webp',
+    );
+    expect(wallpaperBackgroundUrl('a b.png')).toBe('/api/v2/assets/backgrounds/a%20b.png');
+    mocks.isKernelMode.mockReturnValue(true);
+    expect(wallpaperBackgroundUrl('wall-of-storms.webp')).toBeNull();
+    mocks.isKernelMode.mockReturnValue(true);
   });
 
   it('refuses asset content on the legacy plane honestly (no silent downgrade)', async () => {

@@ -3,6 +3,16 @@
 ## Unreleased
 ### Added
 
+- **Wallpaper URLs leave the components (M5 slice 12, Этап 4 context 5
+  part).** `wallpaperBackgroundUrl(backgroundId)` in `wireBridge` replaces
+  the inline `/api/v2/assets/backgrounds/:id` literals in `ChatPage` and
+  `HomePage`: the legacy plane keeps the asset-route URL (transport detail),
+  the kernel plane honestly returns `null` — backgrounds are a legacy file
+  contour with no kernel store, so the wallpaper simply does not render
+  instead of fabricating a URL. ui:api:check drops to 56 sites (two
+  component sites gone, one transport site tracked). Tests: wireBridge 95/95
+  (+1 wallpaper routing test), web typecheck clean.
+
 - **Message metadata rides the wire; edit flows leave the legacy surface
   (M5 slice 11, Этап 4 context 5 part).** Wire `chats.messages.update` now
   accepts optional `content` and `meta` (a new `wire.free-object` schema) and

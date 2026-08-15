@@ -21,7 +21,11 @@ import {
 } from '../api/hooks.js';
 import { streamGeneration } from '../api/generate.js';
 import { backend, legacyRaw } from '../api/backend.js';
-import { swipeMessageToPosition, updateChatMessage } from '../api/wireBridge.js';
+import {
+  swipeMessageToPosition,
+  updateChatMessage,
+  wallpaperBackgroundUrl,
+} from '../api/wireBridge.js';
 import { clampSwipeIndex, readGreetingSwipes } from '@neotavern/shared';
 import { expandDisplayMacros, useMacroContext, type MacroContext } from '../lib/macros.js';
 import { useErrorText } from '../lib/useErrorText.js';
@@ -645,7 +649,7 @@ export function ChatPage() {
 
   const wallpaperUrl = useMemo(() => {
     const backgroundId = chat.data?.backgroundId ?? globalBackgroundId;
-    return backgroundId ? `/api/v2/assets/backgrounds/${encodeURIComponent(backgroundId)}` : null;
+    return wallpaperBackgroundUrl(backgroundId);
   }, [chat.data?.backgroundId, globalBackgroundId]);
 
   useEffect(() => {
