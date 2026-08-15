@@ -157,6 +157,7 @@ import {
   createMessageVariant,
   createPersona,
   createPreset,
+  createBridgeChatMessage,
   deleteCharacter,
   deleteChat,
   deleteLorebook,
@@ -1431,5 +1432,26 @@ describe('imports/exports (kernel plane honest refusals)', () => {
 
   it('refuses provider model discovery on the kernel plane', async () => {
     await expect(warmProviderModels('p1')).rejects.toBeInstanceOf(UnsupportedError);
+  });
+});
+
+describe('legacy bridge message creation', () => {
+  it('routes sendChatMessage to chats.messages.create on the kernel plane', async () => {
+    mocks.chats.createMessage.mockResolvedValue({
+      id: MESSAGE_ID,
+      chatId: CHAT_ID,
+      role: 'user',
+      content: 'Hello',
+      createdAt: NOW_MS,
+      sequence: 1,
+    });
+    const message = await createBridgeChatMessage(CHAT_ID, 'Hello');
+    expect(mocks.chats.createMessage).toHaveBeenCalledWith({
+      chatId: CHAT_ID,
+      role: 'user',
+      content: 'Hello',
+    });
+    expect(message.id).toBe(MESSAGE_ID);
+    expect(message.content).toBe('Hello');
   });
 });

@@ -41,6 +41,7 @@ import {
   type Message,
   type MessageContentRevision,
   type MessageDraft,
+  type MessageRole,
   type MessageVariant,
   type Persona,
   type PersonaCreate,
@@ -197,6 +198,49 @@ export async function warmProviderModels(providerId: string): Promise<void> {
     throw new UnsupportedError('providers.models.discovery');
   }
   await api.get(`/providers/${encodeURIComponent(providerId)}/models`);
+}
+
+/**
+ * Minimum message surface every plane guarantees for the legacy bridge.
+ * Kernel plane returns the lean wire `MessageDto`; legacy plane returns the
+ * full legacy message. Never fabricated: kernel-only fields are simply
+ * absent, and `createdAt` is epoch-ms on the legacy plane vs RFC3339 on the
+ * kernel plane — callers must not assume one format.
+ */
+export type BridgeChatMessage = {
+  id: string;
+  chatId: string;
+  role: MessageRole;
+  content: string;
+  createdAt: number | string;
+};
+
+/**
+ * Create a user message from a legacy bridge caller (SillyTavern
+ * `sendChatMessage`). Kernel plane: wire `chats.messages.create` returns the
+ * lean `MessageDto` (id/chatId/role/content/createdAt/sequence) — legacy-only
+ * fields (branchId, meta, variantCount, …) are absent, never fabricated.
+ * Legacy plane: the full legacy message shape.
+ */
+export async function createBridgeChatMessage(
+  chatId: string,
+  content: string,
+): Promise<BridgeChatMessage> {
+  if (isKernelMode()) {
+    const dto = await backend.chats.createMessage({ chatId, role: 'user', content });
+    // Project exactly the guaranteed surface — never fabricated fields.
+    return {
+      id: dto.id,
+      chatId: dto.chatId,
+      role: dto.role,
+      content: dto.content,
+      createdAt: dto.createdAt,
+    };
+  }
+  return api.post<BridgeChatMessage>(`/chats/${encodeURIComponent(chatId)}/messages`, {
+    role: 'user',
+    content,
+  });
 }
 
 /**

@@ -3,6 +3,18 @@
 ## Unreleased
 ### Added
 
+- **Legacy bridge `sendChatMessage` routes through the Product Wire transport
+  (M5 slice 10, Этап 4 context 5 part).** `createBridgeChatMessage(chatId,
+  text)` in `wireBridge` replaces the `legacyRaw()` POST in
+  `LegacyBridgeSync`: the kernel plane creates the message via wire
+  `chats.messages.create` and returns the lean `MessageDto` projected onto
+  the documented `BridgeChatMessage` surface (id/chatId/role/content +
+  createdAt — RFC3339 on the kernel plane vs epoch-ms on the legacy plane,
+  never fabricated); the legacy plane keeps the full legacy message.
+  ui:api:check drops to 60 sites. Remaining legacy-bridge calls are
+  extension-settings reads/writes — a plugin-facing legacy contour, not
+  product UI. Tests: wireBridge 91/91 (+1 bridge test).
+
 - **Provider model discovery moves out of the component; kernel diagnostics
   are shown honestly (M5 slice 9, Этап 4 contexts 4/7 part).**
   `AutoConnectSync` no longer calls `legacyRaw()` (ARC-03): the warm-up now
