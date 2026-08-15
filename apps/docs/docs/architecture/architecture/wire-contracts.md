@@ -209,9 +209,15 @@ ops (eventSchemaId) carrying a response schema; empty/unknown
 
 The table above is the historical **Phase 0** registry (21 ops). The live
 registry has grown with each milestone — 34 ops at M2, 47 at M4 (lorebooks
-CRUD + entries + personas), and **56 ops** at Этап 4 slice 2, which adds nine
-message variants/revisions/drafts operations (all `transactional`, strict
-`additionalProperties: false`, ARC-07):
+CRUD + entries + personas), **56 ops** at Этап 4 slice 2 (nine message
+variants/revisions/drafts operations), and **64 ops** at Этап 4 slice 3, which
+adds eight memories/presets operations — `presets.get`, `presets.create`,
+`presets.update`, `presets.delete`, `memories.list`, `memories.create`,
+`memories.update`, `memories.delete` — and moves `presets.list` onto the
+filtered `wire.request.list-presets` schema (kind filter). `presets.create` /
+`presets.update` additionally admit `CONFLICT` (`PRESET_CONFLICT`, duplicate
+`(kind,name)`). All slice-3 additions are `transactional`, strict
+`additionalProperties: false`, ARC-07:
 
 | operationId                        | class         | idempotency    | retry | auth      | reqB   | respB  | eventB |
 | ---------------------------------- | ------------- | -------------- | ----- | --------- | ------ | ------ | ------ |
@@ -224,6 +230,14 @@ message variants/revisions/drafts operations (all `transactional`, strict
 | `chats.messages.drafts.save`       | transactional | idempotent     | safe  | app.write | 1048576| 262144 | –      |
 | `chats.messages.drafts.commit`     | transactional | idempotent     | none  | app.write | 2048   | 262144 | –      |
 | `chats.messages.drafts.discard`    | transactional | idempotent     | safe  | app.write | 2048   | 1024   | –      |
+| `presets.get`                      | transactional | idempotent     | safe  | app.read  | 2048   | 262144 | –      |
+| `presets.create`                   | transactional | non-idempotent | none  | app.write | 65536  | 262144 | –      |
+| `presets.update`                   | transactional | non-idempotent | none  | app.write | 65536  | 262144 | –      |
+| `presets.delete`                   | transactional | non-idempotent | none  | app.write | 2048   | 1024   | –      |
+| `memories.list`                    | transactional | idempotent     | safe  | app.read  | 1024   | 262144 | –      |
+| `memories.create`                  | transactional | non-idempotent | none  | app.write | 65536  | 262144 | –      |
+| `memories.update`                  | transactional | non-idempotent | none  | app.write | 65536  | 262144 | –      |
+| `memories.delete`                  | transactional | non-idempotent | none  | app.write | 2048   | 1024   | –      |
 
 The canonical message model (Этап 4 slice 2, schema migration 008): the
 message text is the **active variant**; `message_variants` rows hold

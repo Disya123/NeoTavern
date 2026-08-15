@@ -71,6 +71,13 @@ pub struct ConversionReport {
     pub message_drafts: u64,
     pub lorebooks: u64,
     pub presets: u64,
+    /// Memories copied from the legacy `memories` table (Этап 4 slice 3,
+    /// ТЗ §4.4 Memory/RAG). The legacy table is optional (FTS-backed,
+    /// introduced by migration 0006); a source without it contributes 0.
+    /// Character-scoped rows keep their `character_id` even when the
+    /// character did not convert (the kernel `memories.character_id` has no
+    /// FK, so unknown legacy references survive).
+    pub memories: u64,
     /// Personas migrated from the legacy `personas` table (Этап 4.1). The
     /// legacy table is optional: a pre-personas source simply contributes 0.
     pub personas: u64,
@@ -139,6 +146,7 @@ fn convert(legacy: &Connection, tx: &rusqlite::Transaction) -> Result<Conversion
         message_drafts: 0,
         lorebooks: 0,
         presets: 0,
+        memories: 0,
         personas: 0,
         skipped: 0,
         orphans: Vec::new(),
@@ -151,6 +159,7 @@ fn convert(legacy: &Connection, tx: &rusqlite::Transaction) -> Result<Conversion
     convert_message_drafts(legacy, tx, &chat_ids, &message_ids, &mut report)?;
     convert_lorebooks(legacy, tx, &mut report)?;
     convert_presets(legacy, tx, &mut report)?;
+    convert_memories(legacy, tx, &mut report)?;
     convert_personas(legacy, tx, &mut report)?;
     Ok(report)
 }
@@ -989,7 +998,10 @@ fn convert_presets(
         "presets",
         &["id", "name", "created_at", "updated_at"],
     )?;
-    let selected = select_columns(&cols, &["id", "name", "data", "created_at", "updated_at"]);
+    let selected = select_columns(
+        &cols,
+        &["id", "kind", "name", "data", "created_at", "updated_at"],
+    );
     let sql = format!(
         "SELECT {} FROM presets ORDER BY id",
         quote_columns(&selected)
@@ -1014,6 +1026,17 @@ fn convert_presets(
             skip(report, &format!("preset {id}: missing name"));
             continue;
         };
+        // The legacy `kind` column (tables.ts, `NOT NULL`) maps 1:1; rows
+        // whose kind would fail the wire `^[a-z0-9][a-z0-9-]*$` pattern are
+        // skipped (the kernel select-back validation would reject them).
+        let Some(kind) = as_text(get("kind")) else {
+            skip(report, &format!("preset {id}: missing kind"));
+            continue;
+        };
+        if !is_valid_preset_kind(kind) {
+            skip(report, &format!("preset {id}: invalid kind {kind:?}"));
+            continue;
+        }
         let Some(created_at) = ms_to_rfc3339_checked(get("created_at")) else {
             skip(report, &format!("preset {id}: invalid created_at"));
             continue;
@@ -1023,12 +1046,12 @@ fn convert_presets(
             continue;
         };
         let settings = parse_json(get("data"));
-        // The legacy `kind` column (tables.ts) has no kernel equivalent and
-        // is intentionally not copied.
         tx.execute(
-            "INSERT INTO presets (id, name, settings_json, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO presets (id, kind, name, settings_json, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             rusqlite::params![
                 id,
+                kind,
                 name,
                 serde_json::to_string(&settings).unwrap_or_else(|_| "{}".to_string()),
                 created_at,
@@ -1037,6 +1060,126 @@ fn convert_presets(
         )
         .map_err(|e| StorageError::from_sqlite(e, "legacy: insert preset"))?;
         report.presets += 1;
+    }
+    Ok(())
+}
+
+/// The wire `preset.kind` pattern: `^[a-z0-9][a-z0-9-]*$`.
+fn is_valid_preset_kind(kind: &str) -> bool {
+    let mut chars = kind.chars();
+    match chars.next() {
+        Some(first) if first.is_ascii_lowercase() || first.is_ascii_digit() => {}
+        _ => return false,
+    }
+    chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+}
+
+/// Maps the legacy `memories` table into the kernel `memories` table
+/// (Этап 4 slice 3, ТЗ §4.4 Memory/RAG). The legacy table is optional
+/// (FTS-backed, migration 0006); a source without it contributes 0 rows.
+/// `keys_json`/`metadata` (JSON text) map 1:1 to `keys_json`/`metadata_json`;
+/// INTEGER epoch-ms timestamps become RFC 3339. `character_id` is preserved
+/// verbatim — the kernel table has no FK, so an orphaned reference from a
+/// partially converted source survives instead of dropping user data.
+fn convert_memories(
+    legacy: &Connection,
+    tx: &rusqlite::Transaction,
+    report: &mut ConversionReport,
+) -> Result<()> {
+    if !table_exists(legacy, "memories")? {
+        return Ok(());
+    }
+    let cols = column_names(legacy, "memories")?;
+    require_columns(
+        &cols,
+        "memories",
+        &["id", "content", "created_at", "updated_at"],
+    )?;
+    let selected = select_columns(
+        &cols,
+        &[
+            "id",
+            "scope",
+            "character_id",
+            "keys_json",
+            "content",
+            "enabled",
+            "position",
+            "metadata",
+            "created_at",
+            "updated_at",
+        ],
+    );
+    let sql = format!(
+        "SELECT {} FROM memories ORDER BY id",
+        quote_columns(&selected)
+    );
+    let mut stmt = legacy
+        .prepare(&sql)
+        .map_err(|e| StorageError::from_sqlite(e, "legacy: prepare memories"))?;
+    let mut rows = stmt
+        .query([])
+        .map_err(|e| StorageError::from_sqlite(e, "legacy: query memories"))?;
+    while let Some(row) = rows
+        .next()
+        .map_err(|e| StorageError::from_sqlite(e, "legacy: read memories"))?
+    {
+        let vals = read_values(&selected, row)?;
+        let get = |name: &str| selected.iter().position(|c| *c == name).map(|i| &vals[i]);
+        let Some(id) = as_text(get("id")) else {
+            skip(report, "memory: missing id");
+            continue;
+        };
+        let Some(content) = as_text(get("content")) else {
+            skip(report, &format!("memory {id}: missing content"));
+            continue;
+        };
+        // scope defaults to 'global' in the legacy DDL; anything outside the
+        // kernel CHECK is skipped rather than stored as garbage.
+        let scope = match as_text(get("scope")).unwrap_or("global") {
+            "global" => "global",
+            "character" => "character",
+            other => {
+                skip(report, &format!("memory {id}: invalid scope {other:?}"));
+                continue;
+            }
+        };
+        let Some(created_at) = ms_to_rfc3339_checked(get("created_at")) else {
+            skip(report, &format!("memory {id}: invalid created_at"));
+            continue;
+        };
+        let Some(updated_at) = ms_to_rfc3339_checked(get("updated_at")) else {
+            skip(report, &format!("memory {id}: invalid updated_at"));
+            continue;
+        };
+        let keys = parse_json(get("keys_json"));
+        let keys_text = if keys.is_array() {
+            serde_json::to_string(&keys).unwrap_or_else(|_| "[]".to_string())
+        } else {
+            "[]".to_string()
+        };
+        let metadata = parse_json(get("metadata"));
+        let enabled = as_i64(get("enabled")).unwrap_or(1);
+        let position = as_i64(get("position")).unwrap_or(0);
+        let character_id = as_text(get("character_id"));
+        tx.execute(
+            "INSERT INTO memories (id, scope, character_id, keys_json, content, enabled, position, \
+             metadata_json, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            rusqlite::params![
+                id,
+                scope,
+                character_id,
+                keys_text,
+                content,
+                enabled,
+                position,
+                serde_json::to_string(&metadata).unwrap_or_else(|_| "{}".to_string()),
+                created_at,
+                updated_at,
+            ],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "legacy: insert memory"))?;
+        report.memories += 1;
     }
     Ok(())
 }

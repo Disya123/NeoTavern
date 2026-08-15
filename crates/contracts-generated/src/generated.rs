@@ -931,7 +931,9 @@ pub fn decode_lorebook_dto(bytes: &[u8]) -> Result<LorebookDto, WireError> {
 #[serde(deny_unknown_fields)]
 pub struct PresetDto {
     pub id: String,
+    pub kind: String,
     pub name: String,
+    pub data: Value,
     #[serde(rename = "createdAt")]
     pub created_at: String,
     #[serde(rename = "updatedAt")]
@@ -940,16 +942,23 @@ pub struct PresetDto {
 
 pub(crate) fn check_preset_dto(value: &Value, path: &str, issues: &mut Vec<Issue>) {
     static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
-    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z0-9][a-z0-9-]*$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
     static RE_2: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_3: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
     if !value.is_object() {
         issues.push(Issue::new(path, "Object"));
     } else {
         if value.get("id").is_none() {
             issues.push(Issue::new(join_path(path, "id"), "RequiredProperty"));
         }
+        if value.get("kind").is_none() {
+            issues.push(Issue::new(join_path(path, "kind"), "RequiredProperty"));
+        }
         if value.get("name").is_none() {
             issues.push(Issue::new(join_path(path, "name"), "RequiredProperty"));
+        }
+        if value.get("data").is_none() {
+            issues.push(Issue::new(join_path(path, "data"), "RequiredProperty"));
         }
         if value.get("createdAt").is_none() {
             issues.push(Issue::new(join_path(path, "createdAt"), "RequiredProperty"));
@@ -968,6 +977,24 @@ pub(crate) fn check_preset_dto(value: &Value, path: &str, issues: &mut Vec<Issue
                 None => issues.push(Issue::new(child_path.as_str(), "String")),
             }
         }
+        if let Some(child) = value.get("kind") {
+            let child_path = join_path(path, "kind");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 50 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
         if let Some(child) = value.get("name") {
             let child_path = join_path(path, "name");
             match child.as_str() {
@@ -976,18 +1003,25 @@ pub(crate) fn check_preset_dto(value: &Value, path: &str, issues: &mut Vec<Issue
                     if len < 1 {
                         issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
                     }
-                    if len > 200 {
+                    if len > 500 {
                         issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
                     }
                 }
                 None => issues.push(Issue::new(child_path.as_str(), "String")),
             }
         }
+        if let Some(child) = value.get("data") {
+            let child_path = join_path(path, "data");
+            if !child.is_object() {
+                issues.push(Issue::new(child_path.as_str(), "Object"));
+            } else {
+            }
+        }
         if let Some(child) = value.get("createdAt") {
             let child_path = join_path(path, "createdAt");
             match child.as_str() {
                 Some(s) => {
-                    if !RE_1.is_match(s) {
+                    if !RE_2.is_match(s) {
                         issues.push(Issue::new(child_path.as_str(), "StringFormat"));
                     }
                 }
@@ -998,7 +1032,7 @@ pub(crate) fn check_preset_dto(value: &Value, path: &str, issues: &mut Vec<Issue
             let child_path = join_path(path, "updatedAt");
             match child.as_str() {
                 Some(s) => {
-                    if !RE_2.is_match(s) {
+                    if !RE_3.is_match(s) {
                         issues.push(Issue::new(child_path.as_str(), "StringFormat"));
                     }
                 }
@@ -1007,7 +1041,7 @@ pub(crate) fn check_preset_dto(value: &Value, path: &str, issues: &mut Vec<Issue
         }
         if let Some(obj) = value.as_object() {
             for key in obj.keys() {
-                if !matches!(key.as_str(), "id" | "name" | "createdAt" | "updatedAt") {
+                if !matches!(key.as_str(), "id" | "kind" | "name" | "data" | "createdAt" | "updatedAt") {
                     let key_path = join_path(path, key);
                     issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
                 }
@@ -1024,6 +1058,222 @@ pub fn validate_preset_dto(value: &Value) -> Result<(), Vec<Issue>> {
 
 pub fn decode_preset_dto(bytes: &[u8]) -> Result<PresetDto, WireError> {
     crate::decode::<PresetDto>(validate_preset_dto, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum MemoryScope {
+    #[serde(rename = "global")] Global,
+    #[serde(rename = "character")] Character,
+}
+
+pub(crate) fn check_memory_scope(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    match value.as_str() {
+        Some(s) => {
+            if !matches!(s, "global" | "character") {
+                issues.push(Issue::new(path, "Union"));
+            }
+        }
+        None => issues.push(Issue::new(path, "String")),
+    }
+}
+
+pub fn validate_memory_scope(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_memory_scope(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_memory_scope(bytes: &[u8]) -> Result<MemoryScope, WireError> {
+    crate::decode::<MemoryScope>(validate_memory_scope, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MemoryDto {
+    pub id: String,
+    pub scope: MemoryScope,
+    #[serde(rename = "characterId", default, skip_serializing_if = "Option::is_none")]
+    pub character_id: Option<String>,
+    pub keys: Vec<String>,
+    pub content: String,
+    pub enabled: bool,
+    pub position: i64,
+    pub metadata: Value,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: String,
+}
+
+pub(crate) fn check_memory_dto(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_2: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_3: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("id").is_none() {
+            issues.push(Issue::new(join_path(path, "id"), "RequiredProperty"));
+        }
+        if value.get("scope").is_none() {
+            issues.push(Issue::new(join_path(path, "scope"), "RequiredProperty"));
+        }
+        if value.get("keys").is_none() {
+            issues.push(Issue::new(join_path(path, "keys"), "RequiredProperty"));
+        }
+        if value.get("content").is_none() {
+            issues.push(Issue::new(join_path(path, "content"), "RequiredProperty"));
+        }
+        if value.get("enabled").is_none() {
+            issues.push(Issue::new(join_path(path, "enabled"), "RequiredProperty"));
+        }
+        if value.get("position").is_none() {
+            issues.push(Issue::new(join_path(path, "position"), "RequiredProperty"));
+        }
+        if value.get("metadata").is_none() {
+            issues.push(Issue::new(join_path(path, "metadata"), "RequiredProperty"));
+        }
+        if value.get("createdAt").is_none() {
+            issues.push(Issue::new(join_path(path, "createdAt"), "RequiredProperty"));
+        }
+        if value.get("updatedAt").is_none() {
+            issues.push(Issue::new(join_path(path, "updatedAt"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("id") {
+            let child_path = join_path(path, "id");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("scope") {
+            let child_path = join_path(path, "scope");
+            check_memory_scope(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("characterId") {
+            let child_path = join_path(path, "characterId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("keys") {
+            let child_path = join_path(path, "keys");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                if arr.len() > 100 {
+                    issues.push(Issue::new(child_path.as_str(), "ArrayMaxItems"));
+                }
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    match item.as_str() {
+                        Some(s) => {
+                            let len = s.encode_utf16().count();
+                            if len < 1 {
+                                issues.push(Issue::new(item_path.as_str(), "StringMinLength"));
+                            }
+                            if len > 500 {
+                                issues.push(Issue::new(item_path.as_str(), "StringMaxLength"));
+                            }
+                        }
+                        None => issues.push(Issue::new(item_path.as_str(), "String")),
+                    }
+                }
+            }
+        }
+        if let Some(child) = value.get("content") {
+            let child_path = join_path(path, "content");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 100000 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("enabled") {
+            let child_path = join_path(path, "enabled");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(child) = value.get("position") {
+            let child_path = join_path(path, "position");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                    if n > 1000000 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMaximum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("metadata") {
+            let child_path = join_path(path, "metadata");
+            if !child.is_object() {
+                issues.push(Issue::new(child_path.as_str(), "Object"));
+            } else {
+            }
+        }
+        if let Some(child) = value.get("createdAt") {
+            let child_path = join_path(path, "createdAt");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_2.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("updatedAt") {
+            let child_path = join_path(path, "updatedAt");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_3.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "id" | "scope" | "characterId" | "keys" | "content" | "enabled" | "position" | "metadata" | "createdAt" | "updatedAt") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_memory_dto(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_memory_dto(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_memory_dto(bytes: &[u8]) -> Result<MemoryDto, WireError> {
+    crate::decode::<MemoryDto>(validate_memory_dto, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -4050,6 +4300,683 @@ pub fn validate_result_list_lorebook_entries(value: &Value) -> Result<(), Vec<Is
 
 pub fn decode_result_list_lorebook_entries(bytes: &[u8]) -> Result<ResultListLorebookEntries, WireError> {
     crate::decode::<ResultListLorebookEntries>(validate_result_list_lorebook_entries, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestListMemories {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<MemoryScope>,
+    #[serde(rename = "characterId", default, skip_serializing_if = "Option::is_none")]
+    pub character_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
+}
+
+pub(crate) fn check_request_list_memories(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if let Some(child) = value.get("scope") {
+            let child_path = join_path(path, "scope");
+            check_memory_scope(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("characterId") {
+            let child_path = join_path(path, "characterId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("enabled") {
+            let child_path = join_path(path, "enabled");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "scope" | "characterId" | "enabled") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_list_memories(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_list_memories(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_list_memories(bytes: &[u8]) -> Result<RequestListMemories, WireError> {
+    crate::decode::<RequestListMemories>(validate_request_list_memories, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestCreateMemory {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<MemoryScope>,
+    #[serde(rename = "characterId", default, skip_serializing_if = "Option::is_none")]
+    pub character_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keys: Option<Vec<String>>,
+    pub content: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub position: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<Value>,
+}
+
+pub(crate) fn check_request_create_memory(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("content").is_none() {
+            issues.push(Issue::new(join_path(path, "content"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("scope") {
+            let child_path = join_path(path, "scope");
+            check_memory_scope(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("characterId") {
+            let child_path = join_path(path, "characterId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("keys") {
+            let child_path = join_path(path, "keys");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                if arr.len() > 100 {
+                    issues.push(Issue::new(child_path.as_str(), "ArrayMaxItems"));
+                }
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    match item.as_str() {
+                        Some(s) => {
+                            let len = s.encode_utf16().count();
+                            if len < 1 {
+                                issues.push(Issue::new(item_path.as_str(), "StringMinLength"));
+                            }
+                            if len > 500 {
+                                issues.push(Issue::new(item_path.as_str(), "StringMaxLength"));
+                            }
+                        }
+                        None => issues.push(Issue::new(item_path.as_str(), "String")),
+                    }
+                }
+            }
+        }
+        if let Some(child) = value.get("content") {
+            let child_path = join_path(path, "content");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 100000 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("enabled") {
+            let child_path = join_path(path, "enabled");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(child) = value.get("position") {
+            let child_path = join_path(path, "position");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                    if n > 1000000 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMaximum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("metadata") {
+            let child_path = join_path(path, "metadata");
+            if !child.is_object() {
+                issues.push(Issue::new(child_path.as_str(), "Object"));
+            } else {
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "scope" | "characterId" | "keys" | "content" | "enabled" | "position" | "metadata") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_create_memory(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_create_memory(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_create_memory(bytes: &[u8]) -> Result<RequestCreateMemory, WireError> {
+    crate::decode::<RequestCreateMemory>(validate_request_create_memory, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestUpdateMemory {
+    #[serde(rename = "memoryId")]
+    pub memory_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<MemoryScope>,
+    #[serde(rename = "characterId", default, skip_serializing_if = "Option::is_none")]
+    pub character_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keys: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub position: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<Value>,
+}
+
+pub(crate) fn check_request_update_memory(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("memoryId").is_none() {
+            issues.push(Issue::new(join_path(path, "memoryId"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("memoryId") {
+            let child_path = join_path(path, "memoryId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("scope") {
+            let child_path = join_path(path, "scope");
+            check_memory_scope(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("characterId") {
+            let child_path = join_path(path, "characterId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("keys") {
+            let child_path = join_path(path, "keys");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                if arr.len() > 100 {
+                    issues.push(Issue::new(child_path.as_str(), "ArrayMaxItems"));
+                }
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    match item.as_str() {
+                        Some(s) => {
+                            let len = s.encode_utf16().count();
+                            if len < 1 {
+                                issues.push(Issue::new(item_path.as_str(), "StringMinLength"));
+                            }
+                            if len > 500 {
+                                issues.push(Issue::new(item_path.as_str(), "StringMaxLength"));
+                            }
+                        }
+                        None => issues.push(Issue::new(item_path.as_str(), "String")),
+                    }
+                }
+            }
+        }
+        if let Some(child) = value.get("content") {
+            let child_path = join_path(path, "content");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 100000 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("enabled") {
+            let child_path = join_path(path, "enabled");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(child) = value.get("position") {
+            let child_path = join_path(path, "position");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                    if n > 1000000 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMaximum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("metadata") {
+            let child_path = join_path(path, "metadata");
+            if !child.is_object() {
+                issues.push(Issue::new(child_path.as_str(), "Object"));
+            } else {
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "memoryId" | "scope" | "characterId" | "keys" | "content" | "enabled" | "position" | "metadata") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_update_memory(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_update_memory(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_update_memory(bytes: &[u8]) -> Result<RequestUpdateMemory, WireError> {
+    crate::decode::<RequestUpdateMemory>(validate_request_update_memory, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestDeleteMemory {
+    #[serde(rename = "memoryId")]
+    pub memory_id: String,
+}
+
+pub(crate) fn check_request_delete_memory(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("memoryId").is_none() {
+            issues.push(Issue::new(join_path(path, "memoryId"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("memoryId") {
+            let child_path = join_path(path, "memoryId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "memoryId") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_delete_memory(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_delete_memory(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_delete_memory(bytes: &[u8]) -> Result<RequestDeleteMemory, WireError> {
+    crate::decode::<RequestDeleteMemory>(validate_request_delete_memory, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestListPresets {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
+}
+
+pub(crate) fn check_request_list_presets(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z0-9][a-z0-9-]*$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if let Some(child) = value.get("kind") {
+            let child_path = join_path(path, "kind");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 50 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "kind") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_list_presets(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_list_presets(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_list_presets(bytes: &[u8]) -> Result<RequestListPresets, WireError> {
+    crate::decode::<RequestListPresets>(validate_request_list_presets, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestGetPreset {
+    #[serde(rename = "presetId")]
+    pub preset_id: String,
+}
+
+pub(crate) fn check_request_get_preset(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("presetId").is_none() {
+            issues.push(Issue::new(join_path(path, "presetId"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("presetId") {
+            let child_path = join_path(path, "presetId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "presetId") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_get_preset(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_get_preset(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_get_preset(bytes: &[u8]) -> Result<RequestGetPreset, WireError> {
+    crate::decode::<RequestGetPreset>(validate_request_get_preset, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestCreatePreset {
+    pub kind: String,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub data: Option<Value>,
+}
+
+pub(crate) fn check_request_create_preset(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z0-9][a-z0-9-]*$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("kind").is_none() {
+            issues.push(Issue::new(join_path(path, "kind"), "RequiredProperty"));
+        }
+        if value.get("name").is_none() {
+            issues.push(Issue::new(join_path(path, "name"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("kind") {
+            let child_path = join_path(path, "kind");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 50 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("name") {
+            let child_path = join_path(path, "name");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 500 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("data") {
+            let child_path = join_path(path, "data");
+            if !child.is_object() {
+                issues.push(Issue::new(child_path.as_str(), "Object"));
+            } else {
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "kind" | "name" | "data") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_create_preset(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_create_preset(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_create_preset(bytes: &[u8]) -> Result<RequestCreatePreset, WireError> {
+    crate::decode::<RequestCreatePreset>(validate_request_create_preset, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestUpdatePreset {
+    #[serde(rename = "presetId")]
+    pub preset_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub data: Option<Value>,
+}
+
+pub(crate) fn check_request_update_preset(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("presetId").is_none() {
+            issues.push(Issue::new(join_path(path, "presetId"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("presetId") {
+            let child_path = join_path(path, "presetId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("name") {
+            let child_path = join_path(path, "name");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 500 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("data") {
+            let child_path = join_path(path, "data");
+            if !child.is_object() {
+                issues.push(Issue::new(child_path.as_str(), "Object"));
+            } else {
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "presetId" | "name" | "data") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_update_preset(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_update_preset(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_update_preset(bytes: &[u8]) -> Result<RequestUpdatePreset, WireError> {
+    crate::decode::<RequestUpdatePreset>(validate_request_update_preset, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestDeletePreset {
+    #[serde(rename = "presetId")]
+    pub preset_id: String,
+}
+
+pub(crate) fn check_request_delete_preset(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("presetId").is_none() {
+            issues.push(Issue::new(join_path(path, "presetId"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("presetId") {
+            let child_path = join_path(path, "presetId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "presetId") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_delete_preset(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_delete_preset(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_delete_preset(bytes: &[u8]) -> Result<RequestDeletePreset, WireError> {
+    crate::decode::<RequestDeletePreset>(validate_request_delete_preset, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -7763,6 +8690,51 @@ pub fn validate_result_list_presets(value: &Value) -> Result<(), Vec<Issue>> {
 
 pub fn decode_result_list_presets(bytes: &[u8]) -> Result<ResultListPresets, WireError> {
     crate::decode::<ResultListPresets>(validate_result_list_presets, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultListMemories {
+    pub items: Vec<MemoryDto>,
+}
+
+pub(crate) fn check_result_list_memories(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("items").is_none() {
+            issues.push(Issue::new(join_path(path, "items"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("items") {
+            let child_path = join_path(path, "items");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    check_memory_dto(item, &item_path, issues);
+                }
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "items") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_list_memories(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_list_memories(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_list_memories(bytes: &[u8]) -> Result<ResultListMemories, WireError> {
+    crate::decode::<ResultListMemories>(validate_result_list_memories, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

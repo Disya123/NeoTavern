@@ -638,6 +638,9 @@ fn read_conversion_report(root: &Path) -> Result<ConversionReport> {
         message_drafts: count_if_present("message_drafts")?,
         lorebooks: count("lorebooks")?,
         presets: count("presets")?,
+        // memories is introduced by schema migration 009 (Этап 4 slice 3); a
+        // converted root from an earlier kernel schema simply contributes 0.
+        memories: count_if_present("memories")?,
         personas: count_if_present("personas")?,
         // Counts from a committed root cannot report per-row orphans; the
         // full report is available from the `prepare` step.

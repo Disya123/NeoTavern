@@ -59,6 +59,13 @@ fn build_legacy(path: &Path) -> rusqlite::Result<()> {
             id TEXT PRIMARY KEY, kind TEXT NOT NULL, name TEXT NOT NULL, data TEXT DEFAULT '{}',
             created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
         );
+        CREATE TABLE memories (
+            id TEXT PRIMARY KEY, scope TEXT NOT NULL DEFAULT 'global', character_id TEXT,
+            keys_json TEXT NOT NULL DEFAULT '[]', content TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1, position INTEGER NOT NULL DEFAULT 0,
+            metadata TEXT NOT NULL DEFAULT '{}',
+            created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+        );
         CREATE TABLE provider_configs (
             id TEXT PRIMARY KEY, provider TEXT NOT NULL, name TEXT NOT NULL, config TEXT, api_key TEXT
         );",
@@ -226,6 +233,66 @@ fn build_legacy(path: &Path) -> rusqlite::Result<()> {
          VALUES ('leg-p1', 'default', 'Preset A', '{\"temp\":0.7}', 1700000018000, 1700000019000)",
         [],
     )?;
+    // memories: global + character-scoped (referencing a converted character),
+    // a character-scoped memory whose character did NOT convert (the kernel
+    // keeps the dangling reference), and an invalid-scope row that must be
+    // skipped.
+    conn.execute(
+        "INSERT INTO memories (id, scope, character_id, keys_json, content, enabled, position, \
+         metadata, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        rusqlite::params![
+            "leg-mem1",
+            "global",
+            None::<String>,
+            r#"["city"]"#,
+            "The city sleeps.",
+            1,
+            0,
+            r#"{"source":"manual"}"#,
+            1_700_000_040_000i64,
+            1_700_000_041_000i64,
+        ],
+    )?;
+    conn.execute(
+        "INSERT INTO memories (id, scope, character_id, keys_json, content, enabled, position, \
+         metadata, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        rusqlite::params![
+            "leg-mem2",
+            "character",
+            "leg-c1",
+            r#"["alice","tea"]"#,
+            "Alice likes tea.",
+            1,
+            0,
+            "{}",
+            1_700_000_042_000i64,
+            1_700_000_043_000i64,
+        ],
+    )?;
+    conn.execute(
+        "INSERT INTO memories (id, scope, character_id, keys_json, content, enabled, position, \
+         metadata, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        rusqlite::params![
+            "leg-mem3",
+            "character",
+            "leg-ghost",
+            "[]",
+            "Ghost memory.",
+            1,
+            0,
+            "{}",
+            1_700_000_044_000i64,
+            1_700_000_045_000i64,
+        ],
+    )?;
+    conn.execute(
+        "INSERT INTO memories (id, scope, keys_json, content, created_at, updated_at) \
+         VALUES ('leg-mem4', 'weird', '[]', 'Bad scope.', 1700000046000, 1700000047000)",
+        [],
+    )?;
     conn.execute(
         "INSERT INTO provider_configs (id, provider, name, config, api_key) \
          VALUES ('pc1', 'openai', 'default', '{}', 'sk-fake-api-key-123')",
@@ -272,10 +339,14 @@ fn legacy_conversion_maps_rows_skips_orphans_and_never_copies_secrets(
     assert_eq!(report.lorebooks, 2);
     assert_eq!(report.presets, 1);
     assert_eq!(
-        report.skipped, 7,
-        "orphan chat + orphan message + orphan swipe + orphan revision + 3 drafts"
+        report.memories, 3,
+        "global + character-scoped + dangling-character memories convert; invalid scope skipped"
     );
-    assert_eq!(report.orphans.len(), 7);
+    assert_eq!(
+        report.skipped, 8,
+        "orphan chat + orphan message + orphan swipe + orphan revision + 3 drafts + invalid-scope memory"
+    );
+    assert_eq!(report.orphans.len(), 8);
 
     // The source file is byte- and mtime-identical (opened strictly read-only).
     assert_eq!(
@@ -300,6 +371,7 @@ fn legacy_conversion_maps_rows_skips_orphans_and_never_copies_secrets(
         ("message_drafts", 2),
         ("lorebooks", 2),
         ("presets", 1),
+        ("memories", 3),
     ] {
         let count: i64 =
             db.conn()
@@ -414,13 +486,58 @@ fn legacy_conversion_maps_rows_skips_orphans_and_never_copies_secrets(
     )?;
     assert_eq!(empty, "[]");
 
-    // Presets: legacy data → settings_json; legacy kind is not copied.
-    let settings: String = db.conn().query_row(
-        "SELECT settings_json FROM presets WHERE id = 'leg-p1'",
+    // Presets: legacy data → settings_json; legacy kind maps 1:1.
+    let (settings, kind): (String, String) = db.conn().query_row(
+        "SELECT settings_json, kind FROM presets WHERE id = 'leg-p1'",
         [],
-        |r| r.get(0),
+        |r| Ok((r.get(0)?, r.get(1)?)),
     )?;
     assert_eq!(settings, r#"{"temp":0.7}"#);
+    assert_eq!(kind, "default");
+
+    // Memories: scope/keys/content/metadata mapped, timestamps RFC 3339; the
+    // dangling character reference of leg-mem3 is preserved (no FK).
+    let (scope, character_id, keys, content, created): (String, Option<String>, String, String, String) =
+        db.conn().query_row(
+            "SELECT scope, character_id, keys_json, content, created_at \
+             FROM memories WHERE id = 'leg-mem1'",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+        )?;
+    assert_eq!(scope, "global");
+    assert_eq!(character_id, None);
+    assert_eq!(keys, r#"["city"]"#);
+    assert_eq!(content, "The city sleeps.");
+    assert_eq!(created, "2023-11-14T22:14:00Z", "memory ms timestamp maps");
+    let (scope, character_id, keys, metadata): (String, Option<String>, String, String) = db.conn()
+        .query_row(
+            "SELECT scope, character_id, keys_json, metadata_json \
+             FROM memories WHERE id = 'leg-mem1'",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+        )?;
+    assert_eq!(scope, "global");
+    assert_eq!(character_id, None);
+    assert_eq!(keys, r#"["city"]"#);
+    assert_eq!(metadata, r#"{"source":"manual"}"#);
+    let (scope, character_id, keys, content): (String, String, String, String) = db.conn()
+        .query_row(
+            "SELECT scope, character_id, keys_json, content \
+             FROM memories WHERE id = 'leg-mem2'",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+        )?;
+    assert_eq!(scope, "character");
+    assert_eq!(character_id, "leg-c1");
+    assert_eq!(keys, r#"["alice","tea"]"#);
+    assert_eq!(content, "Alice likes tea.");
+    let (scope, character_id): (String, Option<String>) = db.conn().query_row(
+        "SELECT scope, character_id FROM memories WHERE id = 'leg-mem3'",
+        [],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )?;
+    assert_eq!(scope, "character");
+    assert_eq!(character_id.as_deref(), Some("leg-ghost"));
 
     // Provider secrets are NEVER copied: the v4 schema table exists but is
     // empty (the legacy fake api_key row is absent).

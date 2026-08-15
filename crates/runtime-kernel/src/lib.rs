@@ -540,6 +540,14 @@ fn handle_unary(
             with_db_opt(db, |db| product::lorebooks_entries_delete(db, req))
         }
         "presets.list" => with_db_opt(db, |db| product::presets_list(db, req)),
+        "presets.get" => with_db_opt(db, |db| product::presets_get(db, req)),
+        "presets.create" => with_db_opt(db, |db| product::presets_create(db, req)),
+        "presets.update" => with_db_opt(db, |db| product::presets_update(db, req)),
+        "presets.delete" => with_db_opt(db, |db| product::presets_delete(db, req)),
+        "memories.list" => with_db_opt(db, |db| product::memories_list(db, req)),
+        "memories.create" => with_db_opt(db, |db| product::memories_create(db, req)),
+        "memories.update" => with_db_opt(db, |db| product::memories_update(db, req)),
+        "memories.delete" => with_db_opt(db, |db| product::memories_delete(db, req)),
         "personas.list" => with_db_opt(db, |db| product::personas_list(db, req)),
         "personas.get" => with_db_opt(db, |db| product::personas_get(db, req)),
         "personas.create" => with_db_opt(db, |db| product::personas_create(db, req)),

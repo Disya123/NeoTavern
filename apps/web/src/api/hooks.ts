@@ -27,6 +27,9 @@ import type {
   LorebookEntryCreate,
   LorebookEntryUpdate,
   LorebookUpdate,
+  Memory,
+  MemoryCreate,
+  MemoryUpdate,
   Preset,
   PresetCreate,
   PresetUpdate,
@@ -65,12 +68,16 @@ import {
   createChat,
   createLorebook,
   createLorebookEntry,
+  createMemory,
   createPersona,
+  createPreset,
   deleteCharacter,
   deleteChat,
   deleteLorebook,
   deleteLorebookEntry,
+  deleteMemory,
   deletePersona,
+  deletePreset,
   readCharacters,
   readCharacter,
   readChats,
@@ -79,16 +86,20 @@ import {
   readLorebook,
   readLorebookEntries,
   readLorebooks,
+  readMemories,
   readMessageRevisions,
   readMessageVariants,
   readMessages,
   readPersonas,
+  readPresets,
   restoreMessageRevision,
   updateCharacter,
   updateChat,
   updateLorebook,
   updateLorebookEntry,
+  updateMemory,
   updatePersona,
+  updatePreset,
   type ContinueCharacterChatInput,
   type ContinueCharacterChatResult,
 } from './wireBridge.js';
@@ -479,14 +490,14 @@ export function useDeleteBackground() {
 export function usePresets(kind: string) {
   return useQuery({
     queryKey: ['presets', kind],
-    queryFn: () => api.get<{ items: Preset[] }>(`/presets?kind=${encodeURIComponent(kind)}`),
+    queryFn: () => readPresets(kind),
   });
 }
 
 export function useCreatePreset() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: PresetCreate) => api.post<Preset>('/presets', input),
+    mutationFn: (input: PresetCreate) => createPreset(input),
     onSuccess: (preset) => void qc.invalidateQueries({ queryKey: ['presets', preset.kind] }),
   });
 }
@@ -495,7 +506,7 @@ export function useUpdatePreset() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, update }: { id: string; update: PresetUpdate }) =>
-      api.patch<Preset>(`/presets/${id}`, update),
+      updatePreset(id, update),
     onSuccess: (preset) => void qc.invalidateQueries({ queryKey: ['presets', preset.kind] }),
   });
 }
@@ -503,9 +514,47 @@ export function useUpdatePreset() {
 export function useDeletePreset() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id }: { id: string; kind: string }) => api.del<{ ok: true }>(`/presets/${id}`),
+    mutationFn: ({ id }: { id: string; kind: string }) => deletePreset(id),
     onSuccess: (_result, variables) =>
       void qc.invalidateQueries({ queryKey: ['presets', variables.kind] }),
+  });
+}
+
+/* Memories (Этап 4 slice 3, ТЗ §4.4 Memory/RAG) ----------------------------- */
+
+export function useMemories(filter?: {
+  scope?: 'global' | 'character';
+  characterId?: string;
+  enabled?: boolean;
+}) {
+  return useQuery({
+    queryKey: ['memories', filter],
+    queryFn: () => readMemories(filter),
+  });
+}
+
+export function useCreateMemory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: MemoryCreate) => createMemory(input),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['memories'] }),
+  });
+}
+
+export function useUpdateMemory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, update }: { id: string; update: MemoryUpdate }) =>
+      updateMemory(id, update),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['memories'] }),
+  });
+}
+
+export function useDeleteMemory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteMemory(id),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['memories'] }),
   });
 }
 

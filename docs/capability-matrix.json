@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-08-15T08:08:46.360Z",
+  "generatedAt": "2026-08-15T09:52:07.879Z",
   "rows": [
     {
       "hosts": {
@@ -179,6 +179,19 @@
     },
     {
       "hosts": {
+        "android": "Implemented",
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "webClient": "Implemented"
+      },
+      "id": "memories.crud",
+      "milestone": "M5",
+      "notes": "Этап 4 slice 3: memory CRUD in the kernel through Product Wire (memories.list/create/update/delete) backed by the STRICT memories table with scope/keys/content/enabled/position/metadata (schema migration 9). Character-scoped create requires characterId (unknown character → CHARACTER_NOT_FOUND); list filters scope/characterId/enabled and orders by position, created_at, id. Legacy→kernel migration maps the memories table (scope validated, dangling character_id preserved — no FK by design). Facade: NeoBackend.memories + LegacyBackend over /api/v2/memories + web hooks (useMemories/useCreateMemory/useUpdateMemory/useDeleteMemory) route through the wire ops in kernel mode. Honest boundaries: the wire DTO cannot express `characterId: null` (un-scoping is CAPABILITY_UNAVAILABLE), the kernel has no memory FTS/retrieval stage yet (memories_fts is not converted), and the memory settings editor UI panel is pending within M5.",
+      "title": "Memory CRUD (ТЗ §4.4)",
+      "wireOps": ["memories.create", "memories.delete", "memories.list", "memories.update"]
+    },
+    {
+      "hosts": {
         "android": "Integrated",
         "desktop": "Integrated",
         "headless": "Integrated",
@@ -212,15 +225,21 @@
     {
       "hosts": {
         "android": "Implemented",
-        "desktop": "Implemented",
+        "desktop": "Integrated",
         "headless": "Implemented",
         "webClient": "Implemented"
       },
-      "id": "presets.read",
-      "milestone": "M4",
-      "notes": "Kernel op exists; preset CRUD in M4.",
-      "title": "Preset read",
-      "wireOps": ["presets.list"]
+      "id": "presets.crud",
+      "milestone": "M5",
+      "notes": "Этап 4 slice 3: full preset CRUD in the kernel through Product Wire (presets.list/get/create/update/delete) backed by the STRICT presets table with kind (schema migration 9). The legacy kind pattern `^[a-z0-9][a-z0-9-]*$` is part of the wire contract; duplicate (kind,name) → stable PRESET_CONFLICT (Conflict class) pre-checked outside the transaction. Presets are created with kind; the pre-existing legacy presets rows (kind from the source table, name/data/settings_json) convert in the legacy→kernel migration. Desktop Integrated via the facade `apps/web/src/api/wireBridge.ts`: the preset hooks (usePresets/useCreatePreset/useUpdatePreset/useDeletePreset) route through the wire ops in kernel mode with honest wire→UI translation (RFC 3339 → epoch-ms), powering the existing GenerationPresetEditor and PromptTemplateEditor panels; browser/sidecar mode keeps the legacy /api/v2/presets routes via LegacyBackend (ms timestamps mapped to RFC 3339). Honest boundary: preset data is opaque JSON — no per-field validation beyond the wire size limits.",
+      "title": "Preset CRUD",
+      "wireOps": [
+        "presets.create",
+        "presets.delete",
+        "presets.get",
+        "presets.list",
+        "presets.update"
+      ]
     },
     {
       "hosts": {

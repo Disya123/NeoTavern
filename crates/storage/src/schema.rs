@@ -265,6 +265,34 @@ CREATE INDEX idx_message_drafts_chat ON message_drafts(chat_id);"#
     };
 }
 
+/// Literal body of the memories/presets-kind (v9) schema migration (ТЗ §4.4
+/// Memory/RAG, Этап 4 slice 3): the STRICT `memories` table — long-lived
+/// knowledge fragments the prompt pipeline injects by keyword match, scoped
+/// `global` or `character` (character references are preserved, not
+/// cascade-deleted, so unknown legacy references survive conversion) — plus
+/// the `presets.kind` column (the v2 `presets` table predates kinds; the
+/// legacy `presets` repo enforces kind + data and a unique `(kind, name)`,
+/// mirrored here with `settings_json` carrying the wire `data` payload).
+macro_rules! migration_9_sql {
+    () => {
+        r#"ALTER TABLE presets ADD COLUMN kind TEXT NOT NULL DEFAULT 'generation';
+CREATE UNIQUE INDEX idx_presets_kind_name ON presets(kind, name);
+CREATE TABLE memories (
+  id TEXT PRIMARY KEY,
+  scope TEXT NOT NULL DEFAULT 'global' CHECK (scope IN ('global', 'character')),
+  character_id TEXT,
+  keys_json TEXT NOT NULL DEFAULT '[]',
+  content TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+  position INTEGER NOT NULL DEFAULT 0 CHECK (position >= 0),
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+) STRICT;
+CREATE INDEX idx_memories_character ON memories(character_id);"#
+    };
+}
+
 /// Name of the initial (v1) schema migration.
 pub const MIGRATION_1_NAME: &str = "001_initial_schema";
 
@@ -398,6 +426,22 @@ pub const MIGRATION_8_SQL: &str = migration_8_sql!();
 pub const MIGRATION_8_CHECKSUM: &str =
     "d8af5103543deaced7f1eabf9b35d4ad528df4645fffe4a45f506a569bdea653";
 
+/// Name of the memories/presets-kind (v9) schema migration.
+pub const MIGRATION_9_NAME: &str = "009_memories_presets_kind";
+
+/// Exact SQL of the memories/presets-kind schema migration (v9) — the
+/// `migration_9_sql!()` literal. Adds the STRICT `memories` table and the
+/// `presets.kind` column + `(kind, name)` uniqueness (Этап 4 slice 3).
+pub const MIGRATION_9_SQL: &str = migration_9_sql!();
+
+/// Lowercase sha256 hex of the `MIGRATION_9_SQL` string bytes.
+///
+/// Computed on 2026-08-17 via node (`crypto.createHash('sha256')` over the
+/// literal bytes, no trailing newline) and asserted by the migration test
+/// suite against the ledger.
+pub const MIGRATION_9_CHECKSUM: &str =
+    "0a27e95db6afa600c87900fcd6052c1070a9fc485eae0b141818f9e4a9f77aff";
+
 /// A fresh install runs every migration in order, so `FRESH_SCHEMA_SQL` is the
 /// concatenation of all migration literals with a single newline between them
 /// (the same statement separator `execute_batch` applies).
@@ -420,7 +464,9 @@ pub const FRESH_SCHEMA_SQL: &str = concat!(
     "\n",
     migration_7_sql!(),
     "\n",
-    migration_8_sql!()
+    migration_8_sql!(),
+    "\n",
+    migration_9_sql!()
 );
 
 /// sha256 hex of the `FRESH_SCHEMA_SQL` bytes — the fresh-install fingerprint.

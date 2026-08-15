@@ -260,12 +260,12 @@
     {
       "source": "architecture/operations-inventory.md",
       "target": "architecture/operations-inventory.md",
-      "sha256": "ef69005a5fc1cc17a25c2ce6b8a3ead5e78c82e6bdd9d49ea08347eb277ce66e"
+      "sha256": "91b9635c336518db840154cc32aeeb0706db48a9a92b191fb5a881f39bc566c9"
     },
     {
       "source": "architecture/portable-data.md",
       "target": "architecture/portable-data.md",
-      "sha256": "f65c98bb9170996a8389fa802950f238e4528dbac60b669131e23709786389de"
+      "sha256": "8980fce83c5b2524d1cec21bb969d7755ff8c9e6ec70f71b9c7a0eff3cce7ec6"
     },
     {
       "source": "architecture/prompt-pipeline.md",
@@ -290,12 +290,12 @@
     {
       "source": "architecture/wire-contracts.md",
       "target": "architecture/wire-contracts.md",
-      "sha256": "b13523b3d5f6dee27851ef1d0172a0faee74f1e712627d772d899673693bddc1"
+      "sha256": "e25bd1ed9b18d3d74675ed817ee9a9a4c9f429be9a32e831924b0864a92319e4"
     },
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "02c41bab9a8d830d6a955557e47e1a174d46fcd87be8160456f146babdca13b0"
+      "sha256": "64476f7ca67933f8789ed3bead4cf2b93fd5c43f4bef2b77b59809bfedad6c27"
     },
     {
       "source": "data/README.md",

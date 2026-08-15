@@ -41,9 +41,11 @@ describe('product wire registry', () => {
     // lorebooks.entries.* CRUD + personas.* CRUD joined lorebooks.list and
     // presets.list. Этап 4 slice 2 (message variants/revisions/drafts) adds
     // 9 ops (56 total): variants list/create/delete/activate, revisions
-    // list, drafts get/save/commit/discard. The exact operation set is
+    // list, drafts get/save/commit/discard. Этап 4 slice 3 (memories and
+    // presets) adds 8 ops (64 total): presets get/create/update/delete and
+    // memories list/create/update/delete. The exact operation set is
     // asserted so a registry edit that drops or renames an op fails loudly.
-    expect(registry.operations).toHaveLength(56);
+    expect(registry.operations).toHaveLength(64);
     expect(registry.operations.map((op) => op.operationId)).toEqual([
       'meta.get',
       'characters.list',
@@ -96,6 +98,14 @@ describe('product wire registry', () => {
       'lorebooks.entries.update',
       'lorebooks.entries.delete',
       'presets.list',
+      'presets.get',
+      'presets.create',
+      'presets.update',
+      'presets.delete',
+      'memories.list',
+      'memories.create',
+      'memories.update',
+      'memories.delete',
       'personas.list',
       'personas.get',
       'personas.create',

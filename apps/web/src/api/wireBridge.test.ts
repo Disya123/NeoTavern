@@ -14,11 +14,13 @@ import type {
   ChatDto,
   LorebookDto,
   LorebookEntryDto,
+  MemoryDto,
   MessageDto,
   MessageDraftDto,
   MessageRevisionDto,
   MessageVariantDto,
   PersonaDto,
+  PresetDto,
 } from '@neotavern/contracts';
 
 const mocks = vi.hoisted(() => {
@@ -67,7 +69,20 @@ const mocks = vi.hoisted(() => {
     update: vi.fn(),
     del: vi.fn(),
   };
-  return { characters, chats, lorebooks, personas };
+  const presets = {
+    list: vi.fn(),
+    get: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    del: vi.fn(),
+  };
+  const memories = {
+    list: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    del: vi.fn(),
+  };
+  return { characters, chats, lorebooks, personas, presets, memories };
 });
 
 vi.mock('./backend.js', () => ({
@@ -76,6 +91,8 @@ vi.mock('./backend.js', () => ({
     chats: mocks.chats,
     lorebooks: mocks.lorebooks,
     personas: mocks.personas,
+    presets: mocks.presets,
+    memories: mocks.memories,
   },
   isKernelMode: () => true,
 }));
@@ -88,14 +105,18 @@ import {
   createChat,
   createLorebook,
   createLorebookEntry,
+  createMemory,
   createMessageVariant,
   createPersona,
+  createPreset,
   deleteCharacter,
   deleteChat,
   deleteLorebook,
   deleteLorebookEntry,
+  deleteMemory,
   deleteMessageVariant,
   deletePersona,
+  deletePreset,
   discardMessageDraft,
   readCharacters,
   readCharacter,
@@ -105,12 +126,14 @@ import {
   readLorebook,
   readLorebookEntries,
   readLorebooks,
+  readMemories,
   readMessages,
   readMessageDraft,
   readMessageRevisions,
   readMessageVariants,
   readPersona,
   readPersonas,
+  readPresets,
   restoreMessageRevision,
   saveMessageDraft,
   translateCharacter,
@@ -118,13 +141,17 @@ import {
   translateChat,
   translateChatSummary,
   translateLorebook,
+  translateMemory,
   translateMessage,
   translatePersona,
+  translatePreset,
   updateCharacter,
   updateChat,
   updateLorebook,
   updateLorebookEntry,
+  updateMemory,
   updatePersona,
+  updatePreset,
 } from './wireBridge.js';
 
 const CHAR_ID = '11111111-2222-4333-8444-555555555555';
@@ -182,6 +209,28 @@ const WIRE_PERSONA: PersonaDto = {
   name: 'Aria',
   description: 'A traveler.',
   isDefault: true,
+  createdAt: NOW,
+  updatedAt: NOW,
+};
+
+const WIRE_PRESET: PresetDto = {
+  id: '3c4d5e6f-7a8b-4c0d-9e1f-2a3b4c5d6e7f',
+  kind: 'generation',
+  name: 'Balanced',
+  data: { maxContextTokens: 8192, generationDefaults: { temperature: 0.8 } },
+  createdAt: NOW,
+  updatedAt: NOW,
+};
+
+const WIRE_MEMORY: MemoryDto = {
+  id: '4d5e6f70-8a9b-4c1d-9e2f-3a4b5c6d7e80',
+  scope: 'character',
+  characterId: CHAR_ID,
+  keys: ['aria', 'clockwork'],
+  content: 'Aria guards the clockwork orchard.',
+  enabled: true,
+  position: 1,
+  metadata: { source: 'test' },
   createdAt: NOW,
   updatedAt: NOW,
 };
@@ -800,5 +849,113 @@ describe('persona CRUD (kernel, Этап 4.1)', () => {
     mocks.personas.del.mockResolvedValue({ ok: true });
     await deletePersona(WIRE_PERSONA.id);
     expect(mocks.personas.del).toHaveBeenCalledWith(WIRE_PERSONA.id);
+  });
+});
+
+describe('preset CRUD (kernel, Этап 4 slice 3)', () => {
+  it('translates a wire preset onto the legacy Preset shape', () => {
+    expect(translatePreset(WIRE_PRESET)).toEqual({
+      id: WIRE_PRESET.id,
+      kind: 'generation',
+      name: 'Balanced',
+      data: { maxContextTokens: 8192, generationDefaults: { temperature: 0.8 } },
+      createdAt: NOW_MS,
+      updatedAt: NOW_MS,
+    });
+  });
+
+  it('lists presets by kind through the facade', async () => {
+    mocks.presets.list.mockResolvedValue({ items: [WIRE_PRESET] });
+    await expect(readPresets('generation')).resolves.toEqual({
+      items: [expect.objectContaining({ id: WIRE_PRESET.id, kind: 'generation' })],
+    });
+    expect(mocks.presets.list).toHaveBeenCalledWith({ kind: 'generation' });
+  });
+
+  it('creates a preset through the facade', async () => {
+    mocks.presets.create.mockResolvedValue(WIRE_PRESET);
+    await createPreset({ kind: 'generation', name: 'Balanced' });
+    expect(mocks.presets.create).toHaveBeenCalledWith({
+      kind: 'generation',
+      name: 'Balanced',
+    });
+  });
+
+  it('updates name/data and deletes through the facade', async () => {
+    mocks.presets.update.mockResolvedValue(WIRE_PRESET);
+    await updatePreset(WIRE_PRESET.id, { name: 'Balanced v2' });
+    expect(mocks.presets.update).toHaveBeenCalledWith({
+      presetId: WIRE_PRESET.id,
+      name: 'Balanced v2',
+    });
+    mocks.presets.del.mockResolvedValue({ ok: true });
+    await deletePreset(WIRE_PRESET.id);
+    expect(mocks.presets.del).toHaveBeenCalledWith(WIRE_PRESET.id);
+  });
+});
+
+describe('memory CRUD (kernel, Этап 4 slice 3)', () => {
+  it('translates a wire memory onto the legacy Memory shape (characterId null for global)', () => {
+    expect(translateMemory(WIRE_MEMORY)).toEqual({
+      id: WIRE_MEMORY.id,
+      scope: 'character',
+      characterId: CHAR_ID,
+      keys: ['aria', 'clockwork'],
+      content: 'Aria guards the clockwork orchard.',
+      enabled: true,
+      position: 1,
+      metadata: { source: 'test' },
+      createdAt: NOW_MS,
+      updatedAt: NOW_MS,
+    });
+    expect(
+      translateMemory({ ...WIRE_MEMORY, scope: 'global', characterId: undefined }),
+    ).toEqual(expect.objectContaining({ scope: 'global', characterId: null }));
+  });
+
+  it('lists memories with filters through the facade', async () => {
+    mocks.memories.list.mockResolvedValue({ items: [WIRE_MEMORY] });
+    await readMemories({ scope: 'character', characterId: CHAR_ID });
+    expect(mocks.memories.list).toHaveBeenCalledWith({
+      scope: 'character',
+      characterId: CHAR_ID,
+    });
+  });
+
+  it('creates a memory through the facade (null characterId omitted)', async () => {
+    mocks.memories.create.mockResolvedValue(WIRE_MEMORY);
+    await createMemory({
+      scope: 'character',
+      characterId: CHAR_ID,
+      keys: ['aria'],
+      content: 'Aria guards the clockwork orchard.',
+    });
+    expect(mocks.memories.create).toHaveBeenCalledWith({
+      scope: 'character',
+      characterId: CHAR_ID,
+      keys: ['aria'],
+      content: 'Aria guards the clockwork orchard.',
+    });
+    await createMemory({ content: 'Global note.' });
+    expect(mocks.memories.create).toHaveBeenCalledWith({ content: 'Global note.' });
+  });
+
+  it('updates fields and rejects a null characterId clear honestly', async () => {
+    mocks.memories.update.mockResolvedValue(WIRE_MEMORY);
+    await updateMemory(WIRE_MEMORY.id, { content: 'Updated.', enabled: false });
+    expect(mocks.memories.update).toHaveBeenCalledWith({
+      memoryId: WIRE_MEMORY.id,
+      content: 'Updated.',
+      enabled: false,
+    });
+    await expect(updateMemory(WIRE_MEMORY.id, { characterId: null })).rejects.toBeInstanceOf(
+      UnsupportedError,
+    );
+  });
+
+  it('deletes a memory through the facade', async () => {
+    mocks.memories.del.mockResolvedValue({ ok: true });
+    await deleteMemory(WIRE_MEMORY.id);
+    expect(mocks.memories.del).toHaveBeenCalledWith(WIRE_MEMORY.id);
   });
 });

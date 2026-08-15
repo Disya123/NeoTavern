@@ -34,6 +34,9 @@ import {
   type LorebookEntryCreate,
   type LorebookEntryUpdate,
   type LorebookUpdate,
+  type Memory,
+  type MemoryCreate,
+  type MemoryUpdate,
   type Message,
   type MessageContentRevision,
   type MessageDraft,
@@ -41,15 +44,20 @@ import {
   type Persona,
   type PersonaCreate,
   type PersonaUpdate,
+  type Preset,
+  type PresetCreate,
+  type PresetUpdate,
   type CharacterDto,
   type ChatDto,
   type LorebookDto,
   type LorebookEntryDto,
+  type MemoryDto,
   type MessageDto,
   type MessageDraftDto,
   type MessageRevisionDto,
   type MessageVariantDto,
   type PersonaDto,
+  type PresetDto,
 } from '@neotavern/contracts';
 import { UnsupportedError } from '@neotavern/neobackend';
 import { api } from './client.js';
@@ -254,6 +262,36 @@ export function translatePersona(dto: PersonaDto): Persona {
     // neutrally until assets migrate (Этап 4).
     avatar: dto.avatar ?? null,
     isDefault: dto.isDefault,
+    createdAt: toEpochMs(dto.createdAt),
+    updatedAt: toEpochMs(dto.updatedAt),
+  };
+}
+
+/** Wire preset → legacy `Preset` (Этап 4 slice 3). `data` is passed through
+ * verbatim; wire RFC 3339 timestamps become legacy epoch-ms. */
+export function translatePreset(dto: PresetDto): Preset {
+  return {
+    id: dto.id,
+    kind: dto.kind,
+    name: dto.name,
+    data: dto.data,
+    createdAt: toEpochMs(dto.createdAt),
+    updatedAt: toEpochMs(dto.updatedAt),
+  };
+}
+
+/** Wire memory → legacy `Memory` (Этап 4 slice 3). The wire DTO omits
+ * `characterId` for global memories; the legacy shape requires `null`. */
+export function translateMemory(dto: MemoryDto): Memory {
+  return {
+    id: dto.id,
+    scope: dto.scope,
+    characterId: dto.characterId ?? null,
+    keys: dto.keys,
+    content: dto.content,
+    enabled: dto.enabled,
+    position: dto.position,
+    metadata: dto.metadata,
     createdAt: toEpochMs(dto.createdAt),
     updatedAt: toEpochMs(dto.updatedAt),
   };
@@ -1002,4 +1040,113 @@ function nonWireCharacterFields(input: CharacterCreate | CharacterUpdate): strin
     }
   }
   return present;
+}
+
+/* --------------------------------------------------------------------------
+ * Presets (Этап 4 slice 3, wire `presets.*`).
+ * ------------------------------------------------------------------------ */
+
+/** List presets, filtered by kind. */
+export async function readPresets(kind: string): Promise<{ items: Preset[] }> {
+  if (isKernelMode()) {
+    const result = await backend.presets.list({ kind });
+    return { items: result.items.map(translatePreset) };
+  }
+  return api.get<{ items: Preset[] }>(`/presets?kind=${encodeURIComponent(kind)}`);
+}
+
+/** Create a preset. */
+export async function createPreset(input: PresetCreate): Promise<Preset> {
+  if (isKernelMode()) {
+    const created = await backend.presets.create({
+      kind: input.kind,
+      name: input.name,
+      ...(input.data !== undefined ? { data: input.data } : {}),
+    });
+    return translatePreset(created);
+  }
+  return api.post<Preset>('/presets', input);
+}
+
+/** Update name/data of one preset. */
+export async function updatePreset(id: string, update: PresetUpdate): Promise<Preset> {
+  if (isKernelMode()) {
+    return translatePreset(await backend.presets.update({ presetId: id, ...update }));
+  }
+  return api.patch<Preset>(`/presets/${encodeURIComponent(id)}`, update);
+}
+
+/** Delete one preset. */
+export async function deletePreset(id: string): Promise<void> {
+  if (isKernelMode()) {
+    await backend.presets.del(id);
+    return;
+  }
+  await api.del(`/presets/${encodeURIComponent(id)}`);
+}
+
+/* --------------------------------------------------------------------------
+ * Memories (Этап 4 slice 3, wire `memories.*`; ТЗ §4.4 Memory/RAG).
+ * ------------------------------------------------------------------------ */
+
+/** List memories with optional scope/characterId/enabled filters. */
+export async function readMemories(filter?: {
+  scope?: 'global' | 'character';
+  characterId?: string;
+  enabled?: boolean;
+}): Promise<{ items: Memory[] }> {
+  if (isKernelMode()) {
+    const result = await backend.memories.list(filter);
+    return { items: result.items.map(translateMemory) };
+  }
+  return api.get<{ items: Memory[] }>(`/memories${encodeQuery({ ...filter })}`);
+}
+
+/** Create a memory (global or character-scoped). The legacy input allows
+ * `characterId: null` for global memories; the wire DTO omits the field. */
+export async function createMemory(input: MemoryCreate): Promise<Memory> {
+  if (isKernelMode()) {
+    const created = await backend.memories.create({
+      ...(input.scope !== undefined ? { scope: input.scope } : {}),
+      ...(input.characterId != null ? { characterId: input.characterId } : {}),
+      ...(input.keys !== undefined ? { keys: input.keys } : {}),
+      content: input.content,
+      ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
+      ...(input.position !== undefined ? { position: input.position } : {}),
+      ...(input.metadata !== undefined ? { metadata: input.metadata } : {}),
+    });
+    return translateMemory(created);
+  }
+  return api.post<Memory>('/memories', input);
+}
+
+/** Update the provided fields of one memory. */
+export async function updateMemory(id: string, update: MemoryUpdate): Promise<Memory> {
+  if (isKernelMode()) {
+    // The wire DTO has no way to express `characterId: null` (un-scoping);
+    // legacy could, so this is an honest CAPABILITY_UNAVAILABLE, not a
+    // silent no-op.
+    if (update.characterId === null) {
+      throw new UnsupportedError('memories.update.characterId.null');
+    }
+    const patch: Parameters<typeof backend.memories.update>[0] = { memoryId: id };
+    if (update.scope !== undefined) patch.scope = update.scope;
+    if (update.characterId !== undefined) patch.characterId = update.characterId;
+    if (update.keys !== undefined) patch.keys = update.keys;
+    if (update.content !== undefined) patch.content = update.content;
+    if (update.enabled !== undefined) patch.enabled = update.enabled;
+    if (update.position !== undefined) patch.position = update.position;
+    if (update.metadata !== undefined) patch.metadata = update.metadata;
+    return translateMemory(await backend.memories.update(patch));
+  }
+  return api.patch<Memory>(`/memories/${encodeURIComponent(id)}`, update);
+}
+
+/** Delete one memory. */
+export async function deleteMemory(id: string): Promise<void> {
+  if (isKernelMode()) {
+    await backend.memories.del(id);
+    return;
+  }
+  await api.del(`/memories/${encodeURIComponent(id)}`);
 }

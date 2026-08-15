@@ -16,12 +16,14 @@ import type {
   ListBackupsResultDto,
   ListLorebookEntriesResultDto,
   ListLorebooksResultDto,
+  ListMemoriesResultDto,
   ListPersonasResultDto,
   ListPresetsResultDto,
   ListProviderConfigsResultDto,
   ListProvidersResultDto,
   LorebookDto,
   LorebookEntryDto,
+  MemoryDto,
   MessageDto,
   MessageDraftDto,
   MessageVariantDto,
@@ -33,6 +35,7 @@ import type {
   PagedGenerationEventsDto,
   PagedMessagesDto,
   PersonaDto,
+  PresetDto,
   ProviderConfigDto,
 } from '@neotavern/contracts';
 import type {
@@ -42,6 +45,7 @@ import type {
   ChatsApi,
   GenerationApi,
   LorebooksApi,
+  MemoriesApi,
   NeoBackend,
   PersonasApi,
   PresetsApi,
@@ -180,7 +184,18 @@ export class RemoteBackend implements NeoBackend {
   };
 
   readonly presets: PresetsApi = {
-    list: () => this.sdk.call<ListPresetsResultDto>('presets.list', {}),
+    list: (req) => this.sdk.call<ListPresetsResultDto>('presets.list', req ?? {}),
+    get: (presetId) => this.sdk.call<PresetDto>('presets.get', { presetId }),
+    create: (req) => this.sdk.call<PresetDto>('presets.create', req),
+    update: (req) => this.sdk.call<PresetDto>('presets.update', req),
+    del: (presetId) => this.sdk.call<EmptyResultDto>('presets.delete', { presetId }),
+  };
+
+  readonly memories: MemoriesApi = {
+    list: (req) => this.sdk.call<ListMemoriesResultDto>('memories.list', req ?? {}),
+    create: (req) => this.sdk.call<MemoryDto>('memories.create', req),
+    update: (req) => this.sdk.call<MemoryDto>('memories.update', req),
+    del: (memoryId) => this.sdk.call<EmptyResultDto>('memories.delete', { memoryId }),
   };
 
   readonly providers: ProvidersApi = {

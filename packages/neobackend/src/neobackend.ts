@@ -17,9 +17,11 @@ import type {
   CreateChatRequestDto,
   CreateLorebookEntryRequestDto,
   CreateLorebookRequestDto,
+  CreateMemoryRequestDto,
   CreateMessageRequestDto,
   CreateMessageVariantRequestDto,
   CreatePersonaRequestDto,
+  CreatePresetRequestDto,
   DeleteMessageRequestDto,
   DeleteMessageVariantRequestDto,
   DiscardMessageDraftRequestDto,
@@ -35,18 +37,22 @@ import type {
   ListGenerationEventsRequestDto,
   ListLorebookEntriesResultDto,
   ListLorebooksResultDto,
+  ListMemoriesRequestDto,
+  ListMemoriesResultDto,
   ListMessageRevisionsRequestDto,
   ListMessageRevisionsResultDto,
   ListMessagesRequestDto,
   ListMessageVariantsRequestDto,
   ListMessageVariantsResultDto,
   ListPersonasResultDto,
+  ListPresetsRequestDto,
   ListPresetsResultDto,
   ListProviderConfigsRequestDto,
   ListProviderConfigsResultDto,
   ListProvidersResultDto,
   LorebookDto,
   LorebookEntryDto,
+  MemoryDto,
   MessageDto,
   MessageDraftDto,
   MessageVariantDto,
@@ -56,6 +62,7 @@ import type {
   PagedGenerationEventsDto,
   PagedMessagesDto,
   PersonaDto,
+  PresetDto,
   ProviderConfigDto,
   SaveMessageDraftRequestDto,
   StartGenerationRequestDto,
@@ -64,8 +71,10 @@ import type {
   UpdateChatRequestDto,
   UpdateLorebookEntryRequestDto,
   UpdateLorebookRequestDto,
+  UpdateMemoryRequestDto,
   UpdateMessageRequestDto,
   UpdatePersonaRequestDto,
+  UpdatePresetRequestDto,
 } from '@neotavern/contracts';
 
 /** Options accepted by facade calls (ТЗ §15). */
@@ -243,10 +252,30 @@ export interface PersonasApi {
   del(personaId: string, opts?: BackendCallOptions): Promise<EmptyResultDto>;
 }
 
-/** Preset domain operations (wire `presets.*`). */
+/** Preset domain operations (wire `presets.*`, Этап 4 slice 3). */
 export interface PresetsApi {
-  /** List presets. */
-  list(): Promise<ListPresetsResultDto>;
+  /** List presets, optionally filtered by kind. */
+  list(req?: ListPresetsRequestDto, opts?: BackendCallOptions): Promise<ListPresetsResultDto>;
+  /** Fetch one preset. */
+  get(presetId: string, opts?: BackendCallOptions): Promise<PresetDto>;
+  /** Create a preset (kind + name + free-form data). */
+  create(req: CreatePresetRequestDto, opts?: BackendCallOptions): Promise<PresetDto>;
+  /** Update name/data of one preset. */
+  update(req: UpdatePresetRequestDto, opts?: BackendCallOptions): Promise<PresetDto>;
+  /** Delete one preset (permanent). */
+  del(presetId: string, opts?: BackendCallOptions): Promise<EmptyResultDto>;
+}
+
+/** Memory domain operations (wire `memories.*`, Этап 4 slice 3, ТЗ §4.4). */
+export interface MemoriesApi {
+  /** List memories, optionally filtered by scope/characterId/enabled. */
+  list(req?: ListMemoriesRequestDto, opts?: BackendCallOptions): Promise<ListMemoriesResultDto>;
+  /** Create a memory (global or character-scoped). */
+  create(req: CreateMemoryRequestDto, opts?: BackendCallOptions): Promise<MemoryDto>;
+  /** Update the provided fields of one memory. */
+  update(req: UpdateMemoryRequestDto, opts?: BackendCallOptions): Promise<MemoryDto>;
+  /** Delete one memory (permanent). */
+  del(memoryId: string, opts?: BackendCallOptions): Promise<EmptyResultDto>;
 }
 
 /** Provider domain operations (wire `providers.*`). */
@@ -293,6 +322,7 @@ export interface NeoBackend {
   lorebooks: LorebooksApi;
   personas: PersonasApi;
   presets: PresetsApi;
+  memories: MemoriesApi;
   providers: ProvidersApi;
   generation: GenerationApi;
   backups: BackupsApi;

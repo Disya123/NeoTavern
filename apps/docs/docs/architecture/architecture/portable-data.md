@@ -140,6 +140,22 @@ layouts yield a controlled incompatibility error.
   skipped — never a dangling outbox reference, so a commit replay cannot
   reference a missing message. Counts are reported per table
   (`message_variants`/`message_content_revisions`/`message_drafts`).
+- **Presets (Этап 4, slice 3).** The optional legacy `presets` table
+  (`kind`/`name`/`data` JSON) maps into the kernel schema-009 `presets`
+  (`kind`/`name`/`settings_json`). The legacy kind is validated against the
+  wire pattern `^[a-z0-9][a-z0-9-]*$`; a preset whose kind violates the
+  pattern is skipped and reported (the kernel select-back validation would
+  reject it). `data` is copied verbatim into `settings_json`; epoch-ms
+  timestamps normalize to RFC 3339.
+- **Memories (Этап 4, slice 3).** The optional legacy `memories` table maps
+  into the kernel schema-009 `memories` table. `scope` must be
+  `global`|`character` (anything else is skipped and reported); `keys_json`,
+  `enabled`, `position` and `metadata` are copied; an unknown legacy
+  `character_id` is **preserved as-is** (the kernel table deliberately has no
+  FK — dangling references from the legacy world stay intact rather than
+  being dropped or resurrected). The legacy `memories_fts` table is not
+  converted — the kernel has no FTS yet; memory retrieval is a later slice
+  (ТЗ §4.4). Counts are reported per table (`presets`/`memories`).
 
 ## Staged migration into the application flow (ТЗ §10.3, Этап 3)
 

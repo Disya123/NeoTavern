@@ -24,13 +24,16 @@ import {
   type ListBackupsResultDto,
   type ListLorebookEntriesResultDto,
   type ListLorebooksResultDto,
+  type ListMemoriesResultDto,
   type ListPersonasResultDto,
   type ListPresetsResultDto,
   type ListProvidersResultDto,
   type ListProviderConfigsResultDto,
   type LorebookDto,
   type LorebookEntryDto,
+  type MemoryDto,
   type PersonaDto,
+  type PresetDto,
   type ProviderConfigDto,
   type MessageDto,
   type MessageDraftDto,
@@ -51,6 +54,7 @@ import type {
   ChatsApi,
   GenerationApi,
   LorebooksApi,
+  MemoriesApi,
   NeoBackend,
   PersonasApi,
   PresetsApi,
@@ -199,6 +203,7 @@ export class LocalBackend implements NeoBackend {
   readonly lorebooks: LorebooksApi;
   readonly personas: PersonasApi;
   readonly presets: PresetsApi;
+  readonly memories: MemoriesApi;
   readonly providers: ProvidersApi;
   readonly generation: GenerationApi;
   readonly backups: BackupsApi;
@@ -307,7 +312,17 @@ export class LocalBackend implements NeoBackend {
       del: (personaId, opts) => this.invoke<EmptyResultDto>('personas.delete', { personaId }, opts),
     };
     this.presets = {
-      list: () => this.invoke<ListPresetsResultDto>('presets.list', {}, undefined),
+      list: (req, opts) => this.invoke<ListPresetsResultDto>('presets.list', req ?? {}, opts),
+      get: (presetId, opts) => this.invoke<PresetDto>('presets.get', { presetId }, opts),
+      create: (req, opts) => this.invoke<PresetDto>('presets.create', req, opts),
+      update: (req, opts) => this.invoke<PresetDto>('presets.update', req, opts),
+      del: (presetId, opts) => this.invoke<EmptyResultDto>('presets.delete', { presetId }, opts),
+    };
+    this.memories = {
+      list: (req, opts) => this.invoke<ListMemoriesResultDto>('memories.list', req ?? {}, opts),
+      create: (req, opts) => this.invoke<MemoryDto>('memories.create', req, opts),
+      update: (req, opts) => this.invoke<MemoryDto>('memories.update', req, opts),
+      del: (memoryId, opts) => this.invoke<EmptyResultDto>('memories.delete', { memoryId }, opts),
     };
     this.providers = {
       list: () => this.invoke<ListProvidersResultDto>('providers.list', {}, undefined),

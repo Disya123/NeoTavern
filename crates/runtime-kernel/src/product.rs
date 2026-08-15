@@ -16,10 +16,11 @@
 
 use crate::{KernelError, KernelErrorCode};
 use contracts_generated::generated::{
-    self, CharacterDto, ChatDto, LorebookDto, MessageDraftDto, MessageDto, MessageRevisionDto,
-    MessageRole, MessageVariantDto, PagedCharacters, PagedChats, PagedMessages, PersonaDto,
-    PresetDto, ResultEmpty, ResultListLorebooks, ResultListPersonas, ResultListPresets,
-    ResultMessageRevisionList, ResultMessageVariantList,
+    self, CharacterDto, ChatDto, LorebookDto, MemoryDto, MemoryScope, MessageDraftDto, MessageDto,
+    MessageRevisionDto, MessageRole, MessageVariantDto, PagedCharacters, PagedChats,
+    PagedMessages, PersonaDto, PresetDto, RequestListPresets, ResultEmpty, ResultListLorebooks,
+    ResultListMemories, ResultListPersonas, ResultListPresets, ResultMessageRevisionList,
+    ResultMessageVariantList,
 };
 use contracts_generated::Issue;
 use neotavern_storage::open::Database;
@@ -161,11 +162,22 @@ fn not_found(entity: &str, id: &str) -> KernelError {
         "LOREBOOK" => "lorebookId",
         "PRESET" => "presetId",
         "PERSONA" => "personaId",
+        "MEMORY" => "memoryId",
         _ => "id",
     };
     KernelError::product(
         format!("{entity}_NOT_FOUND"),
         vec![(param.to_string(), id.to_string())],
+    )
+}
+
+/// Stable `PRESET_CONFLICT` product error: the `(kind, name)` pair already
+/// exists (the canonical `presets` table enforces it via
+/// `idx_presets_kind_name`, mirroring the legacy unique index).
+fn preset_conflict(kind: &str, name: &str) -> KernelError {
+    KernelError::product(
+        "PRESET_CONFLICT".to_string(),
+        vec![("kind".to_string(), kind.to_string()), ("name".to_string(), name.to_string())],
     )
 }
 
@@ -284,17 +296,78 @@ fn row_to_lorebook(row: &rusqlite::Row) -> Result<LorebookDto, KernelError> {
     })
 }
 
-/// Renders a `presets` row as the wire [`PresetDto`].
+/// Renders a `presets` row (kind + `settings_json` as the wire `data`) as the
+/// wire [`PresetDto`].
 fn row_to_preset(row: &rusqlite::Row) -> Result<PresetDto, KernelError> {
+    let data: String = row.get(3).map_err(|e| sqlite(e, "presets: read data"))?;
+    let data: serde_json::Value = serde_json::from_str(&data).map_err(|err| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            format!("presets: invalid settings_json: {err}"),
+        )
+    })?;
     Ok(PresetDto {
         id: row.get(0).map_err(|e| sqlite(e, "presets: read id"))?,
-        name: row.get(1).map_err(|e| sqlite(e, "presets: read name"))?,
+        kind: row.get(1).map_err(|e| sqlite(e, "presets: read kind"))?,
+        name: row.get(2).map_err(|e| sqlite(e, "presets: read name"))?,
+        data,
         created_at: row
-            .get(2)
+            .get(4)
             .map_err(|e| sqlite(e, "presets: read created_at"))?,
         updated_at: row
-            .get(3)
+            .get(5)
             .map_err(|e| sqlite(e, "presets: read updated_at"))?,
+    })
+}
+
+/// Renders a `memories` row as the wire [`MemoryDto`]. `keys_json` and
+/// `metadata_json` are JSON text; `enabled`/`scope`/`character_id` map 1:1.
+fn row_to_memory(row: &rusqlite::Row) -> Result<MemoryDto, KernelError> {
+    let scope: String = row.get(1).map_err(|e| sqlite(e, "memories: read scope"))?;
+    let scope = match scope.as_str() {
+        "global" => MemoryScope::Global,
+        "character" => MemoryScope::Character,
+        other => {
+            return Err(KernelError::new(
+                KernelErrorCode::Internal,
+                format!("memories: unexpected scope {other:?}"),
+            ))
+        }
+    };
+    let keys: String = row.get(3).map_err(|e| sqlite(e, "memories: read keys"))?;
+    let keys: Vec<String> = serde_json::from_str(&keys).map_err(|err| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            format!("memories: invalid keys_json: {err}"),
+        )
+    })?;
+    let enabled: i64 = row.get(5).map_err(|e| sqlite(e, "memories: read enabled"))?;
+    let metadata: String = row
+        .get(7)
+        .map_err(|e| sqlite(e, "memories: read metadata"))?;
+    let metadata: serde_json::Value = serde_json::from_str(&metadata).map_err(|err| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            format!("memories: invalid metadata_json: {err}"),
+        )
+    })?;
+    Ok(MemoryDto {
+        id: row.get(0).map_err(|e| sqlite(e, "memories: read id"))?,
+        scope,
+        character_id: row
+            .get(2)
+            .map_err(|e| sqlite(e, "memories: read character_id"))?,
+        keys,
+        content: row.get(4).map_err(|e| sqlite(e, "memories: read content"))?,
+        enabled: enabled != 0,
+        position: row.get(6).map_err(|e| sqlite(e, "memories: read position"))?,
+        metadata,
+        created_at: row
+            .get(8)
+            .map_err(|e| sqlite(e, "memories: read created_at"))?,
+        updated_at: row
+            .get(9)
+            .map_err(|e| sqlite(e, "memories: read updated_at"))?,
     })
 }
 
@@ -1837,21 +1910,32 @@ pub fn lorebooks_entries_delete(db: &mut Database, request: &[u8]) -> Result<Vec
 }
 
 /// `presets.list` — all presets (plain list per the wire contract), newest
-/// first.
+/// first, optionally filtered by `kind`.
 pub fn presets_list(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
-    generated::decode_empty_request_dto(request)?;
+    let req: RequestListPresets = generated::decode_request_list_presets(request)?;
     let mut items: Vec<PresetDto> = Vec::new();
     {
         let conn = db.conn();
-        let mut stmt = conn
-            .prepare(
-                "SELECT id, name, created_at, updated_at \
-                 FROM presets ORDER BY created_at DESC, id DESC",
-            )
-            .map_err(|e| sqlite(e, "presets_list: prepare"))?;
-        let mut rows = stmt
-            .query([])
-            .map_err(|e| sqlite(e, "presets_list: query"))?;
+        let mut stmt = match &req.kind {
+            Some(_) => conn
+                .prepare(
+                    "SELECT id, kind, name, settings_json, created_at, updated_at \
+                     FROM presets WHERE kind = ?1 ORDER BY created_at DESC, id DESC",
+                )
+                .map_err(|e| sqlite(e, "presets_list: prepare (kind)"))?,
+            None => conn
+                .prepare(
+                    "SELECT id, kind, name, settings_json, created_at, updated_at \
+                     FROM presets ORDER BY created_at DESC, id DESC",
+                )
+                .map_err(|e| sqlite(e, "presets_list: prepare"))?,
+        };
+        let mut rows = match &req.kind {
+            Some(kind) => stmt
+                .query([kind])
+                .map_err(|e| sqlite(e, "presets_list: query (kind)"))?,
+            None => stmt.query([]).map_err(|e| sqlite(e, "presets_list: query"))?,
+        };
         while let Some(row) = rows
             .next()
             .map_err(|e| sqlite(e, "presets_list: read row"))?
@@ -1861,6 +1945,426 @@ pub fn presets_list(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Kernel
     }
     let dto = ResultListPresets { items };
     validate(&dto, generated::validate_result_list_presets)?;
+    encode(&dto)
+}
+
+/// Loads one `presets` row by id; `None` when absent.
+fn query_preset(conn: &rusqlite::Connection, id: &str) -> Result<Option<PresetDto>, KernelError> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, kind, name, settings_json, created_at, updated_at \
+             FROM presets WHERE id = ?1",
+        )
+        .map_err(|e| sqlite(e, "presets_get: prepare"))?;
+    let mut rows = stmt
+        .query([id])
+        .map_err(|e| sqlite(e, "presets_get: query"))?;
+    let row = rows
+        .next()
+        .map_err(|e| sqlite(e, "presets_get: read row"))?;
+    row.map(row_to_preset).transpose()
+}
+
+/// `presets.get` — one preset; missing → `PRESET_NOT_FOUND`.
+pub fn presets_get(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_get_preset(request)?;
+    let dto = query_preset(db.conn(), &req.preset_id)?
+        .ok_or_else(|| not_found("PRESET", &req.preset_id))?;
+    validate(&dto, generated::validate_preset_dto)?;
+    encode(&dto)
+}
+
+/// `presets.create` — insert a new preset and return it. A duplicate
+/// `(kind, name)` → `PRESET_CONFLICT`.
+pub fn presets_create(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_create_preset(request)?;
+    let id = new_id();
+    let now = now();
+    let data = serde_json::to_string(req.data.as_ref().unwrap_or(&serde_json::Value::Object(
+        Default::default(),
+    )))
+    .map_err(|err| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            format!("presets_create: serialize data: {err}"),
+        )
+    })?;
+    let exists = db
+        .conn()
+        .query_row(
+            "SELECT 1 FROM presets WHERE kind = ?1 AND name = ?2 LIMIT 1",
+            params![&req.kind, &req.name],
+            |_| Ok(()),
+        )
+        .optional()
+        .map_err(|e| sqlite(e, "presets_create: uniqueness check"))?
+        .is_some();
+    if exists {
+        return Err(preset_conflict(&req.kind, &req.name));
+    }
+    db.transaction(|tx| {
+        tx.execute(
+            "INSERT INTO presets (id, kind, name, settings_json, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![&id, &req.kind, &req.name, &data, &now, &now],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "presets_create: insert"))?;
+        Ok(())
+    })?;
+    let dto = query_preset(db.conn(), &id)?.ok_or_else(|| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            "presets_create: insert succeeded but select back found no row",
+        )
+    })?;
+    validate(&dto, generated::validate_preset_dto)?;
+    encode(&dto)
+}
+
+/// `presets.update` — update name/data; missing preset → `PRESET_NOT_FOUND`;
+/// a duplicate `(kind, name)` (when renaming) → `PRESET_CONFLICT`.
+pub fn presets_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_update_preset(request)?;
+    let id = req.preset_id.clone();
+    let now = now();
+    if let Some(name) = &req.name {
+        let kind: String = db
+            .conn()
+            .query_row(
+                "SELECT kind FROM presets WHERE id = ?1",
+                params![&id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|e| sqlite(e, "presets_update: read kind"))?
+            .ok_or_else(|| not_found("PRESET", &id))?;
+        let dup = db
+            .conn()
+            .query_row(
+                "SELECT 1 FROM presets WHERE kind = ?1 AND name = ?2 AND id <> ?3 LIMIT 1",
+                params![&kind, name, &id],
+                |_| Ok(()),
+            )
+            .optional()
+            .map_err(|e| sqlite(e, "presets_update: uniqueness check"))?
+            .is_some();
+        if dup {
+            return Err(preset_conflict(&kind, name));
+        }
+    }
+    let data = match &req.data {
+        Some(data) => Some(serde_json::to_string(data).map_err(|err| {
+            KernelError::new(
+                KernelErrorCode::Internal,
+                format!("presets_update: serialize data: {err}"),
+            )
+        })?),
+        None => None,
+    };
+    let changed = db.transaction(|tx| {
+        let mut sets: Vec<&str> = Vec::new();
+        let mut values: Vec<Value> = Vec::new();
+        if let Some(name) = &req.name {
+            sets.push("name = ?");
+            values.push(Value::Text(name.clone()));
+        }
+        if let Some(data) = &data {
+            sets.push("settings_json = ?");
+            values.push(Value::Text(data.clone()));
+        }
+        sets.push("updated_at = ?");
+        values.push(Value::Text(now.clone()));
+        let sql = format!("UPDATE presets SET {} WHERE id = ?", sets.join(", "));
+        values.push(Value::Text(id.clone()));
+        tx.execute(&sql, params_from_iter(values))
+            .map_err(|e| StorageError::from_sqlite(e, "presets_update: update"))
+    })?;
+    if changed == 0 {
+        return Err(not_found("PRESET", &id));
+    }
+    let dto = query_preset(db.conn(), &id)?.ok_or_else(|| not_found("PRESET", &id))?;
+    validate(&dto, generated::validate_preset_dto)?;
+    encode(&dto)
+}
+
+/// `presets.delete` — remove a preset; missing → `PRESET_NOT_FOUND`.
+pub fn presets_delete(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_delete_preset(request)?;
+    let changed = db.transaction(|tx| {
+        tx.execute(
+            "DELETE FROM presets WHERE id = ?1",
+            params![&req.preset_id],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "presets_delete: delete"))
+    })?;
+    if changed == 0 {
+        return Err(not_found("PRESET", &req.preset_id));
+    }
+    let dto = ResultEmpty {};
+    validate(&dto, generated::validate_result_empty)?;
+    encode(&dto)
+}
+
+/// `memories.list` — memories filtered by scope/character/enabled (all three
+/// optional), ordered by position then creation time.
+pub fn memories_list(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_list_memories(request)?;
+    let mut items: Vec<MemoryDto> = Vec::new();
+    {
+        let conn = db.conn();
+        let mut conditions: Vec<&str> = Vec::new();
+        let mut values: Vec<Value> = Vec::new();
+        if let Some(scope) = &req.scope {
+            conditions.push("scope = ?");
+            values.push(Value::Text(scope_string(scope).to_string()));
+        }
+        if let Some(character_id) = &req.character_id {
+            conditions.push("character_id = ?");
+            values.push(Value::Text(character_id.clone()));
+        }
+        if let Some(enabled) = req.enabled {
+            conditions.push("enabled = ?");
+            values.push(Value::Integer(i64::from(enabled)));
+        }
+        let where_clause = if conditions.is_empty() {
+            String::new()
+        } else {
+            format!(" WHERE {}", conditions.join(" AND "))
+        };
+        let sql = format!(
+            "SELECT id, scope, character_id, keys_json, content, enabled, position, \
+             metadata_json, created_at, updated_at FROM memories{where_clause} \
+             ORDER BY position ASC, created_at ASC, id ASC"
+        );
+        let mut stmt = conn
+            .prepare(&sql)
+            .map_err(|e| sqlite(e, "memories_list: prepare"))?;
+        let mut rows = stmt
+            .query(params_from_iter(values))
+            .map_err(|e| sqlite(e, "memories_list: query"))?;
+        while let Some(row) = rows
+            .next()
+            .map_err(|e| sqlite(e, "memories_list: read row"))?
+        {
+            items.push(row_to_memory(row)?);
+        }
+    }
+    let dto = ResultListMemories { items };
+    validate(&dto, generated::validate_result_list_memories)?;
+    encode(&dto)
+}
+
+/// The wire scope enum as the stored column value.
+fn scope_string(scope: &MemoryScope) -> &'static str {
+    match scope {
+        MemoryScope::Global => "global",
+        MemoryScope::Character => "character",
+    }
+}
+
+/// Loads one `memories` row by id; `None` when absent.
+fn query_memory(conn: &rusqlite::Connection, id: &str) -> Result<Option<MemoryDto>, KernelError> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, scope, character_id, keys_json, content, enabled, position, \
+             metadata_json, created_at, updated_at FROM memories WHERE id = ?1",
+        )
+        .map_err(|e| sqlite(e, "memories_get: prepare"))?;
+    let mut rows = stmt
+        .query([id])
+        .map_err(|e| sqlite(e, "memories_get: query"))?;
+    let row = rows
+        .next()
+        .map_err(|e| sqlite(e, "memories_get: read row"))?;
+    row.map(row_to_memory).transpose()
+}
+
+/// `memories.create` — insert a new memory and return it. A character-scoped
+/// memory with an unknown character id is rejected (`CHARACTER_NOT_FOUND`).
+pub fn memories_create(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_create_memory(request)?;
+    let scope = req.scope.clone().unwrap_or(MemoryScope::Global);
+    let character_id = req.character_id.clone();
+    if scope == MemoryScope::Character {
+        if let Some(character_id) = &character_id {
+            let exists = db
+                .conn()
+                .query_row(
+                    "SELECT 1 FROM characters WHERE id = ?1 LIMIT 1",
+                    params![character_id],
+                    |_| Ok(()),
+                )
+                .optional()
+                .map_err(|e| sqlite(e, "memories_create: character check"))?
+                .is_some();
+            if !exists {
+                return Err(not_found("CHARACTER", character_id));
+            }
+        } else {
+            return Err(KernelError::product(
+                "VALIDATION".to_string(),
+                vec![(
+                    "message".to_string(),
+                    "character-scoped memory requires characterId".to_string(),
+                )],
+            ));
+        }
+    }
+    let id = new_id();
+    let now = now();
+    let keys = serde_json::to_string(req.keys.as_deref().unwrap_or(&[])).map_err(|err| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            format!("memories_create: serialize keys: {err}"),
+        )
+    })?;
+    let metadata = serde_json::to_string(
+        req.metadata
+            .as_ref()
+            .unwrap_or(&serde_json::Value::Object(Default::default())),
+    )
+    .map_err(|err| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            format!("memories_create: serialize metadata: {err}"),
+        )
+    })?;
+    let enabled = req.enabled.unwrap_or(true);
+    let position = req.position.unwrap_or(0);
+    db.transaction(|tx| {
+        tx.execute(
+            "INSERT INTO memories (id, scope, character_id, keys_json, content, enabled, position, \
+             metadata_json, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![
+                &id,
+                scope_string(&scope),
+                &character_id,
+                &keys,
+                &req.content,
+                i64::from(enabled),
+                position,
+                &metadata,
+                &now,
+                &now
+            ],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "memories_create: insert"))?;
+        Ok(())
+    })?;
+    let dto = query_memory(db.conn(), &id)?.ok_or_else(|| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            "memories_create: insert succeeded but select back found no row",
+        )
+    })?;
+    validate(&dto, generated::validate_memory_dto)?;
+    encode(&dto)
+}
+
+/// `memories.update` — update the provided fields; missing memory →
+/// `MEMORY_NOT_FOUND`. A character-scoped memory must keep a valid
+/// `characterId` (absent scope is left untouched).
+pub fn memories_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_update_memory(request)?;
+    let id = req.memory_id.clone();
+    let now = now();
+    if let (Some(scope), Some(character_id)) = (&req.scope, &req.character_id) {
+        if *scope == MemoryScope::Character {
+            let exists = db
+                .conn()
+                .query_row(
+                    "SELECT 1 FROM characters WHERE id = ?1 LIMIT 1",
+                    params![character_id],
+                    |_| Ok(()),
+                )
+                .optional()
+                .map_err(|e| sqlite(e, "memories_update: character check"))?
+                .is_some();
+            if !exists {
+                return Err(not_found("CHARACTER", character_id));
+            }
+        }
+    }
+    let keys = match &req.keys {
+        Some(keys) => Some(serde_json::to_string(keys).map_err(|err| {
+            KernelError::new(
+                KernelErrorCode::Internal,
+                format!("memories_update: serialize keys: {err}"),
+            )
+        })?),
+        None => None,
+    };
+    let metadata = match &req.metadata {
+        Some(metadata) => Some(serde_json::to_string(metadata).map_err(|err| {
+            KernelError::new(
+                KernelErrorCode::Internal,
+                format!("memories_update: serialize metadata: {err}"),
+            )
+        })?),
+        None => None,
+    };
+    let changed = db.transaction(|tx| {
+        let mut sets: Vec<&str> = Vec::new();
+        let mut values: Vec<Value> = Vec::new();
+        if let Some(scope) = &req.scope {
+            sets.push("scope = ?");
+            values.push(Value::Text(scope_string(scope).to_string()));
+        }
+        if let Some(character_id) = &req.character_id {
+            sets.push("character_id = ?");
+            values.push(Value::Text(character_id.clone()));
+        }
+        if let Some(keys) = &keys {
+            sets.push("keys_json = ?");
+            values.push(Value::Text(keys.clone()));
+        }
+        if let Some(content) = &req.content {
+            sets.push("content = ?");
+            values.push(Value::Text(content.clone()));
+        }
+        if let Some(enabled) = req.enabled {
+            sets.push("enabled = ?");
+            values.push(Value::Integer(i64::from(enabled)));
+        }
+        if let Some(position) = req.position {
+            sets.push("position = ?");
+            values.push(Value::Integer(position));
+        }
+        if let Some(metadata) = &metadata {
+            sets.push("metadata_json = ?");
+            values.push(Value::Text(metadata.clone()));
+        }
+        sets.push("updated_at = ?");
+        values.push(Value::Text(now.clone()));
+        let sql = format!("UPDATE memories SET {} WHERE id = ?", sets.join(", "));
+        values.push(Value::Text(id.clone()));
+        tx.execute(&sql, params_from_iter(values))
+            .map_err(|e| StorageError::from_sqlite(e, "memories_update: update"))
+    })?;
+    if changed == 0 {
+        return Err(not_found("MEMORY", &id));
+    }
+    let dto = query_memory(db.conn(), &id)?.ok_or_else(|| not_found("MEMORY", &id))?;
+    validate(&dto, generated::validate_memory_dto)?;
+    encode(&dto)
+}
+
+/// `memories.delete` — remove a memory; missing → `MEMORY_NOT_FOUND`.
+pub fn memories_delete(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_delete_memory(request)?;
+    let changed = db.transaction(|tx| {
+        tx.execute(
+            "DELETE FROM memories WHERE id = ?1",
+            params![&req.memory_id],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "memories_delete: delete"))
+    })?;
+    if changed == 0 {
+        return Err(not_found("MEMORY", &req.memory_id));
+    }
+    let dto = ResultEmpty {};
+    validate(&dto, generated::validate_result_empty)?;
     encode(&dto)
 }
 

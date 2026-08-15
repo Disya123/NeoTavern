@@ -6,15 +6,25 @@
  */
 import {
   WIRE_PROTOCOL,
+  type CreateMemoryRequestDto,
+  type CreatePresetRequestDto,
   type DeleteMessageRequestDto,
   type EmptyResultDto,
+  type ListMemoriesRequestDto,
+  type ListMemoriesResultDto,
+  type ListPresetsRequestDto,
+  type ListPresetsResultDto,
+  type MemoryDto,
   type MessageDto,
   type MetaDto,
   type PagedCharactersDto,
+  type PresetDto,
   type ProductErrorDto,
   type ListCharactersRequestDto,
   type CharacterDto,
+  type UpdateMemoryRequestDto,
   type UpdateMessageRequestDto,
+  type UpdatePresetRequestDto,
 } from '@neotavern/contracts';
 import { ProductError } from '@neotavern/client-sdk';
 import type {
@@ -23,6 +33,7 @@ import type {
   ChatsApi,
   GenerationApi,
   LorebooksApi,
+  MemoriesApi,
   NeoBackend,
   PersonasApi,
   PresetsApi,
@@ -214,7 +225,18 @@ export class LegacyBackend implements NeoBackend {
   };
 
   readonly presets: PresetsApi = {
-    list: () => this.unsupported('presets.list'),
+    list: (req) => this.listPresets(req),
+    get: (presetId) => this.getPreset(presetId),
+    create: (req) => this.createPreset(req),
+    update: (req) => this.updatePreset(req),
+    del: (presetId) => this.deletePreset(presetId),
+  };
+
+  readonly memories: MemoriesApi = {
+    list: (req) => this.listMemories(req),
+    create: (req) => this.createMemory(req),
+    update: (req) => this.updateMemory(req),
+    del: (memoryId) => this.deleteMemory(memoryId),
   };
 
   readonly providers: ProvidersApi = {
@@ -411,7 +433,155 @@ export class LegacyBackend implements NeoBackend {
     };
   }
 
+  /** M5 slice 3: `presets.list` over `GET /api/v2/presets?kind=`. */
+  private async listPresets(req: ListPresetsRequestDto | undefined): Promise<ListPresetsResultDto> {
+    const query = new URLSearchParams();
+    if (req?.kind !== undefined) {
+      query.set('kind', req.kind);
+    }
+    const queryString = query.toString();
+    const body = await this.getJson(`/api/v2/presets${queryString ? `?${queryString}` : ''}`);
+    if (!isRecord(body) || !Array.isArray(body['items'])) {
+      throw new Error('Legacy /api/v2/presets returned an unexpected shape');
+    }
+    return { items: body['items'].map((item) => this.mapPreset(item)) };
+  }
+
+  /** M5 slice 3: `presets.get` over `GET /api/v2/presets/:id`. */
+  private async getPreset(presetId: string): Promise<PresetDto> {
+    const body = await this.getJson(`/api/v2/presets/${encodeURIComponent(presetId)}`);
+    return this.mapPreset(body);
+  }
+
+  /** M5 slice 3: `presets.create` over `POST /api/v2/presets`. */
+  private async createPreset(req: CreatePresetRequestDto): Promise<PresetDto> {
+    const body = await this.sendRequest<unknown>('POST', '/api/v2/presets', req);
+    return this.mapPreset(body);
+  }
+
+  /** M5 slice 3: `presets.update` over `PATCH /api/v2/presets/:id`. */
+  private async updatePreset(req: UpdatePresetRequestDto): Promise<PresetDto> {
+    const { presetId, ...patch } = req;
+    const body = await this.sendRequest<unknown>(
+      'PATCH',
+      `/api/v2/presets/${encodeURIComponent(presetId)}`,
+      patch,
+    );
+    return this.mapPreset(body);
+  }
+
+  /** M5 slice 3: `presets.delete` over `DELETE /api/v2/presets/:id`. */
+  private async deletePreset(presetId: string): Promise<EmptyResultDto> {
+    await this.sendRequest<unknown>(
+      'DELETE',
+      `/api/v2/presets/${encodeURIComponent(presetId)}`,
+    );
+    return { ok: true };
+  }
+
+  /** M5 slice 3: `memories.list` over `GET /api/v2/memories?scope=&characterId=&enabled=`. */
+  private async listMemories(
+    req: ListMemoriesRequestDto | undefined,
+  ): Promise<ListMemoriesResultDto> {
+    const query = new URLSearchParams();
+    if (req?.scope !== undefined) query.set('scope', req.scope);
+    if (req?.characterId !== undefined) query.set('characterId', req.characterId);
+    if (req?.enabled !== undefined) query.set('enabled', String(req.enabled));
+    const queryString = query.toString();
+    const body = await this.getJson(`/api/v2/memories${queryString ? `?${queryString}` : ''}`);
+    if (!isRecord(body) || !Array.isArray(body['items'])) {
+      throw new Error('Legacy /api/v2/memories returned an unexpected shape');
+    }
+    return { items: body['items'].map((item) => this.mapMemory(item)) };
+  }
+
+  /** M5 slice 3: `memories.create` over `POST /api/v2/memories`. */
+  private async createMemory(req: CreateMemoryRequestDto): Promise<MemoryDto> {
+    const body = await this.sendRequest<unknown>('POST', '/api/v2/memories', req);
+    return this.mapMemory(body);
+  }
+
+  /** M5 slice 3: `memories.update` over `PATCH /api/v2/memories/:id`. */
+  private async updateMemory(req: UpdateMemoryRequestDto): Promise<MemoryDto> {
+    const { memoryId, ...patch } = req;
+    const body = await this.sendRequest<unknown>(
+      'PATCH',
+      `/api/v2/memories/${encodeURIComponent(memoryId)}`,
+      patch,
+    );
+    return this.mapMemory(body);
+  }
+
+  /** M5 slice 3: `memories.delete` over `DELETE /api/v2/memories/:id`. */
+  private async deleteMemory(memoryId: string): Promise<EmptyResultDto> {
+    await this.sendRequest<unknown>('DELETE', `/api/v2/memories/${encodeURIComponent(memoryId)}`);
+    return { ok: true };
+  }
+
+  /**
+   * Maps a legacy `Preset` body onto the canonical wire `PresetDto`. Legacy
+   * timestamps are INTEGER epoch-ms; the wire contract requires RFC 3339, so
+   * numbers are converted (strings pass through unchanged).
+   */
+  private mapPreset(value: unknown): PresetDto {
+    const item = isRecord(value) ? value : {};
+    const id = typeof item['id'] === 'string' ? item['id'] : '';
+    const kind = typeof item['kind'] === 'string' ? item['kind'] : '';
+    const name = typeof item['name'] === 'string' ? item['name'] : '';
+    const data = isRecord(item['data']) ? item['data'] : {};
+    return {
+      id,
+      kind,
+      name,
+      data,
+      createdAt: legacyTimestamp(item['createdAt']),
+      updatedAt: legacyTimestamp(item['updatedAt']),
+    };
+  }
+
+  /**
+   * Maps a legacy `Memory` body onto the canonical wire `MemoryDto`. The
+   * legacy `characterId` is `null` for global memories; the wire DTO omits it
+   * (optional field), so `null` → absent. `scope` is a closed union; unknown
+   * scopes fall back to `'global'` so a legacy extension value can never
+   * break the wire validation.
+   */
+  private mapMemory(value: unknown): MemoryDto {
+    const item = isRecord(value) ? value : {};
+    const id = typeof item['id'] === 'string' ? item['id'] : '';
+    const scope = item['scope'] === 'character' ? ('character' as const) : ('global' as const);
+    const characterId = typeof item['characterId'] === 'string' ? item['characterId'] : undefined;
+    const keys = Array.isArray(item['keys'])
+      ? item['keys'].filter((key): key is string => typeof key === 'string')
+      : [];
+    const content = typeof item['content'] === 'string' ? item['content'] : '';
+    const enabled = typeof item['enabled'] === 'boolean' ? item['enabled'] : true;
+    const position = typeof item['position'] === 'number' ? item['position'] : 0;
+    const metadata = isRecord(item['metadata']) ? item['metadata'] : {};
+    return {
+      id,
+      scope,
+      ...(characterId !== undefined ? { characterId } : {}),
+      keys,
+      content,
+      enabled,
+      position,
+      metadata,
+      createdAt: legacyTimestamp(item['createdAt']),
+      updatedAt: legacyTimestamp(item['updatedAt']),
+    };
+  }
+
   private unsupported(feature: string): never {
     throw new UnsupportedError(feature);
   }
+}
+
+/** Maps a legacy INTEGER epoch-ms timestamp to the wire RFC 3339 string
+ * (strings — already RFC 3339 — pass through; anything else → ''). */
+function legacyTimestamp(value: unknown): string {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return new Date(value).toISOString();
+  }
+  return typeof value === 'string' ? value : '';
 }

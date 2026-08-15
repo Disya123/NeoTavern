@@ -3,6 +3,50 @@
 ## Unreleased
 ### Added
 
+- **Memories + presets CRUD over Product Wire (M5 / Этап 4, slice 3,
+  kernel + contract part).** Eight new wire operations — `presets.get`,
+  `presets.create`, `presets.update`, `presets.delete` and
+  `memories.list/create/update/delete` — plus `presets.list` moving onto the
+  filtered `wire.request.list-presets` schema (kind filter); registry
+  56 → 64 ops. `presets.create/update` additionally admit `CONFLICT`
+  (`PRESET_CONFLICT`, duplicate `(kind,name)`), pre-checked outside the
+  transaction. Schema migration 009 adds `presets.kind` with the unique
+  `(kind,name)` index and the STRICT `memories` table
+  (scope global|character, keys, content, enabled, position, metadata);
+  `CURRENT_SCHEMA` is now 9. The kernel selects back every write through the
+  wire validators; error params follow the wire truth
+  (`presetId`/`memoryId`, `PRESET_CONFLICT` → Conflict class). The wire DTOs
+  keep free-form `data`/`metadata` as `additionalProperties: true` objects
+  (never `Type.Unknown()` — wire-safety rules) and characterId optional
+  (no null unions). Tests: kernel `kernel_memories_presets.rs`
+  (preset CRUD round-trip + conflict/error paths, memory CRUD round-trip +
+  error paths), wire corpus (8 positive + 4 negative fixtures), contracts
+  wire suite 15/15.
+
+- **Legacy converter: memories + presets (M5 / Этап 4, slice 3).** The
+  legacy `app.db` converter now maps the optional `presets` table
+  (kind/name/data → kind/name/settings_json; kinds violating the wire
+  pattern are skipped and reported) and the `memories` table (scope
+  validated, keys/content/enabled/position/metadata copied, dangling
+  `character_id` preserved — the kernel memories table has no FK by design;
+  `memories_fts` is not converted, the kernel retrieval stage is a later
+  slice). Per-table counts were added to the conversion report
+  (`presets`/`memories`) and to the CLI migrate output line.
+
+- **Facade + wireBridge for memories/presets (M5 / Этап 4, slice 3).**
+  `NeoBackend.PresetsApi` gains `get/create/update/del`, `NeoBackend` gains
+  `MemoriesApi` (`list/create/update/del`) on the Local and Remote backends;
+  `LegacyBackend` maps all nine operations onto the legacy `/api/v2/presets`
+  and `/api/v2/memories` routes (ms timestamps → RFC 3339; `null`
+  characterId → omitted). `wireBridge` routes the UI shapes through the
+  facade in kernel mode with honest translation; the existing preset editors
+  (GenerationPresetEditor/PromptTemplateEditor) now load through the wire ops
+  in kernel mode. A `characterId: null` update (un-scoping) is not
+  expressible on the wire and surfaces `CAPABILITY_UNAVAILABLE`, never a
+  silent no-op. Tests: Local/Remote parity + LegacyBackend mapping for the
+  nine ops (neobackend `parity.test.ts` 55 tests), kernel-mode wireBridge
+  routing/translation coverage (web `wireBridge.test.ts`).
+
 - **Message variants/revisions/drafts over Product Wire (M5 / Этап 4, slice
   2, kernel + contract part).** Nine new wire operations
   `chats.messages.variants.list/create/delete/activate`,

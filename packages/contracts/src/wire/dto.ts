@@ -164,17 +164,47 @@ export const LorebookDtoSchema = Type.Object(
 );
 export type LorebookDto = Static<typeof LorebookDtoSchema>;
 
-/** Preset DTO (`wire.preset.dto`). */
+/** Preset DTO (`wire.preset.dto`). `kind` partitions presets; `data` is the
+ * free-form JSON payload the consumer of that kind validates. */
 export const PresetDtoSchema = Type.Object(
   {
     id: Type.String({ format: 'uuid' }),
-    name: Type.String({ minLength: 1, maxLength: 200 }),
+    kind: Type.String({ minLength: 1, maxLength: 50, pattern: '^[a-z0-9][a-z0-9-]*$' }),
+    name: Type.String({ minLength: 1, maxLength: 500 }),
+    data: Type.Object({}, { additionalProperties: true }),
     createdAt: Type.String({ format: 'rfc3339' }),
     updatedAt: Type.String({ format: 'rfc3339' }),
   },
   { $id: 'wire.preset.dto', additionalProperties: false },
 );
 export type PresetDto = Static<typeof PresetDtoSchema>;
+
+/** Memory scope union (`wire.memory.scope`). Closed enum: unknown scopes are
+ * rejected on the wire. */
+export const WireMemoryScope = Type.Union(
+  [Type.Literal('global'), Type.Literal('character')],
+  { $id: 'wire.memory.scope', 'x-wire-unknown-behavior': 'reject' },
+);
+export type WireMemoryScope = Static<typeof WireMemoryScope>;
+
+/** Memory DTO (`wire.memory.dto`). Long-lived knowledge fragments the prompt
+ * pipeline injects, activated by keyword match (legacy `MemorySchema`). */
+export const MemoryDtoSchema = Type.Object(
+  {
+    id: Type.String({ format: 'uuid' }),
+    scope: WireMemoryScope,
+    characterId: Type.Optional(Type.String({ format: 'uuid' })),
+    keys: Type.Array(Type.String({ minLength: 1, maxLength: 500 }), { maxItems: 100 }),
+    content: Type.String({ minLength: 1, maxLength: 100000 }),
+    enabled: Type.Boolean(),
+    position: Type.Integer({ minimum: 0, maximum: 1000000 }),
+    metadata: Type.Object({}, { additionalProperties: true }),
+    createdAt: Type.String({ format: 'rfc3339' }),
+    updatedAt: Type.String({ format: 'rfc3339' }),
+  },
+  { $id: 'wire.memory.dto', additionalProperties: false },
+);
+export type MemoryDto = Static<typeof MemoryDtoSchema>;
 
 /**
  * Persona DTO (`wire.persona.dto`). The "user" identity injected into the
@@ -526,6 +556,108 @@ export const DeleteLorebookRequestDtoSchema = Type.Object(
   { $id: 'wire.request.delete-lorebook', additionalProperties: false },
 );
 export type DeleteLorebookRequestDto = Static<typeof DeleteLorebookRequestDtoSchema>;
+
+/** List memories request DTO (`wire.request.list-memories`). Optional filters;
+ * `characterId` absent means no character filter (pass `null` scope instead
+ * for the global list). */
+export const ListMemoriesRequestDtoSchema = Type.Object(
+  {
+    scope: Type.Optional(WireMemoryScope),
+    characterId: Type.Optional(Type.String({ format: 'uuid' })),
+    enabled: Type.Optional(Type.Boolean()),
+  },
+  { $id: 'wire.request.list-memories', additionalProperties: false },
+);
+export type ListMemoriesRequestDto = Static<typeof ListMemoriesRequestDtoSchema>;
+
+/** Create memory request DTO (`wire.request.create-memory`). */
+export const CreateMemoryRequestDtoSchema = Type.Object(
+  {
+    scope: Type.Optional(WireMemoryScope),
+    characterId: Type.Optional(Type.String({ format: 'uuid' })),
+    keys: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 500 }), { maxItems: 100 })),
+    content: Type.String({ minLength: 1, maxLength: 100000 }),
+    enabled: Type.Optional(Type.Boolean()),
+    position: Type.Optional(Type.Integer({ minimum: 0, maximum: 1000000 })),
+    metadata: Type.Optional(Type.Object({}, { additionalProperties: true })),
+  },
+  { $id: 'wire.request.create-memory', additionalProperties: false },
+);
+export type CreateMemoryRequestDto = Static<typeof CreateMemoryRequestDtoSchema>;
+
+/** Update memory request DTO (`wire.request.update-memory`). */
+export const UpdateMemoryRequestDtoSchema = Type.Object(
+  {
+    memoryId: Type.String({ format: 'uuid' }),
+    scope: Type.Optional(WireMemoryScope),
+    characterId: Type.Optional(Type.String({ format: 'uuid' })),
+    keys: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 500 }), { maxItems: 100 })),
+    content: Type.Optional(Type.String({ minLength: 1, maxLength: 100000 })),
+    enabled: Type.Optional(Type.Boolean()),
+    position: Type.Optional(Type.Integer({ minimum: 0, maximum: 1000000 })),
+    metadata: Type.Optional(Type.Object({}, { additionalProperties: true })),
+  },
+  { $id: 'wire.request.update-memory', additionalProperties: false },
+);
+export type UpdateMemoryRequestDto = Static<typeof UpdateMemoryRequestDtoSchema>;
+
+/** Delete memory request DTO (`wire.request.delete-memory`). */
+export const DeleteMemoryRequestDtoSchema = Type.Object(
+  {
+    memoryId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.delete-memory', additionalProperties: false },
+);
+export type DeleteMemoryRequestDto = Static<typeof DeleteMemoryRequestDtoSchema>;
+
+/** List presets request DTO (`wire.request.list-presets`). */
+export const ListPresetsRequestDtoSchema = Type.Object(
+  {
+    kind: Type.Optional(Type.String({ minLength: 1, maxLength: 50, pattern: '^[a-z0-9][a-z0-9-]*$' })),
+  },
+  { $id: 'wire.request.list-presets', additionalProperties: false },
+);
+export type ListPresetsRequestDto = Static<typeof ListPresetsRequestDtoSchema>;
+
+/** Get preset request DTO (`wire.request.get-preset`). */
+export const GetPresetRequestDtoSchema = Type.Object(
+  {
+    presetId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.get-preset', additionalProperties: false },
+);
+export type GetPresetRequestDto = Static<typeof GetPresetRequestDtoSchema>;
+
+/** Create preset request DTO (`wire.request.create-preset`). */
+export const CreatePresetRequestDtoSchema = Type.Object(
+  {
+    kind: Type.String({ minLength: 1, maxLength: 50, pattern: '^[a-z0-9][a-z0-9-]*$' }),
+    name: Type.String({ minLength: 1, maxLength: 500 }),
+    data: Type.Optional(Type.Object({}, { additionalProperties: true })),
+  },
+  { $id: 'wire.request.create-preset', additionalProperties: false },
+);
+export type CreatePresetRequestDto = Static<typeof CreatePresetRequestDtoSchema>;
+
+/** Update preset request DTO (`wire.request.update-preset`). */
+export const UpdatePresetRequestDtoSchema = Type.Object(
+  {
+    presetId: Type.String({ format: 'uuid' }),
+    name: Type.Optional(Type.String({ minLength: 1, maxLength: 500 })),
+    data: Type.Optional(Type.Object({}, { additionalProperties: true })),
+  },
+  { $id: 'wire.request.update-preset', additionalProperties: false },
+);
+export type UpdatePresetRequestDto = Static<typeof UpdatePresetRequestDtoSchema>;
+
+/** Delete preset request DTO (`wire.request.delete-preset`). */
+export const DeletePresetRequestDtoSchema = Type.Object(
+  {
+    presetId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.delete-preset', additionalProperties: false },
+);
+export type DeletePresetRequestDto = Static<typeof DeletePresetRequestDtoSchema>;
 
 /** Get persona request DTO (`wire.request.get-persona`). */
 export const GetPersonaRequestDtoSchema = Type.Object(
@@ -1268,6 +1400,15 @@ export const ListPresetsResultDtoSchema = Type.Object(
 );
 export type ListPresetsResultDto = Static<typeof ListPresetsResultDtoSchema>;
 
+/** List memories result DTO (`wire.result.list-memories`). */
+export const ListMemoriesResultDtoSchema = Type.Object(
+  {
+    items: Type.Array(MemoryDtoSchema),
+  },
+  { $id: 'wire.result.list-memories', additionalProperties: false },
+);
+export type ListMemoriesResultDto = Static<typeof ListMemoriesResultDtoSchema>;
+
 /** List personas result DTO (`wire.result.list-personas`). */
 export const ListPersonasResultDtoSchema = Type.Object(
   {
@@ -1291,6 +1432,8 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.backup.dto': BackupDtoSchema,
   'wire.lorebook.dto': LorebookDtoSchema,
   'wire.preset.dto': PresetDtoSchema,
+  'wire.memory.scope': WireMemoryScope,
+  'wire.memory.dto': MemoryDtoSchema,
   'wire.persona.dto': PersonaDtoSchema,
   'wire.paged.characters': PagedCharactersDtoSchema,
   'wire.paged.chats': PagedChatsDtoSchema,
@@ -1327,6 +1470,15 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.request.update-lorebook-entry': UpdateLorebookEntryRequestDtoSchema,
   'wire.request.delete-lorebook-entry': DeleteLorebookEntryRequestDtoSchema,
   'wire.result.list-lorebook-entries': ListLorebookEntriesResultDtoSchema,
+  'wire.request.list-memories': ListMemoriesRequestDtoSchema,
+  'wire.request.create-memory': CreateMemoryRequestDtoSchema,
+  'wire.request.update-memory': UpdateMemoryRequestDtoSchema,
+  'wire.request.delete-memory': DeleteMemoryRequestDtoSchema,
+  'wire.request.list-presets': ListPresetsRequestDtoSchema,
+  'wire.request.get-preset': GetPresetRequestDtoSchema,
+  'wire.request.create-preset': CreatePresetRequestDtoSchema,
+  'wire.request.update-preset': UpdatePresetRequestDtoSchema,
+  'wire.request.delete-preset': DeletePresetRequestDtoSchema,
   'wire.request.get-persona': GetPersonaRequestDtoSchema,
   'wire.request.create-persona': CreatePersonaRequestDtoSchema,
   'wire.request.update-persona': UpdatePersonaRequestDtoSchema,
@@ -1378,6 +1530,7 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.paged.generation-events': PagedGenerationEventsDtoSchema,
   'wire.result.list-lorebooks': ListLorebooksResultDtoSchema,
   'wire.result.list-presets': ListPresetsResultDtoSchema,
+  'wire.result.list-memories': ListMemoriesResultDtoSchema,
   'wire.result.list-personas': ListPersonasResultDtoSchema,
   'wire.request.envelope': RequestEnvelopeSchema,
   'wire.response.envelope': ResponseEnvelopeSchema,

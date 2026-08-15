@@ -8,11 +8,14 @@ import {
   WIRE_SCHEMA_HASH,
   type CharacterDto,
   type GenerationRunDto,
+  type ListMemoriesResultDto,
+  type ListPresetsResultDto,
   type ListProvidersResultDto,
   type ListToolsResultDto,
   type ListMessageRevisionsResultDto,
   type ListMessageVariantsResultDto,
   type EmptyResultDto,
+  type MemoryDto,
   type MessageDraftDto,
   type MessageRevisionDto,
   type MessageVariantDto,
@@ -20,6 +23,7 @@ import {
   type PagedCharactersDto,
   type PagedGenerationEventsDto,
   type PagedMessagesDto,
+  type PresetDto,
   type WireGenerationEvent,
 } from '@neotavern/contracts';
 import { ClientSdk, HttpTransport, ProductError, type StreamEvent } from '@neotavern/client-sdk';
@@ -74,6 +78,35 @@ const RUN_ID = '6f5e4d3c-2b1a-4f0e-9d8c-7a6b5c4d3e2f';
 const CHAT_ID = '01234567-89ab-4cde-8f01-23456789abcd';
 const MESSAGE_ID = '12345678-90ab-4cde-8f01-23456789abcd';
 const TIMESTAMP = '2026-06-01T12:00:00.000Z';
+
+// --- Canonical memories/presets fixtures (Этап 4 slice 3; wire fixture
+// shapes from `packages/contracts/src/wire/registry.ts` MEMORY_VALUE and
+// PRESET_VALUE). ---
+const PRESET: PresetDto = {
+  id: '3c4d5e6f-7a8b-4c0d-9e1f-2a3b4c5d6e7f',
+  kind: 'generation',
+  name: 'Balanced',
+  data: { maxContextTokens: 8192, generationDefaults: { temperature: 0.8 } },
+  createdAt: TIMESTAMP,
+  updatedAt: TIMESTAMP,
+};
+
+const PRESET_LIST: ListPresetsResultDto = { items: [PRESET] };
+
+const MEMORY: MemoryDto = {
+  id: '4d5e6f70-8a9b-4c1d-9e2f-3a4b5c6d7e80',
+  scope: 'character',
+  characterId: CHARACTER.id,
+  keys: ['aria', 'clockwork'],
+  content: 'Aria guards the clockwork orchard.',
+  enabled: true,
+  position: 0,
+  metadata: { source: 'canonical' },
+  createdAt: TIMESTAMP,
+  updatedAt: TIMESTAMP,
+};
+
+const MEMORY_LIST: ListMemoriesResultDto = { items: [MEMORY] };
 
 /** `chats.messages.list` response: one canonical wire message (Этап 2.10). */
 const PAGED_MESSAGES: PagedMessagesDto = {
@@ -250,6 +283,21 @@ class FakeKernelTransport implements LocalTransport {
         return { ok: true, value: PAGED_MESSAGES.items[0] };
       case 'chats.messages.drafts.discard':
         return { ok: true, value: EMPTY_RESULT };
+      case 'presets.list':
+        return { ok: true, value: PRESET_LIST };
+      case 'presets.get':
+      case 'presets.create':
+      case 'presets.update':
+        return { ok: true, value: PRESET };
+      case 'presets.delete':
+        return { ok: true, value: EMPTY_RESULT };
+      case 'memories.list':
+        return { ok: true, value: MEMORY_LIST };
+      case 'memories.create':
+      case 'memories.update':
+        return { ok: true, value: MEMORY };
+      case 'memories.delete':
+        return { ok: true, value: EMPTY_RESULT };
       default:
         return { ok: false, error: { code: 'NOT_FOUND', params: {}, traceId: 'kernel-trace' } };
     }
@@ -313,6 +361,21 @@ function rpcResult(operationId: string | undefined): unknown {
     case 'chats.messages.drafts.commit':
       return PAGED_MESSAGES.items[0];
     case 'chats.messages.drafts.discard':
+      return EMPTY_RESULT;
+    case 'presets.list':
+      return PRESET_LIST;
+    case 'presets.get':
+    case 'presets.create':
+    case 'presets.update':
+      return PRESET;
+    case 'presets.delete':
+      return EMPTY_RESULT;
+    case 'memories.list':
+      return MEMORY_LIST;
+    case 'memories.create':
+    case 'memories.update':
+      return MEMORY;
+    case 'memories.delete':
       return EMPTY_RESULT;
     default:
       return null;
@@ -410,6 +473,124 @@ describe('Local vs Remote parity', () => {
   it('remote handshake surfaces validated MetaDto', async () => {
     const remote = makeRemoteBackend();
     await expect(remote.meta()).resolves.toEqual(META);
+  });
+});
+
+describe('Memories/presets Local vs Remote parity (Этап 4 slice 3)', () => {
+  it('presets.list returns deep-equal ListPresetsResultDto from both backends', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const [localResult, remoteResult] = await Promise.all([
+      local.presets.list({ kind: 'generation' }),
+      remote.presets.list({ kind: 'generation' }),
+    ]);
+
+    expect(kernel.requests).toEqual([
+      { operationId: 'presets.list', payload: { kind: 'generation' } },
+    ]);
+    expect(localResult).toEqual(remoteResult);
+    expect(localResult).toEqual(PRESET_LIST);
+  });
+
+  it('presets.get/create/update/del forward payloads and decode canonical DTOs', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const [getLocal, getRemote] = await Promise.all([
+      local.presets.get(PRESET.id),
+      remote.presets.get(PRESET.id),
+    ]);
+    expect(getLocal).toEqual(getRemote);
+    expect(getLocal).toEqual(PRESET);
+
+    const createReq = { kind: 'generation', name: 'Balanced', data: { maxContextTokens: 8192 } };
+    const [createLocal, createRemote] = await Promise.all([
+      local.presets.create(createReq),
+      remote.presets.create(createReq),
+    ]);
+    expect(createLocal).toEqual(createRemote);
+    expect(createLocal).toEqual(PRESET);
+
+    const updateReq = { presetId: PRESET.id, name: 'Balanced v2' };
+    const [updateLocal, updateRemote] = await Promise.all([
+      local.presets.update(updateReq),
+      remote.presets.update(updateReq),
+    ]);
+    expect(updateLocal).toEqual(updateRemote);
+    expect(updateLocal).toEqual(PRESET);
+
+    const [delLocal, delRemote] = await Promise.all([
+      local.presets.del(PRESET.id),
+      remote.presets.del(PRESET.id),
+    ]);
+    expect(delLocal).toEqual(delRemote);
+    expect(delLocal).toEqual(EMPTY_RESULT);
+
+    expect(kernel.requests).toEqual([
+      { operationId: 'presets.get', payload: { presetId: PRESET.id } },
+      { operationId: 'presets.create', payload: createReq },
+      { operationId: 'presets.update', payload: updateReq },
+      { operationId: 'presets.delete', payload: { presetId: PRESET.id } },
+    ]);
+  });
+
+  it('memories.list returns deep-equal ListMemoriesResultDto from both backends', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const req = { scope: 'character' as const, characterId: CHARACTER.id, enabled: true };
+    const [localResult, remoteResult] = await Promise.all([
+      local.memories.list(req),
+      remote.memories.list(req),
+    ]);
+
+    expect(kernel.requests).toEqual([{ operationId: 'memories.list', payload: req }]);
+    expect(localResult).toEqual(remoteResult);
+    expect(localResult).toEqual(MEMORY_LIST);
+  });
+
+  it('memories.create/update/del forward payloads and decode canonical DTOs', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const createReq = {
+      scope: 'character' as const,
+      characterId: CHARACTER.id,
+      keys: ['aria'],
+      content: 'Aria guards the clockwork orchard.',
+    };
+    const [createLocal, createRemote] = await Promise.all([
+      local.memories.create(createReq),
+      remote.memories.create(createReq),
+    ]);
+    expect(createLocal).toEqual(createRemote);
+    expect(createLocal).toEqual(MEMORY);
+
+    const updateReq = { memoryId: MEMORY.id, content: 'Updated.', enabled: false };
+    const [updateLocal, updateRemote] = await Promise.all([
+      local.memories.update(updateReq),
+      remote.memories.update(updateReq),
+    ]);
+    expect(updateLocal).toEqual(updateRemote);
+    expect(updateLocal).toEqual(MEMORY);
+
+    const [delLocal, delRemote] = await Promise.all([
+      local.memories.del(MEMORY.id),
+      remote.memories.del(MEMORY.id),
+    ]);
+    expect(delLocal).toEqual(delRemote);
+    expect(delLocal).toEqual(EMPTY_RESULT);
+
+    expect(kernel.requests).toEqual([
+      { operationId: 'memories.create', payload: createReq },
+      { operationId: 'memories.update', payload: updateReq },
+      { operationId: 'memories.delete', payload: { memoryId: MEMORY.id } },
+    ]);
   });
 });
 
@@ -1031,5 +1212,148 @@ describe('LegacyBackend', () => {
       transport,
     });
     expect(backend.raw.request).toBe(transport.request);
+  });
+
+  // --- М5 slice 3: memories/presets over the legacy /api/v2 routes. ---
+  const LEGACY_PRESET = {
+    id: PRESET.id,
+    kind: 'generation',
+    name: 'Balanced',
+    data: { maxContextTokens: 8192, generationDefaults: { temperature: 0.8 } },
+    createdAt: new Date(TIMESTAMP).getTime(),
+    updatedAt: new Date(TIMESTAMP).getTime(),
+  };
+  const LEGACY_MEMORY = {
+    id: MEMORY.id,
+    scope: 'character',
+    characterId: CHARACTER.id,
+    keys: ['aria', 'clockwork'],
+    content: 'Aria guards the clockwork orchard.',
+    enabled: true,
+    position: 0,
+    metadata: { source: 'canonical' },
+    createdAt: new Date(TIMESTAMP).getTime(),
+    updatedAt: new Date(TIMESTAMP).getTime(),
+  };
+
+  it('presets.list() maps ms timestamps and the kind filter over GET /api/v2/presets', async () => {
+    const backend = makeLegacyBackend(
+      new Map([['/api/v2/presets', { items: [LEGACY_PRESET] }]]),
+    );
+    await expect(backend.presets.list({ kind: 'generation' })).resolves.toEqual({
+      items: [PRESET],
+    });
+  });
+
+  it('presets.get() maps a full legacy preset to the canonical DTO', async () => {
+    const backend = makeLegacyBackend(
+      new Map([['/api/v2/presets/3c4d5e6f-7a8b-4c0d-9e1f-2a3b4c5d6e7f', LEGACY_PRESET]]),
+    );
+    await expect(backend.presets.get(PRESET.id)).resolves.toEqual(PRESET);
+  });
+
+  it('presets.create/update/del map onto POST/PATCH/DELETE /api/v2/presets routes', async () => {
+    const calls: Array<{ method: string; path: string; body?: unknown }> = [];
+    const backend = new LegacyBackend({
+      baseUrl: 'http://legacy.local',
+      transport: {
+        request: async (method, path, body) => {
+          calls.push({ method, path, body });
+          return method === 'DELETE' ? { ok: true } : LEGACY_PRESET;
+        },
+      },
+    });
+
+    await expect(
+      backend.presets.create({ kind: 'generation', name: 'Balanced' }),
+    ).resolves.toEqual(PRESET);
+    await expect(
+      backend.presets.update({ presetId: PRESET.id, name: 'Balanced v2' }),
+    ).resolves.toEqual(PRESET);
+    await expect(backend.presets.del(PRESET.id)).resolves.toEqual({ ok: true });
+    expect(calls).toEqual([
+      { method: 'POST', path: '/api/v2/presets', body: { kind: 'generation', name: 'Balanced' } },
+      {
+        method: 'PATCH',
+        path: '/api/v2/presets/3c4d5e6f-7a8b-4c0d-9e1f-2a3b4c5d6e7f',
+        body: { name: 'Balanced v2' },
+      },
+      { method: 'DELETE', path: '/api/v2/presets/3c4d5e6f-7a8b-4c0d-9e1f-2a3b4c5d6e7f', body: undefined },
+    ]);
+  });
+
+  it('memories.list() maps the legacy shape (null characterId → absent) over GET /api/v2/memories', async () => {
+    const backend = makeLegacyBackend(
+      new Map([
+        [
+          '/api/v2/memories',
+          {
+            items: [
+              LEGACY_MEMORY,
+              { ...LEGACY_MEMORY, id: '5e6f7081-9a8b-4c2d-8e3f-4a5b6c7d8e91', scope: 'global', characterId: null },
+            ],
+          },
+        ],
+      ]),
+    );
+    await expect(backend.memories.list({ scope: 'character' })).resolves.toEqual({
+      items: [
+        MEMORY,
+        {
+          id: '5e6f7081-9a8b-4c2d-8e3f-4a5b6c7d8e91',
+          scope: 'global',
+          keys: ['aria', 'clockwork'],
+          content: 'Aria guards the clockwork orchard.',
+          enabled: true,
+          position: 0,
+          metadata: { source: 'canonical' },
+          createdAt: TIMESTAMP,
+          updatedAt: TIMESTAMP,
+        },
+      ],
+    });
+  });
+
+  it('memories.create/update/del map onto POST/PATCH/DELETE /api/v2/memories routes', async () => {
+    const calls: Array<{ method: string; path: string; body?: unknown }> = [];
+    const backend = new LegacyBackend({
+      baseUrl: 'http://legacy.local',
+      transport: {
+        request: async (method, path, body) => {
+          calls.push({ method, path, body });
+          return method === 'DELETE' ? { ok: true } : LEGACY_MEMORY;
+        },
+      },
+    });
+
+    await expect(
+      backend.memories.create({ scope: 'character', characterId: CHARACTER.id, content: 'x' }),
+    ).resolves.toEqual(MEMORY);
+    await expect(
+      backend.memories.update({ memoryId: MEMORY.id, content: 'Updated.' }),
+    ).resolves.toEqual(MEMORY);
+    await expect(backend.memories.del(MEMORY.id)).resolves.toEqual({ ok: true });
+    expect(calls).toEqual([
+      {
+        method: 'POST',
+        path: '/api/v2/memories',
+        body: { scope: 'character', characterId: CHARACTER.id, content: 'x' },
+      },
+      {
+        method: 'PATCH',
+        path: '/api/v2/memories/4d5e6f70-8a9b-4c1d-9e2f-3a4b5c6d7e80',
+        body: { content: 'Updated.' },
+      },
+      { method: 'DELETE', path: '/api/v2/memories/4d5e6f70-8a9b-4c1d-9e2f-3a4b5c6d7e80', body: undefined },
+    ]);
+  });
+
+  it('memories/presets error envelopes surface as ProductError with code passthrough', async () => {
+    const backend = makeLegacyBackend(new Map());
+    const getPreset = backend.presets.get(PRESET.id);
+    await expect(getPreset).rejects.toBeInstanceOf(ProductError);
+    await expect(getPreset).rejects.toMatchObject({ code: 'NOT_FOUND', traceId: 'legacy' });
+    const getMemory = backend.memories.del(MEMORY.id);
+    await expect(getMemory).rejects.toMatchObject({ code: 'NOT_FOUND', traceId: 'legacy' });
   });
 });

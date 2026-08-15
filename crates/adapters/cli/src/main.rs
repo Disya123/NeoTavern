@@ -259,12 +259,13 @@ fn run_migrate_legacy(root: Option<&Path>, source: &Path, backup: bool) -> Resul
         println!("  previous_root: {}", previous.display());
     }
     println!(
-        "  converted:    characters={} chats={} messages={} lorebooks={} presets={} personas={}",
+        "  converted:    characters={} chats={} messages={} lorebooks={} presets={} memories={} personas={}",
         outcome.report.characters,
         outcome.report.chats,
         outcome.report.messages,
         outcome.report.lorebooks,
         outcome.report.presets,
+        outcome.report.memories,
         outcome.report.personas
     );
     println!("  skipped:      {}", outcome.report.skipped);
