@@ -254,6 +254,22 @@ impl ProviderAdapter for OpenAICompatProvider {
         Availability::Available
     }
 
+    fn capabilities(&self) -> provider_sdk::ProviderCapabilities {
+        // Honest declarations for the chat-completions streaming adapter:
+        // tool calls are fully supported (fragmentable `delta.tool_calls[]`,
+        // §8.3); vision, extended thinking and structured JSON output are
+        // NOT implemented here, so a run that requests them must be
+        // negotiated down by the kernel (CAPABILITY_UNAVAILABLE) instead of
+        // being silently degraded.
+        provider_sdk::ProviderCapabilities {
+            tools: true,
+            vision: false,
+            thinking: false,
+            json_mode: false,
+            streaming: true,
+        }
+    }
+
     fn generate(
         &self,
         request: &ProviderRequest<'_>,

@@ -1197,6 +1197,24 @@ export const ProviderModelDtoSchema = Type.Object(
 );
 export type ProviderModelDto = Static<typeof ProviderModelDtoSchema>;
 
+/**
+ * Provider capability declaration (`wire.provider.capabilities`) — ТЗ §9.3.
+ * The kernel negotiates BEFORE any network request: a capability the run
+ * needs but the adapter does not declare surfaces as
+ * `CAPABILITY_UNAVAILABLE`, never as a silent semantic downgrade.
+ */
+export const ProviderCapabilitiesDtoSchema = Type.Object(
+  {
+    tools: Type.Boolean(),
+    vision: Type.Boolean(),
+    thinking: Type.Boolean(),
+    jsonMode: Type.Boolean(),
+    streaming: Type.Boolean(),
+  },
+  { $id: 'wire.provider.capabilities', additionalProperties: false },
+);
+export type ProviderCapabilitiesDto = Static<typeof ProviderCapabilitiesDtoSchema>;
+
 /** Provider DTO (`wire.provider.dto`) — ТЗ §55/§60 normalized surface. */
 export const ProviderDtoSchema = Type.Object(
   {
@@ -1204,6 +1222,7 @@ export const ProviderDtoSchema = Type.Object(
     name: Type.String({ minLength: 1, maxLength: 120 }),
     builtin: Type.Boolean(),
     availability: ProviderAvailabilitySchema,
+    capabilities: ProviderCapabilitiesDtoSchema,
     models: Type.Array(ProviderModelDtoSchema, { maxItems: 64 }),
   },
   { $id: 'wire.provider.dto', additionalProperties: false },
@@ -1510,6 +1529,7 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.provider.availability': ProviderAvailabilitySchema,
   'wire.provider.model': ProviderModelDtoSchema,
   'wire.provider.dto': ProviderDtoSchema,
+  'wire.provider.capabilities': ProviderCapabilitiesDtoSchema,
   'wire.result.list-providers': ListProvidersResultDtoSchema,
   'wire.provider.config.dto': ProviderConfigDtoSchema,
   'wire.result.list-provider-configs': ListProviderConfigsResultDtoSchema,

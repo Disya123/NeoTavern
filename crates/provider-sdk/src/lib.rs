@@ -285,6 +285,38 @@ pub struct ProviderRequest<'a> {
     pub tools: Option<&'a [ToolSpec<'a>]>,
 }
 
+/// Declared adapter capabilities (ТЗ §9.3). The kernel negotiates BEFORE any
+/// network request: a capability the run needs but the adapter does not
+/// declare surfaces as `CAPABILITY_UNAVAILABLE`, never as a silent semantic
+/// downgrade.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProviderCapabilities {
+    /// Function/tool calling (`tool_calls` request + normalized tool request
+    /// events).
+    pub tools: bool,
+    /// Image input to messages.
+    pub vision: bool,
+    /// Extended/chain-of-thought thinking support.
+    pub thinking: bool,
+    /// Structured JSON output (response_format / json mode).
+    pub json_mode: bool,
+    /// Server-sent streaming of deltas.
+    pub streaming: bool,
+}
+
+impl ProviderCapabilities {
+    /// The minimal capability set every chat provider must honestly declare.
+    pub const fn minimal() -> Self {
+        Self {
+            tools: false,
+            vision: false,
+            thinking: false,
+            json_mode: false,
+            streaming: true,
+        }
+    }
+}
+
 /// The portable provider adapter contract (§55).
 ///
 /// Implementations must be deterministic where documented, must never retry a
@@ -301,6 +333,10 @@ pub trait ProviderAdapter: Send + Sync {
     fn models(&self) -> Vec<ProviderModel>;
     /// Cheap, side-effect-free availability probe (§60).
     fn availability(&self) -> Availability;
+    /// Statically declared capabilities (ТЗ §9.3). Must be honest: the kernel
+    /// fails the run with `CAPABILITY_UNAVAILABLE` before `generate` when a
+    /// requested capability is not declared.
+    fn capabilities(&self) -> ProviderCapabilities;
 
     /// Executes exactly one generation attempt.
     ///

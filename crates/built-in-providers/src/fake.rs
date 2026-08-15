@@ -22,8 +22,8 @@ use std::sync::Arc;
 
 use provider_sdk::policy::Usage;
 use provider_sdk::{
-    Availability, CancelToken, EmitStatus, ProviderAdapter, ProviderError, ProviderErrorCode,
-    ProviderEvent, ProviderModel, ProviderRequest,
+    Availability, CancelToken, EmitStatus, ProviderAdapter, ProviderCapabilities, ProviderError,
+    ProviderErrorCode, ProviderEvent, ProviderModel, ProviderRequest,
 };
 use sha2::{Digest, Sha256};
 
@@ -213,6 +213,20 @@ impl ProviderAdapter for FakeProvider {
 
     fn availability(&self) -> Availability {
         Availability::Available
+    }
+
+    fn capabilities(&self) -> ProviderCapabilities {
+        // The deterministic fake speaks the full tool-call protocol
+        // (`tool=<name>` / `tool-loop=<name>` models, Этап 2.7); it produces
+        // plain text deltas and normalized tool requests, never vision /
+        // thinking / structured JSON.
+        ProviderCapabilities {
+            tools: true,
+            vision: false,
+            thinking: false,
+            json_mode: false,
+            streaming: true,
+        }
     }
 
     fn generate(

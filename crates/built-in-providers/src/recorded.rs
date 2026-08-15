@@ -8,8 +8,8 @@
 
 use provider_sdk::policy::Usage;
 use provider_sdk::{
-    Availability, CancelToken, EmitStatus, ProviderAdapter, ProviderError, ProviderErrorCode,
-    ProviderEvent, ProviderModel, ProviderRequest,
+    Availability, CancelToken, EmitStatus, ProviderAdapter, ProviderCapabilities, ProviderError,
+    ProviderErrorCode, ProviderEvent, ProviderModel, ProviderRequest,
 };
 use serde::{Deserialize, Serialize};
 
@@ -120,6 +120,10 @@ impl ProviderAdapter for RecordedProvider {
 
     fn availability(&self) -> Availability {
         Availability::Available
+    }
+
+    fn capabilities(&self) -> ProviderCapabilities {
+        ProviderCapabilities::minimal()
     }
 
     fn generate(

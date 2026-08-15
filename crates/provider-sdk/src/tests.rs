@@ -3,8 +3,8 @@
 use super::policy::{Deadline, RetryPolicy, Usage};
 use super::secret::{SecretRef, SecretResolver, SecretValue, UnavailableSecretResolver};
 use super::{
-    Availability, CancelToken, EmitStatus, ProviderAdapter, ProviderError, ProviderErrorCode,
-    ProviderEvent, ProviderModel, ProviderRequest,
+    Availability, CancelToken, EmitStatus, ProviderAdapter, ProviderCapabilities, ProviderError,
+    ProviderErrorCode, ProviderEvent, ProviderModel, ProviderRequest,
 };
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
@@ -139,6 +139,9 @@ impl ProviderAdapter for OneShotProvider {
     }
     fn availability(&self) -> Availability {
         Availability::Available
+    }
+    fn capabilities(&self) -> ProviderCapabilities {
+        ProviderCapabilities::minimal()
     }
     fn generate(
         &self,

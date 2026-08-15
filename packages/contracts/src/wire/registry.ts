@@ -663,6 +663,7 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
       'VALIDATION',
       'NOT_FOUND',
       'PROVIDER_ERROR',
+      'CAPABILITY_UNAVAILABLE',
       'CANCELLED',
       'CONTRACT_VIOLATION',
       'OUTCOME_UNKNOWN',
@@ -728,6 +729,7 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
       'NOT_FOUND',
       'CONFLICT',
       'PROVIDER_ERROR',
+      'CAPABILITY_UNAVAILABLE',
       'CANCELLED',
       'CONTRACT_VIOLATION',
       'OUTCOME_UNKNOWN',
@@ -807,6 +809,7 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
       'NOT_FOUND',
       'CONFLICT',
       'PROVIDER_ERROR',
+      'CAPABILITY_UNAVAILABLE',
       'CONTRACT_VIOLATION',
       'OUTCOME_UNKNOWN',
     ],
@@ -1462,6 +1465,13 @@ const PROVIDER_VALUE = {
   name: 'Fake Provider',
   builtin: true,
   availability: { status: 'available' },
+  capabilities: {
+    tools: false,
+    vision: false,
+    thinking: false,
+    jsonMode: false,
+    streaming: true,
+  },
   models: [{ id: 'fake-1', name: 'Fake 1', contextLimit: 8192 }],
 };
 
@@ -1957,6 +1967,14 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
       {
         ...PROVIDER_VALUE,
         availability: { status: 'half-available' },
+      },
+    ],
+  }),
+  fx('neg-provider-bad-capabilities', 'providers.list', 'response', false, {
+    items: [
+      {
+        ...PROVIDER_VALUE,
+        capabilities: { tools: 'yes', vision: false, thinking: false, jsonMode: false, streaming: true },
       },
     ],
   }),

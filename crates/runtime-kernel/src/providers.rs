@@ -116,6 +116,16 @@ pub(crate) fn handle_providers_list(
             name: adapter.name().to_string(),
             builtin: adapter.builtin(),
             availability: map_availability(&adapter.availability()),
+            capabilities: {
+                let caps = adapter.capabilities();
+                generated::ProviderCapabilities {
+                    tools: caps.tools,
+                    vision: caps.vision,
+                    thinking: caps.thinking,
+                    json_mode: caps.json_mode,
+                    streaming: caps.streaming,
+                }
+            },
             models: adapter
                 .models()
                 .iter()

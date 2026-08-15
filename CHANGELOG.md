@@ -3,6 +3,20 @@
 ## Unreleased
 ### Added
 
+- **Provider capability declaration + `CAPABILITY_UNAVAILABLE` pre-negotiation
+  (ТЗ §9.3, M5 slice 4).** The provider port (`ProviderAdapter`) now declares
+  capabilities (`ProviderCapabilities`: tools/vision/thinking/jsonMode/
+  streaming); the OpenAI-compatible adapter declares tools+streaming honestly
+  and no vision/thinking/json. `providers.list` surfaces the declaration as
+  `wire.provider.capabilities` on every provider DTO. The generation path
+  negotiates BEFORE any network request: a run that would send tool calls to
+  a provider without tool support terminates durably `failed` with the new
+  wire code `CAPABILITY_UNAVAILABLE` (allowed on `generation.start`/`retry`/
+  `tool.result`), never a silent no-tools downgrade. Behavioral proof
+  `crates/runtime-kernel/tests/kernel_capability_negotiation.rs` (3 tests):
+  honest list declarations, fail-before-generate (adapter probe counter
+  stays 0), tools-capable pass-through to `waiting_for_tool`. Capability
+  matrix rows updated (providers.list, providers.openai, generation.tool-loop).
 - **Logical profile export over Product Wire (SEC-02, M5 slice 5).** New wire
   operation `profile.export` (`wire.request.profile-export` /
   `wire.result.profile-export`, capability `ui.profile-export`): the kernel

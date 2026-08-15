@@ -1767,6 +1767,23 @@ fn provider_turn_once(
             input_schema: &s.input_schema,
         })
         .collect();
+    // Capability negotiation (ТЗ §9.3): when this turn would send tool
+    // calls, a provider that does not declare tool support must fail BEFORE
+    // the network request with `CAPABILITY_UNAVAILABLE` — never silently
+    // degrade to a no-tools turn.
+    if !tool_specs.is_empty() && !adapter.capabilities().tools {
+        let error = error_dto(
+            "CAPABILITY_UNAVAILABLE",
+            &[
+                ("provider", provider_name.clone()),
+                ("model", model.clone()),
+                ("capability", "tools".to_string()),
+            ],
+        );
+        let seq = terminal_failed(db, run, error, lease_owner)?;
+        send_terminal(notice_tx, seq);
+        return Ok(TurnOutcome::Terminal);
+    }
     let request = provider_sdk::ProviderRequest {
         provider_id: adapter.id(),
         model: &model,

@@ -23,6 +23,7 @@ export const WIRE_ERROR_CODES = [
   'CANCELLED',
   'PROVIDER_ERROR',
   'QUOTA_EXCEEDED',
+  'CAPABILITY_UNAVAILABLE',
 ] as const;
 
 /** Union of canonical wire error codes. */

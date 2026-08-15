@@ -2467,6 +2467,7 @@ pub struct ProviderDto {
     pub name: String,
     pub builtin: bool,
     pub availability: ProviderAvailability,
+    pub capabilities: ProviderCapabilities,
     pub models: Vec<ProviderModel>,
 }
 
@@ -2486,6 +2487,9 @@ pub(crate) fn check_provider_dto(value: &Value, path: &str, issues: &mut Vec<Iss
         }
         if value.get("availability").is_none() {
             issues.push(Issue::new(join_path(path, "availability"), "RequiredProperty"));
+        }
+        if value.get("capabilities").is_none() {
+            issues.push(Issue::new(join_path(path, "capabilities"), "RequiredProperty"));
         }
         if value.get("models").is_none() {
             issues.push(Issue::new(join_path(path, "models"), "RequiredProperty"));
@@ -2526,6 +2530,10 @@ pub(crate) fn check_provider_dto(value: &Value, path: &str, issues: &mut Vec<Iss
             let child_path = join_path(path, "availability");
             check_provider_availability(child, &child_path, issues);
         }
+        if let Some(child) = value.get("capabilities") {
+            let child_path = join_path(path, "capabilities");
+            check_provider_capabilities(child, &child_path, issues);
+        }
         if let Some(child) = value.get("models") {
             let child_path = join_path(path, "models");
             if !child.is_array() {
@@ -2542,7 +2550,7 @@ pub(crate) fn check_provider_dto(value: &Value, path: &str, issues: &mut Vec<Iss
         }
         if let Some(obj) = value.as_object() {
             for key in obj.keys() {
-                if !matches!(key.as_str(), "id" | "name" | "builtin" | "availability" | "models") {
+                if !matches!(key.as_str(), "id" | "name" | "builtin" | "availability" | "capabilities" | "models") {
                     let key_path = join_path(path, key);
                     issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
                 }
@@ -2559,6 +2567,87 @@ pub fn validate_provider_dto(value: &Value) -> Result<(), Vec<Issue>> {
 
 pub fn decode_provider_dto(bytes: &[u8]) -> Result<ProviderDto, WireError> {
     crate::decode::<ProviderDto>(validate_provider_dto, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProviderCapabilities {
+    pub tools: bool,
+    pub vision: bool,
+    pub thinking: bool,
+    #[serde(rename = "jsonMode")]
+    pub json_mode: bool,
+    pub streaming: bool,
+}
+
+pub(crate) fn check_provider_capabilities(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("tools").is_none() {
+            issues.push(Issue::new(join_path(path, "tools"), "RequiredProperty"));
+        }
+        if value.get("vision").is_none() {
+            issues.push(Issue::new(join_path(path, "vision"), "RequiredProperty"));
+        }
+        if value.get("thinking").is_none() {
+            issues.push(Issue::new(join_path(path, "thinking"), "RequiredProperty"));
+        }
+        if value.get("jsonMode").is_none() {
+            issues.push(Issue::new(join_path(path, "jsonMode"), "RequiredProperty"));
+        }
+        if value.get("streaming").is_none() {
+            issues.push(Issue::new(join_path(path, "streaming"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("tools") {
+            let child_path = join_path(path, "tools");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(child) = value.get("vision") {
+            let child_path = join_path(path, "vision");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(child) = value.get("thinking") {
+            let child_path = join_path(path, "thinking");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(child) = value.get("jsonMode") {
+            let child_path = join_path(path, "jsonMode");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(child) = value.get("streaming") {
+            let child_path = join_path(path, "streaming");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "tools" | "vision" | "thinking" | "jsonMode" | "streaming") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_provider_capabilities(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_provider_capabilities(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_provider_capabilities(bytes: &[u8]) -> Result<ProviderCapabilities, WireError> {
+    crate::decode::<ProviderCapabilities>(validate_provider_capabilities, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -1,1 +1,1 @@
-{"items":[{"availability":{"status":"available"},"builtin":true,"id":"fake","models":[{"contextLimit":8192,"id":"fake-1","name":"Fake 1"}],"name":"Fake Provider"}]}
+{"items":[{"availability":{"status":"available"},"builtin":true,"capabilities":{"jsonMode":false,"streaming":true,"thinking":false,"tools":false,"vision":false},"id":"fake","models":[{"contextLimit":8192,"id":"fake-1","name":"Fake 1"}],"name":"Fake Provider"}]}
