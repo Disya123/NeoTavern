@@ -1974,7 +1974,13 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     items: [
       {
         ...PROVIDER_VALUE,
-        capabilities: { tools: 'yes', vision: false, thinking: false, jsonMode: false, streaming: true },
+        capabilities: {
+          tools: 'yes',
+          vision: false,
+          thinking: false,
+          jsonMode: false,
+          streaming: true,
+        },
       },
     ],
   }),
