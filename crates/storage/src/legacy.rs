@@ -15,8 +15,11 @@
 //! # Mapping
 //!
 //! - `characters` → kernel `characters`: `description`/`ext` are mapped
-//!   directly; the legacy `avatar` string is NOT copied (it is not a managed
-//!   asset key); an optional `tags` column is read as a JSON array when
+//!   directly; the legacy `avatar` string is NOT copied verbatim (it is not a
+//!   managed asset key), but the avatar ORIGINAL under `files/avatars/` is
+//!   converted into a canonical `avatar` asset linked via
+//!   `characters.avatar_asset_id` (ADR-0046 waiver 8, assets part; ТЗ §34
+//!   avatar→asset); an optional `tags` column is read as a JSON array when
 //!   present (default `[]`); `created_at`/`updated_at` epoch millis become
 //!   RFC 3339.
 //! - `chats` → kernel `chats`: `title` defaults to `"New chat"`; chats with
@@ -81,6 +84,10 @@ pub struct ConversionReport {
     /// Personas migrated from the legacy `personas` table (Этап 4.1). The
     /// legacy table is optional: a pre-personas source simply contributes 0.
     pub personas: u64,
+    /// Avatar originals converted into canonical assets (ADR-0046 waiver 8,
+    /// assets part, ТЗ §34 avatar→asset): one per character whose legacy
+    /// `avatar` URL resolved to a file under `files/avatars/`.
+    pub assets: u64,
     /// Number of records skipped (orphaned references, invalid values).
     pub skipped: u64,
     /// Human-readable descriptions of every skipped record.
@@ -127,7 +134,14 @@ pub fn convert_legacy(source_db: &Path, candidate: &Candidate) -> Result<Convers
     let tx = fresh
         .transaction()
         .map_err(|e| StorageError::from_sqlite(e, "legacy: begin insert transaction"))?;
-    let report = convert(&legacy, &tx)?;
+    // Legacy avatar originals live next to the legacy database (ТЗ §10.3
+    // layout: `<data-dir>/files/avatars/`), while the canonical asset store
+    // lives under the candidate data root.
+    let legacy_data_dir = source_db
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .to_path_buf();
+    let report = convert(&legacy, &tx, &legacy_data_dir, &candidate.path)?;
     tx.commit()
         .map_err(|e| StorageError::from_sqlite(e, "legacy: commit insert transaction"))?;
     Ok(report)
@@ -136,7 +150,12 @@ pub fn convert_legacy(source_db: &Path, candidate: &Candidate) -> Result<Convers
 /// Maps all product tables into `tx` (single transaction). Inserts are
 /// ordered characters → chats → messages → variants/revisions/drafts so
 /// foreign keys always resolve.
-fn convert(legacy: &Connection, tx: &rusqlite::Transaction) -> Result<ConversionReport> {
+fn convert(
+    legacy: &Connection,
+    tx: &rusqlite::Transaction,
+    legacy_data_dir: &Path,
+    kernel_root: &Path,
+) -> Result<ConversionReport> {
     let mut report = ConversionReport {
         characters: 0,
         chats: 0,
@@ -148,10 +167,15 @@ fn convert(legacy: &Connection, tx: &rusqlite::Transaction) -> Result<Conversion
         presets: 0,
         memories: 0,
         personas: 0,
+        assets: 0,
         skipped: 0,
         orphans: Vec::new(),
     };
     let character_ids = convert_characters(legacy, tx, &mut report)?;
+    // Avatar originals (ADR-0046 waiver 8, assets part): published into the
+    // canonical asset store and linked via `characters.avatar_asset_id`.
+    // Runs after convert_characters so the rows exist for the UPDATE.
+    convert_avatars(legacy, tx, legacy_data_dir, kernel_root, &mut report)?;
     // Personas convert BEFORE chats: `chats.persona_id` has an FK to
     // `personas` (ON DELETE SET NULL), so the persona rows must exist before
     // any chat row references them (foreign_keys = ON during conversion).
@@ -277,8 +301,11 @@ fn convert_characters(
                     .or_insert_with(|| serde_json::Value::String(text.to_string()));
             }
         }
-        // `avatar` is intentionally not copied: legacy avatar strings are
-        // not managed asset keys (ТЗ §34: avatar→asset skip).
+        // `avatar` is intentionally not copied verbatim: legacy avatar
+        // strings are not managed asset keys (ТЗ §34: avatar→asset skip). The
+        // original FILE is converted separately by `convert_avatars`, which
+        // publishes it into the canonical asset store and links
+        // `avatar_asset_id` here.
         tx.execute(
             "INSERT INTO characters (id, name, description, avatar_asset_id, tags_json, ext_json, created_at, updated_at) \
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
@@ -298,6 +325,127 @@ fn convert_characters(
         ids.insert(id.to_string());
     }
     Ok(ids)
+}
+
+/// Converts legacy avatar originals (ADR-0046 waiver 8, assets part, ТЗ §34
+/// avatar→asset): `characters.avatar` is a content-addressed URL
+/// (`/api/v2/assets/avatars/<sha256>.<ext>` or the thumbnail variant
+/// `/api/v2/assets/thumbnails/<sha256>-<size>-v<v>.<ext>`); the original file
+/// lives at `<data-dir>/files/avatars/<sha256>.<ext>`. Matching files are
+/// published into the canonical asset store (kind `avatar`) and the character
+/// row gets the asset id (idempotent per content hash — the same bytes
+/// re-publish as one record). A missing file or an unrecognizable avatar
+/// string is reported as an orphan and the character stays unlinked — no
+/// silent data loss.
+fn convert_avatars(
+    legacy: &Connection,
+    tx: &rusqlite::Transaction,
+    legacy_data_dir: &Path,
+    kernel_root: &Path,
+    report: &mut ConversionReport,
+) -> Result<()> {
+    // Pre-avatar legacy schemas (no `avatar` column) contribute nothing.
+    let cols = column_names(legacy, "characters")?;
+    if !cols.iter().any(|c| c == "avatar") {
+        return Ok(());
+    }
+    let mut stmt = legacy
+        .prepare("SELECT id, avatar FROM characters")
+        .map_err(|e| StorageError::from_sqlite(e, "legacy: prepare character avatars"))?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
+        })
+        .map_err(|e| StorageError::from_sqlite(e, "legacy: query character avatars"))?;
+    let avatars_dir = legacy_data_dir.join("files").join("avatars");
+    for row in rows {
+        let (character_id, avatar) =
+            row.map_err(|e| StorageError::from_sqlite(e, "legacy: read character avatar"))?;
+        let Some(avatar) = avatar else {
+            continue;
+        };
+        let Some(hash) = avatar_hash(&avatar) else {
+            report.orphans.push(format!(
+                "character {character_id}: avatar is not a managed asset URL ({avatar})"
+            ));
+            continue;
+        };
+        let Some(relative_key) = find_avatar_file(&avatars_dir, &hash) else {
+            report.skipped += 1;
+            report.orphans.push(format!(
+                "character {character_id}: avatar original {hash} not found under files/avatars"
+            ));
+            continue;
+        };
+        let avatar_path = avatars_dir.join(hash_key_file(&relative_key));
+        let bytes = std::fs::read(&avatar_path)
+            .map_err(|e| crate::error::io_err(e, "legacy: read avatar original"))?;
+        // UUIDv7 with the version nibble rewritten to 4 — same scheme the
+        // kernel uses (monotonic ordering, valid wire uuid).
+        const VERSION_NIBBLE_MASK: u128 = 0xF000_0000_0000_0000_0000;
+        const V4_NIBBLE: u128 = 0x4000_0000_0000_0000_0000;
+        let raw = uuid::Uuid::now_v7().as_u128();
+        let id = uuid::Uuid::from_u128((raw & !VERSION_NIBBLE_MASK) | V4_NIBBLE).to_string();
+        crate::assets::publish_asset_in_tx(kernel_root, tx, &id, "avatar", &relative_key, &bytes)
+            .map_err(|e| {
+            StorageError::with(
+                e.code,
+                format!("legacy: publish avatar for character {character_id}: {e}"),
+                e.params,
+            )
+        })?;
+        tx.execute(
+            "UPDATE characters SET avatar_asset_id = ?1 WHERE id = ?2",
+            rusqlite::params![id, character_id],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "legacy: link avatar asset"))?;
+        report.assets += 1;
+    }
+    Ok(())
+}
+
+/// Extracts the 64-char content hash from a managed avatar URL — the
+/// isolated hex run bounded by non-hex characters (the `/avatars/` or
+/// `/thumbnails/` segments plus the extension).
+fn avatar_hash(avatar: &str) -> Option<String> {
+    let bytes = avatar.as_bytes();
+    if bytes.len() < 64 {
+        return None;
+    }
+    for i in 0..=bytes.len() - 64 {
+        if !bytes[i..i + 64].iter().all(|b| b.is_ascii_hexdigit()) {
+            continue;
+        }
+        let prev_hex = i > 0 && bytes[i - 1].is_ascii_hexdigit();
+        let next_hex = i + 64 < bytes.len() && bytes[i + 64].is_ascii_hexdigit();
+        if !prev_hex && !next_hex {
+            return Some(avatar[i..i + 64].to_string());
+        }
+    }
+    None
+}
+
+/// Supported avatar original extensions (mirrors
+/// `apps/server/src/plugins/characterGallery.ts`).
+const AVATAR_EXTENSIONS: [&str; 4] = [".png", ".jpg", ".webp", ".gif"];
+
+/// Returns the managed relative key (`avatar/<sha256><ext>`) of the avatar
+/// original present under `avatars_dir`, or `None` when no supported file
+/// exists.
+fn find_avatar_file(avatars_dir: &Path, hash: &str) -> Option<String> {
+    for ext in AVATAR_EXTENSIONS {
+        let candidate = avatars_dir.join(format!("{hash}{ext}"));
+        if candidate.is_file() {
+            return Some(format!("avatar/{hash}{ext}"));
+        }
+    }
+    None
+}
+
+/// The file name part of a managed avatar key (`avatar/<hash>.<ext>` → the
+/// `<hash>.<ext>` file under `files/avatars/`).
+fn hash_key_file(relative_key: &str) -> &str {
+    relative_key.rsplit('/').next().unwrap_or(relative_key)
 }
 
 /// Reads the `character_tags`/`tags` join (the real Drizzle legacy layout)

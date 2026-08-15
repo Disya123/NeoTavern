@@ -90,10 +90,27 @@ pub fn publish_asset(
     relative_key: &str,
     content: &[u8],
 ) -> Result<AssetRecord> {
+    let root = db.root().to_path_buf();
+    db.transaction(|tx| publish_asset_in_tx(&root, tx, id, kind, relative_key, content))
+}
+
+/// Same as [`publish_asset`] but performs the registry INSERT inside the
+/// caller's `tx` (the file is still written outside the transaction — a
+/// rolled-back tx leaves an orphan file that the GC safety net reclaims).
+/// Used by the legacy converter, which maps avatar originals into the
+/// canonical asset store inside its single conversion transaction.
+pub fn publish_asset_in_tx(
+    root: &Path,
+    tx: &rusqlite::Transaction,
+    id: &str,
+    kind: &str,
+    relative_key: &str,
+    content: &[u8],
+) -> Result<AssetRecord> {
     validate_relative_key(relative_key)?;
     validate_kind(kind)?;
 
-    let assets = assets_dir(db.root());
+    let assets = assets_dir(root);
     fs::create_dir_all(&assets).map_err(|e| io_err(e, "create assets dir"))?;
     let target = join_checked(&assets, relative_key)?;
 
@@ -111,12 +128,12 @@ pub fn publish_asset(
     }
     if let Err(e) = fs::rename(&temp_path, &target) {
         let _ = fs::remove_file(&temp_path);
-        return Err(rename_error(e, db, id, relative_key));
+        return Err(rename_error_in_tx(e, tx, id, relative_key));
     }
 
     let created_at = now_utc_rfc3339();
-    let inserted = db.transaction(|tx| {
-        tx.execute(
+    let inserted = tx
+        .execute(
             "INSERT INTO __neotavern_assets \
              (id, type, relative_key, checksum_sha256, size_bytes, metadata_json, created_at) \
              VALUES (?1, ?2, ?3, ?4, ?5, '{}', ?6)",
@@ -129,9 +146,7 @@ pub fn publish_asset(
                 created_at
             ],
         )
-        .map_err(|e| sqlite_error(e, "insert asset row"))?;
-        Ok(())
-    });
+        .map_err(|e| sqlite_error(e, "insert asset row"));
     if let Err(e) = inserted {
         let _ = fs::remove_file(&target);
         return Err(e);
@@ -344,15 +359,21 @@ fn write_verified(file: &mut fs::File, content: &[u8]) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Error path for a failed rename. On Windows a rename onto an existing
-/// destination fails; when the destination is already registered (same `id`
-/// or `relative_key`) the real answer is a duplicate-key
-/// [`StorageErrorCode::Conflict`], so that is reported. Otherwise the
-/// failure is a plain IO error.
-fn rename_error(e: std::io::Error, db: &Database, id: &str, relative_key: &str) -> StorageError {
+/// Error path for a failed rename in the in-transaction publisher. On Windows
+/// a rename onto an existing destination fails; when the destination is
+/// already registered (same `id` or `relative_key`) the real answer is a
+/// duplicate-key [`StorageErrorCode::Conflict`], so that is reported.
+/// Otherwise the failure is a plain IO error. The duplicate-key probe runs
+/// against the caller's transaction (the conversion path has no
+/// [`Database`] handle, only a `Transaction`).
+fn rename_error_in_tx(
+    e: std::io::Error,
+    tx: &rusqlite::Transaction,
+    id: &str,
+    relative_key: &str,
+) -> StorageError {
     if e.kind() == ErrorKind::AlreadyExists {
-        let registered = db
-            .conn()
+        let registered = tx
             .query_row(
                 "SELECT 1 FROM __neotavern_assets WHERE id = ?1 OR relative_key = ?2 LIMIT 1",
                 rusqlite::params![id, relative_key],

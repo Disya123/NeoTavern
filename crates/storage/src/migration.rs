@@ -642,6 +642,10 @@ fn read_conversion_report(root: &Path) -> Result<ConversionReport> {
         // converted root from an earlier kernel schema simply contributes 0.
         memories: count_if_present("memories")?,
         personas: count_if_present("personas")?,
+        // assets (avatar originals) live under the data root's assets/ and
+        // are counted from the registry table; a committed root reports the
+        // rows (the per-file breakdown is in the `prepare` report).
+        assets: count_if_present("__neotavern_assets")?,
         // Counts from a committed root cannot report per-row orphans; the
         // full report is available from the `prepare` step.
         skipped: 0,

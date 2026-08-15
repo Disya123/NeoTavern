@@ -3,6 +3,21 @@
 ## Unreleased
 ### Added
 
+- **Legacy avatar originals convert into canonical assets (M5 slice 6,
+  ADR-0046 waiver 8 assets part).** The legacy converter now maps
+  `characters.avatar` — a content-addressed URL
+  (`/api/v2/assets/avatars/<sha256>.<ext>` or the thumbnail variant) — to
+  the original file under `<data-dir>/files/avatars/`, publishes it into the
+  canonical asset store as an `avatar` asset (crash-safe publisher, same
+  temp-write + sync + atomic-rename contract as `assets.put`) inside the
+  conversion transaction, and links `characters.avatar_asset_id`. A missing
+  file or an unrecognizable avatar string is reported as an orphan (the
+  character stays unlinked — no silent loss), pre-avatar legacy schemas
+  contribute 0, and the legacy avatar string itself is still not copied
+  verbatim (ТЗ §34 avatar→asset). `ConversionReport.assets` reports the
+  converted count. Storage tests: avatar conversion round trip +
+  missing-original orphan.
+
 - **Character↔lorebook scoping (M5 slice 6, ADR-0047 waiver 2 closed).**
   The canonical schema now models the character↔lorebook link: migration 016
   adds the STRICT `character_lorebooks` table (one optional owner per book —

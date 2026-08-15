@@ -74,12 +74,17 @@ of ТЗ §14.2.2 stay intact.
    surface (progress, Retry/Restart/Open help/Export diagnostics, ТЗ
    §10.3.1) is wired in the M4 Desktop slice. **Expiry:** M4 cutover.
 
-8. **Settings/branches/revisions/assets conversion.** The converter
-   preserves unknown character metadata (ТЗ §10.3) and converts
+8. **Settings/branches/assets conversion (revisions delivered).** The
+   converter preserves unknown character metadata (ТЗ §10.3) and converts
    characters/chats/messages/lorebooks/presets/personas now; the remaining
    entity classes are explicitly tracked as the next conversion slices so
    no legacy entity class is silently dropped (mirrors the M1 SEC-02 waiver
-   expiry pattern). **Expiry:** M4 cutover.
+   expiry pattern). **Status: partially honored** — revisions (Этап 4
+   slice 2) and avatar originals (M5 slice 6, ADR-0046 assets part:
+   `characters.avatar` files under `files/avatars/` are published into the
+   canonical asset store as `avatar` assets and linked via
+   `characters.avatar_asset_id`) are delivered; settings and branches
+   remain open. **Expiry:** M4 cutover.
 
 ## Alternatives
 

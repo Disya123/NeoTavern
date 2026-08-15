@@ -14,6 +14,14 @@ use neotavern_storage::open::open;
 use neotavern_storage::restore::stage_candidate;
 use neotavern_storage::StorageErrorCode;
 
+/// Content hash of the avatar original present under `files/avatars/`
+/// (ADR-0046 waiver 8 assets part — converted into a canonical asset).
+const AVATAR_HASH_OK: &str = "abababababababababababababababababababababababababababababababab";
+/// Content hash of an avatar original that does NOT exist on disk — the
+/// conversion must report an orphan and leave the character unlinked.
+const AVATAR_HASH_MISSING: &str =
+    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd";
+
 /// Builds a legacy Drizzle-schema database (ms epoch timestamps) including a
 /// `provider_configs` table carrying a fake API key that must NOT be copied.
 fn build_legacy(path: &Path) -> rusqlite::Result<()> {
@@ -78,16 +86,16 @@ fn build_legacy(path: &Path) -> rusqlite::Result<()> {
             "leg-c1",
             "Alice",
             "A legacy character",
-            "avatar.png",
+            format!("/api/v2/assets/avatars/{AVATAR_HASH_OK}.png"),
             r#"{"legacy":true}"#,
             1_700_000_000_000i64,
             1_700_000_001_000i64,
         ],
     )?;
     conn.execute(
-        "INSERT INTO characters (id, name, created_at, updated_at) \
-         VALUES ('leg-c2', 'Bob', 1700000002000, 1700000003000)",
-        [],
+        "INSERT INTO characters (id, name, avatar, created_at, updated_at) \
+         VALUES ('leg-c2', 'Bob', ?, 1700000002000, 1700000003000)",
+        [format!("/api/v2/assets/avatars/{AVATAR_HASH_MISSING}.png")],
     )?;
     conn.execute(
         "INSERT INTO chats (id, title, character_id, persona_id, created_at, updated_at) \
@@ -362,6 +370,15 @@ fn legacy_conversion_maps_rows_skips_orphans_and_never_copies_secrets(
     let dir = tempfile::tempdir()?;
     let legacy_path = dir.path().join("legacy.db");
     build_legacy(&legacy_path)?;
+    // The avatar original for `leg-c1` exists under the legacy data layout
+    // (`<data-dir>/files/avatars/`); `leg-c2`'s original is missing on disk.
+    let legacy_avatars = dir.path().join("files").join("avatars");
+    fs::create_dir_all(&legacy_avatars)?;
+    let avatar_bytes = b"\x89PNG fake avatar bytes".to_vec();
+    fs::write(
+        legacy_avatars.join(format!("{AVATAR_HASH_OK}.png")),
+        &avatar_bytes,
+    )?;
     let original_bytes = fs::read(&legacy_path)?;
     let original_mtime = fs::metadata(&legacy_path)?.modified()?;
 
@@ -386,6 +403,10 @@ fn legacy_conversion_maps_rows_skips_orphans_and_never_copies_secrets(
     );
     assert_eq!(report.presets, 1);
     assert_eq!(
+        report.assets, 1,
+        "the present avatar original converts; the missing one is an orphan"
+    );
+    assert_eq!(
         report.memories, 3,
         "global + character-scoped + dangling-character memories convert; invalid scope skipped"
     );
@@ -394,13 +415,13 @@ fn legacy_conversion_maps_rows_skips_orphans_and_never_copies_secrets(
         "both personas convert; only the first legacy default keeps the flag"
     );
     assert_eq!(
-        report.skipped, 8,
-        "orphan chat + orphan message + orphan swipe + orphan revision + 3 drafts + invalid-scope memory"
+        report.skipped, 9,
+        "orphan chat + orphan message + orphan swipe + orphan revision + 3 drafts + invalid-scope memory + missing avatar original"
     );
     assert_eq!(
         report.orphans.len(),
-        9,
-        "the 8 skipped rows + the ghost-owned lorebook link"
+        10,
+        "the 9 skipped rows + the ghost-owned lorebook link"
     );
 
     // The source file is byte- and mtime-identical (opened strictly read-only).
@@ -428,6 +449,7 @@ fn legacy_conversion_maps_rows_skips_orphans_and_never_copies_secrets(
         ("presets", 1),
         ("memories", 3),
         ("personas", 2),
+        ("__neotavern_assets", 1),
     ] {
         let count: i64 =
             db.conn()
@@ -472,7 +494,9 @@ fn legacy_conversion_maps_rows_skips_orphans_and_never_copies_secrets(
     assert_eq!(role, "user");
     assert_eq!(committed.as_deref(), Some("leg-m2"));
 
-    // Character mapping: ext preserved, ms timestamps → RFC 3339, avatar skipped.
+    // Character mapping: ext preserved, ms timestamps → RFC 3339; the avatar
+    // string is not copied (the file converts via convert_avatars, asserted
+    // below).
     let (ext, created, updated): (String, String, String) = db.conn().query_row(
         "SELECT ext_json, created_at, updated_at FROM characters WHERE id = 'leg-c1'",
         [],
@@ -590,6 +614,55 @@ fn legacy_conversion_maps_rows_skips_orphans_and_never_copies_secrets(
             .iter()
             .any(|o| o.contains("leg-l4") && o.contains("leg-missing")),
         "orphan link reported: {:?}",
+        report.orphans
+    );
+
+    // Avatar originals → canonical assets (ADR-0046 waiver 8, assets part):
+    // `leg-c1`'s file converts into a `avatar` asset and links the character;
+    // `leg-c2`'s missing original is an orphan and the character stays
+    // unlinked.
+    let (asset_id, relative_key): (Option<String>, Option<String>) = db.conn().query_row(
+        "SELECT c.avatar_asset_id, a.relative_key \
+         FROM characters c LEFT JOIN __neotavern_assets a ON a.id = c.avatar_asset_id \
+         WHERE c.id = 'leg-c1'",
+        [],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )?;
+    let asset_id = asset_id.expect("leg-c1 avatar must link an asset");
+    assert_eq!(
+        relative_key.as_deref(),
+        Some(format!("avatar/{AVATAR_HASH_OK}.png").as_str()),
+        "content-addressed managed key"
+    );
+    let copied = fs::read(
+        candidate
+            .path
+            .join("assets")
+            .join(format!("avatar/{AVATAR_HASH_OK}.png")),
+    )?;
+    assert_eq!(copied, avatar_bytes, "original bytes copied verbatim");
+    let checksum: String = db.conn().query_row(
+        "SELECT checksum_sha256 FROM __neotavern_assets WHERE id = ?1",
+        [asset_id],
+        |r| r.get(0),
+    )?;
+    assert_eq!(
+        checksum,
+        neotavern_storage::assets::sha256_hex(&avatar_bytes),
+        "registry checksum is the sha256 of the converted bytes"
+    );
+    let c2_link: Option<String> = db.conn().query_row(
+        "SELECT avatar_asset_id FROM characters WHERE id = 'leg-c2'",
+        [],
+        |r| r.get(0),
+    )?;
+    assert_eq!(c2_link, None, "missing original → character stays unlinked");
+    assert!(
+        report
+            .orphans
+            .iter()
+            .any(|o| o.contains("leg-c2") && o.contains("not found")),
+        "missing avatar original reported: {:?}",
         report.orphans
     );
 
