@@ -722,6 +722,36 @@ pub const MIGRATION_17_SQL: &str = migration_17_sql!();
 pub const MIGRATION_17_CHECKSUM: &str =
     "2b70fc5c47785022d84a4ccd416e2a100e1c4019d7bcaf971130b0b18ec55d83";
 
+/// Literal body of the snapshot columns (v18) schema migration: adds
+/// `messages.checkpoint_chat_id` (the child chat a checkpoint source message
+/// points at — `chats.snapshots.create`) and the child-chat trio
+/// `chats.parent_chat_id`/`chats.origin`/`chats.source_message_id` that mark
+/// snapshot (checkpoint/branch) child chats and link them back to their
+/// parent.
+macro_rules! migration_18_sql {
+    () => {
+        r#"ALTER TABLE messages ADD COLUMN checkpoint_chat_id TEXT;
+ALTER TABLE chats ADD COLUMN parent_chat_id TEXT;
+ALTER TABLE chats ADD COLUMN origin TEXT;
+ALTER TABLE chats ADD COLUMN source_message_id TEXT;"#
+    };
+}
+
+/// Name of the snapshot columns (v18) schema migration.
+pub const MIGRATION_18_NAME: &str = "018_snapshot_columns";
+
+/// Exact SQL of the snapshot columns schema migration (v18) — the
+/// `migration_18_sql!()` literal.
+pub const MIGRATION_18_SQL: &str = migration_18_sql!();
+
+/// Lowercase sha256 hex of the `MIGRATION_18_SQL` string bytes.
+///
+/// Computed via node (`crypto.createHash('sha256')` over the exact literal
+/// bytes, no trailing newline) and asserted by the migration test suite
+/// against the ledger.
+pub const MIGRATION_18_CHECKSUM: &str =
+    "cabf2093a864e06c9d574e178e1984a0fbeb2abfd5d72644c01cd84d33d4cd85";
+
 /// A fresh install runs every migration in order, so `FRESH_SCHEMA_SQL` is the
 /// concatenation of all migration literals with a single newline between them
 /// (the same statement separator `execute_batch` applies).
@@ -762,7 +792,9 @@ pub const FRESH_SCHEMA_SQL: &str = concat!(
     "\n",
     migration_16_sql!(),
     "\n",
-    migration_17_sql!()
+    migration_17_sql!(),
+    "\n",
+    migration_18_sql!()
 );
 
 /// sha256 hex of the `FRESH_SCHEMA_SQL` bytes — the fresh-install fingerprint.

@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-08-15T21:52:07.859Z",
+  "generatedAt": "2026-08-15T22:21:09.820Z",
   "rows": [
     {
       "hosts": {
@@ -93,6 +93,19 @@
         "chats.messages.variants.delete",
         "chats.messages.variants.list"
       ]
+    },
+    {
+      "hosts": {
+        "android": "Implemented",
+        "desktop": "Integrated",
+        "headless": "Implemented",
+        "webClient": "Integrated"
+      },
+      "id": "chats.snapshots",
+      "milestone": "M5",
+      "notes": "M5 slice 14: kernel-owned `chats.snapshots.create` (schema migration 018) — the prefix up to and including the source message is copied into a fresh child chat (parent_chat_id/origin/source_message_id trio), swipe variants and content revisions are copied with remapped ids, meta_json survives verbatim, and kind=checkpoint links the source message via messages.checkpoint_chat_id (MessageDto.checkpointChatId), which the UI's open-checkpoint reads on both planes. MessageDto/ChatDto gained the additive snapshot fields; UpdateMessageRequestDto.clearCheckpointChatId maps the legacy delete-checkpoint null patch (the wire has no nullable field). ChatPage createSnapshot now routes through wireBridge on both planes (slice 13 removed the last legacyRaw; slice 14 replaced the kernel UnsupportedError with the real op), ui-legacy-surface 56 → 54. The legacy contour keeps its full snapshot flow (branch graph, active-branch validation, child-chat origin) on the sidecar/webClient planes.",
+      "title": "Chat snapshots (checkpoint/branch)",
+      "wireOps": ["chats.snapshots.create"]
     },
     {
       "hosts": {
@@ -398,7 +411,7 @@
       },
       "id": "ui.message-editing",
       "milestone": "M4",
-      "notes": "Legacy /api/v2 contour today; kernel message ops (chats.messages.crud) + UI cutover in M2/M4. Slice 11 (M5): wire chats.messages.update gains optional content + meta (free-object), MessageDto carries meta verbatim; toggleMessageContext / swipeGreeting / deleteCheckpoint now route through updateChatMessage on both planes (ui-legacy-surface 60 → 57). createSnapshot + checkpoint navigation stay legacy-documented (no wire snapshot op yet).",
+      "notes": "Legacy /api/v2 contour today; kernel message ops (chats.messages.crud) + UI cutover in M2/M4. Slice 11 (M5): wire chats.messages.update gains optional content + meta (free-object), MessageDto carries meta verbatim; toggleMessageContext / swipeGreeting / deleteCheckpoint now route through updateChatMessage on both planes (ui-legacy-surface 60 → 57). Slice 13 (M5): ChatPage checkpoint/branch creation routes through the transport (ui-legacy-surface 57 → 56, last legacyRaw removed from ChatPage). Slice 14 (M5): kernel chats.snapshots.create owns the snapshot capability on the kernel plane — checkpoint/branch children carry parentChatId/origin/sourceMessageId, open-checkpoint reads MessageDto.checkpointChatId, deleteCheckpoint clears the real link via clearCheckpointChatId (ui-legacy-surface 56 → 54); the legacy contour keeps its full snapshot flow on the sidecar/webClient planes.",
       "title": "Message edit/delete/drafts/blocks UI",
       "wireOps": []
     },

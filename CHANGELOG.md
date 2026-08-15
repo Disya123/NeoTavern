@@ -3,6 +3,31 @@
 ## Unreleased
 ### Added
 
+- **Kernel chat snapshots (checkpoint/branch) — `chats.snapshots.create`
+  (M5 slice 14, Этап 4 context 5 closure).** The canonical Conversations
+  model (ТЗ §8.1) now owns the snapshot capability instead of refusing it: a
+  new wire operation (87 ops, schema hash `0ab89557…`) freezes the chat
+  prefix up to and including the source message into a fresh child chat
+  (schema migration 018: `chats.parent_chat_id`/`origin`/`source_message_id`
+  trio + `messages.checkpoint_chat_id`). Swipe variants and content revisions
+  are copied with remapped ids, `meta_json` survives verbatim, and
+  `kind = checkpoint` links the source message (`MessageDto.checkpointChatId`)
+  — which the UI's "open checkpoint" now reads on both planes. Additive wire
+  fields: `MessageDto.checkpointChatId`, `ChatDto.parentChatId/origin/
+  sourceMessageId`, `UpdateMessageRequestDto.clearCheckpointChatId` (honest
+  wire spelling of the legacy delete-checkpoint `null` patch — the wire has
+  no nullable field). ChatPage `createSnapshot` routes through the wire on
+  the kernel plane (slice 13 removed the last `legacyRaw`; slice 14 replaced
+  the `UnsupportedError` with the real op), and `deleteCheckpoint` now clears
+  the real link instead of writing extension metadata. Kernel tests:
+  checkpoint/branch round trip (prefix freeze, child provenance, checkpoint
+  link, branch does not overwrite the link, CHAT/MESSAGE_NOT_FOUND) +
+  clear-checkpoint-link update — kernel_crud 20/20; runtime-kernel suite
+  green. Web: wireBridge 96/96 (+1 kernel snapshot routing test), neobackend
+  69/69 (facade `chats.createSnapshot` on Local/Remote, legacy contour keeps
+  its full snapshot flow), full web vitest green; ui:api:check stays at 54
+  sites. Capability matrix: +1 row (`chats.snapshots`, 35 rows).
+
 - **Chat snapshots route through the transport; ChatPage is free of
   `legacyRaw` (M5 slice 13, Этап 4 context 5 part).** `createChatSnapshot`
   in `wireBridge` replaces the last `legacyRaw()` call in `ChatPage`

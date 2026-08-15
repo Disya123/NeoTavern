@@ -42,6 +42,7 @@ const mocks = vi.hoisted(() => {
     createMessage: vi.fn(),
     updateMessage: vi.fn(),
     delMessage: vi.fn(),
+    createSnapshot: vi.fn(),
     listMessageVariants: vi.fn(),
     createMessageVariant: vi.fn(),
     delMessageVariant: vi.fn(),
@@ -1487,10 +1488,36 @@ describe('imports/exports (kernel plane honest refusals)', () => {
     await expect(warmProviderModels('p1')).rejects.toBeInstanceOf(UnsupportedError);
   });
 
-  it('refuses chat snapshots on the kernel plane honestly', async () => {
-    await expect(
-      createChatSnapshot(CHAT_ID, { messageId: MESSAGE_ID, kind: 'checkpoint', replace: true }),
-    ).rejects.toBeInstanceOf(UnsupportedError);
+  it('routes chat snapshots through chats.snapshots.create on the kernel plane', async () => {
+    mocks.chats.createSnapshot.mockResolvedValue({
+      chat: {
+        id: 'f1f2f3f4-f5f6-4f7f-8f9f-0f1f2f3f4f5f',
+        title: 'Chat — checkpoint',
+        characterId: CHAR_ID,
+        messageCount: 2,
+        createdAt: NOW_MS,
+        updatedAt: NOW_MS,
+        parentChatId: CHAT_ID,
+        origin: 'checkpoint',
+        sourceMessageId: MESSAGE_ID,
+      },
+      copiedMessages: 2,
+    });
+    const result = await createChatSnapshot(CHAT_ID, {
+      messageId: MESSAGE_ID,
+      kind: 'checkpoint',
+      title: 'Chat — checkpoint',
+    });
+    expect(mocks.chats.createSnapshot).toHaveBeenCalledWith({
+      chatId: CHAT_ID,
+      messageId: MESSAGE_ID,
+      kind: 'checkpoint',
+      title: 'Chat — checkpoint',
+    });
+    expect(result.copiedMessages).toBe(2);
+    expect(result.chat.parentChatId).toBe(CHAT_ID);
+    expect(result.chat.origin).toBe('checkpoint');
+    expect(result.chat.sourceMessageId).toBe(MESSAGE_ID);
   });
 
   it('routes chat snapshots through the legacy contour on the legacy plane', async () => {

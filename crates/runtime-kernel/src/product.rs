@@ -18,9 +18,9 @@ use crate::{KernelError, KernelErrorCode};
 use contracts_generated::generated::{
     self, CharacterDto, ChatDto, FreeObject, LorebookDto, MemoryDto, MemoryScope, MessageDraftDto,
     MessageDto, MessageRevisionDto, MessageRole, MessageVariantDto, PagedCharacters, PagedChats,
-    PagedMessages, PersonaDto, PresetDto, RequestListPresets, ResultEmpty, ResultListLorebooks,
-    ResultListMemories, ResultListPersonas, ResultListPresets, ResultMessageRevisionList,
-    ResultMessageVariantList,
+    PagedMessages, PersonaDto, PresetDto, RequestListPresets, ResultChatSnapshot, ResultEmpty,
+    ResultListLorebooks, ResultListMemories, ResultListPersonas, ResultListPresets,
+    ResultMessageRevisionList, ResultMessageVariantList, SnapshotOrigin,
 };
 use contracts_generated::Issue;
 use neotavern_storage::open::Database;
@@ -331,8 +331,21 @@ fn row_to_character(row: &rusqlite::Row) -> Result<CharacterDto, KernelError> {
 
 /// Renders a joined `chats` row (with `message_count`) as the wire
 /// [`ChatDto`]. Column order: id, title, character_id, persona_id,
-/// message_count, created_at, updated_at.
+/// message_count, created_at, updated_at, parent_chat_id, origin,
+/// source_message_id (v18).
 fn row_to_chat(row: &rusqlite::Row) -> Result<ChatDto, KernelError> {
+    let origin: Option<String> = row.get(8).map_err(|e| sqlite(e, "chats: read origin"))?;
+    let origin = match origin.as_deref() {
+        None => None,
+        Some("checkpoint") => Some(SnapshotOrigin::Checkpoint),
+        Some("branch") => Some(SnapshotOrigin::Branch),
+        Some(other) => {
+            return Err(KernelError::new(
+                KernelErrorCode::Internal,
+                format!("invalid chat origin in database: {other}"),
+            ));
+        }
+    };
     Ok(ChatDto {
         id: row.get(0).map_err(|e| sqlite(e, "chats: read id"))?,
         title: row.get(1).map_err(|e| sqlite(e, "chats: read title"))?,
@@ -351,6 +364,13 @@ fn row_to_chat(row: &rusqlite::Row) -> Result<ChatDto, KernelError> {
         updated_at: row
             .get(6)
             .map_err(|e| sqlite(e, "chats: read updated_at"))?,
+        parent_chat_id: row
+            .get(7)
+            .map_err(|e| sqlite(e, "chats: read parent_chat_id"))?,
+        origin,
+        source_message_id: row
+            .get(9)
+            .map_err(|e| sqlite(e, "chats: read source_message_id"))?,
     })
 }
 
@@ -404,6 +424,10 @@ pub(crate) fn row_to_message(row: &rusqlite::Row) -> Result<MessageDto, KernelEr
         meta: FreeObject {
             payload: meta_value,
         },
+        // Column 8 is `checkpoint_chat_id` (v18, nullable).
+        checkpoint_chat_id: row
+            .get(8)
+            .map_err(|e| sqlite(e, "messages: read checkpoint_chat_id"))?,
     })
 }
 
@@ -789,7 +813,7 @@ pub fn chats_list(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelEr
         let conn = db.conn();
         let mut sql = String::from(
             "SELECT c.id, c.title, c.character_id, c.persona_id, COALESCE(m.cnt, 0), \
-             c.created_at, c.updated_at \
+             c.created_at, c.updated_at, c.parent_chat_id, c.origin, c.source_message_id \
              FROM chats c \
              LEFT JOIN (SELECT chat_id, COUNT(*) AS cnt FROM messages GROUP BY chat_id) m \
                ON m.chat_id = c.id",
@@ -842,7 +866,7 @@ pub fn chats_get(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelErr
     let mut stmt = conn
         .prepare(
             "SELECT c.id, c.title, c.character_id, c.persona_id, COALESCE(m.cnt, 0), \
-             c.created_at, c.updated_at \
+             c.created_at, c.updated_at, c.parent_chat_id, c.origin, c.source_message_id \
              FROM chats c \
              LEFT JOIN (SELECT chat_id, COUNT(*) AS cnt FROM messages GROUP BY chat_id) m \
                ON m.chat_id = c.id \
@@ -879,7 +903,8 @@ pub fn messages_list(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Kerne
     {
         let conn = db.conn();
         let mut sql = String::from(
-            "SELECT id, chat_id, role, content, created_at, sequence, generation_run_id, meta_json \
+            "SELECT id, chat_id, role, content, created_at, sequence, generation_run_id, meta_json, \
+             checkpoint_chat_id \
              FROM messages WHERE chat_id = ?",
         );
         let mut params: Vec<Value> = vec![Value::Text(chat_id.clone())];
@@ -966,7 +991,7 @@ fn query_chat(conn: &rusqlite::Connection, chat_id: &str) -> Result<Option<ChatD
     let mut stmt = conn
         .prepare(
             "SELECT c.id, c.title, c.character_id, c.persona_id, COALESCE(m.cnt, 0), \
-             c.created_at, c.updated_at \
+             c.created_at, c.updated_at, c.parent_chat_id, c.origin, c.source_message_id \
              FROM chats c \
              LEFT JOIN (SELECT chat_id, COUNT(*) AS cnt FROM messages GROUP BY chat_id) m \
                ON m.chat_id = c.id \
@@ -990,7 +1015,8 @@ fn query_message(
 ) -> Result<Option<MessageDto>, KernelError> {
     let mut stmt = conn
         .prepare(
-            "SELECT id, chat_id, role, content, created_at, sequence, generation_run_id, meta_json \
+            "SELECT id, chat_id, role, content, created_at, sequence, generation_run_id, meta_json, \
+             checkpoint_chat_id \
              FROM messages WHERE id = ?1 AND chat_id = ?2",
         )
         .map_err(|e| sqlite(e, "query_message: prepare"))?;
@@ -1338,24 +1364,37 @@ pub fn messages_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Ker
     let meta_ref: Option<&str> = meta_json.as_deref();
     // The final content is the request value when given, else the stored text.
     let final_content: String = req.content.clone().unwrap_or_else(|| previous.clone());
-    if content_changed || req.meta.is_some() {
+    // Delete-checkpoint (slice 14): clears the snapshot link. The wire has no
+    // nullable `checkpointChatId` field; an explicit boolean is honest about
+    // the mutation (the legacy `null` patch maps here).
+    let clear_checkpoint = req.clear_checkpoint_chat_id.unwrap_or(false);
+    if content_changed || req.meta.is_some() || clear_checkpoint {
         db.transaction(|tx| {
             if content_changed {
                 record_content_revision(tx, &req.message_id, &previous, &final_content, &now_ts)?;
             }
+            let checkpoint_clause = if clear_checkpoint {
+                ", checkpoint_chat_id = NULL"
+            } else {
+                ""
+            };
             match meta_ref {
                 Some(meta) => {
                     tx.execute(
-                        "UPDATE messages SET content = ?1, meta_json = ?2, updated_at = ?3 \
-                         WHERE id = ?4 AND chat_id = ?5",
+                        &format!(
+                            "UPDATE messages SET content = ?1, meta_json = ?2{checkpoint_clause}, \
+                             updated_at = ?3 WHERE id = ?4 AND chat_id = ?5"
+                        ),
                         params![&final_content, meta, &now_ts, &req.message_id, &req.chat_id],
                     )
                     .map_err(|e| StorageError::from_sqlite(e, "messages_update: update"))?;
                 }
                 None => {
                     tx.execute(
-                        "UPDATE messages SET content = ?1, updated_at = ?2 \
-                         WHERE id = ?3 AND chat_id = ?4",
+                        &format!(
+                            "UPDATE messages SET content = ?1{checkpoint_clause}, \
+                             updated_at = ?2 WHERE id = ?3 AND chat_id = ?4"
+                        ),
                         params![&final_content, &now_ts, &req.message_id, &req.chat_id],
                     )
                     .map_err(|e| StorageError::from_sqlite(e, "messages_update: update"))?;
@@ -1387,6 +1426,249 @@ pub fn messages_delete(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Ker
     let dto = ResultEmpty {};
     validate(&dto, generated::validate_result_empty)?;
     encode(&dto)
+}
+
+/// `chats.snapshots.create` — freeze the chat prefix up to and including the
+/// source message into a fresh child chat (checkpoint or branch, Этап 4
+/// context 5 / slice 13 closure).
+///
+/// The kernel model is a single linear message sequence per chat (no legacy
+/// branch graph), so the copied prefix is `sequence <= target.sequence`
+/// ordered by `sequence, id`. Messages, swipe variants and content revisions
+/// are copied with remapped ids (the `parentId`-style chain is not modelled —
+/// the kernel has no message parent field), `meta_json` survives verbatim,
+/// and the child chat inherits the parent's character/persona and carries the
+/// snapshot trio `parent_chat_id`/`origin`/`source_message_id`. `kind =
+/// checkpoint` also links the source message to the child chat via
+/// `messages.checkpoint_chat_id` (replace semantics — the previous child chat
+/// is never deleted), which is what the UI's "open checkpoint" reads.
+///
+/// Missing chat → `CHAT_NOT_FOUND`; missing/foreign message → `MESSAGE_NOT_FOUND`.
+pub fn chats_snapshots_create(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_create_chat_snapshot(request)?;
+    let chat_id = req.chat_id.clone();
+    let source_message_id = req.message_id.clone();
+    if !chat_exists(db.conn(), &chat_id)? {
+        return Err(not_found("CHAT", &chat_id));
+    }
+    // Pre-check outside the transaction (single-writer dispatch): a missing
+    // message is a stable `MESSAGE_NOT_FOUND`, never a storage error.
+    let target_sequence: i64 = db
+        .conn()
+        .query_row(
+            "SELECT sequence FROM messages WHERE id = ?1 AND chat_id = ?2",
+            params![&source_message_id, &chat_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| sqlite(e, "chats_snapshots_create: read target"))?
+        .ok_or_else(|| not_found("MESSAGE", &source_message_id))?;
+    let origin_sql = match req.kind {
+        SnapshotOrigin::Checkpoint => "checkpoint",
+        SnapshotOrigin::Branch => "branch",
+    };
+    let (child_chat_id, copied) = db.transaction(|tx| {
+        let now_ts = now();
+        let (parent_title, character_id, persona_id): (String, String, Option<String>) = tx
+            .query_row(
+                "SELECT title, character_id, persona_id FROM chats WHERE id = ?1",
+                params![&chat_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .map_err(|e| StorageError::from_sqlite(e, "chats_snapshots_create: read parent"))?;
+        let child_chat_id = new_id();
+        let child_title = req
+            .title
+            .clone()
+            .unwrap_or_else(|| format!("{parent_title} — {origin_sql}"));
+        tx.execute(
+            "INSERT INTO chats (id, title, character_id, persona_id, parent_chat_id, origin, \
+             source_message_id, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![
+                &child_chat_id,
+                &child_title,
+                &character_id,
+                &persona_id,
+                &chat_id,
+                origin_sql,
+                &source_message_id,
+                &now_ts,
+                &now_ts
+            ],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "chats_snapshots_create: insert chat"))?;
+
+        // Keyset-free prefix copy: the kernel sequence is monotonic per chat,
+        // so `sequence <= target` is the whole active prefix. Ids are remapped
+        // through an in-memory map for the variant/revision fan-out below.
+        let mut id_map: std::collections::HashMap<String, String> = Default::default();
+        let mut copied: i64 = 0;
+        {
+            let mut stmt = tx
+                .prepare(
+                    "SELECT id, role, content, sequence, generation_run_id, meta_json, \
+                     created_at FROM messages \
+                     WHERE chat_id = ?1 AND sequence <= ?2 \
+                     ORDER BY sequence ASC, id ASC",
+                )
+                .map_err(|e| StorageError::from_sqlite(e, "chats_snapshots_create: prepare"))?;
+            let rows = stmt
+                .query_map(params![&chat_id, target_sequence], |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, i64>(3)?,
+                        row.get::<_, Option<String>>(4)?,
+                        row.get::<_, String>(5)?,
+                        row.get::<_, String>(6)?,
+                    ))
+                })
+                .map_err(|e| StorageError::from_sqlite(e, "chats_snapshots_create: query"))?;
+            for row in rows {
+                let (old_id, role, content, sequence, generation_run_id, meta_json, created_at) =
+                    row.map_err(|e| StorageError::from_sqlite(e, "chats_snapshots_create: row"))?;
+                let new_id = new_id();
+                id_map.insert(old_id.clone(), new_id.clone());
+                copied += 1;
+                tx.execute(
+                    "INSERT INTO messages (id, chat_id, role, content, sequence, \
+                     generation_run_id, meta_json, created_at) \
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                    params![
+                        &new_id,
+                        &child_chat_id,
+                        &role,
+                        &content,
+                        sequence,
+                        &generation_run_id,
+                        &meta_json,
+                        &created_at
+                    ],
+                )
+                .map_err(|e| StorageError::from_sqlite(e, "chats_snapshots_create: insert"))?;
+            }
+        }
+        // Copy swipe variants and content revisions for every copied message.
+        let old_ids: Vec<String> = id_map.keys().cloned().collect();
+        if !old_ids.is_empty() {
+            copy_message_variants(tx, &old_ids, &id_map, &child_chat_id)?;
+            copy_message_revisions(tx, &old_ids, &id_map, &child_chat_id)?;
+        }
+        // The kernel counts messages dynamically (COALESCE in the chat
+        // SELECTs) — there is no stored `message_count` column to update.
+        if matches!(req.kind, SnapshotOrigin::Checkpoint) {
+            tx.execute(
+                "UPDATE messages SET checkpoint_chat_id = ?1 WHERE id = ?2 AND chat_id = ?3",
+                params![&child_chat_id, &source_message_id, &chat_id],
+            )
+            .map_err(|e| StorageError::from_sqlite(e, "chats_snapshots_create: checkpoint"))?;
+        }
+        Ok((child_chat_id, copied))
+    })?;
+    let chat = query_chat(db.conn(), &child_chat_id)?.ok_or_else(|| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            "chats_snapshots_create: insert succeeded but select back found no row",
+        )
+    })?;
+    let dto = ResultChatSnapshot {
+        chat,
+        copied_messages: copied,
+    };
+    validate(&dto, generated::validate_result_chat_snapshot)?;
+    encode(&dto)
+}
+
+/// Copies the swipe variants of `old_ids` into the child chat with remapped
+/// message ids (same position/content/timestamp — the snapshot is a freeze).
+fn copy_message_variants(
+    tx: &rusqlite::Transaction<'_>,
+    old_ids: &[String],
+    id_map: &std::collections::HashMap<String, String>,
+    child_chat_id: &str,
+) -> Result<(), StorageError> {
+    let mut stmt = tx
+        .prepare(
+            "SELECT id, message_id, position, content, created_at FROM message_variants \
+             WHERE message_id IN (SELECT value FROM json_each(?1)) \
+             ORDER BY position ASC, created_at ASC",
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "copy_message_variants: prepare"))?;
+    let old_json = serde_json::to_string(old_ids)
+        .map_err(|e| StorageError::new(StorageErrorCode::Io, format!("variants json: {e}")))?;
+    let rows = stmt
+        .query_map(params![old_json], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i64>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+            ))
+        })
+        .map_err(|e| StorageError::from_sqlite(e, "copy_message_variants: query"))?;
+    for row in rows {
+        let (variant_id, message_id, position, content, created_at) =
+            row.map_err(|e| StorageError::from_sqlite(e, "copy_message_variants: row"))?;
+        let Some(new_message_id) = id_map.get(&message_id) else {
+            continue;
+        };
+        let _ = child_chat_id;
+        let _ = variant_id;
+        tx.execute(
+            "INSERT INTO message_variants (id, message_id, position, content, created_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![new_id(), new_message_id, position, &content, &created_at],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "copy_message_variants: insert"))?;
+    }
+    Ok(())
+}
+
+/// Copies the immutable content revisions of `old_ids` into the child chat
+/// with remapped message ids (the revision history survives the snapshot).
+fn copy_message_revisions(
+    tx: &rusqlite::Transaction<'_>,
+    old_ids: &[String],
+    id_map: &std::collections::HashMap<String, String>,
+    _child_chat_id: &str,
+) -> Result<(), StorageError> {
+    let mut stmt = tx
+        .prepare(
+            "SELECT id, message_id, position, content, created_at FROM message_content_revisions \
+             WHERE message_id IN (SELECT value FROM json_each(?1)) \
+             ORDER BY position ASC, created_at ASC",
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "copy_message_revisions: prepare"))?;
+    let old_json = serde_json::to_string(old_ids)
+        .map_err(|e| StorageError::new(StorageErrorCode::Io, format!("revisions json: {e}")))?;
+    let rows = stmt
+        .query_map(params![old_json], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i64>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+            ))
+        })
+        .map_err(|e| StorageError::from_sqlite(e, "copy_message_revisions: query"))?;
+    for row in rows {
+        let (_revision_id, message_id, position, content, created_at) =
+            row.map_err(|e| StorageError::from_sqlite(e, "copy_message_revisions: row"))?;
+        let Some(new_message_id) = id_map.get(&message_id) else {
+            continue;
+        };
+        tx.execute(
+            "INSERT INTO message_content_revisions (id, message_id, position, content, created_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![new_id(), new_message_id, position, &content, &created_at],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "copy_message_revisions: insert"))?;
+    }
+    Ok(())
 }
 
 /// `chats.messages.variants.list` — all swipe variants of a message in

@@ -188,11 +188,13 @@ export async function importCharacter(file: File): Promise<unknown> {
 
 /**
  * Snapshot the chat up to `message` as a checkpoint or branch child chat.
- * Kernel: the canonical Conversations model (chats/messages/variants/
- * revisions/drafts — ТЗ §8.1) has no snapshot/checkpoint entity and no wire
- * operation for it, so the kernel plane refuses honestly; the legacy contour
- * keeps the real snapshot flow (new child chat + prefix copy + checkpoint
- * link).
+ * Kernel plane (slice 14): wire `chats.snapshots.create` — the canonical
+ * Conversations model (ТЗ §8.1) now owns the snapshot capability: the prefix
+ * up to and including the source message is copied into a fresh child chat
+ * (`parentChatId`/`origin`/`sourceMessageId`), and `kind = checkpoint` links
+ * the source message (`MessageDto.checkpointChatId`). Legacy plane: the
+ * legacy contour keeps its full snapshot flow (new child chat + prefix copy +
+ * checkpoint link).
  */
 export async function createChatSnapshot(
   chatId: string,
@@ -200,28 +202,44 @@ export async function createChatSnapshot(
     messageId: string;
     kind: 'checkpoint' | 'branch';
     replace?: boolean;
+    title?: string;
   },
 ): Promise<ChatSnapshotResult> {
   if (isKernelMode()) {
-    throw new UnsupportedError('chats.snapshots.create');
+    const result = await backend.chats.createSnapshot({
+      chatId,
+      messageId: input.messageId,
+      kind: input.kind,
+      ...(input.title !== undefined ? { title: input.title } : {}),
+    });
+    return {
+      chat: translateChat(result.chat),
+      copiedMessages: result.copiedMessages,
+    };
   }
   return api.post<ChatSnapshotResult>(`/chats/${encodeURIComponent(chatId)}/snapshots`, {
     messageId: input.messageId,
     kind: input.kind,
     ...(input.replace !== undefined ? { replace: input.replace } : {}),
+    ...(input.title !== undefined ? { title: input.title } : {}),
   });
 }
 
 /**
  * Patch one message's content and/or extension metadata. Kernel plane: wire
- * `chats.messages.update` (content optional, meta optional, last-write-wins),
+ * `chats.messages.update` (content optional, meta optional, last-write-wins;
+ * `clearCheckpointChatId` maps the legacy delete-checkpoint `null` patch),
  * response translated to the legacy message shape with `meta` carried
  * verbatim. Legacy plane: the partial PATCH keeps its semantics.
  */
 export async function updateChatMessage(
   chatId: string,
   messageId: string,
-  patch: { content?: string; meta?: Record<string, unknown> },
+  patch: {
+    content?: string;
+    meta?: Record<string, unknown>;
+    clearCheckpointChatId?: boolean;
+  },
 ): Promise<Message> {
   if (isKernelMode()) {
     const dto = await backend.chats.updateMessage({
@@ -229,12 +247,22 @@ export async function updateChatMessage(
       messageId,
       ...(patch.content !== undefined ? { content: patch.content } : {}),
       ...(patch.meta !== undefined ? { meta: patch.meta } : {}),
+      ...(patch.clearCheckpointChatId !== undefined
+        ? { clearCheckpointChatId: patch.clearCheckpointChatId }
+        : {}),
     });
     return translateMessage(dto);
   }
+  // The legacy contour patches the real field; `clearCheckpointChatId` is the
+  // wire-only spelling of the legacy `{ checkpointChatId: null }` patch.
+  const body: Record<string, unknown> = { ...patch };
+  if (body.clearCheckpointChatId !== undefined) {
+    delete body.clearCheckpointChatId;
+    body.checkpointChatId = null;
+  }
   return api.patch<Message>(
     `/chats/${encodeURIComponent(chatId)}/messages/${encodeURIComponent(messageId)}`,
-    patch,
+    body,
   );
 }
 
@@ -582,10 +610,11 @@ export function translateChatSummary(dto: ChatDto): ChatSummary {
     messageCount: dto.messageCount,
     createdAt: toEpochMs(dto.createdAt),
     updatedAt: toEpochMs(dto.updatedAt),
-    // Snapshot provenance (checkpoint/branch children) is legacy-only.
-    parentChatId: null,
-    origin: null,
-    sourceMessageId: null,
+    // Snapshot provenance (checkpoint/branch children) now travels on the
+    // wire (slice 14): the kernel child chat carries the snapshot trio.
+    parentChatId: dto.parentChatId ?? null,
+    origin: dto.origin ?? null,
+    sourceMessageId: dto.sourceMessageId ?? null,
   };
 }
 
@@ -629,7 +658,11 @@ export function translateMessage(dto: MessageDto): Message {
     variantCount: 0,
     activeVariantPosition: null,
     contentRevisionCount: 0,
-    checkpointChatId: null,
+    // Snapshot checkpoint link travels on the wire (slice 14): the kernel
+    // stores `messages.checkpoint_chat_id` and exposes it as
+    // `MessageDto.checkpointChatId`; the UI's "open checkpoint" navigates to
+    // it on both planes.
+    checkpointChatId: dto.checkpointChatId ?? null,
   };
 }
 

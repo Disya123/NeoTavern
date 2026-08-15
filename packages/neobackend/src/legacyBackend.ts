@@ -181,6 +181,7 @@ export class LegacyBackend implements NeoBackend {
     createMessage: () => this.unsupported('chats.messages.create'),
     updateMessage: (req) => this.updateMessage(req),
     delMessage: (req) => this.delMessage(req),
+    createSnapshot: () => this.unsupported('chats.snapshots.create'),
     listMessageVariants: () => this.unsupported('chats.messages.variants.list'),
     createMessageVariant: () => this.unsupported('chats.messages.variants.create'),
     delMessageVariant: () => this.unsupported('chats.messages.variants.delete'),
@@ -407,6 +408,7 @@ export class LegacyBackend implements NeoBackend {
       content,
       createdAt,
       sequence,
+      meta: {},
       ...(generationRunId !== undefined ? { generationRunId } : {}),
     };
   }

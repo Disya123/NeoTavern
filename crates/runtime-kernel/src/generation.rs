@@ -1503,6 +1503,7 @@ fn terminal_completed(
         meta: FreeObject {
             payload: serde_json::Value::Object(Default::default()),
         },
+        checkpoint_chat_id: None,
     };
     validate(&message_dto, generated::validate_message_dto)?;
     let event_payload = event_payload(&GenerationEvent::GenerationCompleted {

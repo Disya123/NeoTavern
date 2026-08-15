@@ -54,8 +54,17 @@ export const CharacterDtoSchema = Type.Object(
 );
 export type CharacterDto = Static<typeof CharacterDtoSchema>;
 
+/** Snapshot origin (`wire.snapshot.origin`): checkpoint or branch. */
+export const WireSnapshotOrigin = Type.Union(
+  [Type.Literal('checkpoint'), Type.Literal('branch')],
+  { $id: 'wire.snapshot.origin', 'x-wire-unknown-behavior': 'reject' },
+);
+export type WireSnapshotOrigin = Static<typeof WireSnapshotOrigin>;
+
 /** Chat DTO (`wire.chat.dto`). `personaId` (optional) is the user persona
- * applied by the prompt pipeline (ADR-0047 waiver 5, Этап 4 slice 3). */
+ * applied by the prompt pipeline (ADR-0047 waiver 5, Этап 4 slice 3); the
+ * snapshot trio (`parentChatId`/`origin`/`sourceMessageId`) marks child chats
+ * created by `chats.snapshots.create`. */
 export const ChatDtoSchema = Type.Object(
   {
     id: Type.String({ format: 'uuid' }),
@@ -65,6 +74,12 @@ export const ChatDtoSchema = Type.Object(
     messageCount: Type.Integer({ minimum: 0 }),
     createdAt: Type.String({ format: 'rfc3339' }),
     updatedAt: Type.String({ format: 'rfc3339' }),
+    /** Parent chat id when this chat is a snapshot (checkpoint/branch) child. */
+    parentChatId: Type.Optional(Type.String({ format: 'uuid' })),
+    /** Snapshot origin (`checkpoint` or `branch`) when this chat is a child. */
+    origin: Type.Optional(WireSnapshotOrigin),
+    /** Source message the snapshot was taken from (child chats only). */
+    sourceMessageId: Type.Optional(Type.String({ format: 'uuid' })),
   },
   { $id: 'wire.chat.dto', additionalProperties: false },
 );
@@ -100,6 +115,8 @@ export const MessageDtoSchema = Type.Object(
     generationRunId: Type.Optional(Type.String({ format: 'uuid' })),
     /** Extension metadata (tool calls, manual exclusion, swipe bookmarks). */
     meta: WireFreeObjectSchema,
+    /** Child chat id when this message is a checkpoint source (snapshots). */
+    checkpointChatId: Type.Optional(Type.String({ format: 'uuid' })),
   },
   { $id: 'wire.message.dto', additionalProperties: false },
 );
@@ -844,6 +861,10 @@ export const UpdateMessageRequestDtoSchema = Type.Object(
     content: Type.Optional(Type.String({ minLength: 0, maxLength: 1000000 })),
     /** Replace the extension metadata object; omitted keeps it unchanged. */
     meta: Type.Optional(WireFreeObjectSchema),
+    /** Clear the snapshot checkpoint link (delete-checkpoint). Wire has no
+     * nullable field for `checkpointChatId`; an explicit boolean is honest
+     * about the mutation (legacy `null` patches map here). */
+    clearCheckpointChatId: Type.Optional(Type.Boolean()),
   },
   { $id: 'wire.request.update-message', additionalProperties: false },
 );
@@ -858,6 +879,33 @@ export const DeleteMessageRequestDtoSchema = Type.Object(
   { $id: 'wire.request.delete-message', additionalProperties: false },
 );
 export type DeleteMessageRequestDto = Static<typeof DeleteMessageRequestDtoSchema>;
+
+/** Create chat snapshot request DTO (`wire.request.create-chat-snapshot`). */
+export const CreateChatSnapshotRequestDtoSchema = Type.Object(
+  {
+    chatId: Type.String({ format: 'uuid' }),
+    /** Last message of the frozen prefix (the snapshot copies up to and
+     * including this message). */
+    messageId: Type.String({ format: 'uuid' }),
+    kind: WireSnapshotOrigin,
+    /** Optional child chat title; defaults to "<parent title> — <kind>". */
+    title: Type.Optional(Type.String({ minLength: 1, maxLength: 500 })),
+  },
+  { $id: 'wire.request.create-chat-snapshot', additionalProperties: false },
+);
+export type CreateChatSnapshotRequestDto = Static<typeof CreateChatSnapshotRequestDtoSchema>;
+
+/** Create chat snapshot result DTO (`wire.result.chat-snapshot`). */
+export const ChatSnapshotResultDtoSchema = Type.Object(
+  {
+    chat: ChatDtoSchema,
+    /** Number of messages copied into the child chat (prefix up to and
+     * including the source message). */
+    copiedMessages: Type.Integer({ minimum: 0 }),
+  },
+  { $id: 'wire.result.chat-snapshot', additionalProperties: false },
+);
+export type ChatSnapshotResultDto = Static<typeof ChatSnapshotResultDtoSchema>;
 
 /** List message variants request DTO (`wire.request.message-variants-list`). */
 export const ListMessageVariantsRequestDtoSchema = Type.Object(
@@ -2169,6 +2217,9 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.request.create-message': CreateMessageRequestDtoSchema,
   'wire.request.update-message': UpdateMessageRequestDtoSchema,
   'wire.request.delete-message': DeleteMessageRequestDtoSchema,
+  'wire.snapshot.origin': WireSnapshotOrigin,
+  'wire.request.create-chat-snapshot': CreateChatSnapshotRequestDtoSchema,
+  'wire.result.chat-snapshot': ChatSnapshotResultDtoSchema,
   'wire.message.variant.dto': MessageVariantDtoSchema,
   'wire.message.revision.dto': MessageRevisionDtoSchema,
   'wire.message.draft.dto': MessageDraftDtoSchema,

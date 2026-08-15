@@ -524,6 +524,20 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'chats.snapshots.create',
+    'transactional',
+    'non-idempotent',
+    'none',
+    'app.write',
+    'wire.request.create-chat-snapshot',
+    'wire.result.chat-snapshot',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    262144,
+    undefined,
+  ),
+  op(
     'chats.messages.variants.list',
     'transactional',
     'idempotent',
@@ -2061,6 +2075,15 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('chats-messages-delete-request', 'chats.messages.delete', 'request', true, {
     chatId: UUID_CHAT,
     messageId: UUID_MESSAGE,
+  }),
+  fx('chats-snapshots-create-request', 'chats.snapshots.create', 'request', true, {
+    chatId: UUID_CHAT,
+    messageId: UUID_MESSAGE,
+    kind: 'checkpoint',
+  }),
+  fx('chats-snapshots-create-response', 'chats.snapshots.create', 'response', true, {
+    chat: CHAT_VALUE,
+    copiedMessages: 2,
   }),
   fx('generation-start-request', 'generation.start', 'request', true, {
     chatId: UUID_CHAT,

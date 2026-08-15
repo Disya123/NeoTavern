@@ -39,6 +39,7 @@ function buildPayload(spec) {
             sequence: 1,
             generationRunId: RUN_ID,
             createdAt: '2026-08-13T00:00:00Z',
+            meta: {},
           },
         ],
       };

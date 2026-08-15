@@ -61,6 +61,7 @@ import {
   type PagedChatsDto,
   type PagedGenerationEventsDto,
   type PagedMessagesDto,
+  type ChatSnapshotResultDto,
 } from '@neotavern/contracts';
 import { ProductError, type StreamEvent } from '@neotavern/client-sdk';
 import type {
@@ -276,6 +277,8 @@ export class LocalBackend implements NeoBackend {
       createMessage: (req, opts) => this.invoke<MessageDto>('chats.messages.create', req, opts),
       updateMessage: (req, opts) => this.invoke<MessageDto>('chats.messages.update', req, opts),
       delMessage: (req, opts) => this.invoke<EmptyResultDto>('chats.messages.delete', req, opts),
+      createSnapshot: (req, opts) =>
+        this.invoke<ChatSnapshotResultDto>('chats.snapshots.create', req, opts),
       listMessageVariants: (req, opts) =>
         this.invoke<ListMessageVariantsResultDto>('chats.messages.variants.list', req, opts),
       createMessageVariant: (req, opts) =>

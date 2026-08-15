@@ -12,9 +12,11 @@ import type {
   BackupDto,
   CharacterDto,
   ChatDto,
+  ChatSnapshotResultDto,
   CommitMessageDraftRequestDto,
   CreateCharacterRequestDto,
   CreateChatRequestDto,
+  CreateChatSnapshotRequestDto,
   CreateLorebookEntryRequestDto,
   CreateLorebookRequestDto,
   CreateMemoryRequestDto,
@@ -142,6 +144,11 @@ export interface ChatsApi {
   updateMessage(req: UpdateMessageRequestDto, opts?: BackendCallOptions): Promise<MessageDto>;
   /** Delete a message. */
   delMessage(req: DeleteMessageRequestDto, opts?: BackendCallOptions): Promise<EmptyResultDto>;
+  /** Freeze the chat prefix into a fresh child chat (checkpoint/branch). */
+  createSnapshot(
+    req: CreateChatSnapshotRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<ChatSnapshotResultDto>;
   /** List the swipe variants of one message (wire `chats.messages.variants.list`). */
   listMessageVariants(
     req: ListMessageVariantsRequestDto,

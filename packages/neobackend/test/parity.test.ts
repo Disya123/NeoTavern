@@ -261,6 +261,7 @@ const PAGED_MESSAGES: PagedMessagesDto = {
       createdAt: TIMESTAMP,
       sequence: 0,
       generationRunId: RUN_ID,
+      meta: {},
     },
   ],
   nextCursor: 'page-2',
@@ -366,6 +367,7 @@ const FINAL_MESSAGE = {
   createdAt: '2026-06-02T10:00:00.000Z',
   sequence: 0,
   generationRunId: RUN_ID,
+  meta: {},
 };
 
 /** Events streamed by `generation.start` / `generation.retry` (identical on both transports). */
@@ -1375,6 +1377,7 @@ describe('LegacyBackend', () => {
       content: 'edited text',
       createdAt: TIMESTAMP,
       sequence: 0,
+      meta: {},
     });
     expect(calls).toEqual([
       {

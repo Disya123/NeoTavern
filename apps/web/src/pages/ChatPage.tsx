@@ -624,9 +624,11 @@ export function ChatPage() {
       if (!chatId) return;
       setError(null);
       try {
-        await updateChatMessage(chatId, message.id, {
-          meta: { ...message.meta, checkpointChatId: null },
-        });
+        // Slice 14: both planes clear the real snapshot link — the kernel
+        // stores `messages.checkpoint_chat_id` (wire
+        // `clearCheckpointChatId`), the legacy contour patches
+        // `checkpointChatId: null`. Extension metadata is left untouched.
+        await updateChatMessage(chatId, message.id, { clearCheckpointChatId: true });
         await queryClient.invalidateQueries({ queryKey: ['messages', chatId] });
       } catch (err) {
         setError(errorText(err));

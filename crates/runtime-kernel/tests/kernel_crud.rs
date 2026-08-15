@@ -1907,3 +1907,189 @@ fn converted_legacy_variants_usable_over_wire() {
     assert_eq!(draft.role, MessageRole::Assistant);
     assert_eq!(draft.revision, 1);
 }
+
+#[test]
+fn chat_snapshot_checkpoint_and_branch_round_trip() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel_with_root(root.path());
+
+    let character =
+        dispatch_decoded::<CharacterDto>(&kernel, "characters.create", json!({ "name": "Aria" }))
+            .expect("character must be created");
+    let chat = dispatch_decoded::<ChatDto>(
+        &kernel,
+        "chats.create",
+        json!({ "characterId": character.id, "title": "The journey" }),
+    )
+    .expect("chats.create");
+    let chat_id = chat.id.clone();
+
+    let m0 = dispatch_decoded::<MessageDto>(
+        &kernel,
+        "chats.messages.create",
+        json!({ "chatId": chat_id, "role": "user", "content": "Hello" }),
+    )
+    .expect("first message");
+    let m1 = dispatch_decoded::<MessageDto>(
+        &kernel,
+        "chats.messages.create",
+        json!({ "chatId": chat_id, "role": "assistant", "content": "Hi there" }),
+    )
+    .expect("second message");
+    let m2 = dispatch_decoded::<MessageDto>(
+        &kernel,
+        "chats.messages.create",
+        json!({ "chatId": chat_id, "role": "user", "content": "After the snapshot point" }),
+    )
+    .expect("third message");
+
+    // The wire has no single-message GET; read back through the chat list.
+    let message_by_id = |kernel: &Kernel, chat_id: &str, message_id: &str| -> MessageDto {
+        let page = dispatch_decoded::<PagedMessages>(
+            kernel,
+            "chats.messages.list",
+            json!({ "chatId": chat_id }),
+        )
+        .expect("messages.list");
+        page.items
+            .into_iter()
+            .find(|m| m.id == message_id)
+            .expect("message present in chat")
+    };
+
+    // --- checkpoint snapshot of the prefix up to m1 (2 messages).
+    let snapshot = dispatch_decoded::<contracts_generated::generated::ResultChatSnapshot>(
+        &kernel,
+        "chats.snapshots.create",
+        json!({ "chatId": chat_id, "messageId": m1.id, "kind": "checkpoint" }),
+    )
+    .expect("checkpoint snapshot");
+    assert_eq!(snapshot.copied_messages, 2);
+    let child = snapshot.chat;
+    assert_eq!(child.title, "The journey — checkpoint");
+    assert_eq!(child.character_id, character.id);
+    assert_eq!(child.parent_chat_id.as_deref(), Some(chat_id.as_str()));
+    assert_eq!(child.source_message_id.as_deref(), Some(m1.id.as_str()));
+    assert_eq!(child.message_count, 2);
+
+    // The source message now carries the checkpoint link (open-checkpoint).
+    let m1_after = message_by_id(&kernel, &chat_id, &m1.id);
+    assert_eq!(
+        m1_after.checkpoint_chat_id.as_deref(),
+        Some(child.id.as_str())
+    );
+
+    // The child contains exactly the frozen prefix; the third message (after
+    // the snapshot point) must not leak into it.
+    let child_messages = dispatch_decoded::<PagedMessages>(
+        &kernel,
+        "chats.messages.list",
+        json!({ "chatId": child.id }),
+    )
+    .expect("child messages");
+    assert_eq!(child_messages.items.len(), 2);
+    assert_eq!(child_messages.items[0].content, "Hello");
+    assert_eq!(child_messages.items[1].content, "Hi there");
+    assert_eq!(child_messages.items[1].chat_id, child.id);
+
+    // Branch snapshot of the same prefix — no checkpoint link on the source.
+    let branch = dispatch_decoded::<contracts_generated::generated::ResultChatSnapshot>(
+        &kernel,
+        "chats.snapshots.create",
+        json!({ "chatId": chat_id, "messageId": m1.id, "kind": "branch", "title": "Branch A" }),
+    )
+    .expect("branch snapshot");
+    assert_eq!(branch.copied_messages, 2);
+    assert_eq!(branch.chat.title, "Branch A");
+    assert_eq!(
+        branch.chat.origin,
+        Some(contracts_generated::generated::SnapshotOrigin::Branch)
+    );
+    let m1_after_branch = message_by_id(&kernel, &chat_id, &m1.id);
+    assert_eq!(
+        m1_after_branch.checkpoint_chat_id.as_deref(),
+        Some(child.id.as_str()),
+        "branch snapshot must not overwrite the checkpoint link"
+    );
+
+    // --- honest errors: missing chat, missing message.
+    let err = dispatch_json(
+        &kernel,
+        "chats.snapshots.create",
+        json!({ "chatId": "99999999-9999-4999-8999-999999999999", "messageId": m0.id, "kind": "branch" }),
+    )
+    .expect_err("snapshot of a missing chat must fail");
+    assert_eq!(err.product.as_ref().unwrap().code, "CHAT_NOT_FOUND");
+
+    // Snapshot at the very last message is valid (full chat prefix).
+    dispatch_decoded::<contracts_generated::generated::ResultChatSnapshot>(
+        &kernel,
+        "chats.snapshots.create",
+        json!({ "chatId": chat_id, "messageId": m2.id, "kind": "checkpoint" }),
+    )
+    .expect("snapshot at the last message must succeed");
+
+    let missing_message = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    let err = dispatch_json(
+        &kernel,
+        "chats.snapshots.create",
+        json!({ "chatId": chat_id, "messageId": missing_message, "kind": "branch" }),
+    )
+    .expect_err("snapshot of a missing message must fail");
+    assert_eq!(err.product.as_ref().unwrap().code, "MESSAGE_NOT_FOUND");
+}
+
+#[test]
+fn message_update_clears_checkpoint_link() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel_with_root(root.path());
+
+    let character =
+        dispatch_decoded::<CharacterDto>(&kernel, "characters.create", json!({ "name": "Aria" }))
+            .expect("character must be created");
+    let chat = dispatch_decoded::<ChatDto>(
+        &kernel,
+        "chats.create",
+        json!({ "characterId": character.id }),
+    )
+    .expect("chats.create");
+    let chat_id = chat.id.clone();
+    let m0 = dispatch_decoded::<MessageDto>(
+        &kernel,
+        "chats.messages.create",
+        json!({ "chatId": chat_id, "role": "user", "content": "Hello" }),
+    )
+    .expect("first message");
+
+    let snapshot = dispatch_decoded::<contracts_generated::generated::ResultChatSnapshot>(
+        &kernel,
+        "chats.snapshots.create",
+        json!({ "chatId": chat_id, "messageId": m0.id, "kind": "checkpoint" }),
+    )
+    .expect("checkpoint snapshot");
+    let page = dispatch_decoded::<PagedMessages>(
+        &kernel,
+        "chats.messages.list",
+        json!({ "chatId": chat_id }),
+    )
+    .expect("messages.list");
+    let linked = page
+        .items
+        .into_iter()
+        .find(|m| m.id == m0.id)
+        .expect("source message");
+    assert_eq!(
+        linked.checkpoint_chat_id.as_deref(),
+        Some(snapshot.chat.id.as_str())
+    );
+
+    // Delete-checkpoint: clears the real link, keeps content + meta.
+    let cleared = dispatch_decoded::<MessageDto>(
+        &kernel,
+        "chats.messages.update",
+        json!({ "chatId": chat_id, "messageId": m0.id, "clearCheckpointChatId": true }),
+    )
+    .expect("clear checkpoint link");
+    assert_eq!(cleared.checkpoint_chat_id, None);
+    assert_eq!(cleared.content, "Hello");
+}
