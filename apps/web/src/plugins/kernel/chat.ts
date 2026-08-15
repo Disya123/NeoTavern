@@ -15,9 +15,14 @@
  * half-written committed message; abort/session-teardown deletes the draft.
  */
 import { kernel } from '@neotavern/plugin-sdk';
-import type { CursorPage, Message, MessageDraft } from '@neotavern/contracts';
+import type { CursorPage, Message } from '@neotavern/contracts';
 import { legacyRaw } from '../../api/backend.js';
 import { ApiError } from '../../api/client.js';
+import {
+  commitMessageDraft,
+  discardMessageDraft,
+  saveMessageDraft,
+} from '../../api/wireBridge.js';
 import type { KernelHostContext } from './types.js';
 
 const { KernelError, KernelErrorCode } = kernel;
@@ -41,10 +46,6 @@ interface DraftState {
   /** window.setTimeout id (browser runtime; DOM lib returns number). */
   timer: number | null;
   flushing: Promise<void> | null;
-}
-
-function draftPath(chatId: string, draftId: string): string {
-  return `/chats/${encodeURIComponent(chatId)}/drafts/${encodeURIComponent(draftId)}`;
 }
 
 function deny(method: string): KernelError {
@@ -199,7 +200,10 @@ export function attachChat(ctx: KernelHostContext): void {
     // Stream into the server-side draft; the sequence makes replayed writes
     // idempotent no-ops (rev4 stage 3). No committed message exists yet.
     draft.sequence += 1;
-    await legacyRaw().request<MessageDraft>('PATCH', draftPath(draft.chatId, draft.draftId), {
+    await saveMessageDraft({
+      chatId: draft.chatId,
+      draftId: draft.draftId,
+      role: 'assistant',
       content: draft.text,
       sequence: draft.sequence,
     });
@@ -235,7 +239,7 @@ export function attachChat(ctx: KernelHostContext): void {
     dispose: () => {
       for (const draft of [...drafts.values()]) {
         clearTimer(draft);
-        void legacyRaw().request('DELETE', draftPath(draft.chatId, draft.draftId)).catch(() => {});
+        void discardMessageDraft(draft.chatId, draft.draftId).catch(() => {});
       }
       drafts.clear();
     },
@@ -246,13 +250,11 @@ export function attachChat(ctx: KernelHostContext): void {
     if (!ctx.hasCapability('chats.draft')) throw deny('chat.draft.start');
     const chatId = resolveChatId(ctx, params, 'chat.draft.start');
     try {
-      const draft = await legacyRaw().request<MessageDraft>(
-        'POST',
-        `/chats/${encodeURIComponent(chatId)}/drafts`,
-        {
-          role: 'assistant',
-        },
-      );
+      const draft = await saveMessageDraft({
+        chatId,
+        role: 'assistant',
+        content: '',
+      });
       drafts.set(draft.id, {
         draftId: draft.id,
         chatId,
@@ -299,21 +301,16 @@ export function attachChat(ctx: KernelHostContext): void {
       if (draft.flushing !== null) await draft.flushing;
       if (draft.dirty) {
         draft.sequence += 1;
-        await legacyRaw().request<MessageDraft>(
-          'PATCH',
-          draftPath(draft.chatId, draft.draftId),
-          {
-            content: draft.text,
-            sequence: draft.sequence,
-          },
-        );
+        await saveMessageDraft({
+          chatId: draft.chatId,
+          draftId: draft.draftId,
+          role: 'assistant',
+          content: draft.text,
+          sequence: draft.sequence,
+        });
         draft.dirty = false;
       }
-      const committed = await legacyRaw().request<{ messageId: string }>(
-        'POST',
-        draftPath(draft.chatId, draft.draftId) + '/commit',
-        {},
-      );
+      const committed = await commitMessageDraft(draft.chatId, draft.draftId);
       return { messageId: committed.messageId };
     } catch (error) {
       throw toKernelError(error);
@@ -332,7 +329,7 @@ export function attachChat(ctx: KernelHostContext): void {
     if (draft.flushing !== null) {
       await draft.flushing.catch(() => {});
     }
-    await legacyRaw().request('DELETE', draftPath(draft.chatId, draft.draftId)).catch(() => {});
+    await discardMessageDraft(draft.chatId, draft.draftId).catch(() => {});
     return {};
   });
 }

@@ -90,6 +90,7 @@ describe('MessageRevisionHistoryCard', () => {
       chatId: message.chatId,
       messageId: message.id,
       revisionId: revision.id,
+      content: revision.content,
       expectedRevision: message.revision,
     });
   });

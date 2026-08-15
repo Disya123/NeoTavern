@@ -58,6 +58,22 @@
   Remote parity + validation for the nine ops (neobackend `parity.test.ts`),
   and kernel-mode wireBridge routing/translation coverage.
 
+- **Chat UI cutover for variants/revisions/drafts (M5 / Этап 4, slice 2).**
+  `ChatPage` swipe controls route through `swipeMessageToPosition`: kernel
+  mode resolves the legacy swipe position onto the canonical variant
+  (`variants.activate`, the active text is the implicit last item — swiping
+  onto it is a no-op), browser mode keeps `POST .../swipe {position}`. The
+  variants/revisions hooks now load through the facade in kernel mode
+  (revisions restore maps onto `chats.messages.update` with the archived
+  content; the legacy CAS `expectedRevision` stays legacy-only). The variants
+  query drives the swipe counter when the message carries no permutation
+  fields (kernel mode), eagerly only for the newest message so a long history
+  does not fan out one request per assistant row (older rows load lazily via
+  the picker). Kernel-plugin draft streaming (`plugins/kernel/chat.ts`)
+  streams through `saveMessageDraft`/`commitMessageDraft`/
+  `discardMessageDraft` instead of the legacy draft routes. The legacy UI
+  surface shrinks from 68 to 61 allowed sites (`check-ui-api` regenerated).
+
 - **Entry-level lorebook CRUD over Product Wire (M4 / Этап 4.1, slice
   follow-up).** Four new wire operations `lorebooks.entries.list/create/
   update/delete` join the `lorebooks.*` book ops: the kernel owns each

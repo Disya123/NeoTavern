@@ -255,7 +255,7 @@
     {
       "source": "architecture/operations-inventory.md",
       "target": "architecture/operations-inventory.md",
-      "sha256": "029699ef0045de626d1180a931086cfe4022e1897d045d5abc50fa5955b4e53e"
+      "sha256": "ef69005a5fc1cc17a25c2ce6b8a3ead5e78c82e6bdd9d49ea08347eb277ce66e"
     },
     {
       "source": "architecture/portable-data.md",
@@ -275,7 +275,7 @@
     {
       "source": "architecture/ui-legacy-surface.md",
       "target": "architecture/ui-legacy-surface.md",
-      "sha256": "6f20e6f1d6fb89624e09d41f8f77c19bf50fd399365aac529dce01bcf954e098"
+      "sha256": "2012a4b58de0dc35634489c5e77f95cd171f92b9f3c552c1d7a7dff0c0a3809a"
     },
     {
       "source": "architecture/version-axes.md",

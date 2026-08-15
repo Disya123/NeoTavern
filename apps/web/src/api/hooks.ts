@@ -22,15 +22,11 @@ import type {
   ChatCreate,
   ChatReorder,
   ChatUpdate,
-  CursorPage,
   InstructFormatListResponse,
   LorebookCreate,
   LorebookEntryCreate,
   LorebookEntryUpdate,
   LorebookUpdate,
-  Message,
-  MessageContentRevision,
-  MessageVariant,
   Preset,
   PresetCreate,
   PresetUpdate,
@@ -83,8 +79,11 @@ import {
   readLorebook,
   readLorebookEntries,
   readLorebooks,
+  readMessageRevisions,
+  readMessageVariants,
   readMessages,
   readPersonas,
+  restoreMessageRevision,
   updateCharacter,
   updateChat,
   updateLorebook,
@@ -143,15 +142,6 @@ export function useLogout() {
       qc.removeQueries({ predicate: (query) => query.queryKey[0] !== 'auth-session' });
     },
   });
-}
-
-function encodeQuery(params: Record<string, string | number | boolean | undefined>): string {
-  const search = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined) search.set(key, String(value));
-  }
-  const qs = search.toString();
-  return qs.length > 0 ? `?${qs}` : '';
 }
 
 /* Characters --------------------------------------------------------------- */
@@ -390,9 +380,10 @@ export function useMessages(chatId: string | undefined, branchId?: string) {
 }
 
 /**
- * Stored swipe variants of one message (positions 0..variantCount-1; the
- * active content lives in `messages.content`, not here). Fetched lazily: the
- * query stays disabled until the caller opens the picker.
+ * Stored swipe variants of one message (positions ascending; the active
+ * content lives in `messages.content`). Routes through the facade in kernel
+ * mode (Этап 4 slice 2) and the legacy variants route otherwise. Fetched
+ * lazily: the query stays disabled until the caller opens the picker.
  */
 export function useMessageVariants(
   chatId: string | undefined,
@@ -401,13 +392,12 @@ export function useMessageVariants(
 ) {
   return useQuery({
     queryKey: ['message-variants', chatId, messageId],
-    queryFn: () =>
-      api.get<{ items: MessageVariant[] }>(`/chats/${chatId}/messages/${messageId}/variants`),
+    queryFn: () => readMessageVariants(chatId as string, messageId as string),
     enabled: chatId !== undefined && messageId !== undefined && enabled,
     staleTime: 30_000,
   });
 }
-/** Manual content revisions, loaded newest-first only while the history card is open. */
+/** Manual content revisions; kernel mode returns the full list in one page. */
 export function useMessageRevisions(
   chatId: string | undefined,
   messageId: string | undefined,
@@ -416,12 +406,7 @@ export function useMessageRevisions(
   return useInfiniteQuery({
     queryKey: ['message-revisions', chatId, messageId],
     queryFn: ({ pageParam }) =>
-      api.get<CursorPage<MessageContentRevision>>(
-        `/chats/${chatId}/messages/${messageId}/revisions${encodeQuery({
-          cursor: pageParam as string | undefined,
-          limit: 20,
-        })}`,
-      ),
+      readMessageRevisions(chatId as string, messageId as string, pageParam as string | undefined),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
     enabled: chatId !== undefined && messageId !== undefined && enabled,
@@ -433,6 +418,9 @@ export interface RestoreMessageRevisionInput {
   chatId: string;
   messageId: string;
   revisionId: string;
+  /** Archived text to restore as the active content (kernel mode needs it). */
+  content: string;
+  /** Legacy-only CAS guard; ignored by the kernel mode mapping. */
   expectedRevision: number;
 }
 
@@ -441,9 +429,12 @@ export function useRestoreMessageRevision() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: RestoreMessageRevisionInput) =>
-      api.post<Message>(
-        `/chats/${input.chatId}/messages/${input.messageId}/revisions/${encodeURIComponent(input.revisionId)}/restore`,
-        { expectedRevision: input.expectedRevision },
+      restoreMessageRevision(
+        input.chatId,
+        input.messageId,
+        input.revisionId,
+        input.content,
+        input.expectedRevision,
       ),
     onSuccess: (_message, input) => {
       void qc.invalidateQueries({ queryKey: ['messages', input.chatId] });

@@ -578,6 +578,27 @@ export async function activateMessageVariant(
 }
 
 /**
+ * Swipe to a position of the message's swipe set (legacy permutation index).
+ * Kernel mode maps the position onto the canonical variant by `position`
+ * (the active text lives in `messages.content` and is the implicit last
+ * item — swiping onto it is a no-op that resolves `null`); browser mode
+ * keeps the legacy `POST .../swipe {position}` route.
+ */
+export async function swipeMessageToPosition(
+  chatId: string,
+  messageId: string,
+  position: number,
+): Promise<Message | null> {
+  if (isKernelMode()) {
+    const variants = await readMessageVariants(chatId, messageId);
+    const variant = variants.find((item) => item.position === position);
+    if (!variant) return null;
+    return activateMessageVariant(chatId, messageId, variant.id);
+  }
+  return api.post<Message>(`/chats/${chatId}/messages/${messageId}/swipe`, { position });
+}
+
+/**
  * List the immutable content revisions of one message. The kernel returns
  * the full list in one page; the legacy route is cursor-paginated.
  */
@@ -599,20 +620,22 @@ export async function readMessageRevisions(
  * Restore an archived text as the active message content. Kernel mode maps
  * this onto the existing `chats.messages.update` wire op (the canonical
  * restore semantics: setting the content records the replaced text as a new
- * revision); legacy keeps its dedicated restore route.
+ * revision); legacy keeps its dedicated restore route with the optional CAS
+ * guard (`expectedRevision` is legacy-only and ignored in kernel mode).
  */
 export async function restoreMessageRevision(
   chatId: string,
   messageId: string,
   revisionId: string,
   content: string,
+  expectedRevision?: number,
 ): Promise<Message> {
   if (isKernelMode()) {
     return translateMessage(await backend.chats.updateMessage({ chatId, messageId, content }));
   }
   return api.post<Message>(
     `/chats/${chatId}/messages/${messageId}/revisions/${revisionId}/restore`,
-    {},
+    { ...(expectedRevision !== undefined ? { expectedRevision } : {}) },
   );
 }
 

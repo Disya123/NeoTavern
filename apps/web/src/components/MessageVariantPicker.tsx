@@ -45,29 +45,49 @@ export function MessageVariantPicker({
   }, [open]);
 
   const activePosition = message.activeVariantPosition;
-  const rows = [
-    // Stored variants never include the active content (it lives in
-    // `message.content`); the active row is synthesised so the picker shows
-    // the full permutation.
-    ...(variants.data?.items ?? [])
-      .filter((variant) => variant.position !== activePosition)
-      .map((variant) => ({
-        id: variant.id,
-        position: variant.position,
-        content: variant.content,
-        active: false,
-      })),
-    ...(activePosition !== null
+  const stored = variants.data ?? [];
+  const contentIndex = stored.findIndex((variant) => variant.content === message.content);
+  // Kernel mode messages carry no permutation fields (translateMessage
+  // reports 0/null): the active content matches one of the stored variants
+  // (after activation) or is a fresh text appended as the last row. Legacy
+  // mode keeps the permutation semantics (active text not in the table).
+  const rows =
+    activePosition !== null
       ? [
+          ...stored
+            .filter((variant) => variant.position !== activePosition)
+            .map((variant) => ({
+              id: variant.id,
+              position: variant.position,
+              content: variant.content,
+              active: false,
+            })),
           {
             id: `active-${message.id}`,
             position: activePosition,
             content: message.content,
             active: true,
           },
-        ]
-      : []),
-  ].sort((left, right) => left.position - right.position);
+        ].sort((left, right) => left.position - right.position)
+      : [
+          ...stored.map((variant, index) => ({
+            id: variant.id,
+            position: variant.position,
+            content: variant.content,
+            active: index === contentIndex,
+          })),
+          ...(contentIndex < 0
+            ? [
+                {
+                  id: `active-${message.id}`,
+                  position: stored.length,
+                  content: message.content,
+                  active: true,
+                },
+              ]
+            : []),
+        ].sort((left, right) => left.position - right.position);
+  const total = activePosition !== null ? message.variantCount : stored.length + 1;
 
   return (
     <div ref={rootRef} className={styles.root} data-component="message-variant-picker">
@@ -105,7 +125,7 @@ export function MessageVariantPicker({
                 }}
               >
                 <span className={styles.index}>
-                  {row.position + 1}/{message.variantCount}
+                  {row.position + 1}/{total}
                 </span>
                 <span className={styles.preview}>
                   {row.content.slice(0, PREVIEW_MAX_LENGTH) || ' '}

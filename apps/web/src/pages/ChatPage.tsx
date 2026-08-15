@@ -12,9 +12,10 @@ import { useTranslation } from 'react-i18next';
 import { Button, ErrorBoundary, Skeleton } from '@neotavern/ui';
 import type { ChatSnapshotResult, Message } from '@neotavern/contracts';
 import { findLegacySlashCommand, hasLegacyPromptInterceptors } from '@neotavern/legacy-compat';
-import { useCharacter, useChat, useMessages, useSettings } from '../api/hooks.js';
+import { useCharacter, useChat, useMessages, useMessageVariants, useSettings } from '../api/hooks.js';
 import { streamGeneration } from '../api/generate.js';
 import { backend, legacyRaw } from '../api/backend.js';
+import { swipeMessageToPosition } from '../api/wireBridge.js';
 import { clampSwipeIndex, readGreetingSwipes } from '@neotavern/shared';
 import { expandDisplayMacros, useMacroContext, type MacroContext } from '../lib/macros.js';
 import { useErrorText } from '../lib/useErrorText.js';
@@ -506,27 +507,31 @@ export function ChatPage() {
     [errorText],
   );
 
-  /** Activate a stored variant (non-destructive position swap, CAS on the server). */
+  /** Activate a stored variant (swipe position; wire `variants.activate`). */
   const variantSwipe = useCallback(
     async (message: Message, position: number): Promise<void> => {
       if (!chatId) return;
-      const active = message.activeVariantPosition;
+      // Legacy permutation guard: the message carries the variant bounds and
+      // the active position; out-of-range or active-position swipes are
+      // no-ops. Kernel mode messages carry 0/null (translateMessage) — the
+      // position is resolved against the variants list there and anything
+      // out of range resolves to null inside swipeMessageToPosition.
       if (
-        active === null ||
         position < 0 ||
-        position >= message.variantCount ||
-        position === active
+        (message.activeVariantPosition !== null &&
+          (position >= message.variantCount || position === message.activeVariantPosition))
       ) {
         return;
       }
       setError(null);
       try {
-        await legacyRaw().request<Message>(
-          'POST',
-          `/chats/${chatId}/messages/${message.id}/swipe`,
-          { position },
-        );
-        await queryClient.invalidateQueries({ queryKey: ['messages', chatId] });
+        const updated = await swipeMessageToPosition(chatId, message.id, position);
+        if (updated !== null) {
+          await queryClient.invalidateQueries({ queryKey: ['messages', chatId] });
+          await queryClient.invalidateQueries({
+            queryKey: ['message-variants', chatId, message.id],
+          });
+        }
       } catch (err) {
         setError(errorText(err));
       }
@@ -794,6 +799,7 @@ export function ChatPage() {
                     streaming={isRegenerating}
                     streamingContent={isRegenerating ? streamingText : undefined}
                     canRegenerate={isLastMessage && canRegenerate}
+                    isLastMessage={isLastMessage}
                     onSaveEdit={saveMessageEdit}
                     onDelete={deleteMessage}
                     onToggleContext={toggleMessageContext}
@@ -904,6 +910,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
   streaming = false,
   streamingContent,
   canRegenerate = false,
+  isLastMessage = false,
   onSaveEdit,
   onDelete,
   onToggleContext,
@@ -926,6 +933,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
   streaming?: boolean;
   streamingContent?: string;
   canRegenerate?: boolean;
+  isLastMessage?: boolean;
   onSaveEdit: (messageId: string, content: string) => Promise<void>;
   onDelete: (messageId: string) => Promise<void>;
   onToggleContext: (message: Message) => Promise<void>;
@@ -948,14 +956,37 @@ const ChatMessageRow = memo(function ChatMessageRow({
   const activeVariantPosition = message.activeVariantPosition;
   // Stored-variant swipe controls (migration-0020 positions). The active
   // content lives in `message.content`; switching swaps stored variants in.
+  //
+  // Kernel mode does not carry variant counts on the message (translateMessage
+  // reports 0/null): the swipe set is derived from the variants query —
+  // stored alternatives sorted by position plus the active content as the
+  // implicit last item (the active text is not a variant row; the canonical
+  // model records the replaced text as a revision instead). The eager query
+  // is limited to the newest message so a long history does not fan out one
+  // variants request per assistant row; older rows load lazily via the picker.
+  const variantQuery = useMessageVariants(
+    message.chatId,
+    message.id,
+    message.role === 'assistant' && message.activeVariantPosition === null && isLastMessage,
+  );
+  const storedVariants = variantQuery.data ?? [];
+  const totalSwipes =
+    activeVariantPosition !== null ? message.variantCount : storedVariants.length + 1;
+  const contentIndex = storedVariants.findIndex((variant) => variant.content === message.content);
+  const currentSwipe =
+    activeVariantPosition !== null
+      ? activeVariantPosition + 1
+      : contentIndex >= 0
+        ? contentIndex + 1
+        : totalSwipes;
   const variantSwipe =
-    message.variantCount > 1 && activeVariantPosition !== null
+    totalSwipes > 1 && (activeVariantPosition !== null || variantQuery.isSuccess)
       ? {
-          current: activeVariantPosition + 1,
-          total: message.variantCount,
+          current: currentSwipe,
+          total: totalSwipes,
           disabled: isGenerating,
-          onPrevious: (): void => void onVariantSwipe(message, activeVariantPosition - 1),
-          onNext: (): void => void onVariantSwipe(message, activeVariantPosition + 1),
+          onPrevious: (): void => void onVariantSwipe(message, currentSwipe - 2),
+          onNext: (): void => void onVariantSwipe(message, currentSwipe),
         }
       : undefined;
   const swipe =
