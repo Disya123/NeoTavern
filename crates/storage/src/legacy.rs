@@ -57,6 +57,18 @@ pub struct ConversionReport {
     pub characters: u64,
     pub chats: u64,
     pub messages: u64,
+    /// Swipe variants copied from the legacy `message_variants` table
+    /// (Этап 4 slice 2; optional legacy table — pre-swipe sources give 0).
+    pub message_variants: u64,
+    /// Immutable content revisions copied from the legacy
+    /// `message_content_revisions` table (Этап 4 slice 2; optional).
+    pub message_content_revisions: u64,
+    /// Server-side drafts copied from the legacy `message_drafts` table
+    /// (Этап 4 slice 2; optional). `branch_id`/`name`/`meta` have no kernel
+    /// equivalent and are not copied; drafts whose committed message did not
+    /// convert are skipped so commit replay can never reference a missing
+    /// message.
+    pub message_drafts: u64,
     pub lorebooks: u64,
     pub presets: u64,
     /// Personas migrated from the legacy `personas` table (Этап 4.1). The
@@ -114,13 +126,17 @@ pub fn convert_legacy(source_db: &Path, candidate: &Candidate) -> Result<Convers
     Ok(report)
 }
 
-/// Maps all five product tables into `tx` (single transaction). Inserts are
-/// ordered characters → chats → messages so foreign keys always resolve.
+/// Maps all product tables into `tx` (single transaction). Inserts are
+/// ordered characters → chats → messages → variants/revisions/drafts so
+/// foreign keys always resolve.
 fn convert(legacy: &Connection, tx: &rusqlite::Transaction) -> Result<ConversionReport> {
     let mut report = ConversionReport {
         characters: 0,
         chats: 0,
         messages: 0,
+        message_variants: 0,
+        message_content_revisions: 0,
+        message_drafts: 0,
         lorebooks: 0,
         presets: 0,
         personas: 0,
@@ -129,7 +145,10 @@ fn convert(legacy: &Connection, tx: &rusqlite::Transaction) -> Result<Conversion
     };
     let character_ids = convert_characters(legacy, tx, &mut report)?;
     let chat_ids = convert_chats(legacy, tx, &character_ids, &mut report)?;
-    convert_messages(legacy, tx, &chat_ids, &mut report)?;
+    let message_ids = convert_messages(legacy, tx, &chat_ids, &mut report)?;
+    convert_message_variants(legacy, tx, &message_ids, &mut report)?;
+    convert_content_revisions(legacy, tx, &message_ids, &mut report)?;
+    convert_message_drafts(legacy, tx, &chat_ids, &message_ids, &mut report)?;
     convert_lorebooks(legacy, tx, &mut report)?;
     convert_presets(legacy, tx, &mut report)?;
     convert_personas(legacy, tx, &mut report)?;
@@ -381,7 +400,7 @@ fn convert_messages(
     tx: &rusqlite::Transaction,
     chat_ids: &HashSet<String>,
     report: &mut ConversionReport,
-) -> Result<()> {
+) -> Result<HashSet<String>> {
     let cols = column_names(legacy, "messages")?;
     require_columns(
         &cols,
@@ -408,6 +427,7 @@ fn convert_messages(
         .query([])
         .map_err(|e| StorageError::from_sqlite(e, "legacy: query messages"))?;
     let mut seq_by_chat: HashMap<String, i64> = HashMap::new();
+    let mut converted_ids: HashSet<String> = HashSet::new();
     while let Some(row) = rows
         .next()
         .map_err(|e| StorageError::from_sqlite(e, "legacy: read messages"))?
@@ -461,6 +481,315 @@ fn convert_messages(
         )
         .map_err(|e| StorageError::from_sqlite(e, "legacy: insert message"))?;
         report.messages += 1;
+        converted_ids.insert(id.to_string());
+    }
+    Ok(converted_ids)
+}
+
+/// Maps the legacy `message_variants` (swipe) rows into the kernel
+/// `message_variants` table (Этап 4 slice 2). The legacy table is optional
+/// (pre-swipe sources contribute 0); a variant whose message did not convert
+/// is skipped. Legacy `position` values are preserved (the kernel orders by
+/// position and allocates `MAX+1` on create, so holes from the legacy
+/// permutation-with-hole model are harmless); a source without the column
+/// derives per-message positions in `created_at, id` order.
+fn convert_message_variants(
+    legacy: &Connection,
+    tx: &rusqlite::Transaction,
+    message_ids: &HashSet<String>,
+    report: &mut ConversionReport,
+) -> Result<()> {
+    if !table_exists(legacy, "message_variants")? {
+        return Ok(());
+    }
+    let cols = column_names(legacy, "message_variants")?;
+    require_columns(
+        &cols,
+        "message_variants",
+        &["id", "message_id", "content", "created_at"],
+    )?;
+    let has_position = cols.iter().any(|c| c == "position");
+    let selected = select_columns(
+        &cols,
+        &["id", "message_id", "content", "position", "created_at"],
+    );
+    let sql = format!(
+        "SELECT {} FROM message_variants ORDER BY message_id, created_at, id",
+        quote_columns(&selected)
+    );
+    let mut stmt = legacy
+        .prepare(&sql)
+        .map_err(|e| StorageError::from_sqlite(e, "legacy: prepare message_variants"))?;
+    let mut rows = stmt
+        .query([])
+        .map_err(|e| StorageError::from_sqlite(e, "legacy: query message_variants"))?;
+    let mut pos_by_message: HashMap<String, i64> = HashMap::new();
+    while let Some(row) = rows
+        .next()
+        .map_err(|e| StorageError::from_sqlite(e, "legacy: read message_variants"))?
+    {
+        let vals = read_values(&selected, row)?;
+        let get = |name: &str| selected.iter().position(|c| *c == name).map(|i| &vals[i]);
+        let Some(id) = as_text(get("id")) else {
+            skip(report, "message_variant: missing id");
+            continue;
+        };
+        let Some(message_id) = as_text(get("message_id")).map(str::to_owned) else {
+            skip(report, &format!("message_variant {id}: missing message reference"));
+            continue;
+        };
+        if !message_ids.contains(&message_id) {
+            skip(
+                report,
+                &format!("message_variant {id}: references missing message {message_id}"),
+            );
+            continue;
+        }
+        let Some(content) = as_text(get("content")) else {
+            skip(report, &format!("message_variant {id}: missing content"));
+            continue;
+        };
+        let Some(created_at) = ms_to_rfc3339_checked(get("created_at")) else {
+            skip(report, &format!("message_variant {id}: invalid created_at"));
+            continue;
+        };
+        let position = if has_position {
+            match as_i64(get("position")) {
+                Some(position) => position,
+                None => {
+                    skip(report, &format!("message_variant {id}: invalid position"));
+                    continue;
+                }
+            }
+        } else {
+            let next = pos_by_message.entry(message_id.clone()).or_insert(0);
+            let position = *next;
+            *next += 1;
+            position
+        };
+        tx.execute(
+            "INSERT INTO message_variants (id, message_id, position, content, created_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![id, message_id, position, content, created_at],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "legacy: insert message_variant"))?;
+        report.message_variants += 1;
+    }
+    Ok(())
+}
+
+/// Maps the legacy `message_content_revisions` rows into the kernel
+/// `message_content_revisions` table (Этап 4 slice 2). The legacy table is
+/// optional; a revision whose message did not convert is skipped.
+fn convert_content_revisions(
+    legacy: &Connection,
+    tx: &rusqlite::Transaction,
+    message_ids: &HashSet<String>,
+    report: &mut ConversionReport,
+) -> Result<()> {
+    if !table_exists(legacy, "message_content_revisions")? {
+        return Ok(());
+    }
+    let cols = column_names(legacy, "message_content_revisions")?;
+    require_columns(
+        &cols,
+        "message_content_revisions",
+        &["id", "message_id", "content", "created_at"],
+    )?;
+    let selected = select_columns(
+        &cols,
+        &["id", "message_id", "position", "content", "created_at"],
+    );
+    let sql = format!(
+        "SELECT {} FROM message_content_revisions ORDER BY message_id, position, created_at, id",
+        quote_columns(&selected)
+    );
+    let mut stmt = legacy
+        .prepare(&sql)
+        .map_err(|e| StorageError::from_sqlite(e, "legacy: prepare message_content_revisions"))?;
+    let mut rows = stmt
+        .query([])
+        .map_err(|e| StorageError::from_sqlite(e, "legacy: query message_content_revisions"))?;
+    let mut pos_by_message: HashMap<String, i64> = HashMap::new();
+    while let Some(row) = rows
+        .next()
+        .map_err(|e| StorageError::from_sqlite(e, "legacy: read message_content_revisions"))?
+    {
+        let vals = read_values(&selected, row)?;
+        let get = |name: &str| selected.iter().position(|c| *c == name).map(|i| &vals[i]);
+        let Some(id) = as_text(get("id")) else {
+            skip(report, "content_revision: missing id");
+            continue;
+        };
+        let Some(message_id) = as_text(get("message_id")).map(str::to_owned) else {
+            skip(report, &format!("content_revision {id}: missing message reference"));
+            continue;
+        };
+        if !message_ids.contains(&message_id) {
+            skip(
+                report,
+                &format!("content_revision {id}: references missing message {message_id}"),
+            );
+            continue;
+        }
+        let Some(content) = as_text(get("content")) else {
+            skip(report, &format!("content_revision {id}: missing content"));
+            continue;
+        };
+        let Some(created_at) = ms_to_rfc3339_checked(get("created_at")) else {
+            skip(report, &format!("content_revision {id}: invalid created_at"));
+            continue;
+        };
+        let position = if cols.iter().any(|c| c == "position") {
+            match as_i64(get("position")) {
+                Some(position) => position,
+                None => {
+                    skip(report, &format!("content_revision {id}: invalid position"));
+                    continue;
+                }
+            }
+        } else {
+            let next = pos_by_message.entry(message_id.clone()).or_insert(0);
+            let position = *next;
+            *next += 1;
+            position
+        };
+        tx.execute(
+            "INSERT INTO message_content_revisions (id, message_id, position, content, created_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![id, message_id, position, content, created_at],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "legacy: insert content_revision"))?;
+        report.message_content_revisions += 1;
+    }
+    Ok(())
+}
+
+/// Maps the legacy `message_drafts` rows into the kernel `message_drafts`
+/// table (Этап 4 slice 2). The legacy table is optional; the legacy
+/// `branch_id`/`name`/`meta` columns have no kernel equivalent and are not
+/// copied (the kernel keeps one linear sequence per chat). A draft whose
+/// chat did not convert, whose role is not kernel-legal, or whose
+/// `committed_message_id` references a message that did not convert is
+/// skipped — never a dangling outbox reference.
+fn convert_message_drafts(
+    legacy: &Connection,
+    tx: &rusqlite::Transaction,
+    chat_ids: &HashSet<String>,
+    message_ids: &HashSet<String>,
+    report: &mut ConversionReport,
+) -> Result<()> {
+    if !table_exists(legacy, "message_drafts")? {
+        return Ok(());
+    }
+    let cols = column_names(legacy, "message_drafts")?;
+    require_columns(
+        &cols,
+        "message_drafts",
+        &["id", "chat_id", "role", "content", "created_at"],
+    )?;
+    let selected = select_columns(
+        &cols,
+        &[
+            "id",
+            "chat_id",
+            "role",
+            "content",
+            "sequence",
+            "revision",
+            "committed_message_id",
+            "created_at",
+            "updated_at",
+        ],
+    );
+    let sql = format!(
+        "SELECT {} FROM message_drafts ORDER BY id",
+        quote_columns(&selected)
+    );
+    let mut stmt = legacy
+        .prepare(&sql)
+        .map_err(|e| StorageError::from_sqlite(e, "legacy: prepare message_drafts"))?;
+    let mut rows = stmt
+        .query([])
+        .map_err(|e| StorageError::from_sqlite(e, "legacy: query message_drafts"))?;
+    while let Some(row) = rows
+        .next()
+        .map_err(|e| StorageError::from_sqlite(e, "legacy: read message_drafts"))?
+    {
+        let vals = read_values(&selected, row)?;
+        let get = |name: &str| selected.iter().position(|c| *c == name).map(|i| &vals[i]);
+        let Some(id) = as_text(get("id")) else {
+            skip(report, "message_draft: missing id");
+            continue;
+        };
+        let Some(chat_id) = as_text(get("chat_id")).map(str::to_owned) else {
+            skip(report, &format!("message_draft {id}: missing chat reference"));
+            continue;
+        };
+        if !chat_ids.contains(&chat_id) {
+            skip(
+                report,
+                &format!("message_draft {id}: references missing chat {chat_id}"),
+            );
+            continue;
+        }
+        let role = match as_text(get("role")) {
+            Some(role) if KERNEL_ROLES.contains(&role) => role.to_string(),
+            Some(role) => {
+                skip(
+                    report,
+                    &format!("message_draft {id}: role '{role}' has no kernel equivalent"),
+                );
+                continue;
+            }
+            None => {
+                skip(report, &format!("message_draft {id}: missing role"));
+                continue;
+            }
+        };
+        let Some(content) = as_text(get("content")) else {
+            skip(report, &format!("message_draft {id}: missing content"));
+            continue;
+        };
+        let Some(created_at) = ms_to_rfc3339_checked(get("created_at")) else {
+            skip(report, &format!("message_draft {id}: invalid created_at"));
+            continue;
+        };
+        let updated_at = match ms_to_rfc3339_checked(get("updated_at")) {
+            Some(updated_at) => updated_at,
+            None => created_at.clone(),
+        };
+        let sequence = as_i64(get("sequence")).unwrap_or(0);
+        let revision = as_i64(get("revision")).unwrap_or(1);
+        let committed_message_id = match as_text(get("committed_message_id")) {
+            None => None,
+            Some(committed) if message_ids.contains(committed) => Some(committed.to_string()),
+            Some(committed) => {
+                skip(
+                    report,
+                    &format!("message_draft {id}: committed message {committed} did not convert"),
+                );
+                continue;
+            }
+        };
+        tx.execute(
+            "INSERT INTO message_drafts \
+             (id, chat_id, role, content, sequence, revision, committed_message_id, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            rusqlite::params![
+                id,
+                chat_id,
+                role,
+                content,
+                sequence,
+                revision,
+                committed_message_id,
+                created_at,
+                updated_at
+            ],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "legacy: insert message_draft"))?;
+        report.message_drafts += 1;
     }
     Ok(())
 }

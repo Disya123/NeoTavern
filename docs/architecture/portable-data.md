@@ -123,6 +123,19 @@ layouts yield a controlled incompatibility error.
 - Legacy `messages.branch_id`/`parent_id`/`meta`/`name` have no kernel
   columns; branches are flattened (rows keep chat ordering), matching the
   current kernel message model.
+- **Message variants/revisions/drafts (Этап 4, slice 2).** The optional
+  legacy `message_variants` (swipes), `message_content_revisions` and
+  `message_drafts` tables are mapped into the kernel schema-008 tables:
+  `position` values are preserved (legacy permutation holes are harmless —
+  the kernel allocates `MAX+1` on create and orders by position); epoch-ms
+  timestamps normalize to RFC 3339; drafts lose the legacy
+  `branch_id`/`name`/`meta` columns (no kernel equivalent) and only
+  kernel-legal roles convert. A variant/revision whose message did not
+  convert is skipped; a draft whose chat did not convert or whose
+  `committed_message_id` references a message that did not convert is
+  skipped — never a dangling outbox reference, so a commit replay cannot
+  reference a missing message. Counts are reported per table
+  (`message_variants`/`message_content_revisions`/`message_drafts`).
 
 ## Staged migration into the application flow (ТЗ §10.3, Этап 3)
 

@@ -260,7 +260,7 @@
     {
       "source": "architecture/portable-data.md",
       "target": "architecture/portable-data.md",
-      "sha256": "67d3eae6b8956244fa7c0a123caeba961c3c85e056b8154a35442e4173706366"
+      "sha256": "f65c98bb9170996a8389fa802950f238e4528dbac60b669131e23709786389de"
     },
     {
       "source": "architecture/prompt-pipeline.md",

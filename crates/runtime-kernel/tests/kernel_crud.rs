@@ -16,6 +16,8 @@ use contracts_generated::generated::{
 use runtime_kernel::{CancellationFlag, Kernel, KernelConfig, KernelError, KernelErrorCode};
 use rusqlite::params;
 use serde_json::{json, Value};
+use neotavern_storage::legacy::convert_legacy;
+use neotavern_storage::restore::stage_candidate;
 
 /// A kernel over `root` with the correct, manifest-derived contract
 /// expectations.
@@ -1604,4 +1606,135 @@ fn message_variants_revisions_drafts_error_paths() {
     )
     .expect_err("extra fields must fail wire validation");
     assert_eq!(extra.code, KernelErrorCode::ContractViolation);
+}
+
+/// Этап 4 slice 2 end to end: a legacy app.db with swipes, content
+/// revisions and server-side drafts is converted into a canonical root and
+/// the converted rows are served over the Product Wire ops. The legacy
+/// fixture uses UUID-shaped ids because the wire contract validates the
+/// uuid format (ARC-07); non-UUID legacy ids are preserved by the converter
+/// but would fail wire validation on dispatch.
+#[test]
+fn converted_legacy_variants_usable_over_wire() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let legacy_path = dir.path().join("legacy.db");
+    let character_id = "11111111-1111-4111-8111-111111111111";
+    let chat_id = "22222222-2222-4222-8222-222222222222";
+    let message_id = "33333333-3333-4333-8333-333333333333";
+    {
+        let conn = rusqlite::Connection::open(&legacy_path).expect("open legacy");
+        conn.execute_batch(
+            "CREATE TABLE characters (
+                id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT, avatar TEXT,
+                ext TEXT DEFAULT '{}', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+            );
+            CREATE TABLE chats (
+                id TEXT PRIMARY KEY, title TEXT, character_id TEXT,
+                created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+            );
+            CREATE TABLE messages (
+                id TEXT PRIMARY KEY, chat_id TEXT NOT NULL, role TEXT, content TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            );
+            CREATE TABLE message_variants (
+                id TEXT PRIMARY KEY, message_id TEXT NOT NULL, content TEXT NOT NULL,
+                position INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL
+            );
+            CREATE TABLE message_content_revisions (
+                id TEXT PRIMARY KEY, message_id TEXT NOT NULL, position INTEGER NOT NULL,
+                content TEXT NOT NULL, created_at INTEGER NOT NULL
+            );
+            CREATE TABLE message_drafts (
+                id TEXT PRIMARY KEY, chat_id TEXT NOT NULL, role TEXT NOT NULL,
+                content TEXT NOT NULL DEFAULT '', sequence INTEGER NOT NULL DEFAULT 0,
+                revision INTEGER NOT NULL DEFAULT 1, committed_message_id TEXT,
+                created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+            );
+            CREATE TABLE lorebooks (
+                id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT,
+                created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+            );
+            CREATE TABLE presets (
+                id TEXT PRIMARY KEY, kind TEXT NOT NULL, name TEXT NOT NULL, data TEXT DEFAULT '{}',
+                created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+            );",
+        )
+        .expect("create legacy tables");
+        conn.execute(
+            "INSERT INTO characters (id, name, created_at, updated_at) \
+             VALUES (?1, 'Aria', 1700000000000, 1700000000000)",
+            [character_id],
+        )
+        .expect("seed character");
+        conn.execute(
+            "INSERT INTO chats (id, title, character_id, created_at, updated_at) \
+             VALUES (?1, 'Chat', ?2, 1700000000000, 1700000000000)",
+            rusqlite::params![chat_id, character_id],
+        )
+        .expect("seed chat");
+        conn.execute(
+            "INSERT INTO messages (id, chat_id, role, content, created_at) \
+             VALUES (?1, ?2, 'assistant', 'Hello', 1700000000000)",
+            rusqlite::params![message_id, chat_id],
+        )
+        .expect("seed message");
+        conn.execute(
+            "INSERT INTO message_variants (id, message_id, content, position, created_at) \
+             VALUES ('44444444-4444-4444-8444-444444444444', ?1, 'Hello (swipe)', 0, 1700000001000)",
+            [message_id],
+        )
+        .expect("seed variant");
+        conn.execute(
+            "INSERT INTO message_content_revisions (id, message_id, position, content, created_at) \
+             VALUES ('55555555-5555-4555-8555-555555555555', ?1, 0, 'Hello', 1700000002000)",
+            [message_id],
+        )
+        .expect("seed revision");
+        conn.execute(
+            "INSERT INTO message_drafts (id, chat_id, role, content, sequence, revision, \
+             committed_message_id, created_at, updated_at) \
+             VALUES ('66666666-6666-4666-8666-666666666666', ?1, 'assistant', 'Streaming…', 0, 1, \
+             NULL, 1700000003000, 1700000003000)",
+            [chat_id],
+        )
+        .expect("seed draft");
+    }
+
+    let target_root = dir.path().join("root");
+    let candidate = stage_candidate(&target_root).expect("stage candidate");
+    let report = convert_legacy(&legacy_path, &candidate).expect("convert legacy");
+    assert_eq!(report.message_variants, 1);
+    assert_eq!(report.message_content_revisions, 1);
+    assert_eq!(report.message_drafts, 1);
+
+    let kernel = open_kernel_with_root(&candidate.path);
+
+    let variants = dispatch_decoded::<ResultMessageVariantList>(
+        &kernel,
+        "chats.messages.variants.list",
+        json!({ "chatId": chat_id, "messageId": message_id }),
+    )
+    .expect("variants.list over converted data");
+    assert_eq!(variants.items.len(), 1);
+    assert_eq!(variants.items[0].content, "Hello (swipe)");
+    assert_eq!(variants.items[0].position, 0);
+
+    let revisions = dispatch_decoded::<ResultMessageRevisionList>(
+        &kernel,
+        "chats.messages.revisions.list",
+        json!({ "chatId": chat_id, "messageId": message_id }),
+    )
+    .expect("revisions.list over converted data");
+    assert_eq!(revisions.items.len(), 1);
+    assert_eq!(revisions.items[0].content, "Hello");
+
+    let draft = dispatch_decoded::<MessageDraftDto>(
+        &kernel,
+        "chats.messages.drafts.get",
+        json!({ "chatId": chat_id, "draftId": "66666666-6666-4666-8666-666666666666" }),
+    )
+    .expect("drafts.get over converted data");
+    assert_eq!(draft.content, "Streaming…");
+    assert_eq!(draft.role, MessageRole::Assistant);
+    assert_eq!(draft.revision, 1);
 }

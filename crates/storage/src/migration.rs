@@ -630,6 +630,12 @@ fn read_conversion_report(root: &Path) -> Result<ConversionReport> {
         characters: count("characters")?,
         chats: count("chats")?,
         messages: count("messages")?,
+        // message_variants / message_content_revisions / message_drafts are
+        // introduced by schema migration 008 (Этап 4 slice 2); a converted
+        // root from an earlier kernel schema simply contributes 0.
+        message_variants: count_if_present("message_variants")?,
+        message_content_revisions: count_if_present("message_content_revisions")?,
+        message_drafts: count_if_present("message_drafts")?,
         lorebooks: count("lorebooks")?,
         presets: count("presets")?,
         personas: count_if_present("personas")?,

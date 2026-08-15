@@ -25,6 +25,24 @@
   The UI/facade cutover, legacy swipe/draft route removal and the legacy
   converter mapping are the remaining slice-2 work within M5.
 
+- **Legacy converter: message variants/revisions/drafts (M5 / Этап 4,
+  slice 2).** The legacy `app.db` converter now maps the optional
+  `message_variants` (swipes), `message_content_revisions` and
+  `message_drafts` tables into the canonical schema-008 tables inside the
+  same single conversion transaction: positions preserved, ms timestamps
+  normalized, drafts lose only the no-kernel-equivalent
+  `branch_id`/`name`/`meta` columns and keep the outbox
+  `committed_message_id` exactly when the referenced message converted
+  (a dangling outbox reference would let a commit replay point at a missing
+  message — such drafts are skipped and reported). Per-table counts were
+  added to the conversion report and to the committed-root re-read
+  (`message_variants`/`message_content_revisions`/`message_drafts`). Tests:
+  extended `legacy_conversion_maps_rows_skips_orphans_and_never_copies_secrets`
+  fixture/assertions and a new kernel end-to-end test
+  `converted_legacy_variants_usable_over_wire` (convert a legacy db with
+  swipes/revisions/drafts, open the Kernel over the candidate root and serve
+  the rows through the wire ops).
+
 - **Entry-level lorebook CRUD over Product Wire (M4 / Этап 4.1, slice
   follow-up).** Four new wire operations `lorebooks.entries.list/create/
   update/delete` join the `lorebooks.*` book ops: the kernel owns each
