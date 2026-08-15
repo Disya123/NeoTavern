@@ -1112,6 +1112,62 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'profiles.list',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.empty',
+    'wire.result.profiles.list',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    1024,
+    262144,
+    undefined,
+  ),
+  op(
+    'profiles.create',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.write',
+    'wire.request.profiles.create',
+    'wire.result.profiles.create',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    4096,
+    262144,
+    undefined,
+  ),
+  op(
+    'profiles.rename',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.write',
+    'wire.request.profiles.rename',
+    'wire.profiles.item',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    4096,
+    262144,
+    undefined,
+  ),
+  op(
+    'profiles.delete',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.write',
+    'wire.request.profiles.delete',
+    'wire.result.empty',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    1024,
+    1024,
+    undefined,
+  ),
+  op(
     'settings.get',
     'transactional',
     'idempotent',
@@ -1827,6 +1883,15 @@ const THEME_INSTALL_REQUEST = {
   manifest: { id: 'wii-u-dark', level: 'shell' },
 };
 
+const PROFILE_VALUE = {
+  id: UUID_PRESET,
+  name: 'Main',
+  createdAt: TIMESTAMP,
+  updatedAt: TIMESTAMP,
+};
+
+const PROFILE_CREATE_REQUEST = { name: 'Main' };
+
 const PROMPT_PLAN_VALUE = {
   runId: UUID_RUN,
   chatId: UUID_CHAT,
@@ -2062,6 +2127,13 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('themes-install-request', 'themes.install', 'request', true, THEME_INSTALL_REQUEST),
   fx('themes-uninstall-request', 'themes.uninstall', 'request', true, { id: 'wii-u-dark' }),
   fx('themes-activate-request', 'themes.activate', 'request', true, { id: 'wii-u-dark' }),
+  fx('profiles-list-request', 'profiles.list', 'request', true, {}),
+  fx('profiles-create-request', 'profiles.create', 'request', true, PROFILE_CREATE_REQUEST),
+  fx('profiles-rename-request', 'profiles.rename', 'request', true, {
+    id: UUID_PRESET,
+    name: 'Main renamed',
+  }),
+  fx('profiles-delete-request', 'profiles.delete', 'request', true, { id: UUID_PRESET }),
   fx('providers-list-request', 'providers.list', 'request', true, {}),
   fx('providers-config-set-request', 'providers.config.set', 'request', true, {
     provider: 'fake',
@@ -2263,6 +2335,13 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     ...THEME_VALUE,
     active: true,
   }),
+  fx('profiles-list-response', 'profiles.list', 'response', true, { items: [PROFILE_VALUE] }),
+  fx('profiles-create-response', 'profiles.create', 'response', true, { profile: PROFILE_VALUE }),
+  fx('profiles-rename-response', 'profiles.rename', 'response', true, {
+    ...PROFILE_VALUE,
+    name: 'Main renamed',
+  }),
+  fx('profiles-delete-response', 'profiles.delete', 'response', true, {}),
   fx('plugins-uninstall-response', 'plugins.uninstall', 'response', true, {}),
   fx('lorebooks-list-response', 'lorebooks.list', 'response', true, { items: [LOREBOOK_VALUE] }),
   fx('lorebooks-get-response', 'lorebooks.get', 'response', true, LOREBOOK_VALUE),
@@ -2535,6 +2614,14 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   }),
   fx('neg-themes-item-bad-active', 'themes.list', 'response', false, {
     items: [{ ...THEME_VALUE, active: 'yes' }],
+  }),
+  fx('neg-profiles-create-bad-name', 'profiles.create', 'request', false, { name: '' }),
+  fx('neg-profiles-rename-bad-id', 'profiles.rename', 'request', false, {
+    id: 'nope',
+    name: 'Main',
+  }),
+  fx('neg-profiles-item-bad-name', 'profiles.list', 'response', false, {
+    items: [{ ...PROFILE_VALUE, name: '' }],
   }),
   fx('characters-create-request-with-avatar', 'characters.create', 'request', true, {
     name: 'Aveline',

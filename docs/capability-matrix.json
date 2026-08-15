@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-08-15T15:13:51.190Z",
+  "generatedAt": "2026-08-15T15:26:24.131Z",
   "rows": [
     {
       "hosts": {
@@ -433,6 +433,19 @@
       "notes": "SEC-02: legacy export (apps/server/src/lib/profileExport.ts) implemented in M1 Wave 1 and hardened in Wave 2 - logical allowlist archive (format v2, snapshot transaction, explicit column allowlist verified via PRAGMA table_info, sentinel negative tests). M5 slice 5 adds the canonical-plane op profile.export over Product Wire: the kernel builds a fresh verified container under the data root's exports/ (characters/chats/messages/lorebooks/presets + optional assets via storage create_export/verify_export) and returns the verified report; provider configs and secrets are not export sections by construction and the kernel negative test proves a sentinel SecretStore value never reaches any container byte. UI/facade cutover and per-profile FK filtering (needs the canonical profiles model) remain tracked within M5.",
       "title": "Logical profile export",
       "wireOps": ["profile.export"]
+    },
+    {
+      "hosts": {
+        "android": "Designed",
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "webClient": "Implemented"
+      },
+      "id": "ui.profiles",
+      "milestone": "M5",
+      "notes": "Этап 4 slice 5 remainder part 2 (M5): canonical Configuration bounded context (ТЗ §8.1) over Product Wire (86 ops total) — schema v14 STRICT profiles table + 4 ops. Mirrors the legacy minimal shape (profiles.id/name/created_at, packages/db schema) plus updated_at for renames; a profile row is a named user context, nothing references it yet. This model UNBLOCKS the per-profile FK columns on product tables and SEC-02 export filtering (ADR-0047 waiver 4) — the slice-5 remainder follow-up. PROFILE_NOT_FOUND product code with profileId param; wire validation rejects empty names and non-uuid ids. 3 kernel tests (kernel_profiles.rs).",
+      "title": "Profiles (Configuration)",
+      "wireOps": ["profiles.create", "profiles.delete", "profiles.list", "profiles.rename"]
     },
     {
       "hosts": {

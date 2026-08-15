@@ -38,6 +38,7 @@ pub mod headless;
 pub mod local;
 pub mod plugins;
 pub mod product;
+pub mod profiles;
 pub mod prompt;
 pub mod providers;
 pub mod providers_config;
@@ -614,6 +615,12 @@ fn handle_unary(
         "themes.install" => with_db_opt(db, |db| themes::themes_install(db, req)),
         "themes.uninstall" => with_db_opt(db, |db| themes::themes_uninstall(db, req)),
         "themes.activate" => with_db_opt(db, |db| themes::themes_activate(db, req)),
+        // Этап 4 slice 5 remainder part 2: canonical Configuration
+        // profiles (unblocks per-profile SEC-02 export filtering).
+        "profiles.list" => with_db_opt(db, |db| profiles::profiles_list(db, req)),
+        "profiles.create" => with_db_opt(db, |db| profiles::profiles_create(db, req)),
+        "profiles.rename" => with_db_opt(db, |db| profiles::profiles_rename(db, req)),
+        "profiles.delete" => with_db_opt(db, |db| profiles::profiles_delete(db, req)),
         // Этап 4 slice 7: canonical non-secret settings + SEC-07 diagnostics.
         "settings.get" => with_db_opt(db, |db| settings::settings_get(db, req)),
         "settings.update" => with_db_opt(db, |db| settings::settings_update(db, req)),

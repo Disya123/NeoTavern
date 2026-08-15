@@ -428,6 +428,19 @@
       "milestone": "M5"
     },
     {
+      "id": "ui.profiles",
+      "title": "Profiles (Configuration)",
+      "wireOps": ["profiles.list", "profiles.create", "profiles.rename", "profiles.delete"],
+      "hosts": {
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "android": "Designed",
+        "webClient": "Implemented"
+      },
+      "notes": "Этап 4 slice 5 remainder part 2 (M5): canonical Configuration bounded context (ТЗ §8.1) over Product Wire (86 ops total) — schema v14 STRICT profiles table + 4 ops. Mirrors the legacy minimal shape (profiles.id/name/created_at, packages/db schema) plus updated_at for renames; a profile row is a named user context, nothing references it yet. This model UNBLOCKS the per-profile FK columns on product tables and SEC-02 export filtering (ADR-0047 waiver 4) — the slice-5 remainder follow-up. PROFILE_NOT_FOUND product code with profileId param; wire validation rejects empty names and non-uuid ids. 3 kernel tests (kernel_profiles.rs).",
+      "milestone": "M5"
+    },
+    {
       "id": "ui.prompt-pipeline",
       "title": "Prompt pipeline (macros, context, tokens, instruct)",
       "wireOps": [],

@@ -379,6 +379,28 @@ macro_rules! migration_13_sql {
     };
 }
 
+/// Literal body of the profiles (v14) schema migration — the
+/// `migration_14_sql!()` literal. Adds the STRICT `profiles` table: the
+/// canonical Configuration bounded context (ТЗ §8.1 Configuration —
+/// "profiles, non-secret settings, capabilities"; Этап 4 slice 5 remainder
+/// part 2). Mirrors the legacy minimal shape (`profiles.id/name/created_at`,
+/// packages/db schema tables.ts) plus `updated_at` for renames; the default
+/// profile for single-user local mode stays a host-side convention (a
+/// profile row is a named user context; nothing references it yet). The
+/// per-profile FK columns on product tables and SEC-02 export filtering
+/// (ADR-0047 waiver 4) are the slice-5 remainder follow-up this model
+/// unblocks.
+macro_rules! migration_14_sql {
+    () => {
+        r#"CREATE TABLE profiles (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+) STRICT;"#
+    };
+}
+
 /// Name of the initial (v1) schema migration.
 pub const MIGRATION_1_NAME: &str = "001_initial_schema";
 
@@ -592,6 +614,22 @@ pub const MIGRATION_13_SQL: &str = migration_13_sql!();
 pub const MIGRATION_13_CHECKSUM: &str =
     "9ea93630aba3d711ecfa2b85e5240d779724970b938827634b66776e7806cb5d";
 
+/// Name of the profiles (v14) schema migration.
+pub const MIGRATION_14_NAME: &str = "014_profiles";
+
+/// Exact SQL of the profiles schema migration (v14) — the
+/// `migration_14_sql!()` literal. Adds the STRICT `profiles` table (ТЗ
+/// §8.1 Configuration, Этап 4 slice 5 remainder part 2).
+pub const MIGRATION_14_SQL: &str = migration_14_sql!();
+
+/// Lowercase sha256 hex of the `MIGRATION_14_SQL` string bytes.
+///
+/// Computed via node (`crypto.createHash('sha256')` over the exact literal
+/// bytes, no trailing newline) and asserted by the migration test suite
+/// against the ledger.
+pub const MIGRATION_14_CHECKSUM: &str =
+    "7be80c2213d0f3abd95af819c4cd86b6b9b65567d953d277c9efef3465c9561d";
+
 /// A fresh install runs every migration in order, so `FRESH_SCHEMA_SQL` is the
 /// concatenation of all migration literals with a single newline between them
 /// (the same statement separator `execute_batch` applies).
@@ -624,7 +662,9 @@ pub const FRESH_SCHEMA_SQL: &str = concat!(
     "\n",
     migration_12_sql!(),
     "\n",
-    migration_13_sql!()
+    migration_13_sql!(),
+    "\n",
+    migration_14_sql!()
 );
 
 /// sha256 hex of the `FRESH_SCHEMA_SQL` bytes — the fresh-install fingerprint.

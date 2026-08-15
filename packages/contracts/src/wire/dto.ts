@@ -1942,6 +1942,72 @@ export const ActivateThemeRequestDtoSchema = Type.Object(
 export type ActivateThemeRequestDto = Static<typeof ActivateThemeRequestDtoSchema>;
 
 /**
+ * Profile DTO (`wire.profiles.item`) — one named user context of the
+ * canonical Configuration bounded context (ТЗ §8.1 Configuration, Этап 4
+ * slice 5 remainder part 2). Mirrors the legacy minimal shape
+ * (`profiles.id/name/created_at`) plus `updated_at` for renames; a profile
+ * row is a named context, nothing references it yet. Per-profile FK
+ * columns on product tables and SEC-02 export filtering (ADR-0047 waiver
+ * 4) are the slice-5 remainder follow-up this model unblocks.
+ */
+export const ProfileDtoSchema = Type.Object(
+  {
+    id: Type.String({ format: 'uuid' }),
+    name: Type.String({ minLength: 1, maxLength: 128 }),
+    createdAt: Type.String({ format: 'rfc3339' }),
+    updatedAt: Type.String({ format: 'rfc3339' }),
+  },
+  { $id: 'wire.profiles.item', additionalProperties: false },
+);
+export type ProfileDto = Static<typeof ProfileDtoSchema>;
+
+/** Profile list result (`wire.result.profiles.list`). */
+export const ListProfilesResultDtoSchema = Type.Object(
+  {
+    items: Type.Array(ProfileDtoSchema, { maxItems: 256 }),
+  },
+  { $id: 'wire.result.profiles.list', additionalProperties: false },
+);
+export type ListProfilesResultDto = Static<typeof ListProfilesResultDtoSchema>;
+
+/** Profile create request (`wire.request.profiles.create`). */
+export const CreateProfileRequestDtoSchema = Type.Object(
+  {
+    name: Type.String({ minLength: 1, maxLength: 128 }),
+  },
+  { $id: 'wire.request.profiles.create', additionalProperties: false },
+);
+export type CreateProfileRequestDto = Static<typeof CreateProfileRequestDtoSchema>;
+
+/** Profile create result (`wire.result.profiles.create`). */
+export const CreateProfileResultDtoSchema = Type.Object(
+  {
+    profile: ProfileDtoSchema,
+  },
+  { $id: 'wire.result.profiles.create', additionalProperties: false },
+);
+export type CreateProfileResultDto = Static<typeof CreateProfileResultDtoSchema>;
+
+/** Profile rename request (`wire.request.profiles.rename`). */
+export const RenameProfileRequestDtoSchema = Type.Object(
+  {
+    id: Type.String({ format: 'uuid' }),
+    name: Type.String({ minLength: 1, maxLength: 128 }),
+  },
+  { $id: 'wire.request.profiles.rename', additionalProperties: false },
+);
+export type RenameProfileRequestDto = Static<typeof RenameProfileRequestDtoSchema>;
+
+/** Profile delete request (`wire.request.profiles.delete`). */
+export const DeleteProfileRequestDtoSchema = Type.Object(
+  {
+    id: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.profiles.delete', additionalProperties: false },
+);
+export type DeleteProfileRequestDto = Static<typeof DeleteProfileRequestDtoSchema>;
+
+/**
  * Every wire schema keyed by its `$id` (schemaId): all DTOs plus the error
  * DTO, the message role union and the three envelopes. This is the complete
  * schema registry the codegen tool and `compileWireContract` operate on.
@@ -2001,6 +2067,12 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.result.themes.install': InstallThemeResultDtoSchema,
   'wire.request.themes.uninstall': UninstallThemeRequestDtoSchema,
   'wire.request.themes.activate': ActivateThemeRequestDtoSchema,
+  'wire.profiles.item': ProfileDtoSchema,
+  'wire.result.profiles.list': ListProfilesResultDtoSchema,
+  'wire.request.profiles.create': CreateProfileRequestDtoSchema,
+  'wire.result.profiles.create': CreateProfileResultDtoSchema,
+  'wire.request.profiles.rename': RenameProfileRequestDtoSchema,
+  'wire.request.profiles.delete': DeleteProfileRequestDtoSchema,
   'wire.request.set-provider-config': SetProviderConfigRequestDtoSchema,
   'wire.request.get-provider-config': GetProviderConfigRequestDtoSchema,
   'wire.request.list-provider-configs': ListProviderConfigsRequestDtoSchema,

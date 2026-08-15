@@ -3,6 +3,19 @@
 ## Unreleased
 ### Added
 
+- **Canonical Configuration profiles (ТЗ §8.1 Configuration, M5 slice 5
+  remainder part 2).** Schema v14 (STRICT `profiles` table) + four new wire
+  operations (86 total): `profiles.list` / `profiles.create` /
+  `profiles.rename` / `profiles.delete`. Mirrors the legacy minimal shape
+  (`profiles.id/name/created_at`) plus `updated_at` for renames; a profile
+  row is a named user context and nothing references it yet. This model
+  unblocks the per-profile FK columns on product tables and the SEC-02
+  per-profile export filtering (ADR-0047 waiver 4) — the slice-5 remainder
+  follow-up. Fail-closed: rename/delete of an unknown profile is the stable
+  `PROFILE_NOT_FOUND` product code with a `profileId` param; wire
+  validation rejects empty names, non-uuid ids and unknown fields. 3 kernel
+  tests (`kernel_profiles.rs`). New capability row `ui.profiles` in the
+  matrix; 33 rows.
 - **Canonical Theme-SDK registry (ТЗ §5.2 theme-sdk, §SEC-05, AGENTS.md
   §19, M5 slice 6 part 2).** Schema v13 (STRICT `themes` table) + four new
   wire operations (82 total): `themes.list` / `themes.install` /
