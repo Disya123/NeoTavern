@@ -36,6 +36,7 @@ import { FloatingTabPanel } from './FloatingTabPanel.js';
 import { PluginSettingsPanels } from './PluginPanels.js';
 import { ProfilesPanel } from './ProfilesPanel.js';
 import { RemoteAccessPanel } from './RemoteAccessPanel.js';
+import { SecretsPanel } from './SecretsPanel.js';
 import { SlotHost } from '../plugins/slots.js';
 import { SystemSurfaceLink } from './SystemSurfaceLink.js';
 import styles from './SettingsPanel.module.css';
@@ -118,6 +119,15 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             content: (
               <FloatingTabContent>
                 <ProfilesPanel />
+              </FloatingTabContent>
+            ),
+          },
+          {
+            value: 'secrets',
+            label: t('navigation:secrets'),
+            content: (
+              <FloatingTabContent>
+                <SecretsPanel />
               </FloatingTabContent>
             ),
           },

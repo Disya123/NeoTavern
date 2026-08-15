@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-08-15T16:42:02.101Z",
+  "generatedAt": "2026-08-15T16:54:09.918Z",
   "rows": [
     {
       "hosts": {
@@ -463,13 +463,13 @@
     {
       "hosts": {
         "android": "Designed",
-        "desktop": "Designed",
-        "headless": "Designed",
-        "webClient": "Designed"
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "webClient": "Implemented"
       },
       "id": "ui.secrets",
       "milestone": "M3",
-      "notes": "SEC-01: backend SecretStore + portable secrets.enc delivered in the legacy contour (M1, see security.secret-store); the passphrase entry UX, auto-lock UI and OS vault / Keystore adapters remain M3; no reveal op by design. M5 slice 7 adds the canonical-plane value-free surface `secrets.status` (ТЗ §SEC-01.1): it reports the explicit mode — kind 'portable' (encrypted secrets.enc with formatVersion), 'env', 'session' (session-only) or 'unavailable' — plus persistent/writable/available flags and the record count, WITHOUT ever invoking get (a value cannot cross this DTO; the kernel test plants a sentinel in a session and a portable store and proves it never appears in the response bytes). The UI renders the honest mode state (portable encrypted / machine-bound / session-only / fail-closed unavailable) from this DTO; the passphrase-entry and auto-lock UX remain the web facade.",
+      "notes": "SEC-01: backend SecretStore + portable secrets.enc delivered in the legacy contour (M1, see security.secret-store); OS vault / Keystore adapters remain M3; no reveal op by design. M5 slice 7 adds the canonical-plane value-free surface secrets.status (ТЗ §SEC-01.1): it reports the explicit mode — kind 'portable' (encrypted secrets.enc with formatVersion), 'env', 'session' (session-only) or 'unavailable' — plus persistent/writable/available flags and the record count, WITHOUT ever invoking get (a value cannot cross this DTO; the kernel test plants a sentinel in a session and a portable store and proves it never appears in the response bytes). M5 slice 7 remainder web: the Settings panel gained a Security tab (SecretsPanel) rendering the honest mode state (portable encrypted / machine-bound / session-only / fail-closed unavailable) plus persistent/writable/available flags, record count and portable format version from the DTO via the NeoBackend facade (LocalBackend/RemoteBackend forward, LegacyBackend UnsupportedError), wired through useSecretsStatus; the panel explicitly states there is no reveal operation. SecretsPanel component tests (2); the passphrase-entry and auto-lock UX remain the web facade.",
       "title": "Secret management",
       "wireOps": ["secrets.status"]
     },

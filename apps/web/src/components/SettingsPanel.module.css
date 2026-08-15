@@ -217,6 +217,46 @@
     font-weight: var(--st-font-weight-semibold);
   }
 
+  .secretsMode {
+    display: flex;
+    align-items: center;
+    gap: var(--st-space-md);
+    padding: var(--st-space-sm) var(--st-space-md);
+    border: 1px solid var(--st-color-border);
+    border-radius: var(--st-radius-card);
+  }
+
+  .secretsMode[data-state='unavailable'] {
+    border-color: var(--st-color-danger);
+  }
+
+  .secretsFlags {
+    display: grid;
+    gap: var(--st-space-xs);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .secretsFlags li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--st-space-md);
+    padding: var(--st-space-xs) 0;
+    border-bottom: 1px solid var(--st-color-border-subtle);
+    color: var(--st-color-text-primary);
+    font-size: var(--st-font-size-sm);
+  }
+
+  .secretsFlags li:last-child {
+    border-bottom: 0;
+  }
+
+  .secretsFlags li span {
+    color: var(--st-color-text-muted);
+  }
+
   .error,
   .noBackups {
     margin: 0;

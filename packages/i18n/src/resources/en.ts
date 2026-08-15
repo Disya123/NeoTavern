@@ -64,6 +64,7 @@ export const en = {
     lorebooks: 'Lorebooks',
     backgrounds: 'Backgrounds',
     profiles: 'Profiles',
+    secrets: 'Security',
   },
   home: {
     appName: 'NeoTavern',
@@ -1448,6 +1449,35 @@ export const en = {
     exportedNotice:
       'Exported "{{name}}": {{characters}} characters, {{chats}} chats, {{messages}} messages.',
     exportFailedHint: 'The export did not complete. Check the diagnostics panel for details.',
+  },
+  secrets: {
+    title: 'Secret storage',
+    titleHint:
+      'How provider keys and other secrets are kept on this device. Secrets are never stored in the database and never appear in exports or diagnostics.',
+    loading: 'Reading secret-store status…',
+    modePortable: 'Portable encrypted',
+    modePortableHint:
+      'Secrets are kept in an encrypted portable store (secrets.enc) protected by your master passphrase and travel with the data folder.',
+    modeEnv: 'Machine-bound (environment)',
+    modeEnvHint:
+      'Secrets come from environment variables configured for this host (NEOTA_SECRET_*). Nothing is written by the app.',
+    modeSession: 'Session-only',
+    modeSessionHint:
+      'Secrets live in memory for this session only and are gone when the app closes. Re-enter them next launch.',
+    modeUnavailable: 'Secret storage unavailable',
+    modeUnavailableHint:
+      'No secure secret backend is wired in this configuration. Secret-requiring features fail closed rather than fall back to plaintext.',
+    persistent: 'Persistent',
+    writable: 'Writable',
+    available: 'Available',
+    recordCount: 'Stored records',
+    recordCountValue: '{{count}}',
+    formatVersion: 'Portable format',
+    formatVersionValue: 'v{{version}}',
+    yes: 'Yes',
+    no: 'No',
+    noRevealHint:
+      'There is no reveal operation: values never leave the store, so there is nothing to display here.',
   },
   validation: {
     required: 'This field is required.',

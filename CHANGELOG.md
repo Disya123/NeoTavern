@@ -3,6 +3,18 @@
 ## Unreleased
 ### Added
 
+- **Secret-store status panel (SEC-01.1, M5 slice 7 remainder web).** The
+  Settings panel gained a Security tab (`SecretsPanel`) rendering the honest
+  value-free store mode from the canonical `secrets.status` DTO via the
+  NeoBackend facade (LocalBackend/RemoteBackend forward, LegacyBackend
+  throws `UnsupportedError` — parity-tested). The panel shows the explicit
+  SEC-01.1 mode — portable encrypted (`secrets.enc` + format version),
+  machine-bound environment, session-only, or the fail-closed unavailable
+  state — plus persistent/writable/available flags and the record count,
+  wired through `useSecretsStatus`. There is no reveal operation by design:
+  the panel states that values never leave the store. i18n en/ru.
+  Tests: SecretsPanel component tests (portable + unavailable modes);
+  web vitest 612/612.
 - **Profiles UI + facade export (M5 slice 5 remainder web).** The NeoBackend
   facade now covers the full Configuration profile surface: `profiles.export`
   was added to `ProfilesApi` (LocalBackend forwards `profile.export` over the
