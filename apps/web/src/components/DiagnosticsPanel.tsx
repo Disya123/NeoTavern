@@ -11,7 +11,12 @@ import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { ActionBar, ActionBarGroup, Button } from '@neotavern/ui';
 import { backend } from '../api/backend.js';
-import { useClearDiagnosticCache, useDiagnostics, useRebuildSearch } from '../api/hooks.js';
+import {
+  useClearDiagnosticCache,
+  useDiagnostics,
+  useKernelDiagnostics,
+  useRebuildSearch,
+} from '../api/hooks.js';
 import { useErrorText } from '../lib/useErrorText.js';
 import { ConfirmActionDialog } from './ConfirmActionDialog.js';
 import {
@@ -44,6 +49,7 @@ export function DiagnosticsPanel() {
   // Kernel as an explicit Preview (ADR-0038) only when the shell reports the
   // Kernel is the ACTIVE backend — never when the sidecar is running.
   const [backendMode, setBackendMode] = useState<'kernel' | 'sidecar' | null>(null);
+  const kernelActive = backendMode === 'kernel';
   useEffect(() => {
     if (!desktop) return;
     void getDesktopBackendMode().then(setBackendMode);
@@ -65,6 +71,10 @@ export function DiagnosticsPanel() {
     staleTime: 60_000,
     retry: false,
   });
+  // SEC-07 allowlist bundle (wire `diagnostics.export`). Distinct from the
+  // legacy DiagnosticsSnapshot: it carries versions/counts only, so the panel
+  // maps the two planes honestly instead of fabricating legacy fields.
+  const kernelDiagnosticsQuery = useKernelDiagnostics();
 
   const checkUpdates = async (): Promise<void> => {
     setActiveAction('update');
@@ -232,6 +242,42 @@ export function DiagnosticsPanel() {
                   }
                   state={kernelBackupsQuery.data ? 'ok' : 'error'}
                 />
+                {kernelDiagnosticsQuery.data ? (
+                  <>
+                    <DiagnosticMetric
+                      label={t('settings:diagnosticsKernelSchema')}
+                      value={t('settings:diagnosticsKernelSchemaValue', {
+                        revision: kernelDiagnosticsQuery.data.schemaRevision,
+                        hash: kernelDiagnosticsQuery.data.schemaHash.slice(0, 12),
+                      })}
+                    />
+                    <DiagnosticMetric
+                      label={t('settings:diagnosticsKernelStorage')}
+                      value={t('settings:diagnosticsKernelStorageValue', {
+                        format: kernelDiagnosticsQuery.data.storageFormat ?? '—',
+                      })}
+                    />
+                    <DiagnosticMetric
+                      label={t('settings:diagnosticsKernelSqlite')}
+                      value={kernelDiagnosticsQuery.data.sqliteVersion}
+                    />
+                    <DiagnosticMetric
+                      label={t('settings:diagnosticsKernelSettings')}
+                      value={t('settings:diagnosticsKernelSettingsValue', {
+                        count: kernelDiagnosticsQuery.data.settings.count,
+                      })}
+                    />
+                    <DiagnosticMetric
+                      label={t('settings:diagnosticsKernelRuns')}
+                      value={t('settings:diagnosticsKernelRunsValue', {
+                        total: kernelDiagnosticsQuery.data.generationRuns.total,
+                        completed: kernelDiagnosticsQuery.data.generationRuns.completed,
+                        failed: kernelDiagnosticsQuery.data.generationRuns.failed,
+                        waiting: kernelDiagnosticsQuery.data.generationRuns.waiting,
+                      })}
+                    />
+                  </>
+                ) : null}
               </>
             ) : kernelQuery.isError ? (
               <DiagnosticMetric
@@ -319,8 +365,9 @@ export function DiagnosticsPanel() {
           <Button
             variant="ghost"
             startIcon={<MagnifyingGlass />}
-            disabled={activeAction !== null}
+            disabled={activeAction !== null || kernelActive}
             onClick={() => void rebuildSearch()}
+            title={kernelActive ? t('settings:diagnosticsKernelMaintenanceUnavailable') : undefined}
           >
             {activeAction === 'search'
               ? t('settings:diagnosticsRebuildingSearch')
@@ -329,8 +376,9 @@ export function DiagnosticsPanel() {
           <Button
             variant="ghost"
             startIcon={<Broom />}
-            disabled={activeAction !== null}
+            disabled={activeAction !== null || kernelActive}
             onClick={() => setCacheConfirmOpen(true)}
+            title={kernelActive ? t('settings:diagnosticsKernelMaintenanceUnavailable') : undefined}
           >
             {activeAction === 'cache'
               ? t('settings:diagnosticsClearingCache')
@@ -346,6 +394,11 @@ export function DiagnosticsPanel() {
           </Button>
         </ActionBarGroup>
       </ActionBar>
+      {kernelActive ? (
+        <p className={styles.safeHint} data-part="kernel-maintenance-note">
+          {t('settings:diagnosticsKernelMaintenanceUnavailable')}
+        </p>
+      ) : null}
       <p className={styles.safeHint}>{t('settings:safeModeHint')}</p>
 
       {desktop ? (

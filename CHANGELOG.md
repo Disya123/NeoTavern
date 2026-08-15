@@ -3,6 +3,24 @@
 ## Unreleased
 ### Added
 
+- **Provider model discovery moves out of the component; kernel diagnostics
+  are shown honestly (M5 slice 9, Этап 4 contexts 4/7 part).**
+  `AutoConnectSync` no longer calls `legacyRaw()` (ARC-03): the warm-up now
+  routes through `warmProviderModels(providerId)` in `wireBridge`, which
+  throws `UnsupportedError('providers.models.discovery')` on the kernel plane
+  (model discovery is a kernel-side capability with no wire operation yet)
+  and keeps the legacy `/providers/:id/models` read on the legacy plane;
+  the optional warm-up failure is ignored as before. ui:api:check drops to 61
+  sites (two component sites gone). The diagnostics panel now maps the kernel
+  `diagnostics.export` SEC-07 allowlist bundle honestly: schema revision +
+  hash prefix, storage format, SQLite version, stored-settings count and
+  generation-run totals appear in the kernel section (browser does not get
+  the bundle, so the legacy snapshot section stays untouched there), and in
+  kernel mode the search-index/cache maintenance buttons are disabled with an
+  explicit explanation that those are legacy-sidecar actions with no kernel
+  equivalent — no fabricated legacy fields. Tests: wireBridge 91/91 (+1
+  refusal).
+
 - **Imports/exports report CAPABILITY_UNAVAILABLE honestly (M5 slice 8,
   Этап 4 context 5 part).** `exportCharacterCard`/`exportChat`/`importCharacter`
   in `wireBridge` route through the transport: on the legacy plane they keep

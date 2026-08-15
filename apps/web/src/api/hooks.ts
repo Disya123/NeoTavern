@@ -108,6 +108,7 @@ import {
   type ContinueCharacterChatInput,
   type ContinueCharacterChatResult,
 } from './wireBridge.js';
+import { backend } from './backend.js';
 export * from './providerHooks.js';
 export type { ContinueCharacterChatInput, ContinueCharacterChatResult } from './wireBridge.js';
 
@@ -978,6 +979,21 @@ export function useDiagnostics() {
   return useQuery({
     queryKey: ['diagnostics'],
     queryFn: () => api.get<DiagnosticsSnapshot>('/diagnostics'),
+  });
+}
+
+/**
+ * Kernel diagnostics bundle (wire `diagnostics.export`, SEC-07 allowlist).
+ * The bundle is intentionally NOT the legacy DiagnosticsSnapshot: it carries
+ * versions/counts only, so the panel maps the two planes honestly instead of
+ * fabricating legacy fields from kernel data.
+ */
+export function useKernelDiagnostics() {
+  return useQuery({
+    queryKey: ['kernel-diagnostics'],
+    queryFn: () => backend.diagnostics.export(),
+    retry: false,
+    staleTime: 60_000,
   });
 }
 

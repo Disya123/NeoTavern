@@ -226,6 +226,7 @@ import {
   exportCharacterCard,
   exportChat,
   importCharacter,
+  warmProviderModels,
 } from './wireBridge.js';
 
 const CHAR_ID = '11111111-2222-4333-8444-555555555555';
@@ -1426,5 +1427,9 @@ describe('imports/exports (kernel plane honest refusals)', () => {
     await expect(importCharacter(new File(['x'], 'card.png'))).rejects.toBeInstanceOf(
       UnsupportedError,
     );
+  });
+
+  it('refuses provider model discovery on the kernel plane', async () => {
+    await expect(warmProviderModels('p1')).rejects.toBeInstanceOf(UnsupportedError);
   });
 });

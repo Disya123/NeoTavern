@@ -185,6 +185,21 @@ export async function importCharacter(file: File): Promise<unknown> {
 }
 
 /**
+ * Warm the provider model-discovery cache for `providerId`. The model list is
+ * a legacy-contour mechanism (`/providers/:id/models` feeds the legacy
+ * provider editor); on the kernel plane provider model discovery is a
+ * kernel-side capability with no wire operation, so this is an honest
+ * CAPABILITY_UNAVAILABLE — callers treat the warm-up as optional and ignore
+ * the refusal (the AutoConnectSync re-asserts `lastServer` regardless).
+ */
+export async function warmProviderModels(providerId: string): Promise<void> {
+  if (isKernelMode()) {
+    throw new UnsupportedError('providers.models.discovery');
+  }
+  await api.get(`/providers/${encodeURIComponent(providerId)}/models`);
+}
+
+/**
  * Defaults mirrored from the legacy `SettingsRepository.DEFAULTS`
  * (`apps/server`): the wire store carries only saved keys, and the legacy
  * shape requires the full `AppSettings` projection. Both sides build the

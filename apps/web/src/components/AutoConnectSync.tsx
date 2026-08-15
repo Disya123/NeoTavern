@@ -8,9 +8,8 @@
  */
 import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import type { ModelInfo } from '@neotavern/contracts';
-import { legacyRaw } from '../api/backend.js';
 import { useProviders, useSettings, useUpdateSettings } from '../api/hooks.js';
+import { warmProviderModels } from '../api/wireBridge.js';
 
 export function AutoConnectSync() {
   const queryClient = useQueryClient();
@@ -33,10 +32,13 @@ export function AutoConnectSync() {
     if (current.activeProviderConfigId !== target.id) {
       void updateSettings.mutateAsync({ activeProviderConfigId: target.id }).catch(() => undefined);
     }
+    // Warm the model discovery cache through the transport. On the kernel
+    // plane the discovery capability has no wire operation yet; the refusal
+    // is optional here — connection re-validation is kernel-side.
     void queryClient
-      .prefetchQuery<{ models: ModelInfo[] }>({
+      .prefetchQuery({
         queryKey: ['provider-models', target.id],
-        queryFn: () => legacyRaw().request<{ models: ModelInfo[] }>('GET', `/providers/${target.id}/models`),
+        queryFn: () => warmProviderModels(target.id),
       })
       .catch(() => undefined);
   }, [settings.data, providers.data, queryClient, updateSettings]);

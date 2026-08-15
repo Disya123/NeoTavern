@@ -969,6 +969,18 @@ export const ru: Resources = {
     diagnosticsKernelBackups: 'Резервные копии',
     diagnosticsKernelBackupsValue: '{{count}} резервных копий',
     diagnosticsKernelUnavailable: 'Недоступно',
+    diagnosticsKernelSchema: 'Схема',
+    diagnosticsKernelSchemaValue: 'rev {{revision}} ({{hash}}…)',
+    diagnosticsKernelStorage: 'Формат хранилища',
+    diagnosticsKernelStorageValue: 'v{{format}}',
+    diagnosticsKernelSqlite: 'SQLite',
+    diagnosticsKernelSettings: 'Настройки',
+    diagnosticsKernelSettingsValue: 'сохранено {{count}}',
+    diagnosticsKernelRuns: 'Запуски генерации',
+    diagnosticsKernelRunsValue:
+      '{{total}} всего · {{completed}} выполнено · {{failed}} сбоев · {{waiting}} ожидает',
+    diagnosticsKernelMaintenanceUnavailable:
+      'Индекс поиска и кэш — обслуживающие действия legacy-сайдкара; ядро владеет собственным хранилищем, и аналога этой поверхности пока нет.',
     diagnosticsUnknown: 'Неизвестно',
     diagnosticsPrivacy:
       'Отчёт не содержит секреты, логи, абсолютные пути и пользовательский текст.',

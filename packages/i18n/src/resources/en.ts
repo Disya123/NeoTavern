@@ -944,6 +944,18 @@ export const en = {
     diagnosticsKernelBackups: 'Backups',
     diagnosticsKernelBackupsValue: '{{count}} backups',
     diagnosticsKernelUnavailable: 'Unavailable',
+    diagnosticsKernelSchema: 'Schema',
+    diagnosticsKernelSchemaValue: 'rev {{revision}} ({{hash}}…)',
+    diagnosticsKernelStorage: 'Storage format',
+    diagnosticsKernelStorageValue: 'v{{format}}',
+    diagnosticsKernelSqlite: 'SQLite',
+    diagnosticsKernelSettings: 'Settings',
+    diagnosticsKernelSettingsValue: '{{count}} stored',
+    diagnosticsKernelRuns: 'Generation runs',
+    diagnosticsKernelRunsValue:
+      '{{total}} total · {{completed}} completed · {{failed}} failed · {{waiting}} waiting',
+    diagnosticsKernelMaintenanceUnavailable:
+      'Search index and cache are legacy-sidecar maintenance actions; the Kernel owns its own storage and has no equivalent surface yet.',
     diagnosticsUnknown: 'Unknown',
     diagnosticsPrivacy:
       'The report excludes secrets, logs, absolute paths and user-authored content.',
