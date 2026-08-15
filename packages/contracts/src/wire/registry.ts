@@ -2036,6 +2036,14 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     },
     'wire.response.envelope',
   ),
+  // Over-limit message: one character past the schema maxLength (100000).
+  // Documents the size boundary in the corpus; the byte-level gate that
+  // rejects this BEFORE the schema check is tested behaviorally in
+  // runtime-kernel (kernel_payload_gates) and remote-http (413 tests).
+  fx('neg-request-message-too-large', 'generation.start', 'request', false, {
+    chatId: UUID_CHAT,
+    message: 'x'.repeat(100_001),
+  }),
 ];
 
 const WIRE_SCHEMA_MAP: ReadonlyMap<string, TSchema> = new Map(Object.entries(WIRE_SCHEMAS));

@@ -10,32 +10,42 @@ use contracts_generated::generated::{
     decode_event_envelope, decode_generation_event, decode_generation_run,
     decode_generation_status, decode_generation_step, decode_generation_step_status,
     decode_generation_step_type, decode_lorebook_dto, decode_lorebook_entry_dto,
-    decode_lorebook_entry_input, decode_lorebook_entry_patch, decode_message_dto,
-    decode_message_role, decode_meta_dto, decode_paged_characters, decode_paged_chats,
-    decode_paged_generation_events, decode_paged_messages, decode_persona_dto, decode_preset_dto,
-    decode_prompt_block, decode_prompt_excluded, decode_prompt_message, decode_prompt_plan,
+    decode_lorebook_entry_input, decode_lorebook_entry_patch, decode_memory_dto,
+    decode_message_draft_dto, decode_message_dto, decode_message_role, decode_message_variant_dto,
+    decode_meta_dto, decode_paged_characters, decode_paged_chats, decode_paged_generation_events,
+    decode_paged_messages, decode_persona_dto, decode_preset_dto, decode_prompt_block,
+    decode_prompt_excluded, decode_prompt_message, decode_prompt_plan,
     decode_provider_availability, decode_provider_config_dto, decode_provider_dto,
     decode_provider_model, decode_request_cancel_generation, decode_request_create_character,
     decode_request_create_chat, decode_request_create_lorebook,
-    decode_request_create_lorebook_entry, decode_request_create_message,
-    decode_request_create_persona, decode_request_delete_character, decode_request_delete_chat,
-    decode_request_delete_lorebook, decode_request_delete_lorebook_entry,
-    decode_request_delete_message, decode_request_delete_persona,
+    decode_request_create_lorebook_entry, decode_request_create_memory,
+    decode_request_create_message, decode_request_create_persona, decode_request_create_preset,
+    decode_request_delete_character, decode_request_delete_chat, decode_request_delete_lorebook,
+    decode_request_delete_lorebook_entry, decode_request_delete_memory,
+    decode_request_delete_message, decode_request_delete_persona, decode_request_delete_preset,
     decode_request_delete_provider_config, decode_request_discard_generation, decode_request_empty,
     decode_request_envelope, decode_request_generation_tool_result, decode_request_get_character,
     decode_request_get_chat, decode_request_get_generation_run, decode_request_get_lorebook,
-    decode_request_get_persona, decode_request_get_prompt_plan, decode_request_get_provider_config,
-    decode_request_keep_partial_generation, decode_request_list_characters,
-    decode_request_list_chats, decode_request_list_generation_events,
-    decode_request_list_lorebook_entries, decode_request_list_messages,
-    decode_request_list_provider_configs, decode_request_retry_generation,
-    decode_request_set_provider_config, decode_request_start_generation,
-    decode_request_update_character, decode_request_update_chat, decode_request_update_lorebook,
-    decode_request_update_lorebook_entry, decode_request_update_message,
-    decode_request_update_persona, decode_response_envelope, decode_result_empty,
+    decode_request_get_persona, decode_request_get_preset, decode_request_get_prompt_plan,
+    decode_request_get_provider_config, decode_request_keep_partial_generation,
+    decode_request_list_characters, decode_request_list_chats,
+    decode_request_list_generation_events, decode_request_list_lorebook_entries,
+    decode_request_list_memories, decode_request_list_messages, decode_request_list_presets,
+    decode_request_list_provider_configs, decode_request_message_draft_commit,
+    decode_request_message_draft_discard, decode_request_message_draft_get,
+    decode_request_message_draft_save, decode_request_message_revisions_list,
+    decode_request_message_variant_activate, decode_request_message_variant_create,
+    decode_request_message_variant_delete, decode_request_message_variants_list,
+    decode_request_retry_generation, decode_request_set_provider_config,
+    decode_request_start_generation, decode_request_update_character, decode_request_update_chat,
+    decode_request_update_lorebook, decode_request_update_lorebook_entry,
+    decode_request_update_memory, decode_request_update_message, decode_request_update_persona,
+    decode_request_update_preset, decode_response_envelope, decode_result_empty,
     decode_result_list_backups, decode_result_list_lorebook_entries, decode_result_list_lorebooks,
-    decode_result_list_personas, decode_result_list_presets, decode_result_list_provider_configs,
-    decode_result_list_providers, decode_result_list_tools, decode_tool_call, decode_tool_spec,
+    decode_result_list_memories, decode_result_list_personas, decode_result_list_presets,
+    decode_result_list_provider_configs, decode_result_list_providers, decode_result_list_tools,
+    decode_result_message_revision_list, decode_result_message_variant_list, decode_tool_call,
+    decode_tool_spec,
 };
 use contracts_generated::{contract_schema_hash, wire_protocol, WireError};
 use serde::de::DeserializeOwned;
@@ -284,6 +294,95 @@ fn dispatch(schema_id: &str, bytes: &[u8], valid: bool) {
             bytes,
             valid,
         ),
+        // M4 slice 2/3 + M5 (presets, memories, message drafts/variants/
+        // revisions): these ops were added after the corpus test's original
+        // arm list; every schemaId the corpus can reference must resolve.
+        "wire.memory.dto" => corpus_case(schema_id, decode_memory_dto, bytes, valid),
+        "wire.message.draft.dto" => corpus_case(schema_id, decode_message_draft_dto, bytes, valid),
+        "wire.message.variant.dto" => {
+            corpus_case(schema_id, decode_message_variant_dto, bytes, valid)
+        }
+        "wire.request.create-memory" => {
+            corpus_case(schema_id, decode_request_create_memory, bytes, valid)
+        }
+        "wire.request.create-preset" => {
+            corpus_case(schema_id, decode_request_create_preset, bytes, valid)
+        }
+        "wire.request.delete-memory" => {
+            corpus_case(schema_id, decode_request_delete_memory, bytes, valid)
+        }
+        "wire.request.delete-preset" => {
+            corpus_case(schema_id, decode_request_delete_preset, bytes, valid)
+        }
+        "wire.request.get-preset" => {
+            corpus_case(schema_id, decode_request_get_preset, bytes, valid)
+        }
+        "wire.request.list-memories" => {
+            corpus_case(schema_id, decode_request_list_memories, bytes, valid)
+        }
+        "wire.request.list-presets" => {
+            corpus_case(schema_id, decode_request_list_presets, bytes, valid)
+        }
+        "wire.request.message-draft-commit" => {
+            corpus_case(schema_id, decode_request_message_draft_commit, bytes, valid)
+        }
+        "wire.request.message-draft-discard" => corpus_case(
+            schema_id,
+            decode_request_message_draft_discard,
+            bytes,
+            valid,
+        ),
+        "wire.request.message-draft-get" => {
+            corpus_case(schema_id, decode_request_message_draft_get, bytes, valid)
+        }
+        "wire.request.message-draft-save" => {
+            corpus_case(schema_id, decode_request_message_draft_save, bytes, valid)
+        }
+        "wire.request.message-revisions-list" => corpus_case(
+            schema_id,
+            decode_request_message_revisions_list,
+            bytes,
+            valid,
+        ),
+        "wire.request.message-variant-activate" => corpus_case(
+            schema_id,
+            decode_request_message_variant_activate,
+            bytes,
+            valid,
+        ),
+        "wire.request.message-variant-create" => corpus_case(
+            schema_id,
+            decode_request_message_variant_create,
+            bytes,
+            valid,
+        ),
+        "wire.request.message-variant-delete" => corpus_case(
+            schema_id,
+            decode_request_message_variant_delete,
+            bytes,
+            valid,
+        ),
+        "wire.request.message-variants-list" => corpus_case(
+            schema_id,
+            decode_request_message_variants_list,
+            bytes,
+            valid,
+        ),
+        "wire.request.update-memory" => {
+            corpus_case(schema_id, decode_request_update_memory, bytes, valid)
+        }
+        "wire.request.update-preset" => {
+            corpus_case(schema_id, decode_request_update_preset, bytes, valid)
+        }
+        "wire.result.list-memories" => {
+            corpus_case(schema_id, decode_result_list_memories, bytes, valid)
+        }
+        "wire.result.message-revision-list" => {
+            corpus_case(schema_id, decode_result_message_revision_list, bytes, valid)
+        }
+        "wire.result.message-variant-list" => {
+            corpus_case(schema_id, decode_result_message_variant_list, bytes, valid)
+        }
         other => panic!("corpus references unknown schemaId: {other}"),
     }
 }

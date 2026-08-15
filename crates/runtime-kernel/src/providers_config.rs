@@ -318,10 +318,6 @@ fn validate<T: serde::Serialize>(
 }
 
 fn encode<T: serde::Serialize>(value: &T) -> Result<Vec<u8>, KernelError> {
-    serde_json::to_vec(value).map_err(|err| {
-        KernelError::new(
-            KernelErrorCode::Internal,
-            format!("failed to serialize provider-config response: {err}"),
-        )
-    })
+    // Bounded serialization (plan rev 2.2 Layer C) — shared LimitedWriter.
+    crate::product::encode(value)
 }

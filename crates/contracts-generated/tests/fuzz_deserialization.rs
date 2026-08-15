@@ -253,6 +253,145 @@ fn mutated_fixtures_never_panic() {
     assert_eq!(calls, iters, "fuzz loop underran");
 }
 
+/// Parser-killer payloads — deep nesting, giant arrays/strings/objects, huge
+/// numbers — driven through EVERY decoder. The decoder must answer with a
+/// controlled `Err` (or, for a structurally valid bomb that happens to match
+/// a schema, `Ok`) — never a panic and never a hang. Deep JSON text relies on
+/// serde_json's built-in recursion limit: the parse must fail cleanly.
+#[test]
+fn pathological_payloads_never_panic() {
+    let probes = decode_probes();
+
+    // Depth bomb: 10_000 nested objects (serde_json's parse recursion limit
+    // is 128, so this must fail as a controlled parse error, not overflow).
+    let mut deep_objects = String::from("{\"a\":".repeat(10_000));
+    deep_objects.push('0');
+    deep_objects.push_str(&"}".repeat(10_000));
+    let mut deep_arrays = String::from("[".repeat(10_000));
+    deep_arrays.push('0');
+    deep_arrays.push_str(&"]".repeat(10_000));
+
+    // Size bombs: structurally valid JSON that no DTO matches.
+    let nulls_100k = format!("[{}]", vec!["null"; 100_000].join(","));
+    let wide_object = format!(
+        "{{{}}}",
+        (0..50_000)
+            .map(|i| format!("\"key-{i}-{}\": {{\"n\": {i}}}", "x".repeat(20)))
+            .collect::<Vec<_>>()
+            .join(",")
+    );
+    let big_string = format!("\"{}\"", "x".repeat(8 * 1024 * 1024));
+    // Number bombs: exponent overflow and a 400-digit integer literal.
+    let number_bombs = [
+        format!(r#"{{"n": 1e400}}"#),
+        format!(r#"{{"n": {}}}"#, "9".repeat(400)),
+    ];
+
+    let mut bombs: Vec<(String, Vec<u8>)> = vec![
+        ("deep-objects-10000".to_string(), deep_objects.into_bytes()),
+        ("deep-arrays-10000".to_string(), deep_arrays.into_bytes()),
+        ("nulls-100000".to_string(), nulls_100k.into_bytes()),
+        ("wide-object-50000".to_string(), wide_object.into_bytes()),
+        ("string-8MiB".to_string(), big_string.into_bytes()),
+        (
+            "number-1e400".to_string(),
+            number_bombs[0].clone().into_bytes(),
+        ),
+        (
+            "number-400-digits".to_string(),
+            number_bombs[1].clone().into_bytes(),
+        ),
+    ];
+
+    // Truncated bombs: every SMALL bomb cut at a dozen random points
+    // (partial tokens, truncated nesting) must also fail controlled. Big
+    // bombs (≥64 KiB) are fed whole only — O(n) string scanning across 51
+    // probes × 12 truncations would dominate the suite for no new signal.
+    let mut rng = Rng(0xA5A5_F00D_CAFE_2026);
+    for (name, bytes) in bombs.clone() {
+        if bytes.len() >= 64 * 1024 {
+            continue;
+        }
+        for _ in 0..12 {
+            let cut = if bytes.len() <= 2 {
+                1
+            } else {
+                1 + rng.below(bytes.len() - 1)
+            };
+            bombs.push((format!("{name}-truncated-{cut}"), bytes[..cut].to_vec()));
+        }
+    }
+
+    // Random deep JSON trees (deterministic): mixed wrong types, unknown
+    // keys, nesting up to depth 100, built as a Rust value then serialized.
+    // Each tree is hard-bounded to MAX_TREE_NODES (the naive generator is a
+    // supercritical branching process — see `random_tree`).
+    const MAX_TREE_NODES: usize = 5000;
+    let mut tree_bytes = Vec::new();
+    for _ in 0..200 {
+        let mut budget = MAX_TREE_NODES;
+        let tree = random_tree(&mut rng, 0, &mut budget);
+        tree_bytes = serde_json::to_vec(&tree).expect("tree serializes");
+        assert!(
+            tree_bytes.len() <= MAX_TREE_NODES * 256,
+            "tree exceeded the node budget ({} B)",
+            tree_bytes.len()
+        );
+        let (name, probe) = probes[rng.below(probes.len())];
+        no_panic(name, probe, &tree_bytes);
+    }
+
+    let mut calls = 0usize;
+    for (name, bytes) in &bombs {
+        for (probe_name, probe) in probes.iter().copied() {
+            no_panic(probe_name, probe, bytes);
+            calls += 1;
+        }
+        // The bomb itself is a label, not a probe name.
+        assert!(!name.is_empty());
+    }
+    // Sanity: the loop above must have driven every bomb through every probe.
+    assert_eq!(calls, bombs.len() * probes.len());
+    assert!(
+        tree_bytes.len() > 0,
+        "random-tree fuzz must have produced input"
+    );
+}
+
+/// Random deep JSON tree (deterministic): nests objects/arrays up to `depth`
+/// with scalar leaves chosen from wrong-type replacements. SIZE-BOUNDED:
+/// a shared node `budget` forces leaves once exhausted — the naive recursion
+/// is a supercritical branching process (≈3.5 children × 75% continuation)
+/// whose largest trees grow without bound (observed: tens of GiB with a
+/// fixed seed), which is exactly the class of failure this suite must never
+/// exhibit. Never panics; ≤ `budget` nodes per tree.
+fn random_tree(rng: &mut Rng, depth: usize, budget: &mut usize) -> serde_json::Value {
+    *budget = budget.saturating_sub(1);
+    if *budget == 0 || depth >= 100 || rng.below(4) == 0 {
+        return wrong_type(rng);
+    }
+    match rng.below(3) {
+        0 => {
+            let mut map = serde_json::Map::new();
+            for _ in 0..(1 + rng.below(6)) {
+                map.insert(
+                    format!("k{}", rng.below(10_000)),
+                    random_tree(rng, depth + 1, budget),
+                );
+            }
+            serde_json::Value::Object(map)
+        }
+        1 => {
+            let mut items = Vec::new();
+            for _ in 0..(1 + rng.below(8)) {
+                items.push(random_tree(rng, depth + 1, budget));
+            }
+            serde_json::Value::Array(items)
+        }
+        _ => wrong_type(rng),
+    }
+}
+
 /// Recursively corrupts a JSON value in place (char-boundary safe).
 fn mutate(rng: &mut Rng, value: &mut serde_json::Value) {
     match value {

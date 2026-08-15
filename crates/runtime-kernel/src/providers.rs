@@ -142,12 +142,8 @@ pub(crate) fn handle_providers_list(
         params: Vec::new(),
         product: None,
     })?;
-    serde_json::to_vec(&value).map_err(|err| {
-        KernelError::new(
-            KernelErrorCode::Internal,
-            format!("failed to serialize providers.list response: {err}"),
-        )
-    })
+    // Bounded serialization (plan rev 2.2 Layer C) — shared LimitedWriter.
+    crate::product::encode(&value)
 }
 
 /// Maps the sdk [`Availability`](provider_sdk::Availability) onto the wire

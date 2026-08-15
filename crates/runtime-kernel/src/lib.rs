@@ -434,12 +434,34 @@ fn handle_meta_get(meta: &MetaDto, request: &[u8]) -> Result<Vec<u8>, KernelErro
         params: Vec::new(),
         product: None,
     })?;
-    serde_json::to_vec(&value).map_err(|err| {
-        KernelError::new(
-            KernelErrorCode::Internal,
-            format!("failed to serialize meta response: {err}"),
-        )
-    })
+    product::encode(&value)
+}
+
+/// Stable product error for a payload that exceeds the declared wire byte
+/// limit (`PAYLOAD_TOO_LARGE`).
+fn payload_too_large(op: &str, bytes: usize, limit: usize) -> KernelError {
+    KernelError::product(
+        "PAYLOAD_TOO_LARGE",
+        vec![
+            ("operationId".to_string(), op.to_string()),
+            ("bytes".to_string(), bytes.to_string()),
+            ("limit".to_string(), limit.to_string()),
+        ],
+    )
+}
+
+/// Rejects a request whose byte length exceeds the operation's declared
+/// wire limit BEFORE any parse (plan rev 2.2 Layer C, вход линия 2 — the
+/// transport-agnostic second barrier after the transports' bounded readers).
+/// The limits are generated from the registry (`operation_request_limit`),
+/// so no hand-written constants can drift.
+pub(crate) fn enforce_request_limit(op: &str, req: &[u8]) -> Result<(), KernelError> {
+    let limit = generated::operation_request_limit(op)
+        .unwrap_or(generated::DEFAULT_REQUEST_LIMIT_BYTES) as usize;
+    if req.len() > limit {
+        return Err(payload_too_large(op, req.len(), limit));
+    }
+    Ok(())
 }
 
 /// Runs a unary operation against the writer's database (when present).
@@ -479,7 +501,10 @@ fn handle_unary(
             "operation cancelled before dispatch",
         ));
     }
-    match op {
+    // Вход, линия 2: reject over-limit payloads BEFORE any parse (the
+    // transports already bound the read; this covers CLI/FFI/JNI/Tauri).
+    enforce_request_limit(op, req)?;
+    let result = match op {
         "meta.get" => handle_meta_get(meta, req),
         // Phase 7: stateless provider registry listing (like meta.get — no
         // durable storage required).
@@ -598,6 +623,22 @@ fn handle_unary(
             KernelErrorCode::OperationNotFound,
             format!("unknown operation: {op}"),
         )),
+    };
+    // Выход, per-op precision layer: the shared encode is already bounded at
+    // the registry maximum during serialization; here an op whose declared
+    // response limit is smaller is rejected after (bounded) construction.
+    match result {
+        Ok(bytes) => {
+            let limit = generated::operation_response_limit(op)
+                .map(|l| l as usize)
+                .unwrap_or(generated::DEFAULT_RESPONSE_LIMIT_BYTES as usize);
+            if bytes.len() > limit {
+                Err(payload_too_large(op, bytes.len(), limit))
+            } else {
+                Ok(bytes)
+            }
+        }
+        Err(err) => Err(err),
     }
 }
 
@@ -930,6 +971,9 @@ impl Kernel {
                 format!("operation {operation_id} must use dispatch_stream"),
             ));
         }
+        // Вход, линия 2 (transport-agnostic): reject over-limit payloads
+        // BEFORE the body is copied to the writer thread or parsed.
+        enforce_request_limit(operation_id, request)?;
         let (reply_tx, reply_rx) = mpsc::sync_channel(1);
         self.cmd_tx
             .send(Command::Unary {
@@ -979,6 +1023,9 @@ impl Kernel {
                 format!("operation {operation_id} must use dispatch"),
             ));
         }
+        // Вход, линия 2 (transport-agnostic): reject over-limit payloads
+        // BEFORE the body is copied to the writer thread or parsed.
+        enforce_request_limit(operation_id, request)?;
         let (reply_tx, reply_rx) = mpsc::sync_channel(1);
         self.cmd_tx
             .send(Command::Stream {

@@ -40,6 +40,10 @@ export default defineConfig({
     // parallel load on slower runners; 10 s widens the margin without
     // masking genuine hangs.
     testTimeout: 10_000,
+    // Memory containment (plan rev 2.2 Layer B): two workers max and a
+    // bounded Node heap so parallel suites cannot exhaust host memory.
+    maxWorkers: 2,
+    execArgv: ['--max-old-space-size=2048'],
     include: [
       'packages/**/*.test.{ts,tsx}',
       'apps/**/*.test.ts',

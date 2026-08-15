@@ -240,7 +240,7 @@
     {
       "source": "architecture/README.md",
       "target": "architecture/README.md",
-      "sha256": "22ad2e3b3768320afa22eeaf55a8a5d8be187f9fba33826aea4ede382e4a80b3"
+      "sha256": "3ba0d6e315c6130349f1cfda49d4bc11f494c7a806421efd682fb1c60fa93ff2"
     },
     {
       "source": "architecture/benchmarks.md",
@@ -276,6 +276,11 @@
       "source": "architecture/providers.md",
       "target": "architecture/providers.md",
       "sha256": "0eb8969f55eb5323e83b8903f3cc6146211e6342eb01151dbdf3da7ebaa405ac"
+    },
+    {
+      "source": "architecture/resource-containment.md",
+      "target": "architecture/resource-containment.md",
+      "sha256": "816650bf1031a8f8b92ab05520680895774d2ecfe950c3ec1db44b0289936352"
     },
     {
       "source": "architecture/ui-legacy-surface.md",

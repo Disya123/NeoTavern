@@ -29,9 +29,9 @@ use common::{
     decode_envelope, default_config, encode_envelope_frame, encode_frame, encode_terminal_frame,
     envelope_body, envelope_body_full, expect_error, expect_ok, free_port, gen, http_request,
     http_request_chunked, http_requests_keepalive, json, kernel_config, parse_last_event_id,
-    parse_sse, rid, seed_data_root, AdapterError, Arc, AuthConfig, IpAddr, Ipv4Addr, Kernel,
-    KernelErrorCode, Mutex, RemoteAdapter, RemoteAdapterConfig, SocketAddr, SseFrame, TestServer,
-    Value, T0, ZERO_SCHEMA_HASH,
+    parse_sse, rid, seed_data_root, AdapterError, Arc, AuthConfig, Duration, IpAddr, Ipv4Addr,
+    Kernel, KernelErrorCode, Mutex, RemoteAdapter, RemoteAdapterConfig, SocketAddr, SseFrame,
+    TcpStream, TestServer, Value, Write, T0, ZERO_SCHEMA_HASH,
 };
 
 // ---------------------------------------------------------------------------
@@ -368,6 +368,39 @@ fn request_body_over_limit_returns_413_quota_exceeded() {
 
     // Chunked body over the limit → the same 413 outcome.
     let response = http_request_chunked(server.addr, "/rpc", &body);
+    assert_eq!(response.status, 413);
+    let value: Value = serde_json::from_slice(&response.body).expect("413 body is JSON");
+    assert_eq!(value["error"]["code"], json!("QUOTA_EXCEEDED"));
+    assert_eq!(value["error"]["params"]["rule"], json!("request_too_large"));
+}
+
+/// 9b. Content-Length over the limit → 413 WITHOUT polling the body stream
+///     (plan rev 2.2 Layer C, вход линия 1): the adapter must answer before
+///     any body byte is read. We send the request head with a huge declared
+///     Content-Length and ZERO body bytes; if the adapter tried to read the
+///     body it would block until the read timeout, so a prompt 413 proves
+///     zero body polls (poll_count == 0).
+#[test]
+fn oversized_content_length_is_413_without_reading_the_body() {
+    let config = RemoteAdapterConfig {
+        max_request_bytes: 64,
+        ..default_config()
+    };
+    let server = TestServer::spawn_with(config);
+
+    let mut stream = TcpStream::connect(server.addr).expect("connect to the adapter");
+    stream
+        .set_read_timeout(Some(Duration::from_millis(500)))
+        .expect("set read timeout");
+    let head = format!(
+        "POST /rpc HTTP/1.1\r\nHost: {}\r\nConnection: close\r\nContent-Length: 1048576\r\n\r\n",
+        server.addr
+    );
+    stream.write_all(head.as_bytes()).expect("write the request head");
+    // Intentionally send NO body bytes — the 413 must still arrive.
+
+    let raw = common::read_response(&mut stream).expect("adapter must answer without the body");
+    let response = common::parse_response(&raw);
     assert_eq!(response.status, 413);
     let value: Value = serde_json::from_slice(&response.body).expect("413 body is JSON");
     assert_eq!(value["error"]["code"], json!("QUOTA_EXCEEDED"));

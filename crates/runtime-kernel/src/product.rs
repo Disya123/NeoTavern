@@ -17,8 +17,8 @@
 use crate::{KernelError, KernelErrorCode};
 use contracts_generated::generated::{
     self, CharacterDto, ChatDto, LorebookDto, MemoryDto, MemoryScope, MessageDraftDto, MessageDto,
-    MessageRevisionDto, MessageRole, MessageVariantDto, PagedCharacters, PagedChats,
-    PagedMessages, PersonaDto, PresetDto, RequestListPresets, ResultEmpty, ResultListLorebooks,
+    MessageRevisionDto, MessageRole, MessageVariantDto, PagedCharacters, PagedChats, PagedMessages,
+    PersonaDto, PresetDto, RequestListPresets, ResultEmpty, ResultListLorebooks,
     ResultListMemories, ResultListPersonas, ResultListPresets, ResultMessageRevisionList,
     ResultMessageVariantList,
 };
@@ -132,20 +132,75 @@ pub(crate) fn validate<T: serde::Serialize>(
     })
 }
 
-/// Serializes a validated DTO to response bytes.
+/// Serializes a validated DTO to response bytes (bounded — plan rev 2.2
+/// Layer C): the serializer stops as soon as the registry-wide response
+/// limit is produced, so the JSON string is never materialized unbounded.
 pub(crate) fn encode<T: serde::Serialize>(value: &T) -> Result<Vec<u8>, KernelError> {
-    let value = serde_json::to_value(value).map_err(|err| {
-        KernelError::new(
-            KernelErrorCode::Internal,
-            format!("failed to serialize response dto: {err}"),
-        )
-    })?;
-    serde_json::to_vec(&value).map_err(|err| {
-        KernelError::new(
-            KernelErrorCode::Internal,
-            format!("failed to serialize response dto: {err}"),
-        )
-    })
+    encode_limited(value, generated::DEFAULT_RESPONSE_LIMIT_BYTES)
+}
+
+/// Bounded serialization with an explicit byte limit (see [`encode`]).
+/// A response that reaches `limit` bytes is aborted mid-write with the
+/// stable `PAYLOAD_TOO_LARGE` product error instead of building the rest.
+pub(crate) fn encode_limited<T: serde::Serialize>(
+    value: &T,
+    limit: u64,
+) -> Result<Vec<u8>, KernelError> {
+    let mut buf = Vec::with_capacity(4096);
+    {
+        let mut writer = LimitedWriter::new(&mut buf, limit);
+        serde_json::to_writer(&mut writer, value).map_err(|err| {
+            if err.io_error_kind() == Some(std::io::ErrorKind::WriteZero) {
+                KernelError::product(
+                    "PAYLOAD_TOO_LARGE",
+                    vec![("limit".to_string(), limit.to_string())],
+                )
+            } else {
+                KernelError::new(
+                    KernelErrorCode::Internal,
+                    format!("failed to serialize response dto: {err}"),
+                )
+            }
+        })?;
+    }
+    Ok(buf)
+}
+
+/// A `Write` that refuses more than `limit` bytes: serialization stops AT
+/// the limit (mid-write), never after materializing an unbounded string.
+pub(crate) struct LimitedWriter<W: std::io::Write> {
+    inner: W,
+    limit: u64,
+    written: u64,
+}
+
+impl<W: std::io::Write> LimitedWriter<W> {
+    fn new(inner: W, limit: u64) -> Self {
+        LimitedWriter {
+            inner,
+            limit,
+            written: 0,
+        }
+    }
+}
+
+impl<W: std::io::Write> std::io::Write for LimitedWriter<W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let remaining = self.limit.saturating_sub(self.written);
+        if buf.len() as u64 > remaining {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::WriteZero,
+                "response exceeds the wire byte limit",
+            ));
+        }
+        let n = self.inner.write(buf)?;
+        self.written += n as u64;
+        Ok(n)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.inner.flush()
+    }
 }
 
 /// Builds a product-level not-found error: stable wire code
@@ -177,7 +232,10 @@ fn not_found(entity: &str, id: &str) -> KernelError {
 fn preset_conflict(kind: &str, name: &str) -> KernelError {
     KernelError::product(
         "PRESET_CONFLICT".to_string(),
-        vec![("kind".to_string(), kind.to_string()), ("name".to_string(), name.to_string())],
+        vec![
+            ("kind".to_string(), kind.to_string()),
+            ("name".to_string(), name.to_string()),
+        ],
     )
 }
 
@@ -345,7 +403,9 @@ fn row_to_memory(row: &rusqlite::Row) -> Result<MemoryDto, KernelError> {
             format!("memories: invalid keys_json: {err}"),
         )
     })?;
-    let enabled: i64 = row.get(5).map_err(|e| sqlite(e, "memories: read enabled"))?;
+    let enabled: i64 = row
+        .get(5)
+        .map_err(|e| sqlite(e, "memories: read enabled"))?;
     let metadata: String = row
         .get(7)
         .map_err(|e| sqlite(e, "memories: read metadata"))?;
@@ -362,9 +422,13 @@ fn row_to_memory(row: &rusqlite::Row) -> Result<MemoryDto, KernelError> {
             .get(2)
             .map_err(|e| sqlite(e, "memories: read character_id"))?,
         keys,
-        content: row.get(4).map_err(|e| sqlite(e, "memories: read content"))?,
+        content: row
+            .get(4)
+            .map_err(|e| sqlite(e, "memories: read content"))?,
         enabled: enabled != 0,
-        position: row.get(6).map_err(|e| sqlite(e, "memories: read position"))?,
+        position: row
+            .get(6)
+            .map_err(|e| sqlite(e, "memories: read position"))?,
         metadata,
         created_at: row
             .get(8)
@@ -851,7 +915,9 @@ fn query_message_variant(
         .map_err(|e| sqlite(e, "query_message_variant: read row"))?
     {
         Some(row) => Ok(Some(MessageVariantDto {
-            id: row.get(0).map_err(|e| sqlite(e, "query_message_variant: id"))?,
+            id: row
+                .get(0)
+                .map_err(|e| sqlite(e, "query_message_variant: id"))?,
             message_id: row
                 .get(1)
                 .map_err(|e| sqlite(e, "query_message_variant: message_id"))?,
@@ -906,7 +972,9 @@ fn query_message_draft(
                 }
             };
             Ok(Some(MessageDraftDto {
-                id: row.get(0).map_err(|e| sqlite(e, "query_message_draft: id"))?,
+                id: row
+                    .get(0)
+                    .map_err(|e| sqlite(e, "query_message_draft: id"))?,
                 chat_id: row
                     .get(1)
                     .map_err(|e| sqlite(e, "query_message_draft: chat_id"))?,
@@ -1047,11 +1115,10 @@ pub fn chats_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Kernel
         params.push(Value::Text(now));
         let sql = format!("UPDATE chats SET {} WHERE id = ?", sets.join(", "));
         params.push(Value::Text(chat_id.clone()));
-        let changed = db
-            .transaction(|tx| {
-                tx.execute(&sql, params_from_iter(params))
-                    .map_err(|e| StorageError::from_sqlite(e, "chats_update: update"))
-            })?;
+        let changed = db.transaction(|tx| {
+            tx.execute(&sql, params_from_iter(params))
+                .map_err(|e| StorageError::from_sqlite(e, "chats_update: update"))
+        })?;
         if changed == 0 {
             return Err(not_found("CHAT", &chat_id));
         }
@@ -1200,7 +1267,9 @@ pub fn message_variants_list(db: &mut Database, request: &[u8]) -> Result<Vec<u8
             .map_err(|e| sqlite(e, "message_variants_list: read row"))?
         {
             items.push(MessageVariantDto {
-                id: row.get(0).map_err(|e| sqlite(e, "message_variants_list: id"))?,
+                id: row
+                    .get(0)
+                    .map_err(|e| sqlite(e, "message_variants_list: id"))?,
                 message_id: row
                     .get(1)
                     .map_err(|e| sqlite(e, "message_variants_list: message_id"))?,
@@ -1282,7 +1351,10 @@ pub fn message_variants_delete(db: &mut Database, request: &[u8]) -> Result<Vec<
 /// the message, atomically (the message text is the active variant). The
 /// replaced text is recorded as an immutable content revision. Missing
 /// variant → `MESSAGE_VARIANT_NOT_FOUND`.
-pub fn message_variants_activate(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+pub fn message_variants_activate(
+    db: &mut Database,
+    request: &[u8],
+) -> Result<Vec<u8>, KernelError> {
     let req = generated::decode_request_message_variant_activate(request)?;
     // Pre-checks outside the transaction: the single-writer dispatch means
     // the rows cannot change between check and write.
@@ -1341,7 +1413,9 @@ pub fn message_revisions_list(db: &mut Database, request: &[u8]) -> Result<Vec<u
             .map_err(|e| sqlite(e, "message_revisions_list: read row"))?
         {
             items.push(MessageRevisionDto {
-                id: row.get(0).map_err(|e| sqlite(e, "message_revisions_list: id"))?,
+                id: row
+                    .get(0)
+                    .map_err(|e| sqlite(e, "message_revisions_list: id"))?,
                 message_id: row
                     .get(1)
                     .map_err(|e| sqlite(e, "message_revisions_list: message_id"))?,
@@ -1983,7 +2057,9 @@ pub fn presets_list(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Kernel
             Some(kind) => stmt
                 .query([kind])
                 .map_err(|e| sqlite(e, "presets_list: query (kind)"))?,
-            None => stmt.query([]).map_err(|e| sqlite(e, "presets_list: query"))?,
+            None => stmt
+                .query([])
+                .map_err(|e| sqlite(e, "presets_list: query"))?,
         };
         while let Some(row) = rows
             .next()
@@ -2029,9 +2105,11 @@ pub fn presets_create(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Kern
     let req = generated::decode_request_create_preset(request)?;
     let id = new_id();
     let now = now();
-    let data = serde_json::to_string(req.data.as_ref().unwrap_or(&serde_json::Value::Object(
-        Default::default(),
-    )))
+    let data = serde_json::to_string(
+        req.data
+            .as_ref()
+            .unwrap_or(&serde_json::Value::Object(Default::default())),
+    )
     .map_err(|err| {
         KernelError::new(
             KernelErrorCode::Internal,
@@ -2140,11 +2218,8 @@ pub fn presets_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Kern
 pub fn presets_delete(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
     let req = generated::decode_request_delete_preset(request)?;
     let changed = db.transaction(|tx| {
-        tx.execute(
-            "DELETE FROM presets WHERE id = ?1",
-            params![&req.preset_id],
-        )
-        .map_err(|e| StorageError::from_sqlite(e, "presets_delete: delete"))
+        tx.execute("DELETE FROM presets WHERE id = ?1", params![&req.preset_id])
+            .map_err(|e| StorageError::from_sqlite(e, "presets_delete: delete"))
     })?;
     if changed == 0 {
         return Err(not_found("PRESET", &req.preset_id));
@@ -2551,4 +2626,49 @@ pub fn personas_delete(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Ker
     let dto = ResultEmpty {};
     validate(&dto, generated::validate_result_empty)?;
     encode(&dto)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write as _;
+
+    #[test]
+    fn limited_writer_refuses_after_the_limit() {
+        // The writer must stop at the limit mid-write (never let the caller
+        // buffer past it) — plan rev 2.2 Layer C serialization invariant.
+        let mut buf = Vec::new();
+        {
+            let mut writer = LimitedWriter::new(&mut buf, 10);
+            assert_eq!(writer.write(b"0123456789").expect("write fits"), 10);
+            let err = writer
+                .write(b"overflow")
+                .expect_err("must refuse past the limit");
+            assert_eq!(err.kind(), std::io::ErrorKind::WriteZero);
+        }
+        assert_eq!(buf.len(), 10, "nothing past the limit may reach the buffer");
+    }
+
+    #[test]
+    fn encode_limited_returns_payload_too_large_not_panic() {
+        // Serializing a DTO whose JSON exceeds the limit must abort with the
+        // stable PAYLOAD_TOO_LARGE product error — never a panic, never an
+        // unbounded allocation of the JSON string.
+        let value = serde_json::json!({ "blob": "x".repeat(64 * 1024) });
+        let err = encode_limited(&value, 1024).expect_err("must exceed the 1 KiB limit");
+        let product = err
+            .product
+            .as_ref()
+            .expect("must carry the wire product dto");
+        assert_eq!(product.code, "PAYLOAD_TOO_LARGE");
+        assert_eq!(product.params["limit"], "1024");
+    }
+
+    #[test]
+    fn encode_limited_under_the_limit_round_trips() {
+        let value = serde_json::json!({ "ok": true });
+        let bytes = encode_limited(&value, 1024).expect("fits the limit");
+        let parsed: serde_json::Value = serde_json::from_slice(&bytes).expect("must be valid JSON");
+        assert_eq!(parsed, value);
+    }
 }

@@ -3,6 +3,64 @@
 ## Unreleased
 ### Added
 
+- **Resource containment (plan rev 2.2).** Two halves so pathological fuzz /
+  bench inputs can never take the host down again (root cause fixed:
+  uncontrolled combined resource pressure from heavy suites without
+  process-tree containment — see
+  [docs/architecture/resource-containment.md](docs/architecture/resource-containment.md)):
+  - **Bounded wire pipeline.** New `PAYLOAD_TOO_LARGE` product error, gated
+    BEFORE any parse in `runtime-kernel` dispatch (`dispatch`,
+    `dispatch_stream`, `handle_unary`, `stream_start`) using **generated**
+    per-operation byte limits (`operation_request_limit` /
+    `operation_response_limit` emitted by `codegen.mjs` into
+    `generated.rs` from the same registry as `contract-manifest.json`).
+    Serialization is now bounded during the write: `product::encode` →
+    `LimitedWriter` (`serde_json::to_writer`, stops mid-write past the
+    limit) replaces `serde_json::to_vec` in every kernel response path
+    (product, providers, providers_config, meta). `remote-http` already
+    answered over-limit bodies with 413 before reading; a new behavioral
+    test proves 413 arrives without polling the body (declared
+    Content-Length 1 MiB, zero body bytes sent).
+  - **Spec-first heavy suites.** New `packages/contracts/test/_budget.ts`:
+    `assertPayloadSpecCap(spec)` guards a DECLARED spec (never a
+    materialized payload) before any builder allocation; hard caps 16 MiB
+    payload / 64 MiB batch / depth 1024 / 200k array items / 100k object
+    keys. `bench.test.ts` rewritten to run each heavy case in its own
+    `node --expose-gc` child (`_bench-child.mjs`) that builds the payload
+    inside itself from a small spec over argv — the old in-process
+    16 MiB × 50 pattern that crashed the machine is gone. `fuzz.test.ts`
+    (fast-check, `SEED=20260815`) pathological payloads now carry spec
+    caps; new corpus fixture `neg-request-message-too-large`.
+  - **Native process-tree containment.** New `crates/resource-runner`
+    (Windows): `CreateProcessW(CREATE_SUSPENDED)` → `AssignProcessToJobObject`
+    (failure → terminate + refuse, never uncontained) → `ResumeThread`;
+    two-threshold memory (soft notification limit ~90% → `TerminateJobObject`
+    → `RESOURCE_LIMIT`, hard `JOB_OBJECT_LIMIT_JOB_MEMORY` backstop);
+    host-headroom gate via `GetPerformanceInfo`
+    (`min(configured, available_commit − max(4 GiB, 25% limit))`, exit
+    `SKIPPED` below the suite minimum); `ActiveProcessLimit`,
+    `KILL_ON_JOB_CLOSE`, wall-clock deadline (`TIMEOUT`), inherited stdout/
+    stderr; named-mutex global scheduler (auto-released on owner death);
+    `RESOURCE_BUDGET_MODE=contained` fail-safe. JS wrapper
+    `scripts/contained-run.mjs` + root scripts `test:contracts:heavy`,
+    `test:rust-fuzz:contained`. vitest bounded to `maxWorkers: 2` +
+    `--max-old-space-size=2048` (root and `apps/web`); Playwright stays
+    `workers: 1`. Behavioral (non-grep) coverage:
+    `kernel_payload_gates.rs`, `LimitedWriter` unit tests,
+    `generated_limits_vs_manifest.rs`, `budget-guard.test.ts`.
+  - **Test-infra fixes surfaced by the contained runs.** The Rust fuzz
+    `random_tree` generator was a supercritical branching process (tens of
+    GiB on a fixed seed — clipped by the Job Object, proving the cap works);
+    it is now hard-bounded to 5k nodes/tree. `wire_corpus.rs` was missing 24
+    match arms for presets/memories/drafts/variants schemaIds added in
+    earlier slices (a latent failure; the arms and decoder imports are added
+    — all 91 corpus schemaIds now resolve). The runner's fail-safe guard is
+    extracted into `fail_safe_mode_ok` so its unit test is deterministic in
+    any environment (the test binary itself runs inside the runner).
+  - New docs page [Resource containment](docs/architecture/resource-containment.md),
+    `crates/resource-runner/README.md`, AGENTS.md §23 resource-containment
+    rules.
+
 - **Memory settings editor UI (M5 / Этап 4, slice 3).** A new
   `MemoryEditor` tab inside AI settings delivers memory CRUD over the wire
   ops in kernel mode: create/edit content, comma-separated activation keys,

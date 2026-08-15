@@ -573,6 +573,35 @@ Must be tested:
 - instruct-format rendering;
 - thumbnail generation and invalidation.
 
+### Resource containment (mandatory for heavy suites)
+
+Heavy fuzz/bench tests must never be able to take the host down
+(plan rev 2.2; see
+[docs/architecture/resource-containment.md](docs/architecture/resource-containment.md)):
+
+- Every heavy payload builder is spec-first: `assertPayloadSpecCap(spec)` runs
+  on a DECLARED spec before any `.repeat()` / `Array.from()`; the guard never
+  allocates proportional to what it guards (no `JSON.stringify(payload)`
+  sizing). Use the shared helper in
+  `packages/contracts/test/_budget.ts`.
+- Heavy benches build their payload INSIDE a dedicated
+  `node --expose-gc` child from a small spec over argv; the parent asserts the
+  returned metrics. Nothing heavy crosses IPC.
+- Heavy commands are serialized and contained via
+  `scripts/contained-run.mjs` (Windows Job Object; see
+  `crates/resource-runner`). The runner refuses to run uncontained
+  (`RESOURCE_BUDGET_MODE=contained` fail-safe). Root scripts:
+  `pnpm test:contracts:heavy`, `pnpm test:rust-fuzz:contained`.
+- vitest runs with `maxWorkers: 2` and `--max-old-space-size=2048` (root and
+  `apps/web`); Playwright runs with `workers: 1`. Do not raise these without
+  an explicit decision.
+- Wire byte limits are generated from the registry
+  (`operation_request_limit` / `operation_response_limit`); never hard-code
+  payload byte constants in kernel or test code.
+- Any new over-limit behavior must be proven behaviorally (payload gates in
+  `crates/runtime-kernel/tests/kernel_payload_gates.rs`, 413-without-reading
+  in `remote-http` tests), not by grepping docs.
+
 ## 24. Performance
 
 Do not degrade target metrics without an explicit decision:

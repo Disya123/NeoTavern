@@ -891,7 +891,7 @@ function emitTopLevelSchema(schema, ctx) {
   return lines;
 }
 
-function emitGeneratedRs(registryIds, schemas, formatPatterns) {
+function emitGeneratedRs(registryIds, operations, schemas, formatPatterns) {
   const ctx = {
     registryIds,
     formatPatterns,
@@ -909,7 +909,51 @@ function emitGeneratedRs(registryIds, schemas, formatPatterns) {
     '    format!("{}{}{}", path, if path.is_empty() { "" } else { "/" }, key)',
     '}',
   ].join('\n');
-  return [HEADER.trimEnd(), joinPath, ...helperBlocks, ...mainBlocks].join('\n\n') + '\n';
+  return [
+    HEADER.trimEnd(),
+    joinPath,
+    emitLimits(operations),
+    ...helperBlocks,
+    ...mainBlocks,
+  ].join('\n\n') + '\n';
+}
+
+/**
+ * Emits the per-operation byte limits as generated Rust (plan rev 2.2
+ * Layer C): `operation_request_limit` / `operation_response_limit` plus the
+ * registry-wide maxima used as defaults. Single source of truth — the
+ * numbers come from the registry here, exactly like the manifest, so no
+ * hand-written 1 MiB / 16 MiB constants can drift.
+ */
+function emitLimits(operations) {
+  const reqMax = Math.max(...operations.map((op) => op.requestLimitBytes));
+  const respMax = Math.max(...operations.map((op) => op.responseLimitBytes));
+  const reqLines = operations.map((op) => `        "${op.operationId}" => Some(${op.requestLimitBytes}),`);
+  const respLines = operations.map((op) => `        "${op.operationId}" => Some(${op.responseLimitBytes}),`);
+  return [
+    '/// The maximum request byte limit across the registry (generated).',
+    `pub const DEFAULT_REQUEST_LIMIT_BYTES: u64 = ${reqMax};`,
+    '/// The maximum response byte limit across the registry (generated).',
+    `pub const DEFAULT_RESPONSE_LIMIT_BYTES: u64 = ${respMax};`,
+    '',
+    '/// The wire request byte limit for `operation_id` (generated from the',
+    '/// registry; `None` for an operation that is not part of the contract).',
+    'pub fn operation_request_limit(operation_id: &str) -> Option<u64> {',
+    '    match operation_id {',
+    ...reqLines,
+    '        _ => None,',
+    '    }',
+    '}',
+    '',
+    '/// The wire response byte limit for `operation_id` (generated from the',
+    '/// registry; `None` for an operation that is not part of the contract).',
+    'pub fn operation_response_limit(operation_id: &str) -> Option<u64> {',
+    '    match operation_id {',
+    ...respLines,
+    '        _ => None,',
+    '    }',
+    '}',
+  ].join('\n');
 }
 
 // ---------------------------------------------------------------------------
@@ -990,6 +1034,7 @@ function buildOutputs(registry, wire) {
   const registryIds = new Set(schemas.keys());
   outputs['crates/contracts-generated/src/generated.rs'] = emitGeneratedRs(
     registryIds,
+    operations,
     schemas.values(),
     wire.WIRE_FORMAT_PATTERNS,
   );

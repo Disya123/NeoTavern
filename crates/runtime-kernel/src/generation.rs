@@ -704,6 +704,9 @@ pub(crate) fn stream_start(
     request: &[u8],
     lease_owner: &str,
 ) -> Result<StreamLaunch, KernelError> {
+    // Вход, линия 2 (defense-in-depth on the writer thread): reject
+    // over-limit payloads BEFORE any parse.
+    crate::enforce_request_limit(op, request)?;
     let (notice_tx, notice_rx) = mpsc::channel();
     let run_id = new_id();
     let (source_run_id, chat_id, attempt, provider, model, snapshot_json) = match op {

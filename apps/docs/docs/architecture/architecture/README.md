@@ -326,5 +326,14 @@ gate passes.
 - [Portable data](portable-data.md) — Phase 11: public backup containers,
   kill-safe staged restore with atomic activation, Portable Export/import and
   the read-only legacy converter (ТЗ §34, §40–§43).
+- [Resource containment](resource-containment.md) — plan rev 2.2: bounded
+  input/parse/result/serialization/transport pipeline for every untrusted
+  byte stream (`PAYLOAD_TOO_LARGE` gate before parse, generated per-operation
+  byte limits, `LimitedWriter` serialization), spec-first memory budgets for
+  heavy fuzz/bench suites (child processes, never unbounded builders), the
+  native Windows `resource-runner` (Job Object with two-threshold memory
+  control, host-headroom gate, named-mutex scheduler, wall-clock deadline)
+  and the `contained-run.mjs` / `test:contracts:heavy` wiring that refuses to
+  run heavy stages uncontained.
 - [ADR-0029](../adr/README.md#adr-0029-wire-contract-toolchain-typebox-single-source--deterministic-codegen)
   — the contract toolchain decision.

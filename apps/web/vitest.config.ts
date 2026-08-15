@@ -13,6 +13,10 @@ export default mergeConfig(
       // default under full-suite parallel load on slower/Windows runners;
       // 10 s keeps failure detection tight without load-lottery flakes.
       testTimeout: 10_000,
+      // Memory containment (plan rev 2.2 Layer B): bounded parallelism and
+      // a bounded Node heap for frontend suites too.
+      maxWorkers: 2,
+      execArgv: ['--max-old-space-size=2048'],
     },
   }),
 );
