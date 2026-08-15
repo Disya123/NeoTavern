@@ -133,11 +133,28 @@ fn collect_rows(
         })?;
         items.push(SettingsItem {
             key,
-            value,
+            // The wire `settings.item` value is a JSON object; the legacy
+            // contour stored scalar preferences (e.g. `"ru"` for `language`)
+            // as bare JSON scalars, and the legacy conversion copies them
+            // verbatim (ADR-0046 waiver 8). Wrap non-object values in the
+            // documented scalar form `{ "value": <scalar> }` so the response
+            // always validates against the wire contract.
+            value: normalize_settings_value(value),
             updated_at,
         });
     }
     Ok(items)
+}
+
+/// Maps a stored settings value onto the wire form: JSON objects pass
+/// through unchanged, every non-object scalar is wrapped as `{ "value": X }`
+/// (the documented scalar representation of `wire.settings.item`).
+fn normalize_settings_value(value: serde_json::Value) -> serde_json::Value {
+    if value.is_object() {
+        value
+    } else {
+        serde_json::json!({ "value": value })
+    }
 }
 
 /// Queries the settings table by explicit keys (unknown keys are omitted —

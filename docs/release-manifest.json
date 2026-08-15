@@ -379,12 +379,12 @@
         "settings.update"
       ],
       "hosts": {
-        "desktop": "Implemented",
+        "desktop": "Integrated",
         "headless": "Implemented",
         "android": "Implemented",
         "webClient": "Implemented"
       },
-      "notes": "M5 slice 7 (Этап 4.7, ТЗ §8.1 Configuration): canonical key → JSON-object settings store backed by the STRICT settings table (schema migration 11). settings.update is a transactional upsert returning the post-update snapshot; settings.get reads a key subset or the full snapshot. Secrets never live here — provider keys are in the SecretStore (ТЗ §9.4, SEC-01); the wire DTO carries object values only (scalar preferences wrapped at the UI boundary).",
+      "notes": "M5 slice 7 (Этап 4.7, ТЗ §8.1 Configuration): canonical key → JSON-object settings store backed by the STRICT settings table (schema migration 11). settings.update is a transactional upsert returning the post-update snapshot; settings.get reads a key subset or the full snapshot. Secrets never live here — provider keys are in the SecretStore (ТЗ §9.4, SEC-01); the wire DTO carries object values only (scalar preferences wrapped at the UI boundary). Slice 7 part 2 (M5): the web transport maps the typed AppSettings projection onto the wire store — camelCase fields to wire-valid kebab keys (maxContextTokens -> max-context-tokens, extensions.legacyFrontend -> extensions.legacy-frontend), scalar preferences round-trip in { value: X } form, post-update snapshot contract preserved; settings.get wraps non-object stored values (legacy bare scalars) and the legacy converter normalizes camelCase settings keys to kebab form, so converted stores stay wire-readable. useSettings/useUpdateSettings (and the AutoConnectSync last-server/auto-connect writes) now route through the transport.",
       "milestone": "M5"
     },
     {

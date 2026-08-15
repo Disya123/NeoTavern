@@ -162,6 +162,47 @@ fn settings_wire_validation_rejects_bad_keys() {
     assert_eq!(missing["items"], json!([]));
 }
 
+/// Legacy scalar settings (bare JSON strings/numbers, copied verbatim by the
+/// legacy converter) must still validate against the wire contract: the
+/// response wraps non-object values in the documented scalar form
+/// `{ "value": X }` (ADR-0046 waiver 8 → `wire.settings.item`).
+#[test]
+fn settings_get_wraps_legacy_scalars_into_wire_form() {
+    let root = tempfile::tempdir().expect("tempdir");
+    {
+        let mut progress = |_p: neotavern_storage::migrations::MigrationProgress| {};
+        let mut db = neotavern_storage::open::open(
+            root.path(),
+            &neotavern_storage::baseline::ConnectionPolicy::default(),
+            &mut progress,
+        )
+        .expect("fresh data root must open");
+        db.transaction(|tx| {
+            tx.execute(
+                "INSERT INTO settings (key, value_json, updated_at) VALUES ('language', '\"ru\"', '2026-08-18T00:00:00Z')",
+                [],
+            )
+            .expect("seed scalar string setting");
+            tx.execute(
+                "INSERT INTO settings (key, value_json, updated_at) VALUES ('max-context-tokens', '16032', '2026-08-18T00:00:00Z')",
+                [],
+            )
+            .expect("seed scalar number setting");
+            Ok(())
+        })
+        .expect("seed transaction");
+    } // drop the storage connection before the kernel takes the data root
+
+    let kernel = open_kernel(root.path());
+    let all = dispatch_ok(&kernel, "settings.get", json!({}));
+    let items = all["items"].as_array().expect("items array");
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0]["key"], "language");
+    assert_eq!(items[0]["value"], json!({ "value": "ru" }));
+    assert_eq!(items[1]["key"], "max-context-tokens");
+    assert_eq!(items[1]["value"], json!({ "value": 16032 }));
+}
+
 #[test]
 fn diagnostics_export_is_allowlisted_and_redacted() {
     let root = tempfile::tempdir().expect("tempdir");

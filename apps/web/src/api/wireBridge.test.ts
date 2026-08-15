@@ -106,6 +106,10 @@ const mocks = vi.hoisted(() => {
     get: vi.fn(),
   };
   const metaFn = vi.fn();
+  const settings = {
+    get: vi.fn(),
+    update: vi.fn(),
+  };
   return {
     characters,
     chats,
@@ -118,6 +122,7 @@ const mocks = vi.hoisted(() => {
     plugins,
     meta,
     metaFn,
+    settings,
     isKernelMode,
   };
 });
@@ -134,6 +139,7 @@ vi.mock('./backend.js', () => ({
     themes: mocks.themes,
     plugins: mocks.plugins,
     meta: mocks.metaFn,
+    settings: mocks.settings,
   },
   isKernelMode: mocks.isKernelMode,
 }));
@@ -215,6 +221,8 @@ import {
   connectPluginAuth,
   revokePluginAuth,
   readAppVersion,
+  readSettings,
+  updateSettings,
 } from './wireBridge.js';
 
 const CHAR_ID = '11111111-2222-4333-8444-555555555555';
@@ -1343,5 +1351,60 @@ describe('meta (wire meta.get)', () => {
     expect(version.version).toBe('4.5.0');
     expect(version.apiVersion).toBe(3);
     expect(mocks.metaFn).toHaveBeenCalledWith();
+  });
+});
+
+describe('settings (wire settings.get/update)', () => {
+  const NOW = '2026-08-20T00:00:00Z';
+
+  it('reads the full AppSettings projection with defaults and scalar unwrap', async () => {
+    mocks.settings.get.mockResolvedValue({
+      items: [
+        { key: 'language', value: { value: 'ru' }, updatedAt: NOW },
+        { key: 'max-context-tokens', value: { value: 32000 }, updatedAt: NOW },
+        { key: 'prompt-template', value: { system: 'You are {{char}}.' }, updatedAt: NOW },
+      ],
+    });
+    const settings = await readSettings();
+    expect(settings.language).toBe('ru');
+    expect(settings.maxContextTokens).toBe(32000);
+    expect(settings.promptTemplate).toEqual({ system: 'You are {{char}}.' });
+    // Untouched defaults stay at the contract values.
+    expect(settings.themeId).toBeNull();
+    expect(settings.contextStrategy).toBe('truncate');
+    expect(settings.activePersonaId).toBeNull();
+    // Object-valued settings pass through unwrapped.
+    expect(settings.generationDefaults).toEqual({});
+  });
+
+  it('writes fields through canonical kebab keys with scalar wrapping', async () => {
+    mocks.settings.get.mockResolvedValue({ items: [] });
+    mocks.settings.update.mockResolvedValue({
+      items: [
+        { key: 'theme-id', value: { value: null }, updatedAt: NOW },
+        { key: 'last-server', value: { providerConfigId: 'p1', model: 'gpt-4o' }, updatedAt: NOW },
+      ],
+    });
+    const result = await updateSettings({
+      themeId: null,
+      lastServer: { providerConfigId: 'p1', model: 'gpt-4o' },
+    });
+    expect(mocks.settings.update).toHaveBeenCalledWith({
+      settings: [
+        { key: 'theme-id', value: { value: null } },
+        { key: 'last-server', value: { providerConfigId: 'p1', model: 'gpt-4o' } },
+      ],
+    });
+    // Post-update projection re-reads the full snapshot.
+    expect(result.themeId).toBeNull();
+    expect(result.lastServer).toEqual({ providerConfigId: 'p1', model: 'gpt-4o' });
+  });
+
+  it('normalizes the extensions.legacyFrontend key', async () => {
+    mocks.settings.update.mockResolvedValue({ items: [] });
+    await updateSettings({ 'extensions.legacyFrontend': true });
+    expect(mocks.settings.update).toHaveBeenCalledWith({
+      settings: [{ key: 'extensions.legacy-frontend', value: { value: true } }],
+    });
   });
 });

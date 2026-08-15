@@ -344,6 +344,13 @@ fn build_legacy(path: &Path) -> rusqlite::Result<()> {
         "INSERT INTO settings (key, value) VALUES ('legacy.raw', 'not-json')",
         [],
     )?;
+    // A camelCase AppSettings-style key (e.g. `maxContextTokens`) is NOT a
+    // valid wire key (`^[a-z][a-z0-9._-]{1,127}$`); the converter must
+    // normalize it to kebab form so the canonical store stays wire-readable.
+    conn.execute(
+        "INSERT INTO settings (key, value) VALUES ('maxContextTokens', '16032')",
+        [],
+    )?;
     // personas: two rows; both legacy-declared defaults collapse to ONE kernel
     // default (the single-default invariant). leg-h1 references leg-p1.
     conn.execute(
@@ -433,8 +440,8 @@ fn legacy_conversion_maps_rows_skips_orphans_and_never_copies_secrets(
         "both personas convert; only the first legacy default keeps the flag"
     );
     assert_eq!(
-        report.settings, 3,
-        "the three legacy settings (object, JSON-string and raw) convert verbatim"
+        report.settings, 4,
+        "four legacy settings (object, JSON-string, raw and camelCase key) convert"
     );
     assert_eq!(
         report.skipped, 9,
@@ -471,7 +478,7 @@ fn legacy_conversion_maps_rows_skips_orphans_and_never_copies_secrets(
         ("presets", 1),
         ("memories", 3),
         ("personas", 2),
-        ("settings", 3),
+        ("settings", 4),
         ("__neotavern_assets", 1),
     ] {
         let count: i64 =
@@ -592,6 +599,14 @@ fn legacy_conversion_maps_rows_skips_orphans_and_never_copies_secrets(
         raw, "\"not-json\"",
         "non-JSON legacy value wrapped, not dropped"
     );
+    // camelCase legacy keys are normalized to wire-valid kebab form so the
+    // canonical settings store stays readable over `settings.get`.
+    let normalized: String = db.conn().query_row(
+        "SELECT value_json FROM settings WHERE key = 'max-context-tokens'",
+        [],
+        |r| r.get(0),
+    )?;
+    assert_eq!(normalized, "16032");
     let updated_at: String = db.conn().query_row(
         "SELECT updated_at FROM settings WHERE key = 'theme'",
         [],

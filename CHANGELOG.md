@@ -3,6 +3,22 @@
 ## Unreleased
 ### Added
 
+- **Settings reach the kernel plane (M5 slice 7 part 2, Этап 4 context 7).**
+  `readSettings`/`updateSettings` in `wireBridge` map the typed
+  `AppSettings` projection onto the canonical wire `settings.get`/`update`
+  store: `AppSettings` camelCase fields map to wire-valid kebab keys
+  (`maxContextTokens` → `max-context-tokens`, `extensions.legacyFrontend` →
+  `extensions.legacy-frontend`), scalar preferences round-trip in the
+  documented `{ "value": X }` wire form, and the legacy `PATCH /settings`
+  post-update snapshot contract is preserved. Kernel: `settings.get` now
+  wraps non-object stored values (legacy bare scalars) in the wire form, and
+  the legacy converter normalizes camelCase settings keys to kebab form so
+  converted stores stay wire-readable — both edges verified by new kernel
+  tests. `useSettings`/`useUpdateSettings` now route through the transport
+  (this also moves the AutoConnectSync last-server/auto-connect writes onto
+  the kernel plane). Tests: wireBridge 86/86 (+3 settings), kernel settings
+  suite 5/5, legacy conversion 2/2.
+
 - **App version reads the kernel wire metadata (M5 slice 7 part 1, Этап 4
   context 7 start).** `readAppVersion` in `wireBridge` maps `meta.get`
   (app version + API major) onto the legacy `VersionResponse`; the static

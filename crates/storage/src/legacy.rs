@@ -1547,6 +1547,17 @@ fn convert_settings(
             skip(report, "setting: missing key");
             continue;
         };
+        // AppSettings-style legacy keys are camelCase (`maxContextTokens`),
+        // which is NOT a valid wire key (`^[a-z][a-z0-9._-]{1,127}$`).
+        // Normalize to kebab form so the canonical store stays readable over
+        // `settings.get`; keys that still fail the wire pattern are skipped
+        // fail-closed (reported, never silently dropped as data loss — the
+        // report carries the reason).
+        let key = normalize_setting_key(key);
+        if !is_valid_setting_key(&key) {
+            skip(report, &format!("setting: key {key:?} is not wire-valid"));
+            continue;
+        }
         let raw = as_text(get("value")).unwrap_or("null");
         let value_json = match serde_json::from_str::<serde_json::Value>(raw) {
             Ok(_) => raw.to_string(),
@@ -1567,6 +1578,58 @@ fn convert_settings(
     }
     report.settings = inserted;
     Ok(())
+}
+
+/// Matches the wire `settings` key pattern `^[a-z][a-z0-9._-]{1,127}$`
+/// (no regex dependency — a character loop over a small key is cheaper).
+fn is_valid_setting_key(key: &str) -> bool {
+    let mut chars = key.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    if !first.is_ascii_lowercase() {
+        return false;
+    }
+    let mut len = 1usize;
+    for ch in chars {
+        len += 1;
+        if len > 128 {
+            return false;
+        }
+        if !(ch.is_ascii_lowercase() || ch.is_ascii_digit() || matches!(ch, '.' | '_' | '-')) {
+            return false;
+        }
+    }
+    true
+}
+
+/// Normalizes a legacy settings key onto the wire-valid form: already-valid
+/// keys pass through unchanged; camelCase keys (`maxContextTokens`,
+/// `extensions.legacyFrontend`) become kebab form (`max-context-tokens`,
+/// `extensions.legacy-frontend`) so `settings.get` never hits a
+/// wire-invalid key in the canonical store.
+fn normalize_setting_key(key: &str) -> String {
+    if is_valid_setting_key(key) {
+        return key.to_string();
+    }
+    let mut out = String::with_capacity(key.len() + 8);
+    let mut prev_was_lower_or_digit = false;
+    for (i, ch) in key.chars().enumerate() {
+        if ch.is_ascii_uppercase() {
+            // A boundary hyphen is inserted only between camel segments
+            // (after a lower-case letter or digit), never at the start and
+            // never after a separator/dot.
+            if i > 0 && prev_was_lower_or_digit {
+                out.push('-');
+            }
+            out.push(ch.to_ascii_lowercase());
+            prev_was_lower_or_digit = false;
+        } else {
+            out.push(ch);
+            prev_was_lower_or_digit = ch.is_ascii_lowercase() || ch.is_ascii_digit();
+        }
+    }
+    out
 }
 
 // --- helpers ----------------------------------------------------------------

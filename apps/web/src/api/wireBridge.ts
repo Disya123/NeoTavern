@@ -80,7 +80,11 @@ import {
   type PresetDto,
   type VersionResponse,
   type MetaDto,
+  type AppSettings,
+  type AppSettingsUpdate,
+  type SettingsItemDto,
 } from '@neotavern/contracts';
+import { CONTEXT_TOKEN_DEFAULT, DEFAULT_PROMPT_TEMPLATE } from '@neotavern/contracts';
 import { type BackendCallOptions, UnsupportedError } from '@neotavern/neobackend';
 import { api } from './client.js';
 import { backend, isKernelMode } from './backend.js';
@@ -125,6 +129,123 @@ export async function readAppVersion(): Promise<VersionResponse> {
     return translateMeta(await backend.meta());
   }
   return api.get<VersionResponse>('/version');
+}
+
+/**
+ * Defaults mirrored from the legacy `SettingsRepository.DEFAULTS`
+ * (`apps/server`): the wire store carries only saved keys, and the legacy
+ * shape requires the full `AppSettings` projection. Both sides build the
+ * defaults from the same `@neotavern/contracts` constants, so the two planes
+ * cannot drift.
+ */
+const APP_SETTINGS_DEFAULTS: AppSettings = {
+  language: 'en',
+  themeId: null,
+  activeProviderConfigId: null,
+  activePersonaId: null,
+  contextStrategy: 'truncate',
+  maxContextTokens: CONTEXT_TOKEN_DEFAULT,
+  generationDefaults: {},
+  activeGenerationPresetId: null,
+  activePromptTemplatePresetId: null,
+  promptTemplate: DEFAULT_PROMPT_TEMPLATE,
+  instructFormat: null,
+  instructFormatId: null,
+};
+
+/**
+ * Maps one wire `settings.item` value onto the typed `AppSettings` field.
+ * The wire stores values as JSON objects; scalar preferences are wrapped in
+ * the documented form `{ "value": X }` (kernel normalizes legacy bare
+ * scalars the same way), so the wrapper is unwrapped here.
+ */
+function unwrapSettingsValue(value: unknown): unknown {
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.keys(value).length === 1 &&
+    Object.hasOwn(value, 'value')
+  ) {
+    return (value as Record<string, unknown>).value;
+  }
+  return value;
+}
+
+/** Wraps a scalar `AppSettings` field value for the wire store. */
+function wrapSettingsValue(value: unknown): unknown {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value : { value };
+}
+
+/**
+ * `AppSettings` field → canonical wire settings key. The wire key pattern is
+ * `^[a-z][a-z0-9._-]{1,127}$` (no upper-case), so the camelCase legacy field
+ * names map to kebab form; the legacy converter normalizes stored legacy keys
+ * the same way, so both planes agree.
+ */
+const APP_SETTINGS_WIRE_KEYS: Record<string, string> = {
+  language: 'language',
+  themeId: 'theme-id',
+  activeProviderConfigId: 'active-provider-config-id',
+  activePersonaId: 'active-persona-id',
+  contextStrategy: 'context-strategy',
+  maxContextTokens: 'max-context-tokens',
+  generationDefaults: 'generation-defaults',
+  activeGenerationPresetId: 'active-generation-preset-id',
+  activePromptTemplatePresetId: 'active-prompt-template-preset-id',
+  promptTemplate: 'prompt-template',
+  instructFormat: 'instruct-format',
+  instructFormatId: 'instruct-format-id',
+  autoConnect: 'auto-connect',
+  lastServer: 'last-server',
+  macroVariables: 'macro-variables',
+  ui: 'ui',
+  'extensions.legacyFrontend': 'extensions.legacy-frontend',
+};
+
+/** Canonical wire settings key → `AppSettings` field (inverse mapping). */
+const WIRE_KEY_TO_SETTINGS_FIELD: Record<string, string> = Object.fromEntries(
+  Object.entries(APP_SETTINGS_WIRE_KEYS).map(([field, key]) => [key, field]),
+);
+
+/** Kernel wire snapshot → typed `AppSettings` projection. */
+function applySettingsItems(base: AppSettings, items: SettingsItemDto[]): AppSettings {
+  const merged: Record<string, unknown> = { ...base };
+  for (const item of items) {
+    const field = WIRE_KEY_TO_SETTINGS_FIELD[item.key];
+    if (field) merged[field] = unwrapSettingsValue(item.value);
+  }
+  return merged as AppSettings;
+}
+
+/** Read the full application settings (kernel: wire `settings.get`, all keys). */
+export async function readSettings(): Promise<AppSettings> {
+  if (isKernelMode()) {
+    const result = await backend.settings.get({});
+    return applySettingsItems(APP_SETTINGS_DEFAULTS, result.items);
+  }
+  return api.get<AppSettings>('/settings');
+}
+
+/**
+ * Apply a partial settings update (kernel: wire `settings.update`) and
+ * return the full post-update projection (legacy `PATCH /settings` contract).
+ */
+export async function updateSettings(update: AppSettingsUpdate): Promise<AppSettings> {
+  if (isKernelMode()) {
+    const settings: { key: string; value: Record<string, unknown> }[] = [];
+    for (const [field, value] of Object.entries(update)) {
+      if (value === undefined) continue;
+      settings.push({
+        key: APP_SETTINGS_WIRE_KEYS[field] ?? field,
+        value: wrapSettingsValue(value) as Record<string, unknown>,
+      });
+    }
+    const result = await backend.settings.update({ settings });
+    const base = await readSettings();
+    return applySettingsItems(base, result.items);
+  }
+  return api.patch<AppSettings>('/settings', update);
 }
 
 /* --------------------------------------------------------------------------

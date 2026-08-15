@@ -5,7 +5,6 @@
  */
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
-  AppSettings,
   AppSettingsUpdate,
   AuthLogin,
   AuthSession,
@@ -103,6 +102,8 @@ import {
   connectPluginAuth,
   revokePluginAuth,
   readAppVersion,
+  readSettings,
+  updateSettings,
   type ContinueCharacterChatInput,
   type ContinueCharacterChatResult,
 } from './wireBridge.js';
@@ -721,7 +722,7 @@ export function useDeleteLorebookEntry() {
 export function useSettings() {
   return useQuery({
     queryKey: ['settings'],
-    queryFn: () => api.get<AppSettings>('/settings'),
+    queryFn: () => readSettings(),
     staleTime: 5 * MINUTE,
   });
 }
@@ -737,7 +738,7 @@ export function useInstructFormats() {
 export function useUpdateSettings() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (update: AppSettingsUpdate) => api.patch<AppSettings>('/settings', update),
+    mutationFn: (update: AppSettingsUpdate) => updateSettings(update),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['settings'] }),
   });
 }
