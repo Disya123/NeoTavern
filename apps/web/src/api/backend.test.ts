@@ -37,6 +37,28 @@ describe('backend routing', () => {
     expect(typeof legacyRaw().request).toBe('function');
   });
 
+  it('normalizes /api/v2 paths through the same-origin transport (no double prefix)', async () => {
+    vi.resetModules();
+    const requested: string[] = [];
+    vi.stubGlobal('fetch', (input: RequestInfo | URL) => {
+      requested.push(String(input));
+      return Promise.resolve(
+        new Response(JSON.stringify({ id: 'm1', chatId: 'c1', role: 'assistant', content: 'x' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+    });
+    const [{ backend }] = await Promise.all([import('./backend.js')]);
+    // `LegacyBackend` passes `/api/v2/...` paths; the transport strips the
+    // prefix before `client.ts` prepends its own BASE (regression guard for
+    // the `/api/v2/api/v2/...` 404 that broke message edits in browser mode).
+    await backend.chats.updateMessage({ chatId: 'c1', messageId: 'm1', content: 'x' });
+    expect(requested).toHaveLength(1);
+    expect(requested[0]).toMatch(/\/api\/v2\/chats\/c1\/messages\/m1$/u);
+    expect(requested[0]).not.toMatch(/\/api\/v2\/api\/v2/u);
+  });
+
   it('routes a mobile-shell local profile to LocalBackend over the WebView bridge', async () => {
     vi.stubGlobal('__neotavernMobile', {
       handshake: () =>

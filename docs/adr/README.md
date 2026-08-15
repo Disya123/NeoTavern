@@ -1,5 +1,20 @@
 # Architecture Decision Records
 
+## ADR-0048: M5 slice-2 limited waiver — message swipe/draft/revision legacy routes
+
+Этап 4 slice 2 (message variants/revisions/drafts) delivers the full
+vertical — kernel wire ops, legacy converter, facade/wireBridge and the UI
+cutover (ChatPage swipe controls, variants/revisions hooks, variant picker,
+kernel-plugin draft streaming all route through the facade in kernel mode;
+`check-ui-api` drops from 68 to 61 recorded sites). The replaced legacy
+`/api/v2` message swipe/draft/revision routes cannot be deleted yet because
+the facade's browser branches still use them as the Web Client /
+legacy-sidecar transport (ADR-0038). ADR-0048 keeps them feature-frozen with
+no direct production UI callers, and moves their removal to Этап 6 (release
+gate), superseding the slice-2 expiry of the analogous ADR-0047 waiver-1
+item. Full decision, alternatives and consequences:
+[ADR-0048](0048-m5-slice2-route-removal.md).
+
 ## ADR-0047: M4 limited waivers — slice-1 scope and full-cutover residual items
 
 The M4 (Этап 4, full UI/API cutover) acceptance covers the delivered

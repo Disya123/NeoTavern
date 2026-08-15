@@ -72,7 +72,19 @@
   the picker). Kernel-plugin draft streaming (`plugins/kernel/chat.ts`)
   streams through `saveMessageDraft`/`commitMessageDraft`/
   `discardMessageDraft` instead of the legacy draft routes. The legacy UI
-  surface shrinks from 68 to 61 allowed sites (`check-ui-api` regenerated).
+  surface shrinks from 68 to 61 allowed sites (`check-ui-api` regenerated);
+  the legacy message swipe/draft/revision routes stay as the facade's
+  browser/legacy-sidecar transport until Этап 6 (ADR-0048).
+
+- **Fix: `/api/v2` double-prefix broke typed legacy calls in browser mode.**
+  `LegacyBackend` passes full `/api/v2/...` paths (its contract), while the
+  web same-origin transport prepends its own `/api/v2` BASE — every typed
+  legacy call (`chats.messages.update` edit-save, `chats.messages.delete`)
+  hit `/api/v2/api/v2/...` and 404'd, leaving the message edit/delete flows
+  broken in the browser/legacy-sidecar modes. The web transport now strips
+  the prefix before delegating (`apps/web/src/api/backend.ts`), with a
+  regression test; the previously red `flows.spec.ts` edit test and
+  `message-card-mobile.spec.ts` edit/restore test are green again.
 
 - **Entry-level lorebook CRUD over Product Wire (M4 / Этап 4.1, slice
   follow-up).** Four new wire operations `lorebooks.entries.list/create/

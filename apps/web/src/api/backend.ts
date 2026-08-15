@@ -29,7 +29,13 @@ function createBackend(): NeoBackend {
   return new LegacyBackend({
     baseUrl: window.location.origin,
     transport: {
-      request: (method, path, body, signal) => request(method, path, body, signal),
+      // `LegacyBackend` passes full `/api/v2/...` paths (its contract —
+      // parity tests fetch `${baseUrl}${path}`); the same-origin transport
+      // (`client.ts`) prepends its own `/api/v2` BASE, so the prefix must be
+      // stripped here or every typed legacy call double-prefixes and 404s
+      // (`/api/v2/api/v2/...`). `legacyRaw` paths are already BASE-relative.
+      request: (method, path, body, signal) =>
+        request(method, path.startsWith('/api/v2') ? path.slice('/api/v2'.length) : path, body, signal),
       upload: (path, file, signal) => upload(path, file, signal),
       sseUrl,
     },

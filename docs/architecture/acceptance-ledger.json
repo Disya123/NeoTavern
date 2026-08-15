@@ -870,7 +870,7 @@
         }
       ],
       "blockingIssues": [
-        "legacy route removal for messages/swipes/drafts (ADR-0047 waiver 1) — slice 2/5",
+        "legacy route removal for messages/swipes/drafts — re-waived via ADR-0048 (UI cutover delivered in slice 2; routes remain as the facade's browser/legacy-sidecar transport until Этап 6, expiry release gate)",
         "character↔lorebook scoping (ADR-0047 waiver 2) — slice 6",
         "chat.persona_id and {{user}} persona application (ADR-0047 waiver 5) — slice 3",
         "SEC-02 logical export with per-profile FK filtering (ADR-0047 waiver 4) — slice 5",

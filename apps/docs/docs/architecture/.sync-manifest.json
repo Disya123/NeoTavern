@@ -218,9 +218,14 @@
       "sha256": "6f0d0e8b599f15dfa67daee0978ca6c7a47d3c865ea498690d3b447fa5533de6"
     },
     {
+      "source": "adr/0048-m5-slice2-route-removal.md",
+      "target": "adr/0048-m5-slice2-route-removal.md",
+      "sha256": "3b01c16d686a47324d1fcf716fdb66870028191305cdf31e1b617ab263acd25c"
+    },
+    {
       "source": "adr/README.md",
       "target": "adr/README.md",
-      "sha256": "42ec4a3e7eaae8331a851e5e8db77a21f40384c5c83463edf8d9c5f86361f98a"
+      "sha256": "ca6a4fb7304e374d9b3870725bfee523dfb937008f76649049a688493e30d263"
     },
     {
       "source": "android/README.md",
@@ -275,7 +280,7 @@
     {
       "source": "architecture/ui-legacy-surface.md",
       "target": "architecture/ui-legacy-surface.md",
-      "sha256": "2012a4b58de0dc35634489c5e77f95cd171f92b9f3c552c1d7a7dff0c0a3809a"
+      "sha256": "a927f1d6384c0e7281fd213f178b9382cd9f716cbff5d9a179b6ac4e7090d3e0"
     },
     {
       "source": "architecture/version-axes.md",
