@@ -652,9 +652,9 @@
     {
       "id": "M4-ui-api-cutover",
       "name": "Этап 4 / Full UI/API cutover",
-      "status": "in_progress",
-      "acceptedCommit": null,
-      "acceptedBy": null,
+      "status": "accepted",
+      "acceptedCommit": "bd294d3",
+      "acceptedBy": "Deepseek",
       "requirements": [
         "slice 1: personas and full lorebook CRUD (contract → application → adapter → UI → E2E → legacy route removal)",
         "slice 2: message variants/revisions/drafts",
@@ -790,7 +790,11 @@
         "date": "2026-08-15",
         "proposalUpdatedAt": "2026-08-15 (round 76) — M4 re-cut EXECUTED as pr-m4-slices on the accepted M3 head (f58491d): 4 cherry-picked M4 commits (b20b79c..398ca0e, conflicts per reCutGuide: CHANGELOG/ledger ours, matrix/sync/release-manifest theirs-then-regen) + adaptation commit 9e92bda (47-op wire.test assertion + 4 lorebook response fixtures, codegen regen — the M4-chain generated.rs was stale, clippy bool-assert fix, check-ui-api baseline 67 sites, CHANGELOG M4 entries restored, ADR-0047 + docs:sync, matrix 28 rows). Full parity re-verified at 9e92bda: cargo test --workspace 56 targets exit 0, clippy/fmt clean, contracts 62/62, vitest 146/1758, web 61/582, typecheck/lint/deps/codegen/matrix/docs/ui:api:check PASS, gates --check 5 milestones / 4 accepted + self-test PASS. The two known contract-conformance gaps are closed (see evidence inspection). The M4 acceptance PROPOSES the delivered slice-1 scope: personas + full lorebook CRUD end-to-end (book + entry level) + SEC-01/SEC-05; slices 2-7 and the full-cutover exit criteria stay as open blockers with limited P1 waivers (ADR-0047)."
       },
-      "reviewFeedback": {},
+      "reviewFeedback": {
+        "verdict": "ACCEPTED (binding human verdict, 2026-08-15, via ask_user_question)",
+        "acceptedBy": "Deepseek",
+        "notes": "Human accepted the M4 slice-1 packet (acceptedCommit bd294d3). The acceptance covers the DELIVERED slice-1 scope: personas + full lorebook CRUD end-to-end (book + entry level) + the SEC-01/SEC-05 audit fixes. The seven limited P1 waivers of ADR-0047 are ratified, including waiver 4 which supersedes the ADR-0042 (M1 SEC-02) M4-cutover expiry with a release-gate expiry. Slices 2-7 and the full-cutover exit criteria (zero production legacy calls, legacy Fastify product-data ownership) remain tracked blockers with their stated expiries. The program gate is now CLOSED: 5 milestones, 5 accepted."
+      },
       "humanReviewSteps": [
         {
           "directive": "1. Clean branch / gates / acceptance on actual HEAD",
@@ -838,7 +842,8 @@
           "howToVerify": "node scripts/check-milestone-gates.mjs --check must report M4 accepted (5 milestones, 5 accepted, GATE PASS — the program gate closes); commit with a human-signed message. Acceptance cannot be self-certified: acceptedBy must be a person. The acceptance ratifies the slice-1 scope + the seven waivers of ADR-0047 (incl. the SEC-02 expiry extension)."
         }
       ],
-      "verdictNeeded": "HUMAN acceptance packet for M4 (branch pr-m4-slices, base f58491d = accepted M3 head, tree clean; review surface = the full branch diff f58491d..HEAD; concrete acceptance target = acceptanceProposal.proposedAcceptedCommit 9e92bda). Packet contents: 4 cherry-picked M4 commits (b20b79c..398ca0e: full lorebook CRUD in the kernel; persona CRUD; lorebook/persona UI cutover + SEC-01/SEC-05; entry-level lorebook CRUD) + adaptation commit 9e92bda (47-op wire.test assertion + 4 lorebook response fixtures, codegen regen, clippy bool-assert fix, check-ui-api baseline 67 sites, CHANGELOG M4 entries, ADR-0047). Scope: M4 acceptance is PROPOSED for the delivered slice-1 (personas + full lorebook CRUD end-to-end + the SEC audit fixes); slices 2-7 and the full-cutover exit criteria stay open with seven limited P1 waivers (ADR-0047, expiries at the next slice, subsequent milestones or the release gate; the SEC-02 M1-waiver expiry is superseded to the release gate by waiver 4, ratified by this verdict). Parity at the proposed commit: cargo test --workspace 56 targets exit 0; clippy -D warnings clean; contracts 62/62; vitest 146/1758; web 582/582 on the clean run; typecheck/lint/dependency-rules/codegen/matrix/docs/ui:api:check PASS; gates --check 5 milestones / 4 accepted + self-test PASS; --acceptance-drill valid. Two timing-sensitive tests flaked once under heavy concurrent load and are green in isolation + clean runs (documented in the evidence)."
+      "verdictNeeded": "HUMAN acceptance packet for M4 (branch pr-m4-slices, base f58491d = accepted M3 head, tree clean; review surface = the full branch diff f58491d..HEAD; concrete acceptance target = acceptanceProposal.proposedAcceptedCommit 9e92bda). Packet contents: 4 cherry-picked M4 commits (b20b79c..398ca0e: full lorebook CRUD in the kernel; persona CRUD; lorebook/persona UI cutover + SEC-01/SEC-05; entry-level lorebook CRUD) + adaptation commit 9e92bda (47-op wire.test assertion + 4 lorebook response fixtures, codegen regen, clippy bool-assert fix, check-ui-api baseline 67 sites, CHANGELOG M4 entries, ADR-0047). Scope: M4 acceptance is PROPOSED for the delivered slice-1 (personas + full lorebook CRUD end-to-end + the SEC audit fixes); slices 2-7 and the full-cutover exit criteria stay open with seven limited P1 waivers (ADR-0047, expiries at the next slice, subsequent milestones or the release gate; the SEC-02 M1-waiver expiry is superseded to the release gate by waiver 4, ratified by this verdict). Parity at the proposed commit: cargo test --workspace 56 targets exit 0; clippy -D warnings clean; contracts 62/62; vitest 146/1758; web 582/582 on the clean run; typecheck/lint/dependency-rules/codegen/matrix/docs/ui:api:check PASS; gates --check 5 milestones / 4 accepted + self-test PASS; --acceptance-drill valid. Two timing-sensitive tests flaked once under heavy concurrent load and are green in isolation + clean runs (documented in the evidence).",
+      "acceptedAt": "2026-08-15"
     }
   ],
   "prSplitPlan": {
