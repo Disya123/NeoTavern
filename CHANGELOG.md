@@ -3,6 +3,45 @@
 ## Unreleased
 ### Added
 
+- **Per-profile scoped profile export (SEC-02, ADR-0047 waiver 4, M5 slice 5
+  remainder, schema v15).** The canonical Configuration profiles model now
+  binds the character library: schema v15 adds the nullable `profile_id` FK
+  on `characters` (`ON DELETE SET NULL` — deleting a profile keeps the
+  characters, they just become unassigned) plus a backing index; wire
+  `characters.create`/`characters.update` accept an optional `profileId`
+  (an explicitly named profile must exist, else `PROFILE_NOT_FOUND` with the
+  `profileId` param) and `CharacterDto` carries it back.
+  `profile.export` accepts an optional `profileId` (wire request/result DTOs
+  extended, result echoes the scope): a scoped container carries only that
+  profile's characters and, transitively, their chats and messages — the
+  manifest records `profileId`; lorebooks and presets are the shared library
+  and always included in full. An unknown profile id is rejected with
+  `PROFILE_NOT_FOUND` before any container directory is created. Import
+  preserves a binding only when the profile already exists in the target;
+  otherwise the character lands unassigned (NULL) and is reported in
+  `ImportReport::orphans` — data is never dropped for a missing binding.
+  Storage export tests (scoped filtering + manifest marker + import binding
+  preservation/unassignment) and kernel tests (scoped export echoes the
+  scope and filters by profile, rebind via update, unknown-profile
+  `PROFILE_NOT_FOUND`, `characters.create` rejects an unknown profile) prove
+  the behavior. Full `cargo test --workspace` now green, including the
+  contract corpus (see CI fixes below).
+- **CI fixes surfaced by an independent verification (all were real
+  merge-blockers on the branch).**
+  1. `crates/contracts-generated/tests/wire_corpus.rs` covered only 115 of
+     the 124 schemaIds in the canonical corpus — the 33 assets/plugins/
+     themes/profiles/settings/diagnostics/secrets/profile-export decoders
+     were missing from the dispatch match, which made the real CI job
+     `cargo test --workspace` (ci.yml contracts-rust) fail. All 33 arms now
+     resolve to their generated decoders; the corpus test passes.
+  2. `--st-color-border-subtle` was used in `AiSettings.module.css` but not
+     part of the canonical theme-sdk token set, failing the token-contract
+     test. The token is now canonical: added to `TOKEN_NAMES`,
+     `DEFAULT_LIGHT_TOKENS`/`DEFAULT_DARK_TOKENS` and the `tokens.css`
+     light/dark/`prefers-color-scheme` blocks (theme-sdk 45/45).
+  3. `docs:sync:check` was out of date (the committed mirror missed the
+     capability-matrix changes of the profiles slice). Resynced 70 mirrored
+     files; `docs:sync:check` passes.
 - **NeoBackend facade for the canonical kernel domains (M5 web-facade
   foundation, ТЗ §15/§13.1).** The single UI-facing surface now covers
   `plugins` (list/install/uninstall/enable/disable — SEC-05 trust +

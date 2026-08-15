@@ -35,7 +35,10 @@ export const MetaDtoSchema = Type.Object(
 );
 export type MetaDto = Static<typeof MetaDtoSchema>;
 
-/** Character DTO (`wire.character.dto`). */
+/** Character DTO (`wire.character.dto`). `profileId` (optional) binds the
+ * character to a Configuration profile (ADR-0047 waiver 4, Этап 4 slice 5
+ * remainder part 2): a scoped `profile.export` carries only the characters
+ * of one profile (chats/messages follow transitively). */
 export const CharacterDtoSchema = Type.Object(
   {
     id: Type.String({ format: 'uuid' }),
@@ -43,6 +46,7 @@ export const CharacterDtoSchema = Type.Object(
     description: Type.Optional(Type.String({ minLength: 0, maxLength: 10000 })),
     avatarAssetId: Type.Optional(Type.String({ format: 'uuid' })),
     tags: Type.Array(Type.String({ minLength: 1, maxLength: 64 }), { maxItems: 32 }),
+    profileId: Type.Optional(Type.String({ format: 'uuid' })),
     createdAt: Type.String({ format: 'rfc3339' }),
     updatedAt: Type.String({ format: 'rfc3339' }),
   },
@@ -472,6 +476,7 @@ export const CreateCharacterRequestDtoSchema = Type.Object(
     description: Type.Optional(Type.String({ minLength: 0, maxLength: 10000 })),
     tags: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 64 }), { maxItems: 32 })),
     avatarAssetId: Type.Optional(Type.String({ format: 'uuid' })),
+    profileId: Type.Optional(Type.String({ format: 'uuid' })),
   },
   { $id: 'wire.request.create-character', additionalProperties: false },
 );
@@ -480,7 +485,8 @@ export type CreateCharacterRequestDto = Static<typeof CreateCharacterRequestDtoS
 /**
  * Update character request DTO (`wire.request.update-character`).
  * `avatarAssetId` (optional) links the character to an asset published
- * through `assets.put`; the kernel verifies the asset exists.
+ * through `assets.put`; the kernel verifies the asset exists. `profileId`
+ * (optional) rebinds the character to a Configuration profile (waiver 4).
  */
 export const UpdateCharacterRequestDtoSchema = Type.Object(
   {
@@ -489,6 +495,7 @@ export const UpdateCharacterRequestDtoSchema = Type.Object(
     description: Type.Optional(Type.String({ minLength: 0, maxLength: 10000 })),
     tags: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 64 }), { maxItems: 32 })),
     avatarAssetId: Type.Optional(Type.String({ format: 'uuid' })),
+    profileId: Type.Optional(Type.String({ format: 'uuid' })),
   },
   { $id: 'wire.request.update-character', additionalProperties: false },
 );
@@ -1470,10 +1477,16 @@ export type ListPersonasResultDto = Static<typeof ListPersonasResultDtoSchema>;
  * Profile export request DTO (`wire.request.profile-export`). An export is a
  * logical allowlist container (SEC-02): only product entities are exported,
  * secrets/provider configs/session data are never part of the container.
+ * `profileId` (optional) scopes the export to one Configuration profile
+ * (ADR-0047 waiver 4): only the profile's characters (and, transitively,
+ * their chats and messages) are exported; lorebooks and presets are the
+ * shared library and are always included. An unknown profile id is
+ * `PROFILE_NOT_FOUND`.
  */
 export const ProfileExportRequestDtoSchema = Type.Object(
   {
     includeAssets: Type.Optional(Type.Boolean()),
+    profileId: Type.Optional(Type.String({ format: 'uuid' })),
   },
   { $id: 'wire.request.profile-export', additionalProperties: false },
 );
@@ -1497,7 +1510,8 @@ export type ProfileExportCountsDto = Static<typeof ProfileExportCountsDtoSchema>
  * container's metadata. The container itself is written by the kernel under
  * the data root's `exports/` directory; `containerPath` is relative to the
  * data root so hosts can resolve and stream it without transport-specific
- * knowledge of the archive format.
+ * knowledge of the archive format. `profileId` echoes the optional request
+ * scope (absent = full library export).
  */
 export const ProfileExportResultDtoSchema = Type.Object(
   {
@@ -1508,6 +1522,7 @@ export const ProfileExportResultDtoSchema = Type.Object(
     assets: Type.Integer({ minimum: 0 }),
     sizeBytes: Type.Integer({ minimum: 0 }),
     manifestSha256: Type.String({ minLength: 64, maxLength: 64 }),
+    profileId: Type.Optional(Type.String({ format: 'uuid' })),
   },
   { $id: 'wire.result.profile-export', additionalProperties: false },
 );

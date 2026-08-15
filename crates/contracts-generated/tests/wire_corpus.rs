@@ -45,7 +45,18 @@ use contracts_generated::generated::{
     decode_result_list_memories, decode_result_list_personas, decode_result_list_presets,
     decode_result_list_provider_configs, decode_result_list_providers, decode_result_list_tools,
     decode_result_message_revision_list, decode_result_message_variant_list, decode_tool_call,
-    decode_tool_spec,
+    decode_tool_spec, decode_request_profile_export, decode_result_profile_export,
+    decode_request_assets_put, decode_result_assets_put, decode_request_assets_get,
+    decode_result_assets_get, decode_request_assets_content, decode_result_assets_content,
+    decode_request_assets_delete, decode_plugins_item, decode_result_plugins_list,
+    decode_request_plugins_install, decode_result_plugins_install, decode_request_plugins_uninstall,
+    decode_request_plugins_enable, decode_request_plugins_disable, decode_themes_item,
+    decode_result_themes_list, decode_request_themes_install, decode_result_themes_install,
+    decode_request_themes_uninstall, decode_request_themes_activate, decode_profiles_item,
+    decode_result_profiles_list, decode_request_profiles_create, decode_result_profiles_create,
+    decode_request_profiles_rename, decode_request_profiles_delete, decode_request_settings_get,
+    decode_request_settings_update, decode_result_settings, decode_result_diagnostics_export,
+    decode_result_secrets_status,
 };
 use contracts_generated::{contract_schema_hash, wire_protocol, WireError};
 use serde::de::DeserializeOwned;
@@ -382,6 +393,92 @@ fn dispatch(schema_id: &str, bytes: &[u8], valid: bool) {
         }
         "wire.result.message-variant-list" => {
             corpus_case(schema_id, decode_result_message_variant_list, bytes, valid)
+        }
+        // M5 slice 2-7 (assets, plugins, themes, profiles, settings,
+        // diagnostics, secrets, profile-export): every schemaId the corpus
+        // can reference must resolve to its generated decoder.
+        "wire.request.profile-export" => {
+            corpus_case(schema_id, decode_request_profile_export, bytes, valid)
+        }
+        "wire.result.profile-export" => {
+            corpus_case(schema_id, decode_result_profile_export, bytes, valid)
+        }
+        "wire.request.assets.put" => corpus_case(schema_id, decode_request_assets_put, bytes, valid),
+        "wire.result.assets.put" => corpus_case(schema_id, decode_result_assets_put, bytes, valid),
+        "wire.request.assets.get" => corpus_case(schema_id, decode_request_assets_get, bytes, valid),
+        "wire.result.assets.get" => corpus_case(schema_id, decode_result_assets_get, bytes, valid),
+        "wire.request.assets.content" => {
+            corpus_case(schema_id, decode_request_assets_content, bytes, valid)
+        }
+        "wire.result.assets.content" => {
+            corpus_case(schema_id, decode_result_assets_content, bytes, valid)
+        }
+        "wire.request.assets.delete" => {
+            corpus_case(schema_id, decode_request_assets_delete, bytes, valid)
+        }
+        "wire.request.plugins.install" => {
+            corpus_case(schema_id, decode_request_plugins_install, bytes, valid)
+        }
+        "wire.result.plugins.install" => {
+            corpus_case(schema_id, decode_result_plugins_install, bytes, valid)
+        }
+        "wire.request.plugins.uninstall" => {
+            corpus_case(schema_id, decode_request_plugins_uninstall, bytes, valid)
+        }
+        "wire.request.plugins.enable" => {
+            corpus_case(schema_id, decode_request_plugins_enable, bytes, valid)
+        }
+        "wire.request.plugins.disable" => {
+            corpus_case(schema_id, decode_request_plugins_disable, bytes, valid)
+        }
+        "wire.plugins.item" => corpus_case(schema_id, decode_plugins_item, bytes, valid),
+        "wire.result.plugins.list" => {
+            corpus_case(schema_id, decode_result_plugins_list, bytes, valid)
+        }
+        "wire.request.themes.install" => {
+            corpus_case(schema_id, decode_request_themes_install, bytes, valid)
+        }
+        "wire.result.themes.install" => {
+            corpus_case(schema_id, decode_result_themes_install, bytes, valid)
+        }
+        "wire.request.themes.uninstall" => {
+            corpus_case(schema_id, decode_request_themes_uninstall, bytes, valid)
+        }
+        "wire.request.themes.activate" => {
+            corpus_case(schema_id, decode_request_themes_activate, bytes, valid)
+        }
+        "wire.themes.item" => corpus_case(schema_id, decode_themes_item, bytes, valid),
+        "wire.result.themes.list" => {
+            corpus_case(schema_id, decode_result_themes_list, bytes, valid)
+        }
+        "wire.request.profiles.create" => {
+            corpus_case(schema_id, decode_request_profiles_create, bytes, valid)
+        }
+        "wire.result.profiles.create" => {
+            corpus_case(schema_id, decode_result_profiles_create, bytes, valid)
+        }
+        "wire.request.profiles.rename" => {
+            corpus_case(schema_id, decode_request_profiles_rename, bytes, valid)
+        }
+        "wire.request.profiles.delete" => {
+            corpus_case(schema_id, decode_request_profiles_delete, bytes, valid)
+        }
+        "wire.profiles.item" => corpus_case(schema_id, decode_profiles_item, bytes, valid),
+        "wire.result.profiles.list" => {
+            corpus_case(schema_id, decode_result_profiles_list, bytes, valid)
+        }
+        "wire.request.settings.get" => {
+            corpus_case(schema_id, decode_request_settings_get, bytes, valid)
+        }
+        "wire.request.settings.update" => {
+            corpus_case(schema_id, decode_request_settings_update, bytes, valid)
+        }
+        "wire.result.settings" => corpus_case(schema_id, decode_result_settings, bytes, valid),
+        "wire.result.diagnostics-export" => {
+            corpus_case(schema_id, decode_result_diagnostics_export, bytes, valid)
+        }
+        "wire.result.secrets-status" => {
+            corpus_case(schema_id, decode_result_secrets_status, bytes, valid)
         }
         other => panic!("corpus references unknown schemaId: {other}"),
     }

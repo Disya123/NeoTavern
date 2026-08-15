@@ -178,3 +178,162 @@ fn profile_export_is_an_allowlist_and_never_carries_secrets() {
     assert_ne!(again.container_path, result.container_path);
     assert_eq!(again.records, result.records);
 }
+
+#[test]
+fn scoped_profile_export_filters_by_profile_and_echoes_the_scope() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel(root.path());
+
+    // Two profiles, two characters (one per profile), chats + messages for
+    // each.
+    let profile_a = dispatch_decoded::<serde_json::Value>(
+        &kernel,
+        "profiles.create",
+        json!({ "name": "Profile A" }),
+    )
+    .expect("profile A must be created");
+    let profile_a_id = profile_a["profile"]["id"]
+        .as_str()
+        .expect("profile id")
+        .to_string();
+    let profile_b = dispatch_decoded::<serde_json::Value>(
+        &kernel,
+        "profiles.create",
+        json!({ "name": "Profile B" }),
+    )
+    .expect("profile B must be created");
+    let profile_b_id = profile_b["profile"]["id"]
+        .as_str()
+        .expect("profile id")
+        .to_string();
+
+    let character_a = dispatch_decoded::<CharacterDto>(
+        &kernel,
+        "characters.create",
+        json!({ "name": "Aria", "profileId": profile_a_id }),
+    )
+    .expect("character A must be created");
+    assert_eq!(
+        character_a.profile_id.as_deref(),
+        Some(profile_a_id.as_str()),
+        "create binds the character to the profile"
+    );
+    let chat_a = dispatch_decoded::<ChatDto>(
+        &kernel,
+        "chats.create",
+        json!({ "characterId": character_a.id }),
+    )
+    .expect("chat A must be created");
+    dispatch_decoded::<MessageDto>(
+        &kernel,
+        "chats.messages.create",
+        json!({ "chatId": chat_a.id, "role": "user", "content": "Hello A" }),
+    )
+    .expect("message A must be created");
+
+    let character_b = dispatch_decoded::<CharacterDto>(
+        &kernel,
+        "characters.create",
+        json!({ "name": "Brunhild", "profileId": profile_b_id }),
+    )
+    .expect("character B must be created");
+    let chat_b = dispatch_decoded::<ChatDto>(
+        &kernel,
+        "chats.create",
+        json!({ "characterId": character_b.id }),
+    )
+    .expect("chat B must be created");
+    dispatch_decoded::<MessageDto>(
+        &kernel,
+        "chats.messages.create",
+        json!({ "chatId": chat_b.id, "role": "user", "content": "Hello B" }),
+    )
+    .expect("message B must be created");
+
+    // Scoped export of profile A carries only A's characters/chats/messages.
+    let scoped = dispatch_decoded::<ResultProfileExport>(
+        &kernel,
+        "profile.export",
+        json!({ "includeAssets": false, "profileId": profile_a_id }),
+    )
+    .expect("scoped export must succeed");
+    assert_eq!(
+        scoped.profile_id.as_deref(),
+        Some(profile_a_id.as_str()),
+        "result echoes the scope"
+    );
+    assert_eq!(scoped.records.characters, 1, "only profile A characters");
+    assert_eq!(scoped.records.chats, 1, "only profile A chats");
+    assert_eq!(scoped.records.messages, 1, "only profile A messages");
+
+    // The full (unscoped) export still carries both profiles' data.
+    let full = dispatch_decoded::<ResultProfileExport>(
+        &kernel,
+        "profile.export",
+        json!({ "includeAssets": false }),
+    )
+    .expect("full export must succeed");
+    assert_eq!(full.profile_id, None, "unscoped export carries no scope");
+    assert_eq!(full.records.characters, 2, "both characters in full export");
+    assert_eq!(full.records.messages, 2, "both messages in full export");
+
+    // Rebind character B to profile A via update; scoped export then sees 2.
+    dispatch_decoded::<CharacterDto>(
+        &kernel,
+        "characters.update",
+        json!({ "characterId": character_b.id, "profileId": profile_a_id }),
+    )
+    .expect("rebind must succeed");
+    let scoped_after = dispatch_decoded::<ResultProfileExport>(
+        &kernel,
+        "profile.export",
+        json!({ "includeAssets": false, "profileId": profile_a_id }),
+    )
+    .expect("scoped export after rebind must succeed");
+    assert_eq!(
+        scoped_after.records.characters, 2,
+        "rebound character counted"
+    );
+    assert_eq!(scoped_after.records.chats, 2, "both chats now scoped");
+
+    // Unknown profile id → PROFILE_NOT_FOUND with the profileId param.
+    let unknown = "9f2c7a1b-3d5e-4f8a-9b2c-1d3e5f7a9b0c";
+    let err = dispatch_json(
+        &kernel,
+        "profile.export",
+        json!({ "includeAssets": false, "profileId": unknown }),
+    )
+    .expect_err("unknown profile must be rejected");
+    assert_eq!(
+        err.product.as_ref().map(|p| p.code.as_str()),
+        Some("PROFILE_NOT_FOUND")
+    );
+}
+
+#[test]
+fn characters_create_rejects_unknown_profile_id() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel(root.path());
+
+    let unknown = "9f2c7a1b-3d5e-4f8a-9b2c-1d3e5f7a9b0d";
+    let err = dispatch_json(
+        &kernel,
+        "characters.create",
+        json!({ "name": "Orphan", "profileId": unknown }),
+    )
+    .expect_err("unknown profile must be rejected");
+    assert_eq!(
+        err.product.as_ref().map(|p| p.code.as_str()),
+        Some("PROFILE_NOT_FOUND")
+    );
+    assert_eq!(
+        err.product
+            .as_ref()
+            .unwrap()
+            .params
+            .get("profileId")
+            .and_then(|v| v.as_str()),
+        Some(unknown),
+        "PROFILE_NOT_FOUND carries the profileId param"
+    );
+}

@@ -1586,6 +1586,7 @@ const CHARACTER_VALUE = {
   description: 'First programmer',
   avatarAssetId: UUID_AVATAR,
   tags: ['analytical', 'historical'],
+  profileId: UUID_PRESET,
   createdAt: TIMESTAMP,
   updatedAt: TIMESTAMP,
 };
@@ -1654,6 +1655,12 @@ const PROFILE_EXPORT_VALUE = {
   assets: 0,
   sizeBytes: 4096,
   manifestSha256: 'b'.repeat(64),
+};
+
+const PROFILE_EXPORT_SCOPED_VALUE = {
+  ...PROFILE_EXPORT_VALUE,
+  containerPath: 'exports/profile-export-1b1b/',
+  profileId: UUID_PRESET,
 };
 
 const LOREBOOK_VALUE = {
@@ -1946,6 +1953,10 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     description: 'First programmer',
     tags: ['analytical'],
   }),
+  fx('characters-create-request-with-profile', 'characters.create', 'request', true, {
+    name: 'Ada Lovelace',
+    profileId: UUID_PRESET,
+  }),
   fx('characters-update-request', 'characters.update', 'request', true, {
     characterId: UUID_CHARACTER,
     name: 'Grace Hopper',
@@ -2112,6 +2123,10 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('personas-list-request', 'personas.list', 'request', true, {}),
   fx('profile-export-request', 'profile.export', 'request', true, { includeAssets: false }),
   fx('profile-export-request-default', 'profile.export', 'request', true, {}),
+  fx('profile-export-request-scoped', 'profile.export', 'request', true, {
+    includeAssets: false,
+    profileId: UUID_PRESET,
+  }),
   fx('assets-put-request', 'assets.put', 'request', true, ASSETS_PUT_REQUEST),
   fx('assets-get-request', 'assets.get', 'request', true, { assetId: UUID_AVATAR }),
   fx('assets-content-request', 'assets.content', 'request', true, { assetId: UUID_AVATAR }),
@@ -2314,6 +2329,7 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('backups-create-response', 'backups.create', 'response', true, BACKUP_VALUE),
   fx('backups-list-response', 'backups.list', 'response', true, { items: [BACKUP_VALUE] }),
   fx('profile-export-response', 'profile.export', 'response', true, PROFILE_EXPORT_VALUE),
+  fx('profile-export-response-scoped', 'profile.export', 'response', true, PROFILE_EXPORT_SCOPED_VALUE),
   fx('assets-put-response', 'assets.put', 'response', true, ASSETS_PUT_VALUE),
   fx('assets-get-response', 'assets.get', 'response', true, { asset: ASSET_VALUE }),
   fx('assets-content-response', 'assets.content', 'response', true, ASSETS_CONTENT_VALUE),
@@ -2580,6 +2596,14 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   }),
   fx('neg-profile-export-bad-request', 'profile.export', 'request', false, {
     includeAssets: 'yes',
+  }),
+  fx('neg-profile-export-bad-profile', 'profile.export', 'request', false, {
+    includeAssets: false,
+    profileId: 'not-a-uuid',
+  }),
+  fx('neg-character-create-bad-profile', 'characters.create', 'request', false, {
+    name: 'Ada',
+    profileId: 'not-a-uuid',
   }),
   fx('neg-assets-put-bad-base64', 'assets.put', 'request', false, {
     ...ASSETS_PUT_REQUEST,

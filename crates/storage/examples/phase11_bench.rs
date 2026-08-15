@@ -1,4 +1,4 @@
-//! Phase 11 benchmark harness (ТЗ §84): builds a fixed reference fixture and
+﻿//! Phase 11 benchmark harness (ТЗ §84): builds a fixed reference fixture and
 //! measures backup/restore/export throughput. Prints a machine-readable
 //! report; the numbers feed `docs/architecture/benchmarks.md`.
 
@@ -74,7 +74,7 @@ fn main() {
     let db = open::open(&root, &ConnectionPolicy::default(), &mut nop).expect("open");
     let export_dir = temp.path().join("export");
     let started = Instant::now();
-    let report = create_export(&db, &export_dir, true).expect("export");
+    let report = create_export(&db, &export_dir, true, None).expect("export");
     let export_ms = started.elapsed().as_millis();
     drop(db);
 

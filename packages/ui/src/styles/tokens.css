@@ -22,6 +22,7 @@
     --st-color-accent-soft: #f1ded4;
     --st-color-accent-soft-text: #6f2e19;
     --st-color-border: #ddd6cd;
+    --st-color-border-subtle: #eae5df;
     --st-color-border-strong: #aaa097;
     --st-color-success: #2d7b4c;
     --st-color-warning: #a86118;
@@ -153,6 +154,7 @@
     --st-color-accent-soft: #492a20;
     --st-color-accent-soft-text: #ffc4a8;
     --st-color-border: #39342f;
+    --st-color-border-subtle: #2b2723;
     --st-color-border-strong: #625a53;
     /* Status colors: lightened dark variants for WCAG AA text contrast. */
     --st-color-success: #63c98d;
@@ -191,6 +193,7 @@
       --st-color-accent-soft: #492a20;
       --st-color-accent-soft-text: #ffc4a8;
       --st-color-border: #39342f;
+      --st-color-border-subtle: #2b2723;
       --st-color-border-strong: #625a53;
       /* Status colors: lightened dark variants for WCAG AA text contrast. */
       --st-color-success: #63c98d;

@@ -274,6 +274,31 @@ fn validate_avatar_asset(
     Ok(Some(id.to_string()))
 }
 
+/// Validates an explicit profile binding (SEC-02 waiver 4): the profile must
+/// exist; `None` (no binding requested) is always fine.
+fn validate_character_profile(db: &Database, profile_id: Option<&str>) -> Result<(), KernelError> {
+    let Some(profile_id) = profile_id else {
+        return Ok(());
+    };
+    let exists: bool = db
+        .conn()
+        .query_row(
+            "SELECT 1 FROM profiles WHERE id = ?1",
+            params![profile_id],
+            |_| Ok(true),
+        )
+        .optional()
+        .map_err(|e| sqlite(e, "characters: profile lookup"))?
+        .unwrap_or(false);
+    if !exists {
+        return Err(KernelError::product(
+            "PROFILE_NOT_FOUND".to_string(),
+            vec![("profileId".to_string(), profile_id.to_string())],
+        ));
+    }
+    Ok(())
+}
+
 /// Renders a `characters` row as the wire [`CharacterDto`].
 fn row_to_character(row: &rusqlite::Row) -> Result<CharacterDto, KernelError> {
     let tags_json: String = row
@@ -292,11 +317,14 @@ fn row_to_character(row: &rusqlite::Row) -> Result<CharacterDto, KernelError> {
             .get(3)
             .map_err(|e| sqlite(e, "characters: read avatar_asset_id"))?,
         tags,
-        created_at: row
+        profile_id: row
             .get(5)
+            .map_err(|e| sqlite(e, "characters: read profile_id"))?,
+        created_at: row
+            .get(6)
             .map_err(|e| sqlite(e, "characters: read created_at"))?,
         updated_at: row
-            .get(6)
+            .get(7)
             .map_err(|e| sqlite(e, "characters: read updated_at"))?,
     })
 }
@@ -527,7 +555,7 @@ fn query_character(
 ) -> Result<Option<CharacterDto>, KernelError> {
     let mut stmt = conn
         .prepare(
-            "SELECT id, name, description, avatar_asset_id, tags_json, created_at, updated_at \
+            "SELECT id, name, description, avatar_asset_id, tags_json, profile_id, created_at, updated_at \
              FROM characters WHERE id = ?1",
         )
         .map_err(|e| sqlite(e, "characters_get: prepare"))?;
@@ -552,7 +580,7 @@ pub fn characters_list(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Ker
     {
         let conn = db.conn();
         let mut sql = String::from(
-            "SELECT id, name, description, avatar_asset_id, tags_json, created_at, updated_at \
+            "SELECT id, name, description, avatar_asset_id, tags_json, profile_id, created_at, updated_at \
              FROM characters",
         );
         let mut params: Vec<Value> = Vec::new();
@@ -613,16 +641,20 @@ pub fn characters_create(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, K
     })?;
     // Avatar linkage: the referenced asset must exist (Этап 4 slice 5).
     let avatar = validate_avatar_asset(db, req.avatar_asset_id.as_deref())?;
+    // Profile binding (SEC-02 waiver 4): an explicitly named profile must
+    // exist; absent profileId → unassigned character.
+    validate_character_profile(db, req.profile_id.as_deref())?;
     db.transaction(|tx| {
         tx.execute(
-            "INSERT INTO characters (id, name, description, avatar_asset_id, tags_json, ext_json, created_at, updated_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, '{}', ?6, ?7)",
+            "INSERT INTO characters (id, name, description, avatar_asset_id, tags_json, ext_json, profile_id, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, '{}', ?6, ?7, ?8)",
             params![
                 &id,
                 &req.name,
                 &req.description,
                 &avatar,
                 &tags_json,
+                &req.profile_id,
                 &now,
                 &now
             ],
@@ -657,6 +689,9 @@ pub fn characters_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, K
     };
     // Avatar linkage: the referenced asset must exist (Этап 4 slice 5).
     let avatar = validate_avatar_asset(db, req.avatar_asset_id.as_deref())?;
+    // Profile rebinding (SEC-02 waiver 4): an explicitly named profile must
+    // exist; `profileId` absent leaves the current binding untouched.
+    validate_character_profile(db, req.profile_id.as_deref())?;
     let changed = db.transaction(|tx| {
         let mut sets: Vec<&str> = Vec::new();
         let mut values: Vec<Value> = Vec::new();
@@ -675,6 +710,10 @@ pub fn characters_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, K
         if let Some(avatar) = &avatar {
             sets.push("avatar_asset_id = ?");
             values.push(Value::Text(avatar.clone()));
+        }
+        if let Some(profile_id) = &req.profile_id {
+            sets.push("profile_id = ?");
+            values.push(Value::Text(profile_id.clone()));
         }
         sets.push("updated_at = ?");
         values.push(Value::Text(now.clone()));

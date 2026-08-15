@@ -401,6 +401,21 @@ macro_rules! migration_14_sql {
     };
 }
 
+/// `migration_15_sql!()` literal. Binds the character library to the
+/// Configuration bounded context (ТЗ §8.1 Configuration, SEC-02, ADR-0047
+/// waiver 4, Этап 4 slice 5 remainder part 2): adds the nullable
+/// `profile_id` FK on `characters` (`ON DELETE SET NULL` — deleting a
+/// profile keeps the characters, they just become unassigned). Chats and
+/// messages follow transitively through the character; lorebooks and presets
+/// stay the shared library. The index backs both the FK enforcement and the
+/// scoped `profile.export` filter.
+macro_rules! migration_15_sql {
+    () => {
+        r#"ALTER TABLE characters ADD COLUMN profile_id TEXT REFERENCES profiles(id) ON DELETE SET NULL;
+CREATE INDEX idx_characters_profile_id ON characters(profile_id);"#
+    };
+}
+
 /// Name of the initial (v1) schema migration.
 pub const MIGRATION_1_NAME: &str = "001_initial_schema";
 
@@ -630,6 +645,22 @@ pub const MIGRATION_14_SQL: &str = migration_14_sql!();
 pub const MIGRATION_14_CHECKSUM: &str =
     "7be80c2213d0f3abd95af819c4cd86b6b9b65567d953d277c9efef3465c9561d";
 
+/// Name of the character-profile (v15) schema migration.
+pub const MIGRATION_15_NAME: &str = "015_character_profiles";
+
+/// Exact SQL of the character-profile schema migration (v15) — the
+/// `migration_15_sql!()` literal. Adds the nullable `profile_id` FK on
+/// `characters` plus its index (SEC-02 scoped export, ADR-0047 waiver 4).
+pub const MIGRATION_15_SQL: &str = migration_15_sql!();
+
+/// Lowercase sha256 hex of the `MIGRATION_15_SQL` string bytes.
+///
+/// Computed via node (`crypto.createHash('sha256')` over the exact literal
+/// bytes, no trailing newline) and asserted by the migration test suite
+/// against the ledger.
+pub const MIGRATION_15_CHECKSUM: &str =
+    "6f7d896fcfb67e9c7036a58a448e67286af5b7b612d25e44f88d1c86ae9c37f2";
+
 /// A fresh install runs every migration in order, so `FRESH_SCHEMA_SQL` is the
 /// concatenation of all migration literals with a single newline between them
 /// (the same statement separator `execute_batch` applies).
@@ -664,7 +695,9 @@ pub const FRESH_SCHEMA_SQL: &str = concat!(
     "\n",
     migration_13_sql!(),
     "\n",
-    migration_14_sql!()
+    migration_14_sql!(),
+    "\n",
+    migration_15_sql!()
 );
 
 /// sha256 hex of the `FRESH_SCHEMA_SQL` bytes — the fresh-install fingerprint.

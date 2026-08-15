@@ -162,6 +162,11 @@ pub struct InventoryEntry {
 }
 
 /// Portable character record (kernel `characters` row, camelCase fields).
+/// `profile_id` (optional) carries the Configuration profile binding
+/// (ADR-0047 waiver 4): a scoped export emits only the characters of one
+/// profile; on import the binding is preserved only when the profile already
+/// exists in the target (otherwise the character lands unassigned and the
+/// loss is reported in [`ImportReport::orphans`] — never silently dropped).
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportCharacter {
@@ -175,6 +180,8 @@ pub struct ExportCharacter {
     pub tags: Vec<String>,
     #[serde(default = "default_json_object")]
     pub ext: serde_json::Value,
+    #[serde(default)]
+    pub profile_id: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -269,7 +276,18 @@ fn default_true() -> bool {
 /// copy; the inventory (sorted by logical path) and the `manifest.json` are
 /// written LAST via an atomic temp+rename, so a partially-written container
 /// never carries a manifest.
-pub fn create_export(db: &Database, dest: &Path, include_assets: bool) -> Result<ExportReport> {
+///
+/// When `profile_id` is `Some`, the export is scoped to that Configuration
+/// profile (SEC-02, ADR-0047 waiver 4): only the profile's characters — and,
+/// transitively, their chats and messages — are exported. Lorebooks and
+/// presets are the shared library and are always included in full, which the
+/// manifest records (`profileId` present on a scoped export).
+pub fn create_export(
+    db: &Database,
+    dest: &Path,
+    include_assets: bool,
+    profile_id: Option<&str>,
+) -> Result<ExportReport> {
     if dest.exists() {
         if !dest.is_dir() {
             return Err(StorageError::new(
@@ -290,9 +308,12 @@ pub fn create_export(db: &Database, dest: &Path, include_assets: bool) -> Result
     }
     fs::create_dir_all(dest).map_err(|e| io_err(e, "create export destination"))?;
 
-    let characters = read_characters(db)?;
-    let chats = read_chats(db)?;
-    let messages = read_messages(db)?;
+    let characters = read_characters(db, profile_id)?;
+    let character_ids: HashSet<&str> = characters.iter().map(|c| c.id.as_str()).collect();
+    // Scoped exports carry only the profile's chats and their messages.
+    let chats = read_chats(db, profile_id, &character_ids)?;
+    let chat_ids: HashSet<&str> = chats.iter().map(|c| c.id.as_str()).collect();
+    let messages = read_messages(db, profile_id, &chat_ids)?;
     let lorebooks = read_lorebooks(db)?;
     let presets = read_presets(db)?;
 
@@ -343,7 +364,7 @@ pub fn create_export(db: &Database, dest: &Path, include_assets: bool) -> Result
     let size_bytes = inventory.iter().map(|e| e.size).sum();
 
     let created_at = now_utc_rfc3339();
-    let manifest = serde_json::json!({
+    let mut manifest = serde_json::json!({
         "exportFormat": EXPORT_FORMAT,
         "formatVersion": EXPORT_FORMAT_VERSION,
         "createdAt": created_at,
@@ -360,6 +381,11 @@ pub fn create_export(db: &Database, dest: &Path, include_assets: bool) -> Result
         },
         "inventory": inventory,
     });
+    if let Some(profile_id) = profile_id {
+        // Scoped export marker (SEC-02 waiver 4): a host can tell a full
+        // library export from a single-profile one by this field alone.
+        manifest["profileId"] = serde_json::json!(profile_id);
+    }
     let bytes = serde_json::to_vec(&manifest)
         .map_err(|e| StorageError::new(StorageErrorCode::Io, format!("serialize manifest: {e}")))?;
     write_atomic(&dest.join("manifest.json"), &bytes)?;
@@ -593,7 +619,7 @@ pub fn apply_import(
     // Integrity first, before any write.
     let verified = verify_export(source)?;
 
-    let characters = parse_ndjson::<ExportCharacter>(
+    let mut characters = parse_ndjson::<ExportCharacter>(
         &source.join("characters.ndjson"),
         verified.records.characters,
     )?;
@@ -639,8 +665,45 @@ pub fn apply_import(
 
     // Referential integrity within the incoming set: orphans are skipped and
     // reported, never invented.
-    let character_ids: HashSet<&str> = characters.iter().map(|c| c.id.as_str()).collect();
+    // Referential integrity within the incoming set: orphans are skipped and
+    // reported, never invented.
     let mut orphans: Vec<String> = Vec::new();
+    //
+    // Profile bindings (SEC-02 waiver 4): a character whose `profileId`
+    // references a profile that does not exist in the target keeps its data
+    // but lands unassigned (NULL), reported as an orphan — a scoped export of
+    // one profile must not invent profiles in another library, and the data
+    // must never be dropped for a missing binding.
+    let profile_ids: HashSet<&str> = characters
+        .iter()
+        .filter_map(|c| c.profile_id.as_deref())
+        .collect();
+    let mut missing_profiles: HashSet<String> = HashSet::new();
+    for profile_id in &profile_ids {
+        let found = db
+            .conn()
+            .query_row("SELECT 1 FROM profiles WHERE id = ?1", [profile_id], |r| {
+                r.get::<_, i64>(0)
+            })
+            .optional()
+            .map_err(|e| StorageError::from_sqlite(e, "import: probe profile"))?;
+        if found.is_none() {
+            missing_profiles.insert(profile_id.to_string());
+        }
+    }
+    for character in &mut characters {
+        if let Some(profile_id) = character.profile_id.clone() {
+            if missing_profiles.contains(&profile_id) {
+                orphans.push(format!(
+                    "character {}: references missing profile {} (unassigned)",
+                    character.id, profile_id
+                ));
+                character.profile_id = None;
+            }
+        }
+    }
+
+    let character_ids: HashSet<&str> = characters.iter().map(|c| c.id.as_str()).collect();
     let mut kept_chats: Vec<&ExportChat> = Vec::new();
     for chat in &chats {
         if !character_ids.contains(chat.character_id.as_str()) {
@@ -850,32 +913,56 @@ pub fn apply_import(
 
 // --- export readers --------------------------------------------------------
 
-fn read_characters(db: &Database) -> Result<Vec<ExportCharacter>> {
+fn read_characters(db: &Database, profile_id: Option<&str>) -> Result<Vec<ExportCharacter>> {
+    let (sql, params): (String, Vec<Box<dyn rusqlite::ToSql>>) = match profile_id {
+        Some(profile_id) => (
+            "SELECT id, name, description, avatar_asset_id, tags_json, ext_json, profile_id, created_at, updated_at \
+             FROM characters WHERE profile_id = ?1 ORDER BY id"
+                .to_string(),
+            vec![Box::new(profile_id.to_string())],
+        ),
+        None => (
+            "SELECT id, name, description, avatar_asset_id, tags_json, ext_json, profile_id, created_at, updated_at \
+             FROM characters ORDER BY id"
+                .to_string(),
+            Vec::new(),
+        ),
+    };
     let mut stmt = db
         .conn()
-        .prepare(
-            "SELECT id, name, description, avatar_asset_id, tags_json, ext_json, created_at, updated_at \
-             FROM characters ORDER BY id",
-        )
+        .prepare(&sql)
         .map_err(|e| StorageError::from_sqlite(e, "export: prepare characters"))?;
     let rows = stmt
-        .query_map([], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, Option<String>>(2)?,
-                row.get::<_, Option<String>>(3)?,
-                row.get::<_, String>(4)?,
-                row.get::<_, String>(5)?,
-                row.get::<_, String>(6)?,
-                row.get::<_, String>(7)?,
-            ))
-        })
+        .query_map(
+            rusqlite::params_from_iter(params.iter().map(|p| p.as_ref())),
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, String>(5)?,
+                    row.get::<_, Option<String>>(6)?,
+                    row.get::<_, String>(7)?,
+                    row.get::<_, String>(8)?,
+                ))
+            },
+        )
         .map_err(|e| StorageError::from_sqlite(e, "export: read characters"))?;
     let mut out = Vec::new();
     for row in rows {
-        let (id, name, description, avatar_asset_id, tags_json, ext_json, created_at, updated_at) =
-            row.map_err(|e| StorageError::from_sqlite(e, "export: read characters"))?;
+        let (
+            id,
+            name,
+            description,
+            avatar_asset_id,
+            tags_json,
+            ext_json,
+            profile_id,
+            created_at,
+            updated_at,
+        ) = row.map_err(|e| StorageError::from_sqlite(e, "export: read characters"))?;
         let tags: Vec<String> = serde_json::from_str(&tags_json).map_err(|e| {
             StorageError::with(
                 StorageErrorCode::IntegrityViolation,
@@ -897,6 +984,7 @@ fn read_characters(db: &Database) -> Result<Vec<ExportCharacter>> {
             avatar_asset_id,
             tags,
             ext,
+            profile_id,
             created_at,
             updated_at,
         });
@@ -904,26 +992,51 @@ fn read_characters(db: &Database) -> Result<Vec<ExportCharacter>> {
     Ok(out)
 }
 
-fn read_chats(db: &Database) -> Result<Vec<ExportChat>> {
+fn read_chats(
+    db: &Database,
+    profile_id: Option<&str>,
+    character_ids: &HashSet<&str>,
+) -> Result<Vec<ExportChat>> {
+    let (sql, params): (String, Vec<Box<dyn rusqlite::ToSql>>) = match profile_id {
+        Some(profile_id) => (
+            "SELECT id, title, character_id, created_at, updated_at FROM chats \
+             WHERE character_id IN (SELECT id FROM characters WHERE profile_id = ?1) ORDER BY id"
+                .to_string(),
+            vec![Box::new(profile_id.to_string())],
+        ),
+        None => (
+            "SELECT id, title, character_id, created_at, updated_at FROM chats ORDER BY id"
+                .to_string(),
+            Vec::new(),
+        ),
+    };
+    // When scoped, cross-check against the actually exported character ids
+    // (defense in depth: chat rows must reference a profile character).
     let mut stmt = db
         .conn()
-        .prepare("SELECT id, title, character_id, created_at, updated_at FROM chats ORDER BY id")
+        .prepare(&sql)
         .map_err(|e| StorageError::from_sqlite(e, "export: prepare chats"))?;
     let rows = stmt
-        .query_map([], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?,
-                row.get::<_, String>(4)?,
-            ))
-        })
+        .query_map(
+            rusqlite::params_from_iter(params.iter().map(|p| p.as_ref())),
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                ))
+            },
+        )
         .map_err(|e| StorageError::from_sqlite(e, "export: read chats"))?;
     let mut out = Vec::new();
     for row in rows {
         let (id, title, character_id, created_at, updated_at) =
             row.map_err(|e| StorageError::from_sqlite(e, "export: read chats"))?;
+        if profile_id.is_some() && !character_ids.contains(character_id.as_str()) {
+            continue;
+        }
         out.push(ExportChat {
             id,
             title,
@@ -935,29 +1048,51 @@ fn read_chats(db: &Database) -> Result<Vec<ExportChat>> {
     Ok(out)
 }
 
-fn read_messages(db: &Database) -> Result<Vec<ExportMessage>> {
+fn read_messages(
+    db: &Database,
+    profile_id: Option<&str>,
+    chat_ids: &HashSet<&str>,
+) -> Result<Vec<ExportMessage>> {
+    let (sql, params): (String, Vec<Box<dyn rusqlite::ToSql>>) = match profile_id {
+        Some(profile_id) => (
+            "SELECT id, chat_id, role, content, sequence, created_at FROM messages \
+             WHERE chat_id IN (SELECT id FROM chats WHERE character_id IN \
+               (SELECT id FROM characters WHERE profile_id = ?1)) ORDER BY id"
+                .to_string(),
+            vec![Box::new(profile_id.to_string())],
+        ),
+        None => (
+            "SELECT id, chat_id, role, content, sequence, created_at FROM messages ORDER BY id"
+                .to_string(),
+            Vec::new(),
+        ),
+    };
     let mut stmt = db
         .conn()
-        .prepare(
-            "SELECT id, chat_id, role, content, sequence, created_at FROM messages ORDER BY id",
-        )
+        .prepare(&sql)
         .map_err(|e| StorageError::from_sqlite(e, "export: prepare messages"))?;
     let rows = stmt
-        .query_map([], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?,
-                row.get::<_, i64>(4)?,
-                row.get::<_, String>(5)?,
-            ))
-        })
+        .query_map(
+            rusqlite::params_from_iter(params.iter().map(|p| p.as_ref())),
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, i64>(4)?,
+                    row.get::<_, String>(5)?,
+                ))
+            },
+        )
         .map_err(|e| StorageError::from_sqlite(e, "export: read messages"))?;
     let mut out = Vec::new();
     for row in rows {
         let (id, chat_id, role, content, sequence, created_at) =
             row.map_err(|e| StorageError::from_sqlite(e, "export: read messages"))?;
+        if profile_id.is_some() && !chat_ids.contains(chat_id.as_str()) {
+            continue;
+        }
         out.push(ExportMessage {
             id,
             chat_id,
@@ -1263,8 +1398,8 @@ fn insert_character(tx: &rusqlite::Transaction, c: &ExportCharacter) -> Result<(
     let ext = serde_json::to_string(&c.ext)
         .map_err(|e| StorageError::new(StorageErrorCode::Io, format!("serialize ext: {e}")))?;
     tx.execute(
-        "INSERT INTO characters (id, name, description, avatar_asset_id, tags_json, ext_json, created_at, updated_at) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        "INSERT INTO characters (id, name, description, avatar_asset_id, tags_json, ext_json, profile_id, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         rusqlite::params![
             c.id,
             c.name,
@@ -1272,6 +1407,7 @@ fn insert_character(tx: &rusqlite::Transaction, c: &ExportCharacter) -> Result<(
             c.avatar_asset_id,
             tags,
             ext,
+            c.profile_id,
             c.created_at,
             c.updated_at,
         ],
@@ -1287,7 +1423,7 @@ fn update_character(tx: &rusqlite::Transaction, c: &ExportCharacter) -> Result<(
         .map_err(|e| StorageError::new(StorageErrorCode::Io, format!("serialize ext: {e}")))?;
     tx.execute(
         "UPDATE characters SET name = ?2, description = ?3, avatar_asset_id = ?4, tags_json = ?5, \
-         ext_json = ?6, created_at = ?7, updated_at = ?8 WHERE id = ?1",
+         ext_json = ?6, profile_id = ?7, created_at = ?8, updated_at = ?9 WHERE id = ?1",
         rusqlite::params![
             c.id,
             c.name,
@@ -1295,6 +1431,7 @@ fn update_character(tx: &rusqlite::Transaction, c: &ExportCharacter) -> Result<(
             c.avatar_asset_id,
             tags,
             ext,
+            c.profile_id,
             c.created_at,
             c.updated_at,
         ],

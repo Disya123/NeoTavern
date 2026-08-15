@@ -32,6 +32,7 @@ export const TOKEN_NAMES = [
   'color-accent-soft',
   'color-accent-soft-text',
   'color-border',
+  'color-border-subtle',
   'color-border-strong',
   'color-success',
   'color-warning',
@@ -171,6 +172,7 @@ export const DEFAULT_LIGHT_TOKENS: ResolvedTokenSet = {
   'color-accent-soft': '#f1ded4',
   'color-accent-soft-text': '#6f2e19',
   'color-border': '#ddd6cd',
+  'color-border-subtle': '#eae5df',
   'color-border-strong': '#aaa097',
   'color-success': '#2d7b4c',
   'color-warning': '#a86118',
@@ -292,6 +294,7 @@ export const DEFAULT_DARK_TOKENS: ResolvedTokenSet = {
   'color-accent-soft': '#492a20',
   'color-accent-soft-text': '#ffc4a8',
   'color-border': '#39342f',
+  'color-border-subtle': '#2b2723',
   'color-border-strong': '#625a53',
   // Status colors need their own dark palette: the light values only reach
   // 2.7–3.7:1 on dark surfaces (WCAG AA wants 4.5:1 for text).

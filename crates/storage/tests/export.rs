@@ -103,7 +103,7 @@ fn export_verify_import_round_trip_and_idempotent_reimport(
     seed_kernel_db(&mut db_a)?;
 
     let dest = dir.path().join("export");
-    let report = create_export(&db_a, &dest, true)?;
+    let report = create_export(&db_a, &dest, true, None)?;
     assert_eq!(report.counts.characters, 2);
     assert_eq!(report.counts.chats, 2);
     assert_eq!(report.counts.messages, 3);
@@ -186,7 +186,7 @@ fn export_verify_import_round_trip_and_idempotent_reimport(
 
     // Data-only export (include_assets = false): same records, no assets.
     let dest_no_assets = dir.path().join("export-no-assets");
-    let report_no_assets = create_export(&db_a, &dest_no_assets, false)?;
+    let report_no_assets = create_export(&db_a, &dest_no_assets, false, None)?;
     assert_eq!(report_no_assets.counts, report.counts, "records unaffected");
     assert_eq!(report_no_assets.assets, 0, "no asset bytes when skipped");
     assert!(!dest_no_assets.join("assets").exists(), "assets dir absent");
@@ -198,7 +198,7 @@ fn export_verify_import_round_trip_and_idempotent_reimport(
     let dest2 = dir.path().join("export2");
     std::fs::create_dir_all(&dest2)?;
     std::fs::write(dest2.join("stray.txt"), b"x")?;
-    let err = create_export(&db_a, &dest2, true).unwrap_err();
+    let err = create_export(&db_a, &dest2, true, None).unwrap_err();
     assert_eq!(err.code, StorageErrorCode::Conflict);
     Ok(())
 }
@@ -211,7 +211,7 @@ fn tampered_checksum_traversal_and_unknown_version_rejected(
     let mut db = open_root(&root)?;
     seed_kernel_db(&mut db)?;
     let dest = dir.path().join("export");
-    create_export(&db, &dest, true)?;
+    create_export(&db, &dest, true, None)?;
 
     // 1. Tampered payload byte → inventory checksum mismatch at verify.
     let chars_path = dest.join("characters.ndjson");
@@ -305,7 +305,7 @@ fn import_reports_orphans_and_applies_policies() -> Result<(), Box<dyn std::erro
     db.conn().execute_batch("PRAGMA foreign_keys = ON")?;
 
     let dest = dir.path().join("export");
-    create_export(&db, &dest, true)?;
+    create_export(&db, &dest, true, None)?;
     let verified = verify_export(&dest)?;
     assert_eq!(verified.records.chats, 3);
     assert_eq!(verified.records.messages, 4);
@@ -385,5 +385,129 @@ fn import_reports_orphans_and_applies_policies() -> Result<(), Box<dyn std::erro
         dangling_messages, 0,
         "message references remapped to new chat ids"
     );
+    Ok(())
+}
+
+#[test]
+fn scoped_profile_export_filters_characters_chats_messages_only(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // SEC-02 waiver 4: a scoped export carries only the profile's characters
+    // and, transitively, their chats/messages; lorebooks and presets (the
+    // shared library) are always included in full.
+    let dir = tempfile::tempdir()?;
+    let root_a = dir.path().join("a");
+    let mut db_a = open_root(&root_a)?;
+    db_a.transaction(|tx| {
+        tx.execute(
+            "INSERT INTO profiles (id, name, created_at, updated_at) \
+             VALUES ('prof-a', 'Profile A', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'), \
+                    ('prof-b', 'Profile B', '2026-01-02T00:00:00Z', '2026-01-02T00:00:00Z')",
+            [],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "seed profiles"))?;
+        for (id, name, profile) in [
+            ("char-a1", "Alice A", "prof-a"),
+            ("char-a2", "Bob A", "prof-a"),
+            ("char-b1", "Carol B", "prof-b"),
+        ] {
+            tx.execute(
+                "INSERT INTO characters (id, name, profile_id, created_at, updated_at) \
+                 VALUES (?1, ?2, ?3, '2026-01-03T00:00:00Z', '2026-01-03T00:00:00Z')",
+                rusqlite::params![id, name, profile],
+            )
+            .map_err(|e| StorageError::from_sqlite(e, "seed scoped characters"))?;
+        }
+        for (id, character) in [("chat-a1", "char-a1"), ("chat-a2", "char-a2"), ("chat-b1", "char-b1")] {
+            tx.execute(
+                "INSERT INTO chats (id, title, character_id, created_at, updated_at) \
+                 VALUES (?1, 'chat', ?2, '2026-01-04T00:00:00Z', '2026-01-04T00:00:00Z')",
+                rusqlite::params![id, character],
+            )
+            .map_err(|e| StorageError::from_sqlite(e, "seed scoped chats"))?;
+        }
+        for (id, chat) in [("msg-a1", "chat-a1"), ("msg-a2", "chat-a2"), ("msg-b1", "chat-b1")] {
+            tx.execute(
+                "INSERT INTO messages (id, chat_id, role, content, sequence, created_at) \
+                 VALUES (?1, ?2, 'user', 'hi', 0, '2026-01-05T00:00:00Z')",
+                rusqlite::params![id, chat],
+            )
+            .map_err(|e| StorageError::from_sqlite(e, "seed scoped messages"))?;
+        }
+        tx.execute(
+            "INSERT INTO lorebooks (id, name, created_at, updated_at) \
+             VALUES ('lb-shared', 'Shared lore', '2026-01-06T00:00:00Z', '2026-01-06T00:00:00Z')",
+            [],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "seed shared lorebook"))?;
+        tx.execute(
+            "INSERT INTO presets (id, name, settings_json, created_at, updated_at) \
+             VALUES ('preset-shared', 'Shared preset', '{}', '2026-01-07T00:00:00Z', '2026-01-07T00:00:00Z')",
+            [],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "seed shared preset"))?;
+        Ok(())
+    })?;
+
+    let dest = dir.path().join("scoped");
+    let report = create_export(&db_a, &dest, false, Some("prof-a"))?;
+    assert_eq!(report.counts.characters, 2, "only profile A characters");
+    assert_eq!(report.counts.chats, 2, "only profile A chats");
+    assert_eq!(report.counts.messages, 2, "only profile A messages");
+    assert_eq!(report.counts.lorebooks, 1, "shared library always included");
+    assert_eq!(report.counts.presets, 1, "shared library always included");
+
+    // The manifest records the scope.
+    let manifest: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(dest.join("manifest.json"))?)?;
+    assert_eq!(
+        manifest["profileId"], "prof-a",
+        "manifest carries the scope"
+    );
+    let verified = verify_export(&dest)?;
+    assert_eq!(verified.records, report.counts, "verified counts match");
+
+    // Import into a fresh root B: profile A exists there? No — so the
+    // characters land unassigned and are reported as orphans, never dropped.
+    let root_b = dir.path().join("b");
+    let mut db_b = open_root(&root_b)?;
+    db_b.transaction(|tx| {
+        tx.execute(
+            "INSERT INTO profiles (id, name, created_at, updated_at) \
+             VALUES ('prof-a', 'Profile A', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+            [],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "seed target profile"))
+    })?;
+    let imported = apply_import(&dest, &mut db_b, DuplicatePolicy::Reject)?;
+    assert_eq!(
+        imported.inserted, 8,
+        "2 chars + 2 chats + 2 messages + shared lorebook/preset"
+    );
+    assert!(imported.orphans.is_empty(), "profile exists → binding kept");
+
+    // Import into a root C WITHOUT the profile: characters become unassigned
+    // and reported, data preserved.
+    let root_c = dir.path().join("c");
+    let mut db_c = open_root(&root_c)?;
+    let imported_c = apply_import(&dest, &mut db_c, DuplicatePolicy::Reject)?;
+    assert_eq!(
+        imported_c.inserted, 8,
+        "data never dropped for missing profile"
+    );
+    assert_eq!(
+        imported_c.skipped, 2,
+        "the two unassigned characters are the reported orphans"
+    );
+    assert_eq!(
+        imported_c.orphans.len(),
+        2,
+        "both profile-A characters reported as unassigned"
+    );
+    let unassigned: i64 = db_c.conn().query_row(
+        "SELECT COUNT(*) FROM characters WHERE profile_id IS NULL",
+        [],
+        |r| r.get(0),
+    )?;
+    assert_eq!(unassigned, 2, "characters landed unassigned, not dropped");
     Ok(())
 }
