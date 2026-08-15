@@ -160,7 +160,7 @@ fn sqlite(err: rusqlite::Error, context: &str) -> KernelError {
     KernelError::new(KernelErrorCode::StorageFailure, format!("{context}: {err}"))
 }
 
-fn asset_by_id(db: &Database, id: &str) -> Result<AssetsItem, KernelError> {
+pub(crate) fn asset_by_id(db: &Database, id: &str) -> Result<AssetsItem, KernelError> {
     let row: Option<(String, String, String, String, i64, String)> = db
         .conn()
         .query_row(

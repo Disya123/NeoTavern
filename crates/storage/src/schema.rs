@@ -350,6 +350,35 @@ macro_rules! migration_12_sql {
     };
 }
 
+/// Literal body of the themes (v13) schema migration — the
+/// `migration_13_sql!()` literal. Adds the STRICT `themes` table: the
+/// canonical Theme-SDK registry (ТЗ §5.2 theme-sdk, Этап 4 slice 6 part 2).
+/// A theme is DATA, never code: the manifest (opaque JSON) plus a
+/// content-addressed CSS asset reference (`css_asset_id` → an asset
+/// published through `assets.put` with kind `theme-css`; the kernel
+/// validates existence at install). The single `active` flag names the
+/// applied theme (uninstalling the active theme clears it — the shell falls
+/// back to the default, AGENTS.md §19: a broken theme must never block
+/// interface reset). SEC-05 trust state is recorded the same way as for
+/// plugins (themes get no access to chats, keys or the filesystem — the
+/// table stores no CSS bytes and no secrets).
+macro_rules! migration_13_sql {
+    () => {
+        r#"CREATE TABLE themes (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    version TEXT NOT NULL,
+    active INTEGER NOT NULL DEFAULT 0,
+    manifest_json TEXT NOT NULL DEFAULT '{}',
+    css_asset_id TEXT,
+    trust_state TEXT NOT NULL DEFAULT 'unsigned-untrusted',
+    publisher_key_id TEXT,
+    installed_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+) STRICT;"#
+    };
+}
+
 /// Name of the initial (v1) schema migration.
 pub const MIGRATION_1_NAME: &str = "001_initial_schema";
 
@@ -547,6 +576,22 @@ pub const MIGRATION_12_SQL: &str = migration_12_sql!();
 pub const MIGRATION_12_CHECKSUM: &str =
     "d6c71609e5e9bf2496123313a7a43151d8a9b0f98cc4082f488cfd0e2dfcfad9";
 
+/// Name of the themes (v13) schema migration.
+pub const MIGRATION_13_NAME: &str = "013_themes";
+
+/// Exact SQL of the themes schema migration (v13) — the
+/// `migration_13_sql!()` literal. Adds the STRICT `themes` registry table
+/// (ТЗ §5.2 theme-sdk, §SEC-05, Этап 4 slice 6 part 2).
+pub const MIGRATION_13_SQL: &str = migration_13_sql!();
+
+/// Lowercase sha256 hex of the `MIGRATION_13_SQL` string bytes.
+///
+/// Computed via node (`crypto.createHash('sha256')` over the exact literal
+/// bytes, no trailing newline) and asserted by the migration test suite
+/// against the ledger.
+pub const MIGRATION_13_CHECKSUM: &str =
+    "9ea93630aba3d711ecfa2b85e5240d779724970b938827634b66776e7806cb5d";
+
 /// A fresh install runs every migration in order, so `FRESH_SCHEMA_SQL` is the
 /// concatenation of all migration literals with a single newline between them
 /// (the same statement separator `execute_batch` applies).
@@ -577,7 +622,9 @@ pub const FRESH_SCHEMA_SQL: &str = concat!(
     "\n",
     migration_11_sql!(),
     "\n",
-    migration_12_sql!()
+    migration_12_sql!(),
+    "\n",
+    migration_13_sql!()
 );
 
 /// sha256 hex of the `FRESH_SCHEMA_SQL` bytes — the fresh-install fingerprint.

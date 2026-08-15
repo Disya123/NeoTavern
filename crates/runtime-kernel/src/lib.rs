@@ -43,6 +43,7 @@ pub mod providers;
 pub mod providers_config;
 pub mod secrets;
 pub mod settings;
+pub mod themes;
 pub mod tools;
 
 /// FFI ABI version this kernel implements. Must match the embedded manifest's
@@ -608,6 +609,11 @@ fn handle_unary(
         "plugins.uninstall" => with_db_opt(db, |db| plugins::plugins_uninstall(db, req)),
         "plugins.enable" => with_db_opt(db, |db| plugins::plugins_enable(db, req)),
         "plugins.disable" => with_db_opt(db, |db| plugins::plugins_disable(db, req)),
+        // Этап 4 slice 6 part 2: canonical Theme-SDK registry (SEC-05).
+        "themes.list" => with_db_opt(db, |db| themes::themes_list(db, req)),
+        "themes.install" => with_db_opt(db, |db| themes::themes_install(db, req)),
+        "themes.uninstall" => with_db_opt(db, |db| themes::themes_uninstall(db, req)),
+        "themes.activate" => with_db_opt(db, |db| themes::themes_activate(db, req)),
         // Этап 4 slice 7: canonical non-secret settings + SEC-07 diagnostics.
         "settings.get" => with_db_opt(db, |db| settings::settings_get(db, req)),
         "settings.update" => with_db_opt(db, |db| settings::settings_update(db, req)),

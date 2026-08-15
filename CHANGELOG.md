@@ -3,6 +3,26 @@
 ## Unreleased
 ### Added
 
+- **Canonical Theme-SDK registry (ТЗ §5.2 theme-sdk, §SEC-05, AGENTS.md
+  §19, M5 slice 6 part 2).** Schema v13 (STRICT `themes` table) + four new
+  wire operations (82 total): `themes.list` / `themes.install` /
+  `themes.uninstall` / `themes.activate`. A theme is DATA, never code: the
+  opaque manifest plus a content-addressed CSS asset reference
+  (`cssAssetId` published through `assets.put` with kind `theme-css`,
+  existence validated by the kernel at install — the table holds no CSS
+  bytes, no chats access and no keys). The single `active` flag names the
+  applied theme; uninstalling the ACTIVE theme clears it so the shell falls
+  back to the default (a broken theme must never block the interface
+  reset). Fail-closed rules mirror plugins: a version change that would
+  LOWER the recorded SEC-05 trust rank is rejected with the stable
+  `THEME_TRUST_DOWNGRADE` product code, same id+version re-install is
+  idempotent, install never activates (activation is an explicit separate
+  consent), uninstall/activate of an unknown theme is `THEME_NOT_FOUND`.
+  5 kernel tests (`kernel_themes.rs`); the diagnostics `schemaRevision`
+  assertion now reads `neotavern_storage::CURRENT_SCHEMA` instead of a
+  hard-coded revision. Capability matrix `ui.themes` updated (wireOps +
+  notes); legacy theme routes and the Theme SDK v1 translation remain
+  slice 6 part 3.
 - **Canonical Extensions-context registry (ТЗ §8.1 Extensions, §SEC-05,
   ARC-08, M5 slice 6 part 1).** Schema v12 (STRICT `plugins` table) + five
   new wire operations (78 total): `plugins.list` /

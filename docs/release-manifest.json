@@ -2,17 +2,17 @@
   "formatVersion": 1,
   "capabilities": [
     {
-      "id": "meta.get",
-      "title": "Kernel handshake / meta",
-      "wireOps": ["meta.get"],
+      "id": "backups",
+      "title": "Backup create/list",
+      "wireOps": ["backups.create", "backups.list"],
       "hosts": {
         "desktop": "Integrated",
-        "headless": "Integrated",
-        "android": "Integrated",
-        "webClient": "Integrated"
+        "headless": "Implemented",
+        "android": "Implemented",
+        "webClient": "Implemented"
       },
-      "notes": "Exact local handshake (schemaHash + FFI ABI) enforced at kernel open; exercised by desktop smoke and JNI bridge.",
-      "milestone": "M0"
+      "notes": "Backup containers (manifest, checksums, atomic publish); restore + activation journal is M3.",
+      "milestone": "M3"
     },
     {
       "id": "characters.crud",
@@ -88,6 +88,45 @@
       "milestone": "M5"
     },
     {
+      "id": "compat.authority-boundary",
+      "title": "Legacy compatibility authority boundary (ARC-11)",
+      "wireOps": [],
+      "hosts": {
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "android": "Designed",
+        "webClient": "Implemented"
+      },
+      "notes": "M1 Wave 1 (ТЗ §14.2, ADR-0039): per-legacy-API authority map shipped as packages/legacy-compat/COMPATIBILITY.md and enforced by apps/server/test/legacyAuthority.spec.ts — legacy Express routers are confined to /api/plugins/{id}/... (core /api/v2 routes are never shadowed), extension settings are namespaced per installed plugin with a 1 MiB bound, and the scoped plugin VFS is wired to <data-root>/plugins/{id}/data with ../ and backslash escapes rejected and files.plugin required (PLUGIN_PERMISSION_DENIED without the grant).",
+      "milestone": "M1"
+    },
+    {
+      "id": "generation.prompt.plan",
+      "title": "Prompt pipeline: durable PromptPlan (history/character/lorebook/token budget)",
+      "wireOps": ["generation.prompt.plan"],
+      "hosts": {
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "android": "Implemented",
+        "webClient": "Implemented"
+      },
+      "notes": "Kernel pipeline (ТЗ §9.1–§9.2, Этап 2.6): every generation run builds an immutable PromptPlan (character/persona system blocks from the card incl. ext_json.personality, lorebook keyword activation with constant/selective rules, last 128 non-tool history messages, heuristic-v1 approximate token budget with response-room reservation and oldest-unpinned truncation recording every excluded message id), stores it in prompt_plans (schema migration 5) and passes the instruct-neutral message array to adapters via ProviderRequest.messages — the OpenAI adapter serializes it verbatim. generation.prompt.plan (app.read) serves the stored plan; stable PROMPT_PLAN_FAILED / PROMPT_PLAN_NOT_FOUND. Tests: 5 unit + 2 kernel integration + 1 adapter. Honest boundaries: approximate tokenizer (model-specific registry pending), instruct template rendering deferred, lorebook character-scoping awaits the lorebook cutover.",
+      "milestone": "M2"
+    },
+    {
+      "id": "generation.tool-loop",
+      "title": "Durable run/step journal + tool-call loop (waiting_for_tool)",
+      "wireOps": ["generation.tools.list", "generation.tool.result"],
+      "hosts": {
+        "desktop": "Integrated",
+        "headless": "Implemented",
+        "android": "Implemented",
+        "webClient": "Implemented"
+      },
+      "notes": "Этап 2.7 (ТЗ §8.3): the kernel journals every generation step in generation_steps (migration 6: ALTER TABLE generation_runs ADD COLUMN pending_tool_call_json + generation_steps table, no rebuild) and streams generation.step events (provider_turn/tool_call/tool_result/final_commit). A provider turn emitting a tool call is validated against the declarative tool registry (capability + minimal JSON-Schema argument check) and durably transitions the run to waiting_for_tool — a DERIVED wire status from the pending marker (DB status stays streaming; the v3 CHECK is untouched). The kernel NEVER executes tools: the host performs the effect and submits generation.tool.result, which journals the tool_result step, clears the marker and resumes the provider turn with the assistant tool_calls + tool-role messages. Stable terminal codes: TOOL_NOT_FOUND / TOOL_ARGS_INVALID / TOOL_LOOP_LIMIT (8 calls max) / TOOL_RESULT_STALE (non-idempotent submission). M5 slice 4 adds CAPABILITY_UNAVAILABLE pre-negotiation (ТЗ §9.3): a run whose provider does not declare tool support fails with CAPABILITY_UNAVAILABLE before any network request instead of silently degrading to a no-tools turn; new wire error code, kernel_capability_negotiation.rs (3 integration tests: honest providers.list declarations, fail-before-generate probe, tools-capable pass-through). Crash-at-wait: fresh lease survives a reopen and the result still resumes; expired lease → interrupted (retry-safe). Этап 2.8: waiting-run cancel/retry — generation.cancel finalizes cancelled itself for a waiting run (no live executor) and every terminal writer clears the pending marker; retry from a cancelled waiting run starts attempt 2; retry on a still-waiting run is GENERATION_RUN_STATE_CONFLICT. Tools register via Kernel::register_tool; generation.tools.list (app.read) serves the registry. Tests: 7 tools.rs unit + 2 fake unit + 2 adapter + 10 tool_loop.rs kernel integration + 1 providers_openai tool round trip + 1 storage migration test. Этап 2.9: desktop host Integrated — the packaged kernel smoke registers a tool and completes a full waiting_for_tool → tool.result round trip over the real Tauri host path (NEOTA_DESKTOP_SMOKE=1); the host seam KernelHost::register_tool was added, and both Tauri-local and remote-http stream pollers now close the consumer stream when a run durably waits (previously an unbounded poll loop). Honest boundary: JSON-Schema validation covers a documented subset (object/required/additionalProperties + scalar/array/object types); the full schema engine is a follow-up. Этап 2.10: the facade exposes `generation.tools.list` / `generation.tool.result` on every NeoBackend implementation (LocalBackend over the wire; LegacyBackend honest UnsupportedError — no legacy route; RemoteBackend over the SDK); the UI has no tool surface yet — tool UX (step rendering, waiting_for_tool state, result submission) is Этап 4.",
+      "milestone": "M2"
+    },
+    {
       "id": "generation.workflow",
       "title": "Generation workflow (stream, cancel, retry, keep, discard)",
       "wireOps": [
@@ -109,87 +148,17 @@
       "milestone": "M2"
     },
     {
-      "id": "providers.list",
-      "title": "Provider catalog read",
-      "wireOps": ["providers.list"],
+      "id": "library.assets",
+      "title": "Content-addressed asset store (put/get/content/delete, avatar linkage)",
+      "wireOps": ["assets.put", "assets.get", "assets.content", "assets.delete"],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
-        "android": "Implemented",
+        "android": "Designed",
         "webClient": "Implemented"
       },
-      "notes": "Kernel op exists; provider configuration without secrets in DB is delivered (providers.config.*). M5 slice 4: every provider DTO now carries the adapter's honest capability declaration (wire.provider.capabilities: tools/vision/thinking/jsonMode/streaming) so the UI can pre-negotiate without guessing; the kernel generation path enforces the same declaration — a run that would send tool calls to a provider without tool support fails with CAPABILITY_UNAVAILABLE before any network request (kernel_capability_negotiation.rs proves generate is never invoked).",
-      "milestone": "M2"
-    },
-    {
-      "id": "providers.config",
-      "title": "Provider configuration (secrets out of the DB)",
-      "wireOps": [
-        "providers.config.set",
-        "providers.config.get",
-        "providers.config.list",
-        "providers.config.delete"
-      ],
-      "hosts": {
-        "desktop": "Implemented",
-        "headless": "Implemented",
-        "android": "Implemented",
-        "webClient": "Implemented"
-      },
-      "notes": "Kernel-owned ops with component tests (ТЗ §9.4, Этап 2.4): provider_configs rows hold non-secret config_json plus an opaque secret_ref; the API key is stored through the kernel's SecretStore seam (Kernel::set_secret_store) and never reaches the DB, the wire DTO, backups or diagnostics — get/list report only hasApiKey. Without a wired store, set with apiKey fails SECRET_UNAVAILABLE (fail-closed); delete revokes the stored secret. Hosts wire real SecretStore backends in M3 (OS vault / Keystore / portable).",
-      "milestone": "M2"
-    },
-    {
-      "id": "providers.openai",
-      "title": "OpenAI-compatible production provider",
-      "wireOps": [],
-      "hosts": {
-        "desktop": "Implemented",
-        "headless": "Implemented",
-        "android": "Implemented",
-        "webClient": "Implemented"
-      },
-      "notes": "Adapter crate (ТЗ §9.3, Этап 2.5) with 14 unit + 4 kernel integration tests: chat-completions streaming over a minimal blocking HTTP/1.1 client with rustls TLS (OS trust store), bounded SSE reads (SEC-04), normalized errors. API key resolved at execution time from the config's secret_ref through the SecretResolver seam (Kernel::set_secret_resolver) and passed via ProviderRequest::api_key — only in the Authorization header, never in body/DB/logs; missing resolver fails closed. Registration via the new Kernel::register_provider seam; config instance selection in the run model. Этап 2.7: serializes declared tools (function schema) and the resumed-turn tool context (assistant tool_calls + tool-role result), accumulates SSE tool_calls deltas into normalized ProviderEvent::ToolCall. Этап 2.8: kernel integration test drives the full tool round trip over the real SSE path — turn 1 streams a normalized tool call, the kernel validates and durably waits, generation.tool.result resumes turn 2 with the tool context, the run completes with exactly one assistant message; both HTTP bodies are asserted (tools serialization + resumed tool_call_id). M5 slice 4: the adapter declares its honest capabilities (tools/streaming true; vision/thinking/jsonMode false — no silent downgrade) via the new ProviderAdapter::capabilities port method; wire.provider.capabilities surfaces it in providers.list. The Anthropic adapter remains the documented TS-side SDK exception (packages/provider-sdk), legacy contour — the canonical plane has no Rust Anthropic adapter yet, and capability declaration makes that absence honest at the list surface.",
-      "milestone": "M2"
-    },
-    {
-      "id": "generation.tool-loop",
-      "title": "Durable run/step journal + tool-call loop (waiting_for_tool)",
-      "wireOps": ["generation.tools.list", "generation.tool.result"],
-      "hosts": {
-        "desktop": "Integrated",
-        "headless": "Implemented",
-        "android": "Implemented",
-        "webClient": "Implemented"
-      },
-      "notes": "Этап 2.7 (ТЗ §8.3): the kernel journals every generation step in generation_steps (migration 6: ALTER TABLE generation_runs ADD COLUMN pending_tool_call_json + generation_steps table, no rebuild) and streams generation.step events (provider_turn/tool_call/tool_result/final_commit). A provider turn emitting a tool call is validated against the declarative tool registry (capability + minimal JSON-Schema argument check) and durably transitions the run to waiting_for_tool — a DERIVED wire status from the pending marker (DB status stays streaming; the v3 CHECK is untouched). The kernel NEVER executes tools: the host performs the effect and submits generation.tool.result, which journals the tool_result step, clears the marker and resumes the provider turn with the assistant tool_calls + tool-role messages. Stable terminal codes: TOOL_NOT_FOUND / TOOL_ARGS_INVALID / TOOL_LOOP_LIMIT (8 calls max) / TOOL_RESULT_STALE (non-idempotent submission). M5 slice 4 adds CAPABILITY_UNAVAILABLE pre-negotiation (ТЗ §9.3): a run whose provider does not declare tool support fails with CAPABILITY_UNAVAILABLE before any network request instead of silently degrading to a no-tools turn; new wire error code, kernel_capability_negotiation.rs (3 integration tests: honest providers.list declarations, fail-before-generate probe, tools-capable pass-through). Crash-at-wait: fresh lease survives a reopen and the result still resumes; expired lease → interrupted (retry-safe). Этап 2.8: waiting-run cancel/retry — generation.cancel finalizes cancelled itself for a waiting run (no live executor) and every terminal writer clears the pending marker; retry from a cancelled waiting run starts attempt 2; retry on a still-waiting run is GENERATION_RUN_STATE_CONFLICT. Tools register via Kernel::register_tool; generation.tools.list (app.read) serves the registry. Tests: 7 tools.rs unit + 2 fake unit + 2 adapter + 10 tool_loop.rs kernel integration + 1 providers_openai tool round trip + 1 storage migration test. Этап 2.9: desktop host Integrated — the packaged kernel smoke registers a tool and completes a full waiting_for_tool → tool.result round trip over the real Tauri host path (NEOTA_DESKTOP_SMOKE=1); the host seam KernelHost::register_tool was added, and both Tauri-local and remote-http stream pollers now close the consumer stream when a run durably waits (previously an unbounded poll loop). Honest boundary: JSON-Schema validation covers a documented subset (object/required/additionalProperties + scalar/array/object types); the full schema engine is a follow-up. Этап 2.10: the facade exposes `generation.tools.list` / `generation.tool.result` on every NeoBackend implementation (LocalBackend over the wire; LegacyBackend honest UnsupportedError — no legacy route; RemoteBackend over the SDK); the UI has no tool surface yet — tool UX (step rendering, waiting_for_tool state, result submission) is Этап 4.",
-      "milestone": "M2"
-    },
-    {
-      "id": "generation.prompt.plan",
-      "title": "Prompt pipeline: durable PromptPlan (history/character/lorebook/token budget)",
-      "wireOps": ["generation.prompt.plan"],
-      "hosts": {
-        "desktop": "Implemented",
-        "headless": "Implemented",
-        "android": "Implemented",
-        "webClient": "Implemented"
-      },
-      "notes": "Kernel pipeline (ТЗ §9.1–§9.2, Этап 2.6): every generation run builds an immutable PromptPlan (character/persona system blocks from the card incl. ext_json.personality, lorebook keyword activation with constant/selective rules, last 128 non-tool history messages, heuristic-v1 approximate token budget with response-room reservation and oldest-unpinned truncation recording every excluded message id), stores it in prompt_plans (schema migration 5) and passes the instruct-neutral message array to adapters via ProviderRequest.messages — the OpenAI adapter serializes it verbatim. generation.prompt.plan (app.read) serves the stored plan; stable PROMPT_PLAN_FAILED / PROMPT_PLAN_NOT_FOUND. Tests: 5 unit + 2 kernel integration + 1 adapter. Honest boundaries: approximate tokenizer (model-specific registry pending), instruct template rendering deferred, lorebook character-scoping awaits the lorebook cutover.",
-      "milestone": "M2"
-    },
-    {
-      "id": "backups",
-      "title": "Backup create/list",
-      "wireOps": ["backups.create", "backups.list"],
-      "hosts": {
-        "desktop": "Integrated",
-        "headless": "Implemented",
-        "android": "Implemented",
-        "webClient": "Implemented"
-      },
-      "notes": "Backup containers (manifest, checksums, atomic publish); restore + activation journal is M3.",
-      "milestone": "M3"
+      "notes": "Этап 4 slice 5 remainder (ТЗ §5.1 AssetStore port, AGENTS.md §11/§12): canonical assets over Product Wire (73 ops total). assets.put publishes immutable bytes under a content-derived managed key <kind>/<sha256>[.<ext>] via the crash-safe neotavern_storage::assets publisher (temp-write + sync + atomic rename + registry INSERT, symlink-safe resolution, orphan GC) and is an idempotent re-import — identical bytes under the same kind return the existing record with deduplicated:true (AGENTS.md: import must not create duplicates). assets.get returns metadata, assets.content returns the ORIGINAL bytes base64 (never lossy; the 4 MiB wire response limit caps the servable size, larger assets are addressed by relativeKey through host transports), assets.delete removes the registry row first (orphan GC covers the file). Avatar linkage is now writable: characters.create/update accept avatarAssetId and the kernel verifies the asset exists (stable ASSET_NOT_FOUND). Thumbnail CACHE generation (AGENTS.md §12 rules 4-9) remains the web/legacy side — the canonical plane deliberately has no image codec dependency; the thumbnail key contract (<original hash>+<size>+<algorithm version>, never regenerating when the key is unchanged) is documented and tracked within slice 5 remainder. 5 kernel tests cover round-trip, dedupe, avatar linkage, delete->not-found and validation.",
+      "milestone": "M5"
     },
     {
       "id": "lorebooks.crud",
@@ -215,25 +184,6 @@
       "milestone": "M4"
     },
     {
-      "id": "presets.crud",
-      "title": "Preset CRUD",
-      "wireOps": [
-        "presets.list",
-        "presets.get",
-        "presets.create",
-        "presets.update",
-        "presets.delete"
-      ],
-      "hosts": {
-        "desktop": "Integrated",
-        "headless": "Implemented",
-        "android": "Implemented",
-        "webClient": "Implemented"
-      },
-      "notes": "Этап 4 slice 3: full preset CRUD in the kernel through Product Wire (presets.list/get/create/update/delete) backed by the STRICT presets table with kind (schema migration 9). The legacy kind pattern `^[a-z0-9][a-z0-9-]*$` is part of the wire contract; duplicate (kind,name) → stable PRESET_CONFLICT (Conflict class) pre-checked outside the transaction. Presets are created with kind; the pre-existing legacy presets rows (kind from the source table, name/data/settings_json) convert in the legacy→kernel migration. Desktop Integrated via the facade `apps/web/src/api/wireBridge.ts`: the preset hooks (usePresets/useCreatePreset/useUpdatePreset/useDeletePreset) route through the wire ops in kernel mode with honest wire→UI translation (RFC 3339 → epoch-ms), powering the existing GenerationPresetEditor and PromptTemplateEditor panels; browser/sidecar mode keeps the legacy /api/v2/presets routes via LegacyBackend (ms timestamps mapped to RFC 3339). Honest boundary: preset data is opaque JSON — no per-field validation beyond the wire size limits.",
-      "milestone": "M5"
-    },
-    {
       "id": "memories.crud",
       "title": "Memory CRUD (ТЗ §4.4)",
       "wireOps": ["memories.list", "memories.create", "memories.update", "memories.delete"],
@@ -245,6 +195,19 @@
       },
       "notes": "Этап 4 slice 3: memory CRUD in the kernel through Product Wire (memories.list/create/update/delete) backed by the STRICT memories table with scope/keys/content/enabled/position/metadata (schema migration 9). Character-scoped create requires characterId (unknown character → CHARACTER_NOT_FOUND); list filters scope/characterId/enabled and orders by position, created_at, id. Legacy→kernel migration maps the memories table (scope validated, dangling character_id preserved — no FK by design). Facade: NeoBackend.memories + LegacyBackend over /api/v2/memories + web hooks (useMemories/useCreateMemory/useUpdateMemory/useDeleteMemory) route through the wire ops in kernel mode. Prompt integration (same slice): the kernel prompt plan injects keyword-activated memory blocks scoped to the chat's character as source:'memory' system blocks (honest memory-keyword-v1 heuristic — the kernel has no FTS yet; memories_fts is not converted; semantic/vector retrieval stays a later slice). The memory settings editor UI (MemoryEditor tab in AI settings) delivers CRUD: content/keys/scope/character picker/enabled toggle + delete confirm (component tests 2/2). Honest boundaries: the wire DTO cannot express `characterId: null` (un-scoping is CAPABILITY_UNAVAILABLE).",
       "milestone": "M5"
+    },
+    {
+      "id": "meta.get",
+      "title": "Kernel handshake / meta",
+      "wireOps": ["meta.get"],
+      "hosts": {
+        "desktop": "Integrated",
+        "headless": "Integrated",
+        "android": "Integrated",
+        "webClient": "Integrated"
+      },
+      "notes": "Exact local handshake (schemaHash + FFI ABI) enforced at kernel open; exercised by desktop smoke and JNI bridge.",
+      "milestone": "M0"
     },
     {
       "id": "personas.crud",
@@ -266,95 +229,67 @@
       "milestone": "M4"
     },
     {
-      "id": "library.assets",
-      "title": "Content-addressed asset store (put/get/content/delete, avatar linkage)",
-      "wireOps": ["assets.put", "assets.get", "assets.content", "assets.delete"],
-      "hosts": {
-        "desktop": "Implemented",
-        "headless": "Implemented",
-        "android": "Designed",
-        "webClient": "Implemented"
-      },
-      "notes": "Этап 4 slice 5 remainder (ТЗ §5.1 AssetStore port, AGENTS.md §11/§12): canonical assets over Product Wire (73 ops total). assets.put publishes immutable bytes under a content-derived managed key <kind>/<sha256>[.<ext>] via the crash-safe neotavern_storage::assets publisher (temp-write + sync + atomic rename + registry INSERT, symlink-safe resolution, orphan GC) and is an idempotent re-import — identical bytes under the same kind return the existing record with deduplicated:true (AGENTS.md: import must not create duplicates). assets.get returns metadata, assets.content returns the ORIGINAL bytes base64 (never lossy; the 4 MiB wire response limit caps the servable size, larger assets are addressed by relativeKey through host transports), assets.delete removes the registry row first (orphan GC covers the file). Avatar linkage is now writable: characters.create/update accept avatarAssetId and the kernel verifies the asset exists (stable ASSET_NOT_FOUND). Thumbnail CACHE generation (AGENTS.md §12 rules 4-9) remains the web/legacy side — the canonical plane deliberately has no image codec dependency; the thumbnail key contract (<original hash>+<size>+<algorithm version>, never regenerating when the key is unchanged) is documented and tracked within slice 5 remainder. 5 kernel tests cover round-trip, dedupe, avatar linkage, delete->not-found and validation.",
-      "milestone": "M5"
-    },
-    {
-      "id": "ui.diagnostics",
-      "title": "Diagnostics panel (kernel section)",
-      "wireOps": ["diagnostics.export"],
+      "id": "presets.crud",
+      "title": "Preset CRUD",
+      "wireOps": [
+        "presets.list",
+        "presets.get",
+        "presets.create",
+        "presets.update",
+        "presets.delete"
+      ],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
         "android": "Implemented",
         "webClient": "Implemented"
       },
-      "notes": "First vertical slice through the NeoBackend facade; legacy sections remain on /api/v2 until M4. Delivered in M1a (Wave 0 Governance). M5 slice 7 (Этап 4.7, ТЗ §15, SEC-07): canonical diagnostics.export builds a redacted ALLOWLIST bundle — versions (app/wire/schema hash + revision + storage format + SQLite), setting count and generation-run counters (total/completed/failed/waiting), pinned redaction: 'allowlist'. Provider configs, secret refs, setting values and message content are never read (structural redaction, fail-closed by omission); kernel tests prove a sentinel secret and message token never reach the bundle.",
-      "milestone": "M1a"
+      "notes": "Этап 4 slice 3: full preset CRUD in the kernel through Product Wire (presets.list/get/create/update/delete) backed by the STRICT presets table with kind (schema migration 9). The legacy kind pattern `^[a-z0-9][a-z0-9-]*$` is part of the wire contract; duplicate (kind,name) → stable PRESET_CONFLICT (Conflict class) pre-checked outside the transaction. Presets are created with kind; the pre-existing legacy presets rows (kind from the source table, name/data/settings_json) convert in the legacy→kernel migration. Desktop Integrated via the facade `apps/web/src/api/wireBridge.ts`: the preset hooks (usePresets/useCreatePreset/useUpdatePreset/useDeletePreset) route through the wire ops in kernel mode with honest wire→UI translation (RFC 3339 → epoch-ms), powering the existing GenerationPresetEditor and PromptTemplateEditor panels; browser/sidecar mode keeps the legacy /api/v2/presets routes via LegacyBackend (ms timestamps mapped to RFC 3339). Honest boundary: preset data is opaque JSON — no per-field validation beyond the wire size limits.",
+      "milestone": "M5"
     },
     {
-      "id": "settings",
-      "title": "Non-secret settings (kernel)",
-      "wireOps": ["settings.get", "settings.update"],
+      "id": "providers.config",
+      "title": "Provider configuration (secrets out of the DB)",
+      "wireOps": [
+        "providers.config.set",
+        "providers.config.get",
+        "providers.config.list",
+        "providers.config.delete"
+      ],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
         "android": "Implemented",
         "webClient": "Implemented"
       },
-      "notes": "M5 slice 7 (Этап 4.7, ТЗ §8.1 Configuration): canonical key → JSON-object settings store backed by the STRICT settings table (schema migration 11). settings.update is a transactional upsert returning the post-update snapshot; settings.get reads a key subset or the full snapshot. Secrets never live here — provider keys are in the SecretStore (ТЗ §9.4, SEC-01); the wire DTO carries object values only (scalar preferences wrapped at the UI boundary).",
-      "milestone": "M5"
-    },
-    {
-      "id": "ui.message-editing",
-      "title": "Message edit/delete/drafts/blocks UI",
-      "wireOps": [],
-      "hosts": {
-        "desktop": "Designed",
-        "headless": "Designed",
-        "android": "Designed",
-        "webClient": "Designed"
-      },
-      "notes": "Legacy /api/v2 contour today; kernel message ops + UI cutover in M2/M4.",
-      "milestone": "M4"
-    },
-    {
-      "id": "ui.prompt-pipeline",
-      "title": "Prompt pipeline (macros, context, tokens, instruct)",
-      "wireOps": [],
-      "hosts": {
-        "desktop": "Designed",
-        "headless": "Designed",
-        "android": "Designed",
-        "webClient": "Designed"
-      },
-      "notes": "Legacy TS pipeline in apps/server; kernel crates/prompting + PromptPlan in M2.",
+      "notes": "Kernel-owned ops with component tests (ТЗ §9.4, Этап 2.4): provider_configs rows hold non-secret config_json plus an opaque secret_ref; the API key is stored through the kernel's SecretStore seam (Kernel::set_secret_store) and never reaches the DB, the wire DTO, backups or diagnostics — get/list report only hasApiKey. Without a wired store, set with apiKey fails SECRET_UNAVAILABLE (fail-closed); delete revokes the stored secret. Hosts wire real SecretStore backends in M3 (OS vault / Keystore / portable).",
       "milestone": "M2"
     },
     {
-      "id": "ui.secrets",
-      "title": "Secret management",
-      "wireOps": ["secrets.status"],
-      "hosts": {
-        "desktop": "Designed",
-        "headless": "Designed",
-        "android": "Designed",
-        "webClient": "Designed"
-      },
-      "notes": "SEC-01: backend SecretStore + portable secrets.enc delivered in the legacy contour (M1, see security.secret-store); the passphrase entry UX, auto-lock UI and OS vault / Keystore adapters remain M3; no reveal op by design. M5 slice 7 adds the canonical-plane value-free surface `secrets.status` (ТЗ §SEC-01.1): it reports the explicit mode — kind 'portable' (encrypted secrets.enc with formatVersion), 'env', 'session' (session-only) or 'unavailable' — plus persistent/writable/available flags and the record count, WITHOUT ever invoking get (a value cannot cross this DTO; the kernel test plants a sentinel in a session and a portable store and proves it never appears in the response bytes). The UI renders the honest mode state (portable encrypted / machine-bound / session-only / fail-closed unavailable) from this DTO; the passphrase-entry and auto-lock UX remain the web facade.",
-      "milestone": "M3"
-    },
-    {
-      "id": "ui.profile-export",
-      "title": "Logical profile export",
-      "wireOps": ["profile.export"],
+      "id": "providers.list",
+      "title": "Provider catalog read",
+      "wireOps": ["providers.list"],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
-        "android": "Designed",
+        "android": "Implemented",
         "webClient": "Implemented"
       },
-      "notes": "SEC-02: legacy export (apps/server/src/lib/profileExport.ts) implemented in M1 Wave 1 and hardened in Wave 2 - logical allowlist archive (format v2, snapshot transaction, explicit column allowlist verified via PRAGMA table_info, sentinel negative tests). M5 slice 5 adds the canonical-plane op profile.export over Product Wire: the kernel builds a fresh verified container under the data root's exports/ (characters/chats/messages/lorebooks/presets + optional assets via storage create_export/verify_export) and returns the verified report; provider configs and secrets are not export sections by construction and the kernel negative test proves a sentinel SecretStore value never reaches any container byte. UI/facade cutover and per-profile FK filtering (needs the canonical profiles model) remain tracked within M5.",
-      "milestone": "M5"
+      "notes": "Kernel op exists; provider configuration without secrets in DB is delivered (providers.config.*). M5 slice 4: every provider DTO now carries the adapter's honest capability declaration (wire.provider.capabilities: tools/vision/thinking/jsonMode/streaming) so the UI can pre-negotiate without guessing; the kernel generation path enforces the same declaration — a run that would send tool calls to a provider without tool support fails with CAPABILITY_UNAVAILABLE before any network request (kernel_capability_negotiation.rs proves generate is never invoked).",
+      "milestone": "M2"
+    },
+    {
+      "id": "providers.openai",
+      "title": "OpenAI-compatible production provider",
+      "wireOps": [],
+      "hosts": {
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "android": "Implemented",
+        "webClient": "Implemented"
+      },
+      "notes": "Adapter crate (ТЗ §9.3, Этап 2.5) with 14 unit + 4 kernel integration tests: chat-completions streaming over a minimal blocking HTTP/1.1 client with rustls TLS (OS trust store), bounded SSE reads (SEC-04), normalized errors. API key resolved at execution time from the config's secret_ref through the SecretResolver seam (Kernel::set_secret_resolver) and passed via ProviderRequest::api_key — only in the Authorization header, never in body/DB/logs; missing resolver fails closed. Registration via the new Kernel::register_provider seam; config instance selection in the run model. Этап 2.7: serializes declared tools (function schema) and the resumed-turn tool context (assistant tool_calls + tool-role result), accumulates SSE tool_calls deltas into normalized ProviderEvent::ToolCall. Этап 2.8: kernel integration test drives the full tool round trip over the real SSE path — turn 1 streams a normalized tool call, the kernel validates and durably waits, generation.tool.result resumes turn 2 with the tool context, the run completes with exactly one assistant message; both HTTP bodies are asserted (tools serialization + resumed tool_call_id). M5 slice 4: the adapter declares its honest capabilities (tools/streaming true; vision/thinking/jsonMode false — no silent downgrade) via the new ProviderAdapter::capabilities port method; wire.provider.capabilities surfaces it in providers.list. The Anthropic adapter remains the documented TS-side SDK exception (packages/provider-sdk), legacy contour — the canonical plane has no Rust Anthropic adapter yet, and capability declaration makes that absence honest at the list surface.",
+      "milestone": "M2"
     },
     {
       "id": "security.plugin-network",
@@ -409,21 +344,34 @@
       "milestone": "M1"
     },
     {
-      "id": "compat.authority-boundary",
-      "title": "Legacy compatibility authority boundary (ARC-11)",
-      "wireOps": [],
+      "id": "settings",
+      "title": "Non-secret settings (kernel)",
+      "wireOps": ["settings.get", "settings.update"],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
-        "android": "Designed",
+        "android": "Implemented",
         "webClient": "Implemented"
       },
-      "notes": "M1 Wave 1 (ТЗ §14.2, ADR-0039): per-legacy-API authority map shipped as packages/legacy-compat/COMPATIBILITY.md and enforced by apps/server/test/legacyAuthority.spec.ts — legacy Express routers are confined to /api/plugins/{id}/... (core /api/v2 routes are never shadowed), extension settings are namespaced per installed plugin with a 1 MiB bound, and the scoped plugin VFS is wired to <data-root>/plugins/{id}/data with ../ and backslash escapes rejected and files.plugin required (PLUGIN_PERMISSION_DENIED without the grant).",
-      "milestone": "M1"
+      "notes": "M5 slice 7 (Этап 4.7, ТЗ §8.1 Configuration): canonical key → JSON-object settings store backed by the STRICT settings table (schema migration 11). settings.update is a transactional upsert returning the post-update snapshot; settings.get reads a key subset or the full snapshot. Secrets never live here — provider keys are in the SecretStore (ТЗ §9.4, SEC-01); the wire DTO carries object values only (scalar preferences wrapped at the UI boundary).",
+      "milestone": "M5"
     },
     {
-      "id": "ui.portable-data",
-      "title": "Portable data / activation / restore",
+      "id": "ui.diagnostics",
+      "title": "Diagnostics panel (kernel section)",
+      "wireOps": ["diagnostics.export"],
+      "hosts": {
+        "desktop": "Integrated",
+        "headless": "Implemented",
+        "android": "Implemented",
+        "webClient": "Implemented"
+      },
+      "notes": "First vertical slice through the NeoBackend facade; legacy sections remain on /api/v2 until M4. Delivered in M1a (Wave 0 Governance). M5 slice 7 (Этап 4.7, ТЗ §15, SEC-07): canonical diagnostics.export builds a redacted ALLOWLIST bundle — versions (app/wire/schema hash + revision + storage format + SQLite), setting count and generation-run counters (total/completed/failed/waiting), pinned redaction: 'allowlist'. Provider configs, secret refs, setting values and message content are never read (structural redaction, fail-closed by omission); kernel tests prove a sentinel secret and message token never reach the bundle.",
+      "milestone": "M1a"
+    },
+    {
+      "id": "ui.message-editing",
+      "title": "Message edit/delete/drafts/blocks UI",
       "wireOps": [],
       "hosts": {
         "desktop": "Designed",
@@ -431,8 +379,8 @@
         "android": "Designed",
         "webClient": "Designed"
       },
-      "notes": "M3 (ADR-0041): versioned data roots (roots/root-<id>/ + active-root.json pointer), durable activation journal with prepared/validated/activation_pending/committed/rolled_back statuses, and the Windows restart-to-complete protocol (bounded transient retry, activation_pending after budget, resolve at open) implemented in neotavern_storage::activation with 21 integration tests; v1 flat layout still fully supported. The staged legacy→kernel migration in the application flow (neotavern_storage::migration: lease-locked preflight incl. disk space, verified pre-migration-* safety copy, convert into a staging versioned root, FK/current-revision validation, report, journaled commit with bounded retry, idempotent re-run, cancel-before-activation) is implemented with 19 integration tests. The migration corpus (ТЗ §17.4) covers: all released schema revisions 1..6 upgrade, future schema fails closed, corrupted DB detected, interrupted migration recovers, the REAL Drizzle layout maps completely (card fields personality/scenario/first_message/example_dialogues/system_prompt/post_history_instructions/creator/creator_notes survive into ext_json; character_tags/tags join merged into tags_json; unknown ext preserved; soft-deleted rows skipped and reported), a 1000x1000x3000 library converts with exact counts, unicode/RTL/20k-char values round-trip, and the Windows platform corpus holds a real handle without FILE_SHARE_DELETE: pointer switch exhausts the bounded retry budget, commit returns the stable recoverable ActivationPending, the next open resolves it (restart-to-complete). The CLI host flow (neotavern-cli --migrate-legacy, Этап 3 work 7-8) runs the offline converter with the kernel closed, then opens the kernel on the activated root — the canonical data-root switch is verified by product reads (13 CLI E2E tests incl. characters.get round-trip on the versioned root). Remaining Этап 3 slice: upgrade drills on packaged Windows/macOS/Linux artifacts. The upgrade drill (scripts/upgrade-drill.mjs, Этап 3 work 7) proves the cross-platform upgrade cycle on the real CLI artifact: a Drizzle-style fixture converts, characters.get returns the migrated character, the legacy database stays byte-identical (immutable source, ТЗ §10.3), re-running the migration is idempotent (one committed entry, one staging root), the pre-migration safety copy matches the source checksum, and the journal ends committed with the rollback pointer retained. PASS on Windows in this session; macOS/Linux runs gate the release branch in CI (Windows lock-contention/restart-to-complete stays covered by the Rust held-handle test). M5 slice 7 adds the canonical-plane surface for the portable secrets half: secrets.status reports kind 'portable' with the secrets.enc formatVersion when a FileEncryptedSecretStore is wired (SEC-01.1 — the UI distinguishes portable-encrypted from machine-bound/session-only/unavailable and never sees a value).",
-      "milestone": "M3"
+      "notes": "Legacy /api/v2 contour today; kernel message ops + UI cutover in M2/M4.",
+      "milestone": "M4"
     },
     {
       "id": "ui.plugins",
@@ -454,16 +402,68 @@
       "milestone": "M4"
     },
     {
-      "id": "ui.themes",
-      "title": "Themes",
+      "id": "ui.portable-data",
+      "title": "Portable data / activation / restore",
       "wireOps": [],
+      "hosts": {
+        "desktop": "Designed",
+        "headless": "Designed",
+        "android": "Designed",
+        "webClient": "Designed"
+      },
+      "notes": "M3 (ADR-0041): versioned data roots (roots/root-<id>/ + active-root.json pointer), durable activation journal with prepared/validated/activation_pending/committed/rolled_back statuses, and the Windows restart-to-complete protocol (bounded transient retry, activation_pending after budget, resolve at open) implemented in neotavern_storage::activation with 21 integration tests; v1 flat layout still fully supported. The staged legacy→kernel migration in the application flow (neotavern_storage::migration: lease-locked preflight incl. disk space, verified pre-migration-* safety copy, convert into a staging versioned root, FK/current-revision validation, report, journaled commit with bounded retry, idempotent re-run, cancel-before-activation) is implemented with 19 integration tests. The migration corpus (ТЗ §17.4) covers: all released schema revisions 1..6 upgrade, future schema fails closed, corrupted DB detected, interrupted migration recovers, the REAL Drizzle layout maps completely (card fields personality/scenario/first_message/example_dialogues/system_prompt/post_history_instructions/creator/creator_notes survive into ext_json; character_tags/tags join merged into tags_json; unknown ext preserved; soft-deleted rows skipped and reported), a 1000x1000x3000 library converts with exact counts, unicode/RTL/20k-char values round-trip, and the Windows platform corpus holds a real handle without FILE_SHARE_DELETE: pointer switch exhausts the bounded retry budget, commit returns the stable recoverable ActivationPending, the next open resolves it (restart-to-complete). The CLI host flow (neotavern-cli --migrate-legacy, Этап 3 work 7-8) runs the offline converter with the kernel closed, then opens the kernel on the activated root — the canonical data-root switch is verified by product reads (13 CLI E2E tests incl. characters.get round-trip on the versioned root). Remaining Этап 3 slice: upgrade drills on packaged Windows/macOS/Linux artifacts. The upgrade drill (scripts/upgrade-drill.mjs, Этап 3 work 7) proves the cross-platform upgrade cycle on the real CLI artifact: a Drizzle-style fixture converts, characters.get returns the migrated character, the legacy database stays byte-identical (immutable source, ТЗ §10.3), re-running the migration is idempotent (one committed entry, one staging root), the pre-migration safety copy matches the source checksum, and the journal ends committed with the rollback pointer retained. PASS on Windows in this session; macOS/Linux runs gate the release branch in CI (Windows lock-contention/restart-to-complete stays covered by the Rust held-handle test). M5 slice 7 adds the canonical-plane surface for the portable secrets half: secrets.status reports kind 'portable' with the secrets.enc formatVersion when a FileEncryptedSecretStore is wired (SEC-01.1 — the UI distinguishes portable-encrypted from machine-bound/session-only/unavailable and never sees a value).",
+      "milestone": "M3"
+    },
+    {
+      "id": "ui.profile-export",
+      "title": "Logical profile export",
+      "wireOps": ["profile.export"],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
         "android": "Designed",
         "webClient": "Implemented"
       },
-      "notes": "Theme SDK + legacy routes; cutover tracked in M4.",
+      "notes": "SEC-02: legacy export (apps/server/src/lib/profileExport.ts) implemented in M1 Wave 1 and hardened in Wave 2 - logical allowlist archive (format v2, snapshot transaction, explicit column allowlist verified via PRAGMA table_info, sentinel negative tests). M5 slice 5 adds the canonical-plane op profile.export over Product Wire: the kernel builds a fresh verified container under the data root's exports/ (characters/chats/messages/lorebooks/presets + optional assets via storage create_export/verify_export) and returns the verified report; provider configs and secrets are not export sections by construction and the kernel negative test proves a sentinel SecretStore value never reaches any container byte. UI/facade cutover and per-profile FK filtering (needs the canonical profiles model) remain tracked within M5.",
+      "milestone": "M5"
+    },
+    {
+      "id": "ui.prompt-pipeline",
+      "title": "Prompt pipeline (macros, context, tokens, instruct)",
+      "wireOps": [],
+      "hosts": {
+        "desktop": "Designed",
+        "headless": "Designed",
+        "android": "Designed",
+        "webClient": "Designed"
+      },
+      "notes": "Legacy TS pipeline in apps/server; kernel crates/prompting + PromptPlan in M2.",
+      "milestone": "M2"
+    },
+    {
+      "id": "ui.secrets",
+      "title": "Secret management",
+      "wireOps": ["secrets.status"],
+      "hosts": {
+        "desktop": "Designed",
+        "headless": "Designed",
+        "android": "Designed",
+        "webClient": "Designed"
+      },
+      "notes": "SEC-01: backend SecretStore + portable secrets.enc delivered in the legacy contour (M1, see security.secret-store); the passphrase entry UX, auto-lock UI and OS vault / Keystore adapters remain M3; no reveal op by design. M5 slice 7 adds the canonical-plane value-free surface `secrets.status` (ТЗ §SEC-01.1): it reports the explicit mode — kind 'portable' (encrypted secrets.enc with formatVersion), 'env', 'session' (session-only) or 'unavailable' — plus persistent/writable/available flags and the record count, WITHOUT ever invoking get (a value cannot cross this DTO; the kernel test plants a sentinel in a session and a portable store and proves it never appears in the response bytes). The UI renders the honest mode state (portable encrypted / machine-bound / session-only / fail-closed unavailable) from this DTO; the passphrase-entry and auto-lock UX remain the web facade.",
+      "milestone": "M3"
+    },
+    {
+      "id": "ui.themes",
+      "title": "Themes",
+      "wireOps": ["themes.list", "themes.install", "themes.uninstall", "themes.activate"],
+      "hosts": {
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "android": "Designed",
+        "webClient": "Implemented"
+      },
+      "notes": "Этап 4 slice 6 part 2 (M5): canonical Theme-SDK registry over Product Wire (82 ops total) — schema v13 STRICT themes table + 4 ops. A theme is DATA, never code: opaque manifest + content-addressed CSS asset reference (cssAssetId published via assets.put kind theme-css, existence validated at install — the table holds no CSS bytes, no chats access, no keys, AGENTS.md §19). Single active flag names the applied theme; uninstalling the ACTIVE theme clears it so the shell falls back to the default (a broken theme must never block interface reset). Fail-closed mirrors plugins: version change that would LOWER the recorded SEC-05 trust rank is rejected (stable THEME_TRUST_DOWNGRADE product code), same id+version re-install idempotent, install never activates (activation is an explicit consent), unknown uninstall/activate is THEME_NOT_FOUND. Legacy theme routes + theme SDK v1 translation remain slice 6 part 3. 5 kernel tests (kernel_themes.rs).",
       "milestone": "M4"
     },
     {

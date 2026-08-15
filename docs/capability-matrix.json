@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-08-15T14:54:07.727Z",
+  "generatedAt": "2026-08-15T15:13:51.190Z",
   "rows": [
     {
       "hosts": {
@@ -469,9 +469,9 @@
       },
       "id": "ui.themes",
       "milestone": "M4",
-      "notes": "Theme SDK + legacy routes; cutover tracked in M4.",
+      "notes": "Этап 4 slice 6 part 2 (M5): canonical Theme-SDK registry over Product Wire (82 ops total) — schema v13 STRICT themes table + 4 ops. A theme is DATA, never code: opaque manifest + content-addressed CSS asset reference (cssAssetId published via assets.put kind theme-css, existence validated at install — the table holds no CSS bytes, no chats access, no keys, AGENTS.md §19). Single active flag names the applied theme; uninstalling the ACTIVE theme clears it so the shell falls back to the default (a broken theme must never block interface reset). Fail-closed mirrors plugins: version change that would LOWER the recorded SEC-05 trust rank is rejected (stable THEME_TRUST_DOWNGRADE product code), same id+version re-install idempotent, install never activates (activation is an explicit consent), unknown uninstall/activate is THEME_NOT_FOUND. Legacy theme routes + theme SDK v1 translation remain slice 6 part 3. 5 kernel tests (kernel_themes.rs).",
       "title": "Themes",
-      "wireOps": []
+      "wireOps": ["themes.activate", "themes.install", "themes.list", "themes.uninstall"]
     },
     {
       "hosts": {

@@ -71,6 +71,10 @@ pub fn operation_request_limit(operation_id: &str) -> Option<u64> {
         "plugins.uninstall" => Some(1024),
         "plugins.enable" => Some(1024),
         "plugins.disable" => Some(1024),
+        "themes.list" => Some(1024),
+        "themes.install" => Some(65536),
+        "themes.uninstall" => Some(1024),
+        "themes.activate" => Some(1024),
         "settings.get" => Some(4096),
         "settings.update" => Some(65536),
         "diagnostics.export" => Some(1024),
@@ -157,6 +161,10 @@ pub fn operation_response_limit(operation_id: &str) -> Option<u64> {
         "plugins.uninstall" => Some(1024),
         "plugins.enable" => Some(262144),
         "plugins.disable" => Some(262144),
+        "themes.list" => Some(262144),
+        "themes.install" => Some(262144),
+        "themes.uninstall" => Some(1024),
+        "themes.activate" => Some(262144),
         "settings.get" => Some(262144),
         "settings.update" => Some(262144),
         "diagnostics.export" => Some(262144),
@@ -5107,6 +5115,508 @@ pub fn validate_request_plugins_disable(value: &Value) -> Result<(), Vec<Issue>>
 
 pub fn decode_request_plugins_disable(bytes: &[u8]) -> Result<RequestPluginsDisable, WireError> {
     crate::decode::<RequestPluginsDisable>(validate_request_plugins_disable, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ThemesItem {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub active: bool,
+    #[serde(rename = "trustState")]
+    pub trust_state: String,
+    #[serde(rename = "publisherKeyId", default, skip_serializing_if = "Option::is_none")]
+    pub publisher_key_id: Option<String>,
+    #[serde(rename = "cssAssetId", default, skip_serializing_if = "Option::is_none")]
+    pub css_asset_id: Option<String>,
+    #[serde(rename = "installedAt")]
+    pub installed_at: String,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub manifest: Option<Value>,
+}
+
+pub(crate) fn check_themes_item(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{1,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_2: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_3: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("id").is_none() {
+            issues.push(Issue::new(join_path(path, "id"), "RequiredProperty"));
+        }
+        if value.get("name").is_none() {
+            issues.push(Issue::new(join_path(path, "name"), "RequiredProperty"));
+        }
+        if value.get("version").is_none() {
+            issues.push(Issue::new(join_path(path, "version"), "RequiredProperty"));
+        }
+        if value.get("active").is_none() {
+            issues.push(Issue::new(join_path(path, "active"), "RequiredProperty"));
+        }
+        if value.get("trustState").is_none() {
+            issues.push(Issue::new(join_path(path, "trustState"), "RequiredProperty"));
+        }
+        if value.get("installedAt").is_none() {
+            issues.push(Issue::new(join_path(path, "installedAt"), "RequiredProperty"));
+        }
+        if value.get("updatedAt").is_none() {
+            issues.push(Issue::new(join_path(path, "updatedAt"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("id") {
+            let child_path = join_path(path, "id");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("name") {
+            let child_path = join_path(path, "name");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 128 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("version") {
+            let child_path = join_path(path, "version");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 64 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("active") {
+            let child_path = join_path(path, "active");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(child) = value.get("trustState") {
+            let child_path = join_path(path, "trustState");
+            match child.as_str() {
+                Some(s) => {
+                    if !matches!(s, "built-in" | "verified-publisher" | "locally-trusted" | "unsigned-untrusted") {
+                        issues.push(Issue::new(child_path.as_str(), "Union"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("publisherKeyId") {
+            let child_path = join_path(path, "publisherKeyId");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 128 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("cssAssetId") {
+            let child_path = join_path(path, "cssAssetId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("installedAt") {
+            let child_path = join_path(path, "installedAt");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_2.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("updatedAt") {
+            let child_path = join_path(path, "updatedAt");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_3.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("manifest") {
+            let child_path = join_path(path, "manifest");
+            if !child.is_object() {
+                issues.push(Issue::new(child_path.as_str(), "Object"));
+            } else {
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "id" | "name" | "version" | "active" | "trustState" | "publisherKeyId" | "cssAssetId" | "installedAt" | "updatedAt" | "manifest") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_themes_item(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_themes_item(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_themes_item(bytes: &[u8]) -> Result<ThemesItem, WireError> {
+    crate::decode::<ThemesItem>(validate_themes_item, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultThemesList {
+    pub items: Vec<ThemesItem>,
+}
+
+pub(crate) fn check_result_themes_list(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("items").is_none() {
+            issues.push(Issue::new(join_path(path, "items"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("items") {
+            let child_path = join_path(path, "items");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                if arr.len() > 256 {
+                    issues.push(Issue::new(child_path.as_str(), "ArrayMaxItems"));
+                }
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    check_themes_item(item, &item_path, issues);
+                }
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "items") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_themes_list(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_themes_list(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_themes_list(bytes: &[u8]) -> Result<ResultThemesList, WireError> {
+    crate::decode::<ResultThemesList>(validate_result_themes_list, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestThemesInstall {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    #[serde(rename = "trustState")]
+    pub trust_state: String,
+    #[serde(rename = "publisherKeyId", default, skip_serializing_if = "Option::is_none")]
+    pub publisher_key_id: Option<String>,
+    #[serde(rename = "cssAssetId", default, skip_serializing_if = "Option::is_none")]
+    pub css_asset_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub manifest: Option<Value>,
+}
+
+pub(crate) fn check_request_themes_install(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{1,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("id").is_none() {
+            issues.push(Issue::new(join_path(path, "id"), "RequiredProperty"));
+        }
+        if value.get("name").is_none() {
+            issues.push(Issue::new(join_path(path, "name"), "RequiredProperty"));
+        }
+        if value.get("version").is_none() {
+            issues.push(Issue::new(join_path(path, "version"), "RequiredProperty"));
+        }
+        if value.get("trustState").is_none() {
+            issues.push(Issue::new(join_path(path, "trustState"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("id") {
+            let child_path = join_path(path, "id");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("name") {
+            let child_path = join_path(path, "name");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 128 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("version") {
+            let child_path = join_path(path, "version");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 64 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("trustState") {
+            let child_path = join_path(path, "trustState");
+            match child.as_str() {
+                Some(s) => {
+                    if !matches!(s, "built-in" | "verified-publisher" | "locally-trusted" | "unsigned-untrusted") {
+                        issues.push(Issue::new(child_path.as_str(), "Union"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("publisherKeyId") {
+            let child_path = join_path(path, "publisherKeyId");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 128 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("cssAssetId") {
+            let child_path = join_path(path, "cssAssetId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("manifest") {
+            let child_path = join_path(path, "manifest");
+            if !child.is_object() {
+                issues.push(Issue::new(child_path.as_str(), "Object"));
+            } else {
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "id" | "name" | "version" | "trustState" | "publisherKeyId" | "cssAssetId" | "manifest") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_themes_install(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_themes_install(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_themes_install(bytes: &[u8]) -> Result<RequestThemesInstall, WireError> {
+    crate::decode::<RequestThemesInstall>(validate_request_themes_install, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultThemesInstall {
+    pub theme: ThemesItem,
+}
+
+pub(crate) fn check_result_themes_install(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("theme").is_none() {
+            issues.push(Issue::new(join_path(path, "theme"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("theme") {
+            let child_path = join_path(path, "theme");
+            check_themes_item(child, &child_path, issues);
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "theme") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_themes_install(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_themes_install(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_themes_install(bytes: &[u8]) -> Result<ResultThemesInstall, WireError> {
+    crate::decode::<ResultThemesInstall>(validate_result_themes_install, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestThemesUninstall {
+    pub id: String,
+}
+
+pub(crate) fn check_request_themes_uninstall(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{1,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("id").is_none() {
+            issues.push(Issue::new(join_path(path, "id"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("id") {
+            let child_path = join_path(path, "id");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "id") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_themes_uninstall(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_themes_uninstall(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_themes_uninstall(bytes: &[u8]) -> Result<RequestThemesUninstall, WireError> {
+    crate::decode::<RequestThemesUninstall>(validate_request_themes_uninstall, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestThemesActivate {
+    pub id: String,
+}
+
+pub(crate) fn check_request_themes_activate(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z][a-z0-9-]{1,63}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("id").is_none() {
+            issues.push(Issue::new(join_path(path, "id"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("id") {
+            let child_path = join_path(path, "id");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "id") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_themes_activate(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_themes_activate(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_themes_activate(bytes: &[u8]) -> Result<RequestThemesActivate, WireError> {
+    crate::decode::<RequestThemesActivate>(validate_request_themes_activate, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -1853,6 +1853,95 @@ export const DisablePluginRequestDtoSchema = Type.Object(
 export type DisablePluginRequestDto = Static<typeof DisablePluginRequestDtoSchema>;
 
 /**
+ * Theme DTO (`wire.themes.item`) — the DURABLE lifecycle state of one
+ * installed theme (ТЗ §5.2 theme-sdk, §SEC-05, Этап 4 slice 6 part 2). A
+ * theme is DATA, never code: the opaque manifest plus a content-addressed
+ * CSS asset reference (`cssAssetId` → an asset published through
+ * `assets.put` with kind `theme-css`, existence validated by the kernel at
+ * install). The single `active` flag names the applied theme; uninstalling
+ * the active theme clears it so the shell falls back to the default
+ * (AGENTS.md §19: a broken theme must never block the interface reset).
+ * SEC-05 trust state is recorded like for plugins; the row holds no CSS
+ * bytes, no chats access, no keys (AGENTS.md §19).
+ */
+export const ThemeDtoSchema = Type.Object(
+  {
+    id: Type.String({ pattern: '^[a-z][a-z0-9-]{1,63}$' }),
+    name: Type.String({ minLength: 1, maxLength: 128 }),
+    version: Type.String({ minLength: 1, maxLength: 64 }),
+    active: Type.Boolean(),
+    trustState: PluginTrustStateSchema,
+    publisherKeyId: Type.Optional(Type.String({ minLength: 1, maxLength: 128 })),
+    cssAssetId: Type.Optional(Type.String({ format: 'uuid' })),
+    installedAt: Type.String({ format: 'rfc3339' }),
+    updatedAt: Type.String({ format: 'rfc3339' }),
+    manifest: Type.Optional(Type.Object({}, { additionalProperties: true })),
+  },
+  { $id: 'wire.themes.item', additionalProperties: false },
+);
+export type ThemeDto = Static<typeof ThemeDtoSchema>;
+
+/** Theme list result (`wire.result.themes.list`). */
+export const ListThemesResultDtoSchema = Type.Object(
+  {
+    items: Type.Array(ThemeDtoSchema, { maxItems: 256 }),
+  },
+  { $id: 'wire.result.themes.list', additionalProperties: false },
+);
+export type ListThemesResultDto = Static<typeof ListThemesResultDtoSchema>;
+
+/**
+ * Theme install request (`wire.request.themes.install`). Like
+ * `plugins.install`: the host has ALREADY verified the package (SEC-05)
+ * and published the CSS through `assets.put` (kind `theme-css`) before
+ * this op runs; the kernel durably records the verified trust state and
+ * version. Re-installing the same id+version is idempotent; a version
+ * change that would LOWER the recorded trust rank is rejected (Conflict).
+ * Install never activates a theme — activation is an explicit separate
+ * consent.
+ */
+export const InstallThemeRequestDtoSchema = Type.Object(
+  {
+    id: Type.String({ pattern: '^[a-z][a-z0-9-]{1,63}$' }),
+    name: Type.String({ minLength: 1, maxLength: 128 }),
+    version: Type.String({ minLength: 1, maxLength: 64 }),
+    trustState: PluginTrustStateSchema,
+    publisherKeyId: Type.Optional(Type.String({ minLength: 1, maxLength: 128 })),
+    cssAssetId: Type.Optional(Type.String({ format: 'uuid' })),
+    manifest: Type.Optional(Type.Object({}, { additionalProperties: true })),
+  },
+  { $id: 'wire.request.themes.install', additionalProperties: false },
+);
+export type InstallThemeRequestDto = Static<typeof InstallThemeRequestDtoSchema>;
+
+/** Theme install result (`wire.result.themes.install`). */
+export const InstallThemeResultDtoSchema = Type.Object(
+  {
+    theme: ThemeDtoSchema,
+  },
+  { $id: 'wire.result.themes.install', additionalProperties: false },
+);
+export type InstallThemeResultDto = Static<typeof InstallThemeResultDtoSchema>;
+
+/** Theme uninstall request (`wire.request.themes.uninstall`). */
+export const UninstallThemeRequestDtoSchema = Type.Object(
+  {
+    id: Type.String({ pattern: '^[a-z][a-z0-9-]{1,63}$' }),
+  },
+  { $id: 'wire.request.themes.uninstall', additionalProperties: false },
+);
+export type UninstallThemeRequestDto = Static<typeof UninstallThemeRequestDtoSchema>;
+
+/** Theme activate request (`wire.request.themes.activate`). */
+export const ActivateThemeRequestDtoSchema = Type.Object(
+  {
+    id: Type.String({ pattern: '^[a-z][a-z0-9-]{1,63}$' }),
+  },
+  { $id: 'wire.request.themes.activate', additionalProperties: false },
+);
+export type ActivateThemeRequestDto = Static<typeof ActivateThemeRequestDtoSchema>;
+
+/**
  * Every wire schema keyed by its `$id` (schemaId): all DTOs plus the error
  * DTO, the message role union and the three envelopes. This is the complete
  * schema registry the codegen tool and `compileWireContract` operate on.
@@ -1906,6 +1995,12 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.request.plugins.uninstall': UninstallPluginRequestDtoSchema,
   'wire.request.plugins.enable': EnablePluginRequestDtoSchema,
   'wire.request.plugins.disable': DisablePluginRequestDtoSchema,
+  'wire.themes.item': ThemeDtoSchema,
+  'wire.result.themes.list': ListThemesResultDtoSchema,
+  'wire.request.themes.install': InstallThemeRequestDtoSchema,
+  'wire.result.themes.install': InstallThemeResultDtoSchema,
+  'wire.request.themes.uninstall': UninstallThemeRequestDtoSchema,
+  'wire.request.themes.activate': ActivateThemeRequestDtoSchema,
   'wire.request.set-provider-config': SetProviderConfigRequestDtoSchema,
   'wire.request.get-provider-config': GetProviderConfigRequestDtoSchema,
   'wire.request.list-provider-configs': ListProviderConfigsRequestDtoSchema,

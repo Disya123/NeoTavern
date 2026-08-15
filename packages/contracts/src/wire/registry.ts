@@ -1056,6 +1056,62 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'themes.list',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.empty',
+    'wire.result.themes.list',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    1024,
+    262144,
+    undefined,
+  ),
+  op(
+    'themes.install',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.write',
+    'wire.request.themes.install',
+    'wire.result.themes.install',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'CONFLICT', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    65536,
+    262144,
+    undefined,
+  ),
+  op(
+    'themes.uninstall',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.write',
+    'wire.request.themes.uninstall',
+    'wire.result.empty',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    1024,
+    1024,
+    undefined,
+  ),
+  op(
+    'themes.activate',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.write',
+    'wire.request.themes.activate',
+    'wire.themes.item',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    1024,
+    262144,
+    undefined,
+  ),
+  op(
     'settings.get',
     'transactional',
     'idempotent',
@@ -1748,6 +1804,29 @@ const PLUGIN_INSTALL_REQUEST = {
   manifest: { id: 'lorebook-searcher', main: 'dist/index.js' },
 };
 
+const THEME_VALUE = {
+  id: 'wii-u-dark',
+  name: 'Wii U Dark',
+  version: '2.0.1',
+  active: false,
+  trustState: 'verified-publisher',
+  publisherKeyId: 'fp-9f2c7a1b',
+  cssAssetId: UUID_AVATAR,
+  installedAt: TIMESTAMP,
+  updatedAt: TIMESTAMP,
+  manifest: { id: 'wii-u-dark', level: 'shell' },
+};
+
+const THEME_INSTALL_REQUEST = {
+  id: 'wii-u-dark',
+  name: 'Wii U Dark',
+  version: '2.0.1',
+  trustState: 'verified-publisher',
+  publisherKeyId: 'fp-9f2c7a1b',
+  cssAssetId: UUID_AVATAR,
+  manifest: { id: 'wii-u-dark', level: 'shell' },
+};
+
 const PROMPT_PLAN_VALUE = {
   runId: UUID_RUN,
   chatId: UUID_CHAT,
@@ -1979,6 +2058,10 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   }),
   fx('plugins-enable-request', 'plugins.enable', 'request', true, { id: 'lorebook-searcher' }),
   fx('plugins-disable-request', 'plugins.disable', 'request', true, { id: 'lorebook-searcher' }),
+  fx('themes-list-request', 'themes.list', 'request', true, {}),
+  fx('themes-install-request', 'themes.install', 'request', true, THEME_INSTALL_REQUEST),
+  fx('themes-uninstall-request', 'themes.uninstall', 'request', true, { id: 'wii-u-dark' }),
+  fx('themes-activate-request', 'themes.activate', 'request', true, { id: 'wii-u-dark' }),
   fx('providers-list-request', 'providers.list', 'request', true, {}),
   fx('providers-config-set-request', 'providers.config.set', 'request', true, {
     provider: 'fake',
@@ -2172,6 +2255,13 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('plugins-disable-response', 'plugins.disable', 'response', true, {
     ...PLUGIN_VALUE,
     enabled: false,
+  }),
+  fx('themes-list-response', 'themes.list', 'response', true, { items: [THEME_VALUE] }),
+  fx('themes-install-response', 'themes.install', 'response', true, { theme: THEME_VALUE }),
+  fx('themes-uninstall-response', 'themes.uninstall', 'response', true, {}),
+  fx('themes-activate-response', 'themes.activate', 'response', true, {
+    ...THEME_VALUE,
+    active: true,
   }),
   fx('plugins-uninstall-response', 'plugins.uninstall', 'response', true, {}),
   fx('lorebooks-list-response', 'lorebooks.list', 'response', true, { items: [LOREBOOK_VALUE] }),
@@ -2434,6 +2524,17 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   }),
   fx('neg-plugins-item-bad-version', 'plugins.list', 'response', false, {
     items: [{ ...PLUGIN_VALUE, version: '' }],
+  }),
+  fx('neg-themes-install-bad-trust', 'themes.install', 'request', false, {
+    ...THEME_INSTALL_REQUEST,
+    trustState: 'super-trusted',
+  }),
+  fx('neg-themes-install-bad-css', 'themes.install', 'request', false, {
+    ...THEME_INSTALL_REQUEST,
+    cssAssetId: 'not-a-uuid',
+  }),
+  fx('neg-themes-item-bad-active', 'themes.list', 'response', false, {
+    items: [{ ...THEME_VALUE, active: 'yes' }],
   }),
   fx('characters-create-request-with-avatar', 'characters.create', 'request', true, {
     name: 'Aveline',
