@@ -84,6 +84,7 @@ import {
   type AppSettings,
   type AppSettingsUpdate,
   type SettingsItemDto,
+  type ChatSnapshotResult,
 } from '@neotavern/contracts';
 import { CONTEXT_TOKEN_DEFAULT, DEFAULT_PROMPT_TEMPLATE } from '@neotavern/contracts';
 import { type BackendCallOptions, UnsupportedError } from '@neotavern/neobackend';
@@ -183,6 +184,32 @@ export async function importCharacter(file: File): Promise<unknown> {
     throw new UnsupportedError('characters.import');
   }
   return api.upload('/characters/import', file);
+}
+
+/**
+ * Snapshot the chat up to `message` as a checkpoint or branch child chat.
+ * Kernel: the canonical Conversations model (chats/messages/variants/
+ * revisions/drafts — ТЗ §8.1) has no snapshot/checkpoint entity and no wire
+ * operation for it, so the kernel plane refuses honestly; the legacy contour
+ * keeps the real snapshot flow (new child chat + prefix copy + checkpoint
+ * link).
+ */
+export async function createChatSnapshot(
+  chatId: string,
+  input: {
+    messageId: string;
+    kind: 'checkpoint' | 'branch';
+    replace?: boolean;
+  },
+): Promise<ChatSnapshotResult> {
+  if (isKernelMode()) {
+    throw new UnsupportedError('chats.snapshots.create');
+  }
+  return api.post<ChatSnapshotResult>(`/chats/${encodeURIComponent(chatId)}/snapshots`, {
+    messageId: input.messageId,
+    kind: input.kind,
+    ...(input.replace !== undefined ? { replace: input.replace } : {}),
+  });
 }
 
 /**

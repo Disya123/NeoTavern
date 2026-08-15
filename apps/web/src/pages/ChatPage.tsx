@@ -20,8 +20,9 @@ import {
   useSettings,
 } from '../api/hooks.js';
 import { streamGeneration } from '../api/generate.js';
-import { backend, legacyRaw } from '../api/backend.js';
+import { backend } from '../api/backend.js';
 import {
+  createChatSnapshot,
   swipeMessageToPosition,
   updateChatMessage,
   wallpaperBackgroundUrl,
@@ -562,15 +563,11 @@ export function ChatPage() {
     ): Promise<ChatSnapshotResult> => {
       if (!chatId) throw new Error('CHAT_NOT_LOADED');
       setError(null);
-      const response = await legacyRaw().request<ChatSnapshotResult>(
-        'POST',
-        `/chats/${chatId}/snapshots`,
-        {
-          messageId: message.id,
-          kind,
-          replace,
-        },
-      );
+      const response = await createChatSnapshot(chatId, {
+        messageId: message.id,
+        kind,
+        replace,
+      });
       await queryClient.invalidateQueries({ queryKey: ['messages', chatId] });
       await queryClient.invalidateQueries({ queryKey: ['chat', chatId] });
       await queryClient.invalidateQueries({ queryKey: ['chats'] });

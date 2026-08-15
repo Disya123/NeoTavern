@@ -230,6 +230,7 @@ import {
   exportChat,
   importCharacter,
   warmProviderModels,
+  createChatSnapshot,
 } from './wireBridge.js';
 
 const CHAR_ID = '11111111-2222-4333-8444-555555555555';
@@ -1484,6 +1485,37 @@ describe('imports/exports (kernel plane honest refusals)', () => {
 
   it('refuses provider model discovery on the kernel plane', async () => {
     await expect(warmProviderModels('p1')).rejects.toBeInstanceOf(UnsupportedError);
+  });
+
+  it('refuses chat snapshots on the kernel plane honestly', async () => {
+    await expect(
+      createChatSnapshot(CHAT_ID, { messageId: MESSAGE_ID, kind: 'checkpoint', replace: true }),
+    ).rejects.toBeInstanceOf(UnsupportedError);
+  });
+
+  it('routes chat snapshots through the legacy contour on the legacy plane', async () => {
+    mocks.isKernelMode.mockReturnValue(false);
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({ chat: { id: 'f1f2f3f4-f5f6-4f7f-8f9f-0f1f2f3f4f5f' }, copiedMessages: 3 }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const result = await createChatSnapshot(CHAT_ID, {
+        messageId: MESSAGE_ID,
+        kind: 'branch',
+      });
+      expect(result.copiedMessages).toBe(3);
+      expect(fetchMock).toHaveBeenCalledWith(
+        `/api/v2/chats/${CHAT_ID}/snapshots`,
+        expect.objectContaining({ method: 'POST' }),
+      );
+    } finally {
+      vi.unstubAllGlobals();
+      mocks.isKernelMode.mockReturnValue(true);
+    }
   });
 });
 

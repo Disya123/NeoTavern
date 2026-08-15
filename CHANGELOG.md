@@ -3,6 +3,20 @@
 ## Unreleased
 ### Added
 
+- **Chat snapshots route through the transport; ChatPage is free of
+  `legacyRaw` (M5 slice 13, Этап 4 context 5 part).** `createChatSnapshot`
+  in `wireBridge` replaces the last `legacyRaw()` call in `ChatPage`
+  (checkpoint/branch snapshot creation): the legacy plane keeps the real
+  snapshot flow via `/chats/:id/snapshots` (new child chat + prefix copy +
+  checkpoint link), the kernel plane refuses honestly with
+  `UnsupportedError('chats.snapshots.create')` — the canonical Conversations
+  model (ТЗ §8.1) has no snapshot/checkpoint entity and no wire operation,
+  so the UI shows the localized CAPABILITY_UNAVAILABLE instead of a fake
+  result. ui:api:check drops to 54 sites (ChatPage legacyRaw import +
+  createSnapshot gone, wireBridge +1 transport site). Tests: wireBridge 96/96
+  (+2 snapshot tests: kernel refusal + legacy routing with fetch stub), web
+  typecheck clean.
+
 - **Wallpaper URLs leave the components (M5 slice 12, Этап 4 context 5
   part).** `wallpaperBackgroundUrl(backgroundId)` in `wireBridge` replaces
   the inline `/api/v2/assets/backgrounds/:id` literals in `ChatPage` and
