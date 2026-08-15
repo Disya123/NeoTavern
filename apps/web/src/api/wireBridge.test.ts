@@ -95,6 +95,13 @@ const mocks = vi.hoisted(() => {
     uninstall: vi.fn(),
     activate: vi.fn(),
   };
+  const plugins = {
+    list: vi.fn(),
+    install: vi.fn(),
+    uninstall: vi.fn(),
+    enable: vi.fn(),
+    disable: vi.fn(),
+  };
   return {
     characters,
     chats,
@@ -104,6 +111,7 @@ const mocks = vi.hoisted(() => {
     memories,
     assets,
     themes,
+    plugins,
     isKernelMode,
   };
 });
@@ -118,6 +126,7 @@ vi.mock('./backend.js', () => ({
     memories: mocks.memories,
     assets: mocks.assets,
     themes: mocks.themes,
+    plugins: mocks.plugins,
   },
   isKernelMode: mocks.isKernelMode,
 }));
@@ -187,6 +196,17 @@ import {
   installTheme,
   readThemeSettings,
   userCssUrl,
+  readPlugins,
+  activatePlugin,
+  disablePlugin,
+  deletePlugin,
+  installPlugin,
+  installPluginFromGit,
+  enterPluginSafeMode,
+  exitPluginSafeMode,
+  readPluginAuthConnections,
+  connectPluginAuth,
+  revokePluginAuth,
 } from './wireBridge.js';
 
 const CHAR_ID = '11111111-2222-4333-8444-555555555555';
@@ -1162,11 +1182,12 @@ describe('themes (Этап 4 context 6 part 3, wire themes.*)', () => {
     const result = await readThemes();
     expect(result.activeThemeId).toBe('wii-u-dark');
     expect(result.items).toHaveLength(2);
-    expect(result.items[0].id).toBe('wii-u-dark');
-    expect(result.items[0].componentsCssUrl).toBe('data:text/css;base64,Ym9keXt9');
-    expect(result.items[0].shellCssUrl).toBeNull();
-    expect(result.items[0].previewUrl).toBeNull();
-    expect(result.items[1].componentsCssUrl).toBeNull();
+    const [first, second] = result.items;
+    expect(first?.id).toBe('wii-u-dark');
+    expect(first?.componentsCssUrl).toBe('data:text/css;base64,Ym9keXt9');
+    expect(first?.shellCssUrl).toBeNull();
+    expect(first?.previewUrl).toBeNull();
+    expect(second?.componentsCssUrl).toBeNull();
     expect(mocks.themes.list).toHaveBeenCalledWith();
   });
 
@@ -1174,7 +1195,7 @@ describe('themes (Этап 4 context 6 part 3, wire themes.*)', () => {
     mocks.themes.list.mockResolvedValue({ items: [THEME_DTO] });
     mocks.assets.content.mockRejectedValue(new Error('cap'));
     const result = await readThemes();
-    expect(result.items[0].componentsCssUrl).toBeNull();
+    expect(result.items[0]?.componentsCssUrl).toBeNull();
   });
 
   it('activates a theme through the facade', async () => {
@@ -1206,5 +1227,96 @@ describe('themes (Этап 4 context 6 part 3, wire themes.*)', () => {
   it('reports no theme settings and no user css on the kernel plane', async () => {
     expect(await readThemeSettings('wii-u-dark')).toBeUndefined();
     expect(userCssUrl()).toBeNull();
+  });
+});
+
+describe('plugins (Этап 4 context 6 part 4, wire plugins.*)', () => {
+  const PLUGIN_DTO = {
+    id: 'lorebook-searcher',
+    name: 'Lorebook Searcher',
+    version: '1.3.0',
+    enabled: true,
+    trustState: 'verified-publisher' as const,
+    publisherKeyId: 'k-abc',
+    permissions: ['plugin.storage', 'lorebooks.list'],
+    installedAt: NOW,
+    updatedAt: NOW,
+    manifest: { name: 'Lorebook Searcher', version: '1.3.0' },
+  };
+
+  it('lists plugins with honest neutral fields through the facade', async () => {
+    mocks.plugins.list.mockResolvedValue({
+      items: [PLUGIN_DTO, { ...PLUGIN_DTO, id: 'off', name: 'Off', enabled: false }],
+    });
+    const result = await readPlugins();
+    expect(result.safeMode).toBe(false);
+    const [on, off] = result.items;
+    expect(on?.enabled).toBe(true);
+    expect(on?.status).toBe('active');
+    expect(on?.grantedPermissions).toEqual(['plugin.storage', 'lorebooks.list']);
+    expect(on?.requestedPermissions).toEqual([]);
+    expect(on?.trust).toBe('verified-publisher');
+    expect(on?.publisherKeyId).toBe('k-abc');
+    expect(on?.compatibilityLevel).toBe('native-v3');
+    expect(on?.hasLegacyFrontend).toBe(false);
+    expect(off?.status).toBe('disabled');
+    expect(mocks.plugins.list).toHaveBeenCalledWith();
+  });
+
+  it('maps a last error to the error status', async () => {
+    mocks.plugins.list.mockResolvedValue({
+      items: [{ ...PLUGIN_DTO, enabled: true, lastErrorCode: 'E_BOOM' }],
+    });
+    const result = await readPlugins();
+    expect(result.items[0]?.status).toBe('error');
+    expect(result.items[0]?.lastErrorCode).toBe('E_BOOM');
+  });
+
+  it('activates a plugin when the requested permissions match the record', async () => {
+    mocks.plugins.list.mockResolvedValue({ items: [PLUGIN_DTO] });
+    mocks.plugins.enable.mockResolvedValue(PLUGIN_DTO);
+    const result = await activatePlugin('lorebook-searcher', {
+      grantedPermissions: ['lorebooks.list', 'plugin.storage'],
+    });
+    expect(result.plugin.enabled).toBe(true);
+    expect(mocks.plugins.enable).toHaveBeenCalledWith('lorebook-searcher');
+  });
+
+  it('refuses a permission change that the wire cannot express', async () => {
+    mocks.plugins.list.mockResolvedValue({ items: [PLUGIN_DTO] });
+    await expect(
+      activatePlugin('lorebook-searcher', { grantedPermissions: ['lorebooks.list'] }),
+    ).rejects.toBeInstanceOf(UnsupportedError);
+    expect(mocks.plugins.enable).not.toHaveBeenCalled();
+  });
+
+  it('disables and deletes through the facade', async () => {
+    mocks.plugins.disable.mockResolvedValue({ ...PLUGIN_DTO, enabled: false });
+    const disabled = await disablePlugin('lorebook-searcher');
+    expect(disabled.plugin.enabled).toBe(false);
+    expect(mocks.plugins.disable).toHaveBeenCalledWith('lorebook-searcher');
+
+    mocks.plugins.uninstall.mockResolvedValue({ ok: true });
+    const removed = await deletePlugin('lorebook-searcher');
+    expect(removed.deleted).toBe(true);
+    expect(mocks.plugins.uninstall).toHaveBeenCalledWith('lorebook-searcher');
+  });
+
+  it('rejects host-side and executor-only flows on the kernel plane honestly', async () => {
+    await expect(installPlugin(new File(['z'], 'p.zip'))).rejects.toBeInstanceOf(UnsupportedError);
+    await expect(installPluginFromGit({ url: 'https://example.com/repo' })).rejects.toBeInstanceOf(
+      UnsupportedError,
+    );
+    await expect(enterPluginSafeMode()).rejects.toBeInstanceOf(UnsupportedError);
+    await expect(exitPluginSafeMode()).rejects.toBeInstanceOf(UnsupportedError);
+    await expect(readPluginAuthConnections('lorebook-searcher')).rejects.toBeInstanceOf(
+      UnsupportedError,
+    );
+    await expect(
+      connectPluginAuth('lorebook-searcher', { serviceId: 'github' }),
+    ).rejects.toBeInstanceOf(UnsupportedError);
+    await expect(
+      revokePluginAuth('lorebook-searcher', { connectionId: 'c1' }),
+    ).rejects.toBeInstanceOf(UnsupportedError);
   });
 });

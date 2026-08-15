@@ -42,16 +42,8 @@ import type {
   SillyTavernImportResult,
   PluginActivateRequest,
   PluginAuthConnectRequest,
-  PluginAuthConnectResult,
-  PluginAuthConnectionsResponse,
   PluginAuthRevokeRequest,
-  PluginAuthRevokeResult,
-  PluginDeleteResult,
   PluginGitInstallRequest,
-  PluginInstallResult,
-  PluginLifecycleResult,
-  PluginListResponse,
-  PluginSafeModeResult,
   DiagnosticsSnapshot,
   VersionResponse,
 } from '@neotavern/contracts';
@@ -100,6 +92,17 @@ import {
   resetActiveTheme,
   deleteTheme,
   installTheme,
+  readPlugins,
+  activatePlugin,
+  disablePlugin,
+  deletePlugin,
+  installPlugin,
+  installPluginFromGit,
+  enterPluginSafeMode,
+  exitPluginSafeMode,
+  readPluginAuthConnections,
+  connectPluginAuth,
+  revokePluginAuth,
   type ContinueCharacterChatInput,
   type ContinueCharacterChatResult,
 } from './wireBridge.js';
@@ -804,7 +807,7 @@ export function useDeleteTheme() {
 export function usePlugins() {
   return useQuery({
     queryKey: ['plugins'],
-    queryFn: () => api.get<PluginListResponse>('/plugins'),
+    queryFn: () => readPlugins(),
     staleTime: MINUTE,
   });
 }
@@ -812,7 +815,7 @@ export function usePlugins() {
 export function useInstallPlugin() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (file: File) => api.upload<PluginInstallResult>('/plugins/install', file),
+    mutationFn: (file: File) => installPlugin(file),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['plugins'] }),
   });
 }
@@ -820,8 +823,7 @@ export function useInstallPlugin() {
 export function useInstallPluginFromGit() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: PluginGitInstallRequest) =>
-      api.post<PluginInstallResult>('/plugins/install-git', input),
+    mutationFn: (input: PluginGitInstallRequest) => installPluginFromGit(input),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['plugins'] }),
   });
 }
@@ -830,7 +832,7 @@ export function useActivatePlugin() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: PluginActivateRequest }) =>
-      api.post<PluginLifecycleResult>(`/plugins/${encodeURIComponent(id)}/activate`, input),
+      activatePlugin(id, input),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['plugins'] }),
   });
 }
@@ -838,8 +840,7 @@ export function useActivatePlugin() {
 export function useDisablePlugin() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) =>
-      api.post<PluginLifecycleResult>(`/plugins/${encodeURIComponent(id)}/disable`),
+    mutationFn: (id: string) => disablePlugin(id),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['plugins'] }),
   });
 }
@@ -847,7 +848,7 @@ export function useDisablePlugin() {
 export function useDeletePlugin() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => api.del<PluginDeleteResult>(`/plugins/${encodeURIComponent(id)}`),
+    mutationFn: (id: string) => deletePlugin(id),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['plugins'] }),
   });
 }
@@ -855,7 +856,7 @@ export function useDeletePlugin() {
 export function useEnterPluginSafeMode() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => api.post<PluginSafeModeResult>('/plugins/runtime/safe-mode'),
+    mutationFn: () => enterPluginSafeMode(),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['plugins'] }),
   });
 }
@@ -863,7 +864,7 @@ export function useEnterPluginSafeMode() {
 export function useExitPluginSafeMode() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => api.del<PluginSafeModeResult>('/plugins/runtime/safe-mode'),
+    mutationFn: () => exitPluginSafeMode(),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['plugins'] }),
   });
 }
@@ -871,10 +872,7 @@ export function useExitPluginSafeMode() {
 export function usePluginAuthConnections(pluginId: string | null) {
   return useQuery({
     queryKey: ['plugins', pluginId, 'auth-connections'],
-    queryFn: () =>
-      api.get<PluginAuthConnectionsResponse>(
-        `/plugins/${encodeURIComponent(pluginId!)}/auth/connections`,
-      ),
+    queryFn: () => readPluginAuthConnections(pluginId!),
     enabled: pluginId !== null,
     staleTime: 5 * 1000,
     refetchInterval: (query) =>
@@ -886,10 +884,7 @@ export function usePluginAuthConnect() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ pluginId, input }: { pluginId: string; input: PluginAuthConnectRequest }) =>
-      api.post<PluginAuthConnectResult>(
-        `/plugins/${encodeURIComponent(pluginId)}/auth/connect`,
-        input,
-      ),
+      connectPluginAuth(pluginId, input),
     onSuccess: (result, vars) =>
       void qc.invalidateQueries({ queryKey: ['plugins', vars.pluginId, 'auth-connections'] }),
   });
@@ -899,10 +894,7 @@ export function usePluginAuthRevoke() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ pluginId, input }: { pluginId: string; input: PluginAuthRevokeRequest }) =>
-      api.post<PluginAuthRevokeResult>(
-        `/plugins/${encodeURIComponent(pluginId)}/auth/revoke`,
-        input,
-      ),
+      revokePluginAuth(pluginId, input),
     onSuccess: (_, vars) =>
       void qc.invalidateQueries({ queryKey: ['plugins', vars.pluginId, 'auth-connections'] }),
   });

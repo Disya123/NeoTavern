@@ -3,6 +3,25 @@
 ## Unreleased
 ### Added
 
+- **Plugins reach the kernel plane (M5 slice 6 part 4, Этап 4 context 6,
+  ТЗ §SEC-05/§SEC-06).** `readPlugins`/`activatePlugin`/`disablePlugin`/
+  `deletePlugin` in `wireBridge` call the wire `plugins.*` operations and
+  map the durable record (trust state + granted permission set, both fixed
+  at the install consent moment) onto the legacy `InstalledPlugin` shape
+  with honest neutral fields for what the wire row does not model
+  (apiVersion, frontend/backend presence, SDK compatibility level).
+  Activation applies the recorded permissions; requesting a different
+  permission set is an honest `CAPABILITY_UNAVAILABLE` rather than
+  silently enabling with different rights. Flows that need the host
+  package verifier or the plugin executor (package install, git install,
+  runtime safe mode, OAuth auth connections) are honest refusals — never
+  a silent skip of SEC-05 verification or SEC-06 cleanup. All ten plugin
+  hooks now go through the transport. ui:api:check stays 64 sites (the
+  plugin routes were already parameterized through the client base). Tests:
+  wireBridge 82/82 (+6 plugins: list translation, error status, matching
+  activation, permission-change refusal, disable/delete, host/executor
+  refusals).
+
 - **Themes reach the kernel plane (M5 slice 6 part 3, Этап 4 context 6,
   ТЗ §5.2 theme-sdk).** `readThemes`/`activateTheme`/`deleteTheme` in
   `wireBridge` call the wire `themes.*` operations and map the durable

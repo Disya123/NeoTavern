@@ -54,6 +54,19 @@ import {
   type ThemeInstallResult,
   type ThemeListResponse,
   type ThemeDto,
+  type InstalledPlugin,
+  type PluginAuthConnectRequest,
+  type PluginAuthConnectResult,
+  type PluginAuthConnectionsResponse,
+  type PluginAuthRevokeRequest,
+  type PluginAuthRevokeResult,
+  type PluginDeleteResult,
+  type PluginGitInstallRequest,
+  type PluginInstallResult,
+  type PluginLifecycleResult,
+  type PluginListResponse,
+  type PluginSafeModeResult,
+  type PluginDto,
   type CharacterDto,
   type ChatDto,
   type LorebookDto,
@@ -1404,4 +1417,198 @@ export function userCssUrl(): string | null {
   }
   // eslint-disable-next-line @neotavern/no-legacy-api-surface
   return '/api/v2/user.css';
+}
+
+/* --------------------------------------------------------------------------
+ * Plugins (Этап 4 context 6 part 4, wire `plugins.*`; ТЗ §SEC-05/§SEC-06).
+ *
+ * The kernel durably records what the HOST already verified (SEC-05 package
+ * verification + ZIP traversal/symlink/bomb rejection stay in the host
+ * package verifier) plus the GRANTED permission set (the install request IS
+ * the consent moment). The web transport can list/enable/disable/uninstall;
+ * everything that needs the host verifier or the plugin executor (package
+ * install, git install, runtime safe mode, auth connections) is an honest
+ * CAPABILITY_UNAVAILABLE — never a silent skip of verification/cleanup.
+ * ------------------------------------------------------------------------ */
+
+/** Wire `plugins.item` → legacy `InstalledPlugin` (honest subset: fields the
+ * wire contract does not model are neutral defaults, not fabricated truth —
+ * see each mapping). */
+export function translatePlugin(dto: PluginDto): InstalledPlugin {
+  return {
+    id: dto.id,
+    name: dto.name,
+    version: dto.version,
+    // The wire row has no Plugin-SDK apiVersion; the neutral minimum (1)
+    // means "does not advertise a higher SDK", never a claimed exact number.
+    apiVersion: 1,
+    enabled: dto.enabled,
+    status: dto.lastErrorCode != null ? 'error' : dto.enabled ? 'active' : 'disabled',
+    manifest: (dto.manifest ?? {}) as Record<string, unknown>,
+    // The kernel records only the granted set (the consent happened at
+    // install); there is no separate requested-not-yet-approved list.
+    requestedPermissions: [],
+    grantedPermissions: dto.permissions,
+    addedPermissions: [],
+    installedAt: toEpochMs(dto.installedAt),
+    updatedAt: toEpochMs(dto.updatedAt),
+    // Presence of frontend/backend/styles surfaces is not modelled by the
+    // wire row; false is the honest "not declared", and the UI then treats
+    // the plugin as native without a legacy island or reload requirement.
+    hasFrontend: false,
+    hasBackend: false,
+    hasStyles: false,
+    hasLegacyFrontend: false,
+    hasLegacyBackend: false,
+    // Kernel plugins are native (no legacy bridge); native-v3 is the current
+    // SDK generation the kernel wire represents.
+    compatibilityLevel: 'native-v3',
+    lastErrorCode: dto.lastErrorCode ?? null,
+    source: undefined,
+    dependencies: [],
+    grantedCapabilities: [],
+    trust: dto.trustState,
+    publisherKeyId: dto.publisherKeyId,
+  };
+}
+
+/** List installed plugins. The kernel has no safe-mode mechanism; `safeMode`
+ * is honestly `false` on that plane. */
+export async function readPlugins(): Promise<PluginListResponse> {
+  if (isKernelMode()) {
+    const result = await backend.plugins.list();
+    return { items: result.items.map(translatePlugin), safeMode: false };
+  }
+  return api.get<PluginListResponse>('/plugins');
+}
+
+/** Enable a plugin (idempotent flag transition). */
+export async function activatePlugin(
+  id: string,
+  input: { grantedPermissions: string[] },
+): Promise<PluginLifecycleResult> {
+  if (isKernelMode()) {
+    // The wire record's permission set was fixed at install (the consent
+    // moment). Activation applies those recorded permissions; requesting a
+    // different set is not expressible on the wire — honest refusal rather
+    // than silently enabling with different rights.
+    const { items } = await backend.plugins.list();
+    const current = items.find((plugin) => plugin.id === id);
+    if (
+      current &&
+      input.grantedPermissions.length > 0 &&
+      !samePermissionSet(input.grantedPermissions, current.permissions)
+    ) {
+      throw new UnsupportedError('plugins.activate.permissions-change');
+    }
+    const enabled = await backend.plugins.enable(id);
+    return { plugin: translatePlugin(enabled) };
+  }
+  return api.post<PluginLifecycleResult>(`/plugins/${encodeURIComponent(id)}/activate`, input);
+}
+
+/** Disable a plugin (idempotent; SEC-06 executor cleanup is host-side). */
+export async function disablePlugin(id: string): Promise<PluginLifecycleResult> {
+  if (isKernelMode()) {
+    const disabled = await backend.plugins.disable(id);
+    return { plugin: translatePlugin(disabled) };
+  }
+  return api.post<PluginLifecycleResult>(`/plugins/${encodeURIComponent(id)}/disable`);
+}
+
+/** Uninstall a plugin (executor archive cleanup is host-side). */
+export async function deletePlugin(id: string): Promise<PluginDeleteResult> {
+  if (isKernelMode()) {
+    await backend.plugins.uninstall(id);
+    return { deleted: true };
+  }
+  return api.del<PluginDeleteResult>(`/plugins/${encodeURIComponent(id)}`);
+}
+
+/** Install a plugin package. On the kernel plane the wire contract requires
+ * the HOST to have already verified the package (SEC-05 signature/digest +
+ * ZIP hardening) before `plugins.install` runs; the web transport has no
+ * such host command yet — honest CAPABILITY_UNAVAILABLE. */
+export async function installPlugin(file: File): Promise<PluginInstallResult> {
+  if (isKernelMode()) {
+    throw new UnsupportedError('plugins.install.host-verify');
+  }
+  return api.upload<PluginInstallResult>('/plugins/install', file);
+}
+
+/** Install a plugin from a public Git repository archive (host-side fetch +
+ * verification required). Not expressible on the kernel plane. */
+export async function installPluginFromGit(
+  input: PluginGitInstallRequest,
+): Promise<PluginInstallResult> {
+  if (isKernelMode()) {
+    throw new UnsupportedError('plugins.install.git.host-verify');
+  }
+  return api.post<PluginInstallResult>('/plugins/install-git', input);
+}
+
+/** Enter runtime safe mode. The kernel has no safe-mode mechanism (no wire
+ * op) — honest CAPABILITY_UNAVAILABLE. */
+export async function enterPluginSafeMode(): Promise<PluginSafeModeResult> {
+  if (isKernelMode()) {
+    throw new UnsupportedError('plugins.safe-mode.enter');
+  }
+  return api.post<PluginSafeModeResult>('/plugins/runtime/safe-mode');
+}
+
+/** Exit runtime safe mode. See {@link enterPluginSafeMode}. */
+export async function exitPluginSafeMode(): Promise<PluginSafeModeResult> {
+  if (isKernelMode()) {
+    throw new UnsupportedError('plugins.safe-mode.exit');
+  }
+  return api.del<PluginSafeModeResult>('/plugins/runtime/safe-mode');
+}
+
+/** List auth connections of one plugin. OAuth/session state lives outside the
+ * kernel wire model — honest CAPABILITY_UNAVAILABLE. */
+export async function readPluginAuthConnections(
+  pluginId: string,
+): Promise<PluginAuthConnectionsResponse> {
+  if (isKernelMode()) {
+    throw new UnsupportedError('plugins.auth.connections');
+  }
+  return api.get<PluginAuthConnectionsResponse>(
+    `/plugins/${encodeURIComponent(pluginId)}/auth/connections`,
+  );
+}
+
+/** Connect an OAuth flow for one plugin. See {@link readPluginAuthConnections}. */
+export async function connectPluginAuth(
+  pluginId: string,
+  input: PluginAuthConnectRequest,
+): Promise<PluginAuthConnectResult> {
+  if (isKernelMode()) {
+    throw new UnsupportedError('plugins.auth.connect');
+  }
+  return api.post<PluginAuthConnectResult>(
+    `/plugins/${encodeURIComponent(pluginId)}/auth/connect`,
+    input,
+  );
+}
+
+/** Revoke an OAuth connection. See {@link readPluginAuthConnections}. */
+export async function revokePluginAuth(
+  pluginId: string,
+  input: PluginAuthRevokeRequest,
+): Promise<PluginAuthRevokeResult> {
+  if (isKernelMode()) {
+    throw new UnsupportedError('plugins.auth.revoke');
+  }
+  return api.post<PluginAuthRevokeResult>(
+    `/plugins/${encodeURIComponent(pluginId)}/auth/revoke`,
+    input,
+  );
+}
+
+/** Set-equality comparison for permission lists (wire order is not
+ * meaningful; the UI selection may arrive in any order). */
+function samePermissionSet(left: readonly string[], right: readonly string[]): boolean {
+  if (left.length !== right.length) return false;
+  const rightSet = new Set(right);
+  return left.every((permission) => rightSet.has(permission));
 }

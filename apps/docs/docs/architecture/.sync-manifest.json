@@ -285,7 +285,7 @@
     {
       "source": "architecture/ui-legacy-surface.md",
       "target": "architecture/ui-legacy-surface.md",
-      "sha256": "57703519315fdcbfcd03e8fbd996f40beed2e31c6f7811bcb3271b4ad799bbc7"
+      "sha256": "c5f888ff435192187142ed00e197c3359df41e0a8ae67356cb79009f71c30571"
     },
     {
       "source": "architecture/version-axes.md",
@@ -300,7 +300,7 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "cafc09a4745936c54ac219f08a1f464ab75619a1968412b2cf887a75dfe1feb1"
+      "sha256": "8a7833103d0f499673d3c4a71c427efc144a75b9ef3a30bdb07d57299663430b"
     },
     {
       "source": "data/README.md",
