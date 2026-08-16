@@ -1298,7 +1298,7 @@
           "type": "artifact",
           "artifact": "ARC-10 library.assets raise",
           "result": "M5 slice 56: library.assets raised Implemented -> Integrated on desktop + webClient. Verified in source: CharacterManagementPanel avatar upload -> useUploadCharacterAvatar -> uploadCharacterAvatar -> backend.assets.put (kind avatar) + backend.characters.update(avatarAssetId); importCharacter stages cards via assets.put (kind card); theme CSS and avatar URLs resolve through backend.assets.content; RemoteBackend forwards the same wire ops. Honest non-raises kept: ui.card-exports stays Implemented (character/chat export remains legacy-only until Этап 4.5, ARC-02-approved helper), ui.prompt-pipeline stays Implemented (plan view-only). Capability matrix 38 rows.",
-          "commit": "pending"
+          "commit": "ea034ea"
         }
       ],
       "blockingIssues": [
