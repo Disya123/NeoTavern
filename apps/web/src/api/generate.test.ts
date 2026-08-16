@@ -25,13 +25,18 @@ const CREATED_USER_MESSAGE: MessageDto = {
 
 function recordingHandlers() {
   const calls: string[] = [];
+  const steps: unknown[] = [];
   const handlers: GenerateHandlers = {
     onStart: () => calls.push('start'),
     onDelta: () => calls.push('delta'),
+    onStep: (step) => {
+      calls.push(`step:${step.type}:${step.status}`);
+      steps.push(step);
+    },
     onDone: () => calls.push('done'),
     onError: () => calls.push('error'),
   };
-  return { handlers, calls };
+  return { handlers, calls, steps };
 }
 
 /** Minimal backend stub: records createMessage, streams canned events. */
@@ -172,5 +177,80 @@ describe('streamWireGeneration (kernel mode)', () => {
       ),
     ).rejects.toBeInstanceOf(UnsupportedError);
     expect(createMessage).not.toHaveBeenCalled();
+  });
+
+  it('forwards durable generation.step announcements to onStep (tool lifecycle, М5 slice 41)', async () => {
+    const { backend } = stubBackend([
+      {
+        type: 'generation.step',
+        step: {
+          stepId: '55667788-99aa-bbcc-ddeeff00112233',
+          runId: RUN_ID,
+          sequence: 0,
+          type: 'provider_turn',
+          status: 'completed',
+          attempt: 1,
+          idempotencyKey: 'turn-1',
+          createdAt: '2026-06-01T12:00:02.000Z',
+          updatedAt: '2026-06-01T12:00:02.000Z',
+        },
+      },
+      {
+        type: 'generation.step',
+        step: {
+          stepId: '66778899-aabb-ccdd-eeff0011223344',
+          runId: RUN_ID,
+          sequence: 1,
+          type: 'tool_call',
+          status: 'waiting',
+          attempt: 1,
+          idempotencyKey: 'tool-call-1',
+          input: {
+            toolCall: {
+              id: '123e4567-e89b-42d3-a456-426614174000',
+              name: 'search_lorebook',
+              arguments: {},
+            },
+          },
+          createdAt: '2026-06-01T12:00:02.500Z',
+          updatedAt: '2026-06-01T12:00:02.500Z',
+        },
+      },
+      { type: 'generation.delta', text: 'Found it: ' },
+      {
+        type: 'generation.completed',
+        finalMessage: {
+          id: '33445566-7788-99aa-bbcc-ddeeff001122',
+          chatId: CHAT_ID,
+          role: 'assistant',
+          content: 'Found it: done.',
+          createdAt: '2026-06-01T12:00:05.000Z',
+          sequence: 4,
+          meta: {},
+        },
+      },
+    ]);
+    const { handlers, calls, steps } = recordingHandlers();
+
+    await streamWireGeneration(
+      backend,
+      CHAT_ID,
+      { userMessage: 'Search now' },
+      handlers,
+      new AbortController().signal,
+    );
+
+    expect(calls).toEqual([
+      'start',
+      'step:provider_turn:completed',
+      'step:tool_call:waiting',
+      'delta',
+      'done',
+    ]);
+    expect(steps[1]).toMatchObject({
+      type: 'tool_call',
+      status: 'waiting',
+      input: { toolCall: { name: 'search_lorebook' } },
+    });
   });
 });

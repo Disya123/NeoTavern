@@ -123,6 +123,7 @@ export const en = {
     send: 'Send',
     regenerate: 'Regenerate',
     stop: 'Stop generating',
+    toolRunning: 'Running tool: {{name}}…',
     deleteMessage: 'Delete message',
     deleteMessageConfirm: 'Delete this message from the conversation? This cannot be undone.',
     editMessage: 'Edit message',

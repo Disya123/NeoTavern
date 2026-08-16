@@ -3,6 +3,20 @@
 ## Unreleased
 ### Added
 
+- **Tool-execution indicator in the web chat (M5 slice 41, ТЗ §13.2).** The
+  UI now distinguishes tool execution / waiting-for-tool from text
+  streaming: `streamWireGeneration` forwards the durable
+  `generation.step` announcements (`provider_turn` / `tool_call` /
+  `tool_result`) to a new `onStep` handler, ChatPage derives the active
+  tool from `tool_call` steps (only `step.input.toolCall.name` — arguments
+  and results never reach the UI) and renders a `ToolActivityBadge` while
+  the run is waiting, clearing it on the next `provider_turn` /
+  `tool_result` step and on done/error/stop. Tests: `generate.test` proves
+  the step forwarding (provider turn → tool_call waiting → delta → done
+  ordering), `ToolActivityBadge` component tests (2); i18n en/ru
+  (`chat:toolRunning`). Honest boundary: step rendering in the transcript
+  and result submission (`generation.tool.result`) remain Этап 4.
+
 - **`secrets.lock` — manual secret-store lock over Product Wire (M5 slice 40,
   ТЗ §SEC-01.1).** The portable `secrets.enc` store now supports the manual
   lock end-to-end: wire `secrets.lock` (transactional, idempotent,

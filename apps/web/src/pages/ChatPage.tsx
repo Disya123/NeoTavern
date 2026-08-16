@@ -38,11 +38,18 @@ import workspaceStyles from '../components/ChatWorkspace.module.css';
 import { ContextUsagePanel } from '../components/ContextUsagePanel.js';
 import { PromptPlanPanel } from '../components/PromptPlanPanel.js';
 import { MessageBubble } from '../components/MessageBubble.js';
+import { ToolActivityBadge } from '../components/ToolActivityBadge.js';
 import { frontendPluginRuntime, usePluginRegistrations } from '../plugins/runtime.js';
 import { useUiStore } from '../state/ui.js';
 import styles from './ChatPage.module.css';
 
 const FLUSH_INTERVAL_MS = 33; // ~30 UI updates per second max
+
+/** Durable tool step the run is waiting on (ТЗ §13.2, М5 slice 41). */
+interface ToolActivity {
+  name: string;
+  waiting: boolean;
+}
 
 export function ChatPage() {
   const { chatId } = useParams<{ chatId: string }>();
@@ -71,6 +78,9 @@ export function ChatPage() {
   const [streamingText, setStreamingText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
+  // Active tool the run is executing/waiting on (derived from the durable
+  // `generation.step` announcements; never shows arguments/results).
+  const [toolActivity, setToolActivity] = useState<ToolActivity | null>(null);
   const [editErrorId, setEditErrorId] = useState<string | null>(null);
   const [editErrorText, setEditErrorText] = useState<string | null>(null);
   const [contextOpen, setContextOpen] = useState(false);
@@ -345,6 +355,21 @@ export function ChatPage() {
             scheduleFlush();
             frontendPluginRuntime.emitEvent('generation.delta', { chatId, text: delta });
           },
+          onStep: (step) => {
+            // Durable step announcements (§8.3): a tool_call step means the
+            // run is executing/waiting on a tool; the next provider_turn or
+            // tool_result step returns the run to streaming. Arguments and
+            // results never reach the UI.
+            if (step.type === 'tool_call') {
+              const call = step.input as { toolCall?: { name?: string } } | undefined;
+              setToolActivity({
+                name: call?.toolCall?.name ?? 'tool',
+                waiting: step.status === 'waiting',
+              });
+            } else {
+              setToolActivity(null);
+            }
+          },
           onDone: (fullText) => {
             cancelFlush();
             bufferRef.current = '';
@@ -352,6 +377,7 @@ export function ChatPage() {
             setIsGenerating(false);
             setRegeneratingId(null);
             setPendingUserMessage(null);
+            setToolActivity(null);
             frontendPluginRuntime.emitEvent('generation.finished', {
               chatId,
               text: fullText,
@@ -367,6 +393,7 @@ export function ChatPage() {
             setIsGenerating(false);
             setRegeneratingId(null);
             setPendingUserMessage(null);
+            setToolActivity(null);
             setError(`${code}: ${message}`);
             frontendPluginRuntime.emitEvent('generation.error', { chatId, code });
             // The user message is persisted server-side before streaming; a
@@ -384,6 +411,7 @@ export function ChatPage() {
       setIsGenerating(false);
       setRegeneratingId(null);
       setPendingUserMessage(null);
+      setToolActivity(null);
       setError(errorText(err));
       void queryClient.invalidateQueries({ queryKey: ['messages', chatId] });
       void queryClient.invalidateQueries({ queryKey: ['prompt-context-audit', chatId] });
@@ -400,6 +428,7 @@ export function ChatPage() {
     setStreamingText('');
     setRegeneratingId(null);
     setPendingUserMessage(null);
+    setToolActivity(null);
     // The user message is persisted server-side before streaming; a send-time
     // refetch can miss it, so re-sync after an abort too.
     void queryClient.invalidateQueries({ queryKey: ['messages', chatId] });
@@ -881,28 +910,31 @@ export function ChatPage() {
         ) : null}
 
         {!regeneratingId && (streamingText.length > 0 || isGenerating) ? (
-          <MessageBubble
-            message={{
-              id: '__streaming__',
-              chatId: chatId ?? '',
-              branchId: '',
-              parentId: null,
-              role: 'assistant',
-              content: streamingText,
-              name: null,
-              meta: { streaming: true },
-              createdAt: 0,
-              revision: 1,
-              updatedAt: null,
-              variantCount: 0,
-              activeVariantPosition: null,
-              contentRevisionCount: 0,
-              checkpointChatId: null,
-            }}
-            macroContext={macroContext}
-            assistantIdentity={assistantIdentity}
-            streaming
-          />
+          <>
+            {toolActivity?.waiting ? <ToolActivityBadge name={toolActivity.name} /> : null}
+            <MessageBubble
+              message={{
+                id: '__streaming__',
+                chatId: chatId ?? '',
+                branchId: '',
+                parentId: null,
+                role: 'assistant',
+                content: streamingText,
+                name: null,
+                meta: { streaming: true },
+                createdAt: 0,
+                revision: 1,
+                updatedAt: null,
+                variantCount: 0,
+                activeVariantPosition: null,
+                contentRevisionCount: 0,
+                checkpointChatId: null,
+              }}
+              macroContext={macroContext}
+              assistantIdentity={assistantIdentity}
+              streaming
+            />
+          </>
         ) : null}
       </ChatWorkspace>
       <PromptPlanPanel

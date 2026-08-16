@@ -1,0 +1,24 @@
+@layer components {
+  /*
+   * Tool-execution indicator (ТЗ §13.2, М5 slice 41): a compact status row
+   * shown while the run waits on a durable tool_call step. Uses only design
+   * tokens; no hardcoded colors/spacing.
+   */
+  .toolActivity {
+    display: flex;
+    align-items: center;
+    gap: var(--st-space-sm);
+    margin: 0 auto;
+    width: min(100%, 820px);
+    padding-block: var(--st-space-sm);
+    color: var(--st-color-text-secondary);
+    font-size: var(--st-font-size-sm);
+  }
+
+  .toolIcon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--st-color-accent);
+  }
+}

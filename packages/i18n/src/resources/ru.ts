@@ -131,6 +131,7 @@ export const ru: Resources = {
     send: 'Отправить',
     regenerate: 'Перегенерировать',
     stop: 'Остановить генерацию',
+    toolRunning: 'Выполняется инструмент: {{name}}…',
     deleteMessage: 'Удалить сообщение',
     deleteMessageConfirm: 'Удалить это сообщение из разговора? Отменить действие нельзя.',
     editMessage: 'Редактировать сообщение',

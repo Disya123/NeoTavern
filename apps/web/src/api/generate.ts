@@ -17,7 +17,7 @@
  * interceptors) are not silently downgraded on the kernel: they surface an
  * honest `UnsupportedError` instead.
  */
-import type { GenerationEvent, PromptTriggerId } from '@neotavern/contracts';
+import type { GenerationEvent, GenerationStepDto, PromptTriggerId } from '@neotavern/contracts';
 import type { NeoBackend } from '@neotavern/neobackend';
 import { UnsupportedError } from '@neotavern/neobackend';
 import { ErrorCodes } from '@neotavern/shared';
@@ -29,6 +29,9 @@ import { frontendPluginRuntime } from '../plugins/runtime.js';
 export interface GenerateHandlers {
   onStart?: (requestId: string) => void;
   onDelta: (text: string) => void;
+  /** Durable step announcement (`generation.step`, ТЗ §13.2): lets the UI
+   * distinguish streaming from tool execution / waiting-for-tool. */
+  onStep?: (step: GenerationStepDto) => void;
   onDone: (fullText: string) => void;
   onError: (code: string, message: string) => void;
 }
@@ -116,12 +119,16 @@ export async function streamWireGeneration(
             handlers.onError(ErrorCodes.GENERATION_CANCELLED, 'Generation cancelled');
           }
           break;
-        case 'generation.checkpoint':
         case 'generation.step':
+          // Durable step announcements: provider turns, tool calls and tool
+          // results (§8.3). The UI keeps batching text deltas; step data
+          // drives the tool-execution indicator (ТЗ §13.2).
+          handlers.onStep?.(event.step);
+          break;
+        case 'generation.checkpoint':
         case 'consumer_lagged':
-          // Durable step/checkpoint announcements — the UI batches text
-          // deltas only; tool execution and waiting-for-tool surface via
-          // generation.step for the tool UI (Этап 4).
+          // Checkpoint announcements / consumer lag — the UI batches text
+          // deltas only.
           break;
       }
     }
