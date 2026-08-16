@@ -479,6 +479,12 @@ export function GenerationPresetEditor() {
         </label>
       </div>
 
+      {catalog.isError ? (
+        <p className={styles.inlineError} role="alert" data-part="catalog-error">
+          {errorText(catalog.error)}
+        </p>
+      ) : null}
+
       {formError ? (
         <p className={styles.inlineError} role="alert">
           {formError}

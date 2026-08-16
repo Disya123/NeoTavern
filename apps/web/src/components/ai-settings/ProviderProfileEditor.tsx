@@ -110,6 +110,7 @@ export function ProviderProfileEditor({ surface = 'panel' }: ProviderProfileEdit
   const initialized = useRef(false);
   const baseUrlHintId = useId();
   const catalogItems = catalog.data?.items ?? [];
+  const catalogError = catalog.isError ? errorText(catalog.error) : null;
   const discoveredModels = discoverModels.data?.models ?? [];
   const selectedCatalog = draft.source
     ? catalogItems.find((entry) => entry.id === draft.source)
@@ -452,6 +453,11 @@ export function ProviderProfileEditor({ surface = 'panel' }: ProviderProfileEdit
       </div>
 
       <div className={`${styles.formGrid} ${styles.providerFormGrid}`} data-part="profile-fields">
+        {catalogError ? (
+          <p className={styles.inlineError} role="alert" data-part="catalog-error">
+            {catalogError}
+          </p>
+        ) : null}
         {catalogItems.length > 0 ? (
           <label className={styles.field} data-part="api-mode">
             <span>{t('providers:apiMode')}</span>

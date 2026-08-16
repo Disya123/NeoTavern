@@ -3,6 +3,23 @@
 ## Unreleased
 ### Added
 
+- **Provider editors report the catalog-unavailable state honestly (M5
+  slice 29).** The provider catalog has no honest wire equivalent
+  (ProviderDto carries no adapterKind/defaultBaseUrl/apiKeyRequired), so
+  the catalog query rejects with a typed `UnsupportedError` on the kernel
+  plane — the panels previously swallowed that error and silently hid the
+  API-mode/source selects, suggesting the catalog was simply empty. Both
+  `ProviderProfileEditor` and `GenerationPresetEditor` now render the
+  localized query error (errors:UNSUPPORTED with the raw feature code)
+  through a dedicated `catalog-error` region whenever the catalog query is
+  in error, on BOTH planes (a legacy network failure is reported just as
+  honestly); the manual path (typed name/base URL, openai-compatible
+  default) still works without the catalog. Tests: ProviderProfileEditor
+  2/2 (+1 kernel-plane case: honest catalog error, no fetch, manual
+  connect still saves through `providers.config.set`), full web vitest
+  green (68 files, 702 tests), typecheck/eslint/prettier clean,
+  ui:api:check 53, docs:check + gates GATE PASS.
+
 - **ApiKeysModal reports the honest secrets-unavailable state on the
   kernel plane (M5 slice 28).** The multi-key secrets manager previously
   rendered the empty state ("No keys yet") when the secrets list query

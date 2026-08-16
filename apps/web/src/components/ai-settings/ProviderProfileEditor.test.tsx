@@ -78,7 +78,7 @@ const defaultSettings: AppSettings = {
   ui: {},
 };
 
-async function renderEditor(element: ReactElement) {
+async function renderEditor(element: ReactElement, includeCatalog = true) {
   const i18n = await createI18n({ language: 'en' });
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -87,7 +87,7 @@ async function renderEditor(element: ReactElement) {
     },
   });
   queryClient.setQueryData(['providers'], { items: [storedProvider] });
-  queryClient.setQueryData(['provider-catalog'], { items: [catalogEntry] });
+  if (includeCatalog) queryClient.setQueryData(['provider-catalog'], { items: [catalogEntry] });
   queryClient.setQueryData(['settings'], defaultSettings);
   queryClient.setQueryData(['presets', 'generation'], { items: [] });
   queryClient.setQueryData(['presets', 'prompt-template'], { items: [] });
@@ -138,5 +138,34 @@ describe('ProviderProfileEditor (kernel plane, slice 27)', () => {
     expect(settingsGet).toHaveBeenCalled();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('reports the catalog-unavailable error honestly and still connects manually', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const configList = vi
+      .spyOn(backend.providers.config, 'list')
+      .mockResolvedValue({ items: [PROVIDER_DTO] });
+    const configSet = vi.spyOn(backend.providers.config, 'set').mockResolvedValue(PROVIDER_DTO);
+    const settingsUpdate = vi.spyOn(backend.settings, 'update').mockResolvedValue({ items: [] });
+
+    // No catalog data is seeded: the provider catalog has no honest wire
+    // equivalent (ProviderDto carries no adapterKind/defaultBaseUrl), so the
+    // query rejects with a typed UnsupportedError on the kernel plane.
+    await renderEditor(<ProviderProfileEditor />, false);
+
+    // The panel says so instead of silently hiding the API-mode/source
+    // selects — a legacy network failure is reported the same way.
+    const catalogError = await screen.findByRole('alert');
+    expect(catalogError).toHaveTextContent('providers.catalog');
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    // Manual connection still works without the catalog.
+    await userEvent.type(screen.getByLabelText('Name'), 'Local model');
+    await userEvent.type(screen.getByLabelText('Base URL'), 'http://127.0.0.1:1234/v1');
+    await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
+    await waitFor(() => expect(screen.getByText('Saved')).toBeInTheDocument());
+    expect(configSet).toHaveBeenCalled();
+    expect(settingsUpdate).toHaveBeenCalled();
+    expect(configList).toHaveBeenCalled();
   });
 });
