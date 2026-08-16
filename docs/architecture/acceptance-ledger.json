@@ -1310,7 +1310,7 @@
           "type": "code",
           "artifact": "Machine-bound OS credential vault (os-vault SecretStore backend)",
           "result": "M5 slice 58 (ТЗ §SEC-01, SEC-01.1 machine-bound): crates/secret-store/src/os_vault.rs NEW (os-vault feature, keyring 3) — OsVaultSecretStore (Windows Credential Manager / macOS Keychain / Linux Secret Service): osvault:<ns>:<id> refs (SecretRefKind::OsVault), machine-bound (credentials never travel with the data folder), fail-closed limits (2560-byte blob / 500-byte key), Unavailable when vault unreachable (never plaintext fallback, never silently empty), list() honest about missing OS enumeration, in-process write serialization (Windows race caveat). KernelHostConfig.secret_backend (Session|OsVault) + KernelHost::open wiring; desktop setup_local_kernel_mode: OsVault default for installed kernel mode, Session for portable/smoke, NEOTA_SECRET_BACKEND=session|osvault override; resolve_data_dir returns (root, portable). Tests: 7 secret-store unit (real-vault round trip skips on runners whose vault accepts writes but does not persist them — sandboxed profile limitation, diagnosed), 22 tauri-local unit/integration (resolver kind isolation, kernel seam wiring); clippy clean, desktop cargo check, android-jni check. Capability notes: ui.secrets updated.",
-          "commit": "pending"
+          "commit": "180036b"
         }
       ],
       "blockingIssues": [
