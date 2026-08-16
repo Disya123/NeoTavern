@@ -315,12 +315,12 @@
     {
       "source": "migrations/README.md",
       "target": "migrations/README.md",
-      "sha256": "a97310651a1e0d9dff71e45fec66eafa73ba98544ddea1abde3953d5f7acbac5"
+      "sha256": "3f8e9ffeefa13ae3ef9da81e2fc12f47a83550cc87746599926dab6cfcd5e864"
     },
     {
       "source": "migrations/etap6-legacy-removal.md",
       "target": "migrations/etap6-legacy-removal.md",
-      "sha256": "4f592fe036a34c6834c57e969ab73f4df4a211b9e54086d81929aeea4caf57b4"
+      "sha256": "fd235f52d231699d69283024482191409efb6bd68237b6f1ae23106fad4cd439"
     },
     {
       "source": "plugin-sdk/README.md",

@@ -60,10 +60,11 @@ test('virtualizes the feed, mounts the newest window, and anchors on load-older'
   await expect(page.getByText(`Latest reply ${suffix}`).first()).toBeVisible();
   await expect(page.locator('[data-index="0"]')).toHaveCount(0);
 
-  // The first page (100 newest) sizes the canvas; only a window of rows is
-  // mounted despite the full chat having hundreds of messages.
+  // The first page sizes the canvas; only a window of rows is mounted
+  // despite the full chat having hundreds of messages. Kernel
+  // `chats.messages.list` defaults to 50 (legacy Fastify served 100).
   const initialCanvasHeight = (await canvas.boundingBox())?.height ?? 0;
-  expect(initialCanvasHeight).toBeGreaterThan(10_000);
+  expect(initialCanvasHeight).toBeGreaterThan(4_000);
   const mountedBeforeScroll = await rows.count();
   expect(mountedBeforeScroll).toBeGreaterThan(0);
   expect(mountedBeforeScroll).toBeLessThan(60);
@@ -84,7 +85,7 @@ test('virtualizes the feed, mounts the newest window, and anchors on load-older'
     .poll(async () => (await canvas.boundingBox())?.height ?? 0, {
       message: 'canvas must grow after loading an older page',
     })
-    .toBeGreaterThan(initialCanvasHeight + 10_000);
+    .toBeGreaterThan(initialCanvasHeight + 4_000);
 
   const mountedAfterLoad = await rows.count();
   expect(mountedAfterLoad).toBeGreaterThan(0);

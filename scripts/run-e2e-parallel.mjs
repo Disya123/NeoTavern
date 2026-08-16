@@ -10,19 +10,33 @@
  *
  * CI (--shard=i/N): runs exactly that shard as one process — the GitHub
  * Actions matrix in ci.yml spawns one runner per shard.
+ *
+ * `--config=` / `-c` selects the Playwright config (Kernel default vs
+ * `playwright.legacy.config.ts` for the Fastify quarantine).
  */
 import { spawn } from 'node:child_process';
 import { availableParallelism } from 'node:os';
 import { readdirSync, existsSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
+import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const playwrightCli = resolve(root, 'node_modules/@playwright/test/cli.js');
+const argv = process.argv.slice(2);
 
-function shardArg(argv) {
-  const flag = argv.find((a) => a.startsWith('--shard='));
+function shardArg(args) {
+  const flag = args.find((a) => a.startsWith('--shard='));
   return flag ? flag.slice('--shard='.length) : null;
+}
+
+function configRel(args) {
+  const flag = args.find((a) => a.startsWith('--config='));
+  if (flag) return flag.slice('--config='.length);
+  const long = args.indexOf('--config');
+  if (long >= 0 && args[long + 1]) return args[long + 1];
+  const short = args.indexOf('-c');
+  if (short >= 0 && args[short + 1]) return args[short + 1];
+  return process.env['E2E_PLAYWRIGHT_CONFIG'] ?? 'playwright.config.ts';
 }
 
 function runPlaywright(args, env) {
@@ -45,43 +59,57 @@ function runPlaywright(args, env) {
   });
 }
 
-function specFileCount() {
-  const dir = resolve(root, 'e2e');
+function walkSpecs(dir, skipNames) {
   if (!existsSync(dir)) return 0;
-  return readdirSync(dir).filter((f) => f.endsWith('.spec.ts')).length;
+  let n = 0;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      if (skipNames.has(entry.name)) continue;
+      n += walkSpecs(join(dir, entry.name), skipNames);
+    } else if (entry.name.endsWith('.spec.ts')) {
+      n += 1;
+    }
+  }
+  return n;
 }
 
-const explicit = shardArg(process.argv.slice(2));
+function specFileCount(configPath) {
+  if (configPath.includes('legacy')) {
+    return walkSpecs(resolve(root, 'e2e', 'legacy'), new Set());
+  }
+  return walkSpecs(resolve(root, 'e2e'), new Set(['legacy', 'spikes']));
+}
+
+const configPath = configRel(argv);
+const configArgs = ['-c', resolve(root, configPath)];
+const explicit = shardArg(argv);
 if (explicit) {
   const [i, n] = explicit.split('/').map(Number);
   try {
-    await runPlaywright([`--shard=${i}/${n}`], {
+    await runPlaywright([...configArgs, `--shard=${i}/${n}`], {
       E2E_PORT_OFFSET: String(i - 1),
       E2E_REPORT_DIR: resolve(root, 'playwright-report', `shard-${i}-of-${n}`),
       E2E_OUTPUT_DIR: resolve(root, 'test-results', `shard-${i}-of-${n}`),
     });
-    console.log(`[e2e] shard ${i}/${n} passed`);
+    console.log(`[e2e] shard ${i}/${n} passed (${configPath})`);
   } catch (error) {
     console.error(`[e2e] shard ${i}/${n} FAILED: ${error.message}`);
     process.exitCode = 1;
   }
 } else {
-  const files = specFileCount();
+  const files = specFileCount(configPath);
   const cores = availableParallelism();
-  // One chromium per shard. Full-core fan-out (10 browsers on 12 threads)
-  // oversubscribes and makes font/render-sensitive visual baselines flaky;
-  // default to ~half the cores, overridable via E2E_SHARDS.
   const envShards = Number.parseInt(process.env['E2E_SHARDS'] ?? '', 10);
   const shards = envShards > 0
-    ? Math.min(envShards, files)
-    : Math.max(2, Math.min(files, Math.floor(cores / 2)));
+    ? Math.min(envShards, Math.max(files, 1))
+    : Math.max(1, Math.min(files, Math.floor(cores / 2) || 1));
   console.log(
-    `[e2e] running ${files} spec files in ${shards} parallel shards (${cores} cores)`,
+    `[e2e] running ${files} spec files in ${shards} parallel shards (${cores} cores, ${configPath})`,
   );
   const results = await Promise.allSettled(
     Array.from({ length: shards }, (_, k) => {
       const i = k + 1;
-      return runPlaywright([`--shard=${i}/${shards}`], {
+      return runPlaywright([...configArgs, `--shard=${i}/${shards}`], {
         E2E_PORT_OFFSET: String(k),
         E2E_REPORT_DIR: resolve(root, 'playwright-report', `shard-${i}-of-${shards}`),
         E2E_OUTPUT_DIR: resolve(root, 'test-results', `shard-${i}-of-${shards}`),

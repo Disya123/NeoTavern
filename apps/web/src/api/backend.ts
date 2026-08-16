@@ -8,6 +8,8 @@
  * - Inside the Android shell the default is `LocalBackend` over
  *   `MobileBridgeTransport` (JNI). The themed HostConnect gate can switch
  *   the singleton to `RemoteBackend` over Headless / Desktop Remote Access.
+ * - A saved remote `hostSession` (browser Web Client or Android after a
+ *   pairing link) uses `RemoteBackend` over Product Wire.
  * - Anywhere else (Vite + sidecar, same-origin Web Client) `LegacyBackend`
  *   stays the transport until M7 removes it.
  *
@@ -51,11 +53,11 @@ function createBackend(): NeoBackend {
   if (isTauriRuntime()) {
     return new LocalBackend({ transport: new TauriTransport() });
   }
+  const saved = readHostSession();
+  if (saved?.kind === 'remote') {
+    return createRemoteBackend(saved.url, readRemoteToken());
+  }
   if (isMobileShell()) {
-    const saved = readHostSession();
-    if (saved?.kind === 'remote') {
-      return createRemoteBackend(saved.url, readRemoteToken());
-    }
     return new LocalBackend({ transport: new MobileBridgeTransport() });
   }
   return createLegacyBackend();

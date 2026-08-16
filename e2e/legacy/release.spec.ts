@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { expectNoA11yViolations, postJson, zipBuffer } from './helpers.js';
+import { expectNoA11yViolations, postJson, zipBuffer } from '../helpers.js';
 
 async function openRailPanel(page: Page, label: string) {
   const navigation = page.getByRole('navigation', { name: 'Main navigation' });

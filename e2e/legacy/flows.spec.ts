@@ -18,7 +18,7 @@
  * The e2e data directory persists between runs, so all names are suffixed.
  */
 import { expect, test, type Page } from '@playwright/test';
-import { postJson, expectNoA11yViolations } from './helpers.js';
+import { postJson, expectNoA11yViolations } from '../helpers.js';
 
 const GENERATION_TIMEOUT_MS = 20_000;
 

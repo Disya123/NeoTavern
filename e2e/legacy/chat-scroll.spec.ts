@@ -11,7 +11,7 @@
  *    optimistic pending bubble, with no duplicate after confirmation.
  */
 import { expect, test, type Page } from '@playwright/test';
-import { postJson } from './helpers.js';
+import { postJson } from '../helpers.js';
 
 const GENERATION_TIMEOUT_MS = 20_000;
 const TEST_TIMEOUT_MS = 120_000;

@@ -18,7 +18,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { postJson, zipBuffer } from './helpers.js';
+import { postJson, zipBuffer } from '../helpers.js';
 
 const SAMPLES_ROOT = resolve(import.meta.dirname, '../plugins');
 

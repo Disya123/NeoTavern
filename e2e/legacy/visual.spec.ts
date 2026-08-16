@@ -1,11 +1,11 @@
 /**
  * Visual regression for the base theme (ТЗ §17). Golden snapshots live under
- * e2e/visual.spec.ts-snapshots/ and are regenerated intentionally with:
+ * e2e/legacy/visual.spec.ts-snapshots/ and are regenerated intentionally with:
  *
- *   pnpm exec playwright test e2e/visual.spec.ts --update-snapshots
+ *   pnpm exec playwright test -c playwright.legacy.config.ts e2e/legacy/visual.spec.ts --update-snapshots
  */
 import { expect, test, type Page } from '@playwright/test';
-import { clearChats, expectNoA11yViolations, zipBuffer } from './helpers.js';
+import { clearChats, expectNoA11yViolations, zipBuffer } from '../helpers.js';
 
 const SCREENSHOT_OPTIONS = {
   animations: 'disabled' as const,

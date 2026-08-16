@@ -188,7 +188,8 @@ tools/
 | `pnpm typecheck`        | TypeScript strict type-check                              |
 | `pnpm lint`             | ESLint (zero warnings)                                    |
 | `pnpm test`             | Unit and integration tests                                |
-| `pnpm test:e2e`         | Playwright end-to-end suite                               |
+| `pnpm test:e2e`         | Playwright Kernel suite (`neotavern-headless`)            |
+| `pnpm test:e2e:legacy`  | Fastify `/api/v2` Playwright quarantine (until M7 delete) |
 | `pnpm contracts:check`  | Contract codegen determinism (`--check`, clean-tree gate) |
 | `pnpm contracts:diff`   | Semantic wire-contract diff                               |
 | `pnpm crates:test`      | Rust workspace tests (cargo)                              |

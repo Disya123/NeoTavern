@@ -1,10 +1,8 @@
 # Этап 6 — Legacy removal (M7)
 
 This is the **migration / deprecation guide** for ТЗ §20 Этап 6 (ledger
-`M7-etap6-legacy-removal`). It is published now so the cutover has a single
-source of truth. **The cutover itself is not executed on `pr-m6-etap5-slices`:**
-Playwright functional E2E still boots Fastify `/api/v2`, and sequential
-policy forbids `deliveredCommit` on M7 while M6 is open.
+`M7-etap6-legacy-removal`). Cutover executes on `pr-m7-etap6-slices`
+(after M6 accepted at `f5c37ea`).
 
 ## Target state
 
@@ -16,20 +14,21 @@ policy forbids `deliveredCommit` on M7 while M6 is open.
 - Compatibility, if still needed, is a **versioned SillyTavern Compatibility
   API** (documented, tested, no product-data ownership) — not a second writer.
 
-## What stays until the cutover
+## What stays until the remaining specs are ported
 
 | Surface                         | Why it still exists                                                                 |
 | ------------------------------- | ----------------------------------------------------------------------------------- |
-| `apps/server` Fastify `/api/v2` | Default Playwright suite and the public desktop sidecar while the Kernel is Preview |
+| `apps/server` Fastify `/api/v2` | `pnpm test:e2e:legacy` (`playwright.legacy.config.ts` / `e2e/legacy/`) — plugins, theme ZIP, echo, context-audit |
 | `packages/db` Drizzle schema    | Legacy adapter for `app.db`                                                         |
 | `legacyRaw()`                   | Unmigrated UI calls tracked in `docs/architecture/operations-inventory.md`          |
 | ADR-0048 / ADR-0047 w7 waivers  | Expire at this stage / the release gate                                             |
 
-## Cutover sequence (after M6 is human-accepted)
+## Cutover sequence (in progress on `pr-m7-etap6-slices`)
 
-1. Point Playwright `webServer` at `neotavern-headless` (the M6
-   `playwright.headless.config.ts` / `e2e/headless/remote.spec.ts` path) and
-   delete the Fastify health-check boot.
+1. **Slice 1 (this branch):** Playwright default (`pnpm test:e2e`) boots
+   `neotavern-headless` + `apps/web/dist`. Kernel specs seed data over
+   Product Wire (`e2e/wire.ts`). Fastify suite is quarantined as
+   `pnpm test:e2e:legacy`. The browser honors a saved remote `hostSession`.
 2. Switch the desktop **public default** to Kernel (release gate in
    AGENTS.md §21) so the sidecar is no longer the honest default.
 3. Delete Drizzle product tables and the legacy writer; keep a read-only
@@ -41,13 +40,15 @@ policy forbids `deliveredCommit` on M7 while M6 is open.
 6. Recovery drills, SBOM/provenance, two real upgrade cycles — release-gate
    items, not this branch.
 
-## Delete inventory (not executed here)
+## Delete inventory (Fastify still required by `e2e/legacy`)
 
-These surfaces are the cutover targets. They stay on `pr-m6-etap5-slices`.
+These surfaces are the remaining cutover targets. Slice 1 quarantined the
+Playwright Fastify boot into `e2e/legacy/` + `playwright.legacy.config.ts`;
+it did not delete `apps/server`.
 
 | Surface                                                                           | Role until cutover                                                             |
 | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `apps/server`                                                                     | Fastify `/api/v2` product host (desktop sidecar + Playwright functional suite) |
+| `apps/server`                                                                     | Fastify `/api/v2` product host (desktop sidecar + `pnpm test:e2e:legacy`)      |
 | `packages/db`                                                                     | Drizzle schema for legacy `app.db`                                             |
 | `LegacyBackend` + `legacyRaw()` in `apps/web/src/api/backend.ts`                  | Facade transport for the sidecar                                               |
 | `apps/web/src/api/{client,events,generate,legacyExtensionSettings,wireBridge}.ts` | Remaining `/api/v2` sites (`docs/architecture/ui-legacy-surface.md`)           |

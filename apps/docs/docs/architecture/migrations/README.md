@@ -6,7 +6,7 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/migrations/README.
 
 ## Этап 6 — Legacy removal (M7)
 
-Cutover plan (not executed while M6 is open):
+Cutover in progress on `pr-m7-etap6-slices` (M6 accepted):
 [etap6-legacy-removal.md](./etap6-legacy-removal.md).
 
 ## 0024 — secret value references (ТЗ §SEC-01)

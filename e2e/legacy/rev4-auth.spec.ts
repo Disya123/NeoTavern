@@ -20,7 +20,7 @@ import { createServer, type Server } from 'node:http';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
-import { zipBuffer } from './helpers.js';
+import { zipBuffer } from '../helpers.js';
 
 const SAMPLES_ROOT = resolve(import.meta.dirname, '../plugins');
 const PLUGIN_ID = 'neotavern.rev4-auth';

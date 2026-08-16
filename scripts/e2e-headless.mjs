@@ -4,10 +4,10 @@
  * stdin EOF (Playwright teardown) kills the child.
  */
 import { spawn } from 'node:child_process';
-import { createReadStream, existsSync, mkdirSync, statSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
-import { extname, join, relative as pathRelative, resolve } from 'node:path';
+import { extname, join, relative as pathRelative, resolve, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(fileURLToPath(new URL('.', import.meta.url)), '..');
@@ -44,10 +44,20 @@ const binaryCandidates = [
 ];
 const binary = binaryCandidates.find((path) => existsSync(path));
 
+const headlessArgs = [
+  '--root',
+  dataRoot,
+  '--bind',
+  headlessBind,
+  '--allowed-origin',
+  webOrigin,
+  '--secret-backend',
+  'session',
+];
 const child = spawn(
   binary ?? 'cargo',
   binary
-    ? ['--root', dataRoot, '--bind', headlessBind, '--allowed-origin', webOrigin]
+    ? headlessArgs
     : [
         'run',
         '--manifest-path',
@@ -55,12 +65,7 @@ const child = spawn(
         '-p',
         'neotavern-headless',
         '--',
-        '--root',
-        dataRoot,
-        '--bind',
-        headlessBind,
-        '--allowed-origin',
-        webOrigin,
+        ...headlessArgs,
       ],
   { cwd: root, stdio: ['pipe', 'pipe', 'pipe'] },
 );
@@ -88,6 +93,17 @@ const server = createServer((req, res) => {
   const serve =
     existsSync(resolved) && statSync(resolved).isFile() ? resolved : join(dist, 'index.html');
   const type = MIME[extname(serve)] ?? 'application/octet-stream';
+  // Vite `base: './'` (Android file://) breaks BrowserRouter deep links on an
+  // HTTP origin (`/chats/:id` would load `./assets` from `/chats/assets`).
+  if (basename(serve) === 'index.html') {
+    let html = readFileSync(serve, 'utf8');
+    if (!html.includes('<base ')) {
+      html = html.replace('<head>', '<head><base href="/" />');
+    }
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    res.end(html);
+    return;
+  }
   res.writeHead(200, { 'content-type': type });
   createReadStream(serve).pipe(res);
 });

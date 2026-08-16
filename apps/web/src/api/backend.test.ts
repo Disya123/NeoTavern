@@ -27,6 +27,21 @@ describe('backend routing', () => {
     expect(() => legacyRaw().sseUrl('/events')).toThrow(UnsupportedError);
   });
 
+  it('uses RemoteBackend in a browser with a saved remote host session', async () => {
+    localStorage.setItem(
+      'neotavern.hostSession',
+      JSON.stringify({ kind: 'remote', url: 'http://127.0.0.1:18080' }),
+    );
+    vi.resetModules();
+    const [{ RemoteBackend }, { backend, isKernelMode, legacyRaw }] = await Promise.all([
+      import('@neotavern/neobackend'),
+      import('./backend.js'),
+    ]);
+    expect(backend).toBeInstanceOf(RemoteBackend);
+    expect(isKernelMode()).toBe(true);
+    expect(() => legacyRaw().request('GET', '/characters')).toThrow();
+  });
+
   it('keeps LegacyBackend in a plain browser', async () => {
     vi.resetModules();
     const [{ LocalBackend }, { backend, legacyRaw }] = await Promise.all([

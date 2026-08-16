@@ -109,8 +109,8 @@ jobs:
       - name: Install Playwright browser
         run: pnpm exec playwright install chromium
 
-      - name: Run E2E suite (shard ${{ matrix.shard }}/4)
-        run: pnpm build && node scripts/run-e2e-parallel.mjs --shard=${{ matrix.shard }}/4
+      - name: Run legacy Fastify E2E suite (shard ${{ matrix.shard }}/4)
+        run: pnpm build && node scripts/run-e2e-parallel.mjs --config=playwright.legacy.config.ts --shard=${{ matrix.shard }}/4
 
       - name: Upload Playwright report
         if: failure()
@@ -121,7 +121,7 @@ jobs:
           retention-days: 7
 
   e2e-headless:
-    name: Playwright Web Client → Headless (M6 remote-flow)
+    name: Playwright Kernel / Web Client → Headless (M7)
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -142,8 +142,8 @@ jobs:
       - name: Install Playwright browser
         run: pnpm exec playwright install chromium
 
-      - name: Web Client remote-flow against neotavern-headless
-        run: pnpm test:e2e:headless
+      - name: Kernel Playwright against neotavern-headless
+        run: pnpm test:e2e
 
   # Plugin SDK vNext cross-platform parity (ТЗ §44/§56, Stage J / B18): the
   # IDENTICAL conformance suite, benchmark harness (B01–B31, default gates)

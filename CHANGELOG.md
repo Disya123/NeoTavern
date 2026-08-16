@@ -1,6 +1,16 @@
 # Changelog
 
 ## Unreleased
+### Changed
+
+- **M7 slice 1 — Playwright default is Kernel.** `pnpm test:e2e` boots
+  `neotavern-headless` and seeds fixtures over Product Wire (`e2e/wire.ts`).
+  The Fastify `/api/v2` suite is quarantined as `pnpm test:e2e:legacy`
+  (`e2e/legacy/`, `playwright.legacy.config.ts`) until plugins, theme ZIP
+  install, echo, and context-audit are ported or deleted. A saved remote
+  `neotavern.hostSession` in the browser now constructs `RemoteBackend`
+  (Web Client reload no longer falls back to same-origin `/api/v2`).
+
 ### Security
 
 - **SSRF-resolved-IP policy for the legacy plugin `network.fetch` (M5 slice

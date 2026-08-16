@@ -51,7 +51,8 @@ Run these before pushing:
 pnpm typecheck    # TypeScript across the monorepo
 pnpm lint         # ESLint, zero warnings allowed
 pnpm test         # Vitest unit and integration tests, plus web tests
-pnpm test:e2e     # Playwright end-to-end suite (builds the workspace first)
+pnpm test:e2e     # Playwright Kernel suite (neotavern-headless + Product Wire)
+pnpm test:e2e:legacy  # Fastify /api/v2 quarantine (until M7 deletes it)
 pnpm build        # full workspace build (tsc -b and Vite)
 pnpm format:check # Prettier check
 ```

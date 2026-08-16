@@ -2,20 +2,51 @@
  * Shared helpers for the Playwright suites: a minimal store-only ZIP writer
  * (the installed `zipBuffer` from release.spec.ts, generalized to bytes),
  * a typed JSON POST helper and an axe accessibility check.
+ *
+ * When `E2E_WIRE_URL` is set (Kernel / neotavern-headless), POSTs map onto
+ * Product Wire `/rpc` instead of Fastify `/api/v2`.
  */
 import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page } from '@playwright/test';
+import {
+  mapLegacyPost,
+  wireBaseUrl,
+  wireCall,
+  wirePatchSettings,
+} from './wire.js';
 
 export async function postJson(
   page: Page,
   path: string,
   body: unknown,
 ): Promise<Record<string, unknown>> {
+  if (wireBaseUrl() !== undefined) {
+    const record =
+      body !== null && typeof body === 'object' && !Array.isArray(body)
+        ? (body as Record<string, unknown>)
+        : {};
+    const mapped = mapLegacyPost(path, record);
+    return wireCall(mapped.operationId, mapped.payload);
+  }
   const response = await page.request.post(`/api/v2${path}`, { data: body });
   expect(response.ok(), `POST ${path} -> ${response.status()}: ${await response.text()}`).toBe(
     true,
   );
   return (await response.json()) as Record<string, unknown>;
+}
+
+export async function patchSettings(
+  page: Page,
+  patch: Record<string, unknown>,
+): Promise<void> {
+  if (wireBaseUrl() !== undefined) {
+    await wirePatchSettings(patch);
+    return;
+  }
+  const response = await page.request.patch('/api/v2/settings', { data: patch });
+  expect(response.ok(), `PATCH settings -> ${response.status()}: ${await response.text()}`).toBe(
+    true,
+  );
 }
 
 /**
@@ -25,6 +56,17 @@ export async function postJson(
  * navigating so the captured hero is deterministic.
  */
 export async function clearChats(page: Page): Promise<void> {
+  if (wireBaseUrl() !== undefined) {
+    const listed = await wireCall('chats.list', { limit: 100 });
+    const items = listed['items'];
+    if (!Array.isArray(items)) return;
+    for (const chat of items) {
+      if (chat !== null && typeof chat === 'object' && 'id' in chat) {
+        await wireCall('chats.delete', { chatId: String((chat as { id: unknown }).id) });
+      }
+    }
+    return;
+  }
   const response = await page.request.get('/api/v2/chats?limit=100');
   expect(response.ok(), `GET chats -> ${response.status()}`).toBe(true);
   const body = (await response.json()) as { items: Array<{ id: string }> };

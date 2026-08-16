@@ -6,8 +6,8 @@
     "comment": "Strict sequential ordering: shipping work for a later milestone while a predecessor is not accepted fails the CI gate (scripts/check-milestone-gates.mjs). Formal acceptance additionally requires every earlier milestone accepted, an existing acceptedCommit in HEAD ancestry, empty or formally waived (non-P0) blockingIssues and non-empty structured evidence. THIS branch (m1-w1-security-clean) carries ONLY M1 work — M2/M3/M4 are recorded as pending with no deliveredCommit, so the gate is green except for M1 awaiting its human acceptance."
   },
   "branch": {
-    "name": "pr-m6-etap5-slices",
-    "note": "M6 (ТЗ Этап 5 Headless/Web Client/Android) PR branch, rooted at e595765 — the accepted M5 HEAD on pr-m5-slices (M5 acceptedCommit bc0f46c is in HEAD ancestry). pr-m5-slices stops growing (sequential policy). Strict sequential: M6 work lives only on this branch."
+    "name": "pr-m7-etap6-slices",
+    "note": "M7 (ТЗ Этап 6 legacy removal) PR branch, rooted at b0e4b67 — the accepted M6 HEAD on pr-m6-etap5-slices (M6 acceptedCommit f5c37ea is in HEAD ancestry). pr-m6-etap5-slices stops growing. Strict sequential: M7 work lives only on this branch."
   },
   "milestones": [
     {
@@ -1515,6 +1515,11 @@
           "type": "artifact",
           "artifact": "docs/migrations/etap6-legacy-removal.md",
           "result": "M7 migration/deprecation guide published, including the delete inventory (apps/server, packages/db, LegacyBackend/legacyRaw, remaining ui-legacy-surface sites, ADR-0048/0047 w7). M6 accepted at f5c37ea; cutover starts on pr-m7-etap6-slices. Rollback is the previous release artifact."
+        },
+        {
+          "type": "artifact",
+          "artifact": "playwright.config.ts + e2e/wire.ts + playwright.legacy.config.ts + e2e/legacy/",
+          "result": "M7 slice 1: default Playwright (`pnpm test:e2e`) boots neotavern-headless + apps/web/dist over Product Wire. Fastify `/api/v2` suite is quarantined (`pnpm test:e2e:legacy`, e2e/legacy). Browser createBackend honors a saved remote hostSession. Fastify/Drizzle/legacyRaw deletion is not this slice."
         }
       ],
       "blockingIssues": [

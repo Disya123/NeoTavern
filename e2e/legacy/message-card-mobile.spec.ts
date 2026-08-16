@@ -12,7 +12,7 @@
  * provider.` without any network.
  */
 import { expect, test, type Page } from '@playwright/test';
-import { expectNoA11yViolations, postJson } from './helpers.js';
+import { expectNoA11yViolations, postJson } from '../helpers.js';
 
 const GENERATION_TIMEOUT_MS = 20_000;
 

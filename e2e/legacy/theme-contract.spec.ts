@@ -13,7 +13,7 @@
  * release.spec.ts; this file focuses on the rejection and settings contract.
  */
 import { expect, test, type Page } from '@playwright/test';
-import { expectNoA11yViolations, zipBuffer } from './helpers.js';
+import { expectNoA11yViolations, zipBuffer } from '../helpers.js';
 
 const THEME_INVALID_TEXT = 'The theme package is invalid.';
 
