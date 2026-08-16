@@ -1262,7 +1262,7 @@
           "type": "artifact",
           "artifact": "ARC-10 status honesty roundup (five capabilities Implemented -> Integrated)",
           "result": "M5 slice 50: library.characterImport, ui.themes, ui.plugins, ui.profile-export and ui.profiles raised Implemented -> Integrated on desktop + webClient in the release manifest, with code-path evidence appended to each note. Evidence (verified in source): CharacterManagementPanel + CharactersPage call importCharacter -> wire assets.put + imports.character.card; the Settings themes section + ThemeSync call readThemes/activateTheme/resetActiveTheme/deleteTheme; the Sidebar PluginsPanel + PluginSync call readPlugins/activatePlugin/disablePlugin/deletePlugin; the Settings Profiles tab calls the NeoBackend facade profiles.list/create/rename/del/export/import. Honest boundaries documented per note: theme/plugin package install, git install, runtime safe mode and OAuth connections remain CAPABILITY_UNAVAILABLE on the kernel plane (no host SEC-05 verifier / SEC-06 executor in the web transport); LegacyBackend keeps honest UnsupportedError for profiles/themes facade ops (parity-tested). Confirmation tests: ProfilesPanel (5), wireBridge (98/98 incl. themes/plugins/import kernel branches), ui.test CharacterManagementPanel. Capability matrix 37 rows (no new ops).",
-          "commit": "pending"
+          "commit": "3a7e58d"
         }
       ],
       "blockingIssues": [
