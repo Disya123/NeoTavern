@@ -1316,7 +1316,7 @@
           "type": "code",
           "artifact": "Headless host tool executor (shared host-tools crate + remote-http SSE mirror)",
           "result": "M5 slice 59 (ТЗ §8.3, §9.3): NEW crates/adapters/host-tools (neotavern-host-tools) extracts the host executor seam — ToolExecutor trait, NoopToolExecutor, BuiltinToolExecutor (app_now, side-effect-free/consent-free), step_tool_call (only durably WAITING tool_call steps) and offer_tool_call (dispatches generation.tool.result; SEC-07 name-only logging; failures leave the run durably waiting — kernel stale-result guard makes double submission harmless). Tauri-local re-uses the crate (executor.rs removed; desktop kernel smoke path unchanged). remote-http SSE worker mirrors the desktop poller (promised in slice 57): every waiting tool_call step is offered to the built-in executor; a handled tool resumes the run and the stream keeps polling the durable journal (resumed_by_executor overrides the session-ended close); NEOTA_TOOL_EXECUTOR=none disables host execution (pre-slice behavior). Integration test: safe app_now round trip completes over a LIVE SSE stream with no external actor — tool_call → tool_result → final_commit → generation.completed; streamed frames == durable log; run status completed. Tests: 6 host-tools unit, 16 tauri-local (incl. os-vault feature), 82 remote-http (27 unit + 55 integration); clippy --all-features --all-targets clean (host-tools/tauri-local/remote-http), desktop cargo check 0. Capability notes: generation.tool-loop updated.",
-          "commit": "pending"
+          "commit": "3fe849d"
         }
       ],
       "blockingIssues": [
