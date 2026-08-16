@@ -545,7 +545,7 @@ fn handle_request(shared: &Arc<Shared>, request: Request) {
     {
         None => None,
         Some(origin) => {
-            if !shared.cors.allows(&origin) {
+            if !origin_admitted(shared, &origin) {
                 shared
                     .audit
                     .record(AuditKind::OriginDenied, "origin_not_allowed");
@@ -588,6 +588,16 @@ fn handle_request(shared: &Arc<Shared>, request: Request) {
     }
 }
 
+/// CORS admit: exact allowlist, plus the opaque `null` origin when pairing
+/// is on. Packaged Android WebView (`file:///android_asset/...`) sends
+/// `Origin: null`; the bearer token is the CSRF/auth gate in that case.
+fn origin_admitted(shared: &Shared, origin: &str) -> bool {
+    if shared.cors.allows(origin) {
+        return true;
+    }
+    origin == "null" && shared.auth.is_some()
+}
+
 /// Answers an `OPTIONS` preflight for an allowed origin: 204 + the CORS
 /// headers a browser needs to perform the actual request. Disallowed
 /// origins never reach this point (denied in [`handle_request`]).
@@ -596,11 +606,14 @@ fn respond_cors_preflight(request: Request, origin: &str) {
         .with_header(header("Access-Control-Allow-Origin", origin))
         .with_header(header("Vary", "Origin"))
         .with_header(header("Access-Control-Allow-Methods", "GET, POST, OPTIONS"))
-        .with_header(header(
-            "Access-Control-Allow-Headers",
-            "Authorization, Content-Type, Last-Event-ID",
-        ))
-        .with_header(header("Access-Control-Max-Age", "600"));
+        .with_header(
+            header(
+                "Access-Control-Allow-Headers",
+                "Authorization, Content-Type, Last-Event-ID",
+            ),
+        )
+        .with_header(header("Access-Control-Max-Age", "600"))
+        .with_header(header("Access-Control-Allow-Private-Network", "true"));
     let _ = request.respond(response);
 }
 

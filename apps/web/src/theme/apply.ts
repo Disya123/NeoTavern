@@ -94,21 +94,51 @@ let appliedSettingVariables: string[] = [];
 /** User-controlled shell layout variables that must survive theme re-apply. */
 const PRESERVED_SHELL_LAYOUT_VARIABLES = ['--st-shell-panel-width'] as const;
 
+/** Android WebView injects these; theme apply must not wipe the safe-area. */
+const PRESERVED_SAFE_AREA_VARIABLES = [
+  '--nt-safe-area-top',
+  '--nt-safe-area-right',
+  '--nt-safe-area-bottom',
+  '--nt-safe-area-left',
+  '--nt-inset-top',
+  '--nt-inset-right',
+  '--nt-inset-bottom',
+  '--nt-inset-left',
+] as const;
+
+const PRESERVED_INLINE_VARIABLES = [
+  ...PRESERVED_SHELL_LAYOUT_VARIABLES,
+  ...PRESERVED_SAFE_AREA_VARIABLES,
+] as const;
+
+function snapshotPreservedInlineVariables(style: CSSStyleDeclaration): Map<string, string> {
+  const preserved = new Map<string, string>();
+  for (const variable of PRESERVED_INLINE_VARIABLES) {
+    const value = style.getPropertyValue(variable).trim();
+    if (value.length > 0) preserved.set(variable, value);
+  }
+  return preserved;
+}
+
+function restorePreservedInlineVariables(
+  style: CSSStyleDeclaration,
+  preserved: Map<string, string>,
+): void {
+  for (const [variable, value] of preserved) {
+    const important = (PRESERVED_SAFE_AREA_VARIABLES as readonly string[]).includes(variable);
+    style.setProperty(variable, value, important ? 'important' : '');
+  }
+}
+
 /** Remove inline theme variables (revert to stylesheet defaults). */
 export function clearThemeOverrides(): void {
   const el = document.documentElement;
-  const preserved = new Map<string, string>();
-  for (const variable of PRESERVED_SHELL_LAYOUT_VARIABLES) {
-    const value = el.style.getPropertyValue(variable).trim();
-    if (value.length > 0) preserved.set(variable, value);
-  }
+  const preserved = snapshotPreservedInlineVariables(el.style);
   const properties = Array.from({ length: el.style.length }, (_, index) => el.style.item(index));
   for (const key of properties) {
     if (key.startsWith('--st-')) el.style.removeProperty(key);
   }
-  for (const [variable, value] of preserved) {
-    el.style.setProperty(variable, value);
-  }
+  restorePreservedInlineVariables(el.style, preserved);
   for (const variable of appliedSettingVariables) el.style.removeProperty(variable);
   appliedSettingVariables = [];
   delete el.dataset.themeId;
@@ -199,11 +229,7 @@ export function applyInstalledTheme(
   mode: UiThemeMode,
 ): boolean {
   const el = document.documentElement;
-  const preservedShellLayout = new Map<string, string>();
-  for (const variable of PRESERVED_SHELL_LAYOUT_VARIABLES) {
-    const value = el.style.getPropertyValue(variable).trim();
-    if (value.length > 0) preservedShellLayout.set(variable, value);
-  }
+  const preservedInline = snapshotPreservedInlineVariables(el.style);
   clearThemeOverrides();
   try {
     const manifests = [...parents, active].map((item) => {
@@ -213,9 +239,7 @@ export function applyInstalledTheme(
     const activeManifest = manifests.at(-1);
     if (!activeManifest) throw new Error('Active theme manifest is missing');
     applyTheme(activeManifest, mode, manifests.slice(0, -1));
-    for (const [variable, value] of preservedShellLayout) {
-      el.style.setProperty(variable, value);
-    }
+    restorePreservedInlineVariables(el.style, preservedInline);
     const responsive = resolveThemeResponsive(activeManifest);
     el.dataset.themeDensity = responsive.density;
     el.dataset.themeMotion = responsive.motion;

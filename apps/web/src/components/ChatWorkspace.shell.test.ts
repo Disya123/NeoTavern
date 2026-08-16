@@ -14,10 +14,16 @@ describe('ChatWorkspace shell contract', () => {
     const toolbarBlock = css.match(/\.composerToolbar\s*\{[^}]*\}/)?.[0] ?? '';
 
     expect(css).toContain('--chat-composer-edge-inset: var(--st-space-lg)');
+    expect(css).toMatch(/grid-template-rows:\s*minmax\(0,\s*1fr\)/);
+    expect(css).toMatch(/\.chatHeader[\s\S]*position:\s*absolute/);
+    expect(css).toMatch(/\.chatHeader[\s\S]*padding-block-start:\s*var\(--nt-inset-top\)/);
+    expect(css).toMatch(
+      /\.scrollBody[\s\S]*var\(--st-control-height-large\)\s*\+\s*var\(--nt-inset-top\)/,
+    );
     expect(css).not.toContain('--composer-h');
     expect(css).not.toContain('ResizeObserver');
     expect(css).not.toContain('mask-image');
-    expect(viewportBlock).toMatch(/grid-row:\s*2/);
+    expect(viewportBlock).toMatch(/grid-row:\s*1/);
     expect(viewportBlock).toMatch(/overflow-y:\s*auto/);
     expect(viewportBlock).toMatch(/scrollbar-width:\s*none/);
     expect(viewportBlock).not.toMatch(/scrollbar-gutter/);

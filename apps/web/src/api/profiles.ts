@@ -1,16 +1,22 @@
 /**
- * Backend profiles (ТЗ §7.2 Phase 5 / §16).
+ * Backend profiles (ТЗ §7.2 / §16).
  *
- * A profile selects which backend the UI talks to. Phase 5 ships the local
- * (in-process kernel) profile for the mobile shell; the remote profile is
- * declared but not selectable yet (Phase 9 scope). Profile state is local UI
- * state only — host-managed caches and credentials (ТЗ §16) never touch this
- * store.
+ * A profile selects which backend the UI talks to. Local profiles run the
+ * in-process kernel (mobile WebView bridge / Tauri IPC). Remote profiles
+ * talk Product Wire HTTP (`RemoteBackend` + `HttpTransport`) to Headless
+ * or Desktop Remote Access — selectable from the themed HostConnect gate
+ * (M6; ADR-0034 originally deferred this to Phase 9).
+ *
+ * Profile state is local UI state only — host-managed caches and credentials
+ * never touch this store. Pairing tokens live in sessionStorage / memory,
+ * not here.
  */
 import { create } from 'zustand';
 import { LocalBackend, UnsupportedError, type LocalTransport, type NeoBackend } from '@neotavern/neobackend';
 import { isMobileShell } from '../lib/mobile.js';
+import { readRemoteToken } from './hostSession.js';
 import { MobileBridgeTransport } from './mobileTransport.js';
+import { createRemoteBackend } from './remoteWire.js';
 import { isTauriRuntime, TauriTransport } from './tauriTransport.js';
 
 export type Profile = {
@@ -44,9 +50,8 @@ export const useProfileStore = create<ProfileStore>((set) => ({
 
 /**
  * Resolve a profile to its backend. Local profiles run `LocalBackend` over
- * the shell transport (mobile WebView bridge in the Android shell, Tauri IPC
- * on desktop); remote profiles throw — they are Phase 9 scope, declared but
- * not selectable.
+ * the shell transport; remote profiles require `remoteUrl` and build
+ * `RemoteBackend` over the product-wire HTTP transport.
  */
 export function resolveBackend(profile: Profile): { backend: NeoBackend } {
   if (profile.kind === 'local') {
@@ -62,5 +67,9 @@ export function resolveBackend(profile: Profile): { backend: NeoBackend } {
     }
     return { backend: new LocalBackend({ transport }) };
   }
-  throw new UnsupportedError('profile.remote');
+  const remoteUrl = profile.remoteUrl?.trim();
+  if (remoteUrl === undefined || remoteUrl.length === 0) {
+    throw new UnsupportedError('profile.remote.url');
+  }
+  return { backend: createRemoteBackend(remoteUrl, readRemoteToken()) };
 }

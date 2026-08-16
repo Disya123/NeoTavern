@@ -12,7 +12,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { extname, basename } from 'node:path';
+import { extname, basename, resolve } from 'node:path';
 import { VIEWPORT_BREAKPOINTS, CONTAINER_BREAKPOINTS, DEFAULT_LIGHT_TOKENS } from '../src/index.js';
 import { SCAN_DIRS, collectSourceFiles, repoRoot } from './helpers.js';
 
@@ -147,5 +147,16 @@ describe('style contract: breakpoint registry', () => {
     expect(CONTAINER_BREAKPOINTS).toEqual(sortedContainer);
     expect(new Set(VIEWPORT_BREAKPOINTS).size).toBe(VIEWPORT_BREAKPOINTS.length);
     expect(new Set(CONTAINER_BREAKPOINTS).size).toBe(CONTAINER_BREAKPOINTS.length);
+  });
+});
+
+describe('style contract: host-connect gate', () => {
+  it('skins the gate through the public data-component contract, not a CSS module', () => {
+    const css = readFileSync(resolve(repoRoot, 'packages/ui/src/styles/components.css'), 'utf8');
+    expect(css).toContain("[data-component='host-connect']");
+    expect(css).toContain("[data-component='host-connect'] [data-part='panel']");
+    expect(css).toContain("[data-component='host-connect'] [data-part='header']");
+    expect(css).toContain("[data-component='host-connect'] [data-part='actions']");
+    expect(css).not.toMatch(/\[data-component='host-connect'\][^{]*\{[^}]*#[0-9a-fA-F]{3,8}/u);
   });
 });

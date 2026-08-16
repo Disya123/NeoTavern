@@ -262,6 +262,7 @@ export function ChatComposer({
             {showStop ? (
               <Button
                 variant="danger"
+                data-action="stop"
                 onClick={onStop}
                 aria-label={t('chat:stop')}
                 title={t('chat:stop')}
@@ -272,6 +273,7 @@ export function ChatComposer({
             ) : (
               <Button
                 variant="primary"
+                data-action="send"
                 onClick={onSubmit}
                 disabled={submitDisabled}
                 aria-label={submitPendingLabel ?? t('chat:send')}

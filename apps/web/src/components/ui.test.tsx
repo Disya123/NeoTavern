@@ -71,6 +71,7 @@ describe('ChatComposer', () => {
     expect(settingsButtons).toHaveLength(2);
     expect(settingsButtons[0]).toHaveAttribute('aria-label', 'Settings');
     expect(screen.getByRole('button', { name: 'Send' })).toHaveAttribute('aria-label', 'Send');
+    expect(screen.getByRole('button', { name: 'Send' })).toHaveAttribute('data-action', 'send');
     expect(
       rendered.container.querySelector(
         '[data-slot="chat.composer"] [data-part="field"] [data-component="textarea"]',
@@ -399,9 +400,8 @@ describe('MessageBubble', () => {
 });
 
 describe('CharacterManagementPanel', () => {
-  it('edits ST1 character fields and exposes the real gallery section', // Heavy component test (list + viewer + gallery + edit flows under
-  // full-suite parallel load); the default 5 s budget is routinely blown.
-  async () => {
+  it('edits ST1 character fields and exposes the real gallery section', async () => {
+    // full-suite parallel load); the default 5 s budget is routinely blown. // Heavy component test (list + viewer + gallery + edit flows under
     const character = {
       id: '018f0000-0000-7000-8000-000000000401',
       name: 'Seraphina',
@@ -485,7 +485,10 @@ describe('CharacterManagementPanel', () => {
         'Gallery',
       ]);
 
-      await userEvent.click(await panel.findByRole('button', { name: /Seraphina/ }));
+      const seraphinaCard = await panel.findByRole('button', { name: /Seraphina/ });
+      expect(seraphinaCard).toHaveAttribute('data-part', 'character-card');
+      expect(seraphinaCard).toHaveAttribute('data-name', 'Seraphina');
+      await userEvent.click(seraphinaCard);
       const viewer = await panel.findByTitle('Read-only card for Seraphina');
       expect(viewer).toHaveAttribute('sandbox', 'allow-same-origin');
       expect(viewer).toHaveAttribute('referrerpolicy', 'no-referrer');
@@ -717,10 +720,10 @@ describe('AuthGate', () => {
 
   it('keeps only the app shell visible when the session check fails offline', async () => {
     const onlineSpy = vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => Promise.reject(new TypeError('Offline'))),
+    const fetchMock = vi.fn(async (_input?: RequestInfo | URL, _init?: RequestInit) =>
+      Promise.reject(new TypeError('Offline')),
     );
+    vi.stubGlobal('fetch', fetchMock);
     try {
       const rendered = await renderWithProviders(
         <AuthGate>
@@ -730,6 +733,14 @@ describe('AuthGate', () => {
       const gate = within(rendered.container);
       expect(await gate.findByText('Offline · app shell only')).toHaveAttribute('role', 'status');
       expect(gate.getByText('Cached application shell')).toBeInTheDocument();
+      expect(
+        gate.queryByRole('heading', { name: 'Enter your access token' }),
+      ).not.toBeInTheDocument();
+      const mutating = fetchMock.mock.calls.filter(([, init]) => {
+        const method = String(init?.method ?? 'GET').toUpperCase();
+        return method !== 'GET' && method !== 'HEAD';
+      });
+      expect(mutating).toEqual([]);
     } finally {
       onlineSpy.mockRestore();
       vi.unstubAllGlobals();

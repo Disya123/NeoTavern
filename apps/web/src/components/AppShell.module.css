@@ -38,7 +38,7 @@
   .statusArea {
     position: fixed;
     z-index: var(--st-layer-notification);
-    inset-block-start: max(var(--st-space-sm), env(safe-area-inset-top));
+    inset-block-start: max(var(--st-space-sm), var(--nt-inset-top));
     inset-inline: calc(
         var(--shell-rail-current-width, var(--st-shell-rail-width)) + var(--st-space-md)
       )

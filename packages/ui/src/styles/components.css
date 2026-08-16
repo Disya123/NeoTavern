@@ -861,8 +861,7 @@
       width: 100%;
       max-height: var(--st-dialog-sheet-height);
       border-radius: var(--st-radius-overlay) var(--st-radius-overlay) 0 0;
-      padding: var(--st-space-xl) var(--st-space-lg)
-        max(var(--st-space-xl), env(safe-area-inset-bottom));
+      padding: var(--st-space-xl) var(--st-space-lg) max(var(--st-space-xl), var(--nt-inset-bottom));
       transform: none;
     }
   }
@@ -887,5 +886,96 @@
     to {
       background-position-x: -220%;
     }
+  }
+
+  /* HostConnect gate (Android / remote-flow, before app.shell) ----------- */
+  /* --nt-inset-* prefers env() (iOS / PWA) then Android-injected
+     --nt-safe-area-* (WebView env() is 0). The document is edge-to-edge. */
+  [data-component='host-connect'] {
+    display: flex;
+    box-sizing: border-box;
+    min-height: 100dvh;
+    max-height: 100dvh;
+    overflow-y: auto;
+    flex-direction: column;
+    padding-block: max(var(--st-space-2xl), var(--nt-inset-top))
+      max(var(--st-space-2xl), var(--nt-inset-bottom));
+    padding-inline: max(var(--st-space-lg), var(--nt-inset-left))
+      max(var(--st-space-lg), var(--nt-inset-right));
+    color: var(--st-color-text-primary);
+    background: var(--st-color-surface-canvas);
+  }
+  [data-component='host-connect'] [data-part='panel'] {
+    display: grid;
+    width: min(100%, var(--st-dialog-max-width));
+    margin-block: auto;
+    margin-inline: auto;
+    gap: var(--st-space-lg);
+  }
+  [data-component='host-connect'] [data-part='header'] {
+    display: grid;
+    gap: var(--st-space-sm);
+  }
+  [data-component='host-connect'] [data-part='mark'] {
+    display: grid;
+    width: var(--st-control-height-large);
+    height: var(--st-control-height-large);
+    place-items: center;
+    border-radius: var(--st-radius-control);
+    color: var(--st-color-accent-soft-text);
+    background: var(--st-color-accent-soft);
+  }
+  [data-component='host-connect'] [data-part='mark'] svg {
+    width: 60%;
+    height: 60%;
+  }
+  [data-component='host-connect'] [data-part='eyebrow'] {
+    color: var(--st-color-accent-soft-text);
+    font-size: var(--st-font-size-xs);
+    font-weight: var(--st-font-weight-bold);
+    text-transform: uppercase;
+  }
+  [data-component='host-connect'] [data-part='title'] {
+    font-size: var(--st-font-size-xl);
+    font-weight: var(--st-font-weight-bold);
+  }
+  [data-component='host-connect'] [data-part='subtitle'],
+  [data-component='host-connect'] [data-part='hint'] {
+    color: var(--st-color-text-secondary);
+    font-size: var(--st-font-size-sm);
+    line-height: var(--st-line-height-body);
+  }
+  [data-component='host-connect'] [data-part='body'],
+  [data-component='host-connect'] [data-part='link-form'] {
+    display: grid;
+    gap: var(--st-space-md);
+  }
+  [data-component='host-connect'] [data-part='preview'] {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    border: var(--st-border-width) solid var(--st-color-border);
+    border-radius: var(--st-radius-card);
+    background: var(--st-color-surface-secondary);
+    object-fit: cover;
+  }
+  [data-component='host-connect'] [data-part='preview'][data-state='idle'] {
+    display: none;
+  }
+  [data-component='host-connect'] [data-part='error'] {
+    padding: var(--st-space-sm) var(--st-space-md);
+    border-inline-start: var(--st-space-xs) solid var(--st-color-danger);
+    color: var(--st-color-danger);
+    background: var(--st-color-surface-secondary);
+    font-size: var(--st-font-size-sm);
+  }
+  [data-component='host-connect'] [data-part='actions'] {
+    display: grid;
+    gap: var(--st-space-sm);
+  }
+  [data-component='host-connect'] [data-part='actions'] [data-component='button'] {
+    width: 100%;
+  }
+  [data-component='host-connect'] [data-component='segmented'] button {
+    min-height: var(--st-control-height);
   }
 }

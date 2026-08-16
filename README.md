@@ -21,9 +21,10 @@ is preserved through a dedicated legacy layer.
 One product, several hosts: the Desktop app runs fully local (public builds
 temporarily bundle the tested legacy Node sidecar while the Rust Kernel is an
 explicit Preview — nightly/internal builds run the Kernel with no HTTP server;
-ADR-0038), the same backend runs headless on a VPS, Android uses the same
-runtime and data format without Node.js — and all of them share one
-authoritative implementation of persistent state: the Rust Runtime Kernel.
+ADR-0038), the same Kernel runs headless on a VPS via `neotavern-headless`,
+Android uses the same runtime and data format without Node.js — and all of
+them share one authoritative implementation of persistent state: the Rust
+Runtime Kernel.
 
 ## Architecture
 
@@ -34,8 +35,8 @@ Public Contracts (TypeBox wire schemas → TS types + generated Rust DTO)
         └── Runtime Kernel (Rust: SQLite ownership, migrations, recovery,
                             generation durability, backup/restore primitives)
                 │
-                └── Hosts: Desktop (Tauri + sidecar) · Android (JNI bridge)
-                           · Headless (Fastify/HTTP adapter) · Web (RemoteBackend)
+                └── Hosts: Desktop (Tauri + sidecar) · Android (JNI local host)
+                           · Headless (neotavern-headless / remote-http) · Web (RemoteBackend)
 ```
 
 - **One source of truth for cross-language contracts.** Product Wire Contracts
@@ -124,22 +125,28 @@ the printed URL (the backend binds to `127.0.0.1` by default).
 
 ### Android (from source)
 
-Requires the Rust toolchain (for the kernel + JNI bridge) and Android SDK/NDK:
+Requires the Rust toolchain (for the kernel + JNI bridge), Android SDK/NDK,
+and a production web build (ТЗ §11.4 — assemble is fail-closed without
+`apps/web/dist/index.html`):
 
 ```bash
-pnpm desktop:android:build
+pnpm --filter @neotavern/web build
+cd apps/android
+bash scripts/build-libs.sh
+gradle :app:assembleDebug
 ```
 
-The APK bundles the Runtime Kernel via JNI — no Node.js runs on-device.
+The APK bundles the Runtime Kernel via JNI and the packaged web UI — no
+Node.js runs on-device. See [docs/android](docs/android/README.md).
 
 ## Repository layout
 
 ```text
 apps/
-├── server          Fastify 5 legacy/migration backend (REST /api/v2, SSE) — headless host
+├── server          Fastify 5 legacy/migration backend (REST /api/v2, SSE)
 ├── web             React 19 SPA (Vite 8, installable Web Client)
 ├── desktop         Tauri 2 shell with a bundled Node.js sidecar
-├── android         Android host (Gradle): JNI kernel bridge, background adapter
+├── android         Android host (Gradle): JNI kernel + packaged web assets
 ├── docs            Docusaurus documentation site (EN / 简体中文 / 日本語)
 └── plugin-runtime  Separate process running SES-hardened Workers per plugin
 
@@ -174,23 +181,22 @@ tools/
 
 ## Development commands
 
-| Command                      | Purpose                                                   |
-| ---------------------------- | --------------------------------------------------------- |
-| `pnpm dev`                   | Run backend + web dev servers                             |
-| `pnpm build`                 | Type-check and build all TS packages/apps                 |
-| `pnpm typecheck`             | TypeScript strict type-check                              |
-| `pnpm lint`                  | ESLint (zero warnings)                                    |
-| `pnpm test`                  | Unit and integration tests                                |
-| `pnpm test:e2e`              | Playwright end-to-end suite                               |
-| `pnpm contracts:check`       | Contract codegen determinism (`--check`, clean-tree gate) |
-| `pnpm contracts:diff`        | Semantic wire-contract diff                               |
-| `pnpm crates:test`           | Rust workspace tests (cargo)                              |
-| `pnpm benchmark`             | DB benchmark suite                                        |
-| `pnpm docs:check`            | Validate required docs and internal links                 |
-| `pnpm docs:build`            | Build the docs site                                       |
-| `pnpm desktop:portable`      | Build portable Windows bundle (no installer)              |
-| `pnpm desktop:release`       | Build signed desktop installers (CI-owned)                |
-| `pnpm desktop:android:build` | Build the Android APK (debug)                             |
+| Command                 | Purpose                                                   |
+| ----------------------- | --------------------------------------------------------- |
+| `pnpm dev`              | Run backend + web dev servers                             |
+| `pnpm build`            | Type-check and build all TS packages/apps                 |
+| `pnpm typecheck`        | TypeScript strict type-check                              |
+| `pnpm lint`             | ESLint (zero warnings)                                    |
+| `pnpm test`             | Unit and integration tests                                |
+| `pnpm test:e2e`         | Playwright end-to-end suite                               |
+| `pnpm contracts:check`  | Contract codegen determinism (`--check`, clean-tree gate) |
+| `pnpm contracts:diff`   | Semantic wire-contract diff                               |
+| `pnpm crates:test`      | Rust workspace tests (cargo)                              |
+| `pnpm benchmark`        | DB benchmark suite                                        |
+| `pnpm docs:check`       | Validate required docs and internal links                 |
+| `pnpm docs:build`       | Build the docs site                                       |
+| `pnpm desktop:portable` | Build portable Windows bundle (no installer)              |
+| `pnpm desktop:release`  | Build signed desktop installers (CI-owned)                |
 
 Requires Node.js ≥ 24, pnpm 9, and (for `crates:test` / Android) the Rust
 toolchain.

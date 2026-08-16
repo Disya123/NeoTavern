@@ -52,7 +52,7 @@
     min-width: 0;
     padding-inline: var(--st-space-lg);
     isolation: isolate;
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
     background: color-mix(
       in srgb,
       var(--st-color-surface-secondary) var(--st-custom-ui-opacity, 70%),
@@ -61,7 +61,7 @@
   }
 
   .viewport {
-    grid-row: 2;
+    grid-row: 1;
     min-height: 0;
     overflow-y: auto;
     scrollbar-width: none;
@@ -78,7 +78,8 @@
     min-height: 100%;
     flex-direction: column;
     gap: var(--st-space-xl);
-    padding-block: var(--st-space-lg) var(--st-space-md);
+    padding-block: calc(var(--st-control-height-large) + var(--nt-inset-top) + var(--st-space-lg))
+      var(--st-space-md);
     padding-inline: var(--chat-content-inline-inset);
   }
 
@@ -167,13 +168,24 @@
   /* --- header (identity + conversation search) ------------------------------ */
 
   .chatHeader {
+    position: absolute;
+    z-index: calc(var(--st-layer-panel) + 1);
+    inset-block-start: 0;
+    inset-inline: 0;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    min-height: var(--st-control-height-large);
+    min-height: calc(var(--st-control-height-large) + var(--nt-inset-top));
     gap: var(--st-space-sm);
+    padding-block-start: var(--nt-inset-top);
     padding-inline: var(--st-space-sm);
     border-bottom: 1px solid color-mix(in srgb, var(--st-color-border) 48%, transparent);
+    background: color-mix(
+      in srgb,
+      var(--st-color-surface-secondary) var(--st-custom-ui-opacity, 70%),
+      transparent
+    );
+    backdrop-filter: blur(calc(var(--st-effect-glass-blur) * 1.2));
   }
 
   .headerAvatar,
@@ -464,8 +476,11 @@
 
   @media (max-width: 600px) {
     .chatHeader {
-      position: relative;
       border-block-end: 0;
+      min-height: calc(
+        var(--st-control-height-large) + max(var(--st-space-2xl), var(--nt-inset-top))
+      );
+      padding-block-start: max(var(--st-space-2xl), var(--nt-inset-top));
     }
 
     .chatHeader::after {
@@ -483,12 +498,16 @@
 
     .chatPanel {
       padding-inline: var(--st-space-sm);
-      --chat-composer-edge-inset: max(var(--st-space-sm), env(safe-area-inset-bottom));
+      --chat-composer-edge-inset: max(var(--st-space-2xl), var(--nt-inset-bottom));
       --chat-content-inline-inset: var(--st-space-md);
     }
 
     .scrollBody {
-      padding-block: var(--st-space-sm) var(--st-space-md);
+      padding-block: calc(
+          var(--st-control-height-large) + max(var(--st-space-2xl), var(--nt-inset-top)) +
+            var(--st-space-sm)
+        )
+        var(--st-space-md);
       padding-inline: var(--chat-content-inline-inset);
     }
 

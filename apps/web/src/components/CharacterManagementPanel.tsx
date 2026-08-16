@@ -741,6 +741,8 @@ function CardsTab({
                 type="button"
                 key={item.id}
                 className={styles.characterCard}
+                data-part="character-card"
+                data-name={item.name}
                 data-state={selected ? 'selected' : 'idle'}
                 data-pinned={pinned ? 'true' : 'false'}
                 onClick={() => onSelect(item.id)}

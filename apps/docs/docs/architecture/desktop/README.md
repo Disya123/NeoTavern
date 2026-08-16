@@ -48,6 +48,9 @@ Runtime Kernel → SQLite` (ТЗ §11.1/§15.1).
 - Contract handshake: `KernelHost::open` requires the exact embedded
   `schemaHash` and FFI ABI version (§6.5); a stale WebView bundle or native
   library is caught before any product write.
+- Starter pack: kernel mode sets `NEOTA_SEED_STARTER=1` before open so the
+  writer thread seeds Hazel + Vesper once per data root (see
+  [Starter character pack](../data/README.md#starter-character-pack)).
 - Streaming: the kernel's durable `generation.events` log is polled by a
   native worker and forwarded to the webview over a Tauri `Channel`; aborting
   the stream dispatches `generation.cancel` (durable, §63). The poller closes
@@ -172,63 +175,69 @@ Windows resource paths without the `\\?\` verbatim prefix before passing them
 to the packaged Node. An unexpected backend exit terminates the shell with an
 error; a clean exit is marked separately and leaves no orphan sidecar.
 
+## Headless host
+
+The Headless server is a **transport adapter over the Kernel**, not a second
+application core. `crates/adapters/remote-http` remains the library
+(envelope-over-HTTP, ADR-0030). `crates/adapters/headless`
+(`neotavern-headless`) is the composition root that operators actually run:
+
+```text
+neotavern-headless --root <data-root>
+```
+
+- **Loopback by default** (`127.0.0.1:8080`). A non-loopback bind is a
+  startup error unless `--remote-exposure` (`NEOTA_REMOTE_EXPOSURE=1`) opts
+  in; a public bind still requires `--auth` (`NEOTA_HEADLESS_AUTH=1`) —
+  fail-closed before any listener exists (ТЗ §10 / §11.3.1).
+- **Secret policy is explicit.** Default backend is read-only `env`
+  (`NEOTA_SECRET_*`). `--secret-backend session|unavailable` selects the
+  session-only or fail-closed stores. There is never a plaintext fallback
+  (SEC-01). File/`secrets.enc` passphrase unlock on a daemon is a later
+  slice.
+- **Stdout** is a single `listening <ip:port>` line. The process waits for
+  stdin EOF, then drains in-flight HTTP. Ctrl+C kills the process; durable
+  generation runs recover on the next open.
+- **TLS** is an operator/proxy concern in front of remote exposure
+  (ADR-0030). This host speaks plaintext HTTP on the bound socket.
+- Pairing tokens are printed once on stderr and never stored or logged as
+  values (SHA-256 verifier only, same store as Desktop Remote Access).
+
+The Web Client remains a remote-only client of this host (or of Desktop
+Remote Access): without a connection it shows the offline/connection screen
+and must not perform product mutations (ARC-12 / ADR-0043). Remote-flow E2E
+against this binary is a later M6 slice.
+
+See [the crate README](https://github.com/Disya123/NeoTavern/blob/main/crates/adapters/headless/README.md).
+
 ## Android APK client
 
-The APK is a Tauri 2 Android client that connects to a NeoTavern server. It
-does not bundle or start Node and does not run a localhost backend: the WebView
-navigates to the user's server origin (`http://<host>:<port>`), so the server
-serves the SPA itself and same-origin auth, CORS and CSP work unchanged. The
-same scheme applies to a future embedded backend on the device (WebView →
-`http://127.0.0.1:<port>`).
+The canonical Android host is **not** a Tauri WebView pointed at a remote
+Fastify server. It is the JNI local host in [`apps/android/`](https://github.com/Disya123/NeoTavern/blob/main/apps/android):
+the WebView loads **bundled** `apps/web` assets (`assets/web/index.html`) and
+talks to the in-process Runtime Kernel over `window.__neotavernMobile`
+([ADR-0034](../adr/0034-android-local-host-jni-transport.md)). There is no
+Node.js and no listening HTTP port on the device.
 
-Structure:
+See [Android](../android/README.md) and `apps/android/README.md`.
 
-- `apps/desktop/src-tauri/src/lib.rs` — shared shell crate. `#[cfg(desktop)]`
-  keeps the existing sidecar/updater logic; `#[cfg(mobile)]` registers only the
-  `mobile_check_core_update` / `mobile_install_core_update` stubs (the updater
-  reports `configured: false` on Android).
-- `apps/desktop/src-tauri/tauri.android.conf.json` — platform config override:
-  `frontendDist` → `../mobile-connect`, an empty `beforeBuildCommand`, the
-  single `main` window, a mobile CSP, no external binaries and no plugins.
-- `apps/desktop/mobile-connect/` — plain HTML/CSS/JS start page (no React, no
-  Tauri API). It remembers the server address in
-  `localStorage['neotavern.backendUrl']`, auto-navigates on fresh loads, and
-  skips the redirect on back/forward navigation so the system back button
-  returns to the form. Before redirecting it pushes a history copy of the
-  page: a failed navigation to an unreachable address replaces the current
-  history entry, so without the copy the back button would exit the app
-  instead of coming back to the form.
-- `apps/desktop/src-tauri/gen/android/` — generated Android Studio project
-  (`pnpm desktop:android:init`).
+The previous Tauri Android / `mobile-connect` remote-connect APK path
+(`pnpm desktop:android:*`, `tauri.android.conf.json`) is **removed** — it
+conflicted with the JNI host (ТЗ §20 Этап 5 item 8). `#[cfg(mobile)]` stubs
+in `apps/desktop/src-tauri/src/lib.rs` remain as compile-time no-ops if
+someone invokes `tauri android` anyway; that is not a supported product.
 
-Build and run:
+Build the canonical APK (assemble is fail-closed without a web build):
 
 ```bash
-pnpm desktop:android:init     # one-time scaffold (icons + identifier required)
-pnpm desktop:android:build    # debug APK (all ABIs)
-pnpm desktop:android:dev      # install + launch on a connected device/emulator
+pnpm --filter @neotavern/web build
+cd apps/android
+bash scripts/build-libs.sh
+gradle :app:assembleDebug
 ```
 
-For a single ABI pass `--target x86_64` (emulator) or `--target aarch64`
-(device). Prerequisites: JDK 17+, `ANDROID_HOME` (platforms, build-tools,
-NDK), and the `aarch64-linux-android` / `x86_64-linux-android` rustup targets.
-Cleartext HTTP is enabled only for debug builds via the
-`usesCleartextTraffic` manifest placeholder in `app/build.gradle.kts`; release
-builds keep it disabled. Production remote access must use HTTPS (see
-ADR-0005) with the server's `NEOTA_REMOTE_ALLOW_INSECURE_HTTP` flag left off.
-
-LAN test (server code unchanged):
-
-```bash
-NEOTA_HOST=0.0.0.0 NEOTA_PORT=8000 NEOTA_REMOTE_ACCESS=true \
-NEOTA_REMOTE_TOKEN=<32+ chars> NEOTA_PUBLIC_ORIGIN=http://<LAN-IP>:8000 \
-NEOTA_WEB_DIR=<abs path>/apps/web/dist NEOTA_REMOTE_ALLOW_INSECURE_HTTP=true \
-pnpm --filter @neotavern/server start
-```
-
-The mobile-connect page accepts `http://<LAN-IP>:8000`, then the server's
-login gate exchanges the token for a session. `GET /api/v2/health` answers
-`{"status":"ok"}`.
+CI (`android-build`) builds the web client, assembles the debug APK, and
+refuses the job if the ZIP lacks `assets/web/index.html` (ТЗ §18.3).
 
 ## Web Client
 

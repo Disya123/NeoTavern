@@ -787,7 +787,7 @@ function rpcResult(operationId: string | undefined): unknown {
 /**
  * Stub fetch serving the ClientSdk HttpTransport surface: `GET /meta` for the
  * handshake, `POST /rpc` with a canonical RequestEnvelope → ResponseEnvelope,
- * and `POST /stream` with NDJSON event envelopes for streaming operations.
+ * and `POST /rpc/stream` with NDJSON event envelopes for streaming operations.
  */
 class StubFetch {
   readonly rpcRequests: Array<{ operationId: string; requestId: string }> = [];
@@ -803,7 +803,7 @@ class StubFetch {
       requestId?: string;
       payload?: unknown;
     };
-    if (pathname === '/stream') {
+    if (pathname === '/rpc/stream') {
       if (
         envelope.operationId === 'generation.start' ||
         envelope.operationId === 'generation.retry'

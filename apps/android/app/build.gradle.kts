@@ -1,6 +1,33 @@
+import org.gradle.api.GradleException
+import org.gradle.api.tasks.Copy
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+}
+
+// Production web UI staged from apps/web/dist into APK assets/web/ (ТЗ §11.4).
+// JVM unit tests do NOT depend on this task (no merge*Assets), so they stay
+// runnable without a Vite build. assembleDebug / connectedAndroidTest fail
+// closed if index.html is missing (ТЗ §18.3).
+val webDistDir = rootProject.projectDir.resolve("../web/dist")
+val packagedWebAssetsDir = layout.buildDirectory.dir("generated/neotavern-web-assets")
+
+val packageWebAssets by tasks.registering(Copy::class) {
+    group = "build"
+    description = "Stage apps/web/dist into APK assets/web (ТЗ §11.4 / §18.3)."
+    from(webDistDir)
+    into(packagedWebAssetsDir.map { it.dir("web") })
+    doFirst {
+        val index = webDistDir.resolve("index.html")
+        if (!index.isFile) {
+            throw GradleException(
+                "Refusing to package an Android APK without apps/web/dist/index.html " +
+                    "(ТЗ §11.4 / §18.3). Build the web client first: " +
+                    "`pnpm --filter @neotavern/web build`",
+            )
+        }
+    }
 }
 
 android {
@@ -25,10 +52,33 @@ android {
         jvmTarget = "17"
     }
 
+    sourceSets.getByName("main").assets.srcDir(packagedWebAssetsDir)
+
+    // CI `assembleRelease` uses the debug keystore so the ZIP can be
+    // scanned for packaged web assets (ТЗ §11.4 Packaged). Store signing
+    // is the release gate, not this host module.
+    buildTypes {
+        getByName("release") {
+            signingConfig = signingConfigs.getByName("debug")
+            isMinifyEnabled = false
+        }
+    }
+
     // The native kernel library (libneotavern_android_jni.so) is a PREBUILT
     // artifact produced by scripts/build-libs.sh into
     // src/main/jniLibs/{arm64-v8a,x86_64}/ — it is never committed and needs
     // no externalNativeBuild configuration.
+}
+
+tasks.configureEach {
+    val n = name
+    if (
+        n == "mergeDebugAssets" ||
+            n == "mergeReleaseAssets" ||
+            n.contains("lintVital", ignoreCase = true)
+    ) {
+        dependsOn(packageWebAssets)
+    }
 }
 
 dependencies {
@@ -43,4 +93,5 @@ dependencies {
 
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.1")
+    androidTestImplementation("androidx.test:core-ktx:1.6.1")
 }

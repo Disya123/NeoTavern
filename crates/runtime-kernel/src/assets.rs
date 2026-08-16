@@ -53,47 +53,57 @@ pub(crate) fn assets_put(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, K
             )
         })?;
 
-    let checksum = neotavern_storage::assets::sha256_hex(&bytes);
-    let ext = extension_of(&req.filename);
-    let relative_key = format!("{}/{checksum}{ext}", req.kind);
+    let (id, deduplicated) = publish_bytes(
+        db,
+        &req.kind,
+        &req.filename,
+        &bytes,
+        req.content_type.as_deref(),
+    )?;
+    let asset = asset_by_id(db, &id)?;
+    let dto = ResultAssetsPut {
+        asset,
+        deduplicated,
+        deduplicated_from_id: if deduplicated { Some(id) } else { None },
+    };
+    encode_result_put(&dto)
+}
 
-    // Idempotent re-import: identical bytes under the same kind already
-    // published → return the existing record (never a duplicate).
+/// Content-addressed publish that bypasses the wire `assets.put` size cap.
+/// The starter pack avatar is larger than 1 MiB; the writer thread uses this
+/// instead of dispatch. Identical bytes under the same kind reuse the row.
+pub(crate) fn publish_bytes(
+    db: &mut Database,
+    kind: &str,
+    filename: &str,
+    bytes: &[u8],
+    content_type: Option<&str>,
+) -> Result<(String, bool), KernelError> {
+    let checksum = neotavern_storage::assets::sha256_hex(bytes);
+    let ext = extension_of(filename);
+    let relative_key = format!("{kind}/{checksum}{ext}");
+
     let existing: Option<String> = db
         .conn()
         .query_row(
             "SELECT id FROM __neotavern_assets \
              WHERE checksum_sha256 = ?1 AND type = ?2 LIMIT 1",
-            rusqlite::params![checksum, req.kind],
+            rusqlite::params![checksum, kind],
             |row| row.get(0),
         )
         .optional()
-        .map_err(|err| sqlite(err, "assets.put: dedupe lookup failed"))?;
+        .map_err(|err| sqlite(err, "assets.publish: dedupe lookup failed"))?;
     if let Some(id) = existing {
-        persist_content_type(db, &id, req.content_type.as_deref())?;
-        let asset = asset_by_id(db, &id)?;
-        let dto = ResultAssetsPut {
-            asset,
-            deduplicated: true,
-            deduplicated_from_id: Some(id),
-        };
-        return encode_result_put(&dto);
+        persist_content_type(db, &id, content_type)?;
+        return Ok((id, true));
     }
 
     let id = new_id();
-    let record =
-        neotavern_storage::assets::publish_asset(db, &id, &req.kind, &relative_key, &bytes)
-            .map_err(|err| {
-                map_asset_error(err, "assets.put: publish failed", &id, &relative_key)
-            })?;
-    persist_content_type(db, &id, req.content_type.as_deref())?;
-    let asset = asset_dto(&record);
-    let dto = ResultAssetsPut {
-        asset,
-        deduplicated: false,
-        deduplicated_from_id: None,
-    };
-    encode_result_put(&dto)
+    neotavern_storage::assets::publish_asset(db, &id, kind, &relative_key, bytes).map_err(
+        |err| map_asset_error(err, "assets.publish: publish failed", &id, &relative_key),
+    )?;
+    persist_content_type(db, &id, content_type)?;
+    Ok((id, false))
 }
 
 /// `assets.get` — metadata by id.
@@ -190,17 +200,6 @@ pub(crate) fn asset_by_id(db: &Database, id: &str) -> Result<AssetsItem, KernelE
         size_bytes,
         created_at,
     })
-}
-
-fn asset_dto(record: &neotavern_storage::assets::AssetRecord) -> AssetsItem {
-    AssetsItem {
-        id: record.id.clone(),
-        kind: record.kind.clone(),
-        relative_key: record.relative_key.clone(),
-        checksum_sha256: record.checksum_sha256.clone(),
-        size_bytes: record.size_bytes,
-        created_at: record.created_at.clone(),
-    }
 }
 
 /// Persist the optional `contentType` in the asset metadata JSON

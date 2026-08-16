@@ -16,7 +16,13 @@ object NotificationState {
     /** User-visible channel name. */
     const val CHANNEL_NAME = "Generation"
 
-    /** Action id for the notification's "stop generation" action. */
+    /**
+     * Action id for the notification's "stop generation" action.
+     * Delivered as an explicit component intent targeting
+     * `GenerationService` (`PendingIntent.getService`), not as an implicit
+     * broadcast — package-scoped broadcasts do not reach a non-exported
+     * runtime receiver on API 34+, including API 36.
+     */
     const val ACTION_STOP = "com.neotavern.mobile.action.STOP_GENERATION"
 
     /** Stable notification id for the generation foreground notification. */

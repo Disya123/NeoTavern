@@ -75,8 +75,10 @@ crates/
   storage/             # SQLite ownership: lease, migrations, assets, snapshot,
                        # recovery (ТЗ Фаза 2)
   adapters/
-    remote-http/       # Phase 4 headless/remote adapter: HTTP/SSE → same Kernel
+    remote-http/       # Phase 4 remote HTTP/SSE adapter over the same Kernel
                        # (tiny_http, envelope-over-HTTP, ADR-0030)
+    headless/          # M6 / ТЗ §11.3 Headless host: composition root that
+                       # binds remote-http (loopback default, explicit exposure)
     mobile-ffi/        # Phase 5 native bridge: stable C ABI → same Kernel
                        # (opaque handles, bounded buffers, status codes)
 ```
@@ -270,6 +272,17 @@ gate passes.
   wire registry (no contract/codegen impact). The enable/pair/revoke UI is
   gated to the desktop shell. See
   [ADR-0035](../adr/README.md#adr-0035-desktop-remote-access--host-service-over-the-shared-runtime-kernel).
+- **M6 / ТЗ §11.3 Headless host** — `crates/adapters/headless`
+  (`neotavern-headless`): the composition root that turns the Phase 4
+  `remote-http` **library** into a long-running Headless server. It opens a
+  canonical data-root, wires an explicit SecretStore backend (`env` default
+  / `session` / `unavailable`, SEC-01, never plaintext), and binds
+  `RemoteAdapter` — loopback `127.0.0.1:8080` by default, non-loopback only
+  with `--remote-exposure`, public bind still requires `--auth` (fail-closed
+  pre-bind, ТЗ §10 / §11.3.1). Stdout is a single `listening <addr>` line;
+  stdin EOF drains in-flight HTTP. TLS termination is an operator/proxy
+  concern in front of remote exposure (ADR-0030). See
+  [Desktop / Headless](../desktop/README.md#headless-host).
 - **Phase 10 Extension hardening** — real security boundaries for
   extensions (ТЗ §10/§47–§54/§70): declarative semantic UI slots
   (the five frozen ids, host-side re-validation, permission gating,
@@ -314,7 +327,8 @@ gate passes.
   over the **same kernel session** (never a second writable kernel, §22):
   a bounded `dataSync` foreground service continues user-visible generation
   streams via a shared `KernelHolder`-refcounted handle, with a
-  status-only notification and Stop action (§85) mapping stop/expiration to
+  status-only notification and explicit Stop `PendingIntent.getService`
+  (§85) mapping stop/expiration to
   `generation.cancel` and process death to kernel startup recovery +
   `generation.retry`; maintenance runs as WorkManager unique one-time work
   (`neotavern-maintenance` → `backups.create`, battery + storage

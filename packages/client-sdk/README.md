@@ -7,10 +7,12 @@ this package adds the client transport and operation semantics on top.
 
 ## Public API
 
-- `HttpTransport` — HTTP/NDJSON transport for the wire endpoints:
+- `HttpTransport` — HTTP transport for the wire endpoints:
   `POST {base}/rpc` (RequestEnvelope → ResponseEnvelope),
-  `POST {base}/stream` (NDJSON EventEnvelope lines),
-  `GET {base}/meta`. `fetchImpl` is injectable for tests.
+  `POST {base}/rpc/stream` (SSE `text/event-stream` EventEnvelope frames;
+  NDJSON is still accepted when a stub returns a non-SSE content type),
+  `GET {base}/meta`. Optional `authorization` (pairing bearer). `fetchImpl`
+  is injectable for tests.
 - `ClientSdk` — `handshake()`, typed `call()`, `stream()`:
   - registry lookup against `buildProductWireRegistry()`;
   - outbound payload validation + `requestLimitBytes` size check _before_
@@ -37,9 +39,9 @@ pnpm exec vitest run packages/client-sdk        # tests (stub fetch, no server)
 
 - Depends only on `@neotavern/contracts` and `@sinclair/typebox` (Value
   validation). No server code, no product rules (validation only, ТЗ §15.1).
-- The wire endpoints (`/rpc`, `/stream`, `/meta`) are not yet served by
-  the legacy server; `RemoteBackend` is wired to a live server in a later
-  phase.
+- The wire endpoints (`/rpc`, `/rpc/stream`, `/meta`) are served by
+  Headless and Desktop Remote Access (`remote-http`). `RemoteBackend`
+  speaks them through this SDK.
 - Streams never fabricate terminal events; a stream that dies mid-way
   fails with a resumable `TransportError` (sequence-based recovery is a
   kernel-side feature).

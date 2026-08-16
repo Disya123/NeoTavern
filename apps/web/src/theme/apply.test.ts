@@ -146,6 +146,23 @@ describe('installed theme application', () => {
 
     expect(document.documentElement.style.getPropertyValue('--st-shell-panel-width')).toBe('520px');
   });
+
+  it('preserves Android safe-area CSS vars across theme re-apply', () => {
+    document.documentElement.style.setProperty('--nt-safe-area-top', '63px');
+    document.documentElement.style.setProperty('--nt-inset-top', '63px');
+    document.documentElement.style.setProperty('--nt-inset-bottom', '48px');
+    const active = installedTheme(
+      'test.safe-area',
+      { tokens: { dark: { 'color-accent': '#abcdef' } } },
+      '/api/v2/themes/test.safe-area/assets/components.css',
+    );
+
+    applyInstalledTheme(active, [], 'dark');
+
+    expect(document.documentElement.style.getPropertyValue('--nt-safe-area-top')).toBe('63px');
+    expect(document.documentElement.style.getPropertyValue('--nt-inset-top')).toBe('63px');
+    expect(document.documentElement.style.getPropertyValue('--nt-inset-bottom')).toBe('48px');
+  });
 });
 
 describe('responsive behavior attributes', () => {

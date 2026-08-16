@@ -6,8 +6,8 @@
     "comment": "Strict sequential ordering: shipping work for a later milestone while a predecessor is not accepted fails the CI gate (scripts/check-milestone-gates.mjs). Formal acceptance additionally requires every earlier milestone accepted, an existing acceptedCommit in HEAD ancestry, empty or formally waived (non-P0) blockingIssues and non-empty structured evidence. THIS branch (m1-w1-security-clean) carries ONLY M1 work — M2/M3/M4 are recorded as pending with no deliveredCommit, so the gate is green except for M1 awaiting its human acceptance."
   },
   "branch": {
-    "name": "m1-w1-security-clean",
-    "note": "Clean M1 PR branch per the audit directive ('split the accumulated branch into security / kernel flow / migration / separate M4 PRs'). Rooted at ec127a4 — origin/main (85b3d3d) plus the two accepted M0 governance commits (cec2f56, ec127a4) — because M0's acceptedCommit ec127a4 must be in HEAD ancestry for the gate. 17 cherry-picked M1 commits (the accumulated branch m1-w1-security is kept as-is as the source for the later PRs) plus the M1 review-round-2 and governance commits. origin/main is untouched: nothing was ever pushed to it."
+    "name": "pr-m6-etap5-slices",
+    "note": "M6 (ТЗ Этап 5 Headless/Web Client/Android) PR branch, rooted at e595765 — the accepted M5 HEAD on pr-m5-slices (M5 acceptedCommit bc0f46c is in HEAD ancestry). pr-m5-slices stops growing (sequential policy). Strict sequential: M6 work lives only on this branch."
   },
   "milestones": [
     {
@@ -1411,10 +1411,103 @@
       "acceptedCommit": "bc0f46c",
       "acceptedBy": "Deepseek",
       "acceptedAt": "2026-08-15"
+    },
+    {
+      "id": "M6-etap5-headless",
+      "name": "Этап 5: Headless/Web Client и Android parity",
+      "status": "in_progress",
+      "description": "ТЗ §20 Этап 5 / §11.3 / §11.4. Headless is a thin Kernel HTTP adapter (not a second core); Web Client is remote-only; Android packs web assets, Keystore/JNI lifecycle, instrumented E2E and process-death recovery. Opened after M5 (Этап 4) was accepted. Ledger M6 is this stage; ТЗ Этап 6 (legacy removal / Fastify product-data ownership / facade retirement) is the subsequent M7 — the M5 ADR-0047 w7 phrase 'passes to M6' is the next-stage handoff, not a claim that M6 deletes Fastify.",
+      "requirements": [
+        "Headless host is a thin Kernel adapter: composition root binds remote-http over one Kernel + data-root (no second schema, no product rules in the host)",
+        "auth/origin policy and streaming conformance on the Headless host (loopback default; remote-exposure + auth for non-loopback; SSE backpressure already in remote-http)",
+        "Web Client remains remote-only; offline connection UX/cache policy proven (no product mutations offline, ARC-12)",
+        "Android build embeds production apps/web assets",
+        "Keystore/JNI lifecycle complete (no Node.js on device)",
+        "Android user-flow instrumented E2E",
+        "process death/restart recovery on Android",
+        "conflicting Android build paths removed",
+        "exit: support matrix honestly confirmed by artifacts and E2E"
+      ],
+      "evidence": [
+        {
+          "type": "inspection",
+          "result": "M6 opened after the M5 human verdict (e595765, acceptedCommit bc0f46c). Slice 1 (Headless host composition root) in progress on pr-m6-etap5-slices. remote-http remains the library; neotavern-headless is the long-running host. Android web-assets, Web Client remote-flow E2E, process-death and conflicting APK paths stay later slices. M5 P1 waivers (ADR-0048 routes, ADR-0047 w7 Fastify ownership) expire at Этап 6 / M7 / release gate — M6 does not close them.",
+          "commit": "e595765"
+        },
+        {
+          "type": "artifact",
+          "artifact": "crates/adapters/headless (neotavern-headless binary, src/lib.rs, tests/headless.rs, README.md)",
+          "result": "M6 slice 1 (ТЗ §11.3): Headless composition root binds remote-http over a data-root Kernel. Loopback default 127.0.0.1:8080; InsecureBind without --remote-exposure; PublicBindRequiresAuth without --auth; documented env/session/unavailable SecretStore (SEC-01, never plaintext); stdout `listening <addr>`; stdin EOF drains. Verified: cargo test -p neotavern-headless 14/14 (7 lib parse + 7 binary: /meta, character create/get over /rpc, both bind gates, auth 401-then-token, --help, missing --root), cargo test --workspace exit 0, clippy -p neotavern-headless --all-targets -D warnings 0, fmt --check 0, ui:api:check 53/53 (0 product, legacy-compat milestone relabeled M7), capability matrix 39 rows, docs:check + docs:sync:check OK (70 files), milestone-gates 7 milestones / 6 accepted GATE PASS. remote-http stays the library. Android web-assets / Web Client remote-flow E2E / process-death remain later slices."
+        },
+        {
+          "type": "artifact",
+          "artifact": "apps/android/app/build.gradle.kts packageWebAssets + scripts/check-android-apk-web-assets.mjs + .github/workflows/ci.yml android-build",
+          "result": "M6 slice 2 (ТЗ §11.4 / §18.3 / Этап 5 items 4+8): Gradle stages apps/web/dist into APK assets/web and refuses assembleDebug/assembleRelease without index.html (JVM unit tests stay independent of Vite). CI builds the web client before assemble and fails closed if the debug APK ZIP lacks assets/web/index.html. Nightly emulator jobs get the same web build so connectedDebugAndroidTest packages the UI. Conflicting Tauri Android path removed (desktop:android:* scripts, tauri.android.conf.json, apps/desktop/mobile-connect). ui:api:check now rejects a removal milestone that is not a ledger id/prefix — which is why M7 is registered below as NOT started. Capability matrix 40 rows (host.android-web-assets Implemented). NOT claimed complete: Web Client remote-flow E2E against neotavern-headless, Android WebView user-flow E2E, UI process-death, Keystore device round-trip, matrix Packaged/E2E exit."
+        },
+        {
+          "type": "artifact",
+          "artifact": "e2e/headless/remote.spec.ts + playwright.headless.config.ts + scripts/e2e-headless.mjs + .github/workflows/ci.yml e2e-headless",
+          "result": "M6 Web Client remote-flow E2E: Playwright connects HostConnect (?connect=) to neotavern-headless over Product Wire GET /meta + POST /rpc and reaches data-component=app-shell. HttpTransport calls globalThis.fetch (Chromium-legal). Themed gate is data-component=host-connect in @neotavern/ui, not a CSS Module. Command: pnpm test:e2e:headless (1 passed). Not a human acceptance."
+        },
+        {
+          "type": "artifact",
+          "artifact": "apps/android/app/src/androidTest/java/com/neotavern/mobile/{WebViewUserFlowInstrumentedTest,KeystoreSecretStoreInstrumentedTest,WebAssetsPackagedInstrumentedTest,BackgroundExecutionInstrumentedTest}.kt",
+          "result": "M6 Android instrumented close-out on emulator-5554 (API 36.1): connectedDebugAndroidTest 11/11 passed, including WebViewUserFlowInstrumentedTest catalog (character-management Hazel) + settings-panel change-host + Home composer, generation.start through window.__neotavernMobile.call (fake provider) interrupted→retry after simulated process death on filesDir/neotavern, HostConnect local→app-shell recreate, edge-to-edge safe-area, Keystore, web assets, KernelRoundTrip, BackgroundExecution FGS/process-death/WorkManager, extension probe. CI assembleRelease (debug-signed) + check-android-apk-web-assets.mjs mark host.android-web-assets Packaged (debug and release APKs both contain assets/web/index.html). Not a human acceptance; not Released (no store signing)."
+        }
+      ],
+      "blockingIssues": [],
+      "resolvedIssues": [
+        "Android full chat/settings UI flow through WebView → JNI → Kernel — DELIVERED: HostConnect local → app-shell + Activity recreate, plus catalog (Hazel), Settings change-host, Home composer (WebViewUserFlowInstrumentedTest.hostConnectLocal_catalogSettingsComposer_reachKernelUi)",
+        "Android generation process-death recovery on the UI→JNI→Kernel path — DELIVERED: generation.start via window.__neotavernMobile.call on the production data root, kernel close without generation.cancel, interrupted → generation.retry (WebViewUserFlowInstrumentedTest.hostConnectLocal_generationViaBridge_processDeathInterruptedThenRetry); BackgroundExecutionInstrumentedTest remains the kernel-level FGS/temp-root suite on nightly",
+        "support matrix Packaged confirmed by artifacts and E2E — DELIVERED for M6: host.android-web-assets Packaged (CI assembleRelease + ZIP gate); host.headless-server Implemented (host) / Integrated (Web Client Playwright). Released (store-signed Play / desktop installers) is the release gate, not an M6 requirement"
+      ],
+      "waivers": []
+    },
+    {
+      "id": "M7-etap6-legacy-removal",
+      "name": "Этап 6: Legacy removal и Stable hardening",
+      "status": "in_progress",
+      "description": "ТЗ §20 Этап 6. Delete Drizzle product schema and the legacy writer, retire legacyRaw()/migration shims, keep only a documented versioned ST Compatibility API if still needed, recovery drills, signing/SBOM/provenance, two real upgrade cycles, migration guide. Exit: one core, one schema, one UI facade, no expired architecture waivers. Registered so ui:api:check M7/release-gate records have a ledger identity. NO Fastify/legacyRaw deletion happens on pr-m6-etap5-slices. Sequential policy: this milestone has no deliveredCommit while M6 is open.",
+      "requirements": [
+        "delete Drizzle product schema and the legacy writer",
+        "delete temporary migration branches and legacyRaw()",
+        "keep a documented versioned ST Compatibility API if still needed; delete only migration shims",
+        "recovery drills and performance tuning",
+        "platform signing, SBOM and provenance",
+        "at least two real upgrade cycles before Stable",
+        "publish the migration/deprecation guide",
+        "exit: one core, one schema, one UI facade, no expired architecture waivers"
+      ],
+      "evidence": [
+        {
+          "type": "artifact",
+          "artifact": "docs/migrations/etap6-legacy-removal.md",
+          "result": "M7 migration/deprecation guide published, including the delete inventory (apps/server, packages/db, LegacyBackend/legacyRaw, remaining ui-legacy-surface sites, ADR-0048/0047 w7). Cutover is NOT executed on pr-m6-etap5-slices (Playwright functional suite still boots Fastify /api/v2; sequential policy: no deliveredCommit while M6 is open). Rollback is the previous release artifact."
+        }
+      ],
+      "blockingIssues": [
+        "P1 (OPEN): M7 work is blocked on M6 human acceptance (policy.parallelDevelopment=false)",
+        "P1 (OPEN): delete Drizzle product schema and the legacy writer",
+        "P1 (OPEN): delete temporary migration branches and legacyRaw()",
+        "P1 (OPEN): keep a documented versioned ST Compatibility API if still needed; delete only migration shims",
+        "P1 (OPEN): recovery drills and performance tuning",
+        "P1 (OPEN): platform signing, SBOM and provenance",
+        "P1 (OPEN): at least two real upgrade cycles before Stable",
+        "P1 (OPEN): exit — one core, one schema, one UI facade, no expired architecture waivers"
+      ],
+      "waivers": []
     }
   ],
   "prSplitPlan": {
     "note": "Audit directive 'split the accumulated branch into security / kernel flow / migration / separate M4 PRs'. pr-security-m1 is EXECUTED on this branch (m1-w1-security-clean, rooted at ec127a4). The remaining PRs will be cut from the accumulated branch (m1-w1-security, kept as-is) by cherry-picking the listed commits onto the then-current main after each predecessor milestone is accepted (conflict resolution against main is expected — the tail M1 commits were written against the accumulated tree). The strict sequential policy prevents further stage mixing, so the accumulated branch stops growing.",
+    "pr-m6-etap5-slices": {
+      "when": "EXECUTED — this branch, after M5 accepted at e595765",
+      "note": "ТЗ Этап 5 (Headless/Web Client/Android). Slice 1: neotavern-headless composition root over remote-http. Slice 2: Android web assets fail-closed packaging + removal of the conflicting Tauri Android APK path. HostConnect is a Theme SDK surface (local / link / QR). Playwright `pnpm test:e2e:headless` talks to neotavern-headless over Product Wire. Close-out: WebView catalog/settings/composer E2E, UI→JNI generation process-death, host.android-web-assets Packaged (CI release APK). Fastify/legacy removal is M7 (Этап 6), not this milestone — do not start it here. M6 is not human-accepted."
+    },
+    "pr-m7-etap6-slices": {
+      "when": "after M6 accepted",
+      "note": "NOT STARTED. ТЗ Этап 6 (legacy removal / Stable hardening). The M7 ledger row is an identity placeholder (in_progress, no deliveredCommit) so ui:api:check can name M7. Do not delete Fastify, Drizzle product schema, or legacyRaw() on pr-m6-etap5-slices."
+    },
     "m34FullTest": "2026-08-15 (round 74): full cargo test --workspace on the merged M1+M2+M3+M4 state (combined sequential dry-run, scratch worktree from c18070e, shared CARGO_TARGET_DIR): exit 0, every test target green — incl. neotavern-storage integration (migration corpus, kill-safety, restore, snapshot, legacy, lease, assets, backup, export, baseline, open_migrate, fresh_fingerprint), runtime-kernel (tool loop, generation, kernel CRUD), provider-openai-compat, built-in-providers, remote-http conformance, CLI. Combined with the zero-real-source-conflict dry-run, both the M3 and M4 re-cuts are fully de-risked on the Rust plane.",
     "pr-security-m1": {
       "when": "EXECUTED — this branch (m1-w1-security-clean)",

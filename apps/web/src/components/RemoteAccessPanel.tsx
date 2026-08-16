@@ -26,6 +26,7 @@ import {
   remoteStatus,
   type RemoteStartPayload,
 } from '../api/remoteAccess.js';
+import { formatPairingLink } from '../api/pairingLink.js';
 import { isTauriRuntime } from '../api/tauriTransport.js';
 import styles from './RemoteAccessPanel.module.css';
 
@@ -174,6 +175,20 @@ export function RemoteAccessPanel() {
     const token = issued?.token;
     if (!token) return;
     await navigator.clipboard?.writeText(token);
+    setCopied(true);
+  };
+
+  const pairingLink =
+    issued && running && status?.bind && status.port !== null
+      ? formatPairingLink(
+          `http://${status.bind === '::1' ? '[::1]' : status.bind}:${status.port}`,
+          issued.token,
+        )
+      : null;
+
+  const copyPairingLink = async (): Promise<void> => {
+    if (pairingLink === null) return;
+    await navigator.clipboard?.writeText(pairingLink);
     setCopied(true);
   };
 
@@ -342,11 +357,22 @@ export function RemoteAccessPanel() {
           </div>
           <code className={styles.tokenValue}>{issued.token}</code>
           <p className={styles.tokenHint}>{t('remoteTokenHint')}</p>
+          {pairingLink ? (
+            <>
+              <p className={styles.tokenHint}>{t('remotePairingLinkHint')}</p>
+              <code className={styles.tokenValue} data-part="pairing-link">
+                {pairingLink}
+              </code>
+            </>
+          ) : null}
           <ActionBar collapse="stack" className={styles.tokenActions}>
             <ActionBarGroup placement="primary">
               <Button variant="primary" onClick={() => void copyToken()}>
                 {copied ? t('remoteCopied') : t('remoteCopy')}
               </Button>
+              {pairingLink ? (
+                <Button onClick={() => void copyPairingLink()}>{t('remoteCopyLink')}</Button>
+              ) : null}
             </ActionBarGroup>
           </ActionBar>
         </div>

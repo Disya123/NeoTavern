@@ -159,6 +159,7 @@ class NeotavernBridge(
     private val webView: WebView,
     private val onStreamOpened: ((Pair<Long, String>) -> Unit)? = null,
     private val onStreamTerminal: ((String) -> Unit)? = null,
+    private val safeAreaCss: () -> String = { """{"top":"0px","right":"0px","bottom":"0px","left":"0px"}""" },
 ) {
 
     /** Set by the host on teardown; stops pumps and drops pending deliveries. */
@@ -176,6 +177,14 @@ class NeotavernBridge(
 
     @JavascriptInterface
     fun handshake(): String = session.handshake()
+
+    /**
+     * CSS-pixel safe-area box for Theme SDK chrome (`--nt-inset-*`). Additive;
+     * the frozen Phase 5 call/stream surface is unchanged. The web client
+     * reads this synchronously because `evaluateJavascript` races hydration.
+     */
+    @JavascriptInterface
+    fun safeAreaCss(): String = safeAreaCss.invoke()
 
     /**
      * Host capability probe (ТЗ §60): the Android host supports background

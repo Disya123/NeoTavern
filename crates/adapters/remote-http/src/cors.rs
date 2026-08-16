@@ -13,7 +13,9 @@
 //! browser auth защищён от CSRF").
 //!
 //! Non-browser clients (CLI, the Client SDK outside a browser) send no
-//! `Origin` header and are unaffected.
+//! `Origin` header and are unaffected. Packaged Android WebView sends
+//! `Origin: null`; `handle_request` admits that opaque origin only when
+//! the pairing gate is configured (the bearer is then the CSRF control).
 
 use std::collections::HashSet;
 

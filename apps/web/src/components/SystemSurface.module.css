@@ -74,7 +74,7 @@
     }
 
     .closeButton {
-      inset-block-start: max(var(--st-space-md), env(safe-area-inset-top));
+      inset-block-start: max(var(--st-space-md), var(--nt-inset-top));
       inset-inline-end: var(--st-space-md);
     }
   }

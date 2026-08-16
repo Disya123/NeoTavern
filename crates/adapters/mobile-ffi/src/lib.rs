@@ -188,6 +188,9 @@ pub extern "C" fn nt_kernel_open(
                 None => return NT_ERR_INVALID_ARG,
             }
         };
+        if root.is_some() {
+            std::env::set_var(runtime_kernel::SEED_STARTER_ENV, "1");
+        }
         let config = KernelConfig {
             expected_schema_hash: contracts_generated::contract_schema_hash().to_string(),
             ffi_abi_version: runtime_kernel::FFI_ABI_VERSION,

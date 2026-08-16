@@ -30,6 +30,10 @@ function aliasesFromTsconfig(): Array<{ find: string; replacement: string }> {
 
 export default defineConfig({
   plugins: [react()],
+  // Relative asset URLs so the bundled UI loads from
+  // `file:///android_asset/web/index.html` (M6 Android host). The Vite
+  // dev server and Playwright http origins still resolve `./` correctly.
+  base: './',
   resolve: {
     alias: aliasesFromTsconfig(),
   },

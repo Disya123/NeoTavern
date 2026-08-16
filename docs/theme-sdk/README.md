@@ -166,6 +166,36 @@ A standard button publishes `data-component="button"`, and when it uses
 `data-has-icon="start|end|both"`. The icon is decorative and excluded from the
 accessible name; the text remains the only action name.
 
+### Host-connect gate (Android / remote-flow)
+
+The packaged Android UI and the Web Client remote-flow show
+`data-component="host-connect"` **before** `app.shell`. It is a Theme SDK
+surface, not a one-off HTML page: chrome is Card / Button / TextField /
+Segmented from `@neotavern/ui`, and the gate layout is in
+`packages/ui/src/styles/components.css` (`@layer components`). Themes restyle
+it by overriding `--st-*` tokens or `[data-component='host-connect']` in the
+`theme` layer.
+
+Stable parts: `panel`, `header`, `mark`, `eyebrow`, `title`, `subtitle`,
+`body`, `link-form`, `hint`, `preview`, `error`, `actions`. Modes are a
+`data-component="segmented"` group (this device / link / QR). `ThemeSync`
+mounts above the gate so an installed kernel theme paints the first frame;
+without a reachable theme list the built-in default tokens apply.
+
+On the Android host, CSS `env(safe-area-inset-*)` is 0 inside WebView, and
+WebView ignores `View.setPadding` for HTML. Do not pad a native host around
+the WebView (that leaves a dead strip). `MainActivity` publishes
+`WindowInsets` as `--nt-safe-area-*`; chrome uses `--nt-inset-*` so titles
+and buttons stay below the clock while wallpaper and scrollable content pass
+under the transparent status bar. Keep `env()` in `--nt-inset-*` for iOS /
+PWA; do not treat it as the Android inset source. On viewports ≤ 600 px the
+built-in chrome also floors at `--st-space-2xl` so a late 0-inset cannot
+cover the clock or the gesture pill.
+
+Settings → General → Host (packaged WebView / mobile shell only) reopens
+this gate so the user can switch local kernel vs pairing link. Cancel
+leaves the saved session in place.
+
 Related actions go into an `ActionBar`, not a local flex container:
 
 ```html
@@ -357,7 +387,9 @@ In the expanded rail the stable parts `data-part="main-items"`,
 `data-item="<id>"`, an action as `data-action="menu-toggle"`. Navigation
 publishes `data-leading-menu-toggle="true"` when the toggle is the first
 item of `main`; the built-in skin uses this state for a shared row height
-with `chat.header` on desktop and mobile. After the rail transitions to `collapsed`
+with `chat.header`. The toggle still honors `--nt-inset-top` so it sits
+below the status bar on Android WebView (do not zero `padding-block-start`).
+After the rail transitions to `collapsed`
 the top-cell separator is not drawn: the remaining toggle does not overlay its own
 border on the `chat.header` line.
 

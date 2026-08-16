@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Headless / Desktop Remote Access speak plaintext HTTP on the bound
+         socket (ADR-0030: TLS is the operator's proxy). The Android host
+         must reach a LAN IP the user typed or scanned. Pairing bearer +
+         CORS (opaque Origin: null only when auth is on) remain the gates;
+         this config only permits cleartext, it does not open /rpc. -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

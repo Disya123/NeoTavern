@@ -9,6 +9,8 @@ import { WIRE_PROTOCOL, WIRE_SCHEMA_HASH } from '@neotavern/contracts';
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.resetModules();
+  localStorage.clear();
+  sessionStorage.clear();
 });
 
 describe('backend routing', () => {
@@ -59,6 +61,27 @@ describe('backend routing', () => {
     expect(requested[0]).not.toMatch(/\/api\/v2\/api\/v2/u);
   });
 
+  it('uses LocalBackend inside the Android mobile shell by default', async () => {
+    vi.stubGlobal('__neotavernMobile', {
+      handshake: () =>
+        JSON.stringify({
+          ffiAbiVersion: 1,
+          schemaHash: WIRE_SCHEMA_HASH,
+          wireProtocol: { major: WIRE_PROTOCOL.major, minor: WIRE_PROTOCOL.minor },
+          appVersion: '0.1.0',
+        }),
+      call: () => undefined,
+      cancelStream: () => undefined,
+    });
+    vi.resetModules();
+    const [{ LocalBackend }, { backend, isKernelMode }] = await Promise.all([
+      import('@neotavern/neobackend'),
+      import('./backend.js'),
+    ]);
+    expect(backend).toBeInstanceOf(LocalBackend);
+    expect(isKernelMode()).toBe(true);
+  });
+
   it('routes a mobile-shell local profile to LocalBackend over the WebView bridge', async () => {
     vi.stubGlobal('__neotavernMobile', {
       handshake: () =>
@@ -82,5 +105,21 @@ describe('backend routing', () => {
       label: 'Mobile',
     });
     expect(mobileBackend).toBeInstanceOf(LocalBackend);
+  });
+
+  it('treats a switched-in RemoteBackend as product-wire mode', async () => {
+    vi.resetModules();
+    const [{ RemoteBackend }, { createBackendForProfile, isKernelMode, legacyRaw, setActiveBackend }] =
+      await Promise.all([import('@neotavern/neobackend'), import('./backend.js')]);
+    const remote = createBackendForProfile({
+      id: 'remote',
+      kind: 'remote',
+      label: 'Headless',
+      remoteUrl: 'http://127.0.0.1:8080',
+    });
+    expect(remote).toBeInstanceOf(RemoteBackend);
+    setActiveBackend(remote);
+    expect(isKernelMode()).toBe(true);
+    expect(() => legacyRaw().request('GET', '/characters')).toThrow();
   });
 });

@@ -17,7 +17,8 @@
     display: flex;
     width: var(--st-shell-rail-width);
     height: 100%;
-    padding: max(var(--st-space-sm), env(safe-area-inset-top)) var(--st-space-xs) var(--st-space-sm);
+    padding: max(var(--st-space-sm), var(--nt-inset-top)) var(--st-space-xs)
+      max(var(--st-space-sm), var(--nt-inset-bottom));
     flex-direction: column;
     align-items: center;
     gap: var(--st-space-xs);
@@ -70,8 +71,11 @@
     border-block-start: 1px solid color-mix(in srgb, var(--st-color-border) 48%, transparent);
   }
 
+  /* Keep the toggle in the title band on desktop (inset is 0). On Android
+     WebView the document is edge-to-edge: zeroing this padding puts the
+     icon under the clock. */
   .rail[data-leading-menu-toggle='true'] {
-    padding-block-start: 0;
+    padding-block-start: var(--nt-inset-top);
   }
 
   .rail[data-leading-menu-toggle='true'] .railMain > [data-item='menu-toggle']:first-child {
@@ -207,7 +211,7 @@
       calc(100vw - var(--shell-rail-current-width, var(--st-shell-rail-width)))
     );
     height: 100%;
-    padding: 0 0 max(var(--st-space-lg), env(safe-area-inset-bottom));
+    padding: 0 0 max(var(--st-space-2xl), var(--nt-inset-bottom));
     flex-direction: column;
     border-inline-end: 1px solid var(--st-color-border);
     color: var(--st-color-text-primary);
@@ -828,17 +832,24 @@
       animation-name: navigation-backdrop-exit;
     }
 
+    .rail,
+    .rail[data-leading-menu-toggle='true'] {
+      padding-block-start: max(var(--st-space-2xl), var(--nt-inset-top));
+      padding-block-end: max(var(--st-space-2xl), var(--nt-inset-bottom));
+    }
+
     .panelOpen {
       width: calc(100vw - var(--shell-rail-current-width, var(--st-shell-rail-width)));
-      padding-block: 0;
+      padding-block-start: 0;
+      padding-block-end: max(var(--st-space-2xl), var(--nt-inset-bottom));
     }
 
     .panelBodyContent {
-      padding-block-end: max(var(--st-space-lg), env(safe-area-inset-bottom));
+      padding-block-end: max(var(--st-space-2xl), var(--nt-inset-bottom));
     }
 
     [data-role='floating-tab-panel'] [data-component='tabs'] {
-      --management-tabs-edge-inset: max(var(--st-space-lg), env(safe-area-inset-bottom));
+      --management-tabs-edge-inset: max(var(--st-space-2xl), var(--nt-inset-bottom));
     }
 
     [data-role='floating-tab-panel'] [data-component='tabs-list'][data-variant='segment'] {

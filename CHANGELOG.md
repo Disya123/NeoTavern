@@ -32,8 +32,118 @@
   loopback/link-local/mapped/metadata denied even with `network:*`,
   `localhost` denied via DNS, allowlist/scheme/method validation kept.
 
-### Added
+### Fixed
 
+- **Android WebView under the status bar (safe-area).** `targetSdk 35` draws
+  the activity edge-to-edge. CSS `env(safe-area-inset-*)` stays 0 in Android
+  WebView, and **WebView ignores `View.setPadding` for HTML**. Native padding
+  around the WebView created a dead strip that was not part of the document.
+  The WebView now fills the display; `MainActivity` publishes `WindowInsets`
+  as `--nt-safe-area-*`. Chrome (headers, rail, composer) uses `--nt-inset-*`;
+  wallpaper and **scrollable content** pass under the transparent status bar
+  (Telegram-style overlay header). `--nt-inset-*` is written inline from
+  `WindowInsets` (WebView often leaves CSS `max(env(), var())` at 0).
+  Character-manager chrome (header, rail, bottom tabs) uses those insets so
+  titles and the Cards/Edit tabs stay clear of the clock and gesture pill.
+  The leading rail toggle no longer zeroes `padding-block-start` (that put
+  the icon under the clock). Narrow viewports also floor chrome at
+  `--st-space-2xl` so a late 0-inset publish cannot leave Cards/Edit on the
+  gesture pill. The instrumented test asserts the WebView on-screen Y is 0
+  and both `--nt-safe-area-top` and `--nt-inset-top` are non-zero.
+- **Android Character Manager on the kernel plane.** The panel's default
+  A–Z sort (`characters.list.sort.name`) was rejected as unsupported, so the
+  catalog showed an error instead of the list (or an empty state). Kernel
+  mode now lists then sorts the returned page by name; search / random /
+  includeDeleted stay honest `UNSUPPORTED`.
+- **Android Home with an empty kernel library.** `HomePage` called `useUiStore`
+  / `useMemo` after the empty-catalog early return, so React threw
+  "Rendered fewer hooks than expected" (#300) and the main region showed
+  the generic ErrorBoundary instead of onboarding.
+- **Android host switch after first connect.** A saved
+  `neotavern.hostSession` hid HostConnect with no way back to local / link /
+  QR. Settings → General → Host and the Home onboarding **Use another host**
+  button reopen the gate (`openHostConnect`) after the settings overlay
+  closes; Cancel keeps the current session. Reopen lands on the other
+  method (local → Link, remote → This device) so the two backends stay
+  interchangeable.
+- **Android generation Stop on API 34+/36.** The notification Stop action
+  used `PendingIntent.getBroadcast` with a package-scoped implicit intent
+  and a context-registered `RECEIVER_NOT_EXPORTED` receiver. On API 36
+  (and other 34+ devices) that broadcast never reached `GenerationService`,
+  so the user Stop button and
+  `BackgroundExecutionInstrumentedTest.foregroundService_pumpsGeneration_andUserStopEndsIt`
+  hung until timeout. Stop is now an explicit `PendingIntent.getService`
+  targeting `GenerationService` (`ACTION_STOP` → `onStartCommand`);
+  dismissing the notification also `NotificationManager.cancel`s the id
+  after `updateTitle` posted it via `notify()`. Verified on the API 36.1
+  emulator; nightly remains API 26 + 34.
+
+- **Android WebView catalog / settings / composer + generation process-death
+  (M6).** After HostConnect local, the instrumented suite opens the
+  character catalog (Hazel), Settings (change-host) and asserts the Home
+  composer, then starts `generation.start` through
+  `window.__neotavernMobile.call` (fake provider) and recovers
+  interrupted → retry after a simulated process death on
+  `<filesDir>/neotavern`. CI `assembleRelease` (debug-signed) plus the APK
+  ZIP gate mark `host.android-web-assets` **Packaged**. Store-signed
+  Released artifacts stay the release gate. M6/M7 are **not** accepted;
+  Fastify/legacyRaw deletion remains M7.
+
+  seed the bundled Hazel character and Vesper lorebook on first open
+  (`NEOTA_SEED_STARTER=1`), using the same files as the Fastify pack. The
+  2.2 MiB avatar bypasses the wire `assets.put` 1 MiB cap via the writer
+  thread. After `starter.hazel.v1.complete`, a deleted Hazel is not
+  restored. Kernel unit tests keep an empty library unless they set the
+  env.
+- **Themed HostConnect + remote Product Wire on Android/Web Client (M6).**
+  The packaged Android UI no longer uses a one-off connect HTML: the gate is
+  `data-component="host-connect"` skinned in `@neotavern/ui`
+  (`components.css` `@layer components`, `--st-*` tokens, Card / Button /
+  TextField / Segmented). `ThemeSync` mounts above the gate so an installed
+  kernel theme paints the first frame. Three modes: **this device** (JNI
+  `LocalBackend`), **link**, **QR** (camera scan or paste). Vite `base: './'`
+  so APK `file:///android_asset/web` loads CSS/JS. `HttpTransport` speaks
+  `POST /rpc/stream` SSE (NDJSON kept for stubs) and calls `globalThis.fetch`
+  so Chromium does not throw `Illegal invocation` on an unbound `window.fetch`.
+  The web app aliases `@neotavern/client-sdk` / `@neotavern/neobackend` from
+  source (same DUP-25 path as the other frontend packages). Remote profiles
+  are selectable (ADR-0034 Phase-9 deferral lifted for this gate). Pairing
+  tokens stay in sessionStorage. Android: INTERNET + optional CAMERA,
+  dark native chrome matching the web `theme-color`, Keystore instrumented
+  round-trip, WebView user-flow + Activity recreate tests. Playwright
+  `test:e2e:headless` drives the Web Client against `neotavern-headless`.
+  Opaque `Origin: null` is CORS-admitted only when pairing auth is on.
+  M6/M7 are **not** accepted.
+- **Android web assets fail-closed packaging + Tauri Android path removed
+  (M6 slice 2, ТЗ §11.4 / §18.3 / Этап 5 items 4+8).** Gradle stages
+  `apps/web/dist` into APK `assets/web/` and refuses `assembleDebug` /
+  `assembleRelease` without `index.html` (JVM unit tests stay independent
+  of Vite). CI builds the web client before assemble and fails if the
+  debug APK ZIP lacks `assets/web/index.html`; nightly emulator jobs get
+  the same web build. The conflicting Tauri Android remote-connect APK
+  (`pnpm desktop:android:*`, `tauri.android.conf.json`,
+  `apps/desktop/mobile-connect`) is removed — the canonical host is
+  `apps/android` (JNI). Ledger **M7** is registered as *not started*
+  (no `deliveredCommit`) so ui:api:check M7/release-gate records have a
+  ledger identity; M6 `blockingIssues` list the remaining Этап 5 work
+  (Web Client remote-flow E2E, Android WebView user-flow, UI
+  process-death, Keystore device round-trip, matrix Packaged/E2E exit).
+  M6 and M7 are **not** accepted.
+- **Headless host composition root (M6 slice 1, ТЗ §11.3).** New crate
+  `crates/adapters/headless` (`neotavern-headless`): the long-running server
+  the Phase 4 `remote-http-adapter` library never was. It opens a canonical
+  data-root, wires an explicit SecretStore backend (`env` default /
+  `session` / `unavailable`, SEC-01, never plaintext) and binds
+  `RemoteAdapter` — loopback `127.0.0.1:8080` by default, non-loopback only
+  with `--remote-exposure`, public bind still requires `--auth` (fail-closed
+  `InsecureBind` / `PublicBindRequiresAuth` before any listener). Stdout is
+  a single `listening <ip:port>` line; stdin EOF drains in-flight HTTP.
+  `--auth` prints a one-time pairing token on stderr. Tests spawn the real
+  binary: `/meta`, character create/get over `/rpc`, both bind gates, the
+  auth gate, `--help` and missing `--root`. The ui:api legacy-compat removal
+  milestone is relabeled **M7** (ТЗ Этап 6 / release gate) so ledger **M6**
+  can mean Этап 5 (Headless/Web Client/Android) without colliding with
+  facade retirement.
 - **ui:api:check three-class legacy-surface gate (M5 slice 63, ТЗ §13.1 /
   ARC-02/ARC-03).** The scanner now classifies legacy UI sites into three
   classes instead of two: `product` (React feature code — components, pages,

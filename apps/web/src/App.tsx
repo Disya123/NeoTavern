@@ -1,7 +1,15 @@
 /** Root router. System tools are modal routes above the persistent chat workspace. */
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { IconContext } from '@phosphor-icons/react';
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import {
+  BrowserRouter,
+  HashRouter,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from 'react-router-dom';
 import type { Location } from 'react-router-dom';
 import { AppShell } from './components/AppShell.js';
 import { AuthGate } from './components/AuthGate.js';
@@ -13,23 +21,34 @@ import { SystemSurface } from './components/SystemSurface.js';
 import { getBackgroundLocation, matchSystemSurface } from './components/systemSurfaces.js';
 import { PluginAuthResult } from './components/PluginAuthResult.js';
 import { ThemeSync } from './components/ThemeSync.js';
+import { HostConnect } from './components/HostConnect.js';
 import { ChatPage } from './pages/ChatPage.js';
 import { HomePage } from './pages/HomePage.js';
 import { useUiStore } from './state/ui.js';
+import { usesHashRouting } from './lib/routing.js';
+
+function AppRouter({ children }: { children: ReactNode }) {
+  if (usesHashRouting()) {
+    return <HashRouter>{children}</HashRouter>;
+  }
+  return <BrowserRouter>{children}</BrowserRouter>;
+}
 
 export function App() {
   return (
     <IconContext.Provider value={{ size: 16 }}>
-      <BrowserRouter>
-        <AuthGate>
-          <ThemeSync />
-          <PluginSync />
-          <PluginProviderSync />
-          <LegacyBridgeSync />
-          <AutoConnectSync />
-          <AppRoutes />
-        </AuthGate>
-      </BrowserRouter>
+      <AppRouter>
+        <ThemeSync />
+        <HostConnect>
+          <AuthGate>
+            <PluginSync />
+            <PluginProviderSync />
+            <LegacyBridgeSync />
+            <AutoConnectSync />
+            <AppRoutes />
+          </AuthGate>
+        </HostConnect>
+      </AppRouter>
     </IconContext.Provider>
   );
 }

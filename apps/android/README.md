@@ -144,6 +144,8 @@ cwd-independent and locates the Rust workspace (`crates/`) itself.
 ```sh
 cd apps/android
 bash scripts/build-libs.sh
+# assembleDebug is fail-closed without apps/web/dist/index.html (ТЗ §18.3)
+pnpm --filter @neotavern/web build   # from the repo root
 ./gradlew :app:assembleDebug          # APK in app/build/outputs/apk/debug/
 ./gradlew :app:installDebug           # install on a connected device/emulator
 ```
@@ -166,19 +168,31 @@ run as plain JUnit 4.
 
 ## Phase gate status
 
-- [x] Gradle + Kotlin host shell (no INTERNET permission, hardened WebView,
-      no foreground service, no HTTP).
+- [x] Gradle + Kotlin host shell (hardened WebView; INTERNET is optional
+      for HostConnect URL/QR remote, CAMERA optional for QR scan).
 - [x] JNI binding (KernelBridge) + pure KernelSession state machine with
       typed errors and stream registry.
 - [x] Keystore-backed SecretStore (AES/GCM, no plaintext fallback) and
-      atomic-write ManagedDataRoot.
-- [x] JVM unit tests + instrumentation round trip (durability after
-      simulated process death).
-- [ ] **Web assets not packaged yet** — the app loads
-      `file:///android_asset/web/index.html`; until `apps/web` is built into
-      `app/src/main/assets/web/`, MainActivity shows a plain error screen
-      (the JS bridge is still installed and the kernel still opens).
-- [ ] LocalBackend over the mobile transport (TS side, apps/web).
-- [ ] Device gate: full CRUD/settings + startup recovery on emulator matrix.
+      atomic-write ManagedDataRoot. On-device round-trip:
+      `KeystoreSecretStoreInstrumentedTest`.
+- [x] JVM unit tests + instrumentation kernel round trip (durability after
+      simulated process death of KernelSession).
+- [x] **Web assets packaged from `apps/web/dist`** — Gradle
+      `packageWebAssets` stages `assets/web/index.html`; assemble fails
+      closed without it (ТЗ §18.3). CI unzip-checks debug **and** release
+      APKs (`assembleRelease` is debug-signed for the Packaged gate).
+      `WebAssetsPackagedInstrumentedTest` asserts the entry on device.
+- [x] Themed HostConnect gate (`data-component="host-connect"`, Theme SDK
+      skin in `@neotavern/ui`) + LocalBackend over the mobile transport.
+      `WebViewUserFlowInstrumentedTest` enters local mode, opens the
+      character catalog (Hazel) and Settings (change-host), asserts the
+      Home composer, and survives Activity recreate. The same class starts
+      `generation.start` through `window.__neotavernMobile.call` (fake
+      provider) and recovers interrupted → retry after a simulated process
+      death on the production data root.
+- [x] Device gate: catalog / settings / composer + generation process-death
+      on the emulator matrix (WebView → JNI → Kernel). Nightly
+      `connectedDebugAndroidTest` (API 26 + 34) runs the full instrumented
+      suite; PR CI compiles the test APK and packages debug + release APKs.
 - [x] Extension-surface probe (declarative-only policy, ТЗ §51) — JVM byte
       contract + instrumented bridge probe.

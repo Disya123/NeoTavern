@@ -10,7 +10,7 @@
     display: grid;
     grid-template-columns: minmax(240px, 1fr) minmax(360px, 1.6fr);
     gap: var(--st-space-xl);
-    padding: var(--st-space-2xl);
+    padding: max(var(--st-space-2xl), var(--nt-inset-top)) var(--st-space-2xl) var(--st-space-2xl);
     border-bottom: 1px solid var(--st-color-border);
   }
 
@@ -90,7 +90,7 @@
     min-height: 0;
     overflow-y: auto;
     padding: var(--st-space-lg) var(--st-space-2xl)
-      calc(var(--st-space-2xl) + env(safe-area-inset-bottom));
+      calc(var(--st-space-2xl) + var(--nt-inset-bottom));
   }
 
   .virtualCanvas {

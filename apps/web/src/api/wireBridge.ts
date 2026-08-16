@@ -886,20 +886,37 @@ export async function readCharacters(
 ): Promise<CursorPage<CharacterSummary>> {
   if (isKernelMode()) {
     // Kernel list supports cursor/limit only; catalog search, tag filter and
-    // non-default sorts are not wire operations yet (Этап 4). 'newest' and
-    // the legacy 'recent' alias both map to the kernel's created_at DESC
-    // default; anything else is an honest CAPABILITY_UNAVAILABLE.
+    // sorts other than created-at / in-page name are not wire operations yet
+    // (Этап 4). 'newest' and the legacy 'recent' alias map to created_at DESC.
+    // A-Z / Z-A are applied to the returned page so the Character Manager
+    // default (`sort: 'name'`) does not hard-fail on Android. Pagination
+    // cursors stay created_at — A-Z is in-page until the wire grows a sort
+    // field.
     if (query.q || query.tag) throw new UnsupportedError('characters.list.search');
     if (query.includeDeleted) throw new UnsupportedError('characters.list.includeDeleted');
-    if (query.sort !== undefined && query.sort !== 'newest' && query.sort !== 'recent') {
+    if (
+      query.sort !== undefined &&
+      query.sort !== 'newest' &&
+      query.sort !== 'recent' &&
+      query.sort !== 'name' &&
+      query.sort !== 'name-desc'
+    ) {
       throw new UnsupportedError(`characters.list.sort.${query.sort}`);
     }
     const page = await backend.characters.list({
       ...(cursor !== undefined ? { cursor } : {}),
       ...(query.limit !== undefined ? { limit: query.limit } : {}),
     });
+    let items = page.items.map(translateCharacterSummary);
+    if (query.sort === 'name' || query.sort === 'name-desc') {
+      const direction = query.sort === 'name-desc' ? -1 : 1;
+      items = [...items].sort(
+        (left, right) =>
+          direction * left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }),
+      );
+    }
     return {
-      items: page.items.map(translateCharacterSummary),
+      items,
       nextCursor: page.nextCursor ?? null,
       hasMore: page.nextCursor !== null,
     };

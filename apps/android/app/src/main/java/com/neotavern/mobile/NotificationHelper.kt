@@ -6,7 +6,6 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
-import android.content.Intent
 import android.content.pm.ServiceInfo
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -46,9 +45,17 @@ object NotificationHelper {
         manager.notify(NotificationState.NOTIFICATION_ID, buildNotification(context, title))
     }
 
-    /** Removes the foreground notification (idempotent). */
+    /**
+     * Removes the foreground notification (idempotent).
+     *
+     * [Service.stopForeground] alone is not enough after [updateTitle]
+     * posted the same id through [NotificationManager.notify]: on API 34+
+     * (including 36) that copy can linger as a regular notification.
+     */
     fun cancelForeground(service: Service) {
         service.stopForeground(Service.STOP_FOREGROUND_REMOVE)
+        service.getSystemService(NotificationManager::class.java)
+            .cancel(NotificationState.NOTIFICATION_ID)
     }
 
     private fun ensureChannel(context: Context) {
@@ -66,10 +73,10 @@ object NotificationHelper {
     }
 
     private fun buildNotification(context: Context, title: String): Notification {
-        val stopIntent = PendingIntent.getBroadcast(
+        val stopIntent = PendingIntent.getService(
             context,
             0,
-            Intent(NotificationState.ACTION_STOP).setPackage(context.packageName),
+            GenerationService.stopIntent(context),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         return NotificationCompat.Builder(context, NotificationState.CHANNEL_ID)

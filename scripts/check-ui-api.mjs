@@ -16,7 +16,7 @@
  * facade's browser/legacy-sidecar transport (ADR-0038/0048), which stays
  * feature-frozen until the legacy server stops serving product data (Этап 6,
  * release-gate expiry) — the same boundary ADR-0048 draws. They carry full
- * removal records (milestone M6, deadline release gate), not n/a, because
+ * removal records (milestone M7, deadline release gate), not n/a, because
  * they are a temporary shim with a deletion condition, unlike the long-lived
  * plugin-compat adapter. Everything else is "product" feature code (React
  * components, pages, hooks) that must migrate.
@@ -52,14 +52,15 @@ import { fileURLToPath } from 'node:url';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const WEB_SRC = join(ROOT, 'apps', 'web', 'src');
 const BASELINE = join(ROOT, 'docs', 'architecture', 'ui-legacy-surface.md');
+const LEDGER_PATH = join(ROOT, 'docs', 'architecture', 'acceptance-ledger.json');
 
 const DISABLE_COMMENT = '// eslint-disable-next-line @neotavern/no-legacy-api-surface';
 
 const OWNER = 'neotavern/desktop-web';
 /** M4 exit target (product convergence removes the last legacy UI call). */
 const M4 = { milestone: 'M4', deadline: '2026-12-31' };
-/** M6 (Этап 6) release-gate removal — legacy server stops serving product data. */
-const M6 = { milestone: 'M6', deadline: 'release gate' };
+/** M7 (ТЗ Этап 6) release-gate removal — legacy server stops serving product data. */
+const M7 = { milestone: 'M7', deadline: 'release gate' };
 
 /**
  * Generator-side removal register for the currently allowed PRODUCT sites,
@@ -113,14 +114,14 @@ const PLUGIN_COMPAT_META = { owner: 'n/a', removalIssue: 'n/a', milestone: 'n/a'
  * (ADR-0038/0048): feature-frozen, they carry the Web Client and the
  * legacy-sidecar desktop default until the legacy server stops serving
  * product data (Этап 6, release-gate expiry). Class "legacy-compat" — full
- * removal records (M6/release gate), NOT n/a: they are a temporary shim with
+ * removal records (M7/release gate), NOT n/a: they are a temporary shim with
  * a deletion condition (ARC-09), unlike the long-lived plugin-compat adapter.
  */
 const LEGACY_COMPAT_META = {
   owner: OWNER,
   removalIssue:
-    'M6: retire the facade legacy transport with the legacy server (ADR-0038/0048, stage-6 cleanup)',
-  ...M6,
+    'M7: retire the facade legacy transport with the legacy server (ADR-0038/0048, stage-6 cleanup)',
+  ...M7,
 };
 
 /**
@@ -199,7 +200,7 @@ function detectHits(file) {
  *  - "legacy-compat": the facade transport shims (api/{backend,client,events,
  *    generate,legacyExtensionSettings,wireBridge}.ts) — browser/legacy-sidecar
  *    transport of the NeoBackend facade, feature-frozen until Этап 6
- *    (ADR-0038/0048), full M6/release-gate removal records;
+ *    (ADR-0038/0048), full M7/release-gate removal records;
  *  - "product": everything else (React feature code) that must migrate.
  */
 function classify(rel) {
@@ -324,7 +325,7 @@ function renderBaseline(hits, existingRows) {
     '> legacyExtensionSettings,wireBridge}.ts) — the browser/legacy-sidecar transport of the',
   );
   lines.push(
-    '> NeoBackend facade, feature-frozen until Этап 6 (ADR-0038/0048) — full M6/release-gate',
+    '> NeoBackend facade, feature-frozen until Этап 6 (ADR-0038/0048) — full M7/release-gate',
   );
   lines.push('> removal records, not n/a. `plugin-compat`');
   lines.push('> entries are the plugin sandbox / legacy-compat bridge (ADR-0039) — a long-lived');
@@ -367,11 +368,34 @@ function renderBaseline(hits, existingRows) {
  * Validate the committed baseline's removal records: every product and
  * legacy-compat row must carry owner, removalIssue, milestone and deadline
  * (legacy-compat is a temporary shim with a deletion condition, ARC-09);
- * plugin-compat rows must not be empty (n/a expected). Returns a list of
- * problems.
+ * plugin-compat rows must not be empty (n/a expected). Removal `milestone`
+ * values must exist in the acceptance ledger (short token `M7` or full id).
  */
+/** Short tokens (`M7`) plus full ledger ids currently recorded. */
+function ledgerMilestoneTokens() {
+  try {
+    const ledger = JSON.parse(readFileSync(LEDGER_PATH, 'utf8'));
+    const tokens = new Set();
+    for (const milestone of ledger.milestones ?? []) {
+      if (typeof milestone.id !== 'string' || milestone.id.length === 0) continue;
+      tokens.add(milestone.id);
+      const short = milestone.id.split('-')[0];
+      if (short) tokens.add(short);
+    }
+    return tokens;
+  } catch {
+    return null;
+  }
+}
+
 function validateMetadata(rows) {
   const problems = [];
+  const tokens = ledgerMilestoneTokens();
+  if (tokens === null) {
+    problems.push(
+      'acceptance ledger unreadable — cannot verify ui:api milestone identities against docs/architecture/acceptance-ledger.json',
+    );
+  }
   for (const [key, row] of rows) {
     const fields = ['owner', 'removalIssue', 'milestone', 'deadline'];
     const missing = fields.filter((f) => row[f] === '');
@@ -382,6 +406,17 @@ function validateMetadata(rows) {
     } else if (row.cls === 'plugin-compat' && missing.length > 0) {
       problems.push(
         `${key} [plugin-compat] missing ${missing.join(', ')} — use n/a for the long-lived adapter`,
+      );
+    }
+    if (
+      tokens &&
+      (row.cls === 'product' || row.cls === 'legacy-compat') &&
+      row.milestone &&
+      row.milestone !== 'n/a' &&
+      !tokens.has(row.milestone)
+    ) {
+      problems.push(
+        `${key} [${row.cls}] milestone '${row.milestone}' is not a ledger milestone id or prefix — ui:api must not name a stage the acceptance ledger does not record`,
       );
     }
   }

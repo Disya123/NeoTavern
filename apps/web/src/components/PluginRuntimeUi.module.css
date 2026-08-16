@@ -15,8 +15,8 @@
   .chrome {
     position: fixed;
     z-index: var(--st-layer-plugin-chrome);
-    inset-block-start: max(var(--st-space-md), env(safe-area-inset-top));
-    inset-inline-end: max(var(--st-space-md), env(safe-area-inset-right));
+    inset-block-start: max(var(--st-space-md), var(--nt-inset-top));
+    inset-inline-end: max(var(--st-space-md), var(--nt-inset-right));
     display: flex;
     align-items: center;
     gap: var(--st-space-sm);
@@ -51,8 +51,8 @@
   .layer {
     position: fixed;
     z-index: var(--st-layer-notification);
-    inset-inline-end: max(var(--st-space-lg), env(safe-area-inset-right));
-    inset-block-end: max(var(--st-space-lg), env(safe-area-inset-bottom));
+    inset-inline-end: max(var(--st-space-lg), var(--nt-inset-right));
+    inset-block-end: max(var(--st-space-lg), var(--nt-inset-bottom));
     display: grid;
     width: min(24rem, calc(100vw - 2 * var(--st-space-lg)));
     gap: var(--st-space-sm);

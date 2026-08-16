@@ -3,7 +3,7 @@
  *
  * All tests run against a stub `fetchImpl` (in-memory handler); no server
  * is started. The stub serves `/meta`, decodes RequestEnvelopes on `/rpc`
- * and serves NDJSON on `/stream`.
+ * and serves NDJSON or SSE on `/rpc/stream`.
  */
 import { describe, expect, it } from 'vitest';
 import { WIRE_PROTOCOL, WIRE_SCHEMA_HASH } from '@neotavern/contracts';
@@ -48,6 +48,22 @@ function ndjsonResponse(lines: string[]): Response {
     },
   });
   return new Response(body, { status: 200, headers: { 'content-type': 'application/x-ndjson' } });
+}
+
+function sseResponse(frames: string[]): Response {
+  const encoder = new TextEncoder();
+  let index = 0;
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (index < frames.length) {
+        controller.enqueue(encoder.encode(frames[index]));
+        index += 1;
+      } else {
+        controller.close();
+      }
+    },
+  });
+  return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } });
 }
 
 interface CapturedCall {
@@ -216,9 +232,9 @@ describe('stream', () => {
     payload: { type: 'generation.delta', text },
   });
 
-  it('yields NDJSON events from the stream endpoint without fabricating a terminal event', async () => {
+  it('yields NDJSON events from /rpc/stream without fabricating a terminal event', async () => {
     const { sdk, calls } = makeSdk(async (url, init) => {
-      expect(url).toBe('http://wire.test/stream');
+      expect(url).toBe('http://wire.test/rpc/stream');
       expect(parseEnvelope(init).operationId).toBe('generation.start');
       return ndjsonResponse([JSON.stringify(delta(0, 'hel')), JSON.stringify(delta(1, 'lo'))]);
     });
@@ -248,5 +264,93 @@ describe('stream', () => {
     await expect(iterator.next()).rejects.toSatisfy(
       (error: unknown) => error instanceof TransportError && error.resumable === true,
     );
+  });
+
+  it('parses SSE frames from /rpc/stream (Headless / remote-http)', async () => {
+    const { sdk, calls } = makeSdk(async (url, init) => {
+      expect(url).toBe('http://wire.test/rpc/stream');
+      expect(String((init?.headers as Record<string, string> | undefined)?.['accept'])).toContain(
+        'text/event-stream',
+      );
+      return sseResponse([
+        `event: generation.delta\nid: 0\ndata: ${JSON.stringify(delta(0, 'hel'))}\n\n`,
+        `event: generation.delta\nid: 1\ndata: ${JSON.stringify(delta(1, 'lo'))}\n\n`,
+      ]);
+    });
+    const events: StreamEvent[] = [];
+    for await (const event of sdk.stream('generation.start', {
+      chatId: CHAT_ID,
+      message: 'hello',
+    })) {
+      events.push(event);
+    }
+    expect(events).toEqual([delta(0, 'hel'), delta(1, 'lo')]);
+    expect(calls).toHaveLength(1);
+  });
+
+  it('sends a Bearer pairing token on rpc and stream', async () => {
+    const { fetchImpl, calls } = makeStub(async (url) => {
+      if (url.endsWith('/meta')) return jsonResponse(200, META);
+      if (url.endsWith('/rpc/stream')) {
+        return sseResponse([`data: ${JSON.stringify(delta(0, 'x'))}\n\n`]);
+      }
+      return jsonResponse(200, {
+        kind: 'ok',
+        requestId: '00000000-0000-4000-8000-000000000099',
+        result: { id: CHARACTER_ID, name: 'Ada Lovelace' },
+      });
+    });
+    const sdk = new ClientSdk({
+      transport: new HttpTransport({
+        baseUrl: 'http://wire.test',
+        fetchImpl,
+        authorization: 'pair-token',
+      }),
+    });
+    await sdk.handshake();
+    await sdk.call('characters.get', { characterId: CHARACTER_ID }).catch(() => undefined);
+    expect(calls[0]?.init?.headers).toMatchObject({ authorization: 'Bearer pair-token' });
+  });
+
+  it('invokes fetch as a free function so window.fetch is not illegally bound', async () => {
+    const calls: unknown[] = [];
+    const fetchImpl = async function (this: unknown, input: RequestInfo | URL, init?: RequestInit) {
+      calls.push(this);
+      const url =
+        typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      expect(url).toBe('http://127.0.0.1:18080/meta');
+      expect(init?.method).toBe('GET');
+      return jsonResponse(200, META);
+    } as typeof fetch;
+    const transport = new HttpTransport({
+      baseUrl: 'http://127.0.0.1:18080',
+      fetchImpl,
+    });
+    await transport.meta();
+    expect(calls).toEqual([undefined]);
+  });
+
+  it('calls the default fetch as a method of globalThis (Chromium-legal)', async () => {
+    const original = globalThis.fetch;
+    const receivers: unknown[] = [];
+    globalThis.fetch = async function (
+      this: unknown,
+      input: RequestInfo | URL,
+      init?: RequestInit,
+    ) {
+      receivers.push(this);
+      const url =
+        typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      expect(url).toBe('http://127.0.0.1:18080/meta');
+      expect(init?.method).toBe('GET');
+      return jsonResponse(200, META);
+    } as typeof fetch;
+    try {
+      const transport = new HttpTransport({ baseUrl: 'http://127.0.0.1:18080' });
+      await transport.meta();
+      expect(receivers).toEqual([globalThis]);
+    } finally {
+      globalThis.fetch = original;
+    }
   });
 });

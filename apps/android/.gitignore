@@ -2,6 +2,10 @@
 # must not be committed (contract: prebuilt .so is NOT committed).
 app/src/main/jniLibs/
 
+# Hand-copied web dist must not be committed; Gradle stages apps/web/dist
+# into app/build/generated/neotavern-web-assets (ТЗ §11.4).
+app/src/main/assets/web/
+
 # Local Gradle state (the repo has no committed gradlew wrapper).
 .gradle/
 local.properties

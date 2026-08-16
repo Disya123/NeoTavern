@@ -22,6 +22,7 @@ import { setDocumentLanguage } from './lib/lang.js';
 import { registerServiceWorker } from './registerServiceWorker.js';
 import { frontendPluginRuntime } from './plugins/runtime.js';
 import { legacyFrontendRuntime } from './plugins/legacyRuntime.js';
+import { watchAndroidSafeArea } from './lib/androidSafeArea.js';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -60,6 +61,7 @@ async function bootstrap(): Promise<void> {
     userMessagePosition,
     characterMessagePosition,
   });
+  watchAndroidSafeArea();
 
   // Documented legacy window globals for existing extensions.
   installLegacyCompat();

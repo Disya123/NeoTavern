@@ -2173,6 +2173,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "neotavern-headless"
+version = "0.1.0"
+dependencies = [
+ "contracts-generated",
+ "remote-http-adapter",
+ "runtime-kernel",
+ "secret-store",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "neotavern-host-tools"
 version = "0.1.0"
 dependencies = [

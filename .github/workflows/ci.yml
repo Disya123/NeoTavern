@@ -65,6 +65,9 @@ jobs:
       - name: Legacy UI surface gate (ARC-02/ARC-03)
         run: pnpm ui:api:check
 
+      - name: Android APK web-assets scanner self-test (ТЗ §18.3)
+        run: node scripts/check-android-apk-web-assets.mjs --self-test
+
       - name: Docs check (links, matrix, exceptions, claims)
         run: pnpm docs:check
 
@@ -116,6 +119,31 @@ jobs:
           name: playwright-report-shard-${{ matrix.shard }}
           path: playwright-report/
           retention-days: 7
+
+  e2e-headless:
+    name: Playwright Web Client → Headless (M6 remote-flow)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browser
+        run: pnpm exec playwright install chromium
+
+      - name: Web Client remote-flow against neotavern-headless
+        run: pnpm test:e2e:headless
 
   # Plugin SDK vNext cross-platform parity (ТЗ §44/§56, Stage J / B18): the
   # IDENTICAL conformance suite, benchmark harness (B01–B31, default gates)
@@ -219,7 +247,7 @@ jobs:
         run: cargo test -p neotavern-tauri-local --features remote && cargo clippy -p neotavern-tauri-local --features remote --all-targets -- -D warnings
 
       - name: Rust formatting (hand-written crates)
-        run: cargo fmt --manifest-path crates/Cargo.toml -p runtime-kernel -p neotavern-storage -p remote-http-adapter -p neotavern-mobile-ffi -p neotavern-cli -p built-in-providers -p provider-sdk -p neotavern-envelope -p neotavern-tauri-local -p neotavern-android-jni -p neotavern-desktop-remote --check
+        run: cargo fmt --manifest-path crates/Cargo.toml -p runtime-kernel -p neotavern-storage -p remote-http-adapter -p neotavern-mobile-ffi -p neotavern-cli -p neotavern-headless -p built-in-providers -p provider-sdk -p neotavern-envelope -p neotavern-tauri-local -p neotavern-android-jni -p neotavern-desktop-remote --check
 
   # Android gates — Phase 5: Android Local foundation (JNI bridge, host,
   # mobile transport, CI gates, ТЗ §7.2) + Phase 8: Android background
@@ -228,12 +256,26 @@ jobs:
   # instrumented-test APK are verified (assembleDebug + testDebugUnitTest +
   # assembleDebugAndroidTest); device-level instrumented tests run nightly
   # (android-device in nightly.yml) across the API 26 + 34 emulator matrix.
+  # ТЗ §18.3: assemble is fail-closed without apps/web/dist/index.html.
   android-build:
     name: Android build (JNI + APK + unit tests)
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install JS dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build web client (APK assets, ТЗ §11.4)
+        run: pnpm --filter @neotavern/web build
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -275,15 +317,32 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      # The instrumented-test APK (androidTest) is assembled here so the
-      # Phase 8 BackgroundExecutionInstrumentedTest COMPILES on every PR;
-      # the tests themselves run on the nightly emulator (android-device).
-      - name: Assemble debug APK + JVM unit tests + instrumented test APK
-        run: gradle -p apps/android :app:assembleDebug :app:testDebugUnitTest :app:assembleDebugAndroidTest
+      # JVM unit tests do not need web assets (merge*Assets is not on that
+      # path). assembleDebug is fail-closed without apps/web/dist/index.html.
+      # The instrumented-test APK is assembled so WebAssetsPackagedInstrumentedTest,
+      # WebViewUserFlowInstrumentedTest and Phase 8 BackgroundExecutionInstrumentedTest
+      # COMPILE on every PR; the tests themselves run on the nightly emulator
+      # (android-device). assembleRelease is debug-signed so the Packaged gate
+      # can unzip a release APK for assets/web/index.html (ТЗ §11.4).
+      - name: JVM unit tests
+        run: gradle -p apps/android :app:testDebugUnitTest
+
+      - name: Assemble debug + release APKs + instrumented test APK
+        run: gradle -p apps/android :app:assembleDebug :app:assembleRelease :app:assembleDebugAndroidTest
+
+      - name: Fail closed if APK lacks assets/web/index.html (ТЗ §18.3)
+        run: node scripts/check-android-apk-web-assets.mjs
 
       - name: Upload debug APK artifact
         uses: actions/upload-artifact@v6
         with:
           name: neotavern-android-debug
           path: apps/android/app/build/outputs/apk/debug/*.apk
+          retention-days: 14
+
+      - name: Upload release APK artifact (Packaged, debug-signed)
+        uses: actions/upload-artifact@v6
+        with:
+          name: neotavern-android-release
+          path: apps/android/app/build/outputs/apk/release/*.apk
           retention-days: 14

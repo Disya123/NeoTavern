@@ -6,8 +6,12 @@ import { connectAppEvents } from './events.js';
 // Kernel-mode honesty (slice 15): the transport consults `isKernelMode`; the
 // default here is the legacy plane so the existing SSE tests stay as they
 // were.
-const mocks = vi.hoisted(() => ({ isKernelMode: vi.fn(() => false) }));
+const mocks = vi.hoisted(() => ({
+  isKernelMode: vi.fn(() => false),
+  needsHostConnect: vi.fn(() => false),
+}));
 vi.mock('./backend.js', () => ({ isKernelMode: mocks.isKernelMode }));
+vi.mock('./hostSession.js', () => ({ needsHostConnect: mocks.needsHostConnect }));
 
 class FakeEventSource {
   static instances: FakeEventSource[] = [];
@@ -157,5 +161,13 @@ describe('connectAppEvents', () => {
     expect(FakeEventSource.instances).toHaveLength(1);
     expect(() => kernelTeardown()).not.toThrow();
     mocks.isKernelMode.mockReturnValue(false);
+  });
+
+  it('is an honest no-op while the host-connect gate is open', () => {
+    mocks.needsHostConnect.mockReturnValue(true);
+    const gateTeardown = connectAppEvents(queryClient);
+    expect(FakeEventSource.instances).toHaveLength(1);
+    expect(() => gateTeardown()).not.toThrow();
+    mocks.needsHostConnect.mockReturnValue(false);
   });
 });

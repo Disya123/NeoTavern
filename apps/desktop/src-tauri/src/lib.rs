@@ -547,6 +547,7 @@ fn setup_local_kernel_mode(
     data_dir: PathBuf,
     portable: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    std::env::set_var("NEOTA_SEED_STARTER", "1");
     let host = KernelHost::open(KernelHostConfig {
         // Clone: `data_dir` is also the Remote Access config fallback (the
         // kernel data root is guaranteed writable and exists).
@@ -566,9 +567,7 @@ fn setup_local_kernel_mode(
     // safe tools — the kernel never executes tools. Wire the declarative
     // `app_now` contract (UTC clock, side-effect-free, consent-free) and the
     // built-in executor that resumes waiting runs automatically.
-    host.set_tool_executor(Some(Arc::new(
-        neotavern_host_tools::BuiltinToolExecutor,
-    )));
+    host.set_tool_executor(Some(Arc::new(neotavern_host_tools::BuiltinToolExecutor)));
     host.register_tool(serde_json::json!({
         "id": "app.now",
         "name": "app_now",

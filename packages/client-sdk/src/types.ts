@@ -68,8 +68,8 @@ export interface StreamEvent {
 
 /**
  * Transport abstraction: how the SDK reaches the wire endpoints. The
- * `HttpTransport` implementation talks HTTP/NDJSON; in-memory transports
- * (kernel-local, test fakes) implement the same surface.
+ * `HttpTransport` implementation talks HTTP/SSE (`/rpc`, `/rpc/stream`);
+ * in-memory transports (kernel-local, test fakes) implement the same surface.
  */
 export interface Transport {
   /**

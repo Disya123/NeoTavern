@@ -50,7 +50,7 @@ export default defineConfig({
   outputDir: shardOutputDir,
   // Stage-0 SDK spikes run via playwright.spike.config.ts (no app server,
   // three-engine matrix) and must not double-run here.
-  testIgnore: ['**/spikes/**'],
+  testIgnore: ['**/spikes/**', '**/headless/**'],
   forbidOnly: Boolean(process.env['CI']),
   retries: process.env['CI'] ? 2 : 0,
   reporter: [

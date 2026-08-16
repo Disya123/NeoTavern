@@ -34,6 +34,11 @@
           if (mode === 'system') root.removeAttribute('data-theme-mode');
           else root.setAttribute('data-theme-mode', mode);
           if (new URLSearchParams(window.location.search).has('safe')) return;
+          var skipBoot =
+            location.protocol === 'file:' ||
+            location.hostname === 'appassets.androidplatform.net' ||
+            typeof window.__neotavernMobile !== 'undefined';
+          if (skipBoot) return;
           fetch('/api/v2/themes/boot', { credentials: 'same-origin' })
             .then(function (response) {
               return response.ok ? response.json() : null;

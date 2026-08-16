@@ -1,14 +1,11 @@
 package com.neotavern.mobile
 
 import android.app.Service
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
-import androidx.core.content.ContextCompat
 import java.nio.charset.StandardCharsets
 import java.util.Collections
 import java.util.HashSet
@@ -34,9 +31,12 @@ import org.json.JSONObject
  *    only — NEVER message content, §85), and on terminal/error unclaims its
  *    stream; when every pump has drained the service removes the notification
  *    and stops itself,
- *  - the STOP action (notification button or broadcast with
- *    [NotificationState.ACTION_STOP]) cancels every claimed stream, unclaims
- *    them, removes the notification and stops the service.
+ *  - the STOP action (notification button → `PendingIntent.getService` with
+ *    [NotificationState.ACTION_STOP] targeting this service) cancels every
+ *    claimed stream, unclaims them, removes the notification and stops the
+ *    service. The intent is explicit (`GenerationService` component): a
+ *    package-scoped implicit broadcast does not reach a non-exported
+ *    runtime receiver on API 34+, including API 36.
  *
  * All kernel access happens on the holder's executor (the STOP cancel and the
  * teardown cancel are thread-safe [KernelSession] calls); the service never
@@ -55,31 +55,13 @@ class GenerationService : Service() {
     @Volatile
     private var holder: KernelHolder? = null
 
-    private var stopReceiver: BroadcastReceiver? = null
-
     override fun onBind(intent: Intent?): IBinder? = null
 
-    override fun onCreate() {
-        super.onCreate()
-        stopReceiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context?, intent: Intent?) {
-                if (intent?.action == NotificationState.ACTION_STOP) {
-                    stopGeneration()
-                }
-            }
-        }
-        // RECEIVER_NOT_EXPORTED: only this app (same UID) and the system can
-        // trigger a stop of the generation foreground service. ContextCompat
-        // maps the flag to the plain 2-arg registration below API 33.
-        ContextCompat.registerReceiver(
-            this,
-            stopReceiver,
-            IntentFilter(NotificationState.ACTION_STOP),
-            ContextCompat.RECEIVER_NOT_EXPORTED,
-        )
-    }
-
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == NotificationState.ACTION_STOP) {
+            stopGeneration()
+            return START_NOT_STICKY
+        }
         val claims = ForegroundExecutionCoordinator.claimedStreams()
         if (claims.isEmpty()) {
             // Defensive: started without any claimed stream (the coordinator
@@ -147,14 +129,13 @@ class GenerationService : Service() {
                 } catch (e: SessionError) {
                     // Session-level failure (e.g. the session closed
                     // underneath): surface "failed" and end this pump.
-                    NotificationHelper.updateTitle(this, "error")
-                    done = true
+                    if (!stopped) NotificationHelper.updateTitle(this, "error")
                     break
                 } catch (e: KernelException) {
-                    NotificationHelper.updateTitle(this, "error")
-                    done = true
+                    if (!stopped) NotificationHelper.updateTitle(this, "error")
                     break
                 }
+                if (stopped) break
                 if (payload == null) continue // poll timeout — not end-of-stream
 
                 val kind = try {
@@ -163,6 +144,7 @@ class GenerationService : Service() {
                     // Non-JSON payload: defensive pass-through as an event.
                     "event"
                 }
+                if (stopped) break
                 NotificationHelper.updateTitle(this, kind)
                 if (NotificationState.isTerminal(kind)) {
                     done = true
@@ -210,8 +192,6 @@ class GenerationService : Service() {
     }
 
     override fun onDestroy() {
-        stopReceiver?.let { unregisterReceiver(it) }
-        stopReceiver = null
         val h = holder
         holder = null
         stopped = true
@@ -237,7 +217,18 @@ class GenerationService : Service() {
         super.onDestroy()
     }
 
-    private companion object {
-        const val STREAM_POLL_MS = 1000
+    companion object {
+        private const val STREAM_POLL_MS = 1000
+
+        /**
+         * Explicit component intent for the notification Stop action and
+         * for tests. Deliver with [Context.startService] or
+         * [android.app.PendingIntent.getService] — not an implicit
+         * broadcast and not [Context.startForegroundService] (Stop must
+         * not re-enter the 5s `startForeground` window).
+         */
+        fun stopIntent(context: Context): Intent =
+            Intent(context, GenerationService::class.java)
+                .setAction(NotificationState.ACTION_STOP)
     }
 }

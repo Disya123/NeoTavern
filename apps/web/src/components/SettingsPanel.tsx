@@ -29,6 +29,7 @@ import {
 } from '../state/ui.js';
 import { useErrorText } from '../lib/useErrorText.js';
 import { isTauriRuntime } from '../api/tauriTransport.js';
+import { canChangeHost, openHostConnect, readHostSession } from '../api/hostSession.js';
 import { DataMigrationPanel } from './DataMigrationPanel.js';
 import { ActivationStatusPanel } from './ActivationStatusPanel.js';
 import { DiagnosticsPanel } from './DiagnosticsPanel.js';
@@ -93,7 +94,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             label: t('settings:general'),
             content: (
               <FloatingTabContent>
-                <GeneralTab />
+                <GeneralTab onClose={onClose} />
               </FloatingTabContent>
             ),
           },
@@ -149,7 +150,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   );
 }
 
-function GeneralTab() {
+function GeneralTab({ onClose }: { onClose: () => void }) {
   const { t, i18n } = useTranslation();
   const errorText = useErrorText();
   const updateSettings = useUpdateSettings();
@@ -185,6 +186,8 @@ function GeneralTab() {
   const setUserMessagePosition = useUiStore((state) => state.setUserMessagePosition);
   const characterMessagePosition = useUiStore((state) => state.characterMessagePosition);
   const setCharacterMessagePosition = useUiStore((state) => state.setCharacterMessagePosition);
+  const hostSwitch = canChangeHost();
+  const hostSession = hostSwitch ? readHostSession() : null;
 
   const changeLanguage = async (code: string): Promise<void> => {
     setLanguage(code);
@@ -194,6 +197,30 @@ function GeneralTab() {
 
   return (
     <div className={styles.body} data-part="general-settings">
+      {hostSwitch ? (
+        <Section title={t('settings:host')} hint={t('settings:hostHint')}>
+          <Field
+            label={
+              hostSession?.kind === 'remote'
+                ? t('settings:hostCurrentRemote', { url: hostSession.url })
+                : t('settings:hostCurrentLocal')
+            }
+          >
+            <Button
+              data-action="change-host"
+              variant="primary"
+              onClick={() => {
+                onClose();
+                queueMicrotask(() => {
+                  openHostConnect();
+                });
+              }}
+            >
+              {t('settings:hostChange')}
+            </Button>
+          </Field>
+        </Section>
+      ) : null}
       <Section title={t('settings:startup')} hint={t('settings:startupHint')}>
         <Field label={t('settings:openHomeOnLoad')} hint={t('settings:openHomeOnLoadHint')}>
           <Segmented<'home' | 'current'>

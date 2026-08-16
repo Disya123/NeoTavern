@@ -1,6 +1,7 @@
 package com.neotavern.mobile
 
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.database.sqlite.SQLiteDatabase
@@ -111,16 +112,16 @@ class BackgroundExecutionInstrumentedTest {
         // service owns the pump from here on (no second waitEvent).
         val runId = awaitFirstEventRunId(streamHandle, 20_000)
 
-        // Hand the stream to the background: first claim wins, later claims
-        // for the same id are rejected (idempotent).
-        assertTrue("stream claimed", ForegroundExecutionCoordinator.claim(streamHandle, requestId))
+        // Hand the stream to the background under the wire stream id the
+        // production bridge claims (event.streamId), not the request id.
+        assertTrue("stream claimed", ForegroundExecutionCoordinator.claim(streamHandle, runId))
         assertFalse(
             "duplicate claim rejected",
-            ForegroundExecutionCoordinator.claim(streamHandle, requestId),
+            ForegroundExecutionCoordinator.claim(streamHandle, runId),
         )
         assertTrue(
             "claim visible to the service",
-            ForegroundExecutionCoordinator.isClaimed(requestId),
+            ForegroundExecutionCoordinator.isClaimed(runId),
         )
 
         context.startForegroundService(Intent(context, GenerationService::class.java))
@@ -134,14 +135,15 @@ class BackgroundExecutionInstrumentedTest {
         assertEquals("generation channel", NotificationState.CHANNEL_ID, notification.notification.channelId)
         assertEquals("generation notification id", NotificationState.NOTIFICATION_ID, notification.id)
 
-        // The user presses Stop: the same implicit, package-scoped broadcast
-        // the notification's Stop action targets (NotificationHelper builds
-        // the PendingIntent from Intent(ACTION_STOP).setPackage(...)). The
-        // service listens with a context-registered RECEIVER_NOT_EXPORTED
-        // receiver — an explicit component would not reach it.
-        context.sendBroadcast(
-            Intent(NotificationState.ACTION_STOP).setPackage(context.packageName),
-        )
+        // The user presses Stop: fire the same PendingIntent.getService the
+        // notification action uses. A package-scoped implicit broadcast does
+        // not reach this non-exported service on API 34+, including API 36.
+        PendingIntent.getService(
+            context,
+            0,
+            GenerationService.stopIntent(context),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        ).send()
 
         // The service cancels the run, drains the terminal, removes the
         // notification and unclaims the stream.
@@ -150,7 +152,7 @@ class BackgroundExecutionInstrumentedTest {
                 .any { it.notification.channelId == NotificationState.CHANNEL_ID }
             if (stillActive) {
                 null
-            } else if (ForegroundExecutionCoordinator.isClaimed(requestId)) {
+            } else if (ForegroundExecutionCoordinator.isClaimed(runId)) {
                 null
             } else {
                 Unit

@@ -150,7 +150,7 @@
     {
       "source": "adr/0034-android-local-host-jni-transport.md",
       "target": "adr/0034-android-local-host-jni-transport.md",
-      "sha256": "e8d9021c9ea90530534cdb671a2854449a6f3ed2e451275bb210b939d7ee0719"
+      "sha256": "7d69e53ebd31ff85d873fb14e8c5074fd43dcea19c109641d88f5a3a1da049b5"
     },
     {
       "source": "adr/0035-desktop-remote-access.md",
@@ -160,7 +160,7 @@
     {
       "source": "adr/0036-android-background-execution.md",
       "target": "adr/0036-android-background-execution.md",
-      "sha256": "de01d20e81dccab3cbc5046e6cfa44bad9ec6ebe988c791fea1e4895fd4f416c"
+      "sha256": "5d602695ceabadc6b5520d5296d2609ead9478a82888bca64af52d9527c009d0"
     },
     {
       "source": "adr/0037-extension-hardening.md",
@@ -230,7 +230,7 @@
     {
       "source": "android/README.md",
       "target": "android/README.md",
-      "sha256": "798bd8b6b7dd993c9545096ab60f128fb94204f8931c46090e21c26f0309c7c4"
+      "sha256": "c9158a442ef3f15009dba26d9974bb5fa33777f4a8049e882355b98de694c76c"
     },
     {
       "source": "api/README.md",
@@ -240,7 +240,7 @@
     {
       "source": "architecture/README.md",
       "target": "architecture/README.md",
-      "sha256": "3ba0d6e315c6130349f1cfda49d4bc11f494c7a806421efd682fb1c60fa93ff2"
+      "sha256": "2103583d4c38d415aac666356b33ad8bf30f0543dc90c8b35d40cfe01d273f4a"
     },
     {
       "source": "architecture/benchmarks.md",
@@ -260,7 +260,7 @@
     {
       "source": "architecture/operations-inventory.md",
       "target": "architecture/operations-inventory.md",
-      "sha256": "7ac7863b07edbb6f76b7fea48c90cfbf0be4e5fb8337947b96faebf7586aff3f"
+      "sha256": "7e90d716a0d5f93ed0fa7eb272fcbbad0395250efecd7491613d1e3037d93a25"
     },
     {
       "source": "architecture/portable-data.md",
@@ -285,7 +285,7 @@
     {
       "source": "architecture/ui-legacy-surface.md",
       "target": "architecture/ui-legacy-surface.md",
-      "sha256": "eae184afde8233eb37972e74f921e89b3bca95ac66cba8aa68d963eb5fc153bc"
+      "sha256": "7b33de4cc13d91140a8a7e12ba5793efbe38749a479fa2c928162ed19377ee63"
     },
     {
       "source": "architecture/version-axes.md",
@@ -300,22 +300,27 @@
     {
       "source": "capability-matrix.md",
       "target": "capability-matrix.md",
-      "sha256": "6867f2e0dc421d57e501f1b884e029361c102ed70aadab1995f523abb07ab7e4"
+      "sha256": "c3b8116d98a2ebbed671972c322dc68faea4290e5067b4b8d468ea7ffdde4a80"
     },
     {
       "source": "data/README.md",
       "target": "data/README.md",
-      "sha256": "fd8d2facab5a2e976cf892ff8c959de201730b5ae94b291df0417f0fb1884977"
+      "sha256": "c618dd2c1a57a6f34ecbeb0ae8a8312039ddf4667dc18a9195d94a1531987d50"
     },
     {
       "source": "desktop/README.md",
       "target": "desktop/README.md",
-      "sha256": "53b938aa0e0ecfdb351e2ae5c6cdf212c40e8a387f2cb69d289e866c6e0852a8"
+      "sha256": "83f92fc4e068f9f5a9096e3616d633afa3f1b4d74e5ba5afcfae7ada5a29a068"
     },
     {
       "source": "migrations/README.md",
       "target": "migrations/README.md",
-      "sha256": "5482a0783448cc259402e20290cc3ee48be180694b5be86a29d6b3ee41f02141"
+      "sha256": "a97310651a1e0d9dff71e45fec66eafa73ba98544ddea1abde3953d5f7acbac5"
+    },
+    {
+      "source": "migrations/etap6-legacy-removal.md",
+      "target": "migrations/etap6-legacy-removal.md",
+      "sha256": "4f592fe036a34c6834c57e969ab73f4df4a211b9e54086d81929aeea4caf57b4"
     },
     {
       "source": "plugin-sdk/README.md",
@@ -340,7 +345,7 @@
     {
       "source": "theme-sdk/README.md",
       "target": "theme-sdk/README.md",
-      "sha256": "dd8acba2965354398d64647100664f7a7f74b2331e62c75a6c0aee4deb36e134"
+      "sha256": "3df18ec7b2d9e8047aa4fd9bf794cada569d0f48f6fde46248ebc3c062f2f02b"
     },
     {
       "source": "ux/README.md",

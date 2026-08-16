@@ -530,6 +530,39 @@ fn cors_denies_every_origin_by_default() {
     server.shutdown();
 }
 
+/// 33b. Opaque `Origin: null` (packaged Android WebView / file:) is still
+///      denied on an open loopback adapter, and admitted only when the
+///      pairing gate is configured — the bearer is then the CSRF control.
+#[test]
+fn cors_admits_opaque_null_origin_only_when_auth_is_on() {
+    let mut open = TestServer::spawn_with(default_config());
+    let denied = http_request(open.addr, "GET", "/meta", &[("Origin", "null")], &[]);
+    assert_eq!(
+        denied.status, 403,
+        "Origin null stays denied without pairing"
+    );
+    open.shutdown();
+
+    let mut gated = TestServer::spawn_with(RemoteAdapterConfig {
+        auth: Some(AuthConfig { max_credentials: 4 }),
+        ..default_config()
+    });
+    let allowed = http_request(gated.addr, "GET", "/meta", &[("Origin", "null")], &[]);
+    assert_eq!(
+        allowed.status, 200,
+        "opaque origin admitted when pairing is on"
+    );
+    assert!(
+        allowed
+            .headers
+            .iter()
+            .any(|(key, value)| key.eq_ignore_ascii_case("Access-Control-Allow-Origin")
+                && value == "null"),
+        "CORS allow-origin echoes the opaque origin"
+    );
+    gated.shutdown();
+}
+
 /// 34. CORS with an explicit allowlist: preflight answers 204 + the CORS
 ///     headers, allowed actual requests carry `Access-Control-Allow-Origin`,
 ///     and any other origin is still 403.
@@ -570,6 +603,10 @@ fn cors_allowlist_serves_only_configured_origins() {
     assert_eq!(
         header_of("access-control-allow-headers"),
         Some("Authorization, Content-Type, Last-Event-ID")
+    );
+    assert_eq!(
+        header_of("access-control-allow-private-network"),
+        Some("true")
     );
     assert_eq!(header_of("vary"), Some("Origin"));
 

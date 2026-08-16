@@ -15,9 +15,6 @@ export default tseslint.config(
       'apps/desktop/src-tauri/gen/**',
       'apps/desktop/src-tauri/resources/**',
       'apps/desktop/src-tauri/target/**',
-      // User's in-flight experimental Android bridge harness (not part of
-      // the product build; linted once it lands in a real package).
-      'apps/desktop/mobile-connect/**',
       // Android local host project (Kotlin/Gradle — not linted by this config).
       'apps/android/**',
       'crates/target/**',

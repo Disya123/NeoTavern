@@ -136,6 +136,20 @@
     --st-chat-message-inline: var(--st-space-md);
   }
 
+  /* Not a Theme SDK --st-* token. Android WebView injects --nt-safe-area-*
+     (env() stays 0 there). Chrome uses --nt-inset-*. The document stays
+     edge-to-edge so scrollable content can pass under the status bar. */
+  :root {
+    --nt-safe-area-top: 0px;
+    --nt-safe-area-right: 0px;
+    --nt-safe-area-bottom: 0px;
+    --nt-safe-area-left: 0px;
+    --nt-inset-top: max(env(safe-area-inset-top, 0px), var(--nt-safe-area-top));
+    --nt-inset-right: max(env(safe-area-inset-right, 0px), var(--nt-safe-area-right));
+    --nt-inset-bottom: max(env(safe-area-inset-bottom, 0px), var(--nt-safe-area-bottom));
+    --nt-inset-left: max(env(safe-area-inset-left, 0px), var(--nt-safe-area-left));
+  }
+
   :root[data-theme-mode='dark'] {
     color-scheme: dark;
     --st-color-text-primary: #f3eee8;

@@ -85,7 +85,7 @@ jobs:
         run: cargo test -p neotavern-tauri-local --features remote && cargo clippy -p neotavern-tauri-local --features remote --all-targets -- -D warnings
 
       - name: Rust formatting (hand-written crates; generated.rs is byte-checked by codegen)
-        run: cargo fmt --manifest-path crates/Cargo.toml -p runtime-kernel -p neotavern-storage -p remote-http-adapter -p neotavern-mobile-ffi -p neotavern-cli -p built-in-providers -p provider-sdk -p neotavern-envelope -p neotavern-tauri-local -p neotavern-android-jni -p neotavern-desktop-remote --check
+        run: cargo fmt --manifest-path crates/Cargo.toml -p runtime-kernel -p neotavern-storage -p remote-http-adapter -p neotavern-mobile-ffi -p neotavern-cli -p neotavern-headless -p built-in-providers -p provider-sdk -p neotavern-envelope -p neotavern-tauri-local -p neotavern-android-jni -p neotavern-desktop-remote --check
 
       # §84 performance sampling: Phase 11 backup/restore/export benchmark.
       # The machine-readable report is uploaded as an artifact; threshold
@@ -179,6 +179,19 @@ jobs:
         api-level: [26, 34]
     steps:
       - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install JS dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build web client (APK assets, ТЗ §11.4)
+        run: pnpm --filter @neotavern/web build
 
       - uses: dtolnay/rust-toolchain@stable
         with:

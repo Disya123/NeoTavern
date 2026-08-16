@@ -7,17 +7,19 @@
  * instead of silently going stale. Before this subscriber, the stream was
  * only relayed into plugin sandboxes.
  *
- * **Kernel plane** (desktop local kernel): there is no SSE channel and no
- * second writer — the kernel is the single writer and every mutation flows
- * through the same TanStack Query caches in this process. Opening the legacy
- * event stream here would be a silent legacy call (ARC-02), so the honest
- * kernel behavior is a no-op subscription (ТЗ §13.1: never silently touch the
- * other backend). The legacy contour (sidecar / remote Web Client) keeps the
- * real stream.
+ * **Kernel plane** (desktop local kernel, Android JNI, remote Headless):
+ * there is no SSE channel and no second writer — the kernel is the single
+ * writer and every mutation flows through the same TanStack Query caches in
+ * this process. Opening the legacy event stream here would be a silent
+ * legacy call (ARC-02), so the honest kernel behavior is a no-op
+ * subscription (ТЗ §13.1: never silently touch the other backend). The
+ * host-connect gate also has no legacy product API yet. The legacy contour
+ * (Vite + sidecar) keeps the real stream until M7.
  */
 import type { QueryClient } from '@tanstack/react-query';
 import type { BrowserAppEvent } from '@neotavern/contracts';
 import { isKernelMode } from './backend.js';
+import { needsHostConnect } from './hostSession.js';
 
 /**
  * Server frame on the wire. The event names come from the shared contract
@@ -36,8 +38,10 @@ interface AppEventEnvelope {
  */
 export function connectAppEvents(queryClient: QueryClient): () => void {
   // Kernel plane: honest no-op (see the module docs) — never a silent legacy
-  // surface call from kernel mode.
-  if (isKernelMode()) {
+  // surface call from kernel mode. The host-connect gate (Android / `?connect=`)
+  // also has no legacy product API yet; opening EventSource against the static
+  // Web Client would fetch `index.html` as `text/event-stream`.
+  if (isKernelMode() || needsHostConnect()) {
     return () => undefined;
   }
   const source = new EventSource('/api/v2/events');

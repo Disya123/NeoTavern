@@ -29,6 +29,8 @@ import { useErrorText } from '../lib/useErrorText.js';
 import { setDocumentLanguage } from '../lib/lang.js';
 import { useConversationContextPreview } from '../lib/useConversationContextPreview.js';
 import { wallpaperBackgroundUrl } from '../api/wireBridge.js';
+import { canChangeHost, openHostConnect } from '../api/hostSession.js';
+import { useAvatarDataUrl } from '../api/avatarHooks.js';
 import { useUiStore } from '../state/ui.js';
 import { ChatComposer } from '../components/ChatComposer.js';
 import { ChatHeader } from '../components/ChatHeader.js';
@@ -140,6 +142,13 @@ export function HomePage() {
     inputRef.current?.focus();
   };
 
+  const globalBackgroundId = useUiStore((state) => state.globalBackgroundId);
+  const wallpaperUrl = useMemo(
+    () => wallpaperBackgroundUrl(globalBackgroundId),
+    [globalBackgroundId],
+  );
+  const avatarDataUrl = useAvatarDataUrl(character?.avatarAssetId);
+
   if (!character && recentCharacters.isError) {
     return (
       <ErrorBoundary name="home">
@@ -174,6 +183,17 @@ export function HomePage() {
                 <span>{t('home:getStartedEyebrow')}</span>
                 <h1>{t('home:noCharacterTitle')}</h1>
                 <p>{t('home:noCharacterDescription')}</p>
+                {canChangeHost() ? (
+                  <Button
+                    variant="default"
+                    data-action="change-host"
+                    onClick={() => {
+                      openHostConnect();
+                    }}
+                  >
+                    {t('auth:connectSwitch')}
+                  </Button>
+                ) : null}
               </div>
             </div>
             <div className={styles.onboardingPreferences}>
@@ -249,12 +269,6 @@ export function HomePage() {
     );
   }
 
-  const globalBackgroundId = useUiStore((state) => state.globalBackgroundId);
-  const wallpaperUrl = useMemo(
-    () => wallpaperBackgroundUrl(globalBackgroundId),
-    [globalBackgroundId],
-  );
-
   return (
     <ErrorBoundary name="home">
       <ChatWorkspace
@@ -265,7 +279,7 @@ export function HomePage() {
         header={
           <ChatHeader
             name={character?.name ?? null}
-            avatar={character?.avatar}
+            avatar={avatarDataUrl.data ?? character?.avatar}
             searchableTexts={displayGreeting ? [displayGreeting] : []}
             onQueryChange={setChatSearchQuery}
           />

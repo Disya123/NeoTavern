@@ -30,10 +30,15 @@
 
   .noCharacter {
     display: flex;
-    align-items: center;
-    justify-content: center;
     flex-direction: column;
-    text-align: center;
+    width: min(100%, 760px);
+    height: 100%;
+    overflow-y: auto;
+    margin: 0 auto;
+    padding: var(--st-space-2xl);
+    padding-block-start: max(var(--st-space-2xl), var(--nt-inset-top));
+    padding-block-end: max(var(--st-space-2xl), var(--nt-inset-bottom));
+    text-align: start;
   }
 
   .emptyIcon {
@@ -57,15 +62,6 @@
     max-width: 54ch;
     margin-top: var(--st-space-sm);
     color: var(--st-color-text-secondary);
-  }
-
-  .noCharacter {
-    width: min(100%, 760px);
-    height: 100%;
-    overflow-y: auto;
-    margin: 0 auto;
-    padding: var(--st-space-2xl);
-    text-align: start;
   }
 
   .onboardingIntro {
@@ -94,6 +90,10 @@
 
   .onboardingIntro p {
     margin-top: var(--st-space-sm);
+  }
+
+  .onboardingIntro [data-action='change-host'] {
+    margin-top: var(--st-space-md);
   }
 
   .onboardingPreferences {

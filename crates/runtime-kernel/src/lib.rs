@@ -47,12 +47,18 @@ pub mod providers;
 pub mod providers_config;
 pub mod secrets;
 pub mod settings;
+mod starter;
 pub mod themes;
 pub mod tools;
 
 /// FFI ABI version this kernel implements. Must match the embedded manifest's
 /// `ffiAbiVersion` (see `contracts_generated::contract_schema_hash`).
 pub const FFI_ABI_VERSION: u32 = 1;
+
+/// Product hosts set this to `1` before [`Kernel::open`] so the writer
+/// thread seeds the bundled Hazel / Vesper pack once per data root.
+/// Kernel unit tests leave it unset so they keep an empty library.
+pub const SEED_STARTER_ENV: &str = "NEOTA_SEED_STARTER";
 
 /// Cancellation token threaded through every dispatch.
 ///
@@ -815,6 +821,13 @@ fn writer_main(
         if let Err(err) = providers_config::hydrate(db, &mut state.registry) {
             eprintln!("kernel: provider config hydration failed: {err}");
         }
+    }
+    // Bundled Hazel / Vesper (same assets as the legacy Fastify pack). The
+    // avatar PNG exceeds the wire `assets.put` cap, so seeding runs here on
+    // the writer thread — never through dispatch. Best-effort: a failure
+    // logs and retries on the next open; it never blocks the kernel.
+    if let Some(db) = &mut db {
+        starter::seed_if_needed(db);
     }
     let mut stop = false;
     let mut pending: Vec<Command> = Vec::new();

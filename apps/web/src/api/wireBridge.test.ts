@@ -612,12 +612,27 @@ describe('readCharacters (kernel)', () => {
     expect(page.hasMore).toBe(true);
   });
 
-  it('rejects search and non-default sorts honestly', async () => {
+  it('rejects search, random sort, and includeDeleted honestly', async () => {
     await expect(readCharacters({ q: 'Alice' })).rejects.toBeInstanceOf(UnsupportedError);
     await expect(readCharacters({ tag: 'x' })).rejects.toBeInstanceOf(UnsupportedError);
     await expect(readCharacters({ sort: 'random' })).rejects.toBeInstanceOf(UnsupportedError);
     await expect(readCharacters({ includeDeleted: true })).rejects.toBeInstanceOf(UnsupportedError);
     expect(mocks.characters.list).not.toHaveBeenCalled();
+  });
+
+  it('sorts a kernel page A-Z without a wire sort field', async () => {
+    mocks.characters.list.mockResolvedValue({
+      items: [
+        { ...WIRE_CHARACTER, name: 'Zed' },
+        { ...WIRE_CHARACTER, id: '11111111-2222-4333-8444-555555555556', name: 'Ann' },
+      ],
+      nextCursor: null,
+    });
+    const az = await readCharacters({ sort: 'name' });
+    expect(az.items.map((item) => item.name)).toEqual(['Ann', 'Zed']);
+    const za = await readCharacters({ sort: 'name-desc' });
+    expect(za.items.map((item) => item.name)).toEqual(['Zed', 'Ann']);
+    expect(mocks.characters.list).toHaveBeenCalled();
   });
 });
 

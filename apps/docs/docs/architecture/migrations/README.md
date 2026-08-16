@@ -4,6 +4,11 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/migrations/README.
 
 # Migrations
 
+## Этап 6 — Legacy removal (M7)
+
+Cutover plan (not executed while M6 is open):
+[etap6-legacy-removal.md](./etap6-legacy-removal.md).
+
 ## 0024 — secret value references (ТЗ §SEC-01)
 
 Migration `0024_secret_value_refs` (version 24) moves secret values out of

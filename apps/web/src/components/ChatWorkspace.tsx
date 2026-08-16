@@ -12,6 +12,10 @@
  * `viewName` becomes the `data-component` on the root element (`home` or
  * `chat-view`); the e2e suite asserts `chat-view` on the live route.
  *
+ * The header overlays the viewport (Telegram-style): identity controls are
+ * padded with `--nt-inset-top` so they sit below the status bar, while
+ * messages scroll under the translucent chrome.
+ *
  * The root is a `<section>`, not a `<main>`: the single page landmark lives in
  * {@link AppShell} (`#chat-workspace`, the skip-link target). Rendering another
  * `<main>` here would create a nested/duplicate landmark.

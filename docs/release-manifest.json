@@ -560,8 +560,34 @@
         "android": "Not supported",
         "webClient": "Integrated"
       },
-      "notes": "ARC-12 / ТЗ 10/10 rev2 §11.3.1 (M5 slice 51): the Web Client is remote-only and shows an honest connection/offline screen without performing local product mutations. Evidence in source: AuthGate renders the offline banner (role=status, i18n offlineShell) when the session check fails with a network error while navigator.onLine is false, or the full-screen connectionRequired panel with Retry for other session errors — covered by ui.test 'keeps only the app shell visible when the session check fails offline' (offline -> app shell only + status banner, no product surface); ConnectivityStatus surfaces a data-state=offline indicator; the production-only service worker (registerServiceWorker/sw.js) caches only the versioned app shell (SHELL_URL) and passes /api/ requests through un-cached, so API responses, SSE, prompts, provider events and secrets never enter Cache Storage (AGENTS.md §20); all product operations flow through the NeoBackend facade, which fails with a network error when the backend is unreachable — no hidden local mutations.",
+      "notes": "ARC-12 / ТЗ 10/10 rev2 §11.3.1 (M5 slice 51, M6 remote-flow): the Web Client is remote-only and shows an honest connection/offline screen without performing local product mutations. Evidence in source: AuthGate renders the offline banner (role=status, i18n offlineShell) when the session check fails with a network error while navigator.onLine is false, or the full-screen connectionRequired panel with Retry for other session errors — covered by ui.test 'keeps only the app shell visible when the session check fails offline'; ConnectivityStatus surfaces a data-state=offline indicator; the production-only service worker caches only the versioned app shell and passes /api/ requests through un-cached. HostConnect (`data-component=host-connect`) is the remote-flow gate; Playwright `pnpm test:e2e:headless` reaches `app-shell` against `neotavern-headless` over Product Wire.",
       "milestone": "M5"
+    },
+    {
+      "id": "host.headless-server",
+      "title": "Headless host (thin Kernel HTTP adapter)",
+      "wireOps": [],
+      "hosts": {
+        "desktop": "Not supported",
+        "headless": "Implemented",
+        "android": "Not supported",
+        "webClient": "Integrated"
+      },
+      "notes": "M6: `neotavern-headless` binds remote-http over a data-root Kernel. Loopback default, `--remote-exposure` + `--auth` for a public bind. Web Client talks Product Wire via themed HostConnect + HttpTransport (`/rpc`, `/rpc/stream` SSE); Playwright `e2e/headless/remote.spec.ts` / `pnpm test:e2e:headless` (CI job e2e-headless). Status is Integrated on the Web Client (remote-flow proven) and Implemented on the Headless host (CI binary, not a Released artifact). Android JNI local host can also connect here via URL/QR.",
+      "milestone": "M6"
+    },
+    {
+      "id": "host.android-web-assets",
+      "title": "Android APK embeds production web UI assets",
+      "wireOps": [],
+      "hosts": {
+        "desktop": "Not supported",
+        "headless": "Not supported",
+        "android": "Packaged",
+        "webClient": "Not supported"
+      },
+      "notes": "M6 (ТЗ §11.4 / §18.3): Gradle `packageWebAssets` stages `apps/web/dist` into APK `assets/web/` (fail-closed without `index.html`). Vite `base: './'` so the packaged UI loads from `file:///android_asset/web`. HostConnect (Theme SDK) + JNI local / URL / QR. Instrumented on device: `WebAssetsPackagedInstrumentedTest`, `WebViewUserFlowInstrumentedTest` (themed gate → app-shell + catalog/settings/composer + Activity recreate; generation.start through `window.__neotavernMobile.call` interrupted→retry after simulated process death), `KeystoreSecretStoreInstrumentedTest`. Status is Packaged: CI `assembleRelease` (debug-signed) plus `scripts/check-android-apk-web-assets.mjs` require `assets/web/index.html` in the release APK ZIP. Not Released: no store-signed Play artifact.",
+      "milestone": "M6"
     }
   ]
 }

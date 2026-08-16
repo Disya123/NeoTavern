@@ -1,10 +1,10 @@
 /**
  * Profile store + backend resolver tests (ТЗ §7.2 Phase 5): profile
  * registration/selection, shell-appropriate transport for local profiles,
- * the Phase 9 remote-profile guard, and the unchanged default backend path.
+ * remote Product Wire HTTP, and the unchanged default backend path.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { LocalBackend, UnsupportedError } from '@neotavern/neobackend';
+import { LocalBackend, RemoteBackend, UnsupportedError } from '@neotavern/neobackend';
 import { WIRE_PROTOCOL, WIRE_SCHEMA_HASH } from '@neotavern/contracts';
 import { MobileBridgeTransport } from './mobileTransport.js';
 import { TauriTransport } from './tauriTransport.js';
@@ -88,21 +88,30 @@ describe('resolveBackend', () => {
     expect(callSpy).toHaveBeenCalledWith('meta.get', {}, { signal: undefined });
   });
 
-  it('throws UnsupportedError for remote profiles (Phase 9 scope)', () => {
+  it('resolves a remote profile to RemoteBackend over the product-wire HTTP transport', () => {
+    const { backend } = resolveBackend({
+      id: 'remote-1',
+      kind: 'remote',
+      label: 'Remote',
+      remoteUrl: 'https://example.com',
+    });
+    expect(backend).toBeInstanceOf(RemoteBackend);
+  });
+
+  it('throws UnsupportedError when a remote profile has no URL', () => {
     let caught: unknown;
     try {
       resolveBackend({
         id: 'remote-1',
         kind: 'remote',
         label: 'Remote',
-        remoteUrl: 'https://example.com',
       });
     } catch (error) {
       caught = error;
     }
     expect(caught).toBeInstanceOf(UnsupportedError);
     if (caught instanceof UnsupportedError) {
-      expect(caught.feature).toBe('profile.remote');
+      expect(caught.feature).toBe('profile.remote.url');
     }
   });
 });

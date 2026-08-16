@@ -98,8 +98,15 @@ so the host surface is exactly the frozen registry.
   `apps/android/app/src/main/jniLibs/{arm64-v8a,x86_64}/libneotavern_android_jni.so`
   from `neotavern-android-jni` before the APK build; the web assets are
   bundled from the built web app.
-- **Remote profiles are deferred to Phase 9**: the Phase 5 host is
-  local-only; remote access on mobile reuses the Phase 4/9 remote adapter
-  surface later.
+- **Remote profiles on Android (M6):** the packaged UI's HostConnect
+  gate can switch the WebView from the local JNI kernel to a remote
+  Headless / Desktop Remote Access host over Product Wire HTTP. Local
+  remains the default "use on this device" path. After the first pick,
+  Settings → General → Host reopens the gate; Cancel keeps the current
+  session. Android WebView does not honor CSS `env(safe-area-inset-*)` and
+  ignores `View.setPadding` for HTML. The activity draws the WebView
+  edge-to-edge and publishes `WindowInsets` as `--nt-safe-area-*`; Theme SDK
+  chrome uses `--nt-inset-*` so controls stay below the status bar while
+  scrollable content passes underneath.
 - Phase 5 scope stays bounded: basic CRUD/settings, startup recovery and
   generation streams; no provider-config UI on mobile.

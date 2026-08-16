@@ -29,7 +29,7 @@
     flex: 1 1 auto;
     flex-direction: column;
     padding-inline: var(--st-space-lg);
-    padding-block: var(--st-space-sm) max(var(--st-space-md), env(safe-area-inset-bottom));
+    padding-block: var(--st-space-sm) max(var(--st-space-md), var(--nt-inset-bottom));
   }
 
   /* ── Details mode ──────────────────────────────────────────────────────── */

@@ -322,17 +322,29 @@ identical cards with different bytes count as separate imports.
 
 The distribution contains the original V3 card of Hazel and four author
 entries of the Vesper lorebook — original starter content in a cyberpunk
-setting, not borrowed from SillyTavern. On startup the server performs a
-resumable local import: it creates the character, saves the original avatar
-image and the content-addressed thumbnail, creates the linked lorebook and a
-chat with the character's `firstMessage`. Unknown V3 fields, greeting arrays,
-extension metadata, and the original lore text are preserved.
+setting, not borrowed from SillyTavern.
 
-Stage state is stored in `app_meta`. Before the `.complete` marker, a restart
-only finishes the missing stages; a corrupted bundled asset leaves a retry
-marker and does not block the server. After `.complete` the starter content is
-never restored: deleting or editing it is considered user intent. The import
-runs once, for both new and existing databases after an update.
+On the **legacy Fastify** contour, startup performs a resumable local
+import (`apps/server/src/lib/starterContent.ts`): it creates the
+character, saves the original avatar image and the content-addressed
+thumbnail, and creates the linked lorebook. Unknown V3 fields, greeting
+arrays, extension metadata, and the original lore text are preserved.
+Stage state is stored in `app_meta`.
+
+On the **canonical Kernel** contour the same files are seeded from
+`apps/server/assets/starter/` at writer-thread startup when the host sets
+`NEOTA_SEED_STARTER=1` (Android `nt_kernel_open` with a data root, and
+Desktop kernel mode). The avatar PNG is larger than the wire `assets.put`
+limit, so the kernel publishes it directly through the asset store rather
+than dispatch. Markers live in `__neotavern_meta` under the same keys
+(`starter.hazel.v1.characterId` / `lorebookId` / `complete`).
+
+Before the `.complete` marker, a restart only finishes the missing
+stages; a corrupted bundled asset leaves a retry log line and does not
+block the host. After `.complete` the starter content is never restored:
+deleting or editing it is considered user intent. The import runs once,
+for both new and existing databases after an update. Kernel unit tests
+leave the env unset so they keep an empty library.
 
 ## SillyTavern data import
 
