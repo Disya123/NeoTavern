@@ -1304,7 +1304,7 @@
           "type": "code",
           "artifact": "Desktop host tool executor (app_now built-in + ToolExecutor seam)",
           "result": "M5 slice 57 (ТЗ §8.3/§9.3): crates/adapters/tauri-local/src/executor.rs NEW — ToolExecutor trait (Ok(None)=leave waiting, Ok(Some)=wire result, Err=redacted), NoopToolExecutor default, BuiltinToolExecutor (app_now UTC clock, side-effect-free, consent-free), step_tool_call extractor (only generation.step/tool_call/waiting), unix->RFC3339; KernelHost gains tool_executor slot + set_tool_executor; poll_loop snapshots the executor per stream, offers each waiting tool_call step to it and, when handled, submits generation.tool.result itself and keeps polling the durable journal through the resumed turn (resumed_by_executor flag overrides the stream Terminal-notice close); SEC-07: only the tool NAME is ever logged. apps/desktop setup_local_kernel_mode registers the app_now contract and wires BuiltinToolExecutor. Tests: 6 executor unit + 18 tauri-local unit total + host_tool_executor.rs integration 2 (host-completed tool round trip with resumed final text [tool-result 1]..., no-executor control keeps waiting_for_tool). Capability notes: generation.tool-loop updated.",
-          "commit": "pending"
+          "commit": "547a506"
         }
       ],
       "blockingIssues": [
