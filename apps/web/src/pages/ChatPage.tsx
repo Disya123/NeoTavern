@@ -36,6 +36,7 @@ import { ChatHeader } from '../components/ChatHeader.js';
 import { ChatWorkspace } from '../components/ChatWorkspace.js';
 import workspaceStyles from '../components/ChatWorkspace.module.css';
 import { ContextUsagePanel } from '../components/ContextUsagePanel.js';
+import { PromptPlanPanel } from '../components/PromptPlanPanel.js';
 import { MessageBubble } from '../components/MessageBubble.js';
 import { frontendPluginRuntime, usePluginRegistrations } from '../plugins/runtime.js';
 import { useUiStore } from '../state/ui.js';
@@ -73,6 +74,7 @@ export function ChatPage() {
   const [editErrorId, setEditErrorId] = useState<string | null>(null);
   const [editErrorText, setEditErrorText] = useState<string | null>(null);
   const [contextOpen, setContextOpen] = useState(false);
+  const [promptPlanRunId, setPromptPlanRunId] = useState<string | null>(null);
   const [chatSearchQuery, setChatSearchQuery] = useState('');
   // Optimistic copy of the user message being generated: rendered instantly
   // on send, dropped when a refetch confirms the server-persisted original.
@@ -820,6 +822,10 @@ export function ChatPage() {
                     onOpenCheckpoint={openCheckpoint}
                     onReplaceCheckpoint={replaceCheckpoint}
                     onDeleteCheckpoint={deleteCheckpoint}
+                    onViewPromptPlan={(message) => {
+                      const runId = message.meta['generationRunId'];
+                      setPromptPlanRunId(typeof runId === 'string' ? runId : null);
+                    }}
                     branchId={chat.data?.activeBranchId ?? null}
                     editError={editErrorId === message.id ? editErrorText : null}
                   />
@@ -899,6 +905,11 @@ export function ChatPage() {
           />
         ) : null}
       </ChatWorkspace>
+      <PromptPlanPanel
+        open={promptPlanRunId !== null}
+        runId={promptPlanRunId}
+        onClose={() => setPromptPlanRunId(null)}
+      />
     </ErrorBoundary>
   );
 }
@@ -931,6 +942,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
   onOpenCheckpoint,
   onReplaceCheckpoint,
   onDeleteCheckpoint,
+  onViewPromptPlan,
   branchId,
   editError,
 }: {
@@ -958,6 +970,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
   onOpenCheckpoint: (message: Message) => void;
   onReplaceCheckpoint: (message: Message) => void;
   onDeleteCheckpoint: (message: Message) => Promise<void>;
+  onViewPromptPlan: (message: Message) => void;
   branchId: string | null;
   editError: string | null;
 }) {
@@ -1030,6 +1043,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
       onOpenCheckpoint={onOpenCheckpoint}
       onReplaceCheckpoint={onReplaceCheckpoint}
       onDeleteCheckpoint={onDeleteCheckpoint}
+      onViewPromptPlan={onViewPromptPlan}
     />
   );
 });

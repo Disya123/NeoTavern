@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-08-16T03:18:15.625Z",
+  "generatedAt": "2026-08-16T03:44:49.809Z",
   "rows": [
     {
       "hosts": {
@@ -398,7 +398,7 @@
       },
       "id": "ui.card-exports",
       "milestone": "M5",
-      "notes": "SillyTavern card containers: character-card EXPORT runs on the kernel plane end-to-end (M5 slice 35, Этап 4.5): wire characters.export.card returns the container (json = the original card object preserved under ext_json._card, verbatim round trip; png = minimal PNG whose chara tEXt chunk carries base64 JSON — exactly what imports.character.card accepts) base64-encoded for download; characters created without a container are rebuilt from canonical fields with an honest warning; CHARACTER_NOT_FOUND stays stable. CHAT SNAPSHOT EXPORT (M5 slice 36): wire chats.export returns the neotavern-chat-export v2 container (chat + character name + message/variant/revision dump, 4 MiB response budget) base64-encoded for download — the last export refusal is gone. Kernel tests (kernel_exports.rs, 8): verbatim round trip, rebuilt+warning, PNG re-import cycle, NOT_FOUND, PNG field fidelity, chat dump with variants/revisions, empty-chat warning, CHAT_NOT_FOUND; host parity character_card_export_over_http + chat_export_over_http (32-scenario suite). Facade CharactersApi.exportCard + ChatsApi.export on all three backends (Local/Remote wire, Legacy unsupported — the legacy download URLs stay for the legacy contour, ТЗ §14.2 authority-non-expanding boundary). UI: CharacterManagementPanel export menu and the chat export menu work on the kernel plane via wireBridge exportCharacterCard/exportChat (Blob object URL download; wireBridge.test 99/99).",
+      "notes": "SillyTavern card containers: character-card EXPORT runs on the kernel plane end-to-end (M5 slice 35, Этап 4.5): wire characters.export.card returns the container (json = the original card object preserved under ext_json._card, verbatim round trip; png = minimal PNG whose chara tEXt chunk carries base64 JSON — exactly what imports.character.card accepts) base64-encoded for download; characters created without a container are rebuilt from canonical fields with an honest warning; CHARACTER_NOT_FOUND stays stable. CHAT SNAPSHOT EXPORT (M5 slice 36): wire chats.export returns the neotavern-chat-export v2 container (chat + character name + message/variant/revision dump, 4 MiB response budget) base64-encoded for download — the last export refusal is gone. Kernel tests (kernel_exports.rs, 8): verbatim round trip, rebuilt+warning, PNG re-import cycle, NOT_FOUND, PNG field fidelity, chat dump with variants/revisions, empty-chat warning, CHAT_NOT_FOUND; host parity character_card_export_over_http + chat_export_over_http (32-scenario suite). Facade CharactersApi.exportCard + ChatsApi.export on all three backends (Local/Remote wire, Legacy unsupported — the legacy download URLs stay for the legacy contour, ТЗ §14.2 authority-non-expanding boundary). UI: CharacterManagementPanel export menu and the chat export menu work on the kernel plane via wireBridge exportCharacterCard/exportChat (Blob object URL download; wireBridge.test 98/98).",
       "title": "Character card / chat exports & character import (legacy containers)",
       "wireOps": ["characters.export.card", "chats.export"]
     },
@@ -489,13 +489,13 @@
     {
       "hosts": {
         "android": "Designed",
-        "desktop": "Designed",
-        "headless": "Designed",
-        "webClient": "Designed"
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "webClient": "Implemented"
       },
       "id": "ui.prompt-pipeline",
-      "milestone": "M2",
-      "notes": "Legacy TS pipeline in apps/server; kernel crates/prompting + PromptPlan in M2.",
+      "milestone": "M5",
+      "notes": "Legacy TS pipeline in apps/server; kernel crates/prompting + PromptPlan in M2. М5 slice 37 (ТЗ §9.2): the durable PromptPlan is now reachable in the UI — NeoBackend GenerationApi.promptPlan(runId) (Local/Remote wire, Legacy honest UnsupportedError), wireBridge getPromptPlan, usePromptPlan hook (PROMPT_PLAN_NOT_FOUND / UnsupportedError resolve to an honest empty state, never an error), and the PromptPlanPanel dialog rendered from the message details card footer action (shown only for messages carrying a durable generation run id, which translateMessage now surfaces in meta.generationRunId). The panel shows provider/model, instruct format, tokenizer profile (approximate badge), input/response-reserve/context-limit tokens, the over-budget warning, system blocks by source, selected messages and every excluded message with its reason — the user can finally see what context entered the provider request and what was cut. Tests: wireBridge getPromptPlan (kernel + legacy refusal), hooks usePromptPlan (plan / NOT_FOUND → null / refusal → null), PromptPlanPanel (plan, over-budget, empty state, close), MessageDetailsCard prompt footer action (visible only with a run id, opens with the message). Honest boundary: the live pre-generation context preview and the sidecar-pipeline context audit remain legacy-only (honest CAPABILITY_UNAVAILABLE on the kernel); the kernel plan is post-generation and per-run, which is the canonical ТЗ §9.2 record.",
       "title": "Prompt pipeline (macros, context, tokens, instruct)",
       "wireOps": []
     },

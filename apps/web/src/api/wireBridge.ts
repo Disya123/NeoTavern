@@ -80,6 +80,7 @@ import {
   type MessageVariantDto,
   type PersonaDto,
   type PresetDto,
+  type PromptPlanDto,
   type VersionResponse,
   type MetaDto,
   type AppSettings,
@@ -695,8 +696,9 @@ export function translateMessage(dto: MessageDto): Message {
     name: null,
     // Extension metadata is carried verbatim on the kernel plane (wire
     // `MessageDto.meta`); legacy-only shapes are reported with neutral
-    // placeholders below.
-    meta: dto.meta,
+    // placeholders below. The durable generation run id rides alongside so
+    // the UI can open the prompt plan (ТЗ §9.2).
+    meta: dto.generationRunId ? { ...dto.meta, generationRunId: dto.generationRunId } : dto.meta,
     createdAt: toEpochMs(dto.createdAt),
     // Kernel updates are last-write-wins; the legacy CAS revision is
     // reported as its minimum (the UI no longer sends `expectedRevision`).
@@ -994,6 +996,20 @@ export async function readChat(id: string): Promise<Chat> {
     return translateChat(await backend.chats.get(id));
   }
   return api.get<Chat>(`/chats/${id}`);
+}
+
+/**
+ * Fetch the durable prompt plan of one generation run (ТЗ §9.2): what
+ * context entered the provider request — system blocks, selected history,
+ * token counts and every excluded message. Kernel plane: wire
+ * `generation.prompt.plan`. Legacy plane: the sidecar pipeline has no
+ * canonical prompt-plan store — honest `UnsupportedError` (ARC-02).
+ */
+export async function getPromptPlan(runId: string): Promise<PromptPlanDto> {
+  if (isKernelMode()) {
+    return backend.generation.promptPlan(runId);
+  }
+  throw new UnsupportedError('generation.prompt.plan');
 }
 
 /** Create a chat. `personaId` links the user persona (Этап 4 slice 3). */

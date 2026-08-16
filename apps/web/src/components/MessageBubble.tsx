@@ -88,6 +88,8 @@ export interface MessageBubbleProps {
   /** Shift+click on an existing flag: create a fresh checkpoint and open it. */
   onReplaceCheckpoint?: (message: Message) => void;
   onDeleteCheckpoint?: (message: Message) => Promise<void> | void;
+  /** Open the durable prompt plan of this message's generation run (ТЗ §9.2). */
+  onViewPromptPlan?: (message: Message) => void;
 }
 
 export const MessageBubble = memo(MessageBubbleInner);
@@ -109,6 +111,7 @@ function MessageBubbleInner({
   onOpenCheckpoint,
   onReplaceCheckpoint,
   onDeleteCheckpoint,
+  onViewPromptPlan,
   macroContext,
   branchId = null,
   editError = null,
@@ -657,6 +660,7 @@ function MessageBubbleInner({
           else if (id === 'delete-checkpoint') setCheckpointDeleteOpen(true);
         }}
         onSaveEdit={saveCardEdit}
+        onViewPromptPlan={onViewPromptPlan}
       />
       <MessageRevisionHistoryCard
         open={revisionHistoryOpen}

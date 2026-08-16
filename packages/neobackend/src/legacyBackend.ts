@@ -204,6 +204,7 @@ export class LegacyBackend implements NeoBackend {
     retry: () => this.unsupported('generation.retry'),
     keep: () => this.unsupported('generation.keep'),
     discard: () => this.unsupported('generation.discard'),
+    promptPlan: () => this.unsupported('generation.prompt.plan'),
     tools: {
       list: () => this.unsupported('generation.tools.list'),
       result: () => this.unsupported('generation.tool.result'),

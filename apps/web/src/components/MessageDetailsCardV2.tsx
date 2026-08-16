@@ -13,6 +13,7 @@ import {
   Timer,
   User,
   X,
+  TextAlignLeft,
 } from '@phosphor-icons/react';
 import {
   useEffect,
@@ -56,6 +57,8 @@ export interface MessageDetailsCardProps {
   onHistory: () => void;
   onBuiltinAction: (id: BuiltinMessageActionId) => void;
   onSaveEdit: (content: string) => Promise<void>;
+  /** Open the durable prompt plan of this message's generation run (ТЗ §9.2). */
+  onViewPromptPlan?: (message: Message) => void;
 }
 
 const DRAG_DISMISS_THRESHOLD_PX = 56;
@@ -78,6 +81,7 @@ export function MessageDetailsCard({
   onHistory,
   onBuiltinAction,
   onSaveEdit,
+  onViewPromptPlan,
 }: MessageDetailsCardProps) {
   const { t, i18n } = useTranslation();
   const [mode, setMode] = useState<MessageDetailsMode>(initialMode);
@@ -142,8 +146,7 @@ export function MessageDetailsCard({
     if (typeof message.meta['tokenCount'] === 'number') return message.meta['tokenCount'];
     if (typeof message.meta['tokens'] === 'number') return message.meta['tokens'];
     const budget = message.meta['tokenBudget'] as
-      | { promptTokens?: number; completionTokens?: number }
-      | undefined;
+      { promptTokens?: number; completionTokens?: number } | undefined;
     if (budget && typeof budget.completionTokens === 'number') return budget.completionTokens;
     return null;
   }, [generation, message.meta]);
@@ -446,11 +449,7 @@ export function MessageDetailsCard({
                 />
               </div>
 
-              <div
-                className={styles.content}
-                data-part="details-content"
-                tabIndex={0}
-              >
+              <div className={styles.content} data-part="details-content" tabIndex={0}>
                 <PluginRenderedMessage
                   message={message}
                   displayContent={displayContent}
@@ -497,6 +496,16 @@ export function MessageDetailsCard({
                 >
                   <Plus aria-hidden="true" />
                 </button>
+                {typeof message.meta['generationRunId'] === 'string' && onViewPromptPlan ? (
+                  <FooterAction
+                    action="prompt"
+                    label={t('chat:promptPlanShort')}
+                    ariaLabel={t('chat:viewPromptPlan')}
+                    icon={<TextAlignLeft aria-hidden="true" />}
+                    disabled={isBusy}
+                    onClick={() => onViewPromptPlan(message)}
+                  />
+                ) : null}
                 {actions.includes('history') && !quickActions.includes('history') ? (
                   <FooterAction
                     action="history"

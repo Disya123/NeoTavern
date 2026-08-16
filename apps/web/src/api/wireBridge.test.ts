@@ -95,6 +95,9 @@ const mocks = vi.hoisted(() => {
   const imports = {
     characterCard: vi.fn(),
   };
+  const generation = {
+    promptPlan: vi.fn(),
+  };
   const themes = {
     list: vi.fn(),
     install: vi.fn(),
@@ -126,6 +129,7 @@ const mocks = vi.hoisted(() => {
     memories,
     assets,
     imports,
+    generation,
     themes,
     plugins,
     meta,
@@ -145,6 +149,7 @@ vi.mock('./backend.js', () => ({
     memories: mocks.memories,
     assets: mocks.assets,
     imports: mocks.imports,
+    generation: mocks.generation,
     themes: mocks.themes,
     plugins: mocks.plugins,
     meta: mocks.metaFn,
@@ -237,6 +242,7 @@ import {
   updateSettings,
   exportCharacterCard,
   exportChat,
+  getPromptPlan,
   importCharacter,
   warmProviderModels,
   createChatSnapshot,
@@ -1566,6 +1572,39 @@ describe('imports/exports (kernel plane wire flow)', () => {
     }
     expect(mocks.chats.export).toHaveBeenCalledWith('018f0000-0000-7000-8000-000000000099');
     expect(captured?.type).toBe('application/json');
+  });
+
+  it('fetches the durable prompt plan via generation.prompt.plan on the kernel plane', async () => {
+    mocks.generation.promptPlan.mockResolvedValue({
+      runId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      chatId: CHAT_ID,
+      provider: 'openai-compatible',
+      model: 'gpt-4o-mini',
+      instructFormat: 'chatml',
+      tokenizerProfile: 'heuristic',
+      approximateTokens: true,
+      contextLimit: 8192,
+      responseReserved: 1024,
+      inputTokens: 1200,
+      overBudget: false,
+      systemBlocks: [{ source: 'character', text: 'You are Alice.' }],
+      messages: [{ role: 'user', content: 'Hello.' }],
+      excluded: [],
+      createdAt: NOW,
+    });
+    const plan = await getPromptPlan('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+    expect(mocks.generation.promptPlan).toHaveBeenCalledWith(
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    );
+    expect(plan.systemBlocks[0]?.source).toBe('character');
+    expect(plan.inputTokens).toBe(1200);
+  });
+
+  it('refuses prompt plan on the legacy plane', async () => {
+    mocks.isKernelMode.mockReturnValueOnce(false);
+    await expect(getPromptPlan('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')).rejects.toBeInstanceOf(
+      UnsupportedError,
+    );
   });
 
   it('imports a character card via assets.put + imports.character.card on the kernel plane', async () => {

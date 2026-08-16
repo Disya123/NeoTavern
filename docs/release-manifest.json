@@ -471,13 +471,13 @@
       "title": "Prompt pipeline (macros, context, tokens, instruct)",
       "wireOps": [],
       "hosts": {
-        "desktop": "Designed",
-        "headless": "Designed",
+        "desktop": "Implemented",
+        "headless": "Implemented",
         "android": "Designed",
-        "webClient": "Designed"
+        "webClient": "Implemented"
       },
-      "notes": "Legacy TS pipeline in apps/server; kernel crates/prompting + PromptPlan in M2.",
-      "milestone": "M2"
+      "notes": "Legacy TS pipeline in apps/server; kernel crates/prompting + PromptPlan in M2. М5 slice 37 (ТЗ §9.2): the durable PromptPlan is now reachable in the UI — NeoBackend GenerationApi.promptPlan(runId) (Local/Remote wire, Legacy honest UnsupportedError), wireBridge getPromptPlan, usePromptPlan hook (PROMPT_PLAN_NOT_FOUND / UnsupportedError resolve to an honest empty state, never an error), and the PromptPlanPanel dialog rendered from the message details card footer action (shown only for messages carrying a durable generation run id, which translateMessage now surfaces in meta.generationRunId). The panel shows provider/model, instruct format, tokenizer profile (approximate badge), input/response-reserve/context-limit tokens, the over-budget warning, system blocks by source, selected messages and every excluded message with its reason — the user can finally see what context entered the provider request and what was cut. Tests: wireBridge getPromptPlan (kernel + legacy refusal), hooks usePromptPlan (plan / NOT_FOUND → null / refusal → null), PromptPlanPanel (plan, over-budget, empty state, close), MessageDetailsCard prompt footer action (visible only with a run id, opens with the message). Honest boundary: the live pre-generation context preview and the sidecar-pipeline context audit remain legacy-only (honest CAPABILITY_UNAVAILABLE on the kernel); the kernel plan is post-generation and per-run, which is the canonical ТЗ §9.2 record.",
+      "milestone": "M5"
     },
     {
       "id": "ui.secrets",

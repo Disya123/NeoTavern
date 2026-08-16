@@ -212,6 +212,28 @@ export const en = {
     contextRoleUser: 'User',
     contextRoleAssistant: 'Assistant',
     contextRoleTool: 'Tool',
+    viewPromptPlan: 'View prompt plan',
+    promptPlanShort: 'Prompt plan',
+    promptPlanTitle: 'Prompt plan',
+    promptPlanEmpty:
+      'No prompt plan yet. Run a generation to build the durable plan of what context entered the provider request.',
+    promptPlanNotFound: 'This run has no recorded prompt plan.',
+    promptPlanError: 'Could not load the prompt plan.',
+    promptPlanModel: 'Model',
+    promptPlanInstruct: 'Instruct format',
+    promptPlanTokenizer: 'Tokenizer',
+    promptPlanApproximate: 'approximate',
+    promptPlanTokens: 'Tokens',
+    promptPlanInput: 'Input',
+    promptPlanResponseReserve: 'Response reserve',
+    promptPlanContextLimit: 'Context limit',
+    promptPlanOverBudget:
+      'The plan still exceeds the context window after dropping all unpinned history.',
+    promptPlanSystemBlocks: 'System blocks ({{count}})',
+    promptPlanMessages: 'Selected messages ({{count}})',
+    promptPlanExcluded: 'Excluded from context ({{count}})',
+    promptPlanNoExcluded: 'Nothing was excluded.',
+    promptPlanExcludedReasonBudget: 'Removed by token budget',
     messages_one: '{{count}} message',
     // _few/_many are inert in English (i18next only selects one/other here)
     // but the shared Resources type requires them: Russian CLDR plurals need

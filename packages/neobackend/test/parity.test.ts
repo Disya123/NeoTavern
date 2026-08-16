@@ -38,6 +38,7 @@ import {
   type CharacterCardExportResultDto,
   type CharacterCardImportResultDto,
   type ChatsExportResultDto,
+  type PromptPlanDto,
   type PluginDto,
   type PresetDto,
   type ProfileDto,
@@ -285,6 +286,29 @@ const CHAT_EXPORT: ChatsExportResultDto = {
   warnings: [],
 };
 
+/** `generation.prompt.plan` response (М5 slice 37): the durable plan. */
+const PROMPT_PLAN: PromptPlanDto = {
+  runId: RUN_ID,
+  chatId: CHAT_ID,
+  provider: 'openai-compatible',
+  model: 'gpt-4o-mini',
+  instructFormat: 'chatml',
+  tokenizerProfile: 'heuristic',
+  approximateTokens: true,
+  contextLimit: 8192,
+  responseReserved: 1024,
+  inputTokens: 1200,
+  overBudget: false,
+  userName: 'Ada',
+  systemBlocks: [
+    { source: 'character', text: 'You are Ada Lovelace.' },
+    { source: 'instruct', text: 'Respond as Ada.' },
+  ],
+  messages: [{ role: 'user', content: 'Hello.' }],
+  excluded: [],
+  createdAt: TIMESTAMP,
+};
+
 /** `chats.messages.list` response: one canonical wire message (Этап 2.10). */
 const PAGED_MESSAGES: PagedMessagesDto = {
   items: [
@@ -530,6 +554,8 @@ class FakeKernelTransport implements LocalTransport {
         return { ok: true, value: CHARACTER_CARD_EXPORT };
       case 'chats.export':
         return { ok: true, value: CHAT_EXPORT };
+      case 'generation.prompt.plan':
+        return { ok: true, value: PROMPT_PLAN };
       default:
         return { ok: false, error: { code: 'NOT_FOUND', params: {}, traceId: 'kernel-trace' } };
     }
@@ -662,6 +688,8 @@ function rpcResult(operationId: string | undefined): unknown {
       return CHARACTER_CARD_EXPORT;
     case 'chats.export':
       return CHAT_EXPORT;
+    case 'generation.prompt.plan':
+      return PROMPT_PLAN;
     default:
       return null;
   }
@@ -2042,6 +2070,33 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
     const backend = new LocalBackend({ transport: kernel });
 
     await expect(backend.chats.export('nope')).rejects.toThrow(ValidationError);
+    expect(kernel.calls).toBe(0);
+  });
+
+  it('generation.prompt.plan is routed identically by local and remote backends', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const [localResult, remoteResult] = await Promise.all([
+      local.generation.promptPlan(RUN_ID),
+      remote.generation.promptPlan(RUN_ID),
+    ]);
+    expect(localResult).toEqual(remoteResult);
+    expect(localResult).toEqual(PROMPT_PLAN);
+    expect(kernel.requests).toEqual([
+      {
+        operationId: 'generation.prompt.plan',
+        payload: { runId: RUN_ID },
+      },
+    ]);
+  });
+
+  it('generation.prompt.plan with a non-uuid run id throws ValidationError before any transport call', async () => {
+    const kernel = new FakeKernelTransport();
+    const backend = new LocalBackend({ transport: kernel });
+
+    await expect(backend.generation.promptPlan('nope')).rejects.toThrow(ValidationError);
     expect(kernel.calls).toBe(0);
   });
 

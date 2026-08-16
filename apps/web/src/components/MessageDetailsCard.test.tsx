@@ -72,6 +72,7 @@ const LABELS: Record<BuiltinMessageActionId, string> = {
   branch: 'Branch',
   'delete-checkpoint': 'Remove checkpoint',
   delete: 'Delete message',
+  prompt: 'View prompt plan',
 };
 
 interface Handlers {
@@ -82,6 +83,7 @@ interface Handlers {
   onHistory: () => void;
   onBuiltinAction: (id: BuiltinMessageActionId) => void;
   onSaveEdit: (content: string) => Promise<void>;
+  onViewPromptPlan: (message: Message) => void;
 }
 
 function makeHandlers(overrides: Partial<Handlers> = {}): Handlers {
@@ -93,6 +95,7 @@ function makeHandlers(overrides: Partial<Handlers> = {}): Handlers {
     onHistory: vi.fn(() => undefined),
     onBuiltinAction: vi.fn(() => undefined),
     onSaveEdit: vi.fn(async () => undefined),
+    onViewPromptPlan: vi.fn(() => undefined),
     ...overrides,
   };
 }
@@ -182,6 +185,26 @@ describe('MessageDetailsCard details mode', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toHaveTextContent('Model');
     expect(rows[0]).toHaveTextContent('legacy-model');
+  });
+
+  it('shows the prompt-plan footer action only for messages with a generation run', async () => {
+    const onViewPromptPlan = vi.fn(() => undefined);
+    // No run id → no prompt action.
+    await renderCard({ message: makeMessage({ meta: {} }) }, makeHandlers({ onViewPromptPlan }));
+    expect(footer().querySelector('[data-action="prompt"]')).toBeNull();
+
+    cleanup();
+
+    // Run id present → prompt action opens the plan viewer with the message.
+    const message = makeMessage({
+      meta: { generationRunId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' },
+    });
+    await renderCard({ message }, makeHandlers({ onViewPromptPlan }));
+    const promptAction = footer().querySelector('[data-action="prompt"]');
+    expect(promptAction).not.toBeNull();
+    expect(promptAction).toHaveAttribute('aria-label', 'View prompt plan');
+    await userEvent.click(promptAction as HTMLElement);
+    expect(onViewPromptPlan).toHaveBeenCalledWith(message);
   });
 
   it('renders the action panel with every available action id and label', async () => {

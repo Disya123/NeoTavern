@@ -17,6 +17,7 @@ import {
   FlagCheckered,
   GitBranch,
   PencilSimple,
+  TextAlignLeft,
   Trash,
   type Icon,
 } from '@phosphor-icons/react';
@@ -36,7 +37,15 @@ export const BUILTIN_MESSAGE_ACTION_ORDER = [
   'delete',
 ] as const;
 
-export type BuiltinMessageActionId = (typeof BUILTIN_MESSAGE_ACTION_ORDER)[number];
+export type BuiltinMessageActionId = (typeof BUILTIN_MESSAGE_ACTION_ORDER)[number] | 'prompt';
+
+/**
+ * `prompt` is not part of the canonical action order — it never appears in
+ * the inline/menu action rows. It exists only as a typed footer action in
+ * the message details card, shown for messages that carry a durable
+ * generation run (`message.generationRunId`) so the user can open the
+ * prompt plan (ТЗ §9.2).
+ */
 
 /** Which built-in actions the current message context exposes. */
 export interface MessageActionCaps {
@@ -106,6 +115,7 @@ export function getBuiltinActionLabels(t: TFunction): Record<BuiltinMessageActio
     branch: t('chat:branch'),
     'delete-checkpoint': t('chat:deleteCheckpoint'),
     delete: t('chat:deleteMessage'),
+    prompt: t('chat:viewPromptPlan'),
   };
 }
 
@@ -123,6 +133,7 @@ export const BUILTIN_ACTION_ICONS: Record<BuiltinMessageActionId, Icon> = {
   branch: GitBranch,
   'delete-checkpoint': FlagCheckered,
   delete: Trash,
+  prompt: TextAlignLeft,
 };
 
 /**

@@ -46,6 +46,7 @@ import type {
   InstallThemeRequestDto,
   InstallThemeResultDto,
   ListToolsResultDto,
+  PromptPlanDto,
   WireGenerationEvent,
   ListBackupsResultDto,
   ListCharactersRequestDto,
@@ -239,6 +240,13 @@ export interface GenerationApi {
   keep(workflowId: string, opts?: BackendCallOptions): Promise<GenerationRunDto>;
   /** Discard the partial output of a non-terminal run. */
   discard(workflowId: string, opts?: BackendCallOptions): Promise<GenerationRunDto>;
+  /**
+   * Fetch the durable prompt plan of a run (wire `generation.prompt.plan`,
+   * ТЗ §9.2): what context entered the provider request — system blocks,
+   * selected history, token counts and every excluded message — so the user
+   * can inspect what was included or cut.
+   */
+  promptPlan(runId: string, opts?: BackendCallOptions): Promise<PromptPlanDto>;
   /** Tool registry for active runs (wire `generation.tools.*`, ТЗ §8.3). */
   tools: GenerationToolsApi;
 }

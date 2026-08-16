@@ -19,6 +19,7 @@ import type {
   ListProfilesResultDto,
   ListThemesResultDto,
   ListToolsResultDto,
+  PromptPlanDto,
   WireGenerationEvent,
   ListBackupsResultDto,
   ListLorebookEntriesResultDto,
@@ -179,6 +180,14 @@ export class RemoteBackend implements NeoBackend {
       this.sdk.call<GenerationRunDto>(
         'generation.discard',
         { workflowId },
+        {
+          signal: opts?.signal,
+        },
+      ),
+    promptPlan: (runId, opts) =>
+      this.sdk.call<PromptPlanDto>(
+        'generation.prompt.plan',
+        { runId },
         {
           signal: opts?.signal,
         },

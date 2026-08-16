@@ -29,6 +29,7 @@ import {
   type ListProfilesResultDto,
   type ListThemesResultDto,
   type ListToolsResultDto,
+  type PromptPlanDto,
   type WireGenerationEvent,
   type ListBackupsResultDto,
   type ListLorebookEntriesResultDto,
@@ -322,6 +323,8 @@ export class LocalBackend implements NeoBackend {
         this.invoke<GenerationRunDto>('generation.keep', { workflowId }, opts),
       discard: (workflowId, opts) =>
         this.invoke<GenerationRunDto>('generation.discard', { workflowId }, opts),
+      promptPlan: (runId, opts) =>
+        this.invoke<PromptPlanDto>('generation.prompt.plan', { runId }, opts),
       tools: {
         list: (opts) => this.invoke<ListToolsResultDto>('generation.tools.list', {}, opts),
         result: (req, opts) => this.invoke<GenerationRunDto>('generation.tool.result', req, opts),

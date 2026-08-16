@@ -104,10 +104,12 @@ import {
   readSettings,
   updateSettings,
   importCharacter,
+  getPromptPlan,
   type ContinueCharacterChatInput,
   type ContinueCharacterChatResult,
 } from './wireBridge.js';
 import { UnsupportedError } from '@neotavern/neobackend';
+import { ProductError } from '@neotavern/client-sdk';
 import { backend, isKernelMode } from './backend.js';
 export * from './providerHooks.js';
 export type { ContinueCharacterChatInput, ContinueCharacterChatResult } from './wireBridge.js';
@@ -385,6 +387,35 @@ export function usePromptContextAudit(chatId: string | undefined, enabled = true
     },
     enabled: chatId !== undefined && enabled,
     staleTime: 0,
+  });
+}
+
+/**
+ * Durable prompt plan of one generation run (ТЗ §9.2, М5 slice 37). The
+ * kernel stores one immutable plan per run (`generation.prompt.plan`); the
+ * user can inspect what context was included or excluded. Runs without a
+ * plan (no generation yet, unknown run) resolve to `null` instead of an
+ * error — the panel shows an honest empty state.
+ */
+export function usePromptPlan(runId: string | undefined) {
+  return useQuery({
+    queryKey: ['prompt-plan', runId],
+    queryFn: async () => {
+      if (!runId) return null;
+      try {
+        return await getPromptPlan(runId);
+      } catch (error) {
+        if (
+          error instanceof UnsupportedError ||
+          (error instanceof ProductError && error.code === 'PROMPT_PLAN_NOT_FOUND')
+        ) {
+          return null;
+        }
+        throw error;
+      }
+    },
+    enabled: runId !== undefined,
+    staleTime: 30_000,
   });
 }
 

@@ -25,6 +25,7 @@ import {
   useLogout,
   usePromptContextAudit,
   usePromptContextPreview,
+  usePromptPlan,
   useRebuildSearch,
   useReorderChats,
   useRestoreBackup,
@@ -32,6 +33,8 @@ import {
   useUploadCharacterImage,
 } from './hooks.js';
 import { backend } from './backend.js';
+import { UnsupportedError } from '@neotavern/neobackend';
+import { ProductError } from '@neotavern/client-sdk';
 
 // Kernel-mode honesty (slice 17): the diagnostics hooks consult
 // `isKernelMode`; the default here is the legacy plane so the existing tests
@@ -40,6 +43,14 @@ const mocks = vi.hoisted(() => ({ isKernelMode: vi.fn(() => false) }));
 vi.mock('./backend.js', async (importOriginal) => {
   const actual = (await importOriginal()) as { backend: unknown };
   return { ...actual, isKernelMode: mocks.isKernelMode };
+});
+
+// `usePromptPlan` routes through wireBridge.getPromptPlan; the plan itself is
+// mocked so the hook tests stay transport-free.
+const promptPlanMock = vi.hoisted(() => ({ getPromptPlan: vi.fn() }));
+vi.mock('./wireBridge.js', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return { ...actual, getPromptPlan: promptPlanMock.getPromptPlan };
 });
 
 function wrapperFor(client: QueryClient) {
@@ -324,6 +335,59 @@ describe('remaining legacy hooks (kernel-plane honesty, slice 22)', () => {
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(fetchMock).not.toHaveBeenCalled();
     mocks.isKernelMode.mockReturnValue(false);
+  });
+
+  it('usePromptPlan resolves the durable plan from generation.prompt.plan', async () => {
+    promptPlanMock.getPromptPlan.mockResolvedValue({
+      runId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      chatId: 'chat-1',
+      provider: 'openai-compatible',
+      model: 'gpt-4o-mini',
+      instructFormat: 'chatml',
+      tokenizerProfile: 'heuristic',
+      approximateTokens: true,
+      contextLimit: 8192,
+      responseReserved: 1024,
+      inputTokens: 1200,
+      overBudget: false,
+      systemBlocks: [{ source: 'character', text: 'You are Alice.' }],
+      messages: [{ role: 'user', content: 'Hello.' }],
+      excluded: [],
+      createdAt: '2026-06-01T12:00:00.000Z',
+    });
+    const { result } = renderHook(() => usePromptPlan('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'), {
+      wrapper: wrapperFor(queryClient),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(promptPlanMock.getPromptPlan).toHaveBeenCalledWith(
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    );
+    expect(result.current.data?.inputTokens).toBe(1200);
+  });
+
+  it('usePromptPlan resolves null when the run has no recorded plan', async () => {
+    promptPlanMock.getPromptPlan.mockRejectedValue(
+      new ProductError({
+        code: 'PROMPT_PLAN_NOT_FOUND',
+        params: { runId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' },
+        traceId: 't',
+      }),
+    );
+    const { result } = renderHook(() => usePromptPlan('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'), {
+      wrapper: wrapperFor(queryClient),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toBeNull();
+    expect(result.current.isError).toBe(false);
+  });
+
+  it('usePromptPlan resolves null when the plane refuses (honest CAPABILITY_UNAVAILABLE)', async () => {
+    promptPlanMock.getPromptPlan.mockRejectedValue(new UnsupportedError('generation.prompt.plan'));
+    const { result } = renderHook(() => usePromptPlan('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'), {
+      wrapper: wrapperFor(queryClient),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toBeNull();
   });
 
   it('useInstructFormats fetches the legacy list on the legacy plane', async () => {

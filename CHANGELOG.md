@@ -3,6 +3,28 @@
 ## Unreleased
 ### Added
 
+- **Durable PromptPlan viewer over Product Wire (M5 slice 37, ТЗ §9.2).**
+  The kernel already stores one immutable prompt plan per generation run;
+  this slice exposes it end-to-end: `NeoBackend GenerationApi.promptPlan(runId)`
+  (Local/Remote wire, Legacy honest `UnsupportedError`), `wireBridge
+  getPromptPlan`, a `usePromptPlan` TanStack hook (unknown run /
+  `PROMPT_PLAN_NOT_FOUND` / legacy refusal resolve to an honest empty state,
+  never an error), and the PromptPlanPanel dialog opened from the message
+  details card footer (shown only for messages carrying a durable run id,
+  which `translateMessage` now surfaces in `meta.generationRunId`). The panel
+  renders provider/model, instruct format, tokenizer profile (approximate
+  badge), input/response-reserve/context-limit tokens, the over-budget
+  warning, system blocks by source, selected messages and every excluded
+  message with its reason — the user can inspect what context entered the
+  provider request and what was cut. Tests: wireBridge getPromptPlan (kernel
+  + legacy refusal), hooks usePromptPlan (plan / NOT_FOUND → null / refusal →
+  null), PromptPlanPanel (plan, over-budget, empty state, close),
+  MessageDetailsCard prompt footer action, parity 77/77 (routing + non-uuid
+  rejection). Honest boundary: the live pre-generation context preview and
+  the sidecar-pipeline context audit stay legacy-only (kernel
+  `CAPABILITY_UNAVAILABLE`); the canonical ТЗ §9.2 record is the per-run
+  durable plan.
+
 - **Chat snapshot export over Product Wire (M5 slice 36).** New wire
   operation `chats.export` (91 ops total): request `{ chatId }`, result
   `{ filename, contentType, contentBase64, warnings[] }` with a 4 MiB

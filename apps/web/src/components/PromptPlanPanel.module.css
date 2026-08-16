@@ -1,0 +1,166 @@
+/* PromptPlanPanel layout (C3): a dialog over the chat (AGENTS.md §14 —
+ * no standalone pages). Token budgets and block order are rendered in
+ * document order from the durable plan; no hardcoded colors/spacing. */
+.dialog {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal, 60);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4, 1rem);
+  background: var(--color-overlay, rgba(0, 0, 0, 0.55));
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3, 0.75rem);
+  padding: var(--space-3, 0.75rem) var(--space-4, 1rem);
+  border-bottom: 1px solid var(--color-border, currentColor);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--font-size-lg, 1.125rem);
+  font-weight: var(--font-weight-semibold, 600);
+}
+
+.close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md, 0.375rem);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.close:hover {
+  background: var(--color-surface-hover, rgba(128, 128, 128, 0.15));
+}
+
+.body {
+  padding: var(--space-4, 1rem);
+  overflow: auto;
+  max-height: 70vh;
+}
+
+.error,
+.empty {
+  color: var(--color-text-secondary, inherit);
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+.error {
+  color: var(--color-danger, inherit);
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4, 1rem);
+}
+
+.meta {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 0.5rem);
+}
+
+.metaRow {
+  display: grid;
+  grid-template-columns: minmax(0, 9rem) minmax(0, 1fr);
+  gap: var(--space-3, 0.75rem);
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+.metaRow dt {
+  color: var(--color-text-secondary, inherit);
+}
+
+.metaRow dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.warning {
+  margin: 0;
+  padding: var(--space-2, 0.5rem) var(--space-3, 0.75rem);
+  border-radius: var(--radius-md, 0.375rem);
+  background: var(--color-warning-surface, rgba(255, 200, 0, 0.12));
+  color: var(--color-warning, inherit);
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 0.5rem);
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: var(--font-size-sm, 0.875rem);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-secondary, inherit);
+}
+
+.blockList,
+.messageList,
+.excludedList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 0.5rem);
+}
+
+.block,
+.message {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1, 0.25rem);
+  padding: var(--space-2, 0.5rem) var(--space-3, 0.75rem);
+  border: 1px solid var(--color-border, currentColor);
+  border-radius: var(--radius-md, 0.375rem);
+}
+
+.blockSource,
+.messageRole {
+  align-self: flex-start;
+  padding: 0 var(--space-2, 0.5rem);
+  border-radius: var(--radius-sm, 0.25rem);
+  background: var(--color-surface-hover, rgba(128, 128, 128, 0.12));
+  font-size: var(--font-size-xs, 0.75rem);
+  text-transform: capitalize;
+}
+
+.blockText,
+.messageContent {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: inherit;
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+.excluded {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3, 0.75rem);
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+.excludedId {
+  color: var(--color-text-secondary, inherit);
+  font-family: var(--font-mono, monospace);
+  font-size: var(--font-size-xs, 0.75rem);
+}
