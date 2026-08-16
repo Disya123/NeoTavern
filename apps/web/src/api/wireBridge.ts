@@ -69,6 +69,7 @@ import {
   type PluginSafeModeResult,
   type PluginDto,
   type CharacterDto,
+  type CharacterImportResult,
   type ChatDto,
   type LorebookDto,
   type LorebookEntryDto,
@@ -179,11 +180,14 @@ export async function exportChat(chatId: string): Promise<void> {
  * is staged as an immutable `card` asset (`assets.put`, content-addressed)
  * and parsed by `imports.character.card`, which deduplicates by the sha256 of
  * the original bytes and returns `{ character, created, sourceHash,
- * warnings }`. Legacy plane: the legacy contour keeps its multipart import.
- * The wire `assets.put` request cap surfaces as a transport error — never a
- * silent downgrade.
+ * warnings }`; the wire character DTO is mapped onto the legacy
+ * `CharacterImportResult` shape (full card fields beyond the canonical
+ * columns live in `ext_json._card` and are not modelled by the wire DTO — the
+ * UI consumes `name`/`id`/`created` here). Legacy plane: the legacy contour
+ * keeps its multipart import. The wire `assets.put` request cap surfaces as a
+ * transport error — never a silent downgrade.
  */
-export async function importCharacter(file: File): Promise<unknown> {
+export async function importCharacter(file: File): Promise<CharacterImportResult> {
   if (isKernelMode()) {
     const contentBase64 = await readFileBase64(file);
     const { asset } = await backend.assets.put({
@@ -192,9 +196,15 @@ export async function importCharacter(file: File): Promise<unknown> {
       ...(file.type ? { contentType: file.type } : {}),
       contentBase64,
     });
-    return backend.imports.characterCard(asset.id);
+    const result = await backend.imports.characterCard(asset.id);
+    return {
+      character: translateCharacter(result.character),
+      created: result.created,
+      sourceHash: result.sourceHash,
+      warnings: result.warnings,
+    };
   }
-  return api.upload('/characters/import', file);
+  return api.upload('/characters/import', file) as Promise<CharacterImportResult>;
 }
 
 /**

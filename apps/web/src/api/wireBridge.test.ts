@@ -1525,7 +1525,24 @@ describe('imports/exports (kernel plane honest refusals)', () => {
     expect(mocks.imports.characterCard).toHaveBeenCalledWith(
       '7a7b7c7d-7e7f-4a8b-9c0d-1e2f3a4b5c6d',
     );
-    expect(result).toMatchObject({ created: true });
+    // The wire character DTO is mapped onto the legacy CharacterImportResult
+    // shape: name/id/created flow through, full card fields stay honest
+    // defaults (not modelled by the wire DTO).
+    expect(result).toMatchObject({
+      created: true,
+      sourceHash: 'a'.repeat(64),
+      warnings: [],
+      character: {
+        id: CHAR_ID,
+        name: 'Ada Lovelace',
+        description: 'First programmer',
+        tags: ['analytical'],
+        personality: '',
+        scenario: '',
+        firstMessage: '',
+        ext: {},
+      },
+    });
   });
 
   it('refuses provider model discovery on the kernel plane', async () => {

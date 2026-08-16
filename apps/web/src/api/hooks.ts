@@ -15,7 +15,6 @@ import type {
   CharacterCreate,
   CharacterGallery,
   CharacterGalleryImage,
-  CharacterImportResult,
   CharacterListQuery,
   CharacterUpdate,
   ChatCreate,
@@ -232,7 +231,7 @@ export function useUpdateCharacter() {
 export function useImportCharacter() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (file: File) => importCharacter(file) as Promise<CharacterImportResult>,
+    mutationFn: (file: File) => importCharacter(file),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['characters'] }),
   });
 }

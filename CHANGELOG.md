@@ -3,6 +3,24 @@
 ## Unreleased
 ### Added
 
+- **Character-card import UI flow on the kernel plane (M5 slice 32, Этап
+  4.5).** The web transport's `importCharacter` now returns a fully typed
+  `CharacterImportResult` on both planes: the kernel branch maps the wire
+  result of `imports.character.card` onto the legacy shape via
+  `translateCharacter` (`name`/`id`/`created`/`sourceHash`/`warnings` flow
+  through; full card fields beyond the canonical columns live in
+  `ext_json._card` and are not modelled by the wire DTO, so the editor sees
+  honest defaults — it must not fabricate persona text), and
+  `useImportCharacter` drops the `as` cast. Both import entry points —
+  `CharactersPage` ("imported / already exists" status) and
+  `CharacterManagementPanel` (select + jump to the edit tab) — now work
+  unchanged on the kernel plane because they consume only
+  `name`/`id`/`created`. Re-import of the same card shows the honest
+  "already exists" state (dedupe by content hash, AGENTS.md §11). Tests:
+  wireBridge 97/97 (import test now asserts the full translated shape),
+  hooks.test +1 (kernel two-step flow: `assets.put` → `imports.character.card`,
+  no network), full web vitest 703/703 (68 files).
+
 - **Character-card import over Product Wire (M5 slice 31, Этап 4.5).** New
   wire operation `imports.character.card` (89 ops total): the card file
   (SillyTavern-compatible V2 JSON, or a PNG carrying the `chara` tEXt chunk

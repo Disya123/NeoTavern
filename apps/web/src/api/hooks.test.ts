@@ -19,6 +19,7 @@ import {
   useDiagnostics,
   useDiscardSillyTavernAnalysis,
   useExecuteSillyTavernImport,
+  useImportCharacter,
   useInstructFormats,
   useLogin,
   useLogout,
@@ -446,6 +447,58 @@ describe('prompt context preview hook (kernel-plane honesty, slice 24)', () => {
     );
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(fetchMock).not.toHaveBeenCalled();
+    mocks.isKernelMode.mockReturnValue(false);
+  });
+});
+
+describe('character import hook (kernel-plane wire flow, slice 32)', () => {
+  const ASSET_ID = '7a7b7c7d-7e7f-4a8b-9c0d-1e2f3a4b5c6d';
+  const IMPORT_DTO = {
+    character: {
+      id: '9f8e7d6c-5b4a-4932-81f0-123456789abc',
+      name: 'Ada Lovelace',
+      description: 'First programmer',
+      tags: ['analytical'],
+      createdAt: '2026-08-13T00:00:00.000Z',
+      updatedAt: '2026-08-13T00:00:00.000Z',
+    },
+    created: true,
+    sourceHash: 'a'.repeat(64),
+    warnings: [],
+  } as const;
+
+  it('useImportCharacter stages the card via assets.put and imports through imports.character.card', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const putSpy = vi.spyOn(backend.assets, 'put').mockResolvedValue({
+      asset: {
+        id: ASSET_ID,
+        kind: 'card',
+        relativeKey: 'card/abc',
+        checksumSha256: 'a'.repeat(64),
+        sizeBytes: 3,
+        createdAt: '2026-08-13T00:00:00.000Z',
+      },
+      deduplicated: false,
+    });
+    const importSpy = vi
+      .spyOn(backend.imports, 'characterCard')
+      .mockResolvedValue(IMPORT_DTO as never);
+    const { result } = renderHook(() => useImportCharacter(), {
+      wrapper: wrapperFor(queryClient),
+    });
+    act(() => result.current.mutate(new File(['abc'], 'card.png', { type: 'image/png' })));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(putSpy).toHaveBeenCalledOnce();
+    expect(importSpy).toHaveBeenCalledWith(ASSET_ID);
+    // The wire result is mapped onto the legacy CharacterImportResult shape.
+    expect(result.current.data).toMatchObject({
+      created: true,
+      sourceHash: 'a'.repeat(64),
+      character: { id: IMPORT_DTO.character.id, name: 'Ada Lovelace' },
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+    putSpy.mockRestore();
+    importSpy.mockRestore();
     mocks.isKernelMode.mockReturnValue(false);
   });
 });
