@@ -48,6 +48,7 @@ import {
   type ProfileExportResultDto,
   type ProviderConfigDto,
   type PutAssetResultDto,
+  type CharacterCardImportResultDto,
   type ResultSettingsDto,
   type SecretsStatusResultDto,
   type ThemeDto,
@@ -72,6 +73,7 @@ import type {
   ChatsApi,
   DiagnosticsApi,
   GenerationApi,
+  ImportsApi,
   LorebooksApi,
   MemoriesApi,
   NeoBackend,
@@ -238,6 +240,7 @@ export class LocalBackend implements NeoBackend {
   readonly diagnostics: DiagnosticsApi;
   readonly secrets: SecretsApi;
   readonly assets: AssetsApi;
+  readonly imports: ImportsApi;
 
   private readonly transport: LocalTransport;
   private readonly operations: ReadonlyMap<string, CompiledOperation>;
@@ -408,6 +411,10 @@ export class LocalBackend implements NeoBackend {
         this.invoke<GetAssetContentResultDto>('assets.content', { assetId }, opts),
       put: (req, opts) => this.invoke<PutAssetResultDto>('assets.put', req, opts),
       del: (assetId, opts) => this.invoke<EmptyResultDto>('assets.delete', { assetId }, opts),
+    };
+    this.imports = {
+      characterCard: (assetId, opts) =>
+        this.invoke<CharacterCardImportResultDto>('imports.character.card', { assetId }, opts),
     };
   }
 

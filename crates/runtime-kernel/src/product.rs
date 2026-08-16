@@ -602,7 +602,7 @@ fn clear_persona_default(tx: &rusqlite::Transaction) -> Result<(), StorageError>
 }
 
 /// Loads one character by id; `None` when absent.
-fn query_character(
+pub(crate) fn query_character(
     conn: &rusqlite::Connection,
     id: &str,
 ) -> Result<Option<CharacterDto>, KernelError> {

@@ -1000,6 +1000,20 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'imports.character.card',
+    'transactional',
+    'non-idempotent',
+    'safe',
+    'app.write',
+    'wire.request.imports.character.card',
+    'wire.result.imports.character.card',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONFLICT', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    1024,
+    262144,
+    undefined,
+  ),
+  op(
     'plugins.list',
     'transactional',
     'idempotent',
@@ -1599,6 +1613,8 @@ const UUID_STEP = 'a1a2a3a4-b5c6-4d7e-8f90-1a2b3c4d5e6f';
 const UUID_TOOL_CALL = 'b1b2b3b4-c5d6-4e7f-8a90-2b3c4d5e6f70';
 const UUID_REQUEST = '8f901a2b-c3d4-4e5f-8a6b-7c8d9e0f1a2b';
 const TIMESTAMP = '2026-08-12T10:00:00Z';
+/** Lowercase sha256 hex of an imported character-card file (fixture value). */
+const IMPORT_SHA256 = 'abababababababababababababababababababababababababababababababab';
 
 const META_VALUE = {
   appVersion: '0.1.0',
@@ -2382,6 +2398,22 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('assets-get-response', 'assets.get', 'response', true, { asset: ASSET_VALUE }),
   fx('assets-content-response', 'assets.content', 'response', true, ASSETS_CONTENT_VALUE),
   fx('assets-delete-response', 'assets.delete', 'response', true, {}),
+  fx('imports-character-card-request', 'imports.character.card', 'request', true, {
+    assetId: UUID_AVATAR,
+  }),
+  fx('imports-character-card-response', 'imports.character.card', 'response', true, {
+    character: CHARACTER_VALUE,
+    created: true,
+    sourceHash: IMPORT_SHA256,
+    warnings: [],
+  }),
+  fx('neg-imports-character-card-missing-asset', 'imports.character.card', 'request', false, {}),
+  fx('neg-imports-character-card-bad-hash', 'imports.character.card', 'response', false, {
+    character: CHARACTER_VALUE,
+    created: true,
+    sourceHash: 'not-a-hash',
+    warnings: [],
+  }),
   fx('plugins-list-response', 'plugins.list', 'response', true, { items: [PLUGIN_VALUE] }),
   fx('plugins-install-response', 'plugins.install', 'response', true, { plugin: PLUGIN_VALUE }),
   fx('plugins-enable-response', 'plugins.enable', 'response', true, {

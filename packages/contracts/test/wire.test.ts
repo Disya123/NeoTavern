@@ -52,10 +52,12 @@ describe('product wire registry', () => {
     // plugins.list/install/uninstall/enable/disable (78 total) and
     // themes.list/install/uninstall/activate (82 total); slice 5 remainder
     // part 2 (canonical Configuration profiles) adds
-    // profiles.list/create/rename/delete (86 total). The exact operation
+    // profiles.list/create/rename/delete (86 total); slice 18 (theme
+    // deactivate) makes 88; Этап 4.5 (character-card import) adds
+    // imports.character.card (89 total). The exact operation
     // set is asserted so a registry edit that drops or renames an op fails
     // loudly.
-    expect(registry.operations).toHaveLength(88);
+    expect(registry.operations).toHaveLength(89);
     expect(registry.operations.map((op) => op.operationId)).toEqual([
       'meta.get',
       'characters.list',
@@ -104,6 +106,7 @@ describe('product wire registry', () => {
       'assets.get',
       'assets.content',
       'assets.delete',
+      'imports.character.card',
       'plugins.list',
       'plugins.install',
       'plugins.uninstall',

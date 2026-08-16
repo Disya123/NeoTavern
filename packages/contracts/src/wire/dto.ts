@@ -54,11 +54,41 @@ export const CharacterDtoSchema = Type.Object(
 );
 export type CharacterDto = Static<typeof CharacterDtoSchema>;
 
-/** Snapshot origin (`wire.snapshot.origin`): checkpoint or branch. */
-export const WireSnapshotOrigin = Type.Union(
-  [Type.Literal('checkpoint'), Type.Literal('branch')],
-  { $id: 'wire.snapshot.origin', 'x-wire-unknown-behavior': 'reject' },
+/**
+ * Character-card import request (`wire.request.imports.character.card`) —
+ * imports a SillyTavern-compatible character card (V2 JSON, or PNG with the
+ * `chara` tEXt chunk) that was staged first through `assets.put` (kind
+ * `card`). The kernel parses the card, deduplicates by content sha256, and
+ * creates the character (Этап 4.5).
+ */
+export const CharacterCardImportRequestDtoSchema = Type.Object(
+  {
+    assetId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.imports.character.card', additionalProperties: false },
 );
+export type CharacterCardImportRequestDto = Static<typeof CharacterCardImportRequestDtoSchema>;
+
+/** Character-card import result (`wire.result.imports.character.card`).
+ * `created` is false when the same card bytes were already imported
+ * (re-running an import must not create duplicates, AGENTS.md §11).
+ * `sourceHash` is the sha256 of the original card file. */
+export const CharacterCardImportResultDtoSchema = Type.Object(
+  {
+    character: CharacterDtoSchema,
+    created: Type.Boolean(),
+    sourceHash: Type.String({ pattern: '^[a-f0-9]{64}$' }),
+    warnings: Type.Array(Type.String({ minLength: 1, maxLength: 512 }), { maxItems: 32 }),
+  },
+  { $id: 'wire.result.imports.character.card', additionalProperties: false },
+);
+export type CharacterCardImportResultDto = Static<typeof CharacterCardImportResultDtoSchema>;
+
+/** Snapshot origin (`wire.snapshot.origin`): checkpoint or branch. */
+export const WireSnapshotOrigin = Type.Union([Type.Literal('checkpoint'), Type.Literal('branch')], {
+  $id: 'wire.snapshot.origin',
+  'x-wire-unknown-behavior': 'reject',
+});
 export type WireSnapshotOrigin = Static<typeof WireSnapshotOrigin>;
 
 /** Chat DTO (`wire.chat.dto`). `personaId` (optional) is the user persona
@@ -2147,6 +2177,8 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.assets.item': AssetDtoSchema,
   'wire.request.assets.put': PutAssetRequestDtoSchema,
   'wire.result.assets.put': PutAssetResultDtoSchema,
+  'wire.request.imports.character.card': CharacterCardImportRequestDtoSchema,
+  'wire.result.imports.character.card': CharacterCardImportResultDtoSchema,
   'wire.request.assets.get': GetAssetRequestDtoSchema,
   'wire.result.assets.get': GetAssetResultDtoSchema,
   'wire.request.assets.content': GetAssetContentRequestDtoSchema,

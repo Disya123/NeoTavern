@@ -35,6 +35,7 @@ import {
   type PagedCharactersDto,
   type PagedGenerationEventsDto,
   type PagedMessagesDto,
+  type CharacterCardImportResultDto,
   type PluginDto,
   type PresetDto,
   type ProfileDto,
@@ -249,6 +250,22 @@ const ASSET_CONTENT: GetAssetContentResultDto = {
   contentBase64: 'iVBORw0KGgoAAAANSUhEUg==',
 };
 const ASSET_PUT: PutAssetResultDto = { asset: ASSET, deduplicated: false };
+
+/** `imports.character.card` response (Этап 4.5): the imported character. */
+const CHARACTER_CARD_IMPORT: CharacterCardImportResultDto = {
+  character: {
+    id: CHARACTER.id,
+    name: 'Ada Lovelace',
+    description: 'First programmer of the analytical engine.',
+    avatarAssetId: ASSET_ID,
+    tags: ['analytical', 'historical'],
+    createdAt: TIMESTAMP,
+    updatedAt: TIMESTAMP,
+  },
+  created: true,
+  sourceHash: 'abababababababababababababababababababababababababababababababab',
+  warnings: [],
+};
 
 /** `chats.messages.list` response: one canonical wire message (Этап 2.10). */
 const PAGED_MESSAGES: PagedMessagesDto = {
@@ -489,6 +506,8 @@ class FakeKernelTransport implements LocalTransport {
         return { ok: true, value: ASSET_PUT };
       case 'assets.delete':
         return { ok: true, value: EMPTY_RESULT };
+      case 'imports.character.card':
+        return { ok: true, value: CHARACTER_CARD_IMPORT };
       default:
         return { ok: false, error: { code: 'NOT_FOUND', params: {}, traceId: 'kernel-trace' } };
     }
@@ -615,6 +634,8 @@ function rpcResult(operationId: string | undefined): unknown {
       return ASSET_PUT;
     case 'assets.delete':
       return EMPTY_RESULT;
+    case 'imports.character.card':
+      return CHARACTER_CARD_IMPORT;
     default:
       return null;
   }
@@ -1915,6 +1936,30 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
       { operationId: 'assets.put', payload: putReq },
       { operationId: 'assets.delete', payload: { assetId: ASSET_ID } },
     ]);
+  });
+
+  it('imports.character.card is routed identically by local and remote backends', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const [localResult, remoteResult] = await Promise.all([
+      local.imports.characterCard(ASSET_ID),
+      remote.imports.characterCard(ASSET_ID),
+    ]);
+    expect(localResult).toEqual(remoteResult);
+    expect(localResult).toEqual(CHARACTER_CARD_IMPORT);
+    expect(kernel.requests).toEqual([
+      { operationId: 'imports.character.card', payload: { assetId: ASSET_ID } },
+    ]);
+  });
+
+  it('imports.character.card with a non-uuid asset id throws ValidationError before any transport call', async () => {
+    const kernel = new FakeKernelTransport();
+    const backend = new LocalBackend({ transport: kernel });
+
+    await expect(backend.imports.characterCard('nope')).rejects.toThrow(ValidationError);
+    expect(kernel.calls).toBe(0);
   });
 
   it('assets.get with a non-uuid id throws ValidationError before any transport call', async () => {

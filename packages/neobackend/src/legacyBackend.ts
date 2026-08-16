@@ -34,6 +34,7 @@ import type {
   ChatsApi,
   DiagnosticsApi,
   GenerationApi,
+  ImportsApi,
   LorebooksApi,
   MemoriesApi,
   NeoBackend,
@@ -305,6 +306,10 @@ export class LegacyBackend implements NeoBackend {
     content: () => this.unsupported('assets.content'),
     put: () => this.unsupported('assets.put'),
     del: () => this.unsupported('assets.delete'),
+  };
+
+  readonly imports: ImportsApi = {
+    characterCard: () => this.unsupported('imports.character.card'),
   };
 
   private async listCharacters(req: ListCharactersRequestDto): Promise<PagedCharactersDto> {

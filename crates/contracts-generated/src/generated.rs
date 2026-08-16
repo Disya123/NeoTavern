@@ -67,6 +67,7 @@ pub fn operation_request_limit(operation_id: &str) -> Option<u64> {
         "assets.get" => Some(1024),
         "assets.content" => Some(1024),
         "assets.delete" => Some(1024),
+        "imports.character.card" => Some(1024),
         "plugins.list" => Some(1024),
         "plugins.install" => Some(65536),
         "plugins.uninstall" => Some(1024),
@@ -163,6 +164,7 @@ pub fn operation_response_limit(operation_id: &str) -> Option<u64> {
         "assets.get" => Some(262144),
         "assets.content" => Some(4194304),
         "assets.delete" => Some(1024),
+        "imports.character.card" => Some(262144),
         "plugins.list" => Some(262144),
         "plugins.install" => Some(262144),
         "plugins.uninstall" => Some(1024),
@@ -4403,6 +4405,147 @@ pub fn validate_result_assets_put(value: &Value) -> Result<(), Vec<Issue>> {
 
 pub fn decode_result_assets_put(bytes: &[u8]) -> Result<ResultAssetsPut, WireError> {
     crate::decode::<ResultAssetsPut>(validate_result_assets_put, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestImportsCharacterCard {
+    #[serde(rename = "assetId")]
+    pub asset_id: String,
+}
+
+pub(crate) fn check_request_imports_character_card(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("assetId").is_none() {
+            issues.push(Issue::new(join_path(path, "assetId"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("assetId") {
+            let child_path = join_path(path, "assetId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "assetId") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_imports_character_card(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_imports_character_card(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_imports_character_card(bytes: &[u8]) -> Result<RequestImportsCharacterCard, WireError> {
+    crate::decode::<RequestImportsCharacterCard>(validate_request_imports_character_card, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultImportsCharacterCard {
+    pub character: CharacterDto,
+    pub created: bool,
+    #[serde(rename = "sourceHash")]
+    pub source_hash: String,
+    pub warnings: Vec<String>,
+}
+
+pub(crate) fn check_result_imports_character_card(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-f0-9]{64}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("character").is_none() {
+            issues.push(Issue::new(join_path(path, "character"), "RequiredProperty"));
+        }
+        if value.get("created").is_none() {
+            issues.push(Issue::new(join_path(path, "created"), "RequiredProperty"));
+        }
+        if value.get("sourceHash").is_none() {
+            issues.push(Issue::new(join_path(path, "sourceHash"), "RequiredProperty"));
+        }
+        if value.get("warnings").is_none() {
+            issues.push(Issue::new(join_path(path, "warnings"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("character") {
+            let child_path = join_path(path, "character");
+            check_character_dto(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("created") {
+            let child_path = join_path(path, "created");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(child) = value.get("sourceHash") {
+            let child_path = join_path(path, "sourceHash");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("warnings") {
+            let child_path = join_path(path, "warnings");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                if arr.len() > 32 {
+                    issues.push(Issue::new(child_path.as_str(), "ArrayMaxItems"));
+                }
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    match item.as_str() {
+                        Some(s) => {
+                            let len = s.encode_utf16().count();
+                            if len < 1 {
+                                issues.push(Issue::new(item_path.as_str(), "StringMinLength"));
+                            }
+                            if len > 512 {
+                                issues.push(Issue::new(item_path.as_str(), "StringMaxLength"));
+                            }
+                        }
+                        None => issues.push(Issue::new(item_path.as_str(), "String")),
+                    }
+                }
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "character" | "created" | "sourceHash" | "warnings") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_imports_character_card(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_imports_character_card(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_imports_character_card(bytes: &[u8]) -> Result<ResultImportsCharacterCard, WireError> {
+    crate::decode::<ResultImportsCharacterCard>(validate_result_imports_character_card, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

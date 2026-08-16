@@ -3,10 +3,33 @@
 ## Unreleased
 ### Added
 
+- **Character-card import over Product Wire (M5 slice 31, Этап 4.5).** New
+  wire operation `imports.character.card` (89 ops total): the card file
+  (SillyTavern-compatible V2 JSON, or a PNG carrying the `chara` tEXt chunk
+  with base64-encoded JSON) is staged through `assets.put` (kind `card`,
+  content-addressed, idempotent) and parsed by the kernel — sha256 of the
+  original bytes deduplicates against the new `characters.import_hash`
+  column (schema migration 019, indexed) so re-running an import returns the
+  existing character with `created: false` (AGENTS.md §11: import must not
+  create duplicates). Card fields beyond the canonical columns — personality,
+  scenario, first message, example dialogue, system prompt, post-history
+  instructions, creator, character version, extensions and any unknown
+  fields — survive verbatim under `ext_json._card` (AGENTS.md §11: unknown
+  character card fields and extension metadata must not be lost);
+  over-length scalar columns are truncated with an honest warning. PNG cards
+  link the staged asset as the avatar; JSON cards carry none. Missing asset →
+  stable `ASSET_NOT_FOUND`; unparseable card → `CHARACTER_CARD_INVALID` with
+  a `reason` param. Facade: `NeoBackend.imports.characterCard` (Local
+  forwards with request/response validation, Remote via ClientSdk, Legacy
+  throws `UnsupportedError`); the web transport's `importCharacter` now runs
+  `assets.put` + `imports.character.card` on the kernel plane (UI wiring in
+  the import panels is slice 32). Tests: kernel_imports.rs 5/5, wire corpus
+  dispatch (4 new fixtures), neobackend parity 71/71, wireBridge 97/97.
+
 - **Product Wire ↔ Kernel dispatch parity gate (M5 slice 30).** New
   `scripts/check-kernel-dispatch.mjs` verifies ARC-01/ARC-07 structurally:
   every operation registered in `packages/contracts/src/wire/registry.ts`
-  (88 today) must have a kernel dispatch arm in
+  (89 today) must have a kernel dispatch arm in
   `crates/runtime-kernel/src/lib.rs` — either a unary arm of the main
   `match op` block or the `dispatch_stream` streaming path
   (`generation.start`/`generation.retry`) — and every dispatch arm must
@@ -14,7 +37,7 @@
   the kernel answers `OperationNotFound` to a valid contract; an arm
   without a registered operation is dead surface. The check is wired into
   `docs:check` (alongside the capability-matrix freshness gate) and exposed
-  as `pnpm kernel:dispatch:check`. Verified: 88/88 operations covered,
+  as `pnpm kernel:dispatch:check`. Verified: 89/89 operations covered,
   docs:check + docs:sync:check green, eslint/prettier clean.
 
 - **Provider editors report the catalog-unavailable state honestly (M5

@@ -175,13 +175,24 @@ export async function exportChat(chatId: string): Promise<void> {
 }
 
 /**
- * Import a character card file (PNG/JSON). Kernel: card parsing is a
- * host-side/legacy capability with no wire operation — honest refusal on the
- * kernel plane; the legacy contour keeps the real import.
+ * Import a character card file (PNG/JSON) (Этап 4.5). Kernel plane: the card
+ * is staged as an immutable `card` asset (`assets.put`, content-addressed)
+ * and parsed by `imports.character.card`, which deduplicates by the sha256 of
+ * the original bytes and returns `{ character, created, sourceHash,
+ * warnings }`. Legacy plane: the legacy contour keeps its multipart import.
+ * The wire `assets.put` request cap surfaces as a transport error — never a
+ * silent downgrade.
  */
 export async function importCharacter(file: File): Promise<unknown> {
   if (isKernelMode()) {
-    throw new UnsupportedError('characters.import');
+    const contentBase64 = await readFileBase64(file);
+    const { asset } = await backend.assets.put({
+      kind: 'card',
+      filename: file.name,
+      ...(file.type ? { contentType: file.type } : {}),
+      contentBase64,
+    });
+    return backend.imports.characterCard(asset.id);
   }
   return api.upload('/characters/import', file);
 }

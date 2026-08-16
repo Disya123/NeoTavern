@@ -29,7 +29,8 @@ use contracts_generated::generated::{
     decode_request_envelope, decode_request_generation_tool_result, decode_request_get_character,
     decode_request_get_chat, decode_request_get_generation_run, decode_request_get_lorebook,
     decode_request_get_persona, decode_request_get_preset, decode_request_get_prompt_plan,
-    decode_request_get_provider_config, decode_request_keep_partial_generation,
+    decode_request_get_provider_config, decode_request_imports_character_card,
+    decode_request_keep_partial_generation,
     decode_request_list_characters, decode_request_list_chats,
     decode_request_list_generation_events, decode_request_list_lorebook_entries,
     decode_request_list_lorebooks, decode_request_list_memories, decode_request_list_messages,
@@ -50,7 +51,7 @@ use contracts_generated::generated::{
     decode_request_update_message, decode_request_update_persona, decode_request_update_preset,
     decode_response_envelope, decode_result_assets_content, decode_result_assets_get,
     decode_result_assets_put, decode_result_chat_snapshot, decode_result_diagnostics_export,
-    decode_result_empty, decode_result_list_backups, decode_result_list_lorebook_entries,
+    decode_result_empty, decode_result_imports_character_card, decode_result_list_backups, decode_result_list_lorebook_entries,
     decode_result_list_lorebooks, decode_result_list_memories, decode_result_list_personas,
     decode_result_list_presets, decode_result_list_provider_configs, decode_result_list_providers,
     decode_result_list_tools, decode_result_message_revision_list,
@@ -426,6 +427,15 @@ fn dispatch(schema_id: &str, bytes: &[u8], valid: bool) {
         }
         "wire.request.assets.delete" => {
             corpus_case(schema_id, decode_request_assets_delete, bytes, valid)
+        }
+        "wire.result.assets.delete" => {
+            corpus_case(schema_id, decode_result_empty, bytes, valid)
+        }
+        "wire.request.imports.character.card" => {
+            corpus_case(schema_id, decode_request_imports_character_card, bytes, valid)
+        }
+        "wire.result.imports.character.card" => {
+            corpus_case(schema_id, decode_result_imports_character_card, bytes, valid)
         }
         "wire.request.plugins.install" => {
             corpus_case(schema_id, decode_request_plugins_install, bytes, valid)

@@ -2983,6 +2983,7 @@ dependencies = [
  "secret-store",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
  "time",
  "uuid",

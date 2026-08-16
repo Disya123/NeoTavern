@@ -54,6 +54,7 @@ import type {
   GetAssetContentResultDto,
   GetAssetResultDto,
   PutAssetResultDto,
+  CharacterCardImportResultDto,
 } from '@neotavern/contracts';
 import type {
   BackendCallOptions,
@@ -63,6 +64,7 @@ import type {
   ChatsApi,
   DiagnosticsApi,
   GenerationApi,
+  ImportsApi,
   LorebooksApi,
   MemoriesApi,
   NeoBackend,
@@ -311,6 +313,15 @@ export class RemoteBackend implements NeoBackend {
       this.sdk.call<PutAssetResultDto>('assets.put', req, { signal: opts?.signal }),
     del: (assetId, opts) =>
       this.sdk.call<EmptyResultDto>('assets.delete', { assetId }, { signal: opts?.signal }),
+  };
+
+  readonly imports: ImportsApi = {
+    characterCard: (assetId, opts) =>
+      this.sdk.call<CharacterCardImportResultDto>(
+        'imports.character.card',
+        { assetId },
+        { signal: opts?.signal },
+      ),
   };
 
   private async *streamOperation(

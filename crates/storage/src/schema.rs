@@ -752,6 +752,33 @@ pub const MIGRATION_18_SQL: &str = migration_18_sql!();
 pub const MIGRATION_18_CHECKSUM: &str =
     "cabf2093a864e06c9d574e178e1984a0fbeb2abfd5d72644c01cd84d33d4cd85";
 
+/// Literal body of the character-card import hash (v19) schema migration:
+/// `characters.import_hash` records the lowercase sha256 of the original
+/// character-card file (PNG or JSON) that created the character, so re-running
+/// an import returns the existing character instead of a duplicate
+/// (AGENTS.md §11).
+macro_rules! migration_19_sql {
+    () => {
+        r#"ALTER TABLE characters ADD COLUMN import_hash TEXT;
+CREATE INDEX idx_characters_import_hash ON characters(import_hash);"#
+    };
+}
+
+/// Name of the character-card import hash (v19) schema migration.
+pub const MIGRATION_19_NAME: &str = "019_character_import_hash";
+
+/// Exact SQL of the character-card import hash schema migration (v19) — the
+/// `migration_19_sql!()` literal.
+pub const MIGRATION_19_SQL: &str = migration_19_sql!();
+
+/// Lowercase sha256 hex of the `MIGRATION_19_SQL` string bytes.
+///
+/// Computed via node (`crypto.createHash('sha256')` over the exact literal
+/// bytes, no trailing newline) and asserted by the migration test suite
+/// against the ledger.
+pub const MIGRATION_19_CHECKSUM: &str =
+    "fde7b5d813e91b6ceb6f3edf388e185dea25dd43880b181e8e041a99d21d1c6b";
+
 /// A fresh install runs every migration in order, so `FRESH_SCHEMA_SQL` is the
 /// concatenation of all migration literals with a single newline between them
 /// (the same statement separator `execute_batch` applies).
@@ -794,7 +821,9 @@ pub const FRESH_SCHEMA_SQL: &str = concat!(
     "\n",
     migration_17_sql!(),
     "\n",
-    migration_18_sql!()
+    migration_18_sql!(),
+    "\n",
+    migration_19_sql!()
 );
 
 /// sha256 hex of the `FRESH_SCHEMA_SQL` bytes — the fresh-install fingerprint.

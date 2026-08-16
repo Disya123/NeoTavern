@@ -10,6 +10,7 @@
 import type {
   ActivateMessageVariantRequestDto,
   BackupDto,
+  CharacterCardImportResultDto,
   CharacterDto,
   ChatDto,
   ChatSnapshotResultDto,
@@ -448,6 +449,17 @@ export interface AssetsApi {
   del(assetId: string, opts?: BackendCallOptions): Promise<EmptyResultDto>;
 }
 
+/**
+ * Import domain operations (Этап 4.5). The card file is staged first through
+ * `assets.put` (kind `card`); `characterCard` parses it, deduplicates by the
+ * sha256 of the original bytes and creates the character (`created` is false
+ * for a re-import, AGENTS.md §11).
+ */
+export interface ImportsApi {
+  /** Character-card import (wire `imports.character.card`). */
+  characterCard(assetId: string, opts?: BackendCallOptions): Promise<CharacterCardImportResultDto>;
+}
+
 /** Provider domain operations (wire `providers.*`). */
 export interface ProvidersApi {
   /** List providers. */
@@ -503,4 +515,5 @@ export interface NeoBackend {
   diagnostics: DiagnosticsApi;
   secrets: SecretsApi;
   assets: AssetsApi;
+  imports: ImportsApi;
 }

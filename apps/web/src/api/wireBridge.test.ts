@@ -90,6 +90,9 @@ const mocks = vi.hoisted(() => {
     put: vi.fn(),
     del: vi.fn(),
   };
+  const imports = {
+    characterCard: vi.fn(),
+  };
   const themes = {
     list: vi.fn(),
     install: vi.fn(),
@@ -120,6 +123,7 @@ const mocks = vi.hoisted(() => {
     presets,
     memories,
     assets,
+    imports,
     themes,
     plugins,
     meta,
@@ -138,6 +142,7 @@ vi.mock('./backend.js', () => ({
     presets: mocks.presets,
     memories: mocks.memories,
     assets: mocks.assets,
+    imports: mocks.imports,
     themes: mocks.themes,
     plugins: mocks.plugins,
     meta: mocks.metaFn,
@@ -1485,10 +1490,42 @@ describe('imports/exports (kernel plane honest refusals)', () => {
     await expect(exportChat('chat-1')).rejects.toBeInstanceOf(UnsupportedError);
   });
 
-  it('refuses character import on the kernel plane', async () => {
-    await expect(importCharacter(new File(['x'], 'card.png'))).rejects.toBeInstanceOf(
-      UnsupportedError,
+  it('imports a character card via assets.put + imports.character.card on the kernel plane', async () => {
+    mocks.assets.put.mockResolvedValue({
+      asset: {
+        id: '7a7b7c7d-7e7f-4a8b-9c0d-1e2f3a4b5c6d',
+        kind: 'card',
+        relativeKey: 'card/abcd',
+        checksumSha256: 'a'.repeat(64),
+        sizeBytes: 3,
+        createdAt: NOW_MS,
+      },
+      deduplicated: false,
+    });
+    mocks.imports.characterCard.mockResolvedValue({
+      character: {
+        id: CHAR_ID,
+        name: 'Ada Lovelace',
+        description: 'First programmer',
+        tags: ['analytical'],
+        createdAt: NOW_MS,
+        updatedAt: NOW_MS,
+      },
+      created: true,
+      sourceHash: 'a'.repeat(64),
+      warnings: [],
+    });
+    const result = await importCharacter(new File(['abc'], 'card.png', { type: 'image/png' }));
+    expect(mocks.assets.put).toHaveBeenCalledWith({
+      kind: 'card',
+      filename: 'card.png',
+      contentType: 'image/png',
+      contentBase64: expect.any(String),
+    });
+    expect(mocks.imports.characterCard).toHaveBeenCalledWith(
+      '7a7b7c7d-7e7f-4a8b-9c0d-1e2f3a4b5c6d',
     );
+    expect(result).toMatchObject({ created: true });
   });
 
   it('refuses provider model discovery on the kernel plane', async () => {

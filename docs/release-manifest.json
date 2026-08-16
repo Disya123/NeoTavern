@@ -195,6 +195,21 @@
       "milestone": "M5"
     },
     {
+      "id": "library.characterImport",
+      "title": "Character-card import (PNG/JSON, content-hash dedupe)",
+      "wireOps": [
+        "imports.character.card"
+      ],
+      "hosts": {
+        "desktop": "Implemented",
+        "headless": "Implemented",
+        "android": "Designed",
+        "webClient": "Implemented"
+      },
+      "notes": "Этап 4.5 (M5 slice 31): canonical character-card import over Product Wire (89 ops total). The card file (SillyTavern-compatible V2 JSON, or a PNG carrying the chara tEXt chunk with base64-encoded JSON) is staged through assets.put (kind card, content-addressed, idempotent; the ~786 KiB wire request cap surfaces as a transport error — never a silent downgrade) and parsed by imports.character.card: sha256 of the original bytes deduplicates against characters.import_hash (schema migration 019, indexed) so re-running an import returns the existing character with created:false (AGENTS.md §11: import must not create duplicates). Card fields beyond the canonical columns (personality, scenario, first message, example dialogue, system prompt, post-history instructions, creator, character version, extensions and any unknown fields) survive verbatim under ext_json._card (AGENTS.md §11: unknown character card fields and extension metadata must not be lost); over-length scalar columns are truncated with an honest warning. PNG cards link the staged asset as the avatar (avatar_asset_id = asset id); JSON cards carry none. Missing asset → stable ASSET_NOT_FOUND; unparseable card → CHARACTER_CARD_INVALID with a reason param (INVALID_JSON/INVALID_PNG_SIGNATURE/TRUNCATED_PNG_CHUNK/INVALID_PNG_CARD_ENCODING/PNG_CARD_METADATA_MISSING). Kernel tests (kernel_imports.rs, 5): JSON create + field preservation, dedupe, PNG avatar link, unparseable reject, missing asset. Facade: NeoBackend.imports.characterCard — LocalBackend forwards with request/response validation, RemoteBackend via ClientSdk, LegacyBackend throws UnsupportedError. Web transport: importCharacter on the kernel plane now runs assets.put + imports.character.card (two-step); UI wiring (CharactersPage/CharacterManagementPanel) is slice 32.",
+      "milestone": "M5"
+    },
+    {
       "id": "lorebooks.crud",
       "title": "Lorebook CRUD",
       "wireOps": [
