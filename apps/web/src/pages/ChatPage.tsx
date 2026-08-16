@@ -23,6 +23,7 @@ import { streamGeneration } from '../api/generate.js';
 import { backend } from '../api/backend.js';
 import {
   createChatSnapshot,
+  rollbackChatToMessage,
   swipeMessageToPosition,
   updateChatMessage,
   wallpaperBackgroundUrl,
@@ -669,6 +670,44 @@ export function ChatPage() {
     [chatId, queryClient, errorText],
   );
 
+  const rollbackTo = useCallback(
+    async (message: Message): Promise<void> => {
+      if (!chatId) return;
+      setError(null);
+      try {
+        // Slice 44: kernel `chats.snapshots.rollback` — everything after this
+        // message is removed in one transaction, with the removed suffix
+        // frozen into an auto-created checkpoint child chat first.
+        const result = await rollbackChatToMessage(chatId, message.id);
+        await queryClient.invalidateQueries({ queryKey: ['messages', chatId] });
+        await queryClient.invalidateQueries({ queryKey: ['chat', chatId] });
+        await queryClient.invalidateQueries({ queryKey: ['chats'] });
+        if (result.deleted > 0 && result.checkpointChatId) {
+          window.dispatchEvent(
+            new CustomEvent('neotavern-plugin-notification', {
+              detail: {
+                pluginId: 'host',
+                registrationId: `host:rollback:${Date.now()}`,
+                notification: {
+                  title: t('chat:rollbackDone'),
+                  description: t('chat:rollbackDoneDetail', { count: result.deleted }),
+                  variant: 'success',
+                  timeoutMs: 8000,
+                  action: { label: t('chat:snapshotOpen'), event: 'neotavern-open-child-chat' },
+                  chatId: result.checkpointChatId,
+                },
+              },
+            }),
+          );
+        }
+      } catch (err) {
+        setError(errorText(err));
+        throw err;
+      }
+    },
+    [chatId, queryClient, errorText, t],
+  );
+
   const assistantIdentity = useMemo(
     () =>
       character.data ? { name: character.data.name, avatar: character.data.avatar } : undefined,
@@ -851,6 +890,7 @@ export function ChatPage() {
                     onOpenCheckpoint={openCheckpoint}
                     onReplaceCheckpoint={replaceCheckpoint}
                     onDeleteCheckpoint={deleteCheckpoint}
+                    onRollbackTo={rollbackTo}
                     onViewPromptPlan={(message) => {
                       const runId = message.meta['generationRunId'];
                       setPromptPlanRunId(typeof runId === 'string' ? runId : null);
@@ -905,6 +945,7 @@ export function ChatPage() {
             onOpenCheckpoint={openCheckpoint}
             onReplaceCheckpoint={replaceCheckpoint}
             onDeleteCheckpoint={deleteCheckpoint}
+            onRollbackTo={rollbackTo}
             branchId={chat.data?.activeBranchId ?? null}
           />
         ) : null}
@@ -974,6 +1015,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
   onOpenCheckpoint,
   onReplaceCheckpoint,
   onDeleteCheckpoint,
+  onRollbackTo,
   onViewPromptPlan,
   branchId,
   editError,
@@ -1002,6 +1044,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
   onOpenCheckpoint: (message: Message) => void;
   onReplaceCheckpoint: (message: Message) => void;
   onDeleteCheckpoint: (message: Message) => Promise<void>;
+  onRollbackTo: (message: Message) => Promise<void>;
   onViewPromptPlan: (message: Message) => void;
   branchId: string | null;
   editError: string | null;
@@ -1075,6 +1118,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
       onOpenCheckpoint={onOpenCheckpoint}
       onReplaceCheckpoint={onReplaceCheckpoint}
       onDeleteCheckpoint={onDeleteCheckpoint}
+      onRollbackTo={onRollbackTo}
       onViewPromptPlan={onViewPromptPlan}
     />
   );

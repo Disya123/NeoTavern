@@ -59,6 +59,7 @@ const ALL_ACTIONS: readonly BuiltinMessageActionId[] = [
   'branch',
   'delete-checkpoint',
   'delete',
+  'rollback',
 ];
 
 /** English labels matching the `en` i18n instance used by renderWithProviders. */
@@ -72,6 +73,7 @@ const LABELS: Record<BuiltinMessageActionId, string> = {
   branch: 'Branch',
   'delete-checkpoint': 'Remove checkpoint',
   delete: 'Delete message',
+  rollback: 'Roll back to this message',
   prompt: 'View prompt plan',
 };
 

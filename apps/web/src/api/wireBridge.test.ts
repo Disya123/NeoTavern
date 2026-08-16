@@ -44,6 +44,7 @@ const mocks = vi.hoisted(() => {
     updateMessage: vi.fn(),
     delMessage: vi.fn(),
     createSnapshot: vi.fn(),
+    rollbackSnapshot: vi.fn(),
     listMessageVariants: vi.fn(),
     createMessageVariant: vi.fn(),
     delMessageVariant: vi.fn(),
@@ -252,6 +253,7 @@ import {
   importCharacter,
   warmProviderModels,
   createChatSnapshot,
+  rollbackChatToMessage,
 } from './wireBridge.js';
 
 const CHAR_ID = '11111111-2222-4333-8444-555555555555';
@@ -1722,6 +1724,27 @@ describe('imports/exports (kernel plane wire flow)', () => {
     expect(result.chat.parentChatId).toBe(CHAT_ID);
     expect(result.chat.origin).toBe('checkpoint');
     expect(result.chat.sourceMessageId).toBe(MESSAGE_ID);
+  });
+
+  it('routes chat rollback through chats.snapshots.rollback on the kernel plane (slice 44)', async () => {
+    mocks.chats.rollbackSnapshot.mockResolvedValue({
+      deleted: 3,
+      checkpointChatId: 'c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f',
+    });
+    const result = await rollbackChatToMessage(CHAT_ID, MESSAGE_ID);
+    expect(mocks.chats.rollbackSnapshot).toHaveBeenCalledWith({
+      chatId: CHAT_ID,
+      toMessageId: MESSAGE_ID,
+    });
+    expect(result.deleted).toBe(3);
+    expect(result.checkpointChatId).toBe('c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f');
+  });
+
+  it('refuses chat rollback on the legacy plane with an honest UnsupportedError (slice 44)', async () => {
+    mocks.isKernelMode.mockReturnValue(false);
+    await expect(rollbackChatToMessage(CHAT_ID, MESSAGE_ID)).rejects.toBeInstanceOf(
+      UnsupportedError,
+    );
   });
 
   it('routes chat snapshots through the legacy contour on the legacy plane', async () => {

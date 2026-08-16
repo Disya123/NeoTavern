@@ -322,6 +322,22 @@ describe('MessageBubble inline actions', () => {
     await waitFor(() => expect(onDeleteCheckpoint).toHaveBeenCalled());
     expect(rendered.container.querySelector('[data-part="overflow-menu"]')).toBeNull();
   });
+
+  it('rolls the chat back to this message only after the confirm dialog (М5 slice 44)', async () => {
+    const onRollbackTo = vi.fn(async () => undefined);
+    const rendered = await renderWithProviders(
+      <MessageBubble message={makeMessage()} onRollbackTo={onRollbackTo} />,
+    );
+
+    const rollbackButton = screen.getByRole('button', { name: 'Roll back to this message' });
+    await userEvent.click(rollbackButton);
+    expect(screen.getByRole('dialog', { name: 'Roll back to this message' })).toBeInTheDocument();
+    expect(onRollbackTo).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Roll back chat' }));
+    await waitFor(() => expect(onRollbackTo).toHaveBeenCalledWith(makeMessage()));
+    expect(rendered.container.querySelector('[data-part="overflow-menu"]')).toBeNull();
+  });
 });
 
 describe('MessageBubble checkpoint flag', () => {

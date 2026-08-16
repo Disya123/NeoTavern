@@ -275,6 +275,29 @@ export async function createChatSnapshot(
 }
 
 /**
+ * Roll the chat back to `toMessageId` (everything after it is removed; the
+ * message itself stays). Kernel plane (slice 44): wire
+ * `chats.snapshots.rollback` — the removed suffix is first frozen into an
+ * auto-created checkpoint child chat (a recoverable safety copy) in ONE
+ * transaction, and a no-op rollback returns `deleted: 0` without inventing a
+ * checkpoint. Legacy plane: the sidecar has no rollback semantics — honest
+ * `UnsupportedError` (ARC-02).
+ */
+export async function rollbackChatToMessage(
+  chatId: string,
+  toMessageId: string,
+): Promise<{ deleted: number; checkpointChatId: string | null }> {
+  if (isKernelMode()) {
+    const result = await backend.chats.rollbackSnapshot({ chatId, toMessageId });
+    return {
+      deleted: result.deleted,
+      checkpointChatId: result.checkpointChatId ?? null,
+    };
+  }
+  throw new UnsupportedError('chats.snapshots.rollback');
+}
+
+/**
  * Patch one message's content and/or extension metadata. Kernel plane: wire
  * `chats.messages.update` (content optional, meta optional, last-write-wins;
  * `clearCheckpointChatId` maps the legacy delete-checkpoint `null` patch),

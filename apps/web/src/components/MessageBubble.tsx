@@ -88,6 +88,8 @@ export interface MessageBubbleProps {
   /** Shift+click on an existing flag: create a fresh checkpoint and open it. */
   onReplaceCheckpoint?: (message: Message) => void;
   onDeleteCheckpoint?: (message: Message) => Promise<void> | void;
+  /** Roll the whole chat back to this message (kernel `chats.snapshots.rollback`). */
+  onRollbackTo?: (message: Message) => Promise<void> | void;
   /** Open the durable prompt plan of this message's generation run (ТЗ §9.2). */
   onViewPromptPlan?: (message: Message) => void;
 }
@@ -111,6 +113,7 @@ function MessageBubbleInner({
   onOpenCheckpoint,
   onReplaceCheckpoint,
   onDeleteCheckpoint,
+  onRollbackTo,
   onViewPromptPlan,
   macroContext,
   branchId = null,
@@ -124,6 +127,7 @@ function MessageBubbleInner({
   const [pending, setPending] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [checkpointDeleteOpen, setCheckpointDeleteOpen] = useState(false);
+  const [rollbackOpen, setRollbackOpen] = useState(false);
   const [cardOpen, setCardOpen] = useState(false);
   const [cardMode, setCardMode] = useState<'details' | 'edit'>('details');
   const [revisionHistoryOpen, setRevisionHistoryOpen] = useState(false);
@@ -269,6 +273,17 @@ function MessageBubbleInner({
     }
   };
 
+  const rollbackToHere = async (): Promise<void> => {
+    if (!onRollbackTo) return;
+    setPending(true);
+    try {
+      await onRollbackTo(message);
+      setRollbackOpen(false);
+    } finally {
+      setPending(false);
+    }
+  };
+
   const toggleContext = async (): Promise<void> => {
     if (!onToggleContext) return;
     setPending(true);
@@ -322,6 +337,7 @@ function MessageBubbleInner({
     checkpointCreate: Boolean(onCreateCheckpoint),
     deleteCheckpoint: Boolean(onDeleteCheckpoint),
     delete: Boolean(onDelete),
+    rollback: Boolean(onRollbackTo),
   };
   const availableActions = getAvailableBuiltinActions(message, caps, canRegenerate);
   // Base labels, then the two message-state-dependent ones resolved here
@@ -363,6 +379,9 @@ function MessageBubbleInner({
         break;
       case 'delete-checkpoint':
         setCheckpointDeleteOpen(true);
+        break;
+      case 'rollback':
+        setRollbackOpen(true);
         break;
     }
   };
@@ -625,6 +644,18 @@ function MessageBubbleInner({
         busy={pending}
         danger
         onConfirm={() => void deleteCheckpoint()}
+      />
+      <ConfirmActionDialog
+        open={rollbackOpen}
+        onOpenChange={(open) => {
+          if (!pending) setRollbackOpen(open);
+        }}
+        title={t('chat:rollbackToHere')}
+        description={t('chat:rollbackConfirm')}
+        confirmLabel={t('chat:rollbackConfirmLabel')}
+        busy={pending}
+        danger
+        onConfirm={() => void rollbackToHere()}
       />
       <MessageDetailsCard
         open={cardOpen}

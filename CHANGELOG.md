@@ -3,6 +3,26 @@
 ## Unreleased
 ### Added
 
+- **`chats.snapshots.rollback` — atomic chat rollback with an automatic
+  safety checkpoint (M5 slice 44, ТЗ §8.1 Conversations).** Rolling a chat
+  back to a kept message now works end-to-end: the kernel removes everything
+  with a higher `sequence` in ONE transaction, but FIRST freezes the removed
+  suffix into an auto-created checkpoint child chat (`origin=checkpoint`,
+  `sourceMessageId` = kept message; variants/revisions cascade into it) so
+  the user always keeps a recoverable copy. A no-op rollback (nothing after
+  the target) creates no checkpoint and returns `deleted: 0` — repeating it
+  is safe. Missing chat/message → `CHAT_NOT_FOUND`/`MESSAGE_NOT_FOUND`. Wire:
+  96 ops total; fixtures + neg; `WIRE_SCHEMA_HASH` `28b9f195...`; wire_corpus
+  decoders 75. Kernel suite 5 (suffix removal + kept message, no-op repeat,
+  rollback-after-rollback, variant/revision cascade, honest errors);
+  remote-http `snapshots_rollback_over_http` (37 scenarios). Facade:
+  `chats.rollbackSnapshot` on Local/Remote, honest `UnsupportedError` on
+  legacy; parity +1 (85). UI: "Roll back to this message" action with a
+  confirm dialog (danger), `rollbackChatToMessage` wireBridge (kernel plane;
+  legacy plane honest `UnsupportedError`), ChatPage notification with an
+  "Open" action into the checkpoint; i18n en/ru; wireBridge +2, MessageBubble
+  +1. Honest boundary: the legacy contour has no rollback semantics (ARC-02).
+
 - **Tool registry UI in Settings (M5 slice 43, ТЗ §8.3/§13.2).** The Settings
   panel gains a Tools tab rendering the declarative tool contracts the host
   registered with the kernel (`generation.tools.list`): name, description

@@ -548,6 +548,9 @@ fn handle_unary(
         "chats.messages.update" => with_db_opt(db, |db| product::messages_update(db, req)),
         "chats.messages.delete" => with_db_opt(db, |db| product::messages_delete(db, req)),
         "chats.snapshots.create" => with_db_opt(db, |db| product::chats_snapshots_create(db, req)),
+        "chats.snapshots.rollback" => {
+            with_db_opt(db, |db| product::chats_snapshots_rollback(db, req))
+        }
         "chats.messages.variants.list" => {
             with_db_opt(db, |db| product::message_variants_list(db, req))
         }

@@ -21,6 +21,8 @@ import type {
   CreateCharacterRequestDto,
   CreateChatRequestDto,
   CreateChatSnapshotRequestDto,
+  RollbackChatSnapshotRequestDto,
+  RollbackChatSnapshotResultDto,
   CreateLorebookEntryRequestDto,
   CreateLorebookRequestDto,
   CreateMemoryRequestDto,
@@ -170,6 +172,14 @@ export interface ChatsApi {
     req: CreateChatSnapshotRequestDto,
     opts?: BackendCallOptions,
   ): Promise<ChatSnapshotResultDto>;
+  /** Atomically roll a chat back to a kept message: everything after it is
+   * removed in ONE transaction, with the removed suffix first frozen into an
+   * auto-created checkpoint child chat (a recoverable safety copy); a no-op
+   * rollback returns `deleted: 0` without inventing a checkpoint. */
+  rollbackSnapshot(
+    req: RollbackChatSnapshotRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<RollbackChatSnapshotResultDto>;
   /** List the swipe variants of one message (wire `chats.messages.variants.list`). */
   listMessageVariants(
     req: ListMessageVariantsRequestDto,

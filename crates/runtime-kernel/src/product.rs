@@ -20,7 +20,7 @@ use contracts_generated::generated::{
     MessageDto, MessageRevisionDto, MessageRole, MessageVariantDto, PagedCharacters, PagedChats,
     PagedMessages, PersonaDto, PresetDto, RequestListPresets, ResultChatSnapshot, ResultEmpty,
     ResultListLorebooks, ResultListMemories, ResultListPersonas, ResultListPresets,
-    ResultMessageRevisionList, ResultMessageVariantList, SnapshotOrigin,
+    ResultMessageRevisionList, ResultMessageVariantList, ResultSnapshotsRollback, SnapshotOrigin,
 };
 use contracts_generated::Issue;
 use neotavern_storage::open::Database;
@@ -1578,6 +1578,146 @@ pub fn chats_snapshots_create(db: &mut Database, request: &[u8]) -> Result<Vec<u
         copied_messages: copied,
     };
     validate(&dto, generated::validate_result_chat_snapshot)?;
+    encode(&dto)
+}
+
+/// `chats.snapshots.rollback` — atomically roll the chat back to the message
+/// `toMessageId` (that message stays; everything with a higher `sequence` is
+/// removed). Destructive, so the kernel FIRST freezes the removed suffix into
+/// an auto-created checkpoint child chat (origin = checkpoint, source =
+/// `toMessageId`) — the user always keeps a recoverable safety copy — and
+/// only then deletes it, in ONE transaction. Variants/revisions cascade with
+/// their messages (`message_variants`/`message_content_revisions` FK CASCADE).
+///
+/// Honest boundary: a no-op rollback (nothing after the target) creates no
+/// checkpoint and returns `deleted = 0` with no `checkpointChatId`; a
+/// repeated rollback to the same point is therefore a safe no-op, not a
+/// duplicate effect. Missing chat → `CHAT_NOT_FOUND`; missing/foreign
+/// message → `MESSAGE_NOT_FOUND`.
+pub fn chats_snapshots_rollback(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_snapshots_rollback(request)?;
+    let chat_id = req.chat_id.clone();
+    let to_message_id = req.to_message_id.clone();
+    if !chat_exists(db.conn(), &chat_id)? {
+        return Err(not_found("CHAT", &chat_id));
+    }
+    // Pre-check outside the transaction (single-writer dispatch): a missing
+    // message is a stable `MESSAGE_NOT_FOUND`, never a storage error.
+    let target_sequence: i64 = db
+        .conn()
+        .query_row(
+            "SELECT sequence FROM messages WHERE id = ?1 AND chat_id = ?2",
+            params![&to_message_id, &chat_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| sqlite(e, "chats_snapshots_rollback: read target"))?
+        .ok_or_else(|| not_found("MESSAGE", &to_message_id))?;
+
+    let (deleted, checkpoint_chat_id) = db.transaction(|tx| {
+        let count: i64 = tx
+            .query_row(
+                "SELECT COUNT(*) FROM messages WHERE chat_id = ?1 AND sequence > ?2",
+                params![&chat_id, target_sequence],
+                |row| row.get(0),
+            )
+            .map_err(|e| StorageError::from_sqlite(e, "chats_snapshots_rollback: count"))?;
+        if count == 0 {
+            return Ok((0i64, None));
+        }
+        // 1. Freeze the removed suffix into a checkpoint child chat.
+        let now_ts = now();
+        let (parent_title, character_id, persona_id): (String, String, Option<String>) = tx
+            .query_row(
+                "SELECT title, character_id, persona_id FROM chats WHERE id = ?1",
+                params![&chat_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .map_err(|e| StorageError::from_sqlite(e, "chats_snapshots_rollback: read parent"))?;
+        let child_chat_id = new_id();
+        tx.execute(
+            "INSERT INTO chats (id, title, character_id, persona_id, parent_chat_id, origin, \
+             source_message_id, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![
+                &child_chat_id,
+                &format!("{parent_title} — rollback {now_ts}"),
+                &character_id,
+                &persona_id,
+                &chat_id,
+                "checkpoint",
+                &to_message_id,
+                &now_ts,
+                &now_ts
+            ],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "chats_snapshots_rollback: insert chat"))?;
+
+        let mut id_map: std::collections::HashMap<String, String> = Default::default();
+        {
+            let mut stmt = tx
+                .prepare(
+                    "SELECT id, role, content, sequence, generation_run_id, meta_json, \
+                     created_at FROM messages \
+                     WHERE chat_id = ?1 AND sequence > ?2 \
+                     ORDER BY sequence ASC, id ASC",
+                )
+                .map_err(|e| StorageError::from_sqlite(e, "chats_snapshots_rollback: prepare"))?;
+            let rows = stmt
+                .query_map(params![&chat_id, target_sequence], |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, i64>(3)?,
+                        row.get::<_, Option<String>>(4)?,
+                        row.get::<_, String>(5)?,
+                        row.get::<_, String>(6)?,
+                    ))
+                })
+                .map_err(|e| StorageError::from_sqlite(e, "chats_snapshots_rollback: query"))?;
+            for row in rows {
+                let (old_id, role, content, sequence, generation_run_id, meta_json, created_at) =
+                    row.map_err(|e| StorageError::from_sqlite(e, "chats_snapshots_rollback: row"))?;
+                let new_id = new_id();
+                id_map.insert(old_id.clone(), new_id.clone());
+                tx.execute(
+                    "INSERT INTO messages (id, chat_id, role, content, sequence, \
+                     generation_run_id, meta_json, created_at) \
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                    params![
+                        &new_id,
+                        &child_chat_id,
+                        &role,
+                        &content,
+                        sequence,
+                        &generation_run_id,
+                        &meta_json,
+                        &created_at
+                    ],
+                )
+                .map_err(|e| StorageError::from_sqlite(e, "chats_snapshots_rollback: insert"))?;
+            }
+        }
+        let old_ids: Vec<String> = id_map.keys().cloned().collect();
+        if !old_ids.is_empty() {
+            copy_message_variants(tx, &old_ids, &id_map, &child_chat_id)?;
+            copy_message_revisions(tx, &old_ids, &id_map, &child_chat_id)?;
+        }
+        // 2. Remove the suffix (variants/revisions cascade via FK).
+        tx.execute(
+            "DELETE FROM messages WHERE chat_id = ?1 AND sequence > ?2",
+            params![&chat_id, target_sequence],
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "chats_snapshots_rollback: delete"))?;
+        Ok((count, Some(child_chat_id)))
+    })?;
+
+    let dto = ResultSnapshotsRollback {
+        deleted,
+        checkpoint_chat_id: checkpoint_chat_id,
+    };
+    validate(&dto, generated::validate_result_snapshots_rollback)?;
     encode(&dto)
 }
 

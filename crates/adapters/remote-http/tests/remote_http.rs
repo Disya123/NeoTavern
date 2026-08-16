@@ -1637,6 +1637,137 @@ fn profile_import_over_http() {
     assert_eq!(items[0]["name"].as_str(), Some("Aria"));
 }
 
+/// 36. М5 slice 44: `chats.snapshots.rollback` over the HTTP host — seed a
+///     chat, roll it back to the first message (removing the suffix), verify
+///     the removed suffix was frozen into an auto-created checkpoint child
+///     chat that the same host serves, then prove a repeated rollback to the
+///     same point is a safe no-op (host parity with the direct kernel path).
+#[test]
+fn snapshots_rollback_over_http() {
+    let server = TestServer::spawn();
+
+    let character = envelope_body(
+        &rid(1),
+        "characters.create",
+        json!({ "name": "Aria", "description": "A wandering bard" }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &character);
+    assert_eq!(response.status, 200, "characters.create answers HTTP 200");
+    let (_, character_result) = expect_ok(decode_envelope(&response.body));
+    let character_id = character_result["id"]
+        .as_str()
+        .expect("character id")
+        .to_string();
+
+    let chat = envelope_body(
+        &rid(2),
+        "chats.create",
+        json!({ "characterId": character_id }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &chat);
+    assert_eq!(response.status, 200, "chats.create answers HTTP 200");
+    let (_, chat_result) = expect_ok(decode_envelope(&response.body));
+    let chat_id = chat_result["id"].as_str().expect("chat id").to_string();
+
+    let mut first_message_id = String::new();
+    for (i, (role, content)) in [
+        ("user", "Hello"),
+        ("assistant", "Greetings, traveler."),
+        ("user", "Tell me a story"),
+    ]
+    .iter()
+    .enumerate()
+    {
+        let message = envelope_body(
+            &rid(3 + i as u64),
+            "chats.messages.create",
+            json!({ "chatId": chat_id, "role": role, "content": content }),
+        );
+        let response = http_request(server.addr, "POST", "/rpc", &[], &message);
+        assert_eq!(
+            response.status, 200,
+            "chats.messages.create answers HTTP 200"
+        );
+        let (_, message_result) = expect_ok(decode_envelope(&response.body));
+        let message_id = message_result["id"]
+            .as_str()
+            .expect("message id")
+            .to_string();
+        if i == 0 {
+            first_message_id = message_id;
+        }
+    }
+
+    // Roll back to the FIRST message: everything after it is removed and the
+    // removed suffix is frozen into an auto-created checkpoint.
+    let rollback = envelope_body(
+        &rid(6),
+        "chats.snapshots.rollback",
+        json!({ "chatId": chat_id, "toMessageId": first_message_id }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &rollback);
+    assert_eq!(
+        response.status, 200,
+        "chats.snapshots.rollback answers HTTP 200"
+    );
+    let (request_id, rollback_result) = expect_ok(decode_envelope(&response.body));
+    assert_eq!(request_id, rid(6), "requestId is echoed");
+    gen::validate_result_snapshots_rollback(&rollback_result)
+        .expect("rollback result is wire-valid");
+    assert_eq!(rollback_result["deleted"], json!(2), "two messages removed");
+    let checkpoint_chat_id = rollback_result["checkpointChatId"]
+        .as_str()
+        .expect("checkpoint chat id");
+
+    let list = envelope_body(&rid(7), "chats.messages.list", json!({ "chatId": chat_id }));
+    let response = http_request(server.addr, "POST", "/rpc", &[], &list);
+    assert_eq!(response.status, 200, "chats.messages.list answers HTTP 200");
+    let (_, list_result) = expect_ok(decode_envelope(&response.body));
+    let items = list_result["items"].as_array().expect("items array");
+    assert_eq!(items.len(), 1, "only the kept message remains");
+    assert_eq!(items[0]["content"].as_str(), Some("Hello"));
+
+    // The checkpoint holds the removed suffix and is served over the same host.
+    let checkpoint_list = envelope_body(
+        &rid(8),
+        "chats.messages.list",
+        json!({ "chatId": checkpoint_chat_id }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &checkpoint_list);
+    assert_eq!(
+        response.status, 200,
+        "checkpoint messages list answers HTTP 200"
+    );
+    let (_, checkpoint_result) = expect_ok(decode_envelope(&response.body));
+    let checkpoint_items = checkpoint_result["items"].as_array().expect("items array");
+    assert_eq!(
+        checkpoint_items.len(),
+        2,
+        "removed suffix frozen in checkpoint"
+    );
+    assert_eq!(
+        checkpoint_items[0]["content"].as_str(),
+        Some("Greetings, traveler.")
+    );
+
+    // Repeat the exact same request: a safe no-op, no duplicate effect.
+    let again = envelope_body(
+        &rid(9),
+        "chats.snapshots.rollback",
+        json!({ "chatId": chat_id, "toMessageId": first_message_id }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &again);
+    assert_eq!(response.status, 200, "repeated rollback answers HTTP 200");
+    let (_, again_result) = expect_ok(decode_envelope(&response.body));
+    gen::validate_result_snapshots_rollback(&again_result)
+        .expect("repeated rollback result is wire-valid");
+    assert_eq!(again_result["deleted"], json!(0), "nothing left to remove");
+    assert!(
+        again_result.get("checkpointChatId").is_none(),
+        "no checkpoint may be invented for a no-op"
+    );
+}
+
 /// Recursively copies a directory tree (host staging of export containers).
 fn copy_dir_recursive(source: &std::path::Path, dest: &std::path::Path) {
     std::fs::create_dir_all(dest).expect("dest dir must create");

@@ -57,10 +57,11 @@ describe('product wire registry', () => {
     // imports.character.card (89 total); slice 35 (character-card export)
     // adds characters.export.card (90 total); slice 36 (chat export) adds
     // chats.export (91 total); slice 42 (profile import) adds
-    // profile.import (95 total). The exact operation
+    // profile.import (95 total); slice 44 (snapshot rollback) adds
+    // chats.snapshots.rollback (96 total). The exact operation
     // set is asserted so a registry edit that drops or renames an op fails
     // loudly.
-    expect(registry.operations).toHaveLength(95);
+    expect(registry.operations).toHaveLength(96);
     expect(registry.operations.map((op) => op.operationId)).toEqual([
       'meta.get',
       'characters.list',
@@ -80,6 +81,7 @@ describe('product wire registry', () => {
       'chats.messages.update',
       'chats.messages.delete',
       'chats.snapshots.create',
+      'chats.snapshots.rollback',
       'chats.messages.variants.list',
       'chats.messages.variants.create',
       'chats.messages.variants.delete',

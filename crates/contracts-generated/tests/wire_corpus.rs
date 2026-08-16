@@ -21,7 +21,7 @@ use contracts_generated::generated::{
     decode_request_cancel_generation, decode_request_characters_export_card,
     decode_request_create_character, decode_request_create_chat,
     decode_request_create_chat_snapshot, decode_request_create_lorebook,
-    decode_request_create_lorebook_entry, decode_request_create_memory,
+    decode_request_snapshots_rollback, decode_request_create_lorebook_entry, decode_request_create_memory,
     decode_request_create_message, decode_request_create_persona, decode_request_create_preset,
     decode_request_delete_character, decode_request_delete_chat, decode_request_delete_lorebook,
     decode_request_delete_lorebook_entry, decode_request_delete_memory,
@@ -52,7 +52,7 @@ use contracts_generated::generated::{
     decode_request_update_message, decode_request_update_persona, decode_request_update_preset,
     decode_response_envelope, decode_result_assets_content, decode_result_assets_get,
     decode_result_assets_put, decode_result_characters_export_card, decode_result_chat_snapshot,
-    decode_result_chats_export, decode_result_diagnostics_export, decode_result_empty, decode_result_imports_character_card,
+    decode_result_snapshots_rollback, decode_result_chats_export, decode_result_diagnostics_export, decode_result_empty, decode_result_imports_character_card,
     decode_result_data_activation_status, decode_result_list_backups, decode_request_backups_restore, decode_result_backups_restore, decode_result_list_lorebook_entries, decode_result_list_lorebooks,
     decode_result_list_memories, decode_result_list_personas, decode_result_list_presets,
     decode_result_list_provider_configs, decode_result_list_providers, decode_result_list_tools,
@@ -257,6 +257,9 @@ fn dispatch(schema_id: &str, bytes: &[u8], valid: bool) {
         }
         "wire.request.create-chat-snapshot" => {
             corpus_case(schema_id, decode_request_create_chat_snapshot, bytes, valid)
+        }
+        "wire.request.snapshots-rollback" => {
+            corpus_case(schema_id, decode_request_snapshots_rollback, bytes, valid)
         }
         "wire.request.list-messages" => {
             corpus_case(schema_id, decode_request_list_messages, bytes, valid)
@@ -544,6 +547,9 @@ fn dispatch(schema_id: &str, bytes: &[u8], valid: bool) {
         "wire.result.chat-snapshot" => {
             corpus_case(schema_id, decode_result_chat_snapshot, bytes, valid)
         }
+        "wire.result.snapshots-rollback" => {
+            corpus_case(schema_id, decode_result_snapshots_rollback, bytes, valid)
+        }
         "wire.result.diagnostics-export" => {
             corpus_case(schema_id, decode_result_diagnostics_export, bytes, valid)
         }
@@ -595,7 +601,7 @@ fn xorshift32(mut state: u32) -> u32 {
 /// coerces to a plain `fn` pointer.
 type DecoderFn = fn(&[u8]) -> Result<(), WireError>;
 
-fn all_decoders() -> [DecoderFn; 73] {
+fn all_decoders() -> [DecoderFn; 75] {
     [
         |b| decode_meta_dto(b).map(|_| ()),
         |b| decode_character_dto(b).map(|_| ()),
@@ -654,6 +660,8 @@ fn all_decoders() -> [DecoderFn; 73] {
         |b| decode_result_secrets_lock(b).map(|_| ()),
         |b| decode_request_profile_import(b).map(|_| ()),
         |b| decode_result_profile_import(b).map(|_| ()),
+        |b| decode_request_snapshots_rollback(b).map(|_| ()),
+        |b| decode_result_snapshots_rollback(b).map(|_| ()),
         |b| decode_result_list_lorebooks(b).map(|_| ()),
         |b| decode_result_list_presets(b).map(|_| ()),
         |b| decode_request_get_lorebook(b).map(|_| ()),

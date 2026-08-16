@@ -566,6 +566,20 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'chats.snapshots.rollback',
+    'transactional',
+    'non-idempotent',
+    'none',
+    'app.write',
+    'wire.request.snapshots-rollback',
+    'wire.result.snapshots-rollback',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    262144,
+    undefined,
+  ),
+  op(
     'chats.messages.variants.list',
     'transactional',
     'idempotent',
@@ -1677,6 +1691,7 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
 // Fixture corpus (self-checked by `compileWireContract`).
 // ---------------------------------------------------------------------------
 
+const UUID_CHILD_CHAT = 'c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f';
 const UUID_CHARACTER = '4f2f0a1e-9b3c-4d5e-8f6a-7b8c9d0e1f2a';
 const UUID_CHAT = '7f3a2b4c-1d2e-4f5a-8b9c-0d1e2f3a4b5c';
 const UUID_MESSAGE = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
@@ -2250,6 +2265,17 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('chats-snapshots-create-response', 'chats.snapshots.create', 'response', true, {
     chat: CHAT_VALUE,
     copiedMessages: 2,
+  }),
+  fx('chats-snapshots-rollback-request', 'chats.snapshots.rollback', 'request', true, {
+    chatId: UUID_CHAT,
+    toMessageId: UUID_MESSAGE,
+  }),
+  fx('chats-snapshots-rollback-response', 'chats.snapshots.rollback', 'response', true, {
+    deleted: 3,
+    checkpointChatId: UUID_CHILD_CHAT,
+  }),
+  fx('neg-chats-snapshots-rollback-missing-field', 'chats.snapshots.rollback', 'request', false, {
+    chatId: UUID_CHAT,
   }),
   fx('generation-start-request', 'generation.start', 'request', true, {
     chatId: UUID_CHAT,

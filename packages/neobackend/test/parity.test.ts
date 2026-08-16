@@ -48,6 +48,7 @@ import {
   type ProfileImportResultDto,
   type PutAssetResultDto,
   type ResultSettingsDto,
+  type RollbackChatSnapshotResultDto,
   type SecretsStatusResultDto,
   type ThemeDto,
   type WireGenerationEvent,
@@ -218,6 +219,12 @@ const PROFILE_IMPORT: ProfileImportResultDto = {
   formatVersion: 1,
   appliedAt: TIMESTAMP,
   orphans: ['chat 99999999-9999-4999-8999-999999999999: references missing character'],
+};
+
+/** `chats.snapshots.rollback` result (`wire.result.snapshots-rollback`). */
+const ROLLBACK_RESULT: RollbackChatSnapshotResultDto = {
+  deleted: 3,
+  checkpointChatId: 'c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f',
 };
 
 const SETTINGS: ResultSettingsDto = {
@@ -570,6 +577,8 @@ class FakeKernelTransport implements LocalTransport {
         return { ok: true, value: PROFILE_EXPORT };
       case 'profile.import':
         return { ok: true, value: PROFILE_IMPORT };
+      case 'chats.snapshots.rollback':
+        return { ok: true, value: ROLLBACK_RESULT };
       case 'settings.get':
       case 'settings.update':
         return { ok: true, value: SETTINGS };
@@ -712,6 +721,8 @@ function rpcResult(operationId: string | undefined): unknown {
       return PROFILE_EXPORT;
     case 'profile.import':
       return PROFILE_IMPORT;
+    case 'chats.snapshots.rollback':
+      return ROLLBACK_RESULT;
     case 'settings.get':
     case 'settings.update':
       return SETTINGS;
@@ -1982,6 +1993,26 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
     expect(kernel.requests).toEqual([{ operationId: 'profile.import', payload: importReq }]);
   });
 
+  it('chats.snapshots.rollback is routed identically by local and remote backends (М5 slice 44)', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const rollbackReq = {
+      chatId: '7f3a2b4c-1d2e-4f5a-8b9c-0d1e2f3a4b5c',
+      toMessageId: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d',
+    };
+    const [rollbackLocal, rollbackRemote] = await Promise.all([
+      local.chats.rollbackSnapshot(rollbackReq),
+      remote.chats.rollbackSnapshot(rollbackReq),
+    ]);
+    expect(rollbackLocal).toEqual(rollbackRemote);
+    expect(rollbackLocal).toEqual(ROLLBACK_RESULT);
+    expect(kernel.requests).toEqual([
+      { operationId: 'chats.snapshots.rollback', payload: rollbackReq },
+    ]);
+  });
+
   it('settings.get/update return deep-equal ResultSettingsDto from both backends', async () => {
     const kernel = new FakeKernelTransport();
     const local = new LocalBackend({ transport: kernel });
@@ -2305,6 +2336,12 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
     expect(() => backend.profiles.export({ profileId: PROFILE_ID })).toThrow(UnsupportedError);
     expect(() =>
       backend.profiles.import({ containerPath: 'exports/x/', policy: 'reject' }),
+    ).toThrow(UnsupportedError);
+    expect(() =>
+      backend.chats.rollbackSnapshot({
+        chatId: '7f3a2b4c-1d2e-4f5a-8b9c-0d1e2f3a4b5c',
+        toMessageId: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d',
+      }),
     ).toThrow(UnsupportedError);
     expect(() => backend.settings.get()).toThrow(UnsupportedError);
     expect(() => backend.diagnostics.export()).toThrow(UnsupportedError);

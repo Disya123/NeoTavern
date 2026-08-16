@@ -292,6 +292,13 @@ export const en = {
     deleteCheckpoint: 'Remove checkpoint',
     deleteCheckpointConfirm:
       'Remove the checkpoint link from this message? The snapshot chat stays in your chat list.',
+    rollbackToHere: 'Roll back to this message',
+    rollbackConfirm:
+      'Everything after this message will be removed. The removed part is first saved as an automatic checkpoint chat you can reopen, so nothing is lost.',
+    rollbackConfirmLabel: 'Roll back chat',
+    rollbackDone: 'Chat rolled back',
+    rollbackDoneDetail:
+      'Removed {{count}} message(s). A checkpoint of the removed part was created.',
     backToParentChat: 'Back to parent chat',
     checkpointCreated: 'Checkpoint created',
     branchCreated: 'Branch created',

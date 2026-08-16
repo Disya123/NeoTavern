@@ -1012,6 +1012,31 @@ export const ChatSnapshotResultDtoSchema = Type.Object(
 );
 export type ChatSnapshotResultDto = Static<typeof ChatSnapshotResultDtoSchema>;
 
+/** Roll back chat snapshot request DTO (`wire.request.snapshots-rollback`). */
+export const RollbackChatSnapshotRequestDtoSchema = Type.Object(
+  {
+    chatId: Type.String({ format: 'uuid' }),
+    /** Last message to KEEP: everything after it (higher sequence) is
+     * removed. The message itself stays. */
+    toMessageId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.snapshots-rollback', additionalProperties: false },
+);
+export type RollbackChatSnapshotRequestDto = Static<typeof RollbackChatSnapshotRequestDtoSchema>;
+
+/** Roll back chat snapshot result DTO (`wire.result.snapshots-rollback`). */
+export const RollbackChatSnapshotResultDtoSchema = Type.Object(
+  {
+    /** Number of messages removed (cascading variants/revisions). */
+    deleted: Type.Integer({ minimum: 0 }),
+    /** Auto-created checkpoint child chat holding the removed suffix —
+     * present only when `deleted > 0` (a recoverable safety copy). */
+    checkpointChatId: Type.Optional(Type.String({ format: 'uuid' })),
+  },
+  { $id: 'wire.result.snapshots-rollback', additionalProperties: false },
+);
+export type RollbackChatSnapshotResultDto = Static<typeof RollbackChatSnapshotResultDtoSchema>;
+
 /** List message variants request DTO (`wire.request.message-variants-list`). */
 export const ListMessageVariantsRequestDtoSchema = Type.Object(
   {
@@ -2494,6 +2519,8 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.snapshot.origin': WireSnapshotOrigin,
   'wire.request.create-chat-snapshot': CreateChatSnapshotRequestDtoSchema,
   'wire.result.chat-snapshot': ChatSnapshotResultDtoSchema,
+  'wire.request.snapshots-rollback': RollbackChatSnapshotRequestDtoSchema,
+  'wire.result.snapshots-rollback': RollbackChatSnapshotResultDtoSchema,
   'wire.message.variant.dto': MessageVariantDtoSchema,
   'wire.message.revision.dto': MessageRevisionDtoSchema,
   'wire.message.draft.dto': MessageDraftDtoSchema,

@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-08-16T06:57:42.943Z",
+  "generatedAt": "2026-08-16T07:23:33.003Z",
   "rows": [
     {
       "hosts": {
@@ -103,9 +103,9 @@
       },
       "id": "chats.snapshots",
       "milestone": "M5",
-      "notes": "M5 slice 14: kernel-owned `chats.snapshots.create` (schema migration 018) — the prefix up to and including the source message is copied into a fresh child chat (parent_chat_id/origin/source_message_id trio), swipe variants and content revisions are copied with remapped ids, meta_json survives verbatim, and kind=checkpoint links the source message via messages.checkpoint_chat_id (MessageDto.checkpointChatId), which the UI's open-checkpoint reads on both planes. MessageDto/ChatDto gained the additive snapshot fields; UpdateMessageRequestDto.clearCheckpointChatId maps the legacy delete-checkpoint null patch (the wire has no nullable field). ChatPage createSnapshot now routes through wireBridge on both planes (slice 13 removed the last legacyRaw; slice 14 replaced the kernel UnsupportedError with the real op), ui-legacy-surface 56 → 54. The legacy contour keeps its full snapshot flow (branch graph, active-branch validation, child-chat origin) on the sidecar/webClient planes.",
+      "notes": "M5 slice 14: kernel-owned `chats.snapshots.create` (schema migration 018) — the prefix up to and including the source message is copied into a fresh child chat (parent_chat_id/origin/source_message_id trio), swipe variants and content revisions are copied with remapped ids, meta_json survives verbatim, and kind=checkpoint links the source message via messages.checkpoint_chat_id (MessageDto.checkpointChatId), which the UI's open-checkpoint reads on both planes. MessageDto/ChatDto gained the additive snapshot fields; UpdateMessageRequestDto.clearCheckpointChatId maps the legacy delete-checkpoint null patch (the wire has no nullable field). ChatPage createSnapshot now routes through wireBridge on both planes (slice 13 removed the last legacyRaw; slice 14 replaced the kernel UnsupportedError with the real op), ui-legacy-surface 56 → 54. The legacy contour keeps its full snapshot flow (branch graph, active-branch validation, child-chat origin) on the sidecar/webClient planes. М5 slice 44: chats.snapshots.rollback atomically rolls a chat back to a kept message (everything with a higher sequence is removed) in ONE transaction, with the removed suffix FIRST frozen into an auto-created checkpoint child chat (recoverable safety copy, origin=checkpoint, source=kept message; variants/revisions cascade into it); a no-op rollback (nothing after the target) creates no checkpoint and returns deleted=0 — safe to repeat; missing chat/message -> CHAT_NOT_FOUND/MESSAGE_NOT_FOUND. Wire: 96 ops, WIRE_SCHEMA_HASH 28b9f195...; kernel suite +5 (suffix removal + kept message, no-op repeat, rollback-after-rollback, variant/revision cascade, honest errors); remote-http snapshots_rollback_over_http (host parity); neobackend parity +1 (85); UI: Roll back to this message action (confirm dialog; rollbackChatToMessage wireBridge, kernel plane; legacy plane honest UnsupportedError), ChatPage notification with checkpoint open action; wireBridge +2, MessageBubble +1. Legacy contour: no rollback semantics (ARC-02 honest boundary).",
       "title": "Chat snapshots (checkpoint/branch)",
-      "wireOps": ["chats.snapshots.create"]
+      "wireOps": ["chats.snapshots.create", "chats.snapshots.rollback"]
     },
     {
       "hosts": {

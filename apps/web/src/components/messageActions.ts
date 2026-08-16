@@ -9,6 +9,7 @@
  */
 import {
   ArrowCounterClockwise,
+  ArrowUUpLeft,
   ClockCounterClockwise,
   Copy,
   Eye,
@@ -35,6 +36,7 @@ export const BUILTIN_MESSAGE_ACTION_ORDER = [
   'branch',
   'delete-checkpoint',
   'delete',
+  'rollback',
 ] as const;
 
 export type BuiltinMessageActionId = (typeof BUILTIN_MESSAGE_ACTION_ORDER)[number] | 'prompt';
@@ -61,6 +63,8 @@ export interface MessageActionCaps {
   checkpointCreate: boolean;
   deleteCheckpoint: boolean;
   delete: boolean;
+  /** Roll the whole chat back to this message (kernel `chats.snapshots.rollback`). */
+  rollback: boolean;
 }
 
 /**
@@ -94,6 +98,8 @@ export function getAvailableBuiltinActions(
         return caps.deleteCheckpoint && message.checkpointChatId !== null;
       case 'delete':
         return caps.delete;
+      case 'rollback':
+        return caps.rollback;
     }
   });
 }
@@ -115,6 +121,7 @@ export function getBuiltinActionLabels(t: TFunction): Record<BuiltinMessageActio
     branch: t('chat:branch'),
     'delete-checkpoint': t('chat:deleteCheckpoint'),
     delete: t('chat:deleteMessage'),
+    rollback: t('chat:rollbackToHere'),
     prompt: t('chat:viewPromptPlan'),
   };
 }
@@ -133,6 +140,7 @@ export const BUILTIN_ACTION_ICONS: Record<BuiltinMessageActionId, Icon> = {
   branch: GitBranch,
   'delete-checkpoint': FlagCheckered,
   delete: Trash,
+  rollback: ArrowUUpLeft,
   prompt: TextAlignLeft,
 };
 
