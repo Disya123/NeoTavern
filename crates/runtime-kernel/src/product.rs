@@ -1721,6 +1721,67 @@ pub fn chats_snapshots_rollback(db: &mut Database, request: &[u8]) -> Result<Vec
     encode(&dto)
 }
 
+/// `chats.snapshots.list` — paginated child chats (checkpoints/branches) of a
+/// chat, newest first, each with its message count. The parent must exist
+/// (`CHAT_NOT_FOUND`); a chat with no snapshots returns an empty page.
+pub fn chats_snapshots_list(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_snapshots_list(request)?;
+    let limit = page_limit(req.limit);
+    let mut items: Vec<ChatDto> = Vec::new();
+    let mut next_cursor: Option<String> = None;
+    {
+        let conn = db.conn();
+        let exists: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM chats WHERE id = ?1",
+                params![&req.chat_id],
+                |row| row.get(0),
+            )
+            .map_err(|e| sqlite(e, "snapshots_list: parent check"))?;
+        if exists == 0 {
+            return Err(not_found("CHAT", &req.chat_id));
+        }
+        let mut sql = String::from(
+            "SELECT c.id, c.title, c.character_id, c.persona_id, COALESCE(m.cnt, 0), \
+             c.created_at, c.updated_at, c.parent_chat_id, c.origin, c.source_message_id \
+             FROM chats c \
+             LEFT JOIN (SELECT chat_id, COUNT(*) AS cnt FROM messages GROUP BY chat_id) m \
+               ON m.chat_id = c.id \
+             WHERE c.parent_chat_id = ?1",
+        );
+        let mut params: Vec<Value> = vec![Value::Text(req.chat_id.clone())];
+        if let Some(cursor) = &req.cursor {
+            let (created_at, id) = decode_cursor(cursor)?;
+            params.push(Value::Text(created_at.clone()));
+            params.push(Value::Text(created_at));
+            params.push(Value::Text(id));
+            sql.push_str(" AND ((c.created_at < ?) OR (c.created_at = ? AND c.id < ?))");
+        }
+        sql.push_str(" ORDER BY c.created_at DESC, c.id DESC LIMIT ?");
+        params.push(Value::Integer(limit + 1));
+        let mut stmt = conn
+            .prepare(&sql)
+            .map_err(|e| sqlite(e, "snapshots_list: prepare"))?;
+        let mut rows = stmt
+            .query(params_from_iter(params))
+            .map_err(|e| sqlite(e, "snapshots_list: query"))?;
+        while let Some(row) = rows
+            .next()
+            .map_err(|e| sqlite(e, "snapshots_list: read row"))?
+        {
+            items.push(row_to_chat(row)?);
+        }
+    }
+    if items.len() > limit as usize {
+        let last = &items[limit as usize - 1];
+        next_cursor = Some(encode_cursor(&last.created_at, &last.id));
+        items.truncate(limit as usize);
+    }
+    let dto = generated::ResultSnapshotsList { items, next_cursor };
+    validate(&dto, generated::validate_result_snapshots_list)?;
+    encode(&dto)
+}
+
 /// Copies the swipe variants of `old_ids` into the child chat with remapped
 /// message ids (same position/content/timestamp — the snapshot is a freeze).
 fn copy_message_variants(

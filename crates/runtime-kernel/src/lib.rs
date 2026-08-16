@@ -551,6 +551,7 @@ fn handle_unary(
         "chats.snapshots.rollback" => {
             with_db_opt(db, |db| product::chats_snapshots_rollback(db, req))
         }
+        "chats.snapshots.list" => with_db_opt(db, |db| product::chats_snapshots_list(db, req)),
         "chats.messages.variants.list" => {
             with_db_opt(db, |db| product::message_variants_list(db, req))
         }

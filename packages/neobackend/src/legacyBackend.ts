@@ -187,6 +187,7 @@ export class LegacyBackend implements NeoBackend {
     delMessage: (req) => this.delMessage(req),
     createSnapshot: () => this.unsupported('chats.snapshots.create'),
     rollbackSnapshot: () => this.unsupported('chats.snapshots.rollback'),
+    listSnapshots: () => this.unsupported('chats.snapshots.list'),
     listMessageVariants: () => this.unsupported('chats.messages.variants.list'),
     createMessageVariant: () => this.unsupported('chats.messages.variants.create'),
     delMessageVariant: () => this.unsupported('chats.messages.variants.delete'),

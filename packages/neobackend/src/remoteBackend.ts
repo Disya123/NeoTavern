@@ -41,6 +41,7 @@ import type {
   ListMessageVariantsResultDto,
   ChatSnapshotResultDto,
   RollbackChatSnapshotResultDto,
+  ListChatSnapshotsResultDto,
   MetaDto,
   PagedCharactersDto,
   PagedChatsDto,
@@ -147,6 +148,7 @@ export class RemoteBackend implements NeoBackend {
     createSnapshot: (req) => this.sdk.call<ChatSnapshotResultDto>('chats.snapshots.create', req),
     rollbackSnapshot: (req) =>
       this.sdk.call<RollbackChatSnapshotResultDto>('chats.snapshots.rollback', req),
+    listSnapshots: (req) => this.sdk.call<ListChatSnapshotsResultDto>('chats.snapshots.list', req),
     listMessageVariants: (req) =>
       this.sdk.call<ListMessageVariantsResultDto>('chats.messages.variants.list', req),
     createMessageVariant: (req) =>

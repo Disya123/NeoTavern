@@ -1,0 +1,114 @@
+/* Snapshot listing popover in the conversation header (slice 46).
+   Layout of the popover (position/size) is shell-level: components declare
+   roles and stable parts, tokens come from the theme. */
+
+.host {
+  position: relative;
+  display: inline-flex;
+}
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--st-control-height-sm);
+  height: var(--st-control-height-sm);
+  border: 1px solid transparent;
+  border-radius: var(--st-radius-round);
+  color: var(--st-color-text-secondary);
+  background: transparent;
+  transition:
+    color var(--st-motion-duration-fast) var(--st-motion-easing-standard),
+    background var(--st-motion-duration-fast) var(--st-motion-easing-standard),
+    transform var(--st-motion-duration-fast) var(--st-motion-easing-standard);
+}
+
+.trigger:hover {
+  color: var(--st-color-text-primary);
+  background: color-mix(in srgb, var(--st-color-text-inverse) 7%, transparent);
+}
+
+.trigger:active {
+  transform: scale(0.96);
+}
+
+.panel {
+  position: absolute;
+  top: calc(100% + var(--st-space-2xs));
+  right: 0;
+  z-index: var(--st-layer-dropdown);
+  display: flex;
+  flex-direction: column;
+  gap: var(--st-space-2xs);
+  width: min(320px, calc(100vw - 2 * var(--st-space-sm)));
+  max-height: min(360px, 60vh);
+  padding: var(--st-space-2xs);
+  overflow-y: auto;
+  border: 1px solid var(--st-color-border);
+  border-radius: var(--st-radius-control);
+  color: var(--st-color-text-primary);
+  background: var(--st-color-surface-elevated);
+  box-shadow: var(--st-shadow-overlay);
+}
+
+.panelTitle {
+  padding-inline: var(--st-space-2xs);
+  color: var(--st-color-text-muted);
+  font-size: var(--st-font-size-xs);
+  font-weight: var(--st-font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.state {
+  padding: var(--st-space-md);
+  color: var(--st-color-text-muted);
+  font-size: var(--st-font-size-sm);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--st-space-2xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--st-space-2xs);
+  width: 100%;
+  padding: var(--st-space-xs) var(--st-space-sm);
+  border: 1px solid transparent;
+  border-radius: var(--st-radius-inset);
+  color: var(--st-color-text-primary);
+  background: transparent;
+  text-align: start;
+}
+
+.item:hover,
+.item:focus-visible {
+  border-color: transparent;
+  color: var(--st-color-text-primary);
+  background: color-mix(in srgb, var(--st-color-text-inverse) 7%, transparent);
+  outline: none;
+}
+
+.itemTitle {
+  overflow: hidden;
+  font-size: var(--st-font-size-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.itemMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--st-space-sm);
+  color: var(--st-color-text-muted);
+  font-size: var(--st-font-size-xs);
+}

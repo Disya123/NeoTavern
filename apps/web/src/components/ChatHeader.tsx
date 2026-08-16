@@ -9,6 +9,7 @@ import { ArrowLeft, MagnifyingGlass, X } from '@phosphor-icons/react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { SlotHost } from '../plugins/slots.js';
+import { ChatSnapshotsMenu } from './ChatSnapshotsMenu.js';
 import styles from './ChatWorkspace.module.css';
 
 export type ChatHeaderProps = {
@@ -27,6 +28,11 @@ export type ChatHeaderProps = {
    * renders a back-to-parent button. Optional — the Home preview omits it.
    */
   backToParentChatId?: string | null;
+  /**
+   * Active chat id (live chat only). When present, renders the snapshot
+   * (checkpoint/branch) listing trigger over Product Wire.
+   */
+  chatId?: string | null;
 };
 
 export function ChatHeader({
@@ -35,6 +41,7 @@ export function ChatHeader({
   searchableTexts,
   onQueryChange,
   backToParentChatId = null,
+  chatId = null,
 }: ChatHeaderProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -112,6 +119,7 @@ export function ChatHeader({
             <h1>{name ?? t('common:loading')}</h1>
           </div>
           <SlotHost slot="chat.header.actions" />
+          {chatId ? <ChatSnapshotsMenu chatId={chatId} /> : null}
           <button
             type="button"
             className={styles.headerSearch}

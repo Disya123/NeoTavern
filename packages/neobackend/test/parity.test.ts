@@ -49,6 +49,8 @@ import {
   type PutAssetResultDto,
   type ResultSettingsDto,
   type RollbackChatSnapshotResultDto,
+  type ListChatSnapshotsRequestDto,
+  type ListChatSnapshotsResultDto,
   type SecretsStatusResultDto,
   type ThemeDto,
   type WireGenerationEvent,
@@ -225,6 +227,23 @@ const PROFILE_IMPORT: ProfileImportResultDto = {
 const ROLLBACK_RESULT: RollbackChatSnapshotResultDto = {
   deleted: 3,
   checkpointChatId: 'c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f',
+};
+
+/** `chats.snapshots.list` result (`wire.result.snapshots-list`, М5 slice 46). */
+const SNAPSHOTS_LIST_RESULT: ListChatSnapshotsResultDto = {
+  items: [
+    {
+      id: 'c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f',
+      title: 'Chat — checkpoint',
+      characterId: '4f2f0a1e-9b3c-4d5e-8f6a-7b8c9d0e1f2a',
+      messageCount: 2,
+      createdAt: TIMESTAMP,
+      updatedAt: TIMESTAMP,
+      parentChatId: '7f3a2b4c-1d2e-4f5a-8b9c-0d1e2f3a4b5c',
+      origin: 'checkpoint',
+      sourceMessageId: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d',
+    },
+  ],
 };
 
 const SETTINGS: ResultSettingsDto = {
@@ -579,6 +598,8 @@ class FakeKernelTransport implements LocalTransport {
         return { ok: true, value: PROFILE_IMPORT };
       case 'chats.snapshots.rollback':
         return { ok: true, value: ROLLBACK_RESULT };
+      case 'chats.snapshots.list':
+        return { ok: true, value: SNAPSHOTS_LIST_RESULT };
       case 'settings.get':
       case 'settings.update':
         return { ok: true, value: SETTINGS };
@@ -723,6 +744,8 @@ function rpcResult(operationId: string | undefined): unknown {
       return PROFILE_IMPORT;
     case 'chats.snapshots.rollback':
       return ROLLBACK_RESULT;
+    case 'chats.snapshots.list':
+      return SNAPSHOTS_LIST_RESULT;
     case 'settings.get':
     case 'settings.update':
       return SETTINGS;
@@ -2011,6 +2034,24 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
     expect(kernel.requests).toEqual([
       { operationId: 'chats.snapshots.rollback', payload: rollbackReq },
     ]);
+  });
+
+  it('chats.snapshots.list is routed identically by local and remote backends (М5 slice 46)', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const listReq: ListChatSnapshotsRequestDto = {
+      chatId: '7f3a2b4c-1d2e-4f5a-8b9c-0d1e2f3a4b5c',
+      limit: 20,
+    };
+    const [listLocal, listRemote] = await Promise.all([
+      local.chats.listSnapshots(listReq),
+      remote.chats.listSnapshots(listReq),
+    ]);
+    expect(listLocal).toEqual(listRemote);
+    expect(listLocal).toEqual(SNAPSHOTS_LIST_RESULT);
+    expect(kernel.requests).toEqual([{ operationId: 'chats.snapshots.list', payload: listReq }]);
   });
 
   it('settings.get/update return deep-equal ResultSettingsDto from both backends', async () => {

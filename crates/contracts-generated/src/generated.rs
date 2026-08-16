@@ -39,6 +39,7 @@ pub fn operation_request_limit(operation_id: &str) -> Option<u64> {
         "chats.messages.delete" => Some(2048),
         "chats.snapshots.create" => Some(2048),
         "chats.snapshots.rollback" => Some(2048),
+        "chats.snapshots.list" => Some(2048),
         "chats.messages.variants.list" => Some(2048),
         "chats.messages.variants.create" => Some(1048576),
         "chats.messages.variants.delete" => Some(2048),
@@ -143,6 +144,7 @@ pub fn operation_response_limit(operation_id: &str) -> Option<u64> {
         "chats.messages.delete" => Some(1024),
         "chats.snapshots.create" => Some(262144),
         "chats.snapshots.rollback" => Some(262144),
+        "chats.snapshots.list" => Some(262144),
         "chats.messages.variants.list" => Some(262144),
         "chats.messages.variants.create" => Some(262144),
         "chats.messages.variants.delete" => Some(1024),
@@ -10610,6 +10612,148 @@ pub fn validate_result_snapshots_rollback(value: &Value) -> Result<(), Vec<Issue
 
 pub fn decode_result_snapshots_rollback(bytes: &[u8]) -> Result<ResultSnapshotsRollback, WireError> {
     crate::decode::<ResultSnapshotsRollback>(validate_result_snapshots_rollback, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestSnapshotsList {
+    #[serde(rename = "chatId")]
+    pub chat_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<i64>,
+}
+
+pub(crate) fn check_request_snapshots_list(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("chatId").is_none() {
+            issues.push(Issue::new(join_path(path, "chatId"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("chatId") {
+            let child_path = join_path(path, "chatId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("cursor") {
+            let child_path = join_path(path, "cursor");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 256 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("limit") {
+            let child_path = join_path(path, "limit");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                    if n > 200 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMaximum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "chatId" | "cursor" | "limit") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_snapshots_list(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_snapshots_list(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_snapshots_list(bytes: &[u8]) -> Result<RequestSnapshotsList, WireError> {
+    crate::decode::<RequestSnapshotsList>(validate_request_snapshots_list, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultSnapshotsList {
+    pub items: Vec<ChatDto>,
+    #[serde(rename = "nextCursor", default, skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
+}
+
+pub(crate) fn check_result_snapshots_list(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("items").is_none() {
+            issues.push(Issue::new(join_path(path, "items"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("items") {
+            let child_path = join_path(path, "items");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    check_chat_dto(item, &item_path, issues);
+                }
+            }
+        }
+        if let Some(child) = value.get("nextCursor") {
+            let child_path = join_path(path, "nextCursor");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 256 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "items" | "nextCursor") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_snapshots_list(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_snapshots_list(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_snapshots_list(bytes: &[u8]) -> Result<ResultSnapshotsList, WireError> {
+    crate::decode::<ResultSnapshotsList>(validate_result_snapshots_list, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

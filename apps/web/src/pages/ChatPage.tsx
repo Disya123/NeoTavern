@@ -755,6 +755,7 @@ export function ChatPage() {
             searchableTexts={searchableTexts}
             onQueryChange={setChatSearchQuery}
             backToParentChatId={chat.data?.parentChatId ?? null}
+            chatId={chatId ?? null}
           />
         }
         composer={

@@ -328,6 +328,12 @@ export const ru: Resources = {
     regenerating: 'Перегенерируем…',
     checkpointBadge: 'Контрольная точка',
     branchBadge: 'Ветка',
+    snapshotsList: 'Снимки',
+    snapshotsListTitle: 'Снимки этого чата',
+    snapshotsEmpty: 'Снимков пока нет. Создайте «Контрольную точку» или откатите чат на сообщении.',
+    snapshotsUnavailable: 'Снимки недоступны в этой сборке.',
+    snapshotMessageCount_one: '{{count}} сообщение',
+    snapshotMessageCount_other: '{{count}} сообщений',
   },
   characters: {
     eyebrow: 'Библиотека персонажей',

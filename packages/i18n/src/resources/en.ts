@@ -309,6 +309,12 @@ export const en = {
     regenerating: 'Regenerating…',
     checkpointBadge: 'Checkpoint',
     branchBadge: 'Branch',
+    snapshotsList: 'Snapshots',
+    snapshotsListTitle: 'Snapshots of this chat',
+    snapshotsEmpty: 'No snapshots yet. Use "Roll back" or "Checkpoint" on a message to create one.',
+    snapshotsUnavailable: 'Snapshots are not available in this build.',
+    snapshotMessageCount_one: '{{count}} message',
+    snapshotMessageCount_other: '{{count}} messages',
   },
   characters: {
     title: 'Characters',

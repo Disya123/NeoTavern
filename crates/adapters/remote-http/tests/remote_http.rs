@@ -1679,7 +1679,7 @@ fn snapshots_rollback_over_http() {
     .enumerate()
     {
         let message = envelope_body(
-            &rid(3 + i as u64),
+            &rid(3 + i as u32),
             "chats.messages.create",
             json!({ "chatId": chat_id, "role": role, "content": content }),
         );
@@ -1765,6 +1765,128 @@ fn snapshots_rollback_over_http() {
     assert!(
         again_result.get("checkpointChatId").is_none(),
         "no checkpoint may be invented for a no-op"
+    );
+}
+
+/// 37. М5 slice 46: `chats.snapshots.list` over the HTTP host — seed a chat,
+///     create two explicit checkpoints, list them over the same host (newest
+///     first, with parent/origin/source markers and message counts), then
+///     verify a missing parent fails with the stable `CHAT_NOT_FOUND` product
+///     error (host parity with the direct kernel path).
+#[test]
+fn snapshots_list_over_http() {
+    let server = TestServer::spawn();
+
+    let character = envelope_body(
+        &rid(1),
+        "characters.create",
+        json!({ "name": "Aria", "description": "A wandering bard" }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &character);
+    assert_eq!(response.status, 200, "characters.create answers HTTP 200");
+    let (_, character_result) = expect_ok(decode_envelope(&response.body));
+    let character_id = character_result["id"]
+        .as_str()
+        .expect("character id")
+        .to_string();
+
+    let chat = envelope_body(
+        &rid(2),
+        "chats.create",
+        json!({ "characterId": character_id }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &chat);
+    assert_eq!(response.status, 200, "chats.create answers HTTP 200");
+    let (_, chat_result) = expect_ok(decode_envelope(&response.body));
+    let chat_id = chat_result["id"].as_str().expect("chat id").to_string();
+
+    let mut first_message_id = String::new();
+    for (i, (role, content)) in [
+        ("user", "Hello"),
+        ("assistant", "Greetings, traveler."),
+        ("user", "Tell me a story"),
+    ]
+    .iter()
+    .enumerate()
+    {
+        let message = envelope_body(
+            &rid(3 + i as u32),
+            "chats.messages.create",
+            json!({ "chatId": chat_id, "role": role, "content": content }),
+        );
+        let response = http_request(server.addr, "POST", "/rpc", &[], &message);
+        assert_eq!(
+            response.status, 200,
+            "chats.messages.create answers HTTP 200"
+        );
+        let (_, message_result) = expect_ok(decode_envelope(&response.body));
+        let message_id = message_result["id"]
+            .as_str()
+            .expect("message id")
+            .to_string();
+        if i == 0 {
+            first_message_id = message_id;
+        }
+    }
+
+    // Two explicit checkpoints: at the first and at the second message.
+    let snapshot = envelope_body(
+        &rid(6),
+        "chats.snapshots.create",
+        json!({ "chatId": chat_id, "messageId": first_message_id, "kind": "checkpoint" }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &snapshot);
+    assert_eq!(
+        response.status, 200,
+        "chats.snapshots.create answers HTTP 200"
+    );
+    let (_, snapshot_result) = expect_ok(decode_envelope(&response.body));
+    let first_snapshot_id = snapshot_result["chat"]["id"]
+        .as_str()
+        .expect("snapshot chat id")
+        .to_string();
+
+    let list_request = envelope_body(
+        &rid(7),
+        "chats.snapshots.list",
+        json!({ "chatId": chat_id }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &list_request);
+    assert_eq!(
+        response.status, 200,
+        "chats.snapshots.list answers HTTP 200"
+    );
+    let (request_id, list_result) = expect_ok(decode_envelope(&response.body));
+    assert_eq!(request_id, rid(7), "requestId is echoed");
+    gen::validate_result_snapshots_list(&list_result).expect("list result is wire-valid");
+    let items = list_result["items"].as_array().expect("items array");
+    assert_eq!(items.len(), 1, "one snapshot listed");
+    let item = &items[0];
+    assert_eq!(item["id"].as_str(), Some(first_snapshot_id.as_str()));
+    assert_eq!(item["parentChatId"].as_str(), Some(chat_id.as_str()));
+    assert_eq!(item["origin"].as_str(), Some("checkpoint"));
+    assert_eq!(
+        item["sourceMessageId"].as_str(),
+        Some(first_message_id.as_str())
+    );
+    assert_eq!(item["messageCount"].as_i64(), Some(1), "prefix up to m0");
+
+    // A missing parent fails with the stable product error over HTTP too.
+    let missing = envelope_body(
+        &rid(8),
+        "chats.snapshots.list",
+        json!({ "chatId": "00000000-0000-4000-8000-000000000000" }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &missing);
+    assert_eq!(
+        response.status, 200,
+        "error still answers HTTP 200 (envelope carries the product error)"
+    );
+    let (_, error) = expect_error(decode_envelope(&response.body));
+    assert_eq!(error.code, "CHAT_NOT_FOUND");
+    assert_eq!(
+        error.params["chatId"].as_str(),
+        Some("00000000-0000-4000-8000-000000000000")
     );
 }
 

@@ -1037,6 +1037,29 @@ export const RollbackChatSnapshotResultDtoSchema = Type.Object(
 );
 export type RollbackChatSnapshotResultDto = Static<typeof RollbackChatSnapshotResultDtoSchema>;
 
+/** List chat snapshots request DTO (`wire.request.snapshots-list`). */
+export const ListChatSnapshotsRequestDtoSchema = Type.Object(
+  {
+    /** Parent chat whose child snapshots (checkpoints/branches) are listed. */
+    chatId: Type.String({ format: 'uuid' }),
+    cursor: Type.Optional(Type.String({ minLength: 1, maxLength: 256 })),
+    limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 200 })),
+  },
+  { $id: 'wire.request.snapshots-list', additionalProperties: false },
+);
+export type ListChatSnapshotsRequestDto = Static<typeof ListChatSnapshotsRequestDtoSchema>;
+
+/** List chat snapshots result DTO (`wire.result.snapshots-list`). Child chats
+ * of the requested chat, newest first; each carries its message count. */
+export const ListChatSnapshotsResultDtoSchema = Type.Object(
+  {
+    items: Type.Array(ChatDtoSchema),
+    nextCursor: Type.Optional(Type.String({ minLength: 1, maxLength: 256 })),
+  },
+  { $id: 'wire.result.snapshots-list', additionalProperties: false },
+);
+export type ListChatSnapshotsResultDto = Static<typeof ListChatSnapshotsResultDtoSchema>;
+
 /** List message variants request DTO (`wire.request.message-variants-list`). */
 export const ListMessageVariantsRequestDtoSchema = Type.Object(
   {
@@ -2521,6 +2544,8 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.result.chat-snapshot': ChatSnapshotResultDtoSchema,
   'wire.request.snapshots-rollback': RollbackChatSnapshotRequestDtoSchema,
   'wire.result.snapshots-rollback': RollbackChatSnapshotResultDtoSchema,
+  'wire.request.snapshots-list': ListChatSnapshotsRequestDtoSchema,
+  'wire.result.snapshots-list': ListChatSnapshotsResultDtoSchema,
   'wire.message.variant.dto': MessageVariantDtoSchema,
   'wire.message.revision.dto': MessageRevisionDtoSchema,
   'wire.message.draft.dto': MessageDraftDtoSchema,

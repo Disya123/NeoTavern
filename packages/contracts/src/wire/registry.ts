@@ -580,6 +580,20 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'chats.snapshots.list',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.snapshots-list',
+    'wire.result.snapshots-list',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    262144,
+    undefined,
+  ),
+  op(
     'chats.messages.variants.list',
     'transactional',
     'idempotent',
@@ -2277,6 +2291,25 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('neg-chats-snapshots-rollback-missing-field', 'chats.snapshots.rollback', 'request', false, {
     chatId: UUID_CHAT,
   }),
+  fx('chats-snapshots-list-request', 'chats.snapshots.list', 'request', true, {
+    chatId: UUID_CHAT,
+  }),
+  fx('chats-snapshots-list-response', 'chats.snapshots.list', 'response', true, {
+    items: [
+      {
+        id: UUID_CHILD_CHAT,
+        title: 'Chat — checkpoint',
+        characterId: UUID_CHARACTER,
+        messageCount: 2,
+        createdAt: TIMESTAMP,
+        updatedAt: TIMESTAMP,
+        parentChatId: UUID_CHAT,
+        origin: 'checkpoint',
+        sourceMessageId: UUID_MESSAGE,
+      },
+    ],
+  }),
+  fx('neg-chats-snapshots-list-missing-field', 'chats.snapshots.list', 'request', false, {}),
   fx('generation-start-request', 'generation.start', 'request', true, {
     chatId: UUID_CHAT,
     message: 'Hello there',

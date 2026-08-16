@@ -45,6 +45,7 @@ const mocks = vi.hoisted(() => {
     delMessage: vi.fn(),
     createSnapshot: vi.fn(),
     rollbackSnapshot: vi.fn(),
+    listSnapshots: vi.fn(),
     listMessageVariants: vi.fn(),
     createMessageVariant: vi.fn(),
     delMessageVariant: vi.fn(),
@@ -254,6 +255,7 @@ import {
   warmProviderModels,
   createChatSnapshot,
   rollbackChatToMessage,
+  listChatSnapshots,
 } from './wireBridge.js';
 
 const CHAR_ID = '11111111-2222-4333-8444-555555555555';
@@ -1745,6 +1747,68 @@ describe('imports/exports (kernel plane wire flow)', () => {
     await expect(rollbackChatToMessage(CHAT_ID, MESSAGE_ID)).rejects.toBeInstanceOf(
       UnsupportedError,
     );
+  });
+
+  it('routes snapshot listing through chats.snapshots.list on the kernel plane (slice 46)', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    mocks.chats.listSnapshots.mockResolvedValue({
+      items: [
+        {
+          id: 'c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f',
+          title: 'Chat — checkpoint',
+          characterId: CHAR_ID,
+          messageCount: 2,
+          createdAt: '2026-08-12T10:00:00Z',
+          updatedAt: '2026-08-12T10:00:00Z',
+          parentChatId: CHAT_ID,
+          origin: 'checkpoint',
+          sourceMessageId: MESSAGE_ID,
+        },
+      ],
+      nextCursor: null,
+    });
+    const result = await listChatSnapshots(CHAT_ID, { limit: 20 });
+    expect(mocks.chats.listSnapshots).toHaveBeenCalledWith({
+      chatId: CHAT_ID,
+      limit: 20,
+    });
+    expect(result.nextCursor).toBeNull();
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]?.id).toBe('c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f');
+    expect(result.items[0]?.parentChatId).toBe(CHAT_ID);
+    expect(result.items[0]?.origin).toBe('checkpoint');
+    expect(result.items[0]?.messageCount).toBe(2);
+  });
+
+  it('passes the cursor through when paging snapshot lists (slice 46)', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    mocks.chats.listSnapshots.mockResolvedValue({
+      items: [
+        {
+          id: 'd2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f',
+          title: 'Chat — branch',
+          characterId: CHAR_ID,
+          messageCount: 1,
+          createdAt: '2026-08-12T09:00:00Z',
+          updatedAt: '2026-08-12T09:00:00Z',
+          parentChatId: CHAT_ID,
+          origin: 'branch',
+          sourceMessageId: MESSAGE_ID,
+        },
+      ],
+      nextCursor: 'next-page-cursor',
+    });
+    const result = await listChatSnapshots(CHAT_ID, { cursor: 'prev-page-cursor' });
+    expect(mocks.chats.listSnapshots).toHaveBeenCalledWith({
+      chatId: CHAT_ID,
+      cursor: 'prev-page-cursor',
+    });
+    expect(result.nextCursor).toBe('next-page-cursor');
+  });
+
+  it('refuses snapshot listing on the legacy plane with an honest UnsupportedError (slice 46)', async () => {
+    mocks.isKernelMode.mockReturnValue(false);
+    await expect(listChatSnapshots(CHAT_ID)).rejects.toBeInstanceOf(UnsupportedError);
   });
 
   it('routes chat snapshots through the legacy contour on the legacy plane', async () => {

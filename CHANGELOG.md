@@ -34,6 +34,22 @@
 
 ### Added
 
+- **`chats.snapshots.list` — snapshot (checkpoint/branch) listing for one
+  chat (M5 slice 46, ТЗ §8.1 Conversations).** The child chats of a chat are
+  now first-class over Product Wire: the kernel returns them newest-first,
+  each with its message count and the `parentChatId`/`origin`/
+  `sourceMessageId` markers, walking the opaque `(createdAt, id)` cursor; the
+  parent must exist (`CHAT_NOT_FOUND`); the rollback auto-checkpoint appears
+  in the list too. Wire: 97 ops total; fixtures + neg; `WIRE_SCHEMA_HASH`
+  `55af3aab...`; wire_corpus decoders 77. Kernel suite 4 (newest-first
+  markers, rollback checkpoint listed, missing parent, cursor walk without
+  duplicates); remote-http `snapshots_list_over_http` (host parity incl. the
+  stable `CHAT_NOT_FOUND` over HTTP). Facade: `listChatSnapshots` wireBridge
+  (kernel plane; legacy plane honest `UnsupportedError` — the frozen sidecar
+  has no snapshot-list contract, ARC-02). UI: `ChatSnapshotsMenu` header
+  trigger lists the snapshots of the active chat and navigates into a child
+  chat; hidden entirely on the legacy plane; i18n en/ru.
+
 - **`chats.snapshots.rollback` — atomic chat rollback with an automatic
   safety checkpoint (M5 slice 44, ТЗ §8.1 Conversations).** Rolling a chat
   back to a kept message now works end-to-end: the kernel removes everything

@@ -298,6 +298,32 @@ export async function rollbackChatToMessage(
 }
 
 /**
+ * List the child chats (checkpoints/branches) of `chatId`, newest first, each
+ * with its message count (wire `chats.snapshots.list`, slice 46). The parent
+ * must exist. Kernel plane: the canonical Conversations model owns the
+ * snapshot view; the page walk uses the opaque `(createdAt, id)` cursor.
+ * Legacy plane: the frozen sidecar has no snapshot-list contract — honest
+ * `UnsupportedError` (ARC-02, feature-freeze).
+ */
+export async function listChatSnapshots(
+  chatId: string,
+  opts: { cursor?: string; limit?: number } = {},
+): Promise<{ items: Chat[]; nextCursor: string | null }> {
+  if (isKernelMode()) {
+    const result = await backend.chats.listSnapshots({
+      chatId,
+      ...(opts.cursor !== undefined ? { cursor: opts.cursor } : {}),
+      ...(opts.limit !== undefined ? { limit: opts.limit } : {}),
+    });
+    return {
+      items: result.items.map((dto) => translateChat(dto)),
+      nextCursor: result.nextCursor ?? null,
+    };
+  }
+  throw new UnsupportedError('chats.snapshots.list');
+}
+
+/**
  * Patch one message's content and/or extension metadata. Kernel plane: wire
  * `chats.messages.update` (content optional, meta optional, last-write-wins;
  * `clearCheckpointChatId` maps the legacy delete-checkpoint `null` patch),

@@ -23,6 +23,8 @@ import type {
   CreateChatSnapshotRequestDto,
   RollbackChatSnapshotRequestDto,
   RollbackChatSnapshotResultDto,
+  ListChatSnapshotsRequestDto,
+  ListChatSnapshotsResultDto,
   CreateLorebookEntryRequestDto,
   CreateLorebookRequestDto,
   CreateMemoryRequestDto,
@@ -180,6 +182,12 @@ export interface ChatsApi {
     req: RollbackChatSnapshotRequestDto,
     opts?: BackendCallOptions,
   ): Promise<RollbackChatSnapshotResultDto>;
+  /** List the child chats (checkpoints/branches) of a chat, newest first,
+   * cursor-paginated (wire `chats.snapshots.list`). */
+  listSnapshots(
+    req: ListChatSnapshotsRequestDto,
+    opts?: BackendCallOptions,
+  ): Promise<ListChatSnapshotsResultDto>;
   /** List the swipe variants of one message (wire `chats.messages.variants.list`). */
   listMessageVariants(
     req: ListMessageVariantsRequestDto,
