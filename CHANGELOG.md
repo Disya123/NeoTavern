@@ -3,6 +3,21 @@
 ## Unreleased
 ### Added
 
+- **Provider connect no longer reports discovery as a failed connection on
+  the kernel plane (M5 slice 27).** After slice 26 made the provider list
+  wire-backed, `ProviderProfileEditor.connect()`/`loadModels()` hit the
+  honest `UnsupportedError` from model discovery (`providers.models.discovery`
+  — a kernel-side capability with no wire operation) and showed a
+  localized "connection failed" error even though the connection itself had
+  already persisted. Now the discovery refusal (typed `UnsupportedError`) is
+  absorbed into the honest `saved` status — the same optional-warm-up
+  boundary as the AutoConnectSync refresh — while real discovery failures on
+  the legacy plane still surface as before. Tests: ProviderProfileEditor 1/1
+  (kernel connect: wire config.set + settings.update called, 'Saved' status,
+  no alert, no fetch), full web vitest green (68 files, 700 tests),
+  typecheck/eslint/prettier clean, ui:api:check 53, docs:check + gates GATE
+  PASS.
+
 - **Provider and secret hooks are honest on the kernel plane (M5 slice
   26, ARC-02).** `api/providerHooks.ts` — 15 hooks
   (`useProviders`/`useProviderCatalog`/`useCreateProvider`/

@@ -10,6 +10,7 @@ import {
   type ProviderConfigCreate,
   type ProviderSourceId,
 } from '@neotavern/contracts';
+import { UnsupportedError } from '@neotavern/neobackend';
 import { Button, ModelMenu, Switch } from '@neotavern/ui';
 import {
   useCreateProvider,
@@ -245,6 +246,14 @@ export function ProviderProfileEditor({ surface = 'panel' }: ProviderProfileEdit
       await discoverModels.mutateAsync(saved.id);
       setStatus('ready');
     } catch (error) {
+      if (error instanceof UnsupportedError) {
+        // Model discovery has no wire operation yet — a kernel-side
+        // capability (same honest boundary as the AutoConnectSync warm-up).
+        // The connection itself already persisted above; keep 'saved' so the
+        // panel does not report a failed connection for an optional warm-up.
+        setStatus('saved');
+        return;
+      }
       setFormError(errorText(error));
       setStatus('error');
     }
@@ -264,6 +273,11 @@ export function ProviderProfileEditor({ surface = 'panel' }: ProviderProfileEdit
       await discoverModels.mutateAsync(saved.id);
       setStatus('saved');
     } catch (error) {
+      if (error instanceof UnsupportedError) {
+        // Optional warm-up, not part of the connection (see connect()).
+        setStatus('saved');
+        return;
+      }
       setFormError(errorText(error));
       setStatus('error');
     }
