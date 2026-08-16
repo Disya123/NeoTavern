@@ -351,7 +351,17 @@ export function useChat(id: string | undefined) {
 export function usePromptContextAudit(chatId: string | undefined, enabled = true) {
   return useQuery({
     queryKey: ['prompt-context-audit', chatId],
-    queryFn: () => api.get<PromptContextAuditResponse>(`/chats/${chatId}/context-audit`),
+    queryFn: () => {
+      // Kernel plane: context audit is the legacy prompt-pipeline preview
+      // (`/chats/:id/context-audit`, sidecar pipeline); the kernel exposes
+      // `generation.prompt.plan` with a different contract — honest
+      // CAPABILITY_UNAVAILABLE (ТЗ §13.1), never a silent legacy request
+      // (ARC-02).
+      if (isKernelMode()) {
+        return Promise.reject(new UnsupportedError('prompt.context-audit'));
+      }
+      return api.get<PromptContextAuditResponse>(`/chats/${chatId}/context-audit`);
+    },
     enabled: chatId !== undefined && enabled,
     staleTime: 0,
   });
@@ -398,7 +408,16 @@ export function useUpdateChat() {
 export function useReorderChats() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: ChatReorder) => api.put<{ reordered: number }>('/chats/order', input),
+    mutationFn: (input: ChatReorder) => {
+      // Kernel plane: chat ordering is the legacy `chats.update order`
+      // surface; the wire contract has no reorder op — honest
+      // CAPABILITY_UNAVAILABLE (ТЗ §13.1), never a silent legacy request
+      // (ARC-02).
+      if (isKernelMode()) {
+        return Promise.reject(new UnsupportedError('chats.reorder'));
+      }
+      return api.put<{ reordered: number }>('/chats/order', input);
+    },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['chats'] }),
   });
 }
@@ -775,7 +794,15 @@ export function useSettings() {
 export function useInstructFormats() {
   return useQuery({
     queryKey: ['instruct-formats'],
-    queryFn: () => api.get<InstructFormatListResponse>('/settings/instruct-formats'),
+    queryFn: () => {
+      // Kernel plane: the legacy instruct-format catalog is a sidecar
+      // contour; the kernel pipeline owns its own rendering — honest empty
+      // list (ТЗ §13.1), never a silent legacy request (ARC-02).
+      if (isKernelMode()) {
+        return Promise.resolve<InstructFormatListResponse>({ formats: [] });
+      }
+      return api.get<InstructFormatListResponse>('/settings/instruct-formats');
+    },
     staleTime: Number.POSITIVE_INFINITY,
   });
 }
@@ -950,8 +977,16 @@ export function usePluginAuthRevoke() {
 
 export function useAnalyzeSillyTavern() {
   return useMutation({
-    mutationFn: ({ file, signal }: { file: File; signal: AbortSignal }) =>
-      api.upload<SillyTavernImportAnalysis>('/imports/sillytavern/analyze', file, signal),
+    mutationFn: ({ file, signal }: { file: File; signal: AbortSignal }) => {
+      // Kernel plane: SillyTavern archive import is a legacy sidecar contour
+      // (staged analyze/execute over `app.db` era data) — honest
+      // CAPABILITY_UNAVAILABLE (ТЗ §13.1), never a silent legacy request
+      // (ARC-02).
+      if (isKernelMode()) {
+        return Promise.reject(new UnsupportedError('imports.sillytavern.analyze'));
+      }
+      return api.upload<SillyTavernImportAnalysis>('/imports/sillytavern/analyze', file, signal);
+    },
   });
 }
 
@@ -966,12 +1001,17 @@ export function useExecuteSillyTavernImport() {
       analysisId: string;
       input: SillyTavernImportExecute;
       signal: AbortSignal;
-    }) =>
-      api.post<SillyTavernImportResult>(
+    }) => {
+      // Kernel plane: same honest CAPABILITY_UNAVAILABLE as analyze.
+      if (isKernelMode()) {
+        return Promise.reject(new UnsupportedError('imports.sillytavern.execute'));
+      }
+      return api.post<SillyTavernImportResult>(
         `/imports/sillytavern/${analysisId}/execute`,
         input,
         signal,
-      ),
+      );
+    },
     onSuccess: async () => {
       await Promise.all([
         qc.invalidateQueries({ queryKey: ['characters'] }),
@@ -986,7 +1026,13 @@ export function useExecuteSillyTavernImport() {
 
 export function useDiscardSillyTavernAnalysis() {
   return useMutation({
-    mutationFn: (analysisId: string) => api.del<void>(`/imports/sillytavern/${analysisId}`),
+    mutationFn: (analysisId: string) => {
+      // Kernel plane: same honest CAPABILITY_UNAVAILABLE as analyze.
+      if (isKernelMode()) {
+        return Promise.reject(new UnsupportedError('imports.sillytavern.discard'));
+      }
+      return api.del<void>(`/imports/sillytavern/${analysisId}`);
+    },
   });
 }
 

@@ -6,6 +6,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { createQueryClient, jsonResponse } from '../../test/helpers.js';
 import { getCsrfToken, setCsrfToken } from './client.js';
 import {
+  useAnalyzeSillyTavern,
   useAuthSession,
   useBackgrounds,
   useBackups,
@@ -16,8 +17,13 @@ import {
   useDeleteCharacter,
   useDeleteCharacterImage,
   useDiagnostics,
+  useDiscardSillyTavernAnalysis,
+  useExecuteSillyTavernImport,
+  useInstructFormats,
   useLogin,
+  usePromptContextAudit,
   useRebuildSearch,
+  useReorderChats,
   useRestoreBackup,
   useUploadBackground,
   useUploadCharacterImage,
@@ -291,6 +297,89 @@ describe('character gallery hooks (kernel-plane honesty, slice 21)', () => {
       wrapper: wrapperFor(queryClient),
     });
     act(() => result.current.mutate({ characterId: 'char-1', imageId: 'img1' }));
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(fetchMock).not.toHaveBeenCalled();
+    mocks.isKernelMode.mockReturnValue(false);
+  });
+});
+
+describe('remaining legacy hooks (kernel-plane honesty, slice 22)', () => {
+  it('useReorderChats rejects with UnsupportedError on the kernel plane', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const { result } = renderHook(() => useReorderChats(), { wrapper: wrapperFor(queryClient) });
+    act(() => result.current.mutate({ characterId: 'char-1', order: ['c1', 'c2'] }));
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(fetchMock).not.toHaveBeenCalled();
+    mocks.isKernelMode.mockReturnValue(false);
+  });
+
+  it('usePromptContextAudit rejects with UnsupportedError on the kernel plane without a network call', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const { result } = renderHook(() => usePromptContextAudit('chat-1'), {
+      wrapper: wrapperFor(queryClient),
+    });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(fetchMock).not.toHaveBeenCalled();
+    mocks.isKernelMode.mockReturnValue(false);
+  });
+
+  it('useInstructFormats fetches the legacy list on the legacy plane', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ items: [{ id: 'f1' }] }));
+    const { result } = renderHook(() => useInstructFormats(), { wrapper: wrapperFor(queryClient) });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).toBe('/api/v2/settings/instruct-formats');
+  });
+
+  it('useInstructFormats resolves an honest empty list on the kernel plane without a network call', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const { result } = renderHook(() => useInstructFormats(), { wrapper: wrapperFor(queryClient) });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual({ formats: [] });
+    expect(fetchMock).not.toHaveBeenCalled();
+    mocks.isKernelMode.mockReturnValue(false);
+  });
+
+  it('useAnalyzeSillyTavern rejects with UnsupportedError on the kernel plane', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const { result } = renderHook(() => useAnalyzeSillyTavern(), {
+      wrapper: wrapperFor(queryClient),
+    });
+    act(() =>
+      result.current.mutate({
+        file: new File(['x'], 'st.zip'),
+        signal: new AbortController().signal,
+      }),
+    );
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(fetchMock).not.toHaveBeenCalled();
+    mocks.isKernelMode.mockReturnValue(false);
+  });
+
+  it('useExecuteSillyTavernImport rejects with UnsupportedError on the kernel plane', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const { result } = renderHook(() => useExecuteSillyTavernImport(), {
+      wrapper: wrapperFor(queryClient),
+    });
+    act(() =>
+      result.current.mutate({
+        analysisId: 'a1',
+        input: { categories: ['characters'], conflictPolicy: 'skip' },
+        signal: new AbortController().signal,
+      }),
+    );
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(fetchMock).not.toHaveBeenCalled();
+    mocks.isKernelMode.mockReturnValue(false);
+  });
+
+  it('useDiscardSillyTavernAnalysis rejects with UnsupportedError on the kernel plane', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const { result } = renderHook(() => useDiscardSillyTavernAnalysis(), {
+      wrapper: wrapperFor(queryClient),
+    });
+    act(() => result.current.mutate('a1'));
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(fetchMock).not.toHaveBeenCalled();
     mocks.isKernelMode.mockReturnValue(false);

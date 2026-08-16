@@ -3,6 +3,23 @@
 ## Unreleased
 ### Added
 
+- **Remaining legacy hooks are honest on the kernel plane (M5 slice 22,
+  ARC-02).** Seven hooks still hit the legacy surface on EVERY backend:
+  `useReorderChats`, `usePromptContextAudit`, `useInstructFormats`,
+  `useAnalyzeSillyTavern`, `useExecuteSillyTavernImport` and
+  `useDiscardSillyTavernAnalysis`. Now the transport gate lives in the
+  hooks: `useReorderChats` / `usePromptContextAudit` / the SillyTavern
+  import triplet reject with a typed `UnsupportedError` (the wire contract
+  has no reorder op, the kernel exposes `generation.prompt.plan` with a
+  different contract, and SillyTavern archive import is a legacy sidecar
+  staged analyze/execute contour — honest CAPABILITY_UNAVAILABLE, ТЗ
+  §13.1), and `useInstructFormats` resolves an honest empty catalog (the
+  kernel pipeline owns its own rendering). Never a silent legacy request
+  from kernel mode (ARC-02). The legacy contour (sidecar / remote Web
+  Client) keeps the real routes. Tests: hooks 26/26 (+7 kernel-honesty
+  cases), full web vitest green, eslint/typecheck/prettier clean,
+  ui:api:check 53, gates GATE PASS.
+
 - **Character gallery hooks are honest on the kernel plane (M5 slice 21,
   ARC-02).** `useCharacterGallery` / `useUploadCharacterImage` /
   `useDeleteCharacterImage` hit the legacy `/api/v2/characters/:id/gallery`
