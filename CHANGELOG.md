@@ -3,6 +3,19 @@
 ## Unreleased
 ### Added
 
+- **Wire corpus dispatcher covers the snapshot DTOs (M5 slice 25,
+  ARC-07).** The full `cargo test --workspace` sweep found
+  `wire_corpus.rs::dispatch` panicked on `wire.request.create-chat-snapshot`
+  and `wire.result.chat-snapshot` — the corpus fixtures emitted for
+  `chats.snapshots.create` (slice 14) referenced two schemaIds the hand-
+  maintained dispatcher had never been taught, so the generated
+  request/response decoders were silently untested by the corpus (the
+  snapshot op's kernels tests passed, masking the gap). The dispatcher now
+  routes both ids to `decode_request_create_chat_snapshot` /
+  `decode_result_chat_snapshot`, so the full wire corpus round-trips every
+  op end-to-end. Verified: `wire_corpus` 3/3, full `cargo test --workspace`
+  green, contracts:check clean.
+
 - **Prompt context preview hook is honest on the kernel plane (M5 slice
   24, ARC-02).** `usePromptContextPreview` (the live context meter used by
   Home and existing chats) hit the legacy `/api/v2/context-preview`
