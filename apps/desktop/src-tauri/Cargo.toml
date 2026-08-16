@@ -37,7 +37,7 @@ url = "2"
 # Phase 9 Remote Access (ТЗ §10): `remote` adds the `kernel_remote_*` host
 # commands (desktop build always carries them; the adapter stays tauri-only
 # compilable without the feature).
-neotavern-tauri-local = { path = "../../../crates/adapters/tauri-local", features = ["tauri", "remote"] }
+neotavern-tauri-local = { path = "../../../crates/adapters/tauri-local", features = ["tauri", "remote", "os-vault"] }
 
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-updater = "2"

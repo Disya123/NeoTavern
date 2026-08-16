@@ -14,6 +14,9 @@ pub enum SecretRefKind {
     Portable,
     Session,
     Env,
+    /// Machine-bound OS credential vault (Windows Credential Manager /
+    /// macOS Keychain / Linux Secret Service).
+    OsVault,
 }
 
 impl SecretRefKind {
@@ -23,6 +26,7 @@ impl SecretRefKind {
             Self::Portable => "portable:",
             Self::Session => "session:",
             Self::Env => "env:",
+            Self::OsVault => "osvault:",
         }
     }
 }
@@ -60,6 +64,7 @@ pub fn parse_ref(raw: &str) -> Option<SecretRef> {
         SecretRefKind::Portable,
         SecretRefKind::Session,
         SecretRefKind::Env,
+        SecretRefKind::OsVault,
     ] {
         let prefix = kind.prefix();
         let Some(rest) = raw.strip_prefix(prefix) else {
@@ -93,6 +98,7 @@ mod tests {
                 "user\u{0}apiKey",
             ),
             (SecretRefKind::Env, "provider", "openaikey"),
+            (SecretRefKind::OsVault, "provider:openai", "rec-machine-1"),
         ] {
             let raw = make_ref(kind, ns, id);
             let parsed = parse_ref(&raw).expect("parse");

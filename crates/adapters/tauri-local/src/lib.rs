@@ -102,12 +102,35 @@ pub struct KernelHost {
     tool_executor: Arc<Mutex<Option<Arc<dyn ToolExecutor>>>>,
 }
 
+/// Host secret backend selection (ТЗ §SEC-01): which explicit backend the
+/// host wires into the kernel at open time. There is never a plaintext
+/// fallback — a backend that cannot serve a reference reports the stable
+/// unavailable code instead.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SecretBackend {
+    /// Session-only memory store (explicit SEC-01 interim, M5 slice 49):
+    /// keys die with the process; the DB keeps opaque `session:` references
+    /// and the runtime reports a stable unavailable state until the user
+    /// re-enters the key.
+    #[default]
+    Session,
+    /// Machine-bound OS credential vault (Windows Credential Manager /
+    /// macOS Keychain / Linux Secret Service, M5 slice 58). Requires the
+    /// `os-vault` feature; an unreachable vault reports
+    /// `SECRET_UNAVAILABLE_ON_THIS_DEVICE` — never an empty store.
+    #[cfg(feature = "os-vault")]
+    OsVault,
+}
+
 /// Configuration for opening the host. The contract handshake constants are
 /// taken from the embedded manifest by the crate itself — the shell never
 /// duplicates `schemaHash`/FFI ABI versions (§6.5).
+#[derive(Default)]
 pub struct KernelHostConfig {
     /// Optional local data root. `None` keeps the kernel stateless.
     pub data_root: Option<std::path::PathBuf>,
+    /// Which SecretStore backend to wire (default: session-only).
+    pub secret_backend: SecretBackend,
 }
 
 /// A wire-valid fallback for unreachable envelope-build invariants.
@@ -125,10 +148,18 @@ impl KernelHost {
             data_root: config.data_root,
         })?;
         // ТЗ §SEC-01: the kernel only holds SecretStore/SecretResolver port
-        // handles; the host provides the backends. Session-only for now (М5
-        // slice 49) — explicit, no plaintext fallback; the OS-vault adapter
-        // is a follow-up slice and only `wire_session_secrets` changes.
-        secrets::wire_session_secrets(&kernel);
+        // handles; the host provides the backends. Session-only by default
+        // (M5 slice 49) — explicit, no plaintext fallback. The shell selects
+        // the machine-bound OS vault via `secret_backend` (M5 slice 58).
+        match config.secret_backend {
+            SecretBackend::Session => {
+                secrets::wire_session_secrets(&kernel);
+            }
+            #[cfg(feature = "os-vault")]
+            SecretBackend::OsVault => {
+                secrets::wire_osvault_secrets(&kernel);
+            }
+        }
         Ok(Self {
             kernel: Arc::new(Mutex::new(kernel)),
             streams: Arc::new(Mutex::new(HashMap::new())),
@@ -619,7 +650,11 @@ mod tests {
     const REQUEST_ID: &str = "00000000-0000-4000-8000-000000000001";
 
     fn stateless_host() -> KernelHost {
-        KernelHost::open(KernelHostConfig { data_root: None }).expect("stateless kernel must open")
+        KernelHost::open(KernelHostConfig {
+            data_root: None,
+            ..Default::default()
+        })
+        .expect("stateless kernel must open")
     }
 
     /// Builds a wire request envelope JSON for the embedded protocol version.
@@ -774,6 +809,7 @@ mod tests {
         std::fs::create_dir_all(&root).expect("temp root");
         let host = KernelHost::open(KernelHostConfig {
             data_root: Some(root.clone()),
+            ..Default::default()
         })
         .expect("kernel");
 

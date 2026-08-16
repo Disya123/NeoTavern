@@ -1,21 +1,23 @@
-//! Desktop host secret seams (ТЗ §SEC-01, М5 slice 49).
+//! Desktop host secret seams (ТЗ §SEC-01, M5 slice 49 + 58).
 //!
 //! The kernel holds SecretStore/SecretResolver **port handles** — the host
-//! must provide the actual backends. The Desktop host currently wires the
-//! explicit **session-only** backend:
+//! must provide the actual backends. The Desktop host wires one of:
 //!
-//! - [`MemorySecretStore`] as the writable store (keys live only in process
-//!   memory, gone after restart — the DB keeps opaque `session:` references
-//!   and the runtime reports a stable unavailable state until the user
-//!   re-enters the key);
-//! - [`SessionSecretResolver`] as the execution-time seam, resolving exactly
-//!   the `session:` references this store produced.
+//! - [`MemorySecretStore`] + [`SessionSecretResolver`] — explicit
+//!   **session-only** backend (keys live only in process memory, gone after
+//!   restart — the DB keeps opaque `session:` references and the runtime
+//!   reports a stable unavailable state until the user re-enters the key);
+//! - `os-vault` feature: [`OsVaultSecretStore`] +
+//!   [`OsvaultSecretResolver`] — machine-bound OS credential vault (Windows
+//!   Credential Manager / macOS Keychain / Linux Secret Service); a
+//!   non-reachable vault reports `SECRET_UNAVAILABLE_ON_THIS_DEVICE`, never
+//!   a plaintext fallback;
+//! - the portable `secrets.enc` backend is a follow-up slice (passphrase
+//!   unlock UX) — when it lands, only the wiring below changes.
 //!
-//! This is an explicit SEC-01 interim: there is never a plaintext fallback —
-//! a `portable:`/`env:` reference resolves to a typed `Unavailable` error,
-//! and a missing record resolves to `Unknown`. The OS-vault (Installed
-//! Desktop) and Android Keystore adapters remain follow-up slices; when they
-//! land, only [`wire_session_secrets`] changes.
+//! There is never a plaintext fallback: a reference of a foreign kind (e.g.
+//! `portable:`/`env:` against the session store) resolves to a typed
+//! `Unavailable` error, and a missing record resolves to `Unknown`.
 
 use runtime_kernel::Kernel;
 use secret_store::refs::SecretRefKind;
@@ -25,21 +27,25 @@ use std::sync::Arc;
 use provider_sdk::secret::{SecretRef, SecretResolver, SecretValue};
 use provider_sdk::{ProviderError, ProviderErrorCode};
 
-/// Execution-time resolver backed by the same [`MemorySecretStore`] the host
-/// wired as the kernel's writable store.
-#[derive(Debug, Clone)]
-pub struct SessionSecretResolver {
-    store: Arc<MemorySecretStore>,
+/// Execution-time resolver over one concrete store kind: parses the opaque
+/// reference, refuses any other kind (fail-closed — a store never serves a
+/// reference it did not produce) and resolves the value at the point of use.
+#[derive(Clone)]
+pub struct StoreSecretResolver {
+    kind: SecretRefKind,
+    store: Arc<dyn SecretStore>,
+    /// Human label for the unavailable diagnostic (never a value).
+    label: &'static str,
 }
 
-impl SessionSecretResolver {
-    /// Wraps a session store.
-    pub fn new(store: Arc<MemorySecretStore>) -> Self {
-        Self { store }
+impl StoreSecretResolver {
+    /// Wraps `store` as the resolver for references of `kind`.
+    pub fn new(kind: SecretRefKind, store: Arc<dyn SecretStore>, label: &'static str) -> Self {
+        Self { kind, store, label }
     }
 }
 
-impl SecretResolver for SessionSecretResolver {
+impl SecretResolver for StoreSecretResolver {
     fn resolve(&self, reference: &SecretRef) -> Result<SecretValue, ProviderError> {
         let parsed = secret_store::refs::parse_ref(&reference.0).ok_or_else(|| {
             ProviderError::with(
@@ -48,10 +54,10 @@ impl SecretResolver for SessionSecretResolver {
                 vec![("secretRef".to_string(), reference.0.clone())],
             )
         })?;
-        if parsed.kind != SecretRefKind::Session {
+        if parsed.kind != self.kind {
             return Err(ProviderError::with(
                 ProviderErrorCode::Unavailable,
-                "session secret store cannot serve this reference kind",
+                format!("{} store cannot serve this reference kind", self.label),
                 vec![("kind".to_string(), parsed.kind.prefix().to_string())],
             ));
         }
@@ -59,7 +65,7 @@ impl SecretResolver for SessionSecretResolver {
             Ok(Some(value)) => Ok(SecretValue::new(value)),
             Ok(None) => Err(ProviderError::with(
                 ProviderErrorCode::Unavailable,
-                "secret not present in the session store (restart clears session secrets)",
+                format!("secret not present in the {} store", self.label),
                 vec![
                     ("namespace".to_string(), parsed.namespace),
                     ("id".to_string(), parsed.id),
@@ -67,10 +73,36 @@ impl SecretResolver for SessionSecretResolver {
             )),
             Err(err) => Err(ProviderError::with(
                 ProviderErrorCode::Unavailable,
-                "session secret store is unavailable",
+                format!("{} store is unavailable", self.label),
                 vec![("code".to_string(), err.code.to_string())],
             )),
         }
+    }
+}
+
+/// Execution-time resolver backed by the same [`MemorySecretStore`] the host
+/// wired as the kernel's writable session store.
+#[derive(Clone)]
+pub struct SessionSecretResolver {
+    inner: StoreSecretResolver,
+}
+
+impl SessionSecretResolver {
+    /// Wraps a session store.
+    pub fn new(store: Arc<MemorySecretStore>) -> Self {
+        Self {
+            inner: StoreSecretResolver::new(
+                SecretRefKind::Session,
+                store as Arc<dyn SecretStore>,
+                "session",
+            ),
+        }
+    }
+}
+
+impl SecretResolver for SessionSecretResolver {
+    fn resolve(&self, reference: &SecretRef) -> Result<SecretValue, ProviderError> {
+        self.inner.resolve(reference)
     }
 }
 
@@ -82,6 +114,44 @@ pub fn wire_session_secrets(kernel: &Kernel) -> Arc<MemorySecretStore> {
     let store = Arc::new(MemorySecretStore::new());
     kernel.set_secret_store(Arc::clone(&store) as Arc<dyn SecretStore>);
     kernel.set_secret_resolver(Arc::new(SessionSecretResolver::new(Arc::clone(&store))));
+    store
+}
+
+/// Execution-time resolver for machine-bound OS vault references.
+#[cfg(feature = "os-vault")]
+#[derive(Clone)]
+pub struct OsvaultSecretResolver {
+    inner: StoreSecretResolver,
+}
+
+#[cfg(feature = "os-vault")]
+impl OsvaultSecretResolver {
+    /// Wraps the OS vault store.
+    pub fn new(store: Arc<dyn SecretStore>) -> Self {
+        Self {
+            inner: StoreSecretResolver::new(SecretRefKind::OsVault, store, "os vault"),
+        }
+    }
+}
+
+#[cfg(feature = "os-vault")]
+impl SecretResolver for OsvaultSecretResolver {
+    fn resolve(&self, reference: &SecretRef) -> Result<SecretValue, ProviderError> {
+        self.inner.resolve(reference)
+    }
+}
+
+/// Wires the machine-bound OS vault seams (SEC-01.1 machine-bound mode) into
+/// a freshly opened kernel. The vault must be reachable; when it is not, the
+/// kernel reports the stable `SECRET_UNAVAILABLE_ON_THIS_DEVICE` — never a
+/// plaintext fallback and never a silently empty store.
+#[cfg(feature = "os-vault")]
+pub fn wire_osvault_secrets(kernel: &Kernel) -> Arc<secret_store::OsVaultSecretStore> {
+    let store = Arc::new(secret_store::OsVaultSecretStore::new());
+    kernel.set_secret_store(Arc::clone(&store) as Arc<dyn SecretStore>);
+    kernel.set_secret_resolver(Arc::new(OsvaultSecretResolver::new(
+        Arc::clone(&store) as Arc<dyn SecretStore>
+    )));
     store
 }
 
@@ -167,5 +237,93 @@ mod tests {
         let resolver = SessionSecretResolver::new(store);
         let value = resolver.resolve(&SecretRef(reference)).expect("resolves");
         assert_eq!(value.expose(), "sk-x");
+    }
+
+    #[cfg(feature = "os-vault")]
+    #[test]
+    fn osvault_resolver_serves_osvault_refs_and_refuses_foreign_kinds() {
+        use secret_store::OsVaultSecretStore;
+
+        let store = Arc::new(OsVaultSecretStore::new());
+        let resolver = OsvaultSecretResolver::new(Arc::clone(&store) as Arc<dyn SecretStore>);
+
+        // Foreign kinds always fail with Unavailable — no vault needed.
+        let session =
+            secret_store::refs::make_ref(SecretRefKind::Session, "provider:openai", "rec-1");
+        let err = resolver
+            .resolve(&SecretRef(session))
+            .expect_err("session ref must fail");
+        assert_eq!(err.code, ProviderErrorCode::Unavailable);
+
+        // Garbage → Unavailable.
+        let err = resolver
+            .resolve(&SecretRef("not-a-ref".to_string()))
+            .expect_err("garbage must fail");
+        assert_eq!(err.code, ProviderErrorCode::Unavailable);
+
+        // A real round trip needs a reachable OS vault (headless CI runners
+        // often have none — skip, never fail).
+        if !store.is_available() {
+            return;
+        }
+        let reference = store
+            .put("provider:openai", "dsh-slice-58", "sk-sentinel")
+            .expect("put on an available vault");
+        assert!(reference.starts_with("osvault:"));
+        // Sandboxed runners may accept CredWrite without persisting the
+        // credential (see os_vault module docs); skip visibility assertions
+        // there instead of failing the machine's vault limitations.
+        match resolver.resolve(&SecretRef(reference)) {
+            Ok(value) => assert_eq!(value.expose(), "sk-sentinel"),
+            Err(_) => {
+                eprintln!("runner OS vault does not persist writes; skipping resolver visibility");
+                let _ = store.delete("provider:openai", "dsh-slice-58");
+                return;
+            }
+        }
+        assert!(store
+            .delete("provider:openai", "dsh-slice-58")
+            .expect("delete"));
+    }
+
+    #[cfg(feature = "os-vault")]
+    #[test]
+    fn wire_osvault_secrets_wires_the_kernel_store_seam() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let kernel = runtime_kernel::Kernel::open(runtime_kernel::KernelConfig {
+            expected_schema_hash: contracts_generated::contract_schema_hash().to_string(),
+            ffi_abi_version: 1,
+            data_root: Some(root.path().to_path_buf()),
+        })
+        .expect("kernel opens");
+        let store = wire_osvault_secrets(&kernel);
+
+        // The store seam is wired; a config commit must not hit the
+        // fail-closed "no store" path. When the vault is reachable the
+        // commit succeeds; when it is not, the operation fails with the
+        // stable SECRET_UNAVAILABLE code — never a plaintext fallback.
+        let flag = runtime_kernel::CancellationFlag::new();
+        let bytes = serde_json::to_vec(&serde_json::json!({
+            "provider": "openai",
+            "name": "local",
+            "config": { "baseUrl": "https://api.openai.com/v1", "model": "mock-1" },
+            "apiKey": "sk-x",
+        }))
+        .expect("serialize");
+        let response: serde_json::Value = serde_json::from_slice(
+            &kernel
+                .dispatch("providers.config.set", &bytes, &flag)
+                .expect("dispatch"),
+        )
+        .expect("response json");
+        let store_info = store.describe();
+        if store_info.available {
+            assert_eq!(response["hasApiKey"], serde_json::json!(true));
+        } else {
+            assert_eq!(
+                response["error"]["code"],
+                serde_json::json!("SECRET_UNAVAILABLE")
+            );
+        }
     }
 }

@@ -4,7 +4,9 @@ use tauri::AppHandle;
 #[cfg(all(desktop, feature = "remote"))]
 use neotavern_tauri_local::remote::{RemoteAccessService, RemoteAccessState};
 #[cfg(desktop)]
-use neotavern_tauri_local::{build_request_envelope, commands, KernelHost, KernelHostConfig};
+use neotavern_tauri_local::{
+    build_request_envelope, commands, KernelHost, KernelHostConfig, SecretBackend,
+};
 #[cfg(desktop)]
 use std::{
     fs,
@@ -377,20 +379,21 @@ fn stop_sidecar(app: &AppHandle) {
 /// Resolves the canonical local data root: `data/` next to the executable for
 /// the portable build, otherwise the platform app-data directory. Both the
 /// kernel and (opt-in) legacy sidecar use this root; only one mode runs at a
-/// time, so the root never has two writable owners.
+/// time, so the root never has two writable owners. Returns `(root, portable)`
+/// — the portable flag selects the secret backend (SEC-01.1).
 #[cfg(desktop)]
-fn resolve_data_dir(app: &tauri::App) -> Result<PathBuf, Box<dyn std::error::Error>> {
+fn resolve_data_dir(app: &tauri::App) -> Result<(PathBuf, bool), Box<dyn std::error::Error>> {
     let executable = std::env::current_exe()?;
     let portable_data_dir = executable
         .parent()
         .filter(|directory| directory.join("portable.flag").is_file())
         .map(|directory| directory.join("data"));
-    let data_dir = match portable_data_dir {
-        Some(directory) => directory,
-        None => app.path().app_local_data_dir()?,
+    let (data_dir, portable) = match portable_data_dir {
+        Some(directory) => (directory, true),
+        None => (app.path().app_local_data_dir()?, false),
     };
     fs::create_dir_all(&data_dir)?;
-    Ok(data_dir)
+    Ok((data_dir, portable))
 }
 
 #[cfg(desktop)]
@@ -542,11 +545,14 @@ fn spawn_legacy_sidecar(
 fn setup_local_kernel_mode(
     app: &mut tauri::App,
     data_dir: PathBuf,
+    portable: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let host = KernelHost::open(KernelHostConfig {
         // Clone: `data_dir` is also the Remote Access config fallback (the
         // kernel data root is guaranteed writable and exists).
         data_root: Some(data_dir.clone()),
+        secret_backend: resolve_secret_backend(portable),
+        ..Default::default()
     })
     .map_err(|error| {
         // Controlled kernel error (contract mismatch, data_root_in_use,
@@ -615,6 +621,31 @@ fn setup_local_kernel_mode(
         app.handle().exit(1);
     }
     Ok(())
+}
+
+/// Selects the kernel SecretStore backend (ТЗ §SEC-01, SEC-01.1).
+///
+/// - `NEOTA_SECRET_BACKEND=osvault|session` wins explicitly (tests, rollback);
+/// - smoke self-checks stay deterministic with the session-only store;
+/// - portable mode keeps the explicit session-only interim until the
+///   portable `secrets.enc` wiring slice lands;
+/// - installed (non-portable) kernel mode defaults to the machine-bound OS
+///   credential vault (Windows Credential Manager / macOS Keychain / Linux
+///   Secret Service): keys never travel with the data folder, an
+///   unreachable vault reports `SECRET_UNAVAILABLE_ON_THIS_DEVICE` — never a
+///   plaintext fallback.
+#[cfg(desktop)]
+fn resolve_secret_backend(portable: bool) -> SecretBackend {
+    if let Ok(value) = std::env::var("NEOTA_SECRET_BACKEND") {
+        return match value.as_str() {
+            "osvault" => SecretBackend::OsVault,
+            _ => SecretBackend::Session,
+        };
+    }
+    if std::env::var("NEOTA_DESKTOP_SMOKE").as_deref() == Ok("1") || portable {
+        return SecretBackend::Session;
+    }
+    SecretBackend::OsVault
 }
 
 /// Deterministic smoke self-check for the packaged local kernel: exercises
@@ -967,14 +998,14 @@ pub fn run() {
 
         let app = builder
             .setup(|app| {
-                let data_dir = resolve_data_dir(app)?;
+                let (data_dir, portable) = resolve_data_dir(app)?;
 
                 match desktop_mode() {
                     DesktopMode::Sidecar => {
                         let port = reserve_loopback_port()?;
                         spawn_legacy_sidecar(app, port, &data_dir)?;
                     }
-                    DesktopMode::Kernel => setup_local_kernel_mode(app, data_dir)?,
+                    DesktopMode::Kernel => setup_local_kernel_mode(app, data_dir, portable)?,
                 }
                 Ok(())
             })

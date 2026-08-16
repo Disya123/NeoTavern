@@ -36,6 +36,10 @@ tauri = ["dep:tauri"]
 # shell enables both `tauri` and `remote`; the service module itself stays
 # Tauri-free (pure serde DTOs) so the workspace can build it standalone.
 remote = ["dep:neotavern-desktop-remote"]
+# M5 slice 58 (SEC-01.1 machine-bound): OS credential vault backend
+# (Windows Credential Manager / macOS Keychain / Linux Secret Service).
+# The desktop shell enables it for installed (non-portable) kernel mode.
+os-vault = ["secret-store/os-vault"]
 
 [dev-dependencies]
 tempfile = "3"

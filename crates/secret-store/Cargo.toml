@@ -12,6 +12,15 @@ rand = "0.8"
 zeroize = { version = "1", features = ["zeroize_derive"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+keyring = { version = "3", optional = true }
+
+[features]
+default = []
+# Machine-bound OS credential vault backend (Windows Credential Manager,
+# macOS Keychain, Linux Secret Service). Optional so the crate still builds
+# for targets without a desktop vault (Android Keystore is a separate
+# adapter). The desktop host enables it; there is never a plaintext fallback.
+os-vault = ["dep:keyring"]
 
 [dev-dependencies]
 tempfile = "3"

@@ -18,6 +18,7 @@ const REQ_ID: &str = "00000000-0000-4000-8000-000000000001";
 fn open_host(root: &tempfile::TempDir) -> KernelHost {
     KernelHost::open(KernelHostConfig {
         data_root: Some(root.path().to_path_buf()),
+        ..Default::default()
     })
     .expect("host opens on a fresh data root")
 }

@@ -34,6 +34,20 @@
 
 ### Added
 
+- **Machine-bound OS credential vault (M5 slice 58, ТЗ §SEC-01/SEC-01.1).**
+  New `os-vault` feature in `crates/secret-store` + `OsVaultSecretStore`
+  (via `keyring`: Windows Credential Manager / macOS Keychain / Linux Secret
+  Service). Installed (non-portable) kernel mode now wires the OS vault by
+  default (`KernelHostConfig::secret_backend`; `NEOTA_SECRET_BACKEND` and
+  smoke/portable overrides); `osvault:<namespace>:<id>` references are
+  machine-bound — credentials never travel with the data folder, an
+  unreachable vault reports `SECRET_UNAVAILABLE_ON_THIS_DEVICE`, there is
+  never a plaintext fallback. Fail-closed limits: 2560-byte credential blob,
+  500-byte key; writes are serialized in-process (Windows Credential Manager
+  race caveat); `list()` is honest about OS vaults having no portable
+  enumeration (per-record `has`/`get`/`delete`). Tests: secret-store unit
+  incl. a real-vault round trip (skipped on runners whose vault accepts but
+  does not persist writes) and tauri-local resolver/seam wiring tests.
 - **Desktop host tool executor (M5 slice 57, ТЗ §8.3/§9.3).** The desktop
   kernel host now performs the effects of registered safe tools — the kernel
   still never executes them. `setup_local_kernel_mode` wires the declarative
