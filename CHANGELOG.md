@@ -3,6 +3,29 @@
 ## Unreleased
 ### Added
 
+- **Provider and secret hooks are honest on the kernel plane (M5 slice
+  26, ARC-02).** `api/providerHooks.ts` — 15 hooks
+  (`useProviders`/`useProviderCatalog`/`useCreateProvider`/
+  `useUpdateProvider`/`useDeleteProvider`/`useDiscoverProviderModels`/
+  `useProviderSecrets`/`useSecretsExposure`/the four secret mutations) —
+  previously hit the legacy surface on EVERY backend: on the kernel plane
+  useless network calls to dead `/api/v2/providers*` routes. Now every hook
+  gates on `isKernelMode()`: `useProviders` maps the wire
+  `providers.config.list` result into the legacy UI shape (RFC3339 →
+  epoch-ms, connection fields hoisted from the opaque `config` blob);
+  create/update/delete route through `providers.config.set/del` with the
+  legacy one-config-per-provider model spelled as a single `default` named
+  config; the static provider catalog, model discovery and the separate
+  secrets CRUD/reveal reject with a typed `UnsupportedError`
+  (CAPABILITY_UNAVAILABLE — the wire stores the API key inside the config
+  and its value never crosses a DTO, SEC-01); `useSecretsExposure`
+  resolves the honest fail-closed `{ allowSecretsExposure: false }`. Never
+  a silent legacy request from kernel mode (ARC-02). Legacy contour
+  (sidecar / remote Web Client) keeps the real routes. Tests:
+  providerHooks 17/17 (+12 kernel-honesty cases + translator unit tests),
+  full web vitest green, eslint/typecheck/prettier clean, ui:api:check 53
+  sites, docs:check + gates GATE PASS.
+
 - **Wire corpus dispatcher covers the snapshot DTOs (M5 slice 25,
   ARC-07).** The full `cargo test --workspace` sweep found
   `wire_corpus.rs::dispatch` panicked on `wire.request.create-chat-snapshot`
