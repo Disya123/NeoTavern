@@ -34,6 +34,17 @@
 
 ### Added
 
+- **SEC-05 kernel trust-state roundup (M5 slice 52).** Documented evidence in
+  `security.plugin-package-trust`: the canonical plugin/theme registry
+  records the four trust states with a fixed rank order
+  (`built-in`(3) > `verified-publisher`(2) > `locally-trusted`(1) >
+  `unsigned-untrusted`(0)); re-install that would lower the recorded rank is
+  rejected (TRUST_DOWNGRADE), unknown states violate the closed wire enum
+  (`ContractViolation`), and `trustState` surfaces through
+  `translatePlugin`/`translateTheme` into the PluginsPanel/themes UI.
+  `built-in` is rank-protected for future bundled extensions; no bundled
+  plugins ship yet, so no row carries it — the host-side package verifier
+  feeding the web transport remains the documented boundary.
 - **Web Client offline truthfulness capability (M5 slice 51, ARC-12).** New
   release-manifest row `web-client.offline-truthfulness` (Integrated on
   webClient): the remote-only Web Client shows an honest connection/offline

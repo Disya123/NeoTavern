@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-08-16T09:33:50.564Z",
+  "generatedAt": "2026-08-16T09:35:45.909Z",
   "rows": [
     {
       "hosts": {
@@ -350,7 +350,7 @@
       },
       "id": "security.plugin-package-trust",
       "milestone": "M1",
-      "notes": "SEC-05 (M1 Wave 1): publisher Ed25519 signature + per-file sha256 digest verification before consent/install (format neotavern.package-signature.v1, apps/server/src/lib/packageTrust.ts); trust states built-in / verified-publisher / locally-trusted / unsigned-untrusted recorded in the plugin registry (migration 0023) and surfaced as InstalledPlugin.trust; NEOTA_PLUGIN_PUBLISHER_KEYS keyring + NEOTA_PLUGIN_REQUIRE_SIGNATURE policy; unsigned packages enabled via consent become locally-trusted; ZIP/tar.gz reject duplicate normalized paths, symlinks, traversal, encrypted entries and bounded zip bombs.",
+      "notes": "SEC-05 (M1 Wave 1): publisher Ed25519 signature + per-file sha256 digest verification before consent/install (format neotavern.package-signature.v1, apps/server/src/lib/packageTrust.ts); trust states built-in / verified-publisher / locally-trusted / unsigned-untrusted recorded in the plugin registry (migration 0023) and surfaced as InstalledPlugin.trust; NEOTA_PLUGIN_PUBLISHER_KEYS keyring + NEOTA_PLUGIN_REQUIRE_SIGNATURE policy; unsigned packages enabled via consent become locally-trusted; ZIP/tar.gz reject duplicate normalized paths, symlinks, traversal, encrypted entries and bounded zip bombs. Kernel-side trust registry roundup (M5 slice 52): the canonical registry also records the four SEC-05 trust states — plugins.rs/themes.rs trust_rank orders built-in(3) > verified-publisher(2) > locally-trusted(1) > unsigned-untrusted(0), an install that would LOWER the recorded rank is rejected with a stable TRUST_DOWNGRADE product code (plugins_install_never_downgrades_trust / themes_install_never_downgrades_trust), an unknown trust state violates the closed wire enum -> ContractViolation (x-wire-unknown-behavior reject), and the wire PluginDto.trustState / ThemeDto.trustState surface through translatePlugin/translateTheme as InstalledPlugin.trust / InstalledTheme.trust in the PluginsPanel and themes UI. built-in is a first-class state for future bundled extensions; the kernel currently ships no bundled plugins, so no row carries it yet — the state exists and is rank-protected, and the host-side package verifier that would feed verified-publisher/locally-trusted installs into the web transport remains the documented boundary (slice 50).",
       "title": "Plugin package trust (signature/digest verification)",
       "wireOps": []
     },
