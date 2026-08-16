@@ -1256,7 +1256,7 @@
           "type": "artifact",
           "artifact": "Desktop kernel host secret seams (ТЗ §SEC-01)",
           "result": "M5 slice 49: the Tauri host (crates/adapters/tauri-local) wires the kernel SecretStore/SecretResolver port handles with a session-only MemorySecretStore + SessionSecretResolver (new secrets module): providers.config.set apiKey commits on the kernel plane for the session and generation resolves the key at execution time. Explicit SEC-01 session-only interim — values live in process memory only, a restart clears them and the runtime reports the stable unavailable state until the key is re-entered; portable:/env: references and missing records fail closed with typed ProviderError::Unavailable, never a plaintext fallback. KernelHost::open calls wire_session_secrets after Kernel::open; only that function changes when the OS-vault adapter lands (M3). Tests (tauri-local 12/12, +3): session ref round trip through the resolver, fail-closed for missing/portable/garbage refs, and host-level proof that the wired store makes providers.config.set with apiKey succeed (hasApiKey true) with the resolver serving the key back. Docs: release-manifest security.secret-store notes (desktop host seam; OS vault/Keystore remain M3), CHANGELOG, ledger.",
-          "commit": "pending"
+          "commit": "ef4967c"
         }
       ],
       "blockingIssues": [
