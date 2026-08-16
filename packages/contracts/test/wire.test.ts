@@ -55,7 +55,7 @@ describe('product wire registry', () => {
     // profiles.list/create/rename/delete (86 total). The exact operation
     // set is asserted so a registry edit that drops or renames an op fails
     // loudly.
-    expect(registry.operations).toHaveLength(87);
+    expect(registry.operations).toHaveLength(88);
     expect(registry.operations.map((op) => op.operationId)).toEqual([
       'meta.get',
       'characters.list',
@@ -113,6 +113,7 @@ describe('product wire registry', () => {
       'themes.install',
       'themes.uninstall',
       'themes.activate',
+      'themes.deactivate',
       'profiles.list',
       'profiles.create',
       'profiles.rename',

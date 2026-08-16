@@ -3,6 +3,25 @@
 ## Unreleased
 ### Added
 
+- **New Product Wire op `themes.deactivate` — clear the active theme
+  (M5 slice 18).** The wire contract previously had no way to stop applying
+  a theme on the kernel plane: `resetActiveTheme` was an honest
+  `UnsupportedError` (legacy `DELETE /themes/active` had no kernel
+  equivalent). The new op clears the single `active` flag — idempotent, no
+  active theme is a successful no-op — and the shell falls back to the
+  default theme (AGENTS.md §19), distinct from `themes.uninstall` which also
+  removes the row. Contract → kernel → facade → web transport, full
+  vertical: `themes.deactivate` (empty request/result, app.write, 88 ops
+  total, new schema hash `501fa37f…`), kernel handler in `themes.rs`
+  (transactional UPDATE, idempotent), `ThemesApi.deactivate` on
+  Local/Remote/Legacy backends, and the web `resetActiveTheme` kernel branch
+  now calls the op and reports the truthful `activeThemeId: null` (the
+  legacy contour keeps `DELETE /themes/active`). Tests: kernel_themes 6/6
+  (+1 deactivate round-trip + idempotency), wire.test 88 ops, wireBridge
+  (+1 deactivate routing), neobackend 69/69, full web vitest green,
+  contracts:check/codegen clean, eslint/typecheck/prettier clean,
+  ui:api:check 53, docs:check + gates GATE PASS.
+
 - **Diagnostics hooks are honest on the kernel plane (M5 slice 17,
   ARC-02).** `useDiagnostics`, `useRebuildSearch` and
   `useClearDiagnosticCache` consulted the legacy `/api/v2` surface on EVERY

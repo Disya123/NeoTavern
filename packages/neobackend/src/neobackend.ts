@@ -361,6 +361,13 @@ export interface ThemesApi {
   uninstall(themeId: string, opts?: BackendCallOptions): Promise<EmptyResultDto>;
   /** Activate one theme (idempotent; exactly one active at a time). */
   activate(themeId: string, opts?: BackendCallOptions): Promise<ThemeDto>;
+  /**
+   * Deactivate the active theme (idempotent; no active theme is a successful
+   * no-op). The shell falls back to the default theme — the explicit "stop
+   * applying a theme" consent, distinct from uninstall which also removes
+   * the row.
+   */
+  deactivate(opts?: BackendCallOptions): Promise<EmptyResultDto>;
 }
 
 /**

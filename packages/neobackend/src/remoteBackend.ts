@@ -127,8 +127,7 @@ export class RemoteBackend implements NeoBackend {
     createMessage: (req) => this.sdk.call<MessageDto>('chats.messages.create', req),
     updateMessage: (req) => this.sdk.call<MessageDto>('chats.messages.update', req),
     delMessage: (req) => this.sdk.call<EmptyResultDto>('chats.messages.delete', req),
-    createSnapshot: (req) =>
-      this.sdk.call<ChatSnapshotResultDto>('chats.snapshots.create', req),
+    createSnapshot: (req) => this.sdk.call<ChatSnapshotResultDto>('chats.snapshots.create', req),
     listMessageVariants: (req) =>
       this.sdk.call<ListMessageVariantsResultDto>('chats.messages.variants.list', req),
     createMessageVariant: (req) =>
@@ -263,6 +262,8 @@ export class RemoteBackend implements NeoBackend {
       this.sdk.call<EmptyResultDto>('themes.uninstall', { id: themeId }, { signal: opts?.signal }),
     activate: (themeId, opts) =>
       this.sdk.call<ThemeDto>('themes.activate', { id: themeId }, { signal: opts?.signal }),
+    deactivate: (opts) =>
+      this.sdk.call<EmptyResultDto>('themes.deactivate', {}, { signal: opts?.signal }),
   };
 
   readonly profiles: ProfilesApi = {

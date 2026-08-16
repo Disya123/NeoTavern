@@ -1713,11 +1713,13 @@ export async function activateTheme(id: string): Promise<ThemeActivationResult> 
 }
 
 /** Clear the active theme (fall back to the built-in shell). The wire
- * contract has no deactivate op — the legacy `DELETE /themes/active` has no
- * kernel equivalent (honest CAPABILITY_UNAVAILABLE). */
+ * `themes.deactivate` op clears the single active flag (idempotent; no
+ * active theme is a successful no-op) — the legacy `DELETE /themes/active`
+ * stays on the legacy contour. */
 export async function resetActiveTheme(): Promise<ThemeActivationResult> {
   if (isKernelMode()) {
-    throw new UnsupportedError('themes.reset.active');
+    await backend.themes.deactivate();
+    return { activeThemeId: null };
   }
   return api.del<ThemeActivationResult>('/themes/active');
 }

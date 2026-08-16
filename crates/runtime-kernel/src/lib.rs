@@ -616,6 +616,7 @@ fn handle_unary(
         "themes.install" => with_db_opt(db, |db| themes::themes_install(db, req)),
         "themes.uninstall" => with_db_opt(db, |db| themes::themes_uninstall(db, req)),
         "themes.activate" => with_db_opt(db, |db| themes::themes_activate(db, req)),
+        "themes.deactivate" => with_db_opt(db, |db| themes::themes_deactivate(db, req)),
         // Этап 4 slice 5 remainder part 2: canonical Configuration
         // profiles (unblocks per-profile SEC-02 export filtering).
         "profiles.list" => with_db_opt(db, |db| profiles::profiles_list(db, req)),

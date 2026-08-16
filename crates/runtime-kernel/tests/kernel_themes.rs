@@ -156,6 +156,36 @@ fn themes_install_list_activate_uninstall_round_trip() {
 }
 
 #[test]
+fn themes_deactivate_clears_active_and_is_idempotent() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel(root.path());
+    let css = publish_css(&kernel);
+    install_theme(&kernel, "wii-u-dark", "2.0.1", "built-in", Some(&css));
+    install_theme(&kernel, "flat-light", "1.0.0", "built-in", Some(&css));
+
+    // Activate one theme, then deactivate → the single active flag clears
+    // (shell falls back to the default theme, AGENTS.md §19).
+    dispatch(&kernel, "themes.activate", json!({ "id": "wii-u-dark" }))
+        .expect("themes.activate must succeed");
+    let empty =
+        dispatch(&kernel, "themes.deactivate", json!({})).expect("themes.deactivate must succeed");
+    assert_eq!(empty, json!({}));
+    let list = dispatch(&kernel, "themes.list", json!({})).expect("themes.list must succeed");
+    assert!(
+        list["items"]
+            .as_array()
+            .expect("items")
+            .iter()
+            .all(|t| t["active"] == false),
+        "deactivate must clear every active flag"
+    );
+
+    // Idempotent: deactivating with no active theme is a successful no-op.
+    dispatch(&kernel, "themes.deactivate", json!({}))
+        .expect("themes.deactivate must be idempotent");
+}
+
+#[test]
 fn themes_uninstall_unknown_is_not_found() {
     let root = tempfile::tempdir().expect("tempdir");
     let kernel = open_kernel(root.path());

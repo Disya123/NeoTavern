@@ -17,6 +17,10 @@
 //!   separate consent.
 //! - `themes.activate` — switches the single `active` flag (idempotent;
 //!   activating the already-active theme is a no-op).
+//! - `themes.deactivate` — clears the single `active` flag (idempotent;
+//!   no active theme is a successful no-op). The shell falls back to the
+//!   default theme (AGENTS.md §19); this is the explicit "stop applying a
+//!   theme" consent, distinct from uninstall which also removes the row.
 //! - `themes.uninstall` — durable row removal; uninstalling the ACTIVE
 //!   theme clears the flag so the shell falls back to the default
 //!   (AGENTS.md §19: a broken theme must never block the interface reset).
@@ -168,6 +172,21 @@ pub(crate) fn themes_activate(db: &mut Database, request: &[u8]) -> Result<Vec<u
         .map_err(|err| sqlite(err, "themes.activate: clear others"))?;
     let theme = theme_by_id(db, &req.id)?;
     encode_theme(&theme)
+}
+
+/// `themes.deactivate` — clears the single `active` flag (idempotent; no
+/// active theme is a successful no-op). The shell falls back to the default
+/// theme (AGENTS.md §19) — the explicit "stop applying a theme" consent,
+/// distinct from uninstall which also removes the row.
+pub(crate) fn themes_deactivate(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    generated::decode_empty_request_dto(request)?;
+    db.conn()
+        .execute(
+            "UPDATE themes SET active = 0, updated_at = ?1 WHERE active = 1",
+            rusqlite::params![now()],
+        )
+        .map_err(|err| sqlite(err, "themes.deactivate: clear"))?;
+    encode_empty(&generated::ResultEmpty {})
 }
 
 /// `themes.uninstall` — durable row removal; uninstalling the active theme

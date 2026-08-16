@@ -382,6 +382,7 @@ export class LocalBackend implements NeoBackend {
       uninstall: (themeId, opts) =>
         this.invoke<EmptyResultDto>('themes.uninstall', { id: themeId }, opts),
       activate: (themeId, opts) => this.invoke<ThemeDto>('themes.activate', { id: themeId }, opts),
+      deactivate: (opts) => this.invoke<EmptyResultDto>('themes.deactivate', {}, opts),
     };
     this.profiles = {
       list: (opts) => this.invoke<ListProfilesResultDto>('profiles.list', {}, opts),

@@ -95,6 +95,7 @@ const mocks = vi.hoisted(() => {
     install: vi.fn(),
     uninstall: vi.fn(),
     activate: vi.fn(),
+    deactivate: vi.fn(),
   };
   const plugins = {
     list: vi.fn(),
@@ -1294,9 +1295,15 @@ describe('themes (Этап 4 context 6 part 3, wire themes.*)', () => {
     expect(result.activeThemeId).toBe('wii-u-dark');
   });
 
-  it('rejects install and reset on the kernel plane honestly', async () => {
+  it('rejects install on the kernel plane honestly (host SEC-05 verify first)', async () => {
     await expect(installTheme(new File(['z'], 't.zip'))).rejects.toBeInstanceOf(UnsupportedError);
-    await expect(resetActiveTheme()).rejects.toBeInstanceOf(UnsupportedError);
+  });
+
+  it('deactivates the active theme through the wire op on the kernel plane', async () => {
+    mocks.themes.deactivate.mockResolvedValue({ ok: true });
+    const result = await resetActiveTheme();
+    expect(mocks.themes.deactivate).toHaveBeenCalledOnce();
+    expect(result.activeThemeId).toBeNull();
   });
 
   it('reports no theme settings and no user css on the kernel plane', async () => {
