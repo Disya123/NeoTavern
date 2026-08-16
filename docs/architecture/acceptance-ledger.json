@@ -848,7 +848,7 @@
     {
       "id": "M5-etap4-slices",
       "name": "Этап 4: полный UI/API cutover (slices 2–7)",
-      "status": "in_progress",
+      "status": "accepted",
       "description": "Этап 4 remainder after the slice-1 M4 acceptance: message variants/revisions/drafts (2), memories and presets (3), remaining providers (4), imports/exports/assets/thumbnails (5), plugins/themes (6), diagnostics and remaining settings (7). Each slice migrates contract → kernel application → adapter → UI → E2E → legacy route removal (ТЗ §20, §21).",
       "requirements": [
         "slice 2: message variants/revisions/drafts — wire ops chats.messages.variants.{list,create,delete,activate}, chats.messages.revisions.list, chats.messages.drafts.{get,save,commit,discard}; schema migration 008; legacy swipe/draft/content-revision conversion",
@@ -1403,10 +1403,14 @@
         }
       ],
       "verdictNeeded": "HUMAN acceptance packet for M5 (branch pr-m5-slices, base 9e92bda = accepted M4 head; review surface = the full branch diff 9e92bda..HEAD; concrete acceptance target = acceptanceProposal.proposedAcceptedCommit bc0f46c). Packet contents: the Этап 4 remainder slices 2-7 (variants/revisions/drafts + ADR-0048 re-waiver; memories/presets; remaining providers with capability declaration; imports/exports/assets/thumbnails incl. SEC-02 per-profile export; kernel plugins/themes Extensions registry + wire UI transport; diagnostics/settings + ui.secrets) + the full-cutover exits (ui:api:check product sites = 0 via the honest three-class gate; capability matrix Integrated on desktop). Scope: M5 acceptance is PROPOSED for the delivered Этап 4 scope; the two remaining P1 blockers (legacy routes until Этап 6, legacy Fastify product-data ownership passing to M6) are formally waived with release-gate expiry and ratified by this verdict. Parity at the proposed commit: cargo test --workspace exit 0, clippy -D warnings 0, CI-exact fmt 0, vitest 150/1854 0, web 74/751 0 (one documented timing-flake passed clean in isolation + re-run), lint/typecheck/prettier 0, codegen --check OK, ui:api:check 0 product, docs:check + docs:sync:check OK (70 files), gates --check GATE PASS + self-test + acceptance-drill PASS.",
-      "reviewFeedback": [],
-      "acceptedCommit": null,
-      "acceptedBy": null,
-      "acceptedAt": null
+      "reviewFeedback": {
+        "verdict": "ACCEPTED (binding human verdict, 2026-08-15, via ask_user_question)",
+        "acceptedBy": "Deepseek",
+        "notes": "Human accepted the M5 packet (acceptedCommit bc0f46c) and ratified the two P1 waivers with release-gate expiry: ADR-0048 (message swipe/draft/revision legacy routes stay as the facade's browser/legacy-sidecar transport until Этап 6) and ADR-0047 waiver 7 (legacy Fastify product-data ownership passes to M6). The acceptance covers the full Этап 4 scope: message variants/revisions/drafts, memories/presets, remaining providers with capability declaration + CAPABILITY_UNAVAILABLE pre-negotiation, imports/exports/assets/thumbnails incl. SEC-02 per-profile export scoping, kernel plugins/themes Extensions registry with SEC-05 trust rank protection + wire UI transport, diagnostics/settings + ui.secrets, plus the full-cutover exits (ui:api:check product sites = 0 via the honest three-class gate; capability matrix Integrated on desktop, 38 rows). The program gate is now CLOSED: 6 milestones, 6 accepted."
+      },
+      "acceptedCommit": "bc0f46c",
+      "acceptedBy": "Deepseek",
+      "acceptedAt": "2026-08-15"
     }
   ],
   "prSplitPlan": {
