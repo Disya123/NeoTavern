@@ -1274,7 +1274,7 @@
           "type": "artifact",
           "artifact": "SEC-05 kernel trust-state roundup",
           "result": "M5 slice 52: documented evidence in security.plugin-package-trust. Verified in source: crates/runtime-kernel/src/plugins.rs and themes.rs define trust_rank (built-in 3 > verified-publisher 2 > locally-trusted 1 > unsigned-untrusted 0); tests plugins_install_never_downgrades_trust / themes_install_never_downgrades_trust reject a rank-lowering re-install with the stable TRUST_DOWNGRADE code; an unknown trust state violates the closed wire enum (x-wire-unknown-behavior reject) -> ContractViolation (bad trust state tests); packages/contracts PluginTrustStateSchema declares the four literals; wireBridge.translatePlugin/translateTheme surface trustState as InstalledPlugin.trust / InstalledTheme.trust into the PluginsPanel and themes UI. built-in is first-class and rank-protected for future bundled extensions; the kernel ships no bundled plugins today, so no row carries it yet. Boundary stays documented: the host-side package verifier that would feed verified installs into the web transport does not exist yet (slice 50 notes).",
-          "commit": "pending"
+          "commit": "484457c"
         }
       ],
       "blockingIssues": [
