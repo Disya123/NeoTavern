@@ -34,6 +34,15 @@
 
 ### Added
 
+- **ARC-10 webClient status roundup (M5 slice 54).** `personas.crud`,
+  `lorebooks.crud`, `presets.crud` and `settings` raised Implemented →
+  Integrated on webClient with code-path evidence appended to each note:
+  PersonasPanel (persona CRUD + active-persona writes), LorebookPanel +
+  CharacterManagementPanel lorebook tab (scoped/all lorebook CRUD),
+  GenerationPresetEditor + PromptTemplateEditor (preset CRUD + activation),
+  and Settings/AiSettings/AutoConnectSync (settings get/update) all route
+  through the NeoBackend facade wire ops on the kernel plane — the
+  RemoteBackend Web Client exercises the same wire path as desktop.
 - **generation.tool-loop notes accuracy fix (M5 slice 53).** The
   release-manifest note for `generation.tool-loop` no longer lists transcript
   step rendering as remaining work: the durable run-step UI (M5 slice 47,

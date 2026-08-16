@@ -1281,6 +1281,12 @@
           "artifact": "generation.tool-loop notes accuracy fix",
           "result": "M5 slice 53: release-manifest note for generation.tool-loop corrected — transcript step rendering is no longer listed as remaining tool UX. Verified in source: packages/i18n en.ts/ru.ts declare chat:runStepType_tool_call and chat:runStepType_tool_result, and RunTranscriptPanel (M5 slice 47) renders every generation.step envelope type incl. tool_call/tool_result with sequence badge, status and attempt marker. Remaining honest boundary narrowed to UI-side generation.tool.result submission and the dangerous-tool consent modal (Этап 4).",
           "commit": "7b6fbec"
+        },
+        {
+          "type": "artifact",
+          "artifact": "ARC-10 webClient status roundup (personas/lorebooks/presets/settings)",
+          "result": "M5 slice 54: four capabilities raised Implemented -> Integrated on webClient with code-path evidence. Verified in source: PersonasPanel drives persona CRUD + active-persona writes via backend.personas.* and backend.settings.update; LorebookPanel + CharacterManagementPanel lorebook tab via backend.lorebooks.* (character-bound scoping ADR-0047 waiver 2); GenerationPresetEditor + PromptTemplateEditor via backend.presets.*; Settings/AiSettings/ChatTemplateEditor/ProviderProfileEditor/AutoConnectSync via backend.settings.get/update. All flow through the NeoBackend facade wire ops on the kernel plane; RemoteBackend (webClient) forwards the same wire ops as LocalBackend (desktop), so the status is uniform. Capability matrix 38 rows.",
+          "commit": "pending"
         }
       ],
       "blockingIssues": [
