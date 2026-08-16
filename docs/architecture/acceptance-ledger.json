@@ -1154,7 +1154,7 @@
           "type": "artifact",
           "artifact": "Character-card import host parity over HTTP (remote_http.rs character_card_import_over_http)",
           "result": "M5 slice 33 (Этап 5 foundation, host parity suite ТЗ §17.3): remote_http.rs gains character_card_import_over_http driving the full Этап 4.5 flow over the loopback remote-http-adapter — assets.put (kind 'card', content-addressed) -> imports.character.card (created:true, name, 64-hex sourceHash, wire-valid via validate_result_imports_character_card), re-import of the same bytes dedupes (created:false, same character id, AGENTS.md §11), unknown asset answers the stable ASSET_NOT_FOUND product error with the assetId param, unparseable bytes answer CHARACTER_CARD_INVALID with reason=INVALID_JSON. Every payload crosses the generated decoders/validators, so the contract semantics are identical over direct kernel dispatch, the wire corpus and the HTTP transport. Verified: remote-http suite green (30 scenarios incl. the new one), cargo fmt -p remote-http-adapter, clippy clean. Docs: release-manifest library.characterImport notes extended (host parity), capability matrix regenerated (36 rows).",
-          "commit": "pending"
+          "commit": "fb7307b"
         },
         {
           "type": "artifact",
