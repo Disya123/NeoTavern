@@ -1286,7 +1286,7 @@
           "type": "artifact",
           "artifact": "ARC-10 webClient status roundup (personas/lorebooks/presets/settings)",
           "result": "M5 slice 54: four capabilities raised Implemented -> Integrated on webClient with code-path evidence. Verified in source: PersonasPanel drives persona CRUD + active-persona writes via backend.personas.* and backend.settings.update; LorebookPanel + CharacterManagementPanel lorebook tab via backend.lorebooks.* (character-bound scoping ADR-0047 waiver 2); GenerationPresetEditor + PromptTemplateEditor via backend.presets.*; Settings/AiSettings/ChatTemplateEditor/ProviderProfileEditor/AutoConnectSync via backend.settings.get/update. All flow through the NeoBackend facade wire ops on the kernel plane; RemoteBackend (webClient) forwards the same wire ops as LocalBackend (desktop), so the status is uniform. Capability matrix 38 rows.",
-          "commit": "pending"
+          "commit": "5460fb7"
         }
       ],
       "blockingIssues": [
