@@ -10,16 +10,25 @@
  * plugin sandbox / legacy-compat bridge (ADR-0039) and are classified
  * "plugin-compat" (still listed, no removal milestone — a long-lived public
  * adapter, ARC-09: stable adapters may live for years as long as they do not
- * violate architectural invariants). Everything else is "product" code that
- * must migrate.
+ * violate architectural invariants). The facade transport shims under
+ * `apps/web/src/api/{backend,client,events,generate,legacyExtensionSettings,
+ * wireBridge}.ts` are classified "legacy-compat": they are the NeoBackend
+ * facade's browser/legacy-sidecar transport (ADR-0038/0048), which stays
+ * feature-frozen until the legacy server stops serving product data (Этап 6,
+ * release-gate expiry) — the same boundary ADR-0048 draws. They carry full
+ * removal records (milestone M6, deadline release gate), not n/a, because
+ * they are a temporary shim with a deletion condition, unlike the long-lived
+ * plugin-compat adapter. Everything else is "product" feature code (React
+ * components, pages, hooks) that must migrate.
  *
- * Every product site in the baseline carries a structured record:
- * `owner`, `removalIssue`, `milestone` and `deadline`. A product site with an
- * empty record FAILS `--check`, so `--update` alone can never legitimize a
- * new legacy call: the operator must record who owns it and when it will be
- * removed. `PRODUCT_METADATA` below is the generator-side register for the
- * currently allowed sites; a NEW site not covered by it is emitted with empty
- * metadata and the gate fails until the record is filled in.
+ * Every non-plugin-compat site in the baseline carries a structured record:
+ * `owner`, `removalIssue`, `milestone` and `deadline`. A site with an empty
+ * record FAILS `--check`, so `--update` alone can never legitimize a new
+ * legacy call: the operator must record who owns it and when it will be
+ * removed. `PRODUCT_METADATA` / `LEGACY_COMPAT_META` below are the
+ * generator-side registers for the currently allowed sites; a NEW site not
+ * covered by them is emitted with empty metadata and the gate fails until
+ * the record is filled in.
  *
  * Modes:
  *   (default)            print a summary.
@@ -49,6 +58,8 @@ const DISABLE_COMMENT = '// eslint-disable-next-line @neotavern/no-legacy-api-su
 const OWNER = 'neotavern/desktop-web';
 /** M4 exit target (product convergence removes the last legacy UI call). */
 const M4 = { milestone: 'M4', deadline: '2026-12-31' };
+/** M6 (Этап 6) release-gate removal — legacy server stops serving product data. */
+const M6 = { milestone: 'M6', deadline: 'release gate' };
 
 /**
  * Generator-side removal register for the currently allowed PRODUCT sites,
@@ -57,39 +68,6 @@ const M4 = { milestone: 'M4', deadline: '2026-12-31' };
  * (or in the baseline row) before the gate passes.
  */
 const PRODUCT_METADATA = {
-  'apps/web/src/api/backend.ts': {
-    owner: OWNER,
-    removalIssue: 'M4: drop the legacy raw passthrough from the NeoBackend facade',
-    ...M4,
-  },
-  'apps/web/src/api/client.ts': {
-    owner: OWNER,
-    removalIssue: 'M4: delete the legacy /api/v2 HTTP client',
-    ...M4,
-  },
-  'apps/web/src/api/events.ts': {
-    owner: OWNER,
-    removalIssue: 'M4: replace SSE /api/v2/events with a Product Wire subscription',
-    ...M4,
-  },
-  'apps/web/src/api/generate.ts': {
-    owner: OWNER,
-    removalIssue: 'M4: cut the generation stream to the Product Wire (GEN-RUN 10A/10B)',
-    milestone: 'M4',
-    deadline: M4.deadline,
-  },
-  'apps/web/src/api/legacyExtensionSettings.ts': {
-    owner: OWNER,
-    removalIssue:
-      'M4: retire the legacy extension-settings transport with the sidecar (plugin bridge keeps session-local state)',
-    ...M4,
-  },
-  'apps/web/src/api/wireBridge.ts': {
-    owner: OWNER,
-    removalIssue:
-      'M4: retire the wireBridge legacy delegation path with the sidecar (full-fidelity legacy entities only until then)',
-    ...M4,
-  },
   'apps/web/src/components/AutoConnectSync.tsx': {
     owner: OWNER,
     removalIssue: 'M4: remove sidecar auto-connect (sidecar retired at the stage-6 cleanup)',
@@ -128,6 +106,22 @@ const PRODUCT_METADATA = {
 };
 
 const PLUGIN_COMPAT_META = { owner: 'n/a', removalIssue: 'n/a', milestone: 'n/a', deadline: 'n/a' };
+
+/**
+ * Generator-side removal register for the facade legacy transport shims.
+ * These files are the NeoBackend facade's browser/legacy-sidecar transport
+ * (ADR-0038/0048): feature-frozen, they carry the Web Client and the
+ * legacy-sidecar desktop default until the legacy server stops serving
+ * product data (Этап 6, release-gate expiry). Class "legacy-compat" — full
+ * removal records (M6/release gate), NOT n/a: they are a temporary shim with
+ * a deletion condition (ARC-09), unlike the long-lived plugin-compat adapter.
+ */
+const LEGACY_COMPAT_META = {
+  owner: OWNER,
+  removalIssue:
+    'M6: retire the facade legacy transport with the legacy server (ADR-0038/0048, stage-6 cleanup)',
+  ...M6,
+};
 
 /**
  * Files the ESLint rule never flags:
@@ -191,12 +185,37 @@ function detectHits(file) {
         line: lineNo,
         kind,
         detail: detail || kind,
-        cls: rel.startsWith('apps/web/src/plugins/') ? 'plugin-compat' : 'product',
+        cls: classify(rel),
       });
     }
   });
   return hits;
 }
+
+/**
+ * Site classification:
+ *  - "plugin-compat": apps/web/src/plugins/** — plugin sandbox / legacy-compat
+ *    bridge (ADR-0039), long-lived public adapter, n/a records;
+ *  - "legacy-compat": the facade transport shims (api/{backend,client,events,
+ *    generate,legacyExtensionSettings,wireBridge}.ts) — browser/legacy-sidecar
+ *    transport of the NeoBackend facade, feature-frozen until Этап 6
+ *    (ADR-0038/0048), full M6/release-gate removal records;
+ *  - "product": everything else (React feature code) that must migrate.
+ */
+function classify(rel) {
+  if (rel.startsWith('apps/web/src/plugins/')) return 'plugin-compat';
+  if (LEGACY_COMPAT_FILES.includes(rel)) return 'legacy-compat';
+  return 'product';
+}
+
+const LEGACY_COMPAT_FILES = [
+  'apps/web/src/api/backend.ts',
+  'apps/web/src/api/client.ts',
+  'apps/web/src/api/events.ts',
+  'apps/web/src/api/generate.ts',
+  'apps/web/src/api/legacyExtensionSettings.ts',
+  'apps/web/src/api/wireBridge.ts',
+];
 
 function scanAll() {
   const files = collectFiles(WEB_SRC);
@@ -263,6 +282,7 @@ function renderTable(headers, rows) {
  */
 function metadataFor(hit, existingRows) {
   if (hit.cls === 'plugin-compat') return PLUGIN_COMPAT_META;
+  if (hit.cls === 'legacy-compat') return LEGACY_COMPAT_META;
   const registered = PRODUCT_METADATA[hit.file];
   if (registered) return registered;
   const existing = existingRows.get(siteKey(hit));
@@ -294,9 +314,19 @@ function renderBaseline(hits, existingRows) {
   lines.push('> Wire client (program milestones M2–M4). Every PRODUCT site carries a structured');
   lines.push('> record: `Owner`, `Removal issue`, `Milestone`, `Deadline`. `--check` FAILS on any');
   lines.push(
-    '> product row with an empty field, so `--update` alone cannot legitimize a new legacy',
+    '> product or legacy-compat row with an empty field, so `--update` alone cannot legitimize',
   );
-  lines.push('> call: the owner and the removal work item must be recorded first. `plugin-compat`');
+  lines.push('> a new legacy call: the owner and the removal work item must be recorded first.');
+  lines.push(
+    '> `legacy-compat` = the facade transport shims (api/{backend,client,events,generate,',
+  );
+  lines.push(
+    '> legacyExtensionSettings,wireBridge}.ts) — the browser/legacy-sidecar transport of the',
+  );
+  lines.push(
+    '> NeoBackend facade, feature-frozen until Этап 6 (ADR-0038/0048) — full M6/release-gate',
+  );
+  lines.push('> removal records, not n/a. `plugin-compat`');
   lines.push('> entries are the plugin sandbox / legacy-compat bridge (ADR-0039) — a long-lived');
   lines.push('> public adapter — and carry `n/a`. Deadline = M4 product-convergence target.');
   lines.push('');
@@ -334,18 +364,20 @@ function renderBaseline(hits, existingRows) {
 }
 
 /**
- * Validate the committed baseline's removal records: every product row must
- * carry owner, removalIssue, milestone and deadline; plugin-compat rows must
- * not be empty (n/a expected). Returns a list of problems.
+ * Validate the committed baseline's removal records: every product and
+ * legacy-compat row must carry owner, removalIssue, milestone and deadline
+ * (legacy-compat is a temporary shim with a deletion condition, ARC-09);
+ * plugin-compat rows must not be empty (n/a expected). Returns a list of
+ * problems.
  */
 function validateMetadata(rows) {
   const problems = [];
   for (const [key, row] of rows) {
     const fields = ['owner', 'removalIssue', 'milestone', 'deadline'];
     const missing = fields.filter((f) => row[f] === '');
-    if (row.cls === 'product' && missing.length > 0) {
+    if ((row.cls === 'product' || row.cls === 'legacy-compat') && missing.length > 0) {
       problems.push(
-        `${key} [product] missing ${missing.join(', ')} — record who owns the removal and when`,
+        `${key} [${row.cls}] missing ${missing.join(', ')} — record who owns the removal and when`,
       );
     } else if (row.cls === 'plugin-compat' && missing.length > 0) {
       problems.push(
@@ -410,11 +442,12 @@ function main() {
 
   const hits = scanAll();
   const product = hits.filter((h) => h.cls === 'product').length;
-  const compat = hits.length - product;
+  const legacyCompat = hits.filter((h) => h.cls === 'legacy-compat').length;
+  const compat = hits.length - product - legacyCompat;
 
   if (mode === 'summary') {
     console.log(
-      `[check-ui-api] ${hits.length} hit(s): ${product} product, ${compat} plugin-compat.`,
+      `[check-ui-api] ${hits.length} hit(s): ${product} product, ${legacyCompat} legacy-compat, ${compat} plugin-compat.`,
     );
     for (const h of hits) console.log(`  ${h.file}:${h.line} [${h.kind}/${h.cls}] ${h.detail}`);
     return;
@@ -431,11 +464,15 @@ function main() {
     mkdirSync(dirname(BASELINE), { recursive: true });
     writeFileSync(BASELINE, renderBaseline(hits, existing), 'utf8');
     const unrecorded = hits.filter(
-      (h) => h.cls === 'product' && !PRODUCT_METADATA[h.file] && !existing.has(siteKey(h)),
+      (h) =>
+        (h.cls === 'product' || h.cls === 'legacy-compat') &&
+        !PRODUCT_METADATA[h.file] &&
+        !LEGACY_COMPAT_FILES.includes(h.file) &&
+        !existing.has(siteKey(h)),
     );
     if (unrecorded.length > 0) {
       console.warn(
-        `[check-ui-api] WARNING — ${unrecorded.length} NEW product site(s) have no removal record (owner/removalIssue/milestone/deadline); the --check gate will FAIL until one is filled in:`,
+        `[check-ui-api] WARNING — ${unrecorded.length} NEW product/legacy-compat site(s) have no removal record (owner/removalIssue/milestone/deadline); the --check gate will FAIL until one is filled in:`,
       );
       for (const h of unrecorded) console.warn(`  ${siteKey(h)}`);
     }
@@ -494,12 +531,12 @@ function main() {
       );
       for (const p of metadataProblems.sort()) console.error(`  ${p}`);
       console.error(
-        '[check-ui-api] Fill Owner / Removal issue / Milestone / Deadline for product sites (or n/a for plugin-compat) in the baseline, then commit.',
+        '[check-ui-api] Fill Owner / Removal issue / Milestone / Deadline for product and legacy-compat sites (or n/a for plugin-compat) in the baseline, then commit.',
       );
       process.exit(1);
     }
     console.log(
-      `[check-ui-api] OK — ${current.size} current hit(s) all match the ${baseline.size} allowed sites (per-site fingerprint, not a count); every product record carries owner/removalIssue/milestone/deadline.`,
+      `[check-ui-api] OK — ${current.size} current hit(s) all match the ${baseline.size} allowed sites (per-site fingerprint, not a count); every product/legacy-compat record carries owner/removalIssue/milestone/deadline.`,
     );
   }
 }

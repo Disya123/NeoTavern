@@ -34,6 +34,22 @@
 
 ### Added
 
+- **ui:api:check three-class legacy-surface gate (M5 slice 63, ТЗ §13.1 /
+  ARC-02/ARC-03).** The scanner now classifies legacy UI sites into three
+  classes instead of two: `product` (React feature code — components, pages,
+  hooks — that must migrate; currently **0 sites**), `legacy-compat` (the six
+  facade transport shims `apps/web/src/api/{backend,client,events,generate,
+  legacyExtensionSettings,wireBridge}.ts` — the browser/legacy-sidecar
+  transport of the NeoBackend facade, feature-frozen until the legacy server
+  stops serving product data at Этап 6, ADR-0038/0048; 26 sites with full
+  `owner`/`removalIssue`/`milestone=M6`/`deadline=release gate` records, not
+  `n/a` because they are a temporary shim with a deletion condition, ARC-09)
+  and `plugin-compat` (the long-lived ADR-0039 plugin-sandbox bridge; 27
+  sites, `n/a`). No transport code was removed: every site stays tracked and
+  `--check` still fails on any NEW site or fingerprint drift; the change
+  aligns the removal milestone with ADR-0048 (previously self-contradicting
+  M4/2026-12-31 records) and makes the M5 exit `product sites = 0` honest
+  and measurable.
 - **Plugin package verifier (M5 slice 60, ТЗ §SEC-05).** New
   `crates/adapters/package-verify` (`neotavern-package-verify`): the
   host-side verifier the kernel's `plugins.install` already assumes — ZIP
