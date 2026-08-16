@@ -84,6 +84,50 @@ export const CharacterCardImportResultDtoSchema = Type.Object(
 );
 export type CharacterCardImportResultDto = Static<typeof CharacterCardImportResultDtoSchema>;
 
+/**
+ * Character-card export format (`wire.card.export.format`): a SillyTavern
+ * card container in plain JSON or a PNG whose `chara` tEXt chunk carries
+ * base64-encoded JSON — the same container shapes `imports.character.card`
+ * accepts, so an exported card re-imports verbatim (Этап 4.5 round trip).
+ */
+export const WireCardExportFormat = Type.Union([Type.Literal('json'), Type.Literal('png')], {
+  $id: 'wire.card.export.format',
+  'x-wire-unknown-behavior': 'reject',
+});
+export type WireCardExportFormat = Static<typeof WireCardExportFormat>;
+
+/** Character-card export request (`wire.request.characters.export.card`). */
+export const CharacterCardExportRequestDtoSchema = Type.Object(
+  {
+    characterId: Type.String({ format: 'uuid' }),
+    format: WireCardExportFormat,
+  },
+  { $id: 'wire.request.characters.export.card', additionalProperties: false },
+);
+export type CharacterCardExportRequestDto = Static<typeof CharacterCardExportRequestDtoSchema>;
+
+/**
+ * Character-card export result (`wire.result.characters.export.card`): the
+ * SillyTavern card container base64-encoded so the UI can download it without
+ * a second transport hop. The JSON payload is the original card object when
+ * it was preserved under `ext_json._card` (import round trip); a character
+ * created without a card container is rebuilt from the canonical columns and
+ * the `warnings` array says so honestly.
+ */
+export const CharacterCardExportResultDtoSchema = Type.Object(
+  {
+    filename: Type.String({ pattern: '^[^/\\\\]{1,255}\\.(json|png)$' }),
+    contentType: Type.String({ minLength: 1, maxLength: 128 }),
+    contentBase64: Type.String({
+      pattern: '^[A-Za-z0-9+/]*={0,2}$',
+      minLength: 1,
+    }),
+    warnings: Type.Array(Type.String({ minLength: 1, maxLength: 512 }), { maxItems: 32 }),
+  },
+  { $id: 'wire.result.characters.export.card', additionalProperties: false },
+);
+export type CharacterCardExportResultDto = Static<typeof CharacterCardExportResultDtoSchema>;
+
 /** Snapshot origin (`wire.snapshot.origin`): checkpoint or branch. */
 export const WireSnapshotOrigin = Type.Union([Type.Literal('checkpoint'), Type.Literal('branch')], {
   $id: 'wire.snapshot.origin',
@@ -2178,6 +2222,9 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.request.assets.put': PutAssetRequestDtoSchema,
   'wire.result.assets.put': PutAssetResultDtoSchema,
   'wire.request.imports.character.card': CharacterCardImportRequestDtoSchema,
+  'wire.card.export.format': WireCardExportFormat,
+  'wire.request.characters.export.card': CharacterCardExportRequestDtoSchema,
+  'wire.result.characters.export.card': CharacterCardExportResultDtoSchema,
   'wire.result.imports.character.card': CharacterCardImportResultDtoSchema,
   'wire.request.assets.get': GetAssetRequestDtoSchema,
   'wire.result.assets.get': GetAssetResultDtoSchema,

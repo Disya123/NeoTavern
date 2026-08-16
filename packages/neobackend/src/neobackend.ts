@@ -10,6 +10,8 @@
 import type {
   ActivateMessageVariantRequestDto,
   BackupDto,
+  WireCardExportFormat,
+  CharacterCardExportResultDto,
   CharacterCardImportResultDto,
   CharacterDto,
   ChatDto,
@@ -123,6 +125,17 @@ export interface CharactersApi {
   update(req: UpdateCharacterRequestDto, opts?: BackendCallOptions): Promise<CharacterDto>;
   /** Soft-delete a character by id. */
   del(characterId: string, opts?: BackendCallOptions): Promise<EmptyResultDto>;
+  /**
+   * Export a character card (SillyTavern container, `json` or `png`; wire
+   * `characters.export.card`, Этап 4.5). Imported characters round-trip the
+   * original card object verbatim (preserved under `ext_json._card`); the
+   * result carries the base64-encoded container for download.
+   */
+  exportCard(
+    characterId: string,
+    format: WireCardExportFormat,
+    opts?: BackendCallOptions,
+  ): Promise<CharacterCardExportResultDto>;
 }
 
 /** Chat and message domain operations (wire `chats.*`). */

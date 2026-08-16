@@ -54,10 +54,11 @@ describe('product wire registry', () => {
     // part 2 (canonical Configuration profiles) adds
     // profiles.list/create/rename/delete (86 total); slice 18 (theme
     // deactivate) makes 88; Этап 4.5 (character-card import) adds
-    // imports.character.card (89 total). The exact operation
+    // imports.character.card (89 total); slice 35 (character-card export)
+    // adds characters.export.card (90 total). The exact operation
     // set is asserted so a registry edit that drops or renames an op fails
     // loudly.
-    expect(registry.operations).toHaveLength(89);
+    expect(registry.operations).toHaveLength(90);
     expect(registry.operations.map((op) => op.operationId)).toEqual([
       'meta.get',
       'characters.list',
@@ -65,6 +66,7 @@ describe('product wire registry', () => {
       'characters.create',
       'characters.update',
       'characters.delete',
+      'characters.export.card',
       'chats.list',
       'chats.get',
       'chats.messages.list',

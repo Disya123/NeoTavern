@@ -35,6 +35,7 @@ import {
   type PagedCharactersDto,
   type PagedGenerationEventsDto,
   type PagedMessagesDto,
+  type CharacterCardExportResultDto,
   type CharacterCardImportResultDto,
   type PluginDto,
   type PresetDto,
@@ -264,6 +265,14 @@ const CHARACTER_CARD_IMPORT: CharacterCardImportResultDto = {
   },
   created: true,
   sourceHash: 'abababababababababababababababababababababababababababababababab',
+  warnings: [],
+};
+
+/** `characters.export.card` response (Этап 4.5): the exported container. */
+const CHARACTER_CARD_EXPORT: CharacterCardExportResultDto = {
+  filename: 'ada-lovelace.json',
+  contentType: 'application/json',
+  contentBase64: 'eyJuYW1lIjoiQWRhIExvdmVsYWNlIn0=',
   warnings: [],
 };
 
@@ -508,6 +517,8 @@ class FakeKernelTransport implements LocalTransport {
         return { ok: true, value: EMPTY_RESULT };
       case 'imports.character.card':
         return { ok: true, value: CHARACTER_CARD_IMPORT };
+      case 'characters.export.card':
+        return { ok: true, value: CHARACTER_CARD_EXPORT };
       default:
         return { ok: false, error: { code: 'NOT_FOUND', params: {}, traceId: 'kernel-trace' } };
     }
@@ -636,6 +647,8 @@ function rpcResult(operationId: string | undefined): unknown {
       return EMPTY_RESULT;
     case 'imports.character.card':
       return CHARACTER_CARD_IMPORT;
+    case 'characters.export.card':
+      return CHARACTER_CARD_EXPORT;
     default:
       return null;
   }
@@ -1959,6 +1972,36 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
     const backend = new LocalBackend({ transport: kernel });
 
     await expect(backend.imports.characterCard('nope')).rejects.toThrow(ValidationError);
+    expect(kernel.calls).toBe(0);
+  });
+
+  it('characters.export.card is routed identically by local and remote backends', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const [localResult, remoteResult] = await Promise.all([
+      local.characters.exportCard(CHARACTER.id, 'json'),
+      remote.characters.exportCard(CHARACTER.id, 'json'),
+    ]);
+    expect(localResult).toEqual(remoteResult);
+    expect(localResult).toEqual(CHARACTER_CARD_EXPORT);
+    expect(kernel.requests).toEqual([
+      {
+        operationId: 'characters.export.card',
+        payload: { characterId: CHARACTER.id, format: 'json' },
+      },
+    ]);
+  });
+
+  it('characters.export.card with a bad format throws ValidationError before any transport call', async () => {
+    const kernel = new FakeKernelTransport();
+    const backend = new LocalBackend({ transport: kernel });
+
+    // @ts-expect-error deliberate invalid format at the facade boundary
+    await expect(backend.characters.exportCard(CHARACTER.id, 'xml')).rejects.toThrow(
+      ValidationError,
+    );
     expect(kernel.calls).toBe(0);
   });
 

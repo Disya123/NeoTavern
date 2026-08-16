@@ -34,6 +34,30 @@ use common::{
     TcpStream, TestServer, Value, Write, T0, ZERO_SCHEMA_HASH,
 };
 
+/// Standard base64 decoding (test-local; the crate stays dependency-free).
+fn decode_base64(encoded: &str) -> Vec<u8> {
+    const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = Vec::with_capacity(encoded.len() * 3 / 4);
+    let mut buf: u32 = 0;
+    let mut bits: u32 = 0;
+    for byte in encoded.bytes() {
+        if byte == b'=' {
+            break;
+        }
+        let value = ALPHABET
+            .iter()
+            .position(|c| *c == byte)
+            .expect("valid base64") as u32;
+        buf = (buf << 6) | value;
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((buf >> bits) as u8);
+        }
+    }
+    out
+}
+
 // ---------------------------------------------------------------------------
 // Scenarios
 // ---------------------------------------------------------------------------
@@ -1621,4 +1645,110 @@ fn character_card_import_over_http() {
     let (_, error) = expect_error(decode_envelope(&response.body));
     assert_eq!(error.code, "CHARACTER_CARD_INVALID");
     assert_eq!(error.params["reason"], json!("INVALID_JSON"));
+}
+
+/// Этап 4.5 host parity: `characters.export.card` over HTTP — export the
+/// imported card (JSON verbatim round trip), export a manually created
+/// character (rebuilt from canonical fields with an honest warning), the PNG
+/// format (valid signature), and the stable `CHARACTER_NOT_FOUND` error.
+#[test]
+fn character_card_export_over_http() {
+    let server = TestServer::spawn();
+
+    // Base64 of `{"name":"Ada Lovelace","description":"First programmer","tags":["analytical"]}`.
+    const CARD_B64: &str = "eyJuYW1lIjoiQWRhIExvdmVsYWNlIiwiZGVzY3JpcHRpb24iOiJGaXJzdCBwcm9ncmFtbWVyIiwidGFncyI6WyJhbmFseXRpY2FsIl19";
+
+    let put = envelope_body(
+        &rid(1),
+        "assets.put",
+        json!({
+            "kind": "card",
+            "filename": "ada.json",
+            "contentType": "application/json",
+            "contentBase64": CARD_B64,
+        }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &put);
+    assert_eq!(response.status, 200, "assets.put answers HTTP 200");
+    let (_, put_result) = expect_ok(decode_envelope(&response.body));
+    let asset_id = put_result["asset"]["id"]
+        .as_str()
+        .expect("staged card asset has an id")
+        .to_string();
+
+    let import = envelope_body(
+        &rid(2),
+        "imports.character.card",
+        json!({ "assetId": asset_id }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &import);
+    assert_eq!(response.status, 200);
+    let (_, imported) = expect_ok(decode_envelope(&response.body));
+    let character_id = imported["character"]["id"]
+        .as_str()
+        .expect("imported character has an id")
+        .to_string();
+
+    // Export JSON: verbatim round trip, no warnings, wire-valid result.
+    let export = envelope_body(
+        &rid(3),
+        "characters.export.card",
+        json!({ "characterId": character_id, "format": "json" }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &export);
+    assert_eq!(
+        response.status, 200,
+        "characters.export.card answers HTTP 200"
+    );
+    let (_, exported) = expect_ok(decode_envelope(&response.body));
+    gen::validate_result_characters_export_card(&exported).expect("export result is wire-valid");
+    assert_eq!(exported["contentType"], json!("application/json"));
+    // The fixture card had no V2 envelope, so the kernel wraps it honestly.
+    assert_eq!(
+        exported["warnings"],
+        json!(["original card had no V2 container envelope; wrapped in chara_card_v2"])
+    );
+    assert!(exported["filename"]
+        .as_str()
+        .expect("filename")
+        .ends_with(".json"));
+    // The exported card carries the V2 `spec` envelope with the fields intact.
+    let decoded = decode_base64(exported["contentBase64"].as_str().expect("contentBase64"));
+    let card: Value = serde_json::from_slice(&decoded).expect("exported card JSON parses");
+    assert_eq!(card["spec"], "chara_card_v2");
+    assert_eq!(card["data"]["name"], "Ada Lovelace");
+
+    // PNG format: valid PNG signature, same content type.
+    let export_png = envelope_body(
+        &rid(4),
+        "characters.export.card",
+        json!({ "characterId": character_id, "format": "png" }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &export_png);
+    assert_eq!(response.status, 200);
+    let (_, exported_png) = expect_ok(decode_envelope(&response.body));
+    gen::validate_result_characters_export_card(&exported_png)
+        .expect("png export result is wire-valid");
+    assert_eq!(exported_png["contentType"], json!("image/png"));
+    let png = decode_base64(
+        exported_png["contentBase64"]
+            .as_str()
+            .expect("contentBase64"),
+    );
+    assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n");
+
+    // Missing character answers the stable product error verbatim.
+    let export_missing = envelope_body(
+        &rid(5),
+        "characters.export.card",
+        json!({ "characterId": "00000000-0000-4000-8000-000000000000", "format": "json" }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &export_missing);
+    assert_eq!(response.status, 200);
+    let (_, error) = expect_error(decode_envelope(&response.body));
+    assert_eq!(error.code, "CHARACTER_NOT_FOUND");
+    assert_eq!(
+        error.params["characterId"],
+        json!("00000000-0000-4000-8000-000000000000")
+    );
 }

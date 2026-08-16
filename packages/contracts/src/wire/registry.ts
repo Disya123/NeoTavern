@@ -398,6 +398,20 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'characters.export.card',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.characters.export.card',
+    'wire.result.characters.export.card',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    2048,
+    262144,
+    undefined,
+  ),
+  op(
     'chats.list',
     'transactional',
     'idempotent',
@@ -2010,6 +2024,14 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('characters-delete-request', 'characters.delete', 'request', true, {
     characterId: UUID_CHARACTER,
   }),
+  fx('characters-export-card-request', 'characters.export.card', 'request', true, {
+    characterId: UUID_CHARACTER,
+    format: 'json',
+  }),
+  fx('characters-export-card-png-request', 'characters.export.card', 'request', true, {
+    characterId: UUID_CHARACTER,
+    format: 'png',
+  }),
   fx('lorebooks-get-request', 'lorebooks.get', 'request', true, {
     lorebookId: UUID_LOREBOOK,
   }),
@@ -2246,6 +2268,18 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('characters-create-response', 'characters.create', 'response', true, CHARACTER_VALUE),
   fx('characters-update-response', 'characters.update', 'response', true, CHARACTER_VALUE),
   fx('characters-delete-response', 'characters.delete', 'response', true, {}),
+  fx('characters-export-card-response', 'characters.export.card', 'response', true, {
+    filename: 'ada-lovelace.json',
+    contentType: 'application/json',
+    contentBase64: 'eyJuYW1lIjoiQWRhIExvdmVsYWNlIn0=',
+    warnings: [],
+  }),
+  fx('characters-export-card-png-response', 'characters.export.card', 'response', true, {
+    filename: 'ada-lovelace.png',
+    contentType: 'image/png',
+    contentBase64: 'aVBORw0KGgoAAAANSUhEUg==',
+    warnings: [],
+  }),
   fx('chats-list-response', 'chats.list', 'response', true, { items: [CHAT_VALUE] }),
   fx('chats-get-response', 'chats.get', 'response', true, CHAT_VALUE),
   fx('chats-create-response', 'chats.create', 'response', true, CHAT_VALUE),
@@ -2575,6 +2609,18 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   // --- negative fixtures (one per rule family).
   fx('neg-characters-get-missing-field', 'characters.get', 'request', false, {}),
   fx('neg-characters-get-wrong-type', 'characters.get', 'request', false, { characterId: 42 }),
+  fx('neg-characters-export-card-bad-format', 'characters.export.card', 'request', false, {
+    characterId: UUID_CHARACTER,
+    format: 'xml',
+  }),
+  fx('neg-characters-export-card-missing-field', 'characters.export.card', 'request', false, {
+    format: 'json',
+  }),
+  fx('neg-characters-export-card-response-missing-base64', 'characters.export.card', 'response', false, {
+    filename: 'ada.json',
+    contentType: 'application/json',
+    warnings: [],
+  }),
   fx('neg-generate-event-unknown-discriminator', 'generation.start', 'event', false, {
     type: 'generation.unknown',
   }),

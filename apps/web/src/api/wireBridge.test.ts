@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => {
     create: vi.fn(),
     update: vi.fn(),
     del: vi.fn(),
+    exportCard: vi.fn(),
   };
   const chats = {
     list: vi.fn(),
@@ -1480,10 +1481,65 @@ describe('settings (wire settings.get/update)', () => {
   });
 });
 
-describe('imports/exports (kernel plane honest refusals)', () => {
-  it('refuses character card export on the kernel plane', async () => {
-    await expect(exportCharacterCard('c1', 'png')).rejects.toBeInstanceOf(UnsupportedError);
-    await expect(exportCharacterCard('c1', 'json')).rejects.toBeInstanceOf(UnsupportedError);
+describe('imports/exports (kernel plane wire flow)', () => {
+  it('exports a character card via characters.export.card on the kernel plane', async () => {
+    const objectUrl = 'blob:mock-card-export';
+    const createSpy = vi
+      .spyOn(URL, 'createObjectURL')
+      .mockReturnValue(objectUrl);
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    const clickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined);
+    mocks.characters.exportCard.mockResolvedValue({
+      filename: 'ada-lovelace.json',
+      contentType: 'application/json',
+      contentBase64: 'eyJuYW1lIjoiQWRhIExvdmVsYWNlIn0=',
+      warnings: [],
+    });
+    let captured: Blob | undefined;
+    try {
+      await exportCharacterCard('c1', 'json');
+      const firstCall = createSpy.mock.calls[0];
+      captured = firstCall?.[0] as Blob | undefined;
+    } finally {
+      createSpy.mockRestore();
+      revokeSpy.mockRestore();
+      clickSpy.mockRestore();
+    }
+    expect(mocks.characters.exportCard).toHaveBeenCalledWith('c1', 'json');
+    // The base64 container was decoded into a Blob object URL for download;
+    // the content fidelity itself is proven by the kernel round-trip tests.
+    expect(captured).toBeDefined();
+    expect(captured?.type).toBe('application/json');
+    expect(captured?.size).toBeGreaterThan(0);
+  });
+
+  it('exports a PNG card on the kernel plane', async () => {
+    const objectUrl = 'blob:mock-png-export';
+    const createSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue(objectUrl);
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    const clickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined);
+    mocks.characters.exportCard.mockResolvedValue({
+      filename: 'ada-lovelace.png',
+      contentType: 'image/png',
+      contentBase64: 'aVBORw0KGgo=',
+      warnings: [],
+    });
+    let captured: Blob | undefined;
+    try {
+      await exportCharacterCard('c1', 'png');
+      const firstCall = createSpy.mock.calls[0];
+      captured = firstCall?.[0] as Blob | undefined;
+    } finally {
+      createSpy.mockRestore();
+      revokeSpy.mockRestore();
+      clickSpy.mockRestore();
+    }
+    expect(mocks.characters.exportCard).toHaveBeenCalledWith('c1', 'png');
+    expect(captured?.type).toBe('image/png');
   });
 
   it('refuses chat export on the kernel plane', async () => {

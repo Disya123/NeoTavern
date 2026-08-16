@@ -527,14 +527,14 @@
     {
       "id": "ui.card-exports",
       "title": "Character card / chat exports & character import (legacy containers)",
-      "wireOps": [],
+      "wireOps": ["characters.export.card"],
       "hosts": {
-        "desktop": "Designed",
-        "headless": "Designed",
+        "desktop": "Implemented",
+        "headless": "Implemented",
         "android": "Designed",
-        "webClient": "Designed"
+        "webClient": "Implemented"
       },
-      "notes": "SillyTavern card containers (PNG/JSON card export, chat snapshot export, card import parsing) have no wire operation — the kernel plane refuses them honestly (M5 slice 8: exportCharacterCard/exportChat throw UnsupportedError on the kernel plane and keep the legacy download on the legacy plane; useErrorText localizes the refusal via errors:UNSUPPORTED instead of INTERNAL. M5 slice 32: character-card IMPORT now runs on the kernel plane end-to-end — assets.put + imports.character.card (Этап 4.5) — so the remaining refusals are the two EXPORT directions, which the wire contract does not model). The legacy /api/v2/characters/:id/export, /api/v2/chats/:id/export and /characters/import routes stay the implemented surface until a canonical container/parse operation is specified (ТЗ §14.2 authority-non-expanding boundary).",
+      "notes": "SillyTavern card containers: character-card EXPORT now runs on the kernel plane end-to-end (M5 slice 35, Этап 4.5): wire characters.export.card returns the container (json = the original card object preserved under ext_json._card, verbatim round trip; png = minimal PNG whose chara tEXt chunk carries base64 JSON — exactly what imports.character.card accepts) base64-encoded for download; characters created without a container are rebuilt from canonical fields with an honest warning; CHARACTER_NOT_FOUND stays stable. Kernel tests (kernel_exports.rs, 5): verbatim round trip, rebuilt+warning, PNG re-import cycle, NOT_FOUND, PNG field fidelity; host parity character_card_export_over_http (30 scenarios suite). Facade CharactersApi.exportCard on all three backends (Local/Remote wire, Legacy unsupported — the legacy download URL stays for the legacy contour, ТЗ §14.2 authority-non-expanding boundary). UI: CharacterManagementPanel export menu now works on the kernel plane via wireBridge exportCharacterCard (Blob object URL download; wireBridge.test 98/98). Remaining honest refusal: chat snapshot EXPORT (chats.export) has no wire op yet (exportChat keeps UnsupportedError on the kernel plane).",
       "milestone": "M5"
     }
   ]

@@ -3,6 +3,29 @@
 ## Unreleased
 ### Added
 
+- **Character-card export over Product Wire (M5 slice 35, Этап 4.5).** New
+  wire operation `characters.export.card` (90 ops total): request
+  `{ characterId, format: json | png }`, result
+  `{ filename, contentType, contentBase64, warnings[] }`. The kernel
+  (`crates/runtime-kernel/src/exports.rs`) builds the SillyTavern card
+  container: an imported character round-trips its original card object
+  verbatim (preserved under `ext_json._card`, AGENTS.md §11); a character
+  created without a container is rebuilt from the canonical columns with an
+  honest warning; the PNG format emits a minimal PNG whose `chara` tEXt
+  chunk carries base64-encoded JSON — exactly the container
+  `imports.character.card` parses, so exports re-import (container data
+  round trip, std-only writer: zlib stored block + CRC-32/Adler-32, no new
+  dependencies). Stable `CHARACTER_NOT_FOUND` (`characterId` param). Tests:
+  kernel_exports.rs 5/5 (verbatim round trip, rebuilt+warning, PNG re-import
+  cycle, NOT_FOUND, PNG field fidelity), wire_corpus arms, remote-http host
+  parity `character_card_export_over_http` (JSON round trip, PNG signature,
+  NOT_FOUND — 31 scenarios total), wireBridge 98/98 (export now downloads a
+  decoded Blob object URL on the kernel plane instead of refusing), parity
+  73/73 (`CharactersApi.exportCard` routed identically local/remote, bad
+  format rejected before transport). UI: the CharacterManagementPanel export
+  menu now works on the kernel plane. Remaining honest refusal: chat
+  snapshot export (`chats.export`) still has no wire op.
+
 - **Honest status: message edit/delete UI is wire-integrated (M5 slice 34,
   ARC-10).** `ui.message-editing` rises from Designed to **Integrated** on
   desktop/headless/Web Client (android stays Designed until JNI parity is

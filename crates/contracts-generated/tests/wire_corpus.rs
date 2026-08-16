@@ -18,7 +18,8 @@ use contracts_generated::generated::{
     decode_prompt_plan, decode_provider_availability, decode_provider_config_dto,
     decode_provider_dto, decode_provider_model, decode_request_assets_content,
     decode_request_assets_delete, decode_request_assets_get, decode_request_assets_put,
-    decode_request_cancel_generation, decode_request_create_character, decode_request_create_chat,
+    decode_request_cancel_generation, decode_request_characters_export_card,
+    decode_request_create_character, decode_request_create_chat,
     decode_request_create_chat_snapshot, decode_request_create_lorebook,
     decode_request_create_lorebook_entry, decode_request_create_memory,
     decode_request_create_message, decode_request_create_persona, decode_request_create_preset,
@@ -30,17 +31,16 @@ use contracts_generated::generated::{
     decode_request_get_chat, decode_request_get_generation_run, decode_request_get_lorebook,
     decode_request_get_persona, decode_request_get_preset, decode_request_get_prompt_plan,
     decode_request_get_provider_config, decode_request_imports_character_card,
-    decode_request_keep_partial_generation,
-    decode_request_list_characters, decode_request_list_chats,
-    decode_request_list_generation_events, decode_request_list_lorebook_entries,
-    decode_request_list_lorebooks, decode_request_list_memories, decode_request_list_messages,
-    decode_request_list_presets, decode_request_list_provider_configs,
-    decode_request_message_draft_commit, decode_request_message_draft_discard,
-    decode_request_message_draft_get, decode_request_message_draft_save,
-    decode_request_message_revisions_list, decode_request_message_variant_activate,
-    decode_request_message_variant_create, decode_request_message_variant_delete,
-    decode_request_message_variants_list, decode_request_plugins_disable,
-    decode_request_plugins_enable, decode_request_plugins_install,
+    decode_request_keep_partial_generation, decode_request_list_characters,
+    decode_request_list_chats, decode_request_list_generation_events,
+    decode_request_list_lorebook_entries, decode_request_list_lorebooks,
+    decode_request_list_memories, decode_request_list_messages, decode_request_list_presets,
+    decode_request_list_provider_configs, decode_request_message_draft_commit,
+    decode_request_message_draft_discard, decode_request_message_draft_get,
+    decode_request_message_draft_save, decode_request_message_revisions_list,
+    decode_request_message_variant_activate, decode_request_message_variant_create,
+    decode_request_message_variant_delete, decode_request_message_variants_list,
+    decode_request_plugins_disable, decode_request_plugins_enable, decode_request_plugins_install,
     decode_request_plugins_uninstall, decode_request_profile_export,
     decode_request_profiles_create, decode_request_profiles_delete, decode_request_profiles_rename,
     decode_request_retry_generation, decode_request_set_provider_config,
@@ -50,15 +50,16 @@ use contracts_generated::generated::{
     decode_request_update_lorebook_entry, decode_request_update_memory,
     decode_request_update_message, decode_request_update_persona, decode_request_update_preset,
     decode_response_envelope, decode_result_assets_content, decode_result_assets_get,
-    decode_result_assets_put, decode_result_chat_snapshot, decode_result_diagnostics_export,
-    decode_result_empty, decode_result_imports_character_card, decode_result_list_backups, decode_result_list_lorebook_entries,
-    decode_result_list_lorebooks, decode_result_list_memories, decode_result_list_personas,
-    decode_result_list_presets, decode_result_list_provider_configs, decode_result_list_providers,
-    decode_result_list_tools, decode_result_message_revision_list,
-    decode_result_message_variant_list, decode_result_plugins_install, decode_result_plugins_list,
-    decode_result_profile_export, decode_result_profiles_create, decode_result_profiles_list,
-    decode_result_secrets_status, decode_result_settings, decode_result_themes_install,
-    decode_result_themes_list, decode_themes_item, decode_tool_call, decode_tool_spec,
+    decode_result_assets_put, decode_result_characters_export_card, decode_result_chat_snapshot,
+    decode_result_diagnostics_export, decode_result_empty, decode_result_imports_character_card,
+    decode_result_list_backups, decode_result_list_lorebook_entries, decode_result_list_lorebooks,
+    decode_result_list_memories, decode_result_list_personas, decode_result_list_presets,
+    decode_result_list_provider_configs, decode_result_list_providers, decode_result_list_tools,
+    decode_result_message_revision_list, decode_result_message_variant_list,
+    decode_result_plugins_install, decode_result_plugins_list, decode_result_profile_export,
+    decode_result_profiles_create, decode_result_profiles_list, decode_result_secrets_status,
+    decode_result_settings, decode_result_themes_install, decode_result_themes_list,
+    decode_themes_item, decode_tool_call, decode_tool_spec,
 };
 use contracts_generated::{contract_schema_hash, wire_protocol, WireError};
 use serde::de::DeserializeOwned;
@@ -428,15 +429,31 @@ fn dispatch(schema_id: &str, bytes: &[u8], valid: bool) {
         "wire.request.assets.delete" => {
             corpus_case(schema_id, decode_request_assets_delete, bytes, valid)
         }
-        "wire.result.assets.delete" => {
-            corpus_case(schema_id, decode_result_empty, bytes, valid)
-        }
-        "wire.request.imports.character.card" => {
-            corpus_case(schema_id, decode_request_imports_character_card, bytes, valid)
-        }
-        "wire.result.imports.character.card" => {
-            corpus_case(schema_id, decode_result_imports_character_card, bytes, valid)
-        }
+        "wire.result.assets.delete" => corpus_case(schema_id, decode_result_empty, bytes, valid),
+        "wire.request.imports.character.card" => corpus_case(
+            schema_id,
+            decode_request_imports_character_card,
+            bytes,
+            valid,
+        ),
+        "wire.result.imports.character.card" => corpus_case(
+            schema_id,
+            decode_result_imports_character_card,
+            bytes,
+            valid,
+        ),
+        "wire.request.characters.export.card" => corpus_case(
+            schema_id,
+            decode_request_characters_export_card,
+            bytes,
+            valid,
+        ),
+        "wire.result.characters.export.card" => corpus_case(
+            schema_id,
+            decode_result_characters_export_card,
+            bytes,
+            valid,
+        ),
         "wire.request.plugins.install" => {
             corpus_case(schema_id, decode_request_plugins_install, bytes, valid)
         }

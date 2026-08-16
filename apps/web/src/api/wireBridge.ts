@@ -148,21 +148,39 @@ function triggerDownload(url: string): void {
 }
 
 /**
- * Export one character card (PNG/JSON). Kernel: no wire operation models the
- * SillyTavern card container, so this is an honest CAPABILITY_UNAVAILABLE —
- * the legacy download URL is served by the legacy contour only.
+ * Export one character card (PNG/JSON, Этап 4.5). Kernel plane: wire
+ * `characters.export.card` returns the SillyTavern container base64-encoded;
+ * it is decoded into a Blob and downloaded locally (imported characters
+ * round-trip their original card object verbatim from `ext_json._card`).
+ * Legacy plane: the legacy download URL is served by the legacy contour
+ * only.
  */
 export async function exportCharacterCard(
   characterId: string,
   format: CharacterCardExportFormat,
 ): Promise<void> {
   if (isKernelMode()) {
-    throw new UnsupportedError('characters.export.card');
+    const result = await backend.characters.exportCard(characterId, format);
+    triggerDownload(blobUrlFromBase64(result.contentBase64, result.contentType));
+    return;
   }
   // Legacy-only capability: the URL is served by the legacy contour, and
   // wireBridge is the migration routing table (legacy branch lives here).
   // eslint-disable-next-line @neotavern/no-legacy-api-surface
   triggerDownload(`/api/v2/characters/${encodeURIComponent(characterId)}/export?format=${format}`);
+}
+
+/** Decodes a base64 payload into a temporary object URL for download. */
+function blobUrlFromBase64(base64: string, contentType: string): string {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  const url = URL.createObjectURL(new Blob([bytes], { type: contentType }));
+  // Revoke once the download anchor has had a chance to start.
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  return url;
 }
 
 /** Export one chat snapshot. Kernel: no wire operation models the container. */

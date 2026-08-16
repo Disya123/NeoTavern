@@ -54,6 +54,7 @@ import type {
   GetAssetContentResultDto,
   GetAssetResultDto,
   PutAssetResultDto,
+  CharacterCardExportResultDto,
   CharacterCardImportResultDto,
 } from '@neotavern/contracts';
 import type {
@@ -116,6 +117,12 @@ export class RemoteBackend implements NeoBackend {
         {
           signal: opts?.signal,
         },
+      ),
+    exportCard: (characterId, format, opts) =>
+      this.sdk.call<CharacterCardExportResultDto>(
+        'characters.export.card',
+        { characterId, format },
+        { signal: opts?.signal },
       ),
   };
 

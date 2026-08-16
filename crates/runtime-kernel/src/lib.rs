@@ -33,6 +33,7 @@ use std::time::Duration;
 pub mod assets;
 pub mod backup;
 pub mod export;
+pub mod exports;
 pub mod generation;
 pub mod headless;
 pub mod imports;
@@ -607,6 +608,7 @@ fn handle_unary(
         "assets.content" => with_db_opt(db, |db| assets::assets_content(db, req)),
         "assets.delete" => with_db_opt(db, |db| assets::assets_delete(db, req)),
         "imports.character.card" => with_db_opt(db, |db| imports::imports_character_card(db, req)),
+        "characters.export.card" => with_db_opt(db, |db| exports::characters_export_card(db, req)),
         // Этап 4 slice 6: canonical Extensions-context registry (SEC-05).
         "plugins.list" => with_db_opt(db, |db| plugins::plugins_list(db, req)),
         "plugins.install" => with_db_opt(db, |db| plugins::plugins_install(db, req)),

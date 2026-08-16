@@ -48,6 +48,7 @@ import {
   type ProfileExportResultDto,
   type ProviderConfigDto,
   type PutAssetResultDto,
+  type CharacterCardExportResultDto,
   type CharacterCardImportResultDto,
   type ResultSettingsDto,
   type SecretsStatusResultDto,
@@ -269,6 +270,12 @@ export class LocalBackend implements NeoBackend {
       update: (req, opts) => this.invoke<CharacterDto>('characters.update', req, opts),
       del: (characterId, opts) =>
         this.invoke<EmptyResultDto>('characters.delete', { characterId }, opts),
+      exportCard: (characterId, format, opts) =>
+        this.invoke<CharacterCardExportResultDto>(
+          'characters.export.card',
+          { characterId, format },
+          opts,
+        ),
     };
     this.chats = {
       list: (req, opts) => this.invoke<PagedChatsDto>('chats.list', req, opts),
