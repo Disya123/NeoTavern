@@ -59,6 +59,7 @@ export function ApiKeysModal({ open, onOpenChange, providerId, providerName }: A
   const items = secrets.data?.items ?? [];
   const activeId = items.find((secret) => secret.active)?.id ?? '';
   const busy = createSecret.isPending || updateSecret.isPending || deleteSecret.isPending;
+  const secretsError = secrets.isError ? errorText(secrets.error) : null;
   const dateFormatter = new Intl.DateTimeFormat(i18n.language, {
     dateStyle: 'short',
     timeStyle: 'short',
@@ -235,7 +236,11 @@ export function ApiKeysModal({ open, onOpenChange, providerId, providerName }: A
             </p>
           ) : null}
 
-          {items.length === 0 ? (
+          {secretsError ? (
+            <p className={styles.inlineError} role="alert" data-part="secrets-error">
+              {secretsError}
+            </p>
+          ) : items.length === 0 ? (
             <p className={styles.empty}>{t('providers:secretsEmpty')}</p>
           ) : (
             <ul className={styles.keysList} data-part="secrets-list">

@@ -8,6 +8,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { jsonResponse, renderWithProviders } from '../../test/helpers.js';
 import { ApiKeysModal } from './ApiKeysModal.js';
 
+// Kernel-mode honesty (slice 28): the secrets hooks consult `isKernelMode`;
+// the default here is the legacy plane so the existing tests stay as they are.
+const mocks = vi.hoisted(() => ({ isKernelMode: vi.fn(() => false) }));
+vi.mock('../api/backend.js', async (importOriginal) => {
+  const actual = (await importOriginal()) as { backend: unknown };
+  return { ...actual, isKernelMode: mocks.isKernelMode };
+});
+
 const PROVIDER_ID = '018f0000-0000-7000-8000-000000000aaa';
 
 const ACTIVE = {
@@ -101,6 +109,35 @@ async function renderModal(exposure: boolean): Promise<ReturnType<typeof userEve
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+  mocks.isKernelMode.mockReturnValue(false);
+});
+
+describe('ApiKeysModal (kernel plane, slice 28)', () => {
+  it('shows the honest secrets-unavailable error instead of an empty list', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await renderWithProviders(
+      <ApiKeysModal
+        open
+        onOpenChange={() => {}}
+        providerId={PROVIDER_ID}
+        providerName="Test Provider"
+      />,
+    );
+
+    // The wire plane has no secrets CRUD (SEC-01): the list query rejects
+    // with a typed UnsupportedError, and the panel reports it honestly —
+    // neither the legacy empty-state ('No keys yet') nor a legacy fetch.
+    expect(mocks.isKernelMode).toHaveBeenCalled();
+    const error = await screen.findByRole('alert');
+    expect(error).toHaveTextContent('providers.secrets.list');
+    expect(screen.queryByText(/No keys yet/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('list')).not.toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('ApiKeysModal', () => {

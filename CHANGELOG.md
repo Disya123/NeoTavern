@@ -3,6 +3,22 @@
 ## Unreleased
 ### Added
 
+- **ApiKeysModal reports the honest secrets-unavailable state on the
+  kernel plane (M5 slice 28).** The multi-key secrets manager previously
+  rendered the empty state ("No keys yet") when the secrets list query
+  failed — on the kernel plane that silently suggested there were no keys,
+  when in fact the wire plane has no secrets CRUD at all (SEC-01: the API
+  key lives inside the provider config and its value never crosses a DTO).
+  The panel now renders the localized query error (typed
+  `UnsupportedError` → errors:UNSUPPORTED with the raw feature code) via a
+  dedicated `secrets-error` region whenever the list query is in error, on
+  BOTH planes (a legacy network failure is reported just as honestly);
+  the empty state appears only when the list actually loaded empty. Tests:
+  ApiKeysModal 8/8 (+1 kernel-plane case: no fetch, honest error instead of
+  empty state), full web vitest green (68 files, 701 tests),
+  typecheck/eslint/prettier clean, ui:api:check 53, docs:check + gates
+  GATE PASS.
+
 - **Provider connect no longer reports discovery as a failed connection on
   the kernel plane (M5 slice 27).** After slice 26 made the provider list
   wire-backed, `ProviderProfileEditor.connect()`/`loadModels()` hit the
