@@ -34,6 +34,19 @@
 
 ### Added
 
+- **Headless host tool executor (M5 slice 59, ТЗ §8.3/§9.3).** The host
+  executor seam moves into the shared `crates/adapters/host-tools`
+  (`neotavern-host-tools`): `ToolExecutor` trait, `NoopToolExecutor`,
+  `BuiltinToolExecutor` (`app_now` — side-effect-free, consent-free),
+  `step_tool_call` extraction and `offer_tool_call` dispatch (SEC-07: only
+  the tool NAME ever reaches diagnostics). Tauri-local re-uses the crate;
+  the remote-http SSE worker now mirrors the desktop poller — the headless
+  host performs safe built-in tool effects, submits `generation.tool.result`
+  and keeps streaming the durable journal through the resumed turn
+  (`NEOTA_TOOL_EXECUTOR=none` opts out; runs then stay durably waiting as
+  before). Integration test completes the safe `app_now` round trip over a
+  live SSE stream with no external actor. Previously this headless mirror
+  was promised as follow-up to slice 57.
 - **Machine-bound OS credential vault (M5 slice 58, ТЗ §SEC-01/SEC-01.1).**
   New `os-vault` feature in `crates/secret-store` + `OsVaultSecretStore`
   (via `keyring`: Windows Credential Manager / macOS Keychain / Linux Secret

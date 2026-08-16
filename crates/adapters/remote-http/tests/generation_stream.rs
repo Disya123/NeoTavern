@@ -712,3 +712,66 @@ fn protocol_gate_blocks_generation_before_dispatch() {
         .expect("count generation runs");
     assert_eq!(runs, 0, "the 426-gated generation must not have dispatched");
 }
+
+/// М5 slice 59: the headless host's built-in tool executor completes a tool
+/// round trip over the LIVE SSE stream.
+///
+/// The fake provider's `tool=app_now` grammar emits a normalized `app_now`
+/// tool call; the server host performs the side-effect-free effect
+/// (`generation.tool.result`) and the SSE worker keeps polling the durable
+/// journal through the resumed turn — the stream carries `tool_call`,
+/// `tool_result` and `final_commit` steps and closes with `stream.closed`
+/// after `generation.completed` (no external actor, no UI).
+#[test]
+fn host_executor_completes_the_safe_tool_round_trip_over_sse() {
+    // Explicitly use the default built-in executor (a CI environment with
+    // NEOTA_TOOL_EXECUTOR=none must not silently change this scenario).
+    std::env::set_var("NEOTA_TOOL_EXECUTOR", "builtin");
+
+    let server = spawn_seeded_server();
+    let spec: gen::ToolSpec = serde_json::from_value(json!({
+        "id": "app.now",
+        "name": "app_now",
+        "description": "Return the current UTC date and time.",
+        "inputSchema": { "type": "object" },
+    }))
+    .expect("app_now spec deserializes");
+    server
+        .kernel
+        .lock()
+        .expect("kernel lock")
+        .register_tool(spec);
+
+    let (stream_id, events) = run_generation(&server, &rid(200), "tool=app_now");
+
+    let step_types: Vec<&str> = events
+        .iter()
+        .filter_map(|event| event.payload["step"]["type"].as_str())
+        .collect();
+    assert!(
+        step_types.contains(&"tool_call"),
+        "journal must contain a tool_call step: {step_types:?}"
+    );
+    assert!(
+        step_types.contains(&"tool_result"),
+        "journal must contain a tool_result step: {step_types:?}"
+    );
+    assert!(
+        step_types.contains(&"final_commit"),
+        "journal must contain the final_commit step: {step_types:?}"
+    );
+
+    // The stream carried every durable event exactly once (Local/Remote
+    // equivalence, design §6) and the run completed durably.
+    let log = durable_log(&server, &stream_id, -1);
+    assert_envelopes_equal(&events, &log, "host-executor round trip");
+    let payload =
+        serde_json::to_vec(&json!({ "workflowId": stream_id })).expect("get request serializes");
+    let guard = server.kernel.lock().expect("kernel lock");
+    let bytes = guard
+        .dispatch("generation.get", &payload, &CancellationFlag::new())
+        .expect("generation.get dispatches");
+    drop(guard);
+    let run: Value = serde_json::from_slice(&bytes).expect("get result JSON");
+    assert_eq!(run["status"], json!("completed"), "run completed durably");
+}

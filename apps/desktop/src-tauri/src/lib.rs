@@ -567,7 +567,7 @@ fn setup_local_kernel_mode(
     // `app_now` contract (UTC clock, side-effect-free, consent-free) and the
     // built-in executor that resumes waiting runs automatically.
     host.set_tool_executor(Some(Arc::new(
-        neotavern_tauri_local::executor::BuiltinToolExecutor,
+        neotavern_host_tools::BuiltinToolExecutor,
     )));
     host.register_tool(serde_json::json!({
         "id": "app.now",

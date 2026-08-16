@@ -2077,6 +2077,7 @@ dependencies = [
 name = "neotavern-desktop"
 version = "0.1.0"
 dependencies = [
+ "neotavern-host-tools",
  "neotavern-tauri-local",
  "serde",
  "serde_json",
@@ -2108,6 +2109,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "neotavern-host-tools"
+version = "0.1.0"
+dependencies = [
+ "contracts-generated",
+ "runtime-kernel",
+ "serde_json",
+]
+
+[[package]]
 name = "neotavern-storage"
 version = "0.1.0"
 dependencies = [
@@ -2127,6 +2137,7 @@ dependencies = [
  "contracts-generated",
  "neotavern-desktop-remote",
  "neotavern-envelope",
+ "neotavern-host-tools",
  "provider-sdk",
  "runtime-kernel",
  "secret-store",
@@ -2879,6 +2890,7 @@ dependencies = [
  "contracts-generated",
  "getrandom 0.4.3",
  "neotavern-envelope",
+ "neotavern-host-tools",
  "runtime-kernel",
  "serde",
  "serde_json",

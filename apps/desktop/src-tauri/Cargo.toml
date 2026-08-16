@@ -38,6 +38,7 @@ url = "2"
 # commands (desktop build always carries them; the adapter stays tauri-only
 # compilable without the feature).
 neotavern-tauri-local = { path = "../../../crates/adapters/tauri-local", features = ["tauri", "remote", "os-vault"] }
+neotavern-host-tools = { path = "../../../crates/adapters/host-tools" }
 
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-updater = "2"

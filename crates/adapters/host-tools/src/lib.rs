@@ -1,11 +1,11 @@
-//! Host tool executor seam (ТЗ §8.3, §9.3, Этап 2.7, M5 slice 57).
+//! Shared host tool executor seam (ТЗ §8.3, §9.3, M5 slices 57 + 59).
 //!
 //! The kernel NEVER executes tools: it validates the normalized tool call
 //! against the declarative registry, journals the durable `tool_call` step
 //! and durably waits (`waiting_for_tool`). The HOST performs the effect and
-//! submits the result via `generation.tool.result`. This module is the
-//! desktop host's seam: stream pollers hand every waiting `tool_call` step to
-//! the registered [`ToolExecutor`], which returns:
+//! submits the result via `generation.tool.result`. Every Kernel host
+//! (Tauri local, remote-http SSE) hands each waiting `tool_call` step to the
+//! registered [`ToolExecutor`]:
 //!
 //! - `Ok(None)` — not handled; the run stays durably waiting (the UI / a
 //!   future consent flow may drive it),
@@ -14,13 +14,16 @@
 //!   only the tool NAME is logged (SEC-07: never the arguments, never the
 //!   result content).
 //!
-//! SEC-07: the executor logs nothing itself; the poller logs only the tool
-//! name on success/failure. The built-in executor covers only
+//! SEC-07: the executor logs nothing itself; [`offer_tool_call`] logs only
+//! the tool name on success/failure. The built-in executor covers only
 //! side-effect-free, consent-free tools — `app_now` (pure UTC clock, no I/O,
 //! no secrets). Network/fs/process tools fall in the high-risk consent
 //! categories (ТЗ §14.2.3) and stay unhandled until the consent flow exists.
 
 use contracts_generated::generated::{EventEnvelope, ToolCall};
+use runtime_kernel::{CancellationFlag, Kernel};
+use std::sync::{Arc, Mutex};
+
 /// Result of one host-side tool execution attempt.
 pub trait ToolExecutor: Send + Sync {
     /// `Ok(None)` — not handled; the run stays durably waiting.
@@ -43,7 +46,7 @@ impl ToolExecutor for NoopToolExecutor {
     }
 }
 
-/// Built-in side-effect-free tool effects (M5 slice 57).
+/// Built-in side-effect-free tool effects (M5 slices 57/59).
 ///
 /// `app_now` returns the current UTC time: pure, deterministic per call, no
 /// I/O, no secrets, no consent required (the ТЗ §14.2.3 high-risk categories
@@ -88,6 +91,65 @@ pub fn step_tool_call(step_event: &EventEnvelope) -> Option<ToolCall> {
     serde_json::from_value(step.get("input")?.get("toolCall")?.clone()).ok()
 }
 
+/// Offers one committed event to the host tool executor. When the event is a
+/// durably WAITING `tool_call` step AND the executor handles it, submits the
+/// result via `generation.tool.result` and returns `true` (the caller keeps
+/// polling the durable journal). Returns `false` when nothing was handled —
+/// the run stays durably waiting.
+///
+/// SEC-07: only the tool NAME may reach diagnostics; call arguments and
+/// result content are never logged. A failed execution or a failed
+/// submission leaves the run durably waiting (recoverable) — the kernel's
+/// stale-result guard makes a double submission harmless.
+pub fn offer_tool_call(
+    kernel: &Arc<Mutex<Kernel>>,
+    run_id: &str,
+    event: &EventEnvelope,
+    executor: &dyn ToolExecutor,
+) -> bool {
+    let Some(tool_call) = step_tool_call(event) else {
+        return false;
+    };
+    let result = match executor.execute(&tool_call) {
+        Ok(Some(result)) => result,
+        Ok(None) => return false,
+        Err(_) => {
+            eprintln!(
+                "[host] tool executor failed for '{}' (redacted)",
+                tool_call.name
+            );
+            return false;
+        }
+    };
+    let request = serde_json::json!({
+        "runId": run_id,
+        "toolCallId": tool_call.id,
+        "result": result,
+    });
+    let Ok(payload) = serde_json::to_vec(&request) else {
+        return false;
+    };
+    let Ok(guard) = kernel.lock() else {
+        return false;
+    };
+    match guard.dispatch("generation.tool.result", &payload, &CancellationFlag::new()) {
+        Ok(_) => {
+            eprintln!(
+                "[host] tool '{}' executed by host (result submitted)",
+                tool_call.name
+            );
+            true
+        }
+        Err(_) => {
+            eprintln!(
+                "[host] tool result submission failed for '{}' (redacted)",
+                tool_call.name
+            );
+            false
+        }
+    }
+}
+
 /// Formats a unix timestamp as a UTC RFC 3339 string without external
 /// dependencies (e.g. `2026-08-13T12:34:56Z`). Pure arithmetic: days since
 /// epoch → proleptic Gregorian calendar date.
@@ -119,8 +181,6 @@ fn civil_from_days(days: i64) -> (i64, u32, u32) {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use super::*;
 
     fn tool_call(name: &str) -> ToolCall {

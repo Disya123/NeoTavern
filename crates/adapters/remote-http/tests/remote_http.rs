@@ -1494,7 +1494,7 @@ fn secrets_lock_over_http() {
         .put("provider:fake", "local", "sk-http-sentinel-9")
         .expect("put must write a record");
     {
-        let mut kernel = server.kernel.lock().expect("kernel lock");
+        let kernel = server.kernel.lock().expect("kernel lock");
         kernel.set_secret_store(Arc::new(file_store));
     }
 

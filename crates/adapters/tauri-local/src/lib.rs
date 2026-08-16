@@ -39,11 +39,11 @@ use std::time::Duration;
 /// session store and the execution-time resolver.
 pub mod secrets;
 
-/// Host tool executor seam (ТЗ §8.3, §9.3, M5 slice 57): the host performs
-/// the effects of registered safe tools and submits the results.
-pub mod executor;
-
-use executor::ToolExecutor;
+// Host tool executor seam (ТЗ §8.3, §9.3, М5 slice 57): the shared
+// `neotavern-host-tools` crate provides the executor trait, the built-in
+// safe tools and the `offer_tool_call` dispatch helper (also used by the
+// remote-http SSE worker — slice 59).
+use neotavern_host_tools::{offer_tool_call, ToolExecutor};
 
 /// How long each polling iteration waits for a stream notice before
 /// re-dispatching `generation.events` (mirrors the remote-http SSE worker).
@@ -459,7 +459,7 @@ fn poll_loop(
             // M5 slice 57: offer the durable waiting tool call to the host
             // executor. A handled tool resumes the run; we keep polling.
             if let Some(executor) = tool_executor.as_ref() {
-                if maybe_auto_execute_tool(&kernel, &stream_id, &event, executor.as_ref()) {
+                if offer_tool_call(&kernel, &stream_id, &event, executor.as_ref()) {
                     resumed_by_executor = true;
                 }
             }
@@ -486,59 +486,6 @@ fn poll_loop(
     }
     let _ = emit(serde_json::Value::Null);
     unregister_stream(&streams, &stream_id);
-}
-
-/// Offers one committed event to the host tool executor. When the event is a
-/// durably WAITING `tool_call` step AND the executor handles it, submits the
-/// result via `generation.tool.result` and returns `true` (the poller keeps
-/// polling the journal). Returns `false` when nothing was handled — the run
-/// stays durably waiting.
-///
-/// SEC-07: only the tool NAME may reach diagnostics; call arguments and
-/// result content are never logged. A failed execution or a failed
-/// submission leaves the run durably waiting (recoverable) — the kernel's
-/// stale-result guard makes a double submission harmless.
-fn maybe_auto_execute_tool(
-    kernel: &Arc<Mutex<Kernel>>,
-    stream_id: &str,
-    event: &EventEnvelope,
-    executor: &dyn ToolExecutor,
-) -> bool {
-    let Some(tool_call) = executor::step_tool_call(event) else {
-        return false;
-    };
-    let result = match executor.execute(&tool_call) {
-        Ok(Some(result)) => result,
-        Ok(None) => return false,
-        Err(_) => {
-            eprintln!(
-                "[host] tool executor failed for '{}' (redacted)",
-                tool_call.name
-            );
-            return false;
-        }
-    };
-    let request = serde_json::json!({
-        "runId": stream_id,
-        "toolCallId": tool_call.id,
-        "result": result,
-    });
-    match dispatch_unary(kernel, "generation.tool.result", &request) {
-        Ok(_) => {
-            eprintln!(
-                "[host] tool '{}' executed by host (result submitted)",
-                tool_call.name
-            );
-            true
-        }
-        Err(_) => {
-            eprintln!(
-                "[host] tool result submission failed for '{}' (redacted)",
-                tool_call.name
-            );
-            false
-        }
-    }
 }
 
 /// Dispatches a unary operation through the shared kernel, returning the
@@ -635,7 +582,7 @@ pub(crate) fn describe_failure(failure: &EnvelopeFailure) -> String {
         .collect::<Vec<_>>()
         .join("; ");
     if params.is_empty() {
-        format!("{}", failure.code)
+        failure.code.to_string()
     } else {
         format!("{}: {}", failure.code, params)
     }

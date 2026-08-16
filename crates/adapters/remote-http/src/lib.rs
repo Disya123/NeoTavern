@@ -37,12 +37,24 @@ use auth::{AuthConfig, AuthError, CredentialInfo, PairingStore};
 use contracts_generated::generated;
 use cors::CorsPolicy;
 use neotavern_envelope::{EnvelopeFailure, ProtocolVerdict};
+use neotavern_host_tools::{offer_tool_call, ToolExecutor};
 use rate_limit::{RateLimitConfig, RateLimiter};
 use runtime_kernel::{
     CancellationFlag, EventStream, Kernel, KernelError, KernelErrorCode, StreamNotice,
 };
 use sse::SseFrame;
 use tiny_http::{Header, Method, Request, Response, Server};
+
+/// The headless host's tool executor (М5 slice 59): by default the built-in
+/// side-effect-free tools (`app_now`) run on the server host, mirroring the
+/// desktop kernel host (slice 57). `NEOTA_TOOL_EXECUTOR=none` disables host
+/// execution — waiting runs stay durably waiting (pre-slice behavior).
+fn host_tool_executor() -> Option<Arc<dyn ToolExecutor>> {
+    if std::env::var("NEOTA_TOOL_EXECUTOR").as_deref() == Ok("none") {
+        return None;
+    }
+    Some(Arc::new(neotavern_host_tools::BuiltinToolExecutor))
+}
 
 /// Configuration for [`RemoteAdapter::start`].
 ///
@@ -1062,6 +1074,8 @@ fn respond_generation_live(
             finished: false,
             terminal: false,
             auth: auth_recheck(shared, credential),
+            tool_executor: host_tool_executor(),
+            resumed_by_executor: false,
         },
         origin,
     );
@@ -1130,6 +1144,8 @@ fn respond_generation_resume(
             finished: false,
             terminal: false,
             auth: auth_recheck(shared, credential),
+            tool_executor: host_tool_executor(),
+            resumed_by_executor: false,
         },
         origin,
     );
@@ -1307,6 +1323,13 @@ struct StreamingResponseReader {
     /// auth is enabled; the poll loop re-validates liveness every batch so
     /// revocation terminates the stream (§10).
     auth: Option<(Arc<PairingStore>, String)>,
+    /// Host tool executor (М5 slice 59): offered every durably WAITING
+    /// `tool_call` step; a handled tool resumes the run through the journal.
+    tool_executor: Option<Arc<dyn ToolExecutor>>,
+    /// Whether the host executor resumed the run after the kernel stream
+    /// session ended (waiting_for_tool): the SSE stream must keep polling the
+    /// durable journal until the run's terminal event instead of closing.
+    resumed_by_executor: bool,
 }
 
 impl StreamingResponseReader {
@@ -1365,16 +1388,32 @@ impl StreamingResponseReader {
                 for item in page.items {
                     self.pending.push_str(&sse::encode_envelope_frame(&item));
                     self.last_sent = item.sequence;
+                    // М5 slice 59: offer every durably waiting tool call to
+                    // the host executor. A handled tool resumes the run; the
+                    // stream keeps polling the journal past the ended kernel
+                    // session (resumed_by_executor).
+                    if let Some(executor) = self.tool_executor.as_ref() {
+                        if offer_tool_call(
+                            &self.kernel,
+                            &self.workflow_id,
+                            &item,
+                            executor.as_ref(),
+                        ) {
+                            self.resumed_by_executor = true;
+                        }
+                    }
                     if STREAM_TERMINAL_TYPES.contains(&item.r#type.as_str()) {
                         self.terminal = true;
                     }
                 }
                 if self.terminal {
                     self.close_stream();
-                } else if session_ended {
+                } else if session_ended && !self.resumed_by_executor {
                     // The run's stream session ended without a terminal event
                     // type (durable `waiting_for_tool`): this page was the
-                    // final drain — close with `stream.closed`.
+                    // final drain — close with `stream.closed`. A run the
+                    // host executor just resumed keeps streaming from the
+                    // durable journal.
                     self.close_stream();
                 } else if self.stream.is_none() && was_empty && self.run_finished() {
                     // Resume at/after the terminal event: the log holds no

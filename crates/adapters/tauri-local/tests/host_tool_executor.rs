@@ -8,7 +8,7 @@
 //! control keeps the pre-slice behavior: the run stays durably waiting and
 //! the consumer stream closes.
 
-use neotavern_tauri_local::executor::BuiltinToolExecutor;
+use neotavern_host_tools::BuiltinToolExecutor;
 use neotavern_tauri_local::{build_request_envelope, KernelHost, KernelHostConfig};
 use std::sync::Arc;
 use std::time::{Duration, Instant};

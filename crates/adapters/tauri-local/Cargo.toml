@@ -16,6 +16,9 @@ runtime-kernel = { path = "../../runtime-kernel" }
 # fallback; the OS-vault adapter is a follow-up slice.
 secret-store = { path = "../../secret-store" }
 provider-sdk = { path = "../../provider-sdk" }
+# Shared host tool executor seam (М5 slices 57/59): the host performs the
+# effects of registered safe tools; also used by remote-http.
+neotavern-host-tools = { path = "../../adapters/host-tools" }
 # Shared envelope layer — the Tauri transport answers byte-identical
 # response envelopes to the CLI and the remote-http adapter (§6.3).
 neotavern-envelope = { path = "../envelope" }
