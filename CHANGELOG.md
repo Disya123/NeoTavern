@@ -3,6 +3,25 @@
 ## Unreleased
 ### Added
 
+- **Legacy extension-settings bridge moved behind a transport module
+  (M5 slice 16, ARC-03).** The last production component holding
+  `legacyRaw()` — `LegacyBridgeSync.tsx` (the documented
+  `window.extension_settings` SillyTavern plugin contour, ТЗ §14) — now goes
+  through `api/legacyExtensionSettings.ts`, the same transport pattern as
+  `wireBridge.ts`. On the legacy contour (sidecar / remote Web Client) the
+  module keeps the real `GET /legacy/extension-settings` /
+  `PATCH /legacy/extension-settings/:namespace` store. On the kernel plane it
+  is an honest empty no-op: the kernel has no legacy extension-settings
+  store (a feature-frozen legacy `app.db` keyspace, ADR-0038), so plugins
+  keep session-local settings through the bridge and nothing opens a legacy
+  call from kernel mode (ARC-02). No production component carries
+  `legacyRaw()` or `/api/v2` literals anymore (scanner + ESLint gate green);
+  the 3 component sites moved to the tracked transport table
+  (`ui-legacy-surface.md`, same M4 sidecar-removal deadline). Tests:
+  legacyExtensionSettings 5/5 (+ kernel no-op cases), events 15/15, full web
+  vitest green, eslint/typecheck/prettier clean, ui:api:check 53, gates GATE
+  PASS.
+
 - **`connectAppEvents` is an honest no-op on the kernel plane (M5 slice 15,
   ARC-02 kernel-mode truthfulness).** The app-level SSE subscriber
   (`GET /api/v2/events`) existed to invalidate TanStack Query caches on

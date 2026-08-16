@@ -9,12 +9,12 @@ import {
   setLegacyBridge,
   type LegacyBridge,
 } from '@neotavern/legacy-compat';
-import type {
-  LegacyExtensionSettings,
-  LegacyExtensionSettingsResponse,
-} from '@neotavern/contracts';
-import { legacyRaw } from '../api/backend.js';
+import type { LegacyExtensionSettings } from '@neotavern/contracts';
 import { getCsrfToken } from '../api/client.js';
+import {
+  loadLegacyExtensionSettings,
+  saveLegacyExtensionSettings,
+} from '../api/legacyExtensionSettings.js';
 import { createBridgeChatMessage } from '../api/wireBridge.js';
 import { useCharacters, useChat, useMessages, usePersonas, useSettings } from '../api/hooks.js';
 import { resolveActivePersona } from '../lib/macros.js';
@@ -43,8 +43,7 @@ export function LegacyBridgeSync() {
 
   useEffect(() => {
     let active = true;
-    void legacyRaw()
-      .request<LegacyExtensionSettingsResponse>('GET', '/legacy/extension-settings')
+    void loadLegacyExtensionSettings()
       .then((response) => {
         if (!active) return;
         settingsRef.current = response.items;
@@ -124,11 +123,7 @@ export function LegacyBridgeSync() {
         (window as LegacyGlobals).eventSource?.emit(event_types.SETTINGS_UPDATED, {
           namespace,
         });
-        void legacyRaw()
-          .request('PATCH', `/legacy/extension-settings/${encodeURIComponent(namespace)}`, {
-            settings: settingsToUpdate,
-          })
-          .catch(() => undefined);
+        void saveLegacyExtensionSettings(namespace, settingsToUpdate).catch(() => undefined);
       },
     };
     setLegacyBridge(bridge);

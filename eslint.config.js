@@ -220,6 +220,7 @@ export default tseslint.config(
       'apps/web/src/api/backend.ts',
       'apps/web/src/api/events.ts',
       'apps/web/src/api/generate.ts',
+      'apps/web/src/api/legacyExtensionSettings.ts',
       'apps/web/src/components/AutoConnectSync.tsx',
       'apps/web/src/components/LegacyBridgeSync.tsx',
       'apps/web/src/pages/ChatPage.tsx',
