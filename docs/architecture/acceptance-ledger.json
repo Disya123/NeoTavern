@@ -1052,7 +1052,7 @@
           "type": "artifact",
           "artifact": "LegacyBridgeSync extension-settings transport (legacyExtensionSettings.ts)",
           "result": "M5 slice 16 (ARC-03): the LAST production component holding legacyRaw() — LegacyBridgeSync.tsx, the documented window.extension_settings SillyTavern plugin contour (ТЗ §14) — now goes through api/legacyExtensionSettings.ts, the same transport pattern as wireBridge.ts (components never call the legacy surface themselves). Legacy contour (sidecar / remote Web Client): real GET /legacy/extension-settings + PATCH /legacy/extension-settings/:namespace store, behavior unchanged. Kernel plane: honest empty no-op — the kernel has no legacy extension-settings store (feature-frozen legacy app.db keyspace, ADR-0038); plugins keep session-local settings through the bridge and nothing opens a legacy call from kernel mode (ARC-02). The 3 component sites moved to the tracked transport table (ui-legacy-surface.md, owner neotavern/desktop-web, M4 sidecar-removal deadline 2026-12-31; module added to the eslint transport exemption alongside events/generate). Result: NO production component carries legacyRaw() or /api/v2 literals (scanner + ESLint gate green). Verified: legacyExtensionSettings 5/5 (+ kernel no-op cases), events 15/15, full web vitest green (646 tests), eslint/typecheck/prettier clean, ui:api:check 53, docs:check + gates GATE PASS.",
-          "commit": "pending"
+          "commit": "4056c81"
         },
         {
           "type": "artifact",
