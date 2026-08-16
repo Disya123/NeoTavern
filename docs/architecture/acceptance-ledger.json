@@ -1130,7 +1130,7 @@
           "type": "artifact",
           "artifact": "Provider editors report the catalog-unavailable state honestly (ProviderProfileEditor/GenerationPresetEditor)",
           "result": "M5 slice 29 (ARC-02 UX honesty): the provider catalog has no honest wire equivalent (ProviderDto carries no adapterKind/defaultBaseUrl/apiKeyRequired), so the catalog query rejects with a typed UnsupportedError on the kernel plane — the panels previously swallowed that error and silently hid the API-mode/source selects, suggesting the catalog was simply empty. Both ProviderProfileEditor and GenerationPresetEditor now render the localized query error (errors:UNSUPPORTED with the raw feature code 'providers.catalog') through a dedicated catalog-error region whenever the catalog query is in error, on BOTH planes (a legacy network failure is reported just as honestly); the manual path (typed name/base URL, openai-compatible default) still works without the catalog. Tests: ProviderProfileEditor 2/2 (+1 kernel-plane case asserting honest catalog error, no fetch, and manual connect still saving through providers.config.set + settings.update), full web vitest 702/702 (68 files), web typecheck clean, eslint clean, prettier clean, ui:api:check 53 sites, docs:check + docs:sync:check + matrix 35 rows + gates GATE PASS.",
-          "commit": "pending"
+          "commit": "175d5b3"
         },
         {
           "type": "artifact",
