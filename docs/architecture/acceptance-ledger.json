@@ -1214,7 +1214,7 @@
           "type": "artifact",
           "artifact": "Tool registry UI in Settings (ТЗ §8.3, §13.2: user can see the declarative tool contracts the host registered)",
           "result": "M5 slice 43: generation.tools.list existed in the kernel and the facade (Local/Remote forward, legacy UnsupportedError) but the UI never surfaced the tool registry — the user had no honest view of which tools exist and what they require before any consent. This slice adds the first tool-visibility surface. UI: new Tools tab in the Settings panel (settings:tools) rendering ToolsPanel — per tool: name, description (tools:noDescription fallback), and the required argument names parsed from the input JSON-Schema (tools:requires / tools:noArgs); honest empty state tools:empty ('No tools registered by this host.'); tool arguments/results never rendered (SEC-07-consistent). useGenerationTools hook (queryKey generation-tools, staleTime 30s). CSS: .hint token in SettingsPanel.module.css. i18n en/ru: settings:tools + new tools namespace (title, titleHint, empty, noDescription, requires, noArgs). Tests: ToolsPanel.test.tsx 2 (registered contracts rendered with required args; honest empty state). Docs: release-manifest generation.tool-loop notes (Tools tab; consent modal + transcript step rendering + generation.tool.result submission remain Этап 4), CHANGELOG, ledger. Honest boundary: this is a read-only registry view — no tool execution, no consent flow, no result submission.",
-          "commit": "pending"
+          "commit": "5039177"
         },
         {
           "type": "artifact",
