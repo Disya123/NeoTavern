@@ -309,6 +309,7 @@ export class LegacyBackend implements NeoBackend {
 
   readonly secrets: SecretsApi = {
     status: () => this.unsupported('secrets.status'),
+    lock: () => this.unsupported('secrets.lock'),
   };
 
   readonly assets: AssetsApi = {

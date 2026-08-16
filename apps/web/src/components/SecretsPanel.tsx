@@ -13,9 +13,10 @@
  * display, copy or reveal.
  */
 import { Key, Lock, LockKey } from '@phosphor-icons/react';
+import { Button } from '@neotavern/ui';
 import { useTranslation } from 'react-i18next';
 import type { SecretsStatusResultDto } from '@neotavern/contracts';
-import { useSecretsStatus } from '../api/secretsHooks.js';
+import { useLockSecrets, useSecretsStatus } from '../api/secretsHooks.js';
 import { useErrorText } from '../lib/useErrorText.js';
 import styles from './SettingsPanel.module.css';
 
@@ -23,6 +24,7 @@ export function SecretsPanel() {
   const { t } = useTranslation();
   const errorText = useErrorText();
   const status = useSecretsStatus();
+  const lockSecrets = useLockSecrets();
 
   if (status.isError) {
     return (
@@ -40,6 +42,14 @@ export function SecretsPanel() {
       </div>
     );
   }
+
+  // Manual lock (SEC-01.1: "auto-lock, ручную блокировку и best-effort
+  // zeroization"). Only a locked-able, available portable store can be
+  // locked again; after a lock the store is unavailable until the host
+  // re-opens it with the master passphrase, so the button disappears and the
+  // mode copy flips to the honest locked state.
+  const canLock =
+    status.data.kind === 'portable' && status.data.available === true && !lockSecrets.isPending;
 
   return (
     <div className={styles.body} data-part="secrets-settings">
@@ -83,6 +93,26 @@ export function SecretsPanel() {
             </li>
           ) : null}
         </ul>
+        {status.data.available === false && status.data.kind === 'portable' ? (
+          <p className={styles.safeHint} role="status">
+            {t('secrets:lockedHint')}
+          </p>
+        ) : null}
+        {canLock ? (
+          <Button
+            size="sm"
+            data-part="lock-secrets"
+            onClick={() => lockSecrets.mutate()}
+            disabled={lockSecrets.isPending}
+          >
+            {lockSecrets.isPending ? t('secrets:locking') : t('secrets:lock')}
+          </Button>
+        ) : null}
+        {lockSecrets.isError ? (
+          <p className={styles.error} role="alert">
+            {errorText(lockSecrets.error)}
+          </p>
+        ) : null}
         <p className={styles.safeHint}>{t('secrets:noRevealHint')}</p>
       </section>
     </div>

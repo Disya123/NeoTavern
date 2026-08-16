@@ -97,6 +97,7 @@ import type {
   ResultSettingsDto,
   SaveMessageDraftRequestDto,
   SecretsStatusResultDto,
+  SecretsLockResultDto,
   StartGenerationRequestDto,
   SetProviderConfigRequestDto,
   ThemeDto,
@@ -466,13 +467,18 @@ export interface DiagnosticsApi {
 }
 
 /**
- * Secret-store status operations (wire `secrets.status`, SEC-01.1, Этап 4
- * slice 7 remainder). Reports the explicit store mode WITHOUT invoking get —
- * a value can never cross the DTO.
+ * Secret-store operations (wire `secrets.status` / `secrets.lock`,
+ * SEC-01.1). `status` reports the explicit store mode WITHOUT invoking get —
+ * a value can never cross the DTO. `lock` performs the manual lock: the
+ * portable store drops its derived key material in memory (best-effort
+ * zeroization); reads/writes fail with `SECRET_STORE_LOCKED` until the host
+ * re-opens the store with the master passphrase.
  */
 export interface SecretsApi {
   /** Report the explicit secret-store mode and backend metadata. */
   status(opts?: BackendCallOptions): Promise<SecretsStatusResultDto>;
+  /** Lock the secret store (idempotent; fail-closed without a store). */
+  lock(opts?: BackendCallOptions): Promise<SecretsLockResultDto>;
 }
 
 /**

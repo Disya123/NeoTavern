@@ -59,7 +59,7 @@ describe('product wire registry', () => {
     // chats.export (91 total). The exact operation
     // set is asserted so a registry edit that drops or renames an op fails
     // loudly.
-    expect(registry.operations).toHaveLength(93);
+    expect(registry.operations).toHaveLength(94);
     expect(registry.operations.map((op) => op.operationId)).toEqual([
       'meta.get',
       'characters.list',
@@ -131,6 +131,7 @@ describe('product wire registry', () => {
       'settings.update',
       'diagnostics.export',
       'secrets.status',
+      'secrets.lock',
       'lorebooks.list',
       'lorebooks.get',
       'lorebooks.create',

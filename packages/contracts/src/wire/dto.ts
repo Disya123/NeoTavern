@@ -1535,10 +1535,9 @@ export type BackupsRestoreRequestDto = Static<typeof BackupsRestoreRequestDtoSch
  * ask the user to restart. */
 export const BackupsRestoreResultDtoSchema = Type.Object(
   {
-    status: Type.Union(
-      [Type.Literal('committed'), Type.Literal('activation_pending')],
-      { 'x-wire-unknown-behavior': 'reject' },
-    ),
+    status: Type.Union([Type.Literal('committed'), Type.Literal('activation_pending')], {
+      'x-wire-unknown-behavior': 'reject',
+    }),
   },
   { $id: 'wire.result.backups-restore', additionalProperties: false },
 );
@@ -1936,6 +1935,21 @@ export const SecretsStatusResultDtoSchema = Type.Object(
   { $id: 'wire.result.secrets-status', additionalProperties: false },
 );
 export type SecretsStatusResultDto = Static<typeof SecretsStatusResultDtoSchema>;
+
+/**
+ * Secrets lock result DTO (`wire.result.secrets-lock`) — SEC-01.1 manual
+ * lock: the portable store drops its derived key material in memory
+ * (best-effort zeroization); every subsequent read/write fails with
+ * `SECRET_STORE_LOCKED` until the host re-opens the store with the master
+ * passphrase. The operation is idempotent and value-free.
+ */
+export const SecretsLockResultDtoSchema = Type.Object(
+  {
+    locked: Type.Boolean(),
+  },
+  { $id: 'wire.result.secrets-lock', additionalProperties: false },
+);
+export type SecretsLockResultDto = Static<typeof SecretsLockResultDtoSchema>;
 
 /**
  * Asset DTO (`wire.assets.item`) — metadata of an immutable content-
@@ -2348,6 +2362,7 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.request.settings.update': UpdateSettingsRequestDtoSchema,
   'wire.result.diagnostics-export': DiagnosticsExportResultDtoSchema,
   'wire.result.secrets-status': SecretsStatusResultDtoSchema,
+  'wire.result.secrets-lock': SecretsLockResultDtoSchema,
   'wire.assets.item': AssetDtoSchema,
   'wire.request.assets.put': PutAssetRequestDtoSchema,
   'wire.result.assets.put': PutAssetResultDtoSchema,

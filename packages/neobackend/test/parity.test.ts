@@ -564,6 +564,8 @@ class FakeKernelTransport implements LocalTransport {
         return { ok: true, value: DIAGNOSTICS };
       case 'secrets.status':
         return { ok: true, value: SECRETS_STATUS };
+      case 'secrets.lock':
+        return { ok: true, value: { locked: true } };
       case 'lorebooks.list':
         return { ok: true, value: LOREBOOK_LIST };
       case 'lorebooks.create':
@@ -702,6 +704,8 @@ function rpcResult(operationId: string | undefined): unknown {
       return DIAGNOSTICS;
     case 'secrets.status':
       return SECRETS_STATUS;
+    case 'secrets.lock':
+      return { locked: true };
     case 'lorebooks.list':
       return LOREBOOK_LIST;
     case 'lorebooks.create':
@@ -1997,6 +2001,20 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
     expect(localResult).toEqual(SECRETS_STATUS);
   });
 
+  it('secrets.lock is routed identically by local and remote backends (SEC-01.1 manual lock)', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const [localResult, remoteResult] = await Promise.all([
+      local.secrets.lock(),
+      remote.secrets.lock(),
+    ]);
+    expect(kernel.requests).toEqual([{ operationId: 'secrets.lock', payload: {} }]);
+    expect(localResult).toEqual(remoteResult);
+    expect(localResult).toEqual({ locked: true });
+  });
+
   it('assets.get/content/put/delete forward the canonical ops and decode the DTOs from both backends', async () => {
     const kernel = new FakeKernelTransport();
     const local = new LocalBackend({ transport: kernel });
@@ -2255,6 +2273,7 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
     expect(() => backend.settings.get()).toThrow(UnsupportedError);
     expect(() => backend.diagnostics.export()).toThrow(UnsupportedError);
     expect(() => backend.secrets.status()).toThrow(UnsupportedError);
+    expect(() => backend.secrets.lock()).toThrow(UnsupportedError);
     expect(() => backend.assets.get(ASSET_ID)).toThrow(UnsupportedError);
     expect(() => backend.assets.content(ASSET_ID)).toThrow(UnsupportedError);
     expect(() =>

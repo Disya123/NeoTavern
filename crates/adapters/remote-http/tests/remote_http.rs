@@ -33,6 +33,8 @@ use common::{
     Kernel, KernelErrorCode, Mutex, RemoteAdapter, RemoteAdapterConfig, SocketAddr, SseFrame,
     TcpStream, TestServer, Value, Write, T0, ZERO_SCHEMA_HASH,
 };
+use secret_store::file::FileEncryptedSecretStore;
+use secret_store::SecretStore;
 
 /// Standard base64 decoding (test-local; the crate stays dependency-free).
 fn decode_base64(encoded: &str) -> Vec<u8> {
@@ -1428,6 +1430,65 @@ fn backups_restore_over_http() {
     assert_eq!(request_id, rid(6), "requestId is echoed on errors too");
     assert_eq!(error.code, "NOT_FOUND");
     assert_eq!(error.params["backupId"], json!("00000000-0000-4000-8000-0000000000ff"));
+}
+
+/// М5 slice 40 (SEC-01.1): `secrets.lock` over the HTTP host — the manual
+/// lock drops the portable store's derived key; status afterwards honestly
+/// reports `available = false` and a second lock is idempotent. Without a
+/// wired store the op fails closed with `CAPABILITY_UNAVAILABLE`.
+#[test]
+fn secrets_lock_over_http() {
+    let server = TestServer::spawn();
+
+    // Fail-closed without a store seam.
+    let request = envelope_body(&rid(1), "secrets.lock", json!({}));
+    let response = http_request(server.addr, "POST", "/rpc", &[], &request);
+    assert_eq!(response.status, 200, "product errors ride the 200 envelope");
+    let (_, error) = expect_error(decode_envelope(&response.body));
+    assert_eq!(error.code, "CAPABILITY_UNAVAILABLE");
+
+    // Wire a real portable store through the host seam, then lock via HTTP.
+    let secrets_path = server.data_root().join("secrets.enc");
+    let file_store = FileEncryptedSecretStore::new(&secrets_path);
+    file_store
+        .create("test-master-passphrase")
+        .expect("create must initialize the encrypted store");
+    file_store
+        .put("provider:fake", "local", "sk-http-sentinel-9")
+        .expect("put must write a record");
+    {
+        let mut kernel = server.kernel.lock().expect("kernel lock");
+        kernel.set_secret_store(Arc::new(file_store));
+    }
+
+    let status = envelope_body(&rid(2), "secrets.status", json!({}));
+    let response = http_request(server.addr, "POST", "/rpc", &[], &status);
+    assert_eq!(response.status, 200, "secrets.status answers HTTP 200");
+    let (_, status_result) = expect_ok(decode_envelope(&response.body));
+    gen::validate_result_secrets_status(&status_result).expect("status result is wire-valid");
+    assert_eq!(status_result["kind"], json!("portable"));
+    assert_eq!(status_result["available"], json!(true));
+    assert_eq!(status_result["recordCount"], json!(1));
+
+    let lock = envelope_body(&rid(3), "secrets.lock", json!({}));
+    let response = http_request(server.addr, "POST", "/rpc", &[], &lock);
+    assert_eq!(response.status, 200, "secrets.lock answers HTTP 200");
+    let (request_id, lock_result) = expect_ok(decode_envelope(&response.body));
+    assert_eq!(request_id, rid(3), "requestId is echoed");
+    gen::validate_result_secrets_lock(&lock_result).expect("lock result is wire-valid");
+    assert_eq!(lock_result["locked"], json!(true));
+
+    let again = envelope_body(&rid(4), "secrets.lock", json!({}));
+    let response = http_request(server.addr, "POST", "/rpc", &[], &again);
+    assert_eq!(response.status, 200, "secrets.lock is idempotent");
+    let (_, again_result) = expect_ok(decode_envelope(&response.body));
+    assert_eq!(again_result["locked"], json!(true));
+
+    let status = envelope_body(&rid(5), "secrets.status", json!({}));
+    let response = http_request(server.addr, "POST", "/rpc", &[], &status);
+    assert_eq!(response.status, 200, "secrets.status keeps serving after lock");
+    let (_, status_result) = expect_ok(decode_envelope(&response.body));
+    assert_eq!(status_result["available"], json!(false), "locked store is unavailable");
 }
 
 /// 26. M4 slice 1 (Этап 4.1): the full lorebook CRUD over the HTTP host —

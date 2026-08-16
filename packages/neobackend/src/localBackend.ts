@@ -56,6 +56,7 @@ import {
   type ChatsExportResultDto,
   type ResultSettingsDto,
   type SecretsStatusResultDto,
+  type SecretsLockResultDto,
   type ThemeDto,
   type MessageDto,
   type MessageDraftDto,
@@ -426,6 +427,7 @@ export class LocalBackend implements NeoBackend {
     };
     this.secrets = {
       status: (opts) => this.invoke<SecretsStatusResultDto>('secrets.status', {}, opts),
+      lock: (opts) => this.invoke<SecretsLockResultDto>('secrets.lock', {}, opts),
     };
     this.assets = {
       get: (assetId, opts) => this.invoke<GetAssetResultDto>('assets.get', { assetId }, opts),

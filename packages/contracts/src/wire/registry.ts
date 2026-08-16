@@ -1322,6 +1322,20 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'secrets.lock',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.write',
+    'wire.request.empty',
+    'wire.result.secrets-lock',
+    undefined,
+    ['INTERNAL', 'CONTRACT_VIOLATION', 'CAPABILITY_UNAVAILABLE', 'OUTCOME_UNKNOWN'],
+    1024,
+    1024,
+    undefined,
+  ),
+  op(
     'lorebooks.list',
     'transactional',
     'idempotent',
@@ -2644,6 +2658,8 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('settings-update-response', 'settings.update', 'response', true, SETTINGS_VALUE),
   fx('diagnostics-export-response', 'diagnostics.export', 'response', true, DIAGNOSTICS_VALUE),
   fx('secrets-status-response', 'secrets.status', 'response', true, SECRETS_STATUS_VALUE),
+  fx('secrets-lock-request', 'secrets.lock', 'request', true, {}),
+  fx('secrets-lock-response', 'secrets.lock', 'response', true, { locked: true }),
 
   // --- valid event fixture (generation.start streams events, no response).
   fx('generation-start-event', 'generation.start', 'event', true, {

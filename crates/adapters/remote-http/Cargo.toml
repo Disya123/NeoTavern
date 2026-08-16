@@ -21,3 +21,7 @@ tempfile = "3"
 # one compiled copy exists in the test graph.
 neotavern-storage = { path = "../../storage" }
 rusqlite = "0.40.2"
+# Portable secrets.enc store used by the secrets.lock host-parity test (М5
+# slice 40, SEC-01.1); the kernel under test already depends on the same
+# crate.
+secret-store = { path = "../../secret-store" }

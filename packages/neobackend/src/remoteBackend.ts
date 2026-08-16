@@ -53,6 +53,7 @@ import type {
   ProviderConfigDto,
   ResultSettingsDto,
   SecretsStatusResultDto,
+  SecretsLockResultDto,
   ThemeDto,
   GetAssetContentResultDto,
   GetAssetResultDto,
@@ -337,6 +338,8 @@ export class RemoteBackend implements NeoBackend {
   readonly secrets: SecretsApi = {
     status: (opts) =>
       this.sdk.call<SecretsStatusResultDto>('secrets.status', {}, { signal: opts?.signal }),
+    lock: (opts) =>
+      this.sdk.call<SecretsLockResultDto>('secrets.lock', {}, { signal: opts?.signal }),
   };
 
   readonly assets: AssetsApi = {

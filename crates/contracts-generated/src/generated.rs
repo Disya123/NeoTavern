@@ -90,6 +90,7 @@ pub fn operation_request_limit(operation_id: &str) -> Option<u64> {
         "settings.update" => Some(65536),
         "diagnostics.export" => Some(1024),
         "secrets.status" => Some(1024),
+        "secrets.lock" => Some(1024),
         "lorebooks.list" => Some(1024),
         "lorebooks.get" => Some(2048),
         "lorebooks.create" => Some(65536),
@@ -191,6 +192,7 @@ pub fn operation_response_limit(operation_id: &str) -> Option<u64> {
         "settings.update" => Some(262144),
         "diagnostics.export" => Some(262144),
         "secrets.status" => Some(262144),
+        "secrets.lock" => Some(1024),
         "lorebooks.list" => Some(262144),
         "lorebooks.get" => Some(262144),
         "lorebooks.create" => Some(262144),
@@ -4102,6 +4104,46 @@ pub fn validate_result_secrets_status(value: &Value) -> Result<(), Vec<Issue>> {
 
 pub fn decode_result_secrets_status(bytes: &[u8]) -> Result<ResultSecretsStatus, WireError> {
     crate::decode::<ResultSecretsStatus>(validate_result_secrets_status, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultSecretsLock {
+    pub locked: bool,
+}
+
+pub(crate) fn check_result_secrets_lock(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("locked").is_none() {
+            issues.push(Issue::new(join_path(path, "locked"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("locked") {
+            let child_path = join_path(path, "locked");
+            if !child.is_boolean() {
+                issues.push(Issue::new(child_path.as_str(), "Boolean"));
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "locked") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_secrets_lock(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_secrets_lock(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_secrets_lock(bytes: &[u8]) -> Result<ResultSecretsLock, WireError> {
+    crate::decode::<ResultSecretsLock>(validate_result_secrets_lock, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

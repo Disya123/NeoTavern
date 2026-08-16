@@ -85,6 +85,84 @@ fn secrets_status_reports_session_mode_and_never_leaks_values() {
 }
 
 #[test]
+fn secrets_lock_is_fail_closed_without_a_store() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel(root.path());
+
+    let err = dispatch_json(&kernel, "secrets.lock", json!({}))
+        .expect_err("secrets.lock without a wired store must fail closed");
+    let product = err.product.expect("product error");
+    assert_eq!(product.code, "CAPABILITY_UNAVAILABLE");
+    assert_eq!(product.params["operation"], json!("secrets.lock"));
+}
+
+#[test]
+fn secrets_lock_blocks_the_portable_store_until_reopen() {
+    // A real portable encrypted store wired into the kernel: lock drops the
+    // derived key; status reports available=false afterwards, and a provider
+    // key write through the SecretStore seam fails with SECRET_STORE_LOCKED.
+    let root = tempfile::tempdir().expect("tempdir");
+    let secrets_path = root.path().join("secrets.enc");
+    let file_store = FileEncryptedSecretStore::new(&secrets_path);
+    file_store
+        .create("test-master-passphrase")
+        .expect("create must initialize the encrypted store");
+    file_store
+        .put("provider:fake", "local", "sk-portable-sentinel-77")
+        .expect("put must write a record");
+    let file_arc = Arc::new(file_store);
+    let store: Arc<dyn SecretStore> = file_arc.clone();
+    let kernel = open_kernel(root.path());
+    kernel.set_secret_store(store);
+
+    let before =
+        dispatch_json(&kernel, "secrets.status", json!({})).expect("secrets.status must succeed");
+    assert_eq!(before["available"], true);
+    assert_eq!(before["recordCount"], 1);
+
+    let locked =
+        dispatch_json(&kernel, "secrets.lock", json!({})).expect("secrets.lock must succeed");
+    assert_eq!(locked["locked"], true);
+
+    // Manual lock is idempotent.
+    let again =
+        dispatch_json(&kernel, "secrets.lock", json!({})).expect("secrets.lock is idempotent");
+    assert_eq!(again["locked"], true);
+
+    let after = dispatch_json(&kernel, "secrets.status", json!({}))
+        .expect("secrets.status must keep working after lock");
+    assert_eq!(after["available"], false, "locked store is unavailable");
+    assert_eq!(after["recordCount"], 0);
+
+    // A key write now fails with the stable SECRET_STORE_LOCKED product code.
+    let err = dispatch_json(
+        &kernel,
+        "providers.config.set",
+        json!({
+            "provider": "openai",
+            "name": "local",
+            "config": { "baseUrl": "http://127.0.0.1:1" },
+            "apiKey": "sk-after-lock"
+        }),
+    )
+    .expect_err("provider key write must fail while the store is locked");
+    let product = err.product.expect("product error");
+    assert_eq!(product.code, "SECRET_STORE_LOCKED");
+
+    // Re-opening with the passphrase restores the record (host-side seam).
+    file_arc
+        .open("test-master-passphrase")
+        .expect("re-open must unlock the store");
+    assert_eq!(
+        file_arc
+            .get("provider:fake", "local")
+            .expect("get after unlock"),
+        Some("sk-portable-sentinel-77".to_string()),
+        "records survive a lock/reopen cycle"
+    );
+}
+
+#[test]
 fn secrets_status_reports_portable_mode_and_format_version() {
     // A real portable encrypted store (FileEncryptedSecretStore, secrets.enc
     // format v2) wired into the kernel: status must report kind 'portable',

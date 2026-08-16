@@ -3,6 +3,29 @@
 ## Unreleased
 ### Added
 
+- **`secrets.lock` — manual secret-store lock over Product Wire (M5 slice 40,
+  ТЗ §SEC-01.1).** The portable `secrets.enc` store now supports the manual
+  lock end-to-end: wire `secrets.lock` (transactional, idempotent,
+  `app.write`; response `{ locked: true }`; fail-closed
+  `CAPABILITY_UNAVAILABLE` when no store seam is wired), a kernel stateless
+  arm that drops the derived key material in memory (best-effort
+  zeroization), and honest post-lock semantics: `secrets.status` flips to
+  `available: false` and subsequent provider-key writes fail with
+  `SECRET_STORE_LOCKED` until the host re-opens the store with the master
+  passphrase (records survive the lock/reopen cycle). Host parity:
+  `secrets_lock_over_http` (fail-closed without a store, lock over HTTP,
+  idempotent second lock, status flip). Facade: `SecretsApi.lock` —
+  Local/Remote over the wire, Legacy honest `UnsupportedError` (parity
+  83/83). UI: `useLockSecrets` + a Lock-now action in the Settings Security
+  tab shown only for an available portable store; after invalidation the
+  panel flips to the honest locked hint (i18n en/ru). Tests: kernel secrets
+  5 (fail-closed, lock/reopen round trip, `SECRET_STORE_LOCKED` on key
+  write, idempotency), remote-http over HTTP, contracts 15/15 with the lock
+  fixtures (94 ops). Honest boundary: auto-lock (timer-based) and the
+  first-launch mode onboarding remain host-side flows; the manual lock is
+  now wire-covered. `wire_corpus` also regains the previously missing
+  `decode_result_secrets_status` fuzz decoder (71 decoders).
+
 - **`backups.restore` over Product Wire (M5 slice 39, ТЗ §10.4).** Restore is
   now reachable end-to-end on the kernel plane: the writer thread closes the
   database (WAL checkpoint) and releases the data-root lease, runs the

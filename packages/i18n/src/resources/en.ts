@@ -1527,6 +1527,10 @@ export const en = {
     no: 'No',
     noRevealHint:
       'There is no reveal operation: values never leave the store, so there is nothing to display here.',
+    lock: 'Lock now',
+    locking: 'Locking…',
+    lockedHint:
+      'The store is locked: derived key material was dropped. Provider-key writes fail until the app is restarted and the store is re-opened with your master passphrase.',
   },
   validation: {
     required: 'This field is required.',

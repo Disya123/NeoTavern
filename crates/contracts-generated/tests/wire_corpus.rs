@@ -58,7 +58,8 @@ use contracts_generated::generated::{
     decode_result_list_provider_configs, decode_result_list_providers, decode_result_list_tools,
     decode_result_message_revision_list, decode_result_message_variant_list,
     decode_result_plugins_install, decode_result_plugins_list, decode_result_profile_export,
-    decode_result_profiles_create, decode_result_profiles_list, decode_result_secrets_status,
+    decode_result_profiles_create, decode_result_profiles_list, decode_result_secrets_lock,
+    decode_result_secrets_status,
     decode_result_settings, decode_result_themes_install, decode_result_themes_list,
     decode_themes_item, decode_tool_call, decode_tool_spec,
 };
@@ -543,6 +544,9 @@ fn dispatch(schema_id: &str, bytes: &[u8], valid: bool) {
         "wire.result.secrets-status" => {
             corpus_case(schema_id, decode_result_secrets_status, bytes, valid)
         }
+        "wire.result.secrets-lock" => {
+            corpus_case(schema_id, decode_result_secrets_lock, bytes, valid)
+        }
         other => panic!("corpus references unknown schemaId: {other}"),
     }
 }
@@ -585,7 +589,7 @@ fn xorshift32(mut state: u32) -> u32 {
 /// coerces to a plain `fn` pointer.
 type DecoderFn = fn(&[u8]) -> Result<(), WireError>;
 
-fn all_decoders() -> [DecoderFn; 69] {
+fn all_decoders() -> [DecoderFn; 71] {
     [
         |b| decode_meta_dto(b).map(|_| ()),
         |b| decode_character_dto(b).map(|_| ()),
@@ -640,6 +644,8 @@ fn all_decoders() -> [DecoderFn; 69] {
         |b| decode_result_backups_restore(b).map(|_| ()),
         |b| decode_result_list_backups(b).map(|_| ()),
         |b| decode_result_data_activation_status(b).map(|_| ()),
+        |b| decode_result_secrets_status(b).map(|_| ()),
+        |b| decode_result_secrets_lock(b).map(|_| ()),
         |b| decode_result_list_lorebooks(b).map(|_| ()),
         |b| decode_result_list_presets(b).map(|_| ()),
         |b| decode_request_get_lorebook(b).map(|_| ()),

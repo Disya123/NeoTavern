@@ -9,7 +9,7 @@
 //! session-only, and the fail-closed `SECRET_UNAVAILABLE` state) from this
 //! DTO; no `get` is ever invoked, so a value can never cross the boundary.
 
-use contracts_generated::generated::{self, ResultSecretsStatus};
+use contracts_generated::generated::{self, ResultSecretsLock, ResultSecretsStatus};
 use secret_store::SecretStore;
 use std::sync::Arc;
 
@@ -54,6 +54,43 @@ pub(crate) fn secrets_status(
     generated::validate_result_secrets_status(&value).map_err(|issues| KernelError {
         code: crate::KernelErrorCode::ContractViolation,
         message: "kernel secrets-status dto failed validation".to_string(),
+        issues,
+        params: Vec::new(),
+        product: None,
+    })?;
+    crate::product::encode(&value)
+}
+
+/// `secrets.lock` — SEC-01.1 manual lock: drops the portable store's derived
+/// key material in memory (best-effort zeroization). Every subsequent
+/// read/write fails with `SECRET_STORE_LOCKED` until the host re-opens the
+/// store with the master passphrase (next bootstrap). Idempotent and
+/// value-free; fails closed with `CAPABILITY_UNAVAILABLE` when no store seam
+/// is wired (there is nothing to lock — reporting success would be a lie).
+pub(crate) fn secrets_lock(
+    store: Option<&Arc<dyn SecretStore>>,
+    request: &[u8],
+) -> Result<Vec<u8>, KernelError> {
+    generated::decode_empty_request_dto(request)?;
+
+    let store = store.ok_or_else(|| {
+        KernelError::product(
+            "CAPABILITY_UNAVAILABLE".to_string(),
+            vec![("operation".to_string(), "secrets.lock".to_string())],
+        )
+    })?;
+    store.lock();
+
+    let dto = ResultSecretsLock { locked: true };
+    let value = serde_json::to_value(&dto).map_err(|err| {
+        KernelError::new(
+            crate::KernelErrorCode::Internal,
+            format!("failed to serialize secrets lock response: {err}"),
+        )
+    })?;
+    generated::validate_result_secrets_lock(&value).map_err(|issues| KernelError {
+        code: crate::KernelErrorCode::ContractViolation,
+        message: "kernel secrets-lock dto failed validation".to_string(),
         issues,
         params: Vec::new(),
         product: None,

@@ -2897,6 +2897,7 @@ dependencies = [
  "neotavern-storage",
  "runtime-kernel",
  "rusqlite",
+ "secret-store",
  "serde",
  "serde_json",
  "sha2",
