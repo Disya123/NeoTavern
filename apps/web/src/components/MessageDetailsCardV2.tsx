@@ -7,6 +7,7 @@ import {
   Eye,
   EyeSlash,
   Lightning,
+  ListChecks,
   PencilSimple,
   Plus,
   Robot,
@@ -59,6 +60,8 @@ export interface MessageDetailsCardProps {
   onSaveEdit: (content: string) => Promise<void>;
   /** Open the durable prompt plan of this message's generation run (ТЗ §9.2). */
   onViewPromptPlan?: (message: Message) => void;
+  /** Open the durable run-step transcript of this message's generation run (ТЗ §8.3). */
+  onViewRunSteps?: (message: Message) => void;
 }
 
 const DRAG_DISMISS_THRESHOLD_PX = 56;
@@ -82,6 +85,7 @@ export function MessageDetailsCard({
   onBuiltinAction,
   onSaveEdit,
   onViewPromptPlan,
+  onViewRunSteps,
 }: MessageDetailsCardProps) {
   const { t, i18n } = useTranslation();
   const [mode, setMode] = useState<MessageDetailsMode>(initialMode);
@@ -504,6 +508,16 @@ export function MessageDetailsCard({
                     icon={<TextAlignLeft aria-hidden="true" />}
                     disabled={isBusy}
                     onClick={() => onViewPromptPlan(message)}
+                  />
+                ) : null}
+                {typeof message.meta['generationRunId'] === 'string' && onViewRunSteps ? (
+                  <FooterAction
+                    action="steps"
+                    label={t('chat:runStepsShort')}
+                    ariaLabel={t('chat:runTranscriptOpen')}
+                    icon={<ListChecks aria-hidden="true" />}
+                    disabled={isBusy}
+                    onClick={() => onViewRunSteps(message)}
                   />
                 ) : null}
                 {actions.includes('history') && !quickActions.includes('history') ? (

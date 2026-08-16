@@ -105,6 +105,7 @@ import {
   updateSettings,
   importCharacter,
   getPromptPlan,
+  listGenerationSteps,
   getDataActivationStatus,
   type ContinueCharacterChatInput,
   type ContinueCharacterChatResult,
@@ -410,6 +411,33 @@ export function usePromptPlan(runId: string | undefined) {
           error instanceof UnsupportedError ||
           (error instanceof ProductError && error.code === 'PROMPT_PLAN_NOT_FOUND')
         ) {
+          return null;
+        }
+        throw error;
+      }
+    },
+    enabled: runId !== undefined,
+    staleTime: 30_000,
+  });
+}
+
+/**
+ * Durable run-step transcript of one generation run (ТЗ §8.3, §15 generation
+ * timeline, М5 slice 47): the immutable step journal — provider turns, tool
+ * calls, tool results, the final commit — so the user can see what the run
+ * actually did. Kernel plane: wire `generation.events` (steps only; tool
+ * arguments/results never reach the UI, SEC-07). Legacy plane: honest empty
+ * state via `UnsupportedError` (ARC-02) — never an error banner.
+ */
+export function useGenerationRunSteps(runId: string | undefined) {
+  return useQuery({
+    queryKey: ['generation-steps', runId],
+    queryFn: async () => {
+      if (!runId) return null;
+      try {
+        return await listGenerationSteps(runId);
+      } catch (error) {
+        if (error instanceof UnsupportedError) {
           return null;
         }
         throw error;

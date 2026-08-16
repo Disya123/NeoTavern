@@ -1062,6 +1062,90 @@ export async function getPromptPlan(runId: string): Promise<PromptPlanDto> {
   throw new UnsupportedError('generation.prompt.plan');
 }
 
+/** One durable generation step rendered in the run transcript (ТЗ §8.3). */
+export interface RunStepItem {
+  /** Monotonic per-run sequence; the transcript renders in this order. */
+  sequence: number;
+  type: 'provider_turn' | 'tool_call' | 'tool_result' | 'final_commit';
+  status: 'running' | 'waiting' | 'completed' | 'failed';
+  attempt: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A page of run steps (`hasMore` mirrors the wire's `afterSequence` paging). */
+export interface RunStepPage {
+  items: RunStepItem[];
+  hasMore: boolean;
+}
+
+/**
+ * Durable run-step transcript of one generation run (ТЗ §8.3/§13.2, §15
+ * generation timeline): the immutable step journal — provider turns, tool
+ * calls, tool results, the final commit — so the user can see what the run
+ * actually did. Kernel plane: wire `generation.events` (envelopes), keeping
+ * ONLY the `generation.step` payloads; tool arguments/results are never
+ * carried into the UI shape (SEC-07 — they may contain data the user did not
+ * ask to see). Legacy plane: the frozen sidecar has no canonical run-step
+ * journal — honest `UnsupportedError` (ARC-02, feature-freeze).
+ */
+export async function listGenerationSteps(
+  runId: string,
+  opts: { afterSequence?: number; limit?: number } = {},
+): Promise<RunStepPage> {
+  if (isKernelMode()) {
+    const result = await backend.generation.events({
+      workflowId: runId,
+      ...(opts.afterSequence !== undefined ? { afterSequence: opts.afterSequence } : {}),
+      ...(opts.limit !== undefined ? { limit: opts.limit } : {}),
+    });
+    const items: RunStepItem[] = [];
+    for (const event of result.items) {
+      if (event.type !== 'generation.step') continue;
+      const payload: unknown = event.payload;
+      if (typeof payload !== 'object' || payload === null) continue;
+      const step = (payload as Record<string, unknown>)['step'] as
+        | {
+            sequence?: unknown;
+            type?: unknown;
+            status?: unknown;
+            attempt?: unknown;
+            createdAt?: unknown;
+            updatedAt?: unknown;
+          }
+        | undefined;
+      if (
+        step === undefined ||
+        typeof step !== 'object' ||
+        typeof step.sequence !== 'number' ||
+        (step.type !== 'provider_turn' &&
+          step.type !== 'tool_call' &&
+          step.type !== 'tool_result' &&
+          step.type !== 'final_commit') ||
+        (step.status !== 'running' &&
+          step.status !== 'waiting' &&
+          step.status !== 'completed' &&
+          step.status !== 'failed') ||
+        typeof step.attempt !== 'number' ||
+        typeof step.createdAt !== 'string' ||
+        typeof step.updatedAt !== 'string'
+      ) {
+        continue;
+      }
+      items.push({
+        sequence: step.sequence,
+        type: step.type,
+        status: step.status,
+        attempt: step.attempt,
+        createdAt: step.createdAt,
+        updatedAt: step.updatedAt,
+      });
+    }
+    return { items, hasMore: result.hasMore };
+  }
+  throw new UnsupportedError('generation.events');
+}
+
 /**
  * Read the durable data-root activation status (ТЗ §10.2–§10.3): layout
  * version, active root, the activation journal and any pending activation.

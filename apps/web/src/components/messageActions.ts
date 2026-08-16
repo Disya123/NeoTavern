@@ -17,6 +17,7 @@ import {
   Flag,
   FlagCheckered,
   GitBranch,
+  ListChecks,
   PencilSimple,
   TextAlignLeft,
   Trash,
@@ -39,14 +40,15 @@ export const BUILTIN_MESSAGE_ACTION_ORDER = [
   'rollback',
 ] as const;
 
-export type BuiltinMessageActionId = (typeof BUILTIN_MESSAGE_ACTION_ORDER)[number] | 'prompt';
+export type BuiltinMessageActionId =
+  (typeof BUILTIN_MESSAGE_ACTION_ORDER)[number] | 'prompt' | 'steps';
 
 /**
- * `prompt` is not part of the canonical action order — it never appears in
- * the inline/menu action rows. It exists only as a typed footer action in
- * the message details card, shown for messages that carry a durable
- * generation run (`message.generationRunId`) so the user can open the
- * prompt plan (ТЗ §9.2).
+ * `prompt` / `steps` are not part of the canonical action order — they never
+ * appear in the inline/menu action rows. They exist only as typed footer
+ * actions in the message details card, shown for messages that carry a
+ * durable generation run (`message.generationRunId`) so the user can open
+ * the prompt plan (ТЗ §9.2) or the run-step transcript (ТЗ §8.3).
  */
 
 /** Which built-in actions the current message context exposes. */
@@ -123,6 +125,7 @@ export function getBuiltinActionLabels(t: TFunction): Record<BuiltinMessageActio
     delete: t('chat:deleteMessage'),
     rollback: t('chat:rollbackToHere'),
     prompt: t('chat:viewPromptPlan'),
+    steps: t('chat:runTranscriptOpen'),
   };
 }
 
@@ -142,6 +145,7 @@ export const BUILTIN_ACTION_ICONS: Record<BuiltinMessageActionId, Icon> = {
   delete: Trash,
   rollback: ArrowUUpLeft,
   prompt: TextAlignLeft,
+  steps: ListChecks,
 };
 
 /**

@@ -79,12 +79,12 @@
         "chats.messages.drafts.discard"
       ],
       "hosts": {
-        "desktop": "Implemented",
+        "desktop": "Integrated",
         "headless": "Implemented",
         "android": "Implemented",
-        "webClient": "Implemented"
+        "webClient": "Integrated"
       },
-      "notes": "Этап 4 slice 2: kernel wire ops (schema migration 008; swipe variants list/create/delete/activate, immutable content revisions recorded on content change, server-side streaming drafts get/save/commit/discard with idempotent commit) with component tests in kernel_crud. UI/facade cutover and legacy route removal are pending within M5. M5 slice 11: chats.messages.update accepts optional content + meta (wire.free-object), MessageDto carries meta verbatim, ChatPage edit flows route through updateChatMessage (ui-legacy-surface 60 → 57); slice 12: the chat/home wallpaper URL moved into the wallpaperBackgroundUrl transport helper — the legacy plane keeps the asset route URL, the kernel plane honestly returns null (backgrounds are a legacy file contour with no kernel store), ui-legacy-surface 57 → 56.",
+      "notes": "Этап 4 slice 2: kernel wire ops (schema migration 008; swipe variants list/create/delete/activate, immutable content revisions recorded on content change, server-side streaming drafts get/save/commit/discard with idempotent commit) with component tests in kernel_crud. М5 slice 11: chats.messages.update accepts optional content + meta (wire.free-object), MessageDto carries meta verbatim, ChatPage edit flows route through updateChatMessage (ui-legacy-surface 60 → 57); slice 12: the chat/home wallpaper URL moved into the wallpaperBackgroundUrl transport helper — the legacy plane keeps the asset route URL, the kernel plane honestly returns null (backgrounds are a legacy file contour with no kernel store), ui-legacy-surface 57 → 56. UI cutover complete (status raised to Integrated, ARC-10, M5 slice 47): stored-variant swipes, the variant picker, activation, the revision-history card and content edits all route through the wire facade in kernel mode (wireBridge readMessageVariants/activateMessageVariant/swipeMessageToPosition + readMessageRevisions + updateChatMessage); the legacy sidecar routes keep the full-fidelity legacy entities for the legacy plane only. Server-side streaming drafts stay a kernel-internal mechanism (get/save/commit/discard) — the composer draft is session-local by design (AGENTS.md §13) and is not migrated to the wire.",
       "milestone": "M5"
     },
     {
@@ -214,12 +214,12 @@
       "title": "Memory CRUD (ТЗ §4.4)",
       "wireOps": ["memories.list", "memories.create", "memories.update", "memories.delete"],
       "hosts": {
-        "desktop": "Implemented",
+        "desktop": "Integrated",
         "headless": "Implemented",
         "android": "Implemented",
-        "webClient": "Implemented"
+        "webClient": "Integrated"
       },
-      "notes": "Этап 4 slice 3: memory CRUD in the kernel through Product Wire (memories.list/create/update/delete) backed by the STRICT memories table with scope/keys/content/enabled/position/metadata (schema migration 9). Character-scoped create requires characterId (unknown character → CHARACTER_NOT_FOUND); list filters scope/characterId/enabled and orders by position, created_at, id. Legacy→kernel migration maps the memories table (scope validated, dangling character_id preserved — no FK by design). Facade: NeoBackend.memories + LegacyBackend over /api/v2/memories + web hooks (useMemories/useCreateMemory/useUpdateMemory/useDeleteMemory) route through the wire ops in kernel mode. Prompt integration (same slice): the kernel prompt plan injects keyword-activated memory blocks scoped to the chat's character as source:'memory' system blocks (honest memory-keyword-v1 heuristic — the kernel has no FTS yet; memories_fts is not converted; semantic/vector retrieval stays a later slice). The memory settings editor UI (MemoryEditor tab in AI settings) delivers CRUD: content/keys/scope/character picker/enabled toggle + delete confirm (component tests 2/2). Honest boundaries: the wire DTO cannot express `characterId: null` (un-scoping is CAPABILITY_UNAVAILABLE).",
+      "notes": "Этап 4 slice 3: memory CRUD in the kernel through Product Wire (memories.list/create/update/delete) backed by the STRICT memories table with scope/keys/content/enabled/position/metadata (schema migration 9). Character-scoped create requires characterId (unknown character → CHARACTER_NOT_FOUND); list filters scope/characterId/enabled and orders by position, created_at, id. Legacy→kernel migration maps the memories table (scope validated, dangling character_id preserved — no FK by design). Facade: NeoBackend.memories + LegacyBackend over /api/v2/memories + web hooks (useMemories/useCreateMemory/useUpdateMemory/useDeleteMemory) route through the wire ops in kernel mode. Prompt integration (same slice): the kernel prompt plan injects keyword-activated memory blocks scoped to the chat's character as source:'memory' system blocks (honest memory-keyword-v1 heuristic — the kernel has no FTS yet; memories_fts is not converted; semantic/vector retrieval stays a later slice). The memory settings editor UI (MemoryEditor tab in AI settings) delivers CRUD: content/keys/scope/character picker/enabled toggle + delete confirm (component tests 2/2). Status raised to Integrated (ARC-10, M5 slice 47): the MemoryEditor is the production AI-settings surface and routes every operation through the wire facade in kernel mode. Honest boundaries: the wire DTO cannot express `characterId: null` (un-scoping is CAPABILITY_UNAVAILABLE).",
       "milestone": "M5"
     },
     {
@@ -535,6 +535,19 @@
         "webClient": "Implemented"
       },
       "notes": "SillyTavern card containers: character-card EXPORT runs on the kernel plane end-to-end (M5 slice 35, Этап 4.5): wire characters.export.card returns the container (json = the original card object preserved under ext_json._card, verbatim round trip; png = minimal PNG whose chara tEXt chunk carries base64 JSON — exactly what imports.character.card accepts) base64-encoded for download; characters created without a container are rebuilt from canonical fields with an honest warning; CHARACTER_NOT_FOUND stays stable. CHAT SNAPSHOT EXPORT (M5 slice 36): wire chats.export returns the neotavern-chat-export v2 container (chat + character name + message/variant/revision dump, 4 MiB response budget) base64-encoded for download — the last export refusal is gone. Kernel tests (kernel_exports.rs, 8): verbatim round trip, rebuilt+warning, PNG re-import cycle, NOT_FOUND, PNG field fidelity, chat dump with variants/revisions, empty-chat warning, CHAT_NOT_FOUND; host parity character_card_export_over_http + chat_export_over_http (32-scenario suite). Facade CharactersApi.exportCard + ChatsApi.export on all three backends (Local/Remote wire, Legacy unsupported — the legacy download URLs stay for the legacy contour, ТЗ §14.2 authority-non-expanding boundary). UI: CharacterManagementPanel export menu and the chat export menu work on the kernel plane via wireBridge exportCharacterCard/exportChat (Blob object URL download; wireBridge.test 98/98).",
+      "milestone": "M5"
+    },
+    {
+      "id": "ui.run-transcript",
+      "title": "Durable run-step transcript (generation timeline)",
+      "wireOps": [],
+      "hosts": {
+        "desktop": "Integrated",
+        "headless": "Integrated",
+        "android": "Designed",
+        "webClient": "Integrated"
+      },
+      "notes": "М5 slice 47 (ТЗ §8.3/§13.2, §15 generation timeline): the message details card gains a 'Steps' footer action for any message carrying a durable generation run id (message.meta.generationRunId), opening the RunTranscriptPanel dialog — the immutable step journal of the run: provider turns, tool calls, tool results and the final commit in document order with per-step status and time (attempt markers on retried steps). Kernel plane: wire generation.events envelopes, keeping ONLY generation.step payloads; tool arguments/results never reach the UI shape (SEC-07 — the panel cannot render what the bridge never carries). Legacy plane: the frozen sidecar has no canonical run-step journal — honest UnsupportedError resolves to the empty state (ARC-02). wireBridge listGenerationSteps (afterSequence paging + hasMore) + useGenerationRunSteps hook; tests: wireBridge 3 (steps-only translation, afterSequence passthrough, malformed envelopes skipped, legacy refusal), RunTranscriptPanel 4 (ordered steps, SEC-07 absence, empty state, close).",
       "milestone": "M5"
     }
   ]

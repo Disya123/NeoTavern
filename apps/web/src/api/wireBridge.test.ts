@@ -99,6 +99,7 @@ const mocks = vi.hoisted(() => {
   };
   const generation = {
     promptPlan: vi.fn(),
+    events: vi.fn(),
   };
   const data = {
     activationStatus: vi.fn(),
@@ -256,6 +257,7 @@ import {
   createChatSnapshot,
   rollbackChatToMessage,
   listChatSnapshots,
+  listGenerationSteps,
 } from './wireBridge.js';
 
 const CHAR_ID = '11111111-2222-4333-8444-555555555555';
@@ -1615,6 +1617,120 @@ describe('imports/exports (kernel plane wire flow)', () => {
     await expect(getPromptPlan('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')).rejects.toBeInstanceOf(
       UnsupportedError,
     );
+  });
+
+  it('lists the durable run steps from generation.events, keeping only step envelopes', async () => {
+    mocks.generation.events.mockResolvedValue({
+      items: [
+        {
+          streamId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          sequence: 0,
+          type: 'generation.delta',
+          payload: { type: 'generation.delta', text: 'Hello' },
+        },
+        {
+          streamId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          sequence: 1,
+          type: 'generation.step',
+          payload: {
+            type: 'generation.step',
+            step: {
+              stepId: '11111111-1111-4111-8111-111111111111',
+              runId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+              sequence: 0,
+              type: 'provider_turn',
+              status: 'completed',
+              attempt: 1,
+              idempotencyKey: 'step-0',
+              input: { message: 'Hello.' },
+              output: { text: 'Hello' },
+              createdAt: NOW,
+              updatedAt: NOW,
+            },
+          },
+        },
+        {
+          streamId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          sequence: 2,
+          type: 'generation.step',
+          payload: {
+            type: 'generation.step',
+            step: {
+              stepId: '22222222-2222-4222-8222-222222222222',
+              runId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+              sequence: 1,
+              type: 'tool_call',
+              status: 'waiting',
+              attempt: 1,
+              idempotencyKey: 'step-1',
+              input: {
+                toolCall: { id: 'tool-1', name: 'lookup_weather', arguments: { city: 'Kyiv' } },
+              },
+              createdAt: NOW,
+              updatedAt: NOW,
+            },
+          },
+        },
+      ],
+      hasMore: false,
+    });
+    const page = await listGenerationSteps('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', { limit: 50 });
+    expect(mocks.generation.events).toHaveBeenCalledWith({
+      workflowId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      limit: 50,
+    });
+    // Deltas never become transcript rows; steps carry sequence/type/status only.
+    expect(page.items).toHaveLength(2);
+    expect(page.items[0]).toEqual({
+      sequence: 0,
+      type: 'provider_turn',
+      status: 'completed',
+      attempt: 1,
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+    expect(page.items[1]?.type).toBe('tool_call');
+    expect(page.items[1]?.status).toBe('waiting');
+    // SEC-07: tool arguments/results never reach the UI shape.
+    expect(page.items[1]).not.toHaveProperty('input');
+    expect(page.items[1]).not.toHaveProperty('output');
+    expect(page.hasMore).toBe(false);
+  });
+
+  it('passes afterSequence through when paging run steps', async () => {
+    mocks.generation.events.mockResolvedValue({ items: [], hasMore: true });
+    await listGenerationSteps('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', {
+      afterSequence: 7,
+      limit: 20,
+    });
+    expect(mocks.generation.events).toHaveBeenCalledWith({
+      workflowId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      afterSequence: 7,
+      limit: 20,
+    });
+  });
+
+  it('skips malformed step envelopes without fabricating rows', async () => {
+    mocks.generation.events.mockResolvedValue({
+      items: [
+        {
+          streamId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          sequence: 0,
+          type: 'generation.step',
+          payload: { type: 'generation.step', step: { sequence: 'x' } },
+        },
+      ],
+      hasMore: false,
+    });
+    const page = await listGenerationSteps('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+    expect(page.items).toHaveLength(0);
+  });
+
+  it('refuses run steps on the legacy plane', async () => {
+    mocks.isKernelMode.mockReturnValueOnce(false);
+    await expect(
+      listGenerationSteps('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'),
+    ).rejects.toBeInstanceOf(UnsupportedError);
   });
 
   it('fetches the durable activation status via data.activation.status on the kernel plane', async () => {

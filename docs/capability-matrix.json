@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-08-16T08:28:18.900Z",
+  "generatedAt": "2026-08-16T08:54:25.410Z",
   "rows": [
     {
       "hosts": {
@@ -74,13 +74,13 @@
     {
       "hosts": {
         "android": "Implemented",
-        "desktop": "Implemented",
+        "desktop": "Integrated",
         "headless": "Implemented",
-        "webClient": "Implemented"
+        "webClient": "Integrated"
       },
       "id": "chats.messages.variants-revisions-drafts",
       "milestone": "M5",
-      "notes": "Этап 4 slice 2: kernel wire ops (schema migration 008; swipe variants list/create/delete/activate, immutable content revisions recorded on content change, server-side streaming drafts get/save/commit/discard with idempotent commit) with component tests in kernel_crud. UI/facade cutover and legacy route removal are pending within M5. M5 slice 11: chats.messages.update accepts optional content + meta (wire.free-object), MessageDto carries meta verbatim, ChatPage edit flows route through updateChatMessage (ui-legacy-surface 60 → 57); slice 12: the chat/home wallpaper URL moved into the wallpaperBackgroundUrl transport helper — the legacy plane keeps the asset route URL, the kernel plane honestly returns null (backgrounds are a legacy file contour with no kernel store), ui-legacy-surface 57 → 56.",
+      "notes": "Этап 4 slice 2: kernel wire ops (schema migration 008; swipe variants list/create/delete/activate, immutable content revisions recorded on content change, server-side streaming drafts get/save/commit/discard with idempotent commit) with component tests in kernel_crud. М5 slice 11: chats.messages.update accepts optional content + meta (wire.free-object), MessageDto carries meta verbatim, ChatPage edit flows route through updateChatMessage (ui-legacy-surface 60 → 57); slice 12: the chat/home wallpaper URL moved into the wallpaperBackgroundUrl transport helper — the legacy plane keeps the asset route URL, the kernel plane honestly returns null (backgrounds are a legacy file contour with no kernel store), ui-legacy-surface 57 → 56. UI cutover complete (status raised to Integrated, ARC-10, M5 slice 47): stored-variant swipes, the variant picker, activation, the revision-history card and content edits all route through the wire facade in kernel mode (wireBridge readMessageVariants/activateMessageVariant/swipeMessageToPosition + readMessageRevisions + updateChatMessage); the legacy sidecar routes keep the full-fidelity legacy entities for the legacy plane only. Server-side streaming drafts stay a kernel-internal mechanism (get/save/commit/discard) — the composer draft is session-local by design (AGENTS.md §13) and is not migrated to the wire.",
       "title": "Message variants, revisions and drafts",
       "wireOps": [
         "chats.messages.drafts.commit",
@@ -223,13 +223,13 @@
     {
       "hosts": {
         "android": "Implemented",
-        "desktop": "Implemented",
+        "desktop": "Integrated",
         "headless": "Implemented",
-        "webClient": "Implemented"
+        "webClient": "Integrated"
       },
       "id": "memories.crud",
       "milestone": "M5",
-      "notes": "Этап 4 slice 3: memory CRUD in the kernel through Product Wire (memories.list/create/update/delete) backed by the STRICT memories table with scope/keys/content/enabled/position/metadata (schema migration 9). Character-scoped create requires characterId (unknown character → CHARACTER_NOT_FOUND); list filters scope/characterId/enabled and orders by position, created_at, id. Legacy→kernel migration maps the memories table (scope validated, dangling character_id preserved — no FK by design). Facade: NeoBackend.memories + LegacyBackend over /api/v2/memories + web hooks (useMemories/useCreateMemory/useUpdateMemory/useDeleteMemory) route through the wire ops in kernel mode. Prompt integration (same slice): the kernel prompt plan injects keyword-activated memory blocks scoped to the chat's character as source:'memory' system blocks (honest memory-keyword-v1 heuristic — the kernel has no FTS yet; memories_fts is not converted; semantic/vector retrieval stays a later slice). The memory settings editor UI (MemoryEditor tab in AI settings) delivers CRUD: content/keys/scope/character picker/enabled toggle + delete confirm (component tests 2/2). Honest boundaries: the wire DTO cannot express `characterId: null` (un-scoping is CAPABILITY_UNAVAILABLE).",
+      "notes": "Этап 4 slice 3: memory CRUD in the kernel through Product Wire (memories.list/create/update/delete) backed by the STRICT memories table with scope/keys/content/enabled/position/metadata (schema migration 9). Character-scoped create requires characterId (unknown character → CHARACTER_NOT_FOUND); list filters scope/characterId/enabled and orders by position, created_at, id. Legacy→kernel migration maps the memories table (scope validated, dangling character_id preserved — no FK by design). Facade: NeoBackend.memories + LegacyBackend over /api/v2/memories + web hooks (useMemories/useCreateMemory/useUpdateMemory/useDeleteMemory) route through the wire ops in kernel mode. Prompt integration (same slice): the kernel prompt plan injects keyword-activated memory blocks scoped to the chat's character as source:'memory' system blocks (honest memory-keyword-v1 heuristic — the kernel has no FTS yet; memories_fts is not converted; semantic/vector retrieval stays a later slice). The memory settings editor UI (MemoryEditor tab in AI settings) delivers CRUD: content/keys/scope/character picker/enabled toggle + delete confirm (component tests 2/2). Status raised to Integrated (ARC-10, M5 slice 47): the MemoryEditor is the production AI-settings surface and routes every operation through the wire facade in kernel mode. Honest boundaries: the wire DTO cannot express `characterId: null` (un-scoping is CAPABILITY_UNAVAILABLE).",
       "title": "Memory CRUD (ТЗ §4.4)",
       "wireOps": ["memories.create", "memories.delete", "memories.list", "memories.update"]
     },
@@ -501,6 +501,19 @@
       "milestone": "M5",
       "notes": "Legacy TS pipeline in apps/server; kernel crates/prompting + PromptPlan in M2. М5 slice 37 (ТЗ §9.2): the durable PromptPlan is now reachable in the UI — NeoBackend GenerationApi.promptPlan(runId) (Local/Remote wire, Legacy honest UnsupportedError), wireBridge getPromptPlan, usePromptPlan hook (PROMPT_PLAN_NOT_FOUND / UnsupportedError resolve to an honest empty state, never an error), and the PromptPlanPanel dialog rendered from the message details card footer action (shown only for messages carrying a durable generation run id, which translateMessage now surfaces in meta.generationRunId). The panel shows provider/model, instruct format, tokenizer profile (approximate badge), input/response-reserve/context-limit tokens, the over-budget warning, system blocks by source, selected messages and every excluded message with its reason — the user can finally see what context entered the provider request and what was cut. Tests: wireBridge getPromptPlan (kernel + legacy refusal), hooks usePromptPlan (plan / NOT_FOUND → null / refusal → null), PromptPlanPanel (plan, over-budget, empty state, close), MessageDetailsCard prompt footer action (visible only with a run id, opens with the message). Honest boundary: the live pre-generation context preview and the sidecar-pipeline context audit remain legacy-only (honest CAPABILITY_UNAVAILABLE on the kernel); the kernel plan is post-generation and per-run, which is the canonical ТЗ §9.2 record.",
       "title": "Prompt pipeline (macros, context, tokens, instruct)",
+      "wireOps": []
+    },
+    {
+      "hosts": {
+        "android": "Designed",
+        "desktop": "Integrated",
+        "headless": "Integrated",
+        "webClient": "Integrated"
+      },
+      "id": "ui.run-transcript",
+      "milestone": "M5",
+      "notes": "М5 slice 47 (ТЗ §8.3/§13.2, §15 generation timeline): the message details card gains a 'Steps' footer action for any message carrying a durable generation run id (message.meta.generationRunId), opening the RunTranscriptPanel dialog — the immutable step journal of the run: provider turns, tool calls, tool results and the final commit in document order with per-step status and time (attempt markers on retried steps). Kernel plane: wire generation.events envelopes, keeping ONLY generation.step payloads; tool arguments/results never reach the UI shape (SEC-07 — the panel cannot render what the bridge never carries). Legacy plane: the frozen sidecar has no canonical run-step journal — honest UnsupportedError resolves to the empty state (ARC-02). wireBridge listGenerationSteps (afterSequence paging + hasMore) + useGenerationRunSteps hook; tests: wireBridge 3 (steps-only translation, afterSequence passthrough, malformed envelopes skipped, legacy refusal), RunTranscriptPanel 4 (ordered steps, SEC-07 absence, empty state, close).",
+      "title": "Durable run-step transcript (generation timeline)",
       "wireOps": []
     },
     {

@@ -75,6 +75,7 @@ const LABELS: Record<BuiltinMessageActionId, string> = {
   delete: 'Delete message',
   rollback: 'Roll back to this message',
   prompt: 'View prompt plan',
+  steps: 'View run steps',
 };
 
 interface Handlers {

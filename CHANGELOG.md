@@ -34,6 +34,23 @@
 
 ### Added
 
+- **Durable run-step transcript — generation timeline in the UI (M5 slice 47,
+  ТЗ §8.3/§13.2, §15).** Messages that carry a durable generation run id gain
+  a «Steps» footer action in the details card, opening `RunTranscriptPanel`:
+  the immutable step journal of the run — provider turns, tool calls, tool
+  results and the final commit — in document order with per-step status and
+  time (attempt markers on retried steps). Kernel plane: wire
+  `generation.events` envelopes, keeping ONLY the `generation.step` payloads;
+  tool arguments/results never reach the UI shape (SEC-07). Legacy plane:
+  honest `UnsupportedError` → empty state (ARC-02). wireBridge
+  `listGenerationSteps` (`afterSequence` paging + `hasMore`),
+  `useGenerationRunSteps` hook; tests: wireBridge 4, RunTranscriptPanel 4.
+- **ARC-10 status honesty (M5 slice 47).** `chats.messages.variants-
+  revisions-drafts` and `memories.crud` raised from Implemented to
+  Integrated: the production UI (variant picker/swipes, revision history,
+  content edits; memory settings editor) routes every operation through the
+  wire facade in kernel mode. Capability matrix now 37 rows
+  (`ui.run-transcript` added).
 - **`chats.snapshots.list` — snapshot (checkpoint/branch) listing for one
   chat (M5 slice 46, ТЗ §8.1 Conversations).** The child chats of a chat are
   now first-class over Product Wire: the kernel returns them newest-first,

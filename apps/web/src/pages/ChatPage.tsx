@@ -38,6 +38,7 @@ import { ChatWorkspace } from '../components/ChatWorkspace.js';
 import workspaceStyles from '../components/ChatWorkspace.module.css';
 import { ContextUsagePanel } from '../components/ContextUsagePanel.js';
 import { PromptPlanPanel } from '../components/PromptPlanPanel.js';
+import { RunTranscriptPanel } from '../components/RunTranscriptPanel.js';
 import { MessageBubble } from '../components/MessageBubble.js';
 import { ToolActivityBadge } from '../components/ToolActivityBadge.js';
 import { frontendPluginRuntime, usePluginRegistrations } from '../plugins/runtime.js';
@@ -86,6 +87,7 @@ export function ChatPage() {
   const [editErrorText, setEditErrorText] = useState<string | null>(null);
   const [contextOpen, setContextOpen] = useState(false);
   const [promptPlanRunId, setPromptPlanRunId] = useState<string | null>(null);
+  const [runStepsRunId, setRunStepsRunId] = useState<string | null>(null);
   const [chatSearchQuery, setChatSearchQuery] = useState('');
   // Optimistic copy of the user message being generated: rendered instantly
   // on send, dropped when a refetch confirms the server-persisted original.
@@ -896,6 +898,10 @@ export function ChatPage() {
                       const runId = message.meta['generationRunId'];
                       setPromptPlanRunId(typeof runId === 'string' ? runId : null);
                     }}
+                    onViewRunSteps={(message) => {
+                      const runId = message.meta['generationRunId'];
+                      setRunStepsRunId(typeof runId === 'string' ? runId : null);
+                    }}
                     branchId={chat.data?.activeBranchId ?? null}
                     editError={editErrorId === message.id ? editErrorText : null}
                   />
@@ -984,6 +990,11 @@ export function ChatPage() {
         runId={promptPlanRunId}
         onClose={() => setPromptPlanRunId(null)}
       />
+      <RunTranscriptPanel
+        open={runStepsRunId !== null}
+        runId={runStepsRunId}
+        onClose={() => setRunStepsRunId(null)}
+      />
     </ErrorBoundary>
   );
 }
@@ -1018,6 +1029,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
   onDeleteCheckpoint,
   onRollbackTo,
   onViewPromptPlan,
+  onViewRunSteps,
   branchId,
   editError,
 }: {
@@ -1047,6 +1059,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
   onDeleteCheckpoint: (message: Message) => Promise<void>;
   onRollbackTo: (message: Message) => Promise<void>;
   onViewPromptPlan: (message: Message) => void;
+  onViewRunSteps: (message: Message) => void;
   branchId: string | null;
   editError: string | null;
 }) {
@@ -1121,6 +1134,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
       onDeleteCheckpoint={onDeleteCheckpoint}
       onRollbackTo={onRollbackTo}
       onViewPromptPlan={onViewPromptPlan}
+      onViewRunSteps={onViewRunSteps}
     />
   );
 });

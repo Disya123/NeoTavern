@@ -92,6 +92,8 @@ export interface MessageBubbleProps {
   onRollbackTo?: (message: Message) => Promise<void> | void;
   /** Open the durable prompt plan of this message's generation run (ТЗ §9.2). */
   onViewPromptPlan?: (message: Message) => void;
+  /** Open the durable run-step transcript of this message's generation run (ТЗ §8.3). */
+  onViewRunSteps?: (message: Message) => void;
 }
 
 export const MessageBubble = memo(MessageBubbleInner);
@@ -115,6 +117,7 @@ function MessageBubbleInner({
   onDeleteCheckpoint,
   onRollbackTo,
   onViewPromptPlan,
+  onViewRunSteps,
   macroContext,
   branchId = null,
   editError = null,
@@ -692,6 +695,7 @@ function MessageBubbleInner({
         }}
         onSaveEdit={saveCardEdit}
         onViewPromptPlan={onViewPromptPlan}
+        onViewRunSteps={onViewRunSteps}
       />
       <MessageRevisionHistoryCard
         open={revisionHistoryOpen}
