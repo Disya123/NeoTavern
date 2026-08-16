@@ -1118,7 +1118,7 @@
           "type": "artifact",
           "artifact": "Provider connect absorbs the optional discovery refusal on the kernel plane (ProviderProfileEditor)",
           "result": "M5 slice 27 (ARC-02 UX honesty): after slice 26 made the provider list wire-backed, ProviderProfileEditor.connect()/loadModels() hit the typed UnsupportedError from model discovery ('providers.models.discovery' — a kernel-side capability with no wire operation) and rendered a localized 'Connection failed' error even though the connection itself had already persisted (config.set + settings.update succeeded). Both handlers now absorb an UnsupportedError into the honest 'saved' status — the same optional-warm-up boundary as the AutoConnectSync refresh (which already ignored the refusal) — while real discovery failures on the legacy plane still surface through setFormError/status 'error' unchanged. Components still never branch on the backend kind; the branch is on the typed error class (precedent: useErrorText). New ProviderProfileEditor.test.tsx proves the kernel connect path: wire config.set + settings.update called, 'Saved' status rendered, no role=alert, zero fetch calls. Verified: ProviderProfileEditor 1/1, full web vitest 700/700 (68 files), web typecheck clean, eslint clean, prettier clean, ui:api:check 53 sites, docs:check + docs:sync:check + matrix 35 rows + gates GATE PASS.",
-          "commit": "pending"
+          "commit": "9517418"
         },
         {
           "type": "artifact",
