@@ -34,6 +34,15 @@
 
 ### Added
 
+- **ARC-10 `library.assets` raise (M5 slice 56).** Content-addressed asset
+  store raised Implemented → Integrated (desktop + webClient): the live
+  kernel-plane flows exercise `assets.put`/`assets.content` — CharacterManagementPanel
+  avatar upload (`assets.put` kind avatar + `characters.update
+  avatarAssetId`), character-card import staging (`assets.put` kind card),
+  theme CSS resolution (`assets.content`) — and the RemoteBackend Web Client
+  uses the same wire path. `ui.card-exports` and `ui.prompt-pipeline` stay
+  honestly Implemented (character/chat EXPORT remains legacy-only until
+  Этап 4.5; the pipeline UI is plan view-only).
 - **ARC-10 status roundup part 2 (M5 slice 55).** `generation.prompt.plan`,
   `providers.config`, `providers.list`, `ui.secrets`, `ui.diagnostics` and
   `ui.portable-data` raised Implemented → Integrated (desktop + webClient)

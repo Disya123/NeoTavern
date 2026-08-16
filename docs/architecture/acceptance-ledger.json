@@ -1293,6 +1293,12 @@
           "artifact": "ARC-10 status roundup part 2 (six capabilities -> Integrated)",
           "result": "M5 slice 55: generation.prompt.plan, providers.config, providers.list, ui.secrets, ui.diagnostics, ui.portable-data raised Implemented -> Integrated on desktop + webClient with code-path evidence. Verified in source: ChatPage message menu opens PromptPlanPanel -> usePromptPlan -> backend.generation.promptPlan (wire); ProviderProfileEditor -> backend.providers.config.* (apiKey writes succeed through the desktop session SecretStore seam, slice 49) and streamWireGeneration passes provider/model from the active config (slice 48); useProviderCatalog -> backend.providers.list powers the provider selects; SecretsPanel -> useSecrets -> backend.secrets.status/lock; DiagnosticsPanel -> backend diagnostics + Kernel Preview marking; ActivationStatusPanel -> useDataActivationStatus -> backend.data.activationStatus (restart-to-complete pending) and secrets.status kinds without values. Honest boundaries kept in notes: approximate tokenizer, host-side auto-lock, OS-vault/Keystore backends M3. Capability matrix 38 rows.",
           "commit": "333f5eb"
+        },
+        {
+          "type": "artifact",
+          "artifact": "ARC-10 library.assets raise",
+          "result": "M5 slice 56: library.assets raised Implemented -> Integrated on desktop + webClient. Verified in source: CharacterManagementPanel avatar upload -> useUploadCharacterAvatar -> uploadCharacterAvatar -> backend.assets.put (kind avatar) + backend.characters.update(avatarAssetId); importCharacter stages cards via assets.put (kind card); theme CSS and avatar URLs resolve through backend.assets.content; RemoteBackend forwards the same wire ops. Honest non-raises kept: ui.card-exports stays Implemented (character/chat export remains legacy-only until Этап 4.5, ARC-02-approved helper), ui.prompt-pipeline stays Implemented (plan view-only). Capability matrix 38 rows.",
+          "commit": "pending"
         }
       ],
       "blockingIssues": [
