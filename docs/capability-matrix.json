@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "generatedAt": "2026-08-16T09:28:55.038Z",
+  "generatedAt": "2026-08-16T09:33:50.564Z",
   "rows": [
     {
       "hosts": {
@@ -547,6 +547,19 @@
         "themes.list",
         "themes.uninstall"
       ]
+    },
+    {
+      "hosts": {
+        "android": "Not supported",
+        "desktop": "Not supported",
+        "headless": "Not supported",
+        "webClient": "Integrated"
+      },
+      "id": "web-client.offline-truthfulness",
+      "milestone": "M5",
+      "notes": "ARC-12 / ТЗ 10/10 rev2 §11.3.1 (M5 slice 51): the Web Client is remote-only and shows an honest connection/offline screen without performing local product mutations. Evidence in source: AuthGate renders the offline banner (role=status, i18n offlineShell) when the session check fails with a network error while navigator.onLine is false, or the full-screen connectionRequired panel with Retry for other session errors — covered by ui.test 'keeps only the app shell visible when the session check fails offline' (offline -> app shell only + status banner, no product surface); ConnectivityStatus surfaces a data-state=offline indicator; the production-only service worker (registerServiceWorker/sw.js) caches only the versioned app shell (SHELL_URL) and passes /api/ requests through un-cached, so API responses, SSE, prompts, provider events and secrets never enter Cache Storage (AGENTS.md §20); all product operations flow through the NeoBackend facade, which fails with a network error when the backend is unreachable — no hidden local mutations.",
+      "title": "Web Client offline truthfulness (ARC-12)",
+      "wireOps": []
     },
     {
       "hosts": {

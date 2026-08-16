@@ -549,6 +549,19 @@
       },
       "notes": "М5 slice 47 (ТЗ §8.3/§13.2, §15 generation timeline): the message details card gains a 'Steps' footer action for any message carrying a durable generation run id (message.meta.generationRunId), opening the RunTranscriptPanel dialog — the immutable step journal of the run: provider turns, tool calls, tool results and the final commit in document order with per-step status and time (attempt markers on retried steps). Kernel plane: wire generation.events envelopes, keeping ONLY generation.step payloads; tool arguments/results never reach the UI shape (SEC-07 — the panel cannot render what the bridge never carries). Legacy plane: the frozen sidecar has no canonical run-step journal — honest UnsupportedError resolves to the empty state (ARC-02). wireBridge listGenerationSteps (afterSequence paging + hasMore) + useGenerationRunSteps hook; tests: wireBridge 3 (steps-only translation, afterSequence passthrough, malformed envelopes skipped, legacy refusal), RunTranscriptPanel 4 (ordered steps, SEC-07 absence, empty state, close).",
       "milestone": "M5"
+    },
+    {
+      "id": "web-client.offline-truthfulness",
+      "title": "Web Client offline truthfulness (ARC-12)",
+      "wireOps": [],
+      "hosts": {
+        "desktop": "Not supported",
+        "headless": "Not supported",
+        "android": "Not supported",
+        "webClient": "Integrated"
+      },
+      "notes": "ARC-12 / ТЗ 10/10 rev2 §11.3.1 (M5 slice 51): the Web Client is remote-only and shows an honest connection/offline screen without performing local product mutations. Evidence in source: AuthGate renders the offline banner (role=status, i18n offlineShell) when the session check fails with a network error while navigator.onLine is false, or the full-screen connectionRequired panel with Retry for other session errors — covered by ui.test 'keeps only the app shell visible when the session check fails offline' (offline -> app shell only + status banner, no product surface); ConnectivityStatus surfaces a data-state=offline indicator; the production-only service worker (registerServiceWorker/sw.js) caches only the versioned app shell (SHELL_URL) and passes /api/ requests through un-cached, so API responses, SSE, prompts, provider events and secrets never enter Cache Storage (AGENTS.md §20); all product operations flow through the NeoBackend facade, which fails with a network error when the backend is unreachable — no hidden local mutations.",
+      "milestone": "M5"
     }
   ]
 }

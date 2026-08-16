@@ -34,6 +34,17 @@
 
 ### Added
 
+- **Web Client offline truthfulness capability (M5 slice 51, ARC-12).** New
+  release-manifest row `web-client.offline-truthfulness` (Integrated on
+  webClient): the remote-only Web Client shows an honest connection/offline
+  screen (AuthGate offline banner with `role=status` / full-screen
+  connectionRequired + Retry, ConnectivityStatus `data-state=offline`
+  indicator) and performs no local product mutations — all operations flow
+  through the NeoBackend facade and fail with a network error when the
+  backend is unreachable. The production-only service worker caches only the
+  versioned app shell (`SHELL_URL`); `/api/` requests pass through un-cached,
+  so API/SSE/prompt/secret data never enters Cache Storage (AGENTS.md §20).
+  Capability matrix now 38 rows (no wire ops added).
 - **ARC-10 status honesty roundup (M5 slice 50).** Five capabilities raised
   Implemented → Integrated on desktop/webClient with code-path evidence:
   `library.characterImport` (CharacterManagementPanel + Characters page →

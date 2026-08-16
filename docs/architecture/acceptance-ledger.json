@@ -1263,6 +1263,12 @@
           "artifact": "ARC-10 status honesty roundup (five capabilities Implemented -> Integrated)",
           "result": "M5 slice 50: library.characterImport, ui.themes, ui.plugins, ui.profile-export and ui.profiles raised Implemented -> Integrated on desktop + webClient in the release manifest, with code-path evidence appended to each note. Evidence (verified in source): CharacterManagementPanel + CharactersPage call importCharacter -> wire assets.put + imports.character.card; the Settings themes section + ThemeSync call readThemes/activateTheme/resetActiveTheme/deleteTheme; the Sidebar PluginsPanel + PluginSync call readPlugins/activatePlugin/disablePlugin/deletePlugin; the Settings Profiles tab calls the NeoBackend facade profiles.list/create/rename/del/export/import. Honest boundaries documented per note: theme/plugin package install, git install, runtime safe mode and OAuth connections remain CAPABILITY_UNAVAILABLE on the kernel plane (no host SEC-05 verifier / SEC-06 executor in the web transport); LegacyBackend keeps honest UnsupportedError for profiles/themes facade ops (parity-tested). Confirmation tests: ProfilesPanel (5), wireBridge (98/98 incl. themes/plugins/import kernel branches), ui.test CharacterManagementPanel. Capability matrix 37 rows (no new ops).",
           "commit": "3a7e58d"
+        },
+        {
+          "type": "artifact",
+          "artifact": "Web Client offline truthfulness capability (ARC-12, ТЗ §11.3.1)",
+          "result": "M5 slice 51: new release-manifest row web-client.offline-truthfulness (webClient=Integrated, desktop/headless/android=Not supported, wireOps []), capability matrix 38 rows. Evidence verified in source: AuthGate renders the offline status banner when the session check fails with a network error while navigator.onLine is false, or the full-screen connectionRequired panel with Retry for other session errors (ui.test keeps only the app shell visible when the session check fails offline — offline -> app shell + status banner); ConnectivityStatus exposes data-state=offline; the production-only service worker (registerServiceWorker/sw.js) caches only the versioned app shell and passes /api/ requests through un-cached (no API/SSE/prompt/secret data in Cache Storage, AGENTS.md §20); all product operations go through the NeoBackend facade and fail with a network error when the backend is unreachable — no hidden local mutations. Docs gates: docs-check OK, matrix fresh, milestone-gates GATE PASS.",
+          "commit": "pending"
         }
       ],
       "blockingIssues": [
