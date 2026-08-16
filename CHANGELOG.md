@@ -3,6 +3,31 @@
 ## Unreleased
 ### Added
 
+- **`profile.import` — logical profile import over Product Wire (M5 slice 42,
+  SEC-02 round trip).** Applies a verified profile export container into the
+  library through the storage `apply_import` primitive: the container is
+  fully verified and ALL records are parsed and validated before any write,
+  then applied in ONE transaction or nothing is. The wire request carries
+  the host-staged `containerPath` (relative to the data root) plus the
+  duplicate policy (`reject` skips existing ids — re-running adds nothing,
+  `replace` updates them, `remap` assigns fresh ids and remaps child
+  references); the response reports `inserted`/`updated`/`skipped` and every
+  skipped orphan (never invented). Path resolution is fail-closed (managed
+  relative-key grammar + lexical containment — no traversal, no absolute
+  paths; missing container → `NOT_FOUND`; corrupted container rejected
+  before any write). Storage fix: the remap `uuid_v7` helper now pins the
+  version nibble to 4 exactly like the kernel's id generator, so remapped
+  ids pass the wire uuid format. Facade: `ProfilesApi.import` on
+  LocalBackend/RemoteBackend, honest `UnsupportedError` on LegacyBackend.
+  UI: the Settings Profiles tab gains an Import action (container path +
+  duplicate-policy select) wired through `useProfileImport` with library
+  query invalidation; i18n en/ru. Tests: kernel suite 5 (round trip, reject
+  idempotency, replace update, traversal + missing, corrupted-before-write),
+  remote-http `profile_import_over_http` (35 → 36 scenarios), neobackend
+  parity +1 (84), ProfilesPanel +1 (5). Wire: 95 ops total; fixtures
+  `profile-import-request`/`-request-remap`/`-response`/neg; wire_corpus
+  decoders 73; `WIRE_SCHEMA_HASH` `6fc65aec...`.
+
 - **Tool-execution indicator in the web chat (M5 slice 41, ТЗ §13.2).** The
   UI now distinguishes tool execution / waiting-for-tool from text
   streaming: `streamWireGeneration` forwards the durable

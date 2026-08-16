@@ -13,6 +13,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   CreateProfileRequestDto,
   ProfileExportRequestDto,
+  ProfileImportRequestDto,
   RenameProfileRequestDto,
 } from '@neotavern/contracts';
 import { backend } from './backend.js';
@@ -54,5 +55,25 @@ export function useDeleteProfile() {
 export function useProfileExport() {
   return useMutation({
     mutationFn: (req?: ProfileExportRequestDto) => backend.profiles.export(req),
+  });
+}
+
+/**
+ * Import a verified profile export container (wire `profile.import`,
+ * SEC-02 round trip, М5 slice 42). The host stages the container under the
+ * data root; the caller supplies the relative `containerPath` and the
+ * duplicate policy. Success invalidates the library queries so imported
+ * characters/chats become visible.
+ */
+export function useProfileImport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (req: ProfileImportRequestDto) => backend.profiles.import(req),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['characters'] });
+      void queryClient.invalidateQueries({ queryKey: ['chats'] });
+      void queryClient.invalidateQueries({ queryKey: ['lorebooks'] });
+      void queryClient.invalidateQueries({ queryKey: ['presets'] });
+    },
   });
 }

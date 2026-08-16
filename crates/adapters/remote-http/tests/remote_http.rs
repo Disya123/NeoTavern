@@ -28,10 +28,10 @@ mod common;
 use common::{
     decode_envelope, default_config, encode_envelope_frame, encode_frame, encode_terminal_frame,
     envelope_body, envelope_body_full, expect_error, expect_ok, free_port, gen, http_request,
-    http_request_chunked, http_request_with, http_requests_keepalive, json, kernel_config, parse_last_event_id,
-    parse_sse, rid, seed_data_root, AdapterError, Arc, AuthConfig, Duration, IpAddr, Ipv4Addr,
-    Kernel, KernelErrorCode, Mutex, RemoteAdapter, RemoteAdapterConfig, SocketAddr, SseFrame,
-    TcpStream, TestServer, Value, Write, T0, ZERO_SCHEMA_HASH,
+    http_request_chunked, http_request_with, http_requests_keepalive, json, kernel_config,
+    parse_last_event_id, parse_sse, rid, seed_data_root, AdapterError, Arc, AuthConfig, Duration,
+    IpAddr, Ipv4Addr, Kernel, KernelErrorCode, Mutex, RemoteAdapter, RemoteAdapterConfig,
+    SocketAddr, SseFrame, TcpStream, TestServer, Value, Write, T0, ZERO_SCHEMA_HASH,
 };
 use secret_store::file::FileEncryptedSecretStore;
 use secret_store::SecretStore;
@@ -1354,16 +1354,35 @@ fn data_activation_status_over_http() {
 
     let request = envelope_body(&rid(1), "data.activation.status", json!({}));
     let response = http_request(server.addr, "POST", "/rpc", &[], &request);
-    assert_eq!(response.status, 200, "data.activation.status answers HTTP 200");
+    assert_eq!(
+        response.status, 200,
+        "data.activation.status answers HTTP 200"
+    );
     let (request_id, result) = expect_ok(decode_envelope(&response.body));
     assert_eq!(request_id, rid(1), "requestId is echoed");
     gen::validate_result_data_activation_status(&result)
         .expect("activation-status result is wire-valid");
-    assert_eq!(result["layoutVersion"], json!(1), "fresh root uses the v1 flat layout");
-    assert_eq!(result["journalFormat"], json!("neotavern-activation-journal"));
-    assert_eq!(result["entries"], json!([]), "fresh root has an empty journal");
-    assert!(result.get("pending").is_none(), "no pending activation on a fresh root");
-    let active_root = result["activeRoot"].as_str().expect("activeRoot path string");
+    assert_eq!(
+        result["layoutVersion"],
+        json!(1),
+        "fresh root uses the v1 flat layout"
+    );
+    assert_eq!(
+        result["journalFormat"],
+        json!("neotavern-activation-journal")
+    );
+    assert_eq!(
+        result["entries"],
+        json!([]),
+        "fresh root has an empty journal"
+    );
+    assert!(
+        result.get("pending").is_none(),
+        "no pending activation on a fresh root"
+    );
+    let active_root = result["activeRoot"]
+        .as_str()
+        .expect("activeRoot path string");
     assert!(!active_root.is_empty(), "activeRoot is a real path");
 }
 
@@ -1378,7 +1397,11 @@ fn backups_restore_over_http() {
     let server = TestServer::spawn();
 
     // Seed + snapshot.
-    let create = envelope_body(&rid(1), "characters.create", json!({ "name": "Aria", "tags": [] }));
+    let create = envelope_body(
+        &rid(1),
+        "characters.create",
+        json!({ "name": "Aria", "tags": [] }),
+    );
     let response = http_request(server.addr, "POST", "/rpc", &[], &create);
     assert_eq!(response.status, 200, "characters.create answers HTTP 200");
     let created = expect_ok(decode_envelope(&response.body)).1;
@@ -1393,7 +1416,11 @@ fn backups_restore_over_http() {
 
     // Mutate after the snapshot.
     let character_id = created["id"].as_str().expect("character id").to_string();
-    let delete = envelope_body(&rid(3), "characters.delete", json!({ "characterId": character_id }));
+    let delete = envelope_body(
+        &rid(3),
+        "characters.delete",
+        json!({ "characterId": character_id }),
+    );
     let response = http_request(server.addr, "POST", "/rpc", &[], &delete);
     assert_eq!(response.status, 200, "characters.delete answers HTTP 200");
 
@@ -1412,11 +1439,18 @@ fn backups_restore_over_http() {
     // The snapshot is back and the same server/kernel still serves.
     let list = envelope_body(&rid(5), "characters.list", json!({ "limit": 10 }));
     let response = http_request(server.addr, "POST", "/rpc", &[], &list);
-    assert_eq!(response.status, 200, "characters.list after restore answers HTTP 200");
+    assert_eq!(
+        response.status, 200,
+        "characters.list after restore answers HTTP 200"
+    );
     let (_, listed) = expect_ok(decode_envelope(&response.body));
     let items = listed["items"].as_array().expect("items array");
     assert_eq!(items.len(), 1, "restore replayed the snapshot");
-    assert_eq!(items[0]["id"], json!(character_id), "the deleted character is back");
+    assert_eq!(
+        items[0]["id"],
+        json!(character_id),
+        "the deleted character is back"
+    );
 
     // Unknown backup id → product NOT_FOUND in the error envelope.
     let unknown = envelope_body(
@@ -1429,7 +1463,10 @@ fn backups_restore_over_http() {
     let (request_id, error) = expect_error(decode_envelope(&response.body));
     assert_eq!(request_id, rid(6), "requestId is echoed on errors too");
     assert_eq!(error.code, "NOT_FOUND");
-    assert_eq!(error.params["backupId"], json!("00000000-0000-4000-8000-0000000000ff"));
+    assert_eq!(
+        error.params["backupId"],
+        json!("00000000-0000-4000-8000-0000000000ff")
+    );
 }
 
 /// М5 slice 40 (SEC-01.1): `secrets.lock` over the HTTP host — the manual
@@ -1486,9 +1523,133 @@ fn secrets_lock_over_http() {
 
     let status = envelope_body(&rid(5), "secrets.status", json!({}));
     let response = http_request(server.addr, "POST", "/rpc", &[], &status);
-    assert_eq!(response.status, 200, "secrets.status keeps serving after lock");
+    assert_eq!(
+        response.status, 200,
+        "secrets.status keeps serving after lock"
+    );
     let (_, status_result) = expect_ok(decode_envelope(&response.body));
-    assert_eq!(status_result["available"], json!(false), "locked store is unavailable");
+    assert_eq!(
+        status_result["available"],
+        json!(false),
+        "locked store is unavailable"
+    );
+}
+
+/// 35. М5 slice 42: `profile.import` over the HTTP host — export a container
+///     on one server, stage it under a second server's data root (the
+///     host-side staging step), import over HTTP with the reject policy and
+///     read the imported character back through the same host (SEC-02 round
+///     trip, host parity with the direct kernel path).
+#[test]
+fn profile_import_over_http() {
+    let source = TestServer::spawn();
+    let target = TestServer::spawn();
+
+    // Seed the source library and export a verified container.
+    let character = envelope_body(
+        &rid(1),
+        "characters.create",
+        json!({ "name": "Aria", "description": "A wandering bard" }),
+    );
+    let response = http_request(source.addr, "POST", "/rpc", &[], &character);
+    assert_eq!(response.status, 200, "characters.create answers HTTP 200");
+    let (_, character_result) = expect_ok(decode_envelope(&response.body));
+    let character_id = character_result["id"]
+        .as_str()
+        .expect("character id")
+        .to_string();
+
+    let chat = envelope_body(
+        &rid(2),
+        "chats.create",
+        json!({ "characterId": character_id }),
+    );
+    let response = http_request(source.addr, "POST", "/rpc", &[], &chat);
+    assert_eq!(response.status, 200, "chats.create answers HTTP 200");
+    let (_, chat_result) = expect_ok(decode_envelope(&response.body));
+    let chat_id = chat_result["id"].as_str().expect("chat id").to_string();
+
+    let message = envelope_body(
+        &rid(3),
+        "chats.messages.create",
+        json!({ "chatId": chat_id, "role": "user", "content": "Hello" }),
+    );
+    let response = http_request(source.addr, "POST", "/rpc", &[], &message);
+    assert_eq!(
+        response.status, 200,
+        "chats.messages.create answers HTTP 200"
+    );
+
+    let export = envelope_body(&rid(4), "profile.export", json!({}));
+    let response = http_request(source.addr, "POST", "/rpc", &[], &export);
+    assert_eq!(response.status, 200, "profile.export answers HTTP 200");
+    let (_, export_result) = expect_ok(decode_envelope(&response.body));
+    gen::validate_result_profile_export(&export_result).expect("export result is wire-valid");
+    let container_path = export_result["containerPath"]
+        .as_str()
+        .expect("container path")
+        .to_string();
+    assert_eq!(export_result["records"]["characters"], json!(1));
+    assert_eq!(export_result["records"]["messages"], json!(1));
+
+    // Host-side staging: copy the container from the source data root into
+    // the target data root (relative path preserved), then import over HTTP.
+    let source_container = source.data_root().join(&container_path);
+    let target_container = target.data_root().join(&container_path);
+    std::fs::create_dir_all(target_container.parent().expect("container parent"))
+        .expect("staging parent must create");
+    copy_dir_recursive(&source_container, &target_container);
+
+    let import = envelope_body(
+        &rid(5),
+        "profile.import",
+        json!({ "containerPath": container_path, "policy": "reject" }),
+    );
+    let response = http_request(target.addr, "POST", "/rpc", &[], &import);
+    assert_eq!(response.status, 200, "profile.import answers HTTP 200");
+    let (request_id, import_result) = expect_ok(decode_envelope(&response.body));
+    assert_eq!(request_id, rid(5), "requestId is echoed");
+    gen::validate_result_profile_import(&import_result).expect("import result is wire-valid");
+    assert_eq!(
+        import_result["inserted"],
+        json!(3),
+        "character + chat + message inserted"
+    );
+    assert_eq!(import_result["updated"], json!(0));
+    assert_eq!(import_result["skipped"], json!(0));
+    assert_eq!(
+        import_result["orphans"]
+            .as_array()
+            .expect("orphans array")
+            .len(),
+        0,
+        "no orphans in a clean import"
+    );
+
+    // The target serves the imported character over the same host.
+    let list = envelope_body(&rid(6), "characters.list", json!({}));
+    let response = http_request(target.addr, "POST", "/rpc", &[], &list);
+    assert_eq!(response.status, 200, "characters.list answers HTTP 200");
+    let (_, list_result) = expect_ok(decode_envelope(&response.body));
+    let items = list_result["items"].as_array().expect("items array");
+    assert_eq!(items.len(), 1, "imported character is listed");
+    assert_eq!(items[0]["id"].as_str(), Some(character_id.as_str()));
+    assert_eq!(items[0]["name"].as_str(), Some("Aria"));
+}
+
+/// Recursively copies a directory tree (host staging of export containers).
+fn copy_dir_recursive(source: &std::path::Path, dest: &std::path::Path) {
+    std::fs::create_dir_all(dest).expect("dest dir must create");
+    for entry in std::fs::read_dir(source).expect("source dir must exist") {
+        let entry = entry.expect("entry");
+        let from = entry.path();
+        let to = dest.join(entry.file_name());
+        if from.is_dir() {
+            copy_dir_recursive(&from, &to);
+        } else {
+            std::fs::copy(&from, &to).expect("file must copy");
+        }
+    }
 }
 
 /// 26. M4 slice 1 (Этап 4.1): the full lorebook CRUD over the HTTP host —

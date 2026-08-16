@@ -677,6 +677,8 @@ fn handle_unary(
         "data.activation.status" => with_db_opt(db, |db| data::data_activation_status(db, req)),
         // Phase 11 / SEC-02: logical allowlist profile export.
         "profile.export" => with_db_opt(db, |db| export::profile_export(db, req)),
+        // М5 slice 42: apply a verified profile export container (SEC-02 round trip).
+        "profile.import" => with_db_opt(db, |db| export::profile_import(db, req)),
         _ => Err(KernelError::new(
             KernelErrorCode::OperationNotFound,
             format!("unknown operation: {op}"),
@@ -1069,10 +1071,7 @@ impl Kernel {
                     reply: reply_tx,
                 })
                 .map_err(|_| {
-                    KernelError::new(
-                        KernelErrorCode::Internal,
-                        "kernel writer thread terminated",
-                    )
+                    KernelError::new(KernelErrorCode::Internal, "kernel writer thread terminated")
                 })?;
         } else {
             self.cmd_tx
@@ -1083,10 +1082,7 @@ impl Kernel {
                     reply: reply_tx,
                 })
                 .map_err(|_| {
-                    KernelError::new(
-                        KernelErrorCode::Internal,
-                        "kernel writer thread terminated",
-                    )
+                    KernelError::new(KernelErrorCode::Internal, "kernel writer thread terminated")
                 })?;
         }
         reply_rx.recv().map_err(|_| {

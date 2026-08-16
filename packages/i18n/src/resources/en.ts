@@ -1499,6 +1499,19 @@ export const en = {
     exportedNotice:
       'Exported "{{name}}": {{characters}} characters, {{chats}} chats, {{messages}} messages.',
     exportFailedHint: 'The export did not complete. Check the diagnostics panel for details.',
+    import: 'Import',
+    importPathPlaceholder: 'imports/profile-export-…/',
+    importPathLabel: 'Container path (relative to the data root)',
+    importPolicyLabel: 'Duplicate policy',
+    importPolicyReject: 'Reject duplicates (skip existing)',
+    importPolicyReplace: 'Replace duplicates (update existing)',
+    importPolicyRemap: 'Remap (fresh ids, nothing overwritten)',
+    importHint:
+      'Import a verified profile export container. The host stages the container under the data root; enter its relative path here. Secrets never enter the container.',
+    importing: 'Importing…',
+    importedNotice: 'Imported: {{inserted}} inserted, {{updated}} updated, {{skipped}} skipped.',
+    importFailedHint: 'The import did not complete. Nothing was partially applied.',
+    importOrphans: 'Skipped {{count}} orphaned record(s).',
   },
   secrets: {
     title: 'Secret storage',

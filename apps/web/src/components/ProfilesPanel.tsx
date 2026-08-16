@@ -11,15 +11,16 @@
  *     always included); the manifest echoes the scope. An unknown profile id
  *     is PROFILE_NOT_FOUND. Secrets never enter the container.
  */
-import { DownloadSimple, PencilSimple, Plus, Trash } from '@phosphor-icons/react';
+import { DownloadSimple, PencilSimple, Plus, Trash, UploadSimple } from '@phosphor-icons/react';
 import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, TextField } from '@neotavern/ui';
-import type { ProfileDto } from '@neotavern/contracts';
+import { Button, SelectField, TextField } from '@neotavern/ui';
+import type { ProfileDto, ProfileImportPolicy } from '@neotavern/contracts';
 import {
   useCreateProfile,
   useDeleteProfile,
   useProfileExport,
+  useProfileImport,
   useProfiles,
   useRenameProfile,
 } from '../api/profilesHooks.js';
@@ -35,12 +36,15 @@ export function ProfilesPanel() {
   const renameProfile = useRenameProfile();
   const deleteProfile = useDeleteProfile();
   const profileExport = useProfileExport();
+  const profileImport = useProfileImport();
 
   const [newName, setNewName] = useState('');
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameName, setRenameName] = useState('');
   const [deleting, setDeleting] = useState<ProfileDto | null>(null);
   const [exporting, setExporting] = useState<ProfileDto | null>(null);
+  const [importPath, setImportPath] = useState('');
+  const [importPolicy, setImportPolicy] = useState<ProfileImportPolicy>('reject');
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -48,7 +52,8 @@ export function ProfilesPanel() {
     createProfile.isPending ||
     renameProfile.isPending ||
     deleteProfile.isPending ||
-    profileExport.isPending;
+    profileExport.isPending ||
+    profileImport.isPending;
 
   const submitCreate = (event: FormEvent): void => {
     event.preventDefault();
@@ -120,6 +125,25 @@ export function ProfilesPanel() {
       .finally(() => setExporting(null));
   };
 
+  const runImport = (event: FormEvent): void => {
+    event.preventDefault();
+    const containerPath = importPath.trim();
+    if (!containerPath || busy) return;
+    setNotice(null);
+    setActionError(null);
+    profileImport
+      .mutateAsync({ containerPath, policy: importPolicy })
+      .then((result) => {
+        setImportPath('');
+        const orphansNote =
+          result.orphans.length > 0
+            ? ` ${t('profiles:importOrphans', { count: result.orphans.length })}`
+            : '';
+        setNotice(`${t('profiles:importedNotice', result)}${orphansNote}`);
+      })
+      .catch((cause) => setActionError(errorText(cause)));
+  };
+
   const items = profiles.data?.items ?? [];
 
   return (
@@ -159,6 +183,47 @@ export function ProfilesPanel() {
               disabled={busy || newName.trim().length === 0}
             >
               {t('profiles:create')}
+            </Button>
+          </div>
+        </form>
+      </section>
+
+      <section className={styles.section}>
+        <header className={styles.sectionHeader}>
+          <h2>{t('profiles:import')}</h2>
+          <p>{t('profiles:importHint')}</p>
+        </header>
+        <form className={styles.field} onSubmit={(event) => void runImport(event)}>
+          <span className={styles.fieldLabel}>{t('profiles:importPathLabel')}</span>
+          <TextField
+            data-component="input"
+            data-part="profile-import-path"
+            aria-label={t('profiles:importPathLabel')}
+            value={importPath}
+            onChange={(event) => setImportPath(event.target.value)}
+            disabled={busy}
+            placeholder={t('profiles:importPathPlaceholder')}
+          />
+          <span className={styles.fieldLabel}>{t('profiles:importPolicyLabel')}</span>
+          <SelectField
+            label={t('profiles:importPolicyLabel')}
+            data-part="profile-import-policy"
+            value={importPolicy}
+            onChange={(event) => setImportPolicy(event.target.value as ProfileImportPolicy)}
+            disabled={busy}
+          >
+            <option value="reject">{t('profiles:importPolicyReject')}</option>
+            <option value="replace">{t('profiles:importPolicyReplace')}</option>
+            <option value="remap">{t('profiles:importPolicyRemap')}</option>
+          </SelectField>
+          <div className={styles.createRow}>
+            <Button
+              type="submit"
+              variant="primary"
+              startIcon={<UploadSimple />}
+              disabled={busy || importPath.trim().length === 0}
+            >
+              {profileImport.isPending ? t('profiles:importing') : t('profiles:import')}
             </Button>
           </div>
         </form>

@@ -45,6 +45,7 @@ import {
   type PresetDto,
   type ProfileDto,
   type ProfileExportResultDto,
+  type ProfileImportResultDto,
   type PutAssetResultDto,
   type ResultSettingsDto,
   type SecretsStatusResultDto,
@@ -207,6 +208,16 @@ const PROFILE_EXPORT: ProfileExportResultDto = {
   sizeBytes: 2048,
   manifestSha256: 'f'.repeat(64),
   profileId: PROFILE_ID,
+};
+
+/** `profile.import` result (canonical `wire.result.profile-import` shape). */
+const PROFILE_IMPORT: ProfileImportResultDto = {
+  inserted: 5,
+  updated: 0,
+  skipped: 1,
+  formatVersion: 1,
+  appliedAt: TIMESTAMP,
+  orphans: ['chat 99999999-9999-4999-8999-999999999999: references missing character'],
 };
 
 const SETTINGS: ResultSettingsDto = {
@@ -557,6 +568,8 @@ class FakeKernelTransport implements LocalTransport {
         return { ok: true, value: EMPTY_RESULT };
       case 'profile.export':
         return { ok: true, value: PROFILE_EXPORT };
+      case 'profile.import':
+        return { ok: true, value: PROFILE_IMPORT };
       case 'settings.get':
       case 'settings.update':
         return { ok: true, value: SETTINGS };
@@ -697,6 +710,8 @@ function rpcResult(operationId: string | undefined): unknown {
       return EMPTY_RESULT;
     case 'profile.export':
       return PROFILE_EXPORT;
+    case 'profile.import':
+      return PROFILE_IMPORT;
     case 'settings.get':
     case 'settings.update':
       return SETTINGS;
@@ -1949,6 +1964,24 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
     ]);
   });
 
+  it('profile.import is routed identically by local and remote backends (М5 slice 42)', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const importReq = {
+      containerPath: 'imports/profile-import-2c2c/',
+      policy: 'remap',
+    };
+    const [importLocal, importRemote] = await Promise.all([
+      local.profiles.import(importReq),
+      remote.profiles.import(importReq),
+    ]);
+    expect(importLocal).toEqual(importRemote);
+    expect(importLocal).toEqual(PROFILE_IMPORT);
+    expect(kernel.requests).toEqual([{ operationId: 'profile.import', payload: importReq }]);
+  });
+
   it('settings.get/update return deep-equal ResultSettingsDto from both backends', async () => {
     const kernel = new FakeKernelTransport();
     const local = new LocalBackend({ transport: kernel });
@@ -2270,6 +2303,9 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
     expect(() => backend.themes.activate('wii-u-dark')).toThrow(UnsupportedError);
     expect(() => backend.profiles.create({ name: 'Main' })).toThrow(UnsupportedError);
     expect(() => backend.profiles.export({ profileId: PROFILE_ID })).toThrow(UnsupportedError);
+    expect(() =>
+      backend.profiles.import({ containerPath: 'exports/x/', policy: 'reject' }),
+    ).toThrow(UnsupportedError);
     expect(() => backend.settings.get()).toThrow(UnsupportedError);
     expect(() => backend.diagnostics.export()).toThrow(UnsupportedError);
     expect(() => backend.secrets.status()).toThrow(UnsupportedError);

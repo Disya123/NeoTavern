@@ -49,6 +49,7 @@ import {
   type PresetDto,
   type ProfileDto,
   type ProfileExportResultDto,
+  type ProfileImportResultDto,
   type ProviderConfigDto,
   type PutAssetResultDto,
   type CharacterCardExportResultDto,
@@ -417,6 +418,7 @@ export class LocalBackend implements NeoBackend {
       del: (profileId, opts) =>
         this.invoke<EmptyResultDto>('profiles.delete', { id: profileId }, opts),
       export: (req, opts) => this.invoke<ProfileExportResultDto>('profile.export', req ?? {}, opts),
+      import: (req, opts) => this.invoke<ProfileImportResultDto>('profile.import', req, opts),
     };
     this.settings = {
       get: (req, opts) => this.invoke<ResultSettingsDto>('settings.get', req ?? {}, opts),

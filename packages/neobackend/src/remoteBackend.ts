@@ -50,6 +50,7 @@ import type {
   PresetDto,
   ProfileDto,
   ProfileExportResultDto,
+  ProfileImportResultDto,
   ProviderConfigDto,
   ResultSettingsDto,
   SecretsStatusResultDto,
@@ -321,6 +322,8 @@ export class RemoteBackend implements NeoBackend {
       this.sdk.call<ProfileExportResultDto>('profile.export', req ?? {}, {
         signal: opts?.signal,
       }),
+    import: (req, opts) =>
+      this.sdk.call<ProfileImportResultDto>('profile.import', req, { signal: opts?.signal }),
   };
 
   readonly settings: SettingsApi = {

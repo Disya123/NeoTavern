@@ -56,10 +56,11 @@ describe('product wire registry', () => {
     // deactivate) makes 88; Этап 4.5 (character-card import) adds
     // imports.character.card (89 total); slice 35 (character-card export)
     // adds characters.export.card (90 total); slice 36 (chat export) adds
-    // chats.export (91 total). The exact operation
+    // chats.export (91 total); slice 42 (profile import) adds
+    // profile.import (95 total). The exact operation
     // set is asserted so a registry edit that drops or renames an op fails
     // loudly.
-    expect(registry.operations).toHaveLength(94);
+    expect(registry.operations).toHaveLength(95);
     expect(registry.operations.map((op) => op.operationId)).toEqual([
       'meta.get',
       'characters.list',
@@ -108,6 +109,7 @@ describe('product wire registry', () => {
       'backups.restore',
       'data.activation.status',
       'profile.export',
+      'profile.import',
       'assets.put',
       'assets.get',
       'assets.content',

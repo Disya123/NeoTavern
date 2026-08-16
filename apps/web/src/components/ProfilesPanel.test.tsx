@@ -6,7 +6,11 @@
  */
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ProfileDto, ProfileExportResultDto } from '@neotavern/contracts';
+import type {
+  ProfileDto,
+  ProfileExportResultDto,
+  ProfileImportResultDto,
+} from '@neotavern/contracts';
 import { renderWithProviders } from '../../test/helpers.js';
 import { ProfilesPanel } from './ProfilesPanel.js';
 
@@ -35,6 +39,15 @@ const EXPORT_RESULT: ProfileExportResultDto = {
   profileId: PROFILE_A.id,
 };
 
+const IMPORT_RESULT: ProfileImportResultDto = {
+  inserted: 5,
+  updated: 0,
+  skipped: 1,
+  formatVersion: 1,
+  appliedAt: '2026-03-02T00:00:00.000Z',
+  orphans: ['chat 99999999-9999-4999-8999-999999999999: references missing character'],
+};
+
 vi.mock('../api/backend.js', () => ({
   backend: {
     profiles: {
@@ -49,6 +62,7 @@ vi.mock('../api/backend.js', () => ({
       })),
       del: vi.fn(async () => ({})),
       export: vi.fn(async () => EXPORT_RESULT),
+      import: vi.fn(async () => IMPORT_RESULT),
     },
   },
 }));
@@ -106,5 +120,32 @@ describe('ProfilesPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
 
     await waitFor(() => expect(backend.profiles.del).toHaveBeenCalledWith(PROFILE_A.id));
+  });
+
+  it('imports a staged container with the chosen duplicate policy (М5 slice 42)', async () => {
+    await renderWithProviders(<ProfilesPanel />);
+
+    const pathInput = (await screen.findByLabelText(
+      'Container path (relative to the data root)',
+    )) as HTMLInputElement;
+    fireEvent.change(pathInput, { target: { value: 'imports/profile-export-2c2c/' } });
+    fireEvent.change(screen.getByLabelText('Duplicate policy'), {
+      target: { value: 'remap' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Import' }));
+
+    await waitFor(() =>
+      expect(backend.profiles.import).toHaveBeenCalledWith({
+        containerPath: 'imports/profile-export-2c2c/',
+        policy: 'remap',
+      }),
+    );
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          'Imported: 5 inserted, 0 updated, 1 skipped. Skipped 1 orphaned record(s).',
+        ),
+      ).toBeTruthy();
+    });
   });
 });

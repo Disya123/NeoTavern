@@ -1000,6 +1000,20 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'profile.import',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.write',
+    'wire.request.profile-import',
+    'wire.result.profile-import',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    4096,
+    262144,
+    undefined,
+  ),
+  op(
     'assets.put',
     'transactional',
     'idempotent',
@@ -1807,6 +1821,20 @@ const PROFILE_EXPORT_SCOPED_VALUE = {
   profileId: UUID_PRESET,
 };
 
+const PROFILE_IMPORT_REQUEST_VALUE = {
+  containerPath: 'imports/profile-import-2c2c/',
+  policy: 'reject',
+};
+
+const PROFILE_IMPORT_RESULT_VALUE = {
+  inserted: 5,
+  updated: 0,
+  skipped: 1,
+  formatVersion: 1,
+  appliedAt: TIMESTAMP,
+  orphans: ['chat 99999999-9999-4999-8999-999999999999: references missing character'],
+};
+
 const LOREBOOK_VALUE = {
   id: UUID_LOREBOOK,
   name: 'World lore',
@@ -2293,6 +2321,11 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     includeAssets: false,
     profileId: UUID_PRESET,
   }),
+  fx('profile-import-request', 'profile.import', 'request', true, PROFILE_IMPORT_REQUEST_VALUE),
+  fx('profile-import-request-remap', 'profile.import', 'request', true, {
+    containerPath: 'imports/profile-import-2c2c/',
+    policy: 'remap',
+  }),
   fx('assets-put-request', 'assets.put', 'request', true, ASSETS_PUT_REQUEST),
   fx('assets-get-request', 'assets.get', 'request', true, { assetId: UUID_AVATAR }),
   fx('assets-content-request', 'assets.content', 'request', true, { assetId: UUID_AVATAR }),
@@ -2538,6 +2571,11 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('assets-get-response', 'assets.get', 'response', true, { asset: ASSET_VALUE }),
   fx('assets-content-response', 'assets.content', 'response', true, ASSETS_CONTENT_VALUE),
   fx('assets-delete-response', 'assets.delete', 'response', true, {}),
+  fx('profile-import-response', 'profile.import', 'response', true, PROFILE_IMPORT_RESULT_VALUE),
+  fx('neg-profile-import-bad-policy', 'profile.import', 'request', false, {
+    containerPath: 'imports/profile-import-2c2c/',
+    policy: 'upsert',
+  }),
   fx('imports-character-card-request', 'imports.character.card', 'request', true, {
     assetId: UUID_AVATAR,
   }),

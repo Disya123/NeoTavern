@@ -1813,6 +1813,51 @@ export const ProfileExportResultDtoSchema = Type.Object(
 );
 export type ProfileExportResultDto = Static<typeof ProfileExportResultDtoSchema>;
 
+/** Duplicate-id policy of a profile import (`wire.request.profile-import.policy`). */
+export const ProfileImportPolicy = Type.Union(
+  [Type.Literal('reject'), Type.Literal('replace'), Type.Literal('remap')],
+  { $id: 'wire.request.profile-import.policy', 'x-wire-unknown-behavior': 'reject' },
+);
+export type ProfileImportPolicy = Static<typeof ProfileImportPolicy>;
+
+/**
+ * Profile import request (`wire.request.profile-import`) — applies a verified
+ * logical profile export container into the library. `containerPath` is
+ * relative to the data root (the same convention `profile.export` uses for
+ * its result), so a host stages the container without transport-specific
+ * knowledge of the archive format; the kernel resolves it fail-closed (no
+ * traversal, no absolute paths). `policy` mirrors the storage duplicate
+ * policy: `reject` skips existing ids (re-running adds nothing), `replace`
+ * updates them, `remap` assigns fresh ids and remaps child references.
+ */
+export const ProfileImportRequestDtoSchema = Type.Object(
+  {
+    containerPath: Type.String({ minLength: 1, maxLength: 512 }),
+    policy: ProfileImportPolicy,
+  },
+  { $id: 'wire.request.profile-import', additionalProperties: false },
+);
+export type ProfileImportRequestDto = Static<typeof ProfileImportRequestDtoSchema>;
+
+/**
+ * Profile import result (`wire.result.profile-import`): the applied record
+ * counts plus every skipped orphan (chats referencing missing characters,
+ * messages referencing missing chats, characters whose profile binding does
+ * not exist in the target) — nothing is ever invented or silently dropped.
+ */
+export const ProfileImportResultDtoSchema = Type.Object(
+  {
+    inserted: Type.Integer({ minimum: 0 }),
+    updated: Type.Integer({ minimum: 0 }),
+    skipped: Type.Integer({ minimum: 0 }),
+    formatVersion: Type.Integer({ minimum: 1 }),
+    appliedAt: Type.String({ format: 'rfc3339' }),
+    orphans: Type.Array(Type.String({ minLength: 1, maxLength: 512 }), { maxItems: 1024 }),
+  },
+  { $id: 'wire.result.profile-import', additionalProperties: false },
+);
+export type ProfileImportResultDto = Static<typeof ProfileImportResultDtoSchema>;
+
 /**
  * Settings item DTO (`wire.settings.item`): one non-secret application
  * setting. Values are JSON objects (the wire has no untyped JSON scalar);
@@ -2355,6 +2400,9 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.result.list-provider-configs': ListProviderConfigsResultDtoSchema,
   'wire.request.profile-export': ProfileExportRequestDtoSchema,
   'wire.result.profile-export': ProfileExportResultDtoSchema,
+  'wire.request.profile-import': ProfileImportRequestDtoSchema,
+  'wire.result.profile-import': ProfileImportResultDtoSchema,
+  'wire.request.profile-import.policy': ProfileImportPolicy,
   'wire.profile-export.counts': ProfileExportCountsDtoSchema,
   'wire.settings.item': SettingsItemDtoSchema,
   'wire.result.settings': ResultSettingsDtoSchema,

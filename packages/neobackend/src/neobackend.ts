@@ -90,6 +90,8 @@ import type {
   ProfileDto,
   ProfileExportRequestDto,
   ProfileExportResultDto,
+  ProfileImportRequestDto,
+  ProfileImportResultDto,
   ProviderConfigDto,
   PutAssetRequestDto,
   PutAssetResultDto,
@@ -440,6 +442,17 @@ export interface ProfilesApi {
    * library and always included. Secrets never enter the container.
    */
   export(req?: ProfileExportRequestDto, opts?: BackendCallOptions): Promise<ProfileExportResultDto>;
+  /**
+   * Import a verified profile export container (wire `profile.import`,
+   * SEC-02 round trip, М5 slice 42). The host stages the container under the
+   * data root; `containerPath` is relative to it (the same convention
+   * `profile.export` uses). `policy` selects the duplicate-id behavior:
+   * `reject` skips existing ids (re-running adds nothing), `replace` updates
+   * them, `remap` assigns fresh ids and remaps child references. Orphans are
+   * reported, never invented; the whole record set applies in one
+   * transaction or nothing does.
+   */
+  import(req: ProfileImportRequestDto, opts?: BackendCallOptions): Promise<ProfileImportResultDto>;
 }
 
 /**

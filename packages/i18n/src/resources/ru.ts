@@ -1524,6 +1524,20 @@ export const ru: Resources = {
     exportedNotice:
       'Экспортирован «{{name}}»: {{characters}} персонажей, {{chats}} чатов, {{messages}} сообщений.',
     exportFailedHint: 'Экспорт не завершился. Подробности — на панели диагностики.',
+    import: 'Импорт',
+    importPathPlaceholder: 'imports/profile-export-…/',
+    importPathLabel: 'Путь к контейнеру (относительно корня данных)',
+    importPolicyLabel: 'Политика дубликатов',
+    importPolicyReject: 'Отклонять дубликаты (пропускать существующие)',
+    importPolicyReplace: 'Заменять дубликаты (обновлять существующие)',
+    importPolicyRemap: 'Переназначать (новые id, ничего не перезаписывается)',
+    importHint:
+      'Импорт проверенного контейнера профиля. Хост размещает контейнер в корне данных; укажите его относительный путь. Секреты никогда не попадают в контейнер.',
+    importing: 'Импорт…',
+    importedNotice:
+      'Импортировано: добавлено {{inserted}}, обновлено {{updated}}, пропущено {{skipped}}.',
+    importFailedHint: 'Импорт не завершился. Ничего не было применено частично.',
+    importOrphans: 'Пропущено записей-сирот: {{count}}.',
   },
   secrets: {
     title: 'Хранилище секретов',

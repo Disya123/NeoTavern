@@ -24,11 +24,25 @@
 //! relative `containerPath` so a host can resolve and stream the archive
 //! without transport-specific knowledge of the format. Runs synchronously
 //! on the writer thread, serialized with the single-writer coordinator.
+//!
+//! `profile.import` (М5 slice 42) applies a verified container into the
+//! library through the storage [`apply_import`](neotavern_storage::export::apply_import)
+//! primitive: the container is fully verified and ALL records are parsed and
+//! validated before any write, then applied in one transaction. The
+//! `containerPath` is resolved fail-closed (managed relative key grammar +
+//! lexical containment under the data root — no traversal, no absolute
+//! paths); the duplicate policy mirrors the request (`reject` skips existing
+//! ids, `replace` updates them, `remap` assigns fresh ids and remaps child
+//! references). Orphaned records are skipped and reported, never invented;
+//! the applied-at report echoes the storage counts and the container format
+//! version.
 
-use contracts_generated::generated::{self, ProfileExportCounts, ResultProfileExport};
-use neotavern_storage::export::{create_export, verify_export};
+use contracts_generated::generated::{
+    self, ProfileExportCounts, RequestProfileImportPolicy, ResultProfileExport, ResultProfileImport,
+};
+use neotavern_storage::export::{apply_import, create_export, verify_export, DuplicatePolicy};
 use neotavern_storage::open::Database;
-use neotavern_storage::paths::exports_dir;
+use neotavern_storage::paths::{exports_dir, join_checked};
 use neotavern_storage::snapshot::sha256_file_hex;
 use rusqlite::OptionalExtension;
 
@@ -114,4 +128,82 @@ fn validate_profile_exists(db: &Database, profile_id: &str) -> Result<(), Kernel
         ));
     }
     Ok(())
+}
+
+/// `profile.import` — applies a verified logical profile export container
+/// into the library (М5 slice 42, SEC-02 round trip).
+///
+/// Request: `wire.request.profile-import` (`{ containerPath, policy }`).
+/// Response: `wire.result.profile-import` with the applied record counts,
+/// the container format version and every skipped orphan.
+///
+/// Fail-closed path resolution: `containerPath` must satisfy the managed
+/// relative-key grammar (no absolute paths, no `..`, no separators beyond
+/// `/`) and the lexical containment check keeps the resolved path inside the
+/// data root — the same `join_checked` guard the asset store uses. A
+/// container that fails verification (`verify_export` inside `apply_import`)
+/// is rejected before any write; the whole record set is applied in one
+/// transaction or nothing is.
+pub(crate) fn profile_import(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req = generated::decode_request_profile_import(request)?;
+
+    // Fail-closed: resolve inside the data root only. Trailing slashes are
+    // trimmed so the managed-key grammar (no empty/trailing components) holds.
+    let key = req.container_path.trim_end_matches('/').to_string();
+    let source = join_checked(db.root(), &key).map_err(|e| {
+        KernelError::product(
+            "VALIDATION".to_string(),
+            vec![
+                ("operation".to_string(), "profile.import".to_string()),
+                (
+                    "message".to_string(),
+                    format!("container path rejected: {e}"),
+                ),
+            ],
+        )
+    })?;
+    if !source.is_dir() {
+        return Err(KernelError::product(
+            "NOT_FOUND".to_string(),
+            vec![
+                ("operation".to_string(), "profile.import".to_string()),
+                ("containerPath".to_string(), req.container_path.clone()),
+            ],
+        ));
+    }
+
+    let policy = match req.policy {
+        RequestProfileImportPolicy::Reject => DuplicatePolicy::Reject,
+        RequestProfileImportPolicy::Replace => DuplicatePolicy::Replace,
+        RequestProfileImportPolicy::Remap => DuplicatePolicy::Remap,
+    };
+    let report = apply_import(&source, db, policy).map_err(KernelError::from)?;
+
+    let dto = ResultProfileImport {
+        inserted: report.inserted as i64,
+        updated: report.updated as i64,
+        skipped: report.skipped as i64,
+        format_version: report.format_version as i64,
+        applied_at: crate::product::now(),
+        orphans: report.orphans,
+    };
+    let value = serde_json::to_value(&dto).map_err(|err| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            format!("failed to serialize profile.import response: {err}"),
+        )
+    })?;
+    generated::validate_result_profile_import(&value).map_err(|issues| KernelError {
+        code: KernelErrorCode::ContractViolation,
+        message: "kernel profile.import response failed validation".to_string(),
+        issues,
+        params: Vec::new(),
+        product: None,
+    })?;
+    serde_json::to_vec(&value).map_err(|err| {
+        KernelError::new(
+            KernelErrorCode::Internal,
+            format!("failed to serialize profile.import response: {err}"),
+        )
+    })
 }

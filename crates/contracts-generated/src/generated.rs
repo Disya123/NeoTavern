@@ -67,6 +67,7 @@ pub fn operation_request_limit(operation_id: &str) -> Option<u64> {
         "backups.restore" => Some(1024),
         "data.activation.status" => Some(1024),
         "profile.export" => Some(4096),
+        "profile.import" => Some(4096),
         "assets.put" => Some(1048576),
         "assets.get" => Some(1024),
         "assets.content" => Some(1024),
@@ -169,6 +170,7 @@ pub fn operation_response_limit(operation_id: &str) -> Option<u64> {
         "backups.restore" => Some(1024),
         "data.activation.status" => Some(262144),
         "profile.export" => Some(262144),
+        "profile.import" => Some(262144),
         "assets.put" => Some(262144),
         "assets.get" => Some(262144),
         "assets.content" => Some(4194304),
@@ -3274,6 +3276,229 @@ pub fn validate_result_profile_export(value: &Value) -> Result<(), Vec<Issue>> {
 
 pub fn decode_result_profile_export(bytes: &[u8]) -> Result<ResultProfileExport, WireError> {
     crate::decode::<ResultProfileExport>(validate_result_profile_export, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestProfileImport {
+    #[serde(rename = "containerPath")]
+    pub container_path: String,
+    pub policy: RequestProfileImportPolicy,
+}
+
+pub(crate) fn check_request_profile_import(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("containerPath").is_none() {
+            issues.push(Issue::new(join_path(path, "containerPath"), "RequiredProperty"));
+        }
+        if value.get("policy").is_none() {
+            issues.push(Issue::new(join_path(path, "policy"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("containerPath") {
+            let child_path = join_path(path, "containerPath");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 512 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("policy") {
+            let child_path = join_path(path, "policy");
+            check_request_profile_import_policy(child, &child_path, issues);
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "containerPath" | "policy") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_profile_import(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_profile_import(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_profile_import(bytes: &[u8]) -> Result<RequestProfileImport, WireError> {
+    crate::decode::<RequestProfileImport>(validate_request_profile_import, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultProfileImport {
+    pub inserted: i64,
+    pub updated: i64,
+    pub skipped: i64,
+    #[serde(rename = "formatVersion")]
+    pub format_version: i64,
+    #[serde(rename = "appliedAt")]
+    pub applied_at: String,
+    pub orphans: Vec<String>,
+}
+
+pub(crate) fn check_result_profile_import(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("inserted").is_none() {
+            issues.push(Issue::new(join_path(path, "inserted"), "RequiredProperty"));
+        }
+        if value.get("updated").is_none() {
+            issues.push(Issue::new(join_path(path, "updated"), "RequiredProperty"));
+        }
+        if value.get("skipped").is_none() {
+            issues.push(Issue::new(join_path(path, "skipped"), "RequiredProperty"));
+        }
+        if value.get("formatVersion").is_none() {
+            issues.push(Issue::new(join_path(path, "formatVersion"), "RequiredProperty"));
+        }
+        if value.get("appliedAt").is_none() {
+            issues.push(Issue::new(join_path(path, "appliedAt"), "RequiredProperty"));
+        }
+        if value.get("orphans").is_none() {
+            issues.push(Issue::new(join_path(path, "orphans"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("inserted") {
+            let child_path = join_path(path, "inserted");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("updated") {
+            let child_path = join_path(path, "updated");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("skipped") {
+            let child_path = join_path(path, "skipped");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 0 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("formatVersion") {
+            let child_path = join_path(path, "formatVersion");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("appliedAt") {
+            let child_path = join_path(path, "appliedAt");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("orphans") {
+            let child_path = join_path(path, "orphans");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                if arr.len() > 1024 {
+                    issues.push(Issue::new(child_path.as_str(), "ArrayMaxItems"));
+                }
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    match item.as_str() {
+                        Some(s) => {
+                            let len = s.encode_utf16().count();
+                            if len < 1 {
+                                issues.push(Issue::new(item_path.as_str(), "StringMinLength"));
+                            }
+                            if len > 512 {
+                                issues.push(Issue::new(item_path.as_str(), "StringMaxLength"));
+                            }
+                        }
+                        None => issues.push(Issue::new(item_path.as_str(), "String")),
+                    }
+                }
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "inserted" | "updated" | "skipped" | "formatVersion" | "appliedAt" | "orphans") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_profile_import(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_profile_import(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_profile_import(bytes: &[u8]) -> Result<ResultProfileImport, WireError> {
+    crate::decode::<ResultProfileImport>(validate_result_profile_import, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum RequestProfileImportPolicy {
+    #[serde(rename = "reject")] Reject,
+    #[serde(rename = "replace")] Replace,
+    #[serde(rename = "remap")] Remap,
+}
+
+pub(crate) fn check_request_profile_import_policy(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    match value.as_str() {
+        Some(s) => {
+            if !matches!(s, "reject" | "replace" | "remap") {
+                issues.push(Issue::new(path, "Union"));
+            }
+        }
+        None => issues.push(Issue::new(path, "String")),
+    }
+}
+
+pub fn validate_request_profile_import_policy(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_profile_import_policy(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_profile_import_policy(bytes: &[u8]) -> Result<RequestProfileImportPolicy, WireError> {
+    crate::decode::<RequestProfileImportPolicy>(validate_request_profile_import_policy, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

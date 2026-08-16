@@ -150,6 +150,8 @@ pub struct ImportReport {
     /// Human-readable descriptions of every skipped orphan, e.g.
     /// `"chat c1: references missing character missing"`.
     pub orphans: Vec<String>,
+    /// Container format version of the applied verified export.
+    pub format_version: u64,
 }
 
 /// One inventory entry of the container manifest.
@@ -908,6 +910,7 @@ pub fn apply_import(
         updated,
         skipped,
         orphans,
+        format_version: verified.format_version,
     })
 }
 
@@ -1610,11 +1613,16 @@ fn manifest_corrupt(why: &str) -> StorageError {
 
 /// Generates an RFC 9562 UUIDv7 identifier using only `std`.
 ///
-/// Layout: 48 bits of Unix-epoch milliseconds, a version nibble of 7, the
-/// RFC 4122 variant bits (`10xx`), and 74 random bits drawn from
+/// Generates a wire-compatible fresh id for remapped records.
+///
+/// Layout: 48 bits of Unix-epoch milliseconds, the RFC 4122 version nibble
+/// of 4, the variant bits (`10xx`), and 74 random bits drawn from
 /// [`std::collections::hash_map::RandomState`] — `std`'s OS-seeded hash
 /// state, the only randomness source available without extra dependencies.
-/// Like the kernel's ids, the timestamp prefix keeps ids time-ordered.
+/// The version nibble is pinned to 4 exactly like the kernel's `new_id`
+/// (timestamp-ordered, but wire-format compatible: the Product Wire uuid
+/// format only admits versions 1–5), and the timestamp prefix keeps ids
+/// time-ordered.
 fn uuid_v7() -> String {
     use std::collections::hash_map::RandomState;
     use std::hash::{BuildHasher, Hasher};
@@ -1637,7 +1645,7 @@ fn uuid_v7() -> String {
     out.push('-');
     push_hex(&mut out, ms & 0xFFFF, 4);
     out.push('-');
-    push_hex(&mut out, 0x7000 | ((rand_a >> 12) & 0x0FFF), 4);
+    push_hex(&mut out, 0x4000 | ((rand_a >> 12) & 0x0FFF), 4);
     out.push('-');
     push_hex(&mut out, 0x8000 | (rand_a & 0x3FFF), 4);
     out.push('-');
