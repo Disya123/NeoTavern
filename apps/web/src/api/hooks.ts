@@ -108,7 +108,8 @@ import {
   type ContinueCharacterChatInput,
   type ContinueCharacterChatResult,
 } from './wireBridge.js';
-import { backend } from './backend.js';
+import { UnsupportedError } from '@neotavern/neobackend';
+import { backend, isKernelMode } from './backend.js';
 export * from './providerHooks.js';
 export type { ContinueCharacterChatInput, ContinueCharacterChatResult } from './wireBridge.js';
 
@@ -978,7 +979,11 @@ export function useRestoreBackup() {
 export function useDiagnostics() {
   return useQuery({
     queryKey: ['diagnostics'],
-    queryFn: () => api.get<DiagnosticsSnapshot>('/diagnostics'),
+    // Kernel plane: the legacy DiagnosticsSnapshot does not exist there — the
+    // panel maps the kernel bundle (useKernelDiagnostics) instead. Returning
+    // null without a network call keeps kernel mode free of silent legacy
+    // requests (ARC-02).
+    queryFn: () => (isKernelMode() ? null : api.get<DiagnosticsSnapshot>('/diagnostics')),
   });
 }
 
@@ -1000,7 +1005,16 @@ export function useKernelDiagnostics() {
 export function useRebuildSearch() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => api.post('/search/rebuild'),
+    mutationFn: () => {
+      // Kernel plane: the kernel owns the search index; the legacy rebuild
+      // route does not exist there — honest CAPABILITY_UNAVAILABLE (ТЗ
+      // §13.1), never a silent legacy request (ARC-02). The DiagnosticsPanel
+      // also disables the action in kernel mode.
+      if (isKernelMode()) {
+        return Promise.reject(new UnsupportedError('search.rebuild'));
+      }
+      return api.post('/search/rebuild');
+    },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['diagnostics'] }),
   });
 }
@@ -1008,7 +1022,16 @@ export function useRebuildSearch() {
 export function useClearDiagnosticCache() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => api.del<CacheCleanupResult>('/diagnostics/cache'),
+    mutationFn: () => {
+      // Kernel plane: no legacy diagnostic cache to clear — honest
+      // CAPABILITY_UNAVAILABLE (ТЗ §13.1), never a silent legacy request
+      // (ARC-02). The DiagnosticsPanel also disables the action in kernel
+      // mode.
+      if (isKernelMode()) {
+        return Promise.reject(new UnsupportedError('diagnostics.cache'));
+      }
+      return api.del<CacheCleanupResult>('/diagnostics/cache');
+    },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['diagnostics'] }),
   });
 }

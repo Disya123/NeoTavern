@@ -3,6 +3,23 @@
 ## Unreleased
 ### Added
 
+- **Diagnostics hooks are honest on the kernel plane (M5 slice 17,
+  ARC-02).** `useDiagnostics`, `useRebuildSearch` and
+  `useClearDiagnosticCache` consulted the legacy `/api/v2` surface on EVERY
+  backend — on the kernel plane that meant useless network calls to a dead
+  legacy route (the kernel has no legacy `DiagnosticsSnapshot`, search-rebuild
+  or diagnostic-cache routes). Now the transport gate lives in the hooks:
+  `useDiagnostics` resolves `null` without a network call on the kernel (the
+  DiagnosticsPanel maps the kernel bundle via `useKernelDiagnostics`
+  instead), and the two maintenance mutations reject with a typed
+  `UnsupportedError` (honest CAPABILITY_UNAVAILABLE, ТЗ §13.1) — never a
+  silent legacy request from kernel mode (ARC-02). The legacy contour
+  (sidecar / remote Web Client) keeps the real routes; the DiagnosticsPanel
+  already disables the maintenance actions in kernel mode. Tests: hooks 7/7
+  (+4 kernel-honesty cases: no fetch on kernel, UnsupportedError for both
+  mutations), full web vitest green, eslint/typecheck/prettier clean,
+  ui:api:check 53, gates GATE PASS.
+
 - **Legacy extension-settings bridge moved behind a transport module
   (M5 slice 16, ARC-03).** The last production component holding
   `legacyRaw()` — `LegacyBridgeSync.tsx` (the documented

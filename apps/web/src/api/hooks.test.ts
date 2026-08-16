@@ -5,7 +5,23 @@ import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { createQueryClient, jsonResponse } from '../../test/helpers.js';
 import { getCsrfToken, setCsrfToken } from './client.js';
-import { useAuthSession, useDeleteCharacter, useLogin } from './hooks.js';
+import {
+  useAuthSession,
+  useClearDiagnosticCache,
+  useDeleteCharacter,
+  useDiagnostics,
+  useLogin,
+  useRebuildSearch,
+} from './hooks.js';
+
+// Kernel-mode honesty (slice 17): the diagnostics hooks consult
+// `isKernelMode`; the default here is the legacy plane so the existing tests
+// stay as they were.
+const mocks = vi.hoisted(() => ({ isKernelMode: vi.fn(() => false) }));
+vi.mock('./backend.js', async (importOriginal) => {
+  const actual = (await importOriginal()) as { backend: unknown };
+  return { ...actual, isKernelMode: mocks.isKernelMode };
+});
 
 function wrapperFor(client: QueryClient) {
   return function Wrapper({ children }: { children: ReactNode }) {
@@ -72,5 +88,45 @@ describe('useDeleteCharacter', () => {
     expect(url).toBe('/api/v2/characters/char-1');
     expect(init.method).toBe('DELETE');
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['characters'] });
+  });
+});
+
+describe('diagnostics hooks (kernel-plane honesty, slice 17)', () => {
+  it('useDiagnostics fetches the legacy snapshot on the legacy plane', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ generatedAt: '2026-08-13T00:00:00Z' }));
+    const { result } = renderHook(() => useDiagnostics(), { wrapper: wrapperFor(queryClient) });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).toBe('/api/v2/diagnostics');
+  });
+
+  it('useDiagnostics resolves null on the kernel plane without a network call', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const { result } = renderHook(() => useDiagnostics(), { wrapper: wrapperFor(queryClient) });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+    mocks.isKernelMode.mockReturnValue(false);
+  });
+
+  it('useRebuildSearch rejects with UnsupportedError on the kernel plane', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const { result } = renderHook(() => useRebuildSearch(), { wrapper: wrapperFor(queryClient) });
+    act(() => result.current.mutate());
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(fetchMock).not.toHaveBeenCalled();
+    mocks.isKernelMode.mockReturnValue(false);
+  });
+
+  it('useClearDiagnosticCache rejects with UnsupportedError on the kernel plane', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const { result } = renderHook(() => useClearDiagnosticCache(), {
+      wrapper: wrapperFor(queryClient),
+    });
+    act(() => result.current.mutate());
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(fetchMock).not.toHaveBeenCalled();
+    mocks.isKernelMode.mockReturnValue(false);
   });
 });
