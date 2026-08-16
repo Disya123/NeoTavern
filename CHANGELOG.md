@@ -34,6 +34,19 @@
 
 ### Added
 
+- **Desktop kernel host secret seams (M5 slice 49, ТЗ §SEC-01).** The Tauri
+  host now wires the kernel's `SecretStore`/`SecretResolver` port handles:
+  a session-only `MemorySecretStore` plus a resolver that serves exactly the
+  `session:` references that store produces (`crates/adapters/tauri-local`
+  `secrets` module). `providers.config.set apiKey` now commits on the kernel
+  plane for the session, and a generation resolves the key at execution time.
+  Explicit SEC-01 session-only interim: values live in process memory only —
+  a restart clears them and the runtime reports the stable unavailable state
+  until the key is re-entered; `portable:`/`env:` references and missing
+  records fail closed with typed `Unavailable`, never a plaintext fallback.
+  Host tests 3 (session round trip, fail-closed kinds, kernel store
+  writability; tauri-local 12/12). The OS-vault / Android Keystore adapters
+  remain M3 — when the vault lands, only `wire_session_secrets` changes.
 - **Production provider selection on the kernel plane (M5 slice 48, Этап 2.5).**
   A stored OpenAI-compatible config is now generatable without any host-side
   adapter wiring: `providers.config.set` materializes the adapter into the

@@ -11,6 +11,11 @@ serde_json = "1"
 tauri = { version = "2", optional = true }
 contracts-generated = { path = "../../contracts-generated" }
 runtime-kernel = { path = "../../runtime-kernel" }
+# М5 slice 49: the desktop host wires the kernel's secret seams (ТЗ §SEC-01)
+# with a session-only MemorySecretStore + resolver — explicit, no plaintext
+# fallback; the OS-vault adapter is a follow-up slice.
+secret-store = { path = "../../secret-store" }
+provider-sdk = { path = "../../provider-sdk" }
 # Shared envelope layer — the Tauri transport answers byte-identical
 # response envelopes to the CLI and the remote-http adapter (§6.3).
 neotavern-envelope = { path = "../envelope" }
@@ -31,3 +36,6 @@ tauri = ["dep:tauri"]
 # shell enables both `tauri` and `remote`; the service module itself stays
 # Tauri-free (pure serde DTOs) so the workspace can build it standalone.
 remote = ["dep:neotavern-desktop-remote"]
+
+[dev-dependencies]
+tempfile = "3"

@@ -35,6 +35,10 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+/// Host-provided secret seams (ТЗ §SEC-01, М5 slice 49): the writable
+/// session store and the execution-time resolver.
+pub mod secrets;
+
 /// How long each polling iteration waits for a stream notice before
 /// re-dispatching `generation.events` (mirrors the remote-http SSE worker).
 const STREAM_POLL_INTERVAL: Duration = Duration::from_millis(250);
@@ -109,6 +113,11 @@ impl KernelHost {
             ffi_abi_version: runtime_kernel::FFI_ABI_VERSION,
             data_root: config.data_root,
         })?;
+        // ТЗ §SEC-01: the kernel only holds SecretStore/SecretResolver port
+        // handles; the host provides the backends. Session-only for now (М5
+        // slice 49) — explicit, no plaintext fallback; the OS-vault adapter
+        // is a follow-up slice and only `wire_session_secrets` changes.
+        secrets::wire_session_secrets(&kernel);
         Ok(Self {
             kernel: Arc::new(Mutex::new(kernel)),
             streams: Arc::new(Mutex::new(HashMap::new())),

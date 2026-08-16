@@ -2175,10 +2175,13 @@ dependencies = [
  "contracts-generated",
  "neotavern-desktop-remote",
  "neotavern-envelope",
+ "provider-sdk",
  "runtime-kernel",
+ "secret-store",
  "serde",
  "serde_json",
  "tauri",
+ "tempfile",
 ]
 
 [[package]]

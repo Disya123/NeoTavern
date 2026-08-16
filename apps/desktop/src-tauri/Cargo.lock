@@ -2117,7 +2117,9 @@ dependencies = [
  "contracts-generated",
  "neotavern-desktop-remote",
  "neotavern-envelope",
+ "provider-sdk",
  "runtime-kernel",
+ "secret-store",
  "serde",
  "serde_json",
  "tauri",
@@ -2707,6 +2709,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "provider-openai-compat"
+version = "0.1.0"
+dependencies = [
+ "provider-sdk",
+ "rustls",
+ "rustls-platform-verifier",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "provider-sdk"
 version = "0.1.0"
 dependencies = [
@@ -2924,11 +2937,13 @@ dependencies = [
  "built-in-providers",
  "contracts-generated",
  "neotavern-storage",
+ "provider-openai-compat",
  "provider-sdk",
  "rusqlite",
  "secret-store",
  "serde",
  "serde_json",
+ "sha2",
  "time",
  "uuid",
 ]
@@ -2980,6 +2995,7 @@ version = "0.23.42"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c54fcab019b409d04215d3a17cb438fd7fbf192ee61461f20f4fe18704bc138"
 dependencies = [
+ "log",
  "once_cell",
  "ring",
  "rustls-pki-types",
