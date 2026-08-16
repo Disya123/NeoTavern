@@ -1064,7 +1064,7 @@
           "type": "artifact",
           "artifact": "Wire op themes.deactivate (clear active theme)",
           "result": "M5 slice 18: the wire contract previously had no way to stop applying a theme on the kernel plane — resetActiveTheme was an honest UnsupportedError (legacy DELETE /themes/active had no kernel equivalent). New op themes.deactivate clears the single active flag — idempotent (no active theme is a successful no-op), the shell falls back to the default (AGENTS.md §19), distinct from themes.uninstall which also removes the row. Full vertical slice: contracts registry (empty request/result, transactional/idempotent/app.write, 88 ops total, new schema hash 501fa37f1081d9fef93847ae88708a95a8ec89696ebf046ec4f205a88824bfea, wire.test 88 ops + fixtures), codegen clean, kernel handler themes.rs (transactional UPDATE ... WHERE active = 1, idempotent), dispatch, ThemesApi.deactivate on Local/Remote/Legacy backends (legacy plane unsupported — legacy uses DELETE /themes/active), web resetActiveTheme kernel branch calls the op and reports truthful activeThemeId: null (legacy contour keeps DELETE /themes/active). Verified: kernel_themes 6/6 (+1 deactivate round-trip + idempotency), wire.test 15/15 (88 ops), wireBridge.test +1 deactivate routing, neobackend 69/69, full web vitest green, contracts:check/codegen clean, eslint/typecheck/prettier clean, ui:api:check 53 (line-shift re-baseline), release-manifest ui.themes += themes.deactivate + notes (slice 6 part 5), matrix 35 rows, docs:check + gates GATE PASS.",
-          "commit": "pending"
+          "commit": "6bda10f"
         },
         {
           "type": "artifact",
