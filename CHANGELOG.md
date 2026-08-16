@@ -3,6 +3,19 @@
 ## Unreleased
 ### Added
 
+- **Character-card import host parity over HTTP (M5 slice 33, Этап 5
+  foundation).** `remote_http.rs` gains `character_card_import_over_http` —
+  the full Этап 4.5 flow over the loopback `remote-http-adapter`: `assets.put`
+  (kind `card`) → `imports.character.card` (created, wire-valid result) →
+  re-import of the same bytes dedupes (`created: false`, same character id,
+  AGENTS.md §11) → unknown asset answers the stable `ASSET_NOT_FOUND`
+  product error with the `assetId` param → unparseable bytes answer
+  `CHARACTER_CARD_INVALID` with the `reason` param. Every payload crosses the
+  generated decoders/validators (`validate_result_imports_character_card` …),
+  so the same contract semantics hold over direct kernel dispatch, the wire
+  corpus and the HTTP transport (host parity suite, ТЗ §17.3). Remote-http
+  suite green (30 scenario tests incl. the new one), fmt/clippy clean.
+
 - **Character-card import UI flow on the kernel plane (M5 slice 32, Этап
   4.5).** The web transport's `importCharacter` now returns a fully typed
   `CharacterImportResult` on both planes: the kernel branch maps the wire

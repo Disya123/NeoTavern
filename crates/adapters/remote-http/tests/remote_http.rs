@@ -1515,3 +1515,110 @@ fn persona_crud_over_http() {
     assert_eq!(error.code, "PERSONA_NOT_FOUND");
     assert_eq!(error.params["personaId"], json!(persona_id));
 }
+
+/// Этап 4.5 host parity: `imports.character.card` over HTTP — stage the card
+/// via `assets.put`, import (created), re-import the same bytes (dedupe,
+/// `created: false`, same character), and the stable error paths
+/// (`ASSET_NOT_FOUND`, `CHARACTER_CARD_INVALID`).
+#[test]
+fn character_card_import_over_http() {
+    let server = TestServer::spawn();
+
+    // Base64 of `{"name":"Ada Lovelace","description":"First programmer","tags":["analytical"]}`.
+    const CARD_B64: &str = "eyJuYW1lIjoiQWRhIExvdmVsYWNlIiwiZGVzY3JpcHRpb24iOiJGaXJzdCBwcm9ncmFtbWVyIiwidGFncyI6WyJhbmFseXRpY2FsIl19";
+
+    let put = envelope_body(
+        &rid(1),
+        "assets.put",
+        json!({
+            "kind": "card",
+            "filename": "ada.json",
+            "contentType": "application/json",
+            "contentBase64": CARD_B64,
+        }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &put);
+    assert_eq!(response.status, 200, "assets.put answers HTTP 200");
+    let (_, put_result) = expect_ok(decode_envelope(&response.body));
+    gen::validate_result_assets_put(&put_result).expect("assets.put result is wire-valid");
+    let asset_id = put_result["asset"]["id"]
+        .as_str()
+        .expect("staged card asset has an id")
+        .to_string();
+
+    let import = envelope_body(
+        &rid(2),
+        "imports.character.card",
+        json!({ "assetId": asset_id }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &import);
+    assert_eq!(
+        response.status, 200,
+        "imports.character.card answers HTTP 200"
+    );
+    let (_, imported) = expect_ok(decode_envelope(&response.body));
+    gen::validate_result_imports_character_card(&imported).expect("import result is wire-valid");
+    assert_eq!(imported["created"], json!(true));
+    assert_eq!(imported["character"]["name"], json!("Ada Lovelace"));
+    let character_id = imported["character"]["id"]
+        .as_str()
+        .expect("imported character has an id")
+        .to_string();
+    let source_hash = imported["sourceHash"]
+        .as_str()
+        .expect("import result carries the source hash");
+    assert_eq!(source_hash.len(), 64);
+
+    // Re-import of the same card bytes → dedupe: created:false, same id.
+    let response = http_request(server.addr, "POST", "/rpc", &[], &import);
+    assert_eq!(response.status, 200);
+    let (_, reimported) = expect_ok(decode_envelope(&response.body));
+    gen::validate_result_imports_character_card(&reimported)
+        .expect("re-import result is wire-valid");
+    assert_eq!(reimported["created"], json!(false));
+    assert_eq!(reimported["character"]["id"], json!(character_id));
+
+    // Unknown asset → stable ASSET_NOT_FOUND product error with the id param.
+    let missing = envelope_body(
+        &rid(3),
+        "imports.character.card",
+        json!({ "assetId": "00000000-0000-4000-8000-000000000000" }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &missing);
+    assert_eq!(response.status, 200);
+    let (_, error) = expect_error(decode_envelope(&response.body));
+    assert_eq!(error.code, "ASSET_NOT_FOUND");
+    assert_eq!(
+        error.params["assetId"],
+        json!("00000000-0000-4000-8000-000000000000")
+    );
+
+    // Unparseable card bytes → CHARACTER_CARD_INVALID with the reason param.
+    let put_bad = envelope_body(
+        &rid(4),
+        "assets.put",
+        json!({
+            "kind": "card",
+            "filename": "bad.json",
+            "contentType": "application/json",
+            "contentBase64": "cGxhaW4gdGV4dCwgbm90IGEgY2FyZA==",
+        }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &put_bad);
+    assert_eq!(response.status, 200);
+    let (_, put_bad_result) = expect_ok(decode_envelope(&response.body));
+    let bad_asset_id = put_bad_result["asset"]["id"]
+        .as_str()
+        .expect("bad card asset has an id")
+        .to_string();
+    let import_bad = envelope_body(
+        &rid(5),
+        "imports.character.card",
+        json!({ "assetId": bad_asset_id }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &import_bad);
+    assert_eq!(response.status, 200);
+    let (_, error) = expect_error(decode_envelope(&response.body));
+    assert_eq!(error.code, "CHARACTER_CARD_INVALID");
+    assert_eq!(error.params["reason"], json!("INVALID_JSON"));
+}

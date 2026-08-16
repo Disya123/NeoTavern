@@ -4,10 +4,7 @@
     {
       "id": "backups",
       "title": "Backup create/list",
-      "wireOps": [
-        "backups.create",
-        "backups.list"
-      ],
+      "wireOps": ["backups.create", "backups.list"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
@@ -39,13 +36,7 @@
     {
       "id": "chats.crud",
       "title": "Chat CRUD",
-      "wireOps": [
-        "chats.list",
-        "chats.get",
-        "chats.create",
-        "chats.update",
-        "chats.delete"
-      ],
+      "wireOps": ["chats.list", "chats.get", "chats.create", "chats.update", "chats.delete"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
@@ -99,9 +90,7 @@
     {
       "id": "chats.snapshots",
       "title": "Chat snapshots (checkpoint/branch)",
-      "wireOps": [
-        "chats.snapshots.create"
-      ],
+      "wireOps": ["chats.snapshots.create"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
@@ -127,9 +116,7 @@
     {
       "id": "generation.prompt.plan",
       "title": "Prompt pipeline: durable PromptPlan (history/character/lorebook/token budget)",
-      "wireOps": [
-        "generation.prompt.plan"
-      ],
+      "wireOps": ["generation.prompt.plan"],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
@@ -142,10 +129,7 @@
     {
       "id": "generation.tool-loop",
       "title": "Durable run/step journal + tool-call loop (waiting_for_tool)",
-      "wireOps": [
-        "generation.tools.list",
-        "generation.tool.result"
-      ],
+      "wireOps": ["generation.tools.list", "generation.tool.result"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
@@ -179,12 +163,7 @@
     {
       "id": "library.assets",
       "title": "Content-addressed asset store (put/get/content/delete, avatar linkage)",
-      "wireOps": [
-        "assets.put",
-        "assets.get",
-        "assets.content",
-        "assets.delete"
-      ],
+      "wireOps": ["assets.put", "assets.get", "assets.content", "assets.delete"],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
@@ -197,16 +176,14 @@
     {
       "id": "library.characterImport",
       "title": "Character-card import (PNG/JSON, content-hash dedupe)",
-      "wireOps": [
-        "imports.character.card"
-      ],
+      "wireOps": ["imports.character.card"],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
         "android": "Designed",
         "webClient": "Implemented"
       },
-      "notes": "Этап 4.5 (M5 slice 31): canonical character-card import over Product Wire (89 ops total). The card file (SillyTavern-compatible V2 JSON, or a PNG carrying the chara tEXt chunk with base64-encoded JSON) is staged through assets.put (kind card, content-addressed, idempotent; the ~786 KiB wire request cap surfaces as a transport error — never a silent downgrade) and parsed by imports.character.card: sha256 of the original bytes deduplicates against characters.import_hash (schema migration 019, indexed) so re-running an import returns the existing character with created:false (AGENTS.md §11: import must not create duplicates). Card fields beyond the canonical columns (personality, scenario, first message, example dialogue, system prompt, post-history instructions, creator, character version, extensions and any unknown fields) survive verbatim under ext_json._card (AGENTS.md §11: unknown character card fields and extension metadata must not be lost); over-length scalar columns are truncated with an honest warning. PNG cards link the staged asset as the avatar (avatar_asset_id = asset id); JSON cards carry none. Missing asset → stable ASSET_NOT_FOUND; unparseable card → CHARACTER_CARD_INVALID with a reason param (INVALID_JSON/INVALID_PNG_SIGNATURE/TRUNCATED_PNG_CHUNK/INVALID_PNG_CARD_ENCODING/PNG_CARD_METADATA_MISSING). Kernel tests (kernel_imports.rs, 5): JSON create + field preservation, dedupe, PNG avatar link, unparseable reject, missing asset. Facade: NeoBackend.imports.characterCard — LocalBackend forwards with request/response validation, RemoteBackend via ClientSdk, LegacyBackend throws UnsupportedError. Web transport: importCharacter on the kernel plane now runs assets.put + imports.character.card (two-step); UI wiring (CharactersPage/CharacterManagementPanel) is slice 32.",
+      "notes": "Этап 4.5 (M5 slice 31): canonical character-card import over Product Wire (89 ops total). The card file (SillyTavern-compatible V2 JSON, or a PNG carrying the chara tEXt chunk with base64-encoded JSON) is staged through assets.put (kind card, content-addressed, idempotent; the ~786 KiB wire request cap surfaces as a transport error — never a silent downgrade) and parsed by imports.character.card: sha256 of the original bytes deduplicates against characters.import_hash (schema migration 019, indexed) so re-running an import returns the existing character with created:false (AGENTS.md §11: import must not create duplicates). Card fields beyond the canonical columns (personality, scenario, first message, example dialogue, system prompt, post-history instructions, creator, character version, extensions and any unknown fields) survive verbatim under ext_json._card (AGENTS.md §11: unknown character card fields and extension metadata must not be lost); over-length scalar columns are truncated with an honest warning. PNG cards link the staged asset as the avatar (avatar_asset_id = asset id); JSON cards carry none. Missing asset → stable ASSET_NOT_FOUND; unparseable card → CHARACTER_CARD_INVALID with a reason param (INVALID_JSON/INVALID_PNG_SIGNATURE/TRUNCATED_PNG_CHUNK/INVALID_PNG_CARD_ENCODING/PNG_CARD_METADATA_MISSING). Kernel tests (kernel_imports.rs, 5): JSON create + field preservation, dedupe, PNG avatar link, unparseable reject, missing asset. Host parity (Этап 5 foundation): remote_http.rs character_card_import_over_http drives the full flow over the loopback HTTP adapter — assets.put -> imports.character.card -> created, re-import dedupe (created:false, same id), ASSET_NOT_FOUND and CHARACTER_CARD_INVALID (reason param) error envelopes verbatim, every payload wire-validated through the generated decoders. Facade: NeoBackend.imports.characterCard — LocalBackend forwards with request/response validation, RemoteBackend via ClientSdk, LegacyBackend throws UnsupportedError. Web transport: importCharacter on the kernel plane now runs assets.put + imports.character.card (two-step); UI wiring (CharactersPage/CharacterManagementPanel) is slice 32.",
       "milestone": "M5"
     },
     {
@@ -235,12 +212,7 @@
     {
       "id": "memories.crud",
       "title": "Memory CRUD (ТЗ §4.4)",
-      "wireOps": [
-        "memories.list",
-        "memories.create",
-        "memories.update",
-        "memories.delete"
-      ],
+      "wireOps": ["memories.list", "memories.create", "memories.update", "memories.delete"],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
@@ -253,9 +225,7 @@
     {
       "id": "meta.get",
       "title": "Kernel handshake / meta",
-      "wireOps": [
-        "meta.get"
-      ],
+      "wireOps": ["meta.get"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Integrated",
@@ -324,9 +294,7 @@
     {
       "id": "providers.list",
       "title": "Provider catalog read",
-      "wireOps": [
-        "providers.list"
-      ],
+      "wireOps": ["providers.list"],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
@@ -404,10 +372,7 @@
     {
       "id": "settings",
       "title": "Non-secret settings (kernel)",
-      "wireOps": [
-        "settings.get",
-        "settings.update"
-      ],
+      "wireOps": ["settings.get", "settings.update"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
@@ -420,9 +385,7 @@
     {
       "id": "ui.diagnostics",
       "title": "Diagnostics panel (kernel section)",
-      "wireOps": [
-        "diagnostics.export"
-      ],
+      "wireOps": ["diagnostics.export"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
@@ -480,9 +443,7 @@
     {
       "id": "ui.profile-export",
       "title": "Logical profile export",
-      "wireOps": [
-        "profile.export"
-      ],
+      "wireOps": ["profile.export"],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
@@ -495,12 +456,7 @@
     {
       "id": "ui.profiles",
       "title": "Profiles (Configuration)",
-      "wireOps": [
-        "profiles.list",
-        "profiles.create",
-        "profiles.rename",
-        "profiles.delete"
-      ],
+      "wireOps": ["profiles.list", "profiles.create", "profiles.rename", "profiles.delete"],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
@@ -526,9 +482,7 @@
     {
       "id": "ui.secrets",
       "title": "Secret management",
-      "wireOps": [
-        "secrets.status"
-      ],
+      "wireOps": ["secrets.status"],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
@@ -580,7 +534,7 @@
         "android": "Designed",
         "webClient": "Designed"
       },
-      "notes": "SillyTavern card containers (PNG/JSON card export, chat snapshot export, card import parsing) have no wire operation — the kernel plane refuses them honestly (M5 slice 8: exportCharacterCard/exportChat/importCharacter throw UnsupportedError on the kernel plane and keep the legacy download/upload on the legacy plane; useErrorText localizes the refusal via errors:UNSUPPORTED instead of INTERNAL). The legacy /api/v2/characters/:id/export, /api/v2/chats/:id/export and /characters/import routes stay the implemented surface until a canonical container/parse operation is specified (ТЗ §14.2 authority-non-expanding boundary).",
+      "notes": "SillyTavern card containers (PNG/JSON card export, chat snapshot export, card import parsing) have no wire operation — the kernel plane refuses them honestly (M5 slice 8: exportCharacterCard/exportChat throw UnsupportedError on the kernel plane and keep the legacy download on the legacy plane; useErrorText localizes the refusal via errors:UNSUPPORTED instead of INTERNAL. M5 slice 32: character-card IMPORT now runs on the kernel plane end-to-end — assets.put + imports.character.card (Этап 4.5) — so the remaining refusals are the two EXPORT directions, which the wire contract does not model). The legacy /api/v2/characters/:id/export, /api/v2/chats/:id/export and /characters/import routes stay the implemented surface until a canonical container/parse operation is specified (ТЗ §14.2 authority-non-expanding boundary).",
       "milestone": "M5"
     }
   ]
