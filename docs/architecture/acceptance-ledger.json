@@ -1058,7 +1058,7 @@
           "type": "artifact",
           "artifact": "Diagnostics hooks kernel-plane honesty (hooks.ts)",
           "result": "M5 slice 17 (ARC-02): useDiagnostics / useRebuildSearch / useClearDiagnosticCache previously consulted the legacy surface on EVERY backend — on the kernel plane useless network calls to a dead legacy route (the kernel has no legacy DiagnosticsSnapshot, search-rebuild or diagnostic-cache routes). Now the transport gate lives in the hooks: useDiagnostics resolves null without a network call on the kernel (the DiagnosticsPanel maps the kernel bundle via useKernelDiagnostics instead), and the two maintenance mutations reject with a typed UnsupportedError (honest CAPABILITY_UNAVAILABLE, ТЗ §13.1) — never a silent legacy request from kernel mode (ARC-02). Legacy contour (sidecar / remote Web Client) keeps the real routes; the DiagnosticsPanel already disables the maintenance actions in kernel mode. Verified: hooks 7/7 (+4 kernel-honesty cases: null without fetch on kernel, UnsupportedError for both mutations), full web vitest green, eslint/typecheck/prettier clean, ui:api:check 53, docs:check + gates GATE PASS.",
-          "commit": "pending"
+          "commit": "9ab6ac0"
         },
         {
           "type": "artifact",
