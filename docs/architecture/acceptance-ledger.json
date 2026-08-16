@@ -1094,7 +1094,7 @@
           "type": "artifact",
           "artifact": "Auth hooks kernel-plane honesty (hooks.ts)",
           "result": "M5 slice 23 (ARC-02): useAuthSession / useLogin / useLogout previously hit the legacy surface on EVERY backend — on the kernel plane the AuthGate hung on a useless network call to a dead route (/api/v2/auth/session does not exist there). Now the transport gate lives in the hooks: useAuthSession resolves the honest local session { required: false, authenticated: true } (the kernel transport — Tauri IPC / local — has no remote-token session layer; auth applies only to non-loopback legacy exposure, ТЗ §11.3), and login/logout reject with a typed UnsupportedError (honest CAPABILITY_UNAVAILABLE, ТЗ §13.1) — never a silent legacy request from kernel mode (ARC-02). Kernel Desktop no longer renders the remote-token form; the legacy contour (sidecar / remote Web Client) keeps the real routes unchanged. Verified: hooks 29/29 (+3 kernel-honesty cases), full web vitest green, eslint/typecheck/prettier clean, ui:api:check 53, docs:check + gates GATE PASS.",
-          "commit": "pending"
+          "commit": "a785b70"
         },
         {
           "type": "artifact",
