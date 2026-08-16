@@ -1,6 +1,37 @@
 # Changelog
 
 ## Unreleased
+### Security
+
+- **SSRF-resolved-IP policy for the legacy plugin `network.fetch` (M5 slice
+  45, ТЗ §SEC-03).** The legacy (Rev4) `network.fetch` RPC previously
+  resolved DNS inside the fetch implementation and checked only the
+  hostname allowlist — a plugin holding `network:*` could reach loopback /
+  cloud-metadata endpoints through a hostname or an IPv4-mapped literal.
+  It now runs the same resolved-IP policy as the vNext broker (§29.1) via
+  `safePluginFetch` (`apps/server/src/lib/safePluginFetch.ts`):
+  - ALL DNS answers are classified; if ANY answer is forbidden the hop is
+    refused (DNS-rebinding safe);
+  - bracketed IPv6 and IPv4-mapped IPv6 are normalized — both the dotted
+    (`::ffff:127.0.0.1`) and the URL-normalized hex spelling
+    (`::ffff:7f00:1`) of mapped addresses are unwrapped, so mapped
+    loopback/link-local/metadata cannot slip through as public;
+  - the connection is made to the pre-verified IP; the hostname is kept
+    only for the `Host` header and TLS `servername` (SNI);
+  - the connected socket's `remoteAddress` is re-checked after connect
+    (defense in depth against a lookup/connect race);
+  - every redirect (≤ 5) re-runs the full policy;
+  - response bodies are bounded in bytes (10 MiB) and the request is torn
+    down on exceed (SEC-04); a 30 s deadline applies.
+  Private ranges (10/8, 172.16/12, 192.168/16, fc00::/7, CGNAT 100.64/10)
+  stay allowed — self-hosted LAN endpoints are a supported use case, the
+  same stance as the plugin-installer download policy. Tests
+  `safePluginFetch.spec.ts` (18): classification (incl. hex-mapped),
+  all-answers fail-closed, verified-IP connect, post-connect race destroy,
+  redirect re-policing, oversized bodies, and `fetchRpc` integration —
+  loopback/link-local/mapped/metadata denied even with `network:*`,
+  `localhost` denied via DNS, allowlist/scheme/method validation kept.
+
 ### Added
 
 - **`chats.snapshots.rollback` — atomic chat rollback with an automatic

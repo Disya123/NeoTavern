@@ -10,6 +10,7 @@ import type { PluginManifest } from '@neotavern/plugin-sdk';
 import type { PluginResourceLimits } from '@neotavern/contracts';
 import { AppError, ErrorCodes, randomToken } from '@neotavern/shared';
 import { validatePackageEntryPath } from '../lib/packageArchive.js';
+import { safePluginFetch } from '../lib/safePluginFetch.js';
 import { DEPENDENCY_MARKER_FILE } from './dependencyInstaller.js';
 import type { ContextShiftResult, PromptMessage } from '../pipeline/contextShift.js';
 import type { AppContext, TypedApp } from '../types.js';
@@ -1281,8 +1282,11 @@ export class BackendPluginHost {
    * Host-side permission-checked fetch (ТЗ §7.3). The authoritative
    * `network:<host>` decision happens here, outside the untrusted process —
    * the worker's own check is fail-fast only and can be subverted in-realm.
-   * Response bodies are size-bounded; redirects are refused (a redirect would
-   * otherwise bypass the hostname allowlist).
+   * Response bodies are size-bounded; every hop (initial URL and each
+   * redirect) re-runs the SEC-03 resolved-IP policy
+   * (`safePluginFetch`): ALL DNS answers are classified, the connection is
+   * made to a pre-verified IP, the connected socket's remoteAddress is
+   * re-checked, and redirects are re-policed (≤ 5).
    */
   async fetchRpc(process: BackendProcess, args: Record<string, unknown>): Promise<unknown> {
     const urlText = requireString(args['url'], 'url');
@@ -1331,25 +1335,16 @@ export class BackendPluginHost {
         ? args['body']
         : undefined;
 
-    let response: Response;
-    try {
-      response = await fetch(parsed, {
-        method,
-        headers,
-        ...(body !== undefined && method !== 'GET' && method !== 'HEAD' ? { body } : {}),
-        redirect: 'error',
-        signal: AbortSignal.timeout(PLUGIN_FETCH_TIMEOUT_MS),
-      });
-    } catch (error) {
-      const timedOut = error instanceof Error && error.name === 'TimeoutError';
-      throw new AppError({
-        code: timedOut ? ErrorCodes.TIMEOUT : ErrorCodes.BAD_REQUEST,
-        params: { reason: timedOut ? 'FETCH_TIMEOUT' : 'FETCH_FAILED', hostname },
-        cause: error,
-      });
-    }
-    const text = await readBoundedText(response.body, MAX_PLUGIN_FETCH_BYTES);
-    return { ok: response.ok, status: response.status, body: text };
+    // SEC-03: resolved-IP policy, verified-IP connection, post-connect
+    // remoteAddress check, redirect re-policing, bounded bodies, deadline.
+    const result = await safePluginFetch(parsed, {
+      method,
+      headers,
+      body,
+      maxBytes: MAX_PLUGIN_FETCH_BYTES,
+      timeoutMs: PLUGIN_FETCH_TIMEOUT_MS,
+    });
+    return { ok: result.ok, status: result.status, body: result.body };
   }
 
   private trackRuntimeCleanup(
@@ -1755,30 +1750,4 @@ function isStreamResponse(
 
 function safeString(value: unknown): string {
   return typeof value === 'string' ? value.slice(0, 2000) : '';
-}
-
-/** Read a response stream up to `limit` bytes; over-limit bodies fail. */
-async function readBoundedText(
-  body: ReadableStream<Uint8Array> | null,
-  limit: number,
-): Promise<string> {
-  if (!body) return '';
-  const reader = body.getReader();
-  const decoder = new TextDecoder();
-  let received = 0;
-  let out = '';
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      received += value.byteLength;
-      if (received > limit) {
-        throw new AppError({ code: ErrorCodes.FILE_TOO_LARGE, params: { limitBytes: limit } });
-      }
-      out += decoder.decode(value, { stream: true });
-    }
-    return out + decoder.decode();
-  } finally {
-    reader.releaseLock();
-  }
 }
