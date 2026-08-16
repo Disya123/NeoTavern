@@ -127,9 +127,14 @@ fn finish(dto: &ProviderConfigDto) -> Result<Vec<u8>, KernelError> {
 /// present) is stored through the SecretStore seam; the row keeps only the
 /// opaque reference. A set without `apiKey` updates `config` and leaves the
 /// stored secret untouched.
+///
+/// The adapter registry is hydrated right after the commit (М5 slice 48): a
+/// saved config for a known provider kind is immediately generatable — the
+/// UI never has to wait for a kernel restart.
 pub(crate) fn set(
     db: &mut Database,
     store: Option<&Arc<dyn SecretStore>>,
+    registry: &mut crate::providers::ProviderRegistry,
     request: &[u8],
 ) -> Result<Vec<u8>, KernelError> {
     let req = generated::decode_request_set_provider_config(request)?;
@@ -194,7 +199,50 @@ pub(crate) fn set(
             "providers.config.set: upsert succeeded but select back found no row",
         )
     })?;
+    // Hydrate the adapter for the saved config (best-effort: an unknown kind
+    // is simply not registered; a malformed config logs and is skipped).
+    crate::providers::register_config_adapter(registry, &provider, &dto.config);
     finish(&dto)
+}
+
+/// Hydrates every stored provider config into the adapter registry (М5 slice
+/// 48). Runs once at kernel startup so saved configs survive restarts; an
+/// unknown kind or a malformed config is skipped with a diagnostic, never a
+/// startup failure.
+pub(crate) fn hydrate(
+    db: &Database,
+    registry: &mut crate::providers::ProviderRegistry,
+) -> Result<(), KernelError> {
+    let conn = db.conn();
+    let mut stmt = conn
+        .prepare(
+            "SELECT provider, config_json FROM provider_configs \
+             ORDER BY provider ASC, name ASC",
+        )
+        .map_err(|e| sqlite(e, "providers_config_hydrate: prepare"))?;
+    let mut rows = stmt
+        .query([])
+        .map_err(|e| sqlite(e, "providers_config_hydrate: query"))?;
+    while let Some(row) = rows
+        .next()
+        .map_err(|e| sqlite(e, "providers_config_hydrate: read row"))?
+    {
+        let provider: String = row
+            .get(0)
+            .map_err(|e| sqlite(e, "providers_config_hydrate: provider"))?;
+        let config_json: String = row
+            .get(1)
+            .map_err(|e| sqlite(e, "providers_config_hydrate: config_json"))?;
+        let config: serde_json::Value = match serde_json::from_str(&config_json) {
+            Ok(config) => config,
+            Err(err) => {
+                eprintln!("kernel: provider config hydration skipped ({provider}): {err}");
+                continue;
+            }
+        };
+        crate::providers::register_config_adapter(registry, &provider, &config);
+    }
+    Ok(())
 }
 
 /// `providers.config.get` — one config; missing → `PROVIDER_CONFIG_NOT_FOUND`.

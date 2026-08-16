@@ -509,7 +509,7 @@ where
 fn handle_unary(
     db: Option<&mut neotavern_storage::open::Database>,
     meta: &MetaDto,
-    state: &providers::ProviderState,
+    state: &mut providers::ProviderState,
     op: &str,
     req: &[u8],
     cancel: &CancellationFlag,
@@ -605,10 +605,14 @@ fn handle_unary(
         "personas.update" => with_db_opt(db, |db| product::personas_update(db, req)),
         "personas.delete" => with_db_opt(db, |db| product::personas_delete(db, req)),
         // Provider configuration (ТЗ §9.4): secrets go to the SecretStore
-        // seam, only opaque references reach the database.
-        "providers.config.set" => with_db_opt(db, |db| {
-            providers_config::set(db, state.secret_store.as_ref(), req)
-        }),
+        // seam, only opaque references reach the database. `set` also
+        // hydrates the adapter registry (М5 slice 48).
+        "providers.config.set" => {
+            let store = state.secret_store.clone();
+            with_db_opt(db, |db| {
+                providers_config::set(db, store.as_ref(), &mut state.registry, req)
+            })
+        }
         "providers.config.get" => with_db_opt(db, |db| {
             providers_config::get(db, state.secret_store.as_ref(), req)
         }),
@@ -803,6 +807,15 @@ fn writer_main(
     // Phase 7 provider state: the adapter registry plus the host-provided
     // secret-resolution seam and the per-run deadline.
     let mut state = providers::ProviderState::new_builtins();
+    // М5 slice 48: hydrate adapters for every stored provider config so a
+    // configured production provider (e.g. openai) is generatable right after
+    // startup without host-side wiring. Best-effort: a malformed or unknown
+    // config is skipped with a diagnostic, never a startup failure.
+    if let Some(db) = &db {
+        if let Err(err) = providers_config::hydrate(db, &mut state.registry) {
+            eprintln!("kernel: provider config hydration failed: {err}");
+        }
+    }
     let mut stop = false;
     let mut pending: Vec<Command> = Vec::new();
     while !stop {
@@ -822,8 +835,15 @@ fn writer_main(
                 cancel,
                 reply,
             } => {
-                let result =
-                    handle_unary(db.as_mut(), &meta, &state, &op, &req, &cancel, &lease_owner);
+                let result = handle_unary(
+                    db.as_mut(),
+                    &meta,
+                    &mut state,
+                    &op,
+                    &req,
+                    &cancel,
+                    &lease_owner,
+                );
                 let _ = reply.send(result);
             }
             Command::Stream {

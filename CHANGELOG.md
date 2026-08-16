@@ -34,6 +34,21 @@
 
 ### Added
 
+- **Production provider selection on the kernel plane (M5 slice 48, Этап 2.5).**
+  A stored OpenAI-compatible config is now generatable without any host-side
+  adapter wiring: `providers.config.set` materializes the adapter into the
+  kernel registry right after its commit (replacing by adapter id — no
+  duplicates), and startup hydration re-registers every saved config, so the
+  provider survives restarts. The web transport resolves the selected provider
+  config id (settings `active-provider-config-id`) into the `provider`/`model`
+  pair handed to `generation.start` — a vanished config is an honest
+  `PROVIDER_CONFIG_NOT_FOUND`, never a silent fake fallback. Kernel tests:
+  config hydration survives a restart and drives a full generation run on the
+  restarted kernel, re-save replaces the adapter (providers_openai 6/6);
+  generate.test 9/9. Honest boundary: executing a configured key still needs
+  the host SecretStore/SecretResolver seams (desktop host wiring is a follow-up
+  slice); without a seam, setting a key fails closed (`SECRET_UNAVAILABLE`)
+  and a run resolves fail closed (`ProviderError::Unavailable`).
 - **Durable run-step transcript — generation timeline in the UI (M5 slice 47,
   ТЗ §8.3/§13.2, §15).** Messages that carry a durable generation run id gain
   a «Steps» footer action in the details card, opening `RunTranscriptPanel`:

@@ -15,6 +15,11 @@ built-in-providers = { path = "../built-in-providers" }
 # Provider-config secrets (ТЗ §9.4, §SEC-01): the kernel holds the SecretStore
 # port handle and stores only opaque references in provider_configs.
 secret-store = { path = "../secret-store" }
+# Production OpenAI-compatible adapter (Этап 2.5): the kernel hydrates
+# configured providers into its registry at startup (and on every
+# providers.config.set) so a saved config is immediately generatable without
+# host-side adapter wiring (M5 slice 48).
+provider-openai-compat = { path = "../provider-openai-compat" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # Same pin as neotavern-storage so both crates share one compiled rusqlite
@@ -31,6 +36,3 @@ time = { version = "0.3", features = ["formatting"] }
 
 [dev-dependencies]
 tempfile = "3"
-# Production OpenAI-compatible adapter + a raw-TCP mock endpoint: proves the
-# config → secret → adapter → durable generation path end-to-end (Этап 2.5).
-provider-openai-compat = { path = "../provider-openai-compat" }

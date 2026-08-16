@@ -22,6 +22,7 @@ import type { NeoBackend } from '@neotavern/neobackend';
 import { UnsupportedError } from '@neotavern/neobackend';
 import { ErrorCodes } from '@neotavern/shared';
 import { runLegacyPromptInterceptors } from '@neotavern/legacy-compat';
+import { ApiError } from './client.js';
 import { backend, isKernelMode, legacyRaw } from './backend.js';
 import { getCsrfToken, setCsrfToken } from './client.js';
 import { frontendPluginRuntime } from '../plugins/runtime.js';
@@ -72,9 +73,11 @@ export async function streamGeneration(
  * - regeneration (`regenerate` / `regenerateMessageId`) is Этап 4 (variants);
  * - frontend prompt interceptors have no kernel rendezvous yet (the kernel
  *   prompt pipeline is the single prompt owner; see release-manifest notes);
- * - `providerConfigId` is a legacy DB identity that does not exist in the
- *   kernel — the kernel selects its own provider/model (or uses `provider`/
- *   `model` when supplied) and the id is ignored.
+ * - `providerConfigId` selects the kernel-side provider config (М5 slice 48):
+ *   the wire id is resolved through `providers.config.list` into the
+ *   `provider`/`model` pair handed to `generation.start` — a missing config
+ *   is an honest `PROVIDER_CONFIG_NOT_FOUND`, never a silent fallback; when
+ *   no config id is supplied the kernel selects its own provider/model.
  *
  * @param backendImpl Injectable backend for tests.
  */
@@ -96,7 +99,29 @@ export async function streamWireGeneration(
   await backendImpl.chats.createMessage({ chatId, role: 'user', content: userMessage }, { signal });
   handlers.onStart?.('wire');
 
-  const stream = backendImpl.generation.start({ chatId, message: userMessage }, { signal });
+  // М5 slice 48: when the caller selected a provider config, resolve the wire
+  // config id into the provider/model pair for `generation.start`. A config
+  // that disappeared is an honest error — never a silent fake fallback.
+  const startRequest: { chatId: string; message: string; provider?: string; model?: string } = {
+    chatId,
+    message: userMessage,
+  };
+  if (body.providerConfigId !== undefined) {
+    const { items } = await backendImpl.providers.config.list({}, { signal });
+    const config = items.find((item) => item.id === body.providerConfigId);
+    if (!config) {
+      throw new ApiError({
+        code: 'PROVIDER_CONFIG_NOT_FOUND',
+        params: { id: body.providerConfigId },
+      });
+    }
+    startRequest.provider = config.provider;
+    const configBlob = config.config as unknown as Record<string, unknown>;
+    const model = typeof configBlob['model'] === 'string' ? configBlob['model'] : undefined;
+    if (model !== undefined) startRequest.model = model;
+  }
+
+  const stream = backendImpl.generation.start(startRequest, { signal });
 
   let sawTerminalEvent = false;
   try {

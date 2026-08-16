@@ -44,6 +44,15 @@ impl ProviderRegistry {
         self.adapters.push(adapter);
     }
 
+    /// Registers an adapter under its [`id`](ProviderAdapter::id), replacing
+    /// any previously registered adapter of the same id (kernel hydration of
+    /// a re-saved provider config must not accumulate duplicates).
+    pub fn register_or_replace(&mut self, adapter: Arc<dyn ProviderAdapter>) {
+        let id = adapter.id().to_string();
+        self.adapters.retain(|existing| existing.id() != id);
+        self.adapters.push(adapter);
+    }
+
     /// Finds the first registered adapter whose
     /// [`id`](ProviderAdapter::id) equals `id`.
     pub fn find(&self, id: &str) -> Option<Arc<dyn ProviderAdapter>> {
@@ -172,4 +181,77 @@ fn map_availability(availability: &provider_sdk::Availability) -> ProviderAvaila
             }
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Adapter hydration from stored provider configs (M5 slice 48)
+// ---------------------------------------------------------------------------
+
+/// Builds the production adapter for a stored provider config, when the kernel
+/// knows how to materialize that provider kind (today: `openai`).
+///
+/// The wire `config` blob is the non-secret settings object the UI stores
+/// through `providers.config.set` (connection fields like `baseUrl`/`model`
+/// hoisted by the bridge). Returns `None` for unknown kinds and logs a
+/// one-line diagnostic (never the config contents — SEC-07) when a known kind
+/// fails to parse. Host-registered adapters are untouched: registration is
+/// keyed by adapter id, and `register_or_replace` replaces only the
+/// kernel-hydrated instance of the same kind.
+pub(crate) fn register_config_adapter(
+    registry: &mut ProviderRegistry,
+    provider: &str,
+    config: &serde_json::Value,
+) {
+    let adapter: Option<Arc<dyn ProviderAdapter>> = match provider {
+        "openai" => {
+            let normalized = normalize_openai_config(config);
+            match provider_openai_compat::OpenAICompatProvider::from_config("openai", &normalized) {
+                Ok(adapter) => Some(Arc::new(adapter)),
+                Err(err) => {
+                    eprintln!("kernel: provider 'openai' config rejected: {err}");
+                    None
+                }
+            }
+        }
+        _ => None,
+    };
+    if let Some(adapter) = adapter {
+        registry.register_or_replace(adapter);
+    }
+}
+
+/// Translates the wire openai config blob into the adapter's
+/// [`ProviderConfig`](provider_openai_compat::ProviderConfig) shape.
+///
+/// The UI stores a single `model` string (legacy hoist); the adapter expects
+/// the `models` array. A missing `models` array is derived from `model` so a
+/// config saved through the production UI is immediately generatable.
+fn normalize_openai_config(config: &serde_json::Value) -> serde_json::Value {
+    let config = config.as_object().cloned().unwrap_or_default();
+    let models = config
+        .get("models")
+        .and_then(|m| m.as_array())
+        .cloned()
+        .filter(|items| !items.is_empty());
+    let models: serde_json::Value = match models {
+        Some(items) => serde_json::Value::Array(items),
+        None => match config.get("model").and_then(|m| m.as_str()) {
+            Some(model) => serde_json::json!([{ "id": model }]),
+            None => serde_json::json!([]),
+        },
+    };
+    let mut normalized = serde_json::Map::new();
+    for key in [
+        "baseUrl",
+        "timeoutMs",
+        "organization",
+        "maxResponseBytes",
+        "maxTokens",
+    ] {
+        if let Some(value) = config.get(key) {
+            normalized.insert(key.to_string(), value.clone());
+        }
+    }
+    normalized.insert("models".to_string(), models);
+    serde_json::Value::Object(normalized)
 }

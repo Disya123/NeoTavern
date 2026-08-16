@@ -47,14 +47,17 @@ function stubBackend(events: WireGenerationEvent[]) {
       for (const event of events) yield event;
     }),
   };
+  const listConfigs = vi.fn(async () => ({ items: [] as unknown[] }));
   const backend = {
     chats: { createMessage },
     generation,
+    providers: { config: { list: listConfigs } },
   };
   return {
     backend: backend as unknown as Parameters<typeof streamWireGeneration>[0],
     createMessage,
     start: generation.start,
+    listConfigs,
   };
 }
 
@@ -252,5 +255,66 @@ describe('streamWireGeneration (kernel mode)', () => {
       status: 'waiting',
       input: { toolCall: { name: 'search_lorebook' } },
     });
+  });
+
+  it('resolves the selected provider config id into provider/model for generation.start (М5 slice 48)', async () => {
+    const { backend, start, listConfigs } = stubBackend([
+      {
+        type: 'generation.completed',
+        finalMessage: {
+          id: 'x',
+          chatId: CHAT_ID,
+          role: 'assistant',
+          content: 'ok',
+          createdAt: '2026-06-01T12:00:05.000Z',
+          sequence: 4,
+          meta: {},
+        },
+      },
+    ]);
+    listConfigs.mockResolvedValue({
+      items: [
+        {
+          id: 'aa111111-2222-4333-8444-555555555555',
+          provider: 'openai',
+          name: 'local',
+          config: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
+          hasApiKey: true,
+          createdAt: '2026-06-01T12:00:00.000Z',
+          updatedAt: '2026-06-01T12:00:00.000Z',
+        },
+      ],
+    });
+    const { handlers } = recordingHandlers();
+
+    await streamWireGeneration(
+      backend,
+      CHAT_ID,
+      { userMessage: 'Hello', providerConfigId: 'aa111111-2222-4333-8444-555555555555' },
+      handlers,
+      new AbortController().signal,
+    );
+
+    expect(listConfigs).toHaveBeenCalledWith({}, { signal: expect.any(AbortSignal) });
+    expect(start).toHaveBeenCalledWith(
+      { chatId: CHAT_ID, message: 'Hello', provider: 'openai', model: 'gpt-4o-mini' },
+      { signal: expect.any(AbortSignal) },
+    );
+  });
+
+  it('fails honestly with PROVIDER_CONFIG_NOT_FOUND when the selected config is gone', async () => {
+    const { backend, start } = stubBackend([]);
+    const { handlers } = recordingHandlers();
+
+    await expect(
+      streamWireGeneration(
+        backend,
+        CHAT_ID,
+        { userMessage: 'Hello', providerConfigId: 'missing-config-id' },
+        handlers,
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({ code: 'PROVIDER_CONFIG_NOT_FOUND' });
+    expect(start).not.toHaveBeenCalled();
   });
 });

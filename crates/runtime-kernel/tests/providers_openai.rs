@@ -695,3 +695,149 @@ fn openai_provider_tool_round_trip_through_the_kernel() {
         "turn 2 carries the tool result payload, got: {turn2}"
     );
 }
+
+// ---------------------------------------------------------------------------
+// М5 slice 48: adapter hydration from stored provider configs
+// ---------------------------------------------------------------------------
+
+/// A saved openai config is materialized into the adapter registry
+/// automatically: right after `providers.config.set` (no host-side
+/// `register_provider` call) AND after a kernel restart (startup hydration) —
+/// and a full generation run works end-to-end on the restarted kernel,
+/// resolving the stored API key at execution time.
+#[test]
+fn openai_config_is_hydrated_on_set_and_survives_restart() {
+    let endpoint = MockEndpoint::spawn();
+    let root = tempfile::tempdir().expect("tempdir");
+    seed_chat(root.path());
+    let kernel = open_kernel(root.path());
+    kernel.set_secret_resolver(Arc::new(FixedSecretResolver));
+    let store = Arc::new(MemorySecretStore::new());
+    kernel.set_secret_store(store.clone());
+
+    // Save the config with its API key (opaque ref only — the existing tests
+    // prove the key never reaches the DB; here we focus on registration).
+    let _: serde_json::Value = serde_json::from_slice(&dispatch_bytes(
+        &kernel,
+        "providers.config.set",
+        json!({
+            "provider": "openai",
+            "name": "local",
+            "config": { "baseUrl": endpoint.base_url(), "model": "mock-1" },
+            "apiKey": RESOLVED_KEY,
+        }),
+    ))
+    .expect("set must succeed");
+
+    // Registration happens inside providers.config.set — no manual
+    // register_provider call anywhere in this test.
+    let listed: serde_json::Value =
+        serde_json::from_slice(&dispatch_bytes(&kernel, "providers.list", json!({})))
+            .expect("list must succeed");
+    let openai = listed["items"]
+        .as_array()
+        .expect("items")
+        .iter()
+        .find(|p| p["id"] == "openai")
+        .expect("openai registered right after set");
+    assert_eq!(openai["availability"]["status"], json!("available"));
+    // The single `model` string from the UI config shape is derived into the
+    // adapter's models array.
+    assert_eq!(openai["models"][0]["id"], json!("mock-1"));
+
+    // Restart: a fresh kernel hydrates the adapter from the stored config.
+    drop(kernel);
+    let kernel2 = open_kernel(root.path());
+    kernel2.set_secret_resolver(Arc::new(FixedSecretResolver));
+
+    let listed: serde_json::Value =
+        serde_json::from_slice(&dispatch_bytes(&kernel2, "providers.list", json!({})))
+            .expect("list must succeed");
+    let openai = listed["items"]
+        .as_array()
+        .expect("items")
+        .iter()
+        .find(|p| p["id"] == "openai")
+        .expect("openai rehydrated after restart");
+    assert_eq!(openai["models"][0]["id"], json!("mock-1"));
+
+    // A full generation on the restarted kernel: provider + model from the
+    // request, API key resolved at execution time from the store seam.
+    let flag = CancellationFlag::new();
+    let mut stream = kernel2
+        .dispatch_stream(
+            "generation.start",
+            &serde_json::to_vec(&json!({
+                "chatId": CHAT_ID,
+                "message": "Hello after restart",
+                "provider": "openai",
+                "model": "mock-1"
+            }))
+            .expect("serialize"),
+            &flag,
+        )
+        .expect("generation.start must succeed");
+    let run_id = stream.stream_id().to_string();
+    let committed = drain_until_terminal(&mut stream);
+    assert!(!committed.is_empty(), "deltas were committed");
+
+    let run = get_run(&kernel2, &run_id);
+    assert_eq!(run.status, GenerationStatus::Completed);
+    let messages = list_messages(&kernel2, CHAT_ID);
+    let assistant: Vec<_> = messages
+        .items
+        .iter()
+        .filter(|m| m.role == MessageRole::Assistant)
+        .collect();
+    assert_eq!(assistant.len(), 1, "exactly one assistant message");
+    assert_eq!(assistant[0].content, "Hello world!");
+
+    // The request carried the resolved key in the Authorization header only.
+    let request = endpoint.captured_request();
+    assert!(
+        request.contains(&format!("Authorization: Bearer {RESOLVED_KEY}")),
+        "adapter authenticated with the resolved key"
+    );
+}
+
+/// Re-saving the same openai config replaces the hydrated adapter instead of
+/// accumulating duplicates in the registry.
+#[test]
+fn re_saving_openai_config_replaces_the_hydrated_adapter() {
+    let endpoint = MockEndpoint::spawn();
+    let root = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel(root.path());
+
+    let _: serde_json::Value = serde_json::from_slice(&dispatch_bytes(
+        &kernel,
+        "providers.config.set",
+        json!({
+            "provider": "openai",
+            "name": "local",
+            "config": { "baseUrl": endpoint.base_url(), "model": "mock-1" },
+        }),
+    ))
+    .expect("set must succeed");
+    let _: serde_json::Value = serde_json::from_slice(&dispatch_bytes(
+        &kernel,
+        "providers.config.set",
+        json!({
+            "provider": "openai",
+            "name": "local",
+            "config": { "baseUrl": endpoint.base_url(), "model": "mock-2" },
+        }),
+    ))
+    .expect("set must succeed");
+
+    let listed: serde_json::Value =
+        serde_json::from_slice(&dispatch_bytes(&kernel, "providers.list", json!({})))
+            .expect("list must succeed");
+    let openai: Vec<_> = listed["items"]
+        .as_array()
+        .expect("items")
+        .iter()
+        .filter(|p| p["id"] == "openai")
+        .collect();
+    assert_eq!(openai.len(), 1, "one openai entry, no duplicates");
+    assert_eq!(openai[0]["models"][0]["id"], json!("mock-2"));
+}
