@@ -400,12 +400,12 @@
       "title": "Message edit/delete/drafts/blocks UI",
       "wireOps": [],
       "hosts": {
-        "desktop": "Designed",
-        "headless": "Designed",
+        "desktop": "Integrated",
+        "headless": "Integrated",
         "android": "Designed",
-        "webClient": "Designed"
+        "webClient": "Integrated"
       },
-      "notes": "Legacy /api/v2 contour today; kernel message ops (chats.messages.crud) + UI cutover in M2/M4. Slice 11 (M5): wire chats.messages.update gains optional content + meta (free-object), MessageDto carries meta verbatim; toggleMessageContext / swipeGreeting / deleteCheckpoint now route through updateChatMessage on both planes (ui-legacy-surface 60 → 57). Slice 13 (M5): ChatPage checkpoint/branch creation routes through the transport (ui-legacy-surface 57 → 56, last legacyRaw removed from ChatPage). Slice 14 (M5): kernel chats.snapshots.create owns the snapshot capability on the kernel plane — checkpoint/branch children carry parentChatId/origin/sourceMessageId, open-checkpoint reads MessageDto.checkpointChatId, deleteCheckpoint clears the real link via clearCheckpointChatId (ui-legacy-surface 56 → 54); the legacy contour keeps its full snapshot flow on the sidecar/webClient planes.",
+      "notes": "Legacy /api/v2 contour today; kernel message ops (chats.messages.crud) + UI cutover in M2/M4. Slice 11 (M5): wire chats.messages.update gains optional content + meta (free-object), MessageDto carries meta verbatim; toggleMessageContext / swipeGreeting / deleteCheckpoint now route through updateChatMessage on both planes (ui-legacy-surface 60 → 57). Slice 13 (M5): ChatPage checkpoint/branch creation routes through the transport (ui-legacy-surface 57 → 56, last legacyRaw removed from ChatPage). Slice 14 (M5): kernel chats.snapshots.create owns the snapshot capability on the kernel plane — checkpoint/branch children carry parentChatId/origin/sourceMessageId, open-checkpoint reads MessageDto.checkpointChatId, deleteCheckpoint clears the real link via clearCheckpointChatId (ui-legacy-surface 56 → 54); the legacy contour keeps its full snapshot flow on the sidecar/webClient planes. Slice 34 (M5): status raised to Integrated (desktop/headless/webClient; android stays Designed until JNI parity) — every message-editing surface routes through the wire facade with no /api/v2 in feature code: MessageBubble inline editor (content-only chats.messages.update, last-write-wins by contract; the legacy expectedRevision CAS is legacy-only), delete via chats.messages.delete, toggleMessageContext / swipeGreeting via content+meta through updateChatMessage, deleteCheckpoint via clearCheckpointChatId. Coverage: MessageBubble.test (draft preserved on edit failure), MessageDetailsCard.test (edit dialog), wireBridge.test (updateChatMessage content/meta/clearCheckpointChatId, deleteMessageVariant).",
       "milestone": "M4"
     },
     {

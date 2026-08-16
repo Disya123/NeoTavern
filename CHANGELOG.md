@@ -3,6 +3,22 @@
 ## Unreleased
 ### Added
 
+- **Honest status: message edit/delete UI is wire-integrated (M5 slice 34,
+  ARC-10).** `ui.message-editing` rises from Designed to **Integrated** on
+  desktop/headless/Web Client (android stays Designed until JNI parity is
+  packaged). Every message-editing surface already routes through the wire
+  facade with no `/api/v2` in feature code: the MessageBubble inline editor
+  saves via content-only `chats.messages.update` (last-write-wins by
+  contract; the legacy `expectedRevision` CAS remains legacy-only), delete
+  via `chats.messages.delete`, context toggle / greeting swipe via
+  content+meta through `updateChatMessage`, and checkpoint removal via
+  `clearCheckpointChatId`. Evidence is the existing coverage:
+  MessageBubble.test (draft preserved on edit failure), MessageDetailsCard
+  tests (edit dialog), wireBridge.test (`updateChatMessage`
+  content/meta/clearCheckpointChatId, `deleteMessageVariant`) — the slice
+  is a documentation/capability-matrix correction, no code change was
+  needed. Capability matrix regenerated (36 rows).
+
 - **Character-card import host parity over HTTP (M5 slice 33, Этап 5
   foundation).** `remote_http.rs` gains `character_card_import_over_http` —
   the full Этап 4.5 flow over the loopback `remote-http-adapter`: `assets.put`
