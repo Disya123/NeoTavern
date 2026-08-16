@@ -34,6 +34,22 @@
 
 ### Added
 
+- **Desktop host tool executor (M5 slice 57, ТЗ §8.3/§9.3).** The desktop
+  kernel host now performs the effects of registered safe tools — the kernel
+  still never executes them. `setup_local_kernel_mode` wires the declarative
+  `app_now` contract (UTC clock; side-effect-free, consent-free) and the new
+  `BuiltinToolExecutor` seam (`crates/adapters/tauri-local/src/executor.rs`);
+  the stream poller offers every durably `waiting` `tool_call` step to the
+  executor and, when handled, submits `generation.tool.result` itself and
+  keeps polling the durable journal through the resumed turn. Failures stay
+  recoverable (executor error / failed submission leaves the run durably
+  waiting; the kernel stale-result guard makes double submission harmless);
+  unhandled tools behave exactly as before. SEC-07: only the tool NAME
+  reaches diagnostics — never arguments or result content. Tests: executor
+  unit (app_now answered, unknown tools stay waiting, extraction only on
+  waiting `tool_call` steps, RFC3339 conversion) + `host_tool_executor.rs`
+  integration (full host-completed tool round trip with resumed final text;
+  no-executor control keeps `waiting_for_tool`).
 - **ARC-10 `library.assets` raise (M5 slice 56).** Content-addressed asset
   store raised Implemented → Integrated (desktop + webClient): the live
   kernel-plane flows exercise `assets.put`/`assets.content` — CharacterManagementPanel

@@ -4,11 +4,7 @@
     {
       "id": "backups",
       "title": "Backup create/list/restore",
-      "wireOps": [
-        "backups.create",
-        "backups.list",
-        "backups.restore"
-      ],
+      "wireOps": ["backups.create", "backups.list", "backups.restore"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
@@ -40,13 +36,7 @@
     {
       "id": "chats.crud",
       "title": "Chat CRUD",
-      "wireOps": [
-        "chats.list",
-        "chats.get",
-        "chats.create",
-        "chats.update",
-        "chats.delete"
-      ],
+      "wireOps": ["chats.list", "chats.get", "chats.create", "chats.update", "chats.delete"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
@@ -100,11 +90,7 @@
     {
       "id": "chats.snapshots",
       "title": "Chat snapshots (checkpoint/branch)",
-      "wireOps": [
-        "chats.snapshots.create",
-        "chats.snapshots.rollback",
-        "chats.snapshots.list"
-      ],
+      "wireOps": ["chats.snapshots.create", "chats.snapshots.rollback", "chats.snapshots.list"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
@@ -130,9 +116,7 @@
     {
       "id": "generation.prompt.plan",
       "title": "Prompt pipeline: durable PromptPlan (history/character/lorebook/token budget)",
-      "wireOps": [
-        "generation.prompt.plan"
-      ],
+      "wireOps": ["generation.prompt.plan"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
@@ -145,17 +129,14 @@
     {
       "id": "generation.tool-loop",
       "title": "Durable run/step journal + tool-call loop (waiting_for_tool)",
-      "wireOps": [
-        "generation.tools.list",
-        "generation.tool.result"
-      ],
+      "wireOps": ["generation.tools.list", "generation.tool.result"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
         "android": "Implemented",
         "webClient": "Implemented"
       },
-      "notes": "Этап 2.7 (ТЗ §8.3): the kernel journals every generation step in generation_steps (migration 6: ALTER TABLE generation_runs ADD COLUMN pending_tool_call_json + generation_steps table, no rebuild) and streams generation.step events (provider_turn/tool_call/tool_result/final_commit). A provider turn emitting a tool call is validated against the declarative tool registry (capability + minimal JSON-Schema argument check) and durably transitions the run to waiting_for_tool — a DERIVED wire status from the pending marker (DB status stays streaming; the v3 CHECK is untouched). The kernel NEVER executes tools: the host performs the effect and submits generation.tool.result, which journals the tool_result step, clears the marker and resumes the provider turn with the assistant tool_calls + tool-role messages. Stable terminal codes: TOOL_NOT_FOUND / TOOL_ARGS_INVALID / TOOL_LOOP_LIMIT (8 calls max) / TOOL_RESULT_STALE (non-idempotent submission). M5 slice 4 adds CAPABILITY_UNAVAILABLE pre-negotiation (ТЗ §9.3): a run whose provider does not declare tool support fails with CAPABILITY_UNAVAILABLE before any network request instead of silently degrading to a no-tools turn; new wire error code, kernel_capability_negotiation.rs (3 integration tests: honest providers.list declarations, fail-before-generate probe, tools-capable pass-through). Crash-at-wait: fresh lease survives a reopen and the result still resumes; expired lease → interrupted (retry-safe). Этап 2.8: waiting-run cancel/retry — generation.cancel finalizes cancelled itself for a waiting run (no live executor) and every terminal writer clears the pending marker; retry from a cancelled waiting run starts attempt 2; retry on a still-waiting run is GENERATION_RUN_STATE_CONFLICT. Tools register via Kernel::register_tool; generation.tools.list (app.read) serves the registry. Tests: 7 tools.rs unit + 2 fake unit + 2 adapter + 10 tool_loop.rs kernel integration + 1 providers_openai tool round trip + 1 storage migration test. Этап 2.9: desktop host Integrated — the packaged kernel smoke registers a tool and completes a full waiting_for_tool → tool.result round trip over the real Tauri host path (NEOTA_DESKTOP_SMOKE=1); the host seam KernelHost::register_tool was added, and both Tauri-local and remote-http stream pollers now close the consumer stream when a run durably waits (previously an unbounded poll loop). Honest boundary: JSON-Schema validation covers a documented subset (object/required/additionalProperties + scalar/array/object types); the full schema engine is a follow-up. Этап 2.10: the facade exposes `generation.tools.list` / `generation.tool.result` on every NeoBackend implementation (LocalBackend over the wire; LegacyBackend honest UnsupportedError — no legacy route; RemoteBackend over the SDK); M5 slice 41 (ТЗ §13.2): the web chat now distinguishes tool execution from text streaming — streamWireGeneration forwards the durable generation.step announcements to onStep, ChatPage derives the active tool from tool_call steps (input.toolCall.name only; arguments/results never reach the UI) and renders a ToolActivityBadge while the run is waiting, clearing it on the next provider_turn/tool_result step and on done/error/stop; generate.test proves the step forwarding, ToolActivityBadge component tests (2), i18n en/ru. М5 slice 43 (ТЗ §8.3, §13.2): the Settings panel gains a Tools tab rendering the declarative tool registry (generation.tools.list) — name, description and required argument names from each input JSON-Schema, with an honest empty state (no tools registered by this host) and never rendering arguments/results; useGenerationTools hook (queryKey generation-tools), ToolsPanel component + 2 tests, i18n en/ru (settings:tools, tools:*). M5 slice 47 closes step rendering in the transcript: the durable run-step UI (RunTranscriptPanel over generation.events) renders tool_call and tool_result steps with sequence badges, status and attempt markers (chat:runStepType_tool_call/runStepType_tool_result, i18n en/ru). Remaining tool UX: result submission from the UI (generation.tool.result — the desktop kernel smoke round trip stays host-side) and the consent modal for dangerous tools remain Этап 4.",
+      "notes": "Этап 2.7 (ТЗ §8.3): the kernel journals every generation step in generation_steps (migration 6: ALTER TABLE generation_runs ADD COLUMN pending_tool_call_json + generation_steps table, no rebuild) and streams generation.step events (provider_turn/tool_call/tool_result/final_commit). A provider turn emitting a tool call is validated against the declarative tool registry (capability + minimal JSON-Schema argument check) and durably transitions the run to waiting_for_tool — a DERIVED wire status from the pending marker (DB status stays streaming; the v3 CHECK is untouched). The kernel NEVER executes tools: the host performs the effect and submits generation.tool.result, which journals the tool_result step, clears the marker and resumes the provider turn with the assistant tool_calls + tool-role messages. Stable terminal codes: TOOL_NOT_FOUND / TOOL_ARGS_INVALID / TOOL_LOOP_LIMIT (8 calls max) / TOOL_RESULT_STALE (non-idempotent submission). M5 slice 4 adds CAPABILITY_UNAVAILABLE pre-negotiation (ТЗ §9.3): a run whose provider does not declare tool support fails with CAPABILITY_UNAVAILABLE before any network request instead of silently degrading to a no-tools turn; new wire error code, kernel_capability_negotiation.rs (3 integration tests: honest providers.list declarations, fail-before-generate probe, tools-capable pass-through). Crash-at-wait: fresh lease survives a reopen and the result still resumes; expired lease → interrupted (retry-safe). Этап 2.8: waiting-run cancel/retry — generation.cancel finalizes cancelled itself for a waiting run (no live executor) and every terminal writer clears the pending marker; retry from a cancelled waiting run starts attempt 2; retry on a still-waiting run is GENERATION_RUN_STATE_CONFLICT. Tools register via Kernel::register_tool; generation.tools.list (app.read) serves the registry. Tests: 7 tools.rs unit + 2 fake unit + 2 adapter + 10 tool_loop.rs kernel integration + 1 providers_openai tool round trip + 1 storage migration test. Этап 2.9: desktop host Integrated — the packaged kernel smoke registers a tool and completes a full waiting_for_tool → tool.result round trip over the real Tauri host path (NEOTA_DESKTOP_SMOKE=1); the host seam KernelHost::register_tool was added, and both Tauri-local and remote-http stream pollers now close the consumer stream when a run durably waits (previously an unbounded poll loop). Honest boundary: JSON-Schema validation covers a documented subset (object/required/additionalProperties + scalar/array/object types); the full schema engine is a follow-up. Этап 2.10: the facade exposes `generation.tools.list` / `generation.tool.result` on every NeoBackend implementation (LocalBackend over the wire; LegacyBackend honest UnsupportedError — no legacy route; RemoteBackend over the SDK); M5 slice 41 (ТЗ §13.2): the web chat now distinguishes tool execution from text streaming — streamWireGeneration forwards the durable generation.step announcements to onStep, ChatPage derives the active tool from tool_call steps (input.toolCall.name only; arguments/results never reach the UI) and renders a ToolActivityBadge while the run is waiting, clearing it on the next provider_turn/tool_result step and on done/error/stop; generate.test proves the step forwarding, ToolActivityBadge component tests (2), i18n en/ru. М5 slice 43 (ТЗ §8.3, §13.2): the Settings panel gains a Tools tab rendering the declarative tool registry (generation.tools.list) — name, description and required argument names from each input JSON-Schema, with an honest empty state (no tools registered by this host) and never rendering arguments/results; useGenerationTools hook (queryKey generation-tools), ToolsPanel component + 2 tests, i18n en/ru (settings:tools, tools:*). M5 slice 47 closes step rendering in the transcript: the durable run-step UI (RunTranscriptPanel over generation.events) renders tool_call and tool_result steps with sequence badges, status and attempt markers (chat:runStepType_tool_call/runStepType_tool_result, i18n en/ru). Remaining tool UX: result submission from the UI (generation.tool.result — the desktop kernel smoke round trip stays host-side) and the consent modal for dangerous tools remain Этап 4. M5 slice 57 (ТЗ §8.3/§9.3): the desktop host now performs safe built-in tool effects — setup_local_kernel_mode wires the declarative app_now contract (UTC clock; side-effect-free, consent-free — no ТЗ §14.2.3 high-risk category) and the BuiltinToolExecutor seam; the stream poller offers every durably waiting tool_call step to the executor and, when handled, submits generation.tool.result itself and keeps polling the durable journal through the resumed turn (the kernel stream already sent its terminal notice at the wait point). Failures stay recoverable: an executor error or a failed submission leaves the run durably waiting (the kernel stale-result guard makes double submission harmless); unhandled tools behave exactly as before (stream closes, run waits). SEC-07: only the tool NAME reaches diagnostics — never arguments or result content. Tests: executor.rs unit (app_now answered, unknown tools stay waiting, step extraction only on waiting tool_call steps, RFC3339 conversion) + host_tool_executor.rs integration (full tool round trip completed by the host executor with resumed final text; no-executor control keeps waiting_for_tool).",
       "milestone": "M2"
     },
     {
@@ -182,12 +163,7 @@
     {
       "id": "library.assets",
       "title": "Content-addressed asset store (put/get/content/delete, avatar linkage)",
-      "wireOps": [
-        "assets.put",
-        "assets.get",
-        "assets.content",
-        "assets.delete"
-      ],
+      "wireOps": ["assets.put", "assets.get", "assets.content", "assets.delete"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
@@ -200,9 +176,7 @@
     {
       "id": "library.characterImport",
       "title": "Character-card import (PNG/JSON, content-hash dedupe)",
-      "wireOps": [
-        "imports.character.card"
-      ],
+      "wireOps": ["imports.character.card"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
@@ -238,12 +212,7 @@
     {
       "id": "memories.crud",
       "title": "Memory CRUD (ТЗ §4.4)",
-      "wireOps": [
-        "memories.list",
-        "memories.create",
-        "memories.update",
-        "memories.delete"
-      ],
+      "wireOps": ["memories.list", "memories.create", "memories.update", "memories.delete"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
@@ -256,9 +225,7 @@
     {
       "id": "meta.get",
       "title": "Kernel handshake / meta",
-      "wireOps": [
-        "meta.get"
-      ],
+      "wireOps": ["meta.get"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Integrated",
@@ -327,9 +294,7 @@
     {
       "id": "providers.list",
       "title": "Provider catalog read",
-      "wireOps": [
-        "providers.list"
-      ],
+      "wireOps": ["providers.list"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
@@ -407,10 +372,7 @@
     {
       "id": "settings",
       "title": "Non-secret settings (kernel)",
-      "wireOps": [
-        "settings.get",
-        "settings.update"
-      ],
+      "wireOps": ["settings.get", "settings.update"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
@@ -423,9 +385,7 @@
     {
       "id": "ui.diagnostics",
       "title": "Diagnostics panel (kernel section)",
-      "wireOps": [
-        "diagnostics.export"
-      ],
+      "wireOps": ["diagnostics.export"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
@@ -470,9 +430,7 @@
     {
       "id": "ui.portable-data",
       "title": "Portable data / activation / restore",
-      "wireOps": [
-        "data.activation.status"
-      ],
+      "wireOps": ["data.activation.status"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
@@ -485,10 +443,7 @@
     {
       "id": "ui.profile-export",
       "title": "Logical profile export/import",
-      "wireOps": [
-        "profile.export",
-        "profile.import"
-      ],
+      "wireOps": ["profile.export", "profile.import"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
@@ -501,12 +456,7 @@
     {
       "id": "ui.profiles",
       "title": "Profiles (Configuration)",
-      "wireOps": [
-        "profiles.list",
-        "profiles.create",
-        "profiles.rename",
-        "profiles.delete"
-      ],
+      "wireOps": ["profiles.list", "profiles.create", "profiles.rename", "profiles.delete"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
@@ -532,10 +482,7 @@
     {
       "id": "ui.secrets",
       "title": "Secret management",
-      "wireOps": [
-        "secrets.status",
-        "secrets.lock"
-      ],
+      "wireOps": ["secrets.status", "secrets.lock"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
@@ -580,10 +527,7 @@
     {
       "id": "ui.card-exports",
       "title": "Character card / chat exports & character import (legacy containers)",
-      "wireOps": [
-        "characters.export.card",
-        "chats.export"
-      ],
+      "wireOps": ["characters.export.card", "chats.export"],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",

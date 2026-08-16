@@ -12,7 +12,7 @@ use std::{
     path::PathBuf,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Mutex,
+        Arc, Mutex,
     },
     thread,
     time::Duration,
@@ -555,6 +555,25 @@ fn setup_local_kernel_mode(
         eprintln!("kernel open failed: {error}");
         error.to_string()
     })?;
+
+    // М5 slice 57 (ТЗ §8.3/§9.3): the host performs the effects of registered
+    // safe tools — the kernel never executes tools. Wire the declarative
+    // `app_now` contract (UTC clock, side-effect-free, consent-free) and the
+    // built-in executor that resumes waiting runs automatically.
+    host.set_tool_executor(Some(Arc::new(
+        neotavern_tauri_local::executor::BuiltinToolExecutor,
+    )));
+    host.register_tool(serde_json::json!({
+        "id": "app.now",
+        "name": "app_now",
+        "description": "Return the current UTC date and time.",
+        "inputSchema": { "type": "object" },
+    }))
+    .map_err(|error| {
+        eprintln!("built-in tool registration failed: {error}");
+        error
+    })?;
+
     app.manage(host);
 
     // Phase 9 Remote Access host service (ТЗ §10): the service wraps the

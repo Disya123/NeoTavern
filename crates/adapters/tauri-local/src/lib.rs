@@ -39,6 +39,12 @@ use std::time::Duration;
 /// session store and the execution-time resolver.
 pub mod secrets;
 
+/// Host tool executor seam (ТЗ §8.3, §9.3, M5 slice 57): the host performs
+/// the effects of registered safe tools and submits the results.
+pub mod executor;
+
+use executor::ToolExecutor;
+
 /// How long each polling iteration waits for a stream notice before
 /// re-dispatching `generation.events` (mirrors the remote-http SSE worker).
 const STREAM_POLL_INTERVAL: Duration = Duration::from_millis(250);
@@ -89,6 +95,11 @@ pub fn build_request_envelope(
 pub struct KernelHost {
     kernel: Arc<Mutex<Kernel>>,
     streams: StreamFlags,
+    /// Registered host tool executor (M5 slice 57). `None` = the host never
+    /// executes tools: waiting runs stay durably waiting (pre-slice
+    /// behavior). Writable so the shell can wire built-ins after `open`
+    /// without rebuilding the host; pollers snapshot it per stream.
+    tool_executor: Arc<Mutex<Option<Arc<dyn ToolExecutor>>>>,
 }
 
 /// Configuration for opening the host. The contract handshake constants are
@@ -121,7 +132,18 @@ impl KernelHost {
         Ok(Self {
             kernel: Arc::new(Mutex::new(kernel)),
             streams: Arc::new(Mutex::new(HashMap::new())),
+            tool_executor: Arc::new(Mutex::new(None)),
         })
+    }
+
+    /// Registers (or replaces) the host tool executor. Pollers snapshot the
+    /// executor per stream at `open_stream` time; tools registered after the
+    /// stream starts are covered by the next stream. Replacing with `None`
+    /// restores the never-executes behavior.
+    pub fn set_tool_executor(&self, executor: Option<Arc<dyn ToolExecutor>>) {
+        if let Ok(mut slot) = self.tool_executor.lock() {
+            *slot = executor;
+        }
     }
 
     /// The shared kernel handle, for transports that dispatch directly to
@@ -278,10 +300,22 @@ impl KernelHost {
         let kernel = Arc::clone(&self.kernel);
         let streams = Arc::clone(&self.streams);
         let poll_stream_id = stream_id.clone();
+        // M5 slice 57: snapshot the host tool executor for this stream. Tools
+        // registered later apply to the next stream; this stream keeps the
+        // executor it opened with (deterministic, no mid-stream swapping).
+        let tool_executor = self.tool_executor.lock().ok().and_then(|slot| slot.clone());
         let spawn = std::thread::Builder::new()
             .name("kernel-stream".to_string())
             .spawn(move || {
-                poll_loop(kernel, streams, stream, poll_stream_id, cancel, emit);
+                poll_loop(
+                    kernel,
+                    streams,
+                    stream,
+                    poll_stream_id,
+                    cancel,
+                    tool_executor,
+                    emit,
+                );
             });
         if spawn.is_err() {
             self.abort_stream(&stream_id);
@@ -333,16 +367,27 @@ impl KernelHost {
 /// timeout), then dispatch `generation.events` for the current cursor, emit
 /// every event, advance the cursor. A consumer error or abort dispatches
 /// `generation.cancel` once — the run is durable and recoverable (§63).
+///
+/// M5 slice 57 (host tool executor): every durably WAITING `tool_call` step
+/// is offered to `tool_executor` (when present). If the executor returns a
+/// result, the poller submits `generation.tool.result` and KEEPS polling the
+/// durable journal — the resumed provider turn emits further events there
+/// even though the kernel stream already sent its terminal notice. The
+/// poller stops on a terminal JOURNAL event (completed/failed/cancelled) or
+/// when no executor handled the wait (pre-slice behavior: the consumer
+/// stream closes and the run stays durably waiting).
 fn poll_loop(
     kernel: Arc<Mutex<Kernel>>,
     streams: StreamFlags,
     mut stream: EventStream,
     stream_id: String,
     cancel: CancellationFlag,
+    tool_executor: Option<Arc<dyn ToolExecutor>>,
     emit: impl Fn(serde_json::Value) -> Result<(), ()>,
 ) {
     let mut last_sent: i64 = -1;
     let mut cancel_requested = false;
+    let mut resumed_by_executor = false;
     loop {
         if cancel.is_cancelled() && !cancel_requested {
             cancel_requested = true;
@@ -380,8 +425,24 @@ fn poll_loop(
                 unregister_stream(&streams, &stream_id);
                 return;
             }
+            // M5 slice 57: offer the durable waiting tool call to the host
+            // executor. A handled tool resumes the run; we keep polling.
+            if let Some(executor) = tool_executor.as_ref() {
+                if maybe_auto_execute_tool(&kernel, &stream_id, &event, executor.as_ref()) {
+                    resumed_by_executor = true;
+                }
+            }
         }
         if matches!(notice, Some(runtime_kernel::StreamNotice::Terminal { .. })) {
+            if resumed_by_executor {
+                // The kernel stream ended its session (the run durably
+                // waited), but the host executor resumed the run: keep
+                // polling the journal — the resumed provider turn (and any
+                // further tool waits, up to the kernel loop guard) lands
+                // there. next_notice now times out; the journal is the
+                // source of truth until a terminal event.
+                continue;
+            }
             // The run's stream session ended — terminal (completed/failed/
             // cancelled) OR durably waiting for a tool result (§8.3). The
             // durable log has no further events (this page was the final
@@ -394,6 +455,59 @@ fn poll_loop(
     }
     let _ = emit(serde_json::Value::Null);
     unregister_stream(&streams, &stream_id);
+}
+
+/// Offers one committed event to the host tool executor. When the event is a
+/// durably WAITING `tool_call` step AND the executor handles it, submits the
+/// result via `generation.tool.result` and returns `true` (the poller keeps
+/// polling the journal). Returns `false` when nothing was handled — the run
+/// stays durably waiting.
+///
+/// SEC-07: only the tool NAME may reach diagnostics; call arguments and
+/// result content are never logged. A failed execution or a failed
+/// submission leaves the run durably waiting (recoverable) — the kernel's
+/// stale-result guard makes a double submission harmless.
+fn maybe_auto_execute_tool(
+    kernel: &Arc<Mutex<Kernel>>,
+    stream_id: &str,
+    event: &EventEnvelope,
+    executor: &dyn ToolExecutor,
+) -> bool {
+    let Some(tool_call) = executor::step_tool_call(event) else {
+        return false;
+    };
+    let result = match executor.execute(&tool_call) {
+        Ok(Some(result)) => result,
+        Ok(None) => return false,
+        Err(_) => {
+            eprintln!(
+                "[host] tool executor failed for '{}' (redacted)",
+                tool_call.name
+            );
+            return false;
+        }
+    };
+    let request = serde_json::json!({
+        "runId": stream_id,
+        "toolCallId": tool_call.id,
+        "result": result,
+    });
+    match dispatch_unary(kernel, "generation.tool.result", &request) {
+        Ok(_) => {
+            eprintln!(
+                "[host] tool '{}' executed by host (result submitted)",
+                tool_call.name
+            );
+            true
+        }
+        Err(_) => {
+            eprintln!(
+                "[host] tool result submission failed for '{}' (redacted)",
+                tool_call.name
+            );
+            false
+        }
+    }
 }
 
 /// Dispatches a unary operation through the shared kernel, returning the

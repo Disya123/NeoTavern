@@ -1299,6 +1299,12 @@
           "artifact": "ARC-10 library.assets raise",
           "result": "M5 slice 56: library.assets raised Implemented -> Integrated on desktop + webClient. Verified in source: CharacterManagementPanel avatar upload -> useUploadCharacterAvatar -> uploadCharacterAvatar -> backend.assets.put (kind avatar) + backend.characters.update(avatarAssetId); importCharacter stages cards via assets.put (kind card); theme CSS and avatar URLs resolve through backend.assets.content; RemoteBackend forwards the same wire ops. Honest non-raises kept: ui.card-exports stays Implemented (character/chat export remains legacy-only until Этап 4.5, ARC-02-approved helper), ui.prompt-pipeline stays Implemented (plan view-only). Capability matrix 38 rows.",
           "commit": "ea034ea"
+        },
+        {
+          "type": "code",
+          "artifact": "Desktop host tool executor (app_now built-in + ToolExecutor seam)",
+          "result": "M5 slice 57 (ТЗ §8.3/§9.3): crates/adapters/tauri-local/src/executor.rs NEW — ToolExecutor trait (Ok(None)=leave waiting, Ok(Some)=wire result, Err=redacted), NoopToolExecutor default, BuiltinToolExecutor (app_now UTC clock, side-effect-free, consent-free), step_tool_call extractor (only generation.step/tool_call/waiting), unix->RFC3339; KernelHost gains tool_executor slot + set_tool_executor; poll_loop snapshots the executor per stream, offers each waiting tool_call step to it and, when handled, submits generation.tool.result itself and keeps polling the durable journal through the resumed turn (resumed_by_executor flag overrides the stream Terminal-notice close); SEC-07: only the tool NAME is ever logged. apps/desktop setup_local_kernel_mode registers the app_now contract and wires BuiltinToolExecutor. Tests: 6 executor unit + 18 tauri-local unit total + host_tool_executor.rs integration 2 (host-completed tool round trip with resumed final text [tool-result 1]..., no-executor control keeps waiting_for_tool). Capability notes: generation.tool-loop updated.",
+          "commit": "pending"
         }
       ],
       "blockingIssues": [
