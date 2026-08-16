@@ -3,6 +3,17 @@
 ## Unreleased
 ### Added
 
+- **Tool registry UI in Settings (M5 slice 43, ТЗ §8.3/§13.2).** The Settings
+  panel gains a Tools tab rendering the declarative tool contracts the host
+  registered with the kernel (`generation.tools.list`): name, description
+  and the required argument names from each input JSON-Schema, plus an
+  honest empty state ("No tools registered by this host") — arguments and
+  results never reach the panel. `useGenerationTools` hook
+  (queryKey `generation-tools`), `ToolsPanel` component (2 tests), i18n
+  en/ru (`settings:tools`, `tools:*`). Honest boundary: transcript step
+  rendering, `generation.tool.result` submission and the dangerous-tool
+  consent modal remain Этап 4.
+
 - **`profile.import` — logical profile import over Product Wire (M5 slice 42,
   SEC-02 round trip).** Applies a verified profile export container into the
   library through the storage `apply_import` primitive: the container is

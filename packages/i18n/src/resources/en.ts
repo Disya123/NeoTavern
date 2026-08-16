@@ -607,6 +607,7 @@ export const en = {
   settings: {
     title: 'Settings',
     general: 'General',
+    tools: 'Tools',
     startup: 'Startup',
     startupHint: 'Choose which workspace opens when the app starts.',
     openHomeOnLoad: 'Open Home when the app starts',
@@ -1562,6 +1563,15 @@ export const en = {
     skipToChat: 'Skip to chat',
     toggleSidebar: 'Toggle sidebar',
     messageList: 'Message list',
+  },
+  tools: {
+    title: 'Tool registry',
+    titleHint:
+      'The declarative tool contracts this host registered with the kernel (ТЗ §8.3). The kernel validates provider tool calls against them but never executes tools itself — the host performs the effect. Arguments and results never reach this panel.',
+    empty: 'No tools registered by this host.',
+    noDescription: 'No description provided.',
+    requires: 'Requires:',
+    noArgs: 'No required arguments.',
   },
 } as const;
 

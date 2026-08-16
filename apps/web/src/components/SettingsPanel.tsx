@@ -40,6 +40,7 @@ import { RemoteAccessPanel } from './RemoteAccessPanel.js';
 import { SecretsPanel } from './SecretsPanel.js';
 import { SlotHost } from '../plugins/slots.js';
 import { SystemSurfaceLink } from './SystemSurfaceLink.js';
+import { ToolsPanel } from './ToolsPanel.js';
 import styles from './SettingsPanel.module.css';
 
 const MAX_THEME_BYTES = 25 * 1024 * 1024;
@@ -129,6 +130,15 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             content: (
               <FloatingTabContent>
                 <SecretsPanel />
+              </FloatingTabContent>
+            ),
+          },
+          {
+            value: 'tools',
+            label: t('settings:tools'),
+            content: (
+              <FloatingTabContent>
+                <ToolsPanel />
               </FloatingTabContent>
             ),
           },
