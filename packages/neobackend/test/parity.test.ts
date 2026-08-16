@@ -39,6 +39,7 @@ import {
   type CharacterCardImportResultDto,
   type ChatsExportResultDto,
   type PromptPlanDto,
+  type DataActivationStatusResultDto,
   type PluginDto,
   type PresetDto,
   type ProfileDto,
@@ -309,6 +310,26 @@ const PROMPT_PLAN: PromptPlanDto = {
   createdAt: TIMESTAMP,
 };
 
+/** `data.activation.status` response (М5 slice 38): durable activation state. */
+const ACTIVATION_STATUS: DataActivationStatusResultDto = {
+  layoutVersion: 2,
+  activeRootId: 'a1b2c3d4',
+  activeRoot: '/data/neotavern/roots/root-a1b2c3d4',
+  journalFormat: 'neotavern-activation-journal',
+  journalFormatVersion: 2,
+  entries: [
+    {
+      id: '1f2e3d4c-5b6a-4a98-8765-4321fedcba98',
+      kind: 'restore',
+      status: 'committed',
+      fromRoot: '/data/neotavern/roots/root-old',
+      toRoot: '/data/neotavern/roots/root-a1b2c3d4',
+      createdAt: TIMESTAMP,
+      updatedAt: TIMESTAMP,
+    },
+  ],
+};
+
 /** `chats.messages.list` response: one canonical wire message (Этап 2.10). */
 const PAGED_MESSAGES: PagedMessagesDto = {
   items: [
@@ -556,6 +577,8 @@ class FakeKernelTransport implements LocalTransport {
         return { ok: true, value: CHAT_EXPORT };
       case 'generation.prompt.plan':
         return { ok: true, value: PROMPT_PLAN };
+      case 'data.activation.status':
+        return { ok: true, value: ACTIVATION_STATUS };
       default:
         return { ok: false, error: { code: 'NOT_FOUND', params: {}, traceId: 'kernel-trace' } };
     }
@@ -690,6 +713,8 @@ function rpcResult(operationId: string | undefined): unknown {
       return CHAT_EXPORT;
     case 'generation.prompt.plan':
       return PROMPT_PLAN;
+    case 'data.activation.status':
+      return ACTIVATION_STATUS;
     default:
       return null;
   }
@@ -2100,6 +2125,25 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
     expect(kernel.calls).toBe(0);
   });
 
+  it('data.activation.status is routed identically by local and remote backends', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const [localResult, remoteResult] = await Promise.all([
+      local.data.activationStatus(),
+      remote.data.activationStatus(),
+    ]);
+    expect(localResult).toEqual(remoteResult);
+    expect(localResult).toEqual(ACTIVATION_STATUS);
+    expect(kernel.requests).toEqual([
+      {
+        operationId: 'data.activation.status',
+        payload: {},
+      },
+    ]);
+  });
+
   it('assets.get with a non-uuid id throws ValidationError before any transport call', async () => {
     const kernel = new FakeKernelTransport();
     const backend = new LocalBackend({ transport: kernel });
@@ -2163,5 +2207,6 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
       backend.assets.put({ kind: 'avatar', filename: 'a.png', contentBase64: 'aGk=' }),
     ).toThrow(UnsupportedError);
     expect(() => backend.assets.del(ASSET_ID)).toThrow(UnsupportedError);
+    expect(() => backend.data.activationStatus()).toThrow(UnsupportedError);
   });
 });

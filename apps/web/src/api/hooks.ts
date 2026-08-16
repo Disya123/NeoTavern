@@ -105,6 +105,7 @@ import {
   updateSettings,
   importCharacter,
   getPromptPlan,
+  getDataActivationStatus,
   type ContinueCharacterChatInput,
   type ContinueCharacterChatResult,
 } from './wireBridge.js';
@@ -1155,6 +1156,25 @@ export function useRestoreBackup() {
       );
     },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['backups'] }),
+  });
+}
+
+/**
+ * Durable data-root activation status (ТЗ §10.2–§10.3, М5 slice 38). Kernel
+ * plane: wire `data.activation.status` (read-only). Legacy plane: the
+ * sidecar has no activation journal — honest `UnsupportedError` resolves to
+ * null so the panel renders an honest empty state, never an error.
+ */
+export function useDataActivationStatus() {
+  return useQuery({
+    queryKey: ['data-activation-status'],
+    queryFn: async () => {
+      if (isKernelMode()) {
+        return getDataActivationStatus();
+      }
+      throw new UnsupportedError('data.activation.status');
+    },
+    retry: false,
   });
 }
 

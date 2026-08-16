@@ -81,6 +81,7 @@ import {
   type PersonaDto,
   type PresetDto,
   type PromptPlanDto,
+  type DataActivationStatusResultDto,
   type VersionResponse,
   type MetaDto,
   type AppSettings,
@@ -1010,6 +1011,19 @@ export async function getPromptPlan(runId: string): Promise<PromptPlanDto> {
     return backend.generation.promptPlan(runId);
   }
   throw new UnsupportedError('generation.prompt.plan');
+}
+
+/**
+ * Read the durable data-root activation status (ТЗ §10.2–§10.3): layout
+ * version, active root, the activation journal and any pending activation.
+ * Kernel plane: wire `data.activation.status` (read-only). Legacy plane:
+ * the sidecar has no activation journal — honest `UnsupportedError`.
+ */
+export async function getDataActivationStatus(): Promise<DataActivationStatusResultDto> {
+  if (isKernelMode()) {
+    return backend.data.activationStatus();
+  }
+  throw new UnsupportedError('data.activation.status');
 }
 
 /** Create a chat. `personaId` links the user persona (Этап 4 slice 3). */

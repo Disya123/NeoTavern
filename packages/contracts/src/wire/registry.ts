@@ -958,6 +958,20 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'data.activation.status',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.empty',
+    'wire.result.data.activation-status',
+    undefined,
+    ['INTERNAL', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    1024,
+    262144,
+    undefined,
+  ),
+  op(
     'profile.export',
     'workflow',
     'non-idempotent',
@@ -1720,6 +1734,30 @@ const BACKUP_VALUE = {
   status: 'completed',
 };
 
+const ACTIVATION_STATUS_VALUE = {
+  layoutVersion: 2,
+  activeRootId: 'a1b2c3d4',
+  activeRoot: '/data/neotavern/roots/root-a1b2c3d4',
+  journalFormat: 'neotavern-activation-journal',
+  journalFormatVersion: 2,
+  entries: [
+    {
+      id: '1f2e3d4c-5b6a-4a98-8765-4321fedcba98',
+      kind: 'restore',
+      status: 'committed',
+      fromRoot: '/data/neotavern/roots/root-old',
+      toRoot: '/data/neotavern/roots/root-a1b2c3d4',
+      createdAt: TIMESTAMP,
+      updatedAt: TIMESTAMP,
+    },
+  ],
+  pending: {
+    kind: 'restore',
+    entryId: '1f2e3d4c-5b6a-4a98-8765-4321fedcba98',
+    createdAt: TIMESTAMP,
+  },
+};
+
 const PROFILE_EXPORT_VALUE = {
   containerPath: 'exports/profile-export-0c0a/',
   formatVersion: 1,
@@ -2187,6 +2225,7 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   }),
   fx('backups-create-request', 'backups.create', 'request', true, {}),
   fx('backups-list-request', 'backups.list', 'request', true, {}),
+  fx('data-activation-status-request', 'data.activation.status', 'request', true, {}),
   fx('lorebooks-list-request', 'lorebooks.list', 'request', true, { characterId: UUID_CHARACTER }),
   fx('presets-list-request', 'presets.list', 'request', true, { kind: 'generation' }),
   fx('presets-get-request', 'presets.get', 'request', true, { presetId: UUID_PRESET }),
@@ -2441,6 +2480,17 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   }),
   fx('backups-create-response', 'backups.create', 'response', true, BACKUP_VALUE),
   fx('backups-list-response', 'backups.list', 'response', true, { items: [BACKUP_VALUE] }),
+  fx('data-activation-status-response', 'data.activation.status', 'response', true, {
+    ...ACTIVATION_STATUS_VALUE,
+    pending: undefined,
+  }),
+  fx(
+    'data-activation-status-response-pending',
+    'data.activation.status',
+    'response',
+    true,
+    ACTIVATION_STATUS_VALUE,
+  ),
   fx('profile-export-response', 'profile.export', 'response', true, PROFILE_EXPORT_VALUE),
   fx(
     'profile-export-response-scoped',
@@ -2637,11 +2687,17 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('neg-characters-export-card-missing-field', 'characters.export.card', 'request', false, {
     format: 'json',
   }),
-  fx('neg-characters-export-card-response-missing-base64', 'characters.export.card', 'response', false, {
-    filename: 'ada.json',
-    contentType: 'application/json',
-    warnings: [],
-  }),
+  fx(
+    'neg-characters-export-card-response-missing-base64',
+    'characters.export.card',
+    'response',
+    false,
+    {
+      filename: 'ada.json',
+      contentType: 'application/json',
+      warnings: [],
+    },
+  ),
   fx('neg-chats-export-missing-field', 'chats.export', 'request', false, {}),
   fx('neg-chats-export-response-bad-extension', 'chats.export', 'response', false, {
     filename: 'chat.txt',

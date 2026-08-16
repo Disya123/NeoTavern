@@ -146,6 +146,12 @@ pub fn inspect(root: &Path) -> Result<Inspection> {
 pub struct Database {
     conn: rusqlite::Connection,
     root: PathBuf,
+    /// The data root (the root that holds the activation journal, the
+    /// active-root pointer and `roots/` in the v2 layout) — the parent of
+    /// the active root in v2, or the active root itself in the v1 flat
+    /// layout. Needed by data-lifecycle handlers (ТЗ §10.2–§10.3) that read
+    /// the journal/pointer without touching the database.
+    data_root: PathBuf,
     writable: bool,
     lease: Option<DataRootLease>,
 }
@@ -168,6 +174,14 @@ impl Database {
     /// The data root directory this database belongs to.
     pub fn root(&self) -> &Path {
         &self.root
+    }
+
+    /// The data root that carries the activation journal and the active-root
+    /// pointer (ТЗ §10.2–§10.3). In the v1 flat layout this equals
+    /// [`Database::root`]; in the v2 versioned layout it is the parent of
+    /// `roots/root-<id>`.
+    pub fn data_root(&self) -> &Path {
+        &self.data_root
     }
 
     /// Whether this handle may write to the database (always `true` for
@@ -370,6 +384,7 @@ pub fn open(
     Ok(Database {
         conn,
         root: active,
+        data_root: root.to_path_buf(),
         writable: true,
         lease: Some(lease),
     })

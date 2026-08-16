@@ -30,6 +30,7 @@ import { ProductError } from '@neotavern/client-sdk';
 import type {
   AssetsApi,
   BackupsApi,
+  DataApi,
   CharactersApi,
   ChatsApi,
   DiagnosticsApi,
@@ -214,6 +215,10 @@ export class LegacyBackend implements NeoBackend {
   readonly backups: BackupsApi = {
     create: () => this.unsupported('backups.create'),
     list: () => this.unsupported('backups.list'),
+  };
+
+  readonly data: DataApi = {
+    activationStatus: () => this.unsupported('data.activation.status'),
   };
 
   readonly lorebooks: LorebooksApi = {

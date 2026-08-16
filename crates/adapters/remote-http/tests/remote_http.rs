@@ -1342,6 +1342,29 @@ fn backups_create_and_list_over_http() {
     assert_eq!(items.len(), 1, "exactly one backup on a fresh root");
 }
 
+/// M5 slice 38: the durable activation status over the HTTP host (host
+/// parity with the direct kernel path, ТЗ §10.2–§10.3) — the response is
+/// wire-valid, reports the v1 flat layout on a fresh root and stays
+/// available after a second backup (the journal is read-only here).
+#[test]
+fn data_activation_status_over_http() {
+    let server = TestServer::spawn();
+
+    let request = envelope_body(&rid(1), "data.activation.status", json!({}));
+    let response = http_request(server.addr, "POST", "/rpc", &[], &request);
+    assert_eq!(response.status, 200, "data.activation.status answers HTTP 200");
+    let (request_id, result) = expect_ok(decode_envelope(&response.body));
+    assert_eq!(request_id, rid(1), "requestId is echoed");
+    gen::validate_result_data_activation_status(&result)
+        .expect("activation-status result is wire-valid");
+    assert_eq!(result["layoutVersion"], json!(1), "fresh root uses the v1 flat layout");
+    assert_eq!(result["journalFormat"], json!("neotavern-activation-journal"));
+    assert_eq!(result["entries"], json!([]), "fresh root has an empty journal");
+    assert!(result.get("pending").is_none(), "no pending activation on a fresh root");
+    let active_root = result["activeRoot"].as_str().expect("activeRoot path string");
+    assert!(!active_root.is_empty(), "activeRoot is a real path");
+}
+
 /// 26. M4 slice 1 (Этап 4.1): the full lorebook CRUD over the HTTP host —
 ///     create with entries → get → update → delete — with the product error
 ///     `LOREBOOK_NOT_FOUND` copied verbatim into the error envelope after

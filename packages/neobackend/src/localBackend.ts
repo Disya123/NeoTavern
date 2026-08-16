@@ -31,6 +31,7 @@ import {
   type ListToolsResultDto,
   type PromptPlanDto,
   type WireGenerationEvent,
+  type DataActivationStatusResultDto,
   type ListBackupsResultDto,
   type ListLorebookEntriesResultDto,
   type ListLorebooksResultDto,
@@ -72,6 +73,7 @@ import type {
   AssetsApi,
   BackendCallOptions,
   BackupsApi,
+  DataApi,
   CharactersApi,
   ChatsApi,
   DiagnosticsApi,
@@ -236,6 +238,7 @@ export class LocalBackend implements NeoBackend {
   readonly providers: ProvidersApi;
   readonly generation: GenerationApi;
   readonly backups: BackupsApi;
+  readonly data: DataApi;
   readonly plugins: PluginsApi;
   readonly themes: ThemesApi;
   readonly profiles: ProfilesApi;
@@ -333,6 +336,10 @@ export class LocalBackend implements NeoBackend {
     this.backups = {
       create: () => this.invoke<BackupDto>('backups.create', {}, undefined),
       list: () => this.invoke<ListBackupsResultDto>('backups.list', {}, undefined),
+    };
+    this.data = {
+      activationStatus: (opts) =>
+        this.invoke<DataActivationStatusResultDto>('data.activation.status', {}, opts),
     };
     this.lorebooks = {
       list: (req, opts) => this.invoke<ListLorebooksResultDto>('lorebooks.list', req ?? {}, opts),

@@ -274,6 +274,106 @@
     font-size: var(--st-font-size-sm);
   }
 
+  .activationMeta {
+    display: grid;
+    margin: 0;
+    gap: var(--st-space-xs);
+    font-size: var(--st-font-size-sm);
+  }
+
+  .activationMetaRow {
+    display: grid;
+    grid-template-columns: minmax(0, 10rem) minmax(0, 1fr);
+    gap: var(--st-space-md);
+  }
+
+  .activationMetaRow dt {
+    color: var(--st-color-text-muted);
+  }
+
+  .activationMetaRow dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: var(--st-color-text-primary);
+  }
+
+  .activationPath {
+    font-family: var(--st-font-mono);
+    font-size: var(--st-font-size-xs);
+  }
+
+  .activationPending {
+    display: flex;
+    align-items: center;
+    gap: var(--st-space-sm);
+    margin: 0;
+    padding: var(--st-space-sm) var(--st-space-md);
+    border-radius: var(--st-radius-control);
+    background: var(--st-color-warning-surface);
+    color: var(--st-color-warning);
+    font-size: var(--st-font-size-sm);
+  }
+
+  .activationJournalTitle {
+    margin: 0;
+    color: var(--st-color-text-secondary);
+    font-size: var(--st-font-size-sm);
+  }
+
+  .activationJournal {
+    display: flex;
+    margin: 0;
+    padding: 0;
+    flex-direction: column;
+    gap: var(--st-space-xs);
+    list-style: none;
+  }
+
+  .activationEntry {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    gap: var(--st-space-sm);
+    padding: var(--st-space-sm) var(--st-space-md);
+    border: 1px solid var(--st-color-border);
+    border-radius: var(--st-radius-control);
+    font-size: var(--st-font-size-sm);
+  }
+
+  .activationEntryKind,
+  .activationEntryStatus {
+    align-self: start;
+    padding: 0 var(--st-space-xs);
+    border-radius: var(--st-radius-control);
+    background: var(--st-color-surface-tertiary);
+    color: var(--st-color-text-secondary);
+    font-size: var(--st-font-size-xs);
+    text-transform: capitalize;
+  }
+
+  .activationEntry[data-status='activation_pending'] .activationEntryStatus {
+    background: var(--st-color-warning-surface);
+    color: var(--st-color-warning);
+  }
+
+  .activationEntryTimes {
+    color: var(--st-color-text-muted);
+    font-size: var(--st-font-size-xs);
+  }
+
+  .activationEntryError {
+    grid-column: 1 / -1;
+    color: var(--st-color-danger);
+    font-size: var(--st-font-size-xs);
+  }
+
+  .activationEntryRoots {
+    grid-column: 1 / -1;
+    overflow-wrap: anywhere;
+    color: var(--st-color-text-muted);
+    font-family: var(--st-font-mono);
+    font-size: var(--st-font-size-xs);
+  }
+
   .signOutRow {
     display: flex;
     min-height: var(--st-control-height-large);

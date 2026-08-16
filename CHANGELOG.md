@@ -3,6 +3,33 @@
 ## Unreleased
 ### Added
 
+- **Durable data-root activation status over Product Wire (M5 slice 38,
+  ТЗ §10.2–§10.3).** The kernel already owned versioned data roots
+  (`roots/root-<id>/` + `active-root.json`), the durable activation journal
+  (`prepared`/`validated`/`activation_pending`/`committed`/`rolled_back`)
+  and the Windows restart-to-complete protocol at the storage/bootstrap
+  layer; this slice exposes the honest state end-to-end: wire op
+  `data.activation.status` (idempotent, safe, `app.read`; strict empty
+  request; response carries `layoutVersion` 1|2, `activeRoot` +
+  `activeRootId`, `journalFormat`/`journalFormatVersion`, the full journal
+  entries array and the newest `activation_pending` entry as `pending`),
+  the kernel handler `data_activation_status` (reads the journal through
+  `neotavern_storage::activation`; `Database` now exposes its `data_root`),
+  loopback-HTTP host parity (`data_activation_status_over_http`), facade
+  `NeoBackend.data.activationStatus` (Local/Remote wire, Legacy honest
+  `UnsupportedError`; parity 78/78), `wireBridge getDataActivationStatus`,
+  a `useDataActivationStatus` hook, and the ActivationStatusPanel in the
+  Settings Data tab (layout badge, active root path/id, pending warning
+  framed as restart-to-complete, journal table with kind/status/times/
+  error/from→to roots, honest empty and error states). Tests: kernel_data 4
+  (v1 empty journal, pending surfaced from the journal, v2 detection,
+  stateless rejection), wireBridge (kernel + legacy refusal), hooks (kernel
+  resolve, legacy honest error without a network call), ActivationStatusPanel
+  (plan, pending, empty, error). Honest boundary: the write side of
+  activation/restore remains offline (CLI `--migrate-legacy` / storage
+  suites); the UI reports state, it does not perform switches from the
+  browser.
+
 - **Durable PromptPlan viewer over Product Wire (M5 slice 37, ТЗ §9.2).**
   The kernel already stores one immutable prompt plan per generation run;
   this slice exposes it end-to-end: `NeoBackend GenerationApi.promptPlan(runId)`

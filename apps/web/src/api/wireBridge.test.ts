@@ -98,6 +98,9 @@ const mocks = vi.hoisted(() => {
   const generation = {
     promptPlan: vi.fn(),
   };
+  const data = {
+    activationStatus: vi.fn(),
+  };
   const themes = {
     list: vi.fn(),
     install: vi.fn(),
@@ -130,6 +133,7 @@ const mocks = vi.hoisted(() => {
     assets,
     imports,
     generation,
+    data,
     themes,
     plugins,
     meta,
@@ -150,6 +154,7 @@ vi.mock('./backend.js', () => ({
     assets: mocks.assets,
     imports: mocks.imports,
     generation: mocks.generation,
+    data: mocks.data,
     themes: mocks.themes,
     plugins: mocks.plugins,
     meta: mocks.metaFn,
@@ -243,6 +248,7 @@ import {
   exportCharacterCard,
   exportChat,
   getPromptPlan,
+  getDataActivationStatus,
   importCharacter,
   warmProviderModels,
   createChatSnapshot,
@@ -1605,6 +1611,26 @@ describe('imports/exports (kernel plane wire flow)', () => {
     await expect(getPromptPlan('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')).rejects.toBeInstanceOf(
       UnsupportedError,
     );
+  });
+
+  it('fetches the durable activation status via data.activation.status on the kernel plane', async () => {
+    mocks.data.activationStatus.mockResolvedValue({
+      layoutVersion: 2,
+      activeRootId: 'a1b2c3d4',
+      activeRoot: '/data/neotavern/roots/root-a1b2c3d4',
+      journalFormat: 'neotavern-activation-journal',
+      journalFormatVersion: 2,
+      entries: [],
+    });
+    const status = await getDataActivationStatus();
+    expect(mocks.data.activationStatus).toHaveBeenCalledTimes(1);
+    expect(status.layoutVersion).toBe(2);
+    expect(status.entries).toEqual([]);
+  });
+
+  it('refuses activation status on the legacy plane', async () => {
+    mocks.isKernelMode.mockReturnValueOnce(false);
+    await expect(getDataActivationStatus()).rejects.toBeInstanceOf(UnsupportedError);
   });
 
   it('imports a character card via assets.put + imports.character.card on the kernel plane', async () => {

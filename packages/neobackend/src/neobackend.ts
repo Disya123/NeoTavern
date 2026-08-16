@@ -48,6 +48,7 @@ import type {
   ListToolsResultDto,
   PromptPlanDto,
   WireGenerationEvent,
+  DataActivationStatusResultDto,
   ListBackupsResultDto,
   ListCharactersRequestDto,
   ListChatsRequestDto,
@@ -272,6 +273,13 @@ export interface BackupsApi {
   create(): Promise<BackupDto>;
   /** List backups. */
   list(): Promise<ListBackupsResultDto>;
+}
+
+/** Data lifecycle operations (ТЗ §10.2–§10.3, wire `data.*`). */
+export interface DataApi {
+  /** Durable data-root activation status: layout version, active root, the
+   * full activation journal and any pending activation. Strictly read-only. */
+  activationStatus(opts?: BackendCallOptions): Promise<DataActivationStatusResultDto>;
 }
 
 /** Lorebook domain operations (wire `lorebooks.*`). */
@@ -536,6 +544,7 @@ export interface NeoBackend {
   providers: ProvidersApi;
   generation: GenerationApi;
   backups: BackupsApi;
+  data: DataApi;
   plugins: PluginsApi;
   themes: ThemesApi;
   profiles: ProfilesApi;

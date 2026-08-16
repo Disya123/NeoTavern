@@ -64,6 +64,7 @@ pub fn operation_request_limit(operation_id: &str) -> Option<u64> {
         "providers.config.delete" => Some(2048),
         "backups.create" => Some(1024),
         "backups.list" => Some(1024),
+        "data.activation.status" => Some(1024),
         "profile.export" => Some(4096),
         "assets.put" => Some(1048576),
         "assets.get" => Some(1024),
@@ -163,6 +164,7 @@ pub fn operation_response_limit(operation_id: &str) -> Option<u64> {
         "providers.config.delete" => Some(1024),
         "backups.create" => Some(262144),
         "backups.list" => Some(262144),
+        "data.activation.status" => Some(262144),
         "profile.export" => Some(262144),
         "assets.put" => Some(262144),
         "assets.get" => Some(262144),
@@ -12896,6 +12898,398 @@ pub fn validate_result_list_backups(value: &Value) -> Result<(), Vec<Issue>> {
 
 pub fn decode_result_list_backups(bytes: &[u8]) -> Result<ResultListBackups, WireError> {
     crate::decode::<ResultListBackups>(validate_result_list_backups, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DataActivationEntry {
+    pub id: String,
+    pub kind: String,
+    pub status: String,
+    #[serde(rename = "fromRoot")]
+    pub from_root: String,
+    #[serde(rename = "toRoot")]
+    pub to_root: String,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+pub(crate) fn check_data_activation_entry(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("id").is_none() {
+            issues.push(Issue::new(join_path(path, "id"), "RequiredProperty"));
+        }
+        if value.get("kind").is_none() {
+            issues.push(Issue::new(join_path(path, "kind"), "RequiredProperty"));
+        }
+        if value.get("status").is_none() {
+            issues.push(Issue::new(join_path(path, "status"), "RequiredProperty"));
+        }
+        if value.get("fromRoot").is_none() {
+            issues.push(Issue::new(join_path(path, "fromRoot"), "RequiredProperty"));
+        }
+        if value.get("toRoot").is_none() {
+            issues.push(Issue::new(join_path(path, "toRoot"), "RequiredProperty"));
+        }
+        if value.get("createdAt").is_none() {
+            issues.push(Issue::new(join_path(path, "createdAt"), "RequiredProperty"));
+        }
+        if value.get("updatedAt").is_none() {
+            issues.push(Issue::new(join_path(path, "updatedAt"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("id") {
+            let child_path = join_path(path, "id");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 64 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("kind") {
+            let child_path = join_path(path, "kind");
+            match child.as_str() {
+                Some(s) => {
+                    if !matches!(s, "restore" | "migration" | "import" | "rollback") {
+                        issues.push(Issue::new(child_path.as_str(), "Union"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("status") {
+            let child_path = join_path(path, "status");
+            match child.as_str() {
+                Some(s) => {
+                    if !matches!(s, "prepared" | "validated" | "activation_pending" | "committed" | "rolled_back") {
+                        issues.push(Issue::new(child_path.as_str(), "Union"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("fromRoot") {
+            let child_path = join_path(path, "fromRoot");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 4096 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("toRoot") {
+            let child_path = join_path(path, "toRoot");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 4096 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("createdAt") {
+            let child_path = join_path(path, "createdAt");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("updatedAt") {
+            let child_path = join_path(path, "updatedAt");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("error") {
+            let child_path = join_path(path, "error");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len > 4096 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "id" | "kind" | "status" | "fromRoot" | "toRoot" | "createdAt" | "updatedAt" | "error") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_data_activation_entry(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_data_activation_entry(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_data_activation_entry(bytes: &[u8]) -> Result<DataActivationEntry, WireError> {
+    crate::decode::<DataActivationEntry>(validate_data_activation_entry, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DataActivationPending {
+    pub kind: String,
+    #[serde(rename = "entryId")]
+    pub entry_id: String,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+}
+
+pub(crate) fn check_data_activation_pending(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("kind").is_none() {
+            issues.push(Issue::new(join_path(path, "kind"), "RequiredProperty"));
+        }
+        if value.get("entryId").is_none() {
+            issues.push(Issue::new(join_path(path, "entryId"), "RequiredProperty"));
+        }
+        if value.get("createdAt").is_none() {
+            issues.push(Issue::new(join_path(path, "createdAt"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("kind") {
+            let child_path = join_path(path, "kind");
+            match child.as_str() {
+                Some(s) => {
+                    if !matches!(s, "restore" | "migration") {
+                        issues.push(Issue::new(child_path.as_str(), "Union"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("entryId") {
+            let child_path = join_path(path, "entryId");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 64 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("createdAt") {
+            let child_path = join_path(path, "createdAt");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "kind" | "entryId" | "createdAt") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_data_activation_pending(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_data_activation_pending(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_data_activation_pending(bytes: &[u8]) -> Result<DataActivationPending, WireError> {
+    crate::decode::<DataActivationPending>(validate_data_activation_pending, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultDataActivationStatus {
+    #[serde(rename = "layoutVersion")]
+    pub layout_version: i64,
+    #[serde(rename = "activeRootId", default, skip_serializing_if = "Option::is_none")]
+    pub active_root_id: Option<String>,
+    #[serde(rename = "activeRoot")]
+    pub active_root: String,
+    #[serde(rename = "journalFormat")]
+    pub journal_format: String,
+    #[serde(rename = "journalFormatVersion")]
+    pub journal_format_version: i64,
+    pub entries: Vec<DataActivationEntry>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pending: Option<DataActivationPending>,
+}
+
+pub(crate) fn check_result_data_activation_status(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("layoutVersion").is_none() {
+            issues.push(Issue::new(join_path(path, "layoutVersion"), "RequiredProperty"));
+        }
+        if value.get("activeRoot").is_none() {
+            issues.push(Issue::new(join_path(path, "activeRoot"), "RequiredProperty"));
+        }
+        if value.get("journalFormat").is_none() {
+            issues.push(Issue::new(join_path(path, "journalFormat"), "RequiredProperty"));
+        }
+        if value.get("journalFormatVersion").is_none() {
+            issues.push(Issue::new(join_path(path, "journalFormatVersion"), "RequiredProperty"));
+        }
+        if value.get("entries").is_none() {
+            issues.push(Issue::new(join_path(path, "entries"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("layoutVersion") {
+            let child_path = join_path(path, "layoutVersion");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                    if n > 2 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMaximum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("activeRootId") {
+            let child_path = join_path(path, "activeRootId");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 128 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("activeRoot") {
+            let child_path = join_path(path, "activeRoot");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 4096 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("journalFormat") {
+            let child_path = join_path(path, "journalFormat");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if len > 64 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMaxLength"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("journalFormatVersion") {
+            let child_path = join_path(path, "journalFormatVersion");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("entries") {
+            let child_path = join_path(path, "entries");
+            if !child.is_array() {
+                issues.push(Issue::new(child_path.as_str(), "Array"));
+            } else if let Some(arr) = child.as_array() {
+                for (i, item) in arr.iter().enumerate() {
+                    let item_path = format!("{}[{}]", child_path, i);
+                    check_data_activation_entry(item, &item_path, issues);
+                }
+            }
+        }
+        if let Some(child) = value.get("pending") {
+            let child_path = join_path(path, "pending");
+            check_data_activation_pending(child, &child_path, issues);
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "layoutVersion" | "activeRootId" | "activeRoot" | "journalFormat" | "journalFormatVersion" | "entries" | "pending") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_data_activation_status(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_data_activation_status(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_data_activation_status(bytes: &[u8]) -> Result<ResultDataActivationStatus, WireError> {
+    crate::decode::<ResultDataActivationStatus>(validate_result_data_activation_status, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

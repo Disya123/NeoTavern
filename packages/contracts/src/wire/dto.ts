@@ -1516,6 +1516,77 @@ export const ListBackupsResultDtoSchema = Type.Object(
 );
 export type ListBackupsResultDto = Static<typeof ListBackupsResultDtoSchema>;
 
+/** One durable activation-journal entry (ТЗ §10.3, `wire.data.activation-entry`).
+ * Statuses mirror the storage journal: `prepared`, `validated`,
+ * `activation_pending`, `committed`, `rolled_back`. Root references are
+ * reported as absolute paths (diagnostics; the journal itself stores
+ * portable relative references). */
+export const DataActivationEntryDtoSchema = Type.Object(
+  {
+    id: Type.String({ minLength: 1, maxLength: 64 }),
+    kind: Type.Union(
+      [
+        Type.Literal('restore'),
+        Type.Literal('migration'),
+        Type.Literal('import'),
+        Type.Literal('rollback'),
+      ],
+      { 'x-wire-unknown-behavior': 'reject' },
+    ),
+    status: Type.Union(
+      [
+        Type.Literal('prepared'),
+        Type.Literal('validated'),
+        Type.Literal('activation_pending'),
+        Type.Literal('committed'),
+        Type.Literal('rolled_back'),
+      ],
+      { 'x-wire-unknown-behavior': 'reject' },
+    ),
+    fromRoot: Type.String({ minLength: 1, maxLength: 4096 }),
+    toRoot: Type.String({ minLength: 1, maxLength: 4096 }),
+    createdAt: Type.String({ format: 'rfc3339' }),
+    updatedAt: Type.String({ format: 'rfc3339' }),
+    error: Type.Optional(Type.String({ maxLength: 4096 })),
+  },
+  { $id: 'wire.data.activation-entry', additionalProperties: false },
+);
+export type DataActivationEntryDto = Static<typeof DataActivationEntryDtoSchema>;
+
+/** A pending (not yet committed) activation, `wire.data.activation-pending`.
+ * `activation_pending` in the journal is the recovery source of truth
+ * (Windows restart-to-complete, ТЗ §10.3.1); the v1 flat layout reports a
+ * restore candidate marker instead. */
+export const DataActivationPendingDtoSchema = Type.Object(
+  {
+    kind: Type.Union([Type.Literal('restore'), Type.Literal('migration')], {
+      'x-wire-unknown-behavior': 'reject',
+    }),
+    entryId: Type.String({ minLength: 1, maxLength: 64 }),
+    createdAt: Type.String({ format: 'rfc3339' }),
+  },
+  { $id: 'wire.data.activation-pending', additionalProperties: false },
+);
+export type DataActivationPendingDto = Static<typeof DataActivationPendingDtoSchema>;
+
+/** Data-root activation status (`wire.result.data.activation-status`,
+ * ТЗ §10.2–§10.3): which layout version the data root uses, which root is
+ * active, the full durable journal and whether an activation is pending.
+ * Strictly read-only — the UI renders the honest state, never mutates. */
+export const DataActivationStatusResultDtoSchema = Type.Object(
+  {
+    layoutVersion: Type.Integer({ minimum: 1, maximum: 2 }),
+    activeRootId: Type.Optional(Type.String({ minLength: 1, maxLength: 128 })),
+    activeRoot: Type.String({ minLength: 1, maxLength: 4096 }),
+    journalFormat: Type.String({ minLength: 1, maxLength: 64 }),
+    journalFormatVersion: Type.Integer({ minimum: 1 }),
+    entries: Type.Array(DataActivationEntryDtoSchema),
+    pending: Type.Optional(DataActivationPendingDtoSchema),
+  },
+  { $id: 'wire.result.data.activation-status', additionalProperties: false },
+);
+export type DataActivationStatusResultDto = Static<typeof DataActivationStatusResultDtoSchema>;
+
 /** List lorebooks request DTO (`wire.request.list-lorebooks`). Optional
  * `characterId` filters to the books bound to one character
  * (character↔lorebook scoping, ADR-0047 waiver 2); absent means all books
@@ -2367,6 +2438,9 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.request.generation-tool-result': GenerationToolResultRequestDtoSchema,
   'wire.result.empty': EmptyResultDtoSchema,
   'wire.result.list-backups': ListBackupsResultDtoSchema,
+  'wire.data.activation-entry': DataActivationEntryDtoSchema,
+  'wire.data.activation-pending': DataActivationPendingDtoSchema,
+  'wire.result.data.activation-status': DataActivationStatusResultDtoSchema,
   'wire.paged.generation-events': PagedGenerationEventsDtoSchema,
   'wire.result.list-lorebooks': ListLorebooksResultDtoSchema,
   'wire.result.list-presets': ListPresetsResultDtoSchema,

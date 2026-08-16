@@ -21,6 +21,7 @@ import type {
   ListToolsResultDto,
   PromptPlanDto,
   WireGenerationEvent,
+  DataActivationStatusResultDto,
   ListBackupsResultDto,
   ListLorebookEntriesResultDto,
   ListLorebooksResultDto,
@@ -63,6 +64,7 @@ import type {
   BackendCallOptions,
   AssetsApi,
   BackupsApi,
+  DataApi,
   CharactersApi,
   ChatsApi,
   DiagnosticsApi,
@@ -205,6 +207,17 @@ export class RemoteBackend implements NeoBackend {
   readonly backups: BackupsApi = {
     create: () => this.sdk.call<BackupDto>('backups.create', {}),
     list: () => this.sdk.call<ListBackupsResultDto>('backups.list', {}),
+  };
+
+  readonly data: DataApi = {
+    activationStatus: (opts) =>
+      this.sdk.call<DataActivationStatusResultDto>(
+        'data.activation.status',
+        {},
+        {
+          signal: opts?.signal,
+        },
+      ),
   };
 
   readonly lorebooks: LorebooksApi = {

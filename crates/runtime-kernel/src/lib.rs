@@ -32,6 +32,7 @@ use std::time::Duration;
 
 pub mod assets;
 pub mod backup;
+pub mod data;
 pub mod export;
 pub mod exports;
 pub mod generation;
@@ -661,6 +662,8 @@ fn handle_unary(
         // Phase 11 portable data (ТЗ §40–§41): backup containers.
         "backups.create" => with_db_opt(db, |db| backup::backups_create(db, req)),
         "backups.list" => with_db_opt(db, |db| backup::backups_list(db, req)),
+        // Data lifecycle (ТЗ §10.2–§10.3): durable activation status.
+        "data.activation.status" => with_db_opt(db, |db| data::data_activation_status(db, req)),
         // Phase 11 / SEC-02: logical allowlist profile export.
         "profile.export" => with_db_opt(db, |db| export::profile_export(db, req)),
         _ => Err(KernelError::new(

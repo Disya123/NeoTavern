@@ -26,6 +26,7 @@ import {
   usePromptContextAudit,
   usePromptContextPreview,
   usePromptPlan,
+  useDataActivationStatus,
   useRebuildSearch,
   useReorderChats,
   useRestoreBackup,
@@ -48,9 +49,14 @@ vi.mock('./backend.js', async (importOriginal) => {
 // `usePromptPlan` routes through wireBridge.getPromptPlan; the plan itself is
 // mocked so the hook tests stay transport-free.
 const promptPlanMock = vi.hoisted(() => ({ getPromptPlan: vi.fn() }));
+const activationStatusMock = vi.hoisted(() => ({ getDataActivationStatus: vi.fn() }));
 vi.mock('./wireBridge.js', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
-  return { ...actual, getPromptPlan: promptPlanMock.getPromptPlan };
+  return {
+    ...actual,
+    getPromptPlan: promptPlanMock.getPromptPlan,
+    getDataActivationStatus: activationStatusMock.getDataActivationStatus,
+  };
 });
 
 function wrapperFor(client: QueryClient) {
@@ -388,6 +394,35 @@ describe('remaining legacy hooks (kernel-plane honesty, slice 22)', () => {
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toBeNull();
+  });
+
+  it('useDataActivationStatus resolves the durable activation status on the kernel plane', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    activationStatusMock.getDataActivationStatus.mockResolvedValue({
+      layoutVersion: 2,
+      activeRootId: 'a1b2c3d4',
+      activeRoot: '/data/neotavern/roots/root-a1b2c3d4',
+      journalFormat: 'neotavern-activation-journal',
+      journalFormatVersion: 2,
+      entries: [],
+    });
+    const { result } = renderHook(() => useDataActivationStatus(), {
+      wrapper: wrapperFor(queryClient),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.layoutVersion).toBe(2);
+    mocks.isKernelMode.mockReturnValue(false);
+  });
+
+  it('useDataActivationStatus reports an honest error on the legacy plane without a network call', async () => {
+    activationStatusMock.getDataActivationStatus.mockRejectedValue(
+      new UnsupportedError('data.activation.status'),
+    );
+    const { result } = renderHook(() => useDataActivationStatus(), {
+      wrapper: wrapperFor(queryClient),
+    });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('useInstructFormats fetches the legacy list on the legacy plane', async () => {

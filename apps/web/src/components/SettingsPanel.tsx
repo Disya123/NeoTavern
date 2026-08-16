@@ -30,6 +30,7 @@ import {
 import { useErrorText } from '../lib/useErrorText.js';
 import { isTauriRuntime } from '../api/tauriTransport.js';
 import { DataMigrationPanel } from './DataMigrationPanel.js';
+import { ActivationStatusPanel } from './ActivationStatusPanel.js';
 import { DiagnosticsPanel } from './DiagnosticsPanel.js';
 import { FloatingTabContent } from './FloatingTabContent.js';
 import { FloatingTabPanel } from './FloatingTabPanel.js';
@@ -529,6 +530,7 @@ function DataTab() {
   return (
     <div className={styles.body} data-part="data-settings">
       <DataMigrationPanel />
+      <ActivationStatusPanel />
 
       <section className={styles.section}>
         <header className={styles.sectionHeader}>
