@@ -21,6 +21,7 @@ import {
   useExecuteSillyTavernImport,
   useInstructFormats,
   useLogin,
+  useLogout,
   usePromptContextAudit,
   useRebuildSearch,
   useReorderChats,
@@ -380,6 +381,35 @@ describe('remaining legacy hooks (kernel-plane honesty, slice 22)', () => {
       wrapper: wrapperFor(queryClient),
     });
     act(() => result.current.mutate('a1'));
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(fetchMock).not.toHaveBeenCalled();
+    mocks.isKernelMode.mockReturnValue(false);
+  });
+});
+
+describe('auth hooks (kernel-plane honesty, slice 23)', () => {
+  it('useAuthSession resolves an honest local session on the kernel plane without a network call', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const { result } = renderHook(() => useAuthSession(), { wrapper: wrapperFor(queryClient) });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual({ required: false, authenticated: true });
+    expect(fetchMock).not.toHaveBeenCalled();
+    mocks.isKernelMode.mockReturnValue(false);
+  });
+
+  it('useLogin rejects with UnsupportedError on the kernel plane', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const { result } = renderHook(() => useLogin(), { wrapper: wrapperFor(queryClient) });
+    act(() => result.current.mutate({ token: 'secret' }));
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(fetchMock).not.toHaveBeenCalled();
+    mocks.isKernelMode.mockReturnValue(false);
+  });
+
+  it('useLogout rejects with UnsupportedError on the kernel plane', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const { result } = renderHook(() => useLogout(), { wrapper: wrapperFor(queryClient) });
+    act(() => result.current.mutate());
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(fetchMock).not.toHaveBeenCalled();
     mocks.isKernelMode.mockReturnValue(false);

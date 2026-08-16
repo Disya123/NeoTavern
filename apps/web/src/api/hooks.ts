@@ -121,6 +121,14 @@ export function useAuthSession() {
   return useQuery({
     queryKey: ['auth-session'],
     queryFn: async () => {
+      // Kernel plane: the kernel transport (Tauri IPC / local) has no
+      // remote-token session layer — auth applies only to non-loopback
+      // legacy exposure (ТЗ §11.3). Honest local session: required=false,
+      // authenticated=true — never a silent legacy request (ARC-02).
+      if (isKernelMode()) {
+        const session: AuthSession = { required: false, authenticated: true };
+        return session;
+      }
       const session = await api.get<AuthSession>('/auth/session');
       setCsrfToken(session.csrfToken ?? null);
       return session;
@@ -142,7 +150,15 @@ export function useAppVersion() {
 export function useLogin() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: AuthLogin) => api.post<AuthSession>('/auth/session', input),
+    mutationFn: (input: AuthLogin) => {
+      // Kernel plane: no remote-token auth layer (see useAuthSession) —
+      // honest CAPABILITY_UNAVAILABLE (ТЗ §13.1), never a silent legacy
+      // request (ARC-02).
+      if (isKernelMode()) {
+        return Promise.reject(new UnsupportedError('auth.login'));
+      }
+      return api.post<AuthSession>('/auth/session', input);
+    },
     onSuccess: (session) => {
       setCsrfToken(session.csrfToken ?? null);
       qc.setQueryData(['auth-session'], session);
@@ -153,7 +169,13 @@ export function useLogin() {
 export function useLogout() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => api.del<AuthSession>('/auth/session'),
+    mutationFn: () => {
+      // Kernel plane: same honest CAPABILITY_UNAVAILABLE as login.
+      if (isKernelMode()) {
+        return Promise.reject(new UnsupportedError('auth.logout'));
+      }
+      return api.del<AuthSession>('/auth/session');
+    },
     onSuccess: (session) => {
       setCsrfToken(null);
       qc.setQueryData(['auth-session'], session);

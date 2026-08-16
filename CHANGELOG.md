@@ -3,6 +3,21 @@
 ## Unreleased
 ### Added
 
+- **Auth hooks are honest on the kernel plane (M5 slice 23, ARC-02).**
+  `useAuthSession` / `useLogin` / `useLogout` hit the legacy
+  `/api/v2/auth/session` surface on EVERY backend — on the kernel plane the
+  AuthGate hung on a useless network call to a dead route. Now the
+  transport gate lives in the hooks: `useAuthSession` resolves the honest
+  local session `{ required: false, authenticated: true }` (the kernel
+  transport — Tauri IPC / local — has no remote-token session layer; auth
+  applies only to non-loopback legacy exposure, ТЗ §11.3), and login/logout
+  reject with a typed `UnsupportedError` (honest CAPABILITY_UNAVAILABLE) —
+  never a silent legacy request from kernel mode (ARC-02). Kernel Desktop no
+  longer renders the remote-token form. The legacy contour (sidecar /
+  remote Web Client) keeps the real routes. Tests: hooks 29/29 (+3
+  kernel-honesty cases), full web vitest green, eslint/typecheck/prettier
+  clean, ui:api:check 53, gates GATE PASS.
+
 - **Remaining legacy hooks are honest on the kernel plane (M5 slice 22,
   ARC-02).** Seven hooks still hit the legacy surface on EVERY backend:
   `useReorderChats`, `usePromptContextAudit`, `useInstructFormats`,
