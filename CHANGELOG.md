@@ -34,6 +34,13 @@
 
 ### Added
 
+- **generation.tool-loop notes accuracy fix (M5 slice 53).** The
+  release-manifest note for `generation.tool-loop` no longer lists transcript
+  step rendering as remaining work: the durable run-step UI (M5 slice 47,
+  RunTranscriptPanel over `generation.events`) renders `tool_call` and
+  `tool_result` steps (sequence badge, status, attempt marker, i18n en/ru).
+  The honest remaining boundary narrows to UI-side `generation.tool.result`
+  submission and the dangerous-tool consent modal (Этап 4).
 - **SEC-05 kernel trust-state roundup (M5 slice 52).** Documented evidence in
   `security.plugin-package-trust`: the canonical plugin/theme registry
   records the four trust states with a fixed rank order

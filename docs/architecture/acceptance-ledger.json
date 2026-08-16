@@ -1275,6 +1275,12 @@
           "artifact": "SEC-05 kernel trust-state roundup",
           "result": "M5 slice 52: documented evidence in security.plugin-package-trust. Verified in source: crates/runtime-kernel/src/plugins.rs and themes.rs define trust_rank (built-in 3 > verified-publisher 2 > locally-trusted 1 > unsigned-untrusted 0); tests plugins_install_never_downgrades_trust / themes_install_never_downgrades_trust reject a rank-lowering re-install with the stable TRUST_DOWNGRADE code; an unknown trust state violates the closed wire enum (x-wire-unknown-behavior reject) -> ContractViolation (bad trust state tests); packages/contracts PluginTrustStateSchema declares the four literals; wireBridge.translatePlugin/translateTheme surface trustState as InstalledPlugin.trust / InstalledTheme.trust into the PluginsPanel and themes UI. built-in is first-class and rank-protected for future bundled extensions; the kernel ships no bundled plugins today, so no row carries it yet. Boundary stays documented: the host-side package verifier that would feed verified installs into the web transport does not exist yet (slice 50 notes).",
           "commit": "484457c"
+        },
+        {
+          "type": "artifact",
+          "artifact": "generation.tool-loop notes accuracy fix",
+          "result": "M5 slice 53: release-manifest note for generation.tool-loop corrected — transcript step rendering is no longer listed as remaining tool UX. Verified in source: packages/i18n en.ts/ru.ts declare chat:runStepType_tool_call and chat:runStepType_tool_result, and RunTranscriptPanel (M5 slice 47) renders every generation.step envelope type incl. tool_call/tool_result with sequence badge, status and attempt marker. Remaining honest boundary narrowed to UI-side generation.tool.result submission and the dangerous-tool consent modal (Этап 4).",
+          "commit": "pending"
         }
       ],
       "blockingIssues": [
