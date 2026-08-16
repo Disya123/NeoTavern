@@ -374,6 +374,16 @@ enum Command {
         timeout: Duration,
         reply: mpsc::SyncSender<()>,
     },
+    /// Offline restore (ТЗ §10.4, М5 slice 39): the writer closes the
+    /// database + lease, restores the verified backup container over the
+    /// active root and re-opens the database, replying with the serialized
+    /// `backups.restore` result. Runs only in the main writer loop (it takes
+    /// the [`Database`] by value); when queued from inside a generation it
+    /// waits for the executor to finish, like stream commands.
+    Restore {
+        req: Vec<u8>,
+        reply: mpsc::SyncSender<Result<Vec<u8>, KernelError>>,
+    },
     /// Orderly shutdown: stop the writer loop (mid-generation this sets a
     /// stop flag observed at the executor's next step boundary) and ack.
     Shutdown { reply: mpsc::SyncSender<()> },
@@ -753,6 +763,12 @@ fn drain_pending(
                 state.run_timeout = timeout;
                 let _ = reply.send(());
             }
+            Command::Restore { req, reply } => {
+                // Restore takes the Database by value; it cannot run inside a
+                // generation's step drain. Queue it for the main loop after
+                // the current stream finishes (same policy as Stream).
+                pending.push(Command::Restore { req, reply });
+            }
             Command::Shutdown { reply } => {
                 shutdown = true;
                 *stop = true;
@@ -883,6 +899,26 @@ fn writer_main(
             Command::SetRunTimeout { timeout, reply } => {
                 state.run_timeout = timeout;
                 let _ = reply.send(());
+            }
+            Command::Restore { req, reply } => {
+                // Restore takes the Database by value: the handler closes the
+                // connection + lease, swaps the active root and re-opens the
+                // database, returning the new handle alongside the result.
+                let (db_next, result) = match db.take() {
+                    Some(db) => {
+                        let (next_db, result) = backup::backups_restore(db, &req);
+                        (Some(next_db), result)
+                    }
+                    None => (
+                        None,
+                        Err(KernelError::new(
+                            KernelErrorCode::StorageFailure,
+                            "operation requires durable storage",
+                        )),
+                    ),
+                };
+                db = db_next;
+                let _ = reply.send(result);
             }
             Command::Shutdown { reply } => {
                 stop = true;
@@ -1022,16 +1058,36 @@ impl Kernel {
         // BEFORE the body is copied to the writer thread or parsed.
         enforce_request_limit(operation_id, request)?;
         let (reply_tx, reply_rx) = mpsc::sync_channel(1);
-        self.cmd_tx
-            .send(Command::Unary {
-                op: operation_id.to_string(),
-                req: request.to_vec(),
-                cancel: cancel.clone(),
-                reply: reply_tx,
-            })
-            .map_err(|_| {
-                KernelError::new(KernelErrorCode::Internal, "kernel writer thread terminated")
-            })?;
+        // `backups.restore` (ТЗ §10.4) runs as a dedicated writer command: it
+        // closes and re-opens the database (offline restore), so it cannot go
+        // through the unary `with_db_opt` path.
+        if operation_id == "backups.restore" {
+            self.cmd_tx
+                .send(Command::Restore {
+                    req: request.to_vec(),
+                    reply: reply_tx,
+                })
+                .map_err(|_| {
+                    KernelError::new(
+                        KernelErrorCode::Internal,
+                        "kernel writer thread terminated",
+                    )
+                })?;
+        } else {
+            self.cmd_tx
+                .send(Command::Unary {
+                    op: operation_id.to_string(),
+                    req: request.to_vec(),
+                    cancel: cancel.clone(),
+                    reply: reply_tx,
+                })
+                .map_err(|_| {
+                    KernelError::new(
+                        KernelErrorCode::Internal,
+                        "kernel writer thread terminated",
+                    )
+                })?;
+        }
         reply_rx.recv().map_err(|_| {
             KernelError::new(KernelErrorCode::Internal, "kernel writer thread terminated")
         })?

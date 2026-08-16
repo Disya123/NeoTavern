@@ -1516,6 +1516,34 @@ export const ListBackupsResultDtoSchema = Type.Object(
 );
 export type ListBackupsResultDto = Static<typeof ListBackupsResultDtoSchema>;
 
+/** Restore-backup request DTO (`wire.request.backups-restore`, ТЗ §10.4). */
+export const BackupsRestoreRequestDtoSchema = Type.Object(
+  {
+    /** The id of an existing backup container (see `backups.list`). */
+    backupId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.backups-restore', additionalProperties: false },
+);
+export type BackupsRestoreRequestDto = Static<typeof BackupsRestoreRequestDtoSchema>;
+
+/** Restore-backup result DTO (`wire.result.backups-restore`, ТЗ §10.4).
+ *
+ * `committed` — the verified candidate was activated and the kernel reopened
+ * the data root on it (no restart needed). `activation_pending` — the swap
+ * could not complete in this call (e.g. Windows sharing violation); the
+ * durable activation protocol completes it at next open — the host should
+ * ask the user to restart. */
+export const BackupsRestoreResultDtoSchema = Type.Object(
+  {
+    status: Type.Union(
+      [Type.Literal('committed'), Type.Literal('activation_pending')],
+      { 'x-wire-unknown-behavior': 'reject' },
+    ),
+  },
+  { $id: 'wire.result.backups-restore', additionalProperties: false },
+);
+export type BackupsRestoreResultDto = Static<typeof BackupsRestoreResultDtoSchema>;
+
 /** One durable activation-journal entry (ТЗ §10.3, `wire.data.activation-entry`).
  * Statuses mirror the storage journal: `prepared`, `validated`,
  * `activation_pending`, `committed`, `rolled_back`. Root references are
@@ -2437,6 +2465,8 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.tool.call': ToolCallDtoSchema,
   'wire.request.generation-tool-result': GenerationToolResultRequestDtoSchema,
   'wire.result.empty': EmptyResultDtoSchema,
+  'wire.request.backups-restore': BackupsRestoreRequestDtoSchema,
+  'wire.result.backups-restore': BackupsRestoreResultDtoSchema,
   'wire.result.list-backups': ListBackupsResultDtoSchema,
   'wire.data.activation-entry': DataActivationEntryDtoSchema,
   'wire.data.activation-pending': DataActivationPendingDtoSchema,

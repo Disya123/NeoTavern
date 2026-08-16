@@ -20,6 +20,7 @@ import {
   type PagedCharactersDto,
   type PresetDto,
   type ProductErrorDto,
+  type BackupsRestoreResultDto,
   type ListCharactersRequestDto,
   type CharacterDto,
   type UpdateMemoryRequestDto,
@@ -215,6 +216,7 @@ export class LegacyBackend implements NeoBackend {
   readonly backups: BackupsApi = {
     create: () => this.unsupported('backups.create'),
     list: () => this.unsupported('backups.list'),
+    restore: (backupId) => this.restoreBackup(backupId),
   };
 
   readonly data: DataApi = {
@@ -450,6 +452,43 @@ export class LegacyBackend implements NeoBackend {
       throw this.mapError(body, response.status);
     }
     return body;
+  }
+
+  /**
+   * `backups.restore` on the legacy plane: translates to the legacy sidecar
+   * restore endpoint (`POST /backups/{id}/restore`), mapping its
+   * `{ restored, restartRequired }` answer onto the canonical
+   * `{ status: 'committed' | 'activation_pending' }` result. This is a pure
+   * boundary translation of an existing user-facing capability — it adds no
+   * authority (ARC-11).
+   */
+  private async restoreBackup(backupId: string): Promise<BackupsRestoreResultDto> {
+    let response: Response;
+    try {
+      response = await this.fetchImpl(
+        `${this.baseUrl}/backups/${encodeURIComponent(backupId)}/restore`,
+        {
+          method: 'POST',
+          headers: { accept: 'application/json' },
+        },
+      );
+    } catch (cause) {
+      throw new Error(
+        `Legacy backend request to /backups/${backupId}/restore failed`,
+        cause instanceof Error ? { cause } : undefined,
+      );
+    }
+    let body: unknown;
+    try {
+      body = await response.json();
+    } catch {
+      body = undefined;
+    }
+    if (!response.ok) {
+      throw this.mapError(body, response.status);
+    }
+    const restartRequired = isRecord(body) && body['restartRequired'] === true;
+    return { status: restartRequired ? 'activation_pending' : 'committed' };
   }
 
   private mapError(body: unknown, status: number): Error {

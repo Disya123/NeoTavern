@@ -30,7 +30,11 @@ function registryOps(source) {
 /**
  * Kernel dispatch arms: top-level unary arms of the main `match op` block
  * (8-space indent, `"id" =>`) plus the streaming special-case list from
- * `dispatch_stream`'s `matches!(operation_id, …)`.
+ * `dispatch_stream`'s `matches!(operation_id, …)` plus the dedicated
+ * offline commands routed in `Kernel::dispatch` itself
+ * (`if operation_id == "backups.restore"`, М5 slice 39 — restore closes and
+ * re-opens the database, so it cannot go through the unary `with_db_opt`
+ * path).
  */
 function kernelDispatchOps(source) {
   const unary = [...source.matchAll(/^ {8}"([a-z0-9.]+)"\s*=>/gm)].map((match) => match[1]);
@@ -39,7 +43,10 @@ function kernelDispatchOps(source) {
       /matches!\(\s*operation_id\s*,\s*"([a-z0-9.]+)"(?:\s*\|\s*"([a-z0-9.]+)")?/g,
     ),
   ].flatMap((match) => [match[1], match[2]].filter((id) => typeof id === 'string'));
-  return [...new Set([...unary, ...stream])].sort();
+  const dedicated = [
+    ...source.matchAll(/if operation_id == "([a-z0-9.]+)"/g),
+  ].map((match) => match[1]);
+  return [...new Set([...unary, ...stream, ...dedicated])].sort();
 }
 
 const registry = registryOps(readFileSync(REGISTRY, 'utf8'));

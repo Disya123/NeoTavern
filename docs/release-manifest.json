@@ -3,18 +3,15 @@
   "capabilities": [
     {
       "id": "backups",
-      "title": "Backup create/list",
-      "wireOps": [
-        "backups.create",
-        "backups.list"
-      ],
+      "title": "Backup create/list/restore",
+      "wireOps": ["backups.create", "backups.list", "backups.restore"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
         "android": "Implemented",
         "webClient": "Implemented"
       },
-      "notes": "Backup containers (manifest, checksums, atomic publish); restore + activation journal is M3.",
+      "notes": "Backup containers (manifest, checksums, atomic publish); staged restore + activation journal (M3) now reachable end-to-end over the wire (M5 slice 39): backups.restore runs the offline staged restore + activation protocol inside the kernel writer (database closed + lease released, candidate verified/staged/finalized, pending-marker swap with previous-root retention, database re-opened on the active root) and records the durable journal entry; the same kernel keeps serving, restartRequired only when the swap must finish at next open.",
       "milestone": "M3"
     },
     {
@@ -39,13 +36,7 @@
     {
       "id": "chats.crud",
       "title": "Chat CRUD",
-      "wireOps": [
-        "chats.list",
-        "chats.get",
-        "chats.create",
-        "chats.update",
-        "chats.delete"
-      ],
+      "wireOps": ["chats.list", "chats.get", "chats.create", "chats.update", "chats.delete"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
@@ -99,9 +90,7 @@
     {
       "id": "chats.snapshots",
       "title": "Chat snapshots (checkpoint/branch)",
-      "wireOps": [
-        "chats.snapshots.create"
-      ],
+      "wireOps": ["chats.snapshots.create"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
@@ -127,9 +116,7 @@
     {
       "id": "generation.prompt.plan",
       "title": "Prompt pipeline: durable PromptPlan (history/character/lorebook/token budget)",
-      "wireOps": [
-        "generation.prompt.plan"
-      ],
+      "wireOps": ["generation.prompt.plan"],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
@@ -142,10 +129,7 @@
     {
       "id": "generation.tool-loop",
       "title": "Durable run/step journal + tool-call loop (waiting_for_tool)",
-      "wireOps": [
-        "generation.tools.list",
-        "generation.tool.result"
-      ],
+      "wireOps": ["generation.tools.list", "generation.tool.result"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
@@ -179,12 +163,7 @@
     {
       "id": "library.assets",
       "title": "Content-addressed asset store (put/get/content/delete, avatar linkage)",
-      "wireOps": [
-        "assets.put",
-        "assets.get",
-        "assets.content",
-        "assets.delete"
-      ],
+      "wireOps": ["assets.put", "assets.get", "assets.content", "assets.delete"],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
@@ -197,9 +176,7 @@
     {
       "id": "library.characterImport",
       "title": "Character-card import (PNG/JSON, content-hash dedupe)",
-      "wireOps": [
-        "imports.character.card"
-      ],
+      "wireOps": ["imports.character.card"],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
@@ -235,12 +212,7 @@
     {
       "id": "memories.crud",
       "title": "Memory CRUD (ТЗ §4.4)",
-      "wireOps": [
-        "memories.list",
-        "memories.create",
-        "memories.update",
-        "memories.delete"
-      ],
+      "wireOps": ["memories.list", "memories.create", "memories.update", "memories.delete"],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
@@ -253,9 +225,7 @@
     {
       "id": "meta.get",
       "title": "Kernel handshake / meta",
-      "wireOps": [
-        "meta.get"
-      ],
+      "wireOps": ["meta.get"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Integrated",
@@ -324,9 +294,7 @@
     {
       "id": "providers.list",
       "title": "Provider catalog read",
-      "wireOps": [
-        "providers.list"
-      ],
+      "wireOps": ["providers.list"],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
@@ -404,10 +372,7 @@
     {
       "id": "settings",
       "title": "Non-secret settings (kernel)",
-      "wireOps": [
-        "settings.get",
-        "settings.update"
-      ],
+      "wireOps": ["settings.get", "settings.update"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
@@ -420,9 +385,7 @@
     {
       "id": "ui.diagnostics",
       "title": "Diagnostics panel (kernel section)",
-      "wireOps": [
-        "diagnostics.export"
-      ],
+      "wireOps": ["diagnostics.export"],
       "hosts": {
         "desktop": "Integrated",
         "headless": "Implemented",
@@ -467,24 +430,20 @@
     {
       "id": "ui.portable-data",
       "title": "Portable data / activation / restore",
-      "wireOps": [
-        "data.activation.status"
-      ],
+      "wireOps": ["data.activation.status"],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
         "android": "Designed",
         "webClient": "Implemented"
       },
-      "notes": "M3 (ADR-0041): versioned data roots (roots/root-<id>/ + active-root.json pointer), durable activation journal with prepared/validated/activation_pending/committed/rolled_back statuses, and the Windows restart-to-complete protocol (bounded transient retry, activation_pending after budget, resolve at open) implemented in neotavern_storage::activation with 21 integration tests; v1 flat layout still fully supported. The staged legacy→kernel migration in the application flow (neotavern_storage::migration: lease-locked preflight incl. disk space, verified pre-migration-* safety copy, convert into a staging versioned root, FK/current-revision validation, report, journaled commit with bounded retry, idempotent re-run, cancel-before-activation) is implemented with 19 integration tests. The migration corpus (ТЗ §17.4) covers: all released schema revisions 1..6 upgrade, future schema fails closed, corrupted DB detected, interrupted migration recovers, the REAL Drizzle layout maps completely (card fields personality/scenario/first_message/example_dialogues/system_prompt/post_history_instructions/creator/creator_notes survive into ext_json; character_tags/tags join merged into tags_json; unknown ext preserved; soft-deleted rows skipped and reported), a 1000x1000x3000 library converts with exact counts, unicode/RTL/20k-char values round-trip, and the Windows platform corpus holds a real handle without FILE_SHARE_DELETE: pointer switch exhausts the bounded retry budget, commit returns the stable recoverable ActivationPending, the next open resolves it (restart-to-complete). The CLI host flow (neotavern-cli --migrate-legacy, Этап 3 work 7-8) runs the offline converter with the kernel closed, then opens the kernel on the activated root — the canonical data-root switch is verified by product reads (13 CLI E2E tests incl. characters.get round-trip on the versioned root).  M5 slice 38 (ТЗ §10.2–§10.3): the durable activation state is now reachable end-to-end — wire op data.activation.status (idempotent safe app.read, strict empty request; response carries layoutVersion 1|2, activeRoot + activeRootId, journalFormat/journalFormatVersion, the full journal entries array and the newest activation_pending entry as pending), kernel handler data_activation_status reading the journal through the storage activation module (Database now exposes data_root), host parity over the loopback HTTP adapter (data_activation_status_over_http), facade NeoBackend.data.activationStatus (Local/Remote wire, Legacy honest UnsupportedError; parity 78/78), wireBridge getDataActivationStatus, useDataActivationStatus hook and the ActivationStatusPanel in the Settings Data tab (layout badge, active root path/id, pending warning with restart-to-complete framing, journal table with kind/status/created/error/from→to roots, honest empty/error states). Tests: kernel_data 4 (v1 empty journal, pending surfaced from the journal, v2 detection, stateless rejection), wireBridge (kernel + legacy refusal), hooks (kernel resolve, legacy honest error without network), ActivationStatusPanel (plan, pending, empty, error). Remaining Этап 3 slice: upgrade drills on packaged Windows/macOS/Linux artifacts. The upgrade drill (scripts/upgrade-drill.mjs, Этап 3 work 7) proves the cross-platform upgrade cycle on the real CLI artifact: a Drizzle-style fixture converts, characters.get returns the migrated character, the legacy database stays byte-identical (immutable source, ТЗ §10.3), re-running the migration is idempotent (one committed entry, one staging root), the pre-migration safety copy matches the source checksum, and the journal ends committed with the rollback pointer retained. PASS on Windows in this session; macOS/Linux runs gate the release branch in CI (Windows lock-contention/restart-to-complete stays covered by the Rust held-handle test). M5 slice 7 adds the canonical-plane surface for the portable secrets half: secrets.status reports kind 'portable' with the secrets.enc formatVersion when a FileEncryptedSecretStore is wired (SEC-01.1 — the UI distinguishes portable-encrypted from machine-bound/session-only/unavailable and never sees a value).",
+      "notes": "M3 (ADR-0041): versioned data roots (roots/root-<id>/ + active-root.json pointer), durable activation journal with prepared/validated/activation_pending/committed/rolled_back statuses, and the Windows restart-to-complete protocol (bounded transient retry, activation_pending after budget, resolve at open) implemented in neotavern_storage::activation with 21 integration tests; v1 flat layout still fully supported. The staged legacy→kernel migration in the application flow (neotavern_storage::migration: lease-locked preflight incl. disk space, verified pre-migration-* safety copy, convert into a staging versioned root, FK/current-revision validation, report, journaled commit with bounded retry, idempotent re-run, cancel-before-activation) is implemented with 19 integration tests. The migration corpus (ТЗ §17.4) covers: all released schema revisions 1..6 upgrade, future schema fails closed, corrupted DB detected, interrupted migration recovers, the REAL Drizzle layout maps completely (card fields personality/scenario/first_message/example_dialogues/system_prompt/post_history_instructions/creator/creator_notes survive into ext_json; character_tags/tags join merged into tags_json; unknown ext preserved; soft-deleted rows skipped and reported), a 1000x1000x3000 library converts with exact counts, unicode/RTL/20k-char values round-trip, and the Windows platform corpus holds a real handle without FILE_SHARE_DELETE: pointer switch exhausts the bounded retry budget, commit returns the stable recoverable ActivationPending, the next open resolves it (restart-to-complete). The CLI host flow (neotavern-cli --migrate-legacy, Этап 3 work 7-8) runs the offline converter with the kernel closed, then opens the kernel on the activated root — the canonical data-root switch is verified by product reads (13 CLI E2E tests incl. characters.get round-trip on the versioned root).  M5 slice 38 (ТЗ §10.2–§10.3): the durable activation state is now reachable end-to-end — wire op data.activation.status (idempotent safe app.read, strict empty request; response carries layoutVersion 1|2, activeRoot + activeRootId, journalFormat/journalFormatVersion, the full journal entries array and the newest activation_pending entry as pending), kernel handler data_activation_status reading the journal through the storage activation module (Database now exposes data_root), host parity over the loopback HTTP adapter (data_activation_status_over_http), facade NeoBackend.data.activationStatus (Local/Remote wire, Legacy honest UnsupportedError; parity 78/78), wireBridge getDataActivationStatus, useDataActivationStatus hook and the ActivationStatusPanel in the Settings Data tab (layout badge, active root path/id, pending warning with restart-to-complete framing, journal table with kind/status/created/error/from→to roots, honest empty/error states). Tests: kernel_data 4 (v1 empty journal, pending surfaced from the journal, v2 detection, stateless rejection), wireBridge (kernel + legacy refusal), hooks (kernel resolve, legacy honest error without network), ActivationStatusPanel (plan, pending, empty, error).  M5 slice 39 (ТЗ §10.4): restore is now reachable end-to-end — wire op backups.restore (workflow, non-idempotent, app.write; strict {backupId} request; response {status: committed|activation_pending}; NOT_FOUND for an unknown id), storage Database::close (WAL checkpoint + lease release — required because activation renames the active root, and on Windows every handle inside it must be closed), kernel writer command Command::Restore that closes the database, runs the staged restore_backup (verify -> candidate sibling -> migrations inside candidate -> foreign_key_check/integrity_check -> finalize -> pending-marker activation with previous-root retention), re-opens the database on the active root and appends the durable journal entry (kind=restore, committed); the SAME kernel keeps serving afterwards. host parity over the loopback HTTP adapter (backups_restore_over_http incl. NOT_FOUND envelope), facade BackupsApi.restore (Local/Remote wire; Legacy translates to the sidecar POST /backups/{id}/restore mapping restartRequired onto activation_pending; parity 82/82), useRestoreBackup wire branch with restartRequired mapped from activation_pending (Settings Data tab already surfaces the restart prompt). Tests: kernel backups 7 (restore round trip through the same kernel, unknown id NOT_FOUND product error, non-uuid contract violation, stateless rejection, quota), remote-http backups_restore_over_http, wireBridge-less hooks (kernel wire restore without network call, activation_pending mapping), contracts 62/62 with the restore fixtures. Remaining Этап 3 slice: upgrade drills on packaged Windows/macOS/Linux artifacts. The upgrade drill (scripts/upgrade-drill.mjs, Этап 3 work 7) proves the cross-platform upgrade cycle on the real CLI artifact: a Drizzle-style fixture converts, characters.get returns the migrated character, the legacy database stays byte-identical (immutable source, ТЗ §10.3), re-running the migration is idempotent (one committed entry, one staging root), the pre-migration safety copy matches the source checksum, and the journal ends committed with the rollback pointer retained. PASS on Windows in this session; macOS/Linux runs gate the release branch in CI (Windows lock-contention/restart-to-complete stays covered by the Rust held-handle test). M5 slice 7 adds the canonical-plane surface for the portable secrets half: secrets.status reports kind 'portable' with the secrets.enc formatVersion when a FileEncryptedSecretStore is wired (SEC-01.1 — the UI distinguishes portable-encrypted from machine-bound/session-only/unavailable and never sees a value).",
       "milestone": "M5"
     },
     {
       "id": "ui.profile-export",
       "title": "Logical profile export",
-      "wireOps": [
-        "profile.export"
-      ],
+      "wireOps": ["profile.export"],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
@@ -497,12 +456,7 @@
     {
       "id": "ui.profiles",
       "title": "Profiles (Configuration)",
-      "wireOps": [
-        "profiles.list",
-        "profiles.create",
-        "profiles.rename",
-        "profiles.delete"
-      ],
+      "wireOps": ["profiles.list", "profiles.create", "profiles.rename", "profiles.delete"],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
@@ -528,9 +482,7 @@
     {
       "id": "ui.secrets",
       "title": "Secret management",
-      "wireOps": [
-        "secrets.status"
-      ],
+      "wireOps": ["secrets.status"],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",
@@ -575,10 +527,7 @@
     {
       "id": "ui.card-exports",
       "title": "Character card / chat exports & character import (legacy containers)",
-      "wireOps": [
-        "characters.export.card",
-        "chats.export"
-      ],
+      "wireOps": ["characters.export.card", "chats.export"],
       "hosts": {
         "desktop": "Implemented",
         "headless": "Implemented",

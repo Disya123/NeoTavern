@@ -28,7 +28,7 @@ mod common;
 use common::{
     decode_envelope, default_config, encode_envelope_frame, encode_frame, encode_terminal_frame,
     envelope_body, envelope_body_full, expect_error, expect_ok, free_port, gen, http_request,
-    http_request_chunked, http_requests_keepalive, json, kernel_config, parse_last_event_id,
+    http_request_chunked, http_request_with, http_requests_keepalive, json, kernel_config, parse_last_event_id,
     parse_sse, rid, seed_data_root, AdapterError, Arc, AuthConfig, Duration, IpAddr, Ipv4Addr,
     Kernel, KernelErrorCode, Mutex, RemoteAdapter, RemoteAdapterConfig, SocketAddr, SseFrame,
     TcpStream, TestServer, Value, Write, T0, ZERO_SCHEMA_HASH,
@@ -1363,6 +1363,71 @@ fn data_activation_status_over_http() {
     assert!(result.get("pending").is_none(), "no pending activation on a fresh root");
     let active_root = result["activeRoot"].as_str().expect("activeRoot path string");
     assert!(!active_root.is_empty(), "activeRoot is a real path");
+}
+
+/// М5 slice 39: `backups.restore` over the HTTP host (host parity with the
+/// direct kernel path, ТЗ §10.4) — create a character, back up, delete the
+/// character, restore through the wire op and verify the snapshot is back
+/// while the adapter keeps serving on the same kernel (the writer re-opened
+/// the database across the activation). Unknown ids surface the product
+/// `NOT_FOUND` envelope.
+#[test]
+fn backups_restore_over_http() {
+    let server = TestServer::spawn();
+
+    // Seed + snapshot.
+    let create = envelope_body(&rid(1), "characters.create", json!({ "name": "Aria", "tags": [] }));
+    let response = http_request(server.addr, "POST", "/rpc", &[], &create);
+    assert_eq!(response.status, 200, "characters.create answers HTTP 200");
+    let created = expect_ok(decode_envelope(&response.body)).1;
+
+    let backup = envelope_body(&rid(2), "backups.create", json!({}));
+    let response = http_request(server.addr, "POST", "/rpc", &[], &backup);
+    assert_eq!(response.status, 200, "backups.create answers HTTP 200");
+    let backup_id = expect_ok(decode_envelope(&response.body)).1["id"]
+        .as_str()
+        .expect("backup id")
+        .to_string();
+
+    // Mutate after the snapshot.
+    let character_id = created["id"].as_str().expect("character id").to_string();
+    let delete = envelope_body(&rid(3), "characters.delete", json!({ "characterId": character_id }));
+    let response = http_request(server.addr, "POST", "/rpc", &[], &delete);
+    assert_eq!(response.status, 200, "characters.delete answers HTTP 200");
+
+    // Restore over HTTP. The swap is a long offline operation (database
+    // closed + lease released, staged candidate verified/finalized, active
+    // root renamed, database re-opened), so the request gets the streaming
+    // stall budget instead of the 10s default.
+    let restore = envelope_body(&rid(4), "backups.restore", json!({ "backupId": backup_id }));
+    let response = http_request_with(server.addr, "POST", "/rpc", &[], &restore, 1000, 120);
+    assert_eq!(response.status, 200, "backups.restore answers HTTP 200");
+    let (request_id, result) = expect_ok(decode_envelope(&response.body));
+    assert_eq!(request_id, rid(4), "requestId is echoed");
+    gen::validate_result_backups_restore(&result).expect("restore result is wire-valid");
+    assert_eq!(result["status"], json!("committed"));
+
+    // The snapshot is back and the same server/kernel still serves.
+    let list = envelope_body(&rid(5), "characters.list", json!({ "limit": 10 }));
+    let response = http_request(server.addr, "POST", "/rpc", &[], &list);
+    assert_eq!(response.status, 200, "characters.list after restore answers HTTP 200");
+    let (_, listed) = expect_ok(decode_envelope(&response.body));
+    let items = listed["items"].as_array().expect("items array");
+    assert_eq!(items.len(), 1, "restore replayed the snapshot");
+    assert_eq!(items[0]["id"], json!(character_id), "the deleted character is back");
+
+    // Unknown backup id → product NOT_FOUND in the error envelope.
+    let unknown = envelope_body(
+        &rid(6),
+        "backups.restore",
+        json!({ "backupId": "00000000-0000-4000-8000-0000000000ff" }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &unknown);
+    assert_eq!(response.status, 200, "product errors ride the 200 envelope");
+    let (request_id, error) = expect_error(decode_envelope(&response.body));
+    assert_eq!(request_id, rid(6), "requestId is echoed on errors too");
+    assert_eq!(error.code, "NOT_FOUND");
+    assert_eq!(error.params["backupId"], json!("00000000-0000-4000-8000-0000000000ff"));
 }
 
 /// 26. M4 slice 1 (Этап 4.1): the full lorebook CRUD over the HTTP host —

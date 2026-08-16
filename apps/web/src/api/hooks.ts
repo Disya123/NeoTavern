@@ -1143,17 +1143,20 @@ export function useCreateBackup() {
 export function useRestoreBackup() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => {
-      // Kernel plane: restore is the maintenance-lock operation (ТЗ §10.4,
-      // security.restore-maintenance-lock) — the wire contract has no
-      // restore op yet, so this is an honest CAPABILITY_UNAVAILABLE (ТЗ
-      // §13.1), never a silent legacy request (ARC-02).
+    mutationFn: async (id: string) => {
+      // Kernel plane: wire `backups.restore` (ТЗ §10.4, М5 slice 39) — the
+      // kernel closes + re-opens its database around the staged restore +
+      // activation; `{ status: 'activation_pending' }` means the swap must be
+      // finished by a restart. Legacy plane: the sidecar REST endpoint,
+      // mapped to the same outcome shape.
       if (isKernelMode()) {
-        return Promise.reject(new UnsupportedError('backups.restore'));
+        const result = await backend.backups.restore(id);
+        return { restartRequired: result.status === 'activation_pending' };
       }
-      return api.post<{ restored: boolean; restartRequired: boolean }>(
+      const result = await api.post<{ restored: boolean; restartRequired: boolean }>(
         `/backups/${encodeURIComponent(id)}/restore`,
       );
+      return { restartRequired: result.restartRequired };
     },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['backups'] }),
   });

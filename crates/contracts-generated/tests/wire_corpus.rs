@@ -53,7 +53,7 @@ use contracts_generated::generated::{
     decode_response_envelope, decode_result_assets_content, decode_result_assets_get,
     decode_result_assets_put, decode_result_characters_export_card, decode_result_chat_snapshot,
     decode_result_chats_export, decode_result_diagnostics_export, decode_result_empty, decode_result_imports_character_card,
-    decode_result_data_activation_status, decode_result_list_backups, decode_result_list_lorebook_entries, decode_result_list_lorebooks,
+    decode_result_data_activation_status, decode_result_list_backups, decode_request_backups_restore, decode_result_backups_restore, decode_result_list_lorebook_entries, decode_result_list_lorebooks,
     decode_result_list_memories, decode_result_list_personas, decode_result_list_presets,
     decode_result_list_provider_configs, decode_result_list_providers, decode_result_list_tools,
     decode_result_message_revision_list, decode_result_message_variant_list,
@@ -278,6 +278,12 @@ fn dispatch(schema_id: &str, bytes: &[u8], valid: bool) {
         "wire.result.empty" => corpus_case(schema_id, decode_result_empty, bytes, valid),
         "wire.result.list-backups" => {
             corpus_case(schema_id, decode_result_list_backups, bytes, valid)
+        }
+        "wire.request.backups-restore" => {
+            corpus_case(schema_id, decode_request_backups_restore, bytes, valid)
+        }
+        "wire.result.backups-restore" => {
+            corpus_case(schema_id, decode_result_backups_restore, bytes, valid)
         }
         "wire.result.data.activation-status" => {
             corpus_case(schema_id, decode_result_data_activation_status, bytes, valid)
@@ -579,7 +585,7 @@ fn xorshift32(mut state: u32) -> u32 {
 /// coerces to a plain `fn` pointer.
 type DecoderFn = fn(&[u8]) -> Result<(), WireError>;
 
-fn all_decoders() -> [DecoderFn; 67] {
+fn all_decoders() -> [DecoderFn; 69] {
     [
         |b| decode_meta_dto(b).map(|_| ()),
         |b| decode_character_dto(b).map(|_| ()),
@@ -630,6 +636,8 @@ fn all_decoders() -> [DecoderFn; 67] {
         |b| decode_request_discard_generation(b).map(|_| ()),
         |b| decode_request_list_generation_events(b).map(|_| ()),
         |b| decode_result_empty(b).map(|_| ()),
+        |b| decode_request_backups_restore(b).map(|_| ()),
+        |b| decode_result_backups_restore(b).map(|_| ()),
         |b| decode_result_list_backups(b).map(|_| ()),
         |b| decode_result_data_activation_status(b).map(|_| ()),
         |b| decode_result_list_lorebooks(b).map(|_| ()),

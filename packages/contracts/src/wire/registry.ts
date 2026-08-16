@@ -958,6 +958,20 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'backups.restore',
+    'workflow',
+    'non-idempotent',
+    'none',
+    'app.write',
+    'wire.request.backups-restore',
+    'wire.result.backups-restore',
+    undefined,
+    ['INTERNAL', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    1024,
+    1024,
+    undefined,
+  ),
+  op(
     'data.activation.status',
     'transactional',
     'idempotent',
@@ -1734,6 +1748,11 @@ const BACKUP_VALUE = {
   status: 'completed',
 };
 
+/** `backups.restore` response (ТЗ §10.4, М5 slice 39): committed candidate. */
+const RESTORE_VALUE = {
+  status: 'committed',
+};
+
 const ACTIVATION_STATUS_VALUE = {
   layoutVersion: 2,
   activeRootId: 'a1b2c3d4',
@@ -2225,6 +2244,7 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   }),
   fx('backups-create-request', 'backups.create', 'request', true, {}),
   fx('backups-list-request', 'backups.list', 'request', true, {}),
+  fx('backups-restore-request', 'backups.restore', 'request', true, { backupId: UUID_BACKUP }),
   fx('data-activation-status-request', 'data.activation.status', 'request', true, {}),
   fx('lorebooks-list-request', 'lorebooks.list', 'request', true, { characterId: UUID_CHARACTER }),
   fx('presets-list-request', 'presets.list', 'request', true, { kind: 'generation' }),
@@ -2480,6 +2500,7 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   }),
   fx('backups-create-response', 'backups.create', 'response', true, BACKUP_VALUE),
   fx('backups-list-response', 'backups.list', 'response', true, { items: [BACKUP_VALUE] }),
+  fx('backups-restore-response', 'backups.restore', 'response', true, RESTORE_VALUE),
   fx('data-activation-status-response', 'data.activation.status', 'response', true, {
     ...ACTIVATION_STATUS_VALUE,
     pending: undefined,

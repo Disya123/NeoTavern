@@ -218,12 +218,30 @@ describe('backups hooks (kernel-plane honesty, slice 19)', () => {
     mocks.isKernelMode.mockReturnValue(false);
   });
 
-  it('useRestoreBackup rejects with UnsupportedError on the kernel plane', async () => {
+  it('useRestoreBackup restores via the wire op on the kernel plane without a network call', async () => {
     mocks.isKernelMode.mockReturnValue(true);
+    const restoreSpy = vi
+      .spyOn(backend.backups, 'restore')
+      .mockResolvedValue({ status: 'committed' });
     const { result } = renderHook(() => useRestoreBackup(), { wrapper: wrapperFor(queryClient) });
     act(() => result.current.mutate('b1'));
-    await waitFor(() => expect(result.current.isError).toBe(true));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(restoreSpy).toHaveBeenCalledWith('b1');
     expect(fetchMock).not.toHaveBeenCalled();
+    restoreSpy.mockRestore();
+    mocks.isKernelMode.mockReturnValue(false);
+  });
+
+  it('useRestoreBackup maps activation_pending onto restartRequired', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const restoreSpy = vi
+      .spyOn(backend.backups, 'restore')
+      .mockResolvedValue({ status: 'activation_pending' });
+    const { result } = renderHook(() => useRestoreBackup(), { wrapper: wrapperFor(queryClient) });
+    act(() => result.current.mutate('b1'));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual({ restartRequired: true });
+    restoreSpy.mockRestore();
     mocks.isKernelMode.mockReturnValue(false);
   });
 });

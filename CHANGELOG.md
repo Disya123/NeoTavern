@@ -3,6 +3,33 @@
 ## Unreleased
 ### Added
 
+- **`backups.restore` over Product Wire (M5 slice 39, ТЗ §10.4).** Restore is
+  now reachable end-to-end on the kernel plane: the writer thread closes the
+  database (WAL checkpoint) and releases the data-root lease, runs the
+  storage staged-restore + activation protocol (verify → candidate sibling →
+  migrations inside the candidate → `foreign_key_check`/`integrity_check` →
+  finalize → pending-marker swap with previous-root retention), re-opens the
+  database on the active root and appends the durable activation-journal
+  entry (`kind = restore`, `status = committed`) — the same kernel keeps
+  serving afterwards. Wire: `backups.restore` (workflow, non-idempotent,
+  `app.write`; strict `{ backupId }` request; response
+  `{ status: 'committed' | 'activation_pending' }`; `NOT_FOUND` for an
+  unknown id). Host parity: `backups_restore_over_http` (create → backup →
+  delete → restore → snapshot back, plus the `NOT_FOUND` error envelope).
+  Facade: `BackupsApi.restore` — Local/Remote over the wire, Legacy translates
+  to the sidecar `POST /backups/{id}/restore` mapping `restartRequired` onto
+  `activation_pending` (a boundary translation, no added authority; parity
+  82/82). UI: `useRestoreBackup` now routes the kernel plane through the wire
+  op and maps `activation_pending` onto the existing restart prompt in the
+  Settings Data tab. Tests: kernel backups 7 (restore round trip through the
+  same kernel, `NOT_FOUND` product error, non-uuid contract violation,
+  stateless rejection, quota), remote-http restore over HTTP, hooks (wire
+  restore without a network call, `activation_pending` mapping), contracts
+  62/62 with the restore fixtures (93 ops). Honest boundary: the swap is
+  synchronous in the writer, so `activation_pending` is only produced when a
+  Windows sharing violation survives the activation attempt and must be
+  finished at next open.
+
 - **Durable data-root activation status over Product Wire (M5 slice 38,
   ТЗ §10.2–§10.3).** The kernel already owned versioned data roots
   (`roots/root-<id>/` + `active-root.json`), the durable activation journal

@@ -48,6 +48,7 @@ import type {
   ListToolsResultDto,
   PromptPlanDto,
   WireGenerationEvent,
+  BackupsRestoreResultDto,
   DataActivationStatusResultDto,
   ListBackupsResultDto,
   ListCharactersRequestDto,
@@ -273,6 +274,12 @@ export interface BackupsApi {
   create(): Promise<BackupDto>;
   /** List backups. */
   list(): Promise<ListBackupsResultDto>;
+  /** Restore a backup container over the active data root (ТЗ §10.4:
+   * offline staged restore + activation; the kernel closes and re-opens its
+   * database around the swap). Resolves with `{ status: 'committed' }` when
+   * the activation completed in this call; `{ status: 'activation_pending' }`
+   * means the swap must be finished by a restart. */
+  restore(backupId: string, opts?: BackendCallOptions): Promise<BackupsRestoreResultDto>;
 }
 
 /** Data lifecycle operations (ТЗ §10.2–§10.3, wire `data.*`). */

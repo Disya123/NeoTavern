@@ -240,6 +240,29 @@ impl Database {
             .query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
             .map_err(|e| StorageError::from_sqlite(e, "schema_revision: read user_version"))
     }
+
+    /// Closes the SQLite connection (checkpointing the WAL) and releases the
+    /// data-root lease, leaving the handle unusable. Used by the offline
+    /// restore path (ТЗ §10.4): the kernel writer closes the database BEFORE
+    /// activating a staged candidate, because activation renames the active
+    /// root directory and on Windows that requires every handle inside it
+    /// (including the lease lock) to be closed.
+    pub fn close(&mut self) -> Result<()> {
+        // rusqlite::Connection::close consumes the handle; swap in a scratch
+        // in-memory connection so the field stays owned (the handle is dead
+        // afterwards and the whole `Database` is dropped by the caller).
+        let conn = std::mem::replace(
+            &mut self.conn,
+            rusqlite::Connection::open_in_memory()
+                .map_err(|e| StorageError::from_sqlite(e, "close: scratch connection"))?,
+        );
+        conn.close()
+            .map_err(|(_, e)| StorageError::from_sqlite(e, "close: checkpoint connection"))?;
+        if let Some(lease) = self.lease.take() {
+            lease.release()?;
+        }
+        Ok(())
+    }
 }
 
 impl Drop for Database {

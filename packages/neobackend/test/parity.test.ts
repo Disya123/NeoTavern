@@ -39,6 +39,7 @@ import {
   type CharacterCardImportResultDto,
   type ChatsExportResultDto,
   type PromptPlanDto,
+  type BackupsRestoreResultDto,
   type DataActivationStatusResultDto,
   type PluginDto,
   type PresetDto,
@@ -107,6 +108,7 @@ const PROVIDERS: ListProvidersResultDto = {
 // --- Canonical generation fixtures (ТЗ §62–64, Phase 6). ---
 const RUN_ID = '6f5e4d3c-2b1a-4f0e-9d8c-7a6b5c4d3e2f';
 const CHAT_ID = '01234567-89ab-4cde-8f01-23456789abcd';
+const BACKUP_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const MESSAGE_ID = '12345678-90ab-4cde-8f01-23456789abcd';
 const TIMESTAMP = '2026-06-01T12:00:00.000Z';
 
@@ -328,6 +330,11 @@ const ACTIVATION_STATUS: DataActivationStatusResultDto = {
       updatedAt: TIMESTAMP,
     },
   ],
+};
+
+/** `backups.restore` response (М5 slice 39): the activation outcome. */
+const RESTORE_RESULT: BackupsRestoreResultDto = {
+  status: 'committed',
 };
 
 /** `chats.messages.list` response: one canonical wire message (Этап 2.10). */
@@ -579,6 +586,8 @@ class FakeKernelTransport implements LocalTransport {
         return { ok: true, value: PROMPT_PLAN };
       case 'data.activation.status':
         return { ok: true, value: ACTIVATION_STATUS };
+      case 'backups.restore':
+        return { ok: true, value: RESTORE_RESULT };
       default:
         return { ok: false, error: { code: 'NOT_FOUND', params: {}, traceId: 'kernel-trace' } };
     }
@@ -715,6 +724,8 @@ function rpcResult(operationId: string | undefined): unknown {
       return PROMPT_PLAN;
     case 'data.activation.status':
       return ACTIVATION_STATUS;
+    case 'backups.restore':
+      return RESTORE_RESULT;
     default:
       return null;
   }
@@ -1732,6 +1743,22 @@ describe('LegacyBackend', () => {
     const getMemory = backend.memories.del(MEMORY.id);
     await expect(getMemory).rejects.toMatchObject({ code: 'NOT_FOUND', traceId: 'legacy' });
   });
+
+  it('legacy backend translates backups.restore onto the legacy sidecar endpoint', async () => {
+    const backend = makeLegacyBackend(
+      new Map([[`/backups/${BACKUP_ID}/restore`, { restored: true, restartRequired: false }]]),
+    );
+    await expect(backend.backups.restore(BACKUP_ID)).resolves.toEqual({ status: 'committed' });
+  });
+
+  it('legacy backend maps restartRequired onto activation_pending', async () => {
+    const backend = makeLegacyBackend(
+      new Map([[`/backups/${BACKUP_ID}/restore`, { restored: false, restartRequired: true }]]),
+    );
+    await expect(backend.backups.restore(BACKUP_ID)).resolves.toEqual({
+      status: 'activation_pending',
+    });
+  });
 });
 
 describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote parity (M5 slices 6-7)', () => {
@@ -2142,6 +2169,33 @@ describe('Extensions/theme/profile/settings/diagnostics/secrets Local vs Remote 
         payload: {},
       },
     ]);
+  });
+
+  it('backups.restore is routed identically by local and remote backends', async () => {
+    const kernel = new FakeKernelTransport();
+    const local = new LocalBackend({ transport: kernel });
+    const remote = makeRemoteBackend();
+
+    const [localResult, remoteResult] = await Promise.all([
+      local.backups.restore(BACKUP_ID),
+      remote.backups.restore(BACKUP_ID),
+    ]);
+    expect(localResult).toEqual(remoteResult);
+    expect(localResult).toEqual(RESTORE_RESULT);
+    expect(kernel.requests).toEqual([
+      {
+        operationId: 'backups.restore',
+        payload: { backupId: BACKUP_ID },
+      },
+    ]);
+  });
+
+  it('backups.restore with a non-uuid backup id throws ValidationError before any transport call', async () => {
+    const kernel = new FakeKernelTransport();
+    const backend = new LocalBackend({ transport: kernel });
+
+    await expect(backend.backups.restore('nope')).rejects.toThrow(ValidationError);
+    expect(kernel.calls).toBe(0);
   });
 
   it('assets.get with a non-uuid id throws ValidationError before any transport call', async () => {
