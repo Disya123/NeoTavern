@@ -1160,7 +1160,7 @@
           "type": "artifact",
           "artifact": "Honest status: ui.message-editing raised to Integrated (ARC-10 matrix correction)",
           "result": "M5 slice 34 (ARC-10, capability status honesty): ui.message-editing rises from Designed to Integrated on desktop/headless/Web Client (android stays Designed until JNI parity is packaged). Every message-editing surface already routes through the wire facade with no /api/v2 in feature code: MessageBubble inline editor saves via content-only chats.messages.update (last-write-wins by contract; the legacy expectedRevision CAS is legacy-only), delete via chats.messages.delete, toggleMessageContext / swipeGreeting via content+meta through updateChatMessage, deleteCheckpoint via clearCheckpointChatId. Evidence is the existing coverage: MessageBubble.test (draft preserved on edit failure), MessageDetailsCard tests (edit dialog), wireBridge.test (updateChatMessage content/meta/clearCheckpointChatId, deleteMessageVariant). The slice is a documentation/capability-matrix correction — no code change was needed. Verified: release-manifest hosts+notes patched, capability matrix regenerated (36 rows), docs:check + gates GATE PASS.",
-          "commit": "pending"
+          "commit": "c8adec3"
         },
         {
           "type": "artifact",
