@@ -36,6 +36,7 @@ export const TOKEN_NAMES = [
   'color-border-strong',
   'color-success',
   'color-warning',
+  'color-warning-surface',
   'color-danger',
   'color-info',
   // Colors — chat message markdown (ST1-compatible roleplay formatting)
@@ -176,6 +177,7 @@ export const DEFAULT_LIGHT_TOKENS: ResolvedTokenSet = {
   'color-border-strong': '#aaa097',
   'color-success': '#2d7b4c',
   'color-warning': '#a86118',
+  'color-warning-surface': '#fdf1dd',
   'color-danger': '#b23b35',
   'color-info': '#416f83',
   // Light-mode message colors meet WCAG 2.2 AA (4.5:1) on the chat surface.
@@ -300,6 +302,7 @@ export const DEFAULT_DARK_TOKENS: ResolvedTokenSet = {
   // 2.7–3.7:1 on dark surfaces (WCAG AA wants 4.5:1 for text).
   'color-success': '#63c98d',
   'color-warning': '#e0a35c',
+  'color-warning-surface': '#3f2f1a',
   'color-danger': '#f0837d',
   'color-info': '#7fb3c9',
   // Dark-mode message colors meet WCAG 2.2 AA (4.5:1) on the chat surface.

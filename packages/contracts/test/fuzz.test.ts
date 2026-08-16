@@ -163,13 +163,24 @@ describe('wire registry fuzz (pathological payloads)', () => {
     [
       'deep object of arrays of objects',
       {
-        bytes: 100_000,
-        depth: 60,
+        bytes: 2_000_000,
+        depth: 10,
         make: () => {
-          const depth = 60;
-          let v: unknown = { end: true };
-          for (let i = 0; i < depth; i += 1) v = { level: i, children: [v, v, { x: [v] }] };
-          return v;
+          // A GENUINE tree, not a shared-reference DAG: `Value.Check` accepts
+          // shared refs, but the round-trip half of expectTotalCheck runs
+          // Value.Cast + JSON.stringify, which EXPAND every occurrence. The
+          // original builder reused the same subtree 3x per level (children:
+          // [v, v, { x: [v] }]) -> ~3^60 occurrences -> the cast/stringify
+          // path never finished (reproduced: vitest hung on this case).
+          // Branching 3 at depth 13 yields ~797k nodes (~16 MiB serialized) -
+          // the declared cap; depth 10 (~88k nodes, ~1.9 MiB) keeps the loop
+          // ms-fast while staying a real deep object-of-arrays-of-objects.
+          const depth = 10;
+          const build = (d: number): unknown =>
+            d === 0
+              ? { end: true }
+              : { level: d, children: [build(d - 1), build(d - 1), { x: [build(d - 1)] }] };
+          return build(depth);
         },
       },
     ],

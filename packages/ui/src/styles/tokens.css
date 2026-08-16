@@ -26,6 +26,7 @@
     --st-color-border-strong: #aaa097;
     --st-color-success: #2d7b4c;
     --st-color-warning: #a86118;
+    --st-color-warning-surface: #fdf1dd;
     --st-color-danger: #b23b35;
     --st-color-info: #416f83;
     --st-color-message-quote: #96520e;
@@ -159,6 +160,7 @@
     /* Status colors: lightened dark variants for WCAG AA text contrast. */
     --st-color-success: #63c98d;
     --st-color-warning: #e0a35c;
+    --st-color-warning-surface: #3f2f1a;
     --st-color-danger: #f0837d;
     --st-color-info: #7fb3c9;
     --st-color-message-quote: #e8943a;
@@ -198,6 +200,7 @@
       /* Status colors: lightened dark variants for WCAG AA text contrast. */
       --st-color-success: #63c98d;
       --st-color-warning: #e0a35c;
+      --st-color-warning-surface: #3f2f1a;
       --st-color-danger: #f0837d;
       --st-color-info: #7fb3c9;
       --st-color-message-quote: #e8943a;
