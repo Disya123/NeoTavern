@@ -23,6 +23,7 @@ import {
   useLogin,
   useLogout,
   usePromptContextAudit,
+  usePromptContextPreview,
   useRebuildSearch,
   useReorderChats,
   useRestoreBackup,
@@ -410,6 +411,39 @@ describe('auth hooks (kernel-plane honesty, slice 23)', () => {
     mocks.isKernelMode.mockReturnValue(true);
     const { result } = renderHook(() => useLogout(), { wrapper: wrapperFor(queryClient) });
     act(() => result.current.mutate());
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(fetchMock).not.toHaveBeenCalled();
+    mocks.isKernelMode.mockReturnValue(false);
+  });
+});
+
+describe('prompt context preview hook (kernel-plane honesty, slice 24)', () => {
+  it('usePromptContextPreview fetches the legacy preview on the legacy plane', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ preview: { providerConfigId: 'p1' } }));
+    const { result } = renderHook(
+      () =>
+        usePromptContextPreview({
+          characterId: 'char-1',
+          userMessage: 'hi',
+        }),
+      { wrapper: wrapperFor(queryClient) },
+    );
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).toBe('/api/v2/context-preview');
+  });
+
+  it('usePromptContextPreview rejects with UnsupportedError on the kernel plane without a network call', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const { result } = renderHook(
+      () =>
+        usePromptContextPreview({
+          characterId: 'char-1',
+          userMessage: 'hi',
+        }),
+      { wrapper: wrapperFor(queryClient) },
+    );
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(fetchMock).not.toHaveBeenCalled();
     mocks.isKernelMode.mockReturnValue(false);

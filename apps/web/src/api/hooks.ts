@@ -398,6 +398,14 @@ export function usePromptContextPreview(
     queryKey: ['prompt-context-preview', input, cacheKey],
     queryFn: ({ signal }) => {
       if (!input) throw new Error('PROMPT_CONTEXT_PREVIEW_INPUT_REQUIRED');
+      // Kernel plane: the live context preview is the legacy sidecar
+      // pipeline's output (`/context-preview`); the kernel exposes
+      // `generation.prompt.plan` with a different contract — honest
+      // CAPABILITY_UNAVAILABLE (ТЗ §13.1), never a silent legacy request
+      // (ARC-02).
+      if (isKernelMode()) {
+        return Promise.reject(new UnsupportedError('prompt.context-preview'));
+      }
       return api.post<PromptContextPreviewResponse>('/context-preview', input, signal);
     },
     enabled: input !== undefined && enabled,

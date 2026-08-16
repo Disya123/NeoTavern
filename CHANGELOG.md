@@ -3,6 +3,20 @@
 ## Unreleased
 ### Added
 
+- **Prompt context preview hook is honest on the kernel plane (M5 slice
+  24, ARC-02).** `usePromptContextPreview` (the live context meter used by
+  Home and existing chats) hit the legacy `/api/v2/context-preview`
+  surface on EVERY backend. Now the transport gate lives in the hook: on
+  the kernel plane it rejects with a typed `UnsupportedError` (the kernel
+  exposes `generation.prompt.plan` with a different contract; the legacy
+  preview stays a sidecar contour — honest CAPABILITY_UNAVAILABLE, ТЗ
+  §13.1), never a silent legacy request from kernel mode (ARC-02). This
+  completes the M5 sweep: every legacy-call site in `api/hooks.ts` is now
+  behind an explicit `isKernelMode` transport gate. The legacy contour
+  (sidecar / remote Web Client) keeps the real routes. Tests: hooks 31/31
+  (+2 kernel-honesty cases), full web vitest green, eslint/typecheck/
+  prettier clean, ui:api:check 53, gates GATE PASS.
+
 - **Auth hooks are honest on the kernel plane (M5 slice 23, ARC-02).**
   `useAuthSession` / `useLogin` / `useLogout` hit the legacy
   `/api/v2/auth/session` surface on EVERY backend — on the kernel plane the
