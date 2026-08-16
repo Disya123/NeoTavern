@@ -1136,7 +1136,7 @@
           "type": "artifact",
           "artifact": "Product Wire ↔ Kernel dispatch parity gate (scripts/check-kernel-dispatch.mjs)",
           "result": "M5 slice 30 (ARC-01/ARC-07 enforcement): new scripts/check-kernel-dispatch.mjs verifies structurally that every operation registered in packages/contracts/src/wire/registry.ts (88 today) has a kernel dispatch arm in crates/runtime-kernel/src/lib.rs — either a unary arm of the main match op block or the dispatch_stream streaming path (generation.start/generation.retry) — and that every dispatch arm is a registered operation. A registered operation without an arm means the kernel answers OperationNotFound to a valid contract; an arm without a registered operation is dead surface. Wired into docs:check (next to the capability-matrix freshness gate) and exposed as pnpm kernel:dispatch:check. Verified: 88/88 registry operations covered by kernel dispatch (86 unary + 2 stream), docs:check OK, docs:sync:check OK, eslint clean, prettier clean, no Rust/TS source changed (gate only).",
-          "commit": "pending"
+          "commit": "96d320b"
         },
         {
           "type": "artifact",
