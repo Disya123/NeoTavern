@@ -3,6 +3,23 @@
 ## Unreleased
 ### Added
 
+- **Backup hooks are honest on the kernel plane (M5 slice 19, ARC-02).**
+  `useBackups` / `useCreateBackup` / `useRestoreBackup` consulted the legacy
+  `/api/v2/backups` surface on EVERY backend — on the kernel plane that meant
+  useless network calls to a dead legacy route. Now the transport gate lives
+  in the hooks: `useBackups` maps the wire `backups.list` result (createdAt
+  RFC3339 → epoch ms; `kind` maps to the honest `'manual'` — the kernel
+  models no auto/manual split and every kernel backup is user-initiated
+  `backups.create`), `useCreateBackup` calls the wire op, and
+  `useRestoreBackup` rejects with a typed `UnsupportedError` (restore is the
+  maintenance-lock operation, ТЗ §10.4 — no wire restore op yet, honest
+  CAPABILITY_UNAVAILABLE) — never a silent legacy request from kernel mode
+  (ARC-02). The legacy contour (sidecar / remote Web Client) keeps the real
+  routes. Tests: hooks 11/11 (+4 kernel-honesty cases: wire list mapping
+  without fetch, wire create without fetch, restore UnsupportedError, legacy
+  fetch unchanged), full web vitest green, eslint/typecheck/prettier clean,
+  ui:api:check 53, gates GATE PASS.
+
 - **New Product Wire op `themes.deactivate` — clear the active theme
   (M5 slice 18).** The wire contract previously had no way to stop applying
   a theme on the kernel plane: `resetActiveTheme` was an honest

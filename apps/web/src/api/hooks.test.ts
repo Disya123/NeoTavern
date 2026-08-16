@@ -7,12 +7,16 @@ import { createQueryClient, jsonResponse } from '../../test/helpers.js';
 import { getCsrfToken, setCsrfToken } from './client.js';
 import {
   useAuthSession,
+  useBackups,
   useClearDiagnosticCache,
+  useCreateBackup,
   useDeleteCharacter,
   useDiagnostics,
   useLogin,
   useRebuildSearch,
+  useRestoreBackup,
 } from './hooks.js';
+import { backend } from './backend.js';
 
 // Kernel-mode honesty (slice 17): the diagnostics hooks consult
 // `isKernelMode`; the default here is the legacy plane so the existing tests
@@ -125,6 +129,67 @@ describe('diagnostics hooks (kernel-plane honesty, slice 17)', () => {
       wrapper: wrapperFor(queryClient),
     });
     act(() => result.current.mutate());
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(fetchMock).not.toHaveBeenCalled();
+    mocks.isKernelMode.mockReturnValue(false);
+  });
+});
+
+describe('backups hooks (kernel-plane honesty, slice 19)', () => {
+  const BACKUP_DTO = {
+    id: '018f0000-0000-7000-8000-000000000099',
+    createdAt: '2026-08-13T00:00:00.000Z',
+    formatVersion: 1,
+    sizeBytes: 2048,
+    checksumSha256: 'a'.repeat(64),
+    status: 'completed',
+  } as const;
+
+  it('useBackups fetches the legacy list on the legacy plane', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ items: [{ id: 'b1', kind: 'manual', createdAt: 1, sizeBytes: 2 }] }),
+    );
+    const { result } = renderHook(() => useBackups(), { wrapper: wrapperFor(queryClient) });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).toBe('/api/v2/backups');
+  });
+
+  it('useBackups maps the wire list on the kernel plane without a network call', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const listSpy = vi.spyOn(backend.backups, 'list').mockResolvedValue({ items: [BACKUP_DTO] });
+    const { result } = renderHook(() => useBackups(), { wrapper: wrapperFor(queryClient) });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual([
+      {
+        id: BACKUP_DTO.id,
+        kind: 'manual',
+        createdAt: Date.parse(BACKUP_DTO.createdAt),
+        sizeBytes: 2048,
+      },
+    ]);
+    expect(fetchMock).not.toHaveBeenCalled();
+    listSpy.mockRestore();
+    mocks.isKernelMode.mockReturnValue(false);
+  });
+
+  it('useCreateBackup calls the wire op on the kernel plane without a network call', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const createSpy = vi.spyOn(backend.backups, 'create').mockResolvedValue(BACKUP_DTO);
+    const { result } = renderHook(() => useCreateBackup(), { wrapper: wrapperFor(queryClient) });
+    act(() => result.current.mutate());
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(createSpy).toHaveBeenCalledOnce();
+    expect(fetchMock).not.toHaveBeenCalled();
+    createSpy.mockRestore();
+    mocks.isKernelMode.mockReturnValue(false);
+  });
+
+  it('useRestoreBackup rejects with UnsupportedError on the kernel plane', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const { result } = renderHook(() => useRestoreBackup(), { wrapper: wrapperFor(queryClient) });
+    act(() => result.current.mutate('b1'));
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(fetchMock).not.toHaveBeenCalled();
     mocks.isKernelMode.mockReturnValue(false);

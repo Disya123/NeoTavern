@@ -953,14 +953,40 @@ export function useDiscardSillyTavernAnalysis() {
 export function useBackups() {
   return useQuery({
     queryKey: ['backups'],
-    queryFn: async () => (await api.get<{ items: Backup[] }>('/backups')).items,
+    queryFn: async () => {
+      // Kernel plane: wire `backups.list`. The kernel models no auto/manual
+      // split — every kernel backup is user-initiated (`backups.create`), so
+      // `kind` maps to the honest 'manual' (never fabricated as 'auto').
+      if (isKernelMode()) {
+        const result = await backend.backups.list();
+        return result.items.map((dto) => ({
+          id: dto.id,
+          kind: 'manual' as const,
+          createdAt: Date.parse(dto.createdAt),
+          sizeBytes: dto.sizeBytes,
+        }));
+      }
+      return (await api.get<{ items: Backup[] }>('/backups')).items;
+    },
   });
 }
 
 export function useCreateBackup() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => api.post<Backup>('/backups'),
+    mutationFn: async (): Promise<Backup> => {
+      // Kernel plane: wire `backups.create` (user-initiated, so 'manual').
+      if (isKernelMode()) {
+        const dto = await backend.backups.create();
+        return {
+          id: dto.id,
+          kind: 'manual',
+          createdAt: Date.parse(dto.createdAt),
+          sizeBytes: dto.sizeBytes,
+        };
+      }
+      return api.post<Backup>('/backups');
+    },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['backups'] }),
   });
 }
@@ -968,8 +994,18 @@ export function useCreateBackup() {
 export function useRestoreBackup() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) =>
-      api.post<{ restored: boolean; restartRequired: boolean }>(`/backups/${id}/restore`),
+    mutationFn: (id: string) => {
+      // Kernel plane: restore is the maintenance-lock operation (ТЗ §10.4,
+      // security.restore-maintenance-lock) — the wire contract has no
+      // restore op yet, so this is an honest CAPABILITY_UNAVAILABLE (ТЗ
+      // §13.1), never a silent legacy request (ARC-02).
+      if (isKernelMode()) {
+        return Promise.reject(new UnsupportedError('backups.restore'));
+      }
+      return api.post<{ restored: boolean; restartRequired: boolean }>(
+        `/backups/${encodeURIComponent(id)}/restore`,
+      );
+    },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['backups'] }),
   });
 }
