@@ -478,7 +478,16 @@ export function useRestoreMessageRevision() {
 export function useBackgrounds() {
   return useQuery({
     queryKey: ['backgrounds'],
-    queryFn: () => api.get<BackgroundList>('/backgrounds'),
+    queryFn: () => {
+      // Kernel plane: the wallpaper catalog is a legacy filesystem contour
+      // (`data/files/backgrounds/`, sidecar-owned); the kernel owns no
+      // backgrounds capability — honest empty list (ТЗ §13.1), never a
+      // silent legacy request (ARC-02).
+      if (isKernelMode()) {
+        return Promise.resolve<BackgroundList>({ items: [] });
+      }
+      return api.get<BackgroundList>('/backgrounds');
+    },
     staleTime: 30_000,
   });
 }
@@ -486,7 +495,14 @@ export function useBackgrounds() {
 export function useUploadBackground() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (file: File) => api.upload<BackgroundItem>('/backgrounds', file),
+    mutationFn: (file: File) => {
+      // Kernel plane: no backgrounds capability → honest
+      // CAPABILITY_UNAVAILABLE (ТЗ §13.1), never a silent legacy upload.
+      if (isKernelMode()) {
+        return Promise.reject(new UnsupportedError('backgrounds.upload'));
+      }
+      return api.upload<BackgroundItem>('/backgrounds', file);
+    },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['backgrounds'] }),
   });
 }
@@ -494,7 +510,13 @@ export function useUploadBackground() {
 export function useDeleteBackground() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => api.del<{ ok: boolean }>(`/backgrounds/${encodeURIComponent(id)}`),
+    mutationFn: (id: string) => {
+      // Kernel plane: same honest CAPABILITY_UNAVAILABLE as upload.
+      if (isKernelMode()) {
+        return Promise.reject(new UnsupportedError('backgrounds.delete'));
+      }
+      return api.del<{ ok: boolean }>(`/backgrounds/${encodeURIComponent(id)}`);
+    },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['backgrounds'] });
       // Applying an already-deleted wallpaper would 404; refresh open chats.

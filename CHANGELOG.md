@@ -3,6 +3,23 @@
 ## Unreleased
 ### Added
 
+- **Backgrounds hooks are honest on the kernel plane (M5 slice 20, ARC-02).**
+  `useBackgrounds` / `useUploadBackground` / `useDeleteBackground` hit the
+  legacy `/api/v2/backgrounds` surface on EVERY backend — on the kernel
+  plane useless network calls to a dead route. Now the transport gate lives
+  in the hooks: `useBackgrounds` resolves an honest empty list (the
+  wallpaper catalog is a legacy filesystem contour, `data/files/backgrounds/`
+  sidecar-owned; the kernel owns no backgrounds capability, ТЗ §13.1), and
+  upload/delete reject with a typed `UnsupportedError` (honest
+  CAPABILITY_UNAVAILABLE) — never a silent legacy request from kernel mode
+  (ARC-02). Applying a background was already kernel-honest (`updateChat`
+  throws for `backgroundId`, М5 slice 3), so the panel degrades gracefully:
+  empty catalog, localized error on upload/apply. The legacy contour
+  (sidecar / remote Web Client) keeps the real routes. Tests: hooks 15/15
+  (+4 kernel-honesty cases: empty list without fetch, upload/delete
+  UnsupportedError, legacy fetch unchanged), full web vitest green,
+  eslint/typecheck/prettier clean, ui:api:check 53, gates GATE PASS.
+
 - **Backup hooks are honest on the kernel plane (M5 slice 19, ARC-02).**
   `useBackups` / `useCreateBackup` / `useRestoreBackup` consulted the legacy
   `/api/v2/backups` surface on EVERY backend — on the kernel plane that meant

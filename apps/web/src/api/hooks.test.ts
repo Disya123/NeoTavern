@@ -7,14 +7,17 @@ import { createQueryClient, jsonResponse } from '../../test/helpers.js';
 import { getCsrfToken, setCsrfToken } from './client.js';
 import {
   useAuthSession,
+  useBackgrounds,
   useBackups,
   useClearDiagnosticCache,
   useCreateBackup,
+  useDeleteBackground,
   useDeleteCharacter,
   useDiagnostics,
   useLogin,
   useRebuildSearch,
   useRestoreBackup,
+  useUploadBackground,
 } from './hooks.js';
 import { backend } from './backend.js';
 
@@ -190,6 +193,48 @@ describe('backups hooks (kernel-plane honesty, slice 19)', () => {
     mocks.isKernelMode.mockReturnValue(true);
     const { result } = renderHook(() => useRestoreBackup(), { wrapper: wrapperFor(queryClient) });
     act(() => result.current.mutate('b1'));
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(fetchMock).not.toHaveBeenCalled();
+    mocks.isKernelMode.mockReturnValue(false);
+  });
+});
+
+describe('backgrounds hooks (kernel-plane honesty, slice 20)', () => {
+  it('useBackgrounds fetches the legacy list on the legacy plane', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ items: [{ id: 'bg1' }] }));
+    const { result } = renderHook(() => useBackgrounds(), { wrapper: wrapperFor(queryClient) });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).toBe('/api/v2/backgrounds');
+  });
+
+  it('useBackgrounds resolves an honest empty list on the kernel plane without a network call', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const { result } = renderHook(() => useBackgrounds(), { wrapper: wrapperFor(queryClient) });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual({ items: [] });
+    expect(fetchMock).not.toHaveBeenCalled();
+    mocks.isKernelMode.mockReturnValue(false);
+  });
+
+  it('useUploadBackground rejects with UnsupportedError on the kernel plane', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const { result } = renderHook(() => useUploadBackground(), {
+      wrapper: wrapperFor(queryClient),
+    });
+    act(() => result.current.mutate(new File(['x'], 'wall.png', { type: 'image/png' })));
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(fetchMock).not.toHaveBeenCalled();
+    mocks.isKernelMode.mockReturnValue(false);
+  });
+
+  it('useDeleteBackground rejects with UnsupportedError on the kernel plane', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const { result } = renderHook(() => useDeleteBackground(), {
+      wrapper: wrapperFor(queryClient),
+    });
+    act(() => result.current.mutate('bg1'));
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(fetchMock).not.toHaveBeenCalled();
     mocks.isKernelMode.mockReturnValue(false);
