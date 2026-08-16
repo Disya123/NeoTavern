@@ -226,7 +226,16 @@ export function useDeleteCharacter() {
 export function useCharacterGallery(characterId: string | undefined, sort: 'oldest' | 'newest') {
   return useQuery({
     queryKey: ['character-gallery', characterId, sort],
-    queryFn: () => api.get<CharacterGallery>(`/characters/${characterId}/gallery?sort=${sort}`),
+    queryFn: () => {
+      // Kernel plane: the gallery is a legacy image contour
+      // (`data/images/characters/<id>/`, sidecar-owned); the kernel models
+      // character images only as content-addressed `assets.put` records —
+      // honest empty list (ТЗ §13.1), never a silent legacy request (ARC-02).
+      if (isKernelMode()) {
+        return Promise.resolve<CharacterGallery>({ items: [] });
+      }
+      return api.get<CharacterGallery>(`/characters/${characterId}/gallery?sort=${sort}`);
+    },
     enabled: characterId !== undefined,
   });
 }
@@ -234,8 +243,14 @@ export function useCharacterGallery(characterId: string | undefined, sort: 'olde
 export function useUploadCharacterImage() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ characterId, file }: { characterId: string; file: File }) =>
-      api.upload<CharacterGalleryImage>(`/characters/${characterId}/gallery`, file),
+    mutationFn: ({ characterId, file }: { characterId: string; file: File }) => {
+      // Kernel plane: no legacy gallery capability → honest
+      // CAPABILITY_UNAVAILABLE (avatars go through useUploadCharacterAvatar).
+      if (isKernelMode()) {
+        return Promise.reject(new UnsupportedError('characters.gallery.upload'));
+      }
+      return api.upload<CharacterGalleryImage>(`/characters/${characterId}/gallery`, file);
+    },
     onSuccess: (_image, { characterId }) =>
       void qc.invalidateQueries({ queryKey: ['character-gallery', characterId] }),
   });
@@ -254,8 +269,13 @@ export function useUploadCharacterAvatar() {
 export function useDeleteCharacterImage() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ characterId, imageId }: { characterId: string; imageId: string }) =>
-      api.del(`/characters/${characterId}/gallery/${imageId}`),
+    mutationFn: ({ characterId, imageId }: { characterId: string; imageId: string }) => {
+      // Kernel plane: same honest CAPABILITY_UNAVAILABLE as upload.
+      if (isKernelMode()) {
+        return Promise.reject(new UnsupportedError('characters.gallery.delete'));
+      }
+      return api.del(`/characters/${characterId}/gallery/${imageId}`);
+    },
     onSuccess: (_result, { characterId }) =>
       void qc.invalidateQueries({ queryKey: ['character-gallery', characterId] }),
   });

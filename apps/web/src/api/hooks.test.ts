@@ -9,15 +9,18 @@ import {
   useAuthSession,
   useBackgrounds,
   useBackups,
+  useCharacterGallery,
   useClearDiagnosticCache,
   useCreateBackup,
   useDeleteBackground,
   useDeleteCharacter,
+  useDeleteCharacterImage,
   useDiagnostics,
   useLogin,
   useRebuildSearch,
   useRestoreBackup,
   useUploadBackground,
+  useUploadCharacterImage,
 } from './hooks.js';
 import { backend } from './backend.js';
 
@@ -235,6 +238,59 @@ describe('backgrounds hooks (kernel-plane honesty, slice 20)', () => {
       wrapper: wrapperFor(queryClient),
     });
     act(() => result.current.mutate('bg1'));
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(fetchMock).not.toHaveBeenCalled();
+    mocks.isKernelMode.mockReturnValue(false);
+  });
+});
+
+describe('character gallery hooks (kernel-plane honesty, slice 21)', () => {
+  it('useCharacterGallery fetches the legacy list on the legacy plane', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ items: [{ id: 'img1', name: 'a.png', thumbnailUrl: '/x.png' }] }),
+    );
+    const { result } = renderHook(() => useCharacterGallery('char-1', 'newest'), {
+      wrapper: wrapperFor(queryClient),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).toBe('/api/v2/characters/char-1/gallery?sort=newest');
+  });
+
+  it('useCharacterGallery resolves an honest empty list on the kernel plane without a network call', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const { result } = renderHook(() => useCharacterGallery('char-1', 'newest'), {
+      wrapper: wrapperFor(queryClient),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual({ items: [] });
+    expect(fetchMock).not.toHaveBeenCalled();
+    mocks.isKernelMode.mockReturnValue(false);
+  });
+
+  it('useUploadCharacterImage rejects with UnsupportedError on the kernel plane', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const { result } = renderHook(() => useUploadCharacterImage(), {
+      wrapper: wrapperFor(queryClient),
+    });
+    act(() =>
+      result.current.mutate({
+        characterId: 'char-1',
+        file: new File(['x'], 'a.png', { type: 'image/png' }),
+      }),
+    );
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(fetchMock).not.toHaveBeenCalled();
+    mocks.isKernelMode.mockReturnValue(false);
+  });
+
+  it('useDeleteCharacterImage rejects with UnsupportedError on the kernel plane', async () => {
+    mocks.isKernelMode.mockReturnValue(true);
+    const { result } = renderHook(() => useDeleteCharacterImage(), {
+      wrapper: wrapperFor(queryClient),
+    });
+    act(() => result.current.mutate({ characterId: 'char-1', imageId: 'img1' }));
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(fetchMock).not.toHaveBeenCalled();
     mocks.isKernelMode.mockReturnValue(false);

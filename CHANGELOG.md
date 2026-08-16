@@ -3,6 +3,23 @@
 ## Unreleased
 ### Added
 
+- **Character gallery hooks are honest on the kernel plane (M5 slice 21,
+  ARC-02).** `useCharacterGallery` / `useUploadCharacterImage` /
+  `useDeleteCharacterImage` hit the legacy `/api/v2/characters/:id/gallery`
+  surface on EVERY backend. Now the transport gate lives in the hooks:
+  `useCharacterGallery` resolves an honest empty list (the gallery is a
+  legacy image contour, `data/images/characters/<id>/` sidecar-owned; the
+  kernel models character images only as content-addressed `assets.put`
+  records, ТЗ §13.1), and upload/delete reject with a typed
+  `UnsupportedError` (honest CAPABILITY_UNAVAILABLE) — never a silent
+  legacy request from kernel mode (ARC-02). Kernel avatars keep their own
+  path (`useUploadCharacterAvatar` → `assets.put` +
+  `characters.update(avatarAssetId)`). The legacy contour (sidecar / remote
+  Web Client) keeps the real routes. Tests: hooks 19/19 (+4 kernel-honesty
+  cases: empty gallery without fetch, upload/delete UnsupportedError,
+  legacy fetch unchanged), full web vitest green, eslint/typecheck/prettier
+  clean, ui:api:check 53, gates GATE PASS.
+
 - **Backgrounds hooks are honest on the kernel plane (M5 slice 20, ARC-02).**
   `useBackgrounds` / `useUploadBackground` / `useDeleteBackground` hit the
   legacy `/api/v2/backgrounds` surface on EVERY backend — on the kernel
