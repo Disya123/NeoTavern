@@ -1106,7 +1106,7 @@
           "type": "artifact",
           "artifact": "Wire corpus dispatcher covers snapshot DTOs (wire_corpus.rs)",
           "result": "M5 slice 25 (ARC-07): the full `cargo test --workspace` sweep (kernel-side verification of slice 18) found wire_corpus.rs::dispatch panicked on 'wire.request.create-chat-snapshot' and 'wire.result.chat-snapshot' — the corpus fixtures emitted for chats.snapshots.create (slice 14) referenced two schemaIds the hand-maintained dispatcher had never been taught, so the generated request/response decoders were silently untested by the corpus (the snapshot op's kernel tests passed, masking the gap). The dispatcher now routes both ids to decode_request_create_chat_snapshot / decode_result_chat_snapshot, so the full wire corpus round-trips every op end-to-end (assertions also cover corpus-completeness: 86 request + 45 response ids verified against the registry). Note: a stray `cargo fmt -p contracts-generated` reformatting generated.rs was reverted — generated.rs is CI-excluded from rustfmt. Verified: wire_corpus 3/3, full `cargo test --workspace -j 2` green (0 failed), contracts:check/codegen --check OK, docs:check + gates GATE PASS.",
-          "commit": "pending"
+          "commit": "10092bb"
         },
         {
           "type": "artifact",
