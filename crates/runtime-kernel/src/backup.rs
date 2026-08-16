@@ -23,7 +23,9 @@
 //! restart required for the `committed` outcome.
 
 use contracts_generated::generated::{self, BackupDto, ResultListBackups};
-use neotavern_storage::backup::{create_backup, list_backups, restore_backup, BACKUP_DIR_SUFFIX, MAX_BACKUPS};
+use neotavern_storage::backup::{
+    create_backup, list_backups, restore_backup, BACKUP_DIR_SUFFIX, MAX_BACKUPS,
+};
 use neotavern_storage::open::Database;
 
 use crate::{KernelError, KernelErrorCode};
@@ -130,9 +132,8 @@ pub(crate) fn backups_restore(
     let backup_id = request.backup_id;
 
     let root = db.root().to_path_buf();
-    let container = neotavern_storage::paths::backups_dir(&root).join(format!(
-        "{backup_id}{BACKUP_DIR_SUFFIX}"
-    ));
+    let container = neotavern_storage::paths::backups_dir(&root)
+        .join(format!("{backup_id}{BACKUP_DIR_SUFFIX}"));
     if !container.is_dir() {
         let err = KernelError::product(
             "NOT_FOUND",

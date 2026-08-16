@@ -27,12 +27,16 @@ use crate::{KernelError, KernelErrorCode};
 /// `data.activation.status` — strict empty request; the response reports the
 /// data-root layout version, the active root, the full durable activation
 /// journal and whether an activation is pending. Idempotent and safe.
-pub(crate) fn data_activation_status(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+pub(crate) fn data_activation_status(
+    db: &mut Database,
+    request: &[u8],
+) -> Result<Vec<u8>, KernelError> {
     generated::decode_request_empty(request)?;
     let data_root = db.data_root();
     let active = db.root();
 
-    let journal = neotavern_storage::activation::read_journal(data_root).map_err(KernelError::from)?;
+    let journal =
+        neotavern_storage::activation::read_journal(data_root).map_err(KernelError::from)?;
     let roots_dir = neotavern_storage::activation::roots_dir(data_root);
     let layout_version: i64 = if roots_dir.is_dir() { 2 } else { 1 };
 

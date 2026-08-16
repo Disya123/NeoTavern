@@ -161,25 +161,44 @@ fn backups_restore_round_trip_through_the_kernel() {
     let kernel = open_kernel_with_root(root.path());
 
     // Seed two characters.
-    dispatch_json(&kernel, "characters.create", json!({ "name": "Aria", "tags": ["party"] }))
-        .expect("character create must succeed");
-    dispatch_json(&kernel, "characters.create", json!({ "name": "Rook", "tags": ["party"] }))
-        .expect("character create must succeed");
+    dispatch_json(
+        &kernel,
+        "characters.create",
+        json!({ "name": "Aria", "tags": ["party"] }),
+    )
+    .expect("character create must succeed");
+    dispatch_json(
+        &kernel,
+        "characters.create",
+        json!({ "name": "Rook", "tags": ["party"] }),
+    )
+    .expect("character create must succeed");
 
     // Snapshot: create a backup container and remember its id.
-    let created = dispatch_json(&kernel, "backups.create", json!({}))
-        .expect("backups.create must succeed");
+    let created =
+        dispatch_json(&kernel, "backups.create", json!({})).expect("backups.create must succeed");
     let backup_id = created["id"].as_str().expect("backup id").to_string();
 
     // Mutate the library after the snapshot.
     let listed = dispatch_json(&kernel, "characters.list", json!({ "limit": 10 }))
         .expect("characters.list must succeed");
-    let first_id = listed["items"][0]["id"].as_str().expect("character id").to_string();
-    dispatch_json(&kernel, "characters.delete", json!({ "characterId": first_id }))
-        .expect("character delete must succeed");
+    let first_id = listed["items"][0]["id"]
+        .as_str()
+        .expect("character id")
+        .to_string();
+    dispatch_json(
+        &kernel,
+        "characters.delete",
+        json!({ "characterId": first_id }),
+    )
+    .expect("character delete must succeed");
     let after_delete = dispatch_json(&kernel, "characters.list", json!({ "limit": 10 }))
         .expect("characters.list must succeed");
-    assert_eq!(after_delete["items"].as_array().unwrap().len(), 1, "one character deleted");
+    assert_eq!(
+        after_delete["items"].as_array().unwrap().len(),
+        1,
+        "one character deleted"
+    );
 
     // Restore the snapshot through the wire op; the same kernel instance
     // re-opens the database on the swapped root.
@@ -191,7 +210,11 @@ fn backups_restore_round_trip_through_the_kernel() {
     // serves (the writer re-opened the database).
     let final_list = dispatch_json(&kernel, "characters.list", json!({ "limit": 10 }))
         .expect("characters.list after restore must succeed");
-    assert_eq!(final_list["items"].as_array().unwrap().len(), 2, "restore replayed the snapshot");
+    assert_eq!(
+        final_list["items"].as_array().unwrap().len(),
+        2,
+        "restore replayed the snapshot"
+    );
 }
 
 /// М5 slice 39: an unknown backup id yields the wire `NOT_FOUND` product
@@ -209,7 +232,10 @@ fn backups_restore_unknown_id_yields_not_found() {
     .expect_err("unknown backup must fail");
     let product = err.product.expect("NOT_FOUND carries the wire product DTO");
     assert_eq!(product.code, "NOT_FOUND");
-    assert_eq!(product.params["backupId"], json!("00000000-0000-4000-8000-0000000000ff"));
+    assert_eq!(
+        product.params["backupId"],
+        json!("00000000-0000-4000-8000-0000000000ff")
+    );
 
     // Kernel still usable.
     let meta = dispatch_json(&kernel, "meta.get", json!({})).expect("kernel alive after failure");

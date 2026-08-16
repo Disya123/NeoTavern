@@ -170,7 +170,7 @@ fn export_png_produces_a_container_the_kernel_import_accepts() {
     // though the file bytes differ from the original JSON import).
     let re_asset = put_card_asset(&kernel, &png);
     let re_imported = import_card(&kernel, re_asset["asset"]["id"].as_str().expect("asset id"));
-    assert_eq!(re_imported["created"], true);
+    assert!(re_imported["created"].as_bool().expect("created is a bool"));
     assert_eq!(re_imported["character"]["name"], "Ada Lovelace");
 }
 
@@ -270,51 +270,53 @@ fn export_chat_dumps_messages_variants_and_revisions() {
     )
     .expect("variant activate must succeed");
 
-    let exported = dispatch(
-        &kernel,
-        "chats.export",
-        json!({ "chatId": chat_id }),
-    )
-    .expect("chats.export must succeed");
+    let exported = dispatch(&kernel, "chats.export", json!({ "chatId": chat_id }))
+        .expect("chats.export must succeed");
     assert_eq!(exported["contentType"], "application/json");
     assert_eq!(exported["warnings"], json!([]));
-    assert_eq!(
-        exported["filename"],
-        json!(format!("chat-{chat_id}.json"))
-    );
-    let container: Value = serde_json::from_slice(
-        &base64_decode(exported["contentBase64"].as_str().expect("contentBase64")),
-    )
+    assert_eq!(exported["filename"], json!(format!("chat-{chat_id}.json")));
+    let container: Value = serde_json::from_slice(&base64_decode(
+        exported["contentBase64"].as_str().expect("contentBase64"),
+    ))
     .expect("container JSON parses");
     assert_eq!(container["kind"], "neotavern-chat-export");
     assert_eq!(container["version"], 2);
     assert_eq!(container["characterName"], "Ada Lovelace");
     assert_eq!(container["chat"]["id"], chat_id);
     assert_eq!(container["chat"]["title"], "Analytical engine");
-    assert_eq!(container["chat"]["characterId"].as_str().is_some(), true);
+    assert!(container["chat"]["characterId"].as_str().is_some());
     assert_eq!(container["messages"].as_array().expect("messages").len(), 2);
     // The activated swipe became the message text; the previous text lives on
     // as an immutable content revision.
     assert_eq!(container["messages"][0]["role"], "user");
     assert_eq!(container["messages"][0]["content"], "Hello there (swipe)");
     assert_eq!(container["messages"][1]["role"], "assistant");
-    assert_eq!(container["messages"][1]["content"], "Good evening, Charles.");
+    assert_eq!(
+        container["messages"][1]["content"],
+        "Good evening, Charles."
+    );
     // Wire-visible fields only: meta is present, no fabricated `name`.
     assert_eq!(container["messages"][0]["meta"], json!({}));
     assert!(container["messages"][0].get("name").is_none());
     assert_eq!(
-        container["messageVariants"].as_array().expect("variants").len(),
-        1
-    );
-    assert_eq!(container["messageVariants"][0]["content"], "Hello there (swipe)");
-    assert_eq!(
-        container["messageRevisions"].as_array().expect("revisions").len(),
+        container["messageVariants"]
+            .as_array()
+            .expect("variants")
+            .len(),
         1
     );
     assert_eq!(
-        container["messageRevisions"][0]["content"],
-        "Good evening."
+        container["messageVariants"][0]["content"],
+        "Hello there (swipe)"
     );
+    assert_eq!(
+        container["messageRevisions"]
+            .as_array()
+            .expect("revisions")
+            .len(),
+        1
+    );
+    assert_eq!(container["messageRevisions"][0]["content"], "Good evening.");
 }
 
 #[test]
@@ -329,9 +331,9 @@ fn export_empty_chat_warns_but_succeeds() {
         exported["warnings"],
         json!(["chat has no messages; the container carries an empty dump"])
     );
-    let container: Value = serde_json::from_slice(
-        &base64_decode(exported["contentBase64"].as_str().expect("contentBase64")),
-    )
+    let container: Value = serde_json::from_slice(&base64_decode(
+        exported["contentBase64"].as_str().expect("contentBase64"),
+    ))
     .expect("container JSON parses");
     assert_eq!(container["messages"].as_array().expect("messages").len(), 0);
 }

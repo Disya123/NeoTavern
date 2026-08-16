@@ -78,9 +78,16 @@ const PRODUCT_METADATA = {
     milestone: 'M4',
     deadline: M4.deadline,
   },
+  'apps/web/src/api/legacyExtensionSettings.ts': {
+    owner: OWNER,
+    removalIssue:
+      'M4: retire the legacy extension-settings transport with the sidecar (plugin bridge keeps session-local state)',
+    ...M4,
+  },
   'apps/web/src/api/wireBridge.ts': {
     owner: OWNER,
-    removalIssue: 'M4: retire the wireBridge legacy delegation path with the sidecar (full-fidelity legacy entities only until then)',
+    removalIssue:
+      'M4: retire the wireBridge legacy delegation path with the sidecar (full-fidelity legacy entities only until then)',
     ...M4,
   },
   'apps/web/src/components/AutoConnectSync.tsx': {

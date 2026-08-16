@@ -1715,7 +1715,7 @@ pub fn chats_snapshots_rollback(db: &mut Database, request: &[u8]) -> Result<Vec
 
     let dto = ResultSnapshotsRollback {
         deleted,
-        checkpoint_chat_id: checkpoint_chat_id,
+        checkpoint_chat_id,
     };
     validate(&dto, generated::validate_result_snapshots_rollback)?;
     encode(&dto)

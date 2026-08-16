@@ -1200,8 +1200,11 @@ mod tests {
     fn response_envelopes_are_byte_identical_to_tauri_local() {
         use neotavern_tauri_local::{KernelHost, KernelHostConfig};
 
-        let host = KernelHost::open(KernelHostConfig { data_root: None, ..Default::default() })
-            .expect("stateless kernel host must open");
+        let host = KernelHost::open(KernelHostConfig {
+            data_root: None,
+            ..Default::default()
+        })
+        .expect("stateless kernel host must open");
         let jni_kernel = jni_open("").expect("stateless jni kernel");
 
         let mut requests: Vec<(&str, Vec<u8>)> = vec![

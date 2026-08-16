@@ -144,8 +144,17 @@ pub fn chats_export(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Kernel
                 crate::product::sqlite(err, "chats.export: read chat")
             }
         })?;
-    let (chat_id, title, character_id, persona_id, created_at, updated_at, parent_chat_id, origin, source_message_id) =
-        chat_row;
+    let (
+        chat_id,
+        title,
+        character_id,
+        persona_id,
+        created_at,
+        updated_at,
+        parent_chat_id,
+        origin,
+        source_message_id,
+    ) = chat_row;
 
     // 2. Character name for the container (optional; a deleted character
     //    yields null, exactly like the legacy contour).
@@ -177,15 +186,32 @@ pub fn chats_export(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Kernel
             .next()
             .map_err(|err| crate::product::sqlite(err, "chats.export: read message"))?
         {
-            let id: String = row.get(0).map_err(|e| crate::product::sqlite(e, "chats.export: id"))?;
-            let role: String = row.get(1).map_err(|e| crate::product::sqlite(e, "chats.export: role"))?;
-            let content: String = row.get(2).map_err(|e| crate::product::sqlite(e, "chats.export: content"))?;
-            let sequence: i64 = row.get(3).map_err(|e| crate::product::sqlite(e, "chats.export: sequence"))?;
-            let meta_json: String = row.get(4).map_err(|e| crate::product::sqlite(e, "chats.export: meta"))?;
-            let created_at: String = row.get(5).map_err(|e| crate::product::sqlite(e, "chats.export: created_at"))?;
-            let checkpoint_chat_id: Option<String> = row.get(6).map_err(|e| crate::product::sqlite(e, "chats.export: checkpoint"))?;
-            let generation_run_id: Option<String> = row.get(7).map_err(|e| crate::product::sqlite(e, "chats.export: run"))?;
-            let meta: serde_json::Value = serde_json::from_str(&meta_json).unwrap_or_else(|_| serde_json::json!({}));
+            let id: String = row
+                .get(0)
+                .map_err(|e| crate::product::sqlite(e, "chats.export: id"))?;
+            let role: String = row
+                .get(1)
+                .map_err(|e| crate::product::sqlite(e, "chats.export: role"))?;
+            let content: String = row
+                .get(2)
+                .map_err(|e| crate::product::sqlite(e, "chats.export: content"))?;
+            let sequence: i64 = row
+                .get(3)
+                .map_err(|e| crate::product::sqlite(e, "chats.export: sequence"))?;
+            let meta_json: String = row
+                .get(4)
+                .map_err(|e| crate::product::sqlite(e, "chats.export: meta"))?;
+            let created_at: String = row
+                .get(5)
+                .map_err(|e| crate::product::sqlite(e, "chats.export: created_at"))?;
+            let checkpoint_chat_id: Option<String> = row
+                .get(6)
+                .map_err(|e| crate::product::sqlite(e, "chats.export: checkpoint"))?;
+            let generation_run_id: Option<String> = row
+                .get(7)
+                .map_err(|e| crate::product::sqlite(e, "chats.export: run"))?;
+            let meta: serde_json::Value =
+                serde_json::from_str(&meta_json).unwrap_or_else(|_| serde_json::json!({}));
             let mut message = serde_json::json!({
                 "id": id,
                 "chatId": chat_id,
@@ -282,11 +308,21 @@ fn dump_variants_or_revisions(
         .next()
         .map_err(|err| crate::product::sqlite(err, "chats.export: read dump"))?
     {
-        let id: String = row.get(0).map_err(|e| crate::product::sqlite(e, "chats.export: dump id"))?;
-        let message_id: String = row.get(1).map_err(|e| crate::product::sqlite(e, "chats.export: dump message_id"))?;
-        let content: String = row.get(2).map_err(|e| crate::product::sqlite(e, "chats.export: dump content"))?;
-        let position: i64 = row.get(3).map_err(|e| crate::product::sqlite(e, "chats.export: dump position"))?;
-        let created_at: String = row.get(4).map_err(|e| crate::product::sqlite(e, "chats.export: dump created_at"))?;
+        let id: String = row
+            .get(0)
+            .map_err(|e| crate::product::sqlite(e, "chats.export: dump id"))?;
+        let message_id: String = row
+            .get(1)
+            .map_err(|e| crate::product::sqlite(e, "chats.export: dump message_id"))?;
+        let content: String = row
+            .get(2)
+            .map_err(|e| crate::product::sqlite(e, "chats.export: dump content"))?;
+        let position: i64 = row
+            .get(3)
+            .map_err(|e| crate::product::sqlite(e, "chats.export: dump position"))?;
+        let created_at: String = row
+            .get(4)
+            .map_err(|e| crate::product::sqlite(e, "chats.export: dump created_at"))?;
         out.push(serde_json::json!({
             "id": id,
             "messageId": message_id,

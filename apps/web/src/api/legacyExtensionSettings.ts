@@ -26,8 +26,9 @@ export async function loadLegacyExtensionSettings(): Promise<LegacyExtensionSett
   if (isKernelMode()) {
     return { items: {} };
   }
-  // Tracked transport site (ui-legacy-surface.md; M4: sidecar removal).
-  // eslint-disable-next-line @neotavern/no-legacy-api-surface
+  // Tracked transport site (ui-legacy-surface.md; M4: sidecar removal). The
+  // no-legacy-api-surface rule is off for this shim (eslint.config.js
+  // exemptions) — the ui:api:check scanner gate covers it.
   return legacyRaw().request<LegacyExtensionSettingsResponse>('GET', '/legacy/extension-settings');
 }
 
@@ -40,7 +41,6 @@ export async function saveLegacyExtensionSettings(
     return;
   }
   // Tracked transport site (ui-legacy-surface.md; M4: sidecar removal).
-  // eslint-disable-next-line @neotavern/no-legacy-api-surface
   await legacyRaw().request(
     'PATCH',
     `/legacy/extension-settings/${encodeURIComponent(namespace)}`,

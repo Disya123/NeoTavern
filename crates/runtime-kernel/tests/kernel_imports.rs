@@ -116,7 +116,7 @@ fn imports_json_card_creates_character_and_preserves_fields() {
     // (verified after the kernel releases the data root).
     drop(kernel);
     let mut progress = |_p: neotavern_storage::migrations::MigrationProgress| {};
-    let mut db = neotavern_storage::open::open(
+    let db = neotavern_storage::open::open(
         dir.path(),
         &neotavern_storage::baseline::ConnectionPolicy::default(),
         &mut progress,
