@@ -34,6 +34,19 @@
 
 ### Added
 
+- **ARC-10 status honesty roundup (M5 slice 50).** Five capabilities raised
+  Implemented → Integrated on desktop/webClient with code-path evidence:
+  `library.characterImport` (CharacterManagementPanel + Characters page →
+  wire `assets.put` + `imports.character.card`), `ui.themes` (Settings themes
+  section + ThemeSync → wire list/activate/deactivate/uninstall), `ui.plugins`
+  (Sidebar PluginsPanel + PluginSync → wire list/enable/disable/uninstall),
+  `ui.profile-export` and `ui.profiles` (Settings Profiles tab → wire
+  `profile.export`/`profile.import` + profiles CRUD). Honest boundaries stay
+  documented in each note: theme/plugin package INSTALL, git install, runtime
+  safe mode and OAuth connections remain `CAPABILITY_UNAVAILABLE` on the
+  kernel plane (no host SEC-05 verifier / SEC-06 executor yet); the legacy
+  contour keeps honest `UnsupportedError` for profiles/themes facade ops.
+  Capability matrix still 37 rows.
 - **Desktop kernel host secret seams (M5 slice 49, ТЗ §SEC-01).** The Tauri
   host now wires the kernel's `SecretStore`/`SecretResolver` port handles:
   a session-only `MemorySecretStore` plus a resolver that serves exactly the
