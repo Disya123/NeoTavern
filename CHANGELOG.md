@@ -3,6 +3,20 @@
 ## Unreleased
 ### Added
 
+- **Product Wire ↔ Kernel dispatch parity gate (M5 slice 30).** New
+  `scripts/check-kernel-dispatch.mjs` verifies ARC-01/ARC-07 structurally:
+  every operation registered in `packages/contracts/src/wire/registry.ts`
+  (88 today) must have a kernel dispatch arm in
+  `crates/runtime-kernel/src/lib.rs` — either a unary arm of the main
+  `match op` block or the `dispatch_stream` streaming path
+  (`generation.start`/`generation.retry`) — and every dispatch arm must
+  be a registered operation. A registered operation without an arm means
+  the kernel answers `OperationNotFound` to a valid contract; an arm
+  without a registered operation is dead surface. The check is wired into
+  `docs:check` (alongside the capability-matrix freshness gate) and exposed
+  as `pnpm kernel:dispatch:check`. Verified: 88/88 operations covered,
+  docs:check + docs:sync:check green, eslint/prettier clean.
+
 - **Provider editors report the catalog-unavailable state honestly (M5
   slice 29).** The provider catalog has no honest wire equivalent
   (ProviderDto carries no adapterKind/defaultBaseUrl/apiKeyRequired), so

@@ -87,6 +87,17 @@ try {
   failures += 1;
 }
 
+// Product Wire ↔ Kernel dispatch parity (ARC-01/ARC-07): every registered
+// operation must have a kernel dispatch arm, and every arm must be a
+// registered operation.
+try {
+  execFileSync(process.execPath, [join(root, 'scripts/check-kernel-dispatch.mjs')], {
+    stdio: 'inherit',
+  });
+} catch {
+  failures += 1;
+}
+
 // Architectural exception expiry (ARC-09).
 try {
   const exceptions = JSON.parse(
