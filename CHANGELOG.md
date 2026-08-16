@@ -34,6 +34,21 @@
 
 ### Added
 
+- **Plugin package verifier (M5 slice 60, ТЗ §SEC-05).** New
+  `crates/adapters/package-verify` (`neotavern-package-verify`): the
+  host-side verifier the kernel's `plugins.install` already assumes — ZIP
+  safety (traversal/absolute-path/symlink/duplicate-path rejection, bounded
+  entry count, declared-size and compression-ratio caps before any read),
+  per-file SHA-256 digest equality with no unlisted payload, and Ed25519
+  publisher signature over `manifest.json` via `manifest.json.sig` (ring).
+  Trust classification matches the kernel rank order (verified-publisher /
+  locally-trusted / unsigned-untrusted); a declared signature that fails
+  against every held key fails closed, an unsigned manifest stays
+  unsigned-untrusted, and permissions are left to the install consent
+  moment (ARC-08). 14 unit tests incl. signed/unsigned/bad-signature
+  packages, traversal, absolute path, duplicate path, symlink-mode
+  boundary, unlisted/missing files, digest mismatch and a zip-bomb
+  fixture.
 - **Headless host tool executor (M5 slice 59, ТЗ §8.3/§9.3).** The host
   executor seam moves into the shared `crates/adapters/host-tools`
   (`neotavern-host-tools`): `ToolExecutor` trait, `NoopToolExecutor`,
