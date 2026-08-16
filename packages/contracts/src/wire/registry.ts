@@ -496,6 +496,20 @@ export const PRODUCT_WIRE_OPERATIONS: readonly WireOperation[] = [
     undefined,
   ),
   op(
+    'chats.export',
+    'transactional',
+    'idempotent',
+    'safe',
+    'app.read',
+    'wire.request.chats.export',
+    'wire.result.chats.export',
+    undefined,
+    ['INTERNAL', 'VALIDATION', 'NOT_FOUND', 'CONTRACT_VIOLATION', 'OUTCOME_UNKNOWN'],
+    1024,
+    4194304,
+    undefined,
+  ),
+  op(
     'chats.messages.create',
     'transactional',
     'non-idempotent',
@@ -2032,6 +2046,7 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     characterId: UUID_CHARACTER,
     format: 'png',
   }),
+  fx('chats-export-request', 'chats.export', 'request', true, { chatId: UUID_CHAT }),
   fx('lorebooks-get-request', 'lorebooks.get', 'request', true, {
     lorebookId: UUID_LOREBOOK,
   }),
@@ -2278,6 +2293,12 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
     filename: 'ada-lovelace.png',
     contentType: 'image/png',
     contentBase64: 'aVBORw0KGgoAAAANSUhEUg==',
+    warnings: [],
+  }),
+  fx('chats-export-response', 'chats.export', 'response', true, {
+    filename: 'chat-018f0000-0000-7000-8000-000000000099.json',
+    contentType: 'application/json',
+    contentBase64: 'eyJraW5kIjoibmVvdGF2ZXJuYS1jaGF0LWV4cG9ydCJ9',
     warnings: [],
   }),
   fx('chats-list-response', 'chats.list', 'response', true, { items: [CHAT_VALUE] }),
@@ -2619,6 +2640,13 @@ export const PRODUCT_WIRE_FIXTURES: readonly WireFixture[] = [
   fx('neg-characters-export-card-response-missing-base64', 'characters.export.card', 'response', false, {
     filename: 'ada.json',
     contentType: 'application/json',
+    warnings: [],
+  }),
+  fx('neg-chats-export-missing-field', 'chats.export', 'request', false, {}),
+  fx('neg-chats-export-response-bad-extension', 'chats.export', 'response', false, {
+    filename: 'chat.txt',
+    contentType: 'application/json',
+    contentBase64: 'e30=',
     warnings: [],
   }),
   fx('neg-generate-event-unknown-discriminator', 'generation.start', 'event', false, {

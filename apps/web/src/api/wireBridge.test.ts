@@ -53,6 +53,7 @@ const mocks = vi.hoisted(() => {
     saveMessageDraft: vi.fn(),
     commitMessageDraft: vi.fn(),
     discardMessageDraft: vi.fn(),
+    export: vi.fn(),
   };
   const lorebooks = {
     list: vi.fn(),
@@ -1484,9 +1485,7 @@ describe('settings (wire settings.get/update)', () => {
 describe('imports/exports (kernel plane wire flow)', () => {
   it('exports a character card via characters.export.card on the kernel plane', async () => {
     const objectUrl = 'blob:mock-card-export';
-    const createSpy = vi
-      .spyOn(URL, 'createObjectURL')
-      .mockReturnValue(objectUrl);
+    const createSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue(objectUrl);
     const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
     const clickSpy = vi
       .spyOn(HTMLAnchorElement.prototype, 'click')
@@ -1542,8 +1541,31 @@ describe('imports/exports (kernel plane wire flow)', () => {
     expect(captured?.type).toBe('image/png');
   });
 
-  it('refuses chat export on the kernel plane', async () => {
-    await expect(exportChat('chat-1')).rejects.toBeInstanceOf(UnsupportedError);
+  it('exports a chat snapshot via chats.export on the kernel plane', async () => {
+    const objectUrl = 'blob:mock-chat-export';
+    const createSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue(objectUrl);
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    const clickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined);
+    mocks.chats.export.mockResolvedValue({
+      filename: 'chat-018f0000-0000-7000-8000-000000000099.json',
+      contentType: 'application/json',
+      contentBase64: 'eyJraW5kIjoibmVvdGF2ZXJuYS1jaGF0LWV4cG9ydCJ9',
+      warnings: [],
+    });
+    let captured: Blob | undefined;
+    try {
+      await exportChat('018f0000-0000-7000-8000-000000000099');
+      const firstCall = createSpy.mock.calls[0];
+      captured = firstCall?.[0] as Blob | undefined;
+    } finally {
+      createSpy.mockRestore();
+      revokeSpy.mockRestore();
+      clickSpy.mockRestore();
+    }
+    expect(mocks.chats.export).toHaveBeenCalledWith('018f0000-0000-7000-8000-000000000099');
+    expect(captured?.type).toBe('application/json');
   });
 
   it('imports a character card via assets.put + imports.character.card on the kernel plane', async () => {

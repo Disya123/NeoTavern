@@ -50,6 +50,7 @@ import {
   type PutAssetResultDto,
   type CharacterCardExportResultDto,
   type CharacterCardImportResultDto,
+  type ChatsExportResultDto,
   type ResultSettingsDto,
   type SecretsStatusResultDto,
   type ThemeDto,
@@ -307,6 +308,7 @@ export class LocalBackend implements NeoBackend {
         this.invoke<MessageDto>('chats.messages.drafts.commit', req, opts),
       discardMessageDraft: (req, opts) =>
         this.invoke<EmptyResultDto>('chats.messages.drafts.discard', req, opts),
+      export: (chatId, opts) => this.invoke<ChatsExportResultDto>('chats.export', { chatId }, opts),
     };
     this.generation = {
       start: (req, opts) => this.stream('generation.start', req, opts),

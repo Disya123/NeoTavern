@@ -13,6 +13,7 @@ import type {
   WireCardExportFormat,
   CharacterCardExportResultDto,
   CharacterCardImportResultDto,
+  ChatsExportResultDto,
   CharacterDto,
   ChatDto,
   ChatSnapshotResultDto,
@@ -208,6 +209,12 @@ export interface ChatsApi {
     req: DiscardMessageDraftRequestDto,
     opts?: BackendCallOptions,
   ): Promise<EmptyResultDto>;
+  /**
+   * Export one chat as the `neotavern-chat-export` v2 JSON container (chat +
+   * character name + message/variant/revision dump), base64-encoded for
+   * download (wire `chats.export`, М5 slice 36).
+   */
+  export(chatId: string, opts?: BackendCallOptions): Promise<ChatsExportResultDto>;
 }
 
 /** Generation domain operations (wire `generation.*`). */

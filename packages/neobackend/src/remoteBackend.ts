@@ -56,6 +56,7 @@ import type {
   PutAssetResultDto,
   CharacterCardExportResultDto,
   CharacterCardImportResultDto,
+  ChatsExportResultDto,
 } from '@neotavern/contracts';
 import type {
   BackendCallOptions,
@@ -152,6 +153,8 @@ export class RemoteBackend implements NeoBackend {
     commitMessageDraft: (req) => this.sdk.call<MessageDto>('chats.messages.drafts.commit', req),
     discardMessageDraft: (req) =>
       this.sdk.call<EmptyResultDto>('chats.messages.drafts.discard', req),
+    export: (chatId, opts) =>
+      this.sdk.call<ChatsExportResultDto>('chats.export', { chatId }, { signal: opts?.signal }),
   };
 
   readonly generation: GenerationApi = {

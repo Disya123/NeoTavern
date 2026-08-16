@@ -128,6 +128,37 @@ export const CharacterCardExportResultDtoSchema = Type.Object(
 );
 export type CharacterCardExportResultDto = Static<typeof CharacterCardExportResultDtoSchema>;
 
+/** Chat export request (`wire.request.chats.export`). */
+export const ChatsExportRequestDtoSchema = Type.Object(
+  {
+    chatId: Type.String({ format: 'uuid' }),
+  },
+  { $id: 'wire.request.chats.export', additionalProperties: false },
+);
+export type ChatsExportRequestDto = Static<typeof ChatsExportRequestDtoSchema>;
+
+/**
+ * Chat export result (`wire.result.chats.export`): the `neotavern-chat-export`
+ * v2 container (chat + character name + full message/variant/revision dump)
+ * base64-encoded for download. Response limit is 4 MiB (same as
+ * `assets.content`) because a long chat with variants and revisions can
+ * legitimately exceed the 256 KiB default cap; an over-limit chat surfaces as
+ * a transport error, never a silent truncation.
+ */
+export const ChatsExportResultDtoSchema = Type.Object(
+  {
+    filename: Type.String({ pattern: '^[^/\\\\]{1,255}\\.json$' }),
+    contentType: Type.String({ minLength: 1, maxLength: 128 }),
+    contentBase64: Type.String({
+      pattern: '^[A-Za-z0-9+/]*={0,2}$',
+      minLength: 1,
+    }),
+    warnings: Type.Array(Type.String({ minLength: 1, maxLength: 512 }), { maxItems: 32 }),
+  },
+  { $id: 'wire.result.chats.export', additionalProperties: false },
+);
+export type ChatsExportResultDto = Static<typeof ChatsExportResultDtoSchema>;
+
 /** Snapshot origin (`wire.snapshot.origin`): checkpoint or branch. */
 export const WireSnapshotOrigin = Type.Union([Type.Literal('checkpoint'), Type.Literal('branch')], {
   $id: 'wire.snapshot.origin',
@@ -2225,6 +2256,8 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.card.export.format': WireCardExportFormat,
   'wire.request.characters.export.card': CharacterCardExportRequestDtoSchema,
   'wire.result.characters.export.card': CharacterCardExportResultDtoSchema,
+  'wire.request.chats.export': ChatsExportRequestDtoSchema,
+  'wire.result.chats.export': ChatsExportResultDtoSchema,
   'wire.result.imports.character.card': CharacterCardImportResultDtoSchema,
   'wire.request.assets.get': GetAssetRequestDtoSchema,
   'wire.result.assets.get': GetAssetResultDtoSchema,

@@ -216,3 +216,141 @@ fn export_png_round_trips_card_fields_through_ext_json() {
         json!(["analytical", "historical"])
     );
 }
+
+/// Helper: create a character + chat and return the chat id.
+fn create_chat(kernel: &Kernel) -> String {
+    let created = dispatch(
+        kernel,
+        "characters.create",
+        json!({ "name": "Ada Lovelace", "description": "First programmer" }),
+    )
+    .expect("characters.create must succeed");
+    let character_id = created["id"].as_str().expect("character id");
+    let chat = dispatch(
+        kernel,
+        "chats.create",
+        json!({ "characterId": character_id, "title": "Analytical engine" }),
+    )
+    .expect("chats.create must succeed");
+    chat["id"].as_str().expect("chat id").to_string()
+}
+
+#[test]
+fn export_chat_dumps_messages_variants_and_revisions() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel(dir.path());
+    let chat_id = create_chat(&kernel);
+
+    let first = dispatch(
+        &kernel,
+        "chats.messages.create",
+        json!({ "chatId": chat_id, "role": "user", "content": "Good evening." }),
+    )
+    .expect("message create must succeed");
+    let message_id = first["id"].as_str().expect("message id");
+    dispatch(
+        &kernel,
+        "chats.messages.create",
+        json!({ "chatId": chat_id, "role": "assistant", "content": "Good evening, Charles." }),
+    )
+    .expect("message create must succeed");
+
+    // A swipe variant plus activation records an immutable content revision.
+    let variant = dispatch(
+        &kernel,
+        "chats.messages.variants.create",
+        json!({ "chatId": chat_id, "messageId": message_id, "content": "Hello there (swipe)" }),
+    )
+    .expect("variant create must succeed");
+    let variant_id = variant["id"].as_str().expect("variant id");
+    dispatch(
+        &kernel,
+        "chats.messages.variants.activate",
+        json!({ "chatId": chat_id, "messageId": message_id, "variantId": variant_id }),
+    )
+    .expect("variant activate must succeed");
+
+    let exported = dispatch(
+        &kernel,
+        "chats.export",
+        json!({ "chatId": chat_id }),
+    )
+    .expect("chats.export must succeed");
+    assert_eq!(exported["contentType"], "application/json");
+    assert_eq!(exported["warnings"], json!([]));
+    assert_eq!(
+        exported["filename"],
+        json!(format!("chat-{chat_id}.json"))
+    );
+    let container: Value = serde_json::from_slice(
+        &base64_decode(exported["contentBase64"].as_str().expect("contentBase64")),
+    )
+    .expect("container JSON parses");
+    assert_eq!(container["kind"], "neotavern-chat-export");
+    assert_eq!(container["version"], 2);
+    assert_eq!(container["characterName"], "Ada Lovelace");
+    assert_eq!(container["chat"]["id"], chat_id);
+    assert_eq!(container["chat"]["title"], "Analytical engine");
+    assert_eq!(container["chat"]["characterId"].as_str().is_some(), true);
+    assert_eq!(container["messages"].as_array().expect("messages").len(), 2);
+    // The activated swipe became the message text; the previous text lives on
+    // as an immutable content revision.
+    assert_eq!(container["messages"][0]["role"], "user");
+    assert_eq!(container["messages"][0]["content"], "Hello there (swipe)");
+    assert_eq!(container["messages"][1]["role"], "assistant");
+    assert_eq!(container["messages"][1]["content"], "Good evening, Charles.");
+    // Wire-visible fields only: meta is present, no fabricated `name`.
+    assert_eq!(container["messages"][0]["meta"], json!({}));
+    assert!(container["messages"][0].get("name").is_none());
+    assert_eq!(
+        container["messageVariants"].as_array().expect("variants").len(),
+        1
+    );
+    assert_eq!(container["messageVariants"][0]["content"], "Hello there (swipe)");
+    assert_eq!(
+        container["messageRevisions"].as_array().expect("revisions").len(),
+        1
+    );
+    assert_eq!(
+        container["messageRevisions"][0]["content"],
+        "Good evening."
+    );
+}
+
+#[test]
+fn export_empty_chat_warns_but_succeeds() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel(dir.path());
+    let chat_id = create_chat(&kernel);
+
+    let exported = dispatch(&kernel, "chats.export", json!({ "chatId": chat_id }))
+        .expect("chats.export must succeed");
+    assert_eq!(
+        exported["warnings"],
+        json!(["chat has no messages; the container carries an empty dump"])
+    );
+    let container: Value = serde_json::from_slice(
+        &base64_decode(exported["contentBase64"].as_str().expect("contentBase64")),
+    )
+    .expect("container JSON parses");
+    assert_eq!(container["messages"].as_array().expect("messages").len(), 0);
+}
+
+#[test]
+fn export_missing_chat_is_chat_not_found() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel(dir.path());
+
+    let err = dispatch(
+        &kernel,
+        "chats.export",
+        json!({ "chatId": "00000000-0000-4000-8000-000000000000" }),
+    )
+    .expect_err("missing chat must fail");
+    let product = err.product.expect("product error");
+    assert_eq!(product.code, "CHAT_NOT_FOUND");
+    assert_eq!(
+        product.params.get("chatId").and_then(|v| v.as_str()),
+        Some("00000000-0000-4000-8000-000000000000")
+    );
+}

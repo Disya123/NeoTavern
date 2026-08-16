@@ -1752,3 +1752,78 @@ fn character_card_export_over_http() {
         json!("00000000-0000-4000-8000-000000000000")
     );
 }
+
+/// М5 slice 36 host parity: `chats.export` over HTTP — the canonical
+/// `neotavern-chat-export` v2 container (chat + character name + message
+/// dump) round-trips, and a missing chat answers the stable
+/// `CHAT_NOT_FOUND` product error.
+#[test]
+fn chat_export_over_http() {
+    let server = TestServer::spawn();
+
+    let create_character = envelope_body(
+        &rid(1),
+        "characters.create",
+        json!({ "name": "Ada Lovelace", "description": "First programmer" }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &create_character);
+    assert_eq!(response.status, 200);
+    let (_, character) = expect_ok(decode_envelope(&response.body));
+    let character_id = character["id"].as_str().expect("character id").to_string();
+
+    let create_chat = envelope_body(
+        &rid(2),
+        "chats.create",
+        json!({ "characterId": character_id, "title": "Analytical engine" }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &create_chat);
+    assert_eq!(response.status, 200);
+    let (_, chat) = expect_ok(decode_envelope(&response.body));
+    let chat_id = chat["id"].as_str().expect("chat id").to_string();
+
+    let create_message = envelope_body(
+        &rid(3),
+        "chats.messages.create",
+        json!({ "chatId": chat_id, "role": "user", "content": "Good evening." }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &create_message);
+    assert_eq!(response.status, 200);
+    expect_ok(decode_envelope(&response.body));
+
+    let export = envelope_body(&rid(4), "chats.export", json!({ "chatId": chat_id }));
+    let response = http_request(server.addr, "POST", "/rpc", &[], &export);
+    assert_eq!(response.status, 200, "chats.export answers HTTP 200");
+    let (_, exported) = expect_ok(decode_envelope(&response.body));
+    gen::validate_result_chats_export(&exported).expect("export result is wire-valid");
+    assert_eq!(exported["contentType"], json!("application/json"));
+    assert_eq!(exported["warnings"], json!([]));
+    assert!(exported["filename"]
+        .as_str()
+        .expect("filename")
+        .starts_with("chat-"));
+
+    let container: Value = serde_json::from_slice(&decode_base64(
+        exported["contentBase64"].as_str().expect("contentBase64"),
+    ))
+    .expect("container JSON parses");
+    assert_eq!(container["kind"], "neotavern-chat-export");
+    assert_eq!(container["version"], 2);
+    assert_eq!(container["chat"]["id"], chat_id);
+    assert_eq!(container["characterName"], "Ada Lovelace");
+    assert_eq!(container["messages"][0]["content"], "Good evening.");
+
+    // Missing chat answers the stable product error verbatim.
+    let export_missing = envelope_body(
+        &rid(5),
+        "chats.export",
+        json!({ "chatId": "00000000-0000-4000-8000-000000000000" }),
+    );
+    let response = http_request(server.addr, "POST", "/rpc", &[], &export_missing);
+    assert_eq!(response.status, 200);
+    let (_, error) = expect_error(decode_envelope(&response.body));
+    assert_eq!(error.code, "CHAT_NOT_FOUND");
+    assert_eq!(
+        error.params["chatId"],
+        json!("00000000-0000-4000-8000-000000000000")
+    );
+}

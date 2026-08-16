@@ -531,6 +531,7 @@ fn handle_unary(
         "chats.create" => with_db_opt(db, |db| product::chats_create(db, req)),
         "chats.update" => with_db_opt(db, |db| product::chats_update(db, req)),
         "chats.delete" => with_db_opt(db, |db| product::chats_delete(db, req)),
+        "chats.export" => with_db_opt(db, |db| exports::chats_export(db, req)),
         "chats.messages.list" => with_db_opt(db, |db| product::messages_list(db, req)),
         "chats.messages.create" => with_db_opt(db, |db| product::messages_create(db, req)),
         "chats.messages.update" => with_db_opt(db, |db| product::messages_update(db, req)),

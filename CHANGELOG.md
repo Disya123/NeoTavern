@@ -3,6 +3,25 @@
 ## Unreleased
 ### Added
 
+- **Chat snapshot export over Product Wire (M5 slice 36).** New wire
+  operation `chats.export` (91 ops total): request `{ chatId }`, result
+  `{ filename, contentType, contentBase64, warnings[] }` with a 4 MiB
+  response budget (long chats legitimately exceed the 256 KiB default cap;
+  over-limit surfaces as a transport error, never truncation). The kernel
+  (`crates/runtime-kernel/src/exports.rs`) dumps the canonical
+  `neotavern-chat-export` v2 container — chat metadata + character name +
+  full message/variant/revision dump, wire-visible fields only (nothing
+  fabricated), with an honest warning for empty chats and the stable
+  `CHAT_NOT_FOUND` error. The last chat-related export refusal is gone:
+  `exportChat` now downloads the decoded container on the kernel plane
+  instead of throwing `UnsupportedError`. Tests: kernel_exports.rs +3
+  (dump with variants/revisions incl. the activated-swipe transition,
+  empty-chat warning, CHAT_NOT_FOUND; 8 total), wire_corpus arms, remote-http
+  host parity `chat_export_over_http` (32 scenarios), wireBridge 98/98,
+  parity 75/75 (`ChatsApi.export` routed identically local/remote, non-uuid
+  rejected pre-transport). UI: the chat export menu (ChatManagementPanel)
+  works on the kernel plane.
+
 - **Character-card export over Product Wire (M5 slice 35, Этап 4.5).** New
   wire operation `characters.export.card` (90 ops total): request
   `{ characterId, format: json | png }`, result

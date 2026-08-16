@@ -183,10 +183,18 @@ function blobUrlFromBase64(base64: string, contentType: string): string {
   return url;
 }
 
-/** Export one chat snapshot. Kernel: no wire operation models the container. */
+/**
+ * Export one chat snapshot (neotavern-chat-export v2 JSON container, М5
+ * slice 36). Kernel plane: `chats.export` returns the full message/variant/
+ * revision dump base64-encoded, decoded into a download. Legacy plane: the
+ * legacy contour keeps its download URL.
+ */
 export async function exportChat(chatId: string): Promise<void> {
   if (isKernelMode()) {
-    throw new UnsupportedError('chats.export');
+    // Kernel: chats.export → decode base64 → Blob download.
+    const exported = await backend.chats.export(chatId);
+    triggerDownload(blobUrlFromBase64(exported.contentBase64, exported.contentType));
+    return;
   }
   // Legacy-only capability (see exportCharacterCard).
   // eslint-disable-next-line @neotavern/no-legacy-api-surface

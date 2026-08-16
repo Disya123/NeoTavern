@@ -193,6 +193,7 @@ export class LegacyBackend implements NeoBackend {
     saveMessageDraft: () => this.unsupported('chats.messages.drafts.save'),
     commitMessageDraft: () => this.unsupported('chats.messages.drafts.commit'),
     discardMessageDraft: () => this.unsupported('chats.messages.drafts.discard'),
+    export: () => this.unsupported('chats.export'),
   };
 
   readonly generation: GenerationApi = {
