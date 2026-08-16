@@ -34,6 +34,20 @@
 
 ### Added
 
+- **ARC-10 status roundup part 2 (M5 slice 55).** `generation.prompt.plan`,
+  `providers.config`, `providers.list`, `ui.secrets`, `ui.diagnostics` and
+  `ui.portable-data` raised Implemented → Integrated (desktop + webClient)
+  with code-path evidence: PromptPlanPanel renders the durable wire
+  PromptPlan; ProviderProfileEditor persists configs via
+  `backend.providers.config.*` (desktop session SecretStore seam makes apiKey
+  writes succeed, M5 slice 49) and generation.start carries provider/model
+  (slice 48); `useProviderCatalog` powers provider selects + honest
+  CAPABILITY_UNAVAILABLE pre-negotiation; the Secrets panel manages
+  status/lock through `backend.secrets.*`; DiagnosticsPanel runs on the
+  kernel plane (Kernel Preview marking); ActivationStatusPanel reads durable
+  activation status via `backend.data.activationStatus`. Honest boundaries
+  stay documented (approximate tokenizer, host-side auto-lock, host SecretStore
+  backends in M3).
 - **ARC-10 webClient status roundup (M5 slice 54).** `personas.crud`,
   `lorebooks.crud`, `presets.crud` and `settings` raised Implemented →
   Integrated on webClient with code-path evidence appended to each note:
