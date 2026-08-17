@@ -4,6 +4,16 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/adr/README.md
 
 # Architecture Decision Records
 
+## ADR-0049: Track D compositor and Dioxus/Blitz producer (D1/D2 GO)
+
+Owner-signed D1/D2 after technical M0 PASS and TrackComparison. **D1=Track D
+GO**, **D2=Dioxus+pinned Blitz GO**, **D3=DEFERRED** (Android Rust
+presentation path, Web stays React). Feature-flagged staged implementation;
+React/WebView remains the rollback and the public Android renderer until
+Milestone B/C DoD. Track D is not claimed as the cheapest A/B/C track.
+Full decision: [ADR-0049](0049-track-d-dioxus-presentation.md), signed record
+[d1-d2-decision.md](../rfc/d1-d2-decision.md).
+
 ## ADR-0048: M5 slice-2 limited waiver — message swipe/draft/revision legacy routes
 
 Этап 4 slice 2 (message variants/revisions/drafts) delivers the full

@@ -98,6 +98,18 @@ and [m0-track-comparison.md](m0-track-comparison.md) set:
 | TrackComparison | **published**; opens `D1=Track D GO` |
 | `D1=Track D GO` | still **`NOT_GRANTED`** |
 
+## Follow-on after D1/D2 signature (not part of the signed Gate P body)
+
+[`d1-d2-decision.md`](d1-d2-decision.md) / [ADR-0049](../adr/0049-track-d-dioxus-presentation.md):
+
+| Object | Status after D1/D2 signature |
+| --- | --- |
+| Gate P | still **`GateP:P1` / PASSED** (signed body unchanged) |
+| `D1=Track D GO` | **GRANTED** |
+| `D2=Dioxus+Blitz GO` | **GRANTED** |
+| `D3` | **DEFERRED** |
+| Production WebView/React | rollback default; cutover not declared |
+
 ## Classified input evidence (unchanged by this signature)
 
 | Track | Evidence status | What may be cited | Must not be cited as |

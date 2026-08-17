@@ -67,8 +67,9 @@ Index of the internal documentation. Each major topic has its own folder.
   producer seam](rfc/m0-d2-probe.md) (**M0-D2 PASS** host-side; probe
   `capture=false`; [physical
   runbook](rfc/m0-d2-physical-runbook.md); [admission](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/m0-d2-adjudication.json)),
-  the [TrackComparison](rfc/m0-track-comparison.md) (opens `D1=Track D GO`,
-  does not grant it), and the [signed Gate P
+  the [TrackComparison](rfc/m0-track-comparison.md), the [signed D1/D2
+  record](rfc/d1-d2-decision.md) (`D1=Track D GO`, `D2=Dioxus+Blitz GO`,
+  `D3=DEFERRED`, 2026-08-18), and the [signed Gate P
   record](rfc/gate-p-decision-draft.md) (`GateP:P1`, 2026-08-17, incomplete
   physical M-1 waiver).
 - [Changelog](https://github.com/Disya123/NeoTavern/blob/main/CHANGELOG.md).

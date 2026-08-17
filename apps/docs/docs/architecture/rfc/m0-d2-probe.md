@@ -6,8 +6,8 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/rfc/m0-d2-probe.md
 
 **Status:** program **M0-D2 PASS** (host-side). Probe log `capture=false` is
 expected. Host-side D1a and D1b remain PASS (JSON unchanged). Normative M0 is
-technical **PASS**. `D1=Track D GO` is **not** granted; the
-[TrackComparison](m0-track-comparison.md) only opens that decision.
+technical **PASS**. `D1=Track D GO` and `D2=Dioxus+Blitz GO` are signed
+([d1-d2-decision.md](d1-d2-decision.md)); `D3=DEFERRED`.
 
 Admitted capture `2026-08-17T20-11-27-178Z` / control
 `2026-08-17T20-11-00-619Z`. Dirty-tree stamps
@@ -123,7 +123,8 @@ cut and swap the producer without rewriting D1a/D1b compositor evidence.
 
 - Changing `docs/rfc/m0-d1a-adjudication.json` or D1b admission.
 - Linking this crate into production kernel JNI.
-- Granting `D1=Track D GO` (TrackComparison is published; the owner decision is not).
+- Granting a blanket production migration or WebView cutover (needs Milestone
+  B/C DoD after [d1-d2-decision.md](d1-d2-decision.md)).
 - Treating dirty-tree rehearsal stamps as admitted evidence.
 
 ## Commands

@@ -5,9 +5,9 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/rfc/neoui-v4-andro
 # Предпроектная техническая спецификация: NeoUI v4 — Android presentation backend и 120-Hz live-glass compositor
 
 **Проект:** NeoTavern  
-**Редакция:** 4.5 (GateP:P1 signed; technical M0 PASS; D1 GO not granted)  
+**Редакция:** 4.5 (GateP:P1 signed; technical M0 PASS; D1/D2 GO signed 2026-08-18; D3 DEFERRED)  
 **Дата:** 2026-08-17  
-**Статус:** Draft Proposal / Gate P = `GateP:P1` PASSED; не является production-каноном до утверждающих ADR; нормативный M0 technical **PASS**; `D1=Track D GO` **NOT_GRANTED**  
+**Статус:** Draft Proposal / Gate P = `GateP:P1` PASSED; D1/D2 GO signed in [`d1-d2-decision.md`](d1-d2-decision.md) / [ADR-0049](../adr/0049-track-d-dioxus-presentation.md); D3 **DEFERRED**; не является blanket production migration  
 **Целевой путь в репозитории:** `docs/rfc/neoui-v4-android-presentation-backend.md`  
 **Repository migration:** OPEN — корневая копия не считается перемещённой этой редакцией  
 **Лицензия продукта:** GNU AGPL-3.0  
@@ -302,7 +302,7 @@ D запрещено выбирать только потому, что он т�
 | A/A0 | `MEASURED` emulator-only morning fixture; physical `BLOCKED`; evening AVD A/A0 **`INVALID_FOR_COMPARISON`** |
 | B | `MEASURED` emulator-only morning fixture; physical `BLOCKED`; evening AVD B **`INVALID_FOR_COMPARISON`** |
 | C | `NOT MEASURED` |
-| D | M0-D1a **PASS**; M0-D1b **PASS**; M0-D2 **PASS** (host-side RenderDoc Vulkan); PRE-GATE desktop/AVD D1a **не admitted**; [TrackComparison](m0-track-comparison.md) published, `D1=Track D GO` **NOT_GRANTED** |
+| D | M0-D1a **PASS**; M0-D1b **PASS**; M0-D2 **PASS**; [TrackComparison](m0-track-comparison.md); **D1=Track D GO** signed [`d1-d2-decision.md`](d1-d2-decision.md) |
 
 Перед Gate P публикуется `BaselineReport M-1` с измеренными A/A0/B и только
 оценочными C/D. Он достаточен для выбора важности live glass, но **не** для D1.
@@ -3934,7 +3934,9 @@ Snapshot фиксирует факты, но не повышает program verdi
 | `M0-D1a` (normative) | **`PASS`** | host-side admission [`m0-d1a-adjudication.json`](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/m0-d1a-adjudication.json); probe log `capture=false` expected |
 | `M0-D1b` | **`PASS`** | host-side admission [`m0-d1b-adjudication.json`](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/m0-d1b-adjudication.json); probe log `capture=false`; D1a JSON unchanged |
 | `M0-D2` | **`PASS`** | host-side admission [`m0-d2-adjudication.json`](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/m0-d2-adjudication.json); probe log `capture=false`; D1a/D1b JSON unchanged |
-| `D1=Track D GO` | `NOT_GRANTED` | [TrackComparison](m0-track-comparison.md) published; owner signature still required |
+| `D1=Track D GO` | **`GRANTED`** | signed 2026-08-18 [`d1-d2-decision.md`](d1-d2-decision.md); [ADR-0049](../adr/0049-track-d-dioxus-presentation.md); not production cutover |
+| `D2=Dioxus+Blitz GO` | **`GRANTED`** | same record; pinned Blitz; not a full Android UI rewrite |
+| `D3` | **`DEFERRED`** | Android Rust presentation path; Web stays React |
 
 Снятое partial evidence:
 

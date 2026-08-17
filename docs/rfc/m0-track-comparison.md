@@ -1,8 +1,9 @@
 # TrackComparison (final, after M0)
 
-**Status:** published. This record **opens** the owner decision
-`D1=Track D GO`. It does **not** grant that decision.
-`D1=Track D GO` remains **`NOT_GRANTED`**.
+**Status:** published. Owner signed the opened decision on 2026-08-18:
+[`d1-d2-decision.md`](d1-d2-decision.md). `D1=Track D GO` and
+`D2=Dioxus+Blitz GO` are **GRANTED**. `D3=DEFERRED`. This file is evidence,
+not the signature.
 
 **RFC:** [neoui-v4-android-presentation-backend.md](neoui-v4-android-presentation-backend.md) §0.4  
 **Gate P:** signed `GateP:P1` ([gate-p-decision-draft.md](gate-p-decision-draft.md)); incomplete physical M-1 waiver unchanged  
@@ -32,12 +33,12 @@ a benchmark win against A/B/C on a shared scroll fixture.
 
 ## Tracks
 
-| Track  | Backend                                                | Evidence status                                                                            | Same device as D M0? | Same content fixture as M-1?           | May win D1 on this record?                               |
-| ------ | ------------------------------------------------------ | ------------------------------------------------------------------------------------------ | -------------------- | -------------------------------------- | -------------------------------------------------------- |
-| A / A0 | WebView `file://`, live glass / glass off              | `MEASURED` emulator-only; physical **`BLOCKED`**; evening AVD **`INVALID_FOR_COMPARISON`** | no                   | M-1 HostConnect (AVD only)             | **no** (not physical Gate P device set)                  |
-| B      | WebView + AssetLoader HTTPS                            | same as A                                                                                  | no                   | M-1 HostConnect (AVD only)             | **no**                                                   |
-| C      | Compose/Flutter/other toolkit, no product compositor   | **`NOT MEASURED`**                                                                         | n/a                  | n/a                                    | **no**                                                   |
-| D      | product compositor + Dioxus/Blitz producer (candidate) | M0-D1a/D1b/D2 **PASS** (host-side Vulkan)                                                  | Xiaomi Adreno 710    | **no** — M0 probe, not M-1 HostConnect | **not granted here**; this table only opens the decision |
+| Track  | Backend                                              | Evidence status                                                                            | Same device as D M0? | Same content fixture as M-1?           | May win D1 on this record?                                  |
+| ------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------ | -------------------- | -------------------------------------- | ----------------------------------------------------------- |
+| A / A0 | WebView `file://`, live glass / glass off            | `MEASURED` emulator-only; physical **`BLOCKED`**; evening AVD **`INVALID_FOR_COMPARISON`** | no                   | M-1 HostConnect (AVD only)             | **no** (not physical Gate P device set)                     |
+| B      | WebView + AssetLoader HTTPS                          | same as A                                                                                  | no                   | M-1 HostConnect (AVD only)             | **no**                                                      |
+| C      | Compose/Flutter/other toolkit, no product compositor | **`NOT MEASURED`**                                                                         | n/a                  | n/a                                    | **no**                                                      |
+| D      | product compositor + Dioxus/Blitz producer           | M0-D1a/D1b/D2 **PASS** (host-side Vulkan)                                                  | Xiaomi Adreno 710    | **no** — M0 probe, not M-1 HostConnect | **granted by owner signature**, not as cheapest A/B/C track |
 
 ## RFC §0.4 field matrix
 
@@ -69,22 +70,21 @@ Evidence status values: `measured` | `estimated` | `unavailable`.
 | Dirty-tree D2 | control `2026-08-17T19-34-27-050Z`, capture `2026-08-17T19-41-18-304Z`                                 | **REHEARSAL / NON-ADMISSIBLE** |
 
 Technical **M0 PASS** means the RFC M0 kill-probe chain (D1a + D1b + D2)
-admitted on a physical production GPU. It is **not** production NeoCompositor,
-**not** `D2=Dioxus` GO, and **not** `D1=Track D GO`.
+admitted on a physical production GPU. It is **not** production NeoCompositor
+and **not** a WebView cutover. D1/D2 GO live in
+[`d1-d2-decision.md`](d1-d2-decision.md).
 
 Missing capabilities remain: upstream `host_node_marker`; typed Blitz Glass
 node. The 65-line patch is bounded, not a foundational private fork.
 
-## Decision this record opens
+## Decision this record opened
 
 ```text
 question: D1 = Track D GO ?
 opened_by: this TrackComparison
-current: NOT_GRANTED
-must_not_cite_as_yes: M0 PASS, D1a/D1b/D2 JSON, this file's existence
-cheapest_track_that_satisfies_Gate_P_on_a_matched_physical_fixture: not established
-honest_alternative: keep WebView (A/B) until a physical M-1 exists, or accept D on M0 feasibility plus the Gate P waiver
+signed: docs/rfc/d1-d2-decision.md (2026-08-18)
+decision: D1=Track D GO; D2=Dioxus+Blitz GO; D3=DEFERRED
+waiver: Track D technically proven, not proven cheapest vs A/B/C
+scope: feature-flagged staged implementation; not blanket production migration
+rollback: acting React/WebView path
 ```
-
-Owner `Disya123 <gamedisya@gmail.com>` still has to sign `D1=Track D GO` or
-choose another track. D3 remains a separate decision.

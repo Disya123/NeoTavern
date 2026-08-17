@@ -155,8 +155,9 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   producer seam plus compositor moving sample; probe `capture=false`; not
   production JNI). See [M0-D2 probe](../rfc/m0-d2-probe.md) and the
   [physical runbook](../rfc/m0-d2-physical-runbook.md). Technical M0 is
-  **PASS**. `D1=Track D GO` is not granted
-  ([TrackComparison](../rfc/m0-track-comparison.md)).
+  **PASS**. `D1=Track D GO` and `D2=Dioxus+Blitz GO` are
+  signed ([d1-d2-decision.md](../rfc/d1-d2-decision.md)); `D3=DEFERRED`.
+  React/WebView remains the public renderer and rollback.
 
 ## Background execution (Phase 8)
 
@@ -275,6 +276,7 @@ See also: [ADR-0034](../adr/0034-android-local-host-jni-transport.md),
 [M0-D2 host adjudication](../rfc/m0-d2-adjudication.json),
 [M0-D2 physical capture runbook](../rfc/m0-d2-physical-runbook.md),
 [TrackComparison](../rfc/m0-track-comparison.md),
+[D1/D2 decision](../rfc/d1-d2-decision.md),
 [Gate P decision record (signed GateP:P1)](../rfc/gate-p-decision-draft.md),
 [ADR-0036](../adr/0036-android-background-execution.md),
 [generation durability](../architecture/generation-durability.md),

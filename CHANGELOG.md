@@ -3,6 +3,15 @@
 ## Unreleased
 ### Added
 
+- **D1/D2 GO (not production cutover).** Owner `Disya123` signed
+  [d1-d2-decision.md](docs/rfc/d1-d2-decision.md) / [ADR-0049](docs/adr/0049-track-d-dioxus-presentation.md):
+  `D1=Track D GO`, `D2=Dioxus+pinned Blitz GO`, `D3=DEFERRED` (Android Rust
+  presentation path, Web stays React). Waiver: Track D is technically proven,
+  not proven cheapest vs A/B/C. Scope: feature-flagged staged implementation.
+  Rollback: acting React/WebView. Kill trigger: production DoD miss,
+  foundational fork, unsupported device matrix, or budget overrun. M0 is not
+  re-run.
+
 - **M0-D2 host-side Vulkan capture admission.** Program **M0-D2 PASS**.
   Adjudicator `scripts/m0-d2-adjudicate.mjs` hashed the physical RenderDoc
   `.rdc` / XML / control+capture logs / BOUND APK (`3036422`, SHA-256
