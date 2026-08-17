@@ -89,6 +89,8 @@ crates/
                        # not production kernel JNI.
   presentation-m0-d2/  # NeoUI v4 RFC M0-D2 producer+dynamic seam PASS
                        # (host-side; crate log capture=false).
+  presentation-dioxus-shell/ # Feature-flagged Dioxus Product Wire shell.
+                       # Not MainActivity; not production JNI.
 ```
 
 Dependencies only go "downward": `server`/`web` → packages; packages → `shared`/

@@ -28,6 +28,13 @@
   M0 probes re-export the interchange types and stay probes. Production
   `MainActivity` is unchanged.
 
+- **Feature-flagged Dioxus Product Wire shell.** Crate
+  `crates/presentation-dioxus-shell` consumes the same canonical Wire fixture
+  as React tests, builds a Dioxus `VirtualDom`, rejects unregistered
+  commands, drops stale generation, and bounds streaming. Not linked to
+  `MainActivity`. `NEOTA_DIOXUS_SHELL=1` is non-default. Milestone A stamp
+  is still STARTED until the evidence record.
+
 - **M0-D2 host-side Vulkan capture admission.** Program **M0-D2 PASS**.
   Adjudicator `scripts/m0-d2-adjudicate.mjs` hashed the physical RenderDoc
   `.rdc` / XML / control+capture logs / BOUND APK (`3036422`, SHA-256

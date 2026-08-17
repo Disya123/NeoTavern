@@ -3207,6 +3207,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "neotavern-presentation-dioxus-shell"
+version = "0.1.0"
+dependencies = [
+ "contracts-generated",
+ "dioxus-core",
+ "dioxus-core-macro",
+ "dioxus-hooks",
+ "dioxus-html",
+ "dioxus-signals",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "neotavern-presentation-m0"
 version = "0.1.0"
 dependencies = [

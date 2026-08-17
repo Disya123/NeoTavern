@@ -1,0 +1,10 @@
+{
+  "chatId": "7f3a2b4c-1d2e-4f5a-8b9c-0d1e2f3a4b5c",
+  "title": "First chat",
+  "messageIds": ["a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"],
+  "issuedCommands": ["chats.get", "chats.messages.list", "generation.cancel"],
+  "acceptedText": "Hello!",
+  "lastGeneration": 2,
+  "droppedStale": 1,
+  "droppedBackpressure": 2
+}

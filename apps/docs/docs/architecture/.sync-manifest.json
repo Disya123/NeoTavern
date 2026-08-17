@@ -245,7 +245,7 @@
     {
       "source": "architecture/README.md",
       "target": "architecture/README.md",
-      "sha256": "e8b3b90b2d8fdc3c344e35aa1fb3d5953bdcf424b985c6a0342dc99505003d5f"
+      "sha256": "38d12afe6953f6e02f696b70e5bec162b9ca9c599526a1b34aed11650ad6177f"
     },
     {
       "source": "architecture/benchmarks.md",
@@ -275,7 +275,7 @@
     {
       "source": "architecture/presentation-boundary.md",
       "target": "architecture/presentation-boundary.md",
-      "sha256": "5a8401d0bfcbd55865c43ccf40cf66c795280c320ebebaeb30f298d417157d31"
+      "sha256": "a64ba9a4e893acedb608d6fd9892ae7f66484022bbb6e6b14be735dfbc0c33bd"
     },
     {
       "source": "architecture/prompt-pipeline.md",

@@ -8,10 +8,10 @@ A/Product Wire boundary = PASS
 Milestone B = STARTED
 ```
 
-This is **not** Milestone A PASS. The TypeScript/Product Wire boundary is
-closed; RFC §49 still requires a feature-flagged Dioxus product shell,
-React ↔ Dioxus canonical view-model parity, and presentation-path
-generation/backpressure/streaming tests.
+This is **not** yet the Milestone A PASS stamp. RFC §49 deliverables for
+the flagged shell, React ↔ Dioxus view-model parity, and presentation-path
+streaming tests now exist in `crates/presentation-dioxus-shell` and the
+shared fixtures. Production `MainActivity` is unchanged.
 
 **Decisions:** [ADR-0049](../adr/0049-track-d-dioxus-presentation.md),
 [d1-d2-decision.md](../rfc/d1-d2-decision.md).
@@ -22,18 +22,18 @@ This is not a production migration and not Milestone B/C PASS.
 
 ## Audit (RFC §49)
 
-| Deliverable                              | Status                                                         | Where                                                                                                       |
-| ---------------------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Product Wire                             | **present**                                                    | `packages/contracts/src/wire/` (97 operations, kernel dispatch 1:1)                                         |
-| Canonical view models                    | **present** (product DTOs); **React ↔ Dioxus parity unproven** | Wire DTOs. Presentation does not own a second durable model                                                 |
-| Typed commands                           | **PASS** (boundary)                                            | Presentation may issue only Product Wire `operationId`s (`packages/contracts/src/presentation/boundary.ts`) |
-| React Web adapter                        | **present**                                                    | `apps/web` + `@neotavern/neobackend` over Product Wire                                                      |
-| Dioxus presentation shell                | **missing** (blocks A PASS)                                    | M0-D2 is a paint-seam probe, not a Product Wire product shell                                               |
-| Fixture recorder                         | **PASS** (boundary)                                            | `recordPresentationFixture` in the boundary module                                                          |
-| Generation / backpressure tests          | **Kernel present**; **presentation-path missing**              | Kernel generation suite does not prove React/Dioxus streaming parity                                        |
-| PresentationCompatibilityMatrix          | **baseline**                                                   | [presentation-compatibility-matrix.md](../rfc/presentation-compatibility-matrix.md)                         |
-| Theme / Plugin / i18n / legacy inventory | **baseline**                                                   | same matrix; no silent supersede                                                                            |
-| D3 plan                                  | **accepted as DEFERRED**                                       | Android Rust path + Web React; no unification mandate                                                       |
+| Deliverable                              | Status                                        | Where                                                                                                       |
+| ---------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Product Wire                             | **present**                                   | `packages/contracts/src/wire/` (97 operations, kernel dispatch 1:1)                                         |
+| Canonical view models                    | **present**; **React ↔ Dioxus parity tested** | Shared fixture `packages/contracts/src/presentation/fixtures/canonical-chat.json`                           |
+| Typed commands                           | **PASS** (boundary)                           | Presentation may issue only Product Wire `operationId`s (`packages/contracts/src/presentation/boundary.ts`) |
+| React Web adapter                        | **present**                                   | `apps/web` + `@neotavern/neobackend` over Product Wire                                                      |
+| Dioxus presentation shell                | **present (flagged)**                         | `crates/presentation-dioxus-shell`. Not `MainActivity`. `NEOTA_DIOXUS_SHELL=1` is non-default               |
+| Fixture recorder                         | **PASS** (boundary)                           | `recordPresentationFixture` in the boundary module                                                          |
+| Generation / backpressure tests          | **present** (presentation-path)               | Stale generation drop + bounded stream cap; React ↔ Dioxus golden projection                                |
+| PresentationCompatibilityMatrix          | **baseline**                                  | [presentation-compatibility-matrix.md](../rfc/presentation-compatibility-matrix.md)                         |
+| Theme / Plugin / i18n / legacy inventory | **baseline**                                  | same matrix; no silent supersede                                                                            |
+| D3 plan                                  | **accepted as DEFERRED**                      | Android Rust path + Web React; no unification mandate                                                       |
 
 ## Rules
 
@@ -46,6 +46,8 @@ This is not a production migration and not Milestone B/C PASS.
 4. Production Android `MainActivity` stays WebView until Milestone B/C DoD.
    `NEOTA_NEOCOMPOSITOR=1` is a **non-default** feature flag for
    `crates/neocompositor`, not a cutover switch.
+   `NEOTA_DIOXUS_SHELL=1` is a **non-default** flag for the Dioxus Product
+   Wire shell crate; it is not a launcher switch.
 5. M0 probe crates stay probes and are not production JNI. Interchange
    types (`NeoDisplayList`, `compile_passes`) live in
    `neotavern-neocompositor`; probes re-export them.
