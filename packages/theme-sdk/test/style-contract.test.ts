@@ -6,7 +6,8 @@
  *     raw px literals for control sizes, font weights, px font sizes,
  *     raw radii and numeric z-index values are forbidden.
  *  2. `!important` is forbidden except in the a11y override stylesheet
- *     (`preferences.css`, AGENTS.md §14).
+ *     (`preferences.css`) and the M-1 measurement user-layer stylesheet
+ *     (`measurement.css`, AGENTS.md §14 user layer).
  *  3. Every viewport and container breakpoint used by the built-in CSS is
  *     registered in the theme-sdk breakpoint registry.
  */
@@ -16,8 +17,8 @@ import { extname, basename, resolve } from 'node:path';
 import { VIEWPORT_BREAKPOINTS, CONTAINER_BREAKPOINTS, DEFAULT_LIGHT_TOKENS } from '../src/index.js';
 import { SCAN_DIRS, collectSourceFiles, repoRoot } from './helpers.js';
 
-/** Files exempt from the `!important` ban: a11y override layer (AGENTS.md §14). */
-const IMPORTANT_EXEMPT = new Set(['preferences.css']);
+/** Files exempt from the `!important` ban: a11y override and M-1 user layer. */
+const IMPORTANT_EXEMPT = new Set(['preferences.css', 'measurement.css']);
 
 /**
  * Token definition file: the canonical source of literal token values.
@@ -83,6 +84,16 @@ describe('style contract: tokenized literals', () => {
       }
     }
     expect(violations, violations.join('\n')).toEqual([]);
+  });
+});
+
+describe('style contract: M-1 measurement user layer', () => {
+  it('keeps the glass-off stylesheet in the user cascade layer', () => {
+    const css = readFileSync(resolve(repoRoot, 'packages/ui/src/styles/measurement.css'), 'utf8');
+    const index = readFileSync(resolve(repoRoot, 'packages/ui/src/index.css'), 'utf8');
+    expect(css).toContain('@layer user');
+    expect(css).toContain("[data-nt-measurement-glass='off']");
+    expect(index).toContain('./styles/measurement.css');
   });
 });
 

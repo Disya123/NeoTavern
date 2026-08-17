@@ -1,0 +1,13 @@
+/* M-1 Track A0: opt-in glass-off. Default production UI never sets the
+   attribute. `!important` is allowed only in the user layer (AGENTS.md §14). */
+@layer user {
+  :root[data-nt-measurement-glass='off'] {
+    --st-custom-glass-blur: 0px;
+    --st-effect-glass-blur: 0px;
+  }
+
+  :root[data-nt-measurement-glass='off'] * {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}

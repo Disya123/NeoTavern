@@ -2,6 +2,7 @@ package com.neotavern.mobile
 
 import android.Manifest
 import android.app.Activity
+import android.app.ActivityManager
 import android.app.ForegroundServiceStartNotAllowedException
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -10,11 +11,18 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
+import android.os.SystemClock
 import android.util.Log
+import android.view.Choreographer
+import android.view.Display
 import android.view.Gravity
 import android.view.View
+import android.webkit.ConsoleMessage
 import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -24,6 +32,8 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.webkit.WebViewAssetLoader
+import androidx.webkit.WebViewCompat
 import java.io.IOException
 
 /**
@@ -48,9 +58,10 @@ import java.io.IOException
  *    stay open) and the activity releases its holder refcount.
  *
  * Security posture: javaScriptEnabled for the bundled UI, DOM storage on,
- * file access OFF (assets remain reachable via `file:///android_asset`),
- * mixed content NEVER. INTERNET is in the manifest for optional remote
- * HostConnect (URL/QR) only — local mode never opens a socket. CAMERA is
+ * file access OFF (assets remain reachable via `file:///android_asset` or,
+ * when M-1 Track B is opted in, `WebViewAssetLoader` HTTPS), mixed content
+ * NEVER. INTERNET is in the manifest for optional remote HostConnect
+ * (URL/QR) only — local mode never opens a socket. CAMERA is
  * optional for QR pairing (WebChromeClient permission bridge).
  */
 class MainActivity : Activity() {
@@ -74,9 +85,22 @@ class MainActivity : Activity() {
     /** Camera PermissionRequest waiting on the runtime CAMERA grant. */
     private var pendingCameraRequest: PermissionRequest? = null
 
+    /** Track B intercepts only `appassets.androidplatform.net`; null on production file://. */
+    private var assetLoader: WebViewAssetLoader? = null
+
+    private var lastRefreshDecision: DisplayRefreshPolicy.Decision? = null
+
+    private var requestedRefreshHz: Float? = null
+
+    private var createElapsedMs = 0L
+
+    private var frameCallback: Choreographer.FrameCallback? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        createElapsedMs = SystemClock.elapsedRealtime()
         WindowCompat.setDecorFitsSystemWindows(window, false)
+        applyPreferredDisplayMode()
 
         val web = WebView(this)
         web.id = R.id.neotavern_webview
@@ -87,10 +111,39 @@ class MainActivity : Activity() {
         // WindowInsets are published as --nt-safe-area-* and chrome uses
         // --nt-inset-* (tokens.css).
         web.setFitsSystemWindows(false)
+        val origin = MeasurementOrigin.parse(
+            intent.getStringExtra(MeasurementOrigin.EXTRA),
+        )
+        if (origin == MeasurementOrigin.Profile.AssetLoader) {
+            assetLoader = WebViewAssetLoader.Builder()
+                .addPathHandler(
+                    MeasurementOrigin.ASSET_PATH_PREFIX,
+                    WebViewAssetLoader.AssetsPathHandler(this),
+                )
+                .build()
+        }
         web.webViewClient = object : WebViewClient() {
+            override fun shouldInterceptRequest(
+                view: WebView,
+                request: WebResourceRequest,
+            ): WebResourceResponse? {
+                val loader = assetLoader
+                if (loader != null) {
+                    val intercepted = loader.shouldInterceptRequest(request.url)
+                    if (intercepted != null) return intercepted
+                }
+                return super.shouldInterceptRequest(view, request)
+            }
+
             override fun onPageFinished(view: WebView, url: String) {
+                Log.i(
+                    TAG,
+                    "m1-startup duration_ms=${SystemClock.elapsedRealtime() - createElapsedMs} url=$url",
+                )
                 ViewCompat.getRootWindowInsets(view)?.let { captureWindowInsets(it, view) }
                     ?: publishSafeAreaCss(view)
+                publishMeasurementGlass(view)
+                publishMeasurementFrames(view)
             }
         }
         web.settings.javaScriptEnabled = true
@@ -98,8 +151,19 @@ class MainActivity : Activity() {
         web.settings.allowFileAccess = false
         web.settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
         @Suppress("DEPRECATION")
-        web.settings.allowUniversalAccessFromFileURLs = true
+        web.settings.allowUniversalAccessFromFileURLs =
+            origin == MeasurementOrigin.Profile.File
+        applyRequestedViewFrameRate(web)
         web.webChromeClient = object : WebChromeClient() {
+            override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
+                val message = consoleMessage.message()
+                if (message.startsWith(MeasurementFrames.LOG_PREFIX)) {
+                    Log.i(TAG, message)
+                    return true
+                }
+                return super.onConsoleMessage(consoleMessage)
+            }
+
             override fun onPermissionRequest(request: PermissionRequest) {
                 val wantsCamera = request.resources.contains(PermissionRequest.RESOURCE_VIDEO_CAPTURE)
                 if (!wantsCamera) {
@@ -160,7 +224,10 @@ class MainActivity : Activity() {
             setContentView(web)
             applyStatusBarAppearance(web)
             attachInsetPublisher(web)
-            web.loadUrl("file:///android_asset/web/index.html")
+            val documentUrl = MeasurementOrigin.documentUrl(origin)
+            Log.i(TAG, "m1-origin profile=${origin.name} url=$documentUrl")
+            logMeasurementEnvironment()
+            web.loadUrl(documentUrl)
         } else {
             // Defense in depth: Gradle already refuses assemble without
             // apps/web/dist/index.html. If a hand-built APK still lacks it,
@@ -250,6 +317,10 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        frameCallback?.let { callback ->
+            Choreographer.getInstance().removeFrameCallback(callback)
+            frameCallback = null
+        }
         // Stop bridge deliveries only — the claimed streams stay open and are
         // pumped by GenerationService, which holds its own holder refcount, so
         // the kernel keeps running while the app is backgrounded.
@@ -345,6 +416,155 @@ class MainActivity : Activity() {
                 "})()"
             )
         web.evaluateJavascript(js, null)
+    }
+
+    /**
+     * M-1 Track A: request the highest same-resolution refresh mode. The OS
+     * may still present at 60 Hz (`ENVIRONMENT_BLOCKED`); that is logged, not
+     * treated as a renderer failure.
+     */
+    private fun applyPreferredDisplayMode() {
+        val currentDisplay = currentDisplayOrNull() ?: return
+        val snapshots = currentDisplay.supportedModes.map { it.toSnapshot() }
+        val current = currentDisplay.mode.toSnapshot()
+        val decision = DisplayRefreshPolicy.chooseHighestRefresh(snapshots, current)
+        lastRefreshDecision = decision
+        requestedRefreshHz = decision.requestedRefreshHz
+        val requestedId = decision.requestedModeId
+        if (requestedId != null) {
+            val params = window.attributes
+            params.preferredDisplayModeId = requestedId
+            window.attributes = params
+        }
+        logRefreshTelemetry("apply", currentDisplay, decision)
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (!hasFocus) return
+        val display = currentDisplayOrNull() ?: return
+        logRefreshTelemetry("observed", display, lastRefreshDecision)
+        logMeasurementThermal("observed")
+    }
+
+    private fun currentDisplayOrNull(): Display? {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            display
+        } else {
+            @Suppress("DEPRECATION")
+            windowManager.defaultDisplay
+        }
+    }
+
+    private fun Display.Mode.toSnapshot(): DisplayRefreshPolicy.Mode =
+        DisplayRefreshPolicy.Mode(
+            id = modeId,
+            refreshRateHz = refreshRate,
+            width = physicalWidth,
+            height = physicalHeight,
+        )
+
+    private fun logRefreshTelemetry(
+        phase: String,
+        display: Display,
+        decision: DisplayRefreshPolicy.Decision?,
+    ) {
+        val supported = display.supportedModes.joinToString(",") { mode ->
+            "${mode.modeId}:${mode.refreshRate}:${mode.physicalWidth}x${mode.physicalHeight}"
+        }
+        val requested = decision?.requestedRefreshHz?.toString() ?: "-"
+        val reason = decision?.reason ?: "-"
+        Log.i(
+            TAG,
+            "m1-refresh phase=$phase supported=[$supported] requested_hz=$requested " +
+                "requested_mode=${decision?.requestedModeId ?: "-"} reason=$reason " +
+                "observed_hz=${display.refreshRate} observed_mode=${display.mode.modeId}",
+        )
+    }
+
+    private fun publishMeasurementGlass(web: WebView) {
+        val profile = MeasurementGlass.parse(
+            intent.getStringExtra(MeasurementGlass.EXTRA_MEASUREMENT_GLASS),
+        )
+        val js = MeasurementGlass.bootstrapJs(profile)
+        if (js != null) {
+            web.evaluateJavascript(js, null)
+        }
+        Log.i(TAG, "m1-glass profile=${profile.name}")
+    }
+
+    private fun publishMeasurementFrames(web: WebView) {
+        if (!MeasurementFrames.enabled(intent.getStringExtra(MeasurementFrames.EXTRA))) return
+        val hz = MeasurementFrames.clampExpectedHz(requestedRefreshHz)
+        web.evaluateJavascript(MeasurementFrames.bootstrapJs(hz), null)
+        startChoreographerSample(hz)
+        Log.i(TAG, "m1-frames expected_hz=$hz sample_ms=${MeasurementFrames.SAMPLE_MS}")
+    }
+
+    private fun startChoreographerSample(expectedHz: Int) {
+        frameCallback?.let { Choreographer.getInstance().removeFrameCallback(it) }
+        val counter = FrameMissCounter(expectedHz)
+        val startElapsed = SystemClock.elapsedRealtime()
+        val callback = object : Choreographer.FrameCallback {
+            override fun doFrame(frameTimeNanos: Long) {
+                val nowMs = frameTimeNanos / 1_000_000.0
+                counter.record(nowMs)
+                if (SystemClock.elapsedRealtime() - startElapsed < MeasurementFrames.SAMPLE_MS) {
+                    Choreographer.getInstance().postFrameCallback(this)
+                } else {
+                    Log.i(TAG, "m1-choreographer ${counter.toJson(nowMs)}")
+                    frameCallback = null
+                }
+            }
+        }
+        frameCallback = callback
+        Choreographer.getInstance().postFrameCallback(callback)
+    }
+
+    /**
+     * API 35+: vote the WebView into the requested display refresh. This does
+     * not change pixels; the OS may still present at 60 Hz.
+     */
+    private fun applyRequestedViewFrameRate(web: WebView) {
+        if (Build.VERSION.SDK_INT < 35) {
+            Log.i(TAG, "m1-refresh view_frame_rate=unsupported")
+            return
+        }
+        val hz = requestedRefreshHz
+        if (hz != null && hz > 0f) {
+            web.setRequestedFrameRate(hz)
+            Log.i(TAG, "m1-refresh view_frame_rate=$hz")
+        } else {
+            web.setRequestedFrameRate(View.REQUESTED_FRAME_RATE_CATEGORY_HIGH)
+            Log.i(TAG, "m1-refresh view_frame_rate=HIGH")
+        }
+    }
+
+    private fun logMeasurementEnvironment() {
+        val pkg = WebViewCompat.getCurrentWebViewPackage(this)
+        Log.i(
+            TAG,
+            "m1-env sdk=${Build.VERSION.SDK_INT} release=${Build.VERSION.RELEASE} " +
+                "model=${Build.MODEL} webview=${pkg?.packageName}:${pkg?.versionName}",
+        )
+        val activityManager = getSystemService(ActivityManager::class.java)
+        val memory = ActivityManager.MemoryInfo()
+        activityManager?.getMemoryInfo(memory)
+        Log.i(
+            TAG,
+            "m1-memory avail_mb=${memory.availMem / (1024L * 1024L)} " +
+                "total_mb=${memory.totalMem / (1024L * 1024L)} low=${memory.lowMemory}",
+        )
+        logMeasurementThermal("apply")
+    }
+
+    private fun logMeasurementThermal(phase: String) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            Log.i(TAG, "m1-thermal phase=$phase status=unsupported")
+            return
+        }
+        val status = getSystemService(PowerManager::class.java)?.currentThermalStatus
+        Log.i(TAG, "m1-thermal phase=$phase status=$status")
     }
 
     private fun applyStatusBarAppearance(host: View) {
