@@ -1,0 +1,294 @@
+{
+  "schema": "m0-d2-adjudication/v1",
+  "status": "PASS",
+  "d2_verdict": "PASS",
+  "d2_program": "PASS",
+  "android_gpu_capture": true,
+  "capture_driver": "Vulkan",
+  "capture_admissible": true,
+  "apk_linkage": "BOUND",
+  "evidence_dirty": false,
+  "producer_source": "dioxus-virtualdom+blitz-paint-traversal+host-node-marker",
+  "glass_from_hook": 2,
+  "sampled_gen": 999,
+  "capture_gen": 120,
+  "pass_compiles": 1,
+  "layout_rebuilds": 0,
+  "paint_scene_rebuilds": 0,
+  "devices": 1,
+  "readbacks": 0,
+  "xdev": 0,
+  "d1a_verdict": "UNCHANGED",
+  "d1b_verdict": "UNCHANGED",
+  "environment_blocked": false,
+  "stamp": "2026-08-17T20-11-27-178Z",
+  "control_stamp": "2026-08-17T20-11-00-619Z",
+  "apk_source_commit": "303642234fb2fc78f8bae4902a003fe13374183e",
+  "capture_tooling_commit": "5df24c8fa97ca2edce3d5627445c2b3e419d683c",
+  "track_d_go": "NOT_GRANTED",
+  "missing_upstream": [
+    "upstream landing of PaintScene::host_node_marker (local crates.io patch)",
+    "typed Blitz Glass paint node beyond the data-neoui host marker"
+  ],
+  "device": {
+    "serial": "8f5c2b7c",
+    "model": "23122PCD1G",
+    "gpu": "Adreno 710"
+  },
+  "ok": true,
+  "checks": [
+    {
+      "id": "hashes",
+      "ok": true,
+      "hashes": {
+        "rdc": {
+          "path": "apps/android/m0-d2-captures/2026-08-17T20-11-27-178Z-d2.rdc",
+          "present": true,
+          "sha256": "e9cca1e7de465f67215bf0af6076c85d7370883ef2f9d0b1161b4b8f4f2a617f",
+          "bytes": 1145391
+        },
+        "xml": {
+          "path": "apps/android/m0-d2-captures/2026-08-17T20-11-27-178Z-d2.xml",
+          "present": true,
+          "sha256": "e1e3646c35e1915c6837b0735a75c68068238e467fe978e4c4a68f95fb70c175",
+          "bytes": 277368
+        },
+        "capture_log": {
+          "path": "apps/android/m0-d2-captures/2026-08-17T20-11-27-178Z-d2-logcat.txt",
+          "present": true,
+          "sha256": "6d6803f60965ed9e3b093fd3ecc213c01492ccad2e0ed94cfea25fb02ac45c3e",
+          "bytes": 24031
+        },
+        "control_log": {
+          "path": "apps/android/m0-d2-captures/2026-08-17T20-11-00-619Z-d2-logcat.txt",
+          "present": true,
+          "sha256": "7b4c834ae42a06392099d6a3c082a7b5ef36d87abb8dbe923e506242e4aa8752",
+          "bytes": 1630
+        },
+        "apk": {
+          "path": "apps/android/app/build/outputs/apk/debug/app-debug.apk",
+          "present": true,
+          "sha256": "ff425359b9a1c6e5aef205faa2e0542b136efa2f01cbe2268b2291ca951515ea",
+          "bytes": 80432422
+        }
+      },
+      "expected_apk_sha256": "ff425359b9a1c6e5aef205faa2e0542b136efa2f01cbe2268b2291ca951515ea",
+      "reason": "SHA-256 recorded for .rdc, XML, both logs, and BOUND APK"
+    },
+    {
+      "id": "not_rehearsal",
+      "ok": true,
+      "rehearsal": {
+        "control_stamp": "2026-08-17T19-34-27-050Z",
+        "capture_stamp": "2026-08-17T19-41-18-304Z",
+        "status": "REHEARSAL / NON-ADMISSIBLE",
+        "reason": "dirty/unbound APK; cannot be reused for PASS"
+      },
+      "reason": "stamps are not the dirty-tree rehearsal"
+    },
+    {
+      "id": "provenance",
+      "ok": true,
+      "apk_linkage": "BOUND",
+      "evidence_dirty": false,
+      "expected_apk_sha256": "ff425359b9a1c6e5aef205faa2e0542b136efa2f01cbe2268b2291ca951515ea",
+      "actual_apk_sha256": "ff425359b9a1c6e5aef205faa2e0542b136efa2f01cbe2268b2291ca951515ea",
+      "bind": {
+        "ok": true,
+        "sha256": "ff425359b9a1c6e5aef205faa2e0542b136efa2f01cbe2268b2291ca951515ea",
+        "reason": "APK SHA-256 matches BOUND bundle"
+      },
+      "reason": "apk_linkage=BOUND; evidence_dirty=false; SHA-256 matches source bundle"
+    },
+    {
+      "id": "driver",
+      "ok": true,
+      "api": {
+        "ok": true,
+        "api": "Vulkan",
+        "status": "VULKAN",
+        "admissible": true,
+        "driver": "Vulkan",
+        "vulkan_commands": true,
+        "reason": "RenderDoc dump contains Vulkan commands"
+      },
+      "reason": "RenderDoc dump contains Vulkan commands"
+    },
+    {
+      "id": "pass_order",
+      "ok": true,
+      "indices": {
+        "restore": 0,
+        "moving": 1,
+        "roi2": 2,
+        "glass2": 3,
+        "overlay": 4
+      },
+      "stale_glass": [],
+      "reason": "restore → moving-blit:g120 → roi:2 → glass:2:g120 → overlay"
+    },
+    {
+      "id": "roi_identity",
+      "ok": true,
+      "accumulator_id": "299",
+      "snapshot_id": "303",
+      "moving_id": "304",
+      "moving_blit": {
+        "src": "304",
+        "dst": "299",
+        "x": 0,
+        "y": 0,
+        "w": 64,
+        "h": 64
+      },
+      "roi": {
+        "src": "299",
+        "dst": "303",
+        "x": 118,
+        "y": 90,
+        "w": 30,
+        "h": 1
+      },
+      "reason": "moving 64×64 blit into named accumulator; Glass B ROI copy is bounded"
+    },
+    {
+      "id": "dump",
+      "ok": true,
+      "missing": [],
+      "api": {
+        "ok": true,
+        "api": "Vulkan",
+        "status": "VULKAN",
+        "admissible": true,
+        "driver": "Vulkan",
+        "vulkan_commands": true,
+        "reason": "RenderDoc dump contains Vulkan commands"
+      },
+      "reason": "Vulkan dump contains moving-blit:g120, roi:2, glass:2:g120, named accumulator"
+    },
+    {
+      "id": "no_readback",
+      "ok": true,
+      "forbidden": [],
+      "reason": "no vkMapMemory / image-to-buffer in the Event Browser"
+    },
+    {
+      "id": "lifetime_and_counters",
+      "ok": true,
+      "capture_counters": {
+        "ok": true,
+        "values": {
+          "devices": 1,
+          "readbacks": 0,
+          "xdev": 0,
+          "roi_copies": 1001,
+          "raster": 4,
+          "glass": 1001,
+          "moving_blits": 1000,
+          "pass_compiles": 1,
+          "vello_rebuilds": 4,
+          "layout_rebuilds": 0,
+          "ui_rebuilds": 0,
+          "paint_scene_rebuilds": 0,
+          "sampled_gen": 999,
+          "frames": 1000,
+          "render_polls": 0,
+          "capture_polls": 1,
+          "acc_bytes": 1046528,
+          "capture": false,
+          "timeline": "clear,raster,blit,roi:1,glass:1,raster,blit,raster,blit,moving:g0,roi:2,glass:2:g0,raster,blit",
+          "capture_timeline": "restore,moving:g120,roi:2,glass:2:g120,overlay",
+          "producer_source": "dioxus-virtualdom+blitz-paint-traversal+host-node-marker",
+          "glass_from_hook": 2,
+          "patch_lines": 65,
+          "rebase_anyrender_0111": "PASS",
+          "blitz_newer": "NOT_AVAILABLE"
+        },
+        "line": "08-18 02:11:55.454  4218  8261 I NeoTavern: m0-d2 gpu_ran=true adapter=Adreno_(TM)_710 backend=Vulkan software=false devices=1 readbacks=0 xdev=0 roi_copies=1001 raster=4 glass=1001 moving_blits=1000 pass_compiles=1 vello_rebuilds=4 layout_rebuilds=0 ui_rebuilds=0 paint_scene_rebuilds=0 sampled_gen=999 damage=95x88+53x1 frames=1000 ran_on_android=true capture=false timeline=clear,raster,blit,roi:1,glass:1,raster,blit,raster,blit,moving:g0,roi:2,glass:2:g0,raster,blit capture_timeline=restore,moving:g120,roi:2,glass:2:g120,overlay render_polls=0 capture_polls=1 acc_bytes=1046528 producer_source=dioxus-virtualdom+blitz-paint-traversal+host-node-marker glass_from_hook=2 patch_lines=65 rebase_anyrender_0111=PASS blitz_newer=NOT_AVAILABLE verdict=BLOCKED reason=Android_GPU_ran;_GPU_capture_with_pass/resource_order_is_still_required_for_D1a_PASS",
+        "reason": "golden D2 counters; producer paint seam; capture bit false; compile-once"
+      },
+      "control_counters": {
+        "ok": true,
+        "values": {
+          "devices": 1,
+          "readbacks": 0,
+          "xdev": 0,
+          "roi_copies": 1001,
+          "raster": 4,
+          "glass": 1001,
+          "moving_blits": 1000,
+          "pass_compiles": 1,
+          "vello_rebuilds": 4,
+          "layout_rebuilds": 0,
+          "ui_rebuilds": 0,
+          "paint_scene_rebuilds": 0,
+          "sampled_gen": 999,
+          "frames": 1000,
+          "render_polls": 0,
+          "capture_polls": 0,
+          "acc_bytes": 1046528,
+          "capture": false,
+          "timeline": "clear,raster,blit,roi:1,glass:1,raster,blit,raster,blit,moving:g0,roi:2,glass:2:g0,raster,blit",
+          "capture_timeline": "restore,moving:g120,roi:2,glass:2:g120,overlay",
+          "producer_source": "dioxus-virtualdom+blitz-paint-traversal+host-node-marker",
+          "glass_from_hook": 2,
+          "patch_lines": 65,
+          "rebase_anyrender_0111": "PASS",
+          "blitz_newer": "NOT_AVAILABLE"
+        },
+        "line": "08-18 02:11:14.577  9919  3639 I NeoTavern: m0-d2 gpu_ran=true adapter=Adreno_(TM)_710 backend=Vulkan software=false devices=1 readbacks=0 xdev=0 roi_copies=1001 raster=4 glass=1001 moving_blits=1000 pass_compiles=1 vello_rebuilds=4 layout_rebuilds=0 ui_rebuilds=0 paint_scene_rebuilds=0 sampled_gen=999 damage=95x88+53x1 frames=1000 ran_on_android=true capture=false timeline=clear,raster,blit,roi:1,glass:1,raster,blit,raster,blit,moving:g0,roi:2,glass:2:g0,raster,blit capture_timeline=restore,moving:g120,roi:2,glass:2:g120,overlay render_polls=0 capture_polls=0 acc_bytes=1046528 producer_source=dioxus-virtualdom+blitz-paint-traversal+host-node-marker glass_from_hook=2 patch_lines=65 rebase_anyrender_0111=PASS blitz_newer=NOT_AVAILABLE verdict=BLOCKED reason=Android_GPU_ran;_GPU_capture_with_pass/resource_order_is_still_required_for_D1a_PASS",
+        "reason": "golden D2 counters; producer paint seam; capture bit false; compile-once"
+      },
+      "vk_device_ids": [
+        "55"
+      ],
+      "vk_create_image": 5,
+      "vk_queue_submit": 4,
+      "validation_errors": false,
+      "high_water_stable": true,
+      "capture_poll_not_render_wait": true,
+      "reason": "1000-frame golden on both runs; acc_bytes stable; render_polls=0; capture poll is not a production wait"
+    },
+    {
+      "id": "patch_and_rebase",
+      "ok": true,
+      "patch_lines": 65,
+      "rebase_anyrender_0111": "PASS",
+      "blitz_newer": "NOT_AVAILABLE",
+      "reason": "bounded 65-line paint hook; AnyRender 0.11.1 rebase PASS; newer Blitz NOT_AVAILABLE"
+    }
+  ],
+  "failed": [],
+  "labels": [
+    "m0-d2-restore-static",
+    "m0-d2-moving-blit:g120",
+    "m0-d2-roi-read:2",
+    "m0-d2-glass:2:g120",
+    "m0-d2-overlay-blit",
+    "m0-d2-overlay-blit"
+  ],
+  "named_resources": {
+    "164": "RelaySemaphores: 1",
+    "299": "m0-d1a-accumulator",
+    "301": "m0-d1a-vello",
+    "303": "m0-d1a-glass-roi",
+    "304": "m0-d2-moving",
+    "306": "m0-d2-static-prefix",
+    "308": "m0-d1a-sampler",
+    "309": "m0-d1a-blit-bgl",
+    "310": "m0-d1a-glass-bgl",
+    "311": "m0-d1a-blit-layout",
+    "312": "m0-d1a-glass-layout",
+    "316": "m0-d1a-blit",
+    "319": "m0-d1a-glass",
+    "320": "m0-d1a-glass-params",
+    "361": "RelaySemaphores: 2",
+    "4077": "(wgpu internal) Staging",
+    "4081": "m0-d1a-glass-bg",
+    "4090": "m0-d2-overlay-blit"
+  },
+  "apk_sha256": "ff425359b9a1c6e5aef205faa2e0542b136efa2f01cbe2268b2291ca951515ea",
+  "rdc_sha256": "e9cca1e7de465f67215bf0af6076c85d7370883ef2f9d0b1161b4b8f4f2a617f",
+  "xml_sha256": "e1e3646c35e1915c6837b0735a75c68068238e467fe978e4c4a68f95fb70c175",
+  "note": "host-side admission; probe log capture=false is expected; D1a/D1b JSON unchanged; D1=Track D GO is not granted"
+}

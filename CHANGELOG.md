@@ -3,21 +3,33 @@
 ## Unreleased
 ### Added
 
-- **M0-D2 dynamic sample after the producer paint seam (still STARTED, not
-  PASS).** The moving sample is inserted into the Dioxus/Blitz
-  `NeoDisplayList` immediately before Glass B — not via `static_d1b_scene()`.
-  Compile-once motion: `pass_compiles=1`, `layout_rebuilds=0`,
-  `paint_scene_rebuilds=0`; per frame only compositor blit/damage/generation.
-  Glass B samples current `gN`. Debug Activity `M0D2Activity` /
+- **M0-D2 host-side Vulkan capture admission.** Program **M0-D2 PASS**.
+  Adjudicator `scripts/m0-d2-adjudicate.mjs` hashed the physical RenderDoc
+  `.rdc` / XML / control+capture logs / BOUND APK (`3036422`, SHA-256
+  `ff425359…`), checked `apk_linkage=BOUND`, `evidence_dirty=false`,
+  producer source `dioxus-virtualdom+blitz-paint-traversal+host-node-marker`,
+  `glass_from_hook=2`, `moving-blit:g120 → roi:2 → glass:2:g120`,
+  compile-once (`pass_compiles=1`, `layout_rebuilds=0`,
+  `paint_scene_rebuilds=0`), `sampled_gen=999`, `capture_gen=120`,
+  `devices=1` / `readbacks=0` / `xdev=0`, `capture_driver=Vulkan`. Probe
+  logcat stays `capture=false`. Dirty-tree stamps
+  `2026-08-17T19-34-27-050Z` / `2026-08-17T19-41-18-304Z` are
+  **REHEARSAL / NON-ADMISSIBLE**. D1a/D1b JSON unchanged. Technical M0 is
+  **PASS**. Final [TrackComparison](docs/rfc/m0-track-comparison.md) is
+  published and **opens** `D1=Track D GO`; that decision is **not** granted.
+
+- **M0-D2 dynamic sample after the producer paint seam.** The moving sample
+  is inserted into the Dioxus/Blitz `NeoDisplayList` immediately before
+  Glass B — not via `static_d1b_scene()`. Compile-once motion:
+  `pass_compiles=1`, `layout_rebuilds=0`, `paint_scene_rebuilds=0`; per
+  frame only compositor blit/damage/generation. Glass B samples current
+  `gN`. Debug Activity `M0D2Activity` /
   `libneotavern_presentation_m0_d2.so`. Host schema
-  `scripts/m0-d2-adjudicate.mjs` checks producer source, both paint-hook
-  barriers, `devices=1`/`readbacks=0`/`xdev=0`, bounded ROI, 65-line patch,
-  AnyRender 0.11.1 rebase `PASS`, newer Blitz `NOT_AVAILABLE`. Xiaomi
-  Adreno 710 rehearsal control (`2026-08-17T19-34-27-050Z`) and
-  generation-120 capture (`2026-08-17T19-41-18-304Z`) reproduced the
-  golden counters and `m0-d2-*` Event Browser order; they are
-  **REHEARSAL / NON-ADMISSIBLE** (dirty/unbound APK) and MUST NOT be
-  reused for PASS. D1a/D1b JSON unchanged. `D1=Track D GO` is not granted.
+  `scripts/m0-d2-adjudicate.mjs`. Xiaomi Adreno 710 rehearsal control
+  (`2026-08-17T19-34-27-050Z`) and generation-120 capture
+  (`2026-08-17T19-41-18-304Z`) reproduced the golden counters; they are
+  **REHEARSAL / NON-ADMISSIBLE** (dirty/unbound APK) and MUST NOT be reused
+  for PASS. D1a/D1b JSON unchanged. `D1=Track D GO` is not granted.
 
 - **M0-D2 glass barriers in Blitz paint order (still STARTED, not PASS).**
   Bounded crates.io patches: `PaintScene::host_node_marker` (anyrender

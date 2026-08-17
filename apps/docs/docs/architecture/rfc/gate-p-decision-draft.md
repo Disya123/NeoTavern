@@ -89,6 +89,19 @@ adjudication of the physical Vulkan capture
 | M0-D1b | **PASS** (see [m0-d1b-adjudication.json](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/m0-d1b-adjudication.json)); D1a JSON still records `NOT_STARTED` |
 | `D1=Track D GO` | still **`NOT_GRANTED`** |
 
+## Follow-on after M0-D2 admission (not part of the signed Gate P body)
+
+Host-side adjudication [`m0-d2-adjudication.json`](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/m0-d2-adjudication.json)
+and [m0-track-comparison.md](m0-track-comparison.md) set:
+
+| Object | Status after D2 admission |
+| --- | --- |
+| Gate P | still **`GateP:P1` / PASSED** (signed body unchanged) |
+| Normative M0 | technical **PASS** |
+| M0-D2 | **PASS** (host-side; probe log `capture=false`) |
+| TrackComparison | **published**; opens `D1=Track D GO` |
+| `D1=Track D GO` | still **`NOT_GRANTED`** |
+
 ## Classified input evidence (unchanged by this signature)
 
 | Track | Evidence status | What may be cited | Must not be cited as |

@@ -1,9 +1,9 @@
 # Предпроектная техническая спецификация: NeoUI v4 — Android presentation backend и 120-Hz live-glass compositor
 
 **Проект:** NeoTavern  
-**Редакция:** 4.5 (GateP:P1 signed; M0 ENTERED, not PASS)  
+**Редакция:** 4.5 (GateP:P1 signed; technical M0 PASS; D1 GO not granted)  
 **Дата:** 2026-08-17  
-**Статус:** Draft Proposal / Gate P = `GateP:P1` PASSED; не является production-каноном до утверждающих ADR; нормативный M0 `ENTERED`, не PASS  
+**Статус:** Draft Proposal / Gate P = `GateP:P1` PASSED; не является production-каноном до утверждающих ADR; нормативный M0 technical **PASS**; `D1=Track D GO` **NOT_GRANTED**  
 **Целевой путь в репозитории:** `docs/rfc/neoui-v4-android-presentation-backend.md`  
 **Repository migration:** OPEN — корневая копия не считается перемещённой этой редакцией  
 **Лицензия продукта:** GNU AGPL-3.0  
@@ -298,7 +298,7 @@ D запрещено выбирать только потому, что он т�
 | A/A0 | `MEASURED` emulator-only morning fixture; physical `BLOCKED`; evening AVD A/A0 **`INVALID_FOR_COMPARISON`** |
 | B | `MEASURED` emulator-only morning fixture; physical `BLOCKED`; evening AVD B **`INVALID_FOR_COMPARISON`** |
 | C | `NOT MEASURED` |
-| D | M0-D1a **PASS**; M0-D1b **PASS** (host-side RenderDoc Vulkan at g120); PRE-GATE desktop/AVD D1a **не admitted** |
+| D | M0-D1a **PASS**; M0-D1b **PASS**; M0-D2 **PASS** (host-side RenderDoc Vulkan); PRE-GATE desktop/AVD D1a **не admitted**; [TrackComparison](m0-track-comparison.md) published, `D1=Track D GO` **NOT_GRANTED** |
 
 Перед Gate P публикуется `BaselineReport M-1` с измеренными A/A0/B и только
 оценочными C/D. Он достаточен для выбора важности live glass, но **не** для D1.
@@ -3920,7 +3920,7 @@ Snapshot фиксирует факты, но не повышает program verdi
 |---|---|---|
 | `Gate P` | **`GateP:P1` / PASSED** | signed 2026-08-17; [gate-p-decision-draft.md](gate-p-decision-draft.md) |
 | owner M-1 waiver | **explicit** | incomplete physical M-1 accepted for the **product** choice only; not an M-1 PASS |
-| normative M0 | **`ENTERED`** | entry allowed after P1; **not** PASS |
+| normative M0 | **`PASS`** (technical) | M0-D1a/b/D2 host-side admission; not production compositor; [`m0-track-comparison.md`](m0-track-comparison.md) |
 | morning AVD M-1 A/A0/B | `MEASURED` emulator-only | 60 Hz; не RFC device set; **not raised** |
 | evening AVD M-1 A/A0/B | `INVALID_FOR_COMPARISON` | другой APK и другие экраны; **not raised** |
 | physical M-1 device set | `BLOCKED` | none attached; **not raised** |
@@ -3929,8 +3929,8 @@ Snapshot фиксирует факты, но не повышает program verdi
 | signed Gate P record | `docs/rfc/gate-p-decision-draft.md` | `GateP:P1`; owner `Disya123 <gamedisya@gmail.com>` |
 | `M0-D1a` (normative) | **`PASS`** | host-side admission [`m0-d1a-adjudication.json`](m0-d1a-adjudication.json); probe log `capture=false` expected |
 | `M0-D1b` | **`PASS`** | host-side admission [`m0-d1b-adjudication.json`](m0-d1b-adjudication.json); probe log `capture=false`; D1a JSON unchanged |
-| `M0-D2` | **`STARTED`** | producer+dynamic seam [`presentation-m0-d2`](../../crates/presentation-m0-d2/README.md); not PASS; physical capture still required; [`m0-d2-probe.md`](m0-d2-probe.md) |
-| `D1=Track D GO` | `NOT_GRANTED` | M0 PASS и TrackComparison отсутствуют |
+| `M0-D2` | **`PASS`** | host-side admission [`m0-d2-adjudication.json`](m0-d2-adjudication.json); probe log `capture=false`; D1a/D1b JSON unchanged |
+| `D1=Track D GO` | `NOT_GRANTED` | [TrackComparison](m0-track-comparison.md) published; owner signature still required |
 
 Снятое partial evidence:
 

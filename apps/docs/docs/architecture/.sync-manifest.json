@@ -5,7 +5,7 @@
     {
       "source": "README.md",
       "target": "README.md",
-      "sha256": "a341dd084c47196c8331da540bf378871f3e03fa116249299edc51e168c6e307"
+      "sha256": "aa9e4bd33ddec075dcc2ae4a8f62231b2ed4dbf768ad083083ce57b64f819e38"
     },
     {
       "source": "adr/0004-typebox-contracts.md",
@@ -230,7 +230,7 @@
     {
       "source": "android/README.md",
       "target": "android/README.md",
-      "sha256": "5c5689df27da2963dec09454b165ddb2fe2169b61dbdeed13afcda1c527832b3"
+      "sha256": "552ff27bc45fe0d592a3b40f9d0e3fea82119920792fe63859857661bd91cc26"
     },
     {
       "source": "api/README.md",
@@ -240,7 +240,7 @@
     {
       "source": "architecture/README.md",
       "target": "architecture/README.md",
-      "sha256": "c4db963f350edc35dcc81973d246e311be217ecc333cf464b91fabfe0996d978"
+      "sha256": "0fb8e6200bebebf67dfcf2fa51dc46f11d321a7712662d1e9f98da68f9886562"
     },
     {
       "source": "architecture/benchmarks.md",
@@ -345,12 +345,12 @@
     {
       "source": "rfc/README.md",
       "target": "rfc/README.md",
-      "sha256": "7cc2f58d563665fe4099ee5efbf1cd1c20cbaf00cf6e857228a92888ae4027b6"
+      "sha256": "deedd5a1b0685d4ab2e4d3b260af0e0e00b0fe48d62835a2487eef619c27da76"
     },
     {
       "source": "rfc/gate-p-decision-draft.md",
       "target": "rfc/gate-p-decision-draft.md",
-      "sha256": "ffea96a0d6d6a8b38d23e244419f25e6f2583c65039361555fa733fb8c461d30"
+      "sha256": "b6b4d159ec0b4a35550b0f731c32786643882495fb9ff43d6edc25ef0dfda2a1"
     },
     {
       "source": "rfc/m0-d1a-physical-runbook.md",
@@ -365,7 +365,7 @@
     {
       "source": "rfc/m0-d1b-physical-runbook.md",
       "target": "rfc/m0-d1b-physical-runbook.md",
-      "sha256": "c69f58d043d0e42367977ceb0d66f477f910628aac72823f5d265bb0ea5a8333"
+      "sha256": "5256ebc83978c67f7ad40adf3dbe211a585888efb1ce449dce5e1a290b56589a"
     },
     {
       "source": "rfc/m0-d1b-probe.md",
@@ -375,12 +375,17 @@
     {
       "source": "rfc/m0-d2-physical-runbook.md",
       "target": "rfc/m0-d2-physical-runbook.md",
-      "sha256": "e8e77d3fbbf520f402d2c3c7bfc749082db905380182a033d0da1b5a80ce1875"
+      "sha256": "60b806782b5bd2604ce48c07ef60daf310f6ec4b48cf9dc1dfeb16f4bdf45b16"
     },
     {
       "source": "rfc/m0-d2-probe.md",
       "target": "rfc/m0-d2-probe.md",
-      "sha256": "6faa8a94e108dba5ef84279a66109f2d93040e6dc7cbeb708abc312f4994f1a8"
+      "sha256": "e57c8ced7e35b8400261500b647cb93e94a6e0699252f13edab7335d3fcb4589"
+    },
+    {
+      "source": "rfc/m0-track-comparison.md",
+      "target": "rfc/m0-track-comparison.md",
+      "sha256": "57c28a8fd885bfb22b490f6fd17b197d4657e36f2f7a2772cba3d39648b07abd"
     },
     {
       "source": "rfc/m1-baseline-report.md",
@@ -390,7 +395,7 @@
     {
       "source": "rfc/neoui-v4-android-presentation-backend.md",
       "target": "rfc/neoui-v4-android-presentation-backend.md",
-      "sha256": "22b254c073324177589225c9624df8e646c58a831ee74c4038fe817cca4644fe"
+      "sha256": "003bdc05e7093b44072030bd48d9e059bfff84ef4c8b409af1a108907346bb93"
     },
     {
       "source": "theme-sdk/README.md",

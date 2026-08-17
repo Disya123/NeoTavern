@@ -1,17 +1,20 @@
 # M0-D2 Dioxus/Blitz producer seam
 
-**Status:** program **M0-D2 STARTED**, not PASS. Dynamic sample is in the
-producer display list after the Dioxus/Blitz static seam. Host-side D1a and
-D1b remain PASS. Normative M0 stays **`ENTERED`**. `D1=Track D GO` is not
-granted. A Xiaomi rehearsal 1000-frame run and generation-120 Vulkan capture exist
-(`2026-08-17T19-34-27-050Z` / `2026-08-17T19-41-18-304Z`); they are
-**REHEARSAL / NON-ADMISSIBLE** (dirty/unbound APK) and MUST NOT be reused
-for PASS. Admission requires a clean source bundle, BOUND APK, official
-capture, and host adjudicator `--write`.
+**Status:** program **M0-D2 PASS** (host-side). Probe log `capture=false` is
+expected. Host-side D1a and D1b remain PASS (JSON unchanged). Normative M0 is
+technical **PASS**. `D1=Track D GO` is **not** granted; the
+[TrackComparison](m0-track-comparison.md) only opens that decision.
+
+Admitted capture `2026-08-17T20-11-27-178Z` / control
+`2026-08-17T20-11-00-619Z`. Dirty-tree stamps
+`2026-08-17T19-34-27-050Z` / `2026-08-17T19-41-18-304Z` are
+**REHEARSAL / NON-ADMISSIBLE**.
 
 **RFC:** [neoui-v4-android-presentation-backend.md](neoui-v4-android-presentation-backend.md) §48 stage 3  
 **Crate:** [`crates/presentation-m0-d2`](../../crates/presentation-m0-d2/README.md)  
-**Runbook:** [m0-d2-physical-runbook.md](m0-d2-physical-runbook.md)
+**Runbook:** [m0-d2-physical-runbook.md](m0-d2-physical-runbook.md)  
+**Admission:** [m0-d2-adjudication.json](m0-d2-adjudication.json)  
+**TrackComparison:** [m0-track-comparison.md](m0-track-comparison.md)
 
 D1a/D1b used a host-authored display list. Stage 3 requires geometry and text
 to come from a real Dioxus `VirtualDom` and pinned Blitz layout/paint. A mock
@@ -104,23 +107,20 @@ The probe still logs `capture=false`. D1a/D1b JSON is unchanged.
 
 ## Missing upstream capabilities
 
-D2 cannot PASS while these remain:
+D2 host admission is recorded. These remain missing after PASS:
 
 1. Upstream landing of `PaintScene::host_node_marker` (local crates.io patch).
 2. Typed Blitz Glass paint node beyond the `data-neoui` host marker.
-3. Host-side D2 admission with a **BOUND** APK (`--bind-apk` on a clean tree)
-   and `scripts/m0-d2-adjudicate.mjs --write`. A lab RenderDoc tree on a dirty
-   worktree is not program PASS.
 
 Estimated replacement surface if the pin set fails: keep the `NeoDisplayList`
 cut and swap the producer without rewriting D1a/D1b compositor evidence.
 
 ## Non-goals
 
-- Declaring M0-D2 PASS or `D2=Dioxus` without the host-side capture record.
 - Changing `docs/rfc/m0-d1a-adjudication.json` or D1b admission.
 - Linking this crate into production kernel JNI.
-- Granting `D1=Track D GO` (needs TrackComparison/decision record after M0).
+- Granting `D1=Track D GO` (TrackComparison is published; the owner decision is not).
+- Treating dirty-tree rehearsal stamps as admitted evidence.
 
 ## Commands
 
@@ -140,4 +140,4 @@ node scripts/m0-d2-renderdoc-capture.mjs --mode=capture --serial=8f5c2b7c
 node scripts/m0-d2-adjudicate.mjs --stamp=<capture> --control-stamp=<control>
 ```
 
-A green unit test is **STARTED** evidence, not program PASS.
+A green unit test is not a substitute for the host admission JSON.

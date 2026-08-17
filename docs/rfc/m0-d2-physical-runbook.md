@@ -1,9 +1,10 @@
 # M0-D2 physical capture runbook
 
 **Status:** lab procedure. Program **M0-D2 PASS** is the host-side record
-(written only with `--write` after artifacts exist). Desktop Vulkan is
+[`m0-d2-adjudication.json`](m0-d2-adjudication.json). Desktop Vulkan is
 preliminary. D1a and D1b evidence/verdict must not be rewritten.
-`D1=Track D GO` is not granted from this runbook.
+`D1=Track D GO` is not granted from this runbook; see
+[m0-track-comparison.md](m0-track-comparison.md).
 
 **Probe:** [m0-d2-probe.md](m0-d2-probe.md)  
 **Schema:** `m0-d2-adjudication/v1` (`scripts/m0-d2-adjudicate.mjs`)  
@@ -110,8 +111,25 @@ capture_timeline=restore,moving:g120,roi:2,glass:2:g120,overlay
 bake count (Blitz emits more fills than the D1b mock). They must not grow
 during motion.
 
-## After a PASS record
+## Admitted stamps (BOUND APK)
 
-Technical M0 can close. `D1=Track D GO` still requires a TrackComparison /
-decision record. Upstream landing of the paint hook stays in missing
-capabilities.
+| Field             | Value                                                              |
+| ----------------- | ------------------------------------------------------------------ |
+| Control stamp     | `2026-08-17T20-11-00-619Z`                                         |
+| Capture stamp     | `2026-08-17T20-11-27-178Z`                                         |
+| APK source commit | `3036422`                                                          |
+| APK SHA-256       | `ff425359b9a1c6e5aef205faa2e0542b136efa2f01cbe2268b2291ca951515ea` |
+| `.rdc` SHA-256    | `e9cca1e7de465f67215bf0af6076c85d7370883ef2f9d0b1161b4b8f4f2a617f` |
+| Device            | Xiaomi `8f5c2b7c` / Adreno 710 / Vulkan                            |
+| `d2_verdict`      | **PASS**                                                           |
+| Probe `capture=`  | false                                                              |
+| `apk_linkage`     | `BOUND`                                                            |
+| `evidence_dirty`  | false                                                              |
+
+The probe cannot set `android_gpu_capture`. Only the host record flips it.
+
+## After this PASS record
+
+Technical M0 is closed. `D1=Track D GO` still requires an owner signature
+on the [TrackComparison](m0-track-comparison.md). Upstream landing of the
+paint hook stays in missing capabilities.

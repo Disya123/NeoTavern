@@ -1,9 +1,12 @@
 # neotavern-presentation-m0-d2
 
 Non-production **M0-D2 producer-seam probe** for NeoUI v4 RFC 4.5 stage 3.
-Program D2 is **STARTED**, not PASS. The moving sample sits in the producer
-`NeoDisplayList` after the Dioxus/Blitz static seam. Normative M0 stays
-`ENTERED`. `D1=Track D GO` is not granted.
+Program D2 is **PASS** on
+[`docs/rfc/m0-d2-adjudication.json`](../../docs/rfc/m0-d2-adjudication.json).
+The probe still logs `capture=false`. The moving sample sits in the producer
+`NeoDisplayList` after the Dioxus/Blitz static seam. Normative M0 is technical
+**PASS**. `D1=Track D GO` is not granted
+([TrackComparison](../../docs/rfc/m0-track-comparison.md)).
 
 This crate is not linked into the production WebView kernel `.so`. It does
 not replace [`presentation-m0`](../presentation-m0/README.md) (D1a/D1b host
@@ -29,7 +32,7 @@ admission). D1a/D1b evidence JSON is unchanged. Debug APK can load
 
 See [`missing_upstream_capabilities`](src/lib.rs) and
 [`docs/rfc/m0-d2-probe.md`](../../docs/rfc/m0-d2-probe.md). Host-side D2 PASS
-still needs a BOUND APK. The patch is not upstreamed.
+is recorded. The patch is not upstreamed.
 
 ## Pins (experimental)
 

@@ -4,9 +4,11 @@
 //! `PaintScene` that records `host_node_marker` glass barriers. A second DOM
 //! walk is diagnostics only and MUST NOT define z-order.
 //!
-//! Program D2 is **STARTED**, not PASS. The moving sample is inserted into
-//! the producer display list after the Dioxus/Blitz static seam. Normative
-//! M0 stays `ENTERED`. `D1=Track D GO` is not granted.
+//! Program D2 is **PASS** on the host-side record
+//! `docs/rfc/m0-d2-adjudication.json`. The probe still logs `capture=false`.
+//! The moving sample is inserted into the producer display list after the
+//! Dioxus/Blitz static seam. Normative M0 is technical **PASS**.
+//! `D1=Track D GO` is not granted.
 
 #[cfg(all(feature = "android-jni", target_os = "android"))]
 mod android_jni;
@@ -48,11 +50,10 @@ pub const D2_PIN_NOTES: &str = concat!(
     "Full dioxus-native 0.8 is avoided (winit 0.31 window shell)."
 );
 
-/// Honest gap list. D2 cannot PASS while any of these remain.
+/// Honest gap list after host-side D2 PASS. These are not D2 FAIL.
 pub fn missing_upstream_capabilities() -> &'static [&'static str] {
     &[
         "upstream landing of PaintScene::host_node_marker (local crates.io patch)",
-        "host-side D2 admission with BOUND APK (lab capture is not PASS while evidence_dirty)",
         "typed Blitz Glass paint node beyond the data-neoui host marker",
     ]
 }

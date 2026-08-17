@@ -52,7 +52,7 @@ Index of the internal documentation. Each major topic has its own folder.
 - [RFC / proposals](rfc/README.md) — non-canonical drafts. They do not
   replace ADR or the target-architecture ТЗ until an accepting ADR lands.
   Current NeoUI v4 items: the presentation-backend proposal (RFC **4.5**,
-  Gate P **`GateP:P1` / PASSED**, M0 **`ENTERED`**, not PASS), [BaselineReport
+  Gate P **`GateP:P1` / PASSED**, technical M0 **PASS**), [BaselineReport
   M-1](rfc/m1-baseline-report.md), the [M0-D1a paint-seam
   probe](rfc/m0-d1a-probe.md) (**M0-D1a PASS** host-side; probe
   `capture=false`; not a compositor GO), the [M0-D1a physical capture
@@ -64,8 +64,11 @@ Index of the internal documentation. Each major topic has its own folder.
   `capture=false`), the [M0-D1b host adjudication
   record](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/m0-d1b-adjudication.json), the [M0-D1b
   physical capture runbook](rfc/m0-d1b-physical-runbook.md), the [M0-D2
-  producer seam](rfc/m0-d2-probe.md) (**M0-D2 STARTED**, not PASS; [physical
-  runbook](rfc/m0-d2-physical-runbook.md)), and the [signed Gate P
+  producer seam](rfc/m0-d2-probe.md) (**M0-D2 PASS** host-side; probe
+  `capture=false`; [physical
+  runbook](rfc/m0-d2-physical-runbook.md); [admission](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/m0-d2-adjudication.json)),
+  the [TrackComparison](rfc/m0-track-comparison.md) (opens `D1=Track D GO`,
+  does not grant it), and the [signed Gate P
   record](rfc/gate-p-decision-draft.md) (`GateP:P1`, 2026-08-17, incomplete
   physical M-1 waiver).
 - [Changelog](https://github.com/Disya123/NeoTavern/blob/main/CHANGELOG.md).

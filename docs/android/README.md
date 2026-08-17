@@ -150,10 +150,13 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   still logs `capture=false`. The 1437-byte GLES capture is
   `WRONG_API_CAPTURE / NON-ADMISSIBLE`. See [M0-D1a probe](../rfc/m0-d1a-probe.md)
   and the [physical capture runbook](../rfc/m0-d1a-physical-runbook.md).
-  M0-D2 is **STARTED** in `crates/presentation-m0-d2` (Dioxus/Blitz
-  producer seam plus compositor moving sample after that seam; not PASS,
-  not production JNI). See [M0-D2 probe](../rfc/m0-d2-probe.md) and the
-  [physical runbook](../rfc/m0-d2-physical-runbook.md).
+  M0-D2 is **PASS** on the host-side record
+  [`m0-d2-adjudication.json`](../rfc/m0-d2-adjudication.json) (Dioxus/Blitz
+  producer seam plus compositor moving sample; probe `capture=false`; not
+  production JNI). See [M0-D2 probe](../rfc/m0-d2-probe.md) and the
+  [physical runbook](../rfc/m0-d2-physical-runbook.md). Technical M0 is
+  **PASS**. `D1=Track D GO` is not granted
+  ([TrackComparison](../rfc/m0-track-comparison.md)).
 
 ## Background execution (Phase 8)
 
@@ -269,7 +272,9 @@ See also: [ADR-0034](../adr/0034-android-local-host-jni-transport.md),
 [M0-D1b host adjudication](../rfc/m0-d1b-adjudication.json),
 [M0-D1b physical capture runbook](../rfc/m0-d1b-physical-runbook.md),
 [M0-D2 producer seam](../rfc/m0-d2-probe.md),
+[M0-D2 host adjudication](../rfc/m0-d2-adjudication.json),
 [M0-D2 physical capture runbook](../rfc/m0-d2-physical-runbook.md),
+[TrackComparison](../rfc/m0-track-comparison.md),
 [Gate P decision record (signed GateP:P1)](../rfc/gate-p-decision-draft.md),
 [ADR-0036](../adr/0036-android-background-execution.md),
 [generation durability](../architecture/generation-durability.md),

@@ -111,6 +111,5 @@ The probe cannot set `android_gpu_capture`. Only this host record flips it.
 - Changing `docs/rfc/m0-d1a-adjudication.json`
 - Treating desktop Vulkan as D1b PASS
 - `D1=Track D GO`
-- Treating this runbook as M0-D2 PASS. D2 dynamic sample is STARTED; see
-  [m0-d2-probe.md](m0-d2-probe.md) and
-  [m0-d2-physical-runbook.md](m0-d2-physical-runbook.md) (not PASS)
+- Treating this runbook as M0-D2 evidence. D2 has its own PASS record:
+  [m0-d2-adjudication.json](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/m0-d2-adjudication.json).
