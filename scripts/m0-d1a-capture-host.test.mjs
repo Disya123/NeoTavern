@@ -21,7 +21,6 @@ import {
   classifyRoiReadOrder,
   debugManifestAgiMainDeclared,
   debugManifestRenderdocQueriesDeclared,
-  debugManifestVulkanDeclared,
   loadPreset,
   loadRenderdocPin,
   loadRenderdocPreset,
@@ -73,7 +72,7 @@ describe('m0-d1a capture host', () => {
   it('pulls Android .rdc files above Node maxBuffer default', () => {
     const src = readFileSync(join(ROOT, 'scripts', 'm0-d1a-renderdoc-capture.mjs'), 'utf8');
     expect(src).toContain('maxBuffer: 64 * 1024 * 1024');
-    expect(src).toContain("ls -1 files");
+    expect(src).toContain('ls -1 files');
   });
 
   it('does not enable renderdoc-capture from android-jni', () => {

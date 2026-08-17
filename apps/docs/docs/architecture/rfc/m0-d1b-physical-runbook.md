@@ -93,16 +93,16 @@ Host-side `scripts/m0-d1b-adjudicate.mjs --write` wrote
 [`docs/rfc/m0-d1b-adjudication.json`](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/m0-d1b-adjudication.json) after the
 physical artifacts below.
 
-| Split | Value |
-| ----- | ----- |
-| Capture stamp | `2026-08-17T18-15-34-453Z` |
-| Control stamp | `2026-08-17T18-15-03-717Z` |
-| APK source commit | `21b38c0` |
-| APK SHA-256 | `089744f364a24018bbea15ffb51abd8a4cc7ebcf4ab2fe887285ba12f41384e6` |
-| `.rdc` SHA-256 | `7768ec08d2b7288dee98d8ea8cb242d95dbbb032f1abdc94221327d7d6c167ad` |
-| Device | Xiaomi `8f5c2b7c` / Adreno 710 / Vulkan |
-| `d1b_verdict` | **PASS** |
-| Probe `capture=` | false |
+| Split             | Value                                                              |
+| ----------------- | ------------------------------------------------------------------ |
+| Capture stamp     | `2026-08-17T18-15-34-453Z`                                         |
+| Control stamp     | `2026-08-17T18-15-03-717Z`                                         |
+| APK source commit | `21b38c0`                                                          |
+| APK SHA-256       | `089744f364a24018bbea15ffb51abd8a4cc7ebcf4ab2fe887285ba12f41384e6` |
+| `.rdc` SHA-256    | `7768ec08d2b7288dee98d8ea8cb242d95dbbb032f1abdc94221327d7d6c167ad` |
+| Device            | Xiaomi `8f5c2b7c` / Adreno 710 / Vulkan                            |
+| `d1b_verdict`     | **PASS**                                                           |
+| Probe `capture=`  | false                                                              |
 
 The probe cannot set `android_gpu_capture`. Only this host record flips it.
 
@@ -111,5 +111,6 @@ The probe cannot set `android_gpu_capture`. Only this host record flips it.
 - Changing `docs/rfc/m0-d1a-adjudication.json`
 - Treating desktop Vulkan as D1b PASS
 - `D1=Track D GO`
-- Treating this runbook as M0-D2 PASS. D2 may start after D1b PASS; see
-  [m0-d2-probe.md](m0-d2-probe.md) (**STARTED**, not PASS)
+- Treating this runbook as M0-D2 PASS. D2 dynamic sample is STARTED; see
+  [m0-d2-probe.md](m0-d2-probe.md) and
+  [m0-d2-physical-runbook.md](m0-d2-physical-runbook.md) (not PASS)

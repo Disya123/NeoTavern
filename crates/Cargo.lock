@@ -3228,6 +3228,7 @@ dependencies = [
  "dioxus-html",
  "dioxus-native-dom",
  "dioxus-signals",
+ "jni 0.21.1",
  "kurbo",
  "neotavern-presentation-m0",
  "peniko",

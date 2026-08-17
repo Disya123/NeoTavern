@@ -136,3 +136,75 @@ pub fn assemble_from_stream(stream: &[StreamOp]) -> Result<NeoDisplayList, Strin
         ops: Arc::from(ops),
     })
 }
+
+/// Insert the compositor moving sample immediately before the last glass
+/// barrier. The producer paint stream is unchanged; this is the D1b sample
+/// after the Dioxus/Blitz static seam, not a host-authored `static_d1b_scene`.
+pub fn insert_moving_sample_before_last_glass(
+    list: NeoDisplayList,
+) -> Result<NeoDisplayList, String> {
+    use neotavern_presentation_m0::scene_d1b::{glass_barriers, moving_bounds};
+
+    let glass = glass_barriers(&list);
+    if glass.len() != 2 {
+        return Err(format!(
+            "D2 dynamic probe expects exactly two glass barriers, got {}",
+            glass.len()
+        ));
+    }
+    let last_idx = list
+        .ops
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, op)| match op {
+            NeoPaintOp::BackdropBarrier(_) => Some(idx),
+            _ => None,
+        })
+        .next_back()
+        .ok_or_else(|| "missing last glass barrier".to_string())?;
+    let last = match &list.ops[last_idx] {
+        NeoPaintOp::BackdropBarrier(barrier) => barrier.clone(),
+        _ => unreachable!("filtered to BackdropBarrier"),
+    };
+    let next_id = list
+        .ops
+        .iter()
+        .filter_map(|op| match op {
+            NeoPaintOp::PaintChunk(chunk) | NeoPaintOp::Image(ImageLayer { chunk }) => {
+                Some(chunk.id.0)
+            }
+            _ => None,
+        })
+        .max()
+        .unwrap_or(0)
+        .saturating_add(1);
+    let next_order = list
+        .ops
+        .iter()
+        .filter_map(|op| match op {
+            NeoPaintOp::PaintChunk(chunk) | NeoPaintOp::Image(ImageLayer { chunk }) => {
+                Some(chunk.paint_order.0)
+            }
+            _ => None,
+        })
+        .max()
+        .unwrap_or(0)
+        .saturating_add(5);
+    let moving = PaintChunk {
+        id: PaintChunkId(next_id),
+        generation: 1,
+        paint_order: PaintOrderKey(next_order),
+        spatial_node: last.spatial_node,
+        clip_chain: last.clip_chain,
+        effect_node: last.effect_node,
+        backdrop_root: last.backdrop_root,
+        bounds: moving_bounds(0),
+        payload: StubPayload::MovingSample,
+    };
+    let mut ops = list.ops.to_vec();
+    ops.insert(last_idx, NeoPaintOp::PaintChunk(moving));
+    Ok(NeoDisplayList {
+        ops: Arc::from(ops),
+        ..list
+    })
+}

@@ -64,7 +64,8 @@ Index of the internal documentation. Each major topic has its own folder.
   `capture=false`), the [M0-D1b host adjudication
   record](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/m0-d1b-adjudication.json), the [M0-D1b
   physical capture runbook](rfc/m0-d1b-physical-runbook.md), the [M0-D2
-  producer seam](rfc/m0-d2-probe.md) (**M0-D2 STARTED**, not PASS), and the [signed Gate P
+  producer seam](rfc/m0-d2-probe.md) (**M0-D2 STARTED**, not PASS; [physical
+  runbook](rfc/m0-d2-physical-runbook.md)), and the [signed Gate P
   record](rfc/gate-p-decision-draft.md) (`GateP:P1`, 2026-08-17, incomplete
   physical M-1 waiver).
 - [Changelog](https://github.com/Disya123/NeoTavern/blob/main/CHANGELOG.md).

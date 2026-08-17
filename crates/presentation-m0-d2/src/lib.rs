@@ -4,10 +4,15 @@
 //! `PaintScene` that records `host_node_marker` glass barriers. A second DOM
 //! walk is diagnostics only and MUST NOT define z-order.
 //!
-//! Program D2 is **STARTED**, not PASS. Normative M0 stays `ENTERED`.
-//! `D1=Track D GO` is not granted.
+//! Program D2 is **STARTED**, not PASS. The moving sample is inserted into
+//! the producer display list after the Dioxus/Blitz static seam. Normative
+//! M0 stays `ENTERED`. `D1=Track D GO` is not granted.
 
+#[cfg(all(feature = "android-jni", target_os = "android"))]
+mod android_jni;
 mod assemble;
+#[cfg(feature = "gpu")]
+mod gpu_run;
 mod sink;
 
 use blitz_dom::BaseDocument;
@@ -19,11 +24,18 @@ use dioxus_native_dom::{DioxusDocument, DocumentConfig};
 use neotavern_presentation_m0::display_list::NeoDisplayList;
 use neotavern_presentation_m0::scene_d1a::{D1A_HEIGHT, D1A_WIDTH};
 
-pub use assemble::assemble_from_stream;
+pub use assemble::{assemble_from_stream, insert_moving_sample_before_last_glass};
+#[cfg(feature = "gpu")]
+pub use gpu_run::{run_dynamic_d2, run_dynamic_d2_with_capture, DynamicD2Report};
 pub use sink::{DrawKind, ProducerSink, StreamOp};
 
 pub const D2_WIDTH: u32 = D1A_WIDTH;
 pub const D2_HEIGHT: u32 = D1A_HEIGHT;
+pub const D2_PATCH_LINES: u64 = 65;
+pub const D2_REBASE_ANYRENDER_0111: &str = "PASS";
+pub const D2_BLITZ_NEWER: &str = "NOT_AVAILABLE";
+pub const D2_PRODUCER_SOURCE: &str = "dioxus-virtualdom+blitz-paint-traversal+host-node-marker";
+pub const D2_CAPTURE_DIR: &str = "/data/data/com.neotavern.mobile/files/m0-d2";
 
 /// Experimental pins matching presentation-m0 wgpu 29 / Vello 0.9.
 /// `anyrender` / `blitz-paint` are patched locally; see `upstream/`.
@@ -40,8 +52,7 @@ pub const D2_PIN_NOTES: &str = concat!(
 pub fn missing_upstream_capabilities() -> &'static [&'static str] {
     &[
         "upstream landing of PaintScene::host_node_marker (local crates.io patch)",
-        "producer-owned synthetic moving sample after the static seam",
-        "physical Android GPU capture of the producer path",
+        "host-side D2 admission with BOUND APK (lab capture is not PASS while evidence_dirty)",
         "typed Blitz Glass paint node beyond the data-neoui host marker",
     ]
 }
@@ -105,7 +116,7 @@ pub fn produce_app(app: fn() -> Element) -> Result<ProducerOutput, String> {
         paint_commands,
         glass_hooks: stream_glass.len() as u64,
         effect_scopes,
-        source: "dioxus-virtualdom+blitz-paint-traversal+host-node-marker",
+        source: D2_PRODUCER_SOURCE,
         pin_notes: D2_PIN_NOTES,
         diagnostic_dom_glass,
         stream_glass: stream_glass.clone(),
@@ -120,6 +131,15 @@ pub fn produce_app(app: fn() -> Element) -> Result<ProducerOutput, String> {
 pub fn produce_static_d1a_list() -> Result<(NeoDisplayList, ProducerReport), String> {
     let out = produce_app(d2_static_app)?;
     Ok((out.list, out.report))
+}
+
+/// Static Dioxus/Blitz seam plus the compositor moving sample immediately
+/// before Glass B. Layout/`paint_scene` run once; the GPU loop must not
+/// call this again.
+pub fn produce_dynamic_list() -> Result<(NeoDisplayList, ProducerReport), String> {
+    let (list, report) = produce_static_d1a_list()?;
+    let list = insert_moving_sample_before_last_glass(list)?;
+    Ok((list, report))
 }
 
 /// D1a-shaped first-party scene. Glass B sits inside one bounded opacity/clip
@@ -289,10 +309,7 @@ mod tests {
         let (list, report) = produce_static_d1a_list().expect("D2 producer");
         assert!(report.vdom_rebuilt);
         assert!(report.layout_resolved);
-        assert_eq!(
-            report.source,
-            "dioxus-virtualdom+blitz-paint-traversal+host-node-marker"
-        );
+        assert_eq!(report.source, D2_PRODUCER_SOURCE);
         assert!(report.paint_commands > 0);
         assert_eq!(report.glass_hooks, 2);
         assert_eq!(report.stream_glass, report.diagnostic_dom_glass);
@@ -407,5 +424,103 @@ mod tests {
             !glass.open_scopes().is_empty(),
             "opacity ancestor must remain open on the glass pass"
         );
+    }
+
+    #[test]
+    fn d2_dynamic_moving_sits_after_blitz_seam_not_d1b_mock() {
+        let (static_list, _) = produce_static_d1a_list().expect("static producer");
+        let (list, report) = produce_dynamic_list().expect("dynamic producer");
+        assert_eq!(report.source, D2_PRODUCER_SOURCE);
+        assert_eq!(report.glass_hooks, 2);
+        assert!(report.vdom_rebuilt);
+        assert!(report.layout_resolved);
+        assert!(neotavern_presentation_m0::scene_d1b::list_has_moving_sample(&list));
+        assert!(!neotavern_presentation_m0::scene_d1b::list_has_moving_sample(&static_list));
+        assert_ne!(list.ops, static_d1a_scene().ops);
+        assert_ne!(
+            list.ops,
+            neotavern_presentation_m0::static_d1b_scene().ops,
+            "producer list is not the host-authored D1b mock"
+        );
+
+        let glass_at = barrier_positions(&list);
+        assert_eq!(glass_at.len(), 2);
+        match &list.ops[glass_at[1] - 1] {
+            NeoPaintOp::PaintChunk(chunk) => {
+                assert_eq!(
+                    chunk.payload,
+                    neotavern_presentation_m0::StubPayload::MovingSample
+                );
+            }
+            other => panic!("expected moving chunk immediately before Glass B, got {other:?}"),
+        }
+
+        let passes = compile_passes(&list).expect("compiled producer+moving");
+        let kinds: Vec<&'static str> = passes
+            .iter()
+            .map(|pass| {
+                if pass.is_glass() {
+                    "glass"
+                } else if matches!(
+                    pass,
+                    neotavern_presentation_m0::pass_graph::CompiledPass::MovingSample { .. }
+                ) {
+                    "moving"
+                } else {
+                    "raster"
+                }
+            })
+            .collect();
+        let moving = kinds
+            .iter()
+            .position(|kind| *kind == "moving")
+            .expect("moving pass");
+        let glasses: Vec<usize> = kinds
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, kind)| (*kind == "glass").then_some(idx))
+            .collect();
+        assert_eq!(glasses.len(), 2);
+        assert!(glasses[0] < moving && moving < glasses[1]);
+        assert!(
+            kinds[glasses[1] + 1..].iter().any(|kind| *kind == "raster"),
+            "overlay raster must remain after Glass B"
+        );
+        let glass_b = passes.iter().filter(|pass| pass.is_glass()).nth(1).unwrap();
+        assert!(
+            !glass_b.open_scopes().is_empty(),
+            "Glass B must keep the ancestor opacity/clip scope"
+        );
+
+        let events = neotavern_presentation_m0::timeline::expected_first_frame(&list)
+            .expect("first-frame timeline");
+        let encoded = neotavern_presentation_m0::timeline::encode_timeline(&events);
+        let moving_at = encoded.find("moving:g0").expect("moving:g0");
+        let roi2 = encoded.find("roi:2").expect("roi:2 ordinal");
+        let glass2 = encoded.find("glass:2:g0").expect("glass:2:g0 current gen");
+        assert!(moving_at < roi2 && roi2 < glass2);
+        assert!(neotavern_presentation_m0::timeline::two_glass_passes_sample_accumulator(&events));
+        assert_eq!(
+            neotavern_presentation_m0::timeline::encode_timeline(
+                &neotavern_presentation_m0::timeline::expected_motion_frame(
+                    &list,
+                    neotavern_presentation_m0::scene_d1b::D1B_CAPTURE_FRAME
+                )
+            ),
+            neotavern_presentation_m0::D1B_MOTION_TIMELINE_G120
+        );
+        assert!(missing_upstream_capabilities()
+            .iter()
+            .any(|item| item.contains("upstream landing")));
+        assert!(missing_upstream_capabilities()
+            .iter()
+            .all(|item| !item.contains("moving sample")));
+        assert_eq!(
+            D2_CAPTURE_DIR,
+            "/data/data/com.neotavern.mobile/files/m0-d2"
+        );
+        assert_eq!(D2_PATCH_LINES, 65);
+        assert_eq!(D2_REBASE_ANYRENDER_0111, "PASS");
+        assert_eq!(D2_BLITZ_NEWER, "NOT_AVAILABLE");
     }
 }

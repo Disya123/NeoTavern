@@ -3933,7 +3933,7 @@ Snapshot фиксирует факты, но не повышает program verdi
 | signed Gate P record | `docs/rfc/gate-p-decision-draft.md` | `GateP:P1`; owner `Disya123 <gamedisya@gmail.com>` |
 | `M0-D1a` (normative) | **`PASS`** | host-side admission [`m0-d1a-adjudication.json`](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/m0-d1a-adjudication.json); probe log `capture=false` expected |
 | `M0-D1b` | **`PASS`** | host-side admission [`m0-d1b-adjudication.json`](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/m0-d1b-adjudication.json); probe log `capture=false`; D1a JSON unchanged |
-| `M0-D2` | **`STARTED`** | producer seam crate [`presentation-m0-d2`](https://github.com/Disya123/NeoTavern/blob/main/crates/presentation-m0-d2/README.md); not PASS; [`m0-d2-probe.md`](m0-d2-probe.md) |
+| `M0-D2` | **`STARTED`** | producer+dynamic seam [`presentation-m0-d2`](https://github.com/Disya123/NeoTavern/blob/main/crates/presentation-m0-d2/README.md); not PASS; physical capture still required; [`m0-d2-probe.md`](m0-d2-probe.md) |
 | `D1=Track D GO` | `NOT_GRANTED` | M0 PASS и TrackComparison отсутствуют |
 
 Снятое partial evidence:

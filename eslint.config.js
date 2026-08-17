@@ -32,6 +32,7 @@ export default tseslint.config(
       '**/drizzle.config.ts',
       'apps/docs/.docusaurus/**',
       '.zcode/**',
+      '.scratch/**',
     ],
   },
   js.configs.recommended,

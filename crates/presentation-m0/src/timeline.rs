@@ -28,6 +28,13 @@ pub const CAPTURE_PASS_RESTORE: &str = "m0-d1b-restore-static";
 pub const CAPTURE_PASS_OVERLAY: &str = "m0-d1b-overlay-blit";
 pub const CAPTURE_GROUP_D1B_ROI_PREFIX: &str = "m0-d1b-roi-read";
 pub const CAPTURE_GROUP_D1B_GLASS_PREFIX: &str = "m0-d1b-glass";
+pub const MOVING_LABEL_D2: &str = "m0-d2-moving";
+pub const STATIC_PREFIX_LABEL_D2: &str = "m0-d2-static-prefix";
+pub const CAPTURE_PASS_D2_MOVING: &str = "m0-d2-moving-blit";
+pub const CAPTURE_PASS_D2_RESTORE: &str = "m0-d2-restore-static";
+pub const CAPTURE_PASS_D2_OVERLAY: &str = "m0-d2-overlay-blit";
+pub const CAPTURE_GROUP_D2_ROI_PREFIX: &str = "m0-d2-roi-read";
+pub const CAPTURE_GROUP_D2_GLASS_PREFIX: &str = "m0-d2-glass";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RoiPx {
@@ -161,8 +168,11 @@ pub fn resolved_glass_roi(
 }
 
 fn glass_events(list: &NeoDisplayList, barrier: &GlassBoundary) -> Vec<TimelineKind> {
-    let roi_rect = if barrier.id.0 == 2 && crate::scene_d1b::list_has_moving_sample(list) {
-        crate::scene_d1b::glass_b_follow_roi(0)
+    let ordinal = crate::scene_d1b::glass_ordinal(list, barrier.id);
+    let follow = crate::scene_d1b::is_last_glass(list, barrier.id)
+        && crate::scene_d1b::list_has_moving_sample(list);
+    let roi_rect = if follow {
+        crate::scene_d1b::glass_b_follow_roi_in(0, barrier.roi)
     } else {
         barrier.roi
     };
@@ -172,23 +182,19 @@ fn glass_events(list: &NeoDisplayList, barrier: &GlassBoundary) -> Vec<TimelineK
     };
     vec![
         TimelineKind::RoiCopyAccumulatorToSnapshot {
-            barrier: barrier.id.0,
+            barrier: ordinal,
             x: roi.x,
             y: roi.y,
             w: roi.w,
             h: roi.h,
         },
         TimelineKind::GlassSampleSnapshotWriteAccumulator {
-            barrier: barrier.id.0,
+            barrier: ordinal,
             x: roi.x,
             y: roi.y,
             w: roi.w,
             h: roi.h,
-            generation: if barrier.id.0 == 2 && crate::scene_d1b::list_has_moving_sample(list) {
-                Some(0)
-            } else {
-                None
-            },
+            generation: if follow { Some(0) } else { None },
         },
     ]
 }
@@ -243,16 +249,13 @@ pub fn expected_motion_frame(list: &NeoDisplayList, frame: u64) -> Vec<TimelineK
     let y = moving.y.max(0.0).floor() as u32;
     let w = crate::scene_d1b::MOVING_SIZE;
     let h = crate::scene_d1b::MOVING_SIZE;
-    let roi_rect = crate::scene_d1b::glass_b_follow_roi(frame);
-    let clip = list
-        .ops
-        .iter()
-        .find_map(|op| match op {
-            crate::display_list::NeoPaintOp::BackdropBarrier(barrier) if barrier.id.0 == 2 => {
-                Some(barrier.clip_chain)
-            }
-            _ => None,
-        })
+    let last = crate::scene_d1b::last_glass(list);
+    let ordinal = last
+        .map(|barrier| crate::scene_d1b::glass_ordinal(list, barrier.id))
+        .unwrap_or(2);
+    let roi_rect = crate::scene_d1b::last_glass_follow_roi(list, frame);
+    let clip = last
+        .map(|barrier| barrier.clip_chain)
         .unwrap_or(crate::display_list::ClipChainId(0));
     let Some(roi) = resolved_glass_roi(list, roi_rect, clip, list.width, list.height) else {
         return Vec::new();
@@ -267,14 +270,14 @@ pub fn expected_motion_frame(list: &NeoDisplayList, frame: u64) -> Vec<TimelineK
             generation: frame,
         },
         TimelineKind::RoiCopyAccumulatorToSnapshot {
-            barrier: 2,
+            barrier: ordinal,
             x: roi.x,
             y: roi.y,
             w: roi.w,
             h: roi.h,
         },
         TimelineKind::GlassSampleSnapshotWriteAccumulator {
-            barrier: 2,
+            barrier: ordinal,
             x: roi.x,
             y: roi.y,
             w: roi.w,
@@ -402,6 +405,11 @@ mod tests {
         assert_eq!(CAPTURE_GROUP_D1B_ROI_PREFIX, "m0-d1b-roi-read");
         assert_eq!(CAPTURE_GROUP_D1B_GLASS_PREFIX, "m0-d1b-glass");
         assert_eq!(CAPTURE_PASS_RESTORE, "m0-d1b-restore-static");
+        assert_eq!(CAPTURE_GROUP_D2_ROI_PREFIX, "m0-d2-roi-read");
+        assert_eq!(CAPTURE_GROUP_D2_GLASS_PREFIX, "m0-d2-glass");
+        assert_eq!(CAPTURE_PASS_D2_MOVING, "m0-d2-moving-blit");
+        assert_eq!(CAPTURE_PASS_D2_RESTORE, "m0-d2-restore-static");
+        assert_eq!(CAPTURE_PASS_D2_OVERLAY, "m0-d2-overlay-blit");
         assert_eq!(
             D1B_MOTION_TIMELINE_G120,
             "restore,moving:g120,roi:2,glass:2:g120,overlay"

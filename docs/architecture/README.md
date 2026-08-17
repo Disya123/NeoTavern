@@ -80,7 +80,7 @@ crates/
   presentation-m0/     # NeoUI v4 RFC D1a/D1b paint-seam probe (host PASS;
                        # crate log capture=false). Debug-only Activity;
                        # not production kernel JNI.
-  presentation-m0-d2/  # NeoUI v4 RFC M0-D2 producer seam STARTED, not PASS.
+  presentation-m0-d2/  # NeoUI v4 RFC M0-D2 producer+dynamic seam STARTED, not PASS.
                        # Dioxus/Blitz/anyrender headless path.
 ```
 

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
-# Builds the debug-only M0-D1a/D1b paint probe into
+# Builds the debug-only M0-D1a/D1b/D2 paint probes into
 # app/src/debug/jniLibs/{arm64-v8a,x86_64}/libneotavern_presentation_m0.so
+# and libneotavern_presentation_m0_d2.so
 #
 # Default features: gpu,android-jni (control counters).
 # Capture APK: M0_D1A_FEATURES=gpu,android-jni,renderdoc-capture
@@ -25,16 +26,25 @@ fi
 
 OUT_DIR="$APP_DIR/app/src/debug/jniLibs"
 mkdir -p "$OUT_DIR"
+FEATURES="${M0_D1A_FEATURES:-gpu,android-jni}"
 
-echo "Building neotavern-presentation-m0 (${M0_D1A_FEATURES:-gpu,android-jni}) -> $OUT_DIR"
+echo "Building neotavern-presentation-m0 ($FEATURES) -> $OUT_DIR"
 cd "$WORKSPACE_DIR"
 cargo ndk \
   -t arm64-v8a \
   -t x86_64 \
   -o "$OUT_DIR" \
-  build --release -p neotavern-presentation-m0 --features "${M0_D1A_FEATURES:-gpu,android-jni}"
+  build --release -p neotavern-presentation-m0 --features "$FEATURES"
+
+echo "Building neotavern-presentation-m0-d2 ($FEATURES) -> $OUT_DIR"
+cargo ndk \
+  -t arm64-v8a \
+  -t x86_64 \
+  -o "$OUT_DIR" \
+  build --release -p neotavern-presentation-m0-d2 --features "$FEATURES"
 
 echo "Built:"
 ls -1 "$OUT_DIR"/*/libneotavern_presentation_m0.so
-# cargo-ndk -o copies every workspace cdylib for the target; keep only the probe.
+ls -1 "$OUT_DIR"/*/libneotavern_presentation_m0_d2.so
+# cargo-ndk -o copies every workspace cdylib for the target; keep only the probes.
 find "$OUT_DIR" -name 'libneotavern_android_jni.so' -delete

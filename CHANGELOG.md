@@ -3,6 +3,22 @@
 ## Unreleased
 ### Added
 
+- **M0-D2 dynamic sample after the producer paint seam (still STARTED, not
+  PASS).** The moving sample is inserted into the Dioxus/Blitz
+  `NeoDisplayList` immediately before Glass B — not via `static_d1b_scene()`.
+  Compile-once motion: `pass_compiles=1`, `layout_rebuilds=0`,
+  `paint_scene_rebuilds=0`; per frame only compositor blit/damage/generation.
+  Glass B samples current `gN`. Debug Activity `M0D2Activity` /
+  `libneotavern_presentation_m0_d2.so`. Host schema
+  `scripts/m0-d2-adjudicate.mjs` checks producer source, both paint-hook
+  barriers, `devices=1`/`readbacks=0`/`xdev=0`, bounded ROI, 65-line patch,
+  AnyRender 0.11.1 rebase `PASS`, newer Blitz `NOT_AVAILABLE`. Xiaomi
+  Adreno 710 rehearsal control (`2026-08-17T19-34-27-050Z`) and
+  generation-120 capture (`2026-08-17T19-41-18-304Z`) reproduced the
+  golden counters and `m0-d2-*` Event Browser order; they are
+  **REHEARSAL / NON-ADMISSIBLE** (dirty/unbound APK) and MUST NOT be
+  reused for PASS. D1a/D1b JSON unchanged. `D1=Track D GO` is not granted.
+
 - **M0-D2 glass barriers in Blitz paint order (still STARTED, not PASS).**
   Bounded crates.io patches: `PaintScene::host_node_marker` (anyrender
   0.11.0, 35 lines) and `render_element` glass emit (blitz-paint

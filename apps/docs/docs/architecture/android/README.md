@@ -155,8 +155,9 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   `WRONG_API_CAPTURE / NON-ADMISSIBLE`. See [M0-D1a probe](../rfc/m0-d1a-probe.md)
   and the [physical capture runbook](../rfc/m0-d1a-physical-runbook.md).
   M0-D2 is **STARTED** in `crates/presentation-m0-d2` (Dioxus/Blitz
-  producer seam, not PASS, not production JNI). See
-  [M0-D2 probe](../rfc/m0-d2-probe.md).
+  producer seam plus compositor moving sample after that seam; not PASS,
+  not production JNI). See [M0-D2 probe](../rfc/m0-d2-probe.md) and the
+  [physical runbook](../rfc/m0-d2-physical-runbook.md).
 
 ## Background execution (Phase 8)
 
@@ -271,6 +272,8 @@ See also: [ADR-0034](../adr/0034-android-local-host-jni-transport.md),
 [M0-D1b moving sample](../rfc/m0-d1b-probe.md),
 [M0-D1b host adjudication](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/m0-d1b-adjudication.json),
 [M0-D1b physical capture runbook](../rfc/m0-d1b-physical-runbook.md),
+[M0-D2 producer seam](../rfc/m0-d2-probe.md),
+[M0-D2 physical capture runbook](../rfc/m0-d2-physical-runbook.md),
 [Gate P decision record (signed GateP:P1)](../rfc/gate-p-decision-draft.md),
 [ADR-0036](../adr/0036-android-background-execution.md),
 [generation durability](../architecture/generation-durability.md),

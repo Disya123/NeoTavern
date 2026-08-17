@@ -34,6 +34,15 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
+        <activity
+            android:name=".M0D2Activity"
+            android:exported="true"
+            android:label="M0-D2 probe">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
     </application>
     <!-- targetSdk >= 30 hides other packages from the Vulkan loader unless
          listed here. Debug/probe only; production main manifest is unchanged. -->

@@ -28,10 +28,12 @@ use crate::pass_graph::{compile_passes, CompiledPass};
 use crate::timeline::{
     compositor_owned_bytes, compositor_owned_bytes_d1b, encode_timeline, expected_first_frame,
     expected_motion_frame, resolved_glass_roi, TimelineKind, ACCUMULATOR_LABEL,
-    CAPTURE_GROUP_D1B_GLASS_PREFIX, CAPTURE_GROUP_D1B_ROI_PREFIX, CAPTURE_GROUP_GLASS_PREFIX,
-    CAPTURE_GROUP_ROI_PREFIX, CAPTURE_PASS_BLIT, CAPTURE_PASS_CLEAR, CAPTURE_PASS_GLASS,
-    CAPTURE_PASS_MOVING, CAPTURE_PASS_OVERLAY, CAPTURE_PASS_RESTORE, GLASS_SNAPSHOT_MAX,
-    MOVING_LABEL, SNAPSHOT_LABEL, STATIC_PREFIX_LABEL, VELLO_LABEL,
+    CAPTURE_GROUP_D1B_GLASS_PREFIX, CAPTURE_GROUP_D1B_ROI_PREFIX, CAPTURE_GROUP_D2_GLASS_PREFIX,
+    CAPTURE_GROUP_D2_ROI_PREFIX, CAPTURE_GROUP_GLASS_PREFIX, CAPTURE_GROUP_ROI_PREFIX,
+    CAPTURE_PASS_BLIT, CAPTURE_PASS_CLEAR, CAPTURE_PASS_D2_MOVING, CAPTURE_PASS_D2_OVERLAY,
+    CAPTURE_PASS_D2_RESTORE, CAPTURE_PASS_GLASS, CAPTURE_PASS_MOVING, CAPTURE_PASS_OVERLAY,
+    CAPTURE_PASS_RESTORE, GLASS_SNAPSHOT_MAX, MOVING_LABEL, MOVING_LABEL_D2, SNAPSHOT_LABEL,
+    STATIC_PREFIX_LABEL, STATIC_PREFIX_LABEL_D2, VELLO_LABEL,
 };
 use crate::verdict::{ProbeReport, SubstrateVerdict};
 
@@ -57,6 +59,15 @@ impl std::fmt::Display for GpuInitError {
 }
 
 impl std::error::Error for GpuInitError {}
+
+/// Debug-group / resource-name set. D1a/D1b goldens stay on `m0-d1b-*`;
+/// D2 capture uses `m0-d2-*` so the Event Browser is distinguishable.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum LabelMode {
+    D1a,
+    D1b,
+    D2,
+}
 
 #[cfg(target_os = "android")]
 #[link(name = "log")]
@@ -120,6 +131,7 @@ pub struct ProbeGpu {
     pub vello_rebuilds: u64,
     pub layout_rebuilds: u64,
     pub ui_rebuilds: u64,
+    pub paint_scene_rebuilds: u64,
     pub render_thread_polls: u64,
     pub capture_only_polls: u64,
     last_damage: Option<crate::timeline::RoiPx>,
@@ -132,18 +144,28 @@ pub struct ProbeGpu {
     recording_frame: bool,
     first_frame_cpu_us: u64,
     compositor_texture_bytes: u64,
+    label_mode: LabelMode,
 }
 
 impl ProbeGpu {
     pub fn try_new(width: u32, height: u32) -> Result<Self, GpuInitError> {
-        Self::try_new_inner(width, height, false)
+        Self::try_new_inner(width, height, false, LabelMode::D1a)
     }
 
     pub fn try_new_d1b(width: u32, height: u32) -> Result<Self, GpuInitError> {
-        Self::try_new_inner(width, height, true)
+        Self::try_new_inner(width, height, true, LabelMode::D1b)
     }
 
-    fn try_new_inner(width: u32, height: u32, with_moving: bool) -> Result<Self, GpuInitError> {
+    pub fn try_new_d2(width: u32, height: u32) -> Result<Self, GpuInitError> {
+        Self::try_new_inner(width, height, true, LabelMode::D2)
+    }
+
+    fn try_new_inner(
+        width: u32,
+        height: u32,
+        with_moving: bool,
+        label_mode: LabelMode,
+    ) -> Result<Self, GpuInitError> {
         let (device, queue, info) = open_probe_device()?;
         let software_adapter = matches!(info.device_type, wgpu::DeviceType::Cpu);
         let adapter_backend = format!("{:?}", info.backend);
@@ -210,7 +232,10 @@ impl ProbeGpu {
         let moving = if with_moving {
             let size_px = crate::scene_d1b::MOVING_SIZE;
             let tex = device.create_texture(&TextureDescriptor {
-                label: Some(MOVING_LABEL),
+                label: Some(match label_mode {
+                    LabelMode::D2 => MOVING_LABEL_D2,
+                    _ => MOVING_LABEL,
+                }),
                 size: Extent3d {
                     width: size_px,
                     height: size_px,
@@ -232,7 +257,10 @@ impl ProbeGpu {
         };
         let pre_moving = if with_moving {
             Some(device.create_texture(&TextureDescriptor {
-                label: Some(STATIC_PREFIX_LABEL),
+                label: Some(match label_mode {
+                    LabelMode::D2 => STATIC_PREFIX_LABEL_D2,
+                    _ => STATIC_PREFIX_LABEL,
+                }),
                 size,
                 mip_level_count: 1,
                 sample_count: 1,
@@ -429,6 +457,7 @@ impl ProbeGpu {
             vello_rebuilds: 0,
             layout_rebuilds: 0,
             ui_rebuilds: 0,
+            paint_scene_rebuilds: 0,
             render_thread_polls: 0,
             capture_only_polls: 0,
             last_damage: None,
@@ -441,7 +470,43 @@ impl ProbeGpu {
             recording_frame: false,
             first_frame_cpu_us: 0,
             compositor_texture_bytes,
+            label_mode,
         })
+    }
+
+    fn restore_label(&self) -> &'static str {
+        match self.label_mode {
+            LabelMode::D2 => CAPTURE_PASS_D2_RESTORE,
+            _ => CAPTURE_PASS_RESTORE,
+        }
+    }
+
+    fn moving_pass_label(&self) -> &'static str {
+        match self.label_mode {
+            LabelMode::D2 => CAPTURE_PASS_D2_MOVING,
+            _ => CAPTURE_PASS_MOVING,
+        }
+    }
+
+    fn overlay_pass_label(&self) -> &'static str {
+        match self.label_mode {
+            LabelMode::D2 => CAPTURE_PASS_D2_OVERLAY,
+            _ => CAPTURE_PASS_OVERLAY,
+        }
+    }
+
+    fn follow_roi_prefix(&self) -> &'static str {
+        match self.label_mode {
+            LabelMode::D2 => CAPTURE_GROUP_D2_ROI_PREFIX,
+            _ => CAPTURE_GROUP_D1B_ROI_PREFIX,
+        }
+    }
+
+    fn follow_glass_prefix(&self) -> &'static str {
+        match self.label_mode {
+            LabelMode::D2 => CAPTURE_GROUP_D2_GLASS_PREFIX,
+            _ => CAPTURE_GROUP_D1B_GLASS_PREFIX,
+        }
     }
 
     pub fn first_frame_timeline(&self) -> &[TimelineKind] {
@@ -480,8 +545,9 @@ impl ProbeGpu {
             }) = passes.iter().rev().find(|pass| pass.is_glass())
             {
                 let opacity = group_opacity(list, open_scopes);
-                let roi = crate::scene_d1b::glass_b_follow_roi(frame);
-                self.glass_pass(list, barrier.id.0, roi, barrier.clip_chain, opacity, frame)?;
+                let ordinal = crate::scene_d1b::glass_ordinal(list, barrier.id);
+                let roi = crate::scene_d1b::glass_b_follow_roi_in(frame, barrier.roi);
+                self.glass_pass(list, ordinal, true, roi, barrier.clip_chain, opacity, frame)?;
                 self.glass_passes += 1;
             }
             self.overlay_blit_from_cache()?;
@@ -514,12 +580,22 @@ impl ProbeGpu {
                     open_scopes,
                 } => {
                     let opacity = group_opacity(list, open_scopes);
-                    let roi = if d1b && barrier.id.0 == 2 {
-                        crate::scene_d1b::glass_b_follow_roi(frame)
+                    let follow = d1b && crate::scene_d1b::is_last_glass(list, barrier.id);
+                    let roi = if follow {
+                        crate::scene_d1b::glass_b_follow_roi_in(frame, barrier.roi)
                     } else {
                         barrier.roi
                     };
-                    self.glass_pass(list, barrier.id.0, roi, barrier.clip_chain, opacity, frame)?;
+                    let ordinal = crate::scene_d1b::glass_ordinal(list, barrier.id);
+                    self.glass_pass(
+                        list,
+                        ordinal,
+                        follow,
+                        roi,
+                        barrier.clip_chain,
+                        opacity,
+                        frame,
+                    )?;
                     self.glass_passes += 1;
                 }
                 CompiledPass::MovingSample { .. } => {
@@ -622,9 +698,9 @@ impl ProbeGpu {
         let mut encoder = self
             .device
             .create_command_encoder(&CommandEncoderDescriptor {
-                label: Some("m0-d1b-restore"),
+                label: Some(self.restore_label()),
             });
-        encoder.push_debug_group(CAPTURE_PASS_RESTORE);
+        encoder.push_debug_group(self.restore_label());
         encoder.copy_texture_to_texture(
             TexelCopyTextureInfo {
                 texture: pre_moving,
@@ -657,8 +733,9 @@ impl ProbeGpu {
         let acc_view = self
             .accumulator
             .create_view(&TextureViewDescriptor::default());
+        let overlay = self.overlay_pass_label();
         let bind = self.device.create_bind_group(&BindGroupDescriptor {
-            label: Some("m0-d1b-overlay-bg"),
+            label: Some(overlay),
             layout: &self.blit_bgl,
             entries: &[
                 BindGroupEntry {
@@ -674,12 +751,12 @@ impl ProbeGpu {
         let mut encoder = self
             .device
             .create_command_encoder(&CommandEncoderDescriptor {
-                label: Some("m0-d1b-overlay"),
+                label: Some(overlay),
             });
-        encoder.push_debug_group(CAPTURE_PASS_OVERLAY);
+        encoder.push_debug_group(overlay);
         {
             let mut rp = encoder.begin_render_pass(&RenderPassDescriptor {
-                label: Some(CAPTURE_PASS_OVERLAY),
+                label: Some(overlay),
                 color_attachments: &[Some(RenderPassColorAttachment {
                     view: &acc_view,
                     resolve_target: None,
@@ -821,11 +898,12 @@ impl ProbeGpu {
             )));
         }
         let generation = frame;
-        let group = format!("{CAPTURE_PASS_MOVING}:g{generation}");
+        let moving_label = self.moving_pass_label();
+        let group = format!("{moving_label}:g{generation}");
         let mut encoder = self
             .device
             .create_command_encoder(&CommandEncoderDescriptor {
-                label: Some("m0-d1b-moving"),
+                label: Some(moving_label),
             });
         encoder.push_debug_group(&group);
         encoder.copy_texture_to_texture(
@@ -864,6 +942,7 @@ impl ProbeGpu {
         &mut self,
         list: &NeoDisplayList,
         barrier: u32,
+        follow: bool,
         roi: crate::display_list::Rect,
         clip: ClipChainId,
         opacity: f32,
@@ -882,9 +961,8 @@ impl ProbeGpu {
             .create_command_encoder(&CommandEncoderDescriptor {
                 label: Some("m0-d1a-glass-copy"),
             });
-        let d1b_glass_b = barrier == 2 && self.moving.is_some();
-        let roi_group = if d1b_glass_b {
-            format!("{CAPTURE_GROUP_D1B_ROI_PREFIX}:{barrier}")
+        let roi_group = if follow {
+            format!("{}:{barrier}", self.follow_roi_prefix())
         } else {
             format!("{CAPTURE_GROUP_ROI_PREFIX}:{barrier}")
         };
@@ -910,7 +988,7 @@ impl ProbeGpu {
         );
         encoder.pop_debug_group();
         self.same_device_roi_copies += 1;
-        if barrier == 2 {
+        if follow {
             self.sampled_generation = frame;
             self.last_damage = Some(px);
         }
@@ -954,8 +1032,8 @@ impl ProbeGpu {
                 },
             ],
         });
-        let glass_group = if d1b_glass_b {
-            format!("{CAPTURE_GROUP_D1B_GLASS_PREFIX}:{barrier}:g{frame}")
+        let glass_group = if follow {
+            format!("{}:{barrier}:g{frame}", self.follow_glass_prefix())
         } else {
             format!("{CAPTURE_GROUP_GLASS_PREFIX}:{barrier}")
         };
@@ -990,7 +1068,7 @@ impl ProbeGpu {
             y,
             w,
             h,
-            generation: if d1b_glass_b { Some(frame) } else { None },
+            generation: if follow { Some(frame) } else { None },
         });
         Ok(())
     }
@@ -1013,6 +1091,7 @@ impl ProbeGpu {
             vello_rebuilds: self.vello_rebuilds,
             layout_rebuilds: self.layout_rebuilds,
             ui_rebuilds: self.ui_rebuilds,
+            paint_scene_rebuilds: self.paint_scene_rebuilds,
             render_thread_polls: self.render_thread_polls,
             capture_only_polls: self.capture_only_polls,
             damage_x: self.last_damage.map(|roi| roi.x).unwrap_or(0),
@@ -1341,14 +1420,36 @@ pub fn run_dynamic_d1b_with_capture(
     frames: u64,
     capture: bool,
 ) -> Result<ProbeReport, GpuInitError> {
+    run_dynamic_list(
+        &crate::scene_d1b::static_d1b_scene(),
+        frames,
+        capture,
+        "/data/data/com.neotavern.mobile/files/m0-d1b",
+        LabelMode::D1b,
+    )
+}
+
+/// Compile-once compositor motion over an already-produced display list.
+/// Callers must not rebuild layout or `paint_scene` inside this loop.
+pub fn run_dynamic_list(
+    list: &NeoDisplayList,
+    frames: u64,
+    capture: bool,
+    capture_dir: &str,
+    labels: LabelMode,
+) -> Result<ProbeReport, GpuInitError> {
     probe_trace(&format!(
-        "run_dynamic_d1b frames={frames} capture={capture} capture_frame={}",
+        "run_dynamic_list frames={frames} capture={capture} capture_frame={} labels={labels:?}",
         crate::scene_d1b::D1B_CAPTURE_FRAME
     ));
-    let list = crate::scene_d1b::static_d1b_scene();
-    let passes = compile_passes(&list).map_err(|err| GpuInitError::Renderer(format!("{err:?}")))?;
-    let mut gpu = ProbeGpu::try_new_d1b(list.width, list.height)?;
+    let passes = compile_passes(list).map_err(|err| GpuInitError::Renderer(format!("{err:?}")))?;
+    let mut gpu = match labels {
+        LabelMode::D2 => ProbeGpu::try_new_d2(list.width, list.height)?,
+        _ => ProbeGpu::try_new_d1b(list.width, list.height)?,
+    };
     gpu.pass_compiles = 1;
+    gpu.paint_scene_rebuilds = 0;
+    gpu.layout_rebuilds = 0;
     probe_trace(&format!(
         "gpu_ready adapter={} backend={} software={}",
         gpu.adapter_name.replace(' ', "_"),
@@ -1370,9 +1471,9 @@ pub fn run_dynamic_d1b_with_capture(
         if capturing {
             let _rdoc = crate::renderdoc_capture::FrameGuard::begin_for_device_path(
                 &gpu.device,
-                "/data/data/com.neotavern.mobile/files/m0-d1b",
+                capture_dir,
             );
-            gpu.render_compiled(&list, &passes, frame)?;
+            gpu.render_compiled(list, &passes, frame)?;
             gpu.capture_only_polls = gpu.capture_only_polls.saturating_add(1);
             let _ = gpu.device.poll(wgpu::PollType::wait_indefinitely());
             probe_trace("capture_only_poll=true render_thread_poll=false");
@@ -1383,7 +1484,8 @@ pub fn run_dynamic_d1b_with_capture(
             continue;
         }
         let _ = capturing;
-        gpu.render_compiled(&list, &passes, frame)?;
+        let _ = capture_dir;
+        gpu.render_compiled(list, &passes, frame)?;
         if let Some(started) = started {
             gpu.first_frame_cpu_us =
                 u64::try_from(started.elapsed().as_micros()).unwrap_or(u64::MAX);
@@ -1392,7 +1494,7 @@ pub fn run_dynamic_d1b_with_capture(
     }
     if gpu.compositor_texture_bytes != bytes_at_init {
         return Err(GpuInitError::Renderer(
-            "D1b compositor texture high-water grew during the run".to_string(),
+            "compositor texture high-water grew during the run".to_string(),
         ));
     }
     Ok(gpu.report(frames))

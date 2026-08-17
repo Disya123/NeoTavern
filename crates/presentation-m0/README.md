@@ -43,7 +43,9 @@ Evidence: [`docs/rfc/m0-d1a-probe.md`](../../docs/rfc/m0-d1a-probe.md),
 - wgpu **29** (resolved `29.0.4`; Vulkan/GLES/Metal features; DX12 left off so
   this crate can share the workspace lockfile with Tauri `windows 0.61`)
 - Blitz is **not** in this crate. M0-D2 STARTED in
-  [`presentation-m0-d2`](../presentation-m0-d2/README.md) (not PASS).
+  [`presentation-m0-d2`](../presentation-m0-d2/README.md) (producer+dynamic
+  seam, not PASS). The D2 crate calls `run_dynamic_list` here so D1b and D2
+  share one compositor.
 
 ## Commands
 
@@ -59,6 +61,7 @@ GPU probe (skip at runtime if no adapter; a skip is **not** D1a PASS):
 cargo test --manifest-path crates/Cargo.toml -p neotavern-presentation-m0 --features gpu
 cargo run --manifest-path crates/Cargo.toml -p neotavern-presentation-m0 --features gpu --bin m0-d1a-probe
 cargo run --manifest-path crates/Cargo.toml -p neotavern-presentation-m0 --features gpu --bin m0-d1b-probe
+cargo run --manifest-path crates/Cargo.toml -p neotavern-presentation-m0-d2 --features gpu --bin m0-d2-probe
 ```
 
 Android (debug APK only; production `MainActivity` / kernel JNI unchanged):

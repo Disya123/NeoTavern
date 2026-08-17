@@ -46,6 +46,7 @@ fn d1b_capture_uses_generation_path_not_first_frame() {
     assert!(src.contains("D1B_CAPTURE_FRAME"));
     assert!(src.contains("begin_for_device_path"));
     assert!(src.contains("/data/data/com.neotavern.mobile/files/m0-d1b"));
+    assert!(src.contains("LabelMode::D2"));
     assert!(src.contains("capture_only_poll"));
     assert!(src.contains("CAPTURE_PASS_MOVING"));
     assert!(src.contains(":g{generation}"));

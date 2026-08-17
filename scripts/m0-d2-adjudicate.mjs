@@ -1,0 +1,524 @@
+#!/usr/bin/env node
+/**
+ * Host-side D2 adjudicator schema. The probe cannot set android_gpu_capture.
+ * This script does not rewrite D1a or D1b evidence. PASS JSON is written only
+ * with --write after physical artifacts exist (separate evidence commit).
+ *
+ *   node scripts/m0-d2-adjudicate.mjs --stamp=... --control-stamp=...
+ *   node scripts/m0-d2-adjudicate.mjs --stamp=... --control-stamp=... --write
+ */
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import {
+  extractCopyImages,
+  extractCreateDeviceIds,
+  extractCreateImageCount,
+  extractDebugLabels,
+  extractNamedResources,
+  extractQueueSubmitCount,
+  forbiddenCommands,
+  hashIfPresent,
+} from './m0-d1a-adjudicate.mjs';
+import {
+  ACCUMULATOR_LABEL,
+  DEFAULT_APK,
+  PINNED_CAPTURE_TOOLING_COMMIT,
+  ROOT,
+  SNAPSHOT_LABEL,
+  bindApkMatches,
+  classifyRenderdocApi,
+  latestBoundBundle,
+} from './m0-d1a-capture-host.mjs';
+
+export const ADJUDICATION_SCHEMA = 'm0-d2-adjudication/v1';
+export const CAPTURES_DIR_D2 = join(ROOT, 'apps', 'android', 'm0-d2-captures');
+export const MOVING_LABEL = 'm0-d2-moving';
+export const MOVING_BLIT_G120 = 'm0-d2-moving-blit:g120';
+export const ROI_READ_2 = 'm0-d2-roi-read:2';
+export const GLASS_B_G120 = 'm0-d2-glass:2:g120';
+export const RESTORE_STATIC = 'm0-d2-restore-static';
+export const OVERLAY_BLIT = 'm0-d2-overlay-blit';
+export const D2_MOTION_TIMELINE_G120 = 'restore,moving:g120,roi:2,glass:2:g120,overlay';
+export const D2_PRODUCER_SOURCE = 'dioxus-virtualdom+blitz-paint-traversal+host-node-marker';
+export const D2_CAPTURE_GEN = 120;
+export const NON_ADMISSIBLE_REHEARSAL = {
+  control_stamp: '2026-08-17T19-34-27-050Z',
+  capture_stamp: '2026-08-17T19-41-18-304Z',
+  status: 'REHEARSAL / NON-ADMISSIBLE',
+  reason: 'dirty/unbound APK; cannot be reused for PASS',
+};
+
+export function isRehearsalStamp(stamp) {
+  return (
+    stamp === NON_ADMISSIBLE_REHEARSAL.control_stamp ||
+    stamp === NON_ADMISSIBLE_REHEARSAL.capture_stamp
+  );
+}
+
+export const ACCUMULATOR_PX = { w: 320, h: 200 };
+export const SNAPSHOT_MAX = 256;
+export const MOVING_SIZE = 64;
+export const EXPECTED_ACC_BYTES = 1_046_528;
+export const EXPECTED_PATCH_LINES = 65;
+export const GOLDEN_D2_COUNTERS = {
+  devices: 1,
+  readbacks: 0,
+  xdev: 0,
+  roi_copies: 1001,
+  glass: 1001,
+  moving_blits: 1000,
+  pass_compiles: 1,
+  layout_rebuilds: 0,
+  ui_rebuilds: 0,
+  paint_scene_rebuilds: 0,
+  sampled_gen: 999,
+  frames: 1000,
+  capture_timeline: D2_MOTION_TIMELINE_G120,
+  render_polls: 0,
+  glass_from_hook: 2,
+  patch_lines: EXPECTED_PATCH_LINES,
+  rebase_anyrender_0111: 'PASS',
+  blitz_newer: 'NOT_AVAILABLE',
+  producer_source: D2_PRODUCER_SOURCE,
+};
+
+function argValue(name) {
+  const prefix = `--${name}=`;
+  const hit = process.argv.find((part) => part.startsWith(prefix));
+  return hit ? hit.slice(prefix.length) : null;
+}
+
+export function artifactPaths(stamp, dir = CAPTURES_DIR_D2) {
+  const base = join(dir, `${stamp}-d2`);
+  return {
+    rdc: `${base}.rdc`,
+    xml: `${base}.xml`,
+    logcat: `${base}-logcat.txt`,
+    evidence: `${base}-evidence.json`,
+    device: `${base}-device.json`,
+  };
+}
+
+export function countPatchInsertedLines(root = ROOT) {
+  const files = [
+    join(
+      root,
+      'crates',
+      'presentation-m0-d2',
+      'upstream',
+      'anyrender-0.11.0-host-node-marker.patch',
+    ),
+    join(
+      root,
+      'crates',
+      'presentation-m0-d2',
+      'upstream',
+      'blitz-paint-0.3.0-beta.1-glass-barrier.patch',
+    ),
+  ];
+  let inserted = 0;
+  for (const file of files) {
+    const text = readFileSync(file, 'utf8');
+    for (const line of text.split(/\r?\n/u)) {
+      if (line.startsWith('+') && !line.startsWith('+++')) {
+        inserted += 1;
+      }
+    }
+  }
+  return inserted;
+}
+
+function firstFrameOrderOk(timeline) {
+  const moving = timeline.indexOf('moving:g0');
+  const roi2 = timeline.indexOf('roi:2');
+  const glass2 = timeline.indexOf('glass:2:g0');
+  return moving >= 0 && roi2 > moving && glass2 > roi2;
+}
+
+export function parseD2LogLine(log) {
+  const lines = String(log)
+    .split(/\r?\n/u)
+    .filter((row) => /m0-d2 gpu_ran=/u.test(row));
+  const line = lines.at(-1);
+  if (!line) {
+    return { ok: false, values: null, line: null, reason: 'no m0-d2 gpu_ran line' };
+  }
+  const num = (name) => {
+    const match = line.match(new RegExp(`${name}=(\\d+)`));
+    return match ? Number(match[1]) : null;
+  };
+  const flag = (name) => {
+    const match = line.match(new RegExp(`${name}=(true|false)`));
+    return match ? match[1] === 'true' : null;
+  };
+  const token = (name) => line.match(new RegExp(`(?:^|\\s)${name}=([^\\s]+)`))?.[1] ?? '';
+  const values = {
+    devices: num('devices'),
+    readbacks: num('readbacks'),
+    xdev: num('xdev'),
+    roi_copies: num('roi_copies'),
+    raster: num('raster'),
+    glass: num('glass'),
+    moving_blits: num('moving_blits'),
+    pass_compiles: num('pass_compiles'),
+    vello_rebuilds: num('vello_rebuilds'),
+    layout_rebuilds: num('layout_rebuilds'),
+    ui_rebuilds: num('ui_rebuilds'),
+    paint_scene_rebuilds: num('paint_scene_rebuilds'),
+    sampled_gen: num('sampled_gen'),
+    frames: num('frames'),
+    render_polls: num('render_polls'),
+    capture_polls: num('capture_polls'),
+    acc_bytes: num('acc_bytes'),
+    capture: flag('capture'),
+    timeline: token('timeline'),
+    capture_timeline: token('capture_timeline'),
+    producer_source: token('producer_source'),
+    glass_from_hook: num('glass_from_hook'),
+    patch_lines: num('patch_lines'),
+    rebase_anyrender_0111: token('rebase_anyrender_0111'),
+    blitz_newer: token('blitz_newer'),
+  };
+  const compileOnce =
+    values.pass_compiles === 1 &&
+    values.layout_rebuilds === 0 &&
+    values.paint_scene_rebuilds === 0 &&
+    values.ui_rebuilds === 0 &&
+    values.raster === values.vello_rebuilds &&
+    values.raster > 0;
+  const ok =
+    values.devices === GOLDEN_D2_COUNTERS.devices &&
+    values.readbacks === GOLDEN_D2_COUNTERS.readbacks &&
+    values.xdev === GOLDEN_D2_COUNTERS.xdev &&
+    values.roi_copies === GOLDEN_D2_COUNTERS.roi_copies &&
+    values.glass === GOLDEN_D2_COUNTERS.glass &&
+    values.moving_blits === GOLDEN_D2_COUNTERS.moving_blits &&
+    compileOnce &&
+    values.sampled_gen === GOLDEN_D2_COUNTERS.sampled_gen &&
+    values.frames === GOLDEN_D2_COUNTERS.frames &&
+    firstFrameOrderOk(values.timeline) &&
+    values.capture_timeline === GOLDEN_D2_COUNTERS.capture_timeline &&
+    values.render_polls === GOLDEN_D2_COUNTERS.render_polls &&
+    values.capture === false &&
+    values.acc_bytes === EXPECTED_ACC_BYTES &&
+    values.producer_source === D2_PRODUCER_SOURCE &&
+    values.glass_from_hook === 2 &&
+    values.patch_lines === EXPECTED_PATCH_LINES &&
+    values.rebase_anyrender_0111 === 'PASS' &&
+    values.blitz_newer === 'NOT_AVAILABLE';
+  return {
+    ok,
+    values,
+    line,
+    reason: ok
+      ? 'golden D2 counters; producer paint seam; capture bit false; compile-once'
+      : 'D2 counters, producer seam, timeline, or compile-once diverged',
+  };
+}
+
+export function checkD2PassOrder(labels) {
+  const restore = labels.indexOf(RESTORE_STATIC);
+  const moving = labels.indexOf(MOVING_BLIT_G120);
+  const roi2 = labels.indexOf(ROI_READ_2);
+  const glass2 = labels.indexOf(GLASS_B_G120);
+  const overlay = labels.indexOf(OVERLAY_BLIT);
+  const staleGlass = labels.filter(
+    (name) => /^m0-d2-glass:2:g\d+$/u.test(name) && name !== GLASS_B_G120,
+  );
+  const ok =
+    restore >= 0 &&
+    moving > restore &&
+    roi2 > moving &&
+    glass2 > roi2 &&
+    overlay > glass2 &&
+    staleGlass.length === 0;
+  return {
+    ok,
+    indices: { restore, moving, roi2, glass2, overlay },
+    stale_glass: staleGlass,
+    reason: ok
+      ? 'restore → moving-blit:g120 → roi:2 → glass:2:g120 → overlay'
+      : `D2 motion order failed restore=${restore} moving=${moving} roi2=${roi2} glass2=${glass2} overlay=${overlay} stale=${staleGlass.join(',')}`,
+  };
+}
+
+export function checkD2RoiCopies(copies, names) {
+  const accId = [...names.entries()].find(([, name]) => name === ACCUMULATOR_LABEL)?.[0];
+  const snapId = [...names.entries()].find(([, name]) => name === SNAPSHOT_LABEL)?.[0];
+  const movingId = [...names.entries()].find(([, name]) => name === MOVING_LABEL)?.[0];
+  const movingBlit = copies.find(
+    (row) =>
+      row.src === movingId && row.dst === accId && row.w === MOVING_SIZE && row.h === MOVING_SIZE,
+  );
+  const roiCopies = copies.filter((row) => row.src === accId && row.dst === snapId);
+  const roi = roiCopies.at(-1);
+  const roiOk =
+    !!roi &&
+    roi.w * roi.h < ACCUMULATOR_PX.w * ACCUMULATOR_PX.h &&
+    roi.w <= SNAPSHOT_MAX &&
+    roi.h <= SNAPSHOT_MAX &&
+    roi.w > 0 &&
+    roi.h > 0;
+  return {
+    ok: !!movingBlit && roiOk,
+    accumulator_id: accId ?? null,
+    snapshot_id: snapId ?? null,
+    moving_id: movingId ?? null,
+    moving_blit: movingBlit ?? null,
+    roi: roi ?? null,
+    reason:
+      !!movingBlit && roiOk
+        ? 'moving 64×64 blit into named accumulator; Glass B ROI copy is bounded'
+        : 'moving blit or bounded Glass B ROI copy missing',
+  };
+}
+
+export function checkD2Lifetime(xml, captureLog, controlLog) {
+  const capture = parseD2LogLine(captureLog);
+  const control = parseD2LogLine(controlLog);
+  const devices = extractCreateDeviceIds(xml);
+  const images = extractCreateImageCount(xml);
+  const submits = extractQueueSubmitCount(xml);
+  const validation = /VUID-|VALIDATION ERROR|DEVICE_LOST|stale handle/iu.test(
+    `${captureLog}\n${xml}`,
+  );
+  const sameGolden =
+    capture.ok &&
+    control.ok &&
+    capture.values.devices === control.values.devices &&
+    capture.values.readbacks === control.values.readbacks &&
+    capture.values.xdev === control.values.xdev &&
+    capture.values.moving_blits === control.values.moving_blits &&
+    capture.values.pass_compiles === control.values.pass_compiles &&
+    capture.values.vello_rebuilds === control.values.vello_rebuilds &&
+    capture.values.layout_rebuilds === control.values.layout_rebuilds &&
+    capture.values.paint_scene_rebuilds === control.values.paint_scene_rebuilds &&
+    capture.values.ui_rebuilds === control.values.ui_rebuilds &&
+    capture.values.frames === control.values.frames &&
+    capture.values.render_polls === 0 &&
+    control.values.render_polls === 0 &&
+    control.values.capture_polls === 0 &&
+    capture.values.acc_bytes === control.values.acc_bytes &&
+    capture.values.acc_bytes === EXPECTED_ACC_BYTES;
+  const capturePollSplit =
+    capture.values?.capture_polls === 1 || capture.values?.capture_polls === 0;
+  const ended = /capture_ended=true/.test(captureLog) && /m0-d2 gpu_ran=true/.test(captureLog);
+  return {
+    ok: sameGolden && ended && !validation && capturePollSplit && devices.length <= 2,
+    capture_counters: capture,
+    control_counters: control,
+    vk_device_ids: devices,
+    vk_create_image: images,
+    vk_queue_submit: submits,
+    validation_errors: validation,
+    high_water_stable: capture.values?.acc_bytes === control.values?.acc_bytes,
+    capture_poll_not_render_wait:
+      capture.values?.render_polls === 0 && control.values?.render_polls === 0,
+    reason:
+      sameGolden && ended && !validation
+        ? '1000-frame golden on both runs; acc_bytes stable; render_polls=0; capture poll is not a production wait'
+        : 'D2 lifetime/counter/validation check failed',
+  };
+}
+
+export function classifyD2Dump(text) {
+  const api = classifyRenderdocApi(text);
+  const required = [MOVING_BLIT_G120, ROI_READ_2, GLASS_B_G120, ACCUMULATOR_LABEL];
+  const missing = required.filter((label) => !text.includes(label));
+  return {
+    ok: api.ok && api.api === 'Vulkan' && missing.length === 0,
+    missing,
+    api,
+    reason:
+      api.ok && missing.length === 0
+        ? 'Vulkan dump contains moving-blit:g120, roi:2, glass:2:g120, named accumulator'
+        : missing.length
+          ? `capture incomplete: missing ${missing.join(',')}`
+          : api.reason,
+  };
+}
+
+export function checkD2PatchAndRebase() {
+  const patchLines = countPatchInsertedLines();
+  const ok =
+    patchLines === EXPECTED_PATCH_LINES &&
+    GOLDEN_D2_COUNTERS.rebase_anyrender_0111 === 'PASS' &&
+    GOLDEN_D2_COUNTERS.blitz_newer === 'NOT_AVAILABLE';
+  return {
+    ok,
+    patch_lines: patchLines,
+    rebase_anyrender_0111: GOLDEN_D2_COUNTERS.rebase_anyrender_0111,
+    blitz_newer: GOLDEN_D2_COUNTERS.blitz_newer,
+    reason: ok
+      ? 'bounded 65-line paint hook; AnyRender 0.11.1 rebase PASS; newer Blitz NOT_AVAILABLE'
+      : `patch/rebase check failed patch_lines=${patchLines}`,
+  };
+}
+
+export function adjudicate({
+  stamp,
+  controlStamp,
+  apkPath = DEFAULT_APK,
+  capturesDir = CAPTURES_DIR_D2,
+} = {}) {
+  if (!stamp || !controlStamp) {
+    return {
+      schema: ADJUDICATION_SCHEMA,
+      ok: false,
+      d2_verdict: 'NOT_STARTED',
+      android_gpu_capture: false,
+      reason: 'stamp and control-stamp are required; this is not D2 PASS',
+    };
+  }
+  const captureFiles = artifactPaths(stamp, capturesDir);
+  const controlFiles = artifactPaths(controlStamp, capturesDir);
+  const bundle = latestBoundBundle();
+  const hashes = {
+    rdc: hashIfPresent(captureFiles.rdc),
+    xml: hashIfPresent(captureFiles.xml),
+    capture_log: hashIfPresent(captureFiles.logcat),
+    control_log: hashIfPresent(controlFiles.logcat),
+    apk: hashIfPresent(apkPath),
+  };
+  const xml = hashes.xml.present ? readFileSync(captureFiles.xml, 'utf8') : '';
+  const captureLog = hashes.capture_log.present ? readFileSync(captureFiles.logcat, 'utf8') : '';
+  const controlLog = hashes.control_log.present ? readFileSync(controlFiles.logcat, 'utf8') : '';
+  const checks = [];
+  const push = (id, result) => {
+    checks.push({ id, ...result });
+  };
+
+  const bind = bindApkMatches(bundle, apkPath);
+  const boundClean = bind.ok && bundle?.apk_linkage === 'BOUND' && bundle?.evidence_dirty === false;
+  push('hashes', {
+    ok:
+      hashes.rdc.present &&
+      hashes.xml.present &&
+      hashes.capture_log.present &&
+      hashes.control_log.present &&
+      hashes.apk.present &&
+      hashes.rdc.bytes > 100_000 &&
+      hashes.xml.bytes > 100_000 &&
+      boundClean &&
+      hashes.apk.sha256 === bundle?.apk_sha256,
+    hashes,
+    expected_apk_sha256: bundle?.apk_sha256 ?? null,
+    reason: boundClean
+      ? 'SHA-256 recorded for .rdc, XML, both logs, and BOUND APK'
+      : 'missing artifacts or APK is not the clean BOUND bundle',
+  });
+  push('not_rehearsal', {
+    ok: !isRehearsalStamp(stamp) && !isRehearsalStamp(controlStamp),
+    rehearsal: NON_ADMISSIBLE_REHEARSAL,
+    reason:
+      isRehearsalStamp(stamp) || isRehearsalStamp(controlStamp)
+        ? 'stamp is REHEARSAL / NON-ADMISSIBLE (dirty/unbound APK)'
+        : 'stamps are not the dirty-tree rehearsal',
+  });
+  push('provenance', {
+    ok: boundClean,
+    apk_linkage: bundle?.apk_linkage ?? 'UNBOUND',
+    evidence_dirty: bundle?.evidence_dirty ?? true,
+    expected_apk_sha256: bundle?.apk_sha256 ?? null,
+    actual_apk_sha256: hashes.apk.sha256,
+    bind,
+    reason: boundClean
+      ? 'apk_linkage=BOUND; evidence_dirty=false; SHA-256 matches source bundle'
+      : bind.reason || 'BOUND clean APK required',
+  });
+
+  const api = classifyRenderdocApi(xml);
+  push('driver', {
+    ok: api.ok && api.api === 'Vulkan',
+    api,
+    reason: api.reason,
+  });
+
+  const names = extractNamedResources(xml);
+  const labels = extractDebugLabels(xml).filter((name) => name.startsWith('m0-d2-'));
+  const copies = extractCopyImages(xml);
+  push('pass_order', checkD2PassOrder(labels));
+  push('roi_identity', checkD2RoiCopies(copies, names));
+  const dump = classifyD2Dump(`${captureLog}\n${xml}`);
+  push('dump', dump);
+  const forbidden = forbiddenCommands(xml);
+  push('no_readback', {
+    ok: forbidden.length === 0,
+    forbidden,
+    reason:
+      forbidden.length === 0
+        ? 'no vkMapMemory / image-to-buffer in the Event Browser'
+        : `forbidden commands: ${forbidden.join(',')}`,
+  });
+  push('lifetime_and_counters', checkD2Lifetime(xml, captureLog, controlLog));
+  push('patch_and_rebase', checkD2PatchAndRebase());
+
+  const ok = checks.every((row) => row.ok);
+  const captureValues = parseD2LogLine(captureLog).values;
+  return {
+    schema: ADJUDICATION_SCHEMA,
+    status: ok ? 'PASS' : 'FAIL',
+    d2_verdict: ok ? 'PASS' : 'FAIL',
+    d2_program: ok ? 'PASS' : 'FAIL',
+    android_gpu_capture: ok,
+    capture_driver: api.api ?? null,
+    capture_admissible: ok,
+    apk_linkage: bundle?.apk_linkage ?? 'UNBOUND',
+    evidence_dirty: bundle?.evidence_dirty ?? true,
+    producer_source: captureValues?.producer_source ?? null,
+    glass_from_hook: captureValues?.glass_from_hook ?? null,
+    sampled_gen: captureValues?.sampled_gen ?? null,
+    capture_gen: D2_CAPTURE_GEN,
+    pass_compiles: captureValues?.pass_compiles ?? null,
+    layout_rebuilds: captureValues?.layout_rebuilds ?? null,
+    paint_scene_rebuilds: captureValues?.paint_scene_rebuilds ?? null,
+    devices: captureValues?.devices ?? null,
+    readbacks: captureValues?.readbacks ?? null,
+    xdev: captureValues?.xdev ?? null,
+    d1a_verdict: 'UNCHANGED',
+    d1b_verdict: 'UNCHANGED',
+    environment_blocked: false,
+    stamp,
+    control_stamp: controlStamp,
+    apk_source_commit: bundle?.base_commit ?? null,
+    capture_tooling_commit: PINNED_CAPTURE_TOOLING_COMMIT,
+    track_d_go: 'NOT_GRANTED',
+    missing_upstream: [
+      'upstream landing of PaintScene::host_node_marker (local crates.io patch)',
+      'typed Blitz Glass paint node beyond the data-neoui host marker',
+    ],
+    device: {
+      serial: '8f5c2b7c',
+      model: '23122PCD1G',
+      gpu: 'Adreno 710',
+    },
+    ok,
+    checks,
+    failed: checks.filter((row) => !row.ok).map((row) => row.id),
+    labels,
+    named_resources: Object.fromEntries(names),
+    apk_sha256: hashes.apk.sha256,
+    rdc_sha256: hashes.rdc.sha256,
+    xml_sha256: hashes.xml.sha256,
+    note: 'host-side admission; probe log capture=false is expected; D1a/D1b JSON unchanged; D1=Track D GO is not granted',
+  };
+}
+
+function main() {
+  const stamp = argValue('stamp');
+  const controlStamp = argValue('control-stamp');
+  const apkPath = argValue('apk') || DEFAULT_APK;
+  const write = process.argv.includes('--write');
+  const record = adjudicate({ stamp, controlStamp, apkPath });
+  process.stdout.write(`${JSON.stringify(record, null, 2)}\n`);
+  if (write && record.ok) {
+    const out = join(ROOT, 'docs', 'rfc', 'm0-d2-adjudication.json');
+    writeFileSync(out, `${JSON.stringify(record, null, 2)}\n`);
+  }
+  process.exit(record.ok ? 0 : 2);
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  main();
+}

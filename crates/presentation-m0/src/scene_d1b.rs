@@ -46,12 +46,16 @@ pub fn moving_bounds(frame: u64) -> Rect {
 /// Glass B damage/ROI follows the moving sample, stays inside the original
 /// glass bounds, and remains smaller than the accumulator / snapshot max.
 pub fn glass_b_follow_roi(frame: u64) -> Rect {
+    glass_b_follow_roi_in(frame, GLASS_B_BOUNDS)
+}
+
+pub fn glass_b_follow_roi_in(frame: u64, glass_bounds: Rect) -> Rect {
     let moving = moving_bounds(frame);
     let pad = 16.0;
-    let x = (moving.x - pad).max(GLASS_B_BOUNDS.x);
-    let y = (moving.y - pad).max(GLASS_B_BOUNDS.y);
-    let x1 = (moving.x1() + pad).min(GLASS_B_BOUNDS.x1());
-    let y1 = (moving.y1() + pad).min(GLASS_B_BOUNDS.y1());
+    let x = (moving.x - pad).max(glass_bounds.x);
+    let y = (moving.y - pad).max(glass_bounds.y);
+    let x1 = (moving.x1() + pad).min(glass_bounds.x1());
+    let y1 = (moving.y1() + pad).min(glass_bounds.y1());
     Rect::new(x, y, (x1 - x).max(1.0), (y1 - y).max(1.0))
 }
 
@@ -80,6 +84,41 @@ pub fn list_has_moving_sample(list: &NeoDisplayList) -> bool {
         }
         _ => false,
     })
+}
+
+pub fn glass_barriers(list: &NeoDisplayList) -> Vec<&GlassBoundary> {
+    list.ops
+        .iter()
+        .filter_map(|op| match op {
+            NeoPaintOp::BackdropBarrier(barrier) => Some(barrier),
+            _ => None,
+        })
+        .collect()
+}
+
+/// 1-based paint-order index of a glass barrier. Capture/timeline tokens use
+/// this ordinal (`roi:2`), not a Blitz node id.
+pub fn glass_ordinal(list: &NeoDisplayList, id: BarrierId) -> u32 {
+    glass_barriers(list)
+        .iter()
+        .position(|barrier| barrier.id == id)
+        .map(|idx| u32::try_from(idx).unwrap_or(u32::MAX).saturating_add(1))
+        .unwrap_or(id.0)
+}
+
+pub fn last_glass(list: &NeoDisplayList) -> Option<&GlassBoundary> {
+    glass_barriers(list).into_iter().next_back()
+}
+
+pub fn is_last_glass(list: &NeoDisplayList, id: BarrierId) -> bool {
+    last_glass(list).is_some_and(|barrier| barrier.id == id)
+}
+
+/// Glass B follow-ROI clamped to the last producer barrier, not a hard-coded D1b rect.
+pub fn last_glass_follow_roi(list: &NeoDisplayList, frame: u64) -> Rect {
+    last_glass(list)
+        .map(|barrier| glass_b_follow_roi_in(frame, barrier.roi))
+        .unwrap_or_else(|| glass_b_follow_roi(frame))
 }
 
 pub fn static_d1b_scene() -> NeoDisplayList {
@@ -279,6 +318,15 @@ mod tests {
                 + u64::from(D1A_WIDTH) * u64::from(D1A_HEIGHT) * 4
         );
         assert_eq!(compositor_owned_bytes_d1b(D1A_WIDTH, D1A_HEIGHT), 1_046_528);
+    }
+
+    #[test]
+    fn glass_ordinal_is_paint_order_not_host_id() {
+        let scene = static_d1b_scene();
+        assert_eq!(glass_ordinal(&scene, BarrierId(1)), 1);
+        assert_eq!(glass_ordinal(&scene, BarrierId(2)), 2);
+        assert!(is_last_glass(&scene, BarrierId(2)));
+        assert!(!is_last_glass(&scene, BarrierId(1)));
     }
 
     #[test]

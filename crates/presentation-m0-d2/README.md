@@ -1,12 +1,14 @@
 # neotavern-presentation-m0-d2
 
 Non-production **M0-D2 producer-seam probe** for NeoUI v4 RFC 4.5 stage 3.
-Program D2 is **STARTED**, not PASS. Normative M0 stays `ENTERED`.
-`D1=Track D GO` is not granted.
+Program D2 is **STARTED**, not PASS. The moving sample sits in the producer
+`NeoDisplayList` after the Dioxus/Blitz static seam. Normative M0 stays
+`ENTERED`. `D1=Track D GO` is not granted.
 
 This crate is not linked into the production WebView kernel `.so`. It does
 not replace [`presentation-m0`](../presentation-m0/README.md) (D1a/D1b host
-admission). D1a evidence JSON is unchanged.
+admission). D1a/D1b evidence JSON is unchanged. Debug APK can load
+`libneotavern_presentation_m0_d2.so` from `M0D2Activity`.
 
 ## What it proves so far
 
@@ -19,12 +21,15 @@ admission). D1a evidence JSON is unchanged.
 - Canonical z-order is the paint stream. A second DOM walk is diagnostics
   only (`z-index` fixture: later sibling paints before hoisted glass).
 - Glass B stays inside Blitz opacity/clip layers; scopes balance.
+- The compositor moving sample is inserted **after** that seam, immediately
+  before Glass B. Motion is compile-once:
+  `pass_compiles=1`, `layout_rebuilds=0`, `paint_scene_rebuilds=0`.
 
 ## What it does not prove
 
 See [`missing_upstream_capabilities`](src/lib.rs) and
-[`docs/rfc/m0-d2-probe.md`](../../docs/rfc/m0-d2-probe.md). D2 cannot PASS on
-this static seam alone. The patch is not upstreamed.
+[`docs/rfc/m0-d2-probe.md`](../../docs/rfc/m0-d2-probe.md). Host-side D2 PASS
+still needs a BOUND APK. The patch is not upstreamed.
 
 ## Pins (experimental)
 
@@ -43,6 +48,15 @@ production Dioxus adoption.
 
 ```sh
 cargo test --manifest-path crates/Cargo.toml -p neotavern-presentation-m0-d2
+cargo test --manifest-path crates/Cargo.toml -p neotavern-presentation-m0-d2 --features gpu
+cargo run --manifest-path crates/Cargo.toml -p neotavern-presentation-m0-d2 --features gpu --bin m0-d2-probe
+```
+
+Android (debug APK only; production `MainActivity` / kernel JNI unchanged):
+
+```sh
+M0_D1A_FEATURES=gpu,android-jni,renderdoc-capture bash apps/android/scripts/build-m0-d1a-libs.sh
+adb shell am start -n com.neotavern.mobile/.M0D2Activity --es com.neotavern.mobile.M0_D2_FRAMES 1000 --es com.neotavern.mobile.M0_D2_CAPTURE_FRAME 120
 ```
 
 ## Constraints
@@ -50,5 +64,6 @@ cargo test --manifest-path crates/Cargo.toml -p neotavern-presentation-m0-d2
 - RFC 4.5: Gate P is `GateP:P1`. Host-side D1a and D1b are PASS. D2 is
   STARTED. This crate is not a compositor GO.
 - Do not treat a green unit test as M0-D2 PASS.
-- Do not paste `static_d1a_scene()` after layout and call that a producer.
+- Do not paste `static_d1a_scene()` / `static_d1b_scene()` after layout and
+  call that a producer.
 - Do not restore a post-layout scene builder for glass z-order.

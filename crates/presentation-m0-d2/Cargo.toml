@@ -21,5 +21,20 @@ kurbo = "0.13.1"
 neotavern-presentation-m0 = { path = "../presentation-m0" }
 peniko = "0.6"
 
+[target.'cfg(target_os = "android")'.dependencies]
+jni = { version = "0.21", default-features = false }
+
 [lib]
 name = "neotavern_presentation_m0_d2"
+crate-type = ["rlib", "cdylib"]
+
+[features]
+default = []
+gpu = ["neotavern-presentation-m0/gpu"]
+android-jni = ["gpu"]
+renderdoc-capture = ["gpu", "neotavern-presentation-m0/renderdoc-capture"]
+
+[[bin]]
+name = "m0-d2-probe"
+path = "src/bin/d2.rs"
+required-features = ["gpu"]
