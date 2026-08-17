@@ -23,17 +23,6 @@ export const UNRELATED_PATH_EXCLUDES = ['Техническое задание_ 
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DEFAULT_OUT = join(ROOT, 'apps', 'android', 'm0-d1a-captures');
-const DEFAULT_APK = join(
-  ROOT,
-  'apps',
-  'android',
-  'app',
-  'build',
-  'outputs',
-  'apk',
-  'debug',
-  'app-debug.apk',
-);
 
 export function sha256Bytes(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -249,7 +238,7 @@ function hashUntrackedFiles(paths) {
 }
 
 function parseArgs(argv) {
-  const out = { apk: null, stdout: false, outDir: DEFAULT_OUT };
+  const out = { apk: null, stdout: false, outDir: DEFAULT_OUT, bindApk: false };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     const next = argv[i + 1];
@@ -259,6 +248,8 @@ function parseArgs(argv) {
     } else if (arg === '--out' && next) {
       out.outDir = resolve(next);
       i += 1;
+    } else if (arg === '--bind-apk') {
+      out.bindApk = true;
     } else if (arg === '--stdout') {
       out.stdout = true;
     } else if (arg === '--help' || arg === '-h') {
@@ -280,14 +271,8 @@ function collect(opts) {
   const untracked = hashUntrackedFiles(evidence.remaining_untracked);
   let submoduleStatus = git(['submodule', 'status']).stdout.trim();
   if (!submoduleStatus) submoduleStatus = '(none)';
-  const requestedApk =
-    opts.apk && existsSync(opts.apk) ? opts.apk : existsSync(DEFAULT_APK) ? DEFAULT_APK : null;
-  const observational = Boolean(
-    requestedApk &&
-    (requestedApk.includes('m0-d1a-captures') ||
-      requestedApk.includes('emulator-installed') ||
-      requestedApk.includes('m1-captures')),
-  );
+  const requestedApk = opts.apk && existsSync(opts.apk) ? opts.apk : null;
+  const observational = Boolean(requestedApk) && !opts.bindApk;
   const apk = classifyApkLinkage(requestedApk, observational);
   if (apk.apk_linkage === 'BOUND' && evidence.evidence_dirty) {
     apk.apk_observational_sha256 = apk.apk_sha256;
@@ -331,7 +316,9 @@ function main(argv = process.argv.slice(2)) {
   if (opts.help) {
     console.log(`PRE-GATE M0-D1a source bundle (RFC ${RFC_EDITION}). Not a PASS.
 
-  node scripts/m0-d1a-source-bundle.mjs [--apk <debug.apk>] [--out <dir>] [--stdout]
+  node scripts/m0-d1a-source-bundle.mjs [--apk <debug.apk>] [--bind-apk] [--out <dir>] [--stdout]
+
+  APK is UNBOUND unless --bind-apk is passed for an APK built from this tree.
 `);
     return;
   }
