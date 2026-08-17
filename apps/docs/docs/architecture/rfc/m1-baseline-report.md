@@ -8,9 +8,12 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/rfc/m1-baseline-re
 **not** available: physical low/mid and high-refresh references are
 **BLOCKED** (none attached). Morning A/A0/B on the 58 337 647-byte APK is
 `MEASURED` emulator-only (60 Hz AVD). Evening A/A0/B is
-**`INVALID_FOR_COMPARISON`** (different APK and different screens). This is
-**not** Gate P and **not** a Track D GO. RFC §44: emulator does not replace
-real-device GPU.
+**`INVALID_FOR_COMPARISON`** (different APK and different screens). These
+classifications are **not raised**. Gate P was nevertheless signed
+`GateP:P1` under an explicit owner waiver
+([gate-p-decision-draft.md](gate-p-decision-draft.md)). This report is
+**not** an M-1 PASS, **not** a D1a PASS, and **not** a Track D GO. RFC §44:
+emulator does not replace real-device GPU.
 
 **RFC:** [neoui-v4-android-presentation-backend.md](neoui-v4-android-presentation-backend.md)
 
@@ -111,11 +114,11 @@ produce a large gfxinfo frame count. Compare A/A0/B rAF on this AVD only.
 | Capture script               | `m1-android-capture.mjs`     | Default wait 50 s; JSON summary preferred over the sampler start line.                       |
 | Device capture               | 2026-08-17 emulator-5554     | Three 50 s cold tracks. No physical low/mid or high-refresh phone.                           |
 
-## Findings for Gate P (still not a decision)
+## Findings for Gate P (not raised by the P1 signature)
 
 - Morning AVD did **not** show a large rAF gap for live vs off glass. That
   does **not** answer the high-refresh phone question and is **not** a valid
-  M-1 for signing Gate P (RFC minimum device set missing).
+  M-1 PASS (RFC minimum device set missing).
 - Track B is a viable measurement **path** (HTTPS origin works). It is not a
   compositor upgrade.
 - High-refresh `preferredDisplayModeId` cannot be proven here:
@@ -123,24 +126,13 @@ produce a large gfxinfo frame count. Compare A/A0/B rAF on this AVD only.
 - gfxinfo on idle HostConnect is not a scroll/animation fixture.
 - Evening A/A0/B must not be compared to each other or to the morning table.
 
-## Gate P input (not a decision)
+## Gate P input (signed elsewhere; this report is not raised)
 
-```text
-decision:
-owner:
-date:
-input evidence: no valid M-1 (physical BLOCKED; evening A/A0/B INVALID_FOR_COMPARISON; morning AVD emulator-only)
-qualified device definition:
-allowed degraded semantics:
-critical Android journeys:
-budget/capacity ceiling:
-revisit/kill trigger:
-```
-
-Empty `decision` / `owner` / `date` means Gate P is still `UNDECIDED` until
-a valid M-1 or an explicit `GateP:P0` product refusal of live glass as MUST.
-Missing phones are not P0. Draft:
-[gate-p-decision-draft.md](gate-p-decision-draft.md).
+The product choice is recorded in
+[gate-p-decision-draft.md](gate-p-decision-draft.md): `GateP:P1`, owner
+`Disya123 <gamedisya@gmail.com>`, date 2026-08-17, with an explicit waiver
+that this incomplete physical M-1 is not a technical PASS and does not
+block P1. M-1 classifications above stay as written.
 
 ## Session 2 — 2026-08-17 evening (`INVALID_FOR_COMPARISON`)
 

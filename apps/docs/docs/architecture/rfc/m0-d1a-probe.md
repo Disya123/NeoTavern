@@ -4,16 +4,18 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/rfc/m0-d1a-probe.m
 
 # M0-D1a paint-seam probe
 
-**Status:** **PRE-GATE / BLOCKED** runner artifact (RFC 4.5 §0.3.2 / §48).
-Normative Milestone 0 is **NOT_ENTERED** because Gate P is `UNDECIDED`.
-This is **not** Gate P, **not** a Track D compositor GO, and **not** D1a PASS.
+**Status:** runner artifact remains **PRE-GATE / BLOCKED** (RFC 4.5 §0.3.2 /
+§48). Gate P is **`GateP:P1` / PASSED**. Normative Milestone 0 is
+**`ENTERED`**, not PASS. This file is **not** a Track D compositor GO and
+**not** D1a PASS. Existing desktop/AVD runs are **not admitted**.
 
 **RFC:** [neoui-v4-android-presentation-backend.md](neoui-v4-android-presentation-backend.md) §48  
 **Crate:** [`crates/presentation-m0`](https://github.com/Disya123/NeoTavern/blob/main/crates/presentation-m0/README.md)
 
 Architectural wording in the RFC is not evidence. This file records what the
-working prototype actually ran. RFC 4.5 forbids starting M0-D1b or a new
-compositor prototype until `GateP:P1/P2` plus an evidence-admission record.
+working prototype actually ran. After `GateP:P1`, D1a must be **repeated**
+from pinned source on physical Android with GPU capture. D1b stays forbidden
+until that D1a PASS.
 
 ## Pins
 
@@ -104,20 +106,21 @@ Two different questions. Do not collapse them.
 
 | Question | Result | Meaning |
 | --- | --- | --- |
-| Gate P (`GateP:P0\|P1\|P2`) | **UNDECIDED** | Product: is live glass required? Unrelated to this crate. |
-| Normative M0 | **NOT_ENTERED** | RFC 4.5: M0 starts only after GateP:P1/P2. |
-| Runner-labelled M0-D1a | **PRE-GATE / BLOCKED** | AVD GLES 3.1 100-frame run exists. No GPU capture, no physical-device production backend, no immutable source bundle. |
+| Gate P (`GateP:P0\|P1\|P2`) | **`GateP:P1` / PASSED** | Signed 2026-08-17. Does not admit this runner as D1a PASS. |
+| Normative M0 | **`ENTERED`** | Entry allowed; not PASS. |
+| Runner-labelled M0-D1a | **PRE-GATE / BLOCKED** | AVD GLES 3.1 100-frame run exists. No GPU capture, no physical-device production backend. **Not admitted.** |
 | Upstream Vello/wgpu API enough for this static seam? | **provisional** (non-admissible) | Shared device, sampleable RT, ROI glass, no readback on desktop Vulkan and emulator GLES. Not a D1a PASS. |
 | Limited supported fork needed? | **not indicated** | Compositor accumulator is host code, not a Vello patch. Emulator gfxstream Vulkan is skipped, not patched. |
 | Replace paint substrate? | **not indicated** on these hosts | No readback / cross-device / dual-device failure on desktop Vulkan or emulator GLES. |
-| RFC §48 D1a **exit** | **not entered** | Capture + phone Vulkan + evidence-admission after Gate P. Runner BLOCKED ≠ FAIL. |
+| RFC §48 D1a **exit** | **not met** | Repeat from pinned source: physical Android + GPU capture (pass/resource order, two accumulator reads). Runner BLOCKED ≠ FAIL. |
 
 Do **not** record this as milestone `PASS`, `PATCH`, or `REPLACE`. Headless
 and AVD success is partial evidence; RFC 4.5 says it MAY later be admitted
-to M0 only by a written evidence-admission record after GateP:P1/P2.
+to M0 only by a written evidence-admission record. The `GateP:P1` signature
+does **not** admit these runs.
 
-M0-D1b and M0-D2 are **not started**. RFC 4.5 forbids D1b until Gate P and
-admitted D1a PASS.
+M0-D1b and M0-D2 are **not started**. RFC 4.5 forbids D1b until admitted
+D1a PASS.
 
 ## Android NDK compile (2026-08-17)
 
@@ -193,19 +196,18 @@ RFC 4.5: after `GateP:P1/P2`, an evidence-admission record plus:
 - Same counters: 0 CPU readback, 0 cross-device copy, 1 device/queue
 - Blitz is still M0-D2; D1a pins Vello 0.9.0 + wgpu 29.0.4
 
-Until Gate P, **stop**: no D1b, no compositor v1, no new probe scope.
-
-After a **signed** `GateP:P1`/`GateP:P2` only, repeat D1a from pinned source:
+Until a **new** physical D1a PASS, **stop D1b**. Repeat D1a from pinned source:
 
 ```text
 clean source bundle (evidence_dirty=false; unrelated paths listed or absent)
-→ new APK built from that bundle (apk_linkage=BOUND)
+→ new APK built from that bundle (apk_linkage=BOUND via --bind-apk)
 → physical Android production GPU
 → GPU capture (two accumulator reads at barriers)
 → D1a verdict
 ```
 
 Only **`D1a PASS`** allows D1b. The evening AVD APK must not be reused.
+PRE-GATE counters and the API timeline do not replace GPU capture.
 
 ## Desktop Vulkan API timeline (2026-08-17 evening)
 

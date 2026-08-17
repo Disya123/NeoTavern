@@ -48,11 +48,11 @@ Index of the internal documentation. Each major topic has its own folder.
 - [RFC / proposals](rfc/README.md) — non-canonical drafts. They do not
   replace ADR or the target-architecture ТЗ until an accepting ADR lands.
   Current NeoUI v4 items: the presentation-backend proposal (RFC **4.5**,
-  Gate P `UNDECIDED`, M0 `NOT_ENTERED`), [BaselineReport
+  Gate P **`GateP:P1` / PASSED**, M0 **`ENTERED`**, not PASS), [BaselineReport
   M-1](rfc/m1-baseline-report.md), the [M0-D1a paint-seam
   probe](rfc/m0-d1a-probe.md) (**PRE-GATE / BLOCKED**, not a compositor GO),
-  and an [unsigned Gate P draft](rfc/gate-p-decision-draft.md)
-  (`UNDECIDED` until a valid M-1).
+  and the [signed Gate P record](rfc/gate-p-decision-draft.md)
+  (`GateP:P1`, 2026-08-17, incomplete physical M-1 waiver).
 - [Changelog](../CHANGELOG.md).
 
 ## Commands

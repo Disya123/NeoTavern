@@ -5,9 +5,9 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/rfc/neoui-v4-andro
 # Предпроектная техническая спецификация: NeoUI v4 — Android presentation backend и 120-Hz live-glass compositor
 
 **Проект:** NeoTavern  
-**Редакция:** 4.5 (pre-gate evidence admission)  
+**Редакция:** 4.5 (GateP:P1 signed; M0 ENTERED, not PASS)  
 **Дата:** 2026-08-17  
-**Статус:** Draft Proposal / не является действующим каноном до Gate P и утверждающих ADR  
+**Статус:** Draft Proposal / Gate P = `GateP:P1` PASSED; не является production-каноном до утверждающих ADR; нормативный M0 `ENTERED`, не PASS  
 **Целевой путь в репозитории:** `docs/rfc/neoui-v4-android-presentation-backend.md`  
 **Repository migration:** OPEN — корневая копия не считается перемещённой этой редакцией  
 **Лицензия продукта:** GNU AGPL-3.0  
@@ -25,8 +25,8 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/rfc/neoui-v4-andro
 собственный compositor как принятое решение. Он задаёт kill-first программу,
 которая должна доказать или отвергнуть их до изменения production-канона.
 
-До прохождения `Gate P` документ MUST храниться и цитироваться как proposal. Он
-MUST NOT:
+Документ MUST храниться и цитироваться как proposal до утверждающих ADR,
+даже после `GateP:P1`. Он MUST NOT:
 
 - отменять действующие ADR о React/WebView, Theme SDK или Plugin SDK;
 - разрешать массовую миграцию экранов;
@@ -159,12 +159,14 @@ NeoUI v4 MUST NOT приниматься одним пакетным голос�
 
 ## 0.3. Gate P — продуктовая необходимость
 
-На дату редакции 4.5 Gate P **не выбран**. Статус `UNDECIDED` блокирует M0,
-implementation milestones и изменение production-канона.
+На дату редакции 4.5 (подпись 2026-08-17) Gate P **пройден** как
+`GateP:P1`. Подпись:
+[gate-p-decision-draft.md](gate-p-decision-draft.md). Нормативный M0
+получает право входа (`ENTERED`) и **не** является PASS. Implementation
+milestones и production-канон по-прежнему требуют D1/D2/D3 и ADR.
 
-До любого compositor/engine prototype product owner MUST письменно выбрать один
-вариант. Единственное исключение — bounded pre-M0 measurement week из раздела
-0.3.1:
+До compositor/engine prototype product owner MUST письменно выбрать один
+вариант. Bounded pre-M0 measurement week — раздел 0.3.1. Выбранный вариант:
 
 ```text
 GateP:P0 — live backdrop glass на Android не является MUST
@@ -190,11 +192,10 @@ WebView/native-toolkit optimization track. Если выбран `GateP:P1` ил
 - совместимость программы с другими крупными инициативами;
 - критерий остановки, если prototype не проходит.
 
-Без этого Milestone 0 не начинается.
+Без заполненного decision record Milestone 0 не начинается. Запись
+`GateP:P1` от 2026-08-17 это условие выполняет.
 
-Рабочая рекомендация proposal — обсуждать `GateP:P1` как наиболее проверяемый
-компромисс либо `GateP:P0` как дешёвый отказ от hard live glass. Это не заменяет
-подпись product owner. `GateP:P2` запрещено принимать без явной нижней границы
+`GateP:P2` по-прежнему запрещено принимать без явной нижней границы
 поддерживаемого Android matrix, evidence по low tier и утверждённого
 staffing/thermal/degraded-mode budget.
 
@@ -212,7 +213,9 @@ budget/capacity ceiling:
 revisit/kill trigger:
 ```
 
-Пустое поле означает, что Gate P не пройден.
+Пустое поле означает, что Gate P не пройден. Заполненная подпись
+`GateP:P1` (2026-08-17, owner `Disya123 <gamedisya@gmail.com>`) находится в
+[gate-p-decision-draft.md](gate-p-decision-draft.md).
 
 ## 0.3.1. Pre-M0 measurement week (M-1)
 
@@ -299,7 +302,7 @@ D запрещено выбирать только потому, что он т�
 | A/A0 | `MEASURED` emulator-only morning fixture; physical `BLOCKED`; evening AVD A/A0 **`INVALID_FOR_COMPARISON`** |
 | B | `MEASURED` emulator-only morning fixture; physical `BLOCKED`; evening AVD B **`INVALID_FOR_COMPARISON`** |
 | C | `NOT MEASURED` |
-| D | `NOT BUILT — запрещён до Gate P` (PRE-GATE D1a: desktop `BLOCKED`; evening AVD **`BLOCKED / NON-ADMISSIBLE`**) |
+| D | M0-D1a **разрешён** после `GateP:P1`; PRE-GATE D1a **не повышен** (desktop `BLOCKED`; evening AVD **`BLOCKED / NON-ADMISSIBLE`**) |
 
 Перед Gate P публикуется `BaselineReport M-1` с измеренными A/A0/B и только
 оценочными C/D. Он достаточен для выбора важности live glass, но **не** для D1.
@@ -3769,9 +3772,10 @@ incidental technical artifact может быть только остановл�
 # 48. Milestone 0 — paint seam и shared-device kill probe
 
 Normative Milestone 0 начинается только после `GateP:P1` либо
-`GateP:P2`. Это timeboxed feasibility probe, а не NeoCompositor v1 и не
+`GateP:P2`. На 2026-08-17 условие выполнено (`GateP:P1`); M0 `ENTERED`,
+не PASS. Это timeboxed feasibility probe, а не NeoCompositor v1 и не
 миграция chat route. Pre-gate run обрабатывается только по разделу
-0.3.2 и не считается входом в milestone.
+0.3.2 и не считается D1a PASS.
 
 Он состоит из трёх последовательных work packages:
 
@@ -3789,6 +3793,7 @@ M0-D2 не может автоматически объявлять M0-D1a/b п�
 ### Verdict vocabulary
 
 - `NOT_ENTERED` — entry gate milestone не пройден;
+- `ENTERED` — Gate P пройден, milestone открыт, work packages ещё не PASS;
 - `NOT_STARTED` — entry gate пройден, но work package не начат;
 - `BLOCKED` — прогон дал partial evidence, но отсутствует mandatory
   artifact, environment или reproducibility record; это не `FAIL`;
@@ -3798,8 +3803,8 @@ M0-D2 не может автоматически объявлять M0-D1a/b п�
 - `FAIL` — хотя бы один exit criterion воспроизводимо нарушен.
 
 Runner verdict и program verdict хранятся раздельно. Например, pre-gate
-runner MAY вернуть `BLOCKED`, пока канонический M0 имеет
-`NOT_ENTERED`. Один не переписывает другой.
+runner MAY вернуть `BLOCKED`, пока канонический M0 имеет `ENTERED` после
+`GateP:P1`. Один не переписывает другой.
 
 ### Stage 1 — M0-D1a static scene
 
@@ -3917,17 +3922,19 @@ Snapshot фиксирует факты, но не повышает program verdi
 
 | Object | Status | Reason |
 |---|---|---|
-| `Gate P` | `UNDECIDED` | нет валидного M-1; lab shortage ≠ `GateP:P0`; owner не подписал |
-| normative M0 | `NOT_ENTERED` | Gate P не пройден |
-| morning AVD M-1 A/A0/B | `MEASURED` emulator-only | 60 Hz; не RFC device set |
-| evening AVD M-1 A/A0/B | `INVALID_FOR_COMPARISON` | другой APK и другие экраны |
-| physical M-1 device set | `BLOCKED` | none attached |
-| runner D1a desktop Vulkan | `PRE-GATE / BLOCKED` | API timeline; нет Android production backend / GPU capture |
-| evening AVD D1a (installed APK) | `BLOCKED / NON-ADMISSIBLE` | `.so` ≠ current source bundle |
-| unsigned Gate P draft | `docs/rfc/gate-p-decision-draft.md` | `decision`/`owner`/`date` empty; not a signature |
-| `M0-D1b` | `NOT_STARTED` | D1a не PASS; Gate P не пройден |
-| `M0-D2` | `NOT_STARTED` | normative M0 не начат |
-| `D1=Track D GO` | `NOT_GRANTED` | Gate P и mandatory M0 outcomes отсутствуют |
+| `Gate P` | **`GateP:P1` / PASSED** | signed 2026-08-17; [gate-p-decision-draft.md](gate-p-decision-draft.md) |
+| owner M-1 waiver | **explicit** | incomplete physical M-1 accepted for the **product** choice only; not an M-1 PASS |
+| normative M0 | **`ENTERED`** | entry allowed after P1; **not** PASS |
+| morning AVD M-1 A/A0/B | `MEASURED` emulator-only | 60 Hz; не RFC device set; **not raised** |
+| evening AVD M-1 A/A0/B | `INVALID_FOR_COMPARISON` | другой APK и другие экраны; **not raised** |
+| physical M-1 device set | `BLOCKED` | none attached; **not raised** |
+| runner D1a desktop Vulkan | `PRE-GATE / BLOCKED` | API timeline; нет Android production backend / GPU capture; **not admitted** |
+| evening AVD D1a (installed APK) | `BLOCKED / NON-ADMISSIBLE` | `.so` ≠ current source bundle; **not admitted** |
+| signed Gate P record | `docs/rfc/gate-p-decision-draft.md` | `GateP:P1`; owner `Disya123 <gamedisya@gmail.com>` |
+| `M0-D1a` (normative) | `NOT_STARTED` | must repeat from pinned source + physical GPU capture |
+| `M0-D1b` | `NOT_STARTED` | D1a не PASS |
+| `M0-D2` | `NOT_STARTED` | D1a/b не PASS |
+| `D1=Track D GO` | `NOT_GRANTED` | M0 PASS и TrackComparison отсутствуют |
 
 Снятое partial evidence:
 
@@ -3988,6 +3995,7 @@ Android reference. До этого D1b не начинается.
 | Результат | Решение |
 |---|---|
 | `GateP=UNDECIDED`, есть pre-gate run | сохранить artifacts, остановить scope; M0 `NOT_ENTERED`, D1b не начинать |
+| `GateP:P1` + incomplete physical M-1 (owner waiver) | M0 `ENTERED`; PRE-GATE D1a **не** admitted; повторить D1a с physical capture |
 | M0-D1a FAIL | остановить D1b; Track D compositor — NO-GO |
 | M0-D1a PASS, M0-D1b FAIL | static barrier доказан, dynamic live glass — NO-GO; вернуться к A/B/C либо пересмотреть Gate P |
 | M0-D1a/b PASS, M0-D2 FAIL | D1 остаётся кандидатом; Dioxus/Blitz — NO-GO, проверить другой producer/substrate |

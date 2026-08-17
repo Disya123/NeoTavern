@@ -1,10 +1,10 @@
 # neotavern-presentation-m0
 
 Non-production **PRE-GATE M0-D1a paint-seam probe** for NeoUI v4 RFC 4.5. It is
-not normative Milestone 0 (`NOT_ENTERED` until Gate P), not NeoCompositor v1,
-not a Dioxus/Blitz producer, not a Gate P product decision, and it is **not**
-linked into the production WebView kernel `.so`. A **debug-only** Activity can
-load a second library `libneotavern_presentation_m0.so`.
+not a normative M0 PASS (M0 is `ENTERED` after `GateP:P1`), not NeoCompositor
+v1, not a Dioxus/Blitz producer, not a replacement for the Gate P record, and
+it is **not** linked into the production WebView kernel `.so`. A **debug-only**
+Activity can load a second library `libneotavern_presentation_m0.so`.
 
 Evidence: [`docs/rfc/m0-d1a-probe.md`](../../docs/rfc/m0-d1a-probe.md).
 
@@ -69,8 +69,9 @@ node scripts/m0-d1a-source-bundle.mjs --apk path/to/app-debug.apk --bind-apk
 
 ## Constraints
 
-- RFC 4.5: this crate is a **PRE-GATE** runner. Normative M0 is
-  `NOT_ENTERED`. Do not start M0-D1b or compositor v1 from here.
+- RFC 4.5: Gate P is `GateP:P1`. Normative M0 is `ENTERED`, not PASS.
+  This crate's existing runs stay **PRE-GATE / BLOCKED** until a physical
+  GPU-capture D1a PASS. Do not start M0-D1b from these artifacts.
 - An emulator GLES 3.1 100-frame logcat line is partial evidence, not an
   admissible D1a PASS (needs Gate P, GPU capture, physical device, source
   bundle). Compiling the NDK `.so` is not a PASS.

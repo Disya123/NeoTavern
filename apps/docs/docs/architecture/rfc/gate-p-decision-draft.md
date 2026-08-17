@@ -2,11 +2,11 @@
 editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/rfc/gate-p-decision-draft.md
 ---
 
-# Gate P decision draft (unsigned)
+# Gate P decision record (signed)
 
-**Status:** draft for product owner. **Not signed.** `decision` / `owner` /
-`date` remain empty, so Gate P stays `UNDECIDED`. This file is not an ADR,
-not a Track D GO, and not normative M0.
+**Status:** **signed** `GateP:P1` / **PASSED** on 2026-08-17. This is the
+product-owner decision record from RFC §0.3. It is **not** an ADR, **not**
+`D1=Track D GO`, **not** M0 PASS, and **not** a D1a PASS.
 
 **RFC:** [neoui-v4-android-presentation-backend.md](neoui-v4-android-presentation-backend.md) §0.3  
 **Evidence:** [BaselineReport M-1](m1-baseline-report.md), [M0-D1a probe](m0-d1a-probe.md)
@@ -14,92 +14,76 @@ not a Track D GO, and not normative M0.
 Prefix `GateP:` is required so this is not confused with plugin tiers
 `Plugin:P0…P5`.
 
-A missing lab (no phone) is **not** a product choice of `GateP:P0`. Lab
-shortage keeps the gate `UNDECIDED` until a **valid** M-1 exists, or until
-the owner explicitly decides live glass is not MUST.
-
-## Record (unsigned)
+## Record (signed)
 
 ```text
-decision:
-owner:
-date:
-input evidence: no valid M-1 for Gate P (physical device set BLOCKED; evening A/A0/B INVALID_FOR_COMPARISON). Morning AVD A/A0/B is emulator-only MEASURED, not a substitute for the RFC device set. PRE-GATE D1a is BLOCKED / NON-ADMISSIBLE against current source (installed APK .so ≠ pinned bundle).
-qualified device definition: NOT SET
-allowed degraded semantics: NOT SET
-critical Android journeys: NOT SET
-budget/capacity ceiling: NOT SET
-revisit/kill trigger: NOT SET
+decision: GateP:P1
+owner: Disya123 <gamedisya@gmail.com> (NeoTavern product owner; authenticated git identity)
+date: 2026-08-17
+input evidence: docs/rfc/m1-baseline-report.md as of this signature, with the recorded limitations (physical device set BLOCKED; evening A/A0/B INVALID_FOR_COMPARISON; morning AVD emulator-only MEASURED). PRE-GATE D1a remains BLOCKED / NON-ADMISSIBLE and is not admitted as D1a PASS.
+qualified device definition: physical Android without a software renderer; supported production GPU backend; required compute and sampleable-texture capabilities; proven D1a/D1b PASS and the established performance thresholds
+allowed degraded semantics: on unqualified devices, under thermal pressure, or under memory pressure, a static/simplified material without live backdrop blur is allowed; application functionality is preserved
+critical Android journeys: launch and open chat; continuous scroll; live-glass header and composer; IME/keyboard; images; media/surface interleaving; lifecycle and recovery
+budget/capacity ceiling: until a further owner review, bounded M0 and the required technical preparation are allowed; production migration budget remains zero until M0 PASS and D1/D2 decisions
+compatibility: React/WebView, Theme SDK, and Plugin SDK are not replaced until the corresponding decisions and ADRs
+revisit/kill trigger: any M0 NO-GO; a required foundational private fork; a CPU readback or cross-device path; no viable physical Android backend; or exceeding the approved M0 scope
 ```
 
-Empty `decision` / `owner` / `date` means the gate is **not** passed.
+## Explicit owner waiver (incomplete physical M-1)
 
-## Options
+The current M-1 does **not** contain a valid RFC §0.3.1 physical device set.
+The owner **knowingly** accepts that limitation:
 
-| Choice | Meaning | Consequence if signed |
-| --- | --- | --- |
-| `GateP:P0` | live backdrop glass on Android is **not** MUST | Track D closes. GPU capture and D1b are not required. Cheap WebView / native-toolkit work remains |
-| `GateP:P1` | live glass is MUST **only** on capability-qualified devices | First: valid physical M-1 (same APK, same content fixture, low/mid + high-refresh). Then sign. Then M0-D1a from pinned source |
-| `GateP:P2` | live glass is MUST on the **entire** supported Android matrix | Same as P1, plus a lower-bound matrix, low-tier evidence, and staffing/thermal/degraded-mode budget. Forbidden without those |
+- incomplete physical M-1 is **not** a technical PASS of the measurement week;
+- it **does not** raise morning AVD A/A0/B from emulator-only `MEASURED`;
+- it **does not** reclassify evening A/A0/B (`INVALID_FOR_COMPARISON`);
+- it **does not** attach a physical low/mid or high-refresh reference;
+- it **does not** raise PRE-GATE D1a (desktop `BLOCKED`; evening AVD
+  `BLOCKED / NON-ADMISSIBLE`) to D1a PASS or to admitted M0 evidence;
+- it **does not** block the **product** choice `GateP:P1`.
 
-## Allowed outcomes (only these three)
+M0 exists to establish **technical feasibility** of live glass on
+capability-qualified devices. A later valid physical M-1 remains required
+before D1/TrackComparison claims about high-refresh cost.
 
-1. **Owner signs `GateP:P0`.** Track D compositor program closes. Capture and
-   D1b are not needed. This is a product refusal of live glass as MUST, not
-   a lab-shortage default.
-2. **Owner considers `P1` or `P2`.** Do **not** sign yet. First attach
-   physical low/mid and high-refresh devices, rebuild **one** APK, run A/A0/B
-   on the **same** content fixture, publish a valid BaselineReport M-1, then
-   sign Gate P.
-3. **Owner does not choose.** Everything stays stopped: M0 `NOT_ENTERED`,
-   D1b `NOT_STARTED`, `D1=Track D GO` `NOT_GRANTED`.
+## Consequence of `GateP:P1`
 
-## After a `P1`/`P2` signature only
+Live backdrop glass on Android is MUST **only** on capability-qualified
+devices, as defined above. Unqualified devices use the allowed degraded
+semantics.
 
-Repeat D1a from pinned source. Do not reuse the evening AVD APK or a dirty
-unrelated tree:
+| Object | Status after this signature |
+| --- | --- |
+| Gate P | **`GateP:P1` / PASSED** |
+| Normative M0 | **`ENTERED`** (entry allowed; **not** PASS) |
+| M0-D1a | may start from pinned source; existing PRE-GATE artifacts are **not** PASS |
+| M0-D1b | **`NOT_STARTED`** until D1a PASS |
+| M0-D2 | **`NOT_STARTED`** until D1a and D1b PASS |
+| `D1=Track D GO` | **`NOT_GRANTED`** until M0 PASS and TrackComparison |
+| Production React/WebView, Theme SDK, Plugin SDK | unchanged |
+
+## Required next technical chain (does not reuse PRE-GATE APK)
 
 ```text
 clean source bundle
-→ new APK hash (built from that bundle)
+→ new APK hash (built from that bundle, apk_linkage=BOUND via --bind-apk)
 → physical Android production GPU
-→ GPU capture (pass/resource order, two accumulator reads)
+→ GPU capture (pass/resource order, two accumulator reads at barriers)
 → D1a verdict
 ```
 
-Only **`D1a PASS`** allows D1b. Technical compositor implementation stays
-stopped until that PASS.
+Only **`D1a PASS`** allows D1b. Counters and an API timeline do **not**
+replace GPU capture.
 
-## Comparison (classified)
+## Classified input evidence (unchanged by this signature)
 
 | Track | Evidence status | What may be cited | Must not be cited as |
 | --- | --- | --- | --- |
 | A morning AVD (58 337 647 B APK, HostConnect) | `MEASURED` emulator-only 60 Hz | rAF ≈ 57.5; live glass on `file://` | high-refresh cost; Gate P device-set complete |
 | A0 morning AVD (same APK) | `MEASURED` emulator-only | rAF ≈ 57.8; glass Off | product-level live-glass delta |
 | B morning AVD (same APK) | `MEASURED` emulator-only | AssetLoader HTTPS loaded | compositor upgrade |
-| A/A0/B evening AVD | **`INVALID_FOR_COMPARISON`** | raw dumps exist | A vs A0 vs B, or vs morning table (different APK **and** different screens) |
-| Physical low/mid + high-refresh | **`BLOCKED`** | none attached | anything |
+| A/A0/B evening AVD | **`INVALID_FOR_COMPARISON`** | raw dumps exist | A vs A0 vs B, or vs morning table |
+| Physical low/mid + high-refresh | **`BLOCKED`** | none attached | a valid M-1 PASS |
 | C | `NOT MEASURED` | — | native-toolkit GO |
-| D / D1a AVD evening APK | **`BLOCKED / NON-ADMISSIBLE`** | older `.so`, no `timeline=`, ≠ current bundle | D1a PASS, GPU capture, phone Vulkan |
+| D / D1a AVD evening APK | **`BLOCKED / NON-ADMISSIBLE`** | older `.so`, no `timeline=` | D1a PASS |
 | D / D1a desktop Vulkan | `PRE-GATE / BLOCKED` | API timeline; 0 readback / 0 xdev | AGI/RenderDoc; Android production backend |
-
-## Unsigned note to the owner (not a recommendation of P0)
-
-- Default while unsigned: **`UNDECIDED` until a valid M-1** (RFC device set,
-  same APK, same content fixture).
-- Choose **`GateP:P0` only if** live backdrop glass on Android is not a
-  product MUST. Missing phones do not imply P0.
-- Choose to **consider P1/P2** only together with a plan to collect that
-  valid M-1, then sign, then repeat D1a from a clean pinned bundle.
-- `GateP:P2` remains forbidden until low-tier matrix and thermal/degraded
-  budget exist.
-
-## Explicit non-actions
-
-- Product owner has **not** signed `GateP:P0|P1|P2`.
-- Normative Milestone 0 stays `NOT_ENTERED`.
-- `M0-D1b` stays `NOT_STARTED`.
-- `D1=Track D GO` stays `NOT_GRANTED`.
-- Production React/WebView, Theme SDK, and Plugin SDK are unchanged.
-- No further compositor/probe implementation until one of the three
-  outcomes above is taken.

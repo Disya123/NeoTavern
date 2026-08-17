@@ -8,11 +8,10 @@
   (`clear,raster,blit,roi:1,glass:1,…`) and compositor-owned texture bytes.
   That log is not AGI/RenderDoc capture and does not raise the runner
   verdict. Helper: `node scripts/m0-d1a-source-bundle.mjs` (gitignored
-  JSON + binary diff). Unsigned Gate P draft:
-  `docs/rfc/gate-p-decision-draft.md` (`UNDECIDED` until a valid M-1; `P0`
-  only if the owner refuses live glass as MUST). Evening M-1 A/A0/B is
-  **`INVALID_FOR_COMPARISON`**. Evening AVD D1a is **`BLOCKED / NON-ADMISSIBLE`**.
-  D1b is not started.
+  JSON + binary diff). Gate P is now signed `GateP:P1` in
+  `docs/rfc/gate-p-decision-draft.md` (M0 `ENTERED`, not PASS). Evening M-1
+  A/A0/B remains **`INVALID_FOR_COMPARISON`**. Evening AVD D1a remains
+  **`BLOCKED / NON-ADMISSIBLE`**. D1b is not started.
 
 - **M0-D1a paint-seam probe (NeoUI v4 RFC 4.5 PRE-GATE, not a compositor).**
   Crate `crates/presentation-m0` compiled a host-authored static display list
@@ -20,10 +19,10 @@
   wgpu `Device`/`Queue` (Vello 0.9). Debug-only `M0D1aActivity` ran 100 frames
   on AVD API 36.1 (`-gpu host`, GLES 3.1): 1 device, 0 readbacks, 0 xdev,
   200 ROI copies. Goldfish/GFXStream Vulkan is skipped (SIGSEGV on Vello
-  submit). RFC 4.5 classifies this as **PRE-GATE / BLOCKED**; normative M0 is
-  **NOT_ENTERED** (Gate P `UNDECIDED`). D1b is not started. Production
-  `MainActivity` / kernel JNI are unchanged. Fill-in:
-  `docs/rfc/m0-d1a-probe.md`.
+  submit). RFC 4.5 classifies this as **PRE-GATE / BLOCKED**; those runs
+  are not admitted. Gate P is `GateP:P1`; normative M0 is `ENTERED`, not
+  PASS. D1b is not started. Production `MainActivity` / kernel JNI are
+  unchanged. Fill-in: `docs/rfc/m0-d1a-probe.md`.
 
 - **M-1 Android presentation measurement (NeoUI v4 RFC, not a compositor).**
   The packaged WebView host now requests the highest same-resolution display
@@ -38,7 +37,8 @@
   `setRequestedFrameRate`. Capture helper:
   `node scripts/m1-android-capture.mjs --track a --phase cold`. Fill-in
   evidence: `docs/rfc/m1-baseline-report.md` (emulator-only capture
-  2026-08-17; Gate P still `UNDECIDED`). The proposal at
+  2026-08-17; physical M-1 remains BLOCKED; Gate P later signed `GateP:P1`
+  with an owner waiver that does not raise this report). The proposal at
   `docs/rfc/neoui-v4-android-presentation-backend.md` is **not** canonical.
   Track D / Dioxus / NeoCompositor are not started.
 
@@ -50,13 +50,20 @@
   bundle is replayable from the committed helper. Unrelated root TZ stays
   in `excluded_unrelated_paths` and does not hide task-relevant dirty files.
 
+- **GateP:P1 signed (2026-08-17).** Product owner `Disya123
+  <gamedisya@gmail.com>` signed live glass as MUST only on
+  capability-qualified devices. Record:
+  `docs/rfc/gate-p-decision-draft.md`. Normative M0 is `ENTERED`, not PASS.
+  Incomplete physical M-1 is an explicit owner waiver and does **not**
+  raise M-1 or PRE-GATE D1a. Production migration budget stays zero until
+  M0 PASS and D1/D2. React/WebView, Theme SDK, and Plugin SDK are unchanged.
+
 - **NeoUI v4 RFC 4.5 (pre-gate evidence admission).** The draft at
-  `docs/rfc/neoui-v4-android-presentation-backend.md` now separates runner
-  verdict from program verdict: Gate P `UNDECIDED`, normative M0
-  `NOT_ENTERED`, existing `M0-D1a` AVD run `PRE-GATE / BLOCKED`. No D1b /
-  compositor v1 until GateP:P1/P2 plus evidence-admission. Repository
-  migration of the root TZ copy remains OPEN (no tombstone / `git mv` in
-  this change).
+  `docs/rfc/neoui-v4-android-presentation-backend.md` separates runner
+  verdict from program verdict. Existing `M0-D1a` AVD run stays
+  `PRE-GATE / BLOCKED` and is not admitted. Repository migration of the
+  root TZ copy remains OPEN. Gate P / M0 program status is in the
+  GateP:P1 signature entry above.
 
 - **M7 slice 1 — Playwright default is Kernel.** `pnpm test:e2e` boots
   `neotavern-headless` and seeds fixtures over Product Wire (`e2e/wire.ts`).

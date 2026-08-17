@@ -213,7 +213,8 @@ Goldfish/GFXStream Vulkan SIGSEGVs on Vello submit and is skipped.
 
 Crate: [`crates/presentation-m0`](../../crates/presentation-m0/README.md).
 Evidence: [M0-D1a probe](../../docs/rfc/m0-d1a-probe.md) (RFC 4.5 **PRE-GATE /
-BLOCKED**; normative M0 `NOT_ENTERED`; do not start D1b).
+BLOCKED**; Gate P `GateP:P1`; normative M0 `ENTERED`, not PASS; do not
+start D1b until D1a PASS).
 
 ## Phase gate status
 
