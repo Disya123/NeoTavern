@@ -1,11 +1,12 @@
 # BaselineReport M-1
 
-**Status:** host M-1 **closed** on 2026-08-17. Device evidence is
-**emulator-only** (API 36 `sdk_gphone64_x86_64`, 60 Hz locked). Physical
-low/mid and high-refresh references are **BLOCKED** (none attached on
-2026-08-17 evening). This is **not** Gate P and **not** a Track D GO.
-RFC §44: emulator does not replace real-device GPU. High-refresh reference =
-`DATA REQUIRED`.
+**Status:** host M-1 **closed** on 2026-08-17. A **valid** Gate P M-1 is
+**not** available: physical low/mid and high-refresh references are
+**BLOCKED** (none attached). Morning A/A0/B on the 58 337 647-byte APK is
+`MEASURED` emulator-only (60 Hz AVD). Evening A/A0/B is
+**`INVALID_FOR_COMPARISON`** (different APK and different screens). This is
+**not** Gate P and **not** a Track D GO. RFC §44: emulator does not replace
+real-device GPU.
 
 **RFC:** [neoui-v4-android-presentation-backend.md](neoui-v4-android-presentation-backend.md)
 
@@ -108,13 +109,15 @@ produce a large gfxinfo frame count. Compare A/A0/B rAF on this AVD only.
 
 ## Findings for Gate P (still not a decision)
 
-- Live glass vs glass-off did **not** show a large rAF gap on this 60 Hz
-  emulator. That does **not** answer the original high-refresh phone question.
-- Track B is a viable measurement path (HTTPS origin works). It is not a
+- Morning AVD did **not** show a large rAF gap for live vs off glass. That
+  does **not** answer the high-refresh phone question and is **not** a valid
+  M-1 for signing Gate P (RFC minimum device set missing).
+- Track B is a viable measurement **path** (HTTPS origin works). It is not a
   compositor upgrade.
 - High-refresh `preferredDisplayModeId` cannot be proven here:
   `supported_modes` has one 60 Hz mode.
 - gfxinfo on idle HostConnect is not a scroll/animation fixture.
+- Evening A/A0/B must not be compared to each other or to the morning table.
 
 ## Gate P input (not a decision)
 
@@ -122,7 +125,7 @@ produce a large gfxinfo frame count. Compare A/A0/B rAF on this AVD only.
 decision:
 owner:
 date:
-input evidence: BaselineReport M-1 (emulator-only, 2026-08-17)
+input evidence: no valid M-1 (physical BLOCKED; evening A/A0/B INVALID_FOR_COMPARISON; morning AVD emulator-only)
 qualified device definition:
 allowed degraded semantics:
 critical Android journeys:
@@ -130,13 +133,12 @@ budget/capacity ceiling:
 revisit/kill trigger:
 ```
 
-Empty `decision` / `owner` / `date` means Gate P is still `UNDECIDED`. Track D
-stays forbidden until that record exists.
-
-Unsigned draft with a technical recommendation (still not a signature):
+Empty `decision` / `owner` / `date` means Gate P is still `UNDECIDED` until
+a valid M-1 or an explicit `GateP:P0` product refusal of live glass as MUST.
+Missing phones are not P0. Draft:
 [gate-p-decision-draft.md](gate-p-decision-draft.md).
 
-## Session 2 — 2026-08-17 evening (physical BLOCKED; AVD recapture)
+## Session 2 — 2026-08-17 evening (`INVALID_FOR_COMPARISON`)
 
 `adb devices -l` listed only `emulator-5554` (`sdk_gphone64_x86_64`,
 Android 16 / SDK 36). **No physical low/mid phone and no high-refresh
@@ -168,7 +170,15 @@ replacement of the morning table):
 | thermal | 0 | 0 | 0 |
 | memory avail/total MB | 678 / 1965 | 690 / 1965 | 698 / 1965 |
 
-Do **not** treat A vs A0 vs B deltas here as a live-glass cost: the three
-tracks did not stay on the same screen (HostConnect vs Home vs an open chat).
-High-refresh and physical GPU remain `DATA REQUIRED`.
+Evening A/A0/B classification: **`INVALID_FOR_COMPARISON`**. They violate RFC
+§0.3.1 `same APK content fixture` and `same physical device set and
+settings` comparison rules:
+
+- APK 44 432 284 B ≠ morning 58 337 647 B;
+- screens diverged (HostConnect vs Home vs an open chat), so A vs A0 vs B
+  deltas are not a live-glass cost.
+
+Physical device set remains **`BLOCKED`** (none attached). Do **not** fold
+these numbers into the morning table or into a Gate P signature. High-refresh
+GPU remains `DATA REQUIRED` until a valid M-1.
 

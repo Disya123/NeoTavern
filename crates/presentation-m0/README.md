@@ -56,7 +56,9 @@ adb logcat -d -s NeoTavern:I | findstr m0-d1a
 
 Optional extra: `-e com.neotavern.mobile.M0_D1A_FRAMES 100`.
 
-Source bundle (gitignored JSON + binary diff; not a PASS):
+Source bundle (gitignored JSON + binary diff; not a PASS). The helper lists
+`excluded_unrelated_paths` and leaves pulled device APKs `apk_linkage=UNBOUND`.
+Do not pair an old APK hash with a dirty unrelated tree.
 
 ```sh
 node scripts/m0-d1a-source-bundle.mjs

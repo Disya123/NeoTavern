@@ -145,8 +145,9 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   the default. See [RFC NeoUI v4](../rfc/neoui-v4-android-presentation-backend.md)
   §0.3.1. The M0-D1a paint-seam probe is `crates/presentation-m0`. Production
   kernel JNI does not link it. Debug APK can load `M0D1aActivity` (not the
-  launcher). Emulator 100-frame GLES 3.1 run 2026-08-17 is **PRE-GATE /
-  BLOCKED** (RFC 4.5); see [M0-D1a probe](../rfc/m0-d1a-probe.md).
+  launcher). Morning AVD GLES 3.1 is **PRE-GATE / BLOCKED**. Evening AVD
+  D1a on the installed APK is **BLOCKED / NON-ADMISSIBLE** (`.so` ≠ current
+  source). See [M0-D1a probe](../rfc/m0-d1a-probe.md).
 
 ## Background execution (Phase 8)
 

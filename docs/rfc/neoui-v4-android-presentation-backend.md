@@ -292,10 +292,10 @@ D запрещено выбирать только потому, что он т�
 
 | Track | Evidence status в этой редакции |
 |---|---|
-| A/A0 | `MEASURED — emulator-only 2026-08-17`; physical low/mid `BLOCKED` (none attached) |
-| B | `MEASURED — emulator-only 2026-08-17`; physical `BLOCKED` (none attached) |
+| A/A0 | `MEASURED` emulator-only morning fixture; physical `BLOCKED`; evening AVD A/A0 **`INVALID_FOR_COMPARISON`** |
+| B | `MEASURED` emulator-only morning fixture; physical `BLOCKED`; evening AVD B **`INVALID_FOR_COMPARISON`** |
 | C | `NOT MEASURED` |
-| D | `NOT BUILT — запрещён до Gate P` (PRE-GATE D1a runner `BLOCKED`) |
+| D | `NOT BUILT — запрещён до Gate P` (PRE-GATE D1a: desktop `BLOCKED`; evening AVD **`BLOCKED / NON-ADMISSIBLE`**) |
 
 Перед Gate P публикуется `BaselineReport M-1` с измеренными A/A0/B и только
 оценочными C/D. Он достаточен для выбора важности live glass, но **не** для D1.
@@ -3913,9 +3913,13 @@ Snapshot фиксирует факты, но не повышает program verdi
 
 | Object | Status | Reason |
 |---|---|---|
-| `Gate P` | `UNDECIDED` | product owner не выбрал `GateP:P0/P1/P2` |
+| `Gate P` | `UNDECIDED` | нет валидного M-1; lab shortage ≠ `GateP:P0`; owner не подписал |
 | normative M0 | `NOT_ENTERED` | Gate P не пройден |
-| runner-labelled `M0-D1a` AVD artifact | `PRE-GATE / BLOCKED` | нет GPU capture и physical-device run; dirty-tree source bundle is a helper artifact, not M0 admission |
+| morning AVD M-1 A/A0/B | `MEASURED` emulator-only | 60 Hz; не RFC device set |
+| evening AVD M-1 A/A0/B | `INVALID_FOR_COMPARISON` | другой APK и другие экраны |
+| physical M-1 device set | `BLOCKED` | none attached |
+| runner D1a desktop Vulkan | `PRE-GATE / BLOCKED` | API timeline; нет Android production backend / GPU capture |
+| evening AVD D1a (installed APK) | `BLOCKED / NON-ADMISSIBLE` | `.so` ≠ current source bundle |
 | unsigned Gate P draft | `docs/rfc/gate-p-decision-draft.md` | `decision`/`owner`/`date` empty; not a signature |
 | `M0-D1b` | `NOT_STARTED` | D1a не PASS; Gate P не пройден |
 | `M0-D2` | `NOT_STARTED` | normative M0 не начат |
@@ -3938,9 +3942,10 @@ frames=100
 ran_on_android=true
 capture=false
 probe_changes_commit=absent
-immutable_source_bundle=helper_script_plus_gitignored_dirty_tree
+immutable_source_bundle=helper_v2;_unrelated_tz_excluded;_apk_linkage=UNBOUND
 api_timeline=desktop_vulkan_2026-08-17_evening;_not_agi_renderdoc
 runner_verdict=BLOCKED
+evening_avd_d1a=BLOCKED_NON_ADMISSIBLE
 ```
 
 Evening desktop Vulkan re-run (same host RTX 3060, rustc 1.97.1) recorded the

@@ -9,8 +9,10 @@
   That log is not AGI/RenderDoc capture and does not raise the runner
   verdict. Helper: `node scripts/m0-d1a-source-bundle.mjs` (gitignored
   JSON + binary diff). Unsigned Gate P draft:
-  `docs/rfc/gate-p-decision-draft.md`. Physical M-1 device set remains
-  **BLOCKED** (no phone attached). D1b is not started.
+  `docs/rfc/gate-p-decision-draft.md` (`UNDECIDED` until a valid M-1; `P0`
+  only if the owner refuses live glass as MUST). Evening M-1 A/A0/B is
+  **`INVALID_FOR_COMPARISON`**. Evening AVD D1a is **`BLOCKED / NON-ADMISSIBLE`**.
+  D1b is not started.
 
 - **M0-D1a paint-seam probe (NeoUI v4 RFC 4.5 PRE-GATE, not a compositor).**
   Crate `crates/presentation-m0` compiled a host-authored static display list

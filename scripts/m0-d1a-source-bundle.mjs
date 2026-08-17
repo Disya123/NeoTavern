@@ -15,8 +15,11 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-export const SCHEMA = 'm0-d1a-source-bundle/v1';
+export const SCHEMA = 'm0-d1a-source-bundle/v2';
 export const RFC_EDITION = '4.5';
+
+/** RFC 0.5 root TZ copy — not part of the D1a evidence tree. */
+export const UNRELATED_PATH_EXCLUDES = ['Техническое задание_ NeoUI v4.md'];
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DEFAULT_OUT = join(ROOT, 'apps', 'android', 'm0-d1a-captures');
@@ -49,6 +52,79 @@ export function parsePorcelain(text) {
   return { dirty: entries.length > 0, entries };
 }
 
+export function normalizeRelPath(rel) {
+  return rel.replace(/\\/gu, '/').replace(/^"(.*)"$/u, '$1');
+}
+
+export function porcelainPath(line) {
+  return normalizeRelPath(line.slice(3));
+}
+
+export function isUnrelatedPath(rel, excludes = UNRELATED_PATH_EXCLUDES) {
+  const normalized = normalizeRelPath(rel);
+  const base = normalized.split('/').pop();
+  return excludes.some((ex) => normalized === ex || normalized.endsWith(`/${ex}`) || base === ex);
+}
+
+export function classifyEvidenceTree(
+  porcelainEntries,
+  untrackedPaths,
+  excludes = UNRELATED_PATH_EXCLUDES,
+) {
+  const excluded = [];
+  const remainingPorcelain = [];
+  for (const line of porcelainEntries) {
+    const rel = porcelainPath(line);
+    if (isUnrelatedPath(rel, excludes)) {
+      excluded.push(rel);
+    } else {
+      remainingPorcelain.push(line);
+    }
+  }
+  const remainingUntracked = [];
+  for (const rel of untrackedPaths) {
+    if (isUnrelatedPath(rel, excludes)) {
+      if (!excluded.includes(normalizeRelPath(rel))) {
+        excluded.push(normalizeRelPath(rel));
+      }
+    } else {
+      remainingUntracked.push(rel);
+    }
+  }
+  return {
+    excluded_unrelated_paths: [...new Set(excluded)],
+    evidence_dirty: remainingPorcelain.length > 0 || remainingUntracked.length > 0,
+    remaining_porcelain: remainingPorcelain,
+    remaining_untracked: remainingUntracked,
+  };
+}
+
+export function classifyApkLinkage(apkPath, observational) {
+  if (!apkPath) {
+    return {
+      apk_sha256: null,
+      apk_observational_sha256: null,
+      apk_linkage: 'UNBOUND',
+      apk_linkage_reason: 'no APK built from this source bundle',
+    };
+  }
+  if (observational) {
+    return {
+      apk_sha256: null,
+      apk_observational_sha256: sha256File(apkPath),
+      apk_linkage: 'UNBOUND',
+      apk_linkage_reason:
+        'pulled/installed APK is not a build of this source bundle; do not cite as matching evidence',
+    };
+  }
+  return {
+    apk_sha256: sha256File(apkPath),
+    apk_observational_sha256: null,
+    apk_linkage: 'BOUND',
+    apk_linkage_reason: 'APK path is the assembleDebug output of this tree',
+  };
+}
+
 export function buildBundleRecord(input) {
   return {
     schema: SCHEMA,
@@ -63,6 +139,8 @@ export function buildBundleRecord(input) {
     },
     base_commit: input.baseCommit,
     dirty: input.dirty,
+    evidence_dirty: input.evidenceDirty ?? input.dirty,
+    excluded_unrelated_paths: input.excludedUnrelatedPaths ?? [],
     porcelain: input.porcelain,
     diff_sha256: input.diffSha256,
     diff_bytes: input.diffBytes,
@@ -71,8 +149,11 @@ export function buildBundleRecord(input) {
     crate_toml_sha256: input.crateTomlSha256,
     submodule_status: input.submoduleStatus,
     apk_sha256: input.apkSha256,
+    apk_observational_sha256: input.apkObservationalSha256 ?? null,
     apk_path: input.apkPath,
     apk_bytes: input.apkBytes,
+    apk_linkage: input.apkLinkage ?? 'UNBOUND',
+    apk_linkage_reason: input.apkLinkageReason ?? 'not classified',
     rustc: input.rustc,
     cargo: input.cargo,
     runner: input.runner,
@@ -148,14 +229,31 @@ function collect(opts) {
   const others = git(['ls-files', '--others', '--exclude-standard'])
     .stdout.split(/\r?\n/u)
     .filter(Boolean);
-  const untracked = hashUntrackedFiles(others);
+  const evidence = classifyEvidenceTree(porcelain.entries, others);
+  const untracked = hashUntrackedFiles(evidence.remaining_untracked);
   let submoduleStatus = git(['submodule', 'status']).stdout.trim();
   if (!submoduleStatus) submoduleStatus = '(none)';
-  const apkPath =
+  const requestedApk =
     opts.apk && existsSync(opts.apk) ? opts.apk : existsSync(DEFAULT_APK) ? DEFAULT_APK : null;
+  const observational = Boolean(
+    requestedApk &&
+    (requestedApk.includes('m0-d1a-captures') ||
+      requestedApk.includes('emulator-installed') ||
+      requestedApk.includes('m1-captures')),
+  );
+  const apk = classifyApkLinkage(requestedApk, observational);
+  if (apk.apk_linkage === 'BOUND' && evidence.evidence_dirty) {
+    apk.apk_observational_sha256 = apk.apk_sha256;
+    apk.apk_sha256 = null;
+    apk.apk_linkage = 'UNBOUND';
+    apk.apk_linkage_reason =
+      'assembleDebug APK exists but evidence_dirty=true; do not bind APK to this tree';
+  }
   return buildBundleRecord({
     baseCommit,
     dirty: porcelain.dirty,
+    evidenceDirty: evidence.evidence_dirty,
+    excludedUnrelatedPaths: evidence.excluded_unrelated_paths,
     porcelain: porcelain.entries,
     diffSha256: sha256Bytes(diff),
     diffBytes: diff.length,
@@ -163,9 +261,12 @@ function collect(opts) {
     lockfileSha256: sha256File(join(ROOT, 'crates', 'Cargo.lock')),
     crateTomlSha256: sha256File(join(ROOT, 'crates', 'presentation-m0', 'Cargo.toml')),
     submoduleStatus,
-    apkSha256: apkPath ? sha256File(apkPath) : null,
-    apkPath,
-    apkBytes: apkPath ? readFileSync(apkPath).byteLength : null,
+    apkSha256: apk.apk_sha256,
+    apkObservationalSha256: apk.apk_observational_sha256,
+    apkPath: requestedApk,
+    apkBytes: requestedApk ? readFileSync(requestedApk).byteLength : null,
+    apkLinkage: apk.apk_linkage,
+    apkLinkageReason: apk.apk_linkage_reason,
     rustc: toolVersion('rustc'),
     cargo: toolVersion('cargo'),
     runner: {
@@ -200,17 +301,19 @@ function main(argv = process.argv.slice(2)) {
   const diff = git(['diff', '--binary', 'HEAD'], { encoding: 'buffer' }).stdout;
   writeFileSync(jsonPath, text);
   writeFileSync(patchPath, diff);
-  const extra = hashUntrackedFiles(
-    git(['ls-files', '--others', '--exclude-standard']).stdout.split(/\r?\n/u).filter(Boolean),
-  );
+  const others = git(['ls-files', '--others', '--exclude-standard'])
+    .stdout.split(/\r?\n/u)
+    .filter(Boolean);
+  const evidence = classifyEvidenceTree(record.porcelain, others);
+  const extra = hashUntrackedFiles(evidence.remaining_untracked);
   writeFileSync(
     join(opts.outDir, `${stamp}-untracked.json`),
-    `${JSON.stringify(extra, null, 2)}\n`,
+    `${JSON.stringify({ ...extra, excluded_unrelated_paths: evidence.excluded_unrelated_paths }, null, 2)}\n`,
   );
   console.log(`[m0-d1a-bundle] wrote ${jsonPath}`);
   console.log(`[m0-d1a-bundle] wrote ${patchPath}`);
   console.log(
-    `[m0-d1a-bundle] base=${record.base_commit} dirty=${record.dirty} apk=${record.apk_sha256 ?? 'absent'}`,
+    `[m0-d1a-bundle] base=${record.base_commit} dirty=${record.dirty} evidence_dirty=${record.evidence_dirty} apk_linkage=${record.apk_linkage} apk=${record.apk_sha256 ?? 'unbound'}`,
   );
 }
 

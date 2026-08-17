@@ -195,6 +195,18 @@ RFC 4.5: after `GateP:P1/P2`, an evidence-admission record plus:
 
 Until Gate P, **stop**: no D1b, no compositor v1, no new probe scope.
 
+After a **signed** `GateP:P1`/`GateP:P2` only, repeat D1a from pinned source:
+
+```text
+clean source bundle (evidence_dirty=false; unrelated paths listed or absent)
+→ new APK built from that bundle (apk_linkage=BOUND)
+→ physical Android production GPU
+→ GPU capture (two accumulator reads at barriers)
+→ D1a verdict
+```
+
+Only **`D1a PASS`** allows D1b. The evening AVD APK must not be reused.
+
 ## Desktop Vulkan API timeline (2026-08-17 evening)
 
 ```text
@@ -234,19 +246,21 @@ node scripts/m0-d1a-source-bundle.mjs
 ```
 
 Produces gitignored JSON + `git diff --binary HEAD` under
-`apps/android/m0-d1a-captures/`. Dirty-tree hashes are not an admitted M0
-bundle.
+`apps/android/m0-d1a-captures/`. The helper records
+`excluded_unrelated_paths` (root TZ copy) and **must not** bind a pulled
+device APK as `apk_linkage=BOUND`. A dirty-tree hash plus an old APK is
+**not** an admitted M0 bundle.
 
-### Physical Android production backend
+### Evening AVD D1a — `BLOCKED / NON-ADMISSIBLE`
 
-**BLOCKED** on 2026-08-17 evening: `adb devices -l` listed only
-`emulator-5554` (`sdk_gphone64_x86_64`). No phone.
+**BLOCKED / NON-ADMISSIBLE** on 2026-08-17 evening: `adb devices -l` listed
+only `emulator-5554` (`sdk_gphone64_x86_64`). No phone.
 
-Worktree `app/src/debug/jniLibs` was empty (gitignored). The already-installed
-debug APK (44 432 284 bytes, SHA-256 `A661693E…BAEB`) still contained an
-older `libneotavern_presentation_m0.so`. Starting `M0D1aActivity` on that
-APK reproduced the GLES 3.1 100-frame run **without** the new `timeline=`
-fields:
+The already-installed debug APK (44 432 284 bytes, SHA-256 `A661693E…BAEB`)
+contained an **older** `libneotavern_presentation_m0.so` that does **not**
+match the current source bundle (no `timeline=` fields). Starting
+`M0D1aActivity` reproduced a GLES 3.1 100-frame run, but that binary cannot
+be cited as evidence of this tree:
 
 ```text
 m0-d1a gpu_ran=true adapter=Android_Emulator_OpenGL_ES_Translator_(NVIDIA_GeForce_RTX_3060/PCIe/SSE2) backend=Gl software=false devices=1 readbacks=0 xdev=0 roi_copies=200 raster=400 glass=200 frames=100 ran_on_android=true capture=false verdict=BLOCKED reason=Android_GPU_ran;_GPU_capture_with_pass/resource_order_is_still_required_for_D1a_PASS
@@ -254,7 +268,9 @@ m0-d1a gpu_ran=true adapter=Android_Emulator_OpenGL_ES_Translator_(NVIDIA_GeForc
 
 Raw log (gitignored):
 `apps/android/m0-d1a-captures/2026-08-17-evening-avd-d1a.log`.
-This is still **PRE-GATE / BLOCKED**, not a D1a PASS.
+
+Do not pair that APK hash with a later source-bundle JSON as if they were
+one revision. Physical production-backend D1a remains **BLOCKED** (no phone).
 
 ## Non-goals (unchanged)
 

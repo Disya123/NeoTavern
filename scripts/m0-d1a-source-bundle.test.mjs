@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   RFC_EDITION,
   SCHEMA,
+  UNRELATED_PATH_EXCLUDES,
   buildBundleRecord,
+  classifyApkLinkage,
+  classifyEvidenceTree,
+  isUnrelatedPath,
   parsePorcelain,
   sha256Bytes,
 } from './m0-d1a-source-bundle.mjs';
@@ -36,11 +40,34 @@ describe('m0-d1a source bundle', () => {
     expect(record.program.runner_d1a).toBe('PRE-GATE / BLOCKED');
     expect(record.program.d1b).toBe('NOT_STARTED');
     expect(record.apk_sha256).toBeNull();
+    expect(record.apk_linkage).toBe('UNBOUND');
     expect(record.note).toContain('not an M0-D1a PASS');
   });
 
   it('treats empty porcelain as a clean tree', () => {
     expect(parsePorcelain('').dirty).toBe(false);
     expect(parsePorcelain('\n').dirty).toBe(false);
+  });
+
+  it('excludes the root TZ copy from evidence_dirty', () => {
+    expect(isUnrelatedPath(UNRELATED_PATH_EXCLUDES[0])).toBe(true);
+    const classified = classifyEvidenceTree(
+      [`?? ${UNRELATED_PATH_EXCLUDES[0]}`],
+      [UNRELATED_PATH_EXCLUDES[0]],
+    );
+    expect(classified.evidence_dirty).toBe(false);
+    expect(classified.excluded_unrelated_paths).toEqual(UNRELATED_PATH_EXCLUDES);
+  });
+
+  it('keeps lockfile edits as evidence_dirty', () => {
+    const classified = classifyEvidenceTree([' M crates/Cargo.lock'], []);
+    expect(classified.evidence_dirty).toBe(true);
+    expect(classified.excluded_unrelated_paths).toEqual([]);
+  });
+
+  it('does not bind an observational pulled APK to the source hash', () => {
+    const linkage = classifyApkLinkage(null, false);
+    expect(linkage.apk_linkage).toBe('UNBOUND');
+    expect(linkage.apk_sha256).toBeNull();
   });
 });

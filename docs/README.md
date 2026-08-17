@@ -51,7 +51,8 @@ Index of the internal documentation. Each major topic has its own folder.
   Gate P `UNDECIDED`, M0 `NOT_ENTERED`), [BaselineReport
   M-1](rfc/m1-baseline-report.md), the [M0-D1a paint-seam
   probe](rfc/m0-d1a-probe.md) (**PRE-GATE / BLOCKED**, not a compositor GO),
-  and an [unsigned Gate P draft](rfc/gate-p-decision-draft.md).
+  and an [unsigned Gate P draft](rfc/gate-p-decision-draft.md)
+  (`UNDECIDED` until a valid M-1).
 - [Changelog](../CHANGELOG.md).
 
 ## Commands

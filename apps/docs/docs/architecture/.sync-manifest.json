@@ -5,7 +5,7 @@
     {
       "source": "README.md",
       "target": "README.md",
-      "sha256": "a318864a1ea7f95a010bd41c850ed11df0ae33e1ff53d389be180cc4f6047d24"
+      "sha256": "a1332496f76a03bf8a0931fe48c5c63ffa5b009563a7c7bf2fa1d09615ccd4f3"
     },
     {
       "source": "adr/0004-typebox-contracts.md",
@@ -230,7 +230,7 @@
     {
       "source": "android/README.md",
       "target": "android/README.md",
-      "sha256": "22dc960d5ad35620a57349f3fef01c09ef3f0c25e250fc45be40ae09418a36fb"
+      "sha256": "b1a3f2e9a248ef0a2e18c9a67ee4ca75b7210d5b402e5d80f463c070a7f6b4c3"
     },
     {
       "source": "api/README.md",
@@ -345,27 +345,27 @@
     {
       "source": "rfc/README.md",
       "target": "rfc/README.md",
-      "sha256": "cf04cd6b3813aeb69fc83a296340eb83cd09fa8f8dc0f03a9ee54c1a8c707e3e"
+      "sha256": "fbbf162970812263158da65052750da3e7c0765ee050de3242cb12a32a08e4df"
     },
     {
       "source": "rfc/gate-p-decision-draft.md",
       "target": "rfc/gate-p-decision-draft.md",
-      "sha256": "dc32924f5826f19a1466fb80b2a906f9cefc911eebda6f1b6d4aa1b1059de7f9"
+      "sha256": "f9628b52dace69a6ba6ac20abd776467ef48dc799f5781c242c66643576426d4"
     },
     {
       "source": "rfc/m0-d1a-probe.md",
       "target": "rfc/m0-d1a-probe.md",
-      "sha256": "302925fac7d3a6bf4e2edc54d9d85993688a4e4700fe52929e1623f1692325e3"
+      "sha256": "a7be0eb9cf80ce8db56b26af89d12a0fc45f4a89c9d2bf07b752e5aeb77f41fc"
     },
     {
       "source": "rfc/m1-baseline-report.md",
       "target": "rfc/m1-baseline-report.md",
-      "sha256": "96b02d64be538cbdd7e6f345051500e9457fc6cf497d51551e3d3d574c67a488"
+      "sha256": "95d68c1b22f068485ece172d1eeaf2a2001071eceb46c066e1a5f0be77a947f6"
     },
     {
       "source": "rfc/neoui-v4-android-presentation-backend.md",
       "target": "rfc/neoui-v4-android-presentation-backend.md",
-      "sha256": "acd15c797e93d017f8f25538ad2472a325040f4972cbbd4d3217f1c94a457009"
+      "sha256": "280faf21b6e1e9c132895837fbf26256c2e1d44d7dd86ce64757190842d2d9ad"
     },
     {
       "source": "theme-sdk/README.md",
