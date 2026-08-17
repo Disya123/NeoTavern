@@ -21,6 +21,9 @@ Evidence: [`docs/rfc/m0-d1a-probe.md`](../../docs/rfc/m0-d1a-probe.md).
 - First-frame **API timeline** (named accumulator / snapshot / ROI copies).
   That log is not an AGI/RenderDoc GPU capture and does not flip
   `android_gpu_capture`.
+- Debug-only Android RenderDoc in-app capture (`StartFrameCapture` around
+  the first D1a submit) when `VK_LAYER_RENDERDOC_Capture` is injected.
+  Production kernel JNI does not compile that module.
 
 ## Pins
 

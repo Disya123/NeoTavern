@@ -315,6 +315,28 @@ node scripts/m0-d1a-capture-check.mjs --commands <stamp>-d1a-commands.txt
 That check does not flip `android_gpu_capture` and is not D1a PASS.
 Runbook: [m0-d1a-physical-runbook.md](m0-d1a-physical-runbook.md).
 
+### Capture tool switch (2026-08-17 night) — still not D1a PASS
+
+Do **not** hunt a newer AGI. **3.3.3** is the last published release. The
+physical `.gfxtrace`
+`apps/android/m0-d1a-captures/2026-08-17T16-17-08-012Z-d1a.gfxtrace` is
+**`CAPTURED_BUT_NOT_REPLAYABLE`**: `gapit commands` fails on unknown
+`VkStructureType(1000128004)` =
+`VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT`. Do not strip
+`VkInstanceCreateInfo::pNext` for that parser.
+
+Capture tool is **RenderDoc v1.45** at `E:\renderdoc`
+([`tools/renderdoc.pin.json`](../../tools/renderdoc.pin.json)). Close
+Android Studio. Use Android Remote Context or
+`node scripts/m0-d1a-renderdoc-capture.mjs`. Debug-only in-app
+`StartFrameCapture` wraps the first offscreen D1a submit. Debug manifest
+`<queries>` lists the RenderDoc layer packages. Production path and
+RenderGraph are unchanged.
+
+D1a stays **BLOCKED** until Event Browser shows `m0-d1a-roi-read:1` →
+glass → raster/blit → `m0-d1a-roi-read:2` → glass, with accumulator/ROI
+identity and no readback/cross-device copy. D1b stays `NOT_STARTED`.
+
 Emulator smoke of **this** APK (GLES translator, not a phone) produced the
 golden API timeline and stayed `capture=false` / `BLOCKED`:
 

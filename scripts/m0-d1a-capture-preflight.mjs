@@ -17,14 +17,14 @@ import {
   PACKAGE,
   bindApkMatches,
   buildEvidenceManifest,
-  buildGapitTraceCommand,
+  buildRenderdocCaptureCommand,
   captureFilenames,
   captureStamp,
   deviceGate,
   evaluateHost,
   formatCaptureHelp,
   latestBoundBundle,
-  loadPreset,
+  loadRenderdocPreset,
   selectPhysicalDevice,
   writeCaptureManifest,
 } from './m0-d1a-capture-host.mjs';
@@ -45,13 +45,7 @@ function runDevicePreflight(host) {
       capture_host: host.capture_host,
       reason: 'no physical Android over USB (emulators excluded)',
       listed: selected.listed.map((row) => ({ serial: row.serial, emulator: row.emulator })),
-      capture_help: formatCaptureHelp(
-        buildGapitTraceCommand({
-          gapit: host.agi.gapit,
-          serial: '<PHYSICAL_SERIAL>',
-          out: join(host.traces.dir, captureFilenames(captureStamp()).gfxtrace),
-        }),
-      ),
+      capture_help: formatCaptureHelp(buildRenderdocCaptureCommand()),
       unblock: 'plug in a physical Android phone over USB and re-run this command',
     };
   }
@@ -76,7 +70,7 @@ function runDevicePreflight(host) {
   const logcatPath = join(host.traces.dir, files.logcat);
   const devicePath = join(host.traces.dir, files.device);
   const evidencePath = join(host.traces.dir, files.evidence);
-  const gfxtracePath = join(host.traces.dir, files.gfxtrace);
+  const rdcPath = join(host.traces.dir, files.rdc);
 
   adb(host.adb.bin, device.serial, ['logcat', '-c']);
   const install = adb(host.adb.bin, device.serial, ['install', '-r', '-d', host.apk.path], {
@@ -121,28 +115,35 @@ function runDevicePreflight(host) {
   );
   adb(host.adb.bin, device.serial, ['shell', 'am', 'force-stop', PACKAGE]);
 
-  const captureCommand = buildGapitTraceCommand({
-    gapit: host.agi.gapit,
-    serial: device.serial,
-    out: gfxtracePath,
-  });
+  const captureCommand = buildRenderdocCaptureCommand({ serial: device.serial });
   const manifest = buildEvidenceManifest({
     physical_device: 'READY_FOR_CAPTURE',
     capture_host: 'READY',
     apk_source_commit: host.provenance?.apk_source_commit,
     apk_sha256: host.provenance?.apk_sha256,
     capture_tooling_commit: host.provenance?.capture_tooling_commit,
-    agi: { version: host.agi.version, build_sha: host.agi.build_sha, path: host.agi.install_path },
+    capture_tool: 'RenderDoc',
+    renderdoc: {
+      version: host.renderdoc.version,
+      build_sha: host.renderdoc.build_sha,
+      path: host.renderdoc.install_path,
+    },
+    agi: {
+      version: host.agi.version,
+      build_sha: host.agi.build_sha,
+      path: host.agi.install_path,
+      status: 'CAPTURED_BUT_NOT_REPLAYABLE',
+    },
     apk: host.apk,
     files: {
       ...files,
-      gfxtrace: gfxtracePath,
+      rdc: rdcPath,
       logcat: logcatPath,
       device: devicePath,
       evidence: evidencePath,
     },
     capture_command: captureCommand,
-    unblock: 'run the printed gapit trace command, then m0-d1a-capture-check.mjs',
+    unblock: 'run node scripts/m0-d1a-renderdoc-capture.mjs, then m0-d1a-capture-check.mjs',
   });
   writeFileSync(evidencePath, `${JSON.stringify(manifest, null, 2)}\n`);
   return {
@@ -155,7 +156,7 @@ function runDevicePreflight(host) {
       logcat: logcatPath,
       device: devicePath,
       evidence: evidencePath,
-      gfxtrace: gfxtracePath,
+      rdc: rdcPath,
     },
     capture_command: captureCommand,
     capture_help: formatCaptureHelp(captureCommand),
@@ -173,52 +174,59 @@ function main() {
   if (hostOnly) {
     const stamp = captureStamp();
     const files = captureFilenames(stamp);
-    const captureCommand = buildGapitTraceCommand({
-      gapit: host.agi.gapit,
-      serial: '<PHYSICAL_SERIAL>',
-      out: join(host.traces.dir, files.gfxtrace),
-    });
+    const captureCommand = buildRenderdocCaptureCommand();
     const manifest = buildEvidenceManifest({
       physical_device: 'BLOCKED_EXTERNAL',
       capture_host: 'READY',
       apk_source_commit: host.provenance.apk_source_commit,
       apk_sha256: host.provenance.apk_sha256,
       capture_tooling_commit: host.provenance.capture_tooling_commit,
+      capture_tool: 'RenderDoc',
+      renderdoc: {
+        version: host.renderdoc.version,
+        build_sha: host.renderdoc.build_sha,
+        path: host.renderdoc.install_path,
+        ready: host.renderdoc.ready,
+      },
       agi: {
         version: host.agi.version,
         build_sha: host.agi.build_sha,
         path: host.agi.install_path,
         ready: host.agi.ready,
+        status: 'CAPTURED_BUT_NOT_REPLAYABLE',
       },
       apk: host.apk,
       files,
       capture_command: captureCommand,
       unblock:
-        'plug in a physical Android phone over USB (not emulator) and re-run without --host-only',
+        'plug in a physical Android phone over USB (not emulator) and run node scripts/m0-d1a-renderdoc-capture.mjs',
     });
     const written = writeCaptureManifest(host.traces.dir, files, manifest);
     printJson({
       ok: true,
       capture_host: 'READY',
       physical_device: 'BLOCKED_EXTERNAL',
+      capture_tool: 'RenderDoc',
       apk_source_commit: host.provenance.apk_source_commit,
       apk_sha256: host.provenance.apk_sha256,
       capture_tooling_commit: host.provenance.capture_tooling_commit,
       agi: host.agi,
+      renderdoc: host.renderdoc,
       java: host.java,
       adb: host.adb,
       apk: host.apk,
       vulkan_source: host.vulkan_source,
+      renderdoc_queries_source: host.renderdoc_queries_source,
       provenance: host.provenance,
       bundle: host.bundle,
       files,
       evidence_path: written.evidencePath,
       ready_pointer: written.pointerPath,
-      preset: loadPreset(),
+      preset: loadRenderdocPreset(),
       capture_command: captureCommand,
       capture_help: formatCaptureHelp(captureCommand),
       unblock:
-        'plug in a physical Android phone over USB (not emulator) and re-run without --host-only',
+        'plug in a physical Android phone over USB (not emulator) and run node scripts/m0-d1a-renderdoc-capture.mjs',
     });
     process.exit(0);
   }

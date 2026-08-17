@@ -147,8 +147,9 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   kernel JNI does not link it. Debug APK can load `M0D1aActivity` (not the
   launcher). Morning AVD GLES 3.1 is **PRE-GATE / BLOCKED**. Evening AVD
   D1a on the installed APK is **BLOCKED / NON-ADMISSIBLE** (`.so` ≠ current
-  source). Capture host is **READY** (AGI 3.3.3 at `E:\agi`); physical USB
-  remains **BLOCKED_EXTERNAL**. See [M0-D1a probe](../rfc/m0-d1a-probe.md)
+  source). Capture host is **READY** (RenderDoc v1.45 at `E:\renderdoc`;
+  AGI 3.3.3 archived `CAPTURED_BUT_NOT_REPLAYABLE`). D1a stays **BLOCKED**
+  until a readable pass/resource tree. See [M0-D1a probe](../rfc/m0-d1a-probe.md)
   and the [physical capture runbook](../rfc/m0-d1a-physical-runbook.md).
 
 ## Background execution (Phase 8)

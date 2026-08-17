@@ -26,4 +26,10 @@
             </intent-filter>
         </activity>
     </application>
+    <!-- targetSdk >= 30 hides other packages from the Vulkan loader unless
+         listed here. Debug/probe only; production main manifest is unchanged. -->
+    <queries>
+        <package android:name="org.renderdoc.renderdoccmd.arm64" />
+        <package android:name="org.renderdoc.renderdoccmd.arm32" />
+    </queries>
 </manifest>

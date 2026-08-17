@@ -1,0 +1,16 @@
+{
+  "tool": "RenderDoc",
+  "version": "1.45",
+  "api": "vulkan",
+  "package": "com.neotavern.mobile",
+  "activity": "com.neotavern.mobile.M0D1aActivity",
+  "component": "com.neotavern.mobile/.M0D1aActivity",
+  "layer_package": "org.renderdoc.renderdoccmd.arm64",
+  "vulkan_layer": "VK_LAYER_RENDERDOC_Capture",
+  "gles_library": "libVkLayer_GLES_RenderDoc.so",
+  "capture_path_template": "/sdcard/Android/data/com.neotavern.mobile/files/m0-d1a",
+  "additionalargs": "-e com.neotavern.mobile.M0_D1A_FRAMES 100",
+  "search_debug_groups": ["m0-d1a-roi-read:1", "m0-d1a-roi-read:2"],
+  "search_resources": ["m0-d1a-accumulator", "m0-d1a-glass-roi"],
+  "note": "Offscreen probe: in-app StartFrameCapture around first D1a submit. Do not use present/frame trigger (HWUI TextView)."
+}

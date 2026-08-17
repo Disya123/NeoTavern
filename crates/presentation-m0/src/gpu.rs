@@ -62,7 +62,7 @@ extern "C" {
     fn __android_log_write(prio: c_int, tag: *const c_char, text: *const c_char) -> c_int;
 }
 
-fn probe_trace(msg: &str) {
+pub(crate) fn probe_trace(msg: &str) {
     #[cfg(target_os = "android")]
     {
         use std::ffi::CString;
@@ -699,9 +699,10 @@ impl ProbeGpu {
 fn probe_instance() -> wgpu::Instance {
     let backends = wgpu::Backends::from_env().unwrap_or_default();
     // Release NDK builds have `debug_assertions=false`, so `from_build_config()`
-    // omits DEBUG. Without it wgpu does not enable VK_EXT_debug_utils and AGI
-    // never sees `m0-d1a-*` pass/resource labels. Do not OR VALIDATION here:
-    // Khronos VVL stacked on AGI GraphicsSpy is a known crash source.
+    // omits DEBUG. Without it wgpu does not enable VK_EXT_debug_utils and
+    // AGI/RenderDoc never see `m0-d1a-*` pass/resource labels. Do not OR
+    // VALIDATION here: Khronos VVL stacked on a capture layer is a known
+    // crash source.
     let flags = wgpu::InstanceFlags::from_build_config().with_env()
         | wgpu::InstanceFlags::ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER
         | wgpu::InstanceFlags::DEBUG;
@@ -959,6 +960,16 @@ pub fn run_static_d1a(frames: u64) -> Result<ProbeReport, GpuInitError> {
         }
         let started = if frame == 0 {
             Some(std::time::Instant::now())
+        } else {
+            None
+        };
+        // Offscreen probe has no swapchain present. RenderDoc's default frame
+        // trigger captures the HWUI TextView. Debug-only in-app boundary wraps
+        // the first D1a submit when the Android layer is injected. No-op if
+        // RenderDoc is not attached. Production kernel JNI is unchanged.
+        #[cfg(target_os = "android")]
+        let _rdoc = if frame == 0 {
+            crate::renderdoc_capture::FrameGuard::begin()
         } else {
             None
         };

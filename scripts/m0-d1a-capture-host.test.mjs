@@ -10,19 +10,24 @@ import {
   bindApkMatches,
   buildEvidenceManifest,
   buildGapitTraceCommand,
+  buildRenderdocCaptureCommand,
   captureFilenames,
   classifyCaptureDump,
   classifyHardwareGpu,
   classifyProvenance,
+  classifyRoiReadOrder,
   debugManifestAgiMainDeclared,
+  debugManifestRenderdocQueriesDeclared,
   debugManifestVulkanDeclared,
   loadPreset,
+  loadRenderdocPreset,
   deviceGate,
   inspectApkFromText,
   isEmulator,
   parseAdbDevices,
   parseJavaVersion,
   verifyAgiPin,
+  verifyRenderdocPin,
 } from './m0-d1a-capture-host.mjs';
 
 const ROOT = join(import.meta.dirname, '..');
@@ -37,8 +42,23 @@ const incompleteDump = readFileSync(
 );
 
 describe('m0-d1a capture host', () => {
-  it('declares optional Vulkan uses-feature in the debug probe manifest', () => {
-    expect(debugManifestVulkanDeclared()).toBe(true);
+  it('keeps RenderDoc queries out of the production main manifest', () => {
+    const xml = readFileSync(
+      join(ROOT, 'apps', 'android', 'app', 'src', 'main', 'AndroidManifest.xml'),
+      'utf8',
+    );
+    expect(xml).not.toContain('org.renderdoc.renderdoccmd');
+  });
+
+  it('keeps the debug-only in-app RenderDoc boundary on the documented 1.1.2 slots', () => {
+    const src = readFileSync(
+      join(ROOT, 'crates', 'presentation-m0', 'src', 'renderdoc_capture.rs'),
+      'utf8',
+    );
+    expect(src).toContain('const IDX_SET_PATH: usize = 11;');
+    expect(src).toContain('const IDX_START: usize = 19;');
+    expect(src).toContain('const IDX_END: usize = 21;');
+    expect(src).toContain('StartFrameCapture');
   });
 
   it('exposes M0D1aActivity to AGI via MAIN without LAUNCHER', () => {
@@ -49,6 +69,14 @@ describe('m0-d1a capture host', () => {
     );
     expect(preset.capture_frames).toBe(0);
     expect(preset.duration).toBe('15s');
+  });
+
+  it('declares debug-only RenderDoc package queries', () => {
+    expect(debugManifestRenderdocQueriesDeclared()).toBe(true);
+    const preset = loadRenderdocPreset();
+    expect(preset.tool).toBe('RenderDoc');
+    expect(preset.layer_package).toBe('org.renderdoc.renderdoccmd.arm64');
+    expect(preset.vulkan_layer).toBe('VK_LAYER_RENDERDOC_Capture');
   });
 
   it('pins AGI 3.3.3 at E:\\agi', () => {
@@ -62,6 +90,24 @@ describe('m0-d1a capture host', () => {
     const result = verifyAgiPin();
     expect(result.ready).toBe(true);
     expect(result.gapit).toMatch(/gapit\.exe$/u);
+  });
+
+  it('pins RenderDoc 1.45 at E:\\renderdoc', () => {
+    const pin = JSON.parse(
+      readFileSync(new URL('../tools/renderdoc.pin.json', import.meta.url), 'utf8'),
+    );
+    expect(pin.version).toBe('1.45');
+    expect(pin.install_path.replaceAll('/', '\\')).toBe('E:\\renderdoc');
+    expect(pin.build_sha).toBe('2fc0bc04cb95499635f63986a55bc6f67849dd9f');
+    expect(pin.zip_sha256).toBe('bd665c348a8245d10a1f513e35b83603edc1a78006277583d09ec0769286eea4');
+  });
+
+  it('verifies installed RenderDoc hashes', () => {
+    const result = verifyRenderdocPin();
+    expect(result.ready).toBe(true);
+    expect(result.qrenderdoc).toMatch(/qrenderdoc\.exe$/u);
+    expect(result.renderdoccmd).toMatch(/renderdoccmd\.exe$/u);
+    expect(result.android_apk).toMatch(/org\.renderdoc\.renderdoccmd\.arm64\.apk$/u);
   });
 
   it('parses Java 11+', () => {
@@ -159,9 +205,11 @@ describe('m0-d1a capture host', () => {
     ).toBe(false);
   });
 
-  it('names traces as {stamp}-d1a.gfxtrace', () => {
+  it('names traces as {stamp}-d1a.gfxtrace and {stamp}-d1a.rdc', () => {
     const files = captureFilenames('2026-08-17T18-00-00-000Z');
     expect(files.gfxtrace).toBe('2026-08-17T18-00-00-000Z-d1a.gfxtrace');
+    expect(files.rdc).toBe('2026-08-17T18-00-00-000Z-d1a.rdc');
+    expect(files.xml).toBe('2026-08-17T18-00-00-000Z-d1a.xml');
     expect(files.commands).toBe('2026-08-17T18-00-00-000Z-d1a-commands.txt');
     expect(files.evidence).toBe('2026-08-17T18-00-00-000Z-d1a-evidence.json');
   });
@@ -206,6 +254,17 @@ describe('m0-d1a capture host', () => {
     expect(result.ok).toBe(false);
     expect(result.missing).toContain('m0-d1a-roi-read:1');
     expect(result.missing).toContain('m0-d1a-roi-read:2');
+  });
+
+  it('requires ROI read :1 before :2', () => {
+    expect(classifyRoiReadOrder(completeDump).ok).toBe(true);
+    expect(classifyRoiReadOrder('m0-d1a-roi-read:2 then m0-d1a-roi-read:1').ok).toBe(false);
+  });
+
+  it('builds the RenderDoc capture command', () => {
+    const cmd = buildRenderdocCaptureCommand({ serial: '8f5c2b7c' });
+    expect(cmd[1]).toMatch(/m0-d1a-renderdoc-capture\.mjs$/u);
+    expect(cmd.at(-1)).toBe('--serial=8f5c2b7c');
   });
 
   it('fails pin verify when a binary is missing', () => {

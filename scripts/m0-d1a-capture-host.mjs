@@ -26,7 +26,9 @@ export const ACCUMULATOR_LABEL = 'm0-d1a-accumulator';
 export const SNAPSHOT_LABEL = 'm0-d1a-glass-roi';
 export const EVIDENCE_SCHEMA = 'm0-d1a-capture-evidence/v1';
 export const AGI_PIN_REL = 'tools/agi.pin.json';
+export const RENDERDOC_PIN_REL = 'tools/renderdoc.pin.json';
 export const PRESET_REL = 'tools/agi-frame-capture.preset.json';
+export const RENDERDOC_PRESET_REL = 'tools/renderdoc-frame-capture.preset.json';
 /** Capture-host scripts identity. APK provenance is the latest BOUND bundle. */
 export const PINNED_CAPTURE_TOOLING_COMMIT = '5df24c8fa97ca2edce3d5627445c2b3e419d683c';
 export const READY_POINTER = 'capture-host-ready.json';
@@ -53,8 +55,16 @@ export function loadAgiPin(root = ROOT) {
   return JSON.parse(readFileSync(join(root, AGI_PIN_REL), 'utf8'));
 }
 
+export function loadRenderdocPin(root = ROOT) {
+  return JSON.parse(readFileSync(join(root, RENDERDOC_PIN_REL), 'utf8'));
+}
+
 export function loadPreset(root = ROOT) {
   return JSON.parse(readFileSync(join(root, PRESET_REL), 'utf8'));
+}
+
+export function loadRenderdocPreset(root = ROOT) {
+  return JSON.parse(readFileSync(join(root, RENDERDOC_PRESET_REL), 'utf8'));
 }
 
 export function gitRevParse(root = ROOT) {
@@ -105,6 +115,75 @@ export function classifyProvenance({ bundle, apkSha256, toolingCommit }) {
     evidence_dirty: false,
     apk_linkage: 'BOUND',
     reason: 'APK provenance is the BOUND source bundle; capture tooling stays pinned at 5df24c8',
+  };
+}
+
+export function verifyRenderdocPin(pin = loadRenderdocPin()) {
+  const home = pin.install_path;
+  const missing = [];
+  const mismatches = [];
+  for (const [name, expected] of Object.entries(pin.binaries ?? {})) {
+    const path = join(home, name);
+    if (!existsSync(path)) {
+      missing.push(name);
+      continue;
+    }
+    const actual = sha256File(path);
+    if (actual !== String(expected).toLowerCase()) {
+      mismatches.push({ name, expected, actual });
+    }
+  }
+  const apkRel = pin.android_apk?.arm64;
+  const apkPath = apkRel ? join(home, apkRel) : null;
+  let apkShaActual = null;
+  if (!apkPath || !existsSync(apkPath)) {
+    missing.push(apkRel || 'android arm64 apk');
+  } else {
+    apkShaActual = sha256File(apkPath);
+    if (apkShaActual !== String(pin.android_apk.arm64_sha256).toLowerCase()) {
+      mismatches.push({
+        name: apkRel,
+        expected: pin.android_apk.arm64_sha256,
+        actual: apkShaActual,
+      });
+    }
+  }
+  const cmd = join(home, 'renderdoccmd.exe');
+  const ui = join(home, 'qrenderdoc.exe');
+  let versionText = '';
+  let versionOk = false;
+  if (existsSync(cmd)) {
+    const result = spawnSync(cmd, ['--version'], { encoding: 'utf8' });
+    versionText = `${result.stdout || ''}\n${result.stderr || ''}`.trim();
+    versionOk =
+      versionText.includes(`v${pin.version}`) &&
+      (!pin.build_sha || versionText.toLowerCase().includes(String(pin.build_sha).toLowerCase()));
+  }
+  const ready =
+    missing.length === 0 &&
+    mismatches.length === 0 &&
+    existsSync(cmd) &&
+    existsSync(ui) &&
+    versionOk;
+  return {
+    version: pin.version,
+    build_sha: pin.build_sha,
+    install_path: home,
+    qrenderdoc: existsSync(ui) ? ui : null,
+    renderdoccmd: existsSync(cmd) ? cmd : null,
+    android_apk: apkPath && existsSync(apkPath) ? apkPath : null,
+    android_apk_sha256: apkShaActual,
+    version_text: versionText || null,
+    missing,
+    mismatches,
+    ready,
+    reason: ready
+      ? `RenderDoc ${pin.version} pin verified at ${home}`
+      : missing.length
+        ? `RenderDoc binaries missing: ${missing.join(',')}`
+        : !versionOk
+          ? `RenderDoc version mismatch (pin v${pin.version} ${pin.build_sha}, actual ${versionText || 'unreadable'})`
+          : 'RenderDoc binary hash mismatch',
   };
 }
 
@@ -236,6 +315,8 @@ export function captureFilenames(stamp) {
   return {
     stamp,
     gfxtrace: `${base}.gfxtrace`,
+    rdc: `${base}.rdc`,
+    xml: `${base}.xml`,
     commands: `${base}-commands.txt`,
     logcat: `${base}-logcat.txt`,
     device: `${base}-device.json`,
@@ -381,6 +462,31 @@ export function debugManifestAgiMainDeclared(root = ROOT) {
   );
 }
 
+export function debugManifestRenderdocQueriesDeclared(root = ROOT) {
+  const path = join(root, 'apps', 'android', 'app', 'src', 'debug', 'AndroidManifest.xml');
+  if (!existsSync(path)) return false;
+  const xml = readFileSync(path, 'utf8');
+  return (
+    xml.includes('org.renderdoc.renderdoccmd.arm64') &&
+    xml.includes('org.renderdoc.renderdoccmd.arm32') &&
+    xml.includes('<queries>')
+  );
+}
+
+export function classifyRoiReadOrder(text) {
+  const first = text.indexOf(REQUIRED_DEBUG_GROUPS[0]);
+  const second = text.indexOf(REQUIRED_DEBUG_GROUPS[1]);
+  const ok = first >= 0 && second >= 0 && first < second;
+  return {
+    ok,
+    first,
+    second,
+    reason: ok
+      ? 'm0-d1a-roi-read:1 appears before m0-d1a-roi-read:2'
+      : 'ROI read labels missing or out of order',
+  };
+}
+
 export function latestBoundBundle(dir = CAPTURES_DIR) {
   if (!existsSync(dir)) return null;
   const files = readdirSync(dir)
@@ -459,6 +565,14 @@ export function buildGapitCommandsCommand({ gapit, gfxtrace, out }) {
   return [gapit, 'commands', '-groupbyusermarkers', '-groupbyframe', gfxtrace, '>', out];
 }
 
+export function buildRenderdocCaptureCommand({ serial = '<PHYSICAL_SERIAL>' } = {}) {
+  return [
+    process.execPath,
+    join(ROOT, 'scripts', 'm0-d1a-renderdoc-capture.mjs'),
+    `--serial=${serial}`,
+  ];
+}
+
 export function buildEvidenceManifest(input) {
   return {
     schema: EVIDENCE_SCHEMA,
@@ -494,6 +608,7 @@ export function writeCaptureManifest(dir, files, manifest) {
 export function evaluateHost(opts = {}) {
   const pin = opts.pin ?? loadAgiPin();
   const agi = verifyAgiPin(pin);
+  const renderdoc = opts.renderdoc ?? verifyRenderdocPin();
   const java = findJava(pin);
   const adb = findAdb();
   const traces = ensureTraceDir(opts.capturesDir ?? CAPTURES_DIR);
@@ -511,6 +626,7 @@ export function evaluateHost(opts = {}) {
     toolingCommit,
   });
   const blockers = [];
+  if (!renderdoc.ready) blockers.push(renderdoc.reason);
   if (!agi.ready) blockers.push(agi.reason);
   if (!java.ok) blockers.push(java.reason);
   if (!adb.ok) blockers.push(adb.reason ?? 'adb not found');
@@ -527,7 +643,9 @@ export function evaluateHost(opts = {}) {
   return {
     capture_host,
     physical_device: 'BLOCKED_EXTERNAL',
+    capture_tool: 'RenderDoc',
     agi,
+    renderdoc,
     java,
     adb,
     traces,
@@ -535,6 +653,7 @@ export function evaluateHost(opts = {}) {
     apk: { ...apk, bind },
     vulkan_source: debugManifestVulkanDeclared(),
     agi_main_source: debugManifestAgiMainDeclared(),
+    renderdoc_queries_source: debugManifestRenderdocQueriesDeclared(),
     provenance,
     bundle: bundle
       ? {
@@ -548,7 +667,7 @@ export function evaluateHost(opts = {}) {
     ready: capture_host === 'READY',
     unblock:
       capture_host === 'READY'
-        ? 'attach a physical Android over USB (not emulator); then run node scripts/m0-d1a-capture-preflight.mjs'
+        ? 'attach a physical Android over USB (not emulator); then run node scripts/m0-d1a-renderdoc-capture.mjs'
         : `fix capture host: ${blockers.join('; ')}`,
   };
 }
@@ -603,12 +722,20 @@ export function deviceGate(device, apkAbis) {
 }
 
 export function formatCaptureHelp(command) {
+  const printed =
+    Array.isArray(command) && command.length > 0
+      ? command.map((part) => (/\s/u.test(part) ? JSON.stringify(part) : part)).join(' ')
+      : 'node scripts/m0-d1a-renderdoc-capture.mjs';
   return [
-    'AGI GUI: File → Capture Trace → API=Vulkan → Stop after 1 frame.',
-    'Commands pane: group by user markers, search m0-d1a-roi-read:1 then m0-d1a-roi-read:2.',
-    `CLI: ${command.map((part) => (/\s/u.test(part) ? JSON.stringify(part) : part)).join(' ')}`,
-    'Then: gapit commands -groupbyusermarkers -groupbyframe TRACE.gfxtrace',
-    'Then: node scripts/m0-d1a-capture-check.mjs --commands TRACE-commands.txt',
+    'Do not hunt a newer AGI: 3.3.3 is the last published release. The existing .gfxtrace is CAPTURED_BUT_NOT_REPLAYABLE (unknown VkStructureType 1000128004 = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT). Do not strip VkInstanceCreateInfo pNext unless RenderDoc also cannot parse the .rdc.',
+    'Close Android Studio (or disable its ADB integration) so it does not steal the debuggable APK.',
+    'Capture tool is RenderDoc v1.45 (tools/renderdoc.pin.json). GUI: File → Attach to Remote Context → Android device. Launch M0D1aActivity, not MainActivity.',
+    `CLI: ${printed}`,
+    'Offscreen probe: default present/frame trigger captures the HWUI TextView. Debug-only in-app StartFrameCapture wraps the first D1a submit when the layer is injected.',
+    'Event Browser: m0-d1a-roi-read:1 → first glass dispatch → intermediate raster/blit → m0-d1a-roi-read:2 → second glass. Resources m0-d1a-accumulator and m0-d1a-glass-roi. No CPU readback, no cross-device copy.',
+    'Then: renderdoccmd convert -c xml -f TRACE.rdc -o TRACE.xml',
+    'Then: node scripts/m0-d1a-capture-check.mjs --commands TRACE.xml',
+    'Completeness check does not flip android_gpu_capture and is not D1a PASS. D1b stays NOT_STARTED.',
   ].join('\n');
 }
 
@@ -620,26 +747,27 @@ function hostOnlyMain() {
   const host = evaluateHost();
   const stamp = captureStamp();
   const files = captureFilenames(stamp);
-  const preset = loadPreset();
-  const captureCommand = host.agi.gapit
-    ? buildGapitTraceCommand({
-        gapit: host.agi.gapit,
-        serial: '<PHYSICAL_SERIAL>',
-        out: join(host.traces.dir, files.gfxtrace),
-        preset,
-      })
-    : [];
+  const preset = loadRenderdocPreset();
+  const captureCommand = buildRenderdocCaptureCommand();
   const manifest = buildEvidenceManifest({
     physical_device: 'BLOCKED_EXTERNAL',
     capture_host: host.capture_host,
     apk_source_commit: host.provenance?.apk_source_commit,
     apk_sha256: host.provenance?.apk_sha256,
     capture_tooling_commit: host.provenance?.capture_tooling_commit,
+    capture_tool: 'RenderDoc',
+    renderdoc: {
+      version: host.renderdoc?.version,
+      build_sha: host.renderdoc?.build_sha,
+      path: host.renderdoc?.install_path,
+      ready: host.renderdoc?.ready,
+    },
     agi: {
       version: host.agi.version,
       build_sha: host.agi.build_sha,
       path: host.agi.install_path,
       ready: host.agi.ready,
+      status: 'CAPTURED_BUT_NOT_REPLAYABLE',
     },
     apk: host.apk,
     files,

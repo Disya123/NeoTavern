@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Completeness check for an AGI `gapit commands` dump. Not D1a PASS. Not D1b.
+ * Completeness check for an AGI `gapit commands` dump or a RenderDoc XML
+ * convert. Not D1a PASS. Not D1b. Does not flip android_gpu_capture.
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';

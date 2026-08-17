@@ -17,6 +17,8 @@ pub mod display_list;
 #[cfg(feature = "gpu")]
 pub mod gpu;
 pub mod pass_graph;
+#[cfg(all(feature = "gpu", target_os = "android"))]
+mod renderdoc_capture;
 pub mod scene_d1a;
 pub mod timeline;
 pub mod verdict;

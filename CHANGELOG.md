@@ -3,6 +3,17 @@
 ## Unreleased
 ### Added
 
+- **M0-D1a RenderDoc v1.45 capture host.** Pin `tools/renderdoc.pin.json`
+  (v1.45 at `E:\renderdoc`, zip and binary SHA-256 recorded). AGI 3.3.3
+  `.gfxtrace` is archived as `CAPTURED_BUT_NOT_REPLAYABLE` (unknown
+  `VkStructureType(1000128004)`); do not hunt a newer AGI and do not strip
+  `pNext` unless RenderDoc also cannot parse. Debug-only in-app
+  `StartFrameCapture` wraps the first D1a submit; debug `<queries>` lists
+  the RenderDoc layer packages. Production manifests and RenderGraph are
+  unchanged. D1a stays **BLOCKED** until a readable Event Browser /
+  resource graph. D1b is not started. Runbook:
+  `docs/rfc/m0-d1a-physical-runbook.md`.
+
 - **M0-D1a debug Vulkan `uses-feature` (probe variant only).**
   `apps/android/app/src/debug/AndroidManifest.xml` declares optional
   `android.hardware.vulkan.level` / `version` (`required=false`) next to
