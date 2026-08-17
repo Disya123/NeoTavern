@@ -50,6 +50,11 @@
   bundle is replayable from the committed helper. Unrelated root TZ stays
   in `excluded_unrelated_paths` and does not hide task-relevant dirty files.
 
+- **M0-D1a capture debug groups after GateP:P1.** The probe names
+  `m0-d1a-roi-read:{barrier}` and glass/blit passes for AGI/RenderDoc.
+  Labels do not flip `android_gpu_capture` and do not admit D1a PASS.
+  Runbook: `docs/rfc/m0-d1a-physical-runbook.md`.
+
 - **GateP:P1 signed (2026-08-17).** Product owner `Disya123
   <gamedisya@gmail.com>` signed live glass as MUST only on
   capability-qualified devices. Record:

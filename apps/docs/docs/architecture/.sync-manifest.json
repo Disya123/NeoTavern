@@ -345,7 +345,7 @@
     {
       "source": "rfc/README.md",
       "target": "rfc/README.md",
-      "sha256": "d79b1c5a62e5e1c768d107baf709bc63cf2fb791867d27370d53ca35097c5245"
+      "sha256": "07f74f97250a5b4c8bffab816b6e22188d94ffeb8c9d835ba5d5e952acb68731"
     },
     {
       "source": "rfc/gate-p-decision-draft.md",
@@ -353,9 +353,14 @@
       "sha256": "0891c2450583fc51d51bfddb9d08cf3feb9d1d058338ce96ffe5fabb44667cba"
     },
     {
+      "source": "rfc/m0-d1a-physical-runbook.md",
+      "target": "rfc/m0-d1a-physical-runbook.md",
+      "sha256": "815cf5f4e9f657b77e5a1ce0eef5748a572b4ee60e4ee07226bf7e1dca43de31"
+    },
+    {
       "source": "rfc/m0-d1a-probe.md",
       "target": "rfc/m0-d1a-probe.md",
-      "sha256": "939873429560b84c9f4ad3ccc7b015b264098fcd4be463d7af6ea52af142ac14"
+      "sha256": "6ed7451e82be7998b18853ad4338e3db3557420d2f03bb483917241dee81fa69"
     },
     {
       "source": "rfc/m1-baseline-report.md",

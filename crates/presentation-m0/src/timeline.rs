@@ -1,7 +1,7 @@
 //! First-frame wgpu API timeline for the D1a probe.
 //!
 //! This is a **host-recorded command log** with named resources. It is not an
-//! AGI/RenderDoc GPU capture and MUST NOT flip `android_gpu_capture`. RFC 4.6
+//! AGI/RenderDoc GPU capture and MUST NOT flip `android_gpu_capture`. RFC 4.5
 //! treats it as partial evidence of pass/resource order at the API the probe
 //! submitted.
 
@@ -14,6 +14,13 @@ pub const GLASS_SNAPSHOT_MAX: u32 = 256;
 pub const ACCUMULATOR_LABEL: &str = "m0-d1a-accumulator";
 pub const VELLO_LABEL: &str = "m0-d1a-vello";
 pub const SNAPSHOT_LABEL: &str = "m0-d1a-glass-roi";
+
+/// Labels a GPU capture must show. They do not admit D1a PASS by themselves.
+pub const CAPTURE_PASS_CLEAR: &str = "m0-d1a-clear-acc";
+pub const CAPTURE_PASS_BLIT: &str = "m0-d1a-blit-pass";
+pub const CAPTURE_PASS_GLASS: &str = "m0-d1a-glass-pass";
+pub const CAPTURE_GROUP_ROI_PREFIX: &str = "m0-d1a-roi-read";
+pub const CAPTURE_GROUP_GLASS_PREFIX: &str = "m0-d1a-glass";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RoiPx {
@@ -247,5 +254,15 @@ mod tests {
         assert!(second.0 <= GLASS_SNAPSHOT_MAX);
         assert!(second.1 <= GLASS_SNAPSHOT_MAX);
         assert_eq!(second, (140, 80));
+    }
+
+    #[test]
+    fn capture_labels_name_clear_blit_glass_and_roi_reads() {
+        assert_eq!(CAPTURE_PASS_CLEAR, "m0-d1a-clear-acc");
+        assert_eq!(CAPTURE_PASS_BLIT, "m0-d1a-blit-pass");
+        assert_eq!(CAPTURE_PASS_GLASS, "m0-d1a-glass-pass");
+        assert_eq!(CAPTURE_GROUP_ROI_PREFIX, "m0-d1a-roi-read");
+        assert_eq!(ACCUMULATOR_LABEL, "m0-d1a-accumulator");
+        assert_eq!(SNAPSHOT_LABEL, "m0-d1a-glass-roi");
     }
 }

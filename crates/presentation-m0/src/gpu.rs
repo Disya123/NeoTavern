@@ -27,7 +27,9 @@ use crate::display_list::{
 use crate::pass_graph::{compile_passes, CompiledPass};
 use crate::timeline::{
     compositor_owned_bytes, encode_timeline, expected_first_frame, resolved_glass_roi,
-    TimelineKind, ACCUMULATOR_LABEL, GLASS_SNAPSHOT_MAX, SNAPSHOT_LABEL, VELLO_LABEL,
+    TimelineKind, ACCUMULATOR_LABEL, CAPTURE_GROUP_GLASS_PREFIX, CAPTURE_GROUP_ROI_PREFIX,
+    CAPTURE_PASS_BLIT, CAPTURE_PASS_CLEAR, CAPTURE_PASS_GLASS, GLASS_SNAPSHOT_MAX, SNAPSHOT_LABEL,
+    VELLO_LABEL,
 };
 use crate::verdict::{ProbeReport, SubstrateVerdict};
 
@@ -383,7 +385,7 @@ impl ProbeGpu {
                     label: Some("m0-d1a-clear"),
                 });
             encoder.begin_render_pass(&RenderPassDescriptor {
-                label: Some("m0-d1a-clear-acc"),
+                label: Some(CAPTURE_PASS_CLEAR),
                 color_attachments: &[Some(RenderPassColorAttachment {
                     view: &acc_view,
                     resolve_target: None,
@@ -511,9 +513,10 @@ impl ProbeGpu {
             .create_command_encoder(&CommandEncoderDescriptor {
                 label: Some("m0-d1a-blit"),
             });
+        encoder.push_debug_group(CAPTURE_PASS_BLIT);
         {
             let mut rp = encoder.begin_render_pass(&RenderPassDescriptor {
-                label: Some("m0-d1a-blit-pass"),
+                label: Some(CAPTURE_PASS_BLIT),
                 color_attachments: &[Some(RenderPassColorAttachment {
                     view: &acc_view,
                     resolve_target: None,
@@ -532,6 +535,7 @@ impl ProbeGpu {
             rp.set_bind_group(0, &bind, &[]);
             rp.draw(0..4, 0..1);
         }
+        encoder.pop_debug_group();
         self.queue.submit([encoder.finish()]);
         if self.recording_frame {
             self.timeline.push(TimelineKind::BlitVelloToAccumulator);
@@ -560,6 +564,8 @@ impl ProbeGpu {
             .create_command_encoder(&CommandEncoderDescriptor {
                 label: Some("m0-d1a-glass-copy"),
             });
+        let roi_group = format!("{CAPTURE_GROUP_ROI_PREFIX}:{barrier}");
+        encoder.push_debug_group(&roi_group);
         encoder.copy_texture_to_texture(
             TexelCopyTextureInfo {
                 texture: &self.accumulator,
@@ -579,6 +585,7 @@ impl ProbeGpu {
                 depth_or_array_layers: 1,
             },
         );
+        encoder.pop_debug_group();
         self.same_device_roi_copies += 1;
         if self.recording_frame {
             self.timeline
@@ -623,9 +630,11 @@ impl ProbeGpu {
                 },
             ],
         });
+        let glass_group = format!("{CAPTURE_GROUP_GLASS_PREFIX}:{barrier}");
+        encoder.push_debug_group(&glass_group);
         {
             let mut rp = encoder.begin_render_pass(&RenderPassDescriptor {
-                label: Some("m0-d1a-glass-pass"),
+                label: Some(CAPTURE_PASS_GLASS),
                 color_attachments: &[Some(RenderPassColorAttachment {
                     view: &acc_view,
                     resolve_target: None,
@@ -645,6 +654,7 @@ impl ProbeGpu {
             rp.set_scissor_rect(x, y, w, h);
             rp.draw(0..4, 0..1);
         }
+        encoder.pop_debug_group();
         self.queue.submit([encoder.finish()]);
         if self.recording_frame {
             self.timeline
