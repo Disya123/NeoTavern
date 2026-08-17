@@ -3123,6 +3123,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "neotavern-chat-viewport"
+version = "0.1.0"
+
+[[package]]
 name = "neotavern-cli"
 version = "0.1.0"
 dependencies = [

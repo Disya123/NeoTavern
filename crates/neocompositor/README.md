@@ -49,8 +49,8 @@ production JNI renderer and **not** an Android cutover.
   default host is `PresentationHost::WebViewRollback`.
 - GPU telemetry and device-loss recovery are not started (required before
   B PASS, not this slice). Mailbox high-water counters are in-memory only.
-- Virtualization and a gesture-platform adapter are **not** in this crate
-  yet (separate commits).
+- Virtualization lives in `crates/chat-viewport`, not here. A
+  gesture-platform adapter is **not** in this crate yet.
 
 ## RFC §50 progress
 
@@ -73,7 +73,7 @@ Started (CPU types + tests):
 
 Not started (do not treat as done):
 
-- virtualization, selection, geometry remap
+- geometry C0/C1 remap (chat-viewport follow-up), selection
 - gesture-platform adapter
 - GPU device/surface recovery
 - shared-device raster interop in this crate (still in the M0 probe)

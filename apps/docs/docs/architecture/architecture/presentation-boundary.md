@@ -70,5 +70,8 @@ dioxus-android-flagged     — experimental; not the launcher
 `FrameTransaction` mailbox, spatial/scroll/clip/effect property trees,
 CPU scroll/animation fast paths, async hit-test / nested-scroll dispatch,
 and a PERF-18 effect-scope backdrop host golden (**IMPLEMENTED /
-GPU_PENDING**, not PASS). It is not linked into production JNI. Recovery
-and GPU telemetry are not started. Product cutover is not declared.
+GPU_PENDING**, not PASS). Chat virtualization lives in
+`crates/chat-viewport` (height index, predictor, bounded tile cache;
+compositor sees only tile descriptors and a geometry snapshot). Neither
+crate is linked into production JNI. Recovery and GPU telemetry are not
+started. Product cutover is not declared.

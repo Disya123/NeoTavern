@@ -40,6 +40,18 @@
   parity, stale-generation drop, bounded streaming. `MainActivity` remains
   WebView. Milestone B remains STARTED.
 
+- **Chat viewport height index, predictor, and bounded tile cache.** Crate
+  `crates/chat-viewport` (not `neocompositor`) maps offset ↔ stable logical
+  item in `O(log n)`, predicts visible/prepared/fallback-ready ranges under
+  item/byte/time overscan budgets, cancels stale preparation (latest range
+  wins), and pins the viewport/protected band in a hard-capped tile cache.
+  Overscan miss presents estimated/known geometry without waiting on
+  Dioxus/layout/raster and without a transparent gap. The compositor
+  handoff is ready tile descriptors plus a geometry snapshot only. Exact
+  `+350 px` height commits are `PendingDebt` until the follow-up geometry
+  epoch / fling-continuous remap. `MainActivity` / WebView rollback
+  unchanged. PERF-18 stays **IMPLEMENTED / GPU_PENDING**.
+
 - **PERF-18 effect-scope backdrop host golden (IMPLEMENTED / GPU_PENDING,
   not PASS).** Canonical scene: parent backdrop root →
   `BeginEffect(opacity=0.5, transform, rounded clip)` → prefix →

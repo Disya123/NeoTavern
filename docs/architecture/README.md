@@ -77,6 +77,10 @@ crates/
                        # binds remote-http (loopback default, explicit exposure)
     mobile-ffi/        # Phase 5 native bridge: stable C ABI → same Kernel
                        # (opaque handles, bounded buffers, status codes)
+  chat-viewport/       # Height index, range predictor, bounded tile cache.
+                       # Compositor sees only tile descriptors + geometry
+                       # snapshot. Not production JNI. Geometry C0/C1 remap
+                       # is a follow-up.
   neocompositor/       # Milestone B STARTED: NeoDisplayList, pass graph,
                        # bounded FrameTransaction mailbox, spatial/scroll/
                        # clip/effect property trees, CPU scroll/animation
@@ -85,6 +89,7 @@ crates/
                        # GPU_PENDING, not PASS). Not production JNI;
                        # default host is WebView rollback
                        # (`NEOTA_NEOCOMPOSITOR=1`).
+                       # Chat virtualization is `chat-viewport`, not here.
   presentation-m0/     # NeoUI v4 RFC D1a/D1b paint-seam probe (host PASS;
                        # crate log capture=false). Debug-only Activity;
                        # not production kernel JNI.
