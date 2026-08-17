@@ -2,7 +2,7 @@
 name = "neotavern-presentation-m0"
 version = "0.1.0"
 edition = "2021"
-description = "NeoUI v4 M0-D1a paint-seam / shared-device probe (RFC, non-production)"
+description = "NeoUI v4 M0-D1a/D1b paint-seam / shared-device probe (RFC, non-production)"
 license = "AGPL-3.0"
 publish = false
 
@@ -42,4 +42,9 @@ jni = { version = "0.21", default-features = false }
 [[bin]]
 name = "m0-d1a-probe"
 path = "src/bin/d1a.rs"
+required-features = ["gpu"]
+
+[[bin]]
+name = "m0-d1b-probe"
+path = "src/bin/d1b.rs"
 required-features = ["gpu"]

@@ -21,6 +21,13 @@ pub const CAPTURE_PASS_BLIT: &str = "m0-d1a-blit-pass";
 pub const CAPTURE_PASS_GLASS: &str = "m0-d1a-glass-pass";
 pub const CAPTURE_GROUP_ROI_PREFIX: &str = "m0-d1a-roi-read";
 pub const CAPTURE_GROUP_GLASS_PREFIX: &str = "m0-d1a-glass";
+pub const MOVING_LABEL: &str = "m0-d1b-moving";
+pub const STATIC_PREFIX_LABEL: &str = "m0-d1b-static-prefix";
+pub const CAPTURE_PASS_MOVING: &str = "m0-d1b-moving-blit";
+pub const CAPTURE_PASS_RESTORE: &str = "m0-d1b-restore-static";
+pub const CAPTURE_PASS_OVERLAY: &str = "m0-d1b-overlay-blit";
+pub const CAPTURE_GROUP_D1B_ROI_PREFIX: &str = "m0-d1b-roi-read";
+pub const CAPTURE_GROUP_D1B_GLASS_PREFIX: &str = "m0-d1b-glass";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RoiPx {
@@ -50,7 +57,17 @@ pub enum TimelineKind {
         y: u32,
         w: u32,
         h: u32,
+        generation: Option<u64>,
     },
+    MovingSampleBlit {
+        x: u32,
+        y: u32,
+        w: u32,
+        h: u32,
+        generation: u64,
+    },
+    RestoreStaticPrefix,
+    OverlayBlitFromCache,
 }
 
 impl TimelineKind {
@@ -60,9 +77,17 @@ impl TimelineKind {
             Self::RasterToVello { .. } => "raster".to_string(),
             Self::BlitVelloToAccumulator => "blit".to_string(),
             Self::RoiCopyAccumulatorToSnapshot { barrier, .. } => format!("roi:{barrier}"),
+            Self::GlassSampleSnapshotWriteAccumulator {
+                barrier,
+                generation: Some(gen),
+                ..
+            } if *barrier == 2 => format!("glass:{barrier}:g{gen}"),
             Self::GlassSampleSnapshotWriteAccumulator { barrier, .. } => {
                 format!("glass:{barrier}")
             }
+            Self::MovingSampleBlit { generation, .. } => format!("moving:g{generation}"),
+            Self::RestoreStaticPrefix => "restore".to_string(),
+            Self::OverlayBlitFromCache => "overlay".to_string(),
         }
     }
 
@@ -80,6 +105,9 @@ impl TimelineKind {
             Self::ClearAccumulator
                 | Self::BlitVelloToAccumulator
                 | Self::GlassSampleSnapshotWriteAccumulator { .. }
+                | Self::MovingSampleBlit { .. }
+                | Self::RestoreStaticPrefix
+                | Self::OverlayBlitFromCache
         )
     }
 }
@@ -95,6 +123,13 @@ pub fn encode_timeline(events: &[TimelineKind]) -> String {
 pub fn compositor_owned_bytes(width: u32, height: u32) -> u64 {
     let rgba = |w: u32, h: u32| u64::from(w) * u64::from(h) * 4;
     rgba(width, height).saturating_mul(2) + rgba(GLASS_SNAPSHOT_MAX, GLASS_SNAPSHOT_MAX)
+}
+
+pub fn compositor_owned_bytes_d1b(width: u32, height: u32) -> u64 {
+    let rgba = |w: u32, h: u32| u64::from(w) * u64::from(h) * 4;
+    compositor_owned_bytes(width, height)
+        + u64::from(crate::scene_d1b::MOVING_SIZE) * u64::from(crate::scene_d1b::MOVING_SIZE) * 4
+        + rgba(width, height)
 }
 
 pub fn resolved_glass_roi(
@@ -126,13 +161,13 @@ pub fn resolved_glass_roi(
 }
 
 fn glass_events(list: &NeoDisplayList, barrier: &GlassBoundary) -> Vec<TimelineKind> {
-    let Some(roi) = resolved_glass_roi(
-        list,
-        barrier.roi,
-        barrier.clip_chain,
-        list.width,
-        list.height,
-    ) else {
+    let roi_rect = if barrier.id.0 == 2 && crate::scene_d1b::list_has_moving_sample(list) {
+        crate::scene_d1b::glass_b_follow_roi(0)
+    } else {
+        barrier.roi
+    };
+    let Some(roi) = resolved_glass_roi(list, roi_rect, barrier.clip_chain, list.width, list.height)
+    else {
         return Vec::new();
     };
     vec![
@@ -149,6 +184,11 @@ fn glass_events(list: &NeoDisplayList, barrier: &GlassBoundary) -> Vec<TimelineK
             y: roi.y,
             w: roi.w,
             h: roi.h,
+            generation: if barrier.id.0 == 2 && crate::scene_d1b::list_has_moving_sample(list) {
+                Some(0)
+            } else {
+                None
+            },
         },
     ]
 }
@@ -168,6 +208,19 @@ pub fn expected_first_frame(list: &NeoDisplayList) -> Result<Vec<TimelineKind>, 
             CompiledPass::Glass { barrier, .. } => {
                 events.extend(glass_events(list, &barrier));
             }
+            CompiledPass::MovingSample { chunk, .. } => {
+                let x = chunk.bounds.x.max(0.0).floor() as u32;
+                let y = chunk.bounds.y.max(0.0).floor() as u32;
+                let w = chunk.bounds.width.ceil() as u32;
+                let h = chunk.bounds.height.ceil() as u32;
+                events.push(TimelineKind::MovingSampleBlit {
+                    x,
+                    y,
+                    w,
+                    h,
+                    generation: 0,
+                });
+            }
         }
     }
     Ok(events)
@@ -176,6 +229,61 @@ pub fn expected_first_frame(list: &NeoDisplayList) -> Result<Vec<TimelineKind>, 
 /// Compact D1a golden: wallpaper → glass A → UI → scoped UI → glass B → overlay.
 pub const D1A_GOLDEN_TIMELINE: &str =
     "clear,raster,blit,roi:1,glass:1,raster,blit,raster,blit,roi:2,glass:2,raster,blit";
+
+/// D1b golden: same cut with a compositor moving blit before glass B (frame 0 / g0).
+pub const D1B_GOLDEN_TIMELINE: &str =
+    "clear,raster,blit,roi:1,glass:1,raster,blit,raster,blit,moving:g0,roi:2,glass:2:g0,raster,blit";
+
+/// Motion-only path recorded at the capture generation (no Vello rebuild).
+pub const D1B_MOTION_TIMELINE_G120: &str = "restore,moving:g120,roi:2,glass:2:g120,overlay";
+
+pub fn expected_motion_frame(list: &NeoDisplayList, frame: u64) -> Vec<TimelineKind> {
+    let moving = crate::scene_d1b::moving_bounds(frame);
+    let x = moving.x.max(0.0).floor() as u32;
+    let y = moving.y.max(0.0).floor() as u32;
+    let w = crate::scene_d1b::MOVING_SIZE;
+    let h = crate::scene_d1b::MOVING_SIZE;
+    let roi_rect = crate::scene_d1b::glass_b_follow_roi(frame);
+    let clip = list
+        .ops
+        .iter()
+        .find_map(|op| match op {
+            crate::display_list::NeoPaintOp::BackdropBarrier(barrier) if barrier.id.0 == 2 => {
+                Some(barrier.clip_chain)
+            }
+            _ => None,
+        })
+        .unwrap_or(crate::display_list::ClipChainId(0));
+    let Some(roi) = resolved_glass_roi(list, roi_rect, clip, list.width, list.height) else {
+        return Vec::new();
+    };
+    vec![
+        TimelineKind::RestoreStaticPrefix,
+        TimelineKind::MovingSampleBlit {
+            x,
+            y,
+            w,
+            h,
+            generation: frame,
+        },
+        TimelineKind::RoiCopyAccumulatorToSnapshot {
+            barrier: 2,
+            x: roi.x,
+            y: roi.y,
+            w: roi.w,
+            h: roi.h,
+        },
+        TimelineKind::GlassSampleSnapshotWriteAccumulator {
+            barrier: 2,
+            x: roi.x,
+            y: roi.y,
+            w: roi.w,
+            h: roi.h,
+            generation: Some(frame),
+        },
+        TimelineKind::OverlayBlitFromCache,
+    ]
+}
 
 pub fn two_glass_passes_sample_accumulator(events: &[TimelineKind]) -> bool {
     let copies: Vec<_> = events
@@ -257,6 +365,32 @@ mod tests {
     }
 
     #[test]
+    fn d1b_expected_timeline_inserts_moving_before_glass_b() {
+        let scene = crate::scene_d1b::static_d1b_scene();
+        let events = expected_first_frame(&scene).expect("valid D1b list");
+        assert_eq!(encode_timeline(&events), D1B_GOLDEN_TIMELINE);
+        assert!(two_glass_passes_sample_accumulator(&events));
+        let moving = events
+            .iter()
+            .position(|event| matches!(event, TimelineKind::MovingSampleBlit { .. }));
+        let glass_b = events.iter().position(|event| {
+            matches!(
+                event,
+                TimelineKind::RoiCopyAccumulatorToSnapshot { barrier: 2, .. }
+            )
+        });
+        assert!(moving.expect("moving") < glass_b.expect("glass B"));
+    }
+
+    #[test]
+    fn d1b_motion_timeline_at_g120_skips_vello() {
+        let scene = crate::scene_d1b::static_d1b_scene();
+        let events = expected_motion_frame(&scene, crate::scene_d1b::D1B_CAPTURE_FRAME);
+        assert_eq!(encode_timeline(&events), D1B_MOTION_TIMELINE_G120);
+        assert!(!encode_timeline(&events).contains("raster"));
+    }
+
+    #[test]
     fn capture_labels_name_clear_blit_glass_and_roi_reads() {
         assert_eq!(CAPTURE_PASS_CLEAR, "m0-d1a-clear-acc");
         assert_eq!(CAPTURE_PASS_BLIT, "m0-d1a-blit-pass");
@@ -264,5 +398,13 @@ mod tests {
         assert_eq!(CAPTURE_GROUP_ROI_PREFIX, "m0-d1a-roi-read");
         assert_eq!(ACCUMULATOR_LABEL, "m0-d1a-accumulator");
         assert_eq!(SNAPSHOT_LABEL, "m0-d1a-glass-roi");
+        assert_eq!(CAPTURE_PASS_MOVING, "m0-d1b-moving-blit");
+        assert_eq!(CAPTURE_GROUP_D1B_ROI_PREFIX, "m0-d1b-roi-read");
+        assert_eq!(CAPTURE_GROUP_D1B_GLASS_PREFIX, "m0-d1b-glass");
+        assert_eq!(CAPTURE_PASS_RESTORE, "m0-d1b-restore-static");
+        assert_eq!(
+            D1B_MOTION_TIMELINE_G120,
+            "restore,moving:g120,roi:2,glass:2:g120,overlay"
+        );
     }
 }

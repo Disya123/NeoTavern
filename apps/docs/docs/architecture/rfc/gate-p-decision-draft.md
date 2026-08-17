@@ -86,7 +86,7 @@ adjudication of the physical Vulkan capture
 | Gate P | still **`GateP:P1` / PASSED** |
 | Normative M0 | still **`ENTERED`**, not PASS |
 | M0-D1a | **PASS** (host-side; probe log `capture=false`) |
-| M0-D1b | may start; `NOT_STARTED` in the D1a JSON |
+| M0-D1b | **STARTED** (see [m0-d1b-probe.md](m0-d1b-probe.md)); D1a JSON still records `NOT_STARTED` |
 | `D1=Track D GO` | still **`NOT_GRANTED`** |
 
 ## Classified input evidence (unchanged by this signature)

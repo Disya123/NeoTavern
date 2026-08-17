@@ -24,6 +24,11 @@ pub enum CompiledPass {
         barrier: GlassBoundary,
         open_scopes: Vec<EffectScopeId>,
     },
+    /// Same-device blit of a persistent sampleable texture. Not a Vello pass.
+    MovingSample {
+        chunk: PaintChunk,
+        open_scopes: Vec<EffectScopeId>,
+    },
 }
 
 impl CompiledPass {
@@ -35,12 +40,15 @@ impl CompiledPass {
         match self {
             Self::Raster { chunks, .. } => chunks.iter().map(|chunk| chunk.id).collect(),
             Self::Glass { .. } => Vec::new(),
+            Self::MovingSample { chunk, .. } => vec![chunk.id],
         }
     }
 
     pub fn open_scopes(&self) -> &[EffectScopeId] {
         match self {
-            Self::Raster { open_scopes, .. } | Self::Glass { open_scopes, .. } => open_scopes,
+            Self::Raster { open_scopes, .. }
+            | Self::Glass { open_scopes, .. }
+            | Self::MovingSample { open_scopes, .. } => open_scopes,
         }
     }
 }
@@ -79,7 +87,15 @@ pub fn compile_passes(list: &NeoDisplayList) -> Result<Vec<CompiledPass>, GraphE
                 }
             }
             NeoPaintOp::PaintChunk(chunk) | NeoPaintOp::Image(crate::ImageLayer { chunk }) => {
-                current.push(chunk.clone());
+                if chunk.payload == crate::display_list::StubPayload::MovingSample {
+                    flush(&mut current, &mut passes, &scope_stack);
+                    passes.push(CompiledPass::MovingSample {
+                        chunk: chunk.clone(),
+                        open_scopes: scope_stack.clone(),
+                    });
+                } else {
+                    current.push(chunk.clone());
+                }
             }
             NeoPaintOp::BackdropBarrier(barrier) => {
                 flush(&mut current, &mut passes, &scope_stack);
@@ -111,6 +127,7 @@ pub fn barriers_cut_raster_runs(list: &NeoDisplayList, passes: &[CompiledPass]) 
                     seen_chunks.push(chunk.id);
                 }
             }
+            CompiledPass::MovingSample { .. } => {}
             CompiledPass::Glass { barrier, .. } => {
                 while op_i < list.ops.len() {
                     match &list.ops[op_i] {
@@ -141,6 +158,7 @@ mod tests {
             .map(|pass| match pass {
                 CompiledPass::Raster { .. } => "raster",
                 CompiledPass::Glass { .. } => "glass",
+                CompiledPass::MovingSample { .. } => "moving",
             })
             .collect();
         assert_eq!(
@@ -156,7 +174,7 @@ mod tests {
                     barrier,
                     open_scopes,
                 } => Some((barrier.id.0, open_scopes.clone())),
-                CompiledPass::Raster { .. } => None,
+                CompiledPass::Raster { .. } | CompiledPass::MovingSample { .. } => None,
             })
             .collect();
         assert_eq!(glass.len(), 2);
@@ -181,6 +199,7 @@ mod tests {
         for pass in &passes {
             match pass {
                 CompiledPass::Glass { .. } => seen_glass = true,
+                CompiledPass::MovingSample { .. } => {}
                 CompiledPass::Raster { chunks, .. } if !seen_glass => {
                     ids_before_first_glass.extend(chunks.iter().map(|chunk| chunk.id));
                 }

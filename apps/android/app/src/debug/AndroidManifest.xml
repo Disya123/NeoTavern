@@ -25,6 +25,15 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
+        <activity
+            android:name=".M0D1bActivity"
+            android:exported="true"
+            android:label="M0-D1b probe">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
     </application>
     <!-- targetSdk >= 30 hides other packages from the Vulkan loader unless
          listed here. Debug/probe only; production main manifest is unchanged. -->

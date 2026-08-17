@@ -14,9 +14,9 @@ use vello::wgpu::{
     Extent3d, FilterMode, FragmentState, FrontFace, LoadOp, MultisampleState, Operations, Origin3d,
     PipelineLayoutDescriptor, PrimitiveState, PrimitiveTopology, RenderPassColorAttachment,
     RenderPassDescriptor, RenderPipelineDescriptor, SamplerBindingType, SamplerDescriptor,
-    ShaderStages, StoreOp, TexelCopyTextureInfo, TextureAspect, TextureDescriptor,
-    TextureDimension, TextureFormat, TextureSampleType, TextureUsages, TextureViewDescriptor,
-    TextureViewDimension, VertexState,
+    ShaderStages, StoreOp, TexelCopyBufferLayout, TexelCopyTextureInfo, TextureAspect,
+    TextureDescriptor, TextureDimension, TextureFormat, TextureSampleType, TextureUsages,
+    TextureViewDescriptor, TextureViewDimension, VertexState,
 };
 use vello::{AaConfig, AaSupport, RenderParams, Renderer, RendererOptions, Scene};
 
@@ -26,10 +26,12 @@ use crate::display_list::{
 };
 use crate::pass_graph::{compile_passes, CompiledPass};
 use crate::timeline::{
-    compositor_owned_bytes, encode_timeline, expected_first_frame, resolved_glass_roi,
-    TimelineKind, ACCUMULATOR_LABEL, CAPTURE_GROUP_GLASS_PREFIX, CAPTURE_GROUP_ROI_PREFIX,
-    CAPTURE_PASS_BLIT, CAPTURE_PASS_CLEAR, CAPTURE_PASS_GLASS, GLASS_SNAPSHOT_MAX, SNAPSHOT_LABEL,
-    VELLO_LABEL,
+    compositor_owned_bytes, compositor_owned_bytes_d1b, encode_timeline, expected_first_frame,
+    expected_motion_frame, resolved_glass_roi, TimelineKind, ACCUMULATOR_LABEL,
+    CAPTURE_GROUP_D1B_GLASS_PREFIX, CAPTURE_GROUP_D1B_ROI_PREFIX, CAPTURE_GROUP_GLASS_PREFIX,
+    CAPTURE_GROUP_ROI_PREFIX, CAPTURE_PASS_BLIT, CAPTURE_PASS_CLEAR, CAPTURE_PASS_GLASS,
+    CAPTURE_PASS_MOVING, CAPTURE_PASS_OVERLAY, CAPTURE_PASS_RESTORE, GLASS_SNAPSHOT_MAX,
+    MOVING_LABEL, SNAPSHOT_LABEL, STATIC_PREFIX_LABEL, VELLO_LABEL,
 };
 use crate::verdict::{ProbeReport, SubstrateVerdict};
 
@@ -96,6 +98,8 @@ pub struct ProbeGpu {
     accumulator: wgpu::Texture,
     vello_target: wgpu::Texture,
     snapshot: wgpu::Texture,
+    moving: Option<wgpu::Texture>,
+    pre_moving: Option<wgpu::Texture>,
     blit_pipeline: wgpu::RenderPipeline,
     glass_pipeline: wgpu::RenderPipeline,
     sampler: wgpu::Sampler,
@@ -110,6 +114,17 @@ pub struct ProbeGpu {
     pub devices_created: u64,
     pub raster_passes: u64,
     pub glass_passes: u64,
+    pub moving_sample_blits: u64,
+    pub pass_compiles: u64,
+    pub sampled_generation: u64,
+    pub vello_rebuilds: u64,
+    pub layout_rebuilds: u64,
+    pub ui_rebuilds: u64,
+    pub render_thread_polls: u64,
+    pub capture_only_polls: u64,
+    last_damage: Option<crate::timeline::RoiPx>,
+    capture_timeline: Vec<TimelineKind>,
+    recording_capture: bool,
     pub software_adapter: bool,
     pub adapter_name: String,
     pub adapter_backend: String,
@@ -121,6 +136,14 @@ pub struct ProbeGpu {
 
 impl ProbeGpu {
     pub fn try_new(width: u32, height: u32) -> Result<Self, GpuInitError> {
+        Self::try_new_inner(width, height, false)
+    }
+
+    pub fn try_new_d1b(width: u32, height: u32) -> Result<Self, GpuInitError> {
+        Self::try_new_inner(width, height, true)
+    }
+
+    fn try_new_inner(width: u32, height: u32, with_moving: bool) -> Result<Self, GpuInitError> {
         let (device, queue, info) = open_probe_device()?;
         let software_adapter = matches!(info.device_type, wgpu::DeviceType::Cpu);
         let adapter_backend = format!("{:?}", info.backend);
@@ -140,7 +163,11 @@ impl ProbeGpu {
             height,
             depth_or_array_layers: 1,
         };
-        let compositor_texture_bytes = compositor_owned_bytes(width, height);
+        let compositor_texture_bytes = if with_moving {
+            compositor_owned_bytes_d1b(width, height)
+        } else {
+            compositor_owned_bytes(width, height)
+        };
         let accumulator = device.create_texture(&TextureDescriptor {
             label: Some(ACCUMULATOR_LABEL),
             size,
@@ -180,6 +207,46 @@ impl ProbeGpu {
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
             view_formats: &[],
         });
+        let moving = if with_moving {
+            let size_px = crate::scene_d1b::MOVING_SIZE;
+            let tex = device.create_texture(&TextureDescriptor {
+                label: Some(MOVING_LABEL),
+                size: Extent3d {
+                    width: size_px,
+                    height: size_px,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: TextureDimension::D2,
+                format: TextureFormat::Rgba8Unorm,
+                usage: TextureUsages::TEXTURE_BINDING
+                    | TextureUsages::COPY_SRC
+                    | TextureUsages::COPY_DST,
+                view_formats: &[],
+            });
+            upload_moving_checker(&queue, &tex, size_px);
+            Some(tex)
+        } else {
+            None
+        };
+        let pre_moving = if with_moving {
+            Some(device.create_texture(&TextureDescriptor {
+                label: Some(STATIC_PREFIX_LABEL),
+                size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: TextureDimension::D2,
+                format: TextureFormat::Rgba8Unorm,
+                usage: TextureUsages::TEXTURE_BINDING
+                    | TextureUsages::COPY_SRC
+                    | TextureUsages::COPY_DST
+                    | TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[],
+            }))
+        } else {
+            None
+        };
 
         let sampler = device.create_sampler(&SamplerDescriptor {
             label: Some("m0-d1a-sampler"),
@@ -340,6 +407,8 @@ impl ProbeGpu {
             accumulator,
             vello_target,
             snapshot,
+            moving,
+            pre_moving,
             blit_pipeline,
             glass_pipeline,
             sampler,
@@ -354,6 +423,17 @@ impl ProbeGpu {
             devices_created: 1,
             raster_passes: 0,
             glass_passes: 0,
+            moving_sample_blits: 0,
+            pass_compiles: 0,
+            sampled_generation: 0,
+            vello_rebuilds: 0,
+            layout_rebuilds: 0,
+            ui_rebuilds: 0,
+            render_thread_polls: 0,
+            capture_only_polls: 0,
+            last_damage: None,
+            capture_timeline: Vec::new(),
+            recording_capture: false,
             software_adapter,
             adapter_name: info.name,
             adapter_backend,
@@ -369,43 +449,56 @@ impl ProbeGpu {
     }
 
     pub fn render_list(&mut self, list: &NeoDisplayList, frame: u64) -> Result<(), GpuInitError> {
+        let passes =
+            compile_passes(list).map_err(|err| GpuInitError::Renderer(format!("{err:?}")))?;
+        self.pass_compiles = self.pass_compiles.saturating_add(1);
+        self.render_compiled(list, &passes, frame)
+    }
+
+    pub fn render_compiled(
+        &mut self,
+        list: &NeoDisplayList,
+        passes: &[CompiledPass],
+        frame: u64,
+    ) -> Result<(), GpuInitError> {
+        let d1b = crate::scene_d1b::list_has_moving_sample(list);
         self.recording_frame = frame == 0;
+        self.recording_capture = d1b && frame == crate::scene_d1b::D1B_CAPTURE_FRAME;
         if self.recording_frame {
             self.timeline.clear();
         }
-        let passes =
-            compile_passes(list).map_err(|err| GpuInitError::Renderer(format!("{err:?}")))?;
-        let acc_view = self
-            .accumulator
-            .create_view(&TextureViewDescriptor::default());
-        {
-            let mut encoder = self
-                .device
-                .create_command_encoder(&CommandEncoderDescriptor {
-                    label: Some("m0-d1a-clear"),
-                });
-            encoder.begin_render_pass(&RenderPassDescriptor {
-                label: Some(CAPTURE_PASS_CLEAR),
-                color_attachments: &[Some(RenderPassColorAttachment {
-                    view: &acc_view,
-                    resolve_target: None,
-                    ops: Operations {
-                        load: LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                        store: StoreOp::Store,
-                    },
-                    depth_slice: None,
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
-            self.queue.submit([encoder.finish()]);
-        }
-        if self.recording_frame {
-            self.timeline.push(TimelineKind::ClearAccumulator);
+        if self.recording_capture {
+            self.capture_timeline.clear();
         }
 
+        if d1b && frame > 0 {
+            self.restore_static_prefix()?;
+            self.moving_blit(frame)?;
+            if let Some(CompiledPass::Glass {
+                barrier,
+                open_scopes,
+            }) = passes.iter().rev().find(|pass| pass.is_glass())
+            {
+                let opacity = group_opacity(list, open_scopes);
+                let roi = crate::scene_d1b::glass_b_follow_roi(frame);
+                self.glass_pass(list, barrier.id.0, roi, barrier.clip_chain, opacity, frame)?;
+                self.glass_passes += 1;
+            }
+            self.overlay_blit_from_cache()?;
+            if self.recording_capture {
+                let expected = expected_motion_frame(list, frame);
+                if self.capture_timeline != expected {
+                    return Err(GpuInitError::Renderer(format!(
+                        "motion timeline diverged: got={} expected={}",
+                        encode_timeline(&self.capture_timeline),
+                        encode_timeline(&expected)
+                    )));
+                }
+            }
+            return Ok(());
+        }
+
+        self.clear_accumulator()?;
         for pass in passes {
             match pass {
                 CompiledPass::Raster {
@@ -413,16 +506,25 @@ impl ProbeGpu {
                     open_scopes,
                 } => {
                     let chunk_count = u32::try_from(chunks.len()).unwrap_or(u32::MAX);
-                    self.raster_pass(list, &chunks, &open_scopes, chunk_count)?;
+                    self.raster_pass(list, chunks, open_scopes, chunk_count)?;
                     self.raster_passes += 1;
                 }
                 CompiledPass::Glass {
                     barrier,
                     open_scopes,
                 } => {
-                    let opacity = group_opacity(list, &open_scopes);
-                    self.glass_pass(list, barrier.id.0, barrier.roi, barrier.clip_chain, opacity)?;
+                    let opacity = group_opacity(list, open_scopes);
+                    let roi = if d1b && barrier.id.0 == 2 {
+                        crate::scene_d1b::glass_b_follow_roi(frame)
+                    } else {
+                        barrier.roi
+                    };
+                    self.glass_pass(list, barrier.id.0, roi, barrier.clip_chain, opacity, frame)?;
                     self.glass_passes += 1;
+                }
+                CompiledPass::MovingSample { .. } => {
+                    self.snapshot_static_prefix()?;
+                    self.moving_blit(frame)?;
                 }
             }
         }
@@ -437,6 +539,168 @@ impl ProbeGpu {
                 )));
             }
         }
+        Ok(())
+    }
+
+    fn record(&mut self, event: TimelineKind) {
+        if self.recording_frame {
+            self.timeline.push(event.clone());
+        }
+        if self.recording_capture {
+            self.capture_timeline.push(event);
+        }
+    }
+
+    fn clear_accumulator(&mut self) -> Result<(), GpuInitError> {
+        let acc_view = self
+            .accumulator
+            .create_view(&TextureViewDescriptor::default());
+        let mut encoder = self
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor {
+                label: Some("m0-d1a-clear"),
+            });
+        encoder.begin_render_pass(&RenderPassDescriptor {
+            label: Some(CAPTURE_PASS_CLEAR),
+            color_attachments: &[Some(RenderPassColorAttachment {
+                view: &acc_view,
+                resolve_target: None,
+                ops: Operations {
+                    load: LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                    store: StoreOp::Store,
+                },
+                depth_slice: None,
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        self.queue.submit([encoder.finish()]);
+        self.record(TimelineKind::ClearAccumulator);
+        Ok(())
+    }
+
+    fn snapshot_static_prefix(&mut self) -> Result<(), GpuInitError> {
+        let Some(pre_moving) = self.pre_moving.as_ref() else {
+            return Ok(());
+        };
+        let mut encoder = self
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor {
+                label: Some("m0-d1b-snapshot-static"),
+            });
+        encoder.copy_texture_to_texture(
+            TexelCopyTextureInfo {
+                texture: &self.accumulator,
+                mip_level: 0,
+                origin: Origin3d::ZERO,
+                aspect: TextureAspect::All,
+            },
+            TexelCopyTextureInfo {
+                texture: pre_moving,
+                mip_level: 0,
+                origin: Origin3d::ZERO,
+                aspect: TextureAspect::All,
+            },
+            Extent3d {
+                width: self.width,
+                height: self.height,
+                depth_or_array_layers: 1,
+            },
+        );
+        self.queue.submit([encoder.finish()]);
+        Ok(())
+    }
+
+    fn restore_static_prefix(&mut self) -> Result<(), GpuInitError> {
+        let Some(pre_moving) = self.pre_moving.as_ref() else {
+            return Err(GpuInitError::Renderer(
+                "D1b static prefix was not cached".to_string(),
+            ));
+        };
+        let mut encoder = self
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor {
+                label: Some("m0-d1b-restore"),
+            });
+        encoder.push_debug_group(CAPTURE_PASS_RESTORE);
+        encoder.copy_texture_to_texture(
+            TexelCopyTextureInfo {
+                texture: pre_moving,
+                mip_level: 0,
+                origin: Origin3d::ZERO,
+                aspect: TextureAspect::All,
+            },
+            TexelCopyTextureInfo {
+                texture: &self.accumulator,
+                mip_level: 0,
+                origin: Origin3d::ZERO,
+                aspect: TextureAspect::All,
+            },
+            Extent3d {
+                width: self.width,
+                height: self.height,
+                depth_or_array_layers: 1,
+            },
+        );
+        encoder.pop_debug_group();
+        self.queue.submit([encoder.finish()]);
+        self.record(TimelineKind::RestoreStaticPrefix);
+        Ok(())
+    }
+
+    fn overlay_blit_from_cache(&mut self) -> Result<(), GpuInitError> {
+        let src_view = self
+            .vello_target
+            .create_view(&TextureViewDescriptor::default());
+        let acc_view = self
+            .accumulator
+            .create_view(&TextureViewDescriptor::default());
+        let bind = self.device.create_bind_group(&BindGroupDescriptor {
+            label: Some("m0-d1b-overlay-bg"),
+            layout: &self.blit_bgl,
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: BindingResource::TextureView(&src_view),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: BindingResource::Sampler(&self.sampler),
+                },
+            ],
+        });
+        let mut encoder = self
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor {
+                label: Some("m0-d1b-overlay"),
+            });
+        encoder.push_debug_group(CAPTURE_PASS_OVERLAY);
+        {
+            let mut rp = encoder.begin_render_pass(&RenderPassDescriptor {
+                label: Some(CAPTURE_PASS_OVERLAY),
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: &acc_view,
+                    resolve_target: None,
+                    ops: Operations {
+                        load: LoadOp::Load,
+                        store: StoreOp::Store,
+                    },
+                    depth_slice: None,
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+            rp.set_pipeline(&self.blit_pipeline);
+            rp.set_bind_group(0, &bind, &[]);
+            rp.draw(0..4, 0..1);
+        }
+        encoder.pop_debug_group();
+        self.queue.submit([encoder.finish()]);
+        self.record(TimelineKind::OverlayBlitFromCache);
         Ok(())
     }
 
@@ -483,10 +747,8 @@ impl ProbeGpu {
                 },
             )
             .map_err(|err| GpuInitError::Renderer(err.to_string()))?;
-        if self.recording_frame {
-            self.timeline
-                .push(TimelineKind::RasterToVello { chunk_count });
-        }
+        self.vello_rebuilds += 1;
+        self.record(TimelineKind::RasterToVello { chunk_count });
 
         let src_view = self
             .vello_target
@@ -537,9 +799,64 @@ impl ProbeGpu {
         }
         encoder.pop_debug_group();
         self.queue.submit([encoder.finish()]);
-        if self.recording_frame {
-            self.timeline.push(TimelineKind::BlitVelloToAccumulator);
+        self.record(TimelineKind::BlitVelloToAccumulator);
+        Ok(())
+    }
+
+    fn moving_blit(&mut self, frame: u64) -> Result<(), GpuInitError> {
+        let Some(moving) = self.moving.as_ref() else {
+            return Err(GpuInitError::Renderer(
+                "D1b moving sample texture was not allocated".to_string(),
+            ));
+        };
+        let bounds = crate::scene_d1b::moving_bounds(frame);
+        let x = bounds.x.max(0.0).floor() as u32;
+        let y = bounds.y.max(0.0).floor() as u32;
+        let w = crate::scene_d1b::MOVING_SIZE;
+        let h = crate::scene_d1b::MOVING_SIZE;
+        if x + w > self.width || y + h > self.height {
+            return Err(GpuInitError::Renderer(format!(
+                "moving sample dest out of bounds x={x} y={y} {w}x{h} target={}x{}",
+                self.width, self.height
+            )));
         }
+        let generation = frame;
+        let group = format!("{CAPTURE_PASS_MOVING}:g{generation}");
+        let mut encoder = self
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor {
+                label: Some("m0-d1b-moving"),
+            });
+        encoder.push_debug_group(&group);
+        encoder.copy_texture_to_texture(
+            TexelCopyTextureInfo {
+                texture: moving,
+                mip_level: 0,
+                origin: Origin3d::ZERO,
+                aspect: TextureAspect::All,
+            },
+            TexelCopyTextureInfo {
+                texture: &self.accumulator,
+                mip_level: 0,
+                origin: Origin3d { x, y, z: 0 },
+                aspect: TextureAspect::All,
+            },
+            Extent3d {
+                width: w,
+                height: h,
+                depth_or_array_layers: 1,
+            },
+        );
+        encoder.pop_debug_group();
+        self.queue.submit([encoder.finish()]);
+        self.moving_sample_blits += 1;
+        self.record(TimelineKind::MovingSampleBlit {
+            x,
+            y,
+            w,
+            h,
+            generation,
+        });
         Ok(())
     }
 
@@ -550,6 +867,7 @@ impl ProbeGpu {
         roi: crate::display_list::Rect,
         clip: ClipChainId,
         opacity: f32,
+        frame: u64,
     ) -> Result<(), GpuInitError> {
         let Some(px) = resolved_glass_roi(list, roi, clip, self.width, self.height) else {
             return Ok(());
@@ -564,7 +882,12 @@ impl ProbeGpu {
             .create_command_encoder(&CommandEncoderDescriptor {
                 label: Some("m0-d1a-glass-copy"),
             });
-        let roi_group = format!("{CAPTURE_GROUP_ROI_PREFIX}:{barrier}");
+        let d1b_glass_b = barrier == 2 && self.moving.is_some();
+        let roi_group = if d1b_glass_b {
+            format!("{CAPTURE_GROUP_D1B_ROI_PREFIX}:{barrier}")
+        } else {
+            format!("{CAPTURE_GROUP_ROI_PREFIX}:{barrier}")
+        };
         encoder.push_debug_group(&roi_group);
         encoder.copy_texture_to_texture(
             TexelCopyTextureInfo {
@@ -587,16 +910,17 @@ impl ProbeGpu {
         );
         encoder.pop_debug_group();
         self.same_device_roi_copies += 1;
-        if self.recording_frame {
-            self.timeline
-                .push(TimelineKind::RoiCopyAccumulatorToSnapshot {
-                    barrier,
-                    x,
-                    y,
-                    w,
-                    h,
-                });
+        if barrier == 2 {
+            self.sampled_generation = frame;
+            self.last_damage = Some(px);
         }
+        self.record(TimelineKind::RoiCopyAccumulatorToSnapshot {
+            barrier,
+            x,
+            y,
+            w,
+            h,
+        });
 
         let params = GlassParams {
             roi: [x as f32, y as f32, w as f32, h as f32],
@@ -630,7 +954,11 @@ impl ProbeGpu {
                 },
             ],
         });
-        let glass_group = format!("{CAPTURE_GROUP_GLASS_PREFIX}:{barrier}");
+        let glass_group = if d1b_glass_b {
+            format!("{CAPTURE_GROUP_D1B_GLASS_PREFIX}:{barrier}:g{frame}")
+        } else {
+            format!("{CAPTURE_GROUP_GLASS_PREFIX}:{barrier}")
+        };
         encoder.push_debug_group(&glass_group);
         {
             let mut rp = encoder.begin_render_pass(&RenderPassDescriptor {
@@ -656,16 +984,14 @@ impl ProbeGpu {
         }
         encoder.pop_debug_group();
         self.queue.submit([encoder.finish()]);
-        if self.recording_frame {
-            self.timeline
-                .push(TimelineKind::GlassSampleSnapshotWriteAccumulator {
-                    barrier,
-                    x,
-                    y,
-                    w,
-                    h,
-                });
-        }
+        self.record(TimelineKind::GlassSampleSnapshotWriteAccumulator {
+            barrier,
+            x,
+            y,
+            w,
+            h,
+            generation: if d1b_glass_b { Some(frame) } else { None },
+        });
         Ok(())
     }
 
@@ -681,6 +1007,19 @@ impl ProbeGpu {
             same_device_roi_copies: self.same_device_roi_copies,
             raster_passes: self.raster_passes,
             glass_passes: self.glass_passes,
+            moving_sample_blits: self.moving_sample_blits,
+            pass_compiles: self.pass_compiles,
+            sampled_generation: self.sampled_generation,
+            vello_rebuilds: self.vello_rebuilds,
+            layout_rebuilds: self.layout_rebuilds,
+            ui_rebuilds: self.ui_rebuilds,
+            render_thread_polls: self.render_thread_polls,
+            capture_only_polls: self.capture_only_polls,
+            damage_x: self.last_damage.map(|roi| roi.x).unwrap_or(0),
+            damage_y: self.last_damage.map(|roi| roi.y).unwrap_or(0),
+            damage_w: self.last_damage.map(|roi| roi.w).unwrap_or(0),
+            damage_h: self.last_damage.map(|roi| roi.h).unwrap_or(0),
+            capture_timeline: encode_timeline(&self.capture_timeline),
             frames,
             ran_on_android: cfg!(target_os = "android"),
             android_gpu_capture: false,
@@ -874,6 +1213,9 @@ fn clip_rect(list: &NeoDisplayList, id: ClipChainId) -> KurboRect {
 }
 
 fn encode_chunk(scene: &mut Scene, list: &NeoDisplayList, chunk: &PaintChunk) {
+    if chunk.payload == StubPayload::MovingSample {
+        return;
+    }
     let transform = spatial_affine(list, chunk.spatial_node);
     let clip = clip_rect(list, chunk.clip_chain);
     scene.push_clip_layer(Fill::NonZero, Affine::IDENTITY, &clip);
@@ -896,6 +1238,7 @@ fn encode_chunk(scene: &mut Scene, list: &NeoDisplayList, chunk: &PaintChunk) {
         StubPayload::Wallpaper => Color::from_rgb8(32, 48, 72),
         StubPayload::VectorUi => Color::from_rgb8(240, 220, 180),
         StubPayload::Overlay => Color::from_rgb8(220, 72, 72),
+        StubPayload::MovingSample => unreachable!("filtered before encode_chunk raster"),
     };
     let shape = match chunk.payload {
         StubPayload::Wallpaper => KurboRect::new(
@@ -904,6 +1247,7 @@ fn encode_chunk(scene: &mut Scene, list: &NeoDisplayList, chunk: &PaintChunk) {
             f64::from(chunk.bounds.x1()),
             f64::from(chunk.bounds.y1()),
         ),
+        StubPayload::MovingSample => unreachable!("filtered before encode_chunk raster"),
         StubPayload::VectorUi | StubPayload::Overlay => {
             let rect = KurboRect::new(
                 f64::from(chunk.bounds.x),
@@ -987,6 +1331,113 @@ pub fn run_static_d1a(frames: u64) -> Result<ProbeReport, GpuInitError> {
         }
     }
     Ok(gpu.report(frames))
+}
+
+pub fn run_dynamic_d1b(frames: u64) -> Result<ProbeReport, GpuInitError> {
+    run_dynamic_d1b_with_capture(frames, false)
+}
+
+pub fn run_dynamic_d1b_with_capture(
+    frames: u64,
+    capture: bool,
+) -> Result<ProbeReport, GpuInitError> {
+    probe_trace(&format!(
+        "run_dynamic_d1b frames={frames} capture={capture} capture_frame={}",
+        crate::scene_d1b::D1B_CAPTURE_FRAME
+    ));
+    let list = crate::scene_d1b::static_d1b_scene();
+    let passes = compile_passes(&list).map_err(|err| GpuInitError::Renderer(format!("{err:?}")))?;
+    let mut gpu = ProbeGpu::try_new_d1b(list.width, list.height)?;
+    gpu.pass_compiles = 1;
+    probe_trace(&format!(
+        "gpu_ready adapter={} backend={} software={}",
+        gpu.adapter_name.replace(' ', "_"),
+        gpu.adapter_backend,
+        gpu.software_adapter
+    ));
+    let bytes_at_init = gpu.compositor_texture_bytes;
+    for frame in 0..frames {
+        if frame == 0 {
+            probe_trace("first_frame_begin");
+        }
+        let started = if frame == 0 {
+            Some(std::time::Instant::now())
+        } else {
+            None
+        };
+        let capturing = capture && frame == crate::scene_d1b::D1B_CAPTURE_FRAME;
+        #[cfg(all(feature = "renderdoc-capture", target_os = "android"))]
+        if capturing {
+            let _rdoc = crate::renderdoc_capture::FrameGuard::begin_for_device_path(
+                &gpu.device,
+                "/data/data/com.neotavern.mobile/files/m0-d1b",
+            );
+            gpu.render_compiled(&list, &passes, frame)?;
+            gpu.capture_only_polls = gpu.capture_only_polls.saturating_add(1);
+            let _ = gpu.device.poll(wgpu::PollType::wait_indefinitely());
+            probe_trace("capture_only_poll=true render_thread_poll=false");
+            if let Some(started) = started {
+                gpu.first_frame_cpu_us =
+                    u64::try_from(started.elapsed().as_micros()).unwrap_or(u64::MAX);
+            }
+            continue;
+        }
+        let _ = capturing;
+        gpu.render_compiled(&list, &passes, frame)?;
+        if let Some(started) = started {
+            gpu.first_frame_cpu_us =
+                u64::try_from(started.elapsed().as_micros()).unwrap_or(u64::MAX);
+            probe_trace("first_frame_done");
+        }
+    }
+    if gpu.compositor_texture_bytes != bytes_at_init {
+        return Err(GpuInitError::Renderer(
+            "D1b compositor texture high-water grew during the run".to_string(),
+        ));
+    }
+    Ok(gpu.report(frames))
+}
+
+fn upload_moving_checker(queue: &wgpu::Queue, texture: &wgpu::Texture, size: u32) {
+    let row_bytes = size * 4;
+    let mut pixels = vec![0u8; (size * size * 4) as usize];
+    for y in 0..size {
+        for x in 0..size {
+            let cell = ((x / 8) + (y / 8)) % 2 == 0;
+            let i = ((y * size + x) * 4) as usize;
+            let gx = (x * 255 / size.max(1)) as u8;
+            let gy = (y * 255 / size.max(1)) as u8;
+            if cell {
+                pixels[i] = gx;
+                pixels[i + 1] = 48;
+                pixels[i + 2] = gy;
+            } else {
+                pixels[i] = 32;
+                pixels[i + 1] = gx;
+                pixels[i + 2] = 200;
+            }
+            pixels[i + 3] = 255;
+        }
+    }
+    queue.write_texture(
+        TexelCopyTextureInfo {
+            texture,
+            mip_level: 0,
+            origin: Origin3d::ZERO,
+            aspect: TextureAspect::All,
+        },
+        &pixels,
+        TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(row_bytes),
+            rows_per_image: Some(size),
+        },
+        Extent3d {
+            width: size,
+            height: size,
+            depth_or_array_layers: 1,
+        },
+    );
 }
 
 #[cfg(test)]

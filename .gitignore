@@ -81,3 +81,4 @@ crates/*/target/
 .scratch/
 apps/android/m1-captures/
 apps/android/m0-d1a-captures/
+apps/android/m0-d1b-captures/

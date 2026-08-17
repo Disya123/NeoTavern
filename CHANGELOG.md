@@ -3,6 +3,20 @@
 ## Unreleased
 ### Added
 
+- **M0-D1b moving sampleable texture (STARTED, not PASS).** After D1a
+  host-side PASS, the probe scene inserts a 64×64 compositor-owned
+  checker/gradient between vector UI and Glass B. The display list is
+  compiled once (`pass_compiles=1`); motion is a dest-offset blit;
+  frames `> 0` restore a static prefix (no Vello/layout/UI rebuild).
+  Glass B ROI follows the moving sample, stays bounded, and samples the
+  current generation (`glass:2:gN`). Telemetry splits
+  `render_polls=0` from capture-only poll. Desktop Vulkan 1000-frame is
+  preliminary. Physical proof is a Xiaomi 1000-frame run plus RenderDoc
+  at generation 120 (`moving-blit:g120 → roi:2 → glass:2:g120`).
+  `acc_bytes=1046528`. Crate verdict stays **BLOCKED**; the probe cannot
+  self-admit. Fill-in: `docs/rfc/m0-d1b-probe.md`, lab:
+  `docs/rfc/m0-d1b-physical-runbook.md`. D1a evidence/verdict unchanged.
+
 - **M0-D1a host-side Vulkan capture admission.** Program **M0-D1a PASS**.
   Adjudicator `scripts/m0-d1a-adjudicate.mjs` hashed the physical
   RenderDoc `.rdc` / XML / control+capture logs / bound APK, checked

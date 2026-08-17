@@ -5,7 +5,7 @@
     {
       "source": "README.md",
       "target": "README.md",
-      "sha256": "2fc8f74d7357240d4afdbcaf0f55cc58ae0636dd4e5f9493a435ce4d090f0744"
+      "sha256": "f4b8fe4a11bf2b126f4469658cb595d667a377280be732bcd7a34476e82b28dc"
     },
     {
       "source": "adr/0004-typebox-contracts.md",
@@ -230,7 +230,7 @@
     {
       "source": "android/README.md",
       "target": "android/README.md",
-      "sha256": "ea973f86d9e411eb63ad2b7de8fda3bf753a1846bd50a8779397453b7be35dd6"
+      "sha256": "db128c9cf02b79f8f5fe6e40d2fb081ceb452b96d2203abcd00ad63a2ec7e67b"
     },
     {
       "source": "api/README.md",
@@ -345,22 +345,32 @@
     {
       "source": "rfc/README.md",
       "target": "rfc/README.md",
-      "sha256": "ef8ca48ba6f8f06a94b546d5afdd0f30c68f1a810be5130128ccec9ba0414652"
+      "sha256": "3601401c2ef69a2cea96d0c0e9dd380fa0909f98dfbc4761f81e5f1157f27fd3"
     },
     {
       "source": "rfc/gate-p-decision-draft.md",
       "target": "rfc/gate-p-decision-draft.md",
-      "sha256": "69dc79df538ec1da050b7b10b3ae7b9c72ffdebaafbd07355c4b15a064727c0a"
+      "sha256": "bab9bb11874e6e89b932712d6a74d4b05a20213f4678cc7cd187bfa721306d8c"
     },
     {
       "source": "rfc/m0-d1a-physical-runbook.md",
       "target": "rfc/m0-d1a-physical-runbook.md",
-      "sha256": "dff9681e7534b1506473231b614f21f84094d8cd87e3f824adf28ad3325d7c85"
+      "sha256": "ac4624485feff5b232d8308e87d111ceee0a3bc8fd5a145b9283c67e502ee0f0"
     },
     {
       "source": "rfc/m0-d1a-probe.md",
       "target": "rfc/m0-d1a-probe.md",
       "sha256": "393212f85978c1ae362cddd4c9def7fc7b8c5e5870692687fec3c40ffc722e97"
+    },
+    {
+      "source": "rfc/m0-d1b-physical-runbook.md",
+      "target": "rfc/m0-d1b-physical-runbook.md",
+      "sha256": "2f448ff815e0467a712ae57660a0ebdc2754ec0f8b22d5f6c73e8ce276c7f09a"
+    },
+    {
+      "source": "rfc/m0-d1b-probe.md",
+      "target": "rfc/m0-d1b-probe.md",
+      "sha256": "1f7779b22b483d7153f52415eacaed1885a6e3e9943e2bd6b74a13ff3eb039ca"
     },
     {
       "source": "rfc/m1-baseline-report.md",
@@ -370,7 +380,7 @@
     {
       "source": "rfc/neoui-v4-android-presentation-backend.md",
       "target": "rfc/neoui-v4-android-presentation-backend.md",
-      "sha256": "01685c062dc4c99cb26d610eaea3145a9b4e6dc5c8b6b37c82e2e13ff7126968"
+      "sha256": "9cd8f02e65565332d23aed89f32d5fa3908b356f010334c68391e460696feca5"
     },
     {
       "source": "theme-sdk/README.md",

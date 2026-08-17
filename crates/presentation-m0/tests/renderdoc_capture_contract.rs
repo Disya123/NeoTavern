@@ -39,3 +39,20 @@ fn capture_source_binds_wgpu_vulkan_device_not_null() {
     assert!(src.contains("start(ptrs.rdoc_device, ptr::null_mut())"));
     assert!(!src.contains("start(ptr::null_mut()"));
 }
+
+#[test]
+fn d1b_capture_uses_generation_path_not_first_frame() {
+    let src = fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/gpu.rs")).unwrap();
+    assert!(src.contains("D1B_CAPTURE_FRAME"));
+    assert!(src.contains("begin_for_device_path"));
+    assert!(src.contains("/data/data/com.neotavern.mobile/files/m0-d1b"));
+    assert!(src.contains("capture_only_poll"));
+    assert!(src.contains("CAPTURE_PASS_MOVING"));
+    assert!(src.contains(":g{generation}"));
+    let rdoc = fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/src/renderdoc_capture.rs"
+    ))
+    .unwrap();
+    assert!(rdoc.contains("begin_for_device_path"));
+}

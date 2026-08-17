@@ -94,6 +94,8 @@ pub enum StubPayload {
     Wallpaper,
     VectorUi,
     Overlay,
+    /// Compositor-owned sampleable texture. D1b only; never merged into Vello.
+    MovingSample,
 }
 
 #[derive(Clone, Debug, PartialEq)]

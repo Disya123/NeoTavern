@@ -271,4 +271,5 @@ Recorded 2026-08-17 after host-side adjudication of RenderDoc v1.45:
 Program D1a is **PASS**. The probe still logs `android_gpu_capture=false`.
 Flip that bit only in the evidence-admission record (already done).
 
-D1b may start. It is `NOT_STARTED` until the D1b work package lands.
+D1b is **STARTED** in [m0-d1b-probe.md](m0-d1b-probe.md) / [m0-d1b-physical-runbook.md](m0-d1b-physical-runbook.md).
+It remains `NOT_STARTED` in this D1a admission JSON. Program D1b is not PASS.

@@ -140,6 +140,10 @@ impl FrameGuard {
     /// Start a capture bound to the probe's wgpu Vulkan device. Does not use
     /// a NULL/wildcard device pointer (that matches HWUI GLES).
     pub fn begin_for_device(device: &wgpu::Device) -> Option<Self> {
+        Self::begin_for_device_path(device, PATH_TEMPLATE)
+    }
+
+    pub fn begin_for_device_path(device: &wgpu::Device, path_template: &str) -> Option<Self> {
         let api = attach_api()?;
         let Some(ptrs) = vulkan_capture_ptrs(device) else {
             probe_trace("capture_device=not-vulkan");
@@ -151,7 +155,7 @@ impl FrameGuard {
             ptrs.vk_device
         ));
         let set_path: SetPathFn = unsafe { std::mem::transmute((*api).fns[IDX_SET_PATH]) };
-        if let Ok(path) = CString::new(PATH_TEMPLATE) {
+        if let Ok(path) = CString::new(path_template) {
             unsafe { set_path(path.as_ptr()) };
         }
         let start: StartFn = unsafe { std::mem::transmute((*api).fns[IDX_START]) };

@@ -49,6 +49,19 @@ pub struct ProbeReport {
     pub same_device_roi_copies: u64,
     pub raster_passes: u64,
     pub glass_passes: u64,
+    pub moving_sample_blits: u64,
+    pub pass_compiles: u64,
+    pub sampled_generation: u64,
+    pub vello_rebuilds: u64,
+    pub layout_rebuilds: u64,
+    pub ui_rebuilds: u64,
+    pub render_thread_polls: u64,
+    pub capture_only_polls: u64,
+    pub damage_x: u32,
+    pub damage_y: u32,
+    pub damage_w: u32,
+    pub damage_h: u32,
+    pub capture_timeline: String,
     pub frames: u64,
     pub ran_on_android: bool,
     pub android_gpu_capture: bool,
@@ -73,6 +86,19 @@ impl ProbeReport {
             same_device_roi_copies: 0,
             raster_passes: 0,
             glass_passes: 0,
+            moving_sample_blits: 0,
+            pass_compiles: 0,
+            sampled_generation: 0,
+            vello_rebuilds: 0,
+            layout_rebuilds: 0,
+            ui_rebuilds: 0,
+            render_thread_polls: 0,
+            capture_only_polls: 0,
+            damage_x: 0,
+            damage_y: 0,
+            damage_w: 0,
+            damage_h: 0,
+            capture_timeline: String::new(),
             frames: 0,
             ran_on_android: cfg!(target_os = "android"),
             android_gpu_capture: false,
@@ -117,6 +143,50 @@ impl ProbeReport {
             self.compositor_texture_bytes,
             self.verdict.as_str(),
             reason.replace(' ', "_")
+        )
+    }
+
+    pub fn to_d1b_log_line(&self) -> String {
+        format!(
+            "m0-d1b gpu_ran={} adapter={} backend={} software={} devices={} readbacks={} xdev={} roi_copies={} raster={} glass={} moving_blits={} pass_compiles={} vello_rebuilds={} layout_rebuilds={} ui_rebuilds={} sampled_gen={} damage={}x{}+{}x{} frames={} ran_on_android={} capture={} timeline={} capture_timeline={} render_polls={} capture_polls={} acc_bytes={} verdict={} reason={}",
+            self.gpu_ran,
+            self.adapter_name.replace(' ', "_"),
+            self.adapter_backend,
+            self.software_adapter,
+            self.devices_created,
+            self.cpu_readbacks,
+            self.cross_device_copies,
+            self.same_device_roi_copies,
+            self.raster_passes,
+            self.glass_passes,
+            self.moving_sample_blits,
+            self.pass_compiles,
+            self.vello_rebuilds,
+            self.layout_rebuilds,
+            self.ui_rebuilds,
+            self.sampled_generation,
+            self.damage_x,
+            self.damage_y,
+            self.damage_w,
+            self.damage_h,
+            self.frames,
+            self.ran_on_android,
+            self.android_gpu_capture,
+            if self.api_timeline.is_empty() {
+                "-"
+            } else {
+                self.api_timeline.as_str()
+            },
+            if self.capture_timeline.is_empty() {
+                "-"
+            } else {
+                self.capture_timeline.as_str()
+            },
+            self.render_thread_polls,
+            self.capture_only_polls,
+            self.compositor_texture_bytes,
+            self.verdict.as_str(),
+            self.verdict.reason().unwrap_or("").replace(' ', "_")
         )
     }
 }
@@ -176,6 +246,19 @@ mod tests {
             same_device_roi_copies: 2,
             raster_passes: 4,
             glass_passes: 2,
+            moving_sample_blits: 0,
+            pass_compiles: 0,
+            sampled_generation: 0,
+            vello_rebuilds: 0,
+            layout_rebuilds: 0,
+            ui_rebuilds: 0,
+            render_thread_polls: 0,
+            capture_only_polls: 0,
+            damage_x: 0,
+            damage_y: 0,
+            damage_w: 0,
+            damage_h: 0,
+            capture_timeline: String::new(),
             frames: 100,
             ran_on_android: false,
             android_gpu_capture: false,
@@ -222,6 +305,30 @@ mod tests {
         report.android_gpu_capture = true;
         let report = report.classify();
         assert_eq!(report.verdict.as_str(), "PASS");
+    }
+
+    #[test]
+    fn d1b_log_line_carries_generation_and_poll_split() {
+        let mut report = base(true);
+        report.moving_sample_blits = 1000;
+        report.pass_compiles = 1;
+        report.vello_rebuilds = 4;
+        report.sampled_generation = 999;
+        report.capture_timeline = crate::D1B_MOTION_TIMELINE_G120.to_string();
+        report.render_thread_polls = 0;
+        report.capture_only_polls = 1;
+        let line = report.to_d1b_log_line();
+        assert!(line.starts_with("m0-d1b "));
+        assert!(line.contains("moving_blits=1000"));
+        assert!(line.contains("pass_compiles=1"));
+        assert!(line.contains("vello_rebuilds=4"));
+        assert!(line.contains("layout_rebuilds=0"));
+        assert!(line.contains("ui_rebuilds=0"));
+        assert!(line.contains("sampled_gen=999"));
+        assert!(line.contains("capture_timeline=restore,moving:g120,roi:2,glass:2:g120,overlay"));
+        assert!(line.contains("render_polls=0"));
+        assert!(line.contains("capture_polls=1"));
+        assert!(line.contains("capture=false"));
     }
 
     #[test]

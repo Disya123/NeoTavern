@@ -55,7 +55,9 @@ Index of the internal documentation. Each major topic has its own folder.
   runbook](rfc/m0-d1a-physical-runbook.md) (RenderDoc v1.45; admitted Vulkan
   stamp `2026-08-17T17-18-59-431Z`; GLES 1437-byte file is
   `WRONG_API_CAPTURE`), the [host adjudication
-  record](rfc/m0-d1a-adjudication.json), and the [signed Gate P
+  record](rfc/m0-d1a-adjudication.json), the [M0-D1b moving
+  sample](rfc/m0-d1b-probe.md) (**STARTED**, not PASS), the [M0-D1b
+  physical capture runbook](rfc/m0-d1b-physical-runbook.md), and the [signed Gate P
   record](rfc/gate-p-decision-draft.md) (`GateP:P1`, 2026-08-17, incomplete
   physical M-1 waiver).
 - [Changelog](../CHANGELOG.md).

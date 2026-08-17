@@ -3,7 +3,7 @@
  * Immutable source bundle for the PRE-GATE M0-D1a probe (RFC §0.3.2 / §48).
  *
  * Writes gitignored files under apps/android/m0-d1a-captures/. Does not claim
- * D1a PASS, does not start D1b, and does not change production WebView.
+ * D1a or D1b PASS and does not change production WebView.
  *
  *   node scripts/m0-d1a-source-bundle.mjs
  *   node scripts/m0-d1a-source-bundle.mjs --apk path/to/app-debug.apk

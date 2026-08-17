@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Builds the debug-only M0-D1a paint probe into
+# Builds the debug-only M0-D1a/D1b paint probe into
 # app/src/debug/jniLibs/{arm64-v8a,x86_64}/libneotavern_presentation_m0.so
 #
 # Default features: gpu,android-jni (control counters).
