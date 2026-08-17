@@ -59,6 +59,9 @@ UI vs Android/Web split) is a separate staffing/parity decision.
   authority. A PASS still requires a feature-flagged Dioxus product shell,
   React ↔ Dioxus view-model parity, and presentation-path
   generation/backpressure tests.
+- Milestone B is **STARTED**, not PASS. Production types live in
+  `crates/neocompositor`. M0 probe crates remain probes and are not the
+  production JNI. This is not Android cutover.
 - Theme SDK, Plugin SDK, and i18n stay on React/Web until later ABI decisions.
 - A later superseding ADR is still required before declaring Android
   production cutover (no WebView main renderer).

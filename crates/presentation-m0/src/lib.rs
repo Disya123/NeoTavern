@@ -1,10 +1,9 @@
 //! NeoUI v4 M0-D1a paint-seam probe (RFC 4.5).
 //!
-//! This crate is a **non-production** runner. Gate P is `GateP:P1`. Normative
-//! Milestone 0 is `ENTERED`, not PASS. Program D1a PASS lives in the host-side
-//! admission record; this crate still reports `android_gpu_capture=false`.
-//! Desktop/AVD PRE-GATE runs stay unadmitted. This is not NeoCompositor v1,
-//! not a Dioxus migration, and not a Track D GO.
+//! This crate is a **non-production** runner. Gate P is `GateP:P1`. Technical
+//! M0 is host-side PASS; this crate still reports `android_gpu_capture=false`.
+//! Display-list and pass-graph types live in `neotavern-neocompositor`; this
+//! crate remains a probe and is not production JNI.
 //!
 //! The probe shows a host-authored static display list compiled into ordered
 //! raster/glass passes on **one** `wgpu` device/queue. A first-frame **API

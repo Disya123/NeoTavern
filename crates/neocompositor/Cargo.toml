@@ -1,0 +1,12 @@
+[package]
+name = "neotavern-neocompositor"
+version = "0.1.0"
+edition = "2021"
+description = "NeoUI v4 NeoCompositor production types (Milestone B start; not Android cutover)"
+license = "AGPL-3.0"
+publish = false
+
+[lib]
+name = "neotavern_neocompositor"
+
+[dependencies]

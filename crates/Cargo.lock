@@ -3192,6 +3192,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "neotavern-neocompositor"
+version = "0.1.0"
+
+[[package]]
 name = "neotavern-package-verify"
 version = "0.1.0"
 dependencies = [
@@ -3209,6 +3213,7 @@ dependencies = [
  "ash",
  "bytemuck",
  "jni 0.21.1",
+ "neotavern-neocompositor",
  "pollster",
  "vello",
  "wgpu",

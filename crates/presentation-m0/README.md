@@ -1,18 +1,17 @@
 # neotavern-presentation-m0
 
-Non-production **M0-D1a paint-seam probe** for NeoUI v4 RFC 4.5. Program
-**M0-D1a is PASS** only on the host-side record
-[`docs/rfc/m0-d1a-adjudication.json`](../../docs/rfc/m0-d1a-adjudication.json).
-This crate still logs `android_gpu_capture=false` and a runner **BLOCKED**
-verdict: the probe cannot self-admit. It is not a normative M0 PASS (M0 is
-`ENTERED` after `GateP:P1`), not NeoCompositor v1, not a Dioxus/Blitz
-producer, not a replacement for the Gate P record, and it is **not** linked
-into the production WebView kernel `.so`. A **debug-only** Activity can load
-a second library `libneotavern_presentation_m0.so`.
+This crate is a **non-production** runner. Gate P is `GateP:P1`. Technical
+M0 is host-side PASS. Display-list and pass-graph types live in
+[`neotavern-neocompositor`](../neocompositor/README.md); this crate re-exports
+them and remains a probe. It is not production JNI, not a Dioxus product
+shell, and not an Android cutover.
 
 Evidence: [`docs/rfc/m0-d1a-probe.md`](../../docs/rfc/m0-d1a-probe.md),
+[`docs/rfc/m0-d1a-adjudication.json`](../../docs/rfc/m0-d1a-adjudication.json),
 [`docs/rfc/m0-d1b-probe.md`](../../docs/rfc/m0-d1b-probe.md),
 [`docs/rfc/m0-d1b-adjudication.json`](../../docs/rfc/m0-d1b-adjudication.json).
+A **debug-only** Activity can load `libneotavern_presentation_m0.so`. The
+probe still logs `android_gpu_capture=false` and cannot self-admit.
 
 ## What it proves
 

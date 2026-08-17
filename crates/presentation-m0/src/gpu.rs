@@ -938,6 +938,7 @@ impl ProbeGpu {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn glass_pass(
         &mut self,
         list: &NeoDisplayList,

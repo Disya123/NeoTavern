@@ -157,7 +157,10 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   [physical runbook](../rfc/m0-d2-physical-runbook.md). Technical M0 is
   **PASS**. `D1=Track D GO` and `D2=Dioxus+Blitz GO` are
   signed ([d1-d2-decision.md](../rfc/d1-d2-decision.md)); `D3=DEFERRED`.
-  React/WebView remains the public renderer and rollback.
+  React/WebView remains the public renderer and rollback. Production
+  compositor types start in `crates/neocompositor` (Milestone B **STARTED**,
+  not PASS) and are **not** linked into `libneotavern_android_jni.so`.
+  `NEOTA_NEOCOMPOSITOR=1` is a non-default flag, not a cutover switch.
 
 ## Background execution (Phase 8)
 

@@ -21,6 +21,13 @@
   Dioxus view-model parity, and presentation-path generation/backpressure
   tests.
 
+- **Milestone B STARTED (not B PASS, not cutover).** Production compositor
+  types start in `crates/neocompositor` (`NeoDisplayList`, `compile_passes`,
+  `FrameTransaction`, bounded layer cache / target pool). Default host
+  remains WebView rollback. `NEOTA_NEOCOMPOSITOR=1` is a non-default flag.
+  M0 probes re-export the interchange types and stay probes. Production
+  `MainActivity` is unchanged.
+
 - **M0-D2 host-side Vulkan capture admission.** Program **M0-D2 PASS**.
   Adjudicator `scripts/m0-d2-adjudicate.mjs` hashed the physical RenderDoc
   `.rdc` / XML / control+capture logs / BOUND APK (`3036422`, SHA-256

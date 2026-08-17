@@ -58,6 +58,7 @@ React. Platform unification is not imposed now.
 ```text
 Milestone A = STARTED
 A/Product Wire boundary = PASS
+Milestone B = STARTED
 ```
 
 A PASS still requires a feature-flagged Dioxus product shell, React ↔

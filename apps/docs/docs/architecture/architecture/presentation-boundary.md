@@ -9,6 +9,7 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/architecture/prese
 ```text
 Milestone A = STARTED
 A/Product Wire boundary = PASS
+Milestone B = STARTED
 ```
 
 This is **not** Milestone A PASS. The TypeScript/Product Wire boundary is
@@ -47,6 +48,11 @@ This is not a production migration and not Milestone B/C PASS.
 3. A presentation command is invalid unless its `wireOperationId` exists in
    `buildProductWireRegistry()`.
 4. Production Android `MainActivity` stays WebView until Milestone B/C DoD.
+   `NEOTA_NEOCOMPOSITOR=1` is a **non-default** feature flag for
+   `crates/neocompositor`, not a cutover switch.
+5. M0 probe crates stay probes and are not production JNI. Interchange
+   types (`NeoDisplayList`, `compile_passes`) live in
+   `neotavern-neocompositor`; probes re-export them.
 
 ## Surfaces
 
@@ -55,3 +61,10 @@ react-web                  — production Web / desktop UI
 webview-android-rollback   — production Android default
 dioxus-android-flagged     — experimental; not the launcher
 ```
+
+## Milestone B start
+
+`crates/neocompositor` holds production interchange types (Milestone B
+**STARTED**, not PASS). It is not linked into production JNI.
+Scroll/animation GPU paths and PERF gates are not started. Product cutover
+is not declared.

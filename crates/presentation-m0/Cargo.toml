@@ -24,6 +24,7 @@ android-jni = ["gpu"]
 renderdoc-capture = ["gpu", "dep:ash"]
 
 [dependencies]
+neotavern-neocompositor = { path = "../neocompositor" }
 ash = { version = "0.38", optional = true, default-features = false }
 bytemuck = { version = "1.25", optional = true, features = ["derive"] }
 pollster = { version = "0.4", optional = true }
