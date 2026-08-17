@@ -4,3 +4,9 @@
 [workspace]
 resolver = "2"
 members = ["contracts-generated", "runtime-kernel", "storage", "secret-store", "adapters/android-jni", "adapters/remote-http", "adapters/cli", "adapters/desktop-remote", "adapters/headless", "adapters/envelope", "adapters/tauri-local", "adapters/host-tools", "adapters/package-verify", "provider-sdk", "built-in-providers", "provider-openai-compat", "adapters/mobile-ffi", "resource-runner", "presentation-m0", "presentation-m0-d2"]
+
+# Bounded M0-D2 producer-seam patches. Not a private Blitz/anyrender fork of
+# layout or text. See crates/presentation-m0-d2/upstream/.
+[patch.crates-io]
+anyrender = { path = "vendor/anyrender" }
+blitz-paint = { path = "vendor/blitz-paint" }

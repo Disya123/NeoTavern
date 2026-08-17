@@ -1,0 +1,53 @@
+﻿diff --git a/src/render.rs b/src/render.rs
+index 7bf7d5c..70f3dd5 100644
+--- a/src/render.rs
++++ b/src/render.rs
+@@ -16,7 +16,7 @@ use crate::kurbo_css::NonUniformRoundedRectRadii;
+ use crate::layers::LayerManager;
+ use crate::sizing::compute_object_fit;
+ use crate::{CustomWidgetSceneMap, SELECTION_COLOR};
+-use anyrender::{PaintScene, Scene};
++use anyrender::{HostNodeKind, HostNodeMarker, PaintScene, Scene};
+ use blitz_dom::node::{
+     ListItemLayout, ListItemLayoutPosition, Marker, NodeData, RasterImageData, TextInputData,
+     TextNodeData,
+@@ -313,6 +313,10 @@ impl<'dom, 'a> BlitzDomPainter<'dom, 'a> {
+             return;
+         }
+ 
++        if let Some(marker) = neoui_glass_marker(node, self.scale) {
++            scene.host_node_marker(marker);
++        }
++
+         #[cfg(feature = "custom-widget")]
+         let custom_widget_scene = self.custom_widget_scenes.get(&(self.dom.id(), node_id));
+         #[cfg(not(feature = "custom-widget"))]
+@@ -1097,3 +1101,28 @@ fn create_css_rect(style: &ComputedValues, layout: &Layout, scale: f64) -> CssBo
+ 
+     CssBox::new(border_box, border, padding, outline_width, border_radii)
+ }
++
++fn neoui_glass_marker(node: &Node, scale: f64) -> Option<HostNodeMarker> {
++    let data = node.element_data()?;
++    let is_glass = data.attrs.iter().any(|attr| {
++        (*attr.name.local == *"data-neoui" && attr.value == "glass")
++            || (*attr.name.local == *"class"
++                && attr
++                    .value
++                    .split_whitespace()
++                    .any(|token| token == "neoui-glass"))
++    });
++    if !is_glass {
++        return None;
++    }
++    let layout = node.final_layout;
++    let x = layout.location.x as f64 * scale;
++    let y = layout.location.y as f64 * scale;
++    let width = layout.size.width as f64 * scale;
++    let height = layout.size.height as f64 * scale;
++    Some(HostNodeMarker {
++        node_id: node.id as u64,
++        kind: HostNodeKind::Glass,
++        bounds: Rect::new(x, y, x + width.max(1.0), y + height.max(1.0)),
++    })
++}

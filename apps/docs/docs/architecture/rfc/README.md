@@ -19,6 +19,6 @@ Code PRs MUST NOT treat files in this folder as a rewrite mandate.
 | [M0-D1b moving sample](m0-d1b-probe.md)                                             | Program **M0-D1b PASS** (host-side). Probe log `capture=false`. D1a JSON unchanged. |
 | [M0-D1b host adjudication](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/m0-d1b-adjudication.json)                                | `android_gpu_capture=true`, `capture_driver=Vulkan`, `d1b_verdict=PASS`. Lab: `node scripts/m0-d1b-adjudicate.mjs`. |
 | [M0-D1b physical capture runbook](m0-d1b-physical-runbook.md)                       | Lab procedure. Admitted Vulkan stamp `2026-08-17T18-15-34-453Z`. |
-| [M0-D2 producer seam](m0-d2-probe.md)                                               | Program **M0-D2 STARTED**, not PASS. Dioxus 0.8-alpha / Blitz 0.3-beta / anyrender 0.11. D1a JSON unchanged. |
+| [M0-D2 producer seam](m0-d2-probe.md)                                               | Program **M0-D2 STARTED**, not PASS. Glass barriers from Blitz `render_element` via `host_node_marker` (65-line patch). D1a JSON unchanged. |
 | [Gate P decision record](gate-p-decision-draft.md)                                  | **Signed `GateP:P1`** 2026-08-17, owner `Disya123 <gamedisya@gmail.com>`. Explicit incomplete-M-1 waiver. D1a follow-on PASS is not a re-signature. |
 | [M0-D1a physical capture runbook](m0-d1a-physical-runbook.md)                       | Lab procedure. Capture tool **RenderDoc v1.45**. GLES 1437-byte file is `WRONG_API_CAPTURE`. Admitted Vulkan stamp `2026-08-17T17-18-59-431Z`. |

@@ -345,7 +345,7 @@
     {
       "source": "rfc/README.md",
       "target": "rfc/README.md",
-      "sha256": "0292bdc20adf0b8b5249710d316845366502ed12807d0ca72c70535ca0be8990"
+      "sha256": "eee9395def4451c76136a523396f6984f40440d58db61a51083be2f9f590c57c"
     },
     {
       "source": "rfc/gate-p-decision-draft.md",
@@ -375,7 +375,7 @@
     {
       "source": "rfc/m0-d2-probe.md",
       "target": "rfc/m0-d2-probe.md",
-      "sha256": "e65934c7b0b7d50a41b995988983a560fcf97fe157458ecbb2e1a1372929133f"
+      "sha256": "0b286d67d6b345e0c5beb27d144508738ccb293001e9acd2020a6f041a48f14b"
     },
     {
       "source": "rfc/m1-baseline-report.md",

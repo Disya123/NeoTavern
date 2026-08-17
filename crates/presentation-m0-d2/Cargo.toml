@@ -17,7 +17,9 @@ dioxus-hooks = "=0.8.0-alpha.1"
 dioxus_elements = { package = "dioxus-html", version = "=0.8.0-alpha.1", default-features = false }
 dioxus-native-dom = { version = "=0.8.0-alpha.1", default-features = false, features = ["system-fonts"] }
 dioxus-signals = "=0.8.0-alpha.1"
+kurbo = "0.13.1"
 neotavern-presentation-m0 = { path = "../presentation-m0" }
+peniko = "0.6"
 
 [lib]
 name = "neotavern_presentation_m0_d2"

@@ -3,6 +3,14 @@
 ## Unreleased
 ### Added
 
+- **M0-D2 glass barriers in Blitz paint order (still STARTED, not PASS).**
+  Bounded crates.io patches: `PaintScene::host_node_marker` (anyrender
+  0.11.0, 35 lines) and `render_element` glass emit (blitz-paint
+  0.3.0-beta.1, 30 lines). Canonical z-order is the paint stream;
+  `BackdropBarrier` carries the Blitz `NodeId`. Rebase: patch applies to
+  anyrender 0.11.1 (`git apply --check`, lib.rs offset 3). D1a JSON
+  unchanged. Moving sample is not added yet.
+
 - **M0-D2 producer seam STARTED (not PASS).** Crate
   `crates/presentation-m0-d2` rebuilds a D1a-shaped static scene through
   Dioxus `VirtualDom` 0.8.0-alpha.1, Blitz 0.3.0-beta.1 layout/paint, and

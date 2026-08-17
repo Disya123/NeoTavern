@@ -13,26 +13,25 @@ admission). D1a evidence JSON is unchanged.
 - A D1a-shaped static scene is authored as Dioxus `rsx!` and rebuilt through
   `VirtualDom`.
 - Pinned Blitz `BaseDocument::resolve` lays out that tree.
-- `blitz_paint::paint_scene` records into the public `anyrender::Scene`
-  sink (not a private fork of Blitz paint).
-- Two `data-neoui="glass"` host hooks become `BackdropBarrier` ops from the
-  laid-out DOM, interleaved with raster/image ops (not “all fills, then leftover
-  glasses”).
-- Glass B sits inside one bounded opacity + `overflow:hidden` ancestor;
-  `compile_passes` keeps that effect scope open on the glass pass.
+- `blitz_paint::paint_scene` drives a `ProducerSink`. Glass barriers are
+  emitted from `render_element` via `PaintScene::host_node_marker` (**65**
+  inserted lines; see [`upstream/`](upstream/README.md)).
+- Canonical z-order is the paint stream. A second DOM walk is diagnostics
+  only (`z-index` fixture: later sibling paints before hoisted glass).
+- Glass B stays inside Blitz opacity/clip layers; scopes balance.
 
 ## What it does not prove
 
 See [`missing_upstream_capabilities`](src/lib.rs) and
 [`docs/rfc/m0-d2-probe.md`](../../docs/rfc/m0-d2-probe.md). D2 cannot PASS on
-this static seam alone.
+this static seam alone. The patch is not upstreamed.
 
 ## Pins (experimental)
 
 ```text
 dioxus-core / dioxus-core-macro / dioxus-hooks / dioxus-html / dioxus-native-dom = 0.8.0-alpha.1
 blitz-dom / blitz-paint / blitz-traits = 0.3.0-beta.1
-anyrender = 0.11.0
+anyrender = 0.11.0 (patched)
 ```
 
 Chosen to share Vello 0.9 / wgpu 29 with `presentation-m0`. Rejected:
@@ -52,3 +51,4 @@ cargo test --manifest-path crates/Cargo.toml -p neotavern-presentation-m0-d2
   STARTED. This crate is not a compositor GO.
 - Do not treat a green unit test as M0-D2 PASS.
 - Do not paste `static_d1a_scene()` after layout and call that a producer.
+- Do not restore a post-layout scene builder for glass z-order.

@@ -1,0 +1,85 @@
+﻿diff --git a/src/lib.rs b/src/lib.rs
+index b0e88e1..595bd68 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -60,6 +60,23 @@ pub use resource_id::ResourceId;
+ #[cfg(feature = "serde")]
+ mod svg_path_parser;
+ 
++/// Host-owned paint-order marker. Default is a no-op so existing backends
++/// stay source-compatible. Blitz can emit a glass barrier without forking
++/// layout or text shaping.
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
++pub enum HostNodeKind {
++    Glass,
++}
++
++#[derive(Clone, Copy, Debug, PartialEq)]
++#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
++pub struct HostNodeMarker {
++    pub node_id: u64,
++    pub kind: HostNodeKind,
++    pub bounds: kurbo::Rect,
++}
++
+ #[derive(Debug, Copy, Clone, Eq, PartialEq)]
+ pub enum RegisterResourceErrorKind {
+     /// The `RenderContext` you tried to register the resource with does not support the kind of resource
+@@ -252,6 +269,11 @@ pub trait PaintScene: RenderContext {
+         std_dev: f64,
+     );
+ 
++    /// Insert a host marker at the current paint position.
++    ///
++    /// Default: no-op. Recording sinks and compositor probes override this.
++    fn host_node_marker(&mut self, _marker: HostNodeMarker) {}
++
+     // --- Provided methods
+ 
+     /// Append a recorded Scene Fragment to the current scene
+@@ -322,6 +344,10 @@ pub trait PaintScene: RenderContext {
+                     cmd.radius,
+                     cmd.std_dev,
+                 ),
++                RenderCommand::HostNodeMarker(mut marker) => {
++                    marker.bounds = scene_transform.transform_rect_bbox(marker.bounds);
++                    self.host_node_marker(marker);
++                }
+             }
+         }
+     }
+diff --git a/src/recording.rs b/src/recording.rs
+index 85a8232..6a8a441 100644
+--- a/src/recording.rs
++++ b/src/recording.rs
+@@ -30,6 +30,8 @@ pub enum RenderCommand<Font = FontData, Brush = Paint> {
+     GlyphRun(GlyphRunCommand<Font, Brush>),
+     /// Draw a rounded rectangle blurred with a gaussian filter.
+     BoxShadow(BoxShadowCommand),
++    /// Host compositor marker (glass barrier, etc.). Not a raster command.
++    HostNodeMarker(crate::HostNodeMarker),
+ }
+ 
+ impl RenderCommand {
+@@ -43,6 +45,9 @@ impl RenderCommand {
+             RenderCommand::Fill(cmd) => cmd.transform = transform * cmd.transform,
+             RenderCommand::GlyphRun(cmd) => cmd.transform = transform * cmd.transform,
+             RenderCommand::BoxShadow(cmd) => cmd.transform = transform * cmd.transform,
++            RenderCommand::HostNodeMarker(cmd) => {
++                cmd.bounds = transform.transform_rect_bbox(cmd.bounds);
++            }
+         };
+ 
+         self
+@@ -297,6 +302,10 @@ impl PaintScene for Scene {
+         self.commands.push(RenderCommand::BoxShadow(box_shadow));
+     }
+ 
++    fn host_node_marker(&mut self, marker: crate::HostNodeMarker) {
++        self.commands.push(RenderCommand::HostNodeMarker(marker));
++    }
++
+     fn append_scene(&mut self, scene: Scene, scene_transform: Affine) {
+         self.commands.extend(
+             scene
