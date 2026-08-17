@@ -49,10 +49,21 @@ React. Platform unification is not imposed now.
   physical A/B/C fixture (TrackComparison says that comparison does not exist)
 - upstream landing of `host_node_marker` or a typed Blitz Glass node
 
+## Follow-on status (not a re-signature)
+
+```text
+Milestone A = STARTED
+A/Product Wire boundary = PASS
+```
+
+A PASS still requires a feature-flagged Dioxus product shell, React ↔
+Dioxus canonical view-model parity, and presentation-path
+generation/backpressure/streaming tests.
+
 ## Next technical chain
 
 ```text
-Milestone A — Product Wire / presentation boundary (audit + close gaps)
+Milestone A — STARTED (Product Wire boundary PASS; shell/parity/streaming open)
 → Milestone B — NeoCompositor production implementation (feature-flagged)
 → Milestone C — Android product slice only after B/C DoD
 → rollback remains React/WebView

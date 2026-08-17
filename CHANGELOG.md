@@ -12,6 +12,15 @@
   foundational fork, unsupported device matrix, or budget overrun. M0 is not
   re-run.
 
+- **Product Wire presentation boundary (Milestone A STARTED, not A PASS).**
+  Presentation commands must be Product Wire `operationId`s
+  (`packages/contracts/src/presentation/boundary.ts`). Fixture recorder
+  and boundary tests land with this change. Baseline
+  [PresentationCompatibilityMatrix](docs/rfc/presentation-compatibility-matrix.md).
+  A PASS still requires a feature-flagged Dioxus product shell, React ↔
+  Dioxus view-model parity, and presentation-path generation/backpressure
+  tests.
+
 - **M0-D2 host-side Vulkan capture admission.** Program **M0-D2 PASS**.
   Adjudicator `scripts/m0-d2-adjudicate.mjs` hashed the physical RenderDoc
   `.rdc` / XML / control+capture logs / BOUND APK (`3036422`, SHA-256

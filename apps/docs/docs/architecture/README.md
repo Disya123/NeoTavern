@@ -33,6 +33,8 @@ Index of the internal documentation. Each major topic has its own folder.
 - [Legacy UI surface](architecture/ui-legacy-surface.md) — baseline inventory of `/api/v2`/`legacyRaw` in production UI (ARC-02/ARC-03).
 - [Operations inventory](architecture/operations-inventory.md) — current `/api/v2` surface, feature ownership/routing.
 - [Product Wire Contracts](architecture/wire-contracts.md) — canonical contracts, codegen, handshake, corpus.
+- [Presentation boundary](architecture/presentation-boundary.md) — Milestone A **STARTED**; Product Wire boundary **PASS**; WebView rollback.
+- [PresentationCompatibilityMatrix](rfc/presentation-compatibility-matrix.md) — baseline after D1/D2 GO (not cutover).
 - [Generation durability](architecture/generation-durability.md) — Phase 6 recoverable generation workflows, state machine, SSE resume.
 - [Generation run/steps and the tool-call loop](architecture/generation-run-steps.md) — M2 / Этап 2.7: durable step journal, `waiting_for_tool`, tool registry and loop guard (ТЗ §8.3).
 - [Providers](architecture/providers.md) — Phase 7 provider contract, built-in adapters, secrets, conformance.

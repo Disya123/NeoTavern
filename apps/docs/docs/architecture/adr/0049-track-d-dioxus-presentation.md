@@ -52,10 +52,13 @@ UI vs Android/Web split) is a separate staffing/parity decision.
 
 ## Consequences
 
-- Milestone A may close the Product Wire / presentation boundary. Presentation
-  consumes Product Wire; it does not become a second product authority.
-- Milestone B may start NeoCompositor production code. M0 probe crates remain
-  probes and are not the production JNI.
+- Milestone A is **STARTED**, not PASS. The Product Wire / presentation
+  boundary is **PASS**
+  ([presentation-boundary.md](../architecture/presentation-boundary.md)).
+  Presentation consumes Product Wire; it does not become a second product
+  authority. A PASS still requires a feature-flagged Dioxus product shell,
+  React ↔ Dioxus view-model parity, and presentation-path
+  generation/backpressure tests.
 - Theme SDK, Plugin SDK, and i18n stay on React/Web until later ABI decisions.
 - A later superseding ADR is still required before declaring Android
   production cutover (no WebView main renderer).
