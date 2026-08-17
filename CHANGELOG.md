@@ -44,6 +44,12 @@
 
 ### Changed
 
+- **M0-D1a source-bundle helper requires explicit `--bind-apk`.** Default
+  `apk_linkage` is `UNBOUND`. Schema `m0-d1a-source-bundle/v3` records
+  `helper_sha256` / `helper_git_blob` / `helper_matches_head` so a clean
+  bundle is replayable from the committed helper. Unrelated root TZ stays
+  in `excluded_unrelated_paths` and does not hide task-relevant dirty files.
+
 - **NeoUI v4 RFC 4.5 (pre-gate evidence admission).** The draft at
   `docs/rfc/neoui-v4-android-presentation-backend.md` now separates runner
   verdict from program verdict: Gate P `UNDECIDED`, normative M0

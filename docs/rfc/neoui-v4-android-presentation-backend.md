@@ -3942,7 +3942,7 @@ frames=100
 ran_on_android=true
 capture=false
 probe_changes_commit=absent
-immutable_source_bundle=helper_v2;_unrelated_tz_excluded;_apk_linkage=UNBOUND
+immutable_source_bundle=helper_v3;_unrelated_tz_excluded;_apk_linkage=UNBOUND;_explicit_bind_apk
 api_timeline=desktop_vulkan_2026-08-17_evening;_not_agi_renderdoc
 runner_verdict=BLOCKED
 evening_avd_d1a=BLOCKED_NON_ADMISSIBLE

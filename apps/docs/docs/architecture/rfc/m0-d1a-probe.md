@@ -243,13 +243,17 @@ Source-bundle helper:
 
 ```sh
 node scripts/m0-d1a-source-bundle.mjs
+node scripts/m0-d1a-source-bundle.mjs --apk path/to/app-debug.apk --bind-apk
 ```
 
 Produces gitignored JSON + `git diff --binary HEAD` under
-`apps/android/m0-d1a-captures/`. The helper records
-`excluded_unrelated_paths` (root TZ copy) and **must not** bind a pulled
-device APK as `apk_linkage=BOUND`. A dirty-tree hash plus an old APK is
-**not** an admitted M0 bundle.
+`apps/android/m0-d1a-captures/` (`m0-d1a-source-bundle/v3`). Default
+`apk_linkage=UNBOUND`. `BOUND` requires explicit `--bind-apk` for an APK
+built from this tree; `--apk` alone is observational. The JSON records
+`helper_sha256` / `helper_git_blob` / `helper_matches_head` so the helper
+revision is part of the bundle. `excluded_unrelated_paths` (root TZ copy)
+does not hide task-relevant dirty files. A dirty-tree hash plus an old APK
+is **not** an admitted M0 bundle.
 
 ### Evening AVD D1a — `BLOCKED / NON-ADMISSIBLE`
 

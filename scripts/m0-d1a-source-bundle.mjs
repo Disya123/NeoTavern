@@ -7,6 +7,7 @@
  *
  *   node scripts/m0-d1a-source-bundle.mjs
  *   node scripts/m0-d1a-source-bundle.mjs --apk path/to/app-debug.apk
+ *   node scripts/m0-d1a-source-bundle.mjs --apk path/to/app-debug.apk --bind-apk
  *   node scripts/m0-d1a-source-bundle.mjs --stdout
  */
 import { spawnSync } from 'node:child_process';
@@ -15,8 +16,9 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-export const SCHEMA = 'm0-d1a-source-bundle/v2';
+export const SCHEMA = 'm0-d1a-source-bundle/v3';
 export const RFC_EDITION = '4.5';
+export const HELPER_REL_PATH = 'scripts/m0-d1a-source-bundle.mjs';
 
 /** RFC 0.5 root TZ copy — not part of the D1a evidence tree. */
 export const UNRELATED_PATH_EXCLUDES = ['Техническое задание_ NeoUI v4.md'];
@@ -157,8 +159,28 @@ export function classifyApkLinkage(apkPath, observational) {
     apk_sha256: sha256File(apkPath),
     apk_observational_sha256: null,
     apk_linkage: 'BOUND',
-    apk_linkage_reason: 'APK path is the assembleDebug output of this tree',
+    apk_linkage_reason: 'explicit --bind-apk for an APK built from this source tree',
   };
+}
+
+export function resolveApkBinding(opts) {
+  const requestedApk = opts.apk && existsSync(opts.apk) ? opts.apk : null;
+  const observational = Boolean(requestedApk) && !opts.bindApk;
+  return { requestedApk, observational, ...classifyApkLinkage(requestedApk, observational) };
+}
+
+export function finalizeApkLinkage(apk, evidenceDirty) {
+  if (apk.apk_linkage === 'BOUND' && evidenceDirty) {
+    return {
+      ...apk,
+      apk_observational_sha256: apk.apk_sha256,
+      apk_sha256: null,
+      apk_linkage: 'UNBOUND',
+      apk_linkage_reason:
+        'explicit --bind-apk but evidence_dirty=true; do not bind APK to this tree',
+    };
+  }
+  return apk;
 }
 
 export function buildBundleRecord(input) {
@@ -190,6 +212,11 @@ export function buildBundleRecord(input) {
     apk_bytes: input.apkBytes,
     apk_linkage: input.apkLinkage ?? 'UNBOUND',
     apk_linkage_reason: input.apkLinkageReason ?? 'not classified',
+    helper_path: input.helperPath ?? HELPER_REL_PATH,
+    helper_sha256: input.helperSha256 ?? sha256File(join(ROOT, HELPER_REL_PATH)),
+    helper_git_blob: input.helperGitBlob ?? null,
+    helper_head_blob: input.helperHeadBlob ?? null,
+    helper_matches_head: input.helperMatchesHead ?? false,
     rustc: input.rustc,
     cargo: input.cargo,
     runner: input.runner,
@@ -212,6 +239,32 @@ function git(args, options = {}) {
     );
   }
   return result;
+}
+
+function gitOptional(args) {
+  const result = spawnSync('git', args, {
+    cwd: ROOT,
+    encoding: 'utf8',
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  if (result.error || result.status !== 0) {
+    return null;
+  }
+  return (result.stdout || '').trim();
+}
+
+export function collectHelperIdentity() {
+  const abs = join(ROOT, HELPER_REL_PATH);
+  const sha256 = existsSync(abs) ? sha256File(abs) : null;
+  const gitBlob = gitOptional(['hash-object', HELPER_REL_PATH]);
+  const headBlob = gitOptional(['rev-parse', `HEAD:${HELPER_REL_PATH}`]);
+  return {
+    helperPath: HELPER_REL_PATH,
+    helperSha256: sha256,
+    helperGitBlob: gitBlob,
+    helperHeadBlob: headBlob,
+    helperMatchesHead: Boolean(gitBlob) && Boolean(headBlob) && gitBlob === headBlob,
+  };
 }
 
 function toolVersion(bin) {
@@ -237,7 +290,7 @@ function hashUntrackedFiles(paths) {
   return { sha256: hashed.length ? hash.digest('hex') : null, files: hashed };
 }
 
-function parseArgs(argv) {
+export function parseArgs(argv) {
   const out = { apk: null, stdout: false, outDir: DEFAULT_OUT, bindApk: false };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -271,16 +324,9 @@ function collect(opts) {
   const untracked = hashUntrackedFiles(evidence.remaining_untracked);
   let submoduleStatus = git(['submodule', 'status']).stdout.trim();
   if (!submoduleStatus) submoduleStatus = '(none)';
-  const requestedApk = opts.apk && existsSync(opts.apk) ? opts.apk : null;
-  const observational = Boolean(requestedApk) && !opts.bindApk;
-  const apk = classifyApkLinkage(requestedApk, observational);
-  if (apk.apk_linkage === 'BOUND' && evidence.evidence_dirty) {
-    apk.apk_observational_sha256 = apk.apk_sha256;
-    apk.apk_sha256 = null;
-    apk.apk_linkage = 'UNBOUND';
-    apk.apk_linkage_reason =
-      'assembleDebug APK exists but evidence_dirty=true; do not bind APK to this tree';
-  }
+  const helper = collectHelperIdentity();
+  const resolved = resolveApkBinding(opts);
+  const apk = finalizeApkLinkage(resolved, evidence.evidence_dirty);
   return buildBundleRecord({
     baseCommit,
     dirty: porcelain.dirty,
@@ -295,10 +341,15 @@ function collect(opts) {
     submoduleStatus,
     apkSha256: apk.apk_sha256,
     apkObservationalSha256: apk.apk_observational_sha256,
-    apkPath: requestedApk,
-    apkBytes: requestedApk ? readFileSync(requestedApk).byteLength : null,
+    apkPath: resolved.requestedApk,
+    apkBytes: resolved.requestedApk ? readFileSync(resolved.requestedApk).byteLength : null,
     apkLinkage: apk.apk_linkage,
     apkLinkageReason: apk.apk_linkage_reason,
+    helperPath: helper.helperPath,
+    helperSha256: helper.helperSha256,
+    helperGitBlob: helper.helperGitBlob,
+    helperHeadBlob: helper.helperHeadBlob,
+    helperMatchesHead: helper.helperMatchesHead,
     rustc: toolVersion('rustc'),
     cargo: toolVersion('cargo'),
     runner: {
@@ -347,7 +398,7 @@ function main(argv = process.argv.slice(2)) {
   console.log(`[m0-d1a-bundle] wrote ${jsonPath}`);
   console.log(`[m0-d1a-bundle] wrote ${patchPath}`);
   console.log(
-    `[m0-d1a-bundle] base=${record.base_commit} dirty=${record.dirty} evidence_dirty=${record.evidence_dirty} apk_linkage=${record.apk_linkage} apk=${record.apk_sha256 ?? 'unbound'}`,
+    `[m0-d1a-bundle] base=${record.base_commit} dirty=${record.dirty} evidence_dirty=${record.evidence_dirty} apk_linkage=${record.apk_linkage} helper_matches_head=${record.helper_matches_head} apk=${record.apk_sha256 ?? 'unbound'}`,
   );
 }
 

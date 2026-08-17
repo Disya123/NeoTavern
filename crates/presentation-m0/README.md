@@ -56,12 +56,15 @@ adb logcat -d -s NeoTavern:I | findstr m0-d1a
 
 Optional extra: `-e com.neotavern.mobile.M0_D1A_FRAMES 100`.
 
-Source bundle (gitignored JSON + binary diff; not a PASS). The helper lists
-`excluded_unrelated_paths` and leaves pulled device APKs `apk_linkage=UNBOUND`.
-Do not pair an old APK hash with a dirty unrelated tree.
+Source bundle (gitignored JSON + binary diff; not a PASS). Schema
+`m0-d1a-source-bundle/v3`. Default `apk_linkage=UNBOUND`. `BOUND` requires
+`--bind-apk`. The JSON records the helper file hash. Unrelated root TZ is
+listed in `excluded_unrelated_paths` and does not hide task-relevant dirty
+files. Do not pair an old APK hash with a dirty unrelated tree.
 
 ```sh
 node scripts/m0-d1a-source-bundle.mjs
+node scripts/m0-d1a-source-bundle.mjs --apk path/to/app-debug.apk --bind-apk
 ```
 
 ## Constraints
