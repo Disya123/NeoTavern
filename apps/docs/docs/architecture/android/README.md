@@ -154,6 +154,9 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   still logs `capture=false`. The 1437-byte GLES capture is
   `WRONG_API_CAPTURE / NON-ADMISSIBLE`. See [M0-D1a probe](../rfc/m0-d1a-probe.md)
   and the [physical capture runbook](../rfc/m0-d1a-physical-runbook.md).
+  M0-D2 is **STARTED** in `crates/presentation-m0-d2` (Dioxus/Blitz
+  producer seam, not PASS, not production JNI). See
+  [M0-D2 probe](../rfc/m0-d2-probe.md).
 
 ## Background execution (Phase 8)
 

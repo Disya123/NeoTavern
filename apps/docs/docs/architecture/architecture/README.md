@@ -81,8 +81,11 @@ crates/
                        # binds remote-http (loopback default, explicit exposure)
     mobile-ffi/        # Phase 5 native bridge: stable C ABI → same Kernel
                        # (opaque handles, bounded buffers, status codes)
-  presentation-m0/     # NeoUI v4 RFC PRE-GATE D1a paint-seam probe (not M0).
-                       # Debug-only Activity; not production kernel JNI.
+  presentation-m0/     # NeoUI v4 RFC D1a/D1b paint-seam probe (host PASS;
+                       # crate log capture=false). Debug-only Activity;
+                       # not production kernel JNI.
+  presentation-m0-d2/  # NeoUI v4 RFC M0-D2 producer seam STARTED, not PASS.
+                       # Dioxus/Blitz/anyrender headless path.
 ```
 
 Dependencies only go "downward": `server`/`web` → packages; packages → `shared`/

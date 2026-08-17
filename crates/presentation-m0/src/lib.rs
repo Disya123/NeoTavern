@@ -10,7 +10,8 @@
 //! raster/glass passes on **one** `wgpu` device/queue. A first-frame **API
 //! timeline** and wgpu debug groups name accumulator/snapshot resources; that
 //! is not an AGI/RenderDoc GPU capture and MUST NOT flip `android_gpu_capture`.
-//! M0-D1b (moving sample) is STARTED in this crate; program D1b is not PASS.
+//! Program D1b PASS lives in the host-side admission record; this crate
+//! still reports `capture=false`. M0-D2 lives in `presentation-m0-d2`.
 
 #[cfg(all(feature = "android-jni", target_os = "android"))]
 mod android_jni;

@@ -42,7 +42,8 @@ Evidence: [`docs/rfc/m0-d1a-probe.md`](../../docs/rfc/m0-d1a-probe.md),
 - Vello **0.9.0** (`Renderer::new(&device)`, `render_to_texture`)
 - wgpu **29** (resolved `29.0.4`; Vulkan/GLES/Metal features; DX12 left off so
   this crate can share the workspace lockfile with Tauri `windows 0.61`)
-- Blitz is **not** in this crate. That is M0-D2.
+- Blitz is **not** in this crate. M0-D2 STARTED in
+  [`presentation-m0-d2`](../presentation-m0-d2/README.md) (not PASS).
 
 ## Commands
 

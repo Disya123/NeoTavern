@@ -111,4 +111,5 @@ The probe cannot set `android_gpu_capture`. Only this host record flips it.
 - Changing `docs/rfc/m0-d1a-adjudication.json`
 - Treating desktop Vulkan as D1b PASS
 - `D1=Track D GO`
-- Starting M0-D2 before program D1b PASS
+- Treating this runbook as M0-D2 PASS. D2 may start after D1b PASS; see
+  [m0-d2-probe.md](m0-d2-probe.md) (**STARTED**, not PASS)

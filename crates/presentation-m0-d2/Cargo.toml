@@ -1,0 +1,23 @@
+[package]
+name = "neotavern-presentation-m0-d2"
+version = "0.1.0"
+edition = "2021"
+description = "NeoUI v4 M0-D2 Dioxus/Blitz producer-seam probe (RFC, non-production)"
+license = "AGPL-3.0"
+publish = false
+
+[dependencies]
+anyrender = "=0.11.0"
+blitz-dom = { version = "=0.3.0-beta.1", default-features = false, features = ["system-fonts"] }
+blitz-paint = { version = "=0.3.0-beta.1", default-features = false }
+blitz-traits = "=0.3.0-beta.1"
+dioxus-core = "=0.8.0-alpha.1"
+dioxus-core-macro = "=0.8.0-alpha.1"
+dioxus-hooks = "=0.8.0-alpha.1"
+dioxus_elements = { package = "dioxus-html", version = "=0.8.0-alpha.1", default-features = false }
+dioxus-native-dom = { version = "=0.8.0-alpha.1", default-features = false, features = ["system-fonts"] }
+dioxus-signals = "=0.8.0-alpha.1"
+neotavern-presentation-m0 = { path = "../presentation-m0" }
+
+[lib]
+name = "neotavern_presentation_m0_d2"

@@ -3,6 +3,16 @@
 ## Unreleased
 ### Added
 
+- **M0-D2 producer seam STARTED (not PASS).** Crate
+  `crates/presentation-m0-d2` rebuilds a D1a-shaped static scene through
+  Dioxus `VirtualDom` 0.8.0-alpha.1, Blitz 0.3.0-beta.1 layout/paint, and
+  the public `anyrender::Scene` recording sink. Glass is a host
+  `data-neoui="glass"` hook on the laid-out DOM (not a typed Blitz paint
+  node). One bounded opacity/clip ancestor keeps Glass B in scope.
+  Missing capabilities are listed in `docs/rfc/m0-d2-probe.md`. D1a/D1b
+  admission JSON is unchanged. Normative M0 stays `ENTERED`.
+  `D1=Track D GO` is not granted.
+
 - **M0-D1b host-side Vulkan capture admission.** Program **M0-D1b PASS**.
   Adjudicator `scripts/m0-d1b-adjudicate.mjs` hashed the physical
   RenderDoc `.rdc` / XML / control+capture logs / bound APK (`21b38c0`,
