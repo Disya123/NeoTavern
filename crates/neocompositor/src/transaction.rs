@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use crate::display_list::Rect;
 use crate::epoch::{DeviceEpoch, FrameId, SceneEpoch};
+use crate::property_tree::PropertySnapshot;
 use crate::scene::NeoScene;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -46,6 +47,7 @@ pub struct FrameTransactionParts {
     pub scene: NeoScene,
     pub damage: Vec<DamageRect>,
     pub leases: Vec<ResourceLease>,
+    pub properties: PropertySnapshot,
 }
 
 /// Immutable UI→render snapshot. Fields are not mutated after [`Self::publish`].
@@ -58,6 +60,7 @@ pub struct FrameTransaction {
     scene: Arc<NeoScene>,
     damage: Arc<[DamageRect]>,
     leases: Arc<[ResourceLease]>,
+    properties: Arc<PropertySnapshot>,
     byte_size: usize,
 }
 
@@ -67,7 +70,8 @@ impl FrameTransaction {
         let scene = Arc::new(parts.scene);
         let damage: Arc<[DamageRect]> = parts.damage.into();
         let leases: Arc<[ResourceLease]> = parts.leases.into();
-        let byte_size = estimate_bytes(&scene, &damage, &leases);
+        let properties = Arc::new(parts.properties);
+        let byte_size = estimate_bytes(&scene, &damage, &leases, &properties);
         Self {
             frame_id: parts.frame_id,
             scene_epoch: parts.scene_epoch,
@@ -76,6 +80,7 @@ impl FrameTransaction {
             scene,
             damage,
             leases,
+            properties,
             byte_size,
         }
     }
@@ -91,7 +96,8 @@ impl FrameTransaction {
         let generation = scene.display_list.generation;
         let damage: Arc<[DamageRect]> = damage.into();
         let leases: Arc<[ResourceLease]> = leases.into();
-        let byte_size = estimate_bytes(&scene, &damage, &leases);
+        let properties = Arc::new(PropertySnapshot::empty());
+        let byte_size = estimate_bytes(&scene, &damage, &leases, &properties);
         Self {
             frame_id,
             scene_epoch,
@@ -100,6 +106,7 @@ impl FrameTransaction {
             scene,
             damage,
             leases,
+            properties,
             byte_size,
         }
     }
@@ -119,6 +126,7 @@ impl FrameTransaction {
             scene,
             damage,
             leases: Vec::new(),
+            properties: PropertySnapshot::empty(),
         })
     }
 
@@ -154,15 +162,32 @@ impl FrameTransaction {
         &self.leases
     }
 
+    pub fn properties(&self) -> &PropertySnapshot {
+        &self.properties
+    }
+
+    pub fn properties_arc(&self) -> Arc<PropertySnapshot> {
+        Arc::clone(&self.properties)
+    }
+
     pub fn byte_size(&self) -> usize {
         self.byte_size
     }
 }
 
-fn estimate_bytes(scene: &NeoScene, damage: &[DamageRect], leases: &[ResourceLease]) -> usize {
+fn estimate_bytes(
+    scene: &NeoScene,
+    damage: &[DamageRect],
+    leases: &[ResourceLease],
+    properties: &PropertySnapshot,
+) -> usize {
     256 + scene.display_list.ops.len() * 96
         + scene.display_list.spatial.len() * 48
         + scene.glass.len() * 32
         + damage.len() * 16
         + leases.len() * 16
+        + properties.spatial_slot_count() * 80
+        + properties.clip_slot_count() * 48
+        + properties.effect_slot_count() * 64
+        + properties.scroll_slot_count() * 16
 }

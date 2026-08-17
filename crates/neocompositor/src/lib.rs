@@ -10,6 +10,7 @@ pub mod layer_cache;
 pub mod mailbox;
 pub mod neo_glass;
 pub mod pass_graph;
+pub mod property_tree;
 pub mod scene;
 pub mod target_pool;
 pub mod transaction;
@@ -30,6 +31,12 @@ pub use mailbox::{
 };
 pub use neo_glass::NeoGlass;
 pub use pass_graph::{barriers_cut_raster_runs, compile_passes, CompiledPass, GraphError};
+pub use property_tree::{
+    hit_test, ClipId, ClipTreeNode, EffectId, EffectSpec, EffectTreeNode, HitTestItem,
+    HitTestMatch, Insets, LogicalRect, Point, PropertyEffectKind, PropertySnapshot,
+    PropertyTreeBuilder, SampleError, SampledFrame, ScrollId, ScrollRange, Size, SpatialId,
+    SpatialKind, SpatialTreeNode, TreeError, Vec2,
+};
 pub use scene::{GlassSurface, NeoScene};
 pub use target_pool::{TargetId, TargetPool, TargetPoolError};
 pub use transaction::{

@@ -38,8 +38,69 @@ pub struct AffineCoeffs(pub [f64; 6]);
 impl AffineCoeffs {
     pub const IDENTITY: Self = Self([1.0, 0.0, 0.0, 1.0, 0.0, 0.0]);
 
+    /// Treat a transform as singular when `|det|` is below this epsilon.
+    pub const SINGULAR_EPS: f64 = 1e-12;
+
     pub fn translate(x: f64, y: f64) -> Self {
         Self([1.0, 0.0, 0.0, 1.0, x, y])
+    }
+
+    pub fn scale(sx: f64, sy: f64) -> Self {
+        Self([sx, 0.0, 0.0, sy, 0.0, 0.0])
+    }
+
+    /// Column-vector multiply `self * rhs` (`p' = self * rhs * p`).
+    pub fn compose(self, rhs: Self) -> Self {
+        let [a1, b1, c1, d1, e1, f1] = self.0;
+        let [a2, b2, c2, d2, e2, f2] = rhs.0;
+        Self([
+            a1 * a2 + c1 * b2,
+            b1 * a2 + d1 * b2,
+            a1 * c2 + c1 * d2,
+            b1 * c2 + d1 * d2,
+            a1 * e2 + c1 * f2 + e1,
+            b1 * e2 + d1 * f2 + f1,
+        ])
+    }
+
+    pub fn transform_point(self, x: f64, y: f64) -> (f64, f64) {
+        let [a, b, c, d, e, f] = self.0;
+        (a * x + c * y + e, b * x + d * y + f)
+    }
+
+    pub fn translation(self) -> (f64, f64) {
+        (self.0[4], self.0[5])
+    }
+
+    pub fn determinant(self) -> f64 {
+        let [a, b, c, d, ..] = self.0;
+        a * d - b * c
+    }
+
+    pub fn is_finite(self) -> bool {
+        self.0.iter().copied().all(f64::is_finite)
+    }
+
+    /// Inverse for hit-test. Singular or non-finite matrices return `None`
+    /// (the node is non-hittable). This must not panic.
+    pub fn inverse(self) -> Option<Self> {
+        if !self.is_finite() {
+            return None;
+        }
+        let det = self.determinant();
+        if !det.is_finite() || det.abs() < Self::SINGULAR_EPS {
+            return None;
+        }
+        let [a, b, c, d, e, f] = self.0;
+        let inv = 1.0 / det;
+        Some(Self([
+            d * inv,
+            -b * inv,
+            -c * inv,
+            a * inv,
+            (c * f - d * e) * inv,
+            (b * e - a * f) * inv,
+        ]))
     }
 }
 

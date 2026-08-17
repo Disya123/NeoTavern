@@ -40,6 +40,15 @@
   parity, stale-generation drop, bounded streaming. `MainActivity` remains
   WebView. Milestone B remains STARTED.
 
+- **Spatial/scroll/clip/effect property trees (Milestone B, not B PASS).**
+  `crates/neocompositor` publishes an immutable `PropertySnapshot` inside
+  `FrameTransaction`: generation-safe `SpatialId`/`ScrollId`/`ClipId`/
+  `EffectId`, parent/cycle checks before commit, dense present-loop
+  sampling, sticky clamp, viewport-fixed and fixed-in-transform containing
+  blocks, clip/effect chains, explicit backdrop roots. Hit-test and
+  rendering share one snapshot/epoch. Scroll/animation fast paths are not
+  in this change. `MainActivity` / WebView rollback unchanged.
+
 - **Bounded FrameTransaction mailbox (Milestone B spine, not B PASS).**
   `crates/neocompositor` publishes immutable transactions over a latest-wins
   UI→render mailbox with item/byte caps, stale/device-epoch reject, resource

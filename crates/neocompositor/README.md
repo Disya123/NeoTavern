@@ -1,8 +1,8 @@
 # NeoCompositor (`neotavern-neocompositor`)
 
-Milestone B **STARTED** (not PASS): production types plus a bounded
-`FrameTransaction` mailbox. This is **not** a production JNI renderer and
-**not** an Android cutover.
+Milestone B **STARTED** (not PASS): production types, a bounded
+`FrameTransaction` mailbox, and spatial/scroll/clip/effect property trees.
+This is **not** a production JNI renderer and **not** an Android cutover.
 
 ## What this crate is
 
@@ -10,9 +10,13 @@ Milestone B **STARTED** (not PASS): production types plus a bounded
 - Consumed by M0 probe crates (`presentation-m0`, `presentation-m0-d2`) so
   probe and production types do not drift.
 - UI/producer → render spine: monotonic `FrameId` / `SceneEpoch` /
-  `DeviceEpoch`, immutable `FrameTransaction`, latest-wins mailbox with
-  item/byte caps, stale/device-epoch reject, resource retirement, and
-  last-known-good on invalid graphs.
+  `DeviceEpoch`, immutable `FrameTransaction` (scene + property snapshot),
+  latest-wins mailbox with item/byte caps, stale/device-epoch reject,
+  resource retirement, and last-known-good on invalid graphs.
+- Generation-safe `SpatialId` / `ScrollId` / `ClipId` / `EffectId` trees:
+  parent/cycle checks at commit, dense present-loop sampling, sticky/fixed
+  containing blocks, clip/effect chains, explicit backdrop roots. Hit-test
+  and rendering share one snapshot/epoch.
 
 ## What this crate is not
 
@@ -22,6 +26,8 @@ Milestone B **STARTED** (not PASS): production types plus a bounded
   default host is `PresentationHost::WebViewRollback`.
 - GPU telemetry and device-loss recovery are not started (required before
   B PASS, not this slice). Mailbox high-water counters are in-memory only.
+- Scroll/animation fast paths, gesture physics, and virtualization are
+  **not** in this crate yet (separate commits).
 
 ## RFC §50 progress
 
@@ -32,13 +38,15 @@ Started (CPU types + tests):
 - GlassSurface / NeoGlass / NeoScene / damage rects
 - bounded layer cache and target pool
 - immutable `FrameTransaction` + bounded UI→render mailbox
+- spatial / scroll / clip / effect property trees (sticky/fixed sampling,
+  dirty subtree, generation-safe handles)
 - M0-D1a pass-order corpus as a production regression (not a lab re-run)
 
 Not started (do not treat as done):
 
-- spatial scroll / clip / effect trees beyond the display-list snapshot
 - scroll/animation fast paths
-- PERF-14/17/18/21 (async hit-test, sticky/fixed, effect scopes, nested scroll)
+- PERF-14/17/18/21 (async hit-test, sticky/fixed product completeness,
+  effect scopes, nested scroll handoff)
 - virtualization, selection, geometry remap
 - GPU device/surface recovery
 - shared-device raster interop in this crate (still in the M0 probe)

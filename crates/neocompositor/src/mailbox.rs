@@ -105,7 +105,10 @@ impl Inner {
             self.stats.rejected_device_epoch += 1;
             return Err(PostReject::DeviceEpoch);
         }
-        if compile_passes(&tx.scene().display_list).is_err() {
+        if compile_passes(&tx.scene().display_list).is_err()
+            || tx.properties().validate().is_err()
+            || property_epoch_mismatch(&tx)
+        {
             self.retire_tx(&tx);
             self.stats.rejected_invalid += 1;
             return Err(PostReject::InvalidGraph);
@@ -205,6 +208,11 @@ impl Inner {
         }
         self.record_depth();
     }
+}
+
+fn property_epoch_mismatch(tx: &FrameTransaction) -> bool {
+    let properties = tx.properties();
+    !properties.is_empty() && properties.scene_epoch() != tx.scene_epoch()
 }
 
 /// Bounded latest-wins mailbox. Render never blocks on this type.
