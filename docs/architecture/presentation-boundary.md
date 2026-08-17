@@ -63,7 +63,7 @@ dioxus-android-flagged     — experimental; not the launcher
 ## Milestone B start
 
 `crates/neocompositor` holds production interchange types, a bounded
-`FrameTransaction` mailbox, and spatial/scroll/clip/effect property trees
-(Milestone B **STARTED**, not PASS). It is not linked into production JNI.
-Scroll/animation GPU paths, PERF-14/17/18/21, recovery, and GPU telemetry
-are not started. Product cutover is not declared.
+`FrameTransaction` mailbox, spatial/scroll/clip/effect property trees, and
+CPU scroll/animation fast paths (Milestone B **STARTED**, not PASS). It is
+not linked into production JNI. PERF-14/17/18/21, recovery, and GPU
+telemetry are not started. Product cutover is not declared.

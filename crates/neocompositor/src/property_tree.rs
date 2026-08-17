@@ -124,6 +124,24 @@ impl Vec2 {
     pub const fn new(x: f64, y: f64) -> Self {
         Self { x, y }
     }
+
+    pub const fn add(self, other: Self) -> Self {
+        Self {
+            x: self.x + other.x,
+            y: self.y + other.y,
+        }
+    }
+
+    pub const fn sub(self, other: Self) -> Self {
+        Self {
+            x: self.x - other.x,
+            y: self.y - other.y,
+        }
+    }
+
+    pub const fn is_zero(self) -> bool {
+        self.x == 0.0 && self.y == 0.0
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -677,11 +695,39 @@ impl PropertySnapshot {
         (node.id == id).then_some(node)
     }
 
+    pub fn effect_at(&self, index: u32) -> Option<&EffectTreeNode> {
+        self.effects.get(index as usize)?.as_ref()
+    }
+
     pub fn scroll_is_live(&self, id: ScrollId) -> bool {
         self.scrolls
             .get(id.index as usize)
             .and_then(|slot| slot.as_ref())
             .is_some_and(|live| *live == id)
+    }
+
+    pub fn scroll_at(&self, index: u32) -> Option<ScrollId> {
+        self.scrolls.get(index as usize).copied().flatten()
+    }
+
+    pub fn scroll_bounds(&self, id: ScrollId) -> Option<ScrollRange> {
+        let spatial = self.spatial_for_scroll(id)?;
+        let node = self.spatial(spatial)?;
+        match node.kind {
+            SpatialKind::Scroll {
+                scrollport,
+                content_extent,
+                ..
+            } => {
+                let max_x = (content_extent.width - scrollport.width).max(0.0);
+                let max_y = (content_extent.height - scrollport.height).max(0.0);
+                Some(ScrollRange {
+                    min: Vec2::new(0.0, 0.0),
+                    max: Vec2::new(max_x, max_y),
+                })
+            }
+            _ => None,
+        }
     }
 
     pub fn spatial_for_scroll(&self, id: ScrollId) -> Option<SpatialId> {
@@ -1174,8 +1220,10 @@ pub struct SampledFrame {
     hittable: Vec<bool>,
     constraint_stale: Vec<bool>,
     scroll_offsets: Vec<Vec2>,
+    anim_local: Vec<AffineCoeffs>,
     dirty: Vec<bool>,
     nodes_recomputed: u32,
+    resample_deferred: bool,
 }
 
 impl SampledFrame {
@@ -1188,8 +1236,10 @@ impl SampledFrame {
             hittable: vec![false; n],
             constraint_stale: vec![false; n],
             scroll_offsets: vec![Vec2::default(); snapshot.scrolls.len()],
+            anim_local: vec![AffineCoeffs::IDENTITY; n],
             dirty: vec![true; n],
             nodes_recomputed: 0,
+            resample_deferred: false,
         };
         sampled.resample(snapshot);
         sampled
@@ -1270,8 +1320,45 @@ impl SampledFrame {
         if let Some(spatial) = snapshot.scroll_spatial[slot] {
             self.mark_subtree(snapshot, spatial);
         }
-        self.resample(snapshot);
+        self.maybe_resample(snapshot);
         Ok(())
+    }
+
+    /// Extra local transform sampled from a compositor animation. Identity is
+    /// the rest pose. Present-loop safe: no allocation.
+    pub fn set_anim_local(
+        &mut self,
+        snapshot: &PropertySnapshot,
+        id: SpatialId,
+        transform: AffineCoeffs,
+    ) -> Result<(), SampleError> {
+        self.check_epoch(snapshot)?;
+        let _ = snapshot.spatial(id).ok_or(SampleError::StaleHandle)?;
+        let slot = id.index as usize;
+        if self.anim_local[slot] == transform {
+            self.nodes_recomputed = 0;
+            return Ok(());
+        }
+        self.anim_local[slot] = transform;
+        self.mark_subtree(snapshot, id.index);
+        self.maybe_resample(snapshot);
+        Ok(())
+    }
+
+    /// Batch scroll/animation writes and resample once. Bind/present uses this
+    /// so the hot path does not allocate.
+    pub fn defer_resample(&mut self, snapshot: &PropertySnapshot, defer: bool) {
+        let was = self.resample_deferred;
+        self.resample_deferred = defer;
+        if was && !defer {
+            self.resample(snapshot);
+        }
+    }
+
+    fn maybe_resample(&mut self, snapshot: &PropertySnapshot) {
+        if !self.resample_deferred {
+            self.resample(snapshot);
+        }
     }
 
     fn check_epoch(&self, snapshot: &PropertySnapshot) -> Result<(), SampleError> {
@@ -1344,12 +1431,13 @@ impl SampledFrame {
     }
 
     fn local_transform(&self, node: &SpatialTreeNode) -> AffineCoeffs {
+        let anim = self.anim_local[node.id.index as usize];
+        let producer = node.producer_transform.compose(anim);
         match node.kind {
-            SpatialKind::ReferenceFrame | SpatialKind::Fixed { .. } => node.producer_transform,
+            SpatialKind::ReferenceFrame | SpatialKind::Fixed { .. } => producer,
             SpatialKind::Scroll { scroll_id, .. } => {
                 let offset = self.scroll_offsets[scroll_id.index as usize];
-                node.producer_transform
-                    .compose(AffineCoeffs::translate(-offset.x, -offset.y))
+                producer.compose(AffineCoeffs::translate(-offset.x, -offset.y))
             }
             SpatialKind::Sticky {
                 scroll_id,
@@ -1367,7 +1455,7 @@ impl SampledFrame {
                 };
                 let extra = sticky_extra(used, normal_origin, constraint_rect, insets, size);
                 let compensate = Vec2::new(actual.x - used.x, actual.y - used.y);
-                node.producer_transform
+                producer
                     .compose(AffineCoeffs::translate(normal_origin.x, normal_origin.y))
                     .compose(AffineCoeffs::translate(
                         extra.x + compensate.x,

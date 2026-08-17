@@ -3,8 +3,10 @@
 //! Default host is WebView rollback. `NEOTA_NEOCOMPOSITOR=1` selects the
 //! flagged compositor path and is not a production cutover.
 
+pub mod animation;
 pub mod display_list;
 pub mod epoch;
+pub mod fast_path;
 pub mod host;
 pub mod layer_cache;
 pub mod mailbox;
@@ -12,15 +14,20 @@ pub mod neo_glass;
 pub mod pass_graph;
 pub mod property_tree;
 pub mod scene;
+pub mod scroll;
 pub mod target_pool;
 pub mod transaction;
 
+pub use animation::{
+    AnimValue, AnimationId, AnimationProperty, AnimationSpec, Easing, FastPathError,
+};
 pub use display_list::{
     AffineCoeffs, BackdropRootId, BarrierId, ClipChainId, ClipNode, EffectKind, EffectNode,
     EffectNodeId, EffectScopeId, GlassBoundary, ImageLayer, NeoDisplayList, NeoPaintOp, PaintChunk,
     PaintChunkId, PaintOrderKey, Rect, SpatialNode, SpatialNodeId, StubPayload,
 };
-pub use epoch::{DeviceEpoch, EpochClock, FrameId, SceneEpoch};
+pub use epoch::{DeviceEpoch, EpochClock, FrameId, PresentationTime, SceneEpoch, ScrollEpoch};
+pub use fast_path::{CompositorFastPath, PresentOutcome, RasterDecision};
 pub use host::{
     production_host_from_env, production_host_from_flag, PresentationHost, NEOCOMPOSITOR_FLAG,
 };
@@ -38,6 +45,9 @@ pub use property_tree::{
     SpatialKind, SpatialTreeNode, TreeError, Vec2,
 };
 pub use scene::{GlassSurface, NeoScene};
+pub use scroll::{
+    AckResult, AsyncScrollState, GestureId, ScrollAck, ScrollInputError, ScrollSequence,
+};
 pub use target_pool::{TargetId, TargetPool, TargetPoolError};
 pub use transaction::{
     DamageRect, FrameTransaction, FrameTransactionParts, ResourceLease, ResourceLeaseId,

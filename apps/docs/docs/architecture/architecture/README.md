@@ -83,8 +83,9 @@ crates/
                        # (opaque handles, bounded buffers, status codes)
   neocompositor/       # Milestone B STARTED: NeoDisplayList, pass graph,
                        # bounded FrameTransaction mailbox, spatial/scroll/
-                       # clip/effect property trees. Not production JNI;
-                       # default host is WebView rollback (`NEOTA_NEOCOMPOSITOR=1`).
+                       # clip/effect property trees, CPU scroll/animation
+                       # fast paths. Not production JNI; default host is
+                       # WebView rollback (`NEOTA_NEOCOMPOSITOR=1`).
   presentation-m0/     # NeoUI v4 RFC D1a/D1b paint-seam probe (host PASS;
                        # crate log capture=false). Debug-only Activity;
                        # not production kernel JNI.

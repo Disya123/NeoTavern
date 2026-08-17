@@ -159,8 +159,8 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   signed ([d1-d2-decision.md](../rfc/d1-d2-decision.md)); `D3=DEFERRED`.
   React/WebView remains the public renderer and rollback. Production
   compositor types start in `crates/neocompositor` (Milestone B **STARTED**,
-  not PASS) with a bounded mailbox and spatial/scroll/clip/effect trees, and
-  are **not** linked into `libneotavern_android_jni.so`.
+  not PASS) with a bounded mailbox, property trees, and CPU scroll/animation
+  fast paths, and are **not** linked into `libneotavern_android_jni.so`.
   `NEOTA_NEOCOMPOSITOR=1` is a non-default flag, not a cutover switch.
 
 ## Background execution (Phase 8)

@@ -40,6 +40,17 @@
   parity, stale-generation drop, bounded streaming. `MainActivity` remains
   WebView. Milestone B remains STARTED.
 
+- **Compositor scroll/animation fast paths (Milestone B, not B PASS).**
+  `AsyncScrollState` lives on the compositor thread, apart from the
+  immutable property snapshot. Input updates delta/velocity only; producer
+  `scroll_sequence` acks rebase without teleport or double-apply. Nested
+  gesture latch/handoff passes unused delta. Transform/opacity animations
+  sample monotonic presentation time (same result at 60/90/120 Hz;
+  retarget keeps the current value). Layout/paint/text animations return
+  `NeedsProducer`. Transform-only present does not rasterize, allocate, or
+  call Dioxus/layout. Hit-test dispatch, virtualization, and PERF-14/17/18/21
+  are not in this change. `MainActivity` / WebView rollback unchanged.
+
 - **Spatial/scroll/clip/effect property trees (Milestone B, not B PASS).**
   `crates/neocompositor` publishes an immutable `PropertySnapshot` inside
   `FrameTransaction`: generation-safe `SpatialId`/`ScrollId`/`ClipId`/

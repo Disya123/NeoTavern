@@ -9,6 +9,40 @@ pub struct SceneEpoch(pub u64);
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct DeviceEpoch(pub u64);
 
+/// Semantic scroll generation. A newer epoch resets compositor delta and
+/// must not mix with a previous fling (RFC §15).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ScrollEpoch(pub u64);
+
+/// Monotonic presentation clock in nanoseconds. Animation duration is
+/// sampled against this value, not against frame count or refresh rate.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct PresentationTime {
+    ns: u64,
+}
+
+impl PresentationTime {
+    pub const fn from_nanos(ns: u64) -> Self {
+        Self { ns }
+    }
+
+    pub const fn from_millis(ms: u64) -> Self {
+        Self {
+            ns: ms.saturating_mul(1_000_000),
+        }
+    }
+
+    pub const fn as_nanos(self) -> u64 {
+        self.ns
+    }
+
+    pub const fn saturating_add_nanos(self, ns: u64) -> Self {
+        Self {
+            ns: self.ns.saturating_add(ns),
+        }
+    }
+}
+
 /// Allocates strictly increasing frame/scene ids and a bumpable device epoch.
 #[derive(Clone, Debug)]
 pub struct EpochClock {
