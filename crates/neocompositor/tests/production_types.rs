@@ -103,9 +103,9 @@ fn frame_transaction_defaults_to_full_frame_damage() {
     let glass = NeoGlass::from_surface(scene.glass[0].clone());
     assert_eq!(glass.surface.barrier_id, 1);
     let tx = FrameTransaction::full_frame(scene);
-    assert_eq!(tx.generation, 1);
-    assert_eq!(tx.damage.len(), 1);
-    assert_eq!(tx.damage[0].width, 1080);
+    assert_eq!(tx.generation(), 1);
+    assert_eq!(tx.damage().len(), 1);
+    assert_eq!(tx.damage()[0].width, 1080);
 }
 
 #[test]

@@ -40,6 +40,14 @@
   parity, stale-generation drop, bounded streaming. `MainActivity` remains
   WebView. Milestone B remains STARTED.
 
+- **Bounded FrameTransaction mailbox (Milestone B spine, not B PASS).**
+  `crates/neocompositor` publishes immutable transactions over a latest-wins
+  UI→render mailbox with item/byte caps, stale/device-epoch reject, resource
+  retirement, and last-known-good on invalid graphs. Render `try_dequeue`
+  never waits on producer/layout/raster. `MainActivity` / WebView rollback
+  unchanged. M0 lab is not re-run; the D1a pass-order corpus is a production
+  regression.
+
 - **M0-D2 host-side Vulkan capture admission.** Program **M0-D2 PASS**.
   Adjudicator `scripts/m0-d2-adjudicate.mjs` hashed the physical RenderDoc
   `.rdc` / XML / control+capture logs / BOUND APK (`3036422`, SHA-256

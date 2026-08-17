@@ -78,8 +78,8 @@ crates/
     mobile-ffi/        # Phase 5 native bridge: stable C ABI → same Kernel
                        # (opaque handles, bounded buffers, status codes)
   neocompositor/       # Milestone B STARTED: NeoDisplayList, pass graph,
-                       # FrameTransaction. Not production JNI; default host
-                       # is WebView rollback (`NEOTA_NEOCOMPOSITOR=1` flag).
+                       # bounded FrameTransaction mailbox. Not production JNI;
+                       # default host is WebView rollback (`NEOTA_NEOCOMPOSITOR=1`).
   presentation-m0/     # NeoUI v4 RFC D1a/D1b paint-seam probe (host PASS;
                        # crate log capture=false). Debug-only Activity;
                        # not production kernel JNI.

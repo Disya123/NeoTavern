@@ -4,8 +4,10 @@
 //! flagged compositor path and is not a production cutover.
 
 pub mod display_list;
+pub mod epoch;
 pub mod host;
 pub mod layer_cache;
+pub mod mailbox;
 pub mod neo_glass;
 pub mod pass_graph;
 pub mod scene;
@@ -17,12 +19,19 @@ pub use display_list::{
     EffectNodeId, EffectScopeId, GlassBoundary, ImageLayer, NeoDisplayList, NeoPaintOp, PaintChunk,
     PaintChunkId, PaintOrderKey, Rect, SpatialNode, SpatialNodeId, StubPayload,
 };
+pub use epoch::{DeviceEpoch, EpochClock, FrameId, SceneEpoch};
 pub use host::{
     production_host_from_env, production_host_from_flag, PresentationHost, NEOCOMPOSITOR_FLAG,
 };
 pub use layer_cache::{LayerCache, LayerCacheStats, LayerKey};
+pub use mailbox::{
+    FrameMailbox, MailboxStats, PostAccept, PostReject, TryDequeue, DEFAULT_BYTE_CAP,
+    DEFAULT_ITEM_CAP,
+};
 pub use neo_glass::NeoGlass;
 pub use pass_graph::{barriers_cut_raster_runs, compile_passes, CompiledPass, GraphError};
 pub use scene::{GlassSurface, NeoScene};
 pub use target_pool::{TargetId, TargetPool, TargetPoolError};
-pub use transaction::{DamageRect, FrameTransaction};
+pub use transaction::{
+    DamageRect, FrameTransaction, FrameTransactionParts, ResourceLease, ResourceLeaseId,
+};

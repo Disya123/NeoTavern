@@ -1,10 +1,7 @@
 # NeoCompositor (`neotavern-neocompositor`)
 
-Milestone B **start**: production types for NeoDisplayList, pass compilation,
-GlassSurface, NeoScene, FrameTransaction, layer cache, target pool, NeoGlass,
-and host selection.
-
-This is **not** Milestone B PASS, **not** a production JNI renderer, and
+Milestone B **STARTED** (not PASS): production types plus a bounded
+`FrameTransaction` mailbox. This is **not** a production JNI renderer and
 **not** an Android cutover.
 
 ## What this crate is
@@ -12,6 +9,10 @@ This is **not** Milestone B PASS, **not** a production JNI renderer, and
 - The shared interchange for Track D compositor work after D1/D2 GO.
 - Consumed by M0 probe crates (`presentation-m0`, `presentation-m0-d2`) so
   probe and production types do not drift.
+- UI/producer → render spine: monotonic `FrameId` / `SceneEpoch` /
+  `DeviceEpoch`, immutable `FrameTransaction`, latest-wins mailbox with
+  item/byte caps, stale/device-epoch reject, resource retirement, and
+  last-known-good on invalid graphs.
 
 ## What this crate is not
 
@@ -19,7 +20,8 @@ This is **not** Milestone B PASS, **not** a production JNI renderer, and
 - Not a cutover switch. Public Android stays on the React/WebView path.
 - `NEOTA_NEOCOMPOSITOR=1` is a **feature flag** for later host wiring. The
   default host is `PresentationHost::WebViewRollback`.
-- GPU telemetry is not added (no telemetry by default).
+- GPU telemetry and device-loss recovery are not started (required before
+  B PASS, not this slice). Mailbox high-water counters are in-memory only.
 
 ## RFC §50 progress
 
@@ -27,21 +29,20 @@ Started (CPU types + tests):
 
 - ordered NeoDisplayList / paint-bridge types
 - `compile_passes` (barrier-aware; scopes; MovingSample)
-- GlassSurface / NeoGlass / NeoScene / FrameTransaction / damage rects
+- GlassSurface / NeoGlass / NeoScene / damage rects
 - bounded layer cache and target pool
-- spatial / clip / effect trees already on the display list
+- immutable `FrameTransaction` + bounded UI→render mailbox
+- M0-D1a pass-order corpus as a production regression (not a lab re-run)
 
 Not started (do not treat as done):
 
+- spatial scroll / clip / effect trees beyond the display-list snapshot
 - scroll/animation fast paths
+- PERF-14/17/18/21 (async hit-test, sticky/fixed, effect scopes, nested scroll)
+- virtualization, selection, geometry remap
 - GPU device/surface recovery
 - shared-device raster interop in this crate (still in the M0 probe)
-- height index / range predictor / tile cache
-- overscan-miss fallback
-- async scroll ack and spatial hit-test
-- sticky/fixed compositor sampling
-- interaction-ready text/selection
-- geometry epochs / fling remap
+- GPU timing telemetry
 - PERF-01…PERF-22 and 120 Hz product budgets
 
 See [presentation boundary](../../docs/architecture/presentation-boundary.md)
