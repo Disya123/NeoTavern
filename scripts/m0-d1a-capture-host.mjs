@@ -309,6 +309,7 @@ export function parseManifestActivities(xmltree) {
     exported_m0d1a: /M0D1aActivity[\s\S]{0,500}android:exported[^=]*=\(type 0x12\)0xffffffff/u.test(
       xmltree,
     ),
+    agi_main_m0d1a: /M0D1aActivity[\s\S]{0,2500}android\.intent\.action\.MAIN/u.test(xmltree),
   };
 }
 
@@ -321,6 +322,7 @@ export function inspectApkFromText(badging, xmltree, apkPath, sha256, bytes) {
     parsed.debuggable &&
     activities.has_m0d1a &&
     activities.exported_m0d1a &&
+    activities.agi_main_m0d1a &&
     parsed.abis.length > 0 &&
     vulkanFeature;
   return {
@@ -333,6 +335,7 @@ export function inspectApkFromText(badging, xmltree, apkPath, sha256, bytes) {
     component: COMPONENT,
     debuggable: parsed.debuggable,
     activity_exported: activities.exported_m0d1a,
+    agi_main_intent: activities.agi_main_m0d1a,
     abis: parsed.abis,
     min_sdk: parsed.min_sdk,
     vulkan_feature: vulkanFeature,
@@ -340,7 +343,7 @@ export function inspectApkFromText(badging, xmltree, apkPath, sha256, bytes) {
       'wgpu prefers Vulkan on physical Android; GLES is fallback; AGI preset uses -api vulkan',
     reason: ok
       ? 'debug APK inspect ok'
-      : 'APK inspect failed package/debuggable/exported activity/abi/vulkan',
+      : 'APK inspect failed package/debuggable/exported activity/agi MAIN/abi/vulkan',
   };
 }
 
@@ -366,6 +369,16 @@ export function inspectApk(apkPath, aaptBin = findAapt()) {
 export function debugManifestVulkanDeclared(root = ROOT) {
   const path = join(root, 'apps', 'android', 'app', 'src', 'debug', 'AndroidManifest.xml');
   return existsSync(path) && readFileSync(path, 'utf8').includes('android.hardware.vulkan');
+}
+
+export function debugManifestAgiMainDeclared(root = ROOT) {
+  const path = join(root, 'apps', 'android', 'app', 'src', 'debug', 'AndroidManifest.xml');
+  if (!existsSync(path)) return false;
+  const xml = readFileSync(path, 'utf8');
+  return (
+    /M0D1aActivity[\s\S]*android\.intent\.action\.MAIN/u.test(xml) &&
+    !xml.includes('android.intent.category.LAUNCHER')
+  );
 }
 
 export function latestBoundBundle(dir = CAPTURES_DIR) {
@@ -515,6 +528,7 @@ export function evaluateHost(opts = {}) {
     aapt,
     apk: { ...apk, bind },
     vulkan_source: debugManifestVulkanDeclared(),
+    agi_main_source: debugManifestAgiMainDeclared(),
     provenance,
     bundle: bundle
       ? {

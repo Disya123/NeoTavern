@@ -355,12 +355,12 @@
     {
       "source": "rfc/m0-d1a-physical-runbook.md",
       "target": "rfc/m0-d1a-physical-runbook.md",
-      "sha256": "2120e444f8aef890607afc92cc3d59e7c1a79543aae9000484cb7313cacf5bcf"
+      "sha256": "7d59af679083426c01baada265a89bc67260f7c5d436e327ae84073d2b2f64f7"
     },
     {
       "source": "rfc/m0-d1a-probe.md",
       "target": "rfc/m0-d1a-probe.md",
-      "sha256": "4c24b1b71f65f7fe1531ed49e7a3751ffbdee7230762cb4e086fafe950f33f36"
+      "sha256": "b5489521014a81da2f8afc714409e9bda10aeb36abef2a0c3e4f16f035f5dad8"
     },
     {
       "source": "rfc/m1-baseline-report.md",

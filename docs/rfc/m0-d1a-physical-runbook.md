@@ -51,7 +51,9 @@ Pin: [`tools/agi.pin.json`](../../tools/agi.pin.json) — Android GPU Inspector
 `5f97b4fd99a9459320b782203ce2de5351a1e661`) at **`E:\agi`**. Frame-capture
 preset: [`tools/agi-frame-capture.preset.json`](../../tools/agi-frame-capture.preset.json)
 (`-api vulkan`, `-capture-frames 1`, URI
-`android:com.neotavern.mobile/com.neotavern.mobile.M0D1aActivity`).
+`android.intent.action.MAIN:com.neotavern.mobile/com.neotavern.mobile.M0D1aActivity`).
+AGI `gapit packages` lists only activities with an action filter; the debug
+probe therefore declares MAIN+DEFAULT **without** LAUNCHER.
 
 Host checks (Java ≥ 11 from `E:\agi\jre` or Studio JBR, adb, writable
 `apps/android/m0-d1a-captures/`, bound debug APK):
@@ -120,7 +122,7 @@ Vulkan on physical Android (GLES fallback).
 ### AGI CLI (printed by preflight)
 
 ```text
-E:\agi\gapit.exe trace -api vulkan -capture-frames 1 -serial <PHYSICAL_SERIAL> -out apps/android/m0-d1a-captures/<stamp>-d1a.gfxtrace -uri android:com.neotavern.mobile/com.neotavern.mobile.M0D1aActivity -additionalargs "-e com.neotavern.mobile.M0_D1A_FRAMES 100"
+E:\agi\gapit.exe trace -api vulkan -capture-frames 1 -serial <PHYSICAL_SERIAL> -out apps/android/m0-d1a-captures/<stamp>-d1a.gfxtrace -uri android.intent.action.MAIN:com.neotavern.mobile/com.neotavern.mobile.M0D1aActivity -additionalargs "-e com.neotavern.mobile.M0_D1A_FRAMES 100"
 ```
 
 Then dump commands and run the completeness checker (does **not** admit

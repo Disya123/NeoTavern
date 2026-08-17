@@ -14,7 +14,9 @@ import {
   classifyCaptureDump,
   classifyHardwareGpu,
   classifyProvenance,
+  debugManifestAgiMainDeclared,
   debugManifestVulkanDeclared,
+  loadPreset,
   deviceGate,
   inspectApkFromText,
   isEmulator,
@@ -37,6 +39,14 @@ const incompleteDump = readFileSync(
 describe('m0-d1a capture host', () => {
   it('declares optional Vulkan uses-feature in the debug probe manifest', () => {
     expect(debugManifestVulkanDeclared()).toBe(true);
+  });
+
+  it('exposes M0D1aActivity to AGI via MAIN without LAUNCHER', () => {
+    expect(debugManifestAgiMainDeclared()).toBe(true);
+    const preset = loadPreset();
+    expect(preset.uri).toBe(
+      'android.intent.action.MAIN:com.neotavern.mobile/com.neotavern.mobile.M0D1aActivity',
+    );
   });
 
   it('pins AGI 3.3.3 at E:\\agi', () => {
@@ -87,6 +97,23 @@ describe('m0-d1a capture host', () => {
     expect(abiCompatible('armeabi-v7a', ['arm64-v8a'])).toBe(false);
   });
 
+  it('rejects a debug APK without AGI MAIN on M0D1aActivity', () => {
+    const inspect = inspectApkFromText(
+      [
+        "package: name='com.neotavern.mobile'",
+        'application-debuggable',
+        "native-code: 'arm64-v8a'",
+        "uses-feature: name='android.hardware.vulkan.level'",
+      ].join('\n'),
+      'A: android:name="com.neotavern.mobile.M0D1aActivity"\nA: android:exported(0x01010010)=(type 0x12)0xffffffff',
+      'app-debug.apk',
+      'abc',
+      1,
+    );
+    expect(inspect.agi_main_intent).toBe(false);
+    expect(inspect.ok).toBe(false);
+  });
+
   it('rejects a debug APK without Vulkan uses-feature', () => {
     const inspect = inspectApkFromText(
       [
@@ -112,7 +139,7 @@ describe('m0-d1a capture host', () => {
         "native-code: 'arm64-v8a' 'x86_64'",
         "uses-feature: name='android.hardware.vulkan.level'",
       ].join('\n'),
-      'E: activity (line=12)\n  A: android:name(0x01010003)="com.neotavern.mobile.M0D1aActivity"\n  A: android:exported(0x01010010)=(type 0x12)0xffffffff',
+      'E: activity (line=12)\n  A: android:name(0x01010003)="com.neotavern.mobile.M0D1aActivity"\n  A: android:exported(0x01010010)=(type 0x12)0xffffffff\n  E: action\n    A: android:name="android.intent.action.MAIN"',
       'app-debug.apk',
       'abc',
       1,
@@ -120,6 +147,7 @@ describe('m0-d1a capture host', () => {
     expect(inspect.ok).toBe(true);
     expect(inspect.debuggable).toBe(true);
     expect(inspect.vulkan_feature).toBe(true);
+    expect(inspect.agi_main_intent).toBe(true);
     expect(inspect.abis).toEqual(['arm64-v8a', 'x86_64']);
   });
 
@@ -144,7 +172,7 @@ describe('m0-d1a capture host', () => {
       preset: {
         api: 'vulkan',
         capture_frames: 1,
-        uri: 'android:com.neotavern.mobile/com.neotavern.mobile.M0D1aActivity',
+        uri: 'android.intent.action.MAIN:com.neotavern.mobile/com.neotavern.mobile.M0D1aActivity',
         additionalargs: '-e com.neotavern.mobile.M0_D1A_FRAMES 100',
       },
     });

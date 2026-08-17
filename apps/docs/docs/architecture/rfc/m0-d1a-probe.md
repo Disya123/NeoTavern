@@ -134,7 +134,8 @@ cargo ndk -t x86_64 -t arm64-v8a build --release -p neotavern-presentation-m0 --
 | arm64-v8a | `libneotavern_presentation_m0.so` (~6.8 MiB, debug jniLibs) |
 
 Debug-only Activity `com.neotavern.mobile.M0D1aActivity` loads that library.
-It is **not** the launcher and is **not** in `libneotavern_android_jni.so`.
+It is **not** the launcher (MAIN+DEFAULT, no LAUNCHER — required so AGI
+`gapit packages` can see it) and is **not** in `libneotavern_android_jni.so`.
 Production WebView path is unchanged. `.so` files are gitignored.
 
 Launch:
