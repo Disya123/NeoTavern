@@ -355,7 +355,7 @@
     {
       "source": "rfc/m0-d1a-physical-runbook.md",
       "target": "rfc/m0-d1a-physical-runbook.md",
-      "sha256": "7d59af679083426c01baada265a89bc67260f7c5d436e327ae84073d2b2f64f7"
+      "sha256": "f8fa26d08946d28c9e4b0207cdcb9d74b0e6150fd134d497c1830f5a67e7454d"
     },
     {
       "source": "rfc/m0-d1a-probe.md",

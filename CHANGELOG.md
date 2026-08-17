@@ -7,7 +7,10 @@
   `apps/android/app/src/debug/AndroidManifest.xml` declares optional
   `android.hardware.vulkan.level` / `version` (`required=false`) next to
   `M0D1aActivity` with MAIN+DEFAULT (no LAUNCHER) so AGI can resolve the
-  probe URI. Production `main`/`release` manifests do not. Merged
+  probe URI. The probe instance ORs wgpu `InstanceFlags::DEBUG` so a
+  release NDK `.so` still emits `m0-d1a-*` debug utils labels. Capture
+  uses `-capture-frames 0 -for 15s` because the probe is offscreen.
+  Production `main`/`release` manifests do not. Merged
   debug vs release manifests were checked with Gradle
   `processDebugMainManifest` / `processReleaseMainManifest`.
   `capture_tooling_commit` stays `5df24c8`. A new debug APK from this

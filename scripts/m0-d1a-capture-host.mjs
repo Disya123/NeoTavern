@@ -431,13 +431,18 @@ export function classifyCaptureDump(text) {
 }
 
 export function buildGapitTraceCommand({ gapit, serial, out, preset = loadPreset() }) {
-  return [
+  const cmd = [
     gapit,
     'trace',
     '-api',
     preset.api,
     '-capture-frames',
     String(preset.capture_frames),
+  ];
+  if (preset.duration) {
+    cmd.push('-for', String(preset.duration));
+  }
+  cmd.push(
     '-serial',
     serial,
     '-out',
@@ -446,7 +451,8 @@ export function buildGapitTraceCommand({ gapit, serial, out, preset = loadPreset
     preset.uri,
     '-additionalargs',
     preset.additionalargs,
-  ];
+  );
+  return cmd;
 }
 
 export function buildGapitCommandsCommand({ gapit, gfxtrace, out }) {

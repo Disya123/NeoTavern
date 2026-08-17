@@ -698,8 +698,13 @@ impl ProbeGpu {
 
 fn probe_instance() -> wgpu::Instance {
     let backends = wgpu::Backends::from_env().unwrap_or_default();
+    // Release NDK builds have `debug_assertions=false`, so `from_build_config()`
+    // omits DEBUG. Without it wgpu does not enable VK_EXT_debug_utils and AGI
+    // never sees `m0-d1a-*` pass/resource labels. Do not OR VALIDATION here:
+    // Khronos VVL stacked on AGI GraphicsSpy is a known crash source.
     let flags = wgpu::InstanceFlags::from_build_config().with_env()
-        | wgpu::InstanceFlags::ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER;
+        | wgpu::InstanceFlags::ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER
+        | wgpu::InstanceFlags::DEBUG;
     wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends,
         flags,

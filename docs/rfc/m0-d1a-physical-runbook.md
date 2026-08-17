@@ -50,10 +50,14 @@ Pin: [`tools/agi.pin.json`](../../tools/agi.pin.json) — Android GPU Inspector
 **3.3.3** (Build.Number 900, Build.SHA
 `5f97b4fd99a9459320b782203ce2de5351a1e661`) at **`E:\agi`**. Frame-capture
 preset: [`tools/agi-frame-capture.preset.json`](../../tools/agi-frame-capture.preset.json)
-(`-api vulkan`, `-capture-frames 1`, URI
+(`-api vulkan`, `-capture-frames 0 -for 15s`, URI
 `android.intent.action.MAIN:com.neotavern.mobile/com.neotavern.mobile.M0D1aActivity`).
 AGI `gapit packages` lists only activities with an action filter; the debug
-probe therefore declares MAIN+DEFAULT **without** LAUNCHER.
+probe therefore declares MAIN+DEFAULT **without** LAUNCHER. The probe paints
+offscreen (no swapchain present), so `-capture-frames 1` stops on the first
+HWUI TextView present — use duration capture instead. Keep gapit stdin open
+or it treats EOF as “stop now”. Release NDK `.so` must enable wgpu
+`InstanceFlags::DEBUG` so AGI records `m0-d1a-*` labels.
 
 Host checks (Java ≥ 11 from `E:\agi\jre` or Studio JBR, adb, writable
 `apps/android/m0-d1a-captures/`, bound debug APK):
@@ -112,7 +116,8 @@ Vulkan on physical Android (GLES fallback).
 ### AGI GUI
 
 1. File → Capture Trace.
-2. API = **Vulkan**. Stop after **1** frame.
+2. API = **Vulkan**. Do **not** stop after 1 frame (that is the TextView
+   present). Capture for ~15 seconds / until the probe log line appears.
 3. Package/activity = `com.neotavern.mobile` /
    `com.neotavern.mobile.M0D1aActivity`.
 4. Commands pane: group by **user markers** (and by frame).
@@ -122,7 +127,7 @@ Vulkan on physical Android (GLES fallback).
 ### AGI CLI (printed by preflight)
 
 ```text
-E:\agi\gapit.exe trace -api vulkan -capture-frames 1 -serial <PHYSICAL_SERIAL> -out apps/android/m0-d1a-captures/<stamp>-d1a.gfxtrace -uri android.intent.action.MAIN:com.neotavern.mobile/com.neotavern.mobile.M0D1aActivity -additionalargs "-e com.neotavern.mobile.M0_D1A_FRAMES 100"
+E:\agi\gapit.exe trace -api vulkan -capture-frames 0 -for 15s -serial <PHYSICAL_SERIAL> -out apps/android/m0-d1a-captures/<stamp>-d1a.gfxtrace -uri android.intent.action.MAIN:com.neotavern.mobile/com.neotavern.mobile.M0D1aActivity -additionalargs "-e com.neotavern.mobile.M0_D1A_FRAMES 100"
 ```
 
 Then dump commands and run the completeness checker (does **not** admit

@@ -47,6 +47,8 @@ describe('m0-d1a capture host', () => {
     expect(preset.uri).toBe(
       'android.intent.action.MAIN:com.neotavern.mobile/com.neotavern.mobile.M0D1aActivity',
     );
+    expect(preset.capture_frames).toBe(0);
+    expect(preset.duration).toBe('15s');
   });
 
   it('pins AGI 3.3.3 at E:\\agi', () => {
@@ -180,7 +182,17 @@ describe('m0-d1a capture host', () => {
     expect(cmd).toContain('vulkan');
     expect(cmd).toContain('-capture-frames');
     expect(cmd).toContain('1');
+    expect(cmd).not.toContain('-for');
     expect(cmd[0]).toBe('E:\\agi\\gapit.exe');
+    const timed = buildGapitTraceCommand({
+      gapit: 'E:\\agi\\gapit.exe',
+      serial: 'R58M30ABCDE',
+      out: 'apps/android/m0-d1a-captures/stamp-d1a.gfxtrace',
+      preset: loadPreset(),
+    });
+    expect(timed).toContain('-for');
+    expect(timed).toContain('15s');
+    expect(timed).toContain('0');
   });
 
   it('accepts a complete AGI commands dump', () => {
