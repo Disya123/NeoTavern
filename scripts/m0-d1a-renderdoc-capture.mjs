@@ -185,11 +185,13 @@ function listCaptureCandidates(adbBin, serial) {
     PACKAGE,
     'sh',
     '-c',
-    'ls -1 files/*.rdc files/m0-d1a*.rdc cache/*.rdc 2>/dev/null',
+    'ls -1 files',
   ]);
   for (const line of (viaRunAs.stdout || '').split(/\r?\n/u)) {
     const name = line.trim().replace(/^\.\//u, '');
-    if (name.endsWith('.rdc')) found.push(name);
+    if (name.endsWith('.rdc')) {
+      found.push(name.includes('/') ? name : `files/${name}`);
+    }
   }
   const dirs = [
     '/data/data/com.neotavern.mobile/files',
@@ -213,10 +215,13 @@ function pullCapture(adbBin, serial, remote, local) {
     rel = `files/${remote.slice(filesIdx + '/files/'.length)}`;
   } else if (remote.startsWith('/')) {
     rel = `files/${remote.split('/').pop()}`;
+  } else if (!rel.startsWith('files/') && rel.endsWith('.rdc')) {
+    rel = `files/${rel.split('/').pop()}`;
   }
   const pulled = adb(adbBin, serial, ['exec-out', 'run-as', PACKAGE, 'cat', rel], {
     timeout: 120_000,
     encoding: 'buffer',
+    maxBuffer: 64 * 1024 * 1024,
   });
   if (pulled.status === 0 && pulled.stdout && pulled.stdout.length > 0) {
     writeFileSync(local, pulled.stdout);

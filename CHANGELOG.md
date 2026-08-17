@@ -13,10 +13,11 @@
   A NULL/wildcard device pointer is forbidden: the 1437-byte
   `2026-08-17T16-53-54-457Z-d1a.rdc` is `WRONG_API_CAPTURE / NON-ADMISSIBLE`
   (OpenGLES / HWUI). Control (`--mode=control`, feature off) and capture
-  (`--mode=capture`) launches must keep golden counters/timeline. D1a stays
-  **BLOCKED** until Event Browser shows Vulkan commands and both
-  `m0-d1a-roi-read:1/2` with readable resource usages. `StartFrameCapture`
-  success is not PASS. D1b is not started.
+  (`--mode=capture`) launches keep golden counters/timeline. Physical Vulkan
+  capture `2026-08-17T17-18-59-431Z-d1a.rdc` contains Vulkan commands and
+  both `m0-d1a-roi-read:1/2` (accumulator → glass-roi `vkCmdCopyImage`).
+  `android_gpu_capture` stays **false**; D1a is not auto-PASS; D1b is not
+  started. Runbook: `docs/rfc/m0-d1a-physical-runbook.md`.
 
 - **M0-D1a debug Vulkan `uses-feature` (probe variant only).**
   `apps/android/app/src/debug/AndroidManifest.xml` declares optional

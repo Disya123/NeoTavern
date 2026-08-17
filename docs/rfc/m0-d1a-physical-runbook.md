@@ -204,6 +204,13 @@ Trace names: `{stamp}-d1a.rdc`, `{stamp}-d1a.xml`,
 (`schema: m0-d1a-capture-evidence/v1`). Archived AGI traces keep
 `{stamp}-d1a.gfxtrace`. Directory is gitignored.
 
+Admissible Vulkan capture (still not D1a PASS, `android_gpu_capture=false`):
+`apps/android/m0-d1a-captures/2026-08-17T17-18-59-431Z-d1a.rdc`
+(1 487 376 bytes, `<driver>Vulkan</driver>`, both `m0-d1a-roi-read:1/2`,
+`vkCmdCopyImage` 299=`m0-d1a-accumulator` → 303=`m0-d1a-glass-roi`).
+APK SHA-256 `478a4593…` bound to `2d72a3c`. GLES 1437-byte
+`2026-08-17T16-53-54-457Z-d1a.rdc` stays `WRONG_API_CAPTURE / NON-ADMISSIBLE`.
+
 ### AGI archive (do not retry as the capture tool)
 
 ```text

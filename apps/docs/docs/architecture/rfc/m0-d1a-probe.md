@@ -340,9 +340,10 @@ layer packages. Production path and RenderGraph are unchanged. The
 1437-byte GLES file `2026-08-17T16-53-54-457Z-d1a.rdc` is
 `WRONG_API_CAPTURE / NON-ADMISSIBLE` (NULL device matched HWUI).
 
-D1a stays **BLOCKED** until Event Browser shows `m0-d1a-roi-read:1` →
-glass → raster/blit → `m0-d1a-roi-read:2` → glass, with accumulator/ROI
-identity and no readback/cross-device copy. D1b stays `NOT_STARTED`.
+D1a stays **BLOCKED** (`android_gpu_capture=false`) until the owner admits
+the capture. A Vulkan `.rdc` with both ROI groups exists
+(`2026-08-17T17-18-59-431Z-d1a.rdc`); that does not auto-flip the flag.
+D1b stays `NOT_STARTED`.
 
 Emulator smoke of **this** APK (GLES translator, not a phone) produced the
 golden API timeline and stayed `capture=false` / `BLOCKED`:
