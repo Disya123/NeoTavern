@@ -62,7 +62,8 @@ describe('m0-d1a source bundle', () => {
     });
     expect(record.schema).toBe(SCHEMA);
     expect(record.rfc).toBe(RFC_EDITION);
-    expect(record.program.gate_p).toBe('UNDECIDED');
+    expect(record.program.gate_p).toBe('GateP:P1 / PASSED');
+    expect(record.program.normative_m0).toBe('ENTERED');
     expect(record.program.runner_d1a).toBe('PRE-GATE / BLOCKED');
     expect(record.program.d1b).toBe('NOT_STARTED');
     expect(record.apk_sha256).toBeNull();

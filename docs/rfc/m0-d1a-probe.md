@@ -276,6 +276,42 @@ Raw log (gitignored):
 Do not pair that APK hash with a later source-bundle JSON as if they were
 one revision. Physical production-backend D1a remains **BLOCKED** (no phone).
 
+### Post-`GateP:P1` rebuild (2026-08-17 night) — not D1a PASS
+
+Pinned commit `0167be5` (capture debug groups) + helper program fields
+updated to `GateP:P1` / M0 `ENTERED`. Clean evidence tree
+(`evidence_dirty=false`, root TZ excluded). Debug APK **BOUND**:
+
+| Field           | Value                                                              |
+| --------------- | ------------------------------------------------------------------ |
+| APK bytes       | 52 747 061                                                         |
+| APK SHA-256     | `4dfc8b41e48f7c3ba7b996e240a8c39ac16c569e7f92c9b61605ccf3c2f8ef30` |
+| `apk_linkage`   | `BOUND` (`--bind-apk`)                                             |
+| helper          | `helper_matches_head=true`                                         |
+| `adb devices`   | `emulator-5554` only                                               |
+| AGI / RenderDoc | not installed                                                      |
+| D1a verdict     | **`ENVIRONMENT_BLOCKED`** (physical Android + GPU capture missing) |
+
+This APK is the pinned binary for the next physical capture. It is **not**
+admitted. AVD must not replace the phone. D1b stays `NOT_STARTED`.
+
+Emulator smoke of **this** APK (GLES translator, not a phone) produced the
+golden API timeline and stayed `capture=false` / `BLOCKED`:
+
+```text
+m0-d1a gpu_ran=true adapter=Android_Emulator_OpenGL_ES_Translator_(NVIDIA_GeForce_RTX_3060/PCIe/SSE2) backend=Gl software=false devices=1 readbacks=0 xdev=0 roi_copies=200 raster=400 glass=200 frames=100 ran_on_android=true capture=false timeline=clear,raster,blit,roi:1,glass:1,raster,blit,raster,blit,roi:2,glass:2,raster,blit timeline_events=13 first_frame_cpu_us=1043704 acc_bytes=774144 verdict=BLOCKED reason=Android_GPU_ran;_GPU_capture_with_pass/resource_order_is_still_required_for_D1a_PASS
+```
+
+That confirms the BOUND `.so` matches the golden cut. It is still not GPU
+capture and not D1a PASS.
+
+Gitignored bundle:
+`apps/android/m0-d1a-captures/2026-08-17T15-02-55-334Z-source-bundle.json`
+(regenerate after the helper program-status commit). AVD log:
+`apps/android/m0-d1a-captures/2026-08-17-post-p1-avd-d1a.log`.
+
+## Non-goals (unchanged)
+
 ## Non-goals (unchanged)
 
 - Production APK / `MainActivity` compositor

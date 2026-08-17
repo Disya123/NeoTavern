@@ -50,6 +50,10 @@
   bundle is replayable from the committed helper. Unrelated root TZ stays
   in `excluded_unrelated_paths` and does not hide task-relevant dirty files.
 
+- **M0-D1a source-bundle helper records signed GateP:P1.** Bundle JSON
+  `program.gate_p` is `GateP:P1 / PASSED` and `normative_m0` is `ENTERED`.
+  That does not admit D1a PASS.
+
 - **M0-D1a capture debug groups after GateP:P1.** The probe names
   `m0-d1a-roi-read:{barrier}` and glass/blit passes for AGI/RenderDoc.
   Labels do not flip `android_gpu_capture` and do not admit D1a PASS.

@@ -187,10 +187,10 @@ export function buildBundleRecord(input) {
   return {
     schema: SCHEMA,
     rfc: RFC_EDITION,
-    note: 'PRE-GATE; not an M0-D1a PASS; not Gate P; not Track D GO',
+    note: 'not an M0-D1a PASS; GateP:P1 signed; M0 ENTERED not PASS; not Track D GO',
     program: {
-      gate_p: 'UNDECIDED',
-      normative_m0: 'NOT_ENTERED',
+      gate_p: 'GateP:P1 / PASSED',
+      normative_m0: 'ENTERED',
       runner_d1a: 'PRE-GATE / BLOCKED',
       d1b: 'NOT_STARTED',
       track_d_go: 'NOT_GRANTED',
