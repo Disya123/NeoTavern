@@ -3,6 +3,20 @@
 ## Unreleased
 ### Added
 
+- **M0-D1a host-side Vulkan capture admission.** Program **M0-D1a PASS**.
+  Adjudicator `scripts/m0-d1a-adjudicate.mjs` hashed the physical
+  RenderDoc `.rdc` / XML / control+capture logs / bound APK, checked
+  `ROI-1 → glass-1 → raster/blit → ROI-2 → glass-2`, bounded 140×80 ROI
+  copies, no full-scene flatten, no `vkMapMemory` / image-to-buffer, one
+  `VkDevice`, stable 100-frame `acc_bytes`, and golden counters vs the
+  control run. Host manifest:
+  `android_gpu_capture=true`, `capture_driver=Vulkan`,
+  `capture_admissible=true`, `d1a_verdict=PASS`
+  (`docs/rfc/m0-d1a-adjudication.json`). Probe logcat stays
+  `capture=false`. GLES 1437-byte file stays `WRONG_API_CAPTURE`.
+  Normative M0 stays `ENTERED`. `D1=Track D GO` is not granted. D1b may
+  start.
+
 - **M0-D1a VkDevice-bound RenderDoc in-app capture.** Feature
   `renderdoc-capture` is probe-only (`neotavern-presentation-m0`);
   `android-jni` does not enable it. Vendored `renderdoc_app.h` (v1.45,

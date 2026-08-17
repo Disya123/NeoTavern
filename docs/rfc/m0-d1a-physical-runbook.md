@@ -1,15 +1,17 @@
 # M0-D1a physical capture runbook
 
-**Status:** lab procedure after `GateP:P1`. Does **not** admit D1a PASS by
-itself. PRE-GATE desktop/AVD artifacts stay unadmitted. D1b stays
-`NOT_STARTED`.
+**Status:** lab procedure after `GateP:P1`. Program **M0-D1a PASS** is the
+host-side record [`m0-d1a-adjudication.json`](m0-d1a-adjudication.json), not
+the probe logcat bit. PRE-GATE desktop/AVD artifacts stay unadmitted. D1b
+may start; it is `NOT_STARTED` in the D1a JSON. `D1=Track D GO` is not
+granted.
 
 | Split                 | Status             | Meaning                                                                                                       |
 | --------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------- |
 | `capture_host`        | **`READY`**        | RenderDoc **v1.45** pinned at `E:\renderdoc`, AGI 3.3.3 archived at `E:\agi`, Java ≥ 11, adb, bound debug APK |
-| `physical_device`     | USB phone required | Emulators are excluded. Xiaomi `8f5c2b7c` is the capture target when attached.                                |
-| D1a program           | **BLOCKED**        | Readable RenderDoc Event Browser / resource graph is still required                                           |
-| `android_gpu_capture` | **false**          | Completeness check does **not** flip this bit                                                                 |
+| `physical_device`     | Xiaomi `8f5c2b7c`  | Emulators remain excluded. Capture used Adreno 710 / Vulkan.                                                  |
+| D1a program           | **PASS**           | Host adjudicator admitted the Vulkan Event Browser tree                                                       |
+| `android_gpu_capture` | **true** (host)    | Probe log stays `capture=false`; only the admission record flips this bit                                     |
 
 **RFC:** [neoui-v4-android-presentation-backend.md](neoui-v4-android-presentation-backend.md) §48  
 **Decision:** [gate-p-decision-draft.md](gate-p-decision-draft.md)  
@@ -28,7 +30,8 @@ clean source bundle (evidence_dirty=false)
 Counters, the host API timeline, and wgpu debug groups **do not** replace
 the capture. Do **not** hunt a newer AGI: **3.3.3 is the last published
 release**. Do **not** strip `VkInstanceCreateInfo::pNext` unless RenderDoc
-also cannot parse the `.rdc`. D1b stays `NOT_STARTED` until D1a PASS.
+also cannot parse the `.rdc`. D1b may start only after D1a PASS (now
+recorded). Do not reuse PRE-GATE APK hashes.
 
 ## Capture labels the frame must show
 
@@ -196,7 +199,9 @@ node scripts/m0-d1a-capture-check.mjs --commands apps/android/m0-d1a-captures/<s
 ```
 
 That check does **not** admit D1a PASS and does **not** set
-`android_gpu_capture`.
+`android_gpu_capture`. Admission is
+`node scripts/m0-d1a-adjudicate.mjs` →
+[`m0-d1a-adjudication.json`](m0-d1a-adjudication.json).
 
 Trace names: `{stamp}-d1a.rdc`, `{stamp}-d1a.xml`,
 `{stamp}-d1a-commands.txt`, `{stamp}-d1a-logcat.txt`,
@@ -204,12 +209,13 @@ Trace names: `{stamp}-d1a.rdc`, `{stamp}-d1a.xml`,
 (`schema: m0-d1a-capture-evidence/v1`). Archived AGI traces keep
 `{stamp}-d1a.gfxtrace`. Directory is gitignored.
 
-Admissible Vulkan capture (still not D1a PASS, `android_gpu_capture=false`):
+Admitted Vulkan capture (`android_gpu_capture=true` in the host record only):
 `apps/android/m0-d1a-captures/2026-08-17T17-18-59-431Z-d1a.rdc`
-(1 487 376 bytes, `<driver>Vulkan</driver>`, both `m0-d1a-roi-read:1/2`,
-`vkCmdCopyImage` 299=`m0-d1a-accumulator` → 303=`m0-d1a-glass-roi`).
-APK SHA-256 `478a4593…` bound to `2d72a3c`. GLES 1437-byte
-`2026-08-17T16-53-54-457Z-d1a.rdc` stays `WRONG_API_CAPTURE / NON-ADMISSIBLE`.
+(1 487 376 bytes, SHA-256 `d45c45db…b11259`, `<driver>Vulkan</driver>`,
+both `m0-d1a-roi-read:1/2`, `vkCmdCopyImage` 299=`m0-d1a-accumulator` →
+303=`m0-d1a-glass-roi` at 140×80). APK SHA-256 `478a4593…` bound to
+`2d72a3c`. GLES 1437-byte `2026-08-17T16-53-54-457Z-d1a.rdc` stays
+`WRONG_API_CAPTURE / NON-ADMISSIBLE`.
 
 ### AGI archive (do not retry as the capture tool)
 
@@ -244,23 +250,21 @@ built from that tree.
 and `sdk_gphone*` are partial evidence only. Preflight will not install to
 them.
 
-## What this lab currently lacks
+## Lab inventory (after admission)
 
-Recorded 2026-08-17 after switching the capture tool to RenderDoc v1.45:
+Recorded 2026-08-17 after host-side adjudication of RenderDoc v1.45:
 
 | Need               | This host                                                                         |
 | ------------------ | --------------------------------------------------------------------------------- |
-| Physical Android   | Xiaomi `8f5c2b7c` (`23122PCD1G`, Adreno 710) when on USB; emulators excluded      |
+| Physical Android   | Xiaomi `8f5c2b7c` (`23122PCD1G`, Adreno 710); emulators excluded                  |
 | RenderDoc          | **pinned** v1.45 at `E:\renderdoc`                                                |
 | AGI                | **archived** 3.3.3 at `E:\agi` — `.gfxtrace` is `CAPTURED_BUT_NOT_REPLAYABLE`     |
 | Full SDK / NDK     | present at `E:\android_sdk` (NDK 27–29)                                           |
 | Gradle 8.9 on PATH | unpacked under `%TEMP%\gradle-8.9\` (repo has no `gradlew`)                       |
-| Readable GPU tree  | **missing until** Event Browser shows both ROI reads and accumulator/ROI identity |
+| Readable GPU tree  | **admitted** — Event Browser shows both ROI reads and accumulator/ROI identity    |
 | Paid device farm   | not used                                                                          |
 
-D1a stays **BLOCKED** until RenderDoc gives a readable pass/resource tree.
-A `.rdc` on disk still does not set `android_gpu_capture=true`. Flip that
-bit only in the **evidence-admission record** after a reviewer confirms the
-two accumulator reads.
+Program D1a is **PASS**. The probe still logs `android_gpu_capture=false`.
+Flip that bit only in the evidence-admission record (already done).
 
-D1b stays `NOT_STARTED` until D1a PASS.
+D1b may start. It is `NOT_STARTED` until the D1b work package lands.

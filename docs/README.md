@@ -50,12 +50,14 @@ Index of the internal documentation. Each major topic has its own folder.
   Current NeoUI v4 items: the presentation-backend proposal (RFC **4.5**,
   Gate P **`GateP:P1` / PASSED**, M0 **`ENTERED`**, not PASS), [BaselineReport
   M-1](rfc/m1-baseline-report.md), the [M0-D1a paint-seam
-  probe](rfc/m0-d1a-probe.md) (**PRE-GATE / BLOCKED**, not a compositor GO),
-  the [M0-D1a physical capture runbook](rfc/m0-d1a-physical-runbook.md)
-  (`capture_host=READY` on RenderDoc v1.45; GLES 1437-byte capture is
-  `WRONG_API_CAPTURE`; D1a **BLOCKED** until a readable Vulkan GPU tree),
-  and the [signed Gate P record](rfc/gate-p-decision-draft.md)
-  (`GateP:P1`, 2026-08-17, incomplete physical M-1 waiver).
+  probe](rfc/m0-d1a-probe.md) (**M0-D1a PASS** host-side; probe
+  `capture=false`; not a compositor GO), the [M0-D1a physical capture
+  runbook](rfc/m0-d1a-physical-runbook.md) (RenderDoc v1.45; admitted Vulkan
+  stamp `2026-08-17T17-18-59-431Z`; GLES 1437-byte file is
+  `WRONG_API_CAPTURE`), the [host adjudication
+  record](rfc/m0-d1a-adjudication.json), and the [signed Gate P
+  record](rfc/gate-p-decision-draft.md) (`GateP:P1`, 2026-08-17, incomplete
+  physical M-1 waiver).
 - [Changelog](../CHANGELOG.md).
 
 ## Commands

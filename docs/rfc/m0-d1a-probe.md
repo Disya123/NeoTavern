@@ -1,17 +1,20 @@
 # M0-D1a paint-seam probe
 
-**Status:** runner artifact remains **PRE-GATE / BLOCKED** (RFC 4.5 §0.3.2 /
-§48). Gate P is **`GateP:P1` / PASSED**. Normative Milestone 0 is
-**`ENTERED`**, not PASS. This file is **not** a Track D compositor GO and
-**not** D1a PASS. Existing desktop/AVD runs are **not admitted**.
+**Status:** program **M0-D1a PASS** via host-side evidence-admission
+([`m0-d1a-adjudication.json`](m0-d1a-adjudication.json)). Gate P remains
+**`GateP:P1` / PASSED**. Normative Milestone 0 remains **`ENTERED`**, not
+PASS. This is **not** `D1=Track D GO`. The crate/logcat bit
+`android_gpu_capture=false` is expected: the probe cannot self-admit.
+PRE-GATE desktop/AVD runs stay unadmitted as D1a evidence.
 
 **RFC:** [neoui-v4-android-presentation-backend.md](neoui-v4-android-presentation-backend.md) §48  
 **Crate:** [`crates/presentation-m0`](../../crates/presentation-m0/README.md)
+**Adjudicator:** `node scripts/m0-d1a-adjudicate.mjs`
 
 Architectural wording in the RFC is not evidence. This file records what the
-working prototype actually ran. After `GateP:P1`, D1a must be **repeated**
-from pinned source on physical Android with GPU capture. D1b stays forbidden
-until that D1a PASS.
+working prototype actually ran. After `GateP:P1`, D1a was **repeated** from
+pinned source on physical Android with a readable Vulkan GPU capture. D1b
+may start; it is **not** started in this admission record.
 
 ## Pins
 
@@ -71,6 +74,47 @@ Text is a **shaped vector stand-in**. Real glyphs from Dioxus/Blitz are M0-D2.
 Vello does not keep an uncleared destination for later sampling. The probe
 treats that as compositor-owned accumulation, not as a required Vello fork.
 
+## Host-side admission (2026-08-17) — M0-D1a PASS
+
+Record: [`m0-d1a-adjudication.json`](m0-d1a-adjudication.json)
+(`schema: m0-d1a-adjudication/v1`). Lab command:
+
+```sh
+node scripts/m0-d1a-adjudicate.mjs
+```
+
+| Host-side field           | Value |
+| ------------------------- | ----- |
+| `android_gpu_capture`     | **true** (host manifest only) |
+| `capture_driver`          | **Vulkan** |
+| `capture_admissible`      | **true** |
+| `d1a_verdict`             | **PASS** |
+| `d1b`                     | `NOT_STARTED` |
+| `environment_blocked`     | false |
+| probe log `capture=`      | **false** (expected; not a FAIL) |
+| crate runner verdict      | **BLOCKED** (probe cannot self-admit) |
+| `D1=Track D GO`           | **NOT_GRANTED** |
+
+Physical capture stamp `2026-08-17T17-18-59-431Z` (feature on) vs control
+`2026-08-17T17-17-50-237Z` (feature off). Bound APK SHA-256
+`478a4593fa4ea58402ba3e17a3a357e2a5d8481146ad20ede34eb2cb2ef99f7c` from
+`2d72a3c`. Capture tooling pin `5df24c8`. Device Xiaomi `8f5c2b7c`
+(`23122PCD1G` / `garnet`, Adreno 710).
+
+| Check | Result |
+| ----- | ------ |
+| SHA-256 of `.rdc`, XML, capture/control logs, bound APK | recorded; APK matches bind |
+| Pass order | `ROI-1 → glass-1 → raster/blit mutations → ROI-2 → glass-2` |
+| ROI identity | resource **299** `m0-d1a-accumulator` → **303** `m0-d1a-glass-roi`; 140×80 at (24,40) and (80,70); both smaller than 320×200 |
+| No full-scene flatten | four blit passes onto the accumulator; no full-target `vkCmdCopyImage` of the accumulator; `vello.flatten` is path tessellation, not a scene flatten |
+| No readback / second device | no `vkMapMemory` / `vkCmdCopyImageToBuffer`; one product `VkDevice` (id `55`) |
+| 100-frame lifetime | golden counters on both runs; `acc_bytes=774144` unchanged; `capture_ended=true`; no validation hits |
+| Capture vs control counters/timeline | identical `devices=1 readbacks=0 xdev=0 roi_copies=200 raster=400 glass=200 frames=100` and golden timeline; first-frame CPU µs is **not** required to match |
+
+The 1437-byte GLES file `2026-08-17T16-53-54-457Z-d1a.rdc` stays
+`WRONG_API_CAPTURE / NON-ADMISSIBLE`. Desktop/AVD PRE-GATE logs stay
+unadmitted.
+
 ## Headless run (2026-08-17)
 
 ```text
@@ -108,15 +152,14 @@ Two different questions. Do not collapse them.
 | Upstream Vello/wgpu API enough for this static seam? | **provisional** (non-admissible) | Shared device, sampleable RT, ROI glass, no readback on desktop Vulkan and emulator GLES. Not a D1a PASS.                      |
 | Limited supported fork needed?                       | **not indicated**                | Compositor accumulator is host code, not a Vello patch. Emulator gfxstream Vulkan is skipped, not patched.                     |
 | Replace paint substrate?                             | **not indicated** on these hosts | No readback / cross-device / dual-device failure on desktop Vulkan or emulator GLES.                                           |
-| RFC §48 D1a **exit**                                 | **not met**                      | Repeat from pinned source: physical Android + GPU capture (pass/resource order, two accumulator reads). Runner BLOCKED ≠ FAIL. |
+| RFC §48 D1a **exit**                                 | **met** (host-side)              | Physical Vulkan capture + eight adjudication checks in [`m0-d1a-adjudication.json`](m0-d1a-adjudication.json). Probe log `capture=false` does not override that record. |
 
-Do **not** record this as milestone `PASS`, `PATCH`, or `REPLACE`. Headless
-and AVD success is partial evidence; RFC 4.5 says it MAY later be admitted
-to M0 only by a written evidence-admission record. The `GateP:P1` signature
-does **not** admit these runs.
+Do **not** record this as milestone M0 `PASS`, `PATCH`, or `REPLACE`, or as
+`D1=Track D GO`. Headless and AVD success remains partial evidence. The
+`GateP:P1` signature does **not** by itself admit those earlier runs.
 
-M0-D1b and M0-D2 are **not started**. RFC 4.5 forbids D1b until admitted
-D1a PASS.
+M0-D1b may start. It is `NOT_STARTED` in the D1a admission record. RFC 4.5
+forbids treating D1a PASS as M0 PASS.
 
 ## Android NDK compile (2026-08-17)
 
@@ -181,7 +224,7 @@ This is **not** a production-phone Vulkan run and **not** a D1a PASS.
 | Goldfish/GFXStream Vulkan (SwiftShader **and** host NVIDIA) | SIGSEGV in `vulkan.ranchu.so` `ResourceTracker::on_vkQueueSubmit` on the first Vello `render_to_texture` submit. Probe now **skips** those Vulkan adapters. |
 | `-gpu swiftshader_indirect` GLES 3.0                        | No compute; Vello cannot run. Use `-gpu host` (GLES 3.1) for this AVD.                                                                                      |
 
-## Still required before this artifact can be admitted to M0-D1a
+## Admission criteria (now recorded)
 
 RFC 4.5: after `GateP:P1/P2`, an evidence-admission record plus:
 
@@ -193,13 +236,16 @@ RFC 4.5: after `GateP:P1/P2`, an evidence-admission record plus:
 - Same counters: 0 CPU readback, 0 cross-device copy, 1 device/queue
 - Blitz is still M0-D2; D1a pins Vello 0.9.0 + wgpu 29.0.4
 
-Until a **new** physical D1a PASS, **stop D1b**. Repeat D1a from pinned source:
+Those are recorded as **PASS** in
+[`m0-d1a-adjudication.json`](m0-d1a-adjudication.json). Repeat D1a only if
+the bound APK, capture tool, or compositor cut changes.
 
 ```text
 clean source bundle (evidence_dirty=false; unrelated paths listed or absent)
 → new APK built from that bundle (apk_linkage=BOUND via --bind-apk)
 → physical Android production GPU
 → GPU capture (two accumulator reads at barriers)
+→ host-side adjudicator (`android_gpu_capture=true` only there)
 → D1a verdict
 ```
 
@@ -296,8 +342,10 @@ updated to `GateP:P1` / M0 `ENTERED`. Clean evidence tree
 | Physical USB             | **`BLOCKED_EXTERNAL`**                                             |
 | D1a verdict              | **`ENVIRONMENT_BLOCKED`** (physical Android + GPU capture missing) |
 
-This APK is the pinned binary for the next physical capture. It is **not**
-admitted. AVD must not replace the phone. D1b stays `NOT_STARTED`.
+This APK (`05d063dd…`) was the then-pinned binary for the next physical
+capture and was **not** admitted that night. AVD must not replace the
+phone. A later bound APK `478a4593…` (`2d72a3c`) is the admitted capture
+binary; see Host-side admission above.
 
 Host-only preflight (no phone):
 
@@ -336,10 +384,11 @@ layer packages. Production path and RenderGraph are unchanged. The
 1437-byte GLES file `2026-08-17T16-53-54-457Z-d1a.rdc` is
 `WRONG_API_CAPTURE / NON-ADMISSIBLE` (NULL device matched HWUI).
 
-D1a stays **BLOCKED** (`android_gpu_capture=false`) until the owner admits
-the capture. A Vulkan `.rdc` with both ROI groups exists
-(`2026-08-17T17-18-59-431Z-d1a.rdc`); that does not auto-flip the flag.
-D1b stays `NOT_STARTED`.
+D1a is **PASS** on the host-side record. The probe still prints
+`android_gpu_capture=false`; do not treat that runtime bit as the program
+verdict. A Vulkan `.rdc` with both ROI groups
+(`2026-08-17T17-18-59-431Z-d1a.rdc`) was admitted after the eight checks
+above. D1b may start; it is `NOT_STARTED` in that JSON.
 
 Emulator smoke of **this** APK (GLES translator, not a phone) produced the
 golden API timeline and stayed `capture=false` / `BLOCKED`:

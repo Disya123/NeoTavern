@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 /**
- * Capture-host helpers for post-GateP:P1 M0-D1a. Not D1a PASS. Not D1b.
+ * Capture-host helpers for post-GateP:P1 M0-D1a. The probe log never
+ * self-admits (`android_gpu_capture=false`). Host-side admission is
+ * `scripts/m0-d1a-adjudicate.mjs` / `docs/rfc/m0-d1a-adjudication.json`.
  */
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';

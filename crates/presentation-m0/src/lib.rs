@@ -1,15 +1,15 @@
 //! NeoUI v4 M0-D1a paint-seam probe (RFC 4.5).
 //!
 //! This crate is a **non-production** runner. Gate P is `GateP:P1`. Normative
-//! Milestone 0 is `ENTERED`, not PASS. Existing desktop/AVD runs stay
-//! PRE-GATE / BLOCKED until a physical Android GPU capture admits D1a.
-//! This is not NeoCompositor v1, not a Dioxus migration, and not a Track D GO.
+//! Milestone 0 is `ENTERED`, not PASS. Program D1a PASS lives in the host-side
+//! admission record; this crate still reports `android_gpu_capture=false`.
+//! Desktop/AVD PRE-GATE runs stay unadmitted. This is not NeoCompositor v1,
+//! not a Dioxus migration, and not a Track D GO.
 //!
 //! The probe shows a host-authored static display list compiled into ordered
 //! raster/glass passes on **one** `wgpu` device/queue. A first-frame **API
 //! timeline** and wgpu debug groups name accumulator/snapshot resources; that
-//! is not an AGI/RenderDoc GPU capture. Android GPU capture on a physical
-//! device remains required before D1a PASS.
+//! is not an AGI/RenderDoc GPU capture and MUST NOT flip `android_gpu_capture`.
 
 #[cfg(all(feature = "android-jni", target_os = "android"))]
 mod android_jni;

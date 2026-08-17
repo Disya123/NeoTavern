@@ -71,6 +71,20 @@ clean source bundle
 Only **`D1a PASS`** allows D1b. Counters and an API timeline do **not**
 replace GPU capture.
 
+## Follow-on (not part of the signed Gate P body)
+
+The signed record above is unchanged. After that signature, host-side
+adjudication of the physical Vulkan capture
+[`m0-d1a-adjudication.json`](m0-d1a-adjudication.json) set:
+
+| Object | Status after D1a admission |
+| --- | --- |
+| Gate P | still **`GateP:P1` / PASSED** |
+| Normative M0 | still **`ENTERED`**, not PASS |
+| M0-D1a | **PASS** (host-side; probe log `capture=false`) |
+| M0-D1b | may start; `NOT_STARTED` in the D1a JSON |
+| `D1=Track D GO` | still **`NOT_GRANTED`** |
+
 ## Classified input evidence (unchanged by this signature)
 
 | Track | Evidence status | What may be cited | Must not be cited as |
@@ -83,3 +97,4 @@ replace GPU capture.
 | C | `NOT MEASURED` | — | native-toolkit GO |
 | D / D1a AVD evening APK | **`BLOCKED / NON-ADMISSIBLE`** | older `.so`, no `timeline=` | D1a PASS |
 | D / D1a desktop Vulkan | `PRE-GATE / BLOCKED` | API timeline; 0 readback / 0 xdev | AGI/RenderDoc; Android production backend |
+| D / D1a physical Vulkan (Adreno 710) | **PASS** (host-side 2026-08-17) | RenderDoc `.rdc` + XML; eight checks | M0 PASS; `D1=Track D GO`; probe `capture=true` |

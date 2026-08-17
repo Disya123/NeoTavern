@@ -144,8 +144,10 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   launcher). Morning AVD GLES 3.1 is **PRE-GATE / BLOCKED**. Evening AVD
   D1a on the installed APK is **BLOCKED / NON-ADMISSIBLE** (`.so` ≠ current
   source). Capture host is **READY** (RenderDoc v1.45 at `E:\renderdoc`;
-  AGI 3.3.3 archived `CAPTURED_BUT_NOT_REPLAYABLE`). D1a stays **BLOCKED**
-  until a readable Vulkan pass/resource tree. The 1437-byte GLES capture is
+  AGI 3.3.3 archived `CAPTURED_BUT_NOT_REPLAYABLE`). Program **M0-D1a is
+  PASS** on the host-side record
+  [`m0-d1a-adjudication.json`](../rfc/m0-d1a-adjudication.json); the probe
+  still logs `capture=false`. The 1437-byte GLES capture is
   `WRONG_API_CAPTURE / NON-ADMISSIBLE`. See [M0-D1a probe](../rfc/m0-d1a-probe.md)
   and the [physical capture runbook](../rfc/m0-d1a-physical-runbook.md).
 
@@ -258,6 +260,7 @@ See also: [ADR-0034](../adr/0034-android-local-host-jni-transport.md),
 [BaselineReport M-1](../rfc/m1-baseline-report.md),
 [M0-D1a paint-seam probe](../rfc/m0-d1a-probe.md),
 [M0-D1a physical capture runbook](../rfc/m0-d1a-physical-runbook.md),
+[M0-D1a host adjudication](../rfc/m0-d1a-adjudication.json),
 [Gate P decision record (signed GateP:P1)](../rfc/gate-p-decision-draft.md),
 [ADR-0036](../adr/0036-android-background-execution.md),
 [generation durability](../architecture/generation-durability.md),

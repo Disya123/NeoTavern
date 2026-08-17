@@ -1,0 +1,241 @@
+{
+  "schema": "m0-d1a-adjudication/v1",
+  "status": "PASS",
+  "d1a_verdict": "PASS",
+  "d1a_program": "PASS",
+  "android_gpu_capture": true,
+  "capture_driver": "Vulkan",
+  "capture_admissible": true,
+  "d1b": "NOT_STARTED",
+  "environment_blocked": false,
+  "stamp": "2026-08-17T17-18-59-431Z",
+  "control_stamp": "2026-08-17T17-17-50-237Z",
+  "apk_source_commit": "2d72a3cd5ab6684824f411be62173250e9d23398",
+  "capture_tooling_commit": "5df24c8fa97ca2edce3d5627445c2b3e419d683c",
+  "checks": [
+    {
+      "id": "hashes",
+      "ok": true,
+      "hashes": {
+        "rdc": {
+          "path": "apps/android/m0-d1a-captures/2026-08-17T17-18-59-431Z-d1a.rdc",
+          "present": true,
+          "sha256": "d45c45db86c574829527f8d094a7217e112a97184bc8f99ab6c7835474b11259",
+          "bytes": 1487376
+        },
+        "xml": {
+          "path": "apps/android/m0-d1a-captures/2026-08-17T17-18-59-431Z-d1a.xml",
+          "present": true,
+          "sha256": "112456a5170b82f407fda4ee4342e49c4c34cdbbb4ce9250582a44059a834991",
+          "bytes": 2542317
+        },
+        "capture_log": {
+          "path": "apps/android/m0-d1a-captures/2026-08-17T17-18-59-431Z-d1a-logcat.txt",
+          "present": true,
+          "sha256": "aa74ee0006d2760a3d7064f581e4b04b45645572529adb39bd562bf837ab4ae8",
+          "bytes": 24846
+        },
+        "control_log": {
+          "path": "apps/android/m0-d1a-captures/2026-08-17T17-17-50-237Z-d1a-logcat.txt",
+          "present": true,
+          "sha256": "f9de54e5c68177ff9d93fcdb76dbcc01cc5ca1be0d94b4c8138f0657ffab0e69",
+          "bytes": 1223
+        },
+        "apk": {
+          "path": "apps/android/app/build/outputs/apk/debug/app-debug.apk",
+          "present": true,
+          "sha256": "478a4593fa4ea58402ba3e17a3a357e2a5d8481146ad20ede34eb2cb2ef99f7c",
+          "bytes": 52760373
+        }
+      },
+      "expected_apk_sha256": "478a4593fa4ea58402ba3e17a3a357e2a5d8481146ad20ede34eb2cb2ef99f7c",
+      "reason": "SHA-256 recorded for .rdc, XML, both logs, and bound APK"
+    },
+    {
+      "id": "driver",
+      "ok": true,
+      "api": {
+        "ok": true,
+        "api": "Vulkan",
+        "status": "VULKAN",
+        "admissible": true,
+        "driver": "Vulkan",
+        "vulkan_commands": true,
+        "reason": "RenderDoc dump contains Vulkan commands"
+      },
+      "reason": "RenderDoc dump contains Vulkan commands"
+    },
+    {
+      "id": "pass_order",
+      "ok": true,
+      "indices": {
+        "roi1": 3,
+        "glass1": 4,
+        "roi2": 10,
+        "glass2": 11
+      },
+      "blit_mutations_between_glasses": 4,
+      "reason": "ROI-1 → glass-1 → raster/blit mutations → ROI-2 → glass-2"
+    },
+    {
+      "id": "roi_identity",
+      "ok": true,
+      "accumulator_id": "299",
+      "snapshot_id": "303",
+      "copies": [
+        {
+          "src": "299",
+          "dst": "303",
+          "x": 24,
+          "y": 40,
+          "w": 140,
+          "h": 80
+        },
+        {
+          "src": "299",
+          "dst": "303",
+          "x": 80,
+          "y": 70,
+          "w": 140,
+          "h": 80
+        }
+      ],
+      "matches": [
+        {
+          "want": {
+            "x": 24,
+            "y": 40,
+            "w": 140,
+            "h": 80
+          },
+          "got": {
+            "src": "299",
+            "dst": "303",
+            "x": 24,
+            "y": 40,
+            "w": 140,
+            "h": 80
+          },
+          "ok": true
+        },
+        {
+          "want": {
+            "x": 80,
+            "y": 70,
+            "w": 140,
+            "h": 80
+          },
+          "got": {
+            "src": "299",
+            "dst": "303",
+            "x": 80,
+            "y": 70,
+            "w": 140,
+            "h": 80
+          },
+          "ok": true
+        }
+      ],
+      "reason": "both ROIs copy named accumulator → glass-roi at 140×80, smaller than 320×200"
+    },
+    {
+      "id": "no_flatten",
+      "ok": true,
+      "blit_passes": 8,
+      "vello_labels": 0,
+      "full_accumulator_copies": 0,
+      "reason": "four blit passes; no full-target flatten copy of the accumulator"
+    },
+    {
+      "id": "no_readback",
+      "ok": true,
+      "forbidden": [],
+      "reason": "no vkMapMemory / image-to-buffer in the Event Browser"
+    },
+    {
+      "id": "lifetime_and_counters",
+      "ok": true,
+      "capture_counters": {
+        "ok": true,
+        "values": {
+          "devices": 1,
+          "readbacks": 0,
+          "xdev": 0,
+          "roi_copies": 200,
+          "raster": 400,
+          "glass": 200,
+          "frames": 100,
+          "timeline": "clear,raster,blit,roi:1,glass:1,raster,blit,raster,blit,roi:2,glass:2,raster,blit"
+        },
+        "line": "08-17 23:19:24.020 19873 26926 I NeoTavern: m0-d1a gpu_ran=true adapter=Adreno_(TM)_710 backend=Vulkan software=false devices=1 readbacks=0 xdev=0 roi_copies=200 raster=400 glass=200 frames=100 ran_on_android=true capture=false timeline=clear,raster,blit,roi:1,glass:1,raster,blit,raster,blit,roi:2,glass:2,raster,blit timeline_events=13 first_frame_cpu_us=1808026 acc_bytes=774144 verdict=BLOCKED reason=Android_GPU_ran;_GPU_capture_with_pass/resource_order_is_still_required_for_D1a_PASS",
+        "reason": "golden D1a counters/timeline"
+      },
+      "control_counters": {
+        "ok": true,
+        "values": {
+          "devices": 1,
+          "readbacks": 0,
+          "xdev": 0,
+          "roi_copies": 200,
+          "raster": 400,
+          "glass": 200,
+          "frames": 100,
+          "timeline": "clear,raster,blit,roi:1,glass:1,raster,blit,raster,blit,roi:2,glass:2,raster,blit"
+        },
+        "line": "08-17 23:18:03.609 16293 22340 I NeoTavern: m0-d1a gpu_ran=true adapter=Adreno_(TM)_710 backend=Vulkan software=false devices=1 readbacks=0 xdev=0 roi_copies=200 raster=400 glass=200 frames=100 ran_on_android=true capture=false timeline=clear,raster,blit,roi:1,glass:1,raster,blit,raster,blit,roi:2,glass:2,raster,blit timeline_events=13 first_frame_cpu_us=497590 acc_bytes=774144 verdict=BLOCKED reason=Android_GPU_ran;_GPU_capture_with_pass/resource_order_is_still_required_for_D1a_PASS",
+        "reason": "golden D1a counters/timeline"
+      },
+      "vk_device_ids": [
+        "55"
+      ],
+      "vk_create_image": 8,
+      "vk_queue_submit": 11,
+      "validation_errors": false,
+      "fences_completed": true,
+      "acc_bytes": {
+        "capture": 774144,
+        "control": 774144
+      },
+      "high_water_stable": true,
+      "reason": "100-frame counters golden on both runs; acc_bytes high-water unchanged; capture ended after poll; no validation hits"
+    }
+  ],
+  "failed": [],
+  "labels": [
+    "m0-d1a-clear-acc",
+    "m0-d1a-blit-pass",
+    "m0-d1a-blit-pass",
+    "m0-d1a-roi-read:1",
+    "m0-d1a-glass:1",
+    "m0-d1a-glass-pass",
+    "m0-d1a-blit-pass",
+    "m0-d1a-blit-pass",
+    "m0-d1a-blit-pass",
+    "m0-d1a-blit-pass",
+    "m0-d1a-roi-read:2",
+    "m0-d1a-glass:2",
+    "m0-d1a-glass-pass",
+    "m0-d1a-blit-pass",
+    "m0-d1a-blit-pass"
+  ],
+  "named_resources": {
+    "299": "m0-d1a-accumulator",
+    "301": "m0-d1a-vello",
+    "303": "m0-d1a-glass-roi",
+    "304": "m0-d1a-sampler",
+    "305": "m0-d1a-blit-bgl",
+    "306": "m0-d1a-glass-bgl",
+    "307": "m0-d1a-blit-layout",
+    "308": "m0-d1a-glass-layout",
+    "312": "m0-d1a-blit",
+    "315": "m0-d1a-glass",
+    "316": "m0-d1a-glass-params",
+    "632": "m0-d1a-blit-bg",
+    "677": "m0-d1a-glass-bg",
+    "839": "m0-d1a-blit-bg",
+    "986": "m0-d1a-blit-bg",
+    "997": "m0-d1a-glass-bg",
+    "1126": "m0-d1a-blit-bg"
+  },
+  "note": "host-side admission; probe log capture=false is expected; D1=Track D GO is not granted"
+}

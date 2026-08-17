@@ -298,7 +298,7 @@ D запрещено выбирать только потому, что он т�
 | A/A0 | `MEASURED` emulator-only morning fixture; physical `BLOCKED`; evening AVD A/A0 **`INVALID_FOR_COMPARISON`** |
 | B | `MEASURED` emulator-only morning fixture; physical `BLOCKED`; evening AVD B **`INVALID_FOR_COMPARISON`** |
 | C | `NOT MEASURED` |
-| D | M0-D1a **разрешён** после `GateP:P1`; PRE-GATE D1a **не повышен** (desktop `BLOCKED`; evening AVD **`BLOCKED / NON-ADMISSIBLE`**) |
+| D | M0-D1a **PASS** (host-side RenderDoc Vulkan); PRE-GATE desktop/AVD **не admitted**; M0-D1b **может начинаться** |
 
 Перед Gate P публикуется `BaselineReport M-1` с измеренными A/A0/B и только
 оценочными C/D. Он достаточен для выбора важности live glass, но **не** для D1.
@@ -3927,8 +3927,8 @@ Snapshot фиксирует факты, но не повышает program verdi
 | runner D1a desktop Vulkan | `PRE-GATE / BLOCKED` | API timeline; нет Android production backend / GPU capture; **not admitted** |
 | evening AVD D1a (installed APK) | `BLOCKED / NON-ADMISSIBLE` | `.so` ≠ current source bundle; **not admitted** |
 | signed Gate P record | `docs/rfc/gate-p-decision-draft.md` | `GateP:P1`; owner `Disya123 <gamedisya@gmail.com>` |
-| `M0-D1a` (normative) | `NOT_STARTED` | must repeat from pinned source + physical GPU capture |
-| `M0-D1b` | `NOT_STARTED` | D1a не PASS |
+| `M0-D1a` (normative) | **`PASS`** | host-side admission [`m0-d1a-adjudication.json`](m0-d1a-adjudication.json); probe log `capture=false` expected |
+| `M0-D1b` | `NOT_STARTED` | D1a PASS; work package may start |
 | `M0-D2` | `NOT_STARTED` | D1a/b не PASS |
 | `D1=Track D GO` | `NOT_GRANTED` | M0 PASS и TrackComparison отсутствуют |
 
@@ -3981,10 +3981,12 @@ Emulator-specific policy:
   распространяться на physical Vulkan adapters; на телефоне Vulkan
   остаётся preferred backend.
 
-Чтобы довести этот artifact до admissible D1a evidence после
-`GateP:P1/P2`, нужны: immutable source bundle, GPU capture с двумя
+Чтобы довести PRE-GATE desktop/AVD artifacts до admissible D1a evidence
+после `GateP:P1/P2`, нужны были: immutable source bundle, GPU capture с двумя
 accumulator reads в barrier positions и воспроизводимый прогон на физическом
-Android reference. До этого D1b не начинается.
+Android reference. Это зафиксировано 2026-08-17 как **M0-D1a PASS**
+([`m0-d1a-adjudication.json`](m0-d1a-adjudication.json)). D1b может
+начинаться; M0 и `D1=Track D GO` не выдаются.
 
 ### Scoped outcomes
 
@@ -3993,6 +3995,7 @@ Android reference. До этого D1b не начинается.
 | `GateP=UNDECIDED`, есть pre-gate run | сохранить artifacts, остановить scope; M0 `NOT_ENTERED`, D1b не начинать |
 | `GateP:P1` + incomplete physical M-1 (owner waiver) | M0 `ENTERED`; PRE-GATE D1a **не** admitted; повторить D1a с physical capture |
 | `GateP:P1` + `capture_host=READY` (AGI 3.3.3 / `E:\agi`), no USB phone | M0 `ENTERED`; D1a `ENVIRONMENT_BLOCKED`; `physical_device=BLOCKED_EXTERNAL`; D1b не начинать |
+| `GateP:P1` + physical Vulkan capture admitted | M0 `ENTERED`; **M0-D1a PASS** (host-side); probe `capture=false`; D1b может начинаться; `D1=Track D GO` нет |
 | M0-D1a FAIL | остановить D1b; Track D compositor — NO-GO |
 | M0-D1a PASS, M0-D1b FAIL | static barrier доказан, dynamic live glass — NO-GO; вернуться к A/B/C либо пересмотреть Gate P |
 | M0-D1a/b PASS, M0-D2 FAIL | D1 остаётся кандидатом; Dioxus/Blitz — NO-GO, проверить другой producer/substrate |
