@@ -27,9 +27,8 @@ export const SNAPSHOT_LABEL = 'm0-d1a-glass-roi';
 export const EVIDENCE_SCHEMA = 'm0-d1a-capture-evidence/v1';
 export const AGI_PIN_REL = 'tools/agi.pin.json';
 export const PRESET_REL = 'tools/agi-frame-capture.preset.json';
-/** Bound debug APK provenance. Do not rebind this APK to a later HEAD. */
-export const PINNED_APK_SOURCE_COMMIT = '4bbc3eb93d4a84e14977c3fea0dcf6bb379f1cf5';
-export const PINNED_APK_SHA256 = '4dfc8b41e48f7c3ba7b996e240a8c39ac16c569e7f92c9b61605ccf3c2f8ef30';
+/** Capture-host scripts identity. APK provenance is the latest BOUND bundle. */
+export const PINNED_CAPTURE_TOOLING_COMMIT = '5df24c8fa97ca2edce3d5627445c2b3e419d683c';
 export const READY_POINTER = 'capture-host-ready.json';
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -64,40 +63,48 @@ export function gitRevParse(root = ROOT) {
   return (result.stdout || '').trim() || null;
 }
 
+export function toolingCommitIsAncestor(root = ROOT) {
+  const result = spawnSync(
+    'git',
+    ['merge-base', '--is-ancestor', PINNED_CAPTURE_TOOLING_COMMIT, 'HEAD'],
+    { cwd: root, encoding: 'utf8' },
+  );
+  return result.status === 0;
+}
+
 export function classifyProvenance({ bundle, apkSha256, toolingCommit }) {
+  const tooling = toolingCommit ?? PINNED_CAPTURE_TOOLING_COMMIT;
   if (!bundle?.apk_sha256 || bundle.apk_linkage !== 'BOUND') {
     return { ok: false, reason: 'no BOUND source bundle for APK provenance' };
   }
-  if (bundle.base_commit !== PINNED_APK_SOURCE_COMMIT) {
+  if (bundle.evidence_dirty) {
+    return { ok: false, reason: 'bound bundle evidence_dirty=true; do not cite' };
+  }
+  if (!apkSha256 || bundle.apk_sha256 !== apkSha256) {
     return {
       ok: false,
-      reason: `apk_source_commit ${bundle.base_commit} != pinned ${PINNED_APK_SOURCE_COMMIT}; do not rebind APK`,
+      reason: 'APK SHA-256 does not match the BOUND source bundle',
     };
   }
-  if (bundle.apk_sha256 !== PINNED_APK_SHA256 || apkSha256 !== PINNED_APK_SHA256) {
-    return {
-      ok: false,
-      reason: 'APK SHA-256 is not the pinned bound APK; do not rebind',
-    };
+  if (!bundle.base_commit) {
+    return { ok: false, reason: 'bound bundle missing apk_source_commit (base_commit)' };
   }
-  if (!toolingCommit) {
-    return { ok: false, reason: 'capture_tooling_commit missing (git HEAD)' };
-  }
-  if (toolingCommit === PINNED_APK_SOURCE_COMMIT) {
+  if (bundle.base_commit === tooling) {
     return {
       ok: false,
       reason:
-        'capture_tooling_commit equals apk_source_commit; commit the capture host before READY',
+        'apk_source_commit equals capture_tooling_commit; APK must be bound from a later source commit',
     };
   }
   return {
     ok: true,
-    apk_source_commit: PINNED_APK_SOURCE_COMMIT,
-    apk_sha256: PINNED_APK_SHA256,
-    capture_tooling_commit: toolingCommit,
+    apk_source_commit: bundle.base_commit,
+    apk_sha256: bundle.apk_sha256,
+    capture_tooling_commit: tooling,
     bound_bundle: bundle.bundle_path ?? null,
-    reason:
-      'APK provenance is the bound source bundle; capture tooling is a later commit; APK was not rebound',
+    evidence_dirty: false,
+    apk_linkage: 'BOUND',
+    reason: 'APK provenance is the BOUND source bundle; capture tooling stays pinned at 5df24c8',
   };
 }
 
@@ -314,7 +321,8 @@ export function inspectApkFromText(badging, xmltree, apkPath, sha256, bytes) {
     parsed.debuggable &&
     activities.has_m0d1a &&
     activities.exported_m0d1a &&
-    parsed.abis.length > 0;
+    parsed.abis.length > 0 &&
+    vulkanFeature;
   return {
     ok,
     path: apkPath,
@@ -332,7 +340,7 @@ export function inspectApkFromText(badging, xmltree, apkPath, sha256, bytes) {
       'wgpu prefers Vulkan on physical Android; GLES is fallback; AGI preset uses -api vulkan',
     reason: ok
       ? 'debug APK inspect ok'
-      : 'APK inspect failed package/debuggable/exported activity/abi',
+      : 'APK inspect failed package/debuggable/exported activity/abi/vulkan',
   };
 }
 
@@ -435,12 +443,14 @@ export function buildGapitCommandsCommand({ gapit, gfxtrace, out }) {
 export function buildEvidenceManifest(input) {
   return {
     schema: EVIDENCE_SCHEMA,
-    note: 'not a D1a PASS; not D1b; APK was not rebound to capture_tooling_commit',
+    note: 'not a D1a PASS; not D1b; capture_tooling_commit stays 5df24c8; APK provenance is the BOUND bundle',
     physical_device: input.physical_device,
     capture_host: input.capture_host,
-    apk_source_commit: input.apk_source_commit ?? PINNED_APK_SOURCE_COMMIT,
-    apk_sha256: input.apk_sha256 ?? PINNED_APK_SHA256,
-    capture_tooling_commit: input.capture_tooling_commit ?? null,
+    apk_source_commit: input.apk_source_commit ?? null,
+    apk_sha256: input.apk_sha256 ?? null,
+    capture_tooling_commit: input.capture_tooling_commit ?? PINNED_CAPTURE_TOOLING_COMMIT,
+    apk_linkage: input.apk_linkage ?? 'BOUND',
+    evidence_dirty: input.evidence_dirty ?? false,
     agi: input.agi,
     apk: input.apk,
     required_debug_groups: REQUIRED_DEBUG_GROUPS,
@@ -475,7 +485,7 @@ export function evaluateHost(opts = {}) {
     (bundle?.apk_path && existsSync(bundle.apk_path) ? bundle.apk_path : DEFAULT_APK);
   const apk = opts.apkInspect ?? inspectApk(apkPath, aapt);
   const bind = bundle ? bindApkMatches(bundle, apkPath) : { ok: false, reason: 'no BOUND bundle' };
-  const toolingCommit = opts.toolingCommit ?? gitRevParse();
+  const toolingCommit = opts.toolingCommit ?? PINNED_CAPTURE_TOOLING_COMMIT;
   const provenance = classifyProvenance({
     bundle,
     apkSha256: apk.sha256 ?? bind.sha256,
@@ -488,6 +498,11 @@ export function evaluateHost(opts = {}) {
   if (!traces.ok) blockers.push('trace directory not writable');
   if (!apk.ok) blockers.push(apk.reason);
   if (!bind.ok) blockers.push(bind.reason);
+  if (!opts.skipToolingAncestor && !toolingCommitIsAncestor()) {
+    blockers.push(
+      `capture_tooling_commit ${PINNED_CAPTURE_TOOLING_COMMIT} is not an ancestor of HEAD`,
+    );
+  }
   if (!provenance.ok) blockers.push(provenance.reason);
   const capture_host = blockers.length === 0 ? 'READY' : 'NOT_READY_INTERNAL';
   return {

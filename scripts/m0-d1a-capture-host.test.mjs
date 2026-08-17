@@ -4,8 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  PINNED_APK_SHA256,
-  PINNED_APK_SOURCE_COMMIT,
+  PINNED_CAPTURE_TOOLING_COMMIT,
   REQUIRED_DEBUG_GROUPS,
   abiCompatible,
   bindApkMatches,
@@ -36,8 +35,8 @@ const incompleteDump = readFileSync(
 );
 
 describe('m0-d1a capture host', () => {
-  it('treats debug-manifest Vulkan uses-feature as optional for host READY', () => {
-    expect(typeof debugManifestVulkanDeclared()).toBe('boolean');
+  it('declares optional Vulkan uses-feature in the debug probe manifest', () => {
+    expect(debugManifestVulkanDeclared()).toBe(true);
   });
 
   it('pins AGI 3.3.3 at E:\\agi', () => {
@@ -86,6 +85,22 @@ describe('m0-d1a capture host', () => {
     expect(abiCompatible('arm64-v8a', ['arm64-v8a', 'x86_64'])).toBe(true);
     expect(abiCompatible('x86_64', ['arm64-v8a', 'x86_64'])).toBe(true);
     expect(abiCompatible('armeabi-v7a', ['arm64-v8a'])).toBe(false);
+  });
+
+  it('rejects a debug APK without Vulkan uses-feature', () => {
+    const inspect = inspectApkFromText(
+      [
+        "package: name='com.neotavern.mobile'",
+        'application-debuggable',
+        "native-code: 'arm64-v8a'",
+      ].join('\n'),
+      'A: android:name="com.neotavern.mobile.M0D1aActivity"\nA: android:exported(0x01010010)=(type 0x12)0xffffffff',
+      'app-debug.apk',
+      'abc',
+      1,
+    );
+    expect(inspect.vulkan_feature).toBe(false);
+    expect(inspect.ok).toBe(false);
   });
 
   it('inspects aapt badging for debuggable D1a activity', () => {
@@ -243,39 +258,45 @@ describe('m0-d1a capture host', () => {
     expect(incomplete.status).toBe(4);
   });
 
-  it('pins APK provenance at 4bbc3eb and refuses to rebind', () => {
-    expect(PINNED_APK_SOURCE_COMMIT.startsWith('4bbc3eb')).toBe(true);
-    expect(PINNED_APK_SHA256).toBe(
-      '4dfc8b41e48f7c3ba7b996e240a8c39ac16c569e7f92c9b61605ccf3c2f8ef30',
-    );
+  it('takes APK provenance from the BOUND bundle and pins capture tooling at 5df24c8', () => {
+    expect(PINNED_CAPTURE_TOOLING_COMMIT.startsWith('5df24c8')).toBe(true);
+    const apkSha = '4dfc8b41e48f7c3ba7b996e240a8c39ac16c569e7f92c9b61605ccf3c2f8ef30';
     const bound = {
       apk_linkage: 'BOUND',
-      apk_sha256: PINNED_APK_SHA256,
-      base_commit: PINNED_APK_SOURCE_COMMIT,
+      apk_sha256: apkSha,
+      base_commit: '4bbc3eb93d4a84e14977c3fea0dcf6bb379f1cf5',
+      evidence_dirty: false,
       bundle_path: 'bundle.json',
     };
     expect(
       classifyProvenance({
         bundle: bound,
-        apkSha256: PINNED_APK_SHA256,
-        toolingCommit: PINNED_APK_SOURCE_COMMIT,
+        apkSha256: apkSha,
+        toolingCommit: bound.base_commit,
       }).ok,
     ).toBe(false);
     expect(
       classifyProvenance({
-        bundle: { ...bound, base_commit: '0'.repeat(40) },
-        apkSha256: PINNED_APK_SHA256,
-        toolingCommit: 'a'.repeat(40),
+        bundle: { ...bound, evidence_dirty: true },
+        apkSha256: apkSha,
+        toolingCommit: PINNED_CAPTURE_TOOLING_COMMIT,
+      }).ok,
+    ).toBe(false);
+    expect(
+      classifyProvenance({
+        bundle: bound,
+        apkSha256: '00'.repeat(32),
+        toolingCommit: PINNED_CAPTURE_TOOLING_COMMIT,
       }).ok,
     ).toBe(false);
     const ok = classifyProvenance({
       bundle: bound,
-      apkSha256: PINNED_APK_SHA256,
-      toolingCommit: 'a'.repeat(40),
+      apkSha256: apkSha,
+      toolingCommit: PINNED_CAPTURE_TOOLING_COMMIT,
     });
     expect(ok.ok).toBe(true);
-    expect(ok.apk_source_commit).toBe(PINNED_APK_SOURCE_COMMIT);
-    expect(ok.capture_tooling_commit).toBe('a'.repeat(40));
+    expect(ok.apk_source_commit).toBe(bound.base_commit);
+    expect(ok.capture_tooling_commit).toBe(PINNED_CAPTURE_TOOLING_COMMIT);
     expect(ok.capture_tooling_commit).not.toBe(ok.apk_source_commit);
     const manifest = buildEvidenceManifest({
       physical_device: 'BLOCKED_EXTERNAL',
@@ -284,7 +305,7 @@ describe('m0-d1a capture host', () => {
       apk_sha256: ok.apk_sha256,
       capture_tooling_commit: ok.capture_tooling_commit,
     });
-    expect(manifest.apk_source_commit).toBe(PINNED_APK_SOURCE_COMMIT);
-    expect(manifest.capture_tooling_commit).not.toBe(PINNED_APK_SOURCE_COMMIT);
+    expect(manifest.capture_tooling_commit).toBe(PINNED_CAPTURE_TOOLING_COMMIT);
+    expect(manifest.apk_source_commit).not.toBe(PINNED_CAPTURE_TOOLING_COMMIT);
   });
 });

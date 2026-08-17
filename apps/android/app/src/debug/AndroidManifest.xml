@@ -1,5 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Debug/probe variant only. Production `main`/`release` must not declare
+         this. Optional: physical D1a prefers wgpu Vulkan. required=false so
+         GLES fallback devices still install; AGI capture uses -api vulkan. -->
+    <uses-feature
+        android:name="android.hardware.vulkan.level"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.vulkan.version"
+        android:required="false"
+        android:version="0x00401000" />
+
     <application>
         <!-- Debug-only; not a launcher. Production MainActivity is unchanged. -->
         <activity

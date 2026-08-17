@@ -70,21 +70,21 @@ emulators. It does not install anything. It writes a gitignored evidence
 manifest under `apps/android/m0-d1a-captures/`
 (`{stamp}-d1a-evidence.json` and `capture-host-ready.json`).
 
-### Provenance split (do not rebind the APK)
+### Provenance split
 
-The bound debug APK stays tied to the source bundle from
-`4bbc3eb`. This capture-host commit is **tooling only**.
+`capture_tooling_commit` stays
+`5df24c8fa97ca2edce3d5627445c2b3e419d683c` (AGI pin, preflight, completeness
+check). APK provenance is the latest BOUND source bundle
+(`apk_linkage=BOUND`, `evidence_dirty=false`). The debug Vulkan
+`uses-feature` commit is `apk_source_commit` after a clean rebuild and
+`--bind-apk`. Do not bind the APK to the tooling-only commit.
 
 | Field                    | Value                                                                |
 | ------------------------ | -------------------------------------------------------------------- |
-| `apk_source_commit`      | `4bbc3eb93d4a84e14977c3fea0dcf6bb379f1cf5`                           |
-| `apk_sha256`             | `4dfc8b41e48f7c3ba7b996e240a8c39ac16c569e7f92c9b61605ccf3c2f8ef30`   |
-| `capture_tooling_commit` | `git rev-parse HEAD` of the committed capture-host scripts           |
-| Bound source bundle      | APK provenance (`apk_linkage=BOUND`). Do **not** `--bind-apk` again. |
-
-`--bind-apk` against this HEAD is forbidden for that APK: a new bind would
-erase the split. Rebuild + bind only when producing a **new** APK from a
-clean evidence tree.
+| `capture_tooling_commit` | `5df24c8fa97ca2edce3d5627445c2b3e419d683c`                           |
+| `apk_source_commit`      | BOUND bundle `base_commit` (Vulkan debug rebuild, not `5df24c8`)     |
+| `apk_sha256`             | BOUND bundle / APK file (must match)                                 |
+| Bound source bundle      | APK provenance. Rebuild + `--bind-apk` only for a **new** debug APK. |
 
 When a physical phone is on USB:
 
@@ -104,10 +104,12 @@ command.
 
 Debug APK `apps/android/app/build/outputs/apk/debug/app-debug.apk`:
 `application-debuggable`, package `com.neotavern.mobile`, exported
-`M0D1aActivity`, native ABIs `arm64-v8a` `x86_64`. Optional debug
-`uses-feature` for Vulkan may appear in a later APK rebuild. The bound APK
-at `4bbc3eb` does not need that declaration for AGI `-api vulkan`. wgpu
-prefers Vulkan on physical Android (GLES fallback).
+`M0D1aActivity`, native ABIs `arm64-v8a` `x86_64`. Optional
+`android.hardware.vulkan.level` / `version` (`required=false`) is declared
+**only** in `apps/android/app/src/debug/AndroidManifest.xml`. Merged debug
+manifest includes those features and `M0D1aActivity`; merged release
+manifest includes neither. Capture uses AGI `-api vulkan`. wgpu prefers
+Vulkan on physical Android (GLES fallback).
 
 ### AGI GUI
 
