@@ -3992,6 +3992,7 @@ Android reference. До этого D1b не начинается.
 |---|---|
 | `GateP=UNDECIDED`, есть pre-gate run | сохранить artifacts, остановить scope; M0 `NOT_ENTERED`, D1b не начинать |
 | `GateP:P1` + incomplete physical M-1 (owner waiver) | M0 `ENTERED`; PRE-GATE D1a **не** admitted; повторить D1a с physical capture |
+| `GateP:P1` + `capture_host=READY` (AGI 3.3.3 / `E:\agi`), no USB phone | M0 `ENTERED`; D1a `ENVIRONMENT_BLOCKED`; `physical_device=BLOCKED_EXTERNAL`; D1b не начинать |
 | M0-D1a FAIL | остановить D1b; Track D compositor — NO-GO |
 | M0-D1a PASS, M0-D1b FAIL | static barrier доказан, dynamic live glass — NO-GO; вернуться к A/B/C либо пересмотреть Gate P |
 | M0-D1a/b PASS, M0-D2 FAIL | D1 остаётся кандидатом; Dioxus/Blitz — NO-GO, проверить другой producer/substrate |

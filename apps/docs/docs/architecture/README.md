@@ -55,6 +55,8 @@ Index of the internal documentation. Each major topic has its own folder.
   Gate P **`GateP:P1` / PASSED**, M0 **`ENTERED`**, not PASS), [BaselineReport
   M-1](rfc/m1-baseline-report.md), the [M0-D1a paint-seam
   probe](rfc/m0-d1a-probe.md) (**PRE-GATE / BLOCKED**, not a compositor GO),
+  the [M0-D1a physical capture runbook](rfc/m0-d1a-physical-runbook.md)
+  (`capture_host=READY`, `physical_device=BLOCKED_EXTERNAL`),
   and the [signed Gate P record](rfc/gate-p-decision-draft.md)
   (`GateP:P1`, 2026-08-17, incomplete physical M-1 waiver).
 - [Changelog](https://github.com/Disya123/NeoTavern/blob/main/CHANGELOG.md).

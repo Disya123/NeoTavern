@@ -1,0 +1,15 @@
+{
+  "tool": "AGI",
+  "version": "3.3.3",
+  "api": "vulkan",
+  "capture_frames": 1,
+  "start_at_frame": 0,
+  "observe_frames": 0,
+  "package": "com.neotavern.mobile",
+  "activity": "com.neotavern.mobile.M0D1aActivity",
+  "uri": "android:com.neotavern.mobile/com.neotavern.mobile.M0D1aActivity",
+  "additionalargs": "-e com.neotavern.mobile.M0_D1A_FRAMES 100",
+  "search_debug_groups": ["m0-d1a-roi-read:1", "m0-d1a-roi-read:2"],
+  "commands_flags": ["-groupbyusermarkers", "-groupbyframe"],
+  "search_resources": ["m0-d1a-accumulator", "m0-d1a-glass-roi"]
+}

@@ -1,0 +1,7 @@
+VkDebugUtilsLabelEXT { Info: "m0-d1a-clear-acc" }
+vkCmdBeginDebugUtilsLabelEXT { Info: "m0-d1a-roi-read:1" }
+vkCmdEndDebugUtilsLabelEXT
+vkCmdBeginDebugUtilsLabelEXT { Info: "m0-d1a-roi-read:2" }
+vkCmdEndDebugUtilsLabelEXT
+vkCmdBeginRenderPass { framebuffer: "m0-d1a-accumulator" }
+vkCmdCopyImage { dst: "m0-d1a-glass-roi" }

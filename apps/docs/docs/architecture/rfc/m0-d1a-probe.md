@@ -286,18 +286,37 @@ Pinned commit `0167be5` (capture debug groups) + helper program fields
 updated to `GateP:P1` / M0 `ENTERED`. Clean evidence tree
 (`evidence_dirty=false`, root TZ excluded). Debug APK **BOUND**:
 
-| Field           | Value                                                              |
-| --------------- | ------------------------------------------------------------------ |
-| APK bytes       | 52 747 061                                                         |
-| APK SHA-256     | `4dfc8b41e48f7c3ba7b996e240a8c39ac16c569e7f92c9b61605ccf3c2f8ef30` |
-| `apk_linkage`   | `BOUND` (`--bind-apk`)                                             |
-| helper          | `helper_matches_head=true`                                         |
-| `adb devices`   | `emulator-5554` only                                               |
-| AGI / RenderDoc | not installed                                                      |
-| D1a verdict     | **`ENVIRONMENT_BLOCKED`** (physical Android + GPU capture missing) |
+| Field                    | Value                                                              |
+| ------------------------ | ------------------------------------------------------------------ |
+| APK bytes                | 52 747 061                                                         |
+| APK SHA-256              | `4dfc8b41e48f7c3ba7b996e240a8c39ac16c569e7f92c9b61605ccf3c2f8ef30` |
+| `apk_linkage`            | `BOUND` (`--bind-apk` at `4bbc3eb`; **not rebound**)               |
+| `apk_source_commit`      | `4bbc3eb93d4a84e14977c3fea0dcf6bb379f1cf5`                         |
+| `capture_tooling_commit` | later capture-host commit (see `capture-host-ready.json`)          |
+| helper                   | `helper_matches_head=true`                                         |
+| `adb devices`            | `emulator-5554` only                                               |
+| AGI                      | **3.3.3 pinned at `E:\agi`** (`capture_host=READY`)                |
+| Physical USB             | **`BLOCKED_EXTERNAL`**                                             |
+| D1a verdict              | **`ENVIRONMENT_BLOCKED`** (physical Android + GPU capture missing) |
 
 This APK is the pinned binary for the next physical capture. It is **not**
 admitted. AVD must not replace the phone. D1b stays `NOT_STARTED`.
+
+Host-only preflight (no phone):
+
+```sh
+node scripts/m0-d1a-capture-preflight.mjs --host-only
+```
+
+Search AGI commands (after a real trace) for debug groups
+`m0-d1a-roi-read:1` and `m0-d1a-roi-read:2`. Completeness check:
+
+```sh
+node scripts/m0-d1a-capture-check.mjs --commands <stamp>-d1a-commands.txt
+```
+
+That check does not flip `android_gpu_capture` and is not D1a PASS.
+Runbook: [m0-d1a-physical-runbook.md](m0-d1a-physical-runbook.md).
 
 Emulator smoke of **this** APK (GLES translator, not a phone) produced the
 golden API timeline and stayed `capture=false` / `BLOCKED`:
@@ -313,8 +332,6 @@ Gitignored bundle:
 `apps/android/m0-d1a-captures/2026-08-17T15-02-55-334Z-source-bundle.json`
 (regenerate after the helper program-status commit). AVD log:
 `apps/android/m0-d1a-captures/2026-08-17-post-p1-avd-d1a.log`.
-
-## Non-goals (unchanged)
 
 ## Non-goals (unchanged)
 

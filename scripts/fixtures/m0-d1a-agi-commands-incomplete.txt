@@ -1,0 +1,2 @@
+VkDebugUtilsLabelEXT { Info: "m0-d1a-clear-acc" }
+vkCmdBeginRenderPass { framebuffer: "m0-d1a-accumulator" }

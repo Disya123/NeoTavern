@@ -5,9 +5,13 @@
  *   node scripts/m0-d1a-lab-inventory.mjs
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const AGI_PIN = JSON.parse(readFileSync(join(ROOT, 'tools', 'agi.pin.json'), 'utf8'));
 
 function run(bin, args) {
   const result = spawnSync(bin, args, { encoding: 'utf8' });
@@ -51,6 +55,8 @@ const adb = adbBin();
 const devices = run(adb, ['devices', '-l']);
 const classified = classifyAdb(devices.stdout);
 const captureTools = [
+  join(AGI_PIN.install_path, 'agi.exe'),
+  join(AGI_PIN.install_path, 'gapit.exe'),
   'C:\\Program Files\\RenderDoc\\qrenderdoc.exe',
   'C:\\Program Files\\RenderDoc\\renderdoccmd.exe',
   join(homedir(), 'AppData\\Local\\Google\\AndroidGPUInspector\\agi.exe'),
@@ -65,15 +71,19 @@ const record = {
   adb_out: devices.stdout,
   ...classified,
   capture_tools: captureTools,
+  agi_pin: {
+    version: AGI_PIN.version,
+    build_sha: AGI_PIN.build_sha,
+    install_path: AGI_PIN.install_path,
+    present: existsSync(join(AGI_PIN.install_path, 'gapit.exe')),
+  },
   gradle_available: gradle.status === 0,
   cargo_ndk: cargoNdk.stdout || cargoNdk.stderr,
   android_home: process.env.ANDROID_HOME || null,
   unblock:
     classified.physical_count === 0
-      ? 'attach a physical Android over USB (not emulator-5554)'
-      : captureTools.length === 0
-        ? 'install free AGI or RenderDoc and capture one D1a frame'
-        : 'rebuild APK from pinned source, --bind-apk, capture two accumulator reads',
+      ? 'attach a physical Android over USB (not emulator-5554); capture_host is separate (node scripts/m0-d1a-capture-preflight.mjs --host-only)'
+      : 'run node scripts/m0-d1a-capture-preflight.mjs then the printed gapit trace command',
 };
 
 process.stdout.write(`${JSON.stringify(record, null, 2)}\n`);

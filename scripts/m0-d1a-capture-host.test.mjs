@@ -1,0 +1,290 @@
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
+import {
+  PINNED_APK_SHA256,
+  PINNED_APK_SOURCE_COMMIT,
+  REQUIRED_DEBUG_GROUPS,
+  abiCompatible,
+  bindApkMatches,
+  buildEvidenceManifest,
+  buildGapitTraceCommand,
+  captureFilenames,
+  classifyCaptureDump,
+  classifyHardwareGpu,
+  classifyProvenance,
+  debugManifestVulkanDeclared,
+  deviceGate,
+  inspectApkFromText,
+  isEmulator,
+  parseAdbDevices,
+  parseJavaVersion,
+  verifyAgiPin,
+} from './m0-d1a-capture-host.mjs';
+
+const ROOT = join(import.meta.dirname, '..');
+
+const completeDump = readFileSync(
+  new URL('./fixtures/m0-d1a-agi-commands-complete.txt', import.meta.url),
+  'utf8',
+);
+const incompleteDump = readFileSync(
+  new URL('./fixtures/m0-d1a-agi-commands-incomplete.txt', import.meta.url),
+  'utf8',
+);
+
+describe('m0-d1a capture host', () => {
+  it('treats debug-manifest Vulkan uses-feature as optional for host READY', () => {
+    expect(typeof debugManifestVulkanDeclared()).toBe('boolean');
+  });
+
+  it('pins AGI 3.3.3 at E:\\agi', () => {
+    const pin = JSON.parse(readFileSync(new URL('../tools/agi.pin.json', import.meta.url), 'utf8'));
+    expect(pin.version).toBe('3.3.3');
+    expect(pin.install_path.replaceAll('/', '\\')).toBe('E:\\agi');
+    expect(pin.build_sha).toBe('5f97b4fd99a9459320b782203ce2de5351a1e661');
+  });
+
+  it('verifies installed AGI hashes', () => {
+    const result = verifyAgiPin();
+    expect(result.ready).toBe(true);
+    expect(result.gapit).toMatch(/gapit\.exe$/u);
+  });
+
+  it('parses Java 11+', () => {
+    expect(parseJavaVersion('openjdk version "11.0.7" 2020-04-14').major).toBe(11);
+    expect(parseJavaVersion('openjdk version "21.0.8" 2025-07-15').major).toBe(21);
+    expect(parseJavaVersion('java version "1.8.0_202"').major).toBe(8);
+  });
+
+  it('excludes emulator serials and qemu props', () => {
+    const devices = parseAdbDevices(
+      [
+        'List of devices attached',
+        'emulator-5554          device product:sdk_gphone64_x86_64 model:sdk_gphone64_x86_64 device:emu64xa transport_id:1',
+        'R58M30ABCDE           device usb:1-1 product:r8sxxx model:SM_S911B device:r8s',
+      ].join('\n'),
+    );
+    expect(devices[0].emulator).toBe(true);
+    expect(devices[1].emulator).toBe(false);
+    expect(isEmulator('emulator-5554', {})).toBe(true);
+    expect(isEmulator('R58M30ABCDE', { 'ro.kernel.qemu': '1' })).toBe(true);
+    expect(isEmulator('R58M30ABCDE', { 'ro.hardware': 'qcom' })).toBe(false);
+  });
+
+  it('rejects SwiftShader / qemu GPU', () => {
+    expect(classifyHardwareGpu({ 'ro.hardware.egl': 'swiftshader' }).ok).toBe(false);
+    expect(classifyHardwareGpu({ 'ro.kernel.qemu': '1' }).ok).toBe(false);
+    expect(
+      classifyHardwareGpu({ 'ro.hardware.egl': 'adreno', 'ro.hardware.vulkan': 'adreno' }).ok,
+    ).toBe(true);
+  });
+
+  it('checks ABI compatibility', () => {
+    expect(abiCompatible('arm64-v8a', ['arm64-v8a', 'x86_64'])).toBe(true);
+    expect(abiCompatible('x86_64', ['arm64-v8a', 'x86_64'])).toBe(true);
+    expect(abiCompatible('armeabi-v7a', ['arm64-v8a'])).toBe(false);
+  });
+
+  it('inspects aapt badging for debuggable D1a activity', () => {
+    const inspect = inspectApkFromText(
+      [
+        "package: name='com.neotavern.mobile' versionCode='1'",
+        'application-debuggable',
+        "sdkVersion:'26'",
+        "native-code: 'arm64-v8a' 'x86_64'",
+        "uses-feature: name='android.hardware.vulkan.level'",
+      ].join('\n'),
+      'E: activity (line=12)\n  A: android:name(0x01010003)="com.neotavern.mobile.M0D1aActivity"\n  A: android:exported(0x01010010)=(type 0x12)0xffffffff',
+      'app-debug.apk',
+      'abc',
+      1,
+    );
+    expect(inspect.ok).toBe(true);
+    expect(inspect.debuggable).toBe(true);
+    expect(inspect.vulkan_feature).toBe(true);
+    expect(inspect.abis).toEqual(['arm64-v8a', 'x86_64']);
+  });
+
+  it('rejects SHA mismatch against BOUND bundle', () => {
+    expect(
+      bindApkMatches({ apk_linkage: 'BOUND', apk_sha256: 'aa'.repeat(32) }, 'no-such.apk').ok,
+    ).toBe(false);
+  });
+
+  it('names traces as {stamp}-d1a.gfxtrace', () => {
+    const files = captureFilenames('2026-08-17T18-00-00-000Z');
+    expect(files.gfxtrace).toBe('2026-08-17T18-00-00-000Z-d1a.gfxtrace');
+    expect(files.commands).toBe('2026-08-17T18-00-00-000Z-d1a-commands.txt');
+    expect(files.evidence).toBe('2026-08-17T18-00-00-000Z-d1a-evidence.json');
+  });
+
+  it('builds the gapit Vulkan frame-capture command', () => {
+    const cmd = buildGapitTraceCommand({
+      gapit: 'E:\\agi\\gapit.exe',
+      serial: 'R58M30ABCDE',
+      out: 'apps/android/m0-d1a-captures/stamp-d1a.gfxtrace',
+      preset: {
+        api: 'vulkan',
+        capture_frames: 1,
+        uri: 'android:com.neotavern.mobile/com.neotavern.mobile.M0D1aActivity',
+        additionalargs: '-e com.neotavern.mobile.M0_D1A_FRAMES 100',
+      },
+    });
+    expect(cmd).toContain('-api');
+    expect(cmd).toContain('vulkan');
+    expect(cmd).toContain('-capture-frames');
+    expect(cmd).toContain('1');
+    expect(cmd[0]).toBe('E:\\agi\\gapit.exe');
+  });
+
+  it('accepts a complete AGI commands dump', () => {
+    const result = classifyCaptureDump(completeDump);
+    expect(result.ok).toBe(true);
+    expect(result.found_groups).toEqual(REQUIRED_DEBUG_GROUPS);
+  });
+
+  it('rejects an incomplete AGI commands dump', () => {
+    const result = classifyCaptureDump(incompleteDump);
+    expect(result.ok).toBe(false);
+    expect(result.missing).toContain('m0-d1a-roi-read:1');
+    expect(result.missing).toContain('m0-d1a-roi-read:2');
+  });
+
+  it('fails pin verify when a binary is missing', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'agi-pin-'));
+    writeFileSync(join(dir, 'agi.exe'), 'x');
+    const result = verifyAgiPin({
+      version: '0',
+      build_sha: 'deadbeef',
+      install_path: dir,
+      binaries: { 'agi.exe': '00'.repeat(32), 'gapit.exe': '11'.repeat(32) },
+    });
+    expect(result.ready).toBe(false);
+    expect(result.missing).toContain('gapit.exe');
+  });
+
+  it('rejects Android < 11, ABI mismatch, and qemu GPU at the device gate', () => {
+    expect(
+      deviceGate({ props: { 'ro.build.version.sdk': '29', 'ro.product.cpu.abi': 'arm64-v8a' } }, [
+        'arm64-v8a',
+      ]).ok,
+    ).toBe(false);
+    expect(
+      deviceGate({ props: { 'ro.build.version.sdk': '33', 'ro.product.cpu.abi': 'armeabi-v7a' } }, [
+        'arm64-v8a',
+      ]).ok,
+    ).toBe(false);
+    expect(
+      deviceGate(
+        {
+          props: {
+            'ro.build.version.sdk': '33',
+            'ro.product.cpu.abi': 'arm64-v8a',
+            'ro.hardware.egl': 'swiftshader',
+          },
+        },
+        ['arm64-v8a'],
+      ).ok,
+    ).toBe(false);
+    expect(
+      deviceGate(
+        {
+          props: {
+            'ro.build.version.sdk': '33',
+            'ro.product.cpu.abi': 'arm64-v8a',
+            'ro.hardware.egl': 'adreno',
+            'ro.hardware.vulkan': 'adreno',
+          },
+        },
+        ['arm64-v8a'],
+      ).ok,
+    ).toBe(true);
+  });
+
+  it('rejects an APK inspect when M0D1a is not exported', () => {
+    const inspect = inspectApkFromText(
+      [
+        "package: name='com.neotavern.mobile'",
+        'application-debuggable',
+        "native-code: 'arm64-v8a'",
+      ].join('\n'),
+      'A: android:name="com.neotavern.mobile.M0D1aActivity"',
+      'app-debug.apk',
+      'abc',
+      1,
+    );
+    expect(inspect.ok).toBe(false);
+    expect(inspect.activity_exported).toBe(false);
+  });
+
+  it('runs capture-check on fixture dumps', () => {
+    const complete = spawnSync(
+      process.execPath,
+      [
+        join(ROOT, 'scripts', 'm0-d1a-capture-check.mjs'),
+        '--commands',
+        join(ROOT, 'scripts', 'fixtures', 'm0-d1a-agi-commands-complete.txt'),
+      ],
+      { encoding: 'utf8' },
+    );
+    const incomplete = spawnSync(
+      process.execPath,
+      [
+        join(ROOT, 'scripts', 'm0-d1a-capture-check.mjs'),
+        '--commands',
+        join(ROOT, 'scripts', 'fixtures', 'm0-d1a-agi-commands-incomplete.txt'),
+      ],
+      { encoding: 'utf8' },
+    );
+    expect(complete.status).toBe(0);
+    expect(incomplete.status).toBe(4);
+  });
+
+  it('pins APK provenance at 4bbc3eb and refuses to rebind', () => {
+    expect(PINNED_APK_SOURCE_COMMIT.startsWith('4bbc3eb')).toBe(true);
+    expect(PINNED_APK_SHA256).toBe(
+      '4dfc8b41e48f7c3ba7b996e240a8c39ac16c569e7f92c9b61605ccf3c2f8ef30',
+    );
+    const bound = {
+      apk_linkage: 'BOUND',
+      apk_sha256: PINNED_APK_SHA256,
+      base_commit: PINNED_APK_SOURCE_COMMIT,
+      bundle_path: 'bundle.json',
+    };
+    expect(
+      classifyProvenance({
+        bundle: bound,
+        apkSha256: PINNED_APK_SHA256,
+        toolingCommit: PINNED_APK_SOURCE_COMMIT,
+      }).ok,
+    ).toBe(false);
+    expect(
+      classifyProvenance({
+        bundle: { ...bound, base_commit: '0'.repeat(40) },
+        apkSha256: PINNED_APK_SHA256,
+        toolingCommit: 'a'.repeat(40),
+      }).ok,
+    ).toBe(false);
+    const ok = classifyProvenance({
+      bundle: bound,
+      apkSha256: PINNED_APK_SHA256,
+      toolingCommit: 'a'.repeat(40),
+    });
+    expect(ok.ok).toBe(true);
+    expect(ok.apk_source_commit).toBe(PINNED_APK_SOURCE_COMMIT);
+    expect(ok.capture_tooling_commit).toBe('a'.repeat(40));
+    expect(ok.capture_tooling_commit).not.toBe(ok.apk_source_commit);
+    const manifest = buildEvidenceManifest({
+      physical_device: 'BLOCKED_EXTERNAL',
+      capture_host: 'READY',
+      apk_source_commit: ok.apk_source_commit,
+      apk_sha256: ok.apk_sha256,
+      capture_tooling_commit: ok.capture_tooling_commit,
+    });
+    expect(manifest.apk_source_commit).toBe(PINNED_APK_SOURCE_COMMIT);
+    expect(manifest.capture_tooling_commit).not.toBe(PINNED_APK_SOURCE_COMMIT);
+  });
+});

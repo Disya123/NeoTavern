@@ -3,6 +3,18 @@
 ## Unreleased
 ### Added
 
+- **M0-D1a capture host (AGI 3.3.3 at `E:\agi`).** Pin
+  `tools/agi.pin.json`, frame-capture preset
+  `tools/agi-frame-capture.preset.json`, one-command preflight
+  `node scripts/m0-d1a-capture-preflight.mjs --host-only`, completeness
+  check `node scripts/m0-d1a-capture-check.mjs`. `capture_host` is
+  **READY** only after this tooling is committed (`capture_tooling_commit`
+  ≠ `apk_source_commit`). The bound APK stays at `4bbc3eb` /
+  `4dfc8b41…ef30` and is **not** rebound. `physical_device` stays
+  **BLOCKED_EXTERNAL** until a phone is on USB. This does not admit D1a
+  PASS, does not flip `android_gpu_capture`, and does not start D1b.
+  Runbook: `docs/rfc/m0-d1a-physical-runbook.md`.
+
 - **M0-D1a API timeline + source-bundle helper (still PRE-GATE / BLOCKED).**
   The probe now records a first-frame wgpu API timeline
   (`clear,raster,blit,roi:1,glass:1,…`) and compositor-owned texture bytes.
