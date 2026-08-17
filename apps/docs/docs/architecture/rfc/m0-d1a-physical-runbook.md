@@ -82,9 +82,9 @@ check). APK provenance is the latest BOUND source bundle
 | Field                    | Value                                                                |
 | ------------------------ | -------------------------------------------------------------------- |
 | `capture_tooling_commit` | `5df24c8fa97ca2edce3d5627445c2b3e419d683c`                           |
-| `apk_source_commit`      | BOUND bundle `base_commit` (Vulkan debug rebuild, not `5df24c8`)     |
-| `apk_sha256`             | BOUND bundle / APK file (must match)                                 |
-| Bound source bundle      | APK provenance. Rebuild + `--bind-apk` only for a **new** debug APK. |
+| `apk_source_commit`      | `58898226a896af14eaea94feec25d935727008fa`                           |
+| `apk_sha256`             | `05d063dd5ac9ff916538e1eaf8d933a66a666cd6ea533c366d4c6a15a6ded834`   |
+| Bound source bundle      | `2026-08-17T15-49-48-279Z-source-bundle.json` (`BOUND`, clean)       |
 
 When a physical phone is on USB:
 

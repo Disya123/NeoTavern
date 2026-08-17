@@ -289,9 +289,9 @@ updated to `GateP:P1` / M0 `ENTERED`. Clean evidence tree
 | Field                    | Value                                                              |
 | ------------------------ | ------------------------------------------------------------------ |
 | APK bytes                | 52 747 061                                                         |
-| APK SHA-256              | `4dfc8b41e48f7c3ba7b996e240a8c39ac16c569e7f92c9b61605ccf3c2f8ef30` |
-| `apk_linkage`            | rebound after the debug Vulkan commit (`apk_linkage=BOUND`)        |
-| `apk_source_commit`      | debug Vulkan rebuild HEAD (not `5df24c8`)                          |
+| APK SHA-256              | `05d063dd5ac9ff916538e1eaf8d933a66a666cd6ea533c366d4c6a15a6ded834` |
+| `apk_linkage`            | `BOUND` (`--bind-apk`, `evidence_dirty=false`)                     |
+| `apk_source_commit`      | `58898226a896af14eaea94feec25d935727008fa`                         |
 | `capture_tooling_commit` | `5df24c8fa97ca2edce3d5627445c2b3e419d683c`                         |
 | helper                   | `helper_matches_head=true`                                         |
 | `adb devices`            | `emulator-5554` only                                               |
