@@ -2,7 +2,7 @@
 name = "neotavern-chat-viewport"
 version = "0.1.0"
 edition = "2021"
-description = "Chat viewport virtualization: height index, range predictor, bounded tile cache (not compositor, not Android cutover)"
+description = "Chat viewport virtualization and fling-continuous geometry remap (not compositor, not Android cutover)"
 license = "AGPL-3.0"
 publish = false
 

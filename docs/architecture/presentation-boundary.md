@@ -67,7 +67,10 @@ dioxus-android-flagged     — experimental; not the launcher
 CPU scroll/animation fast paths, async hit-test / nested-scroll dispatch,
 and a PERF-18 effect-scope backdrop host golden (**IMPLEMENTED /
 GPU_PENDING**, not PASS). Chat virtualization lives in
-`crates/chat-viewport` (height index, predictor, bounded tile cache;
-compositor sees only tile descriptors and a geometry snapshot). Neither
-crate is linked into production JNI. Recovery and GPU telemetry are not
-started. Product cutover is not declared.
+`crates/chat-viewport` (height index, predictor, bounded tile cache,
+geometry epochs / C0/C1 remap; compositor sees only the **active** tile
+descriptors and geometry snapshot). PERF-20 is **IMPLEMENTED** on the
+host corpus, not PASS (compositor integration and an Android high-velocity
+trace still required). Neither crate is linked into production JNI.
+Recovery and GPU telemetry are not started. Product cutover is not
+declared.

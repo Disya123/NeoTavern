@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use crate::height::{GeometryEpoch, HeightIndex, LogicalItemId};
 use crate::range::ItemSpan;
+use crate::remap::SceneGeneration;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub struct TileId(pub u64);
@@ -130,6 +131,76 @@ impl TileCache {
             .find_map(|entry| (entry.tile.first == id).then_some(entry.tile))
     }
 
+    pub fn remap_from_index(&mut self, index: &HeightIndex) {
+        let epoch = index.geometry_epoch();
+        for entry in self.entries.values_mut() {
+            if let Some(layout) = index.index_of(entry.tile.first) {
+                entry.tile.origin = index.origin_at(layout).unwrap_or(entry.tile.origin);
+                entry.tile.height = index
+                    .height_at(layout)
+                    .map(|item| item.1)
+                    .unwrap_or(entry.tile.height);
+                entry.tile.epoch = epoch;
+            } else {
+                entry.tile.epoch = epoch;
+            }
+        }
+    }
+
+    pub fn set_all_epochs(&mut self, epoch: GeometryEpoch) {
+        for entry in self.entries.values_mut() {
+            entry.tile.epoch = epoch;
+        }
+    }
+
+    /// Fallback → full (or any fidelity) replacement without mixing epochs.
+    pub fn replace_span_atomic(
+        &mut self,
+        index: &HeightIndex,
+        span: ItemSpan,
+        fidelity: TileFidelity,
+    ) {
+        let epoch = index.geometry_epoch();
+        for i in span.start..span.end {
+            let Some((id, height, _)) = index.height_at(i) else {
+                continue;
+            };
+            let origin = index.origin_at(i).unwrap_or(0.0);
+            if let Some(existing) = self.covering(id) {
+                if let Some(entry) = self.entries.get_mut(&existing.id) {
+                    entry.tile.origin = origin;
+                    entry.tile.height = height;
+                    entry.tile.fidelity = fidelity;
+                    entry.tile.bytes = bytes_for(fidelity);
+                    entry.tile.epoch = epoch;
+                    continue;
+                }
+            }
+            let bytes = bytes_for(fidelity);
+            let tile = TileDescriptor {
+                id: TileId(self.next_id),
+                first: id,
+                last: id,
+                origin,
+                height,
+                bytes,
+                fidelity,
+                epoch,
+            };
+            self.next_id = self.next_id.saturating_add(1);
+            self.order.push(tile.id);
+            self.entries.insert(
+                tile.id,
+                Entry {
+                    pinned: false,
+                    tile,
+                },
+            );
+            self.record();
+        }
+        self.set_all_epochs(epoch);
+    }
+
     pub fn pin_span(&mut self, index: &HeightIndex, span: ItemSpan) {
         for i in span.start..span.end {
             if let Some((id, _, _)) = index.height_at(i) {
@@ -185,10 +256,7 @@ impl TileCache {
             }
             self.remove(existing.id);
         }
-        let bytes = match fidelity {
-            TileFidelity::Fallback => 128,
-            TileFidelity::Full => BYTES_PER_TILE,
-        };
+        let bytes = bytes_for(fidelity);
         let tile = TileDescriptor {
             id: TileId(self.next_id),
             first: id,
@@ -269,6 +337,14 @@ impl TileCache {
 }
 
 const BYTES_PER_TILE: usize = 4096;
+const FALLBACK_BYTES: usize = 128;
+
+fn bytes_for(fidelity: TileFidelity) -> usize {
+    match fidelity {
+        TileFidelity::Fallback => FALLBACK_BYTES,
+        TileFidelity::Full => BYTES_PER_TILE,
+    }
+}
 
 /// Ready tiles + geometry for the compositor. No chat/model fields.
 #[derive(Clone, Debug, PartialEq)]
@@ -276,16 +352,41 @@ pub struct GeometrySnapshot {
     pub epoch: GeometryEpoch,
     pub extent: f64,
     pub offset: f64,
+    pub origin_base: f64,
     pub tiles: Arc<[TileDescriptor]>,
+    pub generation: SceneGeneration,
 }
 
 impl GeometrySnapshot {
-    pub fn from_cache(cache: &TileCache, index: &HeightIndex, offset: f64) -> Self {
+    pub fn empty() -> Self {
+        Self {
+            epoch: GeometryEpoch(0),
+            extent: 0.0,
+            offset: 0.0,
+            origin_base: 0.0,
+            tiles: Arc::from([]),
+            generation: SceneGeneration::default(),
+        }
+    }
+
+    pub fn from_cache(
+        cache: &TileCache,
+        index: &HeightIndex,
+        offset: f64,
+        origin_base: f64,
+        generation: SceneGeneration,
+    ) -> Self {
         Self {
             epoch: index.geometry_epoch(),
             extent: index.extent(),
             offset,
+            origin_base,
             tiles: cache.descriptors().into(),
+            generation,
         }
+    }
+
+    pub fn uniform_epoch(&self) -> bool {
+        self.tiles.iter().all(|tile| tile.epoch == self.epoch)
     }
 }

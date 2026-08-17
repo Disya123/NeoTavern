@@ -209,26 +209,26 @@ fn preparation_queue_high_water_stays_at_cap() {
 }
 
 #[test]
-fn estimated_to_exact_plus_350_is_pending_geometry_debt() {
-    let mut index = index_n(64);
-    let id = lid(10);
-    let (estimated, kind) = index.height(id).unwrap();
+fn estimated_to_exact_plus_350_defers_inside_protected_fling() {
+    let mut vp = session(index_n(256), 64, 1024 * 1024);
+    vp.set_velocity(FLING);
+    let _ = vp.present();
+    vp.advance(DT_NS);
+    let _ = vp.present();
+    let hit = vp.index().item_at_offset(vp.offset()).unwrap();
+    let (estimated, kind) = vp.index().height(hit.id).unwrap();
     assert_eq!(kind, HeightKind::Estimated);
-    let epoch = index.geometry_epoch();
-    let correction = index.commit_exact(id, estimated + 350.0).unwrap();
-    match correction {
-        GeometryCorrection::PendingDebt(debt) => {
-            assert_eq!(debt.item, id);
-            assert!((debt.delta - 350.0).abs() < 1e-9);
-            assert_eq!(debt.from_epoch, epoch);
-            assert_ne!(debt.to_epoch, epoch);
-        }
-        other => panic!("expected pending debt, got {other:?}"),
-    }
-    assert_eq!(index.height(id).unwrap().0, estimated);
-    assert_eq!(index.height(id).unwrap().1, HeightKind::Estimated);
-    assert_ne!(index.geometry_epoch(), epoch);
-    assert_eq!(index.pending_debt().len(), 1);
+    let epoch = vp.index().geometry_epoch();
+    let outcome = vp.commit_exact(hit.id, estimated + 350.0).unwrap();
+    assert_eq!(outcome.correction, GeometryCorrection::Deferred);
+    assert!(outcome.deferred);
+    assert!(!outcome.applied);
+    assert!((outcome.screen_velocity_after - outcome.screen_velocity_before).abs() < 1e-9);
+    assert_eq!(vp.index().height(hit.id).unwrap().0, estimated);
+    assert_eq!(vp.index().height(hit.id).unwrap().1, HeightKind::Estimated);
+    assert_eq!(vp.index().geometry_epoch(), epoch);
+    assert_eq!(vp.pending_debt().len(), 1);
+    assert_ne!(vp.active_snapshot().epoch, vp.shadow_snapshot().epoch);
 }
 
 #[test]
@@ -241,8 +241,8 @@ fn protected_band_item_is_not_replaced_during_fling() {
     let hit = vp.index().item_at_offset(vp.offset()).unwrap();
     let before = vp.cache().covering(hit.id).unwrap();
     let (estimated, _) = vp.index().height(hit.id).unwrap();
-    let (correction, insert) = vp.commit_exact(hit.id, estimated + 350.0).unwrap();
-    assert!(matches!(correction, GeometryCorrection::PendingDebt(_)));
+    let (outcome, insert) = vp.commit_exact_insert(hit.id, estimated + 350.0).unwrap();
+    assert_eq!(outcome.correction, GeometryCorrection::Deferred);
     assert_eq!(insert, TileInsert::Pinned);
     let after = vp.cache().covering(hit.id).unwrap();
     assert_eq!(after.id, before.id);
@@ -257,6 +257,7 @@ fn compositor_handoff_is_tiles_and_geometry_only() {
     let handoff = vp.compositor_handoff();
     assert_eq!(handoff.epoch, vp.index().geometry_epoch());
     assert_eq!(handoff.extent, vp.index().extent());
+    assert!(handoff.generation.is_atomic());
     assert!(!handoff.tiles.is_empty());
     for tile in handoff.tiles.iter() {
         assert!(tile.height > 0.0);

@@ -1,9 +1,9 @@
 # Chat viewport (`neotavern-chat-viewport`)
 
-Virtualization foundation for the chat list (RFC T19). This crate owns
-the height index, range predictor, bounded preparation queue, and tile
-cache. It is **not** `neocompositor`, **not** production JNI, and **not**
-an Android cutover.
+Virtualization and fling-continuous geometry remap for the chat list
+(RFC T19 / T26). This crate owns the height index, range predictor,
+bounded preparation queue, tile cache, and geometry epochs. It is **not**
+`neocompositor`, **not** production JNI, and **not** an Android cutover.
 
 ## What this crate is
 
@@ -17,16 +17,31 @@ an Android cutover.
   viewport/protected band during fling.
 - Overscan miss presents immediately from known/estimated geometry. It does
   not wait on Dioxus/layout/raster and must not open a transparent gap.
-- The compositor handoff is `GeometrySnapshot`: ready tile descriptors and
-  geometry only. No chat/model payload.
+- Active and shadow `GeometrySnapshot`s exist together. Exact-height updates
+  collect in a bounded `PrefixDeltaMap`. A geometry commit switches tiles,
+  geometry, hit-test, and semantics generations atomically.
+- C0: scroll origin is remapped so the `ScrollAnchor`
+  (`LogicalItemId` + intra-item offset) keeps its screen position. Touch
+  picks the point under the finger; fling uses the protected motion band.
+- C1: screen velocity is unchanged by geometry delta (no fling impulse).
+  Velocity changes only at new hard bounds. Grow/shrink retargets bounds
+  deterministically. In-band corrections may stay as bounded `GeometryDebt`
+  (item/byte/pixel caps, telemetry, deterministic settlement).
+- Fallback → full-fidelity replacement does not mix epochs. Stale/out-of-order
+  shadow commits are rejected. Scroll ack and geometry correction do not
+  apply the same `DeltaToken` twice. A removed anchor is replaced by the
+  nearest stable neighbour. Origin rebase does not change screen
+  position/velocity.
+- The compositor handoff is the **active** `GeometrySnapshot` only: ready
+  tile descriptors and geometry. No chat/model payload.
 
 ## What this crate is not
 
 - Not linked into `libneotavern_android_jni.so`.
 - Not a place for generic compositor types (those stay in
   `neotavern-neocompositor`).
-- Geometry C0/C1 continuity is a follow-up commit, not this slice. Exact
-  height commits that still need remap are `GeometryCorrection::PendingDebt`.
+- PERF-20 is **IMPLEMENTED** on the host corpus, not PASS. Final PASS
+  still needs compositor integration and an Android high-velocity trace.
 - Interaction-ready text and cross-tile selection are later.
 
 ## Commands

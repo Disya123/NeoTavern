@@ -77,10 +77,10 @@ crates/
                        # binds remote-http (loopback default, explicit exposure)
     mobile-ffi/        # Phase 5 native bridge: stable C ABI → same Kernel
                        # (opaque handles, bounded buffers, status codes)
-  chat-viewport/       # Height index, range predictor, bounded tile cache.
-                       # Compositor sees only tile descriptors + geometry
-                       # snapshot. Not production JNI. Geometry C0/C1 remap
-                       # is a follow-up.
+  chat-viewport/       # Height index, range predictor, bounded tile cache,
+                       # geometry epochs / fling-continuous remap (PERF-20
+                       # IMPLEMENTED, not PASS). Compositor sees only the
+                       # active snapshot. Not production JNI.
   neocompositor/       # Milestone B STARTED: NeoDisplayList, pass graph,
                        # bounded FrameTransaction mailbox, spatial/scroll/
                        # clip/effect property trees, CPU scroll/animation

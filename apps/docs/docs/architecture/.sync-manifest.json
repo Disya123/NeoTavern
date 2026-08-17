@@ -235,7 +235,7 @@
     {
       "source": "android/README.md",
       "target": "android/README.md",
-      "sha256": "e7a60a8c9031ce884b2ced15419a71f8b1d0b5c63b31bdabdd5ede8889f80948"
+      "sha256": "528244be8186df4555b4f66f6e0a170f9079bbfea29735545ca460b30482bbe7"
     },
     {
       "source": "api/README.md",
@@ -245,7 +245,7 @@
     {
       "source": "architecture/README.md",
       "target": "architecture/README.md",
-      "sha256": "29065858a11e8e12e5c3723728d8f823a0aefa2c8b9a5bdcd4a4abe0517ed799"
+      "sha256": "cfb2d7a2ec8b5dfdc32a78623b23d44e3a34e22c39c7d2b512f9b5f28795feee"
     },
     {
       "source": "architecture/benchmarks.md",
@@ -275,7 +275,7 @@
     {
       "source": "architecture/presentation-boundary.md",
       "target": "architecture/presentation-boundary.md",
-      "sha256": "d3178e80ab3932cbb88d3086573d58763953d5b9efbb888c2842d27a45d33f6f"
+      "sha256": "33cd46942b9e7f21072c63a642c91002f130830b22a6bcd28efa403bab2a8e4f"
     },
     {
       "source": "architecture/prompt-pipeline.md",

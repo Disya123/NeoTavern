@@ -1,6 +1,6 @@
 //! Offset ↔ logical item in `O(log n)`. Heights are estimated or exact and
-//! carry a [`GeometryEpoch`]. Exact commits that still need C0/C1 remap are
-//! recorded as [`GeometryCorrection::PendingDebt`].
+//! carry a [`GeometryEpoch`]. Live heights are the active mapping; exact
+//! updates that still need C0/C1 remap are staged in [`crate::remap`].
 
 use std::collections::HashMap;
 
@@ -26,22 +26,6 @@ pub struct ItemHit {
     pub height: f64,
     pub kind: HeightKind,
     pub local: f64,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct GeometryDebt {
-    pub item: LogicalItemId,
-    pub estimated: f64,
-    pub exact: f64,
-    pub delta: f64,
-    pub from_epoch: GeometryEpoch,
-    pub to_epoch: GeometryEpoch,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum GeometryCorrection {
-    Unchanged,
-    PendingDebt(GeometryDebt),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -153,7 +137,6 @@ pub struct HeightIndex {
     by_id: HashMap<LogicalItemId, usize>,
     fenwick: Fenwick,
     epoch: GeometryEpoch,
-    debt: Vec<GeometryDebt>,
 }
 
 impl HeightIndex {
@@ -165,7 +148,6 @@ impl HeightIndex {
             by_id: HashMap::new(),
             fenwick: Fenwick::new(),
             epoch: GeometryEpoch(0),
-            debt: Vec::new(),
         }
     }
 
@@ -181,12 +163,16 @@ impl HeightIndex {
         self.epoch
     }
 
+    pub fn bump_epoch(&mut self) {
+        self.epoch = GeometryEpoch(self.epoch.0.saturating_add(1));
+    }
+
     pub fn extent(&self) -> f64 {
         self.fenwick.total()
     }
 
-    pub fn pending_debt(&self) -> &[GeometryDebt] {
-        &self.debt
+    pub fn index_of(&self, id: LogicalItemId) -> Option<usize> {
+        self.by_id.get(&id).copied()
     }
 
     pub fn origin_at(&self, index: usize) -> Option<f64> {
@@ -282,6 +268,15 @@ impl HeightIndex {
         Ok(())
     }
 
+    pub fn remove(&mut self, id: LogicalItemId) -> Result<usize, HeightError> {
+        let i = *self.by_id.get(&id).ok_or(HeightError::UnknownItem)?;
+        self.ids.remove(i);
+        self.heights.remove(i);
+        self.kinds.remove(i);
+        self.rebuild();
+        Ok(i)
+    }
+
     pub fn set_height(
         &mut self,
         id: LogicalItemId,
@@ -297,38 +292,6 @@ impl HeightIndex {
         self.kinds[i] = kind;
         self.fenwick.add(i, delta);
         Ok(())
-    }
-
-    /// Records exact geometry that is not remapped in this slice (PERF-20
-    /// C0/C1 is a follow-up). Live heights stay on the previous estimate so
-    /// the current fling offset is not silently rewritten.
-    pub fn commit_exact(
-        &mut self,
-        id: LogicalItemId,
-        exact: f64,
-    ) -> Result<GeometryCorrection, HeightError> {
-        if exact <= 0.0 {
-            return Err(HeightError::NonPositiveHeight);
-        }
-        let i = *self.by_id.get(&id).ok_or(HeightError::UnknownItem)?;
-        let estimated = self.heights[i];
-        let delta = exact - estimated;
-        if delta.abs() < 1e-9 {
-            self.kinds[i] = HeightKind::Exact;
-            return Ok(GeometryCorrection::Unchanged);
-        }
-        let from = self.epoch;
-        self.epoch = GeometryEpoch(self.epoch.0.saturating_add(1));
-        let debt = GeometryDebt {
-            item: id,
-            estimated,
-            exact,
-            delta,
-            from_epoch: from,
-            to_epoch: self.epoch,
-        };
-        self.debt.push(debt);
-        Ok(GeometryCorrection::PendingDebt(debt))
     }
 
     fn insert_at(

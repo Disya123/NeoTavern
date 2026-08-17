@@ -52,6 +52,20 @@
   epoch / fling-continuous remap. `MainActivity` / WebView rollback
   unchanged. PERF-18 stays **IMPLEMENTED / GPU_PENDING**.
 
+- **Chat viewport geometry epochs and fling-continuous remap (PERF-20
+  IMPLEMENTED, not PASS).** `crates/chat-viewport` keeps active and shadow
+  `GeometrySnapshot`s, stages exact-height updates in a bounded
+  `PrefixDeltaMap`, and commits tiles / geometry / hit-test / semantics
+  as one generation. C0 keeps the `ScrollAnchor` on screen; C1 preserves
+  screen velocity except at new hard bounds. Protected-band corrections
+  may stay as bounded `GeometryDebt`. Fallback → full replacement does
+  not mix epochs. Stale shadow commits are rejected; scroll ack and
+  geometry correction share a `DeltaToken` so a delta is not applied
+  twice. PERF-20 PASS still needs compositor integration and an Android
+  high-velocity trace. Interaction-ready text is not in this change.
+  `MainActivity` / WebView rollback unchanged. PERF-18 stays
+  **IMPLEMENTED / GPU_PENDING**.
+
 - **PERF-18 effect-scope backdrop host golden (IMPLEMENTED / GPU_PENDING,
   not PASS).** Canonical scene: parent backdrop root →
   `BeginEffect(opacity=0.5, transform, rounded clip)` → prefix →

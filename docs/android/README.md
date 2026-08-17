@@ -163,7 +163,9 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   fast paths, async hit-test / nested-scroll dispatch, and a PERF-18
   effect-scope host golden (**IMPLEMENTED / GPU_PENDING**, not PASS), and
   are **not** linked into `libneotavern_android_jni.so`. Chat virtualization
-  is `crates/chat-viewport`, not the compositor crate.
+  is `crates/chat-viewport` (height index, predictor, tile cache, geometry
+  epochs / C0/C1 remap; PERF-20 **IMPLEMENTED**, not PASS), not the
+  compositor crate.
   `NEOTA_NEOCOMPOSITOR=1` is a non-default flag, not a cutover switch.
 
 ## Background execution (Phase 8)
