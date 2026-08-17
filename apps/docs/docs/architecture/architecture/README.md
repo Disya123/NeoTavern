@@ -85,8 +85,10 @@ crates/
                        # bounded FrameTransaction mailbox, spatial/scroll/
                        # clip/effect property trees, CPU scroll/animation
                        # fast paths, async hit-test / nested-scroll
-                       # dispatch. Not production JNI; default host is
-                       # WebView rollback (`NEOTA_NEOCOMPOSITOR=1`).
+                       # dispatch, PERF-18 host golden (IMPLEMENTED /
+                       # GPU_PENDING, not PASS). Not production JNI;
+                       # default host is WebView rollback
+                       # (`NEOTA_NEOCOMPOSITOR=1`).
   presentation-m0/     # NeoUI v4 RFC D1a/D1b paint-seam probe (host PASS;
                        # crate log capture=false). Debug-only Activity;
                        # not production kernel JNI.

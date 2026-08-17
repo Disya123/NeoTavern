@@ -64,7 +64,7 @@ dioxus-android-flagged     — experimental; not the launcher
 
 `crates/neocompositor` holds production interchange types, a bounded
 `FrameTransaction` mailbox, spatial/scroll/clip/effect property trees,
-CPU scroll/animation fast paths, and async hit-test / nested-scroll
-dispatch on the same snapshot/epoch as render (Milestone B **STARTED**,
-not PASS). It is not linked into production JNI. PERF-18, recovery, and
-GPU telemetry are not started. Product cutover is not declared.
+CPU scroll/animation fast paths, async hit-test / nested-scroll dispatch,
+and a PERF-18 effect-scope backdrop host golden (**IMPLEMENTED /
+GPU_PENDING**, not PASS). It is not linked into production JNI. Recovery
+and GPU telemetry are not started. Product cutover is not declared.

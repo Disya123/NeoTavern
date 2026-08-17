@@ -135,10 +135,16 @@ pub struct BackdropRootId(pub u32);
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct PaintOrderKey(pub u32);
 
+/// Group effects on the display list. `Filter` / `Mask` / `RoundedClip` are
+/// host placeholders: they participate in nesting and bounds, and must not
+/// be flattened across a [`crate::NeoPaintOp::BackdropBarrier`].
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum EffectKind {
     Opacity(f32),
     Isolation,
+    Filter,
+    Mask,
+    RoundedClip { radius: f32 },
 }
 
 #[derive(Clone, Debug, PartialEq)]

@@ -247,11 +247,7 @@ fn fixed_inside_transformed_ancestor_uses_that_inverse() {
             containing_block: transformed,
         },
     );
-    let clip = builder.alloc_clip(
-        None,
-        transformed,
-        LogicalRect::new(0.0, 0.0, 50.0, 50.0),
-    );
+    let clip = builder.alloc_clip(None, transformed, LogicalRect::new(0.0, 0.0, 50.0, 50.0));
     let snapshot = Arc::new(builder.commit(SceneEpoch(1)).unwrap());
     let mut path = bind_interaction(
         Arc::clone(&snapshot),

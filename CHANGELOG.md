@@ -40,6 +40,17 @@
   parity, stale-generation drop, bounded streaming. `MainActivity` remains
   WebView. Milestone B remains STARTED.
 
+- **PERF-18 effect-scope backdrop host golden (IMPLEMENTED / GPU_PENDING,
+  not PASS).** Canonical scene: parent backdrop root →
+  `BeginEffect(opacity=0.5, transform, rounded clip)` → prefix →
+  `GlassSurface` → foreground text/media → `EndEffect` → following sibling.
+  Host tests prove backdrop sampling at the barrier, one group opacity
+  application, bounded transformed/rounded ROI, no sibling leak, nested
+  glass acyclicity, foreground vs backdrop invalidation, and malformed
+  scope reject with last-known-good. This is **not** PERF-18 PASS: RFC
+  still requires an Android Vulkan capture. `compile_passes` did not need
+  a correctness fix. `MainActivity` / WebView rollback unchanged.
+
 - **Async hit-test and nested-scroll dispatch (Milestone B, not B PASS).**
   `HitTestSnapshot` is bound to the same `SceneEpoch` / `PropertySnapshot`
   as render. Hit-test walks paint order front-to-back, maps the screen

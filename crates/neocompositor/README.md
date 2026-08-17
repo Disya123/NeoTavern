@@ -2,7 +2,8 @@
 
 Milestone B **STARTED** (not PASS): production types, a bounded
 `FrameTransaction` mailbox, property trees, CPU scroll/animation fast
-paths, and async hit-test / nested-scroll dispatch. This is **not** a
+paths, async hit-test / nested-scroll dispatch, and a PERF-18 effect-scope
+host golden (**IMPLEMENTED / GPU_PENDING**, not PASS). This is **not** a
 production JNI renderer and **not** an Android cutover.
 
 ## What this crate is
@@ -33,6 +34,12 @@ production JNI renderer and **not** an Android cutover.
   across async scroll; a removed/recycled target gets `Cancel` and does not
   fall through to another message. Gesture latch/handoff reuse the same
   `ScrollId`. Targeting does not round-trip through Dioxus/layout.
+- Effect-scope backdrop host golden (PERF-18 **IMPLEMENTED / GPU_PENDING**):
+  ancestor opacity/filter/mask wrap prefix, glass, and foreground as one
+  group; backdrop is sampled at the barrier from the parent root; group
+  targets and glass ROI stay bounded; nested glass stays acyclic; malformed
+  scopes are rejected before present and keep last-known-good. This is
+  **not** PERF-18 PASS (Android Vulkan capture still required).
 
 ## What this crate is not
 
@@ -42,8 +49,8 @@ production JNI renderer and **not** an Android cutover.
   default host is `PresentationHost::WebViewRollback`.
 - GPU telemetry and device-loss recovery are not started (required before
   B PASS, not this slice). Mailbox high-water counters are in-memory only.
-- Virtualization, a gesture-platform adapter, and PERF-18 effect-scope
-  backdrop conformance are **not** in this crate yet (separate commits).
+- Virtualization and a gesture-platform adapter are **not** in this crate
+  yet (separate commits).
 
 ## RFC §50 progress
 
@@ -60,11 +67,12 @@ Started (CPU types + tests):
   latch/handoff, timestamp animation)
 - async hit-test + nested-scroll dispatch (same snapshot/epoch as render;
   capture/cancel; no Dioxus round trip)
+- PERF-18 effect-scope backdrop host golden (**IMPLEMENTED / GPU_PENDING**,
+  not PASS; Android Vulkan capture still required)
 - M0-D1a pass-order corpus as a production regression (not a lab re-run)
 
 Not started (do not treat as done):
 
-- PERF-18 (effect-scope backdrop conformance)
 - virtualization, selection, geometry remap
 - gesture-platform adapter
 - GPU device/surface recovery
