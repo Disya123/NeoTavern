@@ -49,6 +49,15 @@ describe('m0-d1a source bundle', () => {
     expect(parsePorcelain('\n').dirty).toBe(false);
   });
 
+  it('excludes a git C-quoted octal path for the root TZ copy', () => {
+    const quoted =
+      '"\\320\\242\\320\\265\\321\\205\\320\\275\\320\\270\\321\\207\\320\\265\\321\\201\\320\\272\\320\\276\\320\\265 \\320\\267\\320\\260\\320\\264\\320\\260\\320\\275\\320\\270\\320\\265_ NeoUI v4.md"';
+    expect(isUnrelatedPath(quoted)).toBe(true);
+    const classified = classifyEvidenceTree([`?? ${quoted}`], [quoted]);
+    expect(classified.evidence_dirty).toBe(false);
+    expect(classified.excluded_unrelated_paths).toEqual(UNRELATED_PATH_EXCLUDES);
+  });
+
   it('excludes the root TZ copy from evidence_dirty', () => {
     expect(isUnrelatedPath(UNRELATED_PATH_EXCLUDES[0])).toBe(true);
     const classified = classifyEvidenceTree(

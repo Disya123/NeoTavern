@@ -52,8 +52,55 @@ export function parsePorcelain(text) {
   return { dirty: entries.length > 0, entries };
 }
 
+export function decodeGitCQuotedPath(rel) {
+  let text = rel.trim();
+  const quoted = text.startsWith('"') && text.endsWith('"');
+  if (quoted) {
+    text = text.slice(1, -1);
+  }
+  if (!text.includes('\\')) {
+    return text.replace(/\\/gu, '/');
+  }
+  const bytes = [];
+  for (let i = 0; i < text.length; i += 1) {
+    if (text[i] !== '\\') {
+      bytes.push(text.charCodeAt(i));
+      continue;
+    }
+    const oct = text.slice(i + 1, i + 4);
+    if (/^[0-7]{3}$/u.test(oct)) {
+      bytes.push(Number.parseInt(oct, 8));
+      i += 3;
+      continue;
+    }
+    const next = text[i + 1];
+    if (next === '\\') {
+      bytes.push(0x5c);
+      i += 1;
+      continue;
+    }
+    if (next === '"') {
+      bytes.push(0x22);
+      i += 1;
+      continue;
+    }
+    if (next === 'n') {
+      bytes.push(0x0a);
+      i += 1;
+      continue;
+    }
+    if (next === 't') {
+      bytes.push(0x09);
+      i += 1;
+      continue;
+    }
+    bytes.push(text.charCodeAt(i));
+  }
+  return Buffer.from(bytes).toString('utf8');
+}
+
 export function normalizeRelPath(rel) {
-  return rel.replace(/\\/gu, '/').replace(/^"(.*)"$/u, '$1');
+  return decodeGitCQuotedPath(rel);
 }
 
 export function porcelainPath(line) {
