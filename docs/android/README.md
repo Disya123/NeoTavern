@@ -119,6 +119,30 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   gesture pill cannot cover Cards/Edit while WindowInsets catch up. The
   web client ignores a `safeAreaCss()` box of all zeros so it cannot
   clobber a later real measurement.
+- **M-1 presentation measurement (NeoUI v4 RFC, not a compositor).** Before
+  Gate P the host may only collect Track A/A0/B evidence. Production visuals
+  stay live-glass CSS on `file://`. The activity always **requests** the highest
+  refresh mode that matches the current physical resolution
+  (`preferredDisplayModeId`) and logs `m1-refresh` / `m1-env` / `m1-memory` /
+  `m1-thermal` under tag `NeoTavern`. Requesting a mode is not the same as
+  getting it (`ENVIRONMENT_BLOCKED` if the OS stays at 60 Hz). Track A0
+  (glass off/static) is **opt-in only**:
+  `adb shell am start -n com.neotavern.mobile/.MainActivity -e com.neotavern.mobile.MEASUREMENT_GLASS off`.
+  That sets `data-nt-measurement-glass="off"` so the user cascade layer
+  zeroes blur tokens and disables `backdrop-filter`. Track B is **opt-in
+  only** (`MEASUREMENT_ORIGIN=asset-loader`): same APK assets via
+  `WebViewAssetLoader` at `https://appassets.androidplatform.net/assets/web/index.html`.
+  The SPA already treats that host as a packaged WebView; production default
+  stays `file://`. An optional 30 s sampler (`MEASUREMENT_FRAMES=on`) logs
+  `m1-frames` (rAF) and `m1-choreographer` (UI thread). On API 35+ the WebView
+  votes `setRequestedFrameRate` at the requested Hz. Capture helper:
+  `node scripts/m1-android-capture.mjs --track a --phase cold`. Fill-in evidence:
+  [BaselineReport M-1](../rfc/m1-baseline-report.md). Do not ship A0 or B as
+  the default. See [RFC NeoUI v4](../rfc/neoui-v4-android-presentation-backend.md)
+  §0.3.1. The M0-D1a paint-seam probe is `crates/presentation-m0`. Production
+  kernel JNI does not link it. Debug APK can load `M0D1aActivity` (not the
+  launcher). Emulator 100-frame GLES 3.1 run 2026-08-17 is **PRE-GATE /
+  BLOCKED** (RFC 4.5); see [M0-D1a probe](../rfc/m0-d1a-probe.md).
 
 ## Background execution (Phase 8)
 
@@ -225,6 +249,10 @@ in nightly (`connectedDebugAndroidTest`).
   §87).
 
 See also: [ADR-0034](../adr/0034-android-local-host-jni-transport.md),
+[NeoUI v4 RFC (non-canonical)](../rfc/neoui-v4-android-presentation-backend.md),
+[BaselineReport M-1](../rfc/m1-baseline-report.md),
+[M0-D1a paint-seam probe](../rfc/m0-d1a-probe.md),
+[Gate P decision draft (unsigned)](../rfc/gate-p-decision-draft.md),
 [ADR-0036](../adr/0036-android-background-execution.md),
 [generation durability](../architecture/generation-durability.md),
 [mobile-ffi README](../../crates/adapters/mobile-ffi/README.md),

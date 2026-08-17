@@ -45,6 +45,13 @@ Index of the internal documentation. Each major topic has its own folder.
 - [Android](android/README.md) — WebView + JNI local host, mobile-ffi bridge protocol, Keystore secrets.
 - [Migrations](migrations/README.md) — schema version, backup, rollback.
 - [ADR](adr/README.md) — architectural decisions.
+- [RFC / proposals](rfc/README.md) — non-canonical drafts. They do not
+  replace ADR or the target-architecture ТЗ until an accepting ADR lands.
+  Current NeoUI v4 items: the presentation-backend proposal (RFC **4.5**,
+  Gate P `UNDECIDED`, M0 `NOT_ENTERED`), [BaselineReport
+  M-1](rfc/m1-baseline-report.md), the [M0-D1a paint-seam
+  probe](rfc/m0-d1a-probe.md) (**PRE-GATE / BLOCKED**, not a compositor GO),
+  and an [unsigned Gate P draft](rfc/gate-p-decision-draft.md).
 - [Changelog](../CHANGELOG.md).
 
 ## Commands

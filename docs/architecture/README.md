@@ -77,6 +77,8 @@ crates/
                        # binds remote-http (loopback default, explicit exposure)
     mobile-ffi/        # Phase 5 native bridge: stable C ABI → same Kernel
                        # (opaque handles, bounded buffers, status codes)
+  presentation-m0/     # NeoUI v4 RFC PRE-GATE D1a paint-seam probe (not M0).
+                       # Debug-only Activity; not production kernel JNI.
 ```
 
 Dependencies only go "downward": `server`/`web` → packages; packages → `shared`/

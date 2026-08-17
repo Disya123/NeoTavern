@@ -158,13 +158,62 @@ pnpm --filter @neotavern/web build   # from the repo root
 
 | Scope | Command | Runs on |
 | --- | --- | --- |
-| JVM unit tests (state machine, JS escaping, callback frames, extension-availability probe, secret-store contract) | `./gradlew :app:testDebugUnitTest` | Any JVM — no Android needed |
+| JVM unit tests (state machine, JS escaping, callback frames, extension-availability probe, secret-store contract, M-1 display-refresh / glass / origin / frames) | `./gradlew :app:testDebugUnitTest` | Any JVM — no Android needed |
 | Instrumented round trip (real kernel: meta.get, characters CRUD, durability after reopen) | `./gradlew :app:connectedDebugAndroidTest` | API 26+ device/emulator with the `.so` packaged |
 | Instrumented extension-surface probe (frozen `extensionsAvailability()` JSON through the bridge; no kernel/JNI needed) | `./gradlew :app:connectedDebugAndroidTest` | API 26+ device/emulator |
 
 The JVM-tested classes (`KernelSession`, `JsEscaping`, `CallbackFrame`,
-`ExtensionAvailability`, `SecretStore`) contain **no android.\*** imports and
-run as plain JUnit 4.
+`ExtensionAvailability`, `SecretStore`, `DisplayRefreshPolicy`,
+`MeasurementGlass`, `MeasurementOrigin`, `MeasurementFrames`,
+`FrameMissCounter`) contain **no android.\*** imports and run as plain JUnit 4.
+
+## M-1 presentation measurement
+
+This is the bounded measurement week from the
+[NeoUI v4 RFC](../../docs/rfc/neoui-v4-android-presentation-backend.md)
+(non-canonical). It is **not** a compositor. Production default remains live
+glass on `file://`. The host requests the highest same-resolution display
+mode and logs `m1-refresh` / `m1-origin` / `m1-glass` / `m1-env` /
+`m1-memory` / `m1-thermal` / `m1-startup` under tag `NeoTavern`. On API 35+
+the WebView also votes `setRequestedFrameRate` at the requested Hz.
+
+Opt-in extras (never the launcher default):
+
+```sh
+# A0 — glass off
+adb shell am start -n com.neotavern.mobile/.MainActivity -e com.neotavern.mobile.MEASUREMENT_GLASS off
+
+# B — WebViewAssetLoader HTTPS origin (same APK assets)
+adb shell am start -n com.neotavern.mobile/.MainActivity -e com.neotavern.mobile.MEASUREMENT_ORIGIN asset-loader
+
+# rAF + UI Choreographer sampler (30 s)
+adb shell am start -n com.neotavern.mobile/.MainActivity -e com.neotavern.mobile.MEASUREMENT_FRAMES on
+```
+
+Device capture helper (adb + installed APK, 50 s wait):
+
+```sh
+node scripts/m1-android-capture.mjs --track a --phase cold
+```
+
+Fill-in device table: [BaselineReport M-1](../../docs/rfc/m1-baseline-report.md).
+
+The M0-D1a paint-seam probe is **not** in the production kernel `.so`. Debug
+builds can load a second library via `M0D1aActivity` (not the launcher):
+
+```sh
+bash apps/android/scripts/build-m0-d1a-libs.sh
+adb shell am start -n com.neotavern.mobile/.M0D1aActivity --es com.neotavern.mobile.M0_D1A_FRAMES 100
+adb logcat -d -s NeoTavern:I
+```
+
+On the API 36.1 AVD the probe needs **GLES 3.1** (`emulator -gpu host`).
+`-gpu swiftshader_indirect` is GLES 3.0 and cannot run Vello compute.
+Goldfish/GFXStream Vulkan SIGSEGVs on Vello submit and is skipped.
+
+Crate: [`crates/presentation-m0`](../../crates/presentation-m0/README.md).
+Evidence: [M0-D1a probe](../../docs/rfc/m0-d1a-probe.md) (RFC 4.5 **PRE-GATE /
+BLOCKED**; normative M0 `NOT_ENTERED`; do not start D1b).
 
 ## Phase gate status
 

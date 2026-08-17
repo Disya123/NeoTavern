@@ -1,7 +1,54 @@
 # Changelog
 
 ## Unreleased
+### Added
+
+- **M0-D1a API timeline + source-bundle helper (still PRE-GATE / BLOCKED).**
+  The probe now records a first-frame wgpu API timeline
+  (`clear,raster,blit,roi:1,glass:1,…`) and compositor-owned texture bytes.
+  That log is not AGI/RenderDoc capture and does not raise the runner
+  verdict. Helper: `node scripts/m0-d1a-source-bundle.mjs` (gitignored
+  JSON + binary diff). Unsigned Gate P draft:
+  `docs/rfc/gate-p-decision-draft.md`. Physical M-1 device set remains
+  **BLOCKED** (no phone attached). D1b is not started.
+
+- **M0-D1a paint-seam probe (NeoUI v4 RFC 4.5 PRE-GATE, not a compositor).**
+  Crate `crates/presentation-m0` compiled a host-authored static display list
+  into `PaintChunk` raster passes and `BackdropBarrier` glass passes on one
+  wgpu `Device`/`Queue` (Vello 0.9). Debug-only `M0D1aActivity` ran 100 frames
+  on AVD API 36.1 (`-gpu host`, GLES 3.1): 1 device, 0 readbacks, 0 xdev,
+  200 ROI copies. Goldfish/GFXStream Vulkan is skipped (SIGSEGV on Vello
+  submit). RFC 4.5 classifies this as **PRE-GATE / BLOCKED**; normative M0 is
+  **NOT_ENTERED** (Gate P `UNDECIDED`). D1b is not started. Production
+  `MainActivity` / kernel JNI are unchanged. Fill-in:
+  `docs/rfc/m0-d1a-probe.md`.
+
+- **M-1 Android presentation measurement (NeoUI v4 RFC, not a compositor).**
+  The packaged WebView host now requests the highest same-resolution display
+  mode and logs `m1-refresh` / `m1-env` / `m1-memory` / `m1-thermal`
+  telemetry. Live glass on `file://` stays the production default. Track A0
+  (glass off) is opt-in via `com.neotavern.mobile.MEASUREMENT_GLASS=off`.
+  Track B is opt-in via `MEASUREMENT_ORIGIN=asset-loader` (same APK assets
+  through `WebViewAssetLoader` HTTPS; the SPA already recognizes
+  `appassets.androidplatform.net`). An opt-in 30 s rAF sampler
+  (`MEASUREMENT_FRAMES=on`) logs one `m1-frames` summary and a parallel
+  UI-thread `m1-choreographer` sample. On API 35+ the WebView votes
+  `setRequestedFrameRate`. Capture helper:
+  `node scripts/m1-android-capture.mjs --track a --phase cold`. Fill-in
+  evidence: `docs/rfc/m1-baseline-report.md` (emulator-only capture
+  2026-08-17; Gate P still `UNDECIDED`). The proposal at
+  `docs/rfc/neoui-v4-android-presentation-backend.md` is **not** canonical.
+  Track D / Dioxus / NeoCompositor are not started.
+
 ### Changed
+
+- **NeoUI v4 RFC 4.5 (pre-gate evidence admission).** The draft at
+  `docs/rfc/neoui-v4-android-presentation-backend.md` now separates runner
+  verdict from program verdict: Gate P `UNDECIDED`, normative M0
+  `NOT_ENTERED`, existing `M0-D1a` AVD run `PRE-GATE / BLOCKED`. No D1b /
+  compositor v1 until GateP:P1/P2 plus evidence-admission. Repository
+  migration of the root TZ copy remains OPEN (no tombstone / `git mv` in
+  this change).
 
 - **M7 slice 1 — Playwright default is Kernel.** `pnpm test:e2e` boots
   `neotavern-headless` and seeds fixtures over Product Wire (`e2e/wire.ts`).

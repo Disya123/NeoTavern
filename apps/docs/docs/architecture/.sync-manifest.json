@@ -5,7 +5,7 @@
     {
       "source": "README.md",
       "target": "README.md",
-      "sha256": "24f9781cda313daa92f4e052affe53fad11edc6712ded8a1ab6e2df36252fa93"
+      "sha256": "a318864a1ea7f95a010bd41c850ed11df0ae33e1ff53d389be180cc4f6047d24"
     },
     {
       "source": "adr/0004-typebox-contracts.md",
@@ -230,7 +230,7 @@
     {
       "source": "android/README.md",
       "target": "android/README.md",
-      "sha256": "c9158a442ef3f15009dba26d9974bb5fa33777f4a8049e882355b98de694c76c"
+      "sha256": "22dc960d5ad35620a57349f3fef01c09ef3f0c25e250fc45be40ae09418a36fb"
     },
     {
       "source": "api/README.md",
@@ -240,7 +240,7 @@
     {
       "source": "architecture/README.md",
       "target": "architecture/README.md",
-      "sha256": "2103583d4c38d415aac666356b33ad8bf30f0543dc90c8b35d40cfe01d273f4a"
+      "sha256": "9068b7a040d3c0f98a43ad20ec881666c8d44729c31f59479392ca2f06445abc"
     },
     {
       "source": "architecture/benchmarks.md",
@@ -341,6 +341,31 @@
       "source": "prompt-pipeline/README.md",
       "target": "prompt-pipeline/README.md",
       "sha256": "508378f9fbd3fa62c22de2312cf9bb7379c49aa0aaa4435c9433ccac2bc2c04f"
+    },
+    {
+      "source": "rfc/README.md",
+      "target": "rfc/README.md",
+      "sha256": "cf04cd6b3813aeb69fc83a296340eb83cd09fa8f8dc0f03a9ee54c1a8c707e3e"
+    },
+    {
+      "source": "rfc/gate-p-decision-draft.md",
+      "target": "rfc/gate-p-decision-draft.md",
+      "sha256": "dc32924f5826f19a1466fb80b2a906f9cefc911eebda6f1b6d4aa1b1059de7f9"
+    },
+    {
+      "source": "rfc/m0-d1a-probe.md",
+      "target": "rfc/m0-d1a-probe.md",
+      "sha256": "302925fac7d3a6bf4e2edc54d9d85993688a4e4700fe52929e1623f1692325e3"
+    },
+    {
+      "source": "rfc/m1-baseline-report.md",
+      "target": "rfc/m1-baseline-report.md",
+      "sha256": "96b02d64be538cbdd7e6f345051500e9457fc6cf497d51551e3d3d574c67a488"
+    },
+    {
+      "source": "rfc/neoui-v4-android-presentation-backend.md",
+      "target": "rfc/neoui-v4-android-presentation-backend.md",
+      "sha256": "acd15c797e93d017f8f25538ad2472a325040f4972cbbd4d3217f1c94a457009"
     },
     {
       "source": "theme-sdk/README.md",
