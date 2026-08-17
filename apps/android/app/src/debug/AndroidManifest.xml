@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- Debug-only; not a launcher. Production MainActivity is unchanged. -->
+        <activity
+            android:name=".M0D1aActivity"
+            android:exported="true"
+            android:label="M0-D1a probe" />
+    </application>
+</manifest>

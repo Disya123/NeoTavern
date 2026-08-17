@@ -1,6 +1,7 @@
 # Native kernel libraries are built by scripts/build-libs.sh (cargo-ndk) and
 # must not be committed (contract: prebuilt .so is NOT committed).
 app/src/main/jniLibs/
+app/src/debug/jniLibs/
 
 # Hand-copied web dist must not be committed; Gradle stages apps/web/dist
 # into app/build/generated/neotavern-web-assets (ТЗ §11.4).

@@ -238,6 +238,9 @@ jobs:
       - name: Rust clippy (workspace, all targets, warnings denied)
         run: cargo clippy --manifest-path crates/Cargo.toml --workspace --all-targets -- -D warnings
 
+      - name: M0-D1a presentation paint probe (Vello/wgpu)
+        run: cargo test --manifest-path crates/Cargo.toml -p neotavern-presentation-m0 --features gpu && cargo clippy --manifest-path crates/Cargo.toml -p neotavern-presentation-m0 --features gpu --all-targets -- -D warnings
+
       # Phase 9 remote feature gate (ТЗ §11.2): neotavern-tauri-local's
       # optional `remote` feature wires the desktop Remote Access host
       # service into the shell; the workspace commands above build the crate
@@ -247,7 +250,7 @@ jobs:
         run: cargo test -p neotavern-tauri-local --features remote && cargo clippy -p neotavern-tauri-local --features remote --all-targets -- -D warnings
 
       - name: Rust formatting (hand-written crates)
-        run: cargo fmt --manifest-path crates/Cargo.toml -p runtime-kernel -p neotavern-storage -p remote-http-adapter -p neotavern-mobile-ffi -p neotavern-cli -p neotavern-headless -p built-in-providers -p provider-sdk -p neotavern-envelope -p neotavern-tauri-local -p neotavern-android-jni -p neotavern-desktop-remote --check
+        run: cargo fmt --manifest-path crates/Cargo.toml -p runtime-kernel -p neotavern-storage -p remote-http-adapter -p neotavern-mobile-ffi -p neotavern-cli -p neotavern-headless -p built-in-providers -p provider-sdk -p neotavern-envelope -p neotavern-tauri-local -p neotavern-android-jni -p neotavern-desktop-remote -p neotavern-presentation-m0 --check
 
   # Android gates — Phase 5: Android Local foundation (JNI bridge, host,
   # mobile transport, CI gates, ТЗ §7.2) + Phase 8: Android background
@@ -346,3 +349,30 @@ jobs:
           name: neotavern-android-release
           path: apps/android/app/build/outputs/apk/release/*.apk
           retention-days: 14
+
+  # M0-D1a Android compile of the paint probe (Vello/wgpu). Does NOT package
+  # the probe .so into the production kernel APK; that stays WebView+JNI.
+  android-m0-d1a:
+    name: Android M0-D1a paint probe (NDK)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android, x86_64-linux-android
+      - name: Cache cargo (cargo-ndk + registry)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo
+          key: cargo-ndk-m0-d1a-3.5.4-${{ runner.os }}-${{ hashFiles('crates/Cargo.lock', 'crates/presentation-m0/Cargo.toml') }}
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --version 3.5.4 --locked
+      - uses: android-actions/setup-android@v3
+      - name: Install NDK 27.x
+        run: sdkmanager --install "ndk;27.1.12297006"
+      - name: Set ANDROID_NDK_HOME
+        run: echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/27.1.12297006" >> "$GITHUB_ENV"
+      - name: cargo-ndk compile M0-D1a probe (x86_64 + arm64)
+        working-directory: crates
+        run: cargo ndk -t x86_64 -t arm64-v8a build --release -p neotavern-presentation-m0 --features gpu,android-jni

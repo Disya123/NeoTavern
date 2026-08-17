@@ -79,3 +79,5 @@ apps/desktop/src-tauri/.release-config.generated.json
 crates/target/
 crates/*/target/
 .scratch/
+apps/android/m1-captures/
+apps/android/m0-d1a-captures/

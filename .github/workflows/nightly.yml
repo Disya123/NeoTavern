@@ -76,6 +76,9 @@ jobs:
       - name: Rust clippy (workspace, all targets, warnings denied)
         run: cargo clippy --manifest-path crates/Cargo.toml --workspace --all-targets -- -D warnings
 
+      - name: M0-D1a presentation paint probe (Vello/wgpu)
+        run: cargo test --manifest-path crates/Cargo.toml -p neotavern-presentation-m0 --features gpu && cargo clippy --manifest-path crates/Cargo.toml -p neotavern-presentation-m0 --features gpu --all-targets -- -D warnings
+
       # Phase 9 remote feature gate (ТЗ §11.2): neotavern-tauri-local's
       # optional `remote` feature wires the desktop Remote Access host
       # service into the shell; the workspace commands above build the crate
@@ -85,7 +88,7 @@ jobs:
         run: cargo test -p neotavern-tauri-local --features remote && cargo clippy -p neotavern-tauri-local --features remote --all-targets -- -D warnings
 
       - name: Rust formatting (hand-written crates; generated.rs is byte-checked by codegen)
-        run: cargo fmt --manifest-path crates/Cargo.toml -p runtime-kernel -p neotavern-storage -p remote-http-adapter -p neotavern-mobile-ffi -p neotavern-cli -p neotavern-headless -p built-in-providers -p provider-sdk -p neotavern-envelope -p neotavern-tauri-local -p neotavern-android-jni -p neotavern-desktop-remote --check
+        run: cargo fmt --manifest-path crates/Cargo.toml -p runtime-kernel -p neotavern-storage -p remote-http-adapter -p neotavern-mobile-ffi -p neotavern-cli -p neotavern-headless -p built-in-providers -p provider-sdk -p neotavern-envelope -p neotavern-tauri-local -p neotavern-android-jni -p neotavern-desktop-remote -p neotavern-presentation-m0 --check
 
       # §84 performance sampling: Phase 11 backup/restore/export benchmark.
       # The machine-readable report is uploaded as an artifact; threshold
