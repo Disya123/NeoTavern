@@ -790,6 +790,33 @@ impl PropertySnapshot {
             .count())
     }
 
+    /// Inner-first ancestor `ScrollId` chain for `spatial`. No heap allocation.
+    pub fn copy_scroll_chain(
+        &self,
+        spatial: SpatialId,
+        out: &mut [ScrollId],
+    ) -> Result<usize, TreeError> {
+        let mut current = Some(spatial);
+        let mut n = 0usize;
+        let mut guard = 0usize;
+        while let Some(id) = current {
+            if guard > self.spatial.len() {
+                return Err(TreeError::Cycle);
+            }
+            guard += 1;
+            let node = self.spatial(id).ok_or(TreeError::StaleParent)?;
+            if let SpatialKind::Scroll { scroll_id, .. } = node.kind {
+                if n >= out.len() {
+                    return Err(TreeError::BufferTooSmall);
+                }
+                out[n] = scroll_id;
+                n += 1;
+            }
+            current = node.parent;
+        }
+        Ok(n)
+    }
+
     pub fn validate(&self) -> Result<(), TreeError> {
         validate_snapshot(self)
     }
@@ -1361,7 +1388,7 @@ impl SampledFrame {
         }
     }
 
-    fn check_epoch(&self, snapshot: &PropertySnapshot) -> Result<(), SampleError> {
+    pub(crate) fn check_epoch(&self, snapshot: &PropertySnapshot) -> Result<(), SampleError> {
         if self.scene_epoch != snapshot.scene_epoch {
             Err(SampleError::EpochMismatch)
         } else {
@@ -1485,18 +1512,66 @@ fn sticky_extra(
     )
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub struct HitTestId(pub u32);
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub struct StableSemanticId(pub u64);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PointerFlags {
+    pub participates: bool,
+}
+
+impl PointerFlags {
+    pub const PARTICIPATES: Self = Self { participates: true };
+    pub const NONE: Self = Self {
+        participates: false,
+    };
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HitTestItem {
+    pub id: HitTestId,
+    pub target: StableSemanticId,
+    pub generation: u64,
     pub local_bounds: LogicalRect,
     pub spatial: SpatialId,
     pub clip: ClipId,
     pub paint_order: u32,
+    pub scroll_target: Option<ScrollId>,
+    pub pointer_flags: PointerFlags,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+impl HitTestItem {
+    pub fn geometry(
+        local_bounds: LogicalRect,
+        spatial: SpatialId,
+        clip: ClipId,
+        paint_order: u32,
+    ) -> Self {
+        Self {
+            id: HitTestId(paint_order),
+            target: StableSemanticId(paint_order as u64),
+            generation: 1,
+            local_bounds,
+            spatial,
+            clip,
+            paint_order,
+            scroll_target: None,
+            pointer_flags: PointerFlags::PARTICIPATES,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HitTestMatch {
+    pub id: HitTestId,
+    pub target: StableSemanticId,
+    pub generation: u64,
     pub paint_order: u32,
     pub spatial: SpatialId,
+    pub local: Point,
 }
 
 /// Front-to-back hit-test against a single snapshot/epoch sample.
@@ -1510,10 +1585,21 @@ pub fn hit_test(
 ) -> Result<Option<HitTestMatch>, SampleError> {
     sampled.check_epoch(snapshot)?;
     for item in items {
+        if !item.pointer_flags.participates {
+            continue;
+        }
         if item_hits(snapshot, sampled, item, x, y) {
+            let Some(inverse) = sampled.inverse(snapshot, item.spatial) else {
+                continue;
+            };
+            let (lx, ly) = inverse.transform_point(x, y);
             return Ok(Some(HitTestMatch {
+                id: item.id,
+                target: item.target,
+                generation: item.generation,
                 paint_order: item.paint_order,
                 spatial: item.spatial,
+                local: Point::new(lx, ly),
             }));
         }
     }

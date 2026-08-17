@@ -1,9 +1,9 @@
 # NeoCompositor (`neotavern-neocompositor`)
 
 Milestone B **STARTED** (not PASS): production types, a bounded
-`FrameTransaction` mailbox, property trees, and CPU scroll/animation fast
-paths. This is **not** a production JNI renderer and **not** an Android
-cutover.
+`FrameTransaction` mailbox, property trees, CPU scroll/animation fast
+paths, and async hit-test / nested-scroll dispatch. This is **not** a
+production JNI renderer and **not** an Android cutover.
 
 ## What this crate is
 
@@ -24,6 +24,15 @@ cutover.
   unused delta. Transform/opacity animations sample monotonic presentation
   time (refresh-rate independent, retarget-continuous). Present is
   lock-free, allocation-free, and does not rasterize or call the producer.
+- Async hit-test and nested-scroll dispatch: `HitTestSnapshot` is bound to
+  the same `SceneEpoch` / `PropertySnapshot` as render. The walk is
+  front-to-back by paint order, each candidate uses its own inverse
+  (sticky/fixed already sampled; no global scroll inverse). Clip chain is
+  checked before a hit; a singular transform is non-hittable. The target is
+  a stable logical id plus generation. Pointer capture keeps that target
+  across async scroll; a removed/recycled target gets `Cancel` and does not
+  fall through to another message. Gesture latch/handoff reuse the same
+  `ScrollId`. Targeting does not round-trip through Dioxus/layout.
 
 ## What this crate is not
 
@@ -33,9 +42,8 @@ cutover.
   default host is `PresentationHost::WebViewRollback`.
 - GPU telemetry and device-loss recovery are not started (required before
   B PASS, not this slice). Mailbox high-water counters are in-memory only.
-- Hit-test event dispatch, virtualization, and a gesture-platform adapter
-  are **not** in this crate yet (separate commits). PERF-14/17/18/21 are
-  not closed.
+- Virtualization, a gesture-platform adapter, and PERF-18 effect-scope
+  backdrop conformance are **not** in this crate yet (separate commits).
 
 ## RFC §50 progress
 
@@ -50,14 +58,15 @@ Started (CPU types + tests):
   dirty subtree, generation-safe handles)
 - compositor scroll/animation fast paths (async delta, ack/rebase, nested
   latch/handoff, timestamp animation)
+- async hit-test + nested-scroll dispatch (same snapshot/epoch as render;
+  capture/cancel; no Dioxus round trip)
 - M0-D1a pass-order corpus as a production regression (not a lab re-run)
 
 Not started (do not treat as done):
 
-- PERF-14/17/18/21 (async hit-test, sticky/fixed product completeness,
-  effect scopes, nested scroll product handoff)
+- PERF-18 (effect-scope backdrop conformance)
 - virtualization, selection, geometry remap
-- hit-test event dispatch / gesture-platform adapter
+- gesture-platform adapter
 - GPU device/surface recovery
 - shared-device raster interop in this crate (still in the M0 probe)
 - GPU timing telemetry

@@ -12,6 +12,7 @@ use crate::animation::{
 };
 use crate::display_list::AffineCoeffs;
 use crate::epoch::{PresentationTime, SceneEpoch};
+use crate::hit_dispatch::{HitTestSnapshot, PointerCapture};
 use crate::property_tree::{
     PropertyEffectKind, PropertySnapshot, SampledFrame, ScrollId, SpatialId, Vec2,
 };
@@ -35,14 +36,17 @@ pub struct PresentOutcome {
 /// Compositor-thread fast path. Bind may allocate; [`Self::present`] must not.
 #[derive(Clone, Debug, Default)]
 pub struct CompositorFastPath {
-    snapshot: Option<Arc<PropertySnapshot>>,
-    sampled: Option<SampledFrame>,
-    scrolls: ScrollTable,
+    pub(crate) snapshot: Option<Arc<PropertySnapshot>>,
+    pub(crate) sampled: Option<SampledFrame>,
+    pub(crate) scrolls: ScrollTable,
     animations: AnimationTable,
     translations: Vec<Vec2>,
     opacities: Vec<f32>,
     producer_requests: u64,
     raster_invalidations: u64,
+    pub(crate) hits: Option<Arc<HitTestSnapshot>>,
+    pub(crate) capture: Option<PointerCapture>,
+    pub(crate) next_input_seq: u64,
 }
 
 impl CompositorFastPath {

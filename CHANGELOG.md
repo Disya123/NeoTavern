@@ -40,6 +40,20 @@
   parity, stale-generation drop, bounded streaming. `MainActivity` remains
   WebView. Milestone B remains STARTED.
 
+- **Async hit-test and nested-scroll dispatch (Milestone B, not B PASS).**
+  `HitTestSnapshot` is bound to the same `SceneEpoch` / `PropertySnapshot`
+  as render. Hit-test walks paint order front-to-back, maps the screen
+  point through each candidate's inverse (sticky/fixed use the sampled
+  compositor transform; no global scroll inverse), checks the clip chain
+  before a hit, and treats a singular transform as non-hittable. The
+  target is a stable logical id plus generation. Pointer capture keeps
+  that target during async scroll; a removed or recycled target gets
+  `Cancel` and does not fall through to another message. Gesture latch and
+  nested handoff reuse the same `ScrollId`. Events carry scene/scroll
+  sequence and local coordinates. Targeting does not round-trip through
+  Dioxus/layout. PERF-18, virtualization, and the gesture-platform adapter
+  are not in this change. `MainActivity` / WebView rollback unchanged.
+
 - **Compositor scroll/animation fast paths (Milestone B, not B PASS).**
   `AsyncScrollState` lives on the compositor thread, apart from the
   immutable property snapshot. Input updates delta/velocity only; producer

@@ -259,12 +259,7 @@ fn nested_clip_chain_is_intersection() {
     let inner = builder.alloc_clip(Some(outer), root, LogicalRect::new(10.0, 10.0, 20.0, 20.0));
     let snapshot = builder.commit(SceneEpoch(1)).unwrap();
     let sampled = SampledFrame::bind(&snapshot);
-    let item = HitTestItem {
-        local_bounds: LogicalRect::new(0.0, 0.0, 100.0, 100.0),
-        spatial: root,
-        clip: inner,
-        paint_order: 1,
-    };
+    let item = HitTestItem::geometry(LogicalRect::new(0.0, 0.0, 100.0, 100.0), root, inner, 1);
     assert!(hit_test(&snapshot, &sampled, &[item], 15.0, 15.0)
         .unwrap()
         .is_some());
@@ -400,12 +395,7 @@ fn singular_inverse_is_non_hittable_and_does_not_panic() {
     assert!(sampled.world(&snapshot, node).is_some());
     assert!(!sampled.hittable(&snapshot, node));
     assert!(sampled.inverse(&snapshot, node).is_none());
-    let item = HitTestItem {
-        local_bounds: viewport(),
-        spatial: node,
-        clip,
-        paint_order: 1,
-    };
+    let item = HitTestItem::geometry(viewport(), node, clip, 1);
     assert_eq!(hit_test(&snapshot, &sampled, &[item], 0.0, 0.0), Ok(None));
 }
 

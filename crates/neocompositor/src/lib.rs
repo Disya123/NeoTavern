@@ -7,6 +7,7 @@ pub mod animation;
 pub mod display_list;
 pub mod epoch;
 pub mod fast_path;
+pub mod hit_dispatch;
 pub mod host;
 pub mod layer_cache;
 pub mod mailbox;
@@ -28,6 +29,7 @@ pub use display_list::{
 };
 pub use epoch::{DeviceEpoch, EpochClock, FrameId, PresentationTime, SceneEpoch, ScrollEpoch};
 pub use fast_path::{CompositorFastPath, PresentOutcome, RasterDecision};
+pub use hit_dispatch::{DispatchError, HitTestSnapshot, PointerEvent, PointerId, PointerKind};
 pub use host::{
     production_host_from_env, production_host_from_flag, PresentationHost, NEOCOMPOSITOR_FLAG,
 };
@@ -39,10 +41,10 @@ pub use mailbox::{
 pub use neo_glass::NeoGlass;
 pub use pass_graph::{barriers_cut_raster_runs, compile_passes, CompiledPass, GraphError};
 pub use property_tree::{
-    hit_test, ClipId, ClipTreeNode, EffectId, EffectSpec, EffectTreeNode, HitTestItem,
-    HitTestMatch, Insets, LogicalRect, Point, PropertyEffectKind, PropertySnapshot,
+    hit_test, ClipId, ClipTreeNode, EffectId, EffectSpec, EffectTreeNode, HitTestId, HitTestItem,
+    HitTestMatch, Insets, LogicalRect, Point, PointerFlags, PropertyEffectKind, PropertySnapshot,
     PropertyTreeBuilder, SampleError, SampledFrame, ScrollId, ScrollRange, Size, SpatialId,
-    SpatialKind, SpatialTreeNode, TreeError, Vec2,
+    SpatialKind, SpatialTreeNode, StableSemanticId, TreeError, Vec2,
 };
 pub use scene::{GlassSurface, NeoScene};
 pub use scroll::{

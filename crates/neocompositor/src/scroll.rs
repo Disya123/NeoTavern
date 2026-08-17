@@ -214,6 +214,15 @@ impl ScrollTable {
         self.latch.map(GestureLatch::latched)
     }
 
+    pub(crate) fn max_applied_seq(&self) -> u64 {
+        self.slots
+            .iter()
+            .filter_map(|slot| slot.as_ref())
+            .map(|state| state.applied_input_seq.0)
+            .max()
+            .unwrap_or(0)
+    }
+
     pub fn ack(&mut self, ack: ScrollAck) -> AckResult {
         match self.slots.get_mut(ack.scroll_id.index() as usize) {
             Some(Some(slot)) if slot.id == ack.scroll_id => slot.ack(ack),
