@@ -97,7 +97,6 @@ function startRenderdocServer(adbBin, serial, layerApp) {
 
 function launchProbe(adbBin, serial) {
   adb(adbBin, serial, ['shell', 'am', 'force-stop', PACKAGE]);
-  adb(adbBin, serial, ['shell', 'mkdir', '-p', '/sdcard/Android/data/com.neotavern.mobile/files']);
   return adb(adbBin, serial, [
     'shell',
     'am',
@@ -105,14 +104,14 @@ function launchProbe(adbBin, serial) {
     '-S',
     '-n',
     `${PACKAGE}/${ACTIVITY}`,
-    '--ei',
+    '--es',
     `${PACKAGE}.M0_D1A_FRAMES`,
     '100',
   ]);
 }
 
 function logcatDump(adbBin, serial) {
-  const result = adb(adbBin, serial, ['logcat', '-d', '-t', '800']);
+  const result = adb(adbBin, serial, ['logcat', '-d', '-s', 'NeoTavern:I', 'renderdoc:I', 'RenderDoc:I']);
   return `${result.stdout || ''}\n${result.stderr || ''}`;
 }
 
@@ -128,7 +127,7 @@ function waitForProbe(adbBin, serial) {
     const ended = /renderdoc_api=end_frame_capture/.test(log);
     const gpuRan = /gpu_ran=true/.test(log);
     const absent = /renderdoc_api=absent/.test(log);
-    if (ended || (gpuRan && absent) || (gpuRan && /renderdoc_api=/.test(log))) {
+    if ((ended && gpuRan) || (gpuRan && absent)) {
       return { log, ended, gpuRan, absent };
     }
     sleep(POLL_MS);
@@ -149,11 +148,24 @@ function capturePathFromLog(log) {
 }
 
 function listCaptureCandidates(adbBin, serial) {
+  const found = [];
+  const viaRunAs = adb(adbBin, serial, [
+    'shell',
+    'run-as',
+    PACKAGE,
+    'sh',
+    '-c',
+    'ls -1 files/*.rdc cache/*.rdc 2>/dev/null',
+  ]);
+  for (const line of (viaRunAs.stdout || '').split(/\r?\n/u)) {
+    const name = line.trim().replace(/^\.\//u, '');
+    if (name.endsWith('.rdc')) found.push(name);
+  }
   const dirs = [
+    '/data/data/com.neotavern.mobile/files',
     '/sdcard/Android/data/com.neotavern.mobile/files',
     '/storage/emulated/0/Android/data/com.neotavern.mobile/files',
   ];
-  const found = [];
   for (const dir of dirs) {
     const listed = adb(adbBin, serial, ['shell', 'ls', '-1', dir]);
     for (const line of (listed.stdout || '').split(/\r?\n/u)) {
@@ -161,22 +173,27 @@ function listCaptureCandidates(adbBin, serial) {
       if (name.endsWith('.rdc')) found.push(`${dir}/${name}`);
     }
   }
-  const logged = adb(adbBin, serial, [
-    'shell',
-    'sh',
-    '-c',
-    'ls -1 /sdcard/Android/data/com.neotavern.mobile/files/m0-d1a*.rdc 2>/dev/null',
-  ]);
-  for (const line of (logged.stdout || '').split(/\r?\n/u)) {
-    const name = line.trim();
-    if (name.endsWith('.rdc') && !found.includes(name)) found.push(name);
-  }
-  return found;
+  return [...new Set(found)];
 }
 
 function pullCapture(adbBin, serial, remote, local) {
-  const pulled = adb(adbBin, serial, ['pull', remote, local], { timeout: 120_000 });
-  return { ...pulled, ok: pulled.status === 0 && existsSync(local) };
+  let rel = remote;
+  const filesIdx = remote.lastIndexOf('/files/');
+  if (filesIdx >= 0) {
+    rel = `files/${remote.slice(filesIdx + '/files/'.length)}`;
+  } else if (remote.startsWith('/')) {
+    rel = `files/${remote.split('/').pop()}`;
+  }
+  const pulled = adb(adbBin, serial, ['exec-out', 'run-as', PACKAGE, 'cat', rel], {
+    timeout: 120_000,
+    encoding: 'buffer',
+  });
+  if (pulled.status === 0 && pulled.stdout && pulled.stdout.length > 0) {
+    writeFileSync(local, pulled.stdout);
+    return { ok: existsSync(local), status: 0, rel };
+  }
+  const fallback = adb(adbBin, serial, ['pull', remote, local], { timeout: 120_000 });
+  return { ...fallback, ok: fallback.status === 0 && existsSync(local), rel };
 }
 
 function convertToXml(renderdoccmd, rdcPath, xmlPath) {

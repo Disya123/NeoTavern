@@ -22,7 +22,7 @@ use crate::gpu::probe_trace;
 const RTLD_NOW: c_int = 2;
 const RTLD_NOLOAD: c_int = 4;
 const API_1_1_2: i32 = 10102;
-const PATH_TEMPLATE: &str = "/sdcard/Android/data/com.neotavern.mobile/files/m0-d1a";
+const PATH_TEMPLATE: &str = "/data/data/com.neotavern.mobile/files/m0-d1a";
 
 const MODULES: &[&str] = &[
     "libVkLayer_GLES_RenderDoc.so",
