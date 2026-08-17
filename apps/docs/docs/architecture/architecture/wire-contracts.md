@@ -543,6 +543,6 @@ Result<Vec<u8>, KernelError>`).
   status codes, buffer-free contract).
 - [ADR-0029](../adr/0029-wire-contract-toolchain.md) — decision record for this
   toolchain; [ADR-0004](../adr/0004-typebox-contracts.md) — the TypeBox base.
-- [Presentation boundary](presentation-boundary.md) — Milestone A **STARTED**;
-  Product Wire boundary **PASS**. UI surfaces consume Product Wire
-  `operationId`s; they do not own SQLite.
+- [Presentation boundary](presentation-boundary.md) — Milestone A **PASS**
+  (feature-flagged Dioxus Product Wire shell). UI surfaces consume Product
+  Wire `operationId`s; they do not own SQLite.

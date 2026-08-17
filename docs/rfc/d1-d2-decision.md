@@ -52,19 +52,19 @@ React. Platform unification is not imposed now.
 ## Follow-on status (not a re-signature)
 
 ```text
-Milestone A = STARTED
+Milestone A = PASS
 A/Product Wire boundary = PASS
 Milestone B = STARTED
 ```
 
-A PASS still requires a feature-flagged Dioxus product shell, React ↔
-Dioxus canonical view-model parity, and presentation-path
-generation/backpressure/streaming tests.
+A PASS is the feature-flagged Dioxus Product Wire shell, React ↔ Dioxus
+canonical view-model parity, and presentation-path generation/backpressure
+tests. It is not production cutover.
 
 ## Next technical chain
 
 ```text
-Milestone A — STARTED (Product Wire boundary PASS; shell/parity/streaming open)
+Milestone A — PASS (feature-flagged Dioxus Product Wire shell; not cutover)
 → Milestone B — NeoCompositor production implementation (feature-flagged)
 → Milestone C — Android product slice only after B/C DoD
 → rollback remains React/WebView

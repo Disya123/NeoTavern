@@ -48,13 +48,10 @@ UI vs Android/Web split) is a separate staffing/parity decision.
 
 ## Consequences
 
-- Milestone A is **STARTED**, not PASS. The Product Wire / presentation
-  boundary is **PASS**
-  ([presentation-boundary.md](../architecture/presentation-boundary.md)).
+- Milestone A is **PASS** for the feature-flagged Product Wire presentation
+  shell ([presentation-boundary.md](../architecture/presentation-boundary.md)).
   Presentation consumes Product Wire; it does not become a second product
-  authority. A PASS still requires a feature-flagged Dioxus product shell,
-  React ↔ Dioxus view-model parity, and presentation-path
-  generation/backpressure tests.
+  authority. This is not a `MainActivity` cutover.
 - Milestone B is **STARTED**, not PASS. Production types live in
   `crates/neocompositor`. M0 probe crates remain probes and are not the
   production JNI. This is not Android cutover.

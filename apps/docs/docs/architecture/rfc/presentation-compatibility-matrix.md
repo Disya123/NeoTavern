@@ -4,8 +4,9 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/rfc/presentation-c
 
 # PresentationCompatibilityMatrix (baseline)
 
-**Status:** baseline after D1/D2 GO. Milestone A is **STARTED**, not PASS.
-Not a product cutover. Owners have not signed PARITY for Android native UI.
+**Status:** baseline after D1/D2 GO. Milestone A is **PASS** (flagged
+Dioxus Product Wire shell, not cutover). Not a product cutover. Owners have
+not signed PARITY for Android native UI.
 
 **RFC:** [neoui-v4-android-presentation-backend.md](neoui-v4-android-presentation-backend.md) §2.4  
 **Boundary:** [presentation-boundary.md](../architecture/presentation-boundary.md)  

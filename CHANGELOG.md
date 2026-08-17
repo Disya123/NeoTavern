@@ -35,6 +35,11 @@
   `MainActivity`. `NEOTA_DIOXUS_SHELL=1` is non-default. Milestone A stamp
   is still STARTED until the evidence record.
 
+- **Milestone A PASS (not production cutover).** Evidence: shared Product
+  Wire fixture, Dioxus `VirtualDom` shell, React ↔ Dioxus projection
+  parity, stale-generation drop, bounded streaming. `MainActivity` remains
+  WebView. Milestone B remains STARTED.
+
 - **M0-D2 host-side Vulkan capture admission.** Program **M0-D2 PASS**.
   Adjudicator `scripts/m0-d2-adjudicate.mjs` hashed the physical RenderDoc
   `.rdc` / XML / control+capture logs / BOUND APK (`3036422`, SHA-256

@@ -210,9 +210,9 @@ gate passes.
 - [Product Wire Contracts](wire-contracts.md) — canonical TypeBox contracts,
   wire-safe rules, handshake, versioning, deterministic codegen and the
   cross-language corpus.
-- [Presentation boundary](presentation-boundary.md) — Milestone A **STARTED**;
-  Product Wire boundary **PASS**. Not A PASS. React/WebView remains rollback;
-  D3 DEFERRED.
+- [Presentation boundary](presentation-boundary.md) — Milestone A **PASS**
+  (feature-flagged Dioxus Product Wire shell). Not production cutover.
+  React/WebView remains rollback; D3 DEFERRED.
 - [PresentationCompatibilityMatrix](../rfc/presentation-compatibility-matrix.md)
   — baseline capability statuses after D1/D2 GO (not a cutover).
 - [Runtime Kernel + Storage foundation](https://github.com/Disya123/NeoTavern/blob/main/crates/runtime-kernel/README.md) —

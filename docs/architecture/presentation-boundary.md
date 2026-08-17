@@ -3,15 +3,15 @@
 **Status:**
 
 ```text
-Milestone A = STARTED
+Milestone A = PASS
 A/Product Wire boundary = PASS
 Milestone B = STARTED
 ```
 
-This is **not** yet the Milestone A PASS stamp. RFC §49 deliverables for
-the flagged shell, React ↔ Dioxus view-model parity, and presentation-path
-streaming tests now exist in `crates/presentation-dioxus-shell` and the
-shared fixtures. Production `MainActivity` is unchanged.
+Milestone A **PASS** is the feature-flagged Product Wire shell, React ↔
+Dioxus canonical projection parity, and presentation-path streaming tests.
+It is **not** a production migration, **not** Milestone B/C PASS, and **not**
+a `MainActivity` cutover.
 
 **Decisions:** [ADR-0049](../adr/0049-track-d-dioxus-presentation.md),
 [d1-d2-decision.md](../rfc/d1-d2-decision.md).

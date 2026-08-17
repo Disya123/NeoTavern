@@ -5,7 +5,7 @@
     {
       "source": "README.md",
       "target": "README.md",
-      "sha256": "ce848ce5d2ad52f45ee492e820158a6ae703a98bdbeeefab0d22973580cb49c4"
+      "sha256": "10cb8502850e84c5aabb1bb5e191baa6522f9bff38ee8d7a30d46834cb2c9515"
     },
     {
       "source": "adr/0004-typebox-contracts.md",
@@ -225,7 +225,7 @@
     {
       "source": "adr/0049-track-d-dioxus-presentation.md",
       "target": "adr/0049-track-d-dioxus-presentation.md",
-      "sha256": "9fad7bd07e1e096425d5dcd785315f23d07cc407e2fe2491e44b3608a7ac6a3c"
+      "sha256": "ac8a41382c0188003c1eb86d6fb79651f920b30498b967b1823aad57aeb19361"
     },
     {
       "source": "adr/README.md",
@@ -245,7 +245,7 @@
     {
       "source": "architecture/README.md",
       "target": "architecture/README.md",
-      "sha256": "38d12afe6953f6e02f696b70e5bec162b9ca9c599526a1b34aed11650ad6177f"
+      "sha256": "bd575ff5b52acfb2ad52dced1085a061f87c95e882f522ed934b1c665e1d51d0"
     },
     {
       "source": "architecture/benchmarks.md",
@@ -275,7 +275,7 @@
     {
       "source": "architecture/presentation-boundary.md",
       "target": "architecture/presentation-boundary.md",
-      "sha256": "a64ba9a4e893acedb608d6fd9892ae7f66484022bbb6e6b14be735dfbc0c33bd"
+      "sha256": "768d7880803a64086f601684aff08fa53de5d846645e17f703777f815a786405"
     },
     {
       "source": "architecture/prompt-pipeline.md",
@@ -305,7 +305,7 @@
     {
       "source": "architecture/wire-contracts.md",
       "target": "architecture/wire-contracts.md",
-      "sha256": "77ab20c566fbc2a5019b8122e90fc661952119643d5f4b0b58837e08bc9c5fdd"
+      "sha256": "d7b6951963443ff94ee2f419590b3d51964aaf7e85200914621a68f26543f404"
     },
     {
       "source": "capability-matrix.md",
@@ -355,12 +355,12 @@
     {
       "source": "rfc/README.md",
       "target": "rfc/README.md",
-      "sha256": "77ebd47a30adfc0c215cf249243d9fe2d39b5f69947b5a084a5191b5a376471f"
+      "sha256": "f1c1b2b6fec7c0b4b5a0794d5f29b4575656d9b01660d00f5330ba51245168a0"
     },
     {
       "source": "rfc/d1-d2-decision.md",
       "target": "rfc/d1-d2-decision.md",
-      "sha256": "ef231f3ea8ae6eba9e0dbed3235160a79a99c2bf08160fe65771c6ed4aae83ad"
+      "sha256": "836765987ba60938271564a4a6daf3483ca44ef1c11e3be7e167d692f5d950fd"
     },
     {
       "source": "rfc/gate-p-decision-draft.md",
@@ -415,7 +415,7 @@
     {
       "source": "rfc/presentation-compatibility-matrix.md",
       "target": "rfc/presentation-compatibility-matrix.md",
-      "sha256": "ee48b41f22267f9b62b10bd144bb905a1ee9fdc39248809ce946ae16b9c80faf"
+      "sha256": "f91894d32a62c0ba2a8c466c685ffe2f72d30b3e6caf72c3c6ec00e9f98fa25a"
     },
     {
       "source": "theme-sdk/README.md",
