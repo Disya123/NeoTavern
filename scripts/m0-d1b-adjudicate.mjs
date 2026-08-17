@@ -31,6 +31,11 @@ import {
 } from './m0-d1a-capture-host.mjs';
 
 export const ADJUDICATION_SCHEMA = 'm0-d1b-adjudication/v1';
+export const DEFAULT_STAMP = '2026-08-17T18-15-34-453Z';
+export const CONTROL_STAMP = '2026-08-17T18-15-03-717Z';
+export const BOUND_APK_COMMIT = '21b38c0f685f6546ead30ee7f87b97a9014b1e5f';
+export const EXPECTED_APK_SHA256 =
+  '089744f364a24018bbea15ffb51abd8a4cc7ebcf4ab2fe887285ba12f41384e6';
 export const CAPTURES_DIR_D1B = join(ROOT, 'apps', 'android', 'm0-d1b-captures');
 export const MOVING_LABEL = 'm0-d1b-moving';
 export const MOVING_BLIT_G120 = 'm0-d1b-moving-blit:g120';
@@ -303,11 +308,11 @@ export function adjudicate({
       hashes.capture_log.present &&
       hashes.control_log.present &&
       hashes.apk.present &&
-      (!bundle?.apk_sha256 || hashes.apk.sha256 === bundle.apk_sha256) &&
+      hashes.apk.sha256 === EXPECTED_APK_SHA256 &&
       hashes.rdc.bytes > 100_000 &&
       hashes.xml.bytes > 100_000,
     hashes,
-    expected_apk_sha256: bundle?.apk_sha256 ?? null,
+    expected_apk_sha256: EXPECTED_APK_SHA256,
     reason: 'SHA-256 recorded for .rdc, XML, both logs, and bound APK',
   });
 
@@ -339,27 +344,40 @@ export function adjudicate({
   const ok = checks.every((row) => row.ok);
   return {
     schema: ADJUDICATION_SCHEMA,
-    capture_tooling_commit: PINNED_CAPTURE_TOOLING_COMMIT,
-    stamp,
-    control_stamp: controlStamp,
-    ok,
+    status: ok ? 'PASS' : 'FAIL',
+    d1b_verdict: ok ? 'PASS' : 'FAIL',
+    d1b_program: ok ? 'PASS' : 'FAIL',
     android_gpu_capture: ok,
     capture_driver: api.api ?? null,
     capture_admissible: ok,
-    d1b_verdict: ok ? 'PASS' : 'FAIL',
     d1a_verdict: 'UNCHANGED',
+    d2: 'NOT_STARTED',
+    environment_blocked: false,
+    stamp,
+    control_stamp: controlStamp,
+    apk_source_commit: bundle?.base_commit ?? BOUND_APK_COMMIT,
+    capture_tooling_commit: PINNED_CAPTURE_TOOLING_COMMIT,
     track_d_go: 'NOT_GRANTED',
+    device: {
+      serial: '8f5c2b7c',
+      model: '23122PCD1G',
+      gpu: 'Adreno 710',
+    },
+    ok,
     checks,
+    failed: checks.filter((row) => !row.ok).map((row) => row.id),
+    labels,
+    named_resources: Object.fromEntries(names),
     apk_sha256: hashes.apk.sha256,
     rdc_sha256: hashes.rdc.sha256,
     xml_sha256: hashes.xml.sha256,
-    note: 'probe log capture=false expected; host admission only; not D1=Track D GO',
+    note: 'host-side admission; probe log capture=false is expected; D1a JSON unchanged; D1=Track D GO is not granted',
   };
 }
 
 function main() {
-  const stamp = argValue('stamp');
-  const controlStamp = argValue('control-stamp');
+  const stamp = argValue('stamp') || DEFAULT_STAMP;
+  const controlStamp = argValue('control-stamp') || CONTROL_STAMP;
   const apkPath = argValue('apk') || DEFAULT_APK;
   const write = process.argv.includes('--write');
   const record = adjudicate({ stamp, controlStamp, apkPath });

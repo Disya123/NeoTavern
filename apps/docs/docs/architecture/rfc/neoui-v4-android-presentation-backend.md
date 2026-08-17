@@ -302,7 +302,7 @@ D запрещено выбирать только потому, что он т�
 | A/A0 | `MEASURED` emulator-only morning fixture; physical `BLOCKED`; evening AVD A/A0 **`INVALID_FOR_COMPARISON`** |
 | B | `MEASURED` emulator-only morning fixture; physical `BLOCKED`; evening AVD B **`INVALID_FOR_COMPARISON`** |
 | C | `NOT MEASURED` |
-| D | M0-D1a **PASS** (host-side RenderDoc Vulkan); M0-D1b **STARTED** (generation-120 capture plan; не PASS); PRE-GATE desktop/AVD D1a **не admitted** |
+| D | M0-D1a **PASS**; M0-D1b **PASS** (host-side RenderDoc Vulkan at g120); PRE-GATE desktop/AVD D1a **не admitted** |
 
 Перед Gate P публикуется `BaselineReport M-1` с измеренными A/A0/B и только
 оценочными C/D. Он достаточен для выбора важности live glass, но **не** для D1.
@@ -3932,8 +3932,8 @@ Snapshot фиксирует факты, но не повышает program verdi
 | evening AVD D1a (installed APK) | `BLOCKED / NON-ADMISSIBLE` | `.so` ≠ current source bundle; **not admitted** |
 | signed Gate P record | `docs/rfc/gate-p-decision-draft.md` | `GateP:P1`; owner `Disya123 <gamedisya@gmail.com>` |
 | `M0-D1a` (normative) | **`PASS`** | host-side admission [`m0-d1a-adjudication.json`](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/m0-d1a-adjudication.json); probe log `capture=false` expected |
-| `M0-D1b` | **`STARTED`** | D1a PASS; bake-once Vello; generation-120 capture plan; [m0-d1b-probe.md](m0-d1b-probe.md); [m0-d1b-physical-runbook.md](m0-d1b-physical-runbook.md); **not** D1b PASS |
-| `M0-D2` | `NOT_STARTED` | D1a/b не PASS |
+| `M0-D1b` | **`PASS`** | host-side admission [`m0-d1b-adjudication.json`](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/m0-d1b-adjudication.json); probe log `capture=false`; D1a JSON unchanged |
+| `M0-D2` | `NOT_STARTED` | D1a/b PASS; producer seam may start |
 | `D1=Track D GO` | `NOT_GRANTED` | M0 PASS и TrackComparison отсутствуют |
 
 Снятое partial evidence:

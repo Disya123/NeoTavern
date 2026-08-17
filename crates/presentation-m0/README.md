@@ -11,7 +11,8 @@ into the production WebView kernel `.so`. A **debug-only** Activity can load
 a second library `libneotavern_presentation_m0.so`.
 
 Evidence: [`docs/rfc/m0-d1a-probe.md`](../../docs/rfc/m0-d1a-probe.md),
-[`docs/rfc/m0-d1b-probe.md`](../../docs/rfc/m0-d1b-probe.md).
+[`docs/rfc/m0-d1b-probe.md`](../../docs/rfc/m0-d1b-probe.md),
+[`docs/rfc/m0-d1b-adjudication.json`](../../docs/rfc/m0-d1b-adjudication.json).
 
 ## What it proves
 
@@ -90,10 +91,9 @@ node scripts/m0-d1a-source-bundle.mjs --apk path/to/app-debug.apk --bind-apk
 ## Constraints
 
 - RFC 4.5: Gate P is `GateP:P1`. Normative M0 is `ENTERED`, not PASS.
-  Host-side D1a is **PASS**. This crate's logcat bit stays `capture=false`.
-  Desktop/AVD PRE-GATE runs stay unadmitted. D1b is **STARTED** (bake-once
-  Vello, generation-120 capture plan), not PASS. Do not treat either as
-  `D1=Track D GO`.
+  Host-side D1a and D1b are **PASS**. This crate's logcat bit stays
+  `capture=false`. Desktop/AVD PRE-GATE runs stay unadmitted. Do not
+  treat either as `D1=Track D GO`.
 - An emulator GLES 3.1 100-frame logcat line is partial evidence, not an
   admissible D1a PASS (needs Gate P, GPU capture, physical device, source
   bundle). Compiling the NDK `.so` is not a PASS.

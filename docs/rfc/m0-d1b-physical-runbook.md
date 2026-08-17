@@ -1,8 +1,8 @@
 # M0-D1b physical capture runbook
 
-**Status:** lab procedure after host-side [M0-D1a PASS](m0-d1a-adjudication.json).
-Program D1b is **STARTED**, not PASS. The probe log stays `capture=false`.
-Desktop Vulkan is preliminary. D1a evidence/verdict must not be rewritten.
+**Status:** lab procedure. Program **M0-D1b PASS** is the host-side record
+[`m0-d1b-adjudication.json`](m0-d1b-adjudication.json), not the probe logcat
+bit. Desktop Vulkan is preliminary. D1a evidence/verdict must not be rewritten.
 
 **Probe:** [m0-d1b-probe.md](m0-d1b-probe.md)  
 **Schema:** `m0-d1b-adjudication/v1` (`scripts/m0-d1b-adjudicate.mjs`)  
@@ -85,10 +85,22 @@ capture=false
 
 ## Admission
 
-The probe cannot set `android_gpu_capture`. Host-side
-`scripts/m0-d1b-adjudicate.mjs --write` may write
-`docs/rfc/m0-d1b-adjudication.json` only after the physical artifacts exist.
-That write is a **later** evidence commit, not this probe commit.
+Host-side `scripts/m0-d1b-adjudicate.mjs --write` wrote
+[`docs/rfc/m0-d1b-adjudication.json`](m0-d1b-adjudication.json) after the
+physical artifacts below.
+
+| Split | Value |
+| ----- | ----- |
+| Capture stamp | `2026-08-17T18-15-34-453Z` |
+| Control stamp | `2026-08-17T18-15-03-717Z` |
+| APK source commit | `21b38c0` |
+| APK SHA-256 | `089744f364a24018bbea15ffb51abd8a4cc7ebcf4ab2fe887285ba12f41384e6` |
+| `.rdc` SHA-256 | `7768ec08d2b7288dee98d8ea8cb242d95dbbb032f1abdc94221327d7d6c167ad` |
+| Device | Xiaomi `8f5c2b7c` / Adreno 710 / Vulkan |
+| `d1b_verdict` | **PASS** |
+| Probe `capture=` | false |
+
+The probe cannot set `android_gpu_capture`. Only this host record flips it.
 
 ## Non-goals
 

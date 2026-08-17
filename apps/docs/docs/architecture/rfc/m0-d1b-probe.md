@@ -4,8 +4,9 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/rfc/m0-d1b-probe.m
 
 # M0-D1b moving sampleable texture
 
-**Status:** **STARTED** after host-side [M0-D1a PASS](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/m0-d1a-adjudication.json).
-Not D1b PASS. Normative M0 stays **`ENTERED`**. `D1=Track D GO` is not
+**Status:** program **M0-D1b PASS** on the host-side record
+[`m0-d1b-adjudication.json`](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/m0-d1b-adjudication.json). The probe log stays
+`capture=false`. Normative M0 stays **`ENTERED`**. `D1=Track D GO` is not
 granted. D1a capture boundary, D1a evidence, and the D1a admission JSON
 are unchanged (`d1b=NOT_STARTED` in that file is historical).
 
@@ -58,69 +59,46 @@ generation: `sampled_gen == frame`). Its damage/ROI follows the moving dest
 and stays inside the original 140×80 glass bounds, smaller than the 320×200
 accumulator and the 256×256 snapshot.
 
-Debug groups the physical Vulkan capture at frame 120 must show:
+## Host-side admission (2026-08-17)
+
+Physical Xiaomi `8f5c2b7c` / Adreno 710 / Vulkan. Source commit
+`21b38c0`. Bound APK SHA-256 `089744f3…`. Capture stamp
+`2026-08-17T18-15-34-453Z` vs control `2026-08-17T18-15-03-717Z`.
+
+Event Browser at generation 120:
 
 ```text
-m0-d1b-moving-blit:g120
-→ accumulator current generation
+m0-d1b-restore-static
+→ m0-d1b-moving-blit:g120
 → m0-d1b-roi-read:2
 → m0-d1b-glass:2:g120
+→ m0-d1b-overlay-blit
 ```
 
-## Telemetry
+Moving blit is 64×64 into the named accumulator. Glass B ROI copy is
+bounded (`96×60` at dest offset in the capture). No stale `glass:2:g0`
+on that frame. No `vkMapMemory` / image-to-buffer. One `VkDevice`.
 
-| Field | 1000-frame golden |
-| ----- | ----------------- |
-| `frames` | 1000 |
-| `devices` | 1 |
-| `readbacks` | 0 |
-| `xdev` | 0 |
-| `moving_blits` | 1000 |
-| `pass_compiles` | 1 |
-| `vello_rebuilds` | 4 |
-| `layout_rebuilds` / `ui_rebuilds` | 0 |
-| `raster` | 4 |
-| `glass` / `roi_copies` | 1001 (2 on bake + Glass B on 999 motion frames) |
-| `sampled_gen` | 999 |
-| `capture_timeline` | `restore,moving:g120,roi:2,glass:2:g120,overlay` |
-| `render_polls` | 0 |
-| `capture_polls` | 0 on the normal path; 1 only around RenderDoc `EndFrameCapture` |
-| `acc_bytes` | `1046528` (D1a `774144` + `64×64×4` + extra 320×200 static-prefix cache) |
-| crate `capture=` | **false** (probe cannot self-admit) |
-| crate verdict | **BLOCKED** off host-side admission |
+| Field | Control | Capture |
+| ----- | ------- | ------- |
+| `frames` | 1000 | 1000 |
+| `devices` / `readbacks` / `xdev` | 1 / 0 / 0 | 1 / 0 / 0 |
+| `moving_blits` | 1000 | 1000 |
+| `pass_compiles` | 1 | 1 |
+| `vello_rebuilds` | 4 | 4 |
+| `layout_rebuilds` / `ui_rebuilds` | 0 / 0 | 0 / 0 |
+| `raster` / `glass` | 4 / 1001 | 4 / 1001 |
+| `render_polls` | 0 | 0 |
+| `capture_polls` | 0 | 1 (after `EndFrameCapture` only) |
+| `acc_bytes` | 1046528 | 1046528 |
+| probe `capture=` | false | false |
 
-A capture-only `device.poll` after `EndFrameCapture` must not increment
-`render_polls`. Production motion frames do not wait on a fence or device
-poll.
-
-## Desktop GPU 1000-frame run (preliminary)
-
-```text
-cargo test --manifest-path crates/Cargo.toml -p neotavern-presentation-m0 --features gpu
-cargo run --manifest-path crates/Cargo.toml -p neotavern-presentation-m0 --features gpu --bin m0-d1b-probe
-```
-
-Desktop Vulkan is a useful pre-check. It is **not** a physical Android D1b
-PASS and **not** a new GPU capture. D1a RenderDoc admission is unchanged.
-
-## Still required for D1b PASS
-
-RFC 4.5 exit M0-D1b, host-side only (`scripts/m0-d1b-adjudicate.mjs`):
-
-- physical Android 1000-frame run on the production backend
-- readable Vulkan capture at generation 120 with the motion chain above
-- Glass B does not sample a previous generation
-- damage/ROI follows motion and stays bounded
-- resource/target high-water stable vs control
-- no validation errors / stale handles
-- `devices=1`, `readbacks=0`, `xdev=0`
-
-Do not treat crate `BLOCKED`/`PASS` as program D1b. Do not flip
-`android_gpu_capture` in the probe log.
+Host record: `android_gpu_capture=true`, `capture_driver=Vulkan`,
+`d1b_verdict=PASS`. The crate still cannot self-admit.
 
 ## Non-goals
 
 - Rewriting the D1a admission JSON or D1a evidence
 - Production `MainActivity` compositor
-- M0-D2 Dioxus/Blitz producer
-- `D1=Track D GO`
+- `D1=Track D GO` (needs M0 PASS and TrackComparison)
+- Treating crate `BLOCKED` as a FAIL
