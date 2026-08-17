@@ -18,7 +18,15 @@ function main() {
   const dump = readFileSync(path, 'utf8');
   const result = classifyCaptureDump(dump);
   process.stdout.write(
-    `${JSON.stringify({ ...result, path: resolve(path), note: 'not a D1a PASS' }, null, 2)}\n`,
+    `${JSON.stringify(
+      {
+        ...result,
+        path: resolve(path),
+        note: 'not a D1a PASS; OpenGLES dumps are WRONG_API_CAPTURE / NON-ADMISSIBLE',
+      },
+      null,
+      2,
+    )}\n`,
   );
   process.exit(result.ok ? 0 : 4);
 }

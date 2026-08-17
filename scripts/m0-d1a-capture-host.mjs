@@ -24,6 +24,19 @@ export const MIN_DEVICE_SDK = 30;
 export const REQUIRED_DEBUG_GROUPS = ['m0-d1a-roi-read:1', 'm0-d1a-roi-read:2'];
 export const ACCUMULATOR_LABEL = 'm0-d1a-accumulator';
 export const SNAPSHOT_LABEL = 'm0-d1a-glass-roi';
+export const GOLDEN_D1A_TIMELINE =
+  'clear,raster,blit,roi:1,glass:1,raster,blit,raster,blit,roi:2,glass:2,raster,blit';
+export const GOLDEN_D1A_COUNTERS = {
+  devices: 1,
+  readbacks: 0,
+  xdev: 0,
+  roi_copies: 200,
+  raster: 400,
+  glass: 200,
+  frames: 100,
+  timeline: GOLDEN_D1A_TIMELINE,
+};
+export const GLES_WRONG_API_CAPTURE = '2026-08-17T16-53-54-457Z-d1a.rdc';
 export const EVIDENCE_SCHEMA = 'm0-d1a-capture-evidence/v1';
 export const AGI_PIN_REL = 'tools/agi.pin.json';
 export const RENDERDOC_PIN_REL = 'tools/renderdoc.pin.json';
@@ -145,6 +158,20 @@ export function verifyRenderdocPin(pin = loadRenderdocPin()) {
         name: apkRel,
         expected: pin.android_apk.arm64_sha256,
         actual: apkShaActual,
+      });
+    }
+  }
+  const headerRel = pin.app_header?.path;
+  const headerPath = headerRel ? join(ROOT, headerRel) : null;
+  if (!headerPath || !existsSync(headerPath)) {
+    missing.push(headerRel || 'renderdoc_app.h');
+  } else if (pin.app_header?.sha256) {
+    const headerSha = sha256File(headerPath);
+    if (headerSha !== String(pin.app_header.sha256).toLowerCase()) {
+      mismatches.push({
+        name: headerRel,
+        expected: pin.app_header.sha256,
+        actual: headerSha,
       });
     }
   }
@@ -521,17 +548,119 @@ export function bindApkMatches(bundle, apkPath) {
   return { ok: true, sha256: actual, reason: 'APK SHA-256 matches BOUND bundle' };
 }
 
+export function classifyRenderdocApi(text) {
+  const isRenderdocXml = /<rdc>|<driver id=/u.test(text);
+  if (!isRenderdocXml) {
+    return {
+      ok: true,
+      api: 'not-renderdoc-xml',
+      status: 'N/A',
+      admissible: true,
+      driver: null,
+      vulkan_commands: /vkCmd|vkQueueSubmit/u.test(text),
+      reason: 'dump is not a RenderDoc XML convert; API gate skipped',
+    };
+  }
+  const driverMatch = text.match(/<driver id="[^"]*">([^<]+)<\/driver>/u);
+  const driver = driverMatch ? driverMatch[1].trim() : null;
+  const vulkanCmds =
+    /vkCmd(?:Draw|CopyImage|BlitImage|Dispatch|PipelineBarrier)|vkQueueSubmit|vkBeginCommandBuffer/u.test(
+      text,
+    );
+  const glesOnly =
+    driver === 'OpenGLES' ||
+    (/glGenVertexArrays|Default VAO|OpenGL ES/u.test(text) && !vulkanCmds);
+  if (glesOnly) {
+    return {
+      ok: false,
+      api: 'OpenGLES',
+      status: 'WRONG_API_CAPTURE',
+      admissible: false,
+      driver,
+      vulkan_commands: false,
+      reason:
+        'OpenGLES / HWUI capture is NON-ADMISSIBLE for D1a; need Vulkan commands bound to wgpu VkDevice',
+    };
+  }
+  if (driver === 'Vulkan' || vulkanCmds) {
+    return {
+      ok: true,
+      api: 'Vulkan',
+      status: 'VULKAN',
+      admissible: true,
+      driver: driver || 'Vulkan',
+      vulkan_commands: vulkanCmds,
+      reason: 'RenderDoc dump contains Vulkan commands',
+    };
+  }
+  return {
+    ok: false,
+    api: driver || 'unknown',
+    status: 'UNKNOWN_API',
+    admissible: false,
+    driver,
+    vulkan_commands: false,
+    reason: 'RenderDoc dump is not a Vulkan Event Browser tree',
+  };
+}
+
+export function parseProbeLogLine(log) {
+  const lines = String(log)
+    .split(/\r?\n/u)
+    .filter((row) => /m0-d1a gpu_ran=/u.test(row));
+  const line = lines.at(-1);
+  if (!line) {
+    return { ok: false, values: null, line: null, reason: 'no m0-d1a gpu_ran line' };
+  }
+  const num = (name) => {
+    const match = line.match(new RegExp(`${name}=(\\d+)`));
+    return match ? Number(match[1]) : null;
+  };
+  const timeline = line.match(/timeline=([^\s]+)/u)?.[1] ?? '';
+  const values = {
+    devices: num('devices'),
+    readbacks: num('readbacks'),
+    xdev: num('xdev'),
+    roi_copies: num('roi_copies'),
+    raster: num('raster'),
+    glass: num('glass'),
+    frames: num('frames'),
+    timeline,
+  };
+  const ok =
+    values.devices === GOLDEN_D1A_COUNTERS.devices &&
+    values.readbacks === GOLDEN_D1A_COUNTERS.readbacks &&
+    values.xdev === GOLDEN_D1A_COUNTERS.xdev &&
+    values.roi_copies === GOLDEN_D1A_COUNTERS.roi_copies &&
+    values.raster === GOLDEN_D1A_COUNTERS.raster &&
+    values.glass === GOLDEN_D1A_COUNTERS.glass &&
+    values.frames === GOLDEN_D1A_COUNTERS.frames &&
+    values.timeline === GOLDEN_D1A_COUNTERS.timeline;
+  return {
+    ok,
+    values,
+    line,
+    reason: ok
+      ? 'golden D1a counters/timeline'
+      : 'counters or timeline diverged from the golden D1a cut',
+  };
+}
+
 export function classifyCaptureDump(text) {
+  const api = classifyRenderdocApi(text);
   const missing = REQUIRED_DEBUG_GROUPS.filter((group) => !text.includes(group));
   if (!text.includes(ACCUMULATOR_LABEL)) missing.push(ACCUMULATOR_LABEL);
   if (!text.includes(SNAPSHOT_LABEL)) missing.push(SNAPSHOT_LABEL);
+  const groupsOk = missing.length === 0;
   return {
-    ok: missing.length === 0,
+    ok: api.ok && groupsOk,
     missing,
     found_groups: REQUIRED_DEBUG_GROUPS.filter((group) => text.includes(group)),
-    reason:
-      missing.length === 0
-        ? 'capture dump contains both ROI reads and named resources'
+    api,
+    reason: !api.ok
+      ? api.reason
+      : groupsOk
+        ? 'capture dump contains Vulkan commands, both ROI reads, and named resources'
         : `capture incomplete: missing ${missing.join(',')}`,
   };
 }
@@ -632,13 +761,13 @@ export function evaluateHost(opts = {}) {
   if (!adb.ok) blockers.push(adb.reason ?? 'adb not found');
   if (!traces.ok) blockers.push('trace directory not writable');
   if (!apk.ok) blockers.push(apk.reason);
-  if (!bind.ok) blockers.push(bind.reason);
+  if (!opts.skipBind && !bind.ok) blockers.push(bind.reason);
   if (!opts.skipToolingAncestor && !toolingCommitIsAncestor()) {
     blockers.push(
       `capture_tooling_commit ${PINNED_CAPTURE_TOOLING_COMMIT} is not an ancestor of HEAD`,
     );
   }
-  if (!provenance.ok) blockers.push(provenance.reason);
+  if (!opts.skipBind && !provenance.ok) blockers.push(provenance.reason);
   const capture_host = blockers.length === 0 ? 'READY' : 'NOT_READY_INTERNAL';
   return {
     capture_host,

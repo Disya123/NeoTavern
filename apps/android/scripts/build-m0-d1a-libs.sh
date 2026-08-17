@@ -3,8 +3,9 @@
 # Builds the debug-only M0-D1a paint probe into
 # app/src/debug/jniLibs/{arm64-v8a,x86_64}/libneotavern_presentation_m0.so
 #
-# NOT part of production libneotavern_android_jni.so / assembleRelease.
-# assembleDebug picks this up only if the .so is present (gitignored).
+# Default features: gpu,android-jni (control counters).
+# Capture APK: M0_D1A_FEATURES=gpu,android-jni,renderdoc-capture
+# Production libneotavern_android_jni.so is never this crate.
 
 set -euo pipefail
 
@@ -25,13 +26,13 @@ fi
 OUT_DIR="$APP_DIR/app/src/debug/jniLibs"
 mkdir -p "$OUT_DIR"
 
-echo "Building neotavern-presentation-m0 (gpu,android-jni) -> $OUT_DIR"
+echo "Building neotavern-presentation-m0 (${M0_D1A_FEATURES:-gpu,android-jni}) -> $OUT_DIR"
 cd "$WORKSPACE_DIR"
 cargo ndk \
   -t arm64-v8a \
   -t x86_64 \
   -o "$OUT_DIR" \
-  build --release -p neotavern-presentation-m0 --features gpu,android-jni
+  build --release -p neotavern-presentation-m0 --features "${M0_D1A_FEATURES:-gpu,android-jni}"
 
 echo "Built:"
 ls -1 "$OUT_DIR"/*/libneotavern_presentation_m0.so

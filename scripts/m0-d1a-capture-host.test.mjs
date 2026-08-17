@@ -1,9 +1,11 @@
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  GOLDEN_D1A_COUNTERS,
   PINNED_CAPTURE_TOOLING_COMMIT,
   REQUIRED_DEBUG_GROUPS,
   abiCompatible,
@@ -13,6 +15,7 @@ import {
   buildRenderdocCaptureCommand,
   captureFilenames,
   classifyCaptureDump,
+  classifyRenderdocApi,
   classifyHardwareGpu,
   classifyProvenance,
   classifyRoiReadOrder,
@@ -20,7 +23,9 @@ import {
   debugManifestRenderdocQueriesDeclared,
   debugManifestVulkanDeclared,
   loadPreset,
+  loadRenderdocPin,
   loadRenderdocPreset,
+  parseProbeLogLine,
   deviceGate,
   inspectApkFromText,
   isEmulator,
@@ -59,6 +64,24 @@ describe('m0-d1a capture host', () => {
     expect(src).toContain('const IDX_START: usize = 19;');
     expect(src).toContain('const IDX_END: usize = 21;');
     expect(src).toContain('StartFrameCapture');
+    expect(src).toContain('capture_device=wgpu-vulkan');
+    expect(src).toContain('as_hal::<VulkanApi>');
+    expect(src).toContain('start(ptrs.rdoc_device, ptr::null_mut())');
+    expect(src).not.toMatch(/start\(\s*ptr::null_mut\(\)/u);
+  });
+
+  it('does not enable renderdoc-capture from android-jni', () => {
+    const toml = readFileSync(join(ROOT, 'crates', 'presentation-m0', 'Cargo.toml'), 'utf8');
+    expect(toml).toMatch(/android-jni = \["gpu"\]/u);
+    expect(toml).not.toMatch(/android-jni = \[[^\]]*renderdoc-capture/u);
+    expect(toml).toMatch(/renderdoc-capture = \["gpu", "dep:ash"\]/u);
+  });
+
+  it('pins vendored renderdoc_app.h', () => {
+    const pin = loadRenderdocPin();
+    const header = readFileSync(join(ROOT, pin.app_header.path));
+    expect(header.byteLength).toBe(pin.app_header.bytes);
+    expect(createHash('sha256').update(header).digest('hex')).toBe(pin.app_header.sha256);
   });
 
   it('exposes M0D1aActivity to AGI via MAIN without LAUNCHER', () => {
@@ -100,6 +123,9 @@ describe('m0-d1a capture host', () => {
     expect(pin.install_path.replaceAll('/', '\\')).toBe('E:\\renderdoc');
     expect(pin.build_sha).toBe('2fc0bc04cb95499635f63986a55bc6f67849dd9f');
     expect(pin.zip_sha256).toBe('bd665c348a8245d10a1f513e35b83603edc1a78006277583d09ec0769286eea4');
+    expect(pin.app_header.sha256).toBe(
+      'b7005e7dc34c3635046868bbd76d81b9b055aede0f56daa0bd39fedee0639ffb',
+    );
   });
 
   it('verifies installed RenderDoc hashes', () => {
@@ -259,6 +285,37 @@ describe('m0-d1a capture host', () => {
   it('requires ROI read :1 before :2', () => {
     expect(classifyRoiReadOrder(completeDump).ok).toBe(true);
     expect(classifyRoiReadOrder('m0-d1a-roi-read:2 then m0-d1a-roi-read:1').ok).toBe(false);
+  });
+
+  it('marks OpenGLES RenderDoc XML as WRONG_API_CAPTURE', () => {
+    const gles = `<?xml version="1.0"?><rdc><header><driver id="9">OpenGLES</driver></header>
+      <chunks><chunk name="glGenVertexArrays"/><string>Default VAO</string></chunks></rdc>`;
+    const api = classifyRenderdocApi(gles);
+    expect(api.status).toBe('WRONG_API_CAPTURE');
+    expect(api.admissible).toBe(false);
+    expect(classifyCaptureDump(gles).ok).toBe(false);
+  });
+
+  it('accepts Vulkan RenderDoc XML only with both ROI groups', () => {
+    const vulkan = `<?xml version="1.0"?><rdc><header><driver id="1">Vulkan</driver></header>
+      <chunks>
+        <chunk name="vkQueueSubmit"/>
+        <chunk name="vkCmdCopyImage"/>
+        <string>m0-d1a-roi-read:1</string>
+        <string>m0-d1a-roi-read:2</string>
+        <string>m0-d1a-accumulator</string>
+        <string>m0-d1a-glass-roi</string>
+      </chunks></rdc>`;
+    expect(classifyRenderdocApi(vulkan).ok).toBe(true);
+    expect(classifyCaptureDump(vulkan).ok).toBe(true);
+  });
+
+  it('parses the golden D1a logcat counters', () => {
+    const log = `ignored
+m0-d1a gpu_ran=true adapter=Adreno_(TM)_710 backend=Vulkan software=false devices=1 readbacks=0 xdev=0 roi_copies=200 raster=400 glass=200 frames=100 ran_on_android=true capture=false timeline=${GOLDEN_D1A_COUNTERS.timeline} timeline_events=13 first_frame_cpu_us=1 acc_bytes=1 verdict=BLOCKED reason=x`;
+    const parsed = parseProbeLogLine(log);
+    expect(parsed.ok).toBe(true);
+    expect(parsed.values).toMatchObject(GOLDEN_D1A_COUNTERS);
   });
 
   it('builds the RenderDoc capture command', () => {

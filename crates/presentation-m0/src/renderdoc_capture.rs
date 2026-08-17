@@ -1,21 +1,26 @@
-//! Debug-only RenderDoc in-application capture around D1a submits.
+//! Debug-only RenderDoc in-application capture around the measured D1a frame.
 //!
-//! Loaded only when RenderDoc has already injected
-//! `libVkLayer_GLES_RenderDoc.so` (Android Remote Context). Production
-//! `libneotavern_android_jni.so` does not compile this module.
+//! Compiled only with feature `renderdoc-capture` on Android. Production
+//! `libneotavern_android_jni.so` does not compile this module. The RenderDoc
+//! shared library is **not** linked into the APK; `RENDERDOC_GetAPI` is
+//! resolved from the already-injected capture layer.
 //!
-//! Frame-trigger capture stops on the HWUI TextView present; the probe is
-//! offscreen. `StartFrameCapture` / `EndFrameCapture` around the first
-//! `render_list` is the documented headless capture boundary.
+//! Header contract: vendored RenderDoc v1.45 `renderdoc_app.h` (MIT) at
+//! `third_party/renderdoc_app.h`. Vulkan cannot pass raw `VkDevice` as the
+//! in-app device pointer; `StartFrameCapture` / `EndFrameCapture` take
+//! `RENDERDOC_DEVICEPOINTER_FROM_VKINSTANCE` of the wgpu-hal `VkInstance`
+//! that owns the probe `VkDevice`. Passing `NULL` matches HWUI GLES.
 //!
-//! Header contract: RenderDoc v1.45 `renderdoc_app.h` (MIT), API 1.1.2
-//! function-pointer layout through `EndFrameCapture`.
 //! <https://renderdoc.org/docs/in_application_api.html>
+//! <https://github.com/baldurk/renderdoc/blob/v1.x/renderdoc/api/app/renderdoc_app.h>
 
-#![cfg(all(feature = "gpu", target_os = "android"))]
+#![cfg(all(feature = "renderdoc-capture", target_os = "android"))]
 
 use std::ffi::{c_char, c_int, c_void, CStr, CString};
 use std::ptr;
+
+use ash::vk::Handle;
+use wgpu::hal::api::Vulkan as VulkanApi;
 
 use crate::gpu::probe_trace;
 
@@ -56,8 +61,16 @@ struct Api {
     fns: [*mut c_void; FN_COUNT],
 }
 
+/// wgpu-hal Vulkan handles for the probe device. `rdoc_device` is the
+/// official RenderDoc capture key (instance dispatch table).
+struct VulkanCapturePtrs {
+    vk_device: u64,
+    rdoc_device: *mut c_void,
+}
+
 pub struct FrameGuard {
     api: *const Api,
+    rdoc_device: *mut c_void,
     started: bool,
 }
 
@@ -77,38 +90,78 @@ fn load_module() -> *mut c_void {
 fn attach_api() -> Option<*const Api> {
     let handle = load_module();
     if handle.is_null() {
-        probe_trace(
-            "renderdoc_api=absent (layer not injected; launch via RenderDoc Remote Context)",
-        );
+        probe_trace("renderdoc_api_loaded=false");
         return None;
     }
     let symbol = CString::new("RENDERDOC_GetAPI").ok()?;
     let get_api = unsafe { dlsym(handle, symbol.as_ptr()) };
     if get_api.is_null() {
-        probe_trace("renderdoc_api=no_RENDERDOC_GetAPI");
+        probe_trace("renderdoc_api_loaded=false");
         return None;
     }
     let get_api: GetApiFn = unsafe { std::mem::transmute(get_api) };
     let mut out: *mut c_void = ptr::null_mut();
     let ok = unsafe { get_api(API_1_1_2, &mut out) };
     if ok != 1 || out.is_null() {
-        probe_trace(&format!("renderdoc_api=getapi_failed ret={ok}"));
+        probe_trace(&format!(
+            "renderdoc_api_loaded=false getapi_failed ret={ok}"
+        ));
         return None;
     }
+    probe_trace("renderdoc_api_loaded=true");
     Some(out as *const Api)
 }
 
+/// Raw `VkDevice` plus RenderDoc's instance-dispatch pointer for that device.
+///
+/// Safety: `device` must outlive the returned pointers' use; the handles are
+/// copied out of the HAL guard immediately.
+fn vulkan_capture_ptrs(device: &wgpu::Device) -> Option<VulkanCapturePtrs> {
+    unsafe {
+        let hal = device.as_hal::<VulkanApi>()?;
+        let vk_device = Handle::as_raw(hal.raw_device().handle());
+        let vk_instance = Handle::as_raw(hal.shared_instance().raw_instance().handle());
+        if vk_instance == 0 || vk_device == 0 {
+            return None;
+        }
+        let instance_ptr = vk_instance as *mut *mut c_void;
+        let rdoc_device = *instance_ptr;
+        if rdoc_device.is_null() {
+            return None;
+        }
+        Some(VulkanCapturePtrs {
+            vk_device,
+            rdoc_device,
+        })
+    }
+}
+
 impl FrameGuard {
-    pub fn begin() -> Option<Self> {
+    /// Start a capture bound to the probe's wgpu Vulkan device. Does not use
+    /// a NULL/wildcard device pointer (that matches HWUI GLES).
+    pub fn begin_for_device(device: &wgpu::Device) -> Option<Self> {
         let api = attach_api()?;
+        let Some(ptrs) = vulkan_capture_ptrs(device) else {
+            probe_trace("capture_device=not-vulkan");
+            probe_trace("capture_started=false");
+            return None;
+        };
+        probe_trace(&format!(
+            "capture_device=wgpu-vulkan vk_device=0x{:x}",
+            ptrs.vk_device
+        ));
         let set_path: SetPathFn = unsafe { std::mem::transmute((*api).fns[IDX_SET_PATH]) };
         if let Ok(path) = CString::new(PATH_TEMPLATE) {
             unsafe { set_path(path.as_ptr()) };
         }
         let start: StartFn = unsafe { std::mem::transmute((*api).fns[IDX_START]) };
-        unsafe { start(ptr::null_mut(), ptr::null_mut()) };
-        probe_trace("renderdoc_api=start_frame_capture");
-        Some(Self { api, started: true })
+        unsafe { start(ptrs.rdoc_device, ptr::null_mut()) };
+        probe_trace("capture_started=true");
+        Some(Self {
+            api,
+            rdoc_device: ptrs.rdoc_device,
+            started: true,
+        })
     }
 
     fn finish(&mut self) {
@@ -117,7 +170,7 @@ impl FrameGuard {
         }
         self.started = false;
         let end: EndFn = unsafe { std::mem::transmute((*self.api).fns[IDX_END]) };
-        let saved = unsafe { end(ptr::null_mut(), ptr::null_mut()) };
+        let saved = unsafe { end(self.rdoc_device, ptr::null_mut()) };
         let get_num: GetNumFn = unsafe { std::mem::transmute((*self.api).fns[IDX_GET_NUM]) };
         let n = unsafe { get_num() };
         let mut path_buf = [0u8; 512];
@@ -139,7 +192,7 @@ impl FrameGuard {
             .and_then(|s| s.to_str().ok())
             .unwrap_or("");
         probe_trace(&format!(
-            "renderdoc_api=end_frame_capture saved={saved} captures={n} path={path}"
+            "capture_ended=true saved={saved} captures={n} capture_file={path}"
         ));
     }
 }

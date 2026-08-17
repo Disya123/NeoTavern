@@ -56,8 +56,8 @@ Index of the internal documentation. Each major topic has its own folder.
   M-1](rfc/m1-baseline-report.md), the [M0-D1a paint-seam
   probe](rfc/m0-d1a-probe.md) (**PRE-GATE / BLOCKED**, not a compositor GO),
   the [M0-D1a physical capture runbook](rfc/m0-d1a-physical-runbook.md)
-  (`capture_host=READY` on RenderDoc v1.45; AGI 3.3.3 archived
-  `CAPTURED_BUT_NOT_REPLAYABLE`; D1a **BLOCKED** until a readable GPU tree),
+  (`capture_host=READY` on RenderDoc v1.45; GLES 1437-byte capture is
+  `WRONG_API_CAPTURE`; D1a **BLOCKED** until a readable Vulkan GPU tree),
   and the [signed Gate P record](rfc/gate-p-decision-draft.md)
   (`GateP:P1`, 2026-08-17, incomplete physical M-1 waiver).
 - [Changelog](https://github.com/Disya123/NeoTavern/blob/main/CHANGELOG.md).

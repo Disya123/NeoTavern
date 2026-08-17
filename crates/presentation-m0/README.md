@@ -22,8 +22,11 @@ Evidence: [`docs/rfc/m0-d1a-probe.md`](../../docs/rfc/m0-d1a-probe.md).
   That log is not an AGI/RenderDoc GPU capture and does not flip
   `android_gpu_capture`.
 - Debug-only Android RenderDoc in-app capture (`StartFrameCapture` around
-  the first D1a submit) when `VK_LAYER_RENDERDOC_Capture` is injected.
-  Production kernel JNI does not compile that module.
+  the first D1a submit) when feature `renderdoc-capture` is enabled and
+  `VK_LAYER_RENDERDOC_Capture` is injected. The boundary is bound to
+  wgpu-hal's raw `VkDevice` (RenderDoc key = instance dispatch table).
+  `android-jni` does not enable that feature. Production kernel JNI does
+  not compile the module. The RenderDoc library is not packaged in the APK.
 
 ## Pins
 
@@ -51,6 +54,7 @@ Android (debug APK only; production `MainActivity` / kernel JNI unchanged):
 
 ```sh
 bash apps/android/scripts/build-m0-d1a-libs.sh
+M0_D1A_FEATURES=gpu,android-jni,renderdoc-capture bash apps/android/scripts/build-m0-d1a-libs.sh
 gradle -p apps/android :app:assembleDebug
 adb install -r apps/android/app/build/outputs/apk/debug/app-debug.apk
 adb shell am start -n com.neotavern.mobile/.M0D1aActivity

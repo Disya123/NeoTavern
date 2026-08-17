@@ -331,11 +331,14 @@ physical `.gfxtrace`
 
 Capture tool is **RenderDoc v1.45** at `E:\renderdoc`
 ([`tools/renderdoc.pin.json`](https://github.com/Disya123/NeoTavern/blob/main/tools/renderdoc.pin.json)). Close
-Android Studio. Use Android Remote Context or
-`node scripts/m0-d1a-renderdoc-capture.mjs`. Debug-only in-app
-`StartFrameCapture` wraps the first offscreen D1a submit. Debug manifest
-`<queries>` lists the RenderDoc layer packages. Production path and
-RenderGraph are unchanged.
+Android Studio. Use
+`node scripts/m0-d1a-renderdoc-capture.mjs --mode=control` (feature off)
+then `--mode=capture` after a `renderdoc-capture` rebuild and `--bind-apk`.
+The in-app boundary is bound to wgpu-hal's raw `VkDevice` around the first
+offscreen D1a frame only. Debug manifest `<queries>` lists the RenderDoc
+layer packages. Production path and RenderGraph are unchanged. The
+1437-byte GLES file `2026-08-17T16-53-54-457Z-d1a.rdc` is
+`WRONG_API_CAPTURE / NON-ADMISSIBLE` (NULL device matched HWUI).
 
 D1a stays **BLOCKED** until Event Browser shows `m0-d1a-roi-read:1` →
 glass → raster/blit → `m0-d1a-roi-read:2` → glass, with accumulator/ROI

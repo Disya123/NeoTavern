@@ -2537,6 +2537,7 @@ dependencies = [
 name = "neotavern-presentation-m0"
 version = "0.1.0"
 dependencies = [
+ "ash",
  "bytemuck",
  "jni 0.21.1",
  "pollster",

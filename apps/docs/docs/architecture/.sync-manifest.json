@@ -5,7 +5,7 @@
     {
       "source": "README.md",
       "target": "README.md",
-      "sha256": "c80c73cf4d53013aaea6a7a3b2a6439160b25d1e19771ad258a3b286d3b3c247"
+      "sha256": "7eb609b08a2e6f72ea96d0874621ebc28068c5feb67ea0cf9d99ab90ae39138c"
     },
     {
       "source": "adr/0004-typebox-contracts.md",
@@ -230,7 +230,7 @@
     {
       "source": "android/README.md",
       "target": "android/README.md",
-      "sha256": "7d46038d79291f0370c75e5d2dc1e0052d3be769d68694b62fe93796e4cf24ac"
+      "sha256": "564182bc0d260dc8c0b73ac4fadd7f509d3b87ebc8613a928e80a60a145d7254"
     },
     {
       "source": "api/README.md",
@@ -345,7 +345,7 @@
     {
       "source": "rfc/README.md",
       "target": "rfc/README.md",
-      "sha256": "5966abf8efb28695efd76cdb383a3bfb881baf88bf1820fcdd55a3327caf9cab"
+      "sha256": "83616e98f40f474bdfd336068e03739f2db7175765cdb7916eeb1df9563a683c"
     },
     {
       "source": "rfc/gate-p-decision-draft.md",
@@ -355,12 +355,12 @@
     {
       "source": "rfc/m0-d1a-physical-runbook.md",
       "target": "rfc/m0-d1a-physical-runbook.md",
-      "sha256": "1ae2f5886ae08f78a936293d27c55c34868269ae2aeb79e256309d5c60d74c97"
+      "sha256": "1058dbe576ac66937ea9b291c6a5ed5f297f08827d80eb18dcf5235cb78655cf"
     },
     {
       "source": "rfc/m0-d1a-probe.md",
       "target": "rfc/m0-d1a-probe.md",
-      "sha256": "ad8926277968d5bc8d6185afda72daf4b9f000817dbe4d94bdec49dda470dd3e"
+      "sha256": "34a0420db1921c788b9b2697c52711cd7ace1a570c2c1308486ef0ccdade1a0a"
     },
     {
       "source": "rfc/m1-baseline-report.md",

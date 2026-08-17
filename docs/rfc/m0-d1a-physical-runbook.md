@@ -75,10 +75,24 @@ the bytes; the Commands pane is not. Do not strip messenger create-info
 from `pNext` for that parser.
 
 The probe paints offscreen (no swapchain present), so a present/frame
-trigger captures the HWUI TextView. Debug-only in-app
-`StartFrameCapture` / `EndFrameCapture` wraps the first D1a submit when
-`VK_LAYER_RENDERDOC_Capture` is injected (`crates/presentation-m0/src/renderdoc_capture.rs`).
-That module is not linked into production `libneotavern_android_jni.so`.
+trigger captures the HWUI TextView. Do **not** use an external frame
+trigger. Debug-only feature `renderdoc-capture` (not implied by
+`android-jni`) wraps the first measured D1a frame:
+
+```text
+StartFrameCapture(wgpu VkDevice / instance dispatch table)
+→ encode exact D1a frame
+→ queue.submit
+→ device.poll / fence completion
+→ EndFrameCapture
+```
+
+`RENDERDOC_GetAPI` is loaded from the injected layer; `renderdoc_app.h` is
+vendored and pinned (`tools/renderdoc.pin.json` `app_header`). Production
+`libneotavern_android_jni.so` does not compile that module. Passing `NULL`
+as the device pointer captured GLES (`2026-08-17T16-53-54-457Z-d1a.rdc`,
+1437 bytes, `WRONG_API_CAPTURE / NON-ADMISSIBLE`).
+
 The debug manifest lists RenderDoc packages under `<queries>` so the
 Vulkan loader can see the layer APK on `targetSdk >= 30`.
 
@@ -114,20 +128,30 @@ Do not bind the APK to the tooling-only commit.
 Rebind the debug APK after those probe-only changes. Do not capture an
 unbound or dirty tree.
 
-When a physical phone is on USB:
+When a physical phone is on USB, rebuild twice. Control APK is
+`gpu,android-jni` (feature off). Capture APK is
+`gpu,android-jni,renderdoc-capture`, then `--bind-apk` from a clean tree
+(`apk_source_commit` ≠ `5df24c8`).
 
 ```sh
-node scripts/m0-d1a-renderdoc-capture.mjs
+node scripts/m0-d1a-renderdoc-capture.mjs --mode=control
+node scripts/m0-d1a-renderdoc-capture.mjs --mode=capture
 ```
 
 That command refuses `emulator-*` / qemu / goldfish / ranchu / `sdk_gphone`,
 requires Android 11+ (SDK ≥ 30), an ABI present in the APK, and a hardware
-GPU (SwiftShader/qemu rejected). It installs the SHA-256-matching BOUND APK
-and the pinned RenderDoc arm64 layer APK, sets
+GPU (SwiftShader/qemu rejected). Capture mode installs the SHA-256-matching
+BOUND APK and the pinned RenderDoc arm64 layer APK, sets
 `VK_LAYER_RENDERDOC_Capture` as a GPU debug layer, launches
 `com.neotavern.mobile/.M0D1aActivity`, waits for the in-app capture
 boundary, pulls `{stamp}-d1a.rdc`, converts to XML, and runs the
-completeness checker. Close Android Studio first.
+completeness checker. Control mode disables GPU debug layers and only
+checks golden counters/timeline (`devices=1`, `readbacks=0`, `xdev=0`,
+`roi_copies=200`, `glass=200`, golden timeline). Close Android Studio first.
+A new `.rdc` is accepted only if the Event Browser contains Vulkan commands
+and both `m0-d1a-roi-read:1/2` with readable resource usages.
+`StartFrameCapture` success is not PASS. The GLES 1437-byte capture
+`2026-08-17T16-53-54-457Z-d1a.rdc` stays `WRONG_API_CAPTURE / NON-ADMISSIBLE`.
 
 ### Bound APK inspect (this lab)
 
@@ -154,14 +178,14 @@ so `VK_EXT_debug_utils` labels (`m0-d1a-*`) land in the capture.
    `m0-d1a-glass-roi`. ROI copies are same-device. No CPU readback, no
    cross-device transfer.
 
-If a present/frame trigger only captures the TextView, the debug-only
-in-app boundary is already around the first D1a submit. Production
-RenderGraph is unchanged.
+If a present/frame trigger only captures the TextView, that is expected:
+the workload is offscreen. Use the VkDevice-bound in-app boundary, not an
+external frame trigger. Production RenderGraph is unchanged.
 
 ### RenderDoc CLI
 
 ```sh
-node scripts/m0-d1a-renderdoc-capture.mjs --serial=<PHYSICAL_SERIAL>
+node scripts/m0-d1a-renderdoc-capture.mjs --serial=<PHYSICAL_SERIAL> --mode=capture
 ```
 
 Then (if convert did not already):

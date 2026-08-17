@@ -145,7 +145,8 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   D1a on the installed APK is **BLOCKED / NON-ADMISSIBLE** (`.so` ≠ current
   source). Capture host is **READY** (RenderDoc v1.45 at `E:\renderdoc`;
   AGI 3.3.3 archived `CAPTURED_BUT_NOT_REPLAYABLE`). D1a stays **BLOCKED**
-  until a readable pass/resource tree. See [M0-D1a probe](../rfc/m0-d1a-probe.md)
+  until a readable Vulkan pass/resource tree. The 1437-byte GLES capture is
+  `WRONG_API_CAPTURE / NON-ADMISSIBLE`. See [M0-D1a probe](../rfc/m0-d1a-probe.md)
   and the [physical capture runbook](../rfc/m0-d1a-physical-runbook.md).
 
 ## Background execution (Phase 8)

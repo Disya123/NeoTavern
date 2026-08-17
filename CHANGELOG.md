@@ -3,16 +3,20 @@
 ## Unreleased
 ### Added
 
-- **M0-D1a RenderDoc v1.45 capture host.** Pin `tools/renderdoc.pin.json`
-  (v1.45 at `E:\renderdoc`, zip and binary SHA-256 recorded). AGI 3.3.3
-  `.gfxtrace` is archived as `CAPTURED_BUT_NOT_REPLAYABLE` (unknown
-  `VkStructureType(1000128004)`); do not hunt a newer AGI and do not strip
-  `pNext` unless RenderDoc also cannot parse. Debug-only in-app
-  `StartFrameCapture` wraps the first D1a submit; debug `<queries>` lists
-  the RenderDoc layer packages. Production manifests and RenderGraph are
-  unchanged. D1a stays **BLOCKED** until a readable Event Browser /
-  resource graph. D1b is not started. Runbook:
-  `docs/rfc/m0-d1a-physical-runbook.md`.
+- **M0-D1a VkDevice-bound RenderDoc in-app capture.** Feature
+  `renderdoc-capture` is probe-only (`neotavern-presentation-m0`);
+  `android-jni` does not enable it. Vendored `renderdoc_app.h` (v1.45,
+  SHA-256 in `tools/renderdoc.pin.json`) is loaded via `RENDERDOC_GetAPI`;
+  librenderdoc is not packaged. After pipelines exist, the first measured
+  D1a frame is `StartFrameCapture` (wgpu-hal `VkDevice` / instance dispatch
+  table) → encode → `queue.submit` → `device.poll` → `EndFrameCapture`.
+  A NULL/wildcard device pointer is forbidden: the 1437-byte
+  `2026-08-17T16-53-54-457Z-d1a.rdc` is `WRONG_API_CAPTURE / NON-ADMISSIBLE`
+  (OpenGLES / HWUI). Control (`--mode=control`, feature off) and capture
+  (`--mode=capture`) launches must keep golden counters/timeline. D1a stays
+  **BLOCKED** until Event Browser shows Vulkan commands and both
+  `m0-d1a-roi-read:1/2` with readable resource usages. `StartFrameCapture`
+  success is not PASS. D1b is not started.
 
 - **M0-D1a debug Vulkan `uses-feature` (probe variant only).**
   `apps/android/app/src/debug/AndroidManifest.xml` declares optional

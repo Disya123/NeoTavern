@@ -963,16 +963,22 @@ pub fn run_static_d1a(frames: u64) -> Result<ProbeReport, GpuInitError> {
         } else {
             None
         };
-        // Offscreen probe has no swapchain present. RenderDoc's default frame
-        // trigger captures the HWUI TextView. Debug-only in-app boundary wraps
-        // the first D1a submit when the Android layer is injected. No-op if
-        // RenderDoc is not attached. Production kernel JNI is unchanged.
-        #[cfg(target_os = "android")]
-        let _rdoc = if frame == 0 {
-            crate::renderdoc_capture::FrameGuard::begin()
-        } else {
-            None
-        };
+        // Offscreen probe has no swapchain present. A NULL/wildcard
+        // StartFrameCapture matches HWUI GLES. Feature `renderdoc-capture`
+        // binds the first measured frame to wgpu-hal's Vulkan VkDevice
+        // (RenderDoc key = instance dispatch table of that device).
+        #[cfg(all(feature = "renderdoc-capture", target_os = "android"))]
+        if frame == 0 {
+            let _rdoc = crate::renderdoc_capture::FrameGuard::begin_for_device(&gpu.device);
+            gpu.render_list(&list, frame)?;
+            let _ = gpu.device.poll(wgpu::PollType::wait_indefinitely());
+            if let Some(started) = started {
+                gpu.first_frame_cpu_us =
+                    u64::try_from(started.elapsed().as_micros()).unwrap_or(u64::MAX);
+                probe_trace("first_frame_done");
+            }
+            continue;
+        }
         gpu.render_list(&list, frame)?;
         if let Some(started) = started {
             gpu.first_frame_cpu_us =

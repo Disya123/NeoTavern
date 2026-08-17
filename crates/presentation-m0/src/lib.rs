@@ -17,8 +17,12 @@ pub mod display_list;
 #[cfg(feature = "gpu")]
 pub mod gpu;
 pub mod pass_graph;
-#[cfg(all(feature = "gpu", target_os = "android"))]
+#[cfg(all(feature = "renderdoc-capture", target_os = "android"))]
 mod renderdoc_capture;
+// Optional `ash` is Android-only in this crate. Keep the dep used on host so
+// `cargo test --features renderdoc-capture` does not warn.
+#[cfg(all(feature = "renderdoc-capture", not(target_os = "android")))]
+use ash as _;
 pub mod scene_d1a;
 pub mod timeline;
 pub mod verdict;

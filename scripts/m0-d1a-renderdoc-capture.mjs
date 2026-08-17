@@ -18,6 +18,7 @@ import {
   captureFilenames,
   captureStamp,
   classifyCaptureDump,
+  classifyRenderdocApi,
   classifyRoiReadOrder,
   deviceGate,
   evaluateHost,
@@ -25,6 +26,7 @@ import {
   latestBoundBundle,
   loadRenderdocPin,
   loadRenderdocPreset,
+  parseProbeLogLine,
   selectPhysicalDevice,
   writeCaptureManifest,
 } from './m0-d1a-capture-host.mjs';
@@ -82,6 +84,27 @@ function enableGpuDebugLayers(adbBin, serial, pin, preset) {
   return results;
 }
 
+function disableGpuDebugLayers(adbBin, serial) {
+  const puts = [
+    ['settings', 'delete', 'global', 'enable_gpu_debug_layers'],
+    ['settings', 'delete', 'global', 'gpu_debug_app'],
+    ['settings', 'delete', 'global', 'gpu_debug_layer_app'],
+    ['settings', 'delete', 'global', 'gpu_debug_layers'],
+    ['settings', 'delete', 'global', 'gpu_debug_layers_gles'],
+    ['shell', 'setprop', 'debug.vulkan.layers', "''"],
+    ['shell', 'setprop', 'debug.rdoc.IGNORE_LAYERS', '1'],
+  ];
+  const results = [];
+  for (const parts of puts) {
+    const cmd = parts[0] === 'shell' ? parts : ['shell', ...parts];
+    results.push({
+      cmd: cmd.join(' '),
+      ...adb(adbBin, serial, cmd),
+    });
+  }
+  return results;
+}
+
 function startRenderdocServer(adbBin, serial, layerApp) {
   return adb(adbBin, serial, [
     'shell',
@@ -119,29 +142,36 @@ function sleep(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
-function waitForProbe(adbBin, serial) {
+function waitForProbe(adbBin, serial, mode) {
   const deadline = Date.now() + WAIT_MS;
   let log = '';
   while (Date.now() < deadline) {
     log = logcatDump(adbBin, serial);
-    const ended = /renderdoc_api=end_frame_capture/.test(log);
+    const ended = /capture_ended=true/.test(log) || /renderdoc_api=end_frame_capture/.test(log);
     const gpuRan = /gpu_ran=true/.test(log);
-    const absent = /renderdoc_api=absent/.test(log);
-    if ((ended && gpuRan) || (gpuRan && absent)) {
+    const absent = /renderdoc_api_loaded=false/.test(log) || /renderdoc_api=absent/.test(log);
+    if (mode === 'control' && gpuRan) {
+      return { log, ended, gpuRan, absent };
+    }
+    if (mode === 'capture' && ended && gpuRan) {
       return { log, ended, gpuRan, absent };
     }
     sleep(POLL_MS);
   }
   return {
     log,
-    ended: /renderdoc_api=end_frame_capture/.test(log),
+    ended: /capture_ended=true/.test(log) || /renderdoc_api=end_frame_capture/.test(log),
     gpuRan: /gpu_ran=true/.test(log),
-    absent: /renderdoc_api=absent/.test(log),
+    absent: /renderdoc_api_loaded=false/.test(log) || /renderdoc_api=absent/.test(log),
     timeout: true,
   };
 }
 
 function capturePathFromLog(log) {
+  const modern = log.match(/capture_ended=true saved=(\d+) captures=(\d+) capture_file=(\S*)/u);
+  if (modern) {
+    return { saved: Number(modern[1]), captures: Number(modern[2]), path: modern[3] || '' };
+  }
   const match = log.match(/renderdoc_api=end_frame_capture saved=(\d+) captures=(\d+) path=(\S*)/u);
   if (!match) return { saved: 0, captures: 0, path: '' };
   return { saved: Number(match[1]), captures: Number(match[2]), path: match[3] || '' };
@@ -155,7 +185,7 @@ function listCaptureCandidates(adbBin, serial) {
     PACKAGE,
     'sh',
     '-c',
-    'ls -1 files/*.rdc cache/*.rdc 2>/dev/null',
+    'ls -1 files/*.rdc files/m0-d1a*.rdc cache/*.rdc 2>/dev/null',
   ]);
   for (const line of (viaRunAs.stdout || '').split(/\r?\n/u)) {
     const name = line.trim().replace(/^\.\//u, '');
@@ -222,7 +252,13 @@ function scanReadback(text) {
 }
 
 function main() {
-  const host = evaluateHost();
+  const mode = argValue('mode') || 'capture';
+  if (mode !== 'capture' && mode !== 'control') {
+    printJson({ ok: false, stage: 'args', reason: 'mode must be capture or control' });
+    process.exit(2);
+  }
+
+  const host = evaluateHost({ skipBind: mode === 'control' });
   if (!host.ready) {
     printJson({ ok: false, stage: 'host', ...host });
     process.exit(2);
@@ -267,11 +303,13 @@ function main() {
     process.exit(3);
   }
 
-  const bundle = latestBoundBundle();
-  const bind = bindApkMatches(bundle, host.apk.path);
-  if (!bind.ok) {
-    printJson({ ok: false, stage: 'apk', reason: bind.reason });
-    process.exit(3);
+  if (mode === 'capture') {
+    const bundle = latestBoundBundle();
+    const bind = bindApkMatches(bundle, host.apk.path);
+    if (!bind.ok) {
+      printJson({ ok: false, stage: 'apk', reason: bind.reason });
+      process.exit(3);
+    }
   }
 
   const pin = loadRenderdocPin();
@@ -284,22 +322,27 @@ function main() {
   const xmlPath = join(host.traces.dir, files.xml);
   const commandsPath = join(host.traces.dir, files.commands);
 
-  const installedLayer = installRenderdocApk(
-    host.adb.bin,
-    device.serial,
-    host.renderdoc.android_apk,
-  );
-  if (installedLayer.status !== 0) {
-    printJson({
-      ok: false,
-      stage: 'install-renderdoc',
-      reason: installedLayer.stderr || installedLayer.stdout,
-    });
-    process.exit(3);
+  let layerSettings = [];
+  let server = { stdout: '' };
+  if (mode === 'capture') {
+    const installedLayer = installRenderdocApk(
+      host.adb.bin,
+      device.serial,
+      host.renderdoc.android_apk,
+    );
+    if (installedLayer.status !== 0) {
+      printJson({
+        ok: false,
+        stage: 'install-renderdoc',
+        reason: installedLayer.stderr || installedLayer.stdout,
+      });
+      process.exit(3);
+    }
+    layerSettings = enableGpuDebugLayers(host.adb.bin, device.serial, pin, preset);
+    server = startRenderdocServer(host.adb.bin, device.serial, pin.layer_package);
+  } else {
+    layerSettings = disableGpuDebugLayers(host.adb.bin, device.serial);
   }
-
-  const layerSettings = enableGpuDebugLayers(host.adb.bin, device.serial, pin, preset);
-  const server = startRenderdocServer(host.adb.bin, device.serial, pin.layer_package);
 
   const installedApp = adb(host.adb.bin, device.serial, ['install', '-r', '-d', host.apk.path], {
     timeout: 180_000,
@@ -314,9 +357,68 @@ function main() {
   }
   adb(host.adb.bin, device.serial, ['logcat', '-c']);
   const launch = launchProbe(host.adb.bin, device.serial);
-  const waited = waitForProbe(host.adb.bin, device.serial);
+  const waited = waitForProbe(host.adb.bin, device.serial, mode);
   writeFileSync(logcatPath, waited.log);
+  const counters = parseProbeLogLine(waited.log);
   const fromLog = capturePathFromLog(waited.log);
+
+  if (mode === 'control') {
+    writeFileSync(
+      devicePath,
+      `${JSON.stringify(
+        {
+          mode: 'control',
+          serial: device.serial,
+          props: device.props,
+          gate,
+          layerSettings: layerSettings.map((row) => ({
+            cmd: row.cmd,
+            status: row.status,
+            stderr: (row.stderr || '').trim(),
+          })),
+          launch: (launch.stdout || '').trim(),
+          waited: {
+            ended: waited.ended,
+            gpuRan: waited.gpuRan,
+            absent: waited.absent,
+            timeout: waited.timeout === true,
+          },
+          counters,
+          d1a: 'BLOCKED',
+          d1b: 'NOT_STARTED',
+          android_gpu_capture: false,
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    const written = writeCaptureManifest(host.traces.dir, files, {
+      physical_device: 'CAPTURE_ATTEMPTED',
+      capture_host: 'READY',
+      mode: 'control',
+      counters,
+      renderdoc_readable_tree: false,
+      android_gpu_capture: false,
+      d1a: 'BLOCKED',
+      d1b: 'NOT_STARTED',
+    });
+    printJson({
+      ok: counters.ok && waited.gpuRan,
+      mode: 'control',
+      readable_tree: false,
+      d1a: 'BLOCKED',
+      d1b: 'NOT_STARTED',
+      android_gpu_capture: false,
+      serial: device.serial,
+      logcat: logcatPath,
+      counters,
+      gpu_ran: waited.gpuRan,
+      evidence_path: written.evidencePath,
+      note: 'control run; feature renderdoc-capture must be off; not a D1a PASS',
+    });
+    process.exit(counters.ok && waited.gpuRan ? 0 : 4);
+  }
+
   const remotes = listCaptureCandidates(host.adb.bin, device.serial);
   const remote =
     (fromLog.path && fromLog.path.endsWith('.rdc') ? fromLog.path : null) || remotes.at(-1) || null;
@@ -329,6 +431,7 @@ function main() {
   let dump = '';
   let completeness = { ok: false, reason: 'no XML dump' };
   let order = { ok: false };
+  let api = { ok: false, status: 'UNKNOWN_API' };
   let readback = [];
   if (pulled.ok) {
     converted = convertToXml(host.renderdoc.renderdoccmd, rdcPath, xmlPath);
@@ -337,6 +440,7 @@ function main() {
       writeFileSync(commandsPath, dump);
       completeness = classifyCaptureDump(dump);
       order = classifyRoiReadOrder(dump);
+      api = completeness.api || classifyRenderdocApi(dump);
       readback = scanReadback(dump);
     } else {
       completeness = {
@@ -347,7 +451,14 @@ function main() {
   }
 
   const readable =
-    pulled.ok && converted.ok && completeness.ok && order.ok && waited.ended && !waited.absent;
+    pulled.ok &&
+    converted.ok &&
+    completeness.ok &&
+    order.ok &&
+    api.ok &&
+    api.api === 'Vulkan' &&
+    waited.ended &&
+    counters.ok;
   const manifest = buildEvidenceManifest({
     physical_device: 'CAPTURE_ATTEMPTED',
     capture_host: 'READY',
@@ -373,15 +484,21 @@ function main() {
       logcat: logcatPath,
       device: devicePath,
     },
-    capture_command: [process.execPath, resolve(process.argv[1]), `--serial=${device.serial}`],
+    capture_command: [
+      process.execPath,
+      resolve(process.argv[1]),
+      `--serial=${device.serial}`,
+      '--mode=capture',
+    ],
     unblock: readable
       ? 'review Event Browser / resource graph; completeness check is not D1a PASS'
-      : 'RenderDoc capture is not a readable pass/resource tree yet; D1a stays BLOCKED; do not start D1b',
+      : 'RenderDoc capture is not a readable Vulkan pass/resource tree yet; D1a stays BLOCKED; do not start D1b',
   });
   writeFileSync(
     devicePath,
     `${JSON.stringify(
       {
+        mode: 'capture',
         serial: device.serial,
         props: device.props,
         gate,
@@ -404,6 +521,8 @@ function main() {
         converted_ok: converted.ok,
         completeness,
         order,
+        api,
+        counters,
         readback_suspects: readback,
         d1a: 'BLOCKED',
         d1b: 'NOT_STARTED',
@@ -417,6 +536,8 @@ function main() {
     ...manifest,
     completeness,
     order,
+    api,
+    counters,
     renderdoc_readable_tree: readable,
     android_gpu_capture: false,
     d1a: 'BLOCKED',
@@ -424,7 +545,8 @@ function main() {
   });
 
   printJson({
-    ok: pulled.ok,
+    ok: readable,
+    mode: 'capture',
     readable_tree: readable,
     d1a: 'BLOCKED',
     d1b: 'NOT_STARTED',
@@ -438,14 +560,17 @@ function main() {
     remotes,
     completeness,
     order,
+    api,
+    counters,
     convert_ok: converted.ok,
     convert_stderr: (converted.stderr || converted.stdout || '').trim() || null,
     readback_suspects: readback,
-    layer_injected: waited.ended && !waited.absent,
+    capture_started: /capture_started=true/.test(waited.log),
+    capture_ended: waited.ended,
     gpu_ran: waited.gpuRan,
     evidence_path: written.evidencePath,
     capture_help: formatCaptureHelp(),
-    note: 'not a D1a PASS; Event Browser review still required',
+    note: 'StartFrameCapture success is not PASS; Event Browser must show Vulkan + both ROI groups',
   });
   process.exit(readable ? 0 : 4);
 }

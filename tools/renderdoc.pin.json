@@ -12,6 +12,15 @@
   "zip_bytes": 97805614,
   "android_guide": "https://github.com/baldurk/renderdoc/blob/v1.x/docs/how/how_android_capture.rst",
   "in_application_api": "https://renderdoc.org/docs/in_application_api.html",
+  "app_header": {
+    "path": "crates/presentation-m0/third_party/renderdoc_app.h",
+    "source": "https://github.com/baldurk/renderdoc/blob/v1.x/renderdoc/api/app/renderdoc_app.h",
+    "pin_version": "1.45",
+    "build_sha": "2fc0bc04cb95499635f63986a55bc6f67849dd9f",
+    "sha256": "b7005e7dc34c3635046868bbd76d81b9b055aede0f56daa0bd39fedee0639ffb",
+    "bytes": 36480,
+    "note": "MIT header only. RENDERDOC_GetAPI is loaded from the injected Android layer; librenderdoc is not packaged in the APK."
+  },
   "layer_package": "org.renderdoc.renderdoccmd.arm64",
   "vulkan_layer": "VK_LAYER_RENDERDOC_Capture",
   "gles_library": "libVkLayer_GLES_RenderDoc.so",
