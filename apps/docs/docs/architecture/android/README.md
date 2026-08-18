@@ -185,7 +185,9 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   Milestone B PASS). Shared-device interop is host **PASS** on physical
   Vulkan
   ([shared-device-interop-adjudication.json](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/shared-device-interop-adjudication.json)).
-  A gesture-platform adapter is a later stage.
+  Debug `PresentationInputActivity` hosts the MotionEvent / Choreographer
+  adapter (not production JNI, not `MainActivity`). Physical input-to-present
+  Perfetto is still pending.
   Independent stamps:
   [perf-18-20-adjudication.json](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/perf-18-20-adjudication.json).
   `NEOTA_NEOCOMPOSITOR=1` is a non-default flag, not a cutover switch.

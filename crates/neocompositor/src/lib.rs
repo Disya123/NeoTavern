@@ -15,6 +15,7 @@ pub mod mailbox;
 pub mod neo_glass;
 pub mod pass_graph;
 pub mod perf18;
+pub mod platform_input;
 pub mod property_tree;
 pub mod recovery;
 pub mod scene;
@@ -51,6 +52,14 @@ pub use mailbox::{
 pub use neo_glass::NeoGlass;
 pub use pass_graph::{
     barriers_cut_raster_runs, compile_passes, CompiledPass, GraphError, InteractionPassKind,
+};
+pub use platform_input::{
+    expand_android_motion, presentation_time_from_vsync, AndroidMotionView, InputPush,
+    InputQueueStats, PlatformInputAdapter, PlatformPointerKind, PlatformPointerSample,
+    ANDROID_ACTION_CANCEL, ANDROID_ACTION_DOWN, ANDROID_ACTION_MASK, ANDROID_ACTION_MOVE,
+    ANDROID_ACTION_POINTER_DOWN, ANDROID_ACTION_POINTER_INDEX_MASK,
+    ANDROID_ACTION_POINTER_INDEX_SHIFT, ANDROID_ACTION_POINTER_UP, ANDROID_ACTION_UP,
+    INPUT_EDGE_RESERVE, INPUT_MAX_POINTERS, INPUT_QUEUE_CAP,
 };
 pub use property_tree::{
     hit_test, ClipId, ClipTreeNode, EffectId, EffectSpec, EffectTreeNode, HitTestId, HitTestItem,

@@ -16,5 +16,7 @@ issues only registered Wire commands.
 - Not wired to production `MainActivity`.
 - Not a Kernel, SQLite, or network client. Those stay behind Product Wire.
 - `NEOTA_DIOXUS_SHELL=1` is a **non-default** flag, not a cutover switch.
+- The Android MotionEvent adapter attaches to debug
+  `PresentationInputActivity`, not this crate and not default JNI.
 
 See [presentation-boundary.md](../../docs/architecture/presentation-boundary.md).

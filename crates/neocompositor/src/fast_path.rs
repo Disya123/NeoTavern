@@ -135,6 +135,14 @@ impl CompositorFastPath {
         self.scrolls.begin_gesture(gesture, chain)
     }
 
+    pub fn stamp_input_time(
+        &mut self,
+        id: ScrollId,
+        time: PresentationTime,
+    ) -> Result<(), ScrollInputError> {
+        self.scrolls.stamp_input_time(id, time)
+    }
+
     pub fn end_gesture(&mut self, gesture: GestureId) {
         self.scrolls.end_gesture(gesture);
     }

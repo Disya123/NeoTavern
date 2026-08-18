@@ -161,8 +161,8 @@
   capability-gated (`GpuTiming::Unavailable` without the cap) and do not
   block present. Device loss uses `GpuRecovery`. Unsupported compute
   degrades to WebView rollback without a second device. Debug
-  `PERF_SCENARIO=interop` is not a production cutover. A gesture-platform
-  adapter is a later stage. Milestone B remains STARTED.
+  `PERF_SCENARIO=interop` is not a production cutover. Milestone B remains
+  STARTED.
 
 - **Android shared-device interop host adjudication (PASS, Milestone B STARTED).**
   Physical Xiaomi / Vulkan RenderDoc v1.45 evidence in
@@ -174,6 +174,14 @@
   cross-device copy; `devices=1`, `image_readbacks=0`, `xdev=0`. Not a
   production cutover. `MainActivity` / WebView rollback unchanged.
   Milestone B remains STARTED.
+
+- **Android MotionEvent / Choreographer adapter (host-side, not cutover).**
+  `PlatformInputAdapter` in `crates/neocompositor` plus debug
+  `PresentationInputActivity`: raw screen coordinates, `eventTimeNanos`,
+  stable pointer ids, bounded MOVE-coalescing queue, Choreographer →
+  `PresentationTime`. Not wired to production `MainActivity` or default JNI.
+  Physical input-to-present Perfetto is still pending. Milestone B remains
+  STARTED.
 
 - **Known baseline failures (not a green full baseline).** Recorded as
   `KNOWN_BASELINE_FAILURE` in

@@ -33,7 +33,13 @@ production JNI renderer and **not** an Android cutover.
   a stable logical id plus generation. Pointer capture keeps that target
   across async scroll; a removed/recycled target gets `Cancel` and does not
   fall through to another message. Gesture latch/handoff reuse the same
-  `ScrollId`. Targeting does not round-trip through Dioxus/layout.
+  `ScrollId`. Targeting does not round-trip through Dioxus/layout. The
+  Android MotionEvent / Choreographer adapter (`platform_input`) forwards
+  raw screen samples and `eventTimeNanos`, coalesces MOVE latest-wins on a
+  bounded queue, and must not wait on compositor/producer/layout. It is
+  wired only to the debug `PresentationInputActivity` / flagged shell, not
+  production `MainActivity` or default JNI. Physical Perfetto
+  input-to-present is still pending.
 - Interaction-ready text snapshots (RFC §21.1): immutable
   `TextInteractionSnapshot` bound to `SceneEpoch`, generation-safe
   `TextFragmentId`, producer-authored bidi runs / clusters / line metrics /
@@ -132,12 +138,15 @@ Started (CPU types + tests):
 - shared-device raster interop CPU protocol (`SharedGpuContext`; one device;
   sampleable raster texture; no image readback / cross-device copy; debug
   `interop` probe path; host **PASS** on physical Vulkan; not production JNI)
+- Android MotionEvent / Choreographer adapter (host-side; debug/flagged
+  shell only; not production JNI; physical Perfetto input-to-present still
+  pending)
 
 Not started (do not treat as done):
 
-- gesture-platform adapter
 - remaining PERF-01…PERF-22 and 120 Hz product budgets (PERF-18/19/20
   are independently PASS; Milestone B stays STARTED)
+- physical input-to-present Perfetto for the gesture adapter
 
 See [presentation boundary](../../docs/architecture/presentation-boundary.md)
 and [ADR-0049](../../docs/adr/0049-track-d-dioxus-presentation.md).

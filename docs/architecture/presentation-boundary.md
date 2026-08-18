@@ -94,7 +94,10 @@ machine in `crates/neocompositor` (`GpuRecovery`). Bounded GPU telemetry
 frames, recovery counters, epoch, frame cause, damage/ROI, and degraded/
 rollback reason. Timestamp queries are capability-gated on
 `InteropTelemetry` and must not block present. Product cutover is not
-declared. A gesture-platform adapter is a later stage. Known host baseline
+declared. The Android MotionEvent / Choreographer adapter is host-side in
+`crates/neocompositor` (`platform_input`) plus debug
+`PresentationInputActivity`; production `MainActivity` / default JNI stay
+on WebView. Physical input-to-present Perfetto is still pending. Known host baseline
 failures are
 recorded in
 [known-baseline-failures.md](known-baseline-failures.md) and do not make

@@ -257,6 +257,26 @@ impl ScrollTable {
         Ok(latched)
     }
 
+    /// Records the down timestamp so the first MOVE can compute px/s even when
+    /// later MOVE samples were coalesced latest-wins.
+    pub fn stamp_input_time(
+        &mut self,
+        id: ScrollId,
+        time: PresentationTime,
+    ) -> Result<(), ScrollInputError> {
+        let slot = self
+            .slots
+            .get_mut(id.index() as usize)
+            .ok_or(ScrollInputError::MissingHandle)?
+            .as_mut()
+            .ok_or(ScrollInputError::StaleHandle)?;
+        if slot.id != id {
+            return Err(ScrollInputError::StaleHandle);
+        }
+        slot.last_input_ns = Some(time.as_nanos());
+        Ok(())
+    }
+
     pub fn end_gesture(&mut self, gesture: GestureId) {
         if self.latch.is_some_and(|latch| latch.gesture == gesture) {
             self.latch = None;

@@ -205,6 +205,9 @@ impl CompositorFastPath {
             scroll_id,
             latched,
         });
+        if let Some(id) = scroll_id {
+            let _ = self.stamp_input_time(id, time);
+        }
         Ok(self.event(
             PointerKind::Down,
             pointer,
@@ -260,6 +263,15 @@ impl CompositorFastPath {
             capture.scroll_id,
             capture.generation,
         ))
+    }
+
+    pub fn pointer_cancel(
+        &mut self,
+        pointer: PointerId,
+        screen: Point,
+        time: PresentationTime,
+    ) -> Result<PointerEvent, DispatchError> {
+        self.cancel_pointer(pointer, screen, time)
     }
 
     pub fn pointer_up(

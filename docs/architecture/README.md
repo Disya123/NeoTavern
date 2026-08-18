@@ -95,7 +95,9 @@ crates/
                        # (CPU snapshot; timestamps not image readbacks),
                        # shared-device raster interop CPU protocol (one
                        # device; host PASS on physical Vulkan; not B PASS;
-                       # not production JNI). Default
+                       # not production JNI), Android MotionEvent /
+                       # Choreographer adapter (debug/flagged host only;
+                       # Perfetto pending). Default
                        # host is WebView rollback
                        # (`NEOTA_NEOCOMPOSITOR=1`). Chat virtualization is
                        # `chat-viewport`, not here.

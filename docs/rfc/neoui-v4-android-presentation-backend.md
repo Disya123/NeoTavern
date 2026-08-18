@@ -3008,7 +3008,18 @@ Adreno 710 / Vulkan, APK `BOUND`):
 `VkDevice`, named `m0-d1a-vello` sampled into `m0-d1a-accumulator` then
 bounded ROI to `m0-d1a-glass-roi`, no `vkMapMemory` / image-to-buffer,
 `devices=1`, `image_readbacks=0`, `xdev=0`. This is **not** a cutover and
-**not** Milestone B PASS. A gesture-platform adapter is a later stage.
+**not** Milestone B PASS.
+
+Android MotionEvent / Choreographer adapter host status (2026-08-18, **not**
+Milestone B PASS): `PlatformInputAdapter` expands raw screen samples
+(`eventTimeNanos`, stable Android pointer id, DOWN/MOVE/UP/CANCEL and
+POINTER_DOWN/UP, historical MOVE at original timestamps). MOVE may coalesce
+latest-wins on a bounded queue; edges are not dropped. The UI thread only
+`try_push`es. Choreographer `frameTimeNanos` maps 1:1 to `PresentationTime`.
+Hit-test / sticky / fixed / `ScrollId` latch stay in the existing compositor
+path. Debug `PresentationInputActivity` only; production `MainActivity` and
+default JNI are unchanged. Physical input-to-present Perfetto is still
+pending.
 
 ---
 
