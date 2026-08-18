@@ -327,10 +327,12 @@ pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_openRout
     _class: JClass,
     flag: JString,
     chat_id: JString,
+    profile: JString,
     host: JObject,
 ) -> jstring {
     let flag_value = read_string(&mut env, &flag);
     let chat_value = read_string(&mut env, &chat_id);
+    let profile_value = read_string(&mut env, &profile);
     let text = catch_unwind(AssertUnwindSafe(|| {
         let vm = env
             .get_java_vm()
@@ -349,7 +351,12 @@ pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_openRout
         } else {
             Some(chat_value.as_str())
         };
-        let (session, report) = start_flagged_session(Some(&flag_value), wire, preferred)?;
+        let profile = if profile_value.is_empty() {
+            None
+        } else {
+            Some(profile_value.as_str())
+        };
+        let (session, report) = start_flagged_session(Some(&flag_value), wire, preferred, profile)?;
         let line = report.line();
         *ROUTE
             .lock()

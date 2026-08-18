@@ -1,5 +1,6 @@
 use contracts_generated::generated::{
-    ChatDto, GenerationEvent, MessageDraftDto, MessageDto, MessageRole, PagedChats, PagedMessages,
+    CharacterDto, ChatDto, GenerationEvent, MessageDraftDto, MessageDto, MessageRole, PagedChats,
+    PagedMessages,
 };
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -21,6 +22,7 @@ struct CursorCut {
 /// In-memory Product Wire for host tests. Cursors are opaque tokens; the
 /// session must pass them through without parsing.
 pub struct FakeWire {
+    characters: HashMap<String, CharacterDto>,
     chats: HashMap<String, ChatDto>,
     messages: HashMap<String, Vec<MessageDto>>,
     drafts: HashMap<String, MessageDraftDto>,
@@ -33,6 +35,7 @@ pub struct FakeWire {
 impl Default for FakeWire {
     fn default() -> Self {
         Self {
+            characters: HashMap::new(),
             chats: HashMap::new(),
             messages: HashMap::new(),
             drafts: HashMap::new(),
@@ -97,6 +100,10 @@ impl FakeWire {
         self.messages.get(chat_id).map(Vec::len).unwrap_or(0)
     }
 
+    fn insert_character(&mut self, character: CharacterDto) {
+        self.characters.insert(character.id.clone(), character);
+    }
+
     fn insert_chat(&mut self, chat: ChatDto) {
         self.chats.insert(chat.id.clone(), chat);
     }
@@ -132,6 +139,12 @@ impl FakeWire {
 
     fn product(code: &str, key: &str, value: &str) -> ChatRouteError {
         ChatRouteError::product(code, json!({ key: value }))
+    }
+
+    fn require_character(&self, character_id: &str) -> Result<&CharacterDto, ChatRouteError> {
+        self.characters
+            .get(character_id)
+            .ok_or_else(|| Self::product("CHARACTER_NOT_FOUND", "characterId", character_id))
     }
 
     fn require_chat(&self, chat_id: &str) -> Result<&ChatDto, ChatRouteError> {
@@ -233,6 +246,62 @@ impl FakeWire {
             chat.updated_at = TS.into();
         }
         Ok(message)
+    }
+
+    fn create_character(&mut self, payload: &Value) -> Result<CharacterDto, ChatRouteError> {
+        let name = payload_str(payload, "name")?;
+        let tags = payload
+            .get("tags")
+            .and_then(Value::as_array)
+            .map(|rows| {
+                rows.iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default();
+        let character = CharacterDto {
+            id: self.alloc_id(),
+            name,
+            description: payload
+                .get("description")
+                .and_then(Value::as_str)
+                .map(str::to_string),
+            avatar_asset_id: None,
+            tags,
+            profile_id: None,
+            created_at: TS.into(),
+            updated_at: TS.into(),
+        };
+        self.insert_character(character.clone());
+        Ok(character)
+    }
+
+    fn create_chat(&mut self, payload: &Value) -> Result<ChatDto, ChatRouteError> {
+        let character_id = payload_str(payload, "characterId")?;
+        self.require_character(&character_id)?;
+        let title = payload
+            .get("title")
+            .and_then(Value::as_str)
+            .unwrap_or("Chat")
+            .to_string();
+        let chat = ChatDto {
+            id: self.alloc_id(),
+            title,
+            character_id,
+            persona_id: payload
+                .get("personaId")
+                .and_then(Value::as_str)
+                .map(str::to_string),
+            message_count: 0,
+            created_at: TS.into(),
+            updated_at: TS.into(),
+            parent_chat_id: None,
+            origin: None,
+            source_message_id: None,
+        };
+        self.insert_chat(chat.clone());
+        Ok(chat)
     }
 
     fn save_draft(&mut self, payload: &Value) -> Result<MessageDraftDto, ChatRouteError> {
@@ -363,6 +432,14 @@ impl ProductWire for FakeWire {
             return Err(Self::product("WIRE_FAILED", "operationId", operation_id));
         }
         match operation_id {
+            "characters.create" => {
+                let created = self.create_character(&payload)?;
+                self.wrap_call(operation_id, to_value(&created))
+            }
+            "chats.create" => {
+                let created = self.create_chat(&payload)?;
+                self.wrap_call(operation_id, to_value(&created))
+            }
             "chats.list" => {
                 let page =
                     self.list_chats(payload.get("limit").and_then(Value::as_i64).unwrap_or(50));

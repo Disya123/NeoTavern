@@ -15,6 +15,14 @@
 
 ### Added
 
+- **Isolated 10k Product Wire chat workspace (not cutover).** Debug
+  profile `NEOTA_CHAT_PROFILE=isolated-10k` seeds 10_000 messages through
+  existing `characters.create` / `chats.create` / `chats.messages.create`
+  into `filesDir/neotavern-isolated-10k`. The session still pages `limit=50`
+  and virtualizes the visible window. Host Kernel integration is a
+  `presentation-chat` `[dev-dependencies]` test. No production operation
+  or `MainActivity` canary.
+
 - **Live Product Wire send round-trip (not cutover).** Composer IME
   action and the Send button issue `chats.messages.create`. The header
   `messageCount` is Kernel `chats.get`, not a local increment. In-flight

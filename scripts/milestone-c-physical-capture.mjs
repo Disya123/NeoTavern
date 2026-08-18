@@ -26,6 +26,7 @@ export const CAPTURES_DIR = join(ROOT, 'apps', 'android', 'milestone-c-captures'
 export const CHAT_ACTIVITY = `${PACKAGE}/.PresentationChatActivity`;
 export const FLAG = `${PACKAGE}.NEOTA_DIOXUS_SHELL`;
 export const SAFE = `${PACKAGE}.NEOTA_SAFE_MODE`;
+export const PROFILE = `${PACKAGE}.NEOTA_CHAT_PROFILE`;
 export const JOURNEYS = [
   'flag_off',
   'live_open',
@@ -33,6 +34,7 @@ export const JOURNEYS = [
   'a11y_semantics',
   'send',
   'reopen',
+  'isolated_10k',
   'rotate',
   'background',
   'ime',
@@ -312,6 +314,36 @@ function captureBatch({ adbBin, serial, apkPath, stamp, dir }) {
   startChat(adbBin, serial, [[FLAG, '1']]);
   const resumed = waitUi(adbBin, serial, isLiveHeader, 25_000);
   results.push(record('background', resumed.ok, { header: headerCount(resumed.xml) }));
+
+  forceStop(adbBin, serial);
+  startChat(adbBin, serial, [
+    [FLAG, '1'],
+    [PROFILE, 'isolated-10k'],
+  ]);
+  const isolated = waitUi(
+    adbBin,
+    serial,
+    (xml) => {
+      const now = headerCount(xml);
+      return Boolean(now && now.title === 'Isolated 10k' && now.count === 10_000);
+    },
+    180_000,
+  );
+  const isolatedHeader = headerCount(isolated.xml);
+  if (isolated.ok) {
+    adb(adbBin, serial, ['shell', 'input', 'swipe', '540', '400', '540', '1400', '400']);
+    sleep(800);
+  }
+  const afterScroll = isolated.ok ? dumpUi(adbBin, serial) : isolated.xml;
+  results.push(
+    record('isolated_10k', Boolean(isolatedHeader && isolatedHeader.count === 10_000), {
+      header: isolatedHeader,
+      scrolled: isolated.ok,
+      viewportHasOldest:
+        /content-desc="Chat messages"[\s\S]*msg 0/u.test(afterScroll) ||
+        /content-desc="Chat messages"[\s\S]*\*\*msg 0\*\*/u.test(afterScroll),
+    }),
+  );
 
   const launcher = launcherActivity(adbBin, serial);
   results.push(

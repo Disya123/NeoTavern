@@ -10,7 +10,12 @@ object PresentationChatNative {
     }
 
     @JvmStatic
-    external fun openRoute(flag: String, chatId: String, wire: PresentationChatWire): String
+    external fun openRoute(
+        flag: String,
+        chatId: String,
+        profile: String,
+        wire: PresentationChatWire,
+    ): String
 
     @JvmStatic
     external fun snapshot(): String

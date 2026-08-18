@@ -53,18 +53,32 @@ export function adjudicateMilestoneC(evidence, log = '', previous = null) {
     typeof reopen?.after?.count === 'number'
       ? reopen.after.count > (live?.messageCount ?? 0)
       : Boolean(reopen?.ok);
-  const optional = ['a11y_semantics', 'send', 'reopen', 'rotate', 'background', 'ime'].map(
-    (name) => {
-      const item = row(evidence, name);
-      if (name === 'send') {
-        return { id: name, ok: sendPersisted, value: item };
-      }
-      if (name === 'reopen') {
-        return { id: name, ok: reopenOk, value: item };
-      }
-      return { id: name, ok: Boolean(item?.ok), value: item };
-    },
-  );
+  const isolated = row(evidence, 'isolated_10k');
+  const isolatedOk =
+    isolated?.header?.title === 'Isolated 10k' && isolated?.header?.count === 10_000
+      ? true
+      : Boolean(isolated?.ok && isolated?.header?.count === 10_000);
+  const optional = [
+    'a11y_semantics',
+    'send',
+    'reopen',
+    'isolated_10k',
+    'rotate',
+    'background',
+    'ime',
+  ].map((name) => {
+    const item = row(evidence, name);
+    if (name === 'send') {
+      return { id: name, ok: sendPersisted, value: item };
+    }
+    if (name === 'reopen') {
+      return { id: name, ok: reopenOk, value: item };
+    }
+    if (name === 'isolated_10k') {
+      return { id: name, ok: isolatedOk, value: item };
+    }
+    return { id: name, ok: Boolean(item?.ok), value: item };
+  });
   const liveLine = String(log || '');
   const cutoverOff =
     /production_cutover=false/u.test(liveLine) ||
@@ -73,7 +87,9 @@ export function adjudicateMilestoneC(evidence, log = '', previous = null) {
   const physical = serialOk && !emulator;
   const requiredOk = checks.every((item) => item.ok);
   const journeyBatch =
-    physical && requiredOk && sendPersisted && cutoverOff && canaryOff ? 'PASS' : 'FAIL';
+    physical && requiredOk && sendPersisted && isolatedOk && cutoverOff && canaryOff
+      ? 'PASS'
+      : 'FAIL';
   const record = {
     schema: 'milestone-c-adjudication/v1',
     milestone_c: 'STARTED',
@@ -109,7 +125,7 @@ export function adjudicateMilestoneC(evidence, log = '', previous = null) {
       outcome: 'FAILED_ATTEMPT',
       send_round_trip: sendPersisted ? 'PASS' : 'FAIL',
       live_open: live?.ok ? 'PASS' : 'FAIL',
-      ten_k_physical: 'NOT_RUN',
+    ten_k_physical: isolatedOk ? 'PASS' : 'NOT_RUN',
       gboard_environment: /google\.android\.inputmethod\.latin/u.test(
         String(row(evidence, 'ime')?.default_input_method || ''),
       )

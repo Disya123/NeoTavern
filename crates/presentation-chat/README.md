@@ -17,6 +17,11 @@ implementation.
   `chats.messages.create` is not idempotent. The visible window is
   virtualized through `neotavern-chat-viewport`. A stale `sceneEpoch`
   ack must not drop a newer durable revision.
+- Isolated test profile `isolated-10k` seeds 10_000 messages through
+  existing `characters.create` / `chats.create` / `chats.messages.create`
+  into a separate store (`neotavern-isolated-10k`). It is not 10k VDOM
+  nodes and not a production API. Host Kernel coverage is a
+  `[dev-dependencies]` integration test.
 - Host tests use in-memory [`FakeWire`](src/fake_wire.rs). Opaque list
   cursors are never parsed by the session.
 - Android JNI (feature `android-jni`) calls a Kotlin host that already

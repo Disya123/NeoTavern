@@ -240,7 +240,7 @@
     {
       "source": "android/README.md",
       "target": "android/README.md",
-      "sha256": "4e92becd3e74f9030d9dcfb9ee883862f78cf7af41fcaf4250b69eb56d03b707"
+      "sha256": "1aad967426c60bee5530187777049bc7f85e214ad00a0974319a87a3e254b5a0"
     },
     {
       "source": "api/README.md",
@@ -285,7 +285,7 @@
     {
       "source": "architecture/presentation-boundary.md",
       "target": "architecture/presentation-boundary.md",
-      "sha256": "7f38df32f5813c8a330d416012a24005532c93f7d31cec94e4393db182a74361"
+      "sha256": "9ae97f2c53e5babbebeeecad0843e3cc2d90b67875165a5fb0ca6d2d2992bde4"
     },
     {
       "source": "architecture/prompt-pipeline.md",
@@ -430,7 +430,7 @@
     {
       "source": "rfc/milestone-c-physical-runbook.md",
       "target": "rfc/milestone-c-physical-runbook.md",
-      "sha256": "f79df6a9498e00780a39d8bf2a26908f280dbb6e886721258a0bb5eb4027ea2e"
+      "sha256": "200859ecd8af5833a573fc44398169d7759fbe7a85d7586867dedf57e9d1bcbd"
     },
     {
       "source": "rfc/neoui-v4-android-presentation-backend.md",

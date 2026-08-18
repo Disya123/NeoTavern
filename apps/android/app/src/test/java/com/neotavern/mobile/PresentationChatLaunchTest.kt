@@ -39,4 +39,15 @@ class PresentationChatLaunchTest {
         assertFalse(PresentationChatLaunch.isSafeMode("true"))
         assertTrue(PresentationChatLaunch.isSafeMode("1"))
     }
+
+    @Test
+    fun `isolated 10k profile is an explicit extra`() {
+        assertFalse(PresentationChatLaunch.isIsolated10k(null))
+        assertFalse(PresentationChatLaunch.isIsolated10k("10k"))
+        assertTrue(PresentationChatLaunch.isIsolated10k("isolated-10k"))
+        assertEquals(
+            PresentationChatLaunch.PROFILE_ISOLATED_10K,
+            PresentationChatLaunch.parseProfile(" isolated-10k "),
+        )
+    }
 }

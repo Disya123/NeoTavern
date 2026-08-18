@@ -62,7 +62,7 @@ cutover = NOT_STARTED
 | background           | live header after HOME + relaunch              | PASS                                  |
 | launcher_untouched   | LAUNCHER resolves to `MainActivity`            | PASS                                  |
 | safe_mode            | `NEOTA_SAFE_MODE=1` resumes `MainActivity`     | PASS                                  |
-| 10k messages         | isolated Kernel store + same Wire route        | NOT_RUN on this stamp                 |
+| 10k messages         | isolated Kernel store + same Wire route        | NOT_RUN on FAILED_ATTEMPT stamp; host seed through Wire ops |
 | compositor SurfaceView chat | —                                         | not this harness                      |
 
 ## Not claimed

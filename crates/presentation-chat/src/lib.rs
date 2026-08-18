@@ -6,6 +6,7 @@
 
 mod error;
 mod fake_wire;
+mod seed;
 mod session;
 mod wire;
 
@@ -16,6 +17,11 @@ use neotavern_presentation_dioxus_shell::{dioxus_shell_from_flag, DioxusShellHos
 
 pub use error::ChatRouteError;
 pub use fake_wire::{FakeWire, DEMO_CHAT_ID};
+pub use seed::{
+    ensure_isolated_10k_workspace, is_isolated_10k_profile, isolated_message_content,
+    seed_trace_line, IsolatedSeedReport, ISOLATED_10K_COUNT, ISOLATED_10K_PROFILE,
+    ISOLATED_10K_TITLE,
+};
 pub use session::{ChatRouteState, ChatSession};
 pub use wire::{ProductWire, StreamFrame, WireCall, PAGE_LIMIT};
 
@@ -55,7 +61,7 @@ impl LiveChatReport {
 }
 
 pub fn start_flagged_route(flag: Option<&str>) -> String {
-    start_flagged_session(flag, FakeWire::demo(), None).map_or_else(
+    start_flagged_session(flag, FakeWire::demo(), None, None).map_or_else(
         |err| blocked_line(&err),
         |(session, report)| {
             let _ = session;
@@ -66,13 +72,23 @@ pub fn start_flagged_route(flag: Option<&str>) -> String {
 
 pub fn start_flagged_session<W: ProductWire>(
     flag: Option<&str>,
-    wire: W,
+    mut wire: W,
     chat_id: Option<&str>,
+    profile: Option<&str>,
 ) -> Result<(ChatSession<W>, LiveChatReport), ChatRouteError> {
     match dioxus_shell_from_flag(flag) {
         DioxusShellHost::Disabled => Err(ChatRouteError::FlagDisabled),
         DioxusShellHost::Flagged { .. } => {
-            let session = ChatSession::open(wire, chat_id)?;
+            let seeded = if is_isolated_10k_profile(profile) {
+                Some(ensure_isolated_10k_workspace(&mut wire)?)
+            } else {
+                None
+            };
+            let preferred = chat_id
+                .filter(|id| !id.is_empty())
+                .map(str::to_string)
+                .or_else(|| seeded.as_ref().map(|row| row.chat_id.clone()));
+            let session = ChatSession::open(wire, preferred.as_deref())?;
             let vdom_edits = session.mount_vdom();
             let report = LiveChatReport {
                 dioxus_shell: true,

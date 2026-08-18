@@ -185,7 +185,10 @@ Production `MainActivity`, default JNI, and WebView rollback are
 unchanged. Send round-trip uses Kernel `chats.get.messageCount` as the
 source of truth (not a local `+= 1`). IME action Send and a Send button
 both issue `chats.messages.create`; a failed `generation.start` must not
-drop an accepted durable row. Physical stamp `2026-08-18T21-55-58-696Z`
+drop an accepted durable row. The isolated test profile
+`NEOTA_CHAT_PROFILE=isolated-10k` seeds 10k messages through the same
+Product Wire ops into `filesDir/neotavern-isolated-10k` (never the
+production `neotavern` store). Physical stamp `2026-08-18T21-55-58-696Z`
 is a preserved **`FAILED_ATTEMPT`**
 ([milestone-c-adjudication.json](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/milestone-c-adjudication.json),
 [runbook](../rfc/milestone-c-physical-runbook.md)): live open passed,

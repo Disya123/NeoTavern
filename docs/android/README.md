@@ -193,7 +193,9 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   `adb shell am start -n com.neotavern.mobile/.PresentationChatActivity --es com.neotavern.mobile.NEOTA_DIOXUS_SHELL 1`
   (`NEOTA_CHAT_ID` optional; `NEOTA_SAFE_MODE=1` escapes to WebView
   `MainActivity`). Send uses the IME action and a Send button; Kernel
-  `messageCount` is the source of truth. Physical stamp
+  `messageCount` is the source of truth. Isolated 10k:
+  `--es com.neotavern.mobile.NEOTA_CHAT_PROFILE isolated-10k` (separate
+  store `neotavern-isolated-10k`, same Product Wire route). Physical stamp
   `2026-08-18T21-55-58-696Z` is a preserved FAILED_ATTEMPT (send did not
   persist). Re-run:
   `node scripts/milestone-c-physical-capture.mjs --serial=8f5c2b7c`

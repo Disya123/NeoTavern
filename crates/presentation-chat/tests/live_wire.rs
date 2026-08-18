@@ -1,16 +1,38 @@
 use neotavern_presentation_chat::{
-    start_flagged_route, start_flagged_session, ChatRouteError, ChatSession, FakeWire, StreamFrame,
-    DEMO_CHAT_ID, PAGE_LIMIT,
+    ensure_isolated_10k_workspace, start_flagged_route, start_flagged_session, ChatRouteError,
+    ChatSession, FakeWire, StreamFrame, DEMO_CHAT_ID, ISOLATED_10K_COUNT, ISOLATED_10K_PROFILE,
+    ISOLATED_10K_TITLE, PAGE_LIMIT,
 };
 use neotavern_presentation_dioxus_shell::{ProductChrome, PRODUCT_PATH_VISIBLE};
 use serde_json::json;
 use std::fs;
 use std::path::PathBuf;
 
+fn production_dependency_text(manifest: &str) -> String {
+    let mut out = String::new();
+    let mut in_prod = false;
+    for line in manifest.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') {
+            in_prod = trimmed == "[dependencies]"
+                || (trimmed.starts_with("[target.") && trimmed.ends_with("dependencies]"));
+            if trimmed == "[dev-dependencies]" || trimmed.contains("dev-dependencies") {
+                in_prod = false;
+            }
+        }
+        if in_prod {
+            out.push_str(line);
+            out.push('\n');
+        }
+    }
+    out
+}
+
 #[test]
 fn cargo_toml_does_not_depend_on_kernel_storage_or_network() {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
     let text = fs::read_to_string(manifest).expect("Cargo.toml");
+    let production = production_dependency_text(&text);
     for forbidden in [
         "runtime-kernel",
         "neotavern-storage",
@@ -20,8 +42,8 @@ fn cargo_toml_does_not_depend_on_kernel_storage_or_network() {
         "tokio",
     ] {
         assert!(
-            !text.contains(forbidden),
-            "live chat route must not depend on {forbidden}"
+            !production.contains(forbidden),
+            "live chat route must not depend on {forbidden} in [dependencies]"
         );
     }
 }
@@ -316,7 +338,7 @@ fn composer_draft_roundtrip_and_discard() {
 #[test]
 fn start_flagged_session_mounts_vdom() {
     let (session, report) =
-        start_flagged_session(Some("1"), FakeWire::demo(), None).expect("flagged");
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("flagged");
     assert!(report.vdom_edits > 0);
     assert!(report.live_wire);
     assert!(session.mount_vdom() > 0);
@@ -368,4 +390,41 @@ fn snapshot_json_is_object() {
     assert_eq!(value["chatId"], json!(DEMO_CHAT_ID));
     assert_eq!(value["messageCount"], json!(2));
     assert_eq!(value["kernelMessageCount"], json!(2));
+}
+
+#[test]
+fn isolated_10k_seed_goes_through_wire_ops_and_pages() {
+    let mut wire = FakeWire::empty();
+    let report = ensure_isolated_10k_workspace(&mut wire).expect("seed");
+    assert!(!report.skipped);
+    assert_eq!(report.kernel_message_count, ISOLATED_10K_COUNT);
+    assert_eq!(report.created, ISOLATED_10K_COUNT);
+    let again = ensure_isolated_10k_workspace(&mut wire).expect("skip");
+    assert!(again.skipped);
+    assert_eq!(again.created, 0);
+    assert_eq!(again.chat_id, report.chat_id);
+
+    let session = ChatSession::open(wire, Some(&report.chat_id)).expect("open");
+    assert_eq!(session.view().title, ISOLATED_10K_TITLE);
+    assert_eq!(session.view().message_count, ISOLATED_10K_COUNT as usize);
+    assert_eq!(session.state().messages.len(), PAGE_LIMIT as usize);
+    let (visible, outcome) = session.present_visible();
+    assert!(visible.len() <= PRODUCT_PATH_VISIBLE);
+    assert!(!outcome.waited_on_producer);
+    assert!(!visible.iter().any(|row| row.content.contains("**msg 0**")));
+}
+
+#[test]
+fn isolated_10k_profile_opens_the_seeded_workspace() {
+    let (session, report) = start_flagged_session(
+        Some("1"),
+        FakeWire::empty(),
+        None,
+        Some(ISOLATED_10K_PROFILE),
+    )
+    .expect("isolated");
+    assert!(report.live_wire);
+    assert_eq!(session.view().title, ISOLATED_10K_TITLE);
+    assert_eq!(session.view().message_count, ISOLATED_10K_COUNT as usize);
+    assert_eq!(session.state().messages.len(), PAGE_LIMIT as usize);
 }

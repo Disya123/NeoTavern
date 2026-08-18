@@ -17,6 +17,11 @@ const passing = {
     { journey: 'safe_mode', ok: true },
     { journey: 'send', ok: true, after: { title: 'Hazel', count: 1 } },
     { journey: 'reopen', ok: true, after: { title: 'Hazel', count: 1 } },
+    {
+      journey: 'isolated_10k',
+      ok: true,
+      header: { title: 'Isolated 10k', count: 10_000 },
+    },
   ],
 };
 

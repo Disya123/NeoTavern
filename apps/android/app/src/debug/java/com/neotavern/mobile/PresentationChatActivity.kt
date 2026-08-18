@@ -22,6 +22,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsAnimationCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
+import java.io.File
 
 /**
  * Debug harness around the live Product Wire chat route. Not a launcher.
@@ -204,9 +205,31 @@ class PresentationChatActivity : Activity() {
 
         header.text = "Chat"
         viewport.text = "live Product Wire chat route starting…"
-        val dataRoot = ManagedDataRoot(this).ensure().absolutePath
-        val holder = KernelHost.holder(dataRoot) { error ->
-            Log.e(TAG, "kernel open failed", error)
+        val profile = PresentationChatLaunch.parseProfile(
+            intent.getStringExtra(PresentationChatLaunch.EXTRA_CHAT_PROFILE)
+                ?: savedInstanceState?.getString(PresentationChatLaunch.EXTRA_CHAT_PROFILE),
+        )
+        val isolated = PresentationChatLaunch.isIsolated10k(profile)
+        val dataRoot = if (isolated) {
+            val isolatedRoot = File(applicationContext.filesDir, PresentationChatLaunch.ISOLATED_DATA_ROOT)
+            if (!isolatedRoot.exists() && !isolatedRoot.mkdirs()) {
+                viewport.text = "unable to create isolated data root"
+                composer.isEnabled = false
+                send.isEnabled = false
+                return
+            }
+            isolatedRoot.absolutePath
+        } else {
+            ManagedDataRoot(this).ensure().absolutePath
+        }
+        val holder = if (isolated) {
+            KernelHolder(JniNativeKernel, dataRoot) { error ->
+                Log.e(TAG, "isolated kernel open failed", error)
+            }
+        } else {
+            KernelHost.holder(dataRoot) { error ->
+                Log.e(TAG, "kernel open failed", error)
+            }
         }
         this.holder = holder
         holder.acquire()
@@ -215,11 +238,15 @@ class PresentationChatActivity : Activity() {
                 ?: savedInstanceState?.getString(PresentationChatLaunch.EXTRA_CHAT_ID),
         )
         val flagValue = PresentationChatLaunch.parseFlag(flag)
+        if (isolated) {
+            viewport.text = "isolated 10k Product Wire seed…"
+            Log.i(TAG, "chat_profile=isolated-10k data_root_isolated=true production_cutover=false")
+        }
         holder.executor.execute {
             val line = try {
                 val envelopes = EnvelopeBuilder.fromHandshake(holder.session.handshake())
                 val wire = PresentationChatWire(holder.session, envelopes)
-                PresentationChatNative.openRoute(flagValue, chatId, wire)
+                PresentationChatNative.openRoute(flagValue, chatId, profile, wire)
             } catch (err: UnsatisfiedLinkError) {
                 "chat_route=false dioxus_shell=true live_wire=false reason=missing_jni main_activity=false production_jni=false production_cutover=false"
             } catch (err: Throwable) {
@@ -255,6 +282,12 @@ class PresentationChatActivity : Activity() {
         outState.putString(
             PresentationChatLaunch.EXTRA_CHAT_ID,
             PresentationChatLaunch.parseChatId(intent.getStringExtra(PresentationChatLaunch.EXTRA_CHAT_ID)),
+        )
+        outState.putString(
+            PresentationChatLaunch.EXTRA_CHAT_PROFILE,
+            PresentationChatLaunch.parseProfile(
+                intent.getStringExtra(PresentationChatLaunch.EXTRA_CHAT_PROFILE),
+            ),
         )
         if (::composer.isInitialized) {
             outState.putString(STATE_COMPOSER, composer.text?.toString().orEmpty())
