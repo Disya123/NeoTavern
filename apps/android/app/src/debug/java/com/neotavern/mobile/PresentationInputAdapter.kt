@@ -66,6 +66,9 @@ class PresentationInputAdapter(
     @Volatile
     var compositorOwnsTimeline: Boolean = false
         private set
+    @Volatile
+    var lastConsumeNs: Long = 0L
+        private set
 
     init {
         if (Build.VERSION.SDK_INT >= 33) {
@@ -135,6 +138,10 @@ class PresentationInputAdapter(
         lastNextPresentDeadline = nextPresentDeadline
     }
 
+    fun markCompositorPresented(consumeNs: Long) {
+        lastConsumeNs = consumeNs
+    }
+
     fun startFrameCallbacks() {
         if (posted) return
         posted = true
@@ -169,19 +176,36 @@ class PresentationInputAdapter(
         val samples = ArrayList<PresentationInputMapping.Sample>(8)
         PresentationInputMapping.expand(frame, samples)
         val coalesced = PresentationInputMapping.coalescedLatencyTimes(frame)
+        val enqueueNs = SystemClock.uptimeNanos()
+        val presentedCurrent = lastConsumeNs > 0L && enqueueNs >= lastConsumeNs
+        val vsyncStep =
+            if (lastNextVsyncId != 0L && lastVsyncId != 0L) {
+                (lastNextVsyncId - lastVsyncId).coerceAtLeast(1L)
+            } else {
+                1L
+            }
+        val currentVsyncId =
+            if (presentedCurrent && lastNextVsyncId != 0L) lastNextVsyncId else lastVsyncId
         val nextVsyncId =
-            if (lastNextVsyncId != 0L) lastNextVsyncId
+            if (presentedCurrent && lastNextVsyncId != 0L) lastNextVsyncId + vsyncStep
+            else if (lastNextVsyncId != 0L) lastNextVsyncId
             else if (lastVsyncId == 0L) 0L
             else lastVsyncId + 1L
+        val currentDeadline =
+            if (presentedCurrent && lastNextPresentDeadline != 0L) lastNextPresentDeadline
+            else lastExpectedPresentNanos
         val nextDeadline =
-            if (lastNextPresentDeadline != 0L) lastNextPresentDeadline
+            if (presentedCurrent && lastNextPresentDeadline != 0L) {
+                lastNextPresentDeadline + lastPeriodNanos
+            } else if (lastNextPresentDeadline != 0L) lastNextPresentDeadline
             else if (lastExpectedPresentNanos == 0L) 0L
             else lastExpectedPresentNanos + lastPeriodNanos
+        val inputCutoff =
+            if (presentedCurrent) lastDeadlineNanos + lastPeriodNanos else lastDeadlineNanos
         Trace.beginSection("nt.input.enqueue")
         try {
             for (sample in samples) {
                 val seq = nextSeq.getAndIncrement()
-                val enqueueNs = SystemClock.uptimeNanos()
                 queue.tryPush(sample)
                 nativeSink?.tryPush(
                     sample.pointerId,
@@ -193,10 +217,10 @@ class PresentationInputAdapter(
                 val target =
                     PresentationInputMapping.assignFrameTarget(
                         eventTime = sample.timeNanos,
-                        inputCutoff = lastDeadlineNanos,
+                        inputCutoff = inputCutoff,
                         callbackTime = lastVsyncNanos,
-                        currentVsyncId = lastVsyncId,
-                        currentPresentDeadline = lastExpectedPresentNanos,
+                        currentVsyncId = currentVsyncId,
+                        currentPresentDeadline = currentDeadline,
                         nextVsyncId = nextVsyncId,
                         nextPresentDeadline = nextDeadline,
                     )
@@ -218,7 +242,7 @@ class PresentationInputAdapter(
                             newestEventTime = coalesced.newestEventTime,
                             oldestHistoricalEventTime = coalesced.oldestHistoricalEventTime,
                         ) +
-                        " pointer=${sample.pointerId} kind=${sample.kind} enqueueNs=$enqueueNs callbackVsyncId=${lastVsyncId}",
+                        " pointer=${sample.pointerId} kind=${sample.kind} enqueueNs=$enqueueNs callbackVsyncId=$currentVsyncId",
                 )
             }
         } finally {

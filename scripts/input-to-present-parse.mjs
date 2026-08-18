@@ -308,17 +308,69 @@ function timelineByToken(rows) {
   return map;
 }
 
+function isDisplayTimelineRow(row) {
+  const layer = String(row.layer_name ?? row.layer ?? '');
+  return layer === '' || layer === 'null';
+}
+
+export function assignPresentToFrameTimeline(presents, timelineRows, clock) {
+  const display = timelineRows
+    .filter(isDisplayTimelineRow)
+    .map((row) => ({
+      row,
+      actual: toMonotonic(num(row.ts ?? row.actual_present_ns ?? row.timestamp), clock),
+    }))
+    .filter((item) => item.actual != null)
+    .sort((a, b) => a.actual - b.actual);
+  const sorted = [...presents]
+    .filter((present) => present.targetVsyncId != null && present.gpu_submit_ns != null)
+    .sort((a, b) => a.gpu_submit_ns - b.gpu_submit_ns);
+  const assigned = new Map();
+  let i = 0;
+  for (const present of sorted) {
+    while (i < display.length && display[i].actual < present.gpu_submit_ns) i += 1;
+    if (i >= display.length) break;
+    assigned.set(present.targetVsyncId, display[i].row);
+    i += 1;
+  }
+  return assigned;
+}
+
+function presentForCookie(cookie, presentsSorted, presentByVsync) {
+  const hinted = presentByVsync.get(cookie.targetVsyncId);
+  if (
+    hinted &&
+    (cookie.enqueue_ns == null ||
+      hinted.consume_ns == null ||
+      hinted.consume_ns >= cookie.enqueue_ns)
+  ) {
+    return hinted;
+  }
+  if (cookie.enqueue_ns == null) return hinted ?? null;
+  return (
+    presentsSorted.find((present) => present.consume_ns >= cookie.enqueue_ns) ?? hinted ?? null
+  );
+}
+
 export function joinOpportunities({ cookies, presents, timelineRows, clock }) {
   const presentByVsync = new Map();
   for (const present of presents) {
     if (present.targetVsyncId == null) continue;
     presentByVsync.set(present.targetVsyncId, present);
   }
+  const presentsSorted = [...presents]
+    .filter((present) => present.consume_ns != null)
+    .sort((a, b) => a.consume_ns - b.consume_ns);
   const timeline = timelineByToken(timelineRows);
+  const bySubmit = assignPresentToFrameTimeline(presents, timelineRows, clock);
   const opportunities = [];
   for (const cookie of cookies) {
-    const present = presentByVsync.get(cookie.targetVsyncId);
-    const row = timeline.get(cookie.targetVsyncId);
+    const present = presentForCookie(cookie, presentsSorted, presentByVsync);
+    const row =
+      (present ? timeline.get(present.targetVsyncId) : null) ??
+      timeline.get(cookie.targetVsyncId) ??
+      (present ? bySubmit.get(present.targetVsyncId) : null) ??
+      bySubmit.get(cookie.targetVsyncId);
     if (!present || !row) continue;
     const actualRaw = num(row.ts ?? row.actual_present_ns ?? row.timestamp);
     const dur = num(row.dur) ?? 0;
@@ -331,6 +383,7 @@ export function joinOpportunities({ cookies, presents, timelineRows, clock }) {
     if (gpuSubmit != null && sfLatch != null && sfLatch < gpuSubmit) sfLatch = gpuSubmit;
     if (actualPresentTime != null && sfLatch > actualPresentTime) sfLatch = actualPresentTime;
     const exclusion = exclusionForTimeline(row);
+    const retargeted = present.targetVsyncId !== cookie.targetVsyncId;
     opportunities.push({
       seq: cookie.seq,
       eventTime: cookie.eventTime,
@@ -339,10 +392,14 @@ export function joinOpportunities({ cookies, presents, timelineRows, clock }) {
       inputCutoff: cookie.inputCutoff,
       callbackTime: cookie.callbackTime,
       callbackVsyncId: cookie.callbackVsyncId ?? present.targetVsyncId,
-      targetVsyncId: cookie.targetVsyncId,
-      targetPresentDeadline: cookie.targetPresentDeadline,
+      targetVsyncId: present.targetVsyncId,
+      targetPresentDeadline: retargeted
+        ? (present.targetPresentDeadline ?? cookie.targetPresentDeadline)
+        : cookie.targetPresentDeadline,
       actualPresentTime,
-      eligibleForCurrentVsync: cookie.eligibleForCurrentVsync,
+      eligibleForCurrentVsync: retargeted
+        ? false
+        : cookie.eligibleForCurrentVsync,
       rendererControlled: exclusion.rendererControlled,
       exclusionReason: exclusion.exclusionReason,
       enqueue_ns: cookie.enqueue_ns,

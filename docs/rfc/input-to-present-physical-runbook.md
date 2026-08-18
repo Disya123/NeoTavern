@@ -158,10 +158,10 @@ node scripts/input-to-present-adjudicate.mjs --fixture=apps/android/input-to-pre
 ```
 
 Perfetto config: [`scripts/input-to-present.pbtxt`](../../scripts/input-to-present.pbtxt)
-(`linux.ftrace` gfx/view/input, `android.surfaceflinger.frametimeline`,
-`android.log` tag `NeoTavernI2P`). Cookies come from the streamed host
-logcat; FrameTimeline `actualPresentTime` is converted from the trace
-clock onto monotonic.
+(`android.surfaceflinger.frametimeline` plus `android.log` tag `NeoTavernI2P`).
+The config is pushed to `/data/misc/perfetto-configs`; stdin+`--background` on Windows adb can start an empty session. Cookies come from the streamed host logcat;
+FrameTimeline `actualPresentTime` is converted from the trace clock onto
+monotonic.
 
 Evidence JSON must pin: trace SHA, APK SHA, Perfetto config SHA, source
 commit, device, display mode, denominators, exclusions, trace-loss

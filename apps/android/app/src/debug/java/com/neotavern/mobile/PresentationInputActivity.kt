@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.HandlerThread
+import android.os.SystemClock
 import android.os.Trace
 import android.util.Log
 import android.view.Choreographer
@@ -238,6 +239,7 @@ class PresentationInputActivity : Activity(), SurfaceHolder.Callback {
                             Trace.endSection()
                         }
                     Log.i(PresentationInputAdapter.TAG, line)
+                    adapter.markCompositorPresented(SystemClock.uptimeNanos())
                     if (presentPosted) {
                         presentCallback?.let { choreographer.postVsyncCallback(it) }
                     }

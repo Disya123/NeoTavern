@@ -114,6 +114,25 @@ describe('input-to-present parser', () => {
     expect(fixture.trace_buffer_overrun).toBe(1);
   });
 
+  it('joins compositor vsync to SurfaceFlinger actual present when tokens differ', () => {
+    const parsed = parseLogcat(`
+NeoTavernI2P: i2p seq=1 eventTime=1000 inputCutoff=3000 callbackTime=2000 targetVsyncId=995 targetPresentDeadline=20000 actualPresentTime=pending eligibleForCurrentVsync=true newestEventTime=1000 oldestHistoricalEventTime=1000 enqueueNs=1100 callbackVsyncId=995
+NeoTavernI2P: i2p present frameId=9 targetVsyncId=995 callbackTime=2000 inputCutoff=3000 targetPresentDeadline=20000 consumeNs=1200 gpuSubmit=4000 actualPresentTime=pending driver=Vulkan producer=0 layout=0 shaping=0 raster=0 highWater=1 dropE=0 compositorOnly=1 clock=monotonic
+`);
+    const ops = joinOpportunities({
+      cookies: parsed.cookies,
+      presents: parsed.presents,
+      timelineRows: [
+        { ts: 5_000, dur: 200, display_frame_token: 1001, layer_name: null, jank_type: 'None' },
+      ],
+      clock: { domain: 'monotonic', delta_boot_minus_mono: 0, aligned: true },
+    });
+    expect(ops).toHaveLength(1);
+    expect(ops[0].targetVsyncId).toBe(995);
+    expect(ops[0].actualPresentTime).toBe(5_000);
+    expect(ops[0].callbackTime).not.toBe(ops[0].actualPresentTime);
+  });
+
   it('counts unjoined cookies inside the 120 Hz window', () => {
     const parsed = parseLogcat(`${log}
 NeoTavernI2P: i2p seq=2 eventTime=1000004000 inputCutoff=1000010000 callbackTime=1000002500 targetVsyncId=441 targetPresentDeadline=1000008000 actualPresentTime=pending eligibleForCurrentVsync=true rendererControlled=pending exclusionReason=pending newestEventTime=1000004000 oldestHistoricalEventTime=1000004000 pointer=0 kind=Move enqueueNs=1000004100 callbackVsyncId=441

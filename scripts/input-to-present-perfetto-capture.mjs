@@ -10,7 +10,7 @@
  * normative gate is the locked 120 Hz fixture.
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
@@ -220,7 +220,11 @@ function main() {
   adb(adbInfo.bin, device.serial, ['logcat', '-c']);
   const logcatPath = join(outDir, `${stamp}-logcat.txt`);
   const logcatStream = startLogcatStream(adbInfo.bin, device.serial, logcatPath);
-  adb(adbInfo.bin, device.serial, ['shell', 'rm', '-f', DEVICE_TRACE]);
+  adb(adbInfo.bin, device.serial, ['shell', 'rm', '-f', DEVICE_TRACE, DEVICE_CFG]);
+  const pushed = spawnSync(adbInfo.bin, ['-s', device.serial, 'push', CONFIG_PATH, DEVICE_CFG], {
+    encoding: 'utf8',
+  });
+  adb(adbInfo.bin, device.serial, ['shell', 'chmod', '0666', DEVICE_CFG]);
   const startTrace = spawnSync(
     adbInfo.bin,
     [
@@ -230,14 +234,14 @@ function main() {
       'perfetto',
       '--txt',
       '-c',
-      '-',
+      DEVICE_CFG,
       '-o',
       DEVICE_TRACE,
       '--background',
     ],
-    { encoding: 'utf8', input: readFileSync(CONFIG_PATH) },
+    { encoding: 'utf8' },
   );
-  const traceOut = `${startTrace.stdout || ''}\n${startTrace.stderr || ''}`.trim();
+  const traceOut = `${pushed.stdout || ''}\n${pushed.stderr || ''}\n${startTrace.stdout || ''}\n${startTrace.stderr || ''}`.trim();
   const pidLine = traceOut
     .split(/\r?\n/u)
     .map((line) => line.trim())
@@ -286,12 +290,13 @@ function main() {
   }
   adb(adbInfo.bin, device.serial, ['shell', 'kill', '-INT', perfettoPid ?? '']);
   adb(adbInfo.bin, device.serial, ['shell', 'pkill', '-INT', 'perfetto']);
-  sleep(2_000);
+  sleep(3_000);
   const tracePath = join(outDir, `${stamp}.perfetto-trace`);
   let pull = adb(adbInfo.bin, device.serial, ['pull', DEVICE_TRACE, tracePath], {
     timeout: 120_000,
   });
-  if (pull.status !== 0 || !existsSync(tracePath)) {
+  const traceBytes = existsSync(tracePath) ? statSync(tracePath).size : 0;
+  if (pull.status !== 0 || traceBytes < 1024) {
     const fd = openSync(tracePath, 'w');
     pull = spawnSync(
       adbInfo.bin,
@@ -299,6 +304,17 @@ function main() {
       { stdio: ['ignore', fd, 'pipe'], timeout: 120_000 },
     );
     closeSync(fd);
+  }
+  const pulledBytes = existsSync(tracePath) ? statSync(tracePath).size : 0;
+  if (pulledBytes < 1024) {
+    printJson({
+      ok: false,
+      reason: 'Perfetto output is empty; config was not applied or the trace was not flushed',
+      start_trace: traceOut.slice(0, 400),
+      pulled_bytes: pulledBytes,
+    });
+    process.exitCode = 1;
+    return;
   }
   const thermal = dumpThermal(adbInfo.bin, device.serial);
   const meta = {

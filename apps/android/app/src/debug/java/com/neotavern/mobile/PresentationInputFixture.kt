@@ -193,15 +193,14 @@ class PresentationInputFixture(
         dispatch(downTime, downTime, MotionEvent.ACTION_DOWN, X, Y)
         val end = downTime + durationMs
         var y = Y
-        var t = downTime
         while (SystemClock.uptimeMillis() < end && !Thread.currentThread().isInterrupted) {
-            t += FRAME_MS
+            val now = SystemClock.uptimeMillis()
             y -= PX_PER_FRAME
             if (y < 80f) y = Y
-            dispatch(downTime, t, MotionEvent.ACTION_MOVE, X, y)
+            dispatch(downTime, now, MotionEvent.ACTION_MOVE, X, y)
             sleep(FRAME_MS)
         }
-        dispatch(downTime, t + FRAME_MS, MotionEvent.ACTION_UP, X, y)
+        dispatch(downTime, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, X, y)
         sleep(FRAME_MS)
     }
 
@@ -213,7 +212,8 @@ class PresentationInputFixture(
     }
 
     private fun dispatch(downTime: Long, eventTime: Long, action: Int, x: Float, y: Float) {
-        val event = obtain(downTime, eventTime, action, x, y)
+        val boundedEventTime = minOf(eventTime, SystemClock.uptimeMillis())
+        val event = obtain(downTime, boundedEventTime, action, x, y)
         try {
             dispatchEvent(event)
         } finally {
