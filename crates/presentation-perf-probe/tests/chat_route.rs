@@ -12,6 +12,7 @@ fn start_chat_route_stays_off_without_the_flag() {
 fn start_chat_route_mounts_the_flagged_workspace() {
     let line = start_chat_route(Some("1"));
     assert!(line.contains("chat_route=true"), "{line}");
+    assert!(line.contains("live_wire=true"), "{line}");
     assert!(line.contains("data_component=chat-workspace"), "{line}");
     assert!(line.contains("production_cutover=false"), "{line}");
 }

@@ -23,6 +23,7 @@ neotavern-presentation-m0 = { path = "../presentation-m0" }
 neotavern-presentation-m0-d2 = { path = "../presentation-m0-d2" }
 neotavern-presentation-session = { path = "../presentation-session" }
 neotavern-presentation-dioxus-shell = { path = "../presentation-dioxus-shell" }
+neotavern-presentation-chat = { path = "../presentation-chat" }
 pollster = { version = "0.4", optional = true }
 wgpu = { version = "29.0.3", optional = true, default-features = false, features = [
     "std",

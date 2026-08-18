@@ -144,5 +144,5 @@ impl Scenario {
 pub use gpu_scenarios::run_scenario;
 
 pub fn start_chat_route(flag: Option<&str>) -> String {
-    neotavern_presentation_dioxus_shell::chat_route_line(flag)
+    neotavern_presentation_chat::start_flagged_route(flag)
 }

@@ -43,6 +43,9 @@ pub struct ProductChatView {
     pub message_count: usize,
     pub visible: Vec<VisibleRow>,
     pub chrome: ProductChrome,
+    pub composer_text: String,
+    pub error_code: Option<String>,
+    pub streaming: bool,
 }
 
 impl Default for ProductChatView {
@@ -52,6 +55,9 @@ impl Default for ProductChatView {
             message_count: 0,
             visible: Vec::new(),
             chrome: ProductChrome::HeaderComposer,
+            composer_text: String::new(),
+            error_code: None,
+            streaming: false,
         }
     }
 }
@@ -205,6 +211,9 @@ pub fn product_chat_from_fixture(fixture: &CanonicalFixture, start: usize) -> Pr
         message_count: fixture.messages.len(),
         visible: visible_rows(fixture, start),
         chrome: ProductChrome::HeaderComposer,
+        composer_text: String::new(),
+        error_code: None,
+        streaming: false,
     }
 }
 

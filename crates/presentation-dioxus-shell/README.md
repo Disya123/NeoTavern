@@ -18,8 +18,8 @@ issues only registered Wire commands.
 - Not wired to production `MainActivity`.
 - Not a Kernel, SQLite, or network client. Those stay behind Product Wire.
 - `NEOTA_DIOXUS_SHELL=1` is a **non-default** flag, not a cutover switch.
-- Milestone C start: debug `PresentationChatActivity` uses
-  `flagged_chat_route` as the chat workspace. Not the launcher.
+- Milestone C start: debug `PresentationChatActivity` is a harness
+  around `crates/presentation-chat` (live Product Wire). Not the launcher.
 - The Android MotionEvent adapter attaches to debug
   `PresentationInputActivity`, not this crate and not default JNI.
 

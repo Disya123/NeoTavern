@@ -3211,6 +3211,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "neotavern-presentation-chat"
+version = "0.1.0"
+dependencies = [
+ "contracts-generated",
+ "jni 0.21.1",
+ "neotavern-chat-viewport",
+ "neotavern-presentation-dioxus-shell",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "neotavern-presentation-dioxus-shell"
 version = "0.1.0"
 dependencies = [
@@ -3265,6 +3277,7 @@ dependencies = [
  "jni 0.21.1",
  "neotavern-chat-viewport",
  "neotavern-neocompositor",
+ "neotavern-presentation-chat",
  "neotavern-presentation-dioxus-shell",
  "neotavern-presentation-m0",
  "neotavern-presentation-m0-d2",

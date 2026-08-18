@@ -258,6 +258,7 @@ pub fn product_chat_app() -> Element {
                 class: "neoui-glass",
                 "data-neoui": "glass",
                 "data-part": "header",
+                role: "banner",
                 style: "position:absolute;left:0;top:0;width:320px;height:36px;",
                 "{view.title} ({view.message_count})"
                 if nested {
@@ -271,11 +272,17 @@ pub fn product_chat_app() -> Element {
             }
             div {
                 "data-part": "viewport",
+                "data-region": "chat-viewport",
+                role: "list",
+                "aria-label": "Chat messages",
+                "data-state": if view.streaming { "streaming" } else { "idle" },
                 style: "position:absolute;left:0;top:36px;width:320px;height:124px;overflow:hidden;",
                 for row in view.visible.iter() {
                     div {
                         "data-part": "message",
                         "data-role": "{row.role}",
+                        "data-format": "markdown",
+                        role: "listitem",
                         style: "min-height:24px;color:#e8eef7;font-size:12px;",
                         "{row.content}"
                         if matches!(row.kind, RowKind::Image | RowKind::Mixed) {
@@ -289,11 +296,22 @@ pub fn product_chat_app() -> Element {
                     }
                 }
             }
+            if let Some(code) = view.error_code.as_deref() {
+                div {
+                    "data-part": "error",
+                    role: "alert",
+                    "{code}"
+                }
+            }
             div {
                 class: "neoui-glass",
                 "data-neoui": "glass",
                 "data-part": "composer",
-                style: "position:absolute;left:0;top:160px;width:320px;height:40px;"
+                role: "region",
+                "aria-label": "Message composer",
+                "data-state": if view.streaming { "streaming" } else { "idle" },
+                style: "position:absolute;left:0;top:160px;width:320px;height:40px;",
+                "{view.composer_text}"
             }
             if overlay {
                 div {
