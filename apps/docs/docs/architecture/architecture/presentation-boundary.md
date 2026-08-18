@@ -73,7 +73,8 @@ interaction-ready text snapshots, a cross-tile selection underlay (PERF-19
 **PASS** on physical Vulkan, not B PASS), a PERF-18 effect-scope
 backdrop capture (**PASS** on physical Vulkan, not B PASS), and a CPU
 device/surface recovery state machine (injection-tested, not production JNI,
-not B PASS). Chat
+not B PASS), plus bounded GPU telemetry (CPU snapshot; GPU timestamps
+unavailable until shared-device raster interop; not B PASS). Chat
 virtualization lives
 in `crates/chat-viewport` (height index, predictor, bounded tile cache,
 geometry epochs / C0/C1 remap; compositor sees only the **active** tile
@@ -87,8 +88,12 @@ Debug-only
 `crates/presentation-perf-probe` / `PresentationPerfActivity` is the
 physical capture vehicle (not production JNI). Neither crate is linked into
 production JNI. Device/surface recovery is a CPU injection-tested state
-machine in `crates/neocompositor` (`GpuRecovery`); GPU telemetry is not
-started. Product cutover is not declared. Known host baseline failures are
+machine in `crates/neocompositor` (`GpuRecovery`). Bounded GPU telemetry
+(`GpuTelemetry`) records queue/cache/target high-water, dropped/coalesced
+frames, recovery counters, epoch, frame cause, damage/ROI, and degraded/
+rollback reason; GPU timestamps stay `Unavailable` until shared-device
+raster interop. Product cutover is not declared. Known host baseline
+failures are
 recorded in
 [known-baseline-failures.md](known-baseline-failures.md) and do not make
 PERF-18/19/20 evidence inadmissible.

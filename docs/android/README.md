@@ -165,7 +165,8 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   physical Vulkan, not B PASS), a PERF-18
   effect-scope capture (**PASS** on physical Vulkan, not B PASS), and a CPU
   device/surface recovery state machine (injection-tested, not production
-  JNI, not B PASS). The
+  JNI, not B PASS), and bounded GPU telemetry (CPU snapshot; GPU timestamps
+  unavailable; not B PASS). The
   Blitz producer publishes interaction-ready text snapshots from already-
   shaped Parley layouts. These crates are **not** linked into
   `libneotavern_android_jni.so`. Chat virtualization

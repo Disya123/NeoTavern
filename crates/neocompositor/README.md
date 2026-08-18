@@ -71,6 +71,11 @@ production JNI renderer and **not** an Android cutover.
   builds the first restored frame from the new epoch only. Bounded attempts
   then `Degraded` with acting WebView rollback. OOM does not start a recreate
   loop. Not production JNI.
+- Bounded GPU telemetry (CPU counters, not B PASS): `GpuTelemetry` is a
+  copy-sized snapshot of queue/cache/target bytes and high-water, dropped/
+  coalesced frames, recovery reason/duration/attempt, epoch, frame cause,
+  damage/ROI, GPU timing availability (`Unavailable` until shared-device
+  raster interop), and degraded/rollback reason. Not an event log.
 
 ## What this crate is not
 
@@ -78,8 +83,6 @@ production JNI renderer and **not** an Android cutover.
 - Not a cutover switch. Public Android stays on the React/WebView path.
 - `NEOTA_NEOCOMPOSITOR=1` is a **feature flag** for later host wiring. The
   default host is `PresentationHost::WebViewRollback`.
-- GPU telemetry is not started (required before B PASS, not this slice).
-  Mailbox high-water counters are in-memory only.
 - Virtualization lives in `crates/chat-viewport`, not here (including
   geometry epochs / C0/C1 remap). Viewport↔compositor transactions live in
   `crates/presentation-session`. A gesture-platform adapter is **not**
@@ -111,12 +114,13 @@ Started (CPU types + tests):
 - M0-D1a pass-order corpus as a production regression (not a lab re-run)
 - device/surface recovery CPU state machine (injection tests; not production
   JNI)
+- bounded GPU telemetry / recovery counters (CPU snapshot; GPU timestamps
+  `Unavailable`)
 
 Not started (do not treat as done):
 
 - gesture-platform adapter
 - shared-device raster interop in this crate (still in the M0 probe)
-- GPU timing telemetry
 - remaining PERF-01…PERF-22 and 120 Hz product budgets (PERF-18/19/20
   are independently PASS; Milestone B stays STARTED)
 

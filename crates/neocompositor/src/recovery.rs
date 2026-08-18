@@ -6,15 +6,16 @@
 
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::time::Instant;
 
-use crate::epoch::DeviceEpoch;
+use crate::epoch::{DeviceEpoch, SceneEpoch};
 use crate::fast_path::CompositorFastPath;
 use crate::host::PresentationHost;
 use crate::layer_cache::{LayerCache, LayerKey};
-use crate::mailbox::{FrameMailbox, PostAccept, PostReject, TryDequeue};
+use crate::mailbox::{FrameMailbox, MailboxStats, PostAccept, PostReject, TryDequeue};
 use crate::selection::SelectionSession;
 use crate::target_pool::{TargetId, TargetPool};
-use crate::transaction::{FrameTransaction, ResourceLease, ResourceLeaseId};
+use crate::transaction::{DamageRect, FrameTransaction, ResourceLease, ResourceLeaseId};
 
 pub const DEFAULT_RECOVERY_ATTEMPT_CAP: u32 = 3;
 const CACHE_CAP: usize = 32;
@@ -187,6 +188,13 @@ pub struct GpuRecovery {
     degraded_reason: Option<DegradedReason>,
     host: PresentationHost,
     retired: HashSet<ResourceLeaseId>,
+    cache_high_water_entries: usize,
+    target_high_water: usize,
+    last_recovery_started: Option<Instant>,
+    last_recovery_duration_us: u64,
+    last_damage: DamageRect,
+    last_roi: DamageRect,
+    frame_cause: RecoveryFrameCause,
 }
 
 impl GpuRecovery {
@@ -211,6 +219,13 @@ impl GpuRecovery {
             degraded_reason: None,
             host: PresentationHost::NeoCompositor { feature_flag: true },
             retired: HashSet::new(),
+            cache_high_water_entries: 0,
+            target_high_water: 0,
+            last_recovery_started: None,
+            last_recovery_duration_us: 0,
+            last_damage: DamageRect::EMPTY,
+            last_roi: DamageRect::EMPTY,
+            frame_cause: RecoveryFrameCause::Present,
         }
     }
 
@@ -295,6 +310,7 @@ impl GpuRecovery {
 
     pub fn cache_insert(&mut self, key: LayerKey) {
         self.gpu.cache.insert(key);
+        self.cache_high_water_entries = self.cache_high_water_entries.max(self.gpu.cache.len());
     }
 
     pub fn cache_len(&self) -> usize {
@@ -302,7 +318,9 @@ impl GpuRecovery {
     }
 
     pub fn acquire_target(&mut self) -> Result<TargetId, crate::target_pool::TargetPoolError> {
-        self.gpu.targets.acquire()
+        let id = self.gpu.targets.acquire()?;
+        self.target_high_water = self.target_high_water.max(self.gpu.targets.in_use_count());
+        Ok(id)
     }
 
     pub fn targets_in_use(&self) -> usize {
@@ -348,6 +366,7 @@ impl GpuRecovery {
         match self.mailbox.try_dequeue() {
             TryDequeue::Ready(tx) => {
                 self.stale_submit = false;
+                self.capture_tx(&tx);
                 self.in_flight = Some(Arc::clone(&tx));
                 Some(tx)
             }
@@ -381,6 +400,8 @@ impl GpuRecovery {
             return Err(SubmitReject::MixedEpochHandle);
         }
         let _ = self.gpu.alloc(GpuHandleKind::Texture);
+        self.frame_cause = RecoveryFrameCause::Present;
+        self.capture_tx(&tx);
         Ok(tx)
     }
 
@@ -394,9 +415,11 @@ impl GpuRecovery {
         match fault {
             GpuFault::Timeout => {
                 self.skipped_timeouts = self.skipped_timeouts.saturating_add(1);
+                self.frame_cause = RecoveryFrameCause::TimeoutSkip;
                 Ok(RecoveryOutcome::SkippedTimeout)
             }
             GpuFault::OutOfMemory => {
+                self.last_recovery_duration_us = 0;
                 self.degrade(DegradedReason::OutOfMemory);
                 Ok(RecoveryOutcome::Degraded {
                     reason: DegradedReason::OutOfMemory,
@@ -416,6 +439,7 @@ impl GpuRecovery {
     pub fn begin_device_recovery(&mut self) -> Result<DeviceEpoch, RecoveryError> {
         self.enter_loss(GpuFault::DeviceLost)?;
         self.phase = RecoveryPhase::Recreating;
+        self.last_recovery_started = Some(Instant::now());
         let epoch = self.mailbox.recover_device_epoch();
         self.gpu.destroy_for_new_device(epoch);
         self.absorb_retired()?;
@@ -437,6 +461,8 @@ impl GpuRecovery {
         let restored = match self.mailbox.try_dequeue() {
             TryDequeue::Ready(tx) => tx,
             _ => {
+                self.record_recovery_duration();
+                self.frame_cause = RecoveryFrameCause::DeviceRehydrate;
                 self.phase = RecoveryPhase::Ready;
                 return Ok(None);
             }
@@ -451,6 +477,9 @@ impl GpuRecovery {
             .iter()
             .any(|handle| handle.device_epoch.0 < self.gpu.epoch.0));
         self.mailbox.adopt_logical(Arc::clone(&restored));
+        self.record_recovery_duration();
+        self.frame_cause = RecoveryFrameCause::DeviceRehydrate;
+        self.capture_tx(&restored);
         let _ = self.gpu.recreate_surface();
         let _ = self.gpu.alloc(GpuHandleKind::Pipeline);
         self.phase = RecoveryPhase::Ready;
@@ -466,7 +495,10 @@ impl GpuRecovery {
         self.phase = RecoveryPhase::LossDetected;
         self.phase = RecoveryPhase::Quiescing;
         self.phase = RecoveryPhase::Recreating;
+        self.last_recovery_started = Some(Instant::now());
         let _ = self.gpu.recreate_surface();
+        self.record_recovery_duration();
+        self.frame_cause = RecoveryFrameCause::SurfaceRebuild;
         self.phase = RecoveryPhase::Ready;
         Ok(RecoveryOutcome::SurfaceRebuilt {
             device_epoch: self.gpu.epoch,
@@ -511,10 +543,87 @@ impl GpuRecovery {
     pub fn reject_stale_retirement(&self, lease: ResourceLease) -> bool {
         lease.device_epoch != self.gpu.epoch || self.retired.contains(&lease.id)
     }
+
+    fn capture_tx(&mut self, tx: &FrameTransaction) {
+        let damage = tx
+            .damage()
+            .iter()
+            .copied()
+            .fold(DamageRect::EMPTY, DamageRect::union);
+        self.last_damage = damage;
+        self.last_roi = tx
+            .scene()
+            .glass
+            .first()
+            .map(|glass| DamageRect::from_rect(glass.roi))
+            .unwrap_or(damage);
+    }
+
+    fn record_recovery_duration(&mut self) {
+        if let Some(start) = self.last_recovery_started.take() {
+            self.last_recovery_duration_us =
+                u64::try_from(start.elapsed().as_micros()).unwrap_or(u64::MAX);
+        }
+    }
+
+    pub(crate) fn telemetry_view(&self) -> RecoveryTelemetryView {
+        RecoveryTelemetryView {
+            phase: self.phase,
+            device_epoch: self.gpu.epoch,
+            scene_epoch: self
+                .mailbox
+                .last_known_good()
+                .or_else(|| self.mailbox.logical_snapshot())
+                .map(|tx| tx.scene_epoch()),
+            cache_len: self.gpu.cache.len(),
+            cache_high_water_entries: self.cache_high_water_entries,
+            targets_in_use: self.gpu.targets.in_use_count(),
+            target_high_water: self.target_high_water,
+            skipped_timeouts: self.skipped_timeouts,
+            attempt: self.attempt,
+            last_fault: self.last_fault,
+            last_recovery_duration_us: self.last_recovery_duration_us,
+            damage: self.last_damage,
+            roi: self.last_roi,
+            degraded_reason: self.degraded_reason,
+            host: self.host,
+            frame_cause: self.frame_cause,
+            mailbox: self.mailbox.stats(),
+        }
+    }
 }
 
 impl Default for GpuRecovery {
     fn default() -> Self {
         Self::new()
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum RecoveryFrameCause {
+    Present,
+    TimeoutSkip,
+    SurfaceRebuild,
+    DeviceRehydrate,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct RecoveryTelemetryView {
+    pub phase: RecoveryPhase,
+    pub device_epoch: DeviceEpoch,
+    pub scene_epoch: Option<SceneEpoch>,
+    pub cache_len: usize,
+    pub cache_high_water_entries: usize,
+    pub targets_in_use: usize,
+    pub target_high_water: usize,
+    pub skipped_timeouts: u64,
+    pub attempt: u32,
+    pub last_fault: Option<GpuFault>,
+    pub last_recovery_duration_us: u64,
+    pub damage: DamageRect,
+    pub roi: DamageRect,
+    pub degraded_reason: Option<DegradedReason>,
+    pub host: PresentationHost,
+    pub frame_cause: RecoveryFrameCause,
+    pub mailbox: MailboxStats,
 }

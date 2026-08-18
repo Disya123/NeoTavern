@@ -132,9 +132,9 @@
   Physical Xiaomi / Vulkan evidence in
   [perf-18-20-adjudication.json](docs/rfc/perf-18-20-adjudication.json):
   `PERF-18=PASS`, `PERF-19=PASS`, `PERF-20=PASS`, `almost_pass=false`.
-  Milestone B remains STARTED (GPU telemetry, bounded queue/thermal/120 Hz,
-  remaining PERF-01..22; device/surface recovery is now a CPU
-  injection-tested host slice, not production JNI). Not a production
+  Milestone B remains STARTED (bounded queue/thermal/120 Hz, remaining
+  PERF-01..22; device/surface recovery and bounded GPU telemetry are now
+  CPU host slices, not production JNI). Not a production
   cutover. `MainActivity` / WebView rollback unchanged.
 
 - **Device/surface recovery state machine (CPU, not B PASS).**
@@ -145,6 +145,13 @@
   and OOM-without-recreate-loop. Injection tests live in
   `crates/neocompositor/tests/recovery.rs`. Not production JNI. Not a cutover.
   GPU telemetry is not in this change. Milestone B remains STARTED.
+
+- **Bounded GPU telemetry and recovery counters (CPU, not B PASS).**
+  `GpuTelemetry` is a copy-sized snapshot: queue/cache/target bytes and
+  high-water, dropped/coalesced frames, recovery reason/duration/attempt,
+  epoch, frame cause, damage/ROI, GPU timing availability (`Unavailable`
+  until shared-device raster interop), and degraded/rollback reason. Not an
+  event log. Not production JNI. Not a cutover. Milestone B remains STARTED.
 
 - **Known baseline failures (not a green full baseline).** Recorded as
   `KNOWN_BASELINE_FAILURE` in

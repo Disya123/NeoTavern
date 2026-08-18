@@ -2987,8 +2987,11 @@ text/geometry/selection/logical scroll, rejects stale transactions /
 callbacks / retirement leases, keeps the mailbox bounded/latest-wins, and
 builds the first restored frame from the new epoch only. Bounded recovery
 attempts then `Degraded` with acting WebView rollback. OOM does not start a
-recreate loop. This is not production JNI and not a cutover. GPU telemetry
-is a separate follow-up slice.
+recreate loop. Bounded `GpuTelemetry` records queue/cache/target high-water,
+dropped/coalesced frames, recovery reason/duration/attempt, epoch, frame
+cause, damage/ROI, and degraded/rollback reason. GPU timestamp queries stay
+`Unavailable` until shared-device raster interop. This is not production JNI
+and not a cutover.
 
 ---
 

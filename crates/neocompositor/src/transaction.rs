@@ -34,6 +34,13 @@ impl DamageRect {
         self.width == 0 || self.height == 0
     }
 
+    pub const EMPTY: Self = Self {
+        x: 0,
+        y: 0,
+        width: 0,
+        height: 0,
+    };
+
     pub fn union(self, other: Self) -> Self {
         if self.is_empty() {
             return other;

@@ -21,6 +21,7 @@ pub mod scene;
 pub mod scroll;
 pub mod selection;
 pub mod target_pool;
+pub mod telemetry;
 pub mod text;
 pub mod transaction;
 
@@ -69,6 +70,10 @@ pub use selection::{
     SelectablePaintPlan, SelectionError, SelectionFrame, SelectionSession, AUTOSCROLL_EDGE_PX,
 };
 pub use target_pool::{TargetId, TargetPool, TargetPoolError};
+pub use telemetry::{
+    FrameCause, GpuTelemetry, GpuTimingAvailability, LAYER_ACCOUNTING_BYTES,
+    TARGET_ACCOUNTING_BYTES,
+};
 pub use text::{
     BidiAffinity, ClusterBoundary, InteractionReady, LineMetric, ProducerGlyph, ProducerTextWork,
     ShapedRunRef, TextCommitError, TextFragmentId, TextInteractionSnapshot, TextOffset, TextRange,
