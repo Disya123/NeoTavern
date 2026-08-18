@@ -21,6 +21,8 @@ admission). D1a/D1b evidence JSON is unchanged. Debug APK can load
 - `blitz_paint::paint_scene` drives a `ProducerSink`. Glass barriers are
   emitted from `render_element` via `PaintScene::host_node_marker` (**294**
   inserted lines; see [`upstream/`](upstream/README.md)).
+- `produce_vdom` / `produce_app` are the product-path Blitz entry: callers
+  pass a Dioxus tree and must not assemble a `NeoDisplayList` by hand.
 - Canonical z-order is the paint stream. A second DOM walk is diagnostics
   only (`z-index` fixture: later sibling paints before hoisted glass).
 - Glass B stays inside Blitz opacity/clip layers; scopes balance.

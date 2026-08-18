@@ -88,7 +88,12 @@ pub struct ProducerOutput {
 }
 
 pub fn produce_app(app: fn() -> Element) -> Result<ProducerOutput, String> {
-    let vdom = VirtualDom::new(app);
+    produce_vdom(VirtualDom::new(app))
+}
+
+/// Layout and paint an already-built Product Wire VirtualDom through Blitz.
+/// Callers must not assemble a `NeoDisplayList` by hand.
+pub fn produce_vdom(vdom: VirtualDom) -> Result<ProducerOutput, String> {
     let mut doc = DioxusDocument::new(
         vdom,
         DocumentConfig {

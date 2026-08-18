@@ -15,6 +15,16 @@
 
 ### Added
 
+- **Product-path host corpus for PERF-01 / PERF-02 / PERF-16 (not PASS).**
+  `crates/presentation-session` `tests/product_path_perf.rs` drives
+  Product Wire → flagged Dioxus shell → Blitz → presentation-session →
+  compositor. 10k mixed Markdown/image rows, 60 s bidirectional 120 Hz
+  ticks (warm and cold-near-range), streaming coalesce, 100 cold
+  contentful vs interaction samples with host p99 omitted. Unified
+  runner `scripts/presentation-perf-bench-runner.mjs` records
+  `HOST_CORPUS`, never `PASS`. Tile cache `pin_span` now unpins tiles
+  that left the protected band. Milestone B remains STARTED.
+
 - **PERF-15 PASS (not B PASS, not PluginVisualSurface).** Independent
   Xiaomi / Vulkan stamp on a BOUND debug APK:
   [perf-15-adjudication.json](docs/rfc/perf-15-adjudication.json)

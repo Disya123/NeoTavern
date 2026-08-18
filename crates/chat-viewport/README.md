@@ -14,7 +14,8 @@ bounded preparation queue, tile cache, and geometry epochs. It is **not**
 - Overscan clamped by item/byte/time budgets.
 - Bounded preparation queue: latest range wins, stale work is cancelled.
 - Tile cache with hard item/byte caps, high-water telemetry, and a pinned
-  viewport/protected band during fling.
+  viewport/protected band during fling. `pin_span` unpins tiles that left
+  that band so a long fling cannot fill the item cap with stale pins.
 - Overscan miss presents immediately from known/estimated geometry. It does
   not wait on Dioxus/layout/raster and must not open a transparent gap.
 - Active and shadow `GeometrySnapshot`s exist together. Exact-height updates

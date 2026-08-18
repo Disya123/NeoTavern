@@ -202,6 +202,9 @@ impl TileCache {
     }
 
     pub fn pin_span(&mut self, index: &HeightIndex, span: ItemSpan) {
+        for entry in self.entries.values_mut() {
+            entry.pinned = false;
+        }
         for i in span.start..span.end {
             if let Some((id, _, _)) = index.height_at(i) {
                 if let Some(entry) = self

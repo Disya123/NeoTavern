@@ -9,6 +9,8 @@ issues only registered Wire commands.
 - A host-side / unit-tested shell on Dioxus `VirtualDom` 0.8.0-alpha.1.
 - Canonical view models are Wire DTOs (`contracts-generated`).
 - Streaming applies stale-generation rejection and a bounded backpressure cap.
+- Product-path 10k mixed catalog (`product_path.rs`) mounts only the
+  visible window plus header/composer glass. Blitz consumes this tree.
 
 ## What this crate is not
 

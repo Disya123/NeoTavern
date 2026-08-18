@@ -24,6 +24,11 @@ Android cutover.
 - Fallback tiles without a text snapshot stay `NotInteractionReady`.
 - Owns a B-level `VisualSurfaceFrameIngress` (ADR-0050): logical declare
   plus bounded latest-ready-frame-wins queue. Not Plugin SDK.
+- Host product-path corpus for PERF-01 / PERF-02 / PERF-16
+  (`tests/product_path_perf.rs`): Product Wire → flagged Dioxus shell →
+  Blitz producer → this session → compositor ticks. Not a physical PASS.
+  Callers bind a Blitz `NeoDisplayList`; they must not assemble one by
+  hand. Host reports do not publish p99.
 
 ## What this crate is not
 

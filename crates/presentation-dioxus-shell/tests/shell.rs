@@ -1,6 +1,7 @@
 use neotavern_presentation_dioxus_shell::{
     assert_registered_command, dioxus_shell_from_flag, expected_projection, load_canonical_fixture,
-    mount_virtual_dom, project_canonical, DioxusShellHost,
+    mixed_height_catalog, mount_product_chat, mount_virtual_dom, product_chat_from_fixture,
+    project_canonical, DioxusShellHost, PRODUCT_PATH_ITEMS,
 };
 use std::fs;
 use std::path::PathBuf;
@@ -54,4 +55,18 @@ fn cargo_toml_does_not_depend_on_kernel_storage_or_network() {
             "Dioxus Product Wire shell must not depend on {forbidden}"
         );
     }
+}
+
+#[test]
+fn product_path_catalog_is_ten_thousand_wire_messages() {
+    let fixture = mixed_height_catalog(PRODUCT_PATH_ITEMS);
+    let projection = project_canonical(&fixture).expect("wire");
+    assert_eq!(projection.message_ids.len(), PRODUCT_PATH_ITEMS as usize);
+    assert_eq!(
+        dioxus_shell_from_flag(Some("1")),
+        DioxusShellHost::Flagged { feature_flag: true }
+    );
+    let view = product_chat_from_fixture(&fixture, 0);
+    let edits = mount_product_chat(view);
+    assert!(edits > 0);
 }

@@ -10,6 +10,14 @@ use serde::Deserialize;
 use std::collections::HashSet;
 use std::sync::Mutex;
 
+mod product_path;
+pub use product_path::{
+    current_product_chat, install_product_chat, message_id, mixed_height, mixed_height_catalog,
+    product_chat_from_fixture, product_chat_with_chrome, streaming_schedule, visible_rows,
+    ProductChatView, ProductChrome, RowKind, VisibleRow, PRODUCT_PATH_CHAT_ID, PRODUCT_PATH_ITEMS,
+    PRODUCT_PATH_VISIBLE,
+};
+
 pub const DIOXUS_SHELL_FLAG: &str = "NEOTA_DIOXUS_SHELL";
 pub const CANONICAL_FIXTURE_JSON: &str =
     include_str!("../../../packages/contracts/src/presentation/fixtures/canonical-chat.json");
@@ -216,4 +224,88 @@ pub fn mount_virtual_dom(title: &str, message_count: usize) -> usize {
 
 pub fn expected_projection() -> CanonicalProjection {
     serde_json::from_str(EXPECTED_PROJECTION_JSON).expect("expected-projection.json")
+}
+
+/// Flagged Product Wire chat workspace: header glass, visible Markdown/image
+/// rows, composer glass. Blitz consumes this tree; callers must not inject a
+/// hand-built `NeoDisplayList`.
+pub fn product_chat_app() -> Element {
+    let view = current_product_chat();
+    let wallpaper = matches!(view.chrome, ProductChrome::PaintOrder);
+    let overlay = matches!(
+        view.chrome,
+        ProductChrome::TripleGlass | ProductChrome::PaintOrder
+    );
+    let nested = matches!(
+        view.chrome,
+        ProductChrome::NestedDialog | ProductChrome::PaintOrder
+    );
+    rsx! {
+        div {
+            "data-component": "chat-workspace",
+            style: "position:relative;width:320px;height:200px;background:#101820;",
+            if wallpaper {
+                div {
+                    "data-part": "wallpaper",
+                    style: "position:absolute;left:0;top:0;width:320px;height:200px;background:#243044;"
+                }
+            }
+            div {
+                class: "neoui-glass",
+                "data-neoui": "glass",
+                "data-part": "header",
+                style: "position:absolute;left:0;top:0;width:320px;height:36px;",
+                "{view.title} ({view.message_count})"
+                if nested {
+                    div {
+                        class: "neoui-glass",
+                        "data-neoui": "glass",
+                        "data-part": "dialog",
+                        style: "position:absolute;left:48px;top:4px;width:160px;height:28px;"
+                    }
+                }
+            }
+            div {
+                "data-part": "viewport",
+                style: "position:absolute;left:0;top:36px;width:320px;height:124px;overflow:hidden;",
+                for row in view.visible.iter() {
+                    div {
+                        "data-part": "message",
+                        "data-role": "{row.role}",
+                        style: "min-height:24px;color:#e8eef7;font-size:12px;",
+                        "{row.content}"
+                        if matches!(row.kind, RowKind::Image | RowKind::Mixed) {
+                            img {
+                                src: "asset:thumb",
+                                alt: "message image",
+                                "data-part": "message-image",
+                                style: "width:48px;height:32px;background:#3a4a60;"
+                            }
+                        }
+                    }
+                }
+            }
+            div {
+                class: "neoui-glass",
+                "data-neoui": "glass",
+                "data-part": "composer",
+                style: "position:absolute;left:0;top:160px;width:320px;height:40px;"
+            }
+            if overlay {
+                div {
+                    class: "neoui-glass",
+                    "data-neoui": "glass",
+                    "data-part": "overlay",
+                    style: "position:absolute;left:240px;top:8px;width:72px;height:24px;"
+                }
+            }
+        }
+    }
+}
+
+pub fn mount_product_chat(view: ProductChatView) -> usize {
+    install_product_chat(view);
+    let mut vdom = VirtualDom::new(product_chat_app);
+    let mutations = vdom.rebuild_to_vec();
+    mutations.edits.len()
 }

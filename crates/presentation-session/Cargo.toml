@@ -14,4 +14,5 @@ neotavern-chat-viewport = { path = "../chat-viewport" }
 neotavern-neocompositor = { path = "../neocompositor" }
 
 [dev-dependencies]
+neotavern-presentation-dioxus-shell = { path = "../presentation-dioxus-shell" }
 neotavern-presentation-m0-d2 = { path = "../presentation-m0-d2" }

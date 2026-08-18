@@ -24,7 +24,9 @@ describe('presentation PERF bench runner plan', () => {
       true,
     );
     expect(result.remaining.find((row) => row.id === 'PERF-14').status).toBe('HOST_CORPUS');
-    expect(result.remaining.find((row) => row.id === 'PERF-01').status).toBe('MISSING');
+    expect(result.remaining.find((row) => row.id === 'PERF-01').status).toBe('HOST_CORPUS');
+    expect(result.remaining.find((row) => row.id === 'PERF-02').status).toBe('HOST_CORPUS');
+    expect(result.remaining.find((row) => row.id === 'PERF-16').status).toBe('HOST_CORPUS');
     expect(result.remaining.every((row) => row.status !== 'PASS')).toBe(true);
   });
 });

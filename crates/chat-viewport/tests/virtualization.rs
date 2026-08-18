@@ -90,6 +90,18 @@ fn cold_fling_ten_thousand_px_s_has_zero_blank_and_does_not_wait() {
 }
 
 #[test]
+fn long_fling_unpins_left_behind_tiles_and_stays_covered() {
+    let mut vp = session(index_n(N), 256, 4 * 1024 * 1024);
+    vp.set_velocity(FLING);
+    for _ in 0..400 {
+        let frame = vp.present();
+        assert_eq!(frame.blank_px, 0.0);
+        assert!(vp.cache().len() <= 256);
+        vp.advance(DT_NS);
+    }
+}
+
+#[test]
 fn sharp_reversal_keeps_trailing_coverage() {
     let mut vp = session(index_n(N), 256, 4 * 1024 * 1024);
     vp.set_velocity(FLING);

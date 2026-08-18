@@ -41,6 +41,19 @@ const INDEPENDENT = {
 
 export const HOST_GROUPS = [
   {
+    ids: ['PERF-01', 'PERF-02', 'PERF-16'],
+    cargo: [
+      'test',
+      '--manifest-path',
+      'crates/Cargo.toml',
+      '-p',
+      'neotavern-presentation-session',
+      '--test',
+      'product_path_perf',
+    ],
+    note: 'product-path host corpus (Wire→Dioxus→Blitz→session→compositor); not a physical PASS',
+  },
+  {
     ids: ['PERF-03', 'PERF-04', 'PERF-05', 'PERF-11'],
     cargo: [
       'test',
@@ -77,12 +90,6 @@ export const HOST_GROUPS = [
   },
 ];
 
-const PHYSICAL_ONLY = {
-  'PERF-01': '120 Hz 10k mixed-height chat scroll with Markdown/images/glass',
-  'PERF-02': 'streaming Markdown coalesce on the 10k scroll fixture',
-  'PERF-16': 'cold process start / first interactive chat frame',
-};
-
 export function plan() {
   return {
     schema: 'presentation-perf-bench-runner/v1',
@@ -102,7 +109,7 @@ function describeItem(id, extra = {}) {
     id,
     status: extra.status ?? 'MISSING',
     runner: group ? 'host-production-like-bench' : 'physical-or-missing',
-    note: extra.note ?? PHYSICAL_ONLY[id] ?? group?.note ?? null,
+    note: extra.note ?? group?.note ?? null,
     exit_code: extra.exit_code ?? null,
   };
 }

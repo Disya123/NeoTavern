@@ -8,8 +8,8 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use neotavern_chat_viewport::{
-    AckResult as ViewportAckResult, DeltaToken, GeometrySnapshot, LogicalItemId, SceneGeneration,
-    ScrollAck as ViewportScrollAck, TileFidelity, ViewportSession,
+    AckResult as ViewportAckResult, DeltaToken, GeometrySnapshot, LogicalItemId, PresentDecision,
+    SceneGeneration, ScrollAck as ViewportScrollAck, TileFidelity, ViewportSession,
 };
 use neotavern_neocompositor::{
     apply_autoscroll, autoscroll_delta, compose_selectable, AffineCoeffs, BackdropRootId,
@@ -116,6 +116,7 @@ pub struct PresentationSession {
     hit_clip: Option<ClipId>,
     autoscroll_seq: u64,
     ingress: SurfaceFrameIngress,
+    producer_scene: Option<NeoDisplayList>,
 }
 
 impl PresentationSession {
@@ -141,7 +142,67 @@ impl PresentationSession {
             hit_clip: None,
             autoscroll_seq: 0,
             ingress,
+            producer_scene: None,
         }
+    }
+
+    /// Bind a Blitz-produced scene. Tests and probes must not assemble this
+    /// list by hand; it comes from `produce_app` / `produce_vdom`.
+    pub fn bind_producer_scene(&mut self, list: NeoDisplayList) {
+        self.producer_scene = Some(list);
+    }
+
+    pub fn producer_scene(&self) -> Option<&NeoDisplayList> {
+        self.producer_scene.as_ref()
+    }
+
+    pub fn mailbox_stats(&self) -> neotavern_neocompositor::MailboxStats {
+        self.mailbox.stats()
+    }
+
+    pub fn mailbox_pending(&self) -> usize {
+        self.mailbox.pending_count()
+    }
+
+    pub fn try_dequeue(&self) -> neotavern_neocompositor::TryDequeue {
+        self.mailbox.try_dequeue()
+    }
+
+    pub fn recover_gpu_device(&mut self) -> DeviceEpoch {
+        let epoch = self.clock.bump_device();
+        let mailbox_epoch = self.mailbox.recover_device_epoch();
+        debug_assert_eq!(epoch, mailbox_epoch);
+        self.ingress.recover_device(epoch);
+        epoch
+    }
+
+    pub fn path_mut(&mut self) -> &mut CompositorFastPath {
+        &mut self.path
+    }
+
+    /// Compositor-only tick: viewport advance + scroll delta. Must not rebuild
+    /// Dioxus or Blitz.
+    pub fn compositor_scroll_tick(
+        &mut self,
+        velocity: f64,
+        dt_ns: u64,
+        time: PresentationTime,
+    ) -> (f64, PresentDecision) {
+        let before = self.viewport.offset();
+        self.viewport.set_velocity(velocity);
+        self.viewport.advance(dt_ns);
+        let outcome = self.viewport.present();
+        let delta = Vec2::new(0.0, self.viewport.offset() - before);
+        if let Some(scroll) = self.scroll_id {
+            if self.path.latched_scroll() != Some(scroll) {
+                let _ = self.path.begin_gesture(GestureId(1), &[scroll]);
+            }
+            self.autoscroll_seq = self.autoscroll_seq.saturating_add(1);
+            let seq = ScrollSequence(self.autoscroll_seq);
+            let _ = self.path.gesture_delta(GestureId(1), delta, seq, time);
+            let _ = self.path.present(time);
+        }
+        (self.viewport.offset(), outcome.decision)
     }
 
     pub fn viewport(&self) -> &ViewportSession {
@@ -224,7 +285,9 @@ impl PresentationSession {
         self.hit_clip = Some(clip);
         let text = self.commit_text(epoch, generation, &handoff, &geometry)?;
         let hits = hit_snapshot(epoch, &text, spatial, clip);
-        let list = display_list(generation.geometry.max(1), self.width, self.height, &text);
+        let list = self.producer_scene.clone().unwrap_or_else(|| {
+            display_list(generation.geometry.max(1), self.width, self.height, &text)
+        });
         let tx = FrameTransaction::publish(FrameTransactionParts {
             frame_id: self.clock.next_frame(),
             scene_epoch: epoch,

@@ -3265,6 +3265,7 @@ dependencies = [
  "jni 0.21.1",
  "neotavern-chat-viewport",
  "neotavern-neocompositor",
+ "neotavern-presentation-dioxus-shell",
  "neotavern-presentation-m0",
  "neotavern-presentation-m0-d2",
  "neotavern-presentation-session",
@@ -3279,6 +3280,7 @@ version = "0.1.0"
 dependencies = [
  "neotavern-chat-viewport",
  "neotavern-neocompositor",
+ "neotavern-presentation-dioxus-shell",
  "neotavern-presentation-m0-d2",
 ]
 
