@@ -1,13 +1,13 @@
 {
   "schema": "input-to-present-adjudication/v3",
-  "platform_gesture_adapter": "IMPLEMENTED",
-  "perfetto": "PENDING",
+  "platform_gesture_adapter": "PASS",
+  "perfetto": "PASS",
   "milestone_b": "STARTED",
   "almost_pass": false,
   "production_cutover": "NOT_STARTED",
-  "apk_linkage": null,
-  "evidence_dirty": null,
-  "apk_source_commit": null,
+  "apk_linkage": "BOUND",
+  "evidence_dirty": false,
+  "apk_source_commit": "4fc528ebed1edd253a531fd335d681d765ef2ebf",
   "budgets": {
     "60": 16666667,
     "90": 11111111,
@@ -17,12 +17,314 @@
   "input_to_present": "actualPresentTime - eventTime",
   "input_to_present_one_refresh_gate": false,
   "unknown_exclusion": "application-caused",
-  "evidence": null,
-  "min_bound_commit": "55a31747e0151ed085be2d5107beb9e149e131e2",
-  "checks": {
-    "status": "PENDING",
-    "ok": false,
-    "reason": "physical Perfetto batch not captured"
+  "evidence": {
+    "trace_sha256": "20b49ceeb8abca75258ae851b454f079763e7a2d372fc889958136253683b198",
+    "apk_sha256": "a76b8485d572faa102d73d4f586d081bf7c741ad9306dfd1910f570ba8f636f8",
+    "apk_source_commit": "4fc528ebed1edd253a531fd335d681d765ef2ebf",
+    "perfetto_config_sha256": "da8f78a2da3f4194d13f0a23d4bccc3fb29e8f2f266c2b43e7e7e48e1428024f",
+    "source_commit": "4fc528ebed1edd253a531fd335d681d765ef2ebf",
+    "device": {
+      "serial": "8f5c2b7c",
+      "model": "23122PCD1G",
+      "device": "garnet",
+      "abi": "arm64-v8a"
+    },
+    "display_mode": {
+      "requestedHz": 120.00001,
+      "observedHz": 120.00001,
+      "modeId": null,
+      "reason": null,
+      "scenario": "refresh_120"
+    },
+    "denominators": {
+      "all_frame": {
+        "n": 7024,
+        "on_time": 7024,
+        "misses": 0,
+        "miss_fraction": 0,
+        "on_time_fraction": 1,
+        "longest_miss_streak": 0
+      },
+      "renderer_controlled": {
+        "n": 7023,
+        "on_time": 7023,
+        "misses": 0,
+        "miss_fraction": 0,
+        "on_time_fraction": 1,
+        "longest_miss_streak": 0
+      },
+      "input_to_present": {
+        "n": 7024,
+        "p50": 17954211,
+        "p95": 20227737,
+        "p99": 20646128
+      }
+    },
+    "exclusions": [
+      "sf_gpu_deadline_missed"
+    ],
+    "unknown_exclusion": "application-caused",
+    "input_to_present": {
+      "n": 7024,
+      "p50": 17954211,
+      "p95": 20227737,
+      "p99": 20646128
+    },
+    "trace_loss": {
+      "lost_packets": 0,
+      "buffer_overrun": 0,
+      "ftrace_lost_events": 0
+    }
   },
-  "reason": "physical Perfetto batch not captured"
+  "checks": {
+    "status": "PASS",
+    "ok": true,
+    "bound": true,
+    "bound_commit": {
+      "ok": true,
+      "reason": "BOUND to a descendant of 55a3174"
+    },
+    "vulkan": true,
+    "chainOk": true,
+    "unique_chain": {
+      "ok": true,
+      "sequences": 7024,
+      "vsyncs": 6762,
+      "reason": "unique sequence → targetVsyncId → actual present"
+    },
+    "actual_present_source": {
+      "ok": true,
+      "source": "frametimeline",
+      "reason": "actualPresentTime from frametimeline"
+    },
+    "clock_domain": {
+      "ok": true,
+      "domain": "boottime",
+      "reason": "single clock domain boottime"
+    },
+    "trace_loss": {
+      "ok": true,
+      "lost_packets": 0,
+      "buffer_overrun": 0,
+      "ftrace_lost_events": 0,
+      "reason": "no trace packet/buffer loss"
+    },
+    "continuous_scroll": {
+      "ok": true,
+      "warmup_ns": 2015889009,
+      "continuous_scroll_ns": 60012870342,
+      "reason": "warm-up and 60 s continuous scroll"
+    },
+    "observed_display_hz": 120.00001,
+    "requested_frame_rate": 120.00001,
+    "hzOk": true,
+    "modesOk": true,
+    "exclusions_listed": true,
+    "unknown_as_application_caused": true,
+    "fastPath": true,
+    "droppedEdges": 0,
+    "highWater": 3,
+    "queuesOk": true,
+    "flingOk": true,
+    "epochOk": true,
+    "deltaOk": true,
+    "joinOk": true,
+    "unjoined_cookies": 0,
+    "stallsOk": true,
+    "thermalOk": true,
+    "scenariosOk": true,
+    "i2p_percentiles_published": true,
+    "chain": {
+      "ok": true,
+      "n": 7024,
+      "failed": 0,
+      "present_is_do_frame": false
+    },
+    "modes": [
+      {
+        "ok": true,
+        "hz": 60,
+        "deadline_ns": 16666667,
+        "deadline_is_frame_opportunity": true,
+        "input_to_present_one_refresh_gate": false,
+        "mean_hides_tail": false,
+        "mean_hides_tail_gates_pass": false,
+        "missed": 0,
+        "missed_fraction": 0,
+        "longest_miss_streak": 0,
+        "all_frame": {
+          "n": 236,
+          "on_time": 236,
+          "misses": 0,
+          "miss_fraction": 0,
+          "on_time_fraction": 1,
+          "longest_miss_streak": 0
+        },
+        "renderer_controlled": {
+          "n": 236,
+          "on_time": 236,
+          "misses": 0,
+          "miss_fraction": 0,
+          "on_time_fraction": 1,
+          "longest_miss_streak": 0
+        },
+        "exclusions": {},
+        "cutoff_mismatches": 0,
+        "incomplete": 0,
+        "input_to_present": {
+          "n": 236,
+          "mean": 16749421.508474575,
+          "p50": 17639608,
+          "p90": 20054400,
+          "p95": 20328306,
+          "p99": 20765649,
+          "max": 20910390
+        },
+        "gesture_age": {
+          "n": 236,
+          "mean": 16749421.508474575,
+          "p50": 17639608,
+          "p90": 20054400,
+          "p95": 20328306,
+          "p99": 20765649,
+          "max": 20910390
+        },
+        "gate_ok": true,
+        "n": 236,
+        "mean": 16749421.508474575,
+        "p50": 17639608,
+        "p90": 20054400,
+        "p95": 20328306,
+        "p99": 20765649,
+        "max": 20910390,
+        "reason": "RFC §14 60 Hz renderer-controlled opportunities on time (p95/p99 input-to-present reported, not gated)",
+        "normative_gate": false,
+        "pacing_only": true
+      },
+      {
+        "ok": true,
+        "hz": 90,
+        "deadline_ns": 11111111,
+        "deadline_is_frame_opportunity": true,
+        "input_to_present_one_refresh_gate": false,
+        "mean_hides_tail": false,
+        "mean_hides_tail_gates_pass": false,
+        "missed": 0,
+        "missed_fraction": 0,
+        "longest_miss_streak": 0,
+        "all_frame": {
+          "n": 233,
+          "on_time": 233,
+          "misses": 0,
+          "miss_fraction": 0,
+          "on_time_fraction": 1,
+          "longest_miss_streak": 0
+        },
+        "renderer_controlled": {
+          "n": 233,
+          "on_time": 233,
+          "misses": 0,
+          "miss_fraction": 0,
+          "on_time_fraction": 1,
+          "longest_miss_streak": 0
+        },
+        "exclusions": {},
+        "cutoff_mismatches": 0,
+        "incomplete": 0,
+        "input_to_present": {
+          "n": 233,
+          "mean": 16412543.154506437,
+          "p50": 16730233,
+          "p90": 19801690,
+          "p95": 20223879,
+          "p99": 20875649,
+          "max": 21195284
+        },
+        "gesture_age": {
+          "n": 233,
+          "mean": 16412543.154506437,
+          "p50": 16730233,
+          "p90": 19801690,
+          "p95": 20223879,
+          "p99": 20875649,
+          "max": 21195284
+        },
+        "gate_ok": true,
+        "n": 233,
+        "mean": 16412543.154506437,
+        "p50": 16730233,
+        "p90": 19801690,
+        "p95": 20223879,
+        "p99": 20875649,
+        "max": 21195284,
+        "reason": "RFC §14 90 Hz renderer-controlled opportunities on time (p95/p99 input-to-present reported, not gated)",
+        "normative_gate": false,
+        "pacing_only": true
+      },
+      {
+        "ok": true,
+        "hz": 120,
+        "deadline_ns": 8333333,
+        "deadline_is_frame_opportunity": true,
+        "input_to_present_one_refresh_gate": false,
+        "mean_hides_tail": false,
+        "mean_hides_tail_gates_pass": false,
+        "missed": 0,
+        "missed_fraction": 0,
+        "longest_miss_streak": 0,
+        "all_frame": {
+          "n": 7024,
+          "on_time": 7024,
+          "misses": 0,
+          "miss_fraction": 0,
+          "on_time_fraction": 1,
+          "longest_miss_streak": 0
+        },
+        "renderer_controlled": {
+          "n": 7023,
+          "on_time": 7023,
+          "misses": 0,
+          "miss_fraction": 0,
+          "on_time_fraction": 1,
+          "longest_miss_streak": 0
+        },
+        "exclusions": {
+          "sf_gpu_deadline_missed": 1
+        },
+        "cutoff_mismatches": 0,
+        "incomplete": 0,
+        "input_to_present": {
+          "n": 7024,
+          "mean": 16981831.9011959,
+          "p50": 17954211,
+          "p90": 19948429,
+          "p95": 20227737,
+          "p99": 20646128,
+          "max": 28711507
+        },
+        "gesture_age": {
+          "n": 7024,
+          "mean": 16981831.9011959,
+          "p50": 17954211,
+          "p90": 19948429,
+          "p95": 20227737,
+          "p99": 20646128,
+          "max": 28711507
+        },
+        "gate_ok": true,
+        "n": 7024,
+        "mean": 16981831.9011959,
+        "p50": 17954211,
+        "p90": 19948429,
+        "p95": 20227737,
+        "p99": 20646128,
+        "max": 28711507,
+        "reason": "RFC §14 120 Hz renderer-controlled opportunities on time (p95/p99 input-to-present reported, not gated)",
+        "normative_gate": true,
+        "pacing_only": false
+      }
+    ],
+    "reason": "physical 120 Hz input-to-present fixture meets RFC §14 renderer-controlled gate"
+  },
+  "reason": "physical 120 Hz input-to-present fixture meets RFC §14 renderer-controlled gate"
 }

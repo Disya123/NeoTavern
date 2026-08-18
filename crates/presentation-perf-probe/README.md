@@ -43,7 +43,9 @@ adb shell am start -n com.neotavern.mobile/.PresentationInputActivity \
 ```
 
 Physical capture: `node scripts/input-to-present-perfetto-capture.mjs`.
-Host adjudication: `node scripts/input-to-present-adjudicate.mjs`.
+Host adjudication: `node scripts/input-to-present-adjudicate.mjs`
+(`platform_gesture_adapter=PASS`, `perfetto=PASS`, stamp
+`2026-08-18T16-28-13-285Z`).
 
 ## Commands
 

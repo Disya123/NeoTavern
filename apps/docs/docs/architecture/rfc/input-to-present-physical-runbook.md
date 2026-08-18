@@ -9,8 +9,7 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/rfc/input-to-prese
 `Choreographer#doFrame` is not present. Production cutover is unchanged.
 
 ```text
-platform gesture adapter = IMPLEMENTED / PERFETTO_PENDING
-  (PASS only after this batch stamps docs/rfc/input-to-present-adjudication.json)
+platform gesture adapter = PASS
 Milestone B = STARTED
 production cutover = NOT_STARTED
 almost_pass = false
@@ -141,12 +140,17 @@ Run on the debug host (`PresentationInputActivity`), not `MainActivity`:
 | `refresh_transition`   | 60→120→90 without changing physical fling speed  |
 
 `I2P_FIXTURE=all` runs the full set. `I2P_HZ` / `I2P_WARMUP_MS` /
-`I2P_SCROLL_MS` override the 120 Hz window.
+`I2P_SCROLL_MS` override the 120 Hz window. Cookie `targetVsyncId` is the
+compositor `HandlerThread` FrameTimeline token, not the UI-thread
+Choreographer stream.
 
 ## Capture
 
 Physical Xiaomi / Vulkan. Close Android Studio first. Emulator serials
-are excluded.
+are excluded. Host logcat is streamed from t0 (`adb logcat -s NeoTavernI2P`);
+do not dump the logd ring at the end. Perfetto config keeps FrameTimeline
+and light gfx/view/input atrace so the 256 MiB buffer holds the whole
+session (sched ftrace overflowed the first 128 MiB capture).
 
 ```text
 M0_D1A_FEATURES=gpu,android-jni bash apps/android/scripts/build-m0-d1a-libs.sh
@@ -157,8 +161,10 @@ node scripts/input-to-present-adjudicate.mjs --fixture=apps/android/input-to-pre
 ```
 
 Perfetto config: [`scripts/input-to-present.pbtxt`](https://github.com/Disya123/NeoTavern/blob/main/scripts/input-to-present.pbtxt)
-(`linux.ftrace` gfx/view/input/sched/freq, `android.surfaceflinger.frametimeline`,
-`android.log` tag `NeoTavernI2P`).
+(`android.surfaceflinger.frametimeline` plus `android.log` tag `NeoTavernI2P`).
+The config is pushed to `/data/misc/perfetto-configs`; stdin+`--background` on Windows adb can start an empty session. Cookies come from the streamed host logcat;
+FrameTimeline `actualPresentTime` is converted from the trace clock onto
+monotonic.
 
 Evidence JSON must pin: trace SHA, APK SHA, Perfetto config SHA, source
 commit, device, display mode, denominators, exclusions, trace-loss
@@ -166,6 +172,8 @@ counters. Raw traces stay gitignored under
 `apps/android/input-to-present-captures/`.
 
 Without `--fixture` the record stays `IMPLEMENTED / PERFETTO_PENDING`.
+Admitted physical stamp `2026-08-18T16-28-13-285Z` (Xiaomi 23122PCD1G /
+Vulkan / locked 120 Hz, APK `BOUND` to `4fc528e`).
 A fixture that uses `doFrame` as present is `BLOCKED`.
 
 Production `MainActivity`, default JNI, and WebView rollback stay off.

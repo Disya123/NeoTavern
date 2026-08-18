@@ -5,8 +5,7 @@
 `Choreographer#doFrame` is not present. Production cutover is unchanged.
 
 ```text
-platform gesture adapter = IMPLEMENTED / PERFETTO_PENDING
-  (PASS only after this batch stamps docs/rfc/input-to-present-adjudication.json)
+platform gesture adapter = PASS
 Milestone B = STARTED
 production cutover = NOT_STARTED
 almost_pass = false
@@ -169,6 +168,8 @@ counters. Raw traces stay gitignored under
 `apps/android/input-to-present-captures/`.
 
 Without `--fixture` the record stays `IMPLEMENTED / PERFETTO_PENDING`.
+Admitted physical stamp `2026-08-18T16-28-13-285Z` (Xiaomi 23122PCD1G /
+Vulkan / locked 120 Hz, APK `BOUND` to `4fc528e`).
 A fixture that uses `doFrame` as present is `BLOCKED`.
 
 Production `MainActivity`, default JNI, and WebView rollback stay off.

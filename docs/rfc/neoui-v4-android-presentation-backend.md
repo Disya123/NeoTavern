@@ -3019,7 +3019,7 @@ latest-wins on a bounded queue; edges are not dropped. The UI thread only
 Hit-test / sticky / fixed / `ScrollId` latch stay in the existing compositor
 path. Debug `PresentationInputActivity` only; production `MainActivity` and
 default JNI are unchanged. Host and instrumented tests cover the adapter.
-Status: `IMPLEMENTED / PERFETTO_PENDING`. `Choreographer#doFrame` is not
+Status: `PASS`. `Choreographer#doFrame` is not
 present; physical FrameTimeline/SurfaceFlinger adjudication is
 [`input-to-present-adjudication.json`](input-to-present-adjudication.json).
 The host adjudicator treats 16.67 / 11.11 / 8.33 ms as renderer-controlled
@@ -4309,7 +4309,7 @@ Platform expansion не меняет Product Wire либо durable state format.
 - [ ] exact-height commit во время fling сохраняет C0/C1 continuity;
 - [ ] queue/item/byte caps и high-water marks проверены;
 - [ ] frame/deadline metrics проходят утверждённые budgets;
-- [ ] input-to-present измеряется;
+- [x] input-to-present измеряется;
 - [ ] 10-minute thermal fixture проходит;
 - [ ] Gboard остаётся корректным при scrolling/inset animation;
 - [ ] TalkBack остаётся работоспособным;

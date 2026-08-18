@@ -398,6 +398,15 @@ describe('input-to-present host adjudicator', () => {
     expect(evaluateFixture(fixture, provenance).status).toBe('ENVIRONMENT_BLOCKED');
   });
 
+  it('allows 100 µs of display vsync jitter on the stall cap', () => {
+    const fixture = passingFixture({
+      ui_stall_ns_max: 16_720_000,
+      compositor_stall_ns_max: 16_720_000,
+    });
+    expect(evaluateFixture(fixture, provenance).stallsOk).toBe(true);
+    expect(evaluateFixture(fixture, provenance).ok).toBe(true);
+  });
+
   it('requires every continuous-scroll cookie to join FrameTimeline', () => {
     const fixture = passingFixture({ unjoined_cookies: 12 });
     expect(evaluateFixture(fixture, provenance).status).toBe('BLOCKED');

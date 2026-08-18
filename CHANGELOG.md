@@ -182,16 +182,16 @@
   `PresentationTime`. Host tests live in `crates/neocompositor/tests/platform_input.rs`
   and JVM `PresentationInputMappingTest`. Instrumented coverage is
   `PresentationInputInstrumentedTest` (debug `PresentationInputActivity`, not
-  `MainActivity`). Status: **IMPLEMENTED / PERFETTO_PENDING**. Host
+  `MainActivity`).   Status: **PASS**. Host
   adjudicator
   [input-to-present-adjudication.json](docs/rfc/input-to-present-adjudication.json)
   uses RFC §14 renderer-controlled present deadlines
   (`deadline_miss = rendererControlled && actualPresentTime > targetPresentDeadline`).
   Raw `input-to-present` p50/p95/p99 are reported and are not gated against
   one refresh. `Choreographer#doFrame` is not present.
-  Physical FrameTimeline/SurfaceFlinger batch is still pending.
-  The debug host now presents a retained texture to a window swapchain on a
-  compositor thread; `actualPresentTime` still comes only from
+  Physical stamp `2026-08-18T16-28-13-285Z` (Xiaomi / Vulkan / locked 120 Hz).
+  The debug host presents a retained texture to a window swapchain on a
+  compositor thread; `actualPresentTime` comes from
   FrameTimeline/SurfaceFlinger. Milestone B remains STARTED.
 
 - **Known baseline failures (not a green full baseline).** Recorded as

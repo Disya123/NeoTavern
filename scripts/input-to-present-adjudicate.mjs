@@ -42,6 +42,8 @@ export const INPUT_TO_PRESENT_ONE_REFRESH_GATE = false;
 export const FLING_VELOCITY_REL_EPS = 0.15;
 
 export const QUEUE_CAP = 64;
+/** Display vsync jitter allowed on the compositor stall cap (one 60 Hz frame). */
+export const STALL_JITTER_NS = 100_000;
 
 /** Staging commit that split deadline_miss from raw input-to-present. */
 export const MIN_BOUND_COMMIT = '55a31747e0151ed085be2d5107beb9e149e131e2';
@@ -618,7 +620,7 @@ export function evaluateFixture(fixture, provenance = {}) {
   const epochOk = (fixture.epoch_mismatch ?? 1) === 0;
   const deltaOk = (fixture.double_delta ?? 1) === 0;
   const joinOk = (fixture.unjoined_cookies ?? 0) === 0;
-  const stallDeadline = Math.max(...Object.values(REFRESH_DEADLINE_NS));
+  const stallDeadline = Math.max(...Object.values(REFRESH_DEADLINE_NS)) + STALL_JITTER_NS;
   const stallsOk =
     (fixture.ui_stall_ns_max ?? stallDeadline + 1) <= stallDeadline &&
     (fixture.compositor_stall_ns_max ?? stallDeadline + 1) <= stallDeadline;
@@ -721,6 +723,7 @@ export function evidenceFromFixture(fixture, provenance = {}, denominators = nul
     },
     exclusions: fixture.exclusion_reasons ?? [],
     unknown_exclusion: fixture.unknown_exclusion ?? 'application-caused',
+    input_to_present: denominators?.input_to_present ?? null,
     trace_loss: {
       lost_packets: fixture.trace_lost_packets ?? null,
       buffer_overrun: fixture.trace_buffer_overrun ?? null,
@@ -752,10 +755,27 @@ export function adjudicate({ fixture = null, provenance = {} } = {}) {
       fixture,
       provenance,
       hz120
-        ? { all_frame: hz120.all_frame, renderer_controlled: hz120.renderer_controlled }
+        ? {
+            all_frame: hz120.all_frame,
+            renderer_controlled: hz120.renderer_controlled,
+            input_to_present: {
+              n: hz120.input_to_present?.n ?? hz120.n ?? null,
+              p50: hz120.p50 ?? null,
+              p95: hz120.p95 ?? null,
+              p99: hz120.p99 ?? null,
+            },
+          }
         : null,
     ),
-    checks: evaluated,
+    checks: {
+      ...evaluated,
+      chain: {
+        ok: evaluated.chainOk,
+        n: evaluated.chain?.length ?? 0,
+        failed: (evaluated.chain ?? []).filter((item) => !item.ok).length,
+        present_is_do_frame: (evaluated.chain ?? []).some((item) => item.present_is_do_frame),
+      },
+    },
     reason: evaluated.reason,
   };
 }

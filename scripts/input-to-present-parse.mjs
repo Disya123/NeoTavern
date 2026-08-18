@@ -382,24 +382,25 @@ export function joinOpportunities({ cookies, presents, timelineRows, clock }) {
     }
     if (gpuSubmit != null && sfLatch != null && sfLatch < gpuSubmit) sfLatch = gpuSubmit;
     if (actualPresentTime != null && sfLatch > actualPresentTime) sfLatch = actualPresentTime;
+    const inputCutoff = present.inputCutoff ?? cookie.inputCutoff;
+    const targetVsyncId = present.targetVsyncId;
+    const eligibleForCurrentVsync =
+      cookie.eventTime != null && inputCutoff != null && cookie.eventTime <= inputCutoff;
     const exclusion = exclusionForTimeline(row);
-    const retargeted = present.targetVsyncId !== cookie.targetVsyncId;
     opportunities.push({
       seq: cookie.seq,
       eventTime: cookie.eventTime,
       newestEventTime: cookie.newestEventTime ?? cookie.eventTime,
       oldestHistoricalEventTime: cookie.oldestHistoricalEventTime,
-      inputCutoff: cookie.inputCutoff,
-      callbackTime: cookie.callbackTime,
-      callbackVsyncId: cookie.callbackVsyncId ?? present.targetVsyncId,
-      targetVsyncId: present.targetVsyncId,
-      targetPresentDeadline: retargeted
-        ? (present.targetPresentDeadline ?? cookie.targetPresentDeadline)
-        : cookie.targetPresentDeadline,
+      inputCutoff,
+      callbackTime: present.callbackTime ?? cookie.callbackTime,
+      callbackVsyncId: eligibleForCurrentVsync
+        ? targetVsyncId
+        : (cookie.callbackVsyncId ?? present.targetVsyncId),
+      targetVsyncId,
+      targetPresentDeadline: present.targetPresentDeadline ?? cookie.targetPresentDeadline,
       actualPresentTime,
-      eligibleForCurrentVsync: retargeted
-        ? false
-        : cookie.eligibleForCurrentVsync,
+      eligibleForCurrentVsync,
       rendererControlled: exclusion.rendererControlled,
       exclusionReason: exclusion.exclusionReason,
       enqueue_ns: cookie.enqueue_ns,
