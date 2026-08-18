@@ -1,13 +1,89 @@
 {
   "schema": "perf-22-adjudication/v1",
-  "perf22": "IMPLEMENTED",
-  "physical": false,
-  "admissible": false,
+  "perf22": "PASS",
+  "physical": true,
+  "admissible": true,
   "milestone_b": "STARTED",
   "almost_pass": false,
   "production_cutover": "NOT_STARTED",
-  "kind": "host_corpus_plus_fixture",
+  "kind": "physical",
   "record": "apps/android/app/src/debug/java/com/neotavern/mobile/PresentationSurfaceActivity.kt",
-  "pass_requires": "android_platform_surface_fixture",
-  "reason": "PERF-22 stays IMPLEMENTED until the Android WebView + secure SurfaceView fixture is captured on a BOUND APK."
+  "apk_linkage": "BOUND",
+  "evidence_dirty": false,
+  "serial": "8f5c2b7c",
+  "capture_stamp": "2026-08-18T17-57-00-885Z",
+  "reason": "Android WebView + secure SurfaceView fallback fixture",
+  "policies": {
+    "OpaquePanel": "2026-08-18T17-57-00-885Z",
+    "PosterFrame": "2026-08-18T17-57-29-874Z",
+    "FullscreenSurface": "2026-08-18T17-57-37-909Z",
+    "ExplicitError": "2026-08-18T17-57-44-313Z"
+  },
+  "checks": [
+    {
+      "id": "capability_before_passes",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "id": "webview_hits",
+      "ok": true,
+      "value": "0"
+    },
+    {
+      "id": "surface_hits",
+      "ok": true,
+      "value": "0"
+    },
+    {
+      "id": "image_readbacks",
+      "ok": true,
+      "value": "0"
+    },
+    {
+      "id": "xdev",
+      "ok": true,
+      "value": "0"
+    },
+    {
+      "id": "same_epoch_rejected",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "id": "webview",
+      "ok": true,
+      "value": "android.webkit.WebView"
+    },
+    {
+      "id": "secure_surface",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "id": "tap_hit",
+      "ok": true,
+      "value": "fallback"
+    },
+    {
+      "id": "fallback_visible",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "id": "renderdoc_or_host_labels",
+      "ok": true
+    }
+  ],
+  "observed": {
+    "gpu_ran": true,
+    "adapter": "Adreno_(TM)_710",
+    "backend": "Vulkan",
+    "ran_on_android": true,
+    "capability_transition_epoch": 2,
+    "compositor_labels": "perf22-fallback,perf22-no-webview-sample,perf22-no-secure-readback",
+    "surfaceflinger": "PresentationSurfaceActivity BLAST layer present; originals hidden so they are not independent SF layers",
+    "fallback_hits": 1,
+    "original_hittable": false
+  }
 }

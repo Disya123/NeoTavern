@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 /**
- * Production-like benchmark runner for remaining Milestone B PERF items.
- * Does not require a phone for this scaffolding commit. PERF-15 / PERF-22 /
- * device-loss stay on their independent adjudicators.
+ * Production-like benchmark runner plan for remaining Milestone B PERF items.
+ * Does not require a phone to assemble. PERF-15 / PERF-22 / device-loss
+ * stay on their independent adjudicators.
  *
  *   node scripts/presentation-perf-bench-runner.mjs
  */
 import { pathToFileURL } from 'node:url';
+
+export const REMAINING = [
   'PERF-01',
   'PERF-02',
   'PERF-03',
@@ -35,8 +37,13 @@ export function plan() {
     schema: 'presentation-perf-bench-runner/v1',
     milestone_b: 'STARTED',
     almost_pass: false,
+    production_cutover: 'NOT_STARTED',
     phone_required: false,
-    remaining: REMAINING.map((id) => ({ id, status: 'MISSING', runner: 'pending' })),
+    remaining: REMAINING.map((id) => ({
+      id,
+      status: 'MISSING',
+      runner: 'host-production-like-bench',
+    })),
     independent: INDEPENDENT,
     note: 'Unified production-like runner for PERF-01…05 and PERF-11…17/21. Physical Xiaomi is not required to assemble this host plan.',
   };

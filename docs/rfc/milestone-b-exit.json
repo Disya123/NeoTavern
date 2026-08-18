@@ -5,7 +5,7 @@
   "production_cutover": "NOT_STARTED",
   "platform_gesture_adapter": "PASS",
   "perf15": "IMPLEMENTED",
-  "perf22": "IMPLEMENTED",
+  "perf22": "PASS",
   "input_to_present_p99_ns": 20646128,
   "input_to_present_p99_ms": 20.65,
   "input_to_present_p99_role": "reference-device-baseline",
@@ -76,22 +76,21 @@
     },
     "PERF-21": { "status": "MISSING", "independent": false, "admissible": false, "record": null },
     "PERF-22": {
-      "status": "IMPLEMENTED",
+      "status": "PASS",
       "independent": true,
-      "admissible": false,
-      "kind": "host_corpus_plus_fixture",
+      "admissible": true,
+      "kind": "physical",
       "record": "docs/rfc/perf-22-adjudication.json",
-      "field": "perf22",
-      "pass_requires": "android_platform_surface_fixture"
+      "field": "perf22"
     }
   },
   "device_loss_injection": {
-    "status": "CPU_INJECTION",
-    "physical": false,
-    "admissible": false,
+    "status": "PASS",
+    "physical": true,
+    "admissible": true,
+    "kind": "physical",
     "record": "docs/rfc/device-loss-adjudication.json",
-    "field": "device_loss",
-    "pass_requires": "physical_device_loss_injection"
+    "field": "device_loss"
   },
   "known_baseline_failures": [
     {

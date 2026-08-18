@@ -111,18 +111,19 @@ Raw input-to-present p99 `20.65 ms` on that device is a
 **reference-device baseline**, not a release budget (no calibration ADR).
 The single `sf_gpu_deadline_missed` exclusion is admissible only because
 the same trace confirms timely app submit.
-Non-sampleable surface fallback (PERF-22) is **IMPLEMENTED** on the host
-corpus (`crates/neocompositor` `surface_fallback`) plus a debug Android
-fixture (`PresentationSurfaceActivity`: real WebView + secure
-`SurfaceView` + fallback hit routing). PASS still requires a BOUND
-physical capture.
+Non-sampleable surface fallback (PERF-22) is **PASS** on the physical
+Xiaomi / Vulkan debug host (`PresentationSurfaceActivity`: real WebView +
+secure `SurfaceView` + fallback hit routing; capability chosen before
+`compile_passes`). Host compiler corpus remains in
+`crates/neocompositor` `surface_fallback`.
 Pressure/degraded admission (PERF-15) is **IMPLEMENTED** on the host
-corpus (`crates/neocompositor` `pressure`) plus a probe fixture (10k
-fling + live glass + image decode/upload + trim-memory). PASS is blocked
-until a real VisualSurface / Product Wire surface exists; a synthetic
-texture is not a substitute.
-Physical device-loss injection is still **CPU_INJECTION** until a phone
-capture proves wgpu destroy/recreate (`wgpu_destroyed=true`).
+corpus (`crates/neocompositor` `pressure`) plus a physical probe fixture
+(10k fling + live glass + image decode/upload + injected trim-memory).
+PASS is blocked until a real VisualSurface / Product Wire surface exists;
+a synthetic texture is not a substitute.
+Physical device-loss injection is **PASS** (`wgpu_destroyed=true`,
+`wgpu_recreated=true`, `DeviceEpoch` bumps once; surface recreation and
+background/resume are separate and do not bump the epoch).
 Independent records:
 [perf-15-adjudication.json](../rfc/perf-15-adjudication.json),
 [perf-22-adjudication.json](../rfc/perf-22-adjudication.json),

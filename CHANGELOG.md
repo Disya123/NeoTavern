@@ -3,6 +3,21 @@
 ## Unreleased
 ### Added
 
+- **PERF-22 and physical device-loss PASS (not B PASS).** Independent
+  Xiaomi / Vulkan stamps on a BOUND debug APK: PERF-22
+  [perf-22-adjudication.json](docs/rfc/perf-22-adjudication.json)
+  (`PASS`; real WebView + secure `SurfaceView` + fallback tap),
+  device-loss
+  [device-loss-adjudication.json](docs/rfc/device-loss-adjudication.json)
+  (`PASS`; wgpu `Device::destroy` + recreate, `DeviceEpoch` +1).
+  PERF-15 stays **IMPLEMENTED** without a VisualSurface /
+  Product Wire surface
+  ([perf-15-adjudication.json](docs/rfc/perf-15-adjudication.json)).
+  Milestone B remains STARTED. Production `MainActivity` / kernel JNI
+  unchanged. Unified host bench runner for remaining PERF-01…05 and
+  PERF-11…17/21 does not need the phone
+  (`scripts/presentation-perf-bench-runner.mjs`).
+
 - **B-exit physical fixtures (no PASS).** Debug
   `PresentationSurfaceActivity` hosts a real WebView, a secure
   `SurfaceView`, glass, and fallback hit-routing for PERF-22.

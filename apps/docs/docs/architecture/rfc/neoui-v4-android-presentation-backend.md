@@ -3505,9 +3505,9 @@ content.
 ## PERF-22 — non-sampleable surface/effect rejection
 
 **Host corpus:** `IMPLEMENTED` in `crates/neocompositor` (`surface_fallback`).
-Android fixture: debug `PresentationSurfaceActivity` (real WebView + secure
-`SurfaceView` + fallback hit routing). PASS still requires a BOUND physical
-capture. Milestone B remains STARTED.
+**Physical:** `PASS` on Xiaomi / Vulkan (BOUND debug APK). Debug
+`PresentationSurfaceActivity` hosts a real WebView + secure `SurfaceView` +
+fallback hit routing. Milestone B remains STARTED.
 
 WebView/secure video помещаются под glass и внутрь opacity/mask group.
 Scene compiler обязан до present выбрать заявленный panel/poster/fullscreen/

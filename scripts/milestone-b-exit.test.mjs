@@ -22,7 +22,7 @@ describe('milestone B-exit registry', () => {
     expect(registry.milestone_b).toBe('STARTED');
     expect(registry.almost_pass).toBe(false);
     expect(registry.production_cutover).toBe('NOT_STARTED');
-    expect(registry.perf22).toBe('IMPLEMENTED');
+    expect(registry.perf22).toBe('PASS');
     expect(registry.perf15).toBe('IMPLEMENTED');
     expect(registry.input_to_present_p99_ns).toBe(P99_NS);
     expect(registry.input_to_present_p99_ms).toBe(20.65);
@@ -32,7 +32,6 @@ describe('milestone B-exit registry', () => {
     expect(result.can_pass).toBe(false);
     expect(result.milestone_b).toBe('STARTED');
     expect(result.failures.some((row) => row.startsWith('PERF-01'))).toBe(true);
-    expect(result.failures.some((row) => row.includes('device-loss'))).toBe(true);
     expect(result.failures.some((row) => row.includes('prettier-mass-drift'))).toBe(true);
   });
 
@@ -63,15 +62,21 @@ describe('milestone B-exit registry', () => {
     }
   });
 
-  it('treats PERF-22 IMPLEMENTED as not PASS', () => {
+  it('cross-checks PERF-22 PASS against the independent adjudication record', () => {
     const registry = load();
-    expect(registry.criteria['PERF-22'].status).toBe('IMPLEMENTED');
-    expect(registry.criteria['PERF-22'].admissible).toBe(false);
-    expect(registry.criteria['PERF-22'].pass_requires).toBe('android_platform_surface_fixture');
+    expect(registry.criteria['PERF-22'].status).toBe('PASS');
+    expect(registry.criteria['PERF-22'].admissible).toBe(true);
+    expect(registry.criteria['PERF-22'].pass_requires).toBeUndefined();
+    const stamp = JSON.parse(
+      readFileSync(new URL('../docs/rfc/perf-22-adjudication.json', import.meta.url), 'utf8'),
+    );
+    expect(stamp.perf22).toBe('PASS');
+    expect(stamp.milestone_b).toBe('STARTED');
     const forged = structuredClone(registry);
     forged.criteria['PERF-22'].status = 'PASS';
     forged.criteria['PERF-22'].independent = true;
     forged.criteria['PERF-22'].admissible = true;
+    forged.criteria['PERF-22'].pass_requires = 'android_platform_surface_fixture';
     forged.milestone_b = 'PASS';
     const result = evaluate(forged);
     expect(result.ok).toBe(false);
@@ -107,7 +112,8 @@ describe('milestone B-exit registry', () => {
 
   it('requires physical device-loss injection and explicit baseline waivers for B PASS', () => {
     const registry = load();
-    expect(registry.device_loss_injection.physical).toBe(false);
+    expect(registry.device_loss_injection.physical).toBe(true);
+    expect(registry.device_loss_injection.status).toBe('PASS');
     expect(registry.known_baseline_failures.every((row) => row.status === 'OPEN')).toBe(true);
     const forged = structuredClone(registry);
     forged.device_loss_injection.physical = true;
@@ -131,6 +137,6 @@ describe('milestone B-exit registry', () => {
     const result = evaluateFile();
     expect(result.ok).toBe(true);
     expect(result.can_pass).toBe(false);
-    expect(result.perf22).toBe('IMPLEMENTED');
+    expect(result.perf22).toBe('PASS');
   });
 });

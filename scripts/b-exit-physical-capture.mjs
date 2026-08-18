@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import {
   PACKAGE,
   captureStamp,
+  findAdb,
   latestBoundBundle,
   selectPhysicalDevice,
 } from './m0-d1a-capture-host.mjs';
@@ -109,13 +110,30 @@ function main() {
     process.exitCode = 1;
     return;
   }
-  const selected = selectPhysicalDevice(argValue('serial'));
+  const adbInfo = findAdb();
+  if (!adbInfo.ok) {
+    process.stderr.write('adb not found\n');
+    process.exitCode = 1;
+    return;
+  }
+  const selected = selectPhysicalDevice(adbInfo.bin);
+  const requested = argValue('serial');
+  const device =
+    (requested && selected.physical.find((row) => row.serial === requested)) ||
+    selected.physical[0] ||
+    null;
+  if (!device) {
+    process.stderr.write('no physical Android over USB (emulators excluded)\n');
+    process.exitCode = 1;
+    return;
+  }
   const bundle = latestBoundBundle();
   const stamp = captureStamp();
   const dir = ROOT_CAPTURES;
   mkdirSync(dir, { recursive: true });
-  const adbBin = selected.adb ?? 'adb';
-  const serial = selected.serial;
+  const adbBin = adbInfo.bin;
+  const serial = device.serial;
+  adb(adbBin, serial, ['shell', 'input', 'keyevent', 'KEYCODE_WAKEUP']);
   adb(adbBin, serial, ['logcat', '-c']);
   adb(adbBin, serial, ['shell', 'am', 'force-stop', PACKAGE]);
   adb(adbBin, serial, [
@@ -135,6 +153,10 @@ function main() {
     `${PACKAGE}.PERF_CAPTURE_FRAME`,
     '-1',
   ]);
+  if (fixtureName === 'perf15') {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1500);
+    adb(adbBin, serial, ['shell', 'am', 'send-trim-memory', PACKAGE, 'RUNNING_CRITICAL']);
+  }
   const deadline = Date.now() + 180_000;
   let log = '';
   while (Date.now() < deadline) {
@@ -166,7 +188,9 @@ function main() {
       2,
     )}\n`,
   );
-  process.stdout.write(`${JSON.stringify({ stamp, fixture: fixtureName, files, found: log.includes(fixture.needle) }, null, 2)}\n`);
+  process.stdout.write(
+    `${JSON.stringify({ stamp, fixture: fixtureName, files, found: log.includes(fixture.needle) }, null, 2)}\n`,
+  );
 }
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {

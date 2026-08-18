@@ -7,7 +7,7 @@
  *   - device-loss injection has physical evidence
  *   - known baseline failures are FIXED or explicitly WAIVED
  *
- * IMPLEMENTED host corpora (PERF-15 / PERF-22) are not PASS.
+ * IMPLEMENTED host corpora (PERF-15, no VisualSurface) are not PASS.
  * Raw input-to-present p99 is a reference-device baseline, not a release budget.
  *
  *   node scripts/milestone-b-exit.mjs
@@ -140,9 +140,7 @@ export function evaluate(registry) {
   }
   const p99Role = registry?.input_to_present_p99_role;
   if (p99Role !== P99_ROLE && !registry?.release_budget_calibration_adr) {
-    failures.push(
-      'raw input-to-present p99 is not a release budget without a calibration ADR',
-    );
+    failures.push('raw input-to-present p99 is not a release budget without a calibration ADR');
   }
   if (registry?.input_to_present_p99_ns !== P99_NS) {
     failures.push(`reference-device p99 must remain ${P99_NS} ns until a calibration ADR`);

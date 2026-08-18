@@ -98,10 +98,10 @@ crates/
                        # not production JNI), Android MotionEvent /
                        # Choreographer adapter (debug/flagged host only;
                        # physical 120 Hz Perfetto PASS, not B PASS),
-                       # PERF-22 non-sampleable fallback (host IMPLEMENTED,
-                       # Android fixture pending BOUND capture, not PASS),
+                       # PERF-22 non-sampleable fallback (criterion PASS on
+                       # physical Vulkan; not B PASS),
                        # PERF-15 pressure/degraded admission
-                       # (host IMPLEMENTED; VisualSurface missing, not PASS).
+                       # (IMPLEMENTED; VisualSurface missing, not PASS).
                        # Default
                        # host is WebView rollback
                        # (`NEOTA_NEOCOMPOSITOR=1`). Chat virtualization is

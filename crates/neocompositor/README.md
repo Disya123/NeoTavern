@@ -44,7 +44,8 @@ production JNI renderer and **not** an Android cutover.
   the host adjudicator does not treat raw input-to-present as a one-refresh
   PASS gate. Raw p99 on the reference device (`20.65 ms`) is a baseline,
   not a release budget, until a calibration ADR lands.
-- Non-sampleable surface fallback (PERF-22 **IMPLEMENTED**, not PASS):
+- Non-sampleable surface fallback (PERF-22 **PASS** on physical Vulkan,
+  not B PASS):
   every surface gets a capability (`SampleableTexture` /
   `NonSampleableWebView` / `NonSampleableSecureVideo` /
   `ProtectedOverlay` / `Unavailable`) before `compile_passes`. A
@@ -56,11 +57,10 @@ production JNI renderer and **not** an Android cutover.
   plus fallback share one `SceneEpoch`; a capability change is a new
   transaction. Unsupported combinations reject with last-known-good and
   do not panic. Host corpus is in
-  `crates/neocompositor/tests/surface_fallback.rs`. PASS still needs a
-  BOUND Android platform-surface capture
-  (`PresentationSurfaceActivity`). Host record:
+  `crates/neocompositor/tests/surface_fallback.rs`. Physical Android
+  platform-surface capture is `PresentationSurfaceActivity`. Host record:
   [`docs/rfc/perf-22-adjudication.json`](../../docs/rfc/perf-22-adjudication.json)
-  (`IMPLEMENTED`).
+  (`PASS`).
 - Pressure / degraded admission (PERF-15 **IMPLEMENTED**, not PASS):
   unified `Normal → Constrained → Critical → Degraded` controller,
   deterministic eviction, viewport / protected band / LKG retained,
@@ -169,15 +169,17 @@ Started (CPU types + tests):
   `interop` probe path; host **PASS** on physical Vulkan; not production JNI)
 - Android MotionEvent / Choreographer adapter (host-side; debug/flagged
   shell only; not production JNI; `PASS` on physical 120 Hz)
-- non-sampleable surface fallback (PERF-22 **IMPLEMENTED**, not PASS;
-  Android platform-surface fixture still required)
+- non-sampleable surface fallback (PERF-22 **PASS** on physical Vulkan,
+  not B PASS)
 - pressure / degraded admission (PERF-15 **IMPLEMENTED**, not PASS)
+- physical device-loss injection (**PASS** on Xiaomi / Vulkan; surface
+  recreation and background/resume are not device-loss)
 
 Not started (do not treat as done):
 
-- remaining PERF-01…PERF-22 and 120 Hz product budgets (PERF-18/19/20
-  are independently PASS; PERF-15/22 are **IMPLEMENTED** on the host
-  corpus, not PASS; Milestone B stays STARTED)
+- remaining PERF-01…PERF-22 and 120 Hz product budgets (PERF-18/19/20/22
+  and physical device-loss are independently PASS; PERF-15 is
+  **IMPLEMENTED** without VisualSurface; Milestone B stays STARTED)
 
 See [presentation boundary](../../docs/architecture/presentation-boundary.md)
 and [ADR-0049](../../docs/adr/0049-track-d-dioxus-presentation.md).

@@ -8,7 +8,7 @@
  *   node scripts/b-exit-physical-adjudicate.mjs
  *   node scripts/b-exit-physical-adjudicate.mjs --write
  */
-import { writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { fileURLToPath } from 'node:url';
@@ -95,7 +95,10 @@ export function evaluatePerf22({ log = '', platformLog = '', xml = '', provenanc
     flag(platformLog, 'fallback_visible', 'true'),
     {
       id: 'renderdoc_or_host_labels',
-      ok: String(xml).includes('perf22') || String(log).includes('perf22-fallback') || String(log).includes('labels='),
+      ok:
+        String(xml).includes('perf22') ||
+        String(log).includes('perf22-fallback') ||
+        String(log).includes('labels='),
     },
   ];
   const physical =
@@ -145,7 +148,12 @@ export function evaluateDeviceLoss({ log = '', provenance = {} } = {}) {
     destroyed.ok &&
     recreated.ok &&
     android;
-  const status = physical && allOk(checks) ? 'PASS' : destroyed.ok && !android ? 'CPU_INJECTION' : 'CPU_INJECTION';
+  const status =
+    physical && allOk(checks)
+      ? 'PASS'
+      : destroyed.ok && !android
+        ? 'CPU_INJECTION'
+        : 'CPU_INJECTION';
   return {
     schema: DEVICE_LOSS_SCHEMA,
     device_loss: physical && allOk(checks) ? 'PASS' : 'CPU_INJECTION',
@@ -154,9 +162,10 @@ export function evaluateDeviceLoss({ log = '', provenance = {} } = {}) {
     milestone_b: 'STARTED',
     almost_pass: false,
     production_cutover: 'NOT_STARTED',
-    reason: physical && allOk(checks)
-      ? 'shared wgpu device destroyed and recreated on device'
-      : 'device-loss stays CPU_INJECTION until a physical wgpu destroy/recreate is captured',
+    reason:
+      physical && allOk(checks)
+        ? 'shared wgpu device destroyed and recreated on device'
+        : 'device-loss stays CPU_INJECTION until a physical wgpu destroy/recreate is captured',
     checks,
     status,
   };
@@ -188,7 +197,11 @@ export function writeIndependent(result, { write = false } = {}) {
       if (write) {
         writeFileSync(file.path, `${JSON.stringify(file.body, null, 2)}\n`);
       }
-      written.push({ path: file.path, status: file.body.perf15 ?? file.body.perf22 ?? file.body.device_loss, ok: true });
+      written.push({
+        path: file.path,
+        status: file.body.perf15 ?? file.body.perf22 ?? file.body.device_loss,
+        ok: true,
+      });
     } catch (err) {
       written.push({ path: file.path, ok: false, error: String(err) });
     }
@@ -196,12 +209,39 @@ export function writeIndependent(result, { write = false } = {}) {
   return written;
 }
 
+function argValue(name) {
+  const prefix = `--${name}=`;
+  const hit = process.argv.find((part) => part.startsWith(prefix));
+  return hit ? hit.slice(prefix.length) : null;
+}
+
+function readIf(path) {
+  return path && existsSync(path) ? readFileSync(path, 'utf8') : '';
+}
+
 function main() {
   const write = process.argv.includes('--write');
+  const provenance = {
+    apk_linkage: argValue('apk-linkage') ?? 'UNBOUND',
+    evidence_dirty: argValue('evidence-dirty') === 'true',
+  };
+  if (argValue('evidence-dirty') === 'false') provenance.evidence_dirty = false;
   const result = adjudicateIndependent({
-    perf15: { log: '', provenance: {} },
-    perf22: { log: '', provenance: {} },
-    deviceLoss: { log: '', provenance: {} },
+    perf15: {
+      log: readIf(argValue('perf15-log')),
+      platformLog: readIf(argValue('perf15-platform')),
+      provenance,
+    },
+    perf22: {
+      log: readIf(argValue('perf22-log')),
+      platformLog: readIf(argValue('perf22-platform')),
+      xml: readIf(argValue('perf22-xml')),
+      provenance,
+    },
+    deviceLoss: {
+      log: readIf(argValue('device-loss-log')),
+      provenance,
+    },
   });
   const written = writeIndependent(result, { write });
   process.stdout.write(`${JSON.stringify({ result, written }, null, 2)}\n`);

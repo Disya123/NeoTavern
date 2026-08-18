@@ -1,13 +1,105 @@
 {
   "schema": "device-loss-adjudication/v1",
-  "device_loss": "CPU_INJECTION",
-  "physical": false,
-  "admissible": false,
+  "device_loss": "PASS",
+  "physical": true,
+  "admissible": true,
   "milestone_b": "STARTED",
   "almost_pass": false,
   "production_cutover": "NOT_STARTED",
-  "kind": "cpu_plus_wgpu_probe",
-  "record": "crates/presentation-perf-probe/src/b_exit.rs",
-  "pass_requires": "physical_device_loss_injection",
-  "reason": "Device-loss stays CPU_INJECTION until a physical wgpu Device destroy/recreate is captured on the phone. CPU LossDetected is not enough."
+  "kind": "physical",
+  "record": "crates/presentation-m0/src/gpu.rs",
+  "apk_linkage": "BOUND",
+  "evidence_dirty": false,
+  "serial": "8f5c2b7c",
+  "capture_stamp": "2026-08-18T17-57-57-104Z",
+  "reason": "shared wgpu device destroyed and recreated on device",
+  "scenarios": {
+    "raster_composite": {
+      "stamp": "2026-08-18T17-57-57-104Z",
+      "wgpu_destroyed": true,
+      "wgpu_recreated": true,
+      "device_epoch_bumps": 1
+    },
+    "fling": {
+      "stamp": "2026-08-18T17-58-03-380Z",
+      "wgpu_destroyed": true,
+      "wgpu_recreated": true,
+      "device_epoch_bumps": 1,
+      "unacked_delta": true
+    },
+    "selection": {
+      "stamp": "2026-08-18T17-58-11-724Z",
+      "wgpu_destroyed": true,
+      "wgpu_recreated": true,
+      "device_epoch_bumps": 1
+    },
+    "surface_recreation": {
+      "stamp": "2026-08-18T17-58-18-027Z",
+      "wgpu_destroyed": false,
+      "device_epoch_bumps": 0,
+      "not_device_loss": true
+    },
+    "background_resume": {
+      "stamp": "2026-08-18T17-58-22-358Z",
+      "wgpu_destroyed": false,
+      "device_epoch_bumps": 0,
+      "not_device_loss": true
+    }
+  },
+  "checks": [
+    {
+      "id": "wgpu_destroyed",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "id": "wgpu_recreated",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "id": "device_epoch_bumps",
+      "ok": true,
+      "value": "1"
+    },
+    {
+      "id": "stale_handle_rejected",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "id": "live_wgpu_devices",
+      "ok": true,
+      "value": "1"
+    },
+    {
+      "id": "catch_up_burst",
+      "ok": true,
+      "value": "0"
+    },
+    {
+      "id": "mixed_epoch",
+      "ok": true,
+      "value": "false"
+    },
+    {
+      "id": "ran_on_android",
+      "ok": true,
+      "value": true
+    }
+  ],
+  "status": "PASS",
+  "observed": {
+    "gpu_ran": true,
+    "adapter": "Adreno_(TM)_710",
+    "backend": "Vulkan",
+    "devices_created": 2,
+    "live_wgpu_devices": 1,
+    "first_restored_epoch": 1,
+    "open_probe_device_twice": true,
+    "selection_preserved": true,
+    "scroll_anchor_preserved": true,
+    "text_preserved": true,
+    "geometry_preserved": true
+  }
 }

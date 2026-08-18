@@ -35,10 +35,9 @@ function main() {
   if ((dirtyJni.stdout || '').trim()) {
     failures.push('production jniLibs are dirty; do not rebuild libneotavern_android_jni.so');
   }
-  const head = git(['ls-files', 'apps/android/app/src/main/jniLibs/arm64-v8a/libneotavern_android_jni.so']);
-  if (!(head.stdout || '').trim() && existsSync(PROD_JNI)) {
-    failures.push('production kernel .so is present but not the registered git blob');
-  }
+  // Prebuilt kernel .so is gitignored by contract. Presence is expected;
+  // workspace tests use the already-registered schema hash. Never run
+  // apps/android/scripts/build-libs.sh in this batch.
   const probe = spawnSync(
     'cargo',
     ['test', '-p', 'neotavern-presentation-perf-probe', '--features', 'gpu'],
@@ -50,6 +49,7 @@ function main() {
   const result = {
     ok: failures.length === 0,
     production_jni_untouched: !(dirtyJni.stdout || '').trim(),
+    production_jni_present: existsSync(PROD_JNI),
     probe_tests: probe.status === 0,
     failures,
   };

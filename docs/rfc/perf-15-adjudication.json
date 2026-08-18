@@ -7,8 +7,77 @@
   "milestone_b": "STARTED",
   "almost_pass": false,
   "production_cutover": "NOT_STARTED",
-  "kind": "host_corpus_plus_fixture",
+  "kind": "host_corpus_plus_physical_fixture_without_visual_surface",
   "record": "crates/presentation-perf-probe/src/b_exit.rs",
   "pass_requires": "physical_pressure_fixture_with_visual_surface",
-  "reason": "PERF-15 stays IMPLEMENTED: no real VisualSurface / Product Wire surface path. The fixture must not substitute a colored synthetic texture."
+  "apk_linkage": "BOUND",
+  "evidence_dirty": false,
+  "serial": "8f5c2b7c",
+  "capture_stamp": "2026-08-18T17-57-50-847Z",
+  "reason": "PERF-15 stays IMPLEMENTED: no real VisualSurface path (not a synthetic substitute). Physical Xiaomi run had 10k fling + live glass + image decode/upload + injected trim-memory; product_wire_surface=false.",
+  "checks": [
+    {
+      "id": "visual_surface",
+      "ok": false,
+      "value": "missing"
+    },
+    {
+      "id": "fling_items",
+      "ok": true,
+      "value": "10000"
+    },
+    {
+      "id": "live_glass",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "id": "image_decode",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "id": "image_upload",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "id": "viewport_kept",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "id": "protected_kept",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "id": "lkg_kept",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "id": "oom_loops",
+      "ok": true,
+      "value": "0"
+    },
+    {
+      "id": "blank_px",
+      "ok": true,
+      "value": "0"
+    }
+  ],
+  "observed": {
+    "gpu_ran": true,
+    "adapter": "Adreno_(TM)_710",
+    "backend": "Vulkan",
+    "ran_on_android": true,
+    "uploads_throttled": 16,
+    "alloc_retries": 3,
+    "cache_high": 73400320,
+    "cap_bytes": 100663296,
+    "tier": "Degraded",
+    "trim_memory": true,
+    "trim_level": 15
+  }
 }
