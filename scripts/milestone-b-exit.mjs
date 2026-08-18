@@ -7,7 +7,8 @@
  *   - device-loss injection has physical evidence
  *   - known baseline failures are FIXED or explicitly WAIVED
  *
- * IMPLEMENTED host corpora (PERF-15, no VisualSurface) are not PASS.
+ * IMPLEMENTED host corpora are not PASS. PERF-15 is an independent physical
+ * PASS of VisualSurfaceFrameIngress, not PluginVisualSurface.
  * Raw input-to-present p99 is a reference-device baseline, not a release budget.
  *
  *   node scripts/milestone-b-exit.mjs

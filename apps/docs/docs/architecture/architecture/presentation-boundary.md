@@ -124,14 +124,13 @@ Xiaomi / Vulkan debug host (`PresentationSurfaceActivity`: real WebView +
 secure `SurfaceView` + fallback hit routing; capability chosen before
 `compile_passes`). Host compiler corpus remains in
 `crates/neocompositor` `surface_fallback`.
-Pressure/degraded admission (PERF-15) is **IMPLEMENTED** on the host
-corpus (`crates/neocompositor` `pressure`) plus a physical probe fixture
-(10k fling + live glass + image decode/upload + injected trim-memory).
-PASS requires a trusted B-level `VisualSurfaceFrameIngress`
-(implemented in `crates/neocompositor` `visual_surface`, owned by
-`presentation-session`) and a live reference producer (implemented;
-physical recapture still pending). `PluginVisualSurface` is Milestone D.
-A synthetic texture is not a substitute. D3 stays DEFERRED.
+Pressure/degraded admission (PERF-15) is **PASS** on the physical
+Xiaomi / Vulkan debug host (`PresentationPerfActivity`: 10k fling + live
+glass + image decode/upload + trusted `VisualSurfaceFrameIngress`
+reference producer + injected trim-memory). Host corpus remains in
+`crates/neocompositor` `pressure`. This PASS does not claim
+`PluginVisualSurface` or Milestone D. A synthetic texture is not a
+substitute. D3 stays DEFERRED.
 Physical device-loss injection is **PASS** (`wgpu_destroyed=true`,
 `wgpu_recreated=true`, `DeviceEpoch` bumps once; surface recreation and
 background/resume are separate and do not bump the epoch).

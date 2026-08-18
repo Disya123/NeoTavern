@@ -3,17 +3,22 @@
 ## Unreleased
 ### Added
 
+- **PERF-15 PASS (not B PASS, not PluginVisualSurface).** Independent
+  Xiaomi / Vulkan stamp on a BOUND debug APK:
+  [perf-15-adjudication.json](docs/rfc/perf-15-adjudication.json)
+  (`visual_surface=present`, `producer=reference-visual-surface`,
+  `plugin_runtime=false`). Milestone B remains STARTED. D3 stays deferred.
+
 - **Bounded VisualSurfaceFrameIngress (not Plugin SDK).** Presentation
   session owns a generation-safe latest-ready-frame-wins queue. Product
   Wire carries only the logical surface declare and policy. GPU handles
   stay off the wire. Late/not-ready frames do not block present.
   Recovery bumps generation. D3 / PluginVisualSurface stay deferred.
 
-- **Reference VisualSurface producer (PERF-15 fixture, not PASS).** A
-  trusted deforming textured mesh/rig with atlas and alpha layers submits
-  only through `VisualSurfaceFrameIngress`. Not D1b checkerboard, not a
-  synthetic fill, not Plugin SDK. PERF-15 stays **IMPLEMENTED** until
-  the physical pressure recapture.
+- **Reference VisualSurface producer.** A trusted deforming textured
+  mesh/rig with atlas and alpha layers submits only through
+  `VisualSurfaceFrameIngress`. Not D1b checkerboard, not a synthetic fill,
+  not Plugin SDK.
 
 - **PERF-22 and physical device-loss PASS (not B PASS).** Independent
   Xiaomi / Vulkan stamps on a BOUND debug APK: PERF-22
@@ -27,8 +32,8 @@
   ([perf-15-adjudication.json](docs/rfc/perf-15-adjudication.json)).
   Milestone B remains STARTED. Production `MainActivity` / kernel JNI
   unchanged. Unified host bench runner for remaining PERF-01…05 and
-  PERF-11…17/21 does not need the phone
-  (`scripts/presentation-perf-bench-runner.mjs`).
+  PERF-11…17/21 (`scripts/presentation-perf-bench-runner.mjs --execute`)
+  does not need the phone; host corpora are not independent PASS.
 
 - **B-exit physical fixtures (no PASS).** Debug
   `PresentationSurfaceActivity` hosts a real WebView, a secure

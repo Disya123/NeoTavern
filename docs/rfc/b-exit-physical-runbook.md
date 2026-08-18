@@ -5,17 +5,15 @@ BOUND debug APK `a6cbae7`. Independent records:
 
 | Criterion   | Record                                                         | Status                                |
 | ----------- | -------------------------------------------------------------- | ------------------------------------- |
-| PERF-15     | [perf-15-adjudication.json](perf-15-adjudication.json)         | `IMPLEMENTED` (host reference producer ready; physical recapture pending) |
+| PERF-15     | [perf-15-adjudication.json](perf-15-adjudication.json)         | `PASS` (reference VisualSurfaceFrameIngress; not PluginVisualSurface) |
 | PERF-22     | [perf-22-adjudication.json](perf-22-adjudication.json)         | `PASS`                                |
 | device-loss | [device-loss-adjudication.json](device-loss-adjudication.json) | `PASS`                                |
 
 Milestone B remains **STARTED**. `almost_pass=false`. Production cutover
-remains **NOT_STARTED**. PERF-15 cannot become PASS until the physical
-pressure fixture is recaptured with `producer=reference-visual-surface`
-through B-level `VisualSurfaceFrameIngress`
-([ADR-0050](../adr/0050-visual-surface-ingress-vs-plugin.md)). A colored
-synthetic texture is not a substitute. `PluginVisualSurface` is Milestone D
-and does not block B.
+remains **NOT_STARTED**. PERF-15 PASS is the B-level
+`VisualSurfaceFrameIngress` reference producer
+([ADR-0050](../adr/0050-visual-surface-ingress-vs-plugin.md)). It does not
+claim `PluginVisualSurface` or Milestone D. D3 stays **DEFERRED**.
 
 ## Required chain
 
@@ -59,9 +57,12 @@ Admitted physical stamps (gitignored captures under
 `apps/android/b-exit-captures/`):
 
 - PERF-22 panel `2026-08-18T17-57-00-885Z` plus poster / fullscreen / error
-- PERF-15 `2026-08-18T17-57-50-847Z` (`visual_surface=missing`)
+- PERF-15 `2026-08-18T18-56-59-678Z` (`visual_surface=present`,
+  `producer=reference-visual-surface`, `plugin_runtime=false`)
 - device-loss raster/composite `2026-08-18T17-57-57-104Z`
   (`wgpu_destroyed=true`, `wgpu_recreated=true`, two `open_probe_device`)
 
 After this batch the phone is not required to assemble the unified
-benchmark runner for PERF-01…05 and PERF-11…17/21.
+benchmark runner for PERF-01…05 and PERF-11…17/21
+(`node scripts/presentation-perf-bench-runner.mjs --execute`). Host
+corpora are not independent PASS.

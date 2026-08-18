@@ -1,25 +1,38 @@
 {
   "schema": "perf-15-adjudication/v1",
-  "perf15": "IMPLEMENTED",
-  "visual_surface": "missing",
-  "physical": false,
-  "admissible": false,
+  "perf15": "PASS",
+  "visual_surface": "present",
+  "physical": true,
+  "admissible": true,
   "milestone_b": "STARTED",
   "almost_pass": false,
   "production_cutover": "NOT_STARTED",
-  "kind": "host_corpus_plus_physical_fixture_without_visual_surface",
-  "record": "crates/presentation-perf-probe/src/b_exit.rs",
-  "pass_requires": "physical_pressure_fixture_with_visual_surface_ingress",
-  "apk_linkage": "BOUND",
-  "evidence_dirty": false,
-  "serial": "8f5c2b7c",
-  "capture_stamp": "2026-08-18T17-57-50-847Z",
-  "reason": "PERF-15 stays IMPLEMENTED until a trusted VisualSurfaceFrameIngress reference producer is captured. PluginVisualSurface / Milestone D are not required. A synthetic texture is not a substitute. Physical Xiaomi run had 10k fling + live glass + image decode/upload + injected trim-memory; product_wire_surface=false; visual_surface=missing.",
+  "reason": "physical pressure fixture with reference VisualSurfaceFrameIngress",
   "checks": [
     {
       "id": "visual_surface",
-      "ok": false,
-      "value": "missing"
+      "ok": true,
+      "value": "present"
+    },
+    {
+      "id": "producer",
+      "ok": true,
+      "value": "reference-visual-surface"
+    },
+    {
+      "id": "surface_frame_ingress",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "id": "direct_display_list_injection",
+      "ok": true,
+      "value": "false"
+    },
+    {
+      "id": "plugin_runtime",
+      "ok": true,
+      "value": "false"
     },
     {
       "id": "fling_items",
@@ -67,17 +80,30 @@
       "value": "0"
     }
   ],
+  "platform": false,
+  "kind": "physical",
+  "record": "crates/presentation-perf-probe/src/b_exit.rs",
+  "apk_linkage": "BOUND",
+  "evidence_dirty": false,
+  "serial": "8f5c2b7c",
+  "capture_stamp": "2026-08-18T18-56-59-678Z",
   "observed": {
     "gpu_ran": true,
     "adapter": "Adreno_(TM)_710",
     "backend": "Vulkan",
     "ran_on_android": true,
+    "producer": "reference-visual-surface",
+    "surface_frame_ingress": true,
+    "direct_display_list_injection": false,
+    "plugin_runtime": false,
+    "product_wire_surface": true,
     "uploads_throttled": 16,
     "alloc_retries": 3,
     "cache_high": 73400320,
     "cap_bytes": 100663296,
     "tier": "Degraded",
     "trim_memory": true,
-    "trim_level": 15
+    "trim_level": 15,
+    "sequence": 8
   }
 }

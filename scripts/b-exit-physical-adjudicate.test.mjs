@@ -98,7 +98,7 @@ describe('B-exit physical adjudicators', () => {
     expect(hostOnly.perf22).toBe('IMPLEMENTED');
   });
 
-  it('committed JSON records stay independent: PERF-15 IMPLEMENTED, PERF-22 PASS, device-loss PASS', () => {
+  it('committed JSON records stay independent: PERF-15 PASS, PERF-22 PASS, device-loss PASS', () => {
     const perf15 = JSON.parse(
       readFileSync(new URL('../docs/rfc/perf-15-adjudication.json', import.meta.url), 'utf8'),
     );
@@ -108,9 +108,11 @@ describe('B-exit physical adjudicators', () => {
     const deviceLoss = JSON.parse(
       readFileSync(new URL('../docs/rfc/device-loss-adjudication.json', import.meta.url), 'utf8'),
     );
-    expect(perf15.perf15).toBe('IMPLEMENTED');
-    expect(perf15.visual_surface).toBe('missing');
-    expect(perf15.admissible).toBe(false);
+    expect(perf15.perf15).toBe('PASS');
+    expect(perf15.visual_surface).toBe('present');
+    expect(perf15.admissible).toBe(true);
+    expect(perf15.milestone_b).toBe('STARTED');
+    expect(perf15.almost_pass).toBe(false);
     expect(perf22.perf22).toBe('PASS');
     expect(perf22.admissible).toBe(true);
     expect(deviceLoss.device_loss).toBe('PASS');

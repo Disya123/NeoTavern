@@ -61,19 +61,16 @@ production JNI renderer and **not** an Android cutover.
   platform-surface capture is `PresentationSurfaceActivity`. Host record:
   [`docs/rfc/perf-22-adjudication.json`](../../docs/rfc/perf-22-adjudication.json)
   (`PASS`).
-- Pressure / degraded admission (PERF-15 **IMPLEMENTED**, not PASS):
-  unified `Normal → Constrained → Critical → Degraded` controller,
-  deterministic eviction, viewport / protected band / LKG retained,
-  image-upload throttle, bounded allocation retries, no OOM loop.
-  Host corpus is `crates/neocompositor/tests/pressure.rs`. B-level
-  `VisualSurfaceFrameIngress` (`visual_surface`) is a bounded
-  latest-ready-frame-wins queue with shared-device validation; it is not
-  Plugin SDK ([ADR-0050](../../docs/adr/0050-visual-surface-ingress-vs-plugin.md)).
-  The trusted `reference-visual-surface` producer (deforming mesh, atlas,
-  alpha layers, bounded queue) is the PERF-15 live source and must not
-  inject `NeoDisplayList` ops. PERF-15 stays **IMPLEMENTED** until that
-  producer is recaptured on the physical pressure fixture
-  ([`docs/rfc/perf-15-adjudication.json`](../../docs/rfc/perf-15-adjudication.json)).
+- Pressure / degraded admission (PERF-15 **PASS** on physical Vulkan, not
+  B PASS): unified `Normal → Constrained → Critical → Degraded`
+  controller, deterministic eviction, viewport / protected band / LKG
+  retained, image-upload throttle, bounded allocation retries, no OOM
+  loop. Host corpus is `crates/neocompositor/tests/pressure.rs`. B-level
+  `VisualSurfaceFrameIngress` plus the trusted `reference-visual-surface`
+  producer are the live VisualSurface path; not Plugin SDK
+  ([ADR-0050](../../docs/adr/0050-visual-surface-ingress-vs-plugin.md)).
+  Physical stamp:
+  [`docs/rfc/perf-15-adjudication.json`](../../docs/rfc/perf-15-adjudication.json).
 - Interaction-ready text snapshots (RFC §21.1): immutable
   `TextInteractionSnapshot` bound to `SceneEpoch`, generation-safe
   `TextFragmentId`, producer-authored bidi runs / clusters / line metrics /
@@ -176,7 +173,7 @@ Started (CPU types + tests):
   shell only; not production JNI; `PASS` on physical 120 Hz)
 - non-sampleable surface fallback (PERF-22 **PASS** on physical Vulkan,
   not B PASS)
-- pressure / degraded admission (PERF-15 **IMPLEMENTED**, not PASS)
+- pressure / degraded admission (PERF-15 **PASS** on physical Vulkan, not B PASS)
 - physical device-loss injection (**PASS** on Xiaomi / Vulkan; surface
   recreation and background/resume are not device-loss)
 

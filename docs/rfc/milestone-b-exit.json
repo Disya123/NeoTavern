@@ -4,7 +4,7 @@
   "almost_pass": false,
   "production_cutover": "NOT_STARTED",
   "platform_gesture_adapter": "PASS",
-  "perf15": "IMPLEMENTED",
+  "perf15": "PASS",
   "perf22": "PASS",
   "input_to_present_p99_ns": 20646128,
   "input_to_present_p99_ms": 20.65,
@@ -40,13 +40,12 @@
     "PERF-13": { "status": "MISSING", "independent": false, "admissible": false, "record": null },
     "PERF-14": { "status": "MISSING", "independent": false, "admissible": false, "record": null },
     "PERF-15": {
-      "status": "IMPLEMENTED",
+      "status": "PASS",
       "independent": true,
-      "admissible": false,
-      "kind": "host_corpus_plus_fixture",
+      "admissible": true,
+      "kind": "physical",
       "record": "docs/rfc/perf-15-adjudication.json",
-      "field": "perf15",
-      "pass_requires": "physical_pressure_fixture_with_visual_surface_ingress"
+      "field": "perf15"
     },
     "PERF-16": { "status": "MISSING", "independent": false, "admissible": false, "record": null },
     "PERF-17": { "status": "MISSING", "independent": false, "admissible": false, "record": null },

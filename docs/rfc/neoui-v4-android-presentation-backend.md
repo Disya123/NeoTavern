@@ -3439,13 +3439,15 @@ Tap/selection/long-press во время unacknowledged compositor scroll, tile 
 
 ## PERF-15 — pressure/degraded path
 
-**Host corpus:** `IMPLEMENTED` in `crates/neocompositor` (`pressure`).
+**Host corpus:** `crates/neocompositor` (`pressure`).
+**Physical criterion:** `PASS` in [perf-15-adjudication.json](perf-15-adjudication.json)
+(`producer=reference-visual-surface`, `plugin_runtime=false`). Not Milestone B PASS.
 Physical fixture MUST одновременно содержать 10k fling + live glass +
 image decode/upload + VisualSurface + injected trim-memory.
 VisualSurface для B — trusted `VisualSurfaceFrameIngress` и reference
 producer ([ADR-0050](../adr/0050-visual-surface-ingress-vs-plugin.md)), не
 `PluginVisualSurface` и не synthetic texture. `Normal → Constrained →
-Critical → Degraded`. Not Milestone B PASS.
+Critical → Degraded`.
 
 Memory pressure во время fling + glass + image upload + VisualSurface. Проверяет
 hard caps, eviction order, last-known-good/fallback, allocation failure и

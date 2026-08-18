@@ -105,8 +105,8 @@ crates/
                        # PERF-22 non-sampleable fallback (criterion PASS on
                        # physical Vulkan; not B PASS),
                        # PERF-15 pressure/degraded admission
-                       # (IMPLEMENTED; VisualSurfaceFrameIngress is B,
-                       # PluginVisualSurface is D, not PASS).
+                       # (PASS on physical Vulkan; VisualSurfaceFrameIngress
+                       # is B, PluginVisualSurface is D, not B PASS).
                        # Default
                        # host is WebView rollback
                        # (`NEOTA_NEOCOMPOSITOR=1`). Chat virtualization is

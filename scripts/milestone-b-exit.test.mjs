@@ -23,7 +23,7 @@ describe('milestone B-exit registry', () => {
     expect(registry.almost_pass).toBe(false);
     expect(registry.production_cutover).toBe('NOT_STARTED');
     expect(registry.perf22).toBe('PASS');
-    expect(registry.perf15).toBe('IMPLEMENTED');
+    expect(registry.perf15).toBe('PASS');
     expect(registry.input_to_present_p99_ns).toBe(P99_NS);
     expect(registry.input_to_present_p99_ms).toBe(20.65);
     expect(registry.input_to_present_p99_role).toBe(P99_ROLE);
@@ -60,6 +60,20 @@ describe('milestone B-exit registry', () => {
       expect(registry.required_perf).toContain(id);
       expect(registry.criteria[id]).toBeTruthy();
     }
+  });
+
+  it('cross-checks PERF-15 PASS against the independent adjudication record', () => {
+    const registry = load();
+    expect(registry.criteria['PERF-15'].status).toBe('PASS');
+    expect(registry.criteria['PERF-15'].admissible).toBe(true);
+    expect(registry.criteria['PERF-15'].pass_requires).toBeUndefined();
+    const stamp = JSON.parse(
+      readFileSync(new URL('../docs/rfc/perf-15-adjudication.json', import.meta.url), 'utf8'),
+    );
+    expect(stamp.perf15).toBe('PASS');
+    expect(stamp.visual_surface).toBe('present');
+    expect(stamp.milestone_b).toBe('STARTED');
+    expect(stamp.almost_pass).toBe(false);
   });
 
   it('cross-checks PERF-22 PASS against the independent adjudication record', () => {
@@ -138,5 +152,6 @@ describe('milestone B-exit registry', () => {
     expect(result.ok).toBe(true);
     expect(result.can_pass).toBe(false);
     expect(result.perf22).toBe('PASS');
+    expect(result.perf15).toBe('PASS');
   });
 });
