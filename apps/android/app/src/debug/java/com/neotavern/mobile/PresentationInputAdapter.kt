@@ -1,9 +1,12 @@
 package com.neotavern.mobile
 
 import android.os.Build
+import android.os.Trace
+import android.util.Log
 import android.view.Choreographer
 import android.view.MotionEvent
 import android.view.View
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Debug/flagged-shell MotionEvent + Choreographer adapter.
@@ -19,31 +22,117 @@ class PresentationInputAdapter(
     @Volatile
     var lastVsyncNanos: Long = 0L
         private set
+    @Volatile
+    var lastVsyncId: Long = 0L
+        private set
+    @Volatile
+    var lastDeadlineNanos: Long = 0L
+        private set
+    /** FrameTimeline expected present is a deadline cookie, not SF actual present. */
+    @Volatile
+    var lastExpectedPresentNanos: Long = 0L
+        private set
+    @Volatile
+    var lastEligibleForCurrentVsync: Boolean = false
+        private set
+    @Volatile
+    var lastTargetVsyncId: Long = 0L
+        private set
     private var posted = false
+    private val nextSeq = AtomicLong(1)
+    private var vsyncCallback: Choreographer.VsyncCallback? = null
+
+    init {
+        if (Build.VERSION.SDK_INT >= 33) {
+            vsyncCallback =
+                Choreographer.VsyncCallback { data ->
+                    lastVsyncNanos =
+                        PresentationInputMapping.presentationTimeFromVsync(data.frameTimeNanos)
+                    val timeline = data.preferredFrameTimeline
+                    lastVsyncId = timeline.vsyncId
+                    lastDeadlineNanos = timeline.deadlineNanos
+                    lastExpectedPresentNanos = timeline.expectedPresentationTimeNanos
+                    val callback = vsyncCallback
+                    if (posted && callback != null) {
+                        choreographer.postVsyncCallback(callback)
+                    }
+                }
+        }
+    }
 
     fun startFrameCallbacks() {
         if (posted) return
         posted = true
-        choreographer.postFrameCallback(this)
+        val callback = vsyncCallback
+        if (callback != null) {
+            choreographer.postVsyncCallback(callback)
+        } else {
+            choreographer.postFrameCallback(this)
+        }
     }
 
     fun stopFrameCallbacks() {
         posted = false
-        choreographer.removeFrameCallback(this)
+        val callback = vsyncCallback
+        if (callback != null) {
+            choreographer.removeVsyncCallback(callback)
+        } else {
+            choreographer.removeFrameCallback(this)
+        }
     }
 
     override fun doFrame(frameTimeNanos: Long) {
         lastVsyncNanos = PresentationInputMapping.presentationTimeFromVsync(frameTimeNanos)
+        lastVsyncId = 0L
         if (posted) {
             choreographer.postFrameCallback(this)
         }
     }
 
     fun onTouch(event: MotionEvent): Boolean {
+        val frame = fromMotionEvent(event)
         val samples = ArrayList<PresentationInputMapping.Sample>(8)
-        PresentationInputMapping.expand(fromMotionEvent(event), samples)
-        for (sample in samples) {
-            queue.tryPush(sample)
+        PresentationInputMapping.expand(frame, samples)
+        val coalesced = PresentationInputMapping.coalescedLatencyTimes(frame)
+        val nextVsyncId = if (lastVsyncId == 0L) 0L else lastVsyncId + 1L
+        Trace.beginSection("nt.input.enqueue")
+        try {
+            for (sample in samples) {
+                val seq = nextSeq.getAndIncrement()
+                queue.tryPush(sample)
+                val target =
+                    PresentationInputMapping.assignFrameTarget(
+                        eventTime = sample.timeNanos,
+                        inputCutoff = lastDeadlineNanos,
+                        callbackTime = lastVsyncNanos,
+                        currentVsyncId = lastVsyncId,
+                        currentPresentDeadline = lastExpectedPresentNanos,
+                        nextVsyncId = nextVsyncId,
+                        nextPresentDeadline = 0L,
+                    )
+                lastEligibleForCurrentVsync = target.eligibleForCurrentVsync
+                lastTargetVsyncId = target.targetVsyncId
+                Log.i(
+                    TAG,
+                    "i2p seq=$seq " +
+                        PresentationInputMapping.formatI2pCookies(
+                            eventTime = target.eventTime,
+                            inputCutoff = target.inputCutoff,
+                            callbackTime = target.callbackTime,
+                            targetVsyncId = target.targetVsyncId,
+                            targetPresentDeadline = target.targetPresentDeadline,
+                            actualPresentTime = "pending",
+                            eligibleForCurrentVsync = target.eligibleForCurrentVsync,
+                            rendererControlled = "pending",
+                            exclusionReason = "pending",
+                            newestEventTime = coalesced.newestEventTime,
+                            oldestHistoricalEventTime = coalesced.oldestHistoricalEventTime,
+                        ) +
+                        " pointer=${sample.pointerId} kind=${sample.kind}",
+                )
+            }
+        } finally {
+            Trace.endSection()
         }
         return true
     }
@@ -117,5 +206,7 @@ class PresentationInputAdapter(
                 if (Build.VERSION.SDK_INT >= 34) event.getHistoricalEventTimeNanos(pos) else 0L,
                 Build.VERSION.SDK_INT,
             )
+
+        const val TAG: String = "NeoTavernI2P"
     }
 }

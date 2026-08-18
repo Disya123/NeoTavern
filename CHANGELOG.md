@@ -182,7 +182,14 @@
   `PresentationTime`. Host tests live in `crates/neocompositor/tests/platform_input.rs`
   and JVM `PresentationInputMappingTest`. Instrumented coverage is
   `PresentationInputInstrumentedTest` (debug `PresentationInputActivity`, not
-  `MainActivity`). Physical input-to-present Perfetto is still pending.
+  `MainActivity`). Status: **IMPLEMENTED / PERFETTO_PENDING**. Host
+  adjudicator
+  [input-to-present-adjudication.json](docs/rfc/input-to-present-adjudication.json)
+  uses RFC §14 renderer-controlled present deadlines
+  (`deadline_miss = rendererControlled && actualPresentTime > targetPresentDeadline`).
+  Raw `input-to-present` p50/p95/p99 are reported and are not gated against
+  one refresh. `Choreographer#doFrame` is not present.
+  Physical FrameTimeline/SurfaceFlinger batch is still pending.
   Milestone B remains STARTED.
 
 - **Known baseline failures (not a green full baseline).** Recorded as

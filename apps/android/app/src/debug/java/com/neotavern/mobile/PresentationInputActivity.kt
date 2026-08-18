@@ -11,6 +11,7 @@ import android.widget.TextView
  * `adb shell am start -n com.neotavern.mobile/.PresentationInputActivity`
  *
  * Does not change production WebView [MainActivity] or default JNI.
+ * Choreographer frame time is not display present.
  */
 class PresentationInputActivity : Activity() {
     private val adapter = PresentationInputAdapter()
@@ -18,6 +19,7 @@ class PresentationInputActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        requestHighestRefresh()
         view = TextView(this)
         view.text = "input adapter (debug)"
         view.textSize = 16f
@@ -30,7 +32,7 @@ class PresentationInputActivity : Activity() {
         val handled = adapter.onTouch(event)
         val stats = adapter.queue.stats()
         view.text =
-            "vsync=${adapter.lastVsyncNanos}\nqueued=${stats.current} high=${stats.highWater} dropM=${stats.droppedMoves}"
+            "callbackTime=${adapter.lastVsyncNanos}\ncallbackVsyncId=${adapter.lastVsyncId}\ninputCutoff=${adapter.lastDeadlineNanos}\ntargetVsyncId=${adapter.lastTargetVsyncId}\neligibleForCurrentVsync=${adapter.lastEligibleForCurrentVsync}\nqueued=${stats.current} high=${stats.highWater} dropM=${stats.droppedMoves}"
         return handled || super.onTouchEvent(event)
     }
 
@@ -49,5 +51,31 @@ class PresentationInputActivity : Activity() {
     override fun onDestroy() {
         adapter.stopFrameCallbacks()
         super.onDestroy()
+    }
+
+    private fun requestHighestRefresh() {
+        val currentDisplay = display ?: return
+        val currentMode = currentDisplay.mode
+        val current =
+            DisplayRefreshPolicy.Mode(
+                currentMode.modeId,
+                currentMode.refreshRate,
+                currentMode.physicalWidth,
+                currentMode.physicalHeight,
+            )
+        val modes =
+            currentDisplay.supportedModes.map { mode ->
+                DisplayRefreshPolicy.Mode(
+                    mode.modeId,
+                    mode.refreshRate,
+                    mode.physicalWidth,
+                    mode.physicalHeight,
+                )
+            }
+        val decision = DisplayRefreshPolicy.chooseHighestRefresh(modes, current)
+        val modeId = decision.requestedModeId ?: return
+        val params = window.attributes
+        params.preferredDisplayModeId = modeId
+        window.attributes = params
     }
 }

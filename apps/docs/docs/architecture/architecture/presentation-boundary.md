@@ -10,6 +10,7 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/architecture/prese
 Milestone A = PASS
 A/Product Wire boundary = PASS
 shared-device raster interop = PASS
+platform gesture adapter = IMPLEMENTED / PERFETTO_PENDING
 Milestone B = STARTED
 production cutover = NOT_STARTED
 ```
@@ -103,7 +104,13 @@ rollback reason. Timestamp queries are capability-gated on
 declared. The Android MotionEvent / Choreographer adapter is host-side in
 `crates/neocompositor` (`platform_input`) plus debug
 `PresentationInputActivity`; production `MainActivity` / default JNI stay
-on WebView. Physical input-to-present Perfetto is still pending. Known host baseline
+on WebView. Status: `IMPLEMENTED / PERFETTO_PENDING`. Host adjudicator
+[`scripts/input-to-present-adjudicate.mjs`](https://github.com/Disya123/NeoTavern/blob/main/scripts/input-to-present-adjudicate.mjs)
+does not treat `Choreographer#doFrame` as present and does not compare raw
+`input-to-present` to one refresh. Physical FrameTimeline /
+SurfaceFlinger batch is still pending
+([input-to-present-physical-runbook.md](../rfc/input-to-present-physical-runbook.md)).
+Known host baseline
 failures are
 recorded in
 [known-baseline-failures.md](known-baseline-failures.md) and do not make

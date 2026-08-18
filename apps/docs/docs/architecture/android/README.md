@@ -187,8 +187,12 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   ([shared-device-interop-adjudication.json](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/shared-device-interop-adjudication.json)).
   Debug `PresentationInputActivity` hosts the MotionEvent / Choreographer
   adapter (not production JNI, not `MainActivity`). Instrumented:
-  `PresentationInputInstrumentedTest`. Physical input-to-present Perfetto is
-  still pending.
+  `PresentationInputInstrumentedTest`. Status:
+  `IMPLEMENTED / PERFETTO_PENDING`
+  ([input-to-present-adjudication.json](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/input-to-present-adjudication.json)).
+  Raw input-to-present is not gated against one refresh; deadline miss is
+  renderer-controlled present vs `targetPresentDeadline`.
+  Physical FrameTimeline/SurfaceFlinger batch is still pending.
   Independent stamps:
   [perf-18-20-adjudication.json](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/perf-18-20-adjudication.json).
   `NEOTA_NEOCOMPOSITOR=1` is a non-default flag, not a cutover switch.

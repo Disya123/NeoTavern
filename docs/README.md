@@ -71,7 +71,9 @@ Index of the internal documentation. Each major topic has its own folder.
   `D3=DEFERRED`, 2026-08-18), the [PERF-18/19/20 host
   adjudication](rfc/perf-18-20-adjudication.json), the [shared-device interop
   host adjudication](rfc/shared-device-interop-adjudication.json)
-  (`PASS` on physical Vulkan; Milestone B STARTED), and the [signed Gate P
+  (`PASS` on physical Vulkan; Milestone B STARTED), the [input-to-present
+  host adjudication](rfc/input-to-present-adjudication.json)
+  (`IMPLEMENTED / PERFETTO_PENDING`), and the [signed Gate P
   record](rfc/gate-p-decision-draft.md) (`GateP:P1`, 2026-08-17, incomplete
   physical M-1 waiver).
 - [Changelog](../CHANGELOG.md).

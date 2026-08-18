@@ -39,8 +39,10 @@ production JNI renderer and **not** an Android cutover.
   bounded queue, and must not wait on compositor/producer/layout. It is
   wired only to the debug `PresentationInputActivity` / flagged shell, not
   production `MainActivity` or default JNI. Instrumented coverage is
-  `PresentationInputInstrumentedTest`. Physical Perfetto input-to-present
-  is still pending.
+  `PresentationInputInstrumentedTest`. Status: `IMPLEMENTED /
+PERFETTO_PENDING`. Physical FrameTimeline/SurfaceFlinger input-to-present
+  is still pending; the host adjudicator does not treat raw
+  input-to-present as a one-refresh PASS gate.
 - Interaction-ready text snapshots (RFC §21.1): immutable
   `TextInteractionSnapshot` bound to `SceneEpoch`, generation-safe
   `TextFragmentId`, producer-authored bidi runs / clusters / line metrics /
@@ -140,14 +142,14 @@ Started (CPU types + tests):
   sampleable raster texture; no image readback / cross-device copy; debug
   `interop` probe path; host **PASS** on physical Vulkan; not production JNI)
 - Android MotionEvent / Choreographer adapter (host-side; debug/flagged
-  shell only; not production JNI; physical Perfetto input-to-present still
-  pending)
+  shell only; not production JNI; `IMPLEMENTED / PERFETTO_PENDING`)
 
 Not started (do not treat as done):
 
 - remaining PERF-01…PERF-22 and 120 Hz product budgets (PERF-18/19/20
   are independently PASS; Milestone B stays STARTED)
-- physical input-to-present Perfetto for the gesture adapter
+- physical FrameTimeline/SurfaceFlinger input-to-present for the gesture
+  adapter (`IMPLEMENTED / PERFETTO_PENDING`)
 
 See [presentation boundary](../../docs/architecture/presentation-boundary.md)
 and [ADR-0049](../../docs/adr/0049-track-d-dioxus-presentation.md).

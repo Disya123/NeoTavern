@@ -1,0 +1,26 @@
+{
+  "schema": "input-to-present-adjudication/v2",
+  "platform_gesture_adapter": "IMPLEMENTED",
+  "perfetto": "PENDING",
+  "milestone_b": "STARTED",
+  "almost_pass": false,
+  "production_cutover": "NOT_STARTED",
+  "apk_linkage": null,
+  "evidence_dirty": null,
+  "budgets": {
+    "60": 16666667,
+    "90": 11111111,
+    "120": 8333333
+  },
+  "deadline_miss": "rendererControlled && actualPresentTime > targetPresentDeadline",
+  "input_to_present": "actualPresentTime - eventTime",
+  "input_to_present_one_refresh_gate": false,
+  "unknown_exclusion": "application-caused",
+  "staging_commit": "0a1031c0f2fbd9e4da6f958e344e25b0f89d2bb7",
+  "checks": {
+    "status": "PENDING",
+    "ok": false,
+    "reason": "physical Perfetto batch not captured"
+  },
+  "reason": "physical Perfetto batch not captured"
+}

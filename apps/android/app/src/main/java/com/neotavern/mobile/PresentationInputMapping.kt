@@ -133,6 +133,101 @@ object PresentationInputMapping {
             ),
         )
     }
+
+    data class FrameTarget(
+        val eventTime: Long,
+        val inputCutoff: Long,
+        val callbackTime: Long,
+        val targetVsyncId: Long,
+        val targetPresentDeadline: Long,
+        val eligibleForCurrentVsync: Boolean,
+    )
+
+    data class CoalescedLatencyTimes(
+        val newestEventTime: Long,
+        val oldestHistoricalEventTime: Long,
+    )
+
+    /**
+     * Input after [inputCutoff] is not eligible for the current vsync and
+     * must target the next FrameTimeline cookie. That can make raw
+     * input-to-present longer than one refresh without an application miss.
+     */
+    fun assignFrameTarget(
+        eventTime: Long,
+        inputCutoff: Long,
+        callbackTime: Long,
+        currentVsyncId: Long,
+        currentPresentDeadline: Long,
+        nextVsyncId: Long,
+        nextPresentDeadline: Long,
+    ): FrameTarget {
+        val eligible = eventTime <= inputCutoff
+        return FrameTarget(
+            eventTime = eventTime,
+            inputCutoff = inputCutoff,
+            callbackTime = callbackTime,
+            targetVsyncId = if (eligible) currentVsyncId else nextVsyncId,
+            targetPresentDeadline =
+                if (eligible) currentPresentDeadline else nextPresentDeadline,
+            eligibleForCurrentVsync = eligible,
+        )
+    }
+
+    fun coalescedLatencyTimes(frame: MotionFrame): CoalescedLatencyTimes {
+        val oldest = frame.historicalTimesNanos.minOrNull() ?: frame.eventTimeNanos
+        return CoalescedLatencyTimes(
+            newestEventTime = frame.eventTimeNanos,
+            oldestHistoricalEventTime = oldest,
+        )
+    }
+
+    fun deadlineMiss(
+        rendererControlled: Boolean,
+        actualPresentTime: Long,
+        targetPresentDeadline: Long,
+    ): Boolean = rendererControlled && actualPresentTime > targetPresentDeadline
+
+    fun inputToPresent(actualPresentTime: Long, eventTime: Long): Long =
+        actualPresentTime - eventTime
+
+    fun gestureAge(actualPresentTime: Long, oldestHistoricalEventTime: Long): Long =
+        actualPresentTime - oldestHistoricalEventTime
+
+    /**
+     * §14: a frame leaves the renderer-controlled denominator only with a
+     * traced OS/driver/external reason. `unknown` stays application-caused.
+     */
+    fun rendererControlledForDenominator(
+        rendererControlled: Boolean,
+        exclusionReason: String?,
+    ): Boolean {
+        if (!rendererControlled) {
+            val reason = exclusionReason?.trim().orEmpty()
+            if (reason.isEmpty() || reason == "unknown") return true
+            return false
+        }
+        return true
+    }
+
+    fun formatI2pCookies(
+        eventTime: Long,
+        inputCutoff: Long,
+        callbackTime: Long,
+        targetVsyncId: Long,
+        targetPresentDeadline: Long,
+        actualPresentTime: String,
+        eligibleForCurrentVsync: Boolean,
+        rendererControlled: String,
+        exclusionReason: String,
+        newestEventTime: Long,
+        oldestHistoricalEventTime: Long,
+    ): String =
+        "eventTime=$eventTime inputCutoff=$inputCutoff callbackTime=$callbackTime " +
+            "targetVsyncId=$targetVsyncId targetPresentDeadline=$targetPresentDeadline " +
+            "actualPresentTime=$actualPresentTime eligibleForCurrentVsync=$eligibleForCurrentVsync " +
+            "rendererControlled=$rendererControlled exclusionReason=$exclusionReason " +
+            "newestEventTime=$newestEventTime oldestHistoricalEventTime=$oldestHistoricalEventTime"
 }
 
 class PresentationInputQueue(

@@ -5,7 +5,7 @@
     {
       "source": "README.md",
       "target": "README.md",
-      "sha256": "dd2e1b7a3f6c6021cbe4acab2608c7e32f633dabe711e9477f72303a974db9b8"
+      "sha256": "741df33856736e70b893f53d25698fd709832486e21e24a96013dcd639a8c21f"
     },
     {
       "source": "adr/0004-typebox-contracts.md",
@@ -235,7 +235,7 @@
     {
       "source": "android/README.md",
       "target": "android/README.md",
-      "sha256": "9efcd17af6664eab8f0c2f813de6c3ba90e35d3c57d1010178d67e142c3878ef"
+      "sha256": "0d6e65e9712147c434392ae8dc5ac841db9701edfe4596c6b9130c17907f84c0"
     },
     {
       "source": "api/README.md",
@@ -280,7 +280,7 @@
     {
       "source": "architecture/presentation-boundary.md",
       "target": "architecture/presentation-boundary.md",
-      "sha256": "66eca84ebac8a8471e8cfacdd0da1d7b57db14a27b7e42c5eeb96ae46619f570"
+      "sha256": "4577856d4964beb39478f35101ce6b65282a9a9ae9f0444e7cd31d8db643412f"
     },
     {
       "source": "architecture/prompt-pipeline.md",
@@ -360,7 +360,7 @@
     {
       "source": "rfc/README.md",
       "target": "rfc/README.md",
-      "sha256": "85a86fdf0caa0d6dad4c4aa7eeca67f0b647b862ad68c1e447a15cd25f0f16fe"
+      "sha256": "85126b72eff918e4aa9d2146e99675b47676556dbe3c17333087c306c8dc75c8"
     },
     {
       "source": "rfc/d1-d2-decision.md",
@@ -371,6 +371,11 @@
       "source": "rfc/gate-p-decision-draft.md",
       "target": "rfc/gate-p-decision-draft.md",
       "sha256": "6a28b83e124cad106a1d79a9c7f906816ac091b9c1ff9a6f54a51c92cb794b39"
+    },
+    {
+      "source": "rfc/input-to-present-physical-runbook.md",
+      "target": "rfc/input-to-present-physical-runbook.md",
+      "sha256": "7ac1918dac7e2982004df5330beceaf25b59d52ddefa401486c0d70c2deb2510"
     },
     {
       "source": "rfc/m0-d1a-physical-runbook.md",
@@ -415,7 +420,7 @@
     {
       "source": "rfc/neoui-v4-android-presentation-backend.md",
       "target": "rfc/neoui-v4-android-presentation-backend.md",
-      "sha256": "3853ed0d3ad3dbb462f5c943bee5190ce610b0b0965f78a6a75cf046481519fe"
+      "sha256": "d7050d6f1ebfbe693e1b533a672ef822b915cb2a6a2f4e841eb0a68a53a4a87e"
     },
     {
       "source": "rfc/perf-18-20-physical-runbook.md",

@@ -92,6 +92,95 @@ class PresentationInputMappingTest {
     }
 
     @Test
+    fun `input after cutoff targets the next vsync`() {
+        val target =
+            PresentationInputMapping.assignFrameTarget(
+                eventTime = 3_000L,
+                inputCutoff = 2_000L,
+                callbackTime = 1_500L,
+                currentVsyncId = 440L,
+                currentPresentDeadline = 8_333_333L,
+                nextVsyncId = 441L,
+                nextPresentDeadline = 16_666_666L,
+            )
+        assertEquals(false, target.eligibleForCurrentVsync)
+        assertEquals(441L, target.targetVsyncId)
+        assertEquals(16_666_666L, target.targetPresentDeadline)
+    }
+
+    @Test
+    fun `coalesced primary latency uses newest sample`() {
+        val times =
+            PresentationInputMapping.coalescedLatencyTimes(
+                PresentationInputMapping.MotionFrame(
+                    action = PresentationInputMapping.ACTION_MOVE,
+                    pointerCount = 1,
+                    eventTimeNanos = 30L,
+                    pointerIds = intArrayOf(1),
+                    xs = floatArrayOf(3f),
+                    ys = floatArrayOf(4f),
+                    historicalTimesNanos = longArrayOf(10L, 20L),
+                    historicalXs = floatArrayOf(1f, 2f),
+                    historicalYs = floatArrayOf(1f, 2f),
+                ),
+            )
+        assertEquals(30L, times.newestEventTime)
+        assertEquals(10L, times.oldestHistoricalEventTime)
+        assertEquals(970L, PresentationInputMapping.inputToPresent(1_000L, times.newestEventTime))
+        assertEquals(990L, PresentationInputMapping.gestureAge(1_000L, times.oldestHistoricalEventTime))
+    }
+
+    @Test
+    fun `deadline miss is renderer controlled late present`() {
+        assertEquals(true, PresentationInputMapping.deadlineMiss(true, 9_000L, 8_000L))
+        assertEquals(false, PresentationInputMapping.deadlineMiss(false, 9_000L, 8_000L))
+        assertEquals(false, PresentationInputMapping.deadlineMiss(true, 7_000L, 8_000L))
+    }
+
+    @Test
+    fun `unknown exclusion stays application caused`() {
+        assertEquals(
+            true,
+            PresentationInputMapping.rendererControlledForDenominator(false, "unknown"),
+        )
+        assertEquals(
+            true,
+            PresentationInputMapping.rendererControlledForDenominator(false, null),
+        )
+        assertEquals(
+            false,
+            PresentationInputMapping.rendererControlledForDenominator(false, "os_stall"),
+        )
+    }
+
+    @Test
+    fun `i2p cookies keep the §14 field names`() {
+        val line =
+            PresentationInputMapping.formatI2pCookies(
+                eventTime = 1L,
+                inputCutoff = 2L,
+                callbackTime = 3L,
+                targetVsyncId = 4L,
+                targetPresentDeadline = 5L,
+                actualPresentTime = "pending",
+                eligibleForCurrentVsync = false,
+                rendererControlled = "pending",
+                exclusionReason = "pending",
+                newestEventTime = 1L,
+                oldestHistoricalEventTime = 0L,
+            )
+        assertTrue(line.contains("eventTime=1"))
+        assertTrue(line.contains("inputCutoff=2"))
+        assertTrue(line.contains("callbackTime=3"))
+        assertTrue(line.contains("targetVsyncId=4"))
+        assertTrue(line.contains("targetPresentDeadline=5"))
+        assertTrue(line.contains("actualPresentTime=pending"))
+        assertTrue(line.contains("eligibleForCurrentVsync=false"))
+        assertTrue(line.contains("rendererControlled=pending"))
+        assertTrue(line.contains("exclusionReason=pending"))
+    }
+
+    @Test
     fun `pre-API 34 eventTime is scaled to nanos`() {
         assertEquals(
             16_000_000L,

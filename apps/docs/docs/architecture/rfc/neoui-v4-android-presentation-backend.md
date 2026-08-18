@@ -3023,7 +3023,13 @@ latest-wins on a bounded queue; edges are not dropped. The UI thread only
 Hit-test / sticky / fixed / `ScrollId` latch stay in the existing compositor
 path. Debug `PresentationInputActivity` only; production `MainActivity` and
 default JNI are unchanged. Host and instrumented tests cover the adapter.
-Physical input-to-present Perfetto is still pending.
+Status: `IMPLEMENTED / PERFETTO_PENDING`. `Choreographer#doFrame` is not
+present; physical FrameTimeline/SurfaceFlinger adjudication is
+[`input-to-present-adjudication.json`](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/input-to-present-adjudication.json).
+The host adjudicator treats 16.67 / 11.11 / 8.33 ms as renderer-controlled
+frame-opportunity deadlines (`deadline_miss` vs `targetPresentDeadline`),
+not as a one-refresh PASS threshold on raw `input-to-present`. Milestone B
+remains STARTED.
 
 ---
 

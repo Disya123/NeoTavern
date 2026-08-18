@@ -75,7 +75,9 @@ Index of the internal documentation. Each major topic has its own folder.
   `D3=DEFERRED`, 2026-08-18), the [PERF-18/19/20 host
   adjudication](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/perf-18-20-adjudication.json), the [shared-device interop
   host adjudication](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/shared-device-interop-adjudication.json)
-  (`PASS` on physical Vulkan; Milestone B STARTED), and the [signed Gate P
+  (`PASS` on physical Vulkan; Milestone B STARTED), the [input-to-present
+  host adjudication](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/input-to-present-adjudication.json)
+  (`IMPLEMENTED / PERFETTO_PENDING`), and the [signed Gate P
   record](rfc/gate-p-decision-draft.md) (`GateP:P1`, 2026-08-17, incomplete
   physical M-1 waiver).
 - [Changelog](https://github.com/Disya123/NeoTavern/blob/main/CHANGELOG.md).
