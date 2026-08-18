@@ -13,9 +13,17 @@ pub enum StreamFrame {
     Timeout,
 }
 
+/// One Product Wire request/response. Presentation never opens Kernel.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WireCall {
+    pub request_id: String,
+    pub operation_id: String,
+    pub result: Value,
+}
+
 /// Payload-level Product Wire. Presentation never opens Kernel/storage/network.
 pub trait ProductWire {
-    fn call(&mut self, operation_id: &str, payload: Value) -> Result<Value, ChatRouteError>;
+    fn call(&mut self, operation_id: &str, payload: Value) -> Result<WireCall, ChatRouteError>;
     fn start_stream(
         &mut self,
         operation_id: &str,

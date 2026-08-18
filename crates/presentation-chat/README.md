@@ -12,7 +12,11 @@ implementation.
   `poll_stream` / `cancel_stream` for registered Wire operations only.
 - [`ChatSession`](src/session.rs) owns history, drafts, send, retry,
   prepend, streaming, and `ErrorDto` — no Kernel, SQLite, or network.
-  The visible window is virtualized through `neotavern-chat-viewport`.
+  `messageCount` is Kernel `chats.get`, never a local increment.
+  Duplicate in-flight send callbacks coalesce because
+  `chats.messages.create` is not idempotent. The visible window is
+  virtualized through `neotavern-chat-viewport`. A stale `sceneEpoch`
+  ack must not drop a newer durable revision.
 - Host tests use in-memory [`FakeWire`](src/fake_wire.rs). Opaque list
   cursors are never parsed by the session.
 - Android JNI (feature `android-jni`) calls a Kotlin host that already

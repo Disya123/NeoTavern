@@ -41,8 +41,40 @@ class PresentationChatSnapshotTest {
         assertEquals("draft", snap.composer)
         assertFalse(snap.streaming)
         assertEquals(2, snap.visible.size)
+        assertEquals(2, snap.kernelMessageCount)
         assertTrue(snap.rowsText().contains("user: **hello**"))
         assertTrue(snap.rowsText().contains("assistant: ![photo](asset:thumb)"))
+    }
+
+    @Test
+    fun `send snapshot exposes kernel count and omits bodies from the trace`() {
+        val snap = PresentationChatSnapshot.parse(
+            """
+            {
+              "title":"Hazel",
+              "messageCount":1,
+              "kernelMessageCount":1,
+              "pageLen":1,
+              "composer":"",
+              "error":null,
+              "streaming":false,
+              "requestId":"00000000-0000-4000-8000-00000000000a",
+              "operationId":"chats.messages.create",
+              "durableMessageId":"00000000-0000-4000-8000-00000000000b",
+              "sceneEpoch":2,
+              "sendAccepted":true,
+              "visible":[{"id":"b","role":"user","content":"helloCbatch"}]
+            }
+            """.trimIndent(),
+        )
+        requireNotNull(snap)
+        assertTrue(snap.sendAccepted)
+        assertEquals(1, snap.messageCount)
+        val trace = snap.sendTraceLine()
+        assertTrue(trace.contains("kernelMessageCount=1"))
+        assertTrue(trace.contains("sendAccepted=true"))
+        assertFalse(trace.contains("helloCbatch"))
+        assertFalse(trace.contains("composer"))
     }
 
     @Test

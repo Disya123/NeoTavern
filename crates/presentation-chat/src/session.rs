@@ -33,6 +33,13 @@ pub struct ChatRouteState {
     pub last_error: Option<ErrorDto>,
     pub stream_handle: Option<String>,
     pub safe_mode: bool,
+    pub last_request_id: Option<String>,
+    pub last_operation_id: Option<String>,
+    pub last_send_request_id: Option<String>,
+    pub last_send_operation_id: Option<String>,
+    pub last_durable_message_id: Option<String>,
+    pub send_accepted: bool,
+    pub scene_epoch: u64,
 }
 
 pub struct ChatSession<W: ProductWire> {
@@ -40,6 +47,8 @@ pub struct ChatSession<W: ProductWire> {
     chat_id: Option<String>,
     state: ChatRouteState,
     issued: Vec<String>,
+    send_in_flight: bool,
+    last_acked_epoch: u64,
 }
 
 impl<W: ProductWire> ChatSession<W> {
@@ -49,6 +58,8 @@ impl<W: ProductWire> ChatSession<W> {
             chat_id: preferred_chat_id.map(str::to_string),
             state: ChatRouteState::default(),
             issued: Vec::new(),
+            send_in_flight: false,
+            last_acked_epoch: 0,
         };
         if let Err(err) = session.load_workspace() {
             session.record_error(err);
@@ -62,6 +73,50 @@ impl<W: ProductWire> ChatSession<W> {
 
     pub fn wire_mut(&mut self) -> &mut W {
         &mut self.wire
+    }
+
+    pub fn into_wire(self) -> W {
+        self.wire
+    }
+
+    pub fn kernel_message_count(&self) -> usize {
+        self.state
+            .chat
+            .as_ref()
+            .map(|chat| usize::try_from(chat.message_count.max(0)).unwrap_or(0))
+            .unwrap_or(0)
+    }
+
+    pub fn scene_epoch(&self) -> u64 {
+        self.state.scene_epoch
+    }
+
+    pub fn last_durable_message_id(&self) -> Option<&str> {
+        self.state.last_durable_message_id.as_deref()
+    }
+
+    pub fn send_accepted(&self) -> bool {
+        self.state.send_accepted
+    }
+
+    /// Stale presenter epochs must not drop a newer Kernel revision.
+    pub fn ack_revision(&mut self, observed_epoch: u64) -> bool {
+        if observed_epoch < self.state.scene_epoch {
+            return false;
+        }
+        if observed_epoch == self.state.scene_epoch {
+            self.last_acked_epoch = observed_epoch;
+            return true;
+        }
+        false
+    }
+
+    pub fn last_acked_epoch(&self) -> u64 {
+        self.last_acked_epoch
+    }
+
+    pub fn set_send_in_flight(&mut self, in_flight: bool) {
+        self.send_in_flight = in_flight;
     }
 
     pub fn state(&self) -> &ChatRouteState {
@@ -143,7 +198,8 @@ impl<W: ProductWire> ChatSession<W> {
         };
         match self.call_decode("chats.messages.drafts.commit", &req, decode_message_dto) {
             Ok(message) => {
-                self.push_unique(message);
+                self.note_durable(&message);
+                let _ = self.refresh_chat();
                 self.state.draft = None;
                 self.state.composer_text.clear();
                 Ok(())
@@ -156,6 +212,17 @@ impl<W: ProductWire> ChatSession<W> {
     }
 
     pub fn send(&mut self, text: Option<&str>) -> Result<(), ChatRouteError> {
+        if self.send_in_flight {
+            return Ok(());
+        }
+        self.send_in_flight = true;
+        self.state.send_accepted = false;
+        let result = self.send_inner(text);
+        self.send_in_flight = false;
+        result
+    }
+
+    fn send_inner(&mut self, text: Option<&str>) -> Result<(), ChatRouteError> {
         if let Some(text) = text {
             self.state.composer_text = text.to_string();
         }
@@ -188,9 +255,13 @@ impl<W: ProductWire> ChatSession<W> {
                 return Ok(());
             }
         };
-        self.push_unique(created);
+        self.note_durable(&created);
+        self.state.last_send_request_id = self.state.last_request_id.clone();
+        self.state.last_send_operation_id = Some("chats.messages.create".into());
+        let _ = self.refresh_chat();
+        self.state.send_accepted = true;
         let _ = self.discard_draft();
-        self.start_stream_op(
+        let _ = self.start_stream_op(
             "generation.start",
             &RequestStartGeneration {
                 chat_id,
@@ -198,7 +269,9 @@ impl<W: ProductWire> ChatSession<W> {
                 provider: None,
                 model: None,
             },
-        )
+        );
+        let _ = self.refresh_chat();
+        Ok(())
     }
 
     pub fn retry(&mut self) -> Result<(), ChatRouteError> {
@@ -243,8 +316,9 @@ impl<W: ProductWire> ChatSession<W> {
                 }
                 GenerationEvent::GenerationCompleted { final_message } => {
                     self.state.streaming_text.clear();
-                    self.push_unique(final_message.clone());
+                    self.note_durable(final_message);
                     self.state.active_run_id = final_message.generation_run_id.clone();
+                    let _ = self.refresh_chat();
                 }
                 GenerationEvent::GenerationFailed { error } => {
                     self.state.streaming_text.clear();
@@ -354,7 +428,7 @@ impl<W: ProductWire> ChatSession<W> {
         };
         ProductChatView {
             title,
-            message_count: self.state.messages.len(),
+            message_count: self.kernel_message_count(),
             visible,
             chrome,
             composer_text: self.state.composer_text.clone(),
@@ -396,13 +470,41 @@ impl<W: ProductWire> ChatSession<W> {
             "chatId": self.chat_id,
             "title": view.title,
             "messageCount": view.message_count,
+            "kernelMessageCount": view.message_count,
+            "pageLen": self.state.messages.len(),
             "composer": view.composer_text,
             "error": view.error_code,
             "streaming": view.streaming,
             "issued": self.issued,
+            "requestId": self.state.last_send_request_id.as_ref().or(self.state.last_request_id.as_ref()),
+            "operationId": self.state.last_send_operation_id.as_ref().or(self.state.last_operation_id.as_ref()),
+            "durableMessageId": self.state.last_durable_message_id,
+            "sceneEpoch": self.state.scene_epoch,
+            "sendAccepted": self.state.send_accepted,
             "visible": visible,
         })
         .to_string()
+    }
+
+    /// Host debug line. Never includes message or composer content.
+    pub fn send_trace_line(&self) -> String {
+        let error = self
+            .state
+            .last_error
+            .as_ref()
+            .map(|err| err.code.as_str())
+            .unwrap_or("none");
+        format!(
+            "chat_send live_wire=true requestId={} operationId={} durableMessageId={} kernelMessageCount={} pageLen={} sceneEpoch={} sendAccepted={} error={} production_cutover=false",
+            self.state.last_send_request_id.as_deref().or(self.state.last_request_id.as_deref()).unwrap_or("-"),
+            self.state.last_send_operation_id.as_deref().or(self.state.last_operation_id.as_deref()).unwrap_or("-"),
+            self.state.last_durable_message_id.as_deref().unwrap_or("-"),
+            self.kernel_message_count(),
+            self.state.messages.len(),
+            self.state.scene_epoch,
+            self.state.send_accepted,
+            error,
+        )
     }
 
     fn load_workspace(&mut self) -> Result<(), ChatRouteError> {
@@ -433,9 +535,26 @@ impl<W: ProductWire> ChatSession<W> {
         )?;
         self.chat_id = Some(chat.id.clone());
         self.state.chat = Some(chat);
+        self.bump_scene();
         let page = self.list_messages(&chat_id, None)?;
         self.absorb_latest_page(page);
         Ok(())
+    }
+
+    fn refresh_chat(&mut self) -> Result<(), ChatRouteError> {
+        let Some(chat_id) = self.chat_id.clone() else {
+            return Ok(());
+        };
+        match self.call_decode("chats.get", &RequestGetChat { chat_id }, decode_chat_dto) {
+            Ok(chat) => {
+                self.state.chat = Some(chat);
+                Ok(())
+            }
+            Err(err) => {
+                self.record_error(err);
+                Ok(())
+            }
+        }
     }
 
     fn list_messages(
@@ -480,6 +599,7 @@ impl<W: ProductWire> ChatSession<W> {
     ) -> Result<(), ChatRouteError> {
         assert_registered_command(operation_id)?;
         self.issued.push(operation_id.to_string());
+        self.state.last_operation_id = Some(operation_id.to_string());
         let value = serde_json::to_value(payload)?;
         match self.wire.start_stream(operation_id, value) {
             Ok(handle) => {
@@ -514,8 +634,24 @@ impl<W: ProductWire> ChatSession<W> {
     ) -> Result<Value, ChatRouteError> {
         assert_registered_command(operation_id)?;
         self.issued.push(operation_id.to_string());
+        self.state.last_operation_id = Some(operation_id.to_string());
         let value = serde_json::to_value(payload)?;
-        self.wire.call(operation_id, value)
+        let call = self.wire.call(operation_id, value)?;
+        self.state.last_request_id = Some(call.request_id);
+        Ok(call.result)
+    }
+
+    fn bump_scene(&mut self) {
+        self.state.scene_epoch = self.state.scene_epoch.saturating_add(1);
+    }
+
+    fn note_durable(&mut self, message: &MessageDto) {
+        let is_new = !self.state.messages.iter().any(|row| row.id == message.id);
+        self.push_unique(message.clone());
+        self.state.last_durable_message_id = Some(message.id.clone());
+        if is_new {
+            self.bump_scene();
+        }
     }
 
     fn push_unique(&mut self, message: MessageDto) {

@@ -5,7 +5,7 @@ use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use crate::error::ChatRouteError;
-use crate::wire::{ProductWire, StreamFrame};
+use crate::wire::{ProductWire, StreamFrame, WireCall};
 
 pub const DEMO_CHAT_ID: &str = "7f3a2b4c-1d2e-4f5a-8b9c-0d1e2f3a4b5c";
 pub const DEMO_CHARACTER_ID: &str = "4f2f0a1e-9b3c-4d5e-8f6a-7b8c9d0e1f2a";
@@ -112,6 +112,22 @@ impl FakeWire {
         let n = self.next;
         self.next += 1;
         wire_id(n)
+    }
+
+    fn ok_call(&mut self, operation_id: &str, result: Value) -> Result<WireCall, ChatRouteError> {
+        Ok(WireCall {
+            request_id: self.alloc_id(),
+            operation_id: operation_id.to_string(),
+            result,
+        })
+    }
+
+    fn wrap_call(
+        &mut self,
+        operation_id: &str,
+        result: Result<Value, ChatRouteError>,
+    ) -> Result<WireCall, ChatRouteError> {
+        self.ok_call(operation_id, result?)
     }
 
     fn product(code: &str, key: &str, value: &str) -> ChatRouteError {
@@ -342,17 +358,20 @@ impl FakeWire {
 }
 
 impl ProductWire for FakeWire {
-    fn call(&mut self, operation_id: &str, payload: Value) -> Result<Value, ChatRouteError> {
+    fn call(&mut self, operation_id: &str, payload: Value) -> Result<WireCall, ChatRouteError> {
         if self.fail_ops.contains(operation_id) {
             return Err(Self::product("WIRE_FAILED", "operationId", operation_id));
         }
         match operation_id {
-            "chats.list" => to_value(
-                &self.list_chats(payload.get("limit").and_then(Value::as_i64).unwrap_or(50)),
-            ),
+            "chats.list" => {
+                let page =
+                    self.list_chats(payload.get("limit").and_then(Value::as_i64).unwrap_or(50));
+                self.wrap_call(operation_id, to_value(&page))
+            }
             "chats.get" => {
                 let chat_id = payload_str(&payload, "chatId")?;
-                to_value(self.require_chat(&chat_id)?)
+                let chat = self.require_chat(&chat_id)?.clone();
+                self.wrap_call(operation_id, to_value(&chat))
             }
             "chats.messages.list" => {
                 let chat_id = payload_str(&payload, "chatId")?;
@@ -362,14 +381,29 @@ impl ProductWire for FakeWire {
                     payload.get("limit").and_then(Value::as_i64).unwrap_or(50),
                     payload.get("order").and_then(Value::as_str),
                 )?;
-                to_value(&page)
+                self.wrap_call(operation_id, to_value(&page))
             }
-            "chats.messages.create" => to_value(&self.create_message(&payload)?),
-            "chats.messages.drafts.save" => to_value(&self.save_draft(&payload)?),
-            "chats.messages.drafts.get" => to_value(&self.get_draft(&payload)?),
-            "chats.messages.drafts.commit" => to_value(&self.commit_draft(&payload)?),
-            "chats.messages.drafts.discard" => Ok(self.discard_draft(&payload)?),
-            "generation.cancel" => Ok(json!({})),
+            "chats.messages.create" => {
+                let created = self.create_message(&payload)?;
+                self.wrap_call(operation_id, to_value(&created))
+            }
+            "chats.messages.drafts.save" => {
+                let draft = self.save_draft(&payload)?;
+                self.wrap_call(operation_id, to_value(&draft))
+            }
+            "chats.messages.drafts.get" => {
+                let draft = self.get_draft(&payload)?;
+                self.wrap_call(operation_id, to_value(&draft))
+            }
+            "chats.messages.drafts.commit" => {
+                let committed = self.commit_draft(&payload)?;
+                self.wrap_call(operation_id, to_value(&committed))
+            }
+            "chats.messages.drafts.discard" => {
+                let discarded = self.discard_draft(&payload)?;
+                self.ok_call(operation_id, discarded)
+            }
+            "generation.cancel" => self.ok_call(operation_id, json!({})),
             other => Err(ChatRouteError::UnknownCommand(other.to_string())),
         }
     }

@@ -67,6 +67,7 @@ fn open_lists_history_through_wire_operations() {
         .contains(&"chats.messages.list".into()));
     let view = session.view();
     assert_eq!(view.title, "Live wire chat");
+    assert_eq!(view.message_count, 2);
     assert!(!view.visible.is_empty());
 }
 
@@ -116,6 +117,145 @@ fn send_create_then_generation_start() {
         .iter()
         .any(|row| row.content.contains("echo: next turn")));
     assert!(session.state().stream_handle.is_none());
+    assert_eq!(session.view().message_count, 4);
+    assert!(session.send_accepted());
+    assert_eq!(session.wire().message_count(DEMO_CHAT_ID), 4);
+}
+
+#[test]
+fn send_count_comes_from_chats_get_not_local_len() {
+    let mut session = ChatSession::open(FakeWire::demo(), Some(DEMO_CHAT_ID)).expect("open");
+    session.send(Some("next turn")).expect("send");
+    assert!(session.state().messages.len() >= 3);
+    assert_eq!(
+        session.view().message_count,
+        session.wire().message_count(DEMO_CHAT_ID)
+    );
+}
+
+#[test]
+fn duplicate_in_flight_send_creates_one_durable_message() {
+    let mut session = ChatSession::open(FakeWire::demo(), Some(DEMO_CHAT_ID)).expect("open");
+    session.set_send_in_flight(true);
+    session.send(Some("dup")).expect("coalesced");
+    session.set_send_in_flight(false);
+    assert!(!session
+        .issued_commands()
+        .contains(&"chats.messages.create".into()));
+    assert_eq!(session.wire().message_count(DEMO_CHAT_ID), 2);
+    session.send(Some("dup")).expect("first");
+    let creates = session
+        .issued_commands()
+        .iter()
+        .filter(|op| *op == "chats.messages.create")
+        .count();
+    session.set_send_in_flight(true);
+    session.send(Some("dup")).expect("retry callback");
+    session.set_send_in_flight(false);
+    let creates_after = session
+        .issued_commands()
+        .iter()
+        .filter(|op| *op == "chats.messages.create")
+        .count();
+    assert_eq!(creates, 1);
+    assert_eq!(creates_after, 1);
+    assert_eq!(session.wire().message_count(DEMO_CHAT_ID), 4);
+}
+
+#[test]
+fn rejected_create_shows_error_and_does_not_bump_kernel_count() {
+    let mut wire = FakeWire::demo();
+    wire.fail_operation("chats.messages.create");
+    let mut session = ChatSession::open(wire, Some(DEMO_CHAT_ID)).expect("open");
+    session.send(Some("nope")).expect("send");
+    assert_eq!(
+        session
+            .state()
+            .last_error
+            .as_ref()
+            .map(|err| err.code.as_str()),
+        Some("WIRE_FAILED")
+    );
+    assert!(!session.send_accepted());
+    assert_eq!(session.view().message_count, 2);
+    assert_eq!(session.state().composer_text, "nope");
+}
+
+#[test]
+fn generation_start_failure_keeps_the_durable_create() {
+    let mut wire = FakeWire::demo();
+    wire.fail_operation("generation.start");
+    let mut session = ChatSession::open(wire, Some(DEMO_CHAT_ID)).expect("open");
+    session.send(Some("keep")).expect("send");
+    assert!(session.send_accepted());
+    assert_eq!(session.view().message_count, 3);
+    assert_eq!(
+        session
+            .state()
+            .last_error
+            .as_ref()
+            .map(|err| err.code.as_str()),
+        Some("WIRE_FAILED")
+    );
+    assert!(session
+        .state()
+        .messages
+        .iter()
+        .any(|row| row.content == "keep"));
+}
+
+#[test]
+fn stale_scene_epoch_ack_does_not_drop_kernel_messages() {
+    let mut session = ChatSession::open(FakeWire::demo(), Some(DEMO_CHAT_ID)).expect("open");
+    let before = session.scene_epoch();
+    session.send(Some("epoch")).expect("send");
+    let epoch = session.scene_epoch();
+    assert!(epoch > before);
+    let count = session.view().message_count;
+    let durable = session
+        .last_durable_message_id()
+        .expect("durable")
+        .to_string();
+    assert!(!session.ack_revision(before));
+    assert_eq!(session.view().message_count, count);
+    assert_eq!(session.last_durable_message_id(), Some(durable.as_str()));
+    assert!(session.ack_revision(epoch));
+    assert_eq!(session.last_acked_epoch(), epoch);
+}
+
+#[test]
+fn reopen_session_keeps_the_durable_message() {
+    let mut session = ChatSession::open(FakeWire::demo(), Some(DEMO_CHAT_ID)).expect("open");
+    session.send(Some("keep me")).expect("send");
+    let durable = session
+        .last_durable_message_id()
+        .expect("durable")
+        .to_string();
+    let count = session.view().message_count;
+    let wire = session.into_wire();
+    let reopened = ChatSession::open(wire, Some(DEMO_CHAT_ID)).expect("reopen");
+    assert_eq!(reopened.view().message_count, count);
+    assert!(reopened
+        .state()
+        .messages
+        .iter()
+        .any(|row| row.content == "keep me"));
+    assert!(reopened
+        .state()
+        .messages
+        .iter()
+        .any(|row| row.id == durable));
+}
+
+#[test]
+fn send_trace_omits_message_content() {
+    let mut session = ChatSession::open(FakeWire::demo(), Some(DEMO_CHAT_ID)).expect("open");
+    session.send(Some("secret-body")).expect("send");
+    let line = session.send_trace_line();
+    assert!(line.contains("chat_send"));
+    assert!(line.contains("sendAccepted=true"));
+    assert!(!line.contains("secret-body"));
+    assert!(!line.contains("echo:"));
 }
 
 #[test]
@@ -205,6 +345,7 @@ fn ten_thousand_wire_messages_virtualize_the_visible_window() {
     let session =
         ChatSession::open(FakeWire::with_message_count(10_000), Some(DEMO_CHAT_ID)).expect("open");
     assert_eq!(session.state().messages.len(), PAGE_LIMIT as usize);
+    assert_eq!(session.view().message_count, 10_000);
     let (visible, outcome) = session.present_visible();
     assert!(visible.len() <= PRODUCT_PATH_VISIBLE);
     assert!(!outcome.waited_on_producer);
@@ -225,4 +366,6 @@ fn snapshot_json_is_object() {
     let value: serde_json::Value = serde_json::from_str(&session.snapshot_json()).expect("json");
     assert_eq!(value["title"], json!("Live wire chat"));
     assert_eq!(value["chatId"], json!(DEMO_CHAT_ID));
+    assert_eq!(value["messageCount"], json!(2));
+    assert_eq!(value["kernelMessageCount"], json!(2));
 }

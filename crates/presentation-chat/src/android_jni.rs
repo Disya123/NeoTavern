@@ -18,7 +18,7 @@ use serde_json::{json, Value};
 
 use crate::error::ChatRouteError;
 use crate::session::ChatSession;
-use crate::wire::{ProductWire, StreamFrame};
+use crate::wire::{ProductWire, StreamFrame, WireCall};
 use crate::{blocked_line, start_flagged_session, LiveChatReport};
 
 struct JniProductWire {
@@ -52,9 +52,15 @@ impl JniProductWire {
         }
     }
 
-    fn decode_result(bytes: &[u8]) -> Result<Value, ChatRouteError> {
+    fn decode_call(operation_id: &str, bytes: &[u8]) -> Result<WireCall, ChatRouteError> {
         match decode_response_envelope(bytes) {
-            Ok(ResponseEnvelope::Ok { result, .. }) => Ok(result),
+            Ok(ResponseEnvelope::Ok {
+                request_id, result, ..
+            }) => Ok(WireCall {
+                request_id,
+                operation_id: operation_id.to_string(),
+                result,
+            }),
             Ok(ResponseEnvelope::Error { error, .. }) => Err(ChatRouteError::Product(error)),
             Err(err) => Err(ChatRouteError::Wire(err.message)),
         }
@@ -123,7 +129,7 @@ impl JniProductWire {
 }
 
 impl ProductWire for JniProductWire {
-    fn call(&mut self, operation_id: &str, payload: Value) -> Result<Value, ChatRouteError> {
+    fn call(&mut self, operation_id: &str, payload: Value) -> Result<WireCall, ChatRouteError> {
         let payload_json = serde_json::to_string(&payload)?;
         let bytes = self.with_env(|env| {
             let j_op = env
@@ -148,7 +154,7 @@ impl ProductWire for JniProductWire {
             env.convert_byte_array(&array)
                 .map_err(|err| ChatRouteError::Transport(format!("{err:?}")))
         })?;
-        Self::decode_result(&bytes)
+        Self::decode_call(operation_id, &bytes)
     }
 
     fn start_stream(
@@ -303,7 +309,7 @@ fn session_line(session: &ChatSession<JniProductWire>) -> String {
         header: true,
         viewport: true,
         composer: true,
-        wire_messages: session.state().messages.len(),
+        wire_messages: session.kernel_message_count(),
         issued_commands: session.issued_commands().len(),
         vdom_edits,
         error_code: session
@@ -387,7 +393,7 @@ pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_send(
     let value = read_string(&mut env, &text);
     let line = with_route(|session| {
         session.send(Some(&value))?;
-        Ok(session_line(session))
+        Ok(session.send_trace_line())
     });
     to_jstring(&mut env, line)
 }

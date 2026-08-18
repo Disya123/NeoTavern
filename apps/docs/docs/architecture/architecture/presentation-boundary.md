@@ -171,7 +171,7 @@ the existing Kernel via `KernelSession` + `EnvelopeBuilder`. The UI never
 opens SQLite or talks to the network. The visible window is virtualized
 through `crates/chat-viewport` (`waited_on_producer=false`). The harness
 mirrors that same snapshot (selectable Markdown/image rows) and hosts a
-Gboard composer (IME send, draft save, keyboard inset animation). It is
+Gboard composer (IME send, **Send** button, draft save, keyboard inset animation). It is
 not a second chat and not the compositor `SurfaceView` paint path.
 Header/composer glass, Markdown `data-format`, sampleable image rows, and
 TalkBack roles live on the Dioxus tree. Rotate/recreation restores
@@ -182,7 +182,14 @@ The route mounts only when `com.neotavern.mobile.NEOTA_DIOXUS_SHELL=1`.
 Without the extra it stays off (`reason=flag_off`). Optional
 `NEOTA_SAFE_MODE=1` escapes to production `MainActivity` (WebView).
 Production `MainActivity`, default JNI, and WebView rollback are
-unchanged. Milestone C is **not PASS**. Chat workspace on flagged Dioxus
-Android remains **DEFERRED** in the compatibility matrix until
-owner-signed PARITY. Production cutover stays `NOT_STARTED` until C PASS
-and canary evidence.
+unchanged. Send round-trip uses Kernel `chats.get.messageCount` as the
+source of truth (not a local `+= 1`). IME action Send and a Send button
+both issue `chats.messages.create`; a failed `generation.start` must not
+drop an accepted durable row. Physical stamp `2026-08-18T21-55-58-696Z`
+is a preserved **`FAILED_ATTEMPT`**
+([milestone-c-adjudication.json](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/milestone-c-adjudication.json),
+[runbook](../rfc/milestone-c-physical-runbook.md)): live open passed,
+send did not persist. Milestone C is **STARTED**, not PASS. Chat
+workspace on flagged Dioxus Android remains **DEFERRED** in the
+compatibility matrix until owner-signed PARITY. Production cutover
+stays `NOT_STARTED` until C PASS and canary evidence.

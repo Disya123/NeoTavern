@@ -9,15 +9,19 @@ import android.text.TextWatcher
 import android.util.Log
 import android.view.Gravity
 import android.view.View
+import android.view.accessibility.AccessibilityNodeInfo
 import android.view.inputmethod.EditorInfo
+import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.core.view.AccessibilityDelegateCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsAnimationCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 
 /**
  * Debug harness around the live Product Wire chat route. Not a launcher.
@@ -32,13 +36,21 @@ class PresentationChatActivity : Activity() {
     private lateinit var viewport: TextView
     private lateinit var scroller: ScrollView
     private lateinit var composer: EditText
+    private lateinit var send: Button
     private var composerWatcher: TextWatcher? = null
     private var routeReady: Boolean = false
     private var prependInFlight: Boolean = false
+    private var imeLogged: Boolean = false
+    private val sendGate = PresentationChatSendGate()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
+        val restoredComposer = savedInstanceState?.getString(STATE_COMPOSER).orEmpty()
+        Log.i(
+            TAG,
+            "chat_restore saved=${savedInstanceState != null} composer_len=${restoredComposer.length} production_cutover=false",
+        )
 
         if (PresentationChatLaunch.isSafeMode(intent.getStringExtra(PresentationChatLaunch.EXTRA_SAFE_MODE))) {
             val line =
@@ -58,6 +70,7 @@ class PresentationChatActivity : Activity() {
         header.textSize = 16f
         header.setPadding(48, 48, 48, 16)
         header.contentDescription = "Chat header"
+        header.isFocusable = true
 
         viewport = TextView(this)
         viewport.id = View.generateViewId()
@@ -66,6 +79,7 @@ class PresentationChatActivity : Activity() {
         viewport.setTextIsSelectable(true)
         viewport.contentDescription = "Chat messages"
         viewport.accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+        viewport.isFocusable = true
 
         scroller = ScrollView(this)
         scroller.isFillViewport = true
@@ -93,11 +107,18 @@ class PresentationChatActivity : Activity() {
         composer.setRawInputType(InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES)
         composer.gravity = Gravity.TOP
         composer.minLines = 2
-        composer.setPadding(48, 24, 48, 48)
+        composer.setPadding(48, 24, 24, 48)
         savedInstanceState?.getString(STATE_COMPOSER)?.let { composer.setText(it) }
+
+        send = Button(this)
+        send.id = View.generateViewId()
+        send.text = "Send"
+        send.contentDescription = "Send"
+        send.isFocusable = true
 
         header.accessibilityTraversalBefore = viewport.id
         viewport.accessibilityTraversalBefore = composer.id
+        composer.accessibilityTraversalBefore = send.id
 
         val viewportParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
@@ -105,9 +126,19 @@ class PresentationChatActivity : Activity() {
             1f,
         )
         val composerParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
+            0,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            1f,
+        )
+        val sendParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
             LinearLayout.LayoutParams.WRAP_CONTENT,
         )
+        sendParams.gravity = Gravity.BOTTOM
+        val composerRow = LinearLayout(this)
+        composerRow.orientation = LinearLayout.HORIZONTAL
+        composerRow.addView(composer, composerParams)
+        composerRow.addView(send, sendParams)
         root.addView(
             header,
             LinearLayout.LayoutParams(
@@ -116,8 +147,16 @@ class PresentationChatActivity : Activity() {
             ),
         )
         root.addView(scroller, viewportParams)
-        root.addView(composer, composerParams)
+        root.addView(
+            composerRow,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ),
+        )
         setContentView(root)
+
+        bindViewportActions()
 
         header.setOnLongClickListener {
             retryGeneration()
@@ -141,6 +180,10 @@ class PresentationChatActivity : Activity() {
                 ): WindowInsetsCompat {
                     val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
                     val sys = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+                    if (ime.bottom > 0 && !imeLogged) {
+                        imeLogged = true
+                        Log.i(TAG, "chat_ime inset=${ime.bottom} production_cutover=false")
+                    }
                     root.setPadding(sys.left, sys.top, sys.right, ime.bottom.coerceAtLeast(sys.bottom))
                     return insets
                 }
@@ -155,6 +198,7 @@ class PresentationChatActivity : Activity() {
             header.text = "Chat"
             viewport.text = line.replace(' ', '\n')
             composer.isEnabled = false
+            send.isEnabled = false
             return
         }
 
@@ -235,6 +279,7 @@ class PresentationChatActivity : Activity() {
                 false
             }
         }
+        send.setOnClickListener { sendComposer(holder) }
         val watcher = object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
@@ -253,18 +298,53 @@ class PresentationChatActivity : Activity() {
     }
 
     private fun sendComposer(holder: KernelHolder) {
+        if (!routeReady) {
+            return
+        }
+        if (!sendGate.tryBegin()) {
+            Log.i(TAG, "chat_send coalesced in_flight=true production_cutover=false")
+            return
+        }
         val text = composer.text?.toString().orEmpty()
         holder.executor.execute {
             try {
-                PresentationChatNative.send(text)
+                val trace = PresentationChatNative.send(text)
+                Log.i(TAG, trace)
+                var snap = PresentationChatNative.snapshot()
+                var parsed = PresentationChatSnapshot.parse(snap)
+                var polls = 0
+                while (parsed?.streaming == true && polls < 40) {
+                    PresentationChatNative.pollStream(50)
+                    snap = PresentationChatNative.snapshot()
+                    parsed = PresentationChatSnapshot.parse(snap)
+                    polls += 1
+                }
+                val view = parsed
+                Log.i(TAG, view?.sendTraceLine() ?: "chat_send live_wire=true parse=false production_cutover=false")
+                runOnUiThread {
+                    bindSnapshot(snap, view, stickToBottom = true)
+                    view?.let { replaceComposerText(it.composer) }
+                    send.isEnabled = true
+                }
             } catch (err: Throwable) {
                 Log.e(TAG, "send failed", err)
-            }
-            runOnUiThread {
-                composer.text?.clear()
-                refreshFromRoute(holder)
+                runOnUiThread { send.isEnabled = true }
+            } finally {
+                sendGate.end()
             }
         }
+    }
+
+    private fun replaceComposerText(text: String) {
+        if (!::composer.isInitialized) {
+            return
+        }
+        composerWatcher?.let { composer.removeTextChangedListener(it) }
+        if (composer.text?.toString() != text) {
+            composer.setText(text)
+            composer.setSelection(text.length)
+        }
+        composerWatcher?.let { composer.addTextChangedListener(it) }
     }
 
     private fun retryGeneration() {
@@ -328,15 +408,62 @@ class PresentationChatActivity : Activity() {
     ) {
         if (snap == null) {
             viewport.text = raw.replace(' ', '\n')
+            Log.i(TAG, "chat_snapshot live_wire=false parse=false production_cutover=false")
             return
         }
         header.text = snap.headerText()
         header.contentDescription = "Chat header, ${snap.title}, ${snap.messageCount} messages"
         viewport.text = snap.rowsText()
         viewport.contentDescription = "Chat messages"
+        Log.i(
+            TAG,
+            "chat_snapshot live_wire=true messageCount=${snap.messageCount} kernelMessageCount=${snap.kernelMessageCount} pageLen=${snap.pageLen} visible=${snap.visible.size} sceneEpoch=${snap.sceneEpoch} sendAccepted=${snap.sendAccepted} streaming=${snap.streaming} error=${snap.error ?: "none"} production_cutover=false",
+        )
         if (stickToBottom) {
             scroller.post { scroller.fullScroll(View.FOCUS_DOWN) }
         }
+    }
+
+    private fun bindViewportActions() {
+        ViewCompat.setAccessibilityDelegate(
+            scroller,
+            object : AccessibilityDelegateCompat() {
+                override fun onInitializeAccessibilityNodeInfo(
+                    host: View,
+                    info: AccessibilityNodeInfoCompat,
+                ) {
+                    super.onInitializeAccessibilityNodeInfo(host, info)
+                    info.addAction(AccessibilityNodeInfoCompat.AccessibilityActionCompat.ACTION_SCROLL_FORWARD)
+                    info.addAction(AccessibilityNodeInfoCompat.AccessibilityActionCompat.ACTION_SCROLL_BACKWARD)
+                    info.addAction(AccessibilityNodeInfoCompat.AccessibilityActionCompat.ACTION_CLICK)
+                    info.isScrollable = true
+                    info.contentDescription = "Chat messages"
+                }
+
+                override fun performAccessibilityAction(
+                    host: View,
+                    action: Int,
+                    args: Bundle?,
+                ): Boolean {
+                    return when (action) {
+                        AccessibilityNodeInfo.ACTION_SCROLL_FORWARD -> {
+                            scroller.fullScroll(View.FOCUS_DOWN)
+                            true
+                        }
+                        AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD -> {
+                            prependOlder()
+                            scroller.fullScroll(View.FOCUS_UP)
+                            true
+                        }
+                        AccessibilityNodeInfo.ACTION_CLICK -> {
+                            scroller.fullScroll(View.FOCUS_DOWN)
+                            true
+                        }
+                        else -> super.performAccessibilityAction(host, action, args)
+                    }
+                }
+            },
+        )
     }
 
     private companion object {

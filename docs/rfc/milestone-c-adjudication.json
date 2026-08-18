@@ -1,0 +1,160 @@
+{
+  "schema": "milestone-c-adjudication/v1",
+  "milestone_c": "STARTED",
+  "journey_batch": "FAIL",
+  "almost_pass": false,
+  "production_cutover": "NOT_STARTED",
+  "canary": false,
+  "physical": true,
+  "admissible": true,
+  "serial": "8f5c2b7c",
+  "capture_stamp": "2026-08-18T21-55-58-696Z",
+  "apk_sha256": "d4061969f869a50309f991f6863c4d01abb4061bcb48f6972c197808fd3b2b51",
+  "source_commit": "c1bd3a953f2b601d86cbd137964fe5c39f4c129c",
+  "production_jni_untouched": true,
+  "reason": "send round-trip did not persist a Kernel messageCount",
+  "live_open": "PASS",
+  "send_round_trip": "FAIL",
+  "ten_k_physical": "NOT_RUN",
+  "gboard_environment": "READY",
+  "gboard_journey": "NOT_PROVEN",
+  "talkback_semantics": "PASS",
+  "talkback_journey": "NOT_PROVEN",
+  "checks": [
+    {
+      "id": "flag_off",
+      "ok": true,
+      "value": {
+        "journey": "flag_off",
+        "ok": true
+      }
+    },
+    {
+      "id": "live_open",
+      "ok": true,
+      "value": {
+        "journey": "live_open",
+        "ok": true,
+        "title": "Hazel",
+        "messageCount": 0
+      }
+    },
+    {
+      "id": "jni_mapped",
+      "ok": true,
+      "value": {
+        "journey": "jni_mapped",
+        "ok": false,
+        "pid": "32048",
+        "libs": []
+      }
+    },
+    {
+      "id": "launcher_untouched",
+      "ok": true,
+      "value": {
+        "journey": "launcher_untouched",
+        "ok": true,
+        "resolved": "com.neotavern.mobile/.MainActivity"
+      }
+    },
+    {
+      "id": "safe_mode",
+      "ok": true,
+      "value": {
+        "journey": "safe_mode",
+        "ok": true,
+        "resumed": "com.neotavern.mobile/.MainActivity"
+      }
+    },
+    {
+      "id": "a11y_semantics",
+      "ok": true,
+      "value": {
+        "journey": "a11y_semantics",
+        "ok": true
+      }
+    },
+    {
+      "id": "send",
+      "ok": false,
+      "value": {
+        "journey": "send",
+        "ok": false,
+        "tapped": true,
+        "after": {
+          "title": "Hazel",
+          "count": 0
+        }
+      }
+    },
+    {
+      "id": "rotate",
+      "ok": true,
+      "value": {
+        "journey": "rotate",
+        "ok": true,
+        "header": {
+          "title": "Hazel",
+          "count": 0
+        }
+      }
+    },
+    {
+      "id": "background",
+      "ok": true,
+      "value": {
+        "journey": "background",
+        "ok": true,
+        "header": {
+          "title": "Hazel",
+          "count": 0
+        }
+      }
+    },
+    {
+      "id": "ime",
+      "ok": true,
+      "value": {
+        "journey": "ime",
+        "ok": true,
+        "default_input_method": "com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME",
+        "gboard": true
+      }
+    },
+    {
+      "id": "production_cutover_false",
+      "ok": true,
+      "value": "NOT_STARTED"
+    },
+    {
+      "id": "canary_off",
+      "ok": true,
+      "value": false
+    },
+    {
+      "id": "serial",
+      "ok": true,
+      "value": "8f5c2b7c"
+    }
+  ],
+  "ten_k_messages": "HOST_PROVEN",
+  "compositor_surfaceview_chat": false,
+  "compatibility_matrix": "DEFERRED",
+  "failed_attempts": [
+    {
+      "stamp": "2026-08-18T21-55-58-696Z",
+      "outcome": "FAILED_ATTEMPT",
+      "send_round_trip": "FAIL",
+      "live_open": "PASS",
+      "ten_k_physical": "NOT_RUN",
+      "gboard_environment": "READY",
+      "gboard_journey": "NOT_PROVEN",
+      "talkback_semantics": "PASS",
+      "talkback_journey": "NOT_PROVEN",
+      "production_cutover": "NOT_STARTED",
+      "apk_sha256": "d4061969f869a50309f991f6863c4d01abb4061bcb48f6972c197808fd3b2b51",
+      "source_commit": "c1bd3a953f2b601d86cbd137964fe5c39f4c129c"
+    }
+  ]
+}

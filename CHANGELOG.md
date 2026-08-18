@@ -15,6 +15,27 @@
 
 ### Added
 
+- **Live Product Wire send round-trip (not cutover).** Composer IME
+  action and the Send button issue `chats.messages.create`. The header
+  `messageCount` is Kernel `chats.get`, not a local increment. In-flight
+  callbacks coalesce. A rejected create keeps the composer and shows
+  `ErrorDto`. A failed `generation.start` does not drop an accepted
+  durable row. Debug traces log ids/counts/epoch only. Stamp
+  `2026-08-18T21-55-58-696Z` stays a `FAILED_ATTEMPT` in
+  [`docs/rfc/milestone-c-adjudication.json`](docs/rfc/milestone-c-adjudication.json).
+  Production `MainActivity` / canary unchanged.
+
+- **Milestone C physical journey batch FAILED_ATTEMPT (not RFC C PASS, not cutover).**
+  Xiaomi `8f5c2b7c` stamp `2026-08-18T21-55-58-696Z` opened the live
+  Product Wire chat (Kernel chat `Hazel`) on debug
+  `PresentationChatActivity`, with flag-off, Gboard as default IME,
+  TalkBack semantics, rotate, background/resume, and `NEOTA_SAFE_MODE=1`
+  WebView escape. Send did not grow Kernel `messageCount`. 10k was not
+  run on device. Gboard composing and TalkBack focus/actions remain
+  unproven. Record:
+  [`docs/rfc/milestone-c-adjudication.json`](docs/rfc/milestone-c-adjudication.json).
+  Production `MainActivity` / canary unchanged.
+
 - **Live Product Wire Dioxus chat route (Milestone C, not cutover).**
   `crates/presentation-chat` binds history, streaming, send, retry,
   prepend, drafts, and errors to registered Product Wire operations.

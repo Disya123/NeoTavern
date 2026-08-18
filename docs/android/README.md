@@ -192,7 +192,12 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   it is not a second chat. Launch:
   `adb shell am start -n com.neotavern.mobile/.PresentationChatActivity --es com.neotavern.mobile.NEOTA_DIOXUS_SHELL 1`
   (`NEOTA_CHAT_ID` optional; `NEOTA_SAFE_MODE=1` escapes to WebView
-  `MainActivity`). Not the launcher, not production JNI, not cutover.
+  `MainActivity`). Send uses the IME action and a Send button; Kernel
+  `messageCount` is the source of truth. Physical stamp
+  `2026-08-18T21-55-58-696Z` is a preserved FAILED_ATTEMPT (send did not
+  persist). Re-run:
+  `node scripts/milestone-c-physical-capture.mjs --serial=8f5c2b7c`
+  ([runbook](../rfc/milestone-c-physical-runbook.md)).
   Kernel stays in `libneotavern_android_jni.so`.
   Raw input-to-present is not gated against one refresh; deadline miss is
   renderer-controlled present vs `targetPresentDeadline`.

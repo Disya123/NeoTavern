@@ -17,7 +17,7 @@ use neotavern_presentation_dioxus_shell::{dioxus_shell_from_flag, DioxusShellHos
 pub use error::ChatRouteError;
 pub use fake_wire::{FakeWire, DEMO_CHAT_ID};
 pub use session::{ChatRouteState, ChatSession};
-pub use wire::{ProductWire, StreamFrame, PAGE_LIMIT};
+pub use wire::{ProductWire, StreamFrame, WireCall, PAGE_LIMIT};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LiveChatReport {
@@ -81,7 +81,7 @@ pub fn start_flagged_session<W: ProductWire>(
                 header: true,
                 viewport: true,
                 composer: true,
-                wire_messages: session.state().messages.len(),
+                wire_messages: session.kernel_message_count(),
                 issued_commands: session.issued_commands().len(),
                 vdom_edits,
                 error_code: session
