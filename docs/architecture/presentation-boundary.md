@@ -71,9 +71,11 @@ golden (**IMPLEMENTED / GPU_PENDING**, not PASS). Chat virtualization lives
 in `crates/chat-viewport` (height index, predictor, bounded tile cache,
 geometry epochs / C0/C1 remap; compositor sees only the **active** tile
 descriptors and geometry snapshot). PERF-20 is **IMPLEMENTED** on the
-host corpus, not PASS (compositor integration and an Android high-velocity
-trace still required). The Blitz producer publishes `TextInteractionSnapshot`
+host corpus, not PASS. The Blitz producer publishes `TextInteractionSnapshot`
 from already-shaped Parley layouts (no compositor reshape). PERF-19 PASS
-still needs an Android selection/autoscroll capture. Neither crate is linked into
+still needs an Android selection/autoscroll capture. Viewport remap and
+selection now go through `crates/presentation-session` (one
+`FrameTransaction`, logical selection, `DeltaToken`). PERF-20 PASS still
+needs an Android high-velocity trace. Neither crate is linked into
 production JNI. Recovery and GPU telemetry are not started. Product
 cutover is not declared.

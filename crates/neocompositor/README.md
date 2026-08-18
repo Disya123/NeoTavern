@@ -71,7 +71,8 @@ production JNI renderer and **not** an Android cutover.
 - GPU telemetry and device-loss recovery are not started (required before
   B PASS, not this slice). Mailbox high-water counters are in-memory only.
 - Virtualization lives in `crates/chat-viewport`, not here (including
-  geometry epochs / C0/C1 remap). A gesture-platform adapter is **not**
+  geometry epochs / C0/C1 remap). Viewport↔compositor transactions live in
+  `crates/presentation-session`. A gesture-platform adapter is **not**
   in this crate yet.
 
 ## RFC §50 progress
@@ -94,6 +95,8 @@ Started (CPU types + tests):
 - cross-tile selection underlay (PERF-19 **IMPLEMENTED**, not PASS;
   Blitz producer snapshots land in this slice; Android selection/autoscroll
   capture still required)
+- viewport remap / selection transactions in `crates/presentation-session`
+  (PERF-19/20 host integration, not PASS, not production JNI)
 - PERF-18 effect-scope backdrop host golden (**IMPLEMENTED / GPU_PENDING**,
   not PASS; Android Vulkan capture still required)
 - M0-D1a pass-order corpus as a production regression (not a lab re-run)

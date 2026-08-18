@@ -1,0 +1,17 @@
+[package]
+name = "neotavern-presentation-session"
+version = "0.1.0"
+edition = "2021"
+description = "chat-viewport ↔ NeoCompositor session (remap + selection transactions, not Android cutover)"
+license = "AGPL-3.0"
+publish = false
+
+[lib]
+name = "neotavern_presentation_session"
+
+[dependencies]
+neotavern-chat-viewport = { path = "../chat-viewport" }
+neotavern-neocompositor = { path = "../neocompositor" }
+
+[dev-dependencies]
+neotavern-presentation-m0-d2 = { path = "../presentation-m0-d2" }

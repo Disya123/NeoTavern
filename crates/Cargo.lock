@@ -3259,6 +3259,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "neotavern-presentation-session"
+version = "0.1.0"
+dependencies = [
+ "neotavern-chat-viewport",
+ "neotavern-neocompositor",
+ "neotavern-presentation-m0-d2",
+]
+
+[[package]]
 name = "neotavern-storage"
 version = "0.1.0"
 dependencies = [

@@ -61,8 +61,9 @@
   may stay as bounded `GeometryDebt`. Fallback → full replacement does
   not mix epochs. Stale shadow commits are rejected; scroll ack and
   geometry correction share a `DeltaToken` so a delta is not applied
-  twice. PERF-20 PASS still needs compositor integration and an Android
-  high-velocity trace. Interaction-ready text is not in this change.
+  twice. PERF-20 PASS still needs an Android high-velocity trace (host
+  compositor integration now lives in `presentation-session`).
+  Interaction-ready text is not in this change.
   `MainActivity` / WebView rollback unchanged. PERF-18 stays
   **IMPLEMENTED / GPU_PENDING**.
 
@@ -108,6 +109,17 @@
   `glyph_rasters_during_drag=0`. PERF-19 remains **IMPLEMENTED**, not
   PASS. `MainActivity` / WebView rollback unchanged. Milestone B remains
   STARTED.
+
+- **Viewport remap and selection transactions (not PERF-19/20 PASS).**
+  `crates/presentation-session` connects `chat-viewport` to the compositor:
+  geometry remap, hit-test, semantics, text, and tiles switch in one
+  `FrameTransaction`. `DeltaToken` is applied once. The selection anchor is
+  a logical text position, so remap during drag/fling does not move the
+  highlight relative to the text. Deleting the selected message yields
+  `Cancel`. Autoscroll uses the existing `ScrollId` latch. Selection
+  damage stays underlay-only. PERF-19 and PERF-20 remain **IMPLEMENTED**,
+  not PASS. `MainActivity` / WebView rollback unchanged. Milestone B
+  remains STARTED.
 
 - **PERF-18 effect-scope backdrop host golden (IMPLEMENTED / GPU_PENDING,
   not PASS).** Canonical scene: parent backdrop root →

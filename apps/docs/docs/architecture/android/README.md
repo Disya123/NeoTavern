@@ -173,7 +173,8 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   `libneotavern_android_jni.so`. Chat virtualization
   is `crates/chat-viewport` (height index, predictor, tile cache, geometry
   epochs / C0/C1 remap; PERF-20 **IMPLEMENTED**, not PASS), not the
-  compositor crate.
+  compositor crate. Viewport↔compositor transactions live in
+  `crates/presentation-session` (not production JNI).
   `NEOTA_NEOCOMPOSITOR=1` is a non-default flag, not a cutover switch.
 
 ## Background execution (Phase 8)
