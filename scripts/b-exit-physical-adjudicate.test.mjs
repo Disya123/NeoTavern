@@ -28,6 +28,22 @@ describe('B-exit physical adjudicators', () => {
     expect(evaluatePerf15({ log, provenance: bound }).perf15).toBe('IMPLEMENTED');
   });
 
+  it('stamps PERF-15 PASS only for the reference VisualSurface ingress on a physical BOUND run', () => {
+    const log =
+      'perf15 visual_surface=present producer=reference-visual-surface surface_frame_ingress=true direct_display_list_injection=false plugin_runtime=false fling_items=10000 live_glass=true image_decode=true image_upload=true viewport_kept=true protected_kept=true lkg_kept=true oom_loops=0 blank_px=0 ran_on_android=true';
+    const result = evaluatePerf15({ log, provenance: bound });
+    expect(result.perf15).toBe('PASS');
+    expect(result.admissible).toBe(true);
+    expect(result.milestone_b).toBe('STARTED');
+    expect(result.almost_pass).toBe(false);
+  });
+
+  it('keeps PERF-15 IMPLEMENTED when visual_surface=present lacks the reference producer', () => {
+    const log =
+      'perf15 visual_surface=present producer=checkerboard fling_items=10000 live_glass=true image_decode=true image_upload=true viewport_kept=true protected_kept=true lkg_kept=true oom_loops=0 blank_px=0 ran_on_android=true';
+    expect(evaluatePerf15({ log, provenance: bound }).perf15).toBe('IMPLEMENTED');
+  });
+
   it('stamps PERF-22 independently of a blocked device-loss record', () => {
     const batch = adjudicateIndependent({
       perf15: { log: 'visual_surface=missing', provenance: bound },

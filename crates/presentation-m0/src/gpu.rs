@@ -128,8 +128,8 @@ struct GlassParams {
 }
 
 pub struct ProbeGpu {
-    device: wgpu::Device,
-    queue: wgpu::Queue,
+    pub(crate) device: wgpu::Device,
+    pub(crate) queue: wgpu::Queue,
     renderer: Renderer,
     accumulator: wgpu::Texture,
     vello_target: wgpu::Texture,
@@ -138,7 +138,7 @@ pub struct ProbeGpu {
     pre_moving: Option<wgpu::Texture>,
     blit_pipeline: wgpu::RenderPipeline,
     glass_pipeline: wgpu::RenderPipeline,
-    sampler: wgpu::Sampler,
+    pub(crate) sampler: wgpu::Sampler,
     params_buf: wgpu::Buffer,
     blit_bgl: wgpu::BindGroupLayout,
     glass_bgl: wgpu::BindGroupLayout,
@@ -171,9 +171,10 @@ pub struct ProbeGpu {
     compositor_texture_bytes: u64,
     label_mode: LabelMode,
     capture_at: Option<u64>,
-    shared: SharedGpuContext,
+    pub(crate) shared: SharedGpuContext,
     raster_backend: BoundBackend,
     compositor_backend: BoundBackend,
+    pub(crate) reference_vs: Option<crate::reference_visual_surface::ReferenceVsGpu>,
 }
 
 impl ProbeGpu {
@@ -539,6 +540,7 @@ impl ProbeGpu {
             shared,
             raster_backend,
             compositor_backend,
+            reference_vs: None,
         })
     }
 
@@ -596,6 +598,7 @@ impl ProbeGpu {
             self.shared.sample_tile(stale_handle),
             Err(SharedGpuError::StaleEpoch)
         );
+        self.reference_vs = None;
         self.raster_backend.epoch = new_epoch;
         self.compositor_backend.epoch = new_epoch;
         self.shared
@@ -1567,6 +1570,10 @@ impl ProbeGpu {
 
     pub fn shared_telemetry(&self) -> neotavern_neocompositor::InteropTelemetry {
         self.shared.telemetry()
+    }
+
+    pub fn shared_gpu(&self) -> &SharedGpuContext {
+        &self.shared
     }
 }
 

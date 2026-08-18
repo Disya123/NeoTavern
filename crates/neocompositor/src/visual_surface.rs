@@ -419,4 +419,15 @@ impl VisualSurfaceDeclare {
             policy: FallbackPolicy::OpaquePanel,
         }
     }
+
+    pub fn reference_pressure() -> Self {
+        Self {
+            wire_surface_id: crate::reference_visual_surface::WIRE_SURFACE_ID.into(),
+            generation: 1,
+            width: crate::reference_visual_surface::REFERENCE_SURFACE_WIDTH,
+            height: crate::reference_visual_surface::REFERENCE_SURFACE_HEIGHT,
+            sampleable: true,
+            policy: FallbackPolicy::OpaquePanel,
+        }
+    }
 }

@@ -18,6 +18,8 @@ pub mod display_list;
 #[cfg(feature = "gpu")]
 pub mod gpu;
 pub mod pass_graph;
+#[cfg(feature = "gpu")]
+mod reference_visual_surface;
 #[cfg(all(feature = "renderdoc-capture", target_os = "android"))]
 mod renderdoc_capture;
 // Optional `ash` is Android-only in this crate. Keep the dep used on host so

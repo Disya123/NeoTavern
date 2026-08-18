@@ -3,7 +3,8 @@
  * Independent host adjudicators for PERF-15, PERF-22, and device-loss.
  * Failure of one criterion never blocks writing the other two records.
  * None of these scripts stamp Milestone B PASS. PERF-15 cannot PASS without
- * a real VisualSurface path (`visual_surface=present`).
+ * a trusted reference VisualSurfaceFrameIngress (`visual_surface=present`,
+ * `producer=reference-visual-surface`). PluginVisualSurface is Milestone D.
  *
  *   node scripts/b-exit-physical-adjudicate.mjs
  *   node scripts/b-exit-physical-adjudicate.mjs --write
@@ -41,6 +42,10 @@ function allOk(checks) {
 export function evaluatePerf15({ log = '', platformLog = '', provenance = {} } = {}) {
   const checks = [
     flag(log, 'visual_surface', 'present'),
+    flag(log, 'producer', 'reference-visual-surface'),
+    flag(log, 'surface_frame_ingress', 'true'),
+    flag(log, 'direct_display_list_injection', 'false'),
+    flag(log, 'plugin_runtime', 'false'),
     flag(log, 'fling_items', '10000'),
     flag(log, 'live_glass', 'true'),
     flag(log, 'image_decode', 'true'),
@@ -52,30 +57,31 @@ export function evaluatePerf15({ log = '', platformLog = '', provenance = {} } =
     flag(log, 'blank_px', '0'),
   ];
   const visual = checks[0];
+  const ingressOk = checks.slice(0, 5).every((row) => row.ok);
   const physical =
     provenance.apk_linkage === 'BOUND' &&
     provenance.evidence_dirty === false &&
     /ran_on_android=true/u.test(log);
-  const otherOk = checks.slice(1).every((row) => row.ok);
+  const otherOk = checks.slice(5).every((row) => row.ok);
   let status = 'IMPLEMENTED';
-  if (visual.ok && otherOk && physical) status = 'PASS';
-  else if (!visual.ok) status = 'IMPLEMENTED';
+  if (ingressOk && otherOk && physical) status = 'PASS';
+  else if (!ingressOk) status = 'IMPLEMENTED';
   else if (!physical) status = 'IMPLEMENTED';
   else status = 'BLOCKED';
   return {
     schema: PERF15_SCHEMA,
     perf15: status,
     visual_surface: visual.value ?? 'missing',
-    physical: Boolean(physical && visual.ok),
+    physical: Boolean(physical && ingressOk),
     admissible: status === 'PASS',
     milestone_b: 'STARTED',
     almost_pass: false,
     production_cutover: 'NOT_STARTED',
-    reason: visual.ok
+    reason: ingressOk
       ? status === 'PASS'
-        ? 'physical pressure fixture with VisualSurface'
-        : 'VisualSurface present but other PERF-15 gates failed'
-      : 'PERF-15 stays IMPLEMENTED: no real VisualSurface path (not a synthetic substitute)',
+        ? 'physical pressure fixture with reference VisualSurfaceFrameIngress'
+        : 'VisualSurface ingress present but other PERF-15 gates failed'
+      : 'PERF-15 stays IMPLEMENTED until a trusted VisualSurfaceFrameIngress reference producer is captured (not PluginVisualSurface, not a synthetic texture)',
     checks,
     platform: Boolean(platformLog),
   };

@@ -69,8 +69,10 @@ production JNI renderer and **not** an Android cutover.
   `VisualSurfaceFrameIngress` (`visual_surface`) is a bounded
   latest-ready-frame-wins queue with shared-device validation; it is not
   Plugin SDK ([ADR-0050](../../docs/adr/0050-visual-surface-ingress-vs-plugin.md)).
-  PERF-15 stays **IMPLEMENTED** until the reference producer fixture is
-  captured
+  The trusted `reference-visual-surface` producer (deforming mesh, atlas,
+  alpha layers, bounded queue) is the PERF-15 live source and must not
+  inject `NeoDisplayList` ops. PERF-15 stays **IMPLEMENTED** until that
+  producer is recaptured on the physical pressure fixture
   ([`docs/rfc/perf-15-adjudication.json`](../../docs/rfc/perf-15-adjudication.json)).
 - Interaction-ready text snapshots (RFC §21.1): immutable
   `TextInteractionSnapshot` bound to `SceneEpoch`, generation-safe

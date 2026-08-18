@@ -5,7 +5,7 @@
     {
       "source": "README.md",
       "target": "README.md",
-      "sha256": "71b5ab12e72b6476f778f8ea8d20823f8c1066cdec8436147b6b59ec74ca25f9"
+      "sha256": "12f4aa1cb4a0ad413b7ee321e3a3ee16bd89678248c1d2d81c7b1ca7fa62cca9"
     },
     {
       "source": "adr/0004-typebox-contracts.md",
@@ -285,7 +285,7 @@
     {
       "source": "architecture/presentation-boundary.md",
       "target": "architecture/presentation-boundary.md",
-      "sha256": "534594e8c6ae8ef310218783510d90cc59fa6f1a57b0fd5f14b9a0d93aecd865"
+      "sha256": "77358ae1d040fbc477bafb660cd78d75e63a74e87b7fa6b10ff5cc73cec19cc7"
     },
     {
       "source": "architecture/prompt-pipeline.md",
@@ -365,12 +365,12 @@
     {
       "source": "rfc/README.md",
       "target": "rfc/README.md",
-      "sha256": "120413292e55432fc5fee1a51d72f8ad90e1618f502753710d65aafda67a6cf0"
+      "sha256": "164e8f4cd9331628432f84f7c4b4484329be0c24dc661f9bb202c23973868bc6"
     },
     {
       "source": "rfc/b-exit-physical-runbook.md",
       "target": "rfc/b-exit-physical-runbook.md",
-      "sha256": "c8a28ae233e54bd4e96edb7affb33c8fe41fc27fc1a6984bb024c366e8625091"
+      "sha256": "6479a0c3615af1ab7e1948fabdceb3e28e4e10246c028c99d7f63226df428d75"
     },
     {
       "source": "rfc/d1-d2-decision.md",

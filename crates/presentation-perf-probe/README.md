@@ -22,7 +22,7 @@ B-exit fixtures: [`perf-15-adjudication.json`](../../docs/rfc/perf-15-adjudicati
 | `perf19`                               | Cross-tile selection underlay + autoscroll; shape/layout/glyph raster stay 0 during drag                                                                                                  |
 | `perf20`                               | Multi-frame fling 10 000 px/s + exact `+350 px`; one `DeltaToken`; C0/C1 continuity                                                                                                       |
 | `interop`                              | Shared-device raster↔compositor path: `devices=1`, `image_readbacks=0`, `xdev=0`; raster texture sampled by compositor/glass. Host **PASS** on physical Vulkan (not B PASS, not cutover). |
-| `perf15`                               | 10k fling + live glass + decoded image upload + trim-memory. `visual_surface=missing` until a Product Wire VisualSurface exists. **IMPLEMENTED**, not PASS.                               |
+| `perf15`                               | 10k fling + live glass + decoded image upload + trim-memory + trusted `reference-visual-surface` through `VisualSurfaceFrameIngress`. Plugin runtime stays false. Physical recapture still required for **PASS**. |
 | `perf22` / poster / fullscreen / error | Capability compile before `compile_passes`. Debug `PresentationSurfaceActivity` hosts a real WebView + secure `SurfaceView`. Physical **PASS**.                                           |
 | `recovery`                             | Destroys and recreates the live wgpu device. Physical **PASS**. `recovery-surface` / `recovery-background` are separate and must not bump `DeviceEpoch`.                                  |
 

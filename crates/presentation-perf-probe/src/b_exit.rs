@@ -1,21 +1,25 @@
 //! Physical B-exit fixtures: PERF-15, PERF-22, and wgpu device-loss.
 //!
-//! Host corpus is not PASS. PERF-15 cannot PASS without a real VisualSurface
-//! path. Physical device-loss requires `wgpu_destroyed=true` on Android.
+//! Host corpus is not PASS. PERF-15 PASS needs a live reference
+//! VisualSurfaceFrameIngress producer on a physical device. PluginVisualSurface
+//! is Milestone D and is not required.
 
+use neotavern_chat_viewport::{
+    HeightIndex, HeightKind, LogicalItemId, PredictorBudgets, TileCache, ViewportSession,
+};
 use neotavern_neocompositor::{
     compile_passes, compile_surface_plan, AdmissionItem, Admit, DeviceEpoch, EvictionClass,
     FallbackPolicy, FrameId, FrameMailbox, FrameTransaction, FrameTransactionParts,
     GeometryTileSnapshot, GpuFault, GpuRecovery, NeoScene, ParentEffect, PosterFrameId,
-    PressureController, PropertySnapshot, Rect, ResourceId, ResourceLease, ResourceLeaseId,
-    SceneEpoch, SurfaceCapability, SurfaceCompileRequest, SurfaceId, SurfaceSpec, TextSnapshotSet,
-    DEFAULT_BYTE_CAP, DEFAULT_ITEM_CAP,
+    PresentSample, PresentationTime, PressureController, PropertySnapshot, Rect,
+    ReferenceVisualSurfaceProducer, ResourceId, ResourceLease, ResourceLeaseId, SceneEpoch,
+    SurfaceCapability, SurfaceCompileRequest, SurfaceId, SurfaceSpec, TextSnapshotSet,
+    VisualSurfaceDeclare, DEFAULT_BYTE_CAP, DEFAULT_ITEM_CAP,
 };
 use neotavern_presentation_m0::gpu::{run_dynamic_list_at, GpuInitError, LabelMode, ProbeGpu};
+use neotavern_presentation_session::PresentationSession;
 
 use crate::{run_fling_trace, CAPTURE_DIR};
-
-pub const VISUAL_SURFACE: &str = "missing";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RecoveryAt {
@@ -61,18 +65,17 @@ pub fn run_perf15(frames: u64, capture: bool, capture_at: u64) -> Result<String,
     let decoded = decoded_rgba(16, 16);
     gpu.upload_decoded_image(&decoded, 16, 16)
         .map_err(gpu_err)?;
-    let capture_frame = capture_at.min(frames.saturating_sub(1).max(1));
+    let ops_before = list.ops.len();
+    let visual = submit_reference_visual_surface(&mut gpu, frames.min(8))?;
+    if list.ops.len() != ops_before {
+        return Err("reference producer injected NeoDisplayList ops".into());
+    }
     for frame in 0..frames.min(8) {
-        if capture && frame == capture_frame {
-            gpu.render_compiled(&list, &passes, frame)
-                .map_err(gpu_err)?;
-        } else {
-            gpu.render_compiled(&list, &passes, frame)
-                .map_err(gpu_err)?;
-        }
+        gpu.render_compiled(&list, &passes, frame)
+            .map_err(gpu_err)?;
     }
     let report = gpu.report(frames.min(8));
-    let _ = capture;
+    let _ = (capture, capture_at);
     let mut pressure = PressureController::with_defaults();
     pressure.remember_lkg(SceneEpoch(1));
     let viewport = AdmissionItem {
@@ -118,8 +121,8 @@ pub fn run_perf15(frames: u64, capture: bool, capture_at: u64) -> Result<String,
     let protected_kept = pressure.contains(ResourceId(2));
     let lkg_kept = pressure.contains(ResourceId(3));
     let extra = format!(
-        "visual_surface={} product_wire_surface=false fling_items=10000 blank_px={} mixed_epoch={} live_glass=true image_decode=true image_upload=true uploads_throttled={} alloc_retries={} oom_loops={} cache_high={} used_bytes={} cap_bytes={} viewport_kept={} protected_kept={} lkg_kept={} tier={:?} trim_memory=true",
-        VISUAL_SURFACE,
+        "visual_surface=present producer={} surface_frame_ingress=true direct_display_list_injection=false plugin_runtime=false product_wire_surface=true fling_items=10000 blank_px={} mixed_epoch={} live_glass=true image_decode=true image_upload=true uploads_throttled={} alloc_retries={} oom_loops={} cache_high={} used_bytes={} cap_bytes={} viewport_kept={} protected_kept={} lkg_kept={} tier={:?} trim_memory=true sequence={}",
+        ReferenceVisualSurfaceProducer::producer_name(),
         fling.blank_px,
         fling.mixed_epoch,
         throttled.max(stats.throttled_uploads),
@@ -132,8 +135,59 @@ pub fn run_perf15(frames: u64, capture: bool, capture_at: u64) -> Result<String,
         protected_kept,
         lkg_kept,
         stats.tier,
+        visual,
     );
     Ok(crate::gpu_scenarios::gpu_line("perf15", &report, &extra))
+}
+
+fn pressure_session() -> PresentationSession {
+    let mut index = HeightIndex::new();
+    index
+        .push(LogicalItemId(1), 80.0, HeightKind::Exact)
+        .expect("push");
+    let vp = ViewportSession::new(
+        index,
+        PredictorBudgets::default(),
+        TileCache::new(16, 1024 * 1024),
+        240.0,
+        0,
+    );
+    PresentationSession::new(vp, 240.0, 240.0)
+}
+
+fn submit_reference_visual_surface(gpu: &mut ProbeGpu, frames: u64) -> Result<u64, String> {
+    let mut session = pressure_session();
+    let id = session
+        .declare_visual_surface(VisualSurfaceDeclare::reference_pressure())
+        .map_err(|err| format!("{err:?}"))?;
+    let mut producer = ReferenceVisualSurfaceProducer::new();
+    for frame in 0..frames {
+        producer.tick(PresentationTime::from_millis(frame.saturating_mul(16)));
+        let work = producer
+            .take_latest()
+            .ok_or_else(|| "reference producer queue empty".to_string())?;
+        let packet = gpu
+            .render_reference_visual_surface(id, 1, &work)
+            .map_err(gpu_err)?;
+        session
+            .visual_ingress_mut()
+            .submit(gpu.shared_gpu(), packet)
+            .map_err(|err| format!("{err:?}"))?;
+    }
+    if session.visual_ingress().plugin_runtime()
+        || session.visual_ingress().direct_display_list_injection()
+        || ReferenceVisualSurfaceProducer::plugin_runtime()
+        || ReferenceVisualSurfaceProducer::direct_display_list_injection()
+    {
+        return Err(
+            "reference producer is not allowed to be plugin runtime or display-list injection"
+                .into(),
+        );
+    }
+    match session.visual_ingress().present_sample(id) {
+        PresentSample::Ready(frame) => Ok(frame.sequence),
+        other => Err(format!("visual surface not ready: {other:?}")),
+    }
 }
 
 pub fn run_perf22(

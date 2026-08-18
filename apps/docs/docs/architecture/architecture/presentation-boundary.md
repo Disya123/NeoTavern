@@ -129,9 +129,9 @@ corpus (`crates/neocompositor` `pressure`) plus a physical probe fixture
 (10k fling + live glass + image decode/upload + injected trim-memory).
 PASS requires a trusted B-level `VisualSurfaceFrameIngress`
 (implemented in `crates/neocompositor` `visual_surface`, owned by
-`presentation-session`) and a live reference producer (not yet
-captured). `PluginVisualSurface` is Milestone D. A synthetic texture is
-not a substitute. D3 stays DEFERRED.
+`presentation-session`) and a live reference producer (implemented;
+physical recapture still pending). `PluginVisualSurface` is Milestone D.
+A synthetic texture is not a substitute. D3 stays DEFERRED.
 Physical device-loss injection is **PASS** (`wgpu_destroyed=true`,
 `wgpu_recreated=true`, `DeviceEpoch` bumps once; surface recreation and
 background/resume are separate and do not bump the epoch).

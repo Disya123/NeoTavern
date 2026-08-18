@@ -9,6 +9,12 @@
   stay off the wire. Late/not-ready frames do not block present.
   Recovery bumps generation. D3 / PluginVisualSurface stay deferred.
 
+- **Reference VisualSurface producer (PERF-15 fixture, not PASS).** A
+  trusted deforming textured mesh/rig with atlas and alpha layers submits
+  only through `VisualSurfaceFrameIngress`. Not D1b checkerboard, not a
+  synthetic fill, not Plugin SDK. PERF-15 stays **IMPLEMENTED** until
+  the physical pressure recapture.
+
 - **PERF-22 and physical device-loss PASS (not B PASS).** Independent
   Xiaomi / Vulkan stamps on a BOUND debug APK: PERF-22
   [perf-22-adjudication.json](docs/rfc/perf-22-adjudication.json)

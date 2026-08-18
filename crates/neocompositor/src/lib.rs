@@ -19,6 +19,7 @@ pub mod platform_input;
 pub mod pressure;
 pub mod property_tree;
 pub mod recovery;
+pub mod reference_visual_surface;
 pub mod scene;
 pub mod scroll;
 pub mod selection;
@@ -77,6 +78,12 @@ pub use property_tree::{
 pub use recovery::{
     CallbackReject, DegradedReason, GpuCallback, GpuFault, GpuHandle, GpuHandleKind, GpuRecovery,
     RecoveryError, RecoveryOutcome, RecoveryPhase, SubmitReject, DEFAULT_RECOVERY_ATTEMPT_CAP,
+};
+pub use reference_visual_surface::{
+    atlas_is_checkerboard, ReferenceLayer, ReferenceSurfaceWork, ReferenceVertex,
+    ReferenceVisualSurfaceProducer, ATLAS_SIZE, LAYER_COUNT, PRODUCER_QUEUE_CAP,
+    REFERENCE_SURFACE_HEIGHT, REFERENCE_SURFACE_WIDTH, REFERENCE_VISUAL_SURFACE_PRODUCER,
+    WIRE_SURFACE_ID,
 };
 pub use scene::{GlassSurface, NeoScene};
 pub use scroll::{

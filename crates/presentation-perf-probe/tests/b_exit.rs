@@ -1,7 +1,7 @@
 //! Host fixtures for PERF-15 / PERF-22 / physical device-loss.
 //!
-//! None of these tests stamp PASS. PERF-15 stays IMPLEMENTED without a real
-//! VisualSurface path. CPU `on_device_lost` is not physical wgpu destroy.
+//! None of these tests stamp PASS. PERF-15 host evidence can show a live
+//! reference VisualSurfaceFrameIngress; PluginVisualSurface stays Milestone D.
 
 use neotavern_presentation_perf_probe::Scenario;
 
@@ -21,16 +21,23 @@ fn parses_b_exit_scenario_names() {
 
 #[cfg(feature = "gpu")]
 #[test]
-fn perf15_host_run_refuses_visual_surface_and_skips_without_adapter() {
+fn perf15_host_run_uses_reference_visual_surface_or_skips_without_adapter() {
     match neotavern_presentation_perf_probe::run_scenario(Scenario::Perf15, 8, -1) {
         Ok(line) => {
             assert!(line.contains("perf15"), "{line}");
-            assert!(line.contains("visual_surface=missing"), "{line}");
-            assert!(line.contains("product_wire_surface=false"), "{line}");
+            assert!(line.contains("visual_surface=present"), "{line}");
+            assert!(line.contains("producer=reference-visual-surface"), "{line}");
+            assert!(line.contains("surface_frame_ingress=true"), "{line}");
+            assert!(
+                line.contains("direct_display_list_injection=false"),
+                "{line}"
+            );
+            assert!(line.contains("plugin_runtime=false"), "{line}");
+            assert!(line.contains("product_wire_surface=true"), "{line}");
             assert!(line.contains("fling_items=10000"), "{line}");
             assert!(line.contains("live_glass=true"), "{line}");
             assert!(line.contains("image_decode=true"), "{line}");
-            assert!(!line.contains("visual_surface=present"), "{line}");
+            assert!(!line.contains("visual_surface=missing"), "{line}");
         }
         Err(err) => {
             assert!(
