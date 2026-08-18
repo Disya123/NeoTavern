@@ -1,0 +1,455 @@
+{
+  "schema": "perf-18-20-adjudication/v1",
+  "perf18": "PASS",
+  "perf19": "PASS",
+  "perf20": "PASS",
+  "milestone_b": "STARTED",
+  "almost_pass": false,
+  "apk_linkage": "BOUND",
+  "evidence_dirty": false,
+  "checks": {
+    "perf18": {
+      "status": "PASS",
+      "ok": true,
+      "checks": [
+        {
+          "id": "vulkan",
+          "ok": true,
+          "api": {
+            "ok": true,
+            "api": "Vulkan",
+            "status": "VULKAN",
+            "admissible": true,
+            "driver": "Vulkan",
+            "vulkan_commands": true,
+            "reason": "RenderDoc dump contains Vulkan commands"
+          }
+        },
+        {
+          "id": "label:perf18-effect-opacity",
+          "ok": true,
+          "reason": "present"
+        },
+        {
+          "id": "label:perf18-transform",
+          "ok": true,
+          "reason": "present"
+        },
+        {
+          "id": "label:perf18-rounded-clip",
+          "ok": true,
+          "reason": "present"
+        },
+        {
+          "id": "label:perf18-backdrop-barrier",
+          "ok": true,
+          "reason": "present"
+        },
+        {
+          "id": "label:perf18-glass",
+          "ok": true,
+          "reason": "present"
+        },
+        {
+          "id": "label:perf18-group-target",
+          "ok": true,
+          "reason": "present"
+        },
+        {
+          "id": "no_readback_xdev",
+          "ok": true,
+          "forbidden": []
+        },
+        {
+          "id": "bounded_group_target_roi",
+          "ok": true,
+          "copies": 1,
+          "fullscreen": false,
+          "bounded": true
+        },
+        {
+          "id": "ancestor_effect_order",
+          "ok": true,
+          "order": {
+            "ok": true,
+            "opacity": 3,
+            "transform": 4,
+            "rounded": 5,
+            "group": 6,
+            "barrier": 13,
+            "glass": 14
+          }
+        },
+        {
+          "id": "counters",
+          "ok": true,
+          "devices": 1,
+          "readbacks": 0,
+          "xdev": 0
+        },
+        {
+          "id": "provenance",
+          "ok": true,
+          "provenance": {
+            "apk_linkage": "BOUND",
+            "evidence_dirty": false
+          }
+        },
+        {
+          "id": "glass_in_effect_scope",
+          "ok": true,
+          "values": {
+            "gpu_ran": "true",
+            "adapter": "Adreno_(TM)_710",
+            "backend": "Vulkan",
+            "software": "false",
+            "devices": "1",
+            "readbacks": "0",
+            "xdev": "0",
+            "pass_compiles": "1",
+            "layout_rebuilds": "0",
+            "paint_scene_rebuilds": "0",
+            "vello_rebuilds": "64",
+            "raster": "64",
+            "glass": "16",
+            "frames": "16",
+            "ran_on_android": "true",
+            "capture": "false",
+            "capture_polls": "1",
+            "render_polls": "0",
+            "acc_bytes": "20998144",
+            "glass_in_opacity": "true",
+            "roi": "95x185+220x70",
+            "labels": "perf18-effect-opacity,perf18-transform,perf18-rounded-clip,perf18-backdrop-barrier,perf18-glass,perf18-group-target"
+          }
+        }
+      ],
+      "reason": "Vulkan effect-scope capture"
+    },
+    "perf19": {
+      "status": "PASS",
+      "ok": true,
+      "checks": [
+        {
+          "id": "vulkan",
+          "ok": true,
+          "api": {
+            "ok": true,
+            "api": "Vulkan",
+            "status": "VULKAN",
+            "admissible": true,
+            "driver": "Vulkan",
+            "vulkan_commands": true,
+            "reason": "RenderDoc dump contains Vulkan commands"
+          }
+        },
+        {
+          "id": "selection_not_in_bg_or_glyph",
+          "ok": true,
+          "labels": [
+            "m0-d1a-clear-acc",
+            "perf19-background",
+            "m0-d1a-blit-pass",
+            "m0-d1a-blit-pass",
+            "perf19-selection-underlay",
+            "perf19-selection-underlay",
+            "perf19-glyphs",
+            "m0-d1a-blit-pass",
+            "m0-d1a-blit-pass",
+            "perf19-glyphs",
+            "m0-d1a-blit-pass",
+            "m0-d1a-blit-pass"
+          ]
+        },
+        {
+          "id": "drag_counters",
+          "ok": true,
+          "values": {
+            "gpu_ran": "true",
+            "adapter": "Adreno_(TM)_710",
+            "backend": "Vulkan",
+            "software": "false",
+            "devices": "1",
+            "readbacks": "0",
+            "xdev": "0",
+            "pass_compiles": "1",
+            "layout_rebuilds": "0",
+            "paint_scene_rebuilds": "0",
+            "vello_rebuilds": "48",
+            "raster": "SelectionOnly",
+            "glass": "0",
+            "frames": "16",
+            "ran_on_android": "true",
+            "capture": "false",
+            "capture_polls": "1",
+            "render_polls": "0",
+            "acc_bytes": "722944",
+            "tiles": "3",
+            "glass_roi": "11",
+            "autoscroll": "true",
+            "shape_calls_after_commit": "0",
+            "layout_rebuilds_during_drag": "0",
+            "glyph_rasters_during_drag": "0",
+            "producer_shape": "1",
+            "producer_layout": "1",
+            "producer_glyph": "1"
+          }
+        },
+        {
+          "id": "tiles",
+          "ok": true,
+          "tiles": 3
+        },
+        {
+          "id": "autoscroll_and_glass_roi",
+          "ok": true,
+          "values": {
+            "gpu_ran": "true",
+            "adapter": "Adreno_(TM)_710",
+            "backend": "Vulkan",
+            "software": "false",
+            "devices": "1",
+            "readbacks": "0",
+            "xdev": "0",
+            "pass_compiles": "1",
+            "layout_rebuilds": "0",
+            "paint_scene_rebuilds": "0",
+            "vello_rebuilds": "48",
+            "raster": "SelectionOnly",
+            "glass": "0",
+            "frames": "16",
+            "ran_on_android": "true",
+            "capture": "false",
+            "capture_polls": "1",
+            "render_polls": "0",
+            "acc_bytes": "722944",
+            "tiles": "3",
+            "glass_roi": "11",
+            "autoscroll": "true",
+            "shape_calls_after_commit": "0",
+            "layout_rebuilds_during_drag": "0",
+            "glyph_rasters_during_drag": "0",
+            "producer_shape": "1",
+            "producer_layout": "1",
+            "producer_glyph": "1"
+          }
+        },
+        {
+          "id": "counters",
+          "ok": true,
+          "values": {
+            "gpu_ran": "true",
+            "adapter": "Adreno_(TM)_710",
+            "backend": "Vulkan",
+            "software": "false",
+            "devices": "1",
+            "readbacks": "0",
+            "xdev": "0",
+            "pass_compiles": "1",
+            "layout_rebuilds": "0",
+            "paint_scene_rebuilds": "0",
+            "vello_rebuilds": "48",
+            "raster": "SelectionOnly",
+            "glass": "0",
+            "frames": "16",
+            "ran_on_android": "true",
+            "capture": "false",
+            "capture_polls": "1",
+            "render_polls": "0",
+            "acc_bytes": "722944",
+            "tiles": "3",
+            "glass_roi": "11",
+            "autoscroll": "true",
+            "shape_calls_after_commit": "0",
+            "layout_rebuilds_during_drag": "0",
+            "glyph_rasters_during_drag": "0",
+            "producer_shape": "1",
+            "producer_layout": "1",
+            "producer_glyph": "1"
+          }
+        },
+        {
+          "id": "no_readback_xdev_xml",
+          "ok": true,
+          "forbidden": []
+        },
+        {
+          "id": "provenance",
+          "ok": true,
+          "provenance": {
+            "apk_linkage": "BOUND",
+            "evidence_dirty": false
+          }
+        }
+      ],
+      "reason": "selection underlay capture"
+    },
+    "perf20": {
+      "status": "PASS",
+      "ok": true,
+      "checks": [
+        {
+          "id": "frame_fields",
+          "ok": true
+        },
+        {
+          "id": "one_delta_token_commit",
+          "ok": true,
+          "commits": 1,
+          "commit": {
+            "token": 1,
+            "velocity_before": 10000,
+            "velocity_after": 10000,
+            "anchor_before": 0,
+            "anchor_after": 2.2737367544323206e-13,
+            "hard_clamp": false,
+            "applied": true,
+            "deferred": false,
+            "exact_delta": 350,
+            "fling_px_s": 10000
+          }
+        },
+        {
+          "id": "exact_plus_350_fling",
+          "ok": true,
+          "commit": {
+            "token": 1,
+            "velocity_before": 10000,
+            "velocity_after": 10000,
+            "anchor_before": 0,
+            "anchor_after": 2.2737367544323206e-13,
+            "hard_clamp": false,
+            "applied": true,
+            "deferred": false,
+            "exact_delta": 350,
+            "fling_px_s": 10000
+          }
+        },
+        {
+          "id": "c0_anchor",
+          "ok": true,
+          "commit": {
+            "token": 1,
+            "velocity_before": 10000,
+            "velocity_after": 10000,
+            "anchor_before": 0,
+            "anchor_after": 2.2737367544323206e-13,
+            "hard_clamp": false,
+            "applied": true,
+            "deferred": false,
+            "exact_delta": 350,
+            "fling_px_s": 10000
+          }
+        },
+        {
+          "id": "c1_velocity",
+          "ok": true
+        },
+        {
+          "id": "no_blank_or_mixed_epoch",
+          "ok": true
+        },
+        {
+          "id": "no_shape_layout_raster",
+          "ok": true
+        },
+        {
+          "id": "delta_token_not_double_applied",
+          "ok": true,
+          "tokens": [
+            1,
+            2
+          ]
+        },
+        {
+          "id": "counters",
+          "ok": true,
+          "values": {
+            "gpu_ran": "true",
+            "adapter": "Adreno_(TM)_710",
+            "backend": "Vulkan",
+            "software": "false",
+            "devices": "1",
+            "readbacks": "0",
+            "xdev": "0",
+            "pass_compiles": "1",
+            "layout_rebuilds": "0",
+            "paint_scene_rebuilds": "0",
+            "vello_rebuilds": "32",
+            "raster": "32",
+            "glass": "8",
+            "frames": "8",
+            "ran_on_android": "true",
+            "capture": "false",
+            "capture_polls": "1",
+            "render_polls": "0",
+            "acc_bytes": "20998144",
+            "velocity_continuous": "true",
+            "mixed_epoch": "false",
+            "blank_px": "0",
+            "commit_frame": "24",
+            "applied_token": "1",
+            "applied": "true",
+            "deferred": "false",
+            "hard_clamp": "false",
+            "fling_px_s": "10000",
+            "exact_delta": "350",
+            "frames_logged": "48"
+          }
+        },
+        {
+          "id": "vulkan",
+          "ok": true,
+          "api": {
+            "ok": true,
+            "api": "Vulkan",
+            "status": "VULKAN",
+            "admissible": true,
+            "driver": "Vulkan",
+            "vulkan_commands": true,
+            "reason": "RenderDoc dump contains Vulkan commands"
+          }
+        },
+        {
+          "id": "no_readback_xdev_xml",
+          "ok": true,
+          "forbidden": []
+        },
+        {
+          "id": "provenance",
+          "ok": true,
+          "provenance": {
+            "apk_linkage": "BOUND",
+            "evidence_dirty": false
+          }
+        }
+      ],
+      "frames": 48,
+      "commit": {
+        "token": 1,
+        "velocity_before": 10000,
+        "velocity_after": 10000,
+        "anchor_before": 0,
+        "anchor_after": 2.2737367544323206e-13,
+        "hard_clamp": false,
+        "applied": true,
+        "deferred": false,
+        "exact_delta": 350,
+        "fling_px_s": 10000
+      },
+      "reason": "multi-frame fling trace"
+    }
+  },
+  "captures": {
+    "perf18": "2026-08-18T11-12-42-464Z",
+    "perf19": "2026-08-18T11-13-59-218Z",
+    "perf20": "2026-08-18T11-15-46-856Z"
+  },
+  "apk": {
+    "path": "apps/android/app/build/outputs/apk/debug/app-debug.apk",
+    "present": true,
+    "sha256": "a5a0217dbd5dd201af04e99c8bc0af94896c3c6c377bd28a6143774d537cacc2",
+    "bytes": 137828751
+  },
+  "package": "com.neotavern.mobile"
+}

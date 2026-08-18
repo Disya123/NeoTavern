@@ -1,8 +1,9 @@
 # presentation-perf-probe (`neotavern-presentation-perf-probe`)
 
 Debug-only Android probe for PERF-18/19/20. **Not** production JNI, **not**
-`MainActivity`, **not** Milestone B PASS. The probe logs evidence; only the
-host adjudicator may stamp `PASS` or `BLOCKED` per criterion.
+`MainActivity`, **not** Milestone B PASS. Host stamps live in
+[`docs/rfc/perf-18-20-adjudication.json`](../../docs/rfc/perf-18-20-adjudication.json)
+(`PERF-18=PASS`, `PERF-19=PASS`, `PERF-20=PASS`, `Milestone B=STARTED`).
 
 ## Scenarios
 

@@ -40,9 +40,9 @@ bounded preparation queue, tile cache, and geometry epochs. It is **not**
 - Not linked into `libneotavern_android_jni.so`.
 - Not a place for generic compositor types (those stay in
   `neotavern-neocompositor`).
-- PERF-20 is **IMPLEMENTED** on the host corpus, not PASS. Final PASS
-  still needs an Android high-velocity trace. Compositor integration lives
-  in `crates/presentation-session`, not here.
+- PERF-20 is **PASS** on the physical Vulkan multi-frame trace, not
+  Milestone B PASS. Compositor integration lives in
+  `crates/presentation-session`, not here.
 - Interaction-ready text and cross-tile selection stay in
   `neocompositor` / `presentation-session`.
 

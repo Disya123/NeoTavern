@@ -1,8 +1,7 @@
 //! Canonical PERF-18 effect-scope scene (host golden + Android GPU probe).
 //!
-//! Status of the CPU corpus: **IMPLEMENTED / GPU_PENDING** until the host
-//! adjudicator records a physical Vulkan capture. This module is not
-//! production JNI.
+//! Host stamp: **PASS** in `docs/rfc/perf-18-20-adjudication.json`.
+//! Milestone B remains STARTED. This module is not production JNI.
 
 use std::sync::Arc;
 

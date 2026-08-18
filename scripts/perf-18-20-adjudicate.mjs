@@ -405,12 +405,18 @@ function main() {
           ? bundle.evidence_dirty === true
           : true,
   };
+  const stamps = {
+    perf18: argValue('perf18-stamp'),
+    perf19: argValue('perf19-stamp'),
+    perf20: argValue('perf20-stamp'),
+  };
   const record = adjudicate({
     provenance,
-    perf18: { ...loadScenario(argValue('perf18-stamp'), 'perf18'), provenance },
-    perf19: { ...loadScenario(argValue('perf19-stamp'), 'perf19'), provenance },
-    perf20: { ...loadScenario(argValue('perf20-stamp'), 'perf20'), provenance },
+    perf18: { ...loadScenario(stamps.perf18, 'perf18'), provenance },
+    perf19: { ...loadScenario(stamps.perf19, 'perf19'), provenance },
+    perf20: { ...loadScenario(stamps.perf20, 'perf20'), provenance },
   });
+  record.captures = stamps;
   record.apk = hashIfPresent(DEFAULT_APK);
   record.package = PACKAGE;
   process.stdout.write(`${JSON.stringify(record, null, 2)}\n`);

@@ -27,8 +27,9 @@ Android cutover.
 
 - Not linked into `libneotavern_android_jni.so`.
 - Not a place to dump compositor types into `chat-viewport`.
-- PERF-19 and PERF-20 remain **IMPLEMENTED**, not PASS. Android capture
-  and host-side adjudication are still required.
+- PERF-19 and PERF-20 are **PASS** on physical Vulkan (independent host
+  stamps), not Milestone B PASS. See
+  [`docs/rfc/perf-18-20-adjudication.json`](../../docs/rfc/perf-18-20-adjudication.json).
 
 ## Commands
 

@@ -3,7 +3,7 @@
 Milestone B **STARTED** (not PASS): production types, a bounded
 `FrameTransaction` mailbox, property trees, CPU scroll/animation fast
 paths, async hit-test / nested-scroll dispatch, and a PERF-18 effect-scope
-host golden (**IMPLEMENTED / GPU_PENDING**, not PASS). This is **not** a
+capture (**PASS** on physical Vulkan, not B PASS). This is **not** a
 production JNI renderer and **not** an Android cutover.
 
 ## What this crate is
@@ -41,7 +41,8 @@ production JNI renderer and **not** an Android cutover.
   A fragment may span many tiles. Text, geometry, and property snapshots
   switch atomically on `FrameTransaction`. Stale/recycled fragments cancel
   instead of selecting another message.
-- Cross-tile selection underlay (PERF-19 **IMPLEMENTED**, not PASS):
+- Cross-tile selection underlay (PERF-19 **PASS** on physical Vulkan, not
+  B PASS):
   `SelectionPaintOp` sits between the box/background chunk and transparent
   glyph/emoji chunks. Highlight is not baked into background or glyph
   tiles. Drag is `SELECTION_ONLY`: bounded damage, no shaping/layout, no
@@ -51,16 +52,14 @@ production JNI renderer and **not** an Android cutover.
   subsequent glass invalidates the dependent glass ROI. Handles/caret use
   the same property snapshot and async scroll state; autoscroll nudges an
   existing `ScrollId`. A fallback tile without an interaction snapshot is
-  not a text target. This is **not** PERF-19 PASS (Android
-  selection/autoscroll capture still required). The Blitz producer now
-  publishes real snapshots via `PaintScene::host_text_fragment`; IME
-  composition uses separate underlay ops without glyph-tile redraw.
-- Effect-scope backdrop host golden (PERF-18 **IMPLEMENTED / GPU_PENDING**):
+  not a text target. The Blitz producer publishes snapshots via
+  `PaintScene::host_text_fragment`; IME composition uses separate underlay
+  ops without glyph-tile redraw.
+- Effect-scope backdrop (PERF-18 **PASS** on physical Vulkan, not B PASS):
   ancestor opacity/filter/mask wrap prefix, glass, and foreground as one
   group; backdrop is sampled at the barrier from the parent root; group
   targets and glass ROI stay bounded; nested glass stays acyclic; malformed
-  scopes are rejected before present and keep last-known-good. This is
-  **not** PERF-18 PASS (Android Vulkan capture still required).
+  scopes are rejected before present and keep last-known-good.
 
 ## What this crate is not
 
@@ -92,13 +91,12 @@ Started (CPU types + tests):
   capture/cancel; no Dioxus round trip)
 - interaction-ready text snapshots (immutable, producer-shaped, atomic
   with geometry + property snapshots)
-- cross-tile selection underlay (PERF-19 **IMPLEMENTED**, not PASS;
-  Blitz producer snapshots land in this slice; Android selection/autoscroll
-  capture still required)
+- cross-tile selection underlay (PERF-19 **PASS** on physical Vulkan, not
+  B PASS; Blitz producer snapshots)
 - viewport remap / selection transactions in `crates/presentation-session`
-  (PERF-19/20 host integration, not PASS, not production JNI)
-- PERF-18 effect-scope backdrop host golden (**IMPLEMENTED / GPU_PENDING**,
-  not PASS; Android Vulkan capture still required)
+  (PERF-19/20 host integration; criteria PASS on physical Vulkan; not
+  production JNI)
+- PERF-18 effect-scope backdrop (**PASS** on physical Vulkan, not B PASS)
 - M0-D1a pass-order corpus as a production regression (not a lab re-run)
 
 Not started (do not treat as done):
@@ -107,9 +105,8 @@ Not started (do not treat as done):
 - GPU device/surface recovery
 - shared-device raster interop in this crate (still in the M0 probe)
 - GPU timing telemetry
-- PERF-01…PERF-22 PASS and 120 Hz product budgets (PERF-18 remains
-  **IMPLEMENTED / GPU_PENDING**; PERF-19 and PERF-20 host corpora are
-  **IMPLEMENTED**, not PASS)
+- remaining PERF-01…PERF-22 and 120 Hz product budgets (PERF-18/19/20
+  are independently PASS; Milestone B stays STARTED)
 
 See [presentation boundary](../../docs/architecture/presentation-boundary.md)
 and [ADR-0049](../../docs/adr/0049-track-d-dioxus-presentation.md).

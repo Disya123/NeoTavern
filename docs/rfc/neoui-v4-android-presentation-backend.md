@@ -3386,6 +3386,9 @@ backdrop damage, frontmost hit, clip, pointer capture и отсутствие cl
 
 ## PERF-18 — effect scope split
 
+**Host stamp:** `PASS` in [perf-18-20-adjudication.json](perf-18-20-adjudication.json).
+Milestone B remains STARTED.
+
 ```text
 opacity group
 → transformed/rounded clip Card
@@ -3402,6 +3405,9 @@ conditional mask/blend и nested glass.
 
 ## PERF-19 — cross-tile selection
 
+**Host stamp:** `PASS` in [perf-18-20-adjudication.json](perf-18-20-adjudication.json).
+Milestone B remains STARTED.
+
 Long selectable message пересекает минимум три tiles и содержит bidi text,
 ligatures, underline/strike, syntax colors и color emoji. Long press + drag +
 selection autoscroll не запускают shaping/layout и не создают seams либо
@@ -3409,6 +3415,10 @@ blend-color artifacts. Selection handles остаются правильными
 и tile replacement.
 
 ## PERF-20 — geometry remap during fling
+
+**Host stamp:** `PASS` in [perf-18-20-adjudication.json](perf-18-20-adjudication.json)
+(multi-frame `perf20-frame` trace, not a single RenderDoc snapshot).
+Milestone B remains STARTED.
 
 На 10 000 px/s fallback item перед/внутри/после viewport меняет height минимум
 на 350 px после Markdown/image metadata resolution. Проверяются:

@@ -1,8 +1,8 @@
 //! PERF-18 host golden: effect-scope / backdrop conformance.
 //!
-//! Status: **IMPLEMENTED / GPU_PENDING**. This corpus locks the CPU pass
-//! graph, resource topology, and last-known-good reject path. It is **not**
-//! PERF-18 PASS: RFC still requires an Android Vulkan capture.
+//! CPU corpus plus physical Vulkan stamp **PASS** in
+//! `docs/rfc/perf-18-20-adjudication.json`. Milestone B remains STARTED.
+//! This is not production JNI.
 
 use neotavern_neocompositor::{
     compile_passes, AffineCoeffs, BackdropRootId, BarrierId, ClipChainId, ClipNode, CompiledPass,

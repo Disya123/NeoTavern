@@ -128,15 +128,13 @@
   STARTED even if all three pass. `MainActivity` / WebView rollback
   unchanged.
 
-- **PERF-18 glass ROI uses world-space clip (not PASS).**
-  `resolved_glass_roi` transforms local clip rects by the owning spatial
-  node before intersecting the already-world glass ROI. A local card clip
-  no longer empties a transformed barrier, so the probe can emit a bounded
-  `copy_texture_to_texture` inside the opacity/transform/rounded-clip
-  debug groups. The host adjudicator requires at least one non-fullscreen
-  `vkCmdCopyImage`. Physical Vulkan recapture is still required. `glass_passes`
-  increments only after a real copy. `MainActivity` / WebView rollback
-  unchanged. Milestone B remains STARTED.
+- **Android PERF-18/19/20 host adjudication (independent PASS, Milestone B STARTED).**
+  Physical Xiaomi / Vulkan evidence in
+  [perf-18-20-adjudication.json](docs/rfc/perf-18-20-adjudication.json):
+  `PERF-18=PASS`, `PERF-19=PASS`, `PERF-20=PASS`, `almost_pass=false`.
+  Milestone B remains STARTED (device/surface recovery, GPU telemetry,
+  bounded queue/thermal/120 Hz, remaining PERF-01..22). Not a production
+  cutover. `MainActivity` / WebView rollback unchanged.
 
 - **PERF-18 effect-scope backdrop host golden (IMPLEMENTED / GPU_PENDING,
   not PASS).** Canonical scene: parent backdrop root →

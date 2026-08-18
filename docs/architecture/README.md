@@ -79,19 +79,19 @@ crates/
                        # (opaque handles, bounded buffers, status codes)
   chat-viewport/       # Height index, range predictor, bounded tile cache,
                        # geometry epochs / fling-continuous remap (PERF-20
-                       # IMPLEMENTED, not PASS). Compositor sees only the
-                       # active snapshot. Not production JNI.
+                       # criterion PASS on physical Vulkan; not B PASS).
+                       # Compositor sees only the active snapshot. Not
+                       # production JNI.
   neocompositor/       # Milestone B STARTED: NeoDisplayList, pass graph,
                        # bounded FrameTransaction mailbox, spatial/scroll/
                        # clip/effect property trees, CPU scroll/animation
                        # fast paths, async hit-test / nested-scroll
-                       # dispatch, PERF-18 host golden (IMPLEMENTED /
-                       # GPU_PENDING, not PASS), interaction-ready text
-                       # snapshots, cross-tile selection underlay
-                       # (PERF-19 IMPLEMENTED, not PASS). Blitz producer
-                       # publishes text snapshots (not PERF-19 PASS).
-                       # Not production JNI; default host is WebView rollback
-                       # (`NEOTA_NEOCOMPOSITOR=1`).
+                       # dispatch, PERF-18 effect-scope (criterion PASS on
+                       # physical Vulkan; not B PASS), interaction-ready
+                       # text snapshots, cross-tile selection underlay
+                       # (PERF-19 criterion PASS on physical Vulkan; not
+                       # B PASS). Not production JNI; default host is
+                       # WebView rollback (`NEOTA_NEOCOMPOSITOR=1`).
                        # Chat virtualization is `chat-viewport`, not here.
   presentation-m0/     # NeoUI v4 RFC D1a/D1b paint-seam probe (host PASS;
                        # crate log capture=false). Debug-only Activity;
@@ -99,7 +99,8 @@ crates/
   presentation-m0-d2/  # NeoUI v4 RFC M0-D2 producer+dynamic seam PASS
                        # (host-side; crate log capture=false).
   presentation-session/ # chat-viewport ↔ compositor transactions
-                       # (PERF-19/20 host integration, not PASS).
+                       # (PERF-19/20 host integration; criteria PASS on
+                       # physical Vulkan; not B PASS).
   presentation-perf-probe/ # debug-only Android PERF-18/19/20 probe
                        # (not production JNI; not Milestone B PASS).
   presentation-dioxus-shell/ # Feature-flagged Dioxus Product Wire shell.

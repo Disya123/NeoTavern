@@ -6,13 +6,24 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/rfc/perf-18-20-phy
 
 **Status:** lab procedure. Host adjudicator
 [`scripts/perf-18-20-adjudicate.mjs`](https://github.com/Disya123/NeoTavern/blob/main/scripts/perf-18-20-adjudicate.mjs)
-stamps each criterion independently:
+stamps each criterion independently. Current record:
+[`perf-18-20-adjudication.json`](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/perf-18-20-adjudication.json).
 
 ```text
-PERF-18 = PASS | BLOCKED
-PERF-19 = PASS | BLOCKED
-PERF-20 = PASS | BLOCKED
+PERF-18 = PASS
+PERF-19 = PASS
+PERF-20 = PASS
 Milestone B = STARTED
+almost_pass = false
+```
+
+Admitted capture stamps (Xiaomi `8f5c2b7c` / Adreno 710 / Vulkan, APK
+`BOUND`, `evidence_dirty=false`):
+
+```text
+perf18  2026-08-18T11-12-42-464Z
+perf19  2026-08-18T11-13-59-218Z
+perf20  2026-08-18T11-15-46-856Z
 ```
 
 There is no combined «almost PASS». Milestone B stays STARTED even if all
