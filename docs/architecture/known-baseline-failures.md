@@ -35,9 +35,15 @@ with a deadline.
 | File        | `crates/runtime-kernel/tests/kernel_settings_diagnostics.rs`                                                                      |
 | Fingerprint | `generationRuns.waiting` expected `1`, observed `0`                                                                               |
 | Seed        | three `generation_runs` rows: `completed`, `failed`, and `streaming` with `pending_tool_call_json` set (derived waiting-for-tool) |
-| Owner       | unassigned; required before Milestone B PASS                                                                                      |
+| Owner       | runtime-kernel                                                                                                                    |
+| Status      | **FIXED**                                                                                                                         |
 | Waiver      | none                                                                                                                              |
 
-The export still counts `total` / `completed` / `failed`. The waiting
-counter is the failing assertion. Do not treat `pnpm crates:test` / a
-full kernel suite as green while this test fails.
+Waiting-for-tool is the derived pair `status = streaming` **and**
+`pending_tool_call_json IS NOT NULL`. Diagnostics counts that pair, not
+the marker alone. The accounting test seeds a **live** lease, then uses
+`generation.get` as the startup-recovery barrier (the writer recovers
+before serving unaries) and asserts wire `waiting_for_tool` before
+reading `generationRuns.waiting`. An expired-lease companion proves
+recovery interrupts the attempt and the waiting counter becomes `0`.
+Do not replace the live-lease expected `1` with `0`.

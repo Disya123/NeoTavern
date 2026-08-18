@@ -1,6 +1,14 @@
 # Changelog
 
 ## Unreleased
+### Fixed
+
+- **Generation diagnostics waiting count is deterministic.**
+  `diagnostics.export` counts `waiting` as the derived lifecycle
+  `streaming` + `pending_tool_call_json`, not a racy marker-only scan.
+  The kernel test waits on `generation.get` after startup recovery
+  instead of sampling against an expired lease.
+
 ### Added
 
 - **PERF-15 PASS (not B PASS, not PluginVisualSurface).** Independent

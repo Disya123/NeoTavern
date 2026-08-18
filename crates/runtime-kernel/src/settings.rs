@@ -231,9 +231,14 @@ pub(crate) fn diagnostics_export(
             |row| row.get(0),
         )
         .map_err(|e| sqlite(e, "diagnostics.export count failed"))?;
+    // Waiting-for-tool is derived, never stored: status stays `streaming`
+    // while `pending_tool_call_json` is set (generation.rs `run_status_enum`).
+    // Counting the marker alone would include interrupted rows if recovery
+    // ever failed to clear it; require the live lifecycle pair.
     let runs_waiting: i64 = conn
         .query_row(
-            "SELECT COUNT(*) FROM generation_runs WHERE pending_tool_call_json IS NOT NULL",
+            "SELECT COUNT(*) FROM generation_runs \
+             WHERE status = 'streaming' AND pending_tool_call_json IS NOT NULL",
             [],
             |row| row.get(0),
         )

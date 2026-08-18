@@ -99,7 +99,7 @@
     },
     {
       "id": "runtime-kernel.diagnostics_export_counts_generation_runs",
-      "status": "OPEN",
+      "status": "FIXED",
       "waiver": null
     }
   ]

@@ -33,6 +33,11 @@ describe('milestone B-exit registry', () => {
     expect(result.milestone_b).toBe('STARTED');
     expect(result.failures.some((row) => row.startsWith('PERF-01'))).toBe(true);
     expect(result.failures.some((row) => row.includes('prettier-mass-drift'))).toBe(true);
+    expect(
+      result.failures.some((row) =>
+        row.includes('runtime-kernel.diagnostics_export_counts_generation_runs'),
+      ),
+    ).toBe(false);
   });
 
   it('requires every PERF-01…05 and PERF-11…22 slot', () => {
@@ -128,7 +133,14 @@ describe('milestone B-exit registry', () => {
     const registry = load();
     expect(registry.device_loss_injection.physical).toBe(true);
     expect(registry.device_loss_injection.status).toBe('PASS');
-    expect(registry.known_baseline_failures.every((row) => row.status === 'OPEN')).toBe(true);
+    expect(
+      registry.known_baseline_failures.find(
+        (row) => row.id === 'runtime-kernel.diagnostics_export_counts_generation_runs',
+      )?.status,
+    ).toBe('FIXED');
+    expect(
+      registry.known_baseline_failures.find((row) => row.id === 'prettier-mass-drift')?.status,
+    ).toBe('OPEN');
     const forged = structuredClone(registry);
     forged.device_loss_injection.physical = true;
     forged.known_baseline_failures = forged.known_baseline_failures.map((row) => ({

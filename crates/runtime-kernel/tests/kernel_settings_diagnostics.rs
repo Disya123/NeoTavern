@@ -265,14 +265,25 @@ fn diagnostics_export_is_allowlisted_and_redacted() {
     );
 }
 
-#[test]
-fn diagnostics_export_counts_generation_runs() {
-    let root = tempfile::tempdir().expect("tempdir");
-    // Seed three durable runs before the kernel opens: completed, failed and
-    // one with a pending tool call (derived waiting-for-tool state).
+const DIAG_CHARACTER_ID: &str = "00000000-0000-4000-8000-0000000000d1";
+const DIAG_CHAT_ID: &str = "00000000-0000-4000-8000-0000000000d2";
+const DIAG_COMPLETED_RUN: &str = "00000000-0000-4000-8000-0000000000d3";
+const DIAG_FAILED_RUN: &str = "00000000-0000-4000-8000-0000000000d4";
+const DIAG_WAITING_RUN: &str = "00000000-0000-4000-8000-0000000000d5";
+const PENDING_TOOL_JSON: &str =
+    r#"{"id":"call-1","name":"lookup_weather","arguments":{"query":"Kyiv"}}"#;
+/// Live waiting-for-tool lease: startup recovery only interrupts expired
+/// (or NULL) leases. A far-future RFC 3339 stamp is the durable lifecycle,
+/// not a sleep.
+const LIVE_LEASE_EXPIRES_AT: &str = "2099-01-01T00:00:00Z";
+/// Expired lease: recovery must mark the attempt `interrupted` and clear
+/// the pending-tool marker before any unary is served.
+const EXPIRED_LEASE_EXPIRES_AT: &str = "2000-01-01T00:00:00Z";
+
+fn seed_generation_accounting(root: &std::path::Path, waiting_lease_expires_at: &str) {
     let mut progress = |_p: neotavern_storage::migrations::MigrationProgress| {};
     let mut db = neotavern_storage::open::open(
-        root.path(),
+        root,
         &neotavern_storage::baseline::ConnectionPolicy::default(),
         &mut progress,
     )
@@ -280,47 +291,93 @@ fn diagnostics_export_counts_generation_runs() {
     db.transaction(|tx| {
         tx.execute(
             "INSERT INTO characters (id, name, description, tags_json, ext_json, created_at, updated_at)
-             VALUES ('00000000-0000-4000-8000-0000000000d1', 'Diag', NULL, '[]', '{}', '2026-08-18T00:00:00Z', '2026-08-18T00:00:00Z')",
-            [],
+             VALUES (?1, 'Diag', NULL, '[]', '{}', '2026-08-18T00:00:00Z', '2026-08-18T00:00:00Z')",
+            rusqlite::params![DIAG_CHARACTER_ID],
         )
         .expect("seed character");
         tx.execute(
             "INSERT INTO chats (id, character_id, title, created_at, updated_at)
-             VALUES ('00000000-0000-4000-8000-0000000000d2', '00000000-0000-4000-8000-0000000000d1', 'diag chat', '2026-08-18T00:00:00Z', '2026-08-18T00:00:00Z')",
-            [],
+             VALUES (?1, ?2, 'diag chat', '2026-08-18T00:00:00Z', '2026-08-18T00:00:00Z')",
+            rusqlite::params![DIAG_CHAT_ID, DIAG_CHARACTER_ID],
         )
         .expect("seed chat");
-        for (id, status, tool) in [
-            ("00000000-0000-4000-8000-0000000000d3", "completed", false),
-            ("00000000-0000-4000-8000-0000000000d4", "failed", false),
-            ("00000000-0000-4000-8000-0000000000d5", "streaming", true),
+        for (id, status, tool, lease) in [
+            (DIAG_COMPLETED_RUN, "completed", false, None),
+            (DIAG_FAILED_RUN, "failed", false, None),
+            (
+                DIAG_WAITING_RUN,
+                "streaming",
+                true,
+                Some(waiting_lease_expires_at),
+            ),
         ] {
-            let tool_json = if tool {
-                Some(r#"{"id":"call-1","name":"lookup_weather","arguments":{"query":"Kyiv"}}"#)
-            } else {
-                None
-            };
+            let tool_json = if tool { Some(PENDING_TOOL_JSON) } else { None };
             tx.execute(
                 "INSERT INTO generation_runs
                    (id, chat_id, attempt, status, provider, model, request_snapshot_json,
                     pending_tool_call_json, lease_expires_at, started_at, updated_at)
-                 VALUES (?1, '00000000-0000-4000-8000-0000000000d2', 1, ?2, 'fake', 'demo',
-                         '{}', ?3, '2026-08-18T00:00:00Z', '2026-08-18T00:00:00Z',
-                         '2026-08-18T00:00:00Z')",
-                rusqlite::params![id, status, tool_json],
+                 VALUES (?1, ?2, 1, ?3, 'fake', 'demo', '{}', ?4, ?5,
+                         '2026-08-18T00:00:00Z', '2026-08-18T00:00:00Z')",
+                rusqlite::params![id, DIAG_CHAT_ID, status, tool_json, lease],
             )
             .expect("seed generation run");
         }
         Ok::<(), neotavern_storage::StorageError>(())
     })
     .expect("seeding transaction must succeed");
-    drop(db);
+}
+
+/// First unary after `Kernel::open` is the recovery barrier: the writer
+/// runs `generation::recover` before serving the command channel. Do not
+/// sample diagnostics.export against a sleep or a racy open.
+fn barrier_generation_get(kernel: &Kernel, run_id: &str) -> Value {
+    dispatch_ok(kernel, "generation.get", json!({ "workflowId": run_id }))
+}
+
+#[test]
+fn diagnostics_export_counts_generation_runs() {
+    let root = tempfile::tempdir().expect("tempdir");
+    // Live lease + streaming + pending_tool_call_json is the durable
+    // waiting-for-tool lifecycle. Recovery must not interrupt it.
+    seed_generation_accounting(root.path(), LIVE_LEASE_EXPIRES_AT);
 
     let kernel = open_kernel(root.path());
+    let waiting = barrier_generation_get(&kernel, DIAG_WAITING_RUN);
+    assert_eq!(
+        waiting["status"].as_str().expect("status"),
+        "waiting_for_tool",
+        "recovery barrier must observe streaming+pending_tool_call as waiting_for_tool"
+    );
+
     let bundle = dispatch_ok(&kernel, "diagnostics.export", json!({}));
     let runs = &bundle["generationRuns"];
     assert_eq!(runs["total"].as_i64().expect("total"), 3);
     assert_eq!(runs["completed"].as_i64().expect("completed"), 1);
     assert_eq!(runs["failed"].as_i64().expect("failed"), 1);
     assert_eq!(runs["waiting"].as_i64().expect("waiting"), 1);
+}
+
+#[test]
+fn diagnostics_export_waiting_clears_after_expired_lease_recovery() {
+    let root = tempfile::tempdir().expect("tempdir");
+    seed_generation_accounting(root.path(), EXPIRED_LEASE_EXPIRES_AT);
+
+    let kernel = open_kernel(root.path());
+    let recovered = barrier_generation_get(&kernel, DIAG_WAITING_RUN);
+    assert_eq!(
+        recovered["status"].as_str().expect("status"),
+        "interrupted",
+        "expired waiting lease is interrupted by startup recovery, not left racy"
+    );
+
+    let bundle = dispatch_ok(&kernel, "diagnostics.export", json!({}));
+    let runs = &bundle["generationRuns"];
+    assert_eq!(runs["total"].as_i64().expect("total"), 3);
+    assert_eq!(runs["completed"].as_i64().expect("completed"), 1);
+    assert_eq!(runs["failed"].as_i64().expect("failed"), 1);
+    assert_eq!(
+        runs["waiting"].as_i64().expect("waiting"),
+        0,
+        "interrupted recovery must clear the derived waiting counter"
+    );
 }
