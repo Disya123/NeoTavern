@@ -5,7 +5,10 @@
 //! treats it as partial evidence of pass/resource order at the API the probe
 //! submitted.
 
-use crate::display_list::{ClipChainId, GlassBoundary, NeoDisplayList, Rect};
+use crate::display_list::{
+    AffineCoeffs, ClipChainId, GlassBoundary, ImageLayer, NeoDisplayList, NeoPaintOp, Rect,
+    SpatialNodeId,
+};
 use crate::pass_graph::{compile_passes, CompiledPass, GraphError};
 
 /// Max glass ROI copy into the sampleable snapshot (D1a ROIs are 140×80).
@@ -139,6 +142,106 @@ pub fn compositor_owned_bytes_d1b(width: u32, height: u32) -> u64 {
         + rgba(width, height)
 }
 
+fn world_aabb(transform: AffineCoeffs, local: Rect) -> Rect {
+    let corners = [
+        transform.transform_point(f64::from(local.x), f64::from(local.y)),
+        transform.transform_point(f64::from(local.x1()), f64::from(local.y)),
+        transform.transform_point(f64::from(local.x), f64::from(local.y1())),
+        transform.transform_point(f64::from(local.x1()), f64::from(local.y1())),
+    ];
+    let min_x = corners.iter().map(|p| p.0).fold(f64::INFINITY, f64::min);
+    let min_y = corners.iter().map(|p| p.1).fold(f64::INFINITY, f64::min);
+    let max_x = corners
+        .iter()
+        .map(|p| p.0)
+        .fold(f64::NEG_INFINITY, f64::max);
+    let max_y = corners
+        .iter()
+        .map(|p| p.1)
+        .fold(f64::NEG_INFINITY, f64::max);
+    Rect::new(
+        min_x as f32,
+        min_y as f32,
+        (max_x - min_x) as f32,
+        (max_y - min_y) as f32,
+    )
+}
+
+fn intersect_rects(a: Rect, b: Rect) -> Rect {
+    let x = a.x.max(b.x);
+    let y = a.y.max(b.y);
+    let x1 = a.x1().min(b.x1());
+    let y1 = a.y1().min(b.y1());
+    Rect::new(x, y, (x1 - x).max(0.0), (y1 - y).max(0.0))
+}
+
+fn spatial_transform(list: &NeoDisplayList, id: SpatialNodeId) -> AffineCoeffs {
+    let mut chain = Vec::new();
+    let mut current = Some(id);
+    while let Some(node_id) = current {
+        let Some(node) = list.spatial.iter().find(|node| node.id == node_id) else {
+            break;
+        };
+        chain.push(node.transform);
+        current = node.parent;
+    }
+    let mut out = AffineCoeffs::IDENTITY;
+    for coeffs in chain.into_iter().rev() {
+        out = out.compose(coeffs);
+    }
+    out
+}
+
+fn spatial_for_clip(list: &NeoDisplayList, clip: ClipChainId) -> SpatialNodeId {
+    if let Some(effect) = list.effects.iter().find(|node| node.clip_chain == clip) {
+        return effect.spatial_node;
+    }
+    for op in list.ops.iter() {
+        let spatial = match op {
+            NeoPaintOp::PaintChunk(chunk) | NeoPaintOp::Image(ImageLayer { chunk })
+                if chunk.clip_chain == clip =>
+            {
+                Some(chunk.spatial_node)
+            }
+            NeoPaintOp::BackdropBarrier(barrier) if barrier.clip_chain == clip => {
+                Some(barrier.spatial_node)
+            }
+            _ => None,
+        };
+        if let Some(id) = spatial {
+            return id;
+        }
+    }
+    list.spatial
+        .first()
+        .map(|node| node.id)
+        .unwrap_or(SpatialNodeId(0))
+}
+
+/// Clip chain in framebuffer space. Local clip rects (PERF-18 card clip)
+/// are transformed by the spatial node that owns the clip; D1a world-space
+/// clips stay identity-transformed.
+pub fn world_clip_rect(list: &NeoDisplayList, clip: ClipChainId) -> Rect {
+    if !list.clips.iter().any(|node| node.id == clip) {
+        return Rect::new(0.0, 0.0, 1.0, 1.0);
+    }
+    let framebuffer = Rect::new(0.0, 0.0, list.width as f32, list.height as f32);
+    let mut acc = framebuffer;
+    let mut current = Some(clip);
+    while let Some(id) = current {
+        let Some(node) = list.clips.iter().find(|node| node.id == id) else {
+            break;
+        };
+        let world = world_aabb(
+            spatial_transform(list, spatial_for_clip(list, id)),
+            node.rect,
+        );
+        acc = intersect_rects(acc, world);
+        current = node.parent;
+    }
+    acc
+}
+
 pub fn resolved_glass_roi(
     list: &NeoDisplayList,
     roi: Rect,
@@ -146,12 +249,7 @@ pub fn resolved_glass_roi(
     target_w: u32,
     target_h: u32,
 ) -> Option<RoiPx> {
-    let clip_rect = list
-        .clips
-        .iter()
-        .find(|node| node.id == clip)
-        .map(|node| node.rect)
-        .unwrap_or(roi);
+    let clip_rect = world_clip_rect(list, clip);
     let x = roi.x.max(clip_rect.x).max(0.0).floor() as u32;
     let y = roi.y.max(clip_rect.y).max(0.0).floor() as u32;
     let x1 = roi.x1().min(clip_rect.x1()).min(target_w as f32).ceil() as u32;
@@ -414,6 +512,40 @@ mod tests {
         assert_eq!(
             D1B_MOTION_TIMELINE_G120,
             "restore,moving:g120,roi:2,glass:2:g120,overlay"
+        );
+    }
+
+    #[test]
+    fn perf18_world_clip_resolves_bounded_glass_roi() {
+        let scene = neotavern_neocompositor::perf18::reference_scene();
+        let barrier = scene
+            .ops
+            .iter()
+            .find_map(|op| match op {
+                NeoPaintOp::BackdropBarrier(barrier) => Some(barrier.clone()),
+                _ => None,
+            })
+            .expect("PERF-18 glass barrier");
+        let px = resolved_glass_roi(
+            &scene,
+            barrier.roi,
+            barrier.clip_chain,
+            scene.width,
+            scene.height,
+        )
+        .expect("world-space clip must not empty the transformed glass ROI");
+        assert!(px.w > 0 && px.h > 0);
+        assert!(px.w < scene.width && px.h < scene.height);
+        assert!(
+            u64::from(px.w) * u64::from(px.h)
+                < u64::from(scene.width) * u64::from(scene.height) / 4
+        );
+        let events = expected_first_frame(&scene).expect("valid PERF-18 list");
+        assert!(
+            events
+                .iter()
+                .any(|event| matches!(event, TimelineKind::RoiCopyAccumulatorToSnapshot { .. })),
+            "PERF-18 timeline must include a bounded ROI copy"
         );
     }
 }

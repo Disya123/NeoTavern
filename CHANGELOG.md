@@ -128,6 +128,16 @@
   STARTED even if all three pass. `MainActivity` / WebView rollback
   unchanged.
 
+- **PERF-18 glass ROI uses world-space clip (not PASS).**
+  `resolved_glass_roi` transforms local clip rects by the owning spatial
+  node before intersecting the already-world glass ROI. A local card clip
+  no longer empties a transformed barrier, so the probe can emit a bounded
+  `copy_texture_to_texture` inside the opacity/transform/rounded-clip
+  debug groups. The host adjudicator requires at least one non-fullscreen
+  `vkCmdCopyImage`. Physical Vulkan recapture is still required. `glass_passes`
+  increments only after a real copy. `MainActivity` / WebView rollback
+  unchanged. Milestone B remains STARTED.
+
 - **PERF-18 effect-scope backdrop host golden (IMPLEMENTED / GPU_PENDING,
   not PASS).** Canonical scene: parent backdrop root →
   `BeginEffect(opacity=0.5, transform, rounded clip)` → prefix →

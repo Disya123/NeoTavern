@@ -81,6 +81,20 @@ describe('PERF-18/19/20 host adjudicator', () => {
       provenance,
     });
     expect(blocked.status).toBe('BLOCKED');
+    const noCopy = evaluatePerf18({
+      xml: `<?xml version="1.0"?><rdc><header><driver id="8">Vulkan</driver></header>
+<chunk name="vkCmdBeginDebugUtilsLabelEXT"><string name="pLabelName">perf18-effect-opacity</string></chunk>
+<chunk name="vkCmdBeginDebugUtilsLabelEXT"><string name="pLabelName">perf18-transform</string></chunk>
+<chunk name="vkCmdBeginDebugUtilsLabelEXT"><string name="pLabelName">perf18-rounded-clip</string></chunk>
+<chunk name="vkCmdBeginDebugUtilsLabelEXT"><string name="pLabelName">perf18-group-target</string></chunk>
+<chunk name="vkCmdBeginDebugUtilsLabelEXT"><string name="pLabelName">perf18-backdrop-barrier:1</string></chunk>
+<chunk name="vkCmdBeginDebugUtilsLabelEXT"><string name="pLabelName">perf18-glass:1:g2</string></chunk>
+</rdc>`,
+      log: perf18Log,
+      provenance,
+    });
+    expect(noCopy.status).toBe('BLOCKED');
+    expect(noCopy.checks.find((check) => check.id === 'bounded_group_target_roi')?.ok).toBe(false);
   });
 
   it('requires selection underlay separate from glyphs', () => {

@@ -596,7 +596,6 @@ impl ProbeGpu {
                     open_scopes,
                     frame,
                 )?;
-                self.glass_passes += 1;
             }
             self.overlay_blit_from_cache()?;
             if self.recording_capture {
@@ -645,7 +644,6 @@ impl ProbeGpu {
                         open_scopes,
                         frame,
                     )?;
-                    self.glass_passes += 1;
                 }
                 CompiledPass::MovingSample { .. } => {
                     self.snapshot_static_prefix()?;
@@ -1027,6 +1025,11 @@ impl ProbeGpu {
         frame: u64,
     ) -> Result<(), GpuInitError> {
         let Some(px) = resolved_glass_roi(list, roi, clip, self.width, self.height) else {
+            if self.label_mode == LabelMode::Perf18 {
+                return Err(GpuInitError::Renderer(
+                    "perf18 glass ROI resolved empty after world clip".into(),
+                ));
+            }
             return Ok(());
         };
         let x = px.x;
@@ -1069,9 +1072,9 @@ impl ProbeGpu {
         );
         encoder.pop_debug_group();
         self.same_device_roi_copies += 1;
+        self.last_damage = Some(px);
         if follow {
             self.sampled_generation = frame;
-            self.last_damage = Some(px);
         }
         self.record(TimelineKind::RoiCopyAccumulatorToSnapshot {
             barrier,
@@ -1146,6 +1149,7 @@ impl ProbeGpu {
         encoder.pop_debug_group();
         self.pop_perf18_effect_labels(&mut encoder, nested_perf18);
         self.queue.submit([encoder.finish()]);
+        self.glass_passes += 1;
         self.record(TimelineKind::GlassSampleSnapshotWriteAccumulator {
             barrier,
             x,
@@ -1451,18 +1455,13 @@ fn spatial_affine(list: &NeoDisplayList, id: SpatialNodeId) -> Affine {
 }
 
 fn clip_rect(list: &NeoDisplayList, id: ClipChainId) -> KurboRect {
-    list.clips
-        .iter()
-        .find(|node| node.id == id)
-        .map(|node| {
-            KurboRect::new(
-                f64::from(node.rect.x),
-                f64::from(node.rect.y),
-                f64::from(node.rect.x1()),
-                f64::from(node.rect.y1()),
-            )
-        })
-        .unwrap_or_else(|| KurboRect::new(0.0, 0.0, 1.0, 1.0))
+    let rect = crate::timeline::world_clip_rect(list, id);
+    KurboRect::new(
+        f64::from(rect.x),
+        f64::from(rect.y),
+        f64::from(rect.x1()),
+        f64::from(rect.y1()),
+    )
 }
 
 fn encode_chunk(scene: &mut Scene, list: &NeoDisplayList, chunk: &PaintChunk) {

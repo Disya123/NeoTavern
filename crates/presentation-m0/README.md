@@ -22,7 +22,9 @@ probe still logs `android_gpu_capture=false` and cannot self-admit.
 - One `wgpu` `Device`/`Queue` shared by Vello raster and the glass pass.
 - Sampleable intermediate (Vello `STORAGE_BINDING|TEXTURE_BINDING` plus a
   compositor accumulator). Glass reads a **same-device ROI copy**, never a CPU
-  readback and never a cross-device copy.
+  readback and never a cross-device copy. Clip rects are resolved in
+  framebuffer space (`world_clip_rect`) so a local card clip cannot empty a
+  transformed PERF-18 glass ROI.
 - D1b moving sample is a persistent compositor texture blit (no layout
   rebuild, no decoder). Glass B samples the current frame generation.
 - First-frame **API timeline** (named accumulator / snapshot / ROI copies).

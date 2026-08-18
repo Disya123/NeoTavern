@@ -8,7 +8,7 @@ host adjudicator may stamp `PASS` or `BLOCKED` per criterion.
 
 | Extra `PERF_SCENARIO` | Evidence |
 | --------------------- | -------- |
-| `perf18` | Effect-scope golden through wgpu/Vulkan: glass inside opacity/transform/rounded clip |
+| `perf18` | Effect-scope golden through wgpu/Vulkan: glass inside opacity/transform/rounded clip; bounded world-space ROI copy |
 | `perf19` | Cross-tile selection underlay + autoscroll; shape/layout/glyph raster stay 0 during drag |
 | `perf20` | Multi-frame fling 10 000 px/s + exact `+350 px`; one `DeltaToken`; C0/C1 continuity |
 

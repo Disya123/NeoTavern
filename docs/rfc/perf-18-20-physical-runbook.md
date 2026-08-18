@@ -35,6 +35,11 @@ clean source bundle (node scripts/m0-d1a-source-bundle.mjs)
 PERF-20 is **not** a single RenderDoc frame. Velocity continuity is the
 JSONL/`perf20-frame` stream.
 
+`resolved_glass_roi` intersects the glass ROI with the **world-space** clip
+chain. A local clip in a transformed effect group must not empty the barrier.
+The host adjudicator requires at least one bounded `vkCmdCopyImage` (not
+`copies.length === 0`). `glass_passes` counts only after a real copy.
+
 ## Launch
 
 ```text

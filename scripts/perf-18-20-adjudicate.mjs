@@ -130,11 +130,15 @@ export function evaluatePerf18({ xml, log, provenance }) {
   });
   const copies = extractCopyImages(xml);
   const fullscreen = copies.some((copy) => copy.w >= 1080 && copy.h >= 2400);
+  const bounded = copies.some(
+    (copy) => copy.w > 0 && copy.h > 0 && copy.w * copy.h < 1080 * 2400 * 0.25,
+  );
   checks.push({
     id: 'bounded_group_target_roi',
-    ok: copies.length === 0 || !fullscreen,
+    ok: copies.length >= 1 && !fullscreen && bounded,
     copies: copies.length,
     fullscreen,
+    bounded,
   });
   const order = checkPerf18LabelOrder(labels);
   checks.push({ id: 'ancestor_effect_order', ok: order.ok, order });
