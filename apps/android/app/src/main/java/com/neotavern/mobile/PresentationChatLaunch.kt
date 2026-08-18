@@ -7,6 +7,8 @@ package com.neotavern.mobile
  */
 object PresentationChatLaunch {
     const val EXTRA_DIOXUS_SHELL: String = "com.neotavern.mobile.NEOTA_DIOXUS_SHELL"
+    const val EXTRA_CHAT_ID: String = "com.neotavern.mobile.NEOTA_CHAT_ID"
+    const val EXTRA_SAFE_MODE: String = "com.neotavern.mobile.NEOTA_SAFE_MODE"
     const val FLAG_ON: String = "1"
 
     fun parseFlag(extra: String?): String {
@@ -14,6 +16,14 @@ object PresentationChatLaunch {
     }
 
     fun isFlagged(extra: String?): Boolean {
+        return parseFlag(extra) == FLAG_ON
+    }
+
+    fun parseChatId(extra: String?): String {
+        return extra?.trim().orEmpty()
+    }
+
+    fun isSafeMode(extra: String?): Boolean {
         return parseFlag(extra) == FLAG_ON
     }
 }
