@@ -1,8 +1,9 @@
 # PresentationCompatibilityMatrix (baseline)
 
 **Status:** baseline after D1/D2 GO. Milestone A is **PASS** (flagged
-Dioxus Product Wire shell, not cutover). Not a product cutover. Owners have
-not signed PARITY for Android native UI.
+Dioxus Product Wire shell, not cutover). Milestone B is **PASS**
+(independent physical PERF/device-loss registry). Not a product cutover.
+Owners have not signed PARITY for Android native UI.
 
 **RFC:** [neoui-v4-android-presentation-backend.md](neoui-v4-android-presentation-backend.md) §2.4  
 **Boundary:** [presentation-boundary.md](../architecture/presentation-boundary.md)  
@@ -13,7 +14,7 @@ Allowed statuses: `PARITY` | `ADAPTED` | `CONTAINED` | `DEFERRED` | `REMOVED`.
 | Capability                             | React / Web                 | Android WebView (rollback) | Android Dioxus/NeoCompositor | Notes                                                           |
 | -------------------------------------- | --------------------------- | -------------------------- | ---------------------------- | --------------------------------------------------------------- |
 | Product Wire durable state             | PARITY                      | PARITY                     | PARITY (same Kernel)         | Presentation never owns SQLite                                  |
-| Chat workspace as main screen          | PARITY                      | PARITY                     | DEFERRED (Milestone C)       | RFC screen model                                                |
+| Chat workspace as main screen          | PARITY                      | PARITY                     | DEFERRED (Milestone C)       | Flagged debug `PresentationChatActivity` exists; not PARITY; not launcher; not cutover |
 | Live backdrop glass                    | CONTAINED (CSS)             | CONTAINED (CSS)            | DEFERRED (Milestone B/C)     | GateP:P1 on qualified devices; compositor not in production APK |
 | Theme SDK (CSS tokens / shells)        | PARITY                      | PARITY                     | DEFERRED                     | Native theme ABI not chosen                                     |
 | Plugin frontend slots / DOM islands    | PARITY                      | PARITY                     | CONTAINED (WebSurface later) | No silent Plugin SDK rewrite                                    |
@@ -25,7 +26,7 @@ Allowed statuses: `PARITY` | `ADAPTED` | `CONTAINED` | `DEFERRED` | `REMOVED`.
 | Gboard / IME composer                  | n/a (web)                   | PARITY (WebView)           | DEFERRED (Milestone C)       |                                                                 |
 | 10k message virtualization             | PARITY (web virt)           | PARITY                     | DEFERRED                     |                                                                 |
 | Safe mode (disable 3p theme/plugin)    | PARITY                      | PARITY                     | DEFERRED                     |                                                                 |
-| Production no-WebView cutover          | REMOVED from this milestone | rollback default           | DEFERRED                     | Forbidden until B/C DoD                                         |
+| Production no-WebView cutover          | REMOVED from this milestone | rollback default           | DEFERRED                     | Forbidden until C DoD                                           |
 
 Critical Android journeys stay on WebView until the DEFERRED rows are closed
 with owner signatures. Estimated rows cannot be presented as PARITY.

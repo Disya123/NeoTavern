@@ -1,8 +1,8 @@
 # presentation-perf-probe (`neotavern-presentation-perf-probe`)
 
 Debug-only Android probe for PERF-18/19/20, shared-device raster
-interop, input-to-present, and B-exit fixtures (PERF-15 / PERF-22 /
-device-loss).
+interop, input-to-present, B-exit fixtures, and the flagged Milestone C
+chat route (`PresentationChatProbe.startRoute`).
 **Not** production JNI, **not** `MainActivity`, **not** production cutover.
 Independent records keep `milestone_b=STARTED`. Registry Milestone B is
 **PASS**. Host stamps live in
@@ -64,6 +64,17 @@ Physical capture: `node scripts/input-to-present-perfetto-capture.mjs`.
 Host adjudication: `node scripts/input-to-present-adjudicate.mjs`
 (`platform_gesture_adapter=PASS`, `perfetto=PASS`, stamp
 `2026-08-18T16-28-13-285Z`).
+
+## Flagged chat route (Milestone C start)
+
+Not a launcher. Production `MainActivity` stays WebView.
+
+```text
+adb shell am start -n com.neotavern.mobile/.PresentationChatActivity \
+  --es com.neotavern.mobile.NEOTA_DIOXUS_SHELL 1
+```
+
+Without the extra the native route stays off (`reason=flag_off`).
 
 ## Commands
 

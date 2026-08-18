@@ -1,8 +1,7 @@
 //! Remaining Milestone B physical fixtures (PERF-01…05, 11–14, 16, 17, 21).
 //!
 //! Product path: Product Wire → flagged Dioxus shell → Blitz → session →
-//! compositor. Not a hand-built `NeoDisplayList`. Not production JNI. Not
-//! Milestone B PASS.
+//! compositor. Not a hand-built `NeoDisplayList`. Not production JNI.
 
 use std::sync::Arc;
 use std::time::Instant;

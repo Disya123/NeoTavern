@@ -240,7 +240,7 @@
     {
       "source": "android/README.md",
       "target": "android/README.md",
-      "sha256": "45718efda56f9e27086d6aaedaaeff2818673bac9700e3af70e6b95cb8c4f91c"
+      "sha256": "e3d5afea99b28938d650cdc26f1436efaba4b9ea7ff6cfd58a6195c4ab7aa8e9"
     },
     {
       "source": "api/README.md",
@@ -285,7 +285,7 @@
     {
       "source": "architecture/presentation-boundary.md",
       "target": "architecture/presentation-boundary.md",
-      "sha256": "fd839852df1c3d33fa4d5fbe3fe76726d1a99f32c1713b13245066a183e3b393"
+      "sha256": "4a2534f476ef826957e43e8e38102142b6270e40a7f59c35d31d4f7f41f5df4c"
     },
     {
       "source": "architecture/prompt-pipeline.md",
@@ -440,7 +440,7 @@
     {
       "source": "rfc/presentation-compatibility-matrix.md",
       "target": "rfc/presentation-compatibility-matrix.md",
-      "sha256": "f91894d32a62c0ba2a8c466c685ffe2f72d30b3e6caf72c3c6ec00e9f98fa25a"
+      "sha256": "e0ea248c422947f5641a791a3785c82f9e6bd6ef309528c69fa78ecd31f37d5a"
     },
     {
       "source": "rfc/remaining-b-physical-runbook.md",

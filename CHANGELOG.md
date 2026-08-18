@@ -15,6 +15,12 @@
 
 ### Added
 
+- **Flagged Android Dioxus chat route (Milestone C start, not cutover).**
+  Debug `PresentationChatActivity` mounts the Product Wire chat
+  workspace only when `NEOTA_DIOXUS_SHELL=1`. Production
+  `MainActivity` / default JNI / WebView stay the launcher. Compatibility
+  matrix chat-workspace row remains **DEFERRED** (not PARITY).
+
 - **Milestone B PASS (not production cutover).** Independent Xiaomi /
   Vulkan records for PERF-01…05 / 11–14 / 16 / 17 / 21 on stamp
   `2026-08-18T20-21-12-333Z`. Registry

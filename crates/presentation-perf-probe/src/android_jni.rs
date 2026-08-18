@@ -116,3 +116,21 @@ pub extern "system" fn Java_com_neotavern_mobile_PresentationI2pProbe_presentFra
     .unwrap_or_else(|_| "i2p present failed reason=panic".into());
     to_jstring(&mut env, text)
 }
+
+#[no_mangle]
+pub extern "system" fn Java_com_neotavern_mobile_PresentationChatProbe_startRoute(
+    mut env: JNIEnv,
+    _class: JClass,
+    flag: JString,
+) -> jstring {
+    let value = env
+        .get_string(&flag)
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let text = catch_unwind(AssertUnwindSafe(|| crate::start_chat_route(Some(&value))))
+        .unwrap_or_else(|_| {
+            "chat_route=false dioxus_shell=false reason=panic main_activity=false production_jni=false production_cutover=false"
+                .to_string()
+        });
+    to_jstring(&mut env, text)
+}

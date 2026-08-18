@@ -10,7 +10,9 @@ use serde::Deserialize;
 use std::collections::HashSet;
 use std::sync::Mutex;
 
+mod chat_route;
 mod product_path;
+pub use chat_route::{chat_route_line, flagged_chat_route, ChatRouteReport};
 pub use product_path::{
     current_product_chat, install_product_chat, message_id, mixed_height, mixed_height_catalog,
     product_chat_from_fixture, product_chat_with_chrome, streaming_schedule, visible_rows,
@@ -95,6 +97,7 @@ pub enum ShellError {
     Json(String),
     Wire(String),
     UnknownCommand(String),
+    FlagDisabled,
 }
 
 impl std::fmt::Display for ShellError {
@@ -107,6 +110,7 @@ impl std::fmt::Display for ShellError {
                     "presentation command is not a Product Wire operation: {id}"
                 )
             }
+            Self::FlagDisabled => write!(f, "{DIOXUS_SHELL_FLAG} must be 1"),
         }
     }
 }

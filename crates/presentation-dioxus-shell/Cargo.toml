@@ -2,7 +2,7 @@
 name = "neotavern-presentation-dioxus-shell"
 version = "0.1.0"
 edition = "2021"
-description = "Feature-flagged Dioxus Product Wire shell (Milestone A; not MainActivity)"
+description = "Feature-flagged Dioxus Product Wire shell (not MainActivity)"
 license = "AGPL-3.0"
 publish = false
 

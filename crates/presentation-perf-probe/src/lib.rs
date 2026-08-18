@@ -1,6 +1,7 @@
-//! Debug-only PERF-18/19/20 Android probe plus B-exit fixtures.
+//! Debug-only PERF-18/19/20 Android probe plus B-exit fixtures and the
+//! flagged Milestone C chat route.
 //!
-//! Not production JNI, not `MainActivity`, not Milestone B PASS. The probe
+//! Not production JNI, not `MainActivity`, not production cutover. The probe
 //! cannot stamp PERF PASS; only the host adjudicator does.
 
 #[cfg(all(feature = "android-jni", target_os = "android"))]
@@ -141,3 +142,7 @@ impl Scenario {
 
 #[cfg(feature = "gpu")]
 pub use gpu_scenarios::run_scenario;
+
+pub fn start_chat_route(flag: Option<&str>) -> String {
+    neotavern_presentation_dioxus_shell::chat_route_line(flag)
+}

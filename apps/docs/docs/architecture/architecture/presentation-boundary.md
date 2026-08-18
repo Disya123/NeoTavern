@@ -68,6 +68,7 @@ This is not a production migration and not Milestone C PASS.
 react-web                  — production Web / desktop UI
 webview-android-rollback   — production Android default
 dioxus-android-flagged     — experimental; not the launcher
+dioxus-android-chat-route  — debug PresentationChatActivity; NEOTA_DIOXUS_SHELL=1; not cutover
 ```
 
 ## Milestone B
@@ -158,3 +159,15 @@ failures are
 recorded in
 [known-baseline-failures.md](known-baseline-failures.md) and do not make
 PERF-18/19/20 evidence inadmissible.
+
+## Milestone C start
+
+Feature-flagged Android chat workspace (RFC §51 first slice). Debug
+`PresentationChatActivity` mounts the Product Wire chat workspace
+(header / viewport / composer) only when
+`com.neotavern.mobile.NEOTA_DIOXUS_SHELL=1`. Without the extra the route
+stays off. Production `MainActivity`, default JNI, and WebView rollback
+are unchanged. Milestone C is **not PASS**. Chat workspace on flagged
+Dioxus Android remains **DEFERRED** in the compatibility matrix until
+owner-signed PARITY. Gboard, TalkBack, 10k virtualization, and cutover
+are not this slice.

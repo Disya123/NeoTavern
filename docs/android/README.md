@@ -186,6 +186,9 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   `PresentationInputInstrumentedTest`. Status:
   `PASS`
   ([input-to-present-adjudication.json](../rfc/input-to-present-adjudication.json)).
+  Debug `PresentationChatActivity` is the Milestone C flagged chat
+  workspace (`NEOTA_DIOXUS_SHELL=1` extra). Not the launcher, not
+  production JNI, not cutover.
   Raw input-to-present is not gated against one refresh; deadline miss is
   renderer-controlled present vs `targetPresentDeadline`.
   Physical stamp `2026-08-18T16-28-13-285Z`.
