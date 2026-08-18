@@ -7,14 +7,15 @@ Milestone A = PASS
 A/Product Wire boundary = PASS
 shared-device raster interop = PASS
 platform gesture adapter = PASS
-Milestone B = STARTED
+Milestone B = PASS
 production cutover = NOT_STARTED
 ```
 
 Milestone A **PASS** is the feature-flagged Product Wire shell, React ↔
 Dioxus canonical projection parity, and presentation-path streaming tests.
-It is **not** a production migration, **not** Milestone B/C PASS, and **not**
-a `MainActivity` cutover.
+Milestone B **PASS** is the independent physical PERF-01…22 / device-loss
+registry. Neither is a production migration, Milestone C PASS, or a
+`MainActivity` cutover.
 
 **Decisions:** [ADR-0049](../adr/0049-track-d-dioxus-presentation.md),
 [ADR-0050](../adr/0050-visual-surface-ingress-vs-plugin.md),
@@ -22,7 +23,7 @@ a `MainActivity` cutover.
 **D3:** **DEFERRED** — Android may take a Rust presentation path; Web stays
 React. Rollback is the acting React/WebView host.
 
-This is not a production migration and not Milestone B/C PASS.
+This is not a production migration and not Milestone C PASS.
 
 ## Audit (RFC §49)
 
@@ -47,7 +48,8 @@ This is not a production migration and not Milestone B/C PASS.
    Wire for product mutations.
 3. A presentation command is invalid unless its `wireOperationId` exists in
    `buildProductWireRegistry()`.
-4. Production Android `MainActivity` stays WebView until Milestone B/C DoD.
+4. Production Android `MainActivity` stays WebView until Milestone C DoD
+   and an explicit production cutover.
    `NEOTA_NEOCOMPOSITOR=1` is a **non-default** feature flag for
    `crates/neocompositor`, not a cutover switch.
    `NEOTA_DIOXUS_SHELL=1` is a **non-default** flag for the Dioxus Product
@@ -64,20 +66,21 @@ webview-android-rollback   — production Android default
 dioxus-android-flagged     — experimental; not the launcher
 ```
 
-## Milestone B start
+## Milestone B
 
 `crates/neocompositor` holds production interchange types, a bounded
 `FrameTransaction` mailbox, spatial/scroll/clip/effect property trees,
 CPU scroll/animation fast paths, async hit-test / nested-scroll dispatch,
 interaction-ready text snapshots, a cross-tile selection underlay (PERF-19
-**PASS** on physical Vulkan, not B PASS), a PERF-18 effect-scope
-backdrop capture (**PASS** on physical Vulkan, not B PASS), a CPU
+**PASS** on physical Vulkan, not production cutover), a PERF-18 effect-scope
+backdrop capture (**PASS** on physical Vulkan, not production cutover), a CPU
 device/surface recovery state machine (injection-tested, not production JNI,
-not B PASS), bounded GPU telemetry (CPU snapshot; GPU timestamps on that
-snapshot stay `Unavailable` and are not image readbacks; not B PASS), and a
-shared-device raster interop CPU protocol (`SharedGpuContext`; one
-`DeviceEpoch`; sampleable raster texture; `image_readbacks=0`,
-`cross_device_copies=0`; not production JNI, not B PASS). B-level
+not production cutover), bounded GPU telemetry (CPU snapshot; GPU timestamps
+on that snapshot stay `Unavailable` and are not image readbacks; not
+production cutover), and a shared-device raster interop CPU protocol
+(`SharedGpuContext`; one `DeviceEpoch`; sampleable raster texture;
+`image_readbacks=0`, `cross_device_copies=0`; not production JNI, not
+production cutover). B-level
 `VisualSurfaceFrameIngress` is the trusted VisualSurface queue
 ([ADR-0050](../adr/0050-visual-surface-ingress-vs-plugin.md)); it is not
 Plugin SDK. Chat
@@ -85,7 +88,7 @@ virtualization lives
 in `crates/chat-viewport` (height index, predictor, bounded tile cache,
 geometry epochs / C0/C1 remap; compositor sees only the **active** tile
 descriptors and geometry snapshot). PERF-20 is **PASS** on the physical
-Vulkan multi-frame trace, not B PASS. The Blitz producer publishes `TextInteractionSnapshot`
+Vulkan multi-frame trace, not production cutover. The Blitz producer publishes `TextInteractionSnapshot`
 from already-shaped Parley layouts (no compositor reshape). Viewport remap and
 selection go through `crates/presentation-session` (one
 `FrameTransaction`, logical selection, `DeltaToken`). Host product-path
@@ -97,8 +100,7 @@ corpus is **not** an independent PASS. Independent stamps:
 Debug-only
 `crates/presentation-perf-probe` / `PresentationPerfActivity` is the
 physical capture vehicle (not production JNI), including debug
-`PERF_SCENARIO=interop` (host **PASS** on physical Vulkan; not cutover,
-not B PASS). Neither crate is linked into
+`PERF_SCENARIO=interop` (host **PASS** on physical Vulkan; not cutover). Neither crate is linked into
 production JNI. Device/surface recovery is a CPU injection-tested state
 machine in `crates/neocompositor` (`GpuRecovery`). Bounded GPU telemetry
 (`GpuTelemetry`) records queue/cache/target high-water, dropped/coalesced
@@ -139,13 +141,14 @@ Independent records:
 [perf-22-adjudication.json](../rfc/perf-22-adjudication.json),
 [device-loss-adjudication.json](../rfc/device-loss-adjudication.json).
 The machine-checkable B-exit registry
-[`docs/rfc/milestone-b-exit.json`](../rfc/milestone-b-exit.json) refuses
-`Milestone B = PASS` until PERF-01…05 and PERF-11…22 have independent
-admissible evidence, device-loss injection is physical, and known
-baseline failures are fixed or explicitly waived.
-Remaining physical fixtures are one debug Android batch
-([remaining-b-physical-runbook.md](../rfc/remaining-b-physical-runbook.md));
-host product-path / glass / viewport / hit-test corpora are not PASS.
+[`docs/rfc/milestone-b-exit.json`](../rfc/milestone-b-exit.json) is
+`milestone_b=PASS` with independent physical records for PERF-01…22 and
+device-loss. `almost_pass=false`. Production cutover remains
+`NOT_STARTED`. Individual records keep `milestone_b=STARTED`.
+Remaining physical fixtures were one debug Android batch
+([remaining-b-physical-runbook.md](../rfc/remaining-b-physical-runbook.md),
+stamp `2026-08-18T20-21-12-333Z`); host product-path / glass / viewport /
+hit-test corpora are still not independent PASS.
 Known host baseline
 failures are
 recorded in

@@ -81,5 +81,7 @@ D are ready.
 - RFC §52 keeps public VisualSurface / plugin platform as D.
 - D3 stays **DEFERRED**. Production `MainActivity`, default JNI, and
   WebView rollback are unchanged.
-- Milestone B remains **STARTED** until remaining PERF-01…05 / 11–14 /
-  16–17 / 21 records exist. This ADR does not stamp B PASS.
+- Remaining PERF-01…05 / 11–14 / 16–17 / 21 records exist as independent
+  physical PASS. Milestone B PASS is stamped only by
+  [`docs/rfc/milestone-b-exit.json`](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/milestone-b-exit.json), not by
+  this ADR. Production cutover remains **NOT_STARTED**.

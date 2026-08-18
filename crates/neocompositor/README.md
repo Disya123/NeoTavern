@@ -1,9 +1,9 @@
 # NeoCompositor (`neotavern-neocompositor`)
 
-Milestone B **STARTED** (not PASS): production types, a bounded
+Milestone B **PASS** (not production cutover): production types, a bounded
 `FrameTransaction` mailbox, property trees, CPU scroll/animation fast
 paths, async hit-test / nested-scroll dispatch, and a PERF-18 effect-scope
-capture (**PASS** on physical Vulkan, not B PASS). This is **not** a
+capture (**PASS** on physical Vulkan). This is **not** a
 production JNI renderer and **not** an Android cutover.
 
 ## What this crate is
@@ -156,11 +156,11 @@ Started (CPU types + tests):
 - interaction-ready text snapshots (immutable, producer-shaped, atomic
   with geometry + property snapshots)
 - cross-tile selection underlay (PERF-19 **PASS** on physical Vulkan, not
-  B PASS; Blitz producer snapshots)
+  production cutover; Blitz producer snapshots)
 - viewport remap / selection transactions in `crates/presentation-session`
   (PERF-19/20 host integration; criteria PASS on physical Vulkan; not
   production JNI)
-- PERF-18 effect-scope backdrop (**PASS** on physical Vulkan, not B PASS)
+- PERF-18 effect-scope backdrop (**PASS** on physical Vulkan, not production cutover)
 - M0-D1a pass-order corpus as a production regression (not a lab re-run)
 - device/surface recovery CPU state machine (injection tests; not production
   JNI)
@@ -172,16 +172,16 @@ Started (CPU types + tests):
 - Android MotionEvent / Choreographer adapter (host-side; debug/flagged
   shell only; not production JNI; `PASS` on physical 120 Hz)
 - non-sampleable surface fallback (PERF-22 **PASS** on physical Vulkan,
-  not B PASS)
-- pressure / degraded admission (PERF-15 **PASS** on physical Vulkan, not B PASS)
+  not production cutover)
+- pressure / degraded admission (PERF-15 **PASS** on physical Vulkan, not production cutover)
 - physical device-loss injection (**PASS** on Xiaomi / Vulkan; surface
   recreation and background/resume are not device-loss)
 
 Not started (do not treat as done):
 
-- remaining PERF-01…PERF-22 and 120 Hz product budgets (PERF-18/19/20/22
-  and physical device-loss are independently PASS; PERF-15 is
-  **IMPLEMENTED** without VisualSurface; Milestone B stays STARTED)
+- production Android cutover / `MainActivity` / default JNI
+- 120 Hz release-budget calibration ADR (raw p99 is a reference-device
+  baseline)
 
 See [presentation boundary](../../docs/architecture/presentation-boundary.md)
 and [ADR-0049](../../docs/adr/0049-track-d-dioxus-presentation.md).

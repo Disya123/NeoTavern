@@ -1,13 +1,11 @@
 # Known baseline failures
 
-**Status:** both listed rows are **FIXED**. This is not Milestone B PASS
-and not a waiver. Production cutover remains forbidden.
+**Status:** both listed rows are **FIXED**. Milestone B is **PASS** in
+[milestone-b-exit.json](../rfc/milestone-b-exit.json). Production cutover
+remains forbidden (`production_cutover=NOT_STARTED`).
 
 These rows do **not** make the independent PERF-18/19/20 physical
-evidence inadmissible (`docs/rfc/perf-18-20-adjudication.json`). The
-machine-checkable gate is
-[milestone-b-exit.json](../rfc/milestone-b-exit.json); it will not stamp
-`Milestone B = PASS` while remaining PERF evidence is missing.
+evidence inadmissible (`docs/rfc/perf-18-20-adjudication.json`).
 
 ## `KNOWN_BASELINE_FAILURE` — Prettier mass drift
 

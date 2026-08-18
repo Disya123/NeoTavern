@@ -158,27 +158,27 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   **PASS**. `D1=Track D GO` and `D2=Dioxus+Blitz GO` are
   signed ([d1-d2-decision.md](../rfc/d1-d2-decision.md)); `D3=DEFERRED`.
   React/WebView remains the public renderer and rollback. Production
-  compositor types start in `crates/neocompositor` (Milestone B **STARTED**,
-  not PASS) with a bounded mailbox, property trees, CPU scroll/animation
+  compositor types start in `crates/neocompositor` (Milestone B **PASS**,
+  not production cutover) with a bounded mailbox, property trees, CPU scroll/animation
   fast paths, async hit-test / nested-scroll dispatch, interaction-ready
   text snapshots, a cross-tile selection underlay (PERF-19 **PASS** on
-  physical Vulkan, not B PASS), a PERF-18
-  effect-scope capture (**PASS** on physical Vulkan, not B PASS), a CPU
+  physical Vulkan, not production cutover), a PERF-18
+  effect-scope capture (**PASS** on physical Vulkan, not production cutover), a CPU
   device/surface recovery state machine (injection-tested, not production
-  JNI, not B PASS), bounded GPU telemetry (CPU snapshot; timestamps are
-  not image readbacks; not B PASS), and shared-device raster interop
+  JNI, not production cutover), bounded GPU telemetry (CPU snapshot; timestamps are
+  not image readbacks; not production cutover), and shared-device raster interop
   (`SharedGpuContext`; one device; debug `PERF_SCENARIO=interop`; not
-  production JNI, not B PASS). The
+  production JNI, not production cutover). The
   Blitz producer publishes interaction-ready text snapshots from already-
   shaped Parley layouts. These crates are **not** linked into
   `libneotavern_android_jni.so`. Chat virtualization
   is `crates/chat-viewport` (height index, predictor, tile cache, geometry
-  epochs / C0/C1 remap; PERF-20 **PASS** on physical Vulkan, not B PASS), not the
+  epochs / C0/C1 remap; PERF-20 **PASS** on physical Vulkan, not production cutover), not the
   compositor crate. Viewport↔compositor transactions live in
   `crates/presentation-session` (not production JNI). Debug-only
   `PresentationPerfActivity` / `presentation-perf-probe` is the PERF-18/19/20
   and shared-device interop capture vehicle (not production JNI, not
-  Milestone B PASS). Shared-device interop is host **PASS** on physical
+  production cutover). Shared-device interop is host **PASS** on physical
   Vulkan
   ([shared-device-interop-adjudication.json](../rfc/shared-device-interop-adjudication.json)).
   Debug `PresentationInputActivity` hosts the MotionEvent / Choreographer

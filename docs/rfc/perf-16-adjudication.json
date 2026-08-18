@@ -1,0 +1,58 @@
+{
+  "schema": "perf16-adjudication/v1",
+  "perf16": "PASS",
+  "physical": true,
+  "admissible": true,
+  "independent": true,
+  "milestone_b": "STARTED",
+  "almost_pass": false,
+  "production_cutover": "NOT_STARTED",
+  "reason": "physical cold pipeline with 100 split contentful/interaction samples",
+  "checks": [
+    {
+      "id": "product_path",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "id": "dioxus_shell",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "id": "blitz_producer",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "id": "wire_messages",
+      "ok": true,
+      "value": "10000"
+    },
+    {
+      "id": "direct_display_list_injection",
+      "ok": true,
+      "value": "false"
+    },
+    {
+      "id": "samples",
+      "ok": true,
+      "value": 100
+    },
+    {
+      "id": "host_p99",
+      "ok": true,
+      "value": "none"
+    },
+    {
+      "id": "contentful_p99",
+      "ok": true,
+      "value": "5736979"
+    },
+    {
+      "id": "interaction_p99",
+      "ok": true,
+      "value": "2864"
+    }
+  ]
+}

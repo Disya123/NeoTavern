@@ -1,6 +1,6 @@
 {
   "schema": "milestone-b-exit/v1",
-  "milestone_b": "STARTED",
+  "milestone_b": "PASS",
   "almost_pass": false,
   "production_cutover": "NOT_STARTED",
   "platform_gesture_adapter": "PASS",
@@ -30,15 +30,78 @@
     "PERF-22"
   ],
   "criteria": {
-    "PERF-01": { "status": "MISSING", "independent": false, "admissible": false, "record": null },
-    "PERF-02": { "status": "MISSING", "independent": false, "admissible": false, "record": null },
-    "PERF-03": { "status": "MISSING", "independent": false, "admissible": false, "record": null },
-    "PERF-04": { "status": "MISSING", "independent": false, "admissible": false, "record": null },
-    "PERF-05": { "status": "MISSING", "independent": false, "admissible": false, "record": null },
-    "PERF-11": { "status": "MISSING", "independent": false, "admissible": false, "record": null },
-    "PERF-12": { "status": "MISSING", "independent": false, "admissible": false, "record": null },
-    "PERF-13": { "status": "MISSING", "independent": false, "admissible": false, "record": null },
-    "PERF-14": { "status": "MISSING", "independent": false, "admissible": false, "record": null },
+    "PERF-01": {
+      "status": "PASS",
+      "independent": true,
+      "admissible": true,
+      "kind": "physical",
+      "record": "docs/rfc/perf-01-adjudication.json",
+      "field": "perf01"
+    },
+    "PERF-02": {
+      "status": "PASS",
+      "independent": true,
+      "admissible": true,
+      "kind": "physical",
+      "record": "docs/rfc/perf-02-adjudication.json",
+      "field": "perf02"
+    },
+    "PERF-03": {
+      "status": "PASS",
+      "independent": true,
+      "admissible": true,
+      "kind": "physical",
+      "record": "docs/rfc/perf-03-adjudication.json",
+      "field": "perf03"
+    },
+    "PERF-04": {
+      "status": "PASS",
+      "independent": true,
+      "admissible": true,
+      "kind": "physical",
+      "record": "docs/rfc/perf-04-adjudication.json",
+      "field": "perf04"
+    },
+    "PERF-05": {
+      "status": "PASS",
+      "independent": true,
+      "admissible": true,
+      "kind": "physical",
+      "record": "docs/rfc/perf-05-adjudication.json",
+      "field": "perf05"
+    },
+    "PERF-11": {
+      "status": "PASS",
+      "independent": true,
+      "admissible": true,
+      "kind": "physical",
+      "record": "docs/rfc/perf-11-adjudication.json",
+      "field": "perf11"
+    },
+    "PERF-12": {
+      "status": "PASS",
+      "independent": true,
+      "admissible": true,
+      "kind": "physical",
+      "record": "docs/rfc/perf-12-adjudication.json",
+      "field": "perf12"
+    },
+    "PERF-13": {
+      "status": "PASS",
+      "independent": true,
+      "admissible": true,
+      "kind": "physical",
+      "record": "docs/rfc/perf-13-adjudication.json",
+      "field": "perf13"
+    },
+    "PERF-14": {
+      "status": "PASS",
+      "independent": true,
+      "admissible": true,
+      "kind": "physical",
+      "record": "docs/rfc/perf-14-adjudication.json",
+      "field": "perf14"
+    },
     "PERF-15": {
       "status": "PASS",
       "independent": true,
@@ -47,8 +110,22 @@
       "record": "docs/rfc/perf-15-adjudication.json",
       "field": "perf15"
     },
-    "PERF-16": { "status": "MISSING", "independent": false, "admissible": false, "record": null },
-    "PERF-17": { "status": "MISSING", "independent": false, "admissible": false, "record": null },
+    "PERF-16": {
+      "status": "PASS",
+      "independent": true,
+      "admissible": true,
+      "kind": "physical",
+      "record": "docs/rfc/perf-16-adjudication.json",
+      "field": "perf16"
+    },
+    "PERF-17": {
+      "status": "PASS",
+      "independent": true,
+      "admissible": true,
+      "kind": "physical",
+      "record": "docs/rfc/perf-17-adjudication.json",
+      "field": "perf17"
+    },
     "PERF-18": {
       "status": "PASS",
       "independent": true,
@@ -73,7 +150,14 @@
       "record": "docs/rfc/perf-18-20-adjudication.json",
       "field": "perf20"
     },
-    "PERF-21": { "status": "MISSING", "independent": false, "admissible": false, "record": null },
+    "PERF-21": {
+      "status": "PASS",
+      "independent": true,
+      "admissible": true,
+      "kind": "physical",
+      "record": "docs/rfc/perf-21-adjudication.json",
+      "field": "perf21"
+    },
     "PERF-22": {
       "status": "PASS",
       "independent": true,

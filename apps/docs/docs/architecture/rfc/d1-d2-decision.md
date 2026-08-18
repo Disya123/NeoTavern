@@ -5,8 +5,10 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/rfc/d1-d2-decision
 # D1/D2 decision record (signed)
 
 **Status:** **signed** 2026-08-18. This is the product-owner decision that
-TrackComparison opened. It is **not** a production migration, **not**
-Milestone B/C PASS, and **not** `D3=single UI`.
+TrackComparison opened. It is **not** a production migration, **not** Milestone C PASS, and **not**
+`D3=single UI`. Milestone B later PASSed independently
+([milestone-b-exit.json](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/milestone-b-exit.json)); this signed record is not
+rewritten and does not grant cutover.
 
 **RFC:** [neoui-v4-android-presentation-backend.md](neoui-v4-android-presentation-backend.md) §0.2 / §0.4  
 **Evidence:** [m0-track-comparison.md](m0-track-comparison.md)  
@@ -58,19 +60,21 @@ React. Platform unification is not imposed now.
 ```text
 Milestone A = PASS
 A/Product Wire boundary = PASS
-Milestone B = STARTED
+Milestone B = PASS
+production cutover = NOT_STARTED
 ```
 
 A PASS is the feature-flagged Dioxus Product Wire shell, React ↔ Dioxus
 canonical view-model parity, and presentation-path generation/backpressure
-tests. It is not production cutover.
+tests. B PASS is the independent physical PERF-01…22 / device-loss
+registry. Neither is production cutover.
 
 ## Next technical chain
 
 ```text
 Milestone A — PASS (feature-flagged Dioxus Product Wire shell; not cutover)
-→ Milestone B — NeoCompositor production implementation (feature-flagged)
-→ Milestone C — Android product slice only after B/C DoD
+→ Milestone B — PASS (independent physical PERF/device-loss registry; not cutover)
+→ Milestone C — Android product slice (feature-flagged chat route; not MainActivity cutover)
 → rollback remains React/WebView
 ```
 

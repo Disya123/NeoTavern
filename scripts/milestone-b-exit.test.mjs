@@ -15,11 +15,11 @@ function load() {
 }
 
 describe('milestone B-exit registry', () => {
-  it('keeps the committed registry STARTED and refuses can_pass', () => {
+  it('stamps the committed registry PASS when every B-exit gate is green', () => {
     const registry = load();
     const result = evaluate(registry);
     expect(registry.schema).toBe(SCHEMA);
-    expect(registry.milestone_b).toBe('STARTED');
+    expect(registry.milestone_b).toBe('PASS');
     expect(registry.almost_pass).toBe(false);
     expect(registry.production_cutover).toBe('NOT_STARTED');
     expect(registry.perf22).toBe('PASS');
@@ -29,15 +29,27 @@ describe('milestone B-exit registry', () => {
     expect(registry.input_to_present_p99_role).toBe(P99_ROLE);
     expect(registry.release_budget_calibration_adr).toBeNull();
     expect(result.ok).toBe(true);
-    expect(result.can_pass).toBe(false);
-    expect(result.milestone_b).toBe('STARTED');
-    expect(result.failures.some((row) => row.startsWith('PERF-01'))).toBe(true);
-    expect(result.failures.some((row) => row.includes('prettier-mass-drift'))).toBe(false);
-    expect(
-      result.failures.some((row) =>
-        row.includes('runtime-kernel.diagnostics_export_counts_generation_runs'),
-      ),
-    ).toBe(false);
+    expect(result.can_pass).toBe(true);
+    expect(result.milestone_b).toBe('PASS');
+    expect(result.failures).toEqual([]);
+    expect(result.production_cutover).toBe('NOT_STARTED');
+  });
+
+  it('keeps independent records from stamping Milestone B PASS', () => {
+    const registry = load();
+    for (const id of REQUIRED_PERF) {
+      const slot = registry.criteria[id];
+      expect(slot.status).toBe('PASS');
+      expect(slot.independent).toBe(true);
+      expect(slot.admissible).toBe(true);
+      const stamp = JSON.parse(readFileSync(new URL(`../${slot.record}`, import.meta.url), 'utf8'));
+      expect(stamp[slot.field]).toBe('PASS');
+      expect(stamp.milestone_b).toBe('STARTED');
+      expect(stamp.almost_pass).toBe(false);
+      if (Object.hasOwn(stamp, 'production_cutover')) {
+        expect(stamp.production_cutover).toBe('NOT_STARTED');
+      }
+    }
   });
 
   it('requires every PERF-01…05 and PERF-11…22 slot', () => {
@@ -105,11 +117,19 @@ describe('milestone B-exit registry', () => {
 
   it('forbids Milestone B = PASS while evidence is incomplete', () => {
     const forged = structuredClone(load());
+    forged.criteria['PERF-01'] = {
+      status: 'MISSING',
+      independent: false,
+      admissible: false,
+      record: null,
+    };
     forged.milestone_b = 'PASS';
     const result = evaluate(forged);
     expect(result.ok).toBe(false);
+    expect(result.can_pass).toBe(false);
     expect(result.milestone_b).toBe('STARTED');
     expect(result.failures[0]).toMatch(/Milestone B = PASS is forbidden/);
+    expect(result.failures.some((row) => row.startsWith('PERF-01'))).toBe(true);
   });
 
   it('cross-checks PERF-18/19/20 against the independent adjudication record', () => {
@@ -141,12 +161,14 @@ describe('milestone B-exit registry', () => {
     expect(
       registry.known_baseline_failures.find((row) => row.id === 'prettier-mass-drift')?.status,
     ).toBe('FIXED');
+    expect(evaluate(registry).can_pass).toBe(true);
     const forged = structuredClone(registry);
-    forged.device_loss_injection.physical = true;
-    forged.known_baseline_failures = forged.known_baseline_failures.map((row) => ({
-      ...row,
-      status: 'FIXED',
-    }));
+    forged.criteria['PERF-01'] = {
+      status: 'MISSING',
+      independent: false,
+      admissible: false,
+      record: null,
+    };
     const stillBlocked = evaluate(forged);
     expect(stillBlocked.can_pass).toBe(false);
     expect(stillBlocked.failures.some((row) => row.startsWith('PERF-01'))).toBe(true);
@@ -162,8 +184,10 @@ describe('milestone B-exit registry', () => {
   it('evaluateFile reads the committed registry', () => {
     const result = evaluateFile();
     expect(result.ok).toBe(true);
-    expect(result.can_pass).toBe(false);
+    expect(result.can_pass).toBe(true);
+    expect(result.milestone_b).toBe('PASS');
     expect(result.perf22).toBe('PASS');
     expect(result.perf15).toBe('PASS');
+    expect(result.production_cutover).toBe('NOT_STARTED');
   });
 });

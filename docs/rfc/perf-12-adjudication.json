@@ -1,0 +1,68 @@
+{
+  "schema": "perf12-adjudication/v1",
+  "perf12": "PASS",
+  "physical": true,
+  "admissible": true,
+  "independent": true,
+  "milestone_b": "STARTED",
+  "almost_pass": false,
+  "production_cutover": "NOT_STARTED",
+  "reason": "physical adversarial 10k fling",
+  "checks": [
+    {
+      "id": "product_path",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "id": "dioxus_shell",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "id": "blitz_producer",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "id": "wire_messages",
+      "ok": true,
+      "value": "10000"
+    },
+    {
+      "id": "direct_display_list_injection",
+      "ok": true,
+      "value": "false"
+    },
+    {
+      "id": "cache",
+      "ok": true,
+      "value": "cold"
+    },
+    {
+      "id": "compositor_only_frames",
+      "ok": true,
+      "value": "7200"
+    },
+    {
+      "id": "travel",
+      "ok": true,
+      "value": 600000
+    },
+    {
+      "id": "blank_px",
+      "ok": true,
+      "value": "0"
+    },
+    {
+      "id": "waited_on_producer",
+      "ok": true,
+      "value": "false"
+    },
+    {
+      "id": "predictive_trigger",
+      "ok": true,
+      "value": "true"
+    }
+  ]
+}

@@ -11,9 +11,18 @@
 
 - **Prettier baseline restored.** Generated/vendor/capture paths are
   ignored with a documented reason; maintained source and `docs/` are
-  formatted. `pnpm format:check` is green. Not Milestone B PASS.
+  formatted. `pnpm format:check` is green. Not production cutover.
 
 ### Added
+
+- **Milestone B PASS (not production cutover).** Independent Xiaomi /
+  Vulkan records for PERF-01…05 / 11–14 / 16 / 17 / 21 on stamp
+  `2026-08-18T20-21-12-333Z`. Registry
+  [`docs/rfc/milestone-b-exit.json`](docs/rfc/milestone-b-exit.json) is
+  `milestone_b=PASS`, `almost_pass=false`,
+  `production_cutover=NOT_STARTED`. Individual records keep
+  `milestone_b=STARTED`. Host corpora remain `HOST_CORPUS`, not PASS.
+  Production `MainActivity` / default JNI unchanged.
 
 - **Product-path host corpus for PERF-01 / PERF-02 / PERF-16 (not PASS).**
   `crates/presentation-session` `tests/product_path_perf.rs` drives

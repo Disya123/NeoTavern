@@ -75,13 +75,12 @@ Index of the internal documentation. Each major topic has its own folder.
   `D3=DEFERRED`, 2026-08-18), the [PERF-18/19/20 host
   adjudication](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/perf-18-20-adjudication.json), the [shared-device interop
   host adjudication](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/shared-device-interop-adjudication.json)
-  (`PASS` on physical Vulkan; Milestone B STARTED), the [input-to-present
+  (`PASS` on physical Vulkan; not production cutover), the [input-to-present
   host adjudication](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/input-to-present-adjudication.json)
-  (`PASS` on physical Vulkan / locked 120 Hz; Milestone B STARTED; raw p99
+  (`PASS` on physical Vulkan / locked 120 Hz; not production cutover; raw p99
   `20.65 ms` is a reference-device baseline), the [Milestone B-exit
-  registry](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/milestone-b-exit.json) (machine-checkable; refuses B PASS
-  while PERF-01…05 / PERF-11…22 evidence, physical device-loss, or open
-  baseline failures remain), the [PERF-15](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/perf-15-adjudication.json)
+  registry](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/milestone-b-exit.json) (`milestone_b=PASS`,
+  `almost_pass=false`, `production_cutover=NOT_STARTED`), the [PERF-15](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/perf-15-adjudication.json)
   (`PASS` on Xiaomi / Vulkan; trusted VisualSurfaceFrameIngress, not Plugin SDK),
   [PERF-22](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/perf-22-adjudication.json) (`PASS`),
   [device-loss](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/device-loss-adjudication.json) (`PASS`) records, and the [signed Gate P

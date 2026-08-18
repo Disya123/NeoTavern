@@ -3,16 +3,19 @@
 Debug-only Android probe for PERF-18/19/20, shared-device raster
 interop, input-to-present, and B-exit fixtures (PERF-15 / PERF-22 /
 device-loss).
-**Not** production JNI, **not** `MainActivity`, **not** Milestone B PASS
-or production cutover. Host stamps live in
+**Not** production JNI, **not** `MainActivity`, **not** production cutover.
+Independent records keep `milestone_b=STARTED`. Registry Milestone B is
+**PASS**. Host stamps live in
 [`docs/rfc/perf-18-20-adjudication.json`](../../docs/rfc/perf-18-20-adjudication.json)
-(`PERF-18=PASS`, `PERF-19=PASS`, `PERF-20=PASS`, `Milestone B=STARTED`).
+(`PERF-18=PASS`, `PERF-19=PASS`, `PERF-20=PASS`).
 B-exit fixtures: [`perf-15-adjudication.json`](../../docs/rfc/perf-15-adjudication.json)
 (`PASS`), [`perf-22-adjudication.json`](../../docs/rfc/perf-22-adjudication.json)
 (`PASS`), [`device-loss-adjudication.json`](../../docs/rfc/device-loss-adjudication.json)
-(`PASS`). Interop capture does not stamp Milestone B PASS. Host stamp:
+(`PASS`), remaining PERF-01…05 / 11–14 / 16 / 17 / 21 records, and
+[`milestone-b-exit.json`](../../docs/rfc/milestone-b-exit.json). Interop
+capture does not stamp production cutover. Host stamp:
 [`docs/rfc/shared-device-interop-adjudication.json`](../../docs/rfc/shared-device-interop-adjudication.json)
-(`shared_device_interop=PASS`, `Milestone B=STARTED`).
+(`shared_device_interop=PASS`).
 
 ## Scenarios
 
@@ -21,18 +24,18 @@ B-exit fixtures: [`perf-15-adjudication.json`](../../docs/rfc/perf-15-adjudicati
 | `perf18`                               | Effect-scope golden through wgpu/Vulkan: glass inside opacity/transform/rounded clip; bounded world-space ROI copy                                                                                   |
 | `perf19`                               | Cross-tile selection underlay + autoscroll; shape/layout/glyph raster stay 0 during drag                                                                                                             |
 | `perf20`                               | Multi-frame fling 10 000 px/s + exact `+350 px`; one `DeltaToken`; C0/C1 continuity                                                                                                                  |
-| `interop`                              | Shared-device raster↔compositor path: `devices=1`, `image_readbacks=0`, `xdev=0`; raster texture sampled by compositor/glass. Host **PASS** on physical Vulkan (not B PASS, not cutover).            |
+| `interop`                              | Shared-device raster↔compositor path: `devices=1`, `image_readbacks=0`, `xdev=0`; raster texture sampled by compositor/glass. Host **PASS** on physical Vulkan (not production cutover).             |
 | `perf15`                               | 10k fling + live glass + decoded image upload + trim-memory + trusted `reference-visual-surface` through `VisualSurfaceFrameIngress`. Plugin runtime stays false. Physical **PASS**. Not Plugin SDK. |
 | `perf22` / poster / fullscreen / error | Capability compile before `compile_passes`. Debug `PresentationSurfaceActivity` hosts a real WebView + secure `SurfaceView`. Physical **PASS**.                                                      |
 | `recovery`                             | Destroys and recreates the live wgpu device. Physical **PASS**. `recovery-surface` / `recovery-background` are separate and must not bump `DeviceEpoch`.                                             |
-| `perf01-warm` / `perf01-cold`          | Product-path 60 s bidirectional 120 Hz compositor ticks (warm vs cold-near-range). Host corpus is not PASS.                                                                                            |
-| `perf02`                               | Streaming coalesce + compositor-only frames without Dioxus rebuild.                                                                                                                                   |
-| `perf03` / `perf04`                    | Triple glass and nested dialog glass from the Dioxus product tree.                                                                                                                                    |
-| `perf05`                               | Image decode/upload during product-path fling.                                                                                                                                                        |
-| `perf11`                               | Paint-order wallpaper → glass → text → image → nested glass → overlay.                                                                                                                                |
-| `perf12` / `perf13`                    | Adversarial cold fling; reversal / teleport / prepend.                                                                                                                                                |
-| `perf14` / `perf17` / `perf21`         | Async hit-test, sticky/fixed, nested scroll latch/handoff plus product-path GPU.                                                                                                                      |
-| `perf16`                               | 100 cold contentful vs interaction samples. Host p99 stays none.                                                                                                                                      |
+| `perf01-warm` / `perf01-cold`          | Product-path 60 s bidirectional 120 Hz compositor ticks (warm vs cold-near-range). Independent physical PASS. Host corpus is not PASS.                                                               |
+| `perf02`                               | Streaming coalesce + compositor-only frames without Dioxus rebuild.                                                                                                                                  |
+| `perf03` / `perf04`                    | Triple glass and nested dialog glass from the Dioxus product tree.                                                                                                                                   |
+| `perf05`                               | Image decode/upload during product-path fling.                                                                                                                                                       |
+| `perf11`                               | Paint-order wallpaper → glass → text → image → nested glass → overlay.                                                                                                                               |
+| `perf12` / `perf13`                    | Adversarial cold fling; reversal / teleport / prepend.                                                                                                                                               |
+| `perf14` / `perf17` / `perf21`         | Async hit-test, sticky/fixed, nested scroll latch/handoff plus product-path GPU.                                                                                                                     |
+| `perf16`                               | 100 cold contentful vs interaction samples. Host p99 stays none.                                                                                                                                     |
 
 ```text
 adb shell am start -n com.neotavern.mobile/.PresentationPerfActivity \

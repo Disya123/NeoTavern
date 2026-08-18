@@ -1,7 +1,7 @@
 # Предпроектная техническая спецификация: NeoUI v4 — Android presentation backend и 120-Hz live-glass compositor
 
 **Проект:** NeoTavern  
-**Редакция:** 4.6 (GateP:P1 signed; technical M0 PASS; D1/D2 GO signed 2026-08-18; D3 DEFERRED; VisualSurfaceFrameIngress split 2026-08-19)  
+**Редакция:** 4.6 (GateP:P1 signed; technical M0 PASS; D1/D2 GO signed 2026-08-18; D3 DEFERRED; VisualSurfaceFrameIngress split 2026-08-19; Milestone B PASS 2026-08-19, not production cutover)  
 **Дата:** 2026-08-19  
 **Статус:** Draft Proposal / Gate P = `GateP:P1` PASSED; D1/D2 GO signed in [`d1-d2-decision.md`](d1-d2-decision.md) / [ADR-0049](../adr/0049-track-d-dioxus-presentation.md); D3 **DEFERRED**; VisualSurface B/D split in [ADR-0050](../adr/0050-visual-surface-ingress-vs-plugin.md); не является blanket production migration  
 **Целевой путь в репозитории:** `docs/rfc/neoui-v4-android-presentation-backend.md`  
@@ -3478,7 +3478,7 @@ backdrop damage, frontmost hit, clip, pointer capture и отсутствие cl
 ## PERF-18 — effect scope split
 
 **Host stamp:** `PASS` in [perf-18-20-adjudication.json](perf-18-20-adjudication.json).
-Milestone B remains STARTED.
+Independent record keeps `milestone_b=STARTED`. Registry Milestone B is PASS; not production cutover.
 
 ```text
 opacity group
@@ -3497,7 +3497,7 @@ conditional mask/blend и nested glass.
 ## PERF-19 — cross-tile selection
 
 **Host stamp:** `PASS` in [perf-18-20-adjudication.json](perf-18-20-adjudication.json).
-Milestone B remains STARTED.
+Independent record keeps `milestone_b=STARTED`. Registry Milestone B is PASS; not production cutover.
 
 Long selectable message пересекает минимум три tiles и содержит bidi text,
 ligatures, underline/strike, syntax colors и color emoji. Long press + drag +
@@ -3509,7 +3509,7 @@ blend-color artifacts. Selection handles остаются правильными
 
 **Host stamp:** `PASS` in [perf-18-20-adjudication.json](perf-18-20-adjudication.json)
 (multi-frame `perf20-frame` trace, not a single RenderDoc snapshot).
-Milestone B remains STARTED.
+Independent record keeps `milestone_b=STARTED`. Registry Milestone B is PASS; not production cutover.
 
 На 10 000 px/s fallback item перед/внутри/после viewport меняет height минимум
 на 350 px после Markdown/image metadata resolution. Проверяются:
@@ -3534,7 +3534,7 @@ content.
 **Host corpus:** `IMPLEMENTED` in `crates/neocompositor` (`surface_fallback`).
 **Physical:** `PASS` on Xiaomi / Vulkan (BOUND debug APK). Debug
 `PresentationSurfaceActivity` hosts a real WebView + secure `SurfaceView` +
-fallback hit routing. Milestone B remains STARTED.
+fallback hit routing. Independent record keeps `milestone_b=STARTED`. Registry Milestone B is PASS; not production cutover.
 
 WebView/secure video помещаются под glass и внутрь opacity/mask group.
 Scene compiler обязан до present выбрать заявленный panel/poster/fullscreen/

@@ -35,7 +35,7 @@ Android cutover.
 - Not linked into `libneotavern_android_jni.so`.
 - Not a place to dump compositor types into `chat-viewport`.
 - PERF-19 and PERF-20 are **PASS** on physical Vulkan (independent host
-  stamps), not Milestone B PASS. See
+  stamps). Registry Milestone B is PASS. Not production cutover. See
   [`docs/rfc/perf-18-20-adjudication.json`](../../docs/rfc/perf-18-20-adjudication.json).
 
 ## Commands

@@ -13,7 +13,7 @@ BOUND debug APK `a6cbae7`. Independent records:
 | PERF-22     | [perf-22-adjudication.json](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/perf-22-adjudication.json)         | `PASS`                                                                |
 | device-loss | [device-loss-adjudication.json](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/device-loss-adjudication.json) | `PASS`                                                                |
 
-Milestone B remains **STARTED**. `almost_pass=false`. Production cutover
+Registry Milestone B is **PASS**. `almost_pass=false`. Production cutover
 remains **NOT_STARTED**. PERF-15 PASS is the B-level
 `VisualSurfaceFrameIngress` reference producer
 ([ADR-0050](../adr/0050-visual-surface-ingress-vs-plugin.md)). It does not

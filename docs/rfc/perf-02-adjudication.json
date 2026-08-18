@@ -1,0 +1,53 @@
+{
+  "schema": "perf02-adjudication/v1",
+  "perf02": "PASS",
+  "physical": true,
+  "admissible": true,
+  "independent": true,
+  "milestone_b": "STARTED",
+  "almost_pass": false,
+  "production_cutover": "NOT_STARTED",
+  "reason": "physical product-path streaming coalesce",
+  "checks": [
+    {
+      "id": "product_path",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "id": "dioxus_shell",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "id": "blitz_producer",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "id": "wire_messages",
+      "ok": true,
+      "value": "10000"
+    },
+    {
+      "id": "direct_display_list_injection",
+      "ok": true,
+      "value": "false"
+    },
+    {
+      "id": "coalesced",
+      "ok": true,
+      "value": 2
+    },
+    {
+      "id": "rebuilds_during_scroll",
+      "ok": true,
+      "value": "0"
+    },
+    {
+      "id": "dropped_stale",
+      "ok": true,
+      "value": 11
+    }
+  ]
+}

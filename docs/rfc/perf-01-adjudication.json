@@ -1,0 +1,73 @@
+{
+  "schema": "perf01-adjudication/v1",
+  "perf01": "PASS",
+  "physical": true,
+  "admissible": true,
+  "independent": true,
+  "milestone_b": "STARTED",
+  "almost_pass": false,
+  "production_cutover": "NOT_STARTED",
+  "reason": "physical product-path 60s warm and cold-near-range 120 Hz scroll",
+  "checks": [
+    {
+      "id": "product_path",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "id": "dioxus_shell",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "id": "blitz_producer",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "id": "wire_messages",
+      "ok": true,
+      "value": "10000"
+    },
+    {
+      "id": "direct_display_list_injection",
+      "ok": true,
+      "value": "false"
+    },
+    {
+      "id": "cache",
+      "ok": true,
+      "value": "warm"
+    },
+    {
+      "id": "compositor_only_frames",
+      "ok": true,
+      "value": "7200"
+    },
+    {
+      "id": "travel",
+      "ok": true,
+      "value": 480000
+    },
+    {
+      "id": "cache",
+      "ok": true,
+      "value": "cold_near_range"
+    },
+    {
+      "id": "compositor_only_frames",
+      "ok": true,
+      "value": "7200"
+    },
+    {
+      "id": "cold_travel",
+      "ok": true,
+      "value": 480000
+    },
+    {
+      "id": "product_path",
+      "ok": true,
+      "value": "true"
+    }
+  ]
+}

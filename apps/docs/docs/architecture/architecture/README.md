@@ -83,30 +83,30 @@ crates/
                        # (opaque handles, bounded buffers, status codes)
   chat-viewport/       # Height index, range predictor, bounded tile cache,
                        # geometry epochs / fling-continuous remap (PERF-20
-                       # criterion PASS on physical Vulkan; not B PASS).
+                       # criterion PASS on physical Vulkan; not production cutover).
                        # Compositor sees only the active snapshot. Not
                        # production JNI.
-  neocompositor/       # Milestone B STARTED: NeoDisplayList, pass graph,
+  neocompositor/       # Milestone B PASS (not production cutover): NeoDisplayList, pass graph,
                        # bounded FrameTransaction mailbox, spatial/scroll/
                        # clip/effect property trees, CPU scroll/animation
                        # fast paths, async hit-test / nested-scroll
                        # dispatch, PERF-18 effect-scope (criterion PASS on
-                       # physical Vulkan; not B PASS), interaction-ready
+                       # physical Vulkan; not production cutover), interaction-ready
                        # text snapshots, cross-tile selection underlay
                        # (PERF-19 criterion PASS on physical Vulkan; not
-                       # B PASS), CPU device/surface recovery (injection
+                       # production cutover), CPU device/surface recovery (injection
                        # tests; not production JNI), bounded GPU telemetry
                        # (CPU snapshot; timestamps not image readbacks),
                        # shared-device raster interop CPU protocol (one
-                       # device; host PASS on physical Vulkan; not B PASS;
+                       # device; host PASS on physical Vulkan; not production cutover;
                        # not production JNI), Android MotionEvent /
                        # Choreographer adapter (debug/flagged host only;
-                       # physical 120 Hz Perfetto PASS, not B PASS),
+                       # physical 120 Hz Perfetto PASS, not production cutover),
                        # PERF-22 non-sampleable fallback (criterion PASS on
-                       # physical Vulkan; not B PASS),
+                       # physical Vulkan; not production cutover),
                        # PERF-15 pressure/degraded admission
                        # (PASS on physical Vulkan; VisualSurfaceFrameIngress
-                       # is B, PluginVisualSurface is D, not B PASS).
+                       # is B, PluginVisualSurface is D, not production cutover).
                        # Default
                        # host is WebView rollback
                        # (`NEOTA_NEOCOMPOSITOR=1`). Chat virtualization is
@@ -118,10 +118,10 @@ crates/
                        # (host-side; crate log capture=false).
   presentation-session/ # chat-viewport ↔ compositor transactions
                        # (PERF-19/20 host integration; criteria PASS on
-                       # physical Vulkan; not B PASS).
+                       # physical Vulkan; not production cutover).
   presentation-perf-probe/ # debug-only Android PERF-18/19/20 + interop
                        # + PERF-15/22/device-loss fixtures (not
-                       # production JNI; not Milestone B PASS).
+                       # production JNI; not production cutover).
   presentation-dioxus-shell/ # Feature-flagged Dioxus Product Wire shell.
                        # Not MainActivity; not production JNI.
 ```
@@ -244,12 +244,12 @@ gate passes.
   wire-safe rules, handshake, versioning, deterministic codegen and the
   cross-language corpus.
 - [Presentation boundary](presentation-boundary.md) — Milestone A **PASS**
-  (feature-flagged Dioxus Product Wire shell). Not production cutover.
+  (feature-flagged Dioxus Product Wire shell). Milestone B **PASS**
+  (independent physical PERF/device-loss registry). Not production cutover.
   React/WebView remains rollback; D3 DEFERRED.
 - [Known baseline failures](known-baseline-failures.md) — recorded
   `KNOWN_BASELINE_FAILURE` fingerprints. They do not invalidate PERF-18/19/20
-  evidence and are **not** a green full baseline. Must be fixed or waived
-  with an owner before Milestone B PASS. Gated by
+  evidence. Both listed rows are **FIXED**. Gated by
   [milestone-b-exit.json](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/milestone-b-exit.json).
 - [PresentationCompatibilityMatrix](../rfc/presentation-compatibility-matrix.md)
   — baseline capability statuses after D1/D2 GO (not a cutover).
