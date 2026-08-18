@@ -61,16 +61,15 @@ production JNI renderer and **not** an Android cutover.
   targets and glass ROI stay bounded; nested glass stays acyclic; malformed
   scopes are rejected before present and keep last-known-good.
 - Device/surface recovery (RFC §36 / T13, CPU injection-tested, not B PASS):
-  `GpuRecovery` owns `Uninitialized → Ready → LossDetected → Quiescing →
-  Recreating → Rehydrating → Ready` (or `Degraded`). `Timeout` skips a frame
-  without rebuild. Surface outdated/lost recreates surface/config on the same
-  `DeviceEpoch`. Device loss bumps `DeviceEpoch`, destroys device-bound
-  cache/targets/pipelines/handles, keeps `SceneEpoch` and product
-  text/geometry/selection/logical scroll, rejects stale transactions /
-  callbacks / retirement leases, keeps the mailbox bounded/latest-wins, and
-  builds the first restored frame from the new epoch only. Bounded attempts
-  then `Degraded` with acting WebView rollback. OOM does not start a recreate
-  loop. Not production JNI.
+  `GpuRecovery` owns the RFC §36 phases through `Ready` or `Degraded`.
+  `Timeout` skips a frame without rebuild. Surface outdated/lost recreates
+  surface/config on the same `DeviceEpoch`. Device loss bumps `DeviceEpoch`,
+  destroys device-bound cache/targets/pipelines/handles, keeps `SceneEpoch`
+  and product text/geometry/selection/logical scroll, rejects stale
+  transactions / callbacks / retirement leases, keeps the mailbox
+  bounded/latest-wins, and builds the first restored frame from the new epoch
+  only. Bounded attempts then `Degraded` with acting WebView rollback. OOM
+  does not start a recreate loop. Not production JNI.
 - Bounded GPU telemetry (CPU counters, not B PASS): `GpuTelemetry` is a
   copy-sized snapshot of queue/cache/target bytes and high-water, dropped/
   coalesced frames, recovery reason/duration/attempt, epoch, frame cause,

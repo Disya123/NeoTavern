@@ -265,7 +265,7 @@
     {
       "source": "architecture/known-baseline-failures.md",
       "target": "architecture/known-baseline-failures.md",
-      "sha256": "d20fc7fbc960391704668982ce527285714a0623e1b53232b304a8ad7f8b9af0"
+      "sha256": "50802f0d152dc7c36b06ba628930d7e6385d8d6b0aaebe51ba4e2909d186c58d"
     },
     {
       "source": "architecture/operations-inventory.md",
