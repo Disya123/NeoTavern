@@ -65,13 +65,13 @@ production JNI renderer and **not** an Android cutover.
   unified `Normal → Constrained → Critical → Degraded` controller,
   deterministic eviction, viewport / protected band / LKG retained,
   image-upload throttle, bounded allocation retries, no OOM loop.
-  Host corpus is `crates/neocompositor/tests/pressure.rs`. The debug
-  probe adds 10k fling + live glass + image decode/upload + trim-memory;
-  PERF-15 stays **IMPLEMENTED** without a real VisualSurface path
+  Host corpus is `crates/neocompositor/tests/pressure.rs`. B-level
+  `VisualSurfaceFrameIngress` (`visual_surface`) is a bounded
+  latest-ready-frame-wins queue with shared-device validation; it is not
+  Plugin SDK ([ADR-0050](../../docs/adr/0050-visual-surface-ingress-vs-plugin.md)).
+  PERF-15 stays **IMPLEMENTED** until the reference producer fixture is
+  captured
   ([`docs/rfc/perf-15-adjudication.json`](../../docs/rfc/perf-15-adjudication.json)).
-  B-level `VisualSurfaceFrameIngress` is specified in
-  [ADR-0050](../../docs/adr/0050-visual-surface-ingress-vs-plugin.md);
-  `PluginVisualSurface` stays Milestone D.
 - Interaction-ready text snapshots (RFC §21.1): immutable
   `TextInteractionSnapshot` bound to `SceneEpoch`, generation-safe
   `TextFragmentId`, producer-authored bidi runs / clusters / line metrics /

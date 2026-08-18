@@ -3,12 +3,11 @@
 ## Unreleased
 ### Added
 
-- **VisualSurfaceFrameIngress vs PluginVisualSurface (ADR-0050).** Milestone
-  B PERF-15 needs a live VisualSurface; the public plugin platform is
-  Milestone D and D3 stays **DEFERRED**. B gets an internal bounded
-  ingress and a trusted reference producer. D keeps PluginVisualSurface /
-  IR / permissions. PERF-15 is not weakened and is not yet PASS.
-  RFC 4.6 updates §29, §43/PERF-15, §50, §52.
+- **Bounded VisualSurfaceFrameIngress (not Plugin SDK).** Presentation
+  session owns a generation-safe latest-ready-frame-wins queue. Product
+  Wire carries only the logical surface declare and policy. GPU handles
+  stay off the wire. Late/not-ready frames do not block present.
+  Recovery bumps generation. D3 / PluginVisualSurface stay deferred.
 
 - **PERF-22 and physical device-loss PASS (not B PASS).** Independent
   Xiaomi / Vulkan stamps on a BOUND debug APK: PERF-22

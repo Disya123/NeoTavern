@@ -101,7 +101,7 @@ crates/
                        # PERF-22 non-sampleable fallback (criterion PASS on
                        # physical Vulkan; not B PASS),
                        # PERF-15 pressure/degraded admission
-                       # (IMPLEMENTED; VisualSurfaceFrameIngress pending,
+                       # (IMPLEMENTED; VisualSurfaceFrameIngress is B,
                        # PluginVisualSurface is D, not PASS).
                        # Default
                        # host is WebView rollback

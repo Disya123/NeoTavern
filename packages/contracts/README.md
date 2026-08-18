@@ -14,6 +14,9 @@ with these schemas (Fastify Type Provider), the frontend uses the inferred
   `ChatGenerateRequestSchema`.
 - Diagnostics: `DiagnosticsSnapshotSchema` and `CacheCleanupResultSchema`;
   the snapshot contains only aggregates and explicit privacy invariants.
+- Presentation (logical, not Kernel durable state): `VisualSurfaceDeclareSchema`
+  (ADR-0050). Product Wire carries surface id, generation, size, sampleable
+  flag, and policy. GPU handles are forbidden on this schema.
 - `validateSchema(schema, input)` / `isValid()` — runtime validation via TypeBox.
 
 ## Dependencies

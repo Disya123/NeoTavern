@@ -13,16 +13,17 @@ use neotavern_chat_viewport::{
 };
 use neotavern_neocompositor::{
     apply_autoscroll, autoscroll_delta, compose_selectable, AffineCoeffs, BackdropRootId,
-    BidiAffinity, ClipChainId, ClipId, ClipNode, CompositorFastPath, DamageRect, EffectKind,
-    EffectNode, EffectNodeId, EpochClock, FrameMailbox, FrameTransaction, FrameTransactionParts,
-    GeometryTile, GeometryTileSnapshot, GestureId, GlassBoundary, HitTestSnapshot,
-    InteractionReady, LogicalRect, NeoDisplayList, NeoPaintOp, NeoScene, PaintChunk, PaintChunkId,
-    PaintOrderKey, Point, PointerEvent, PointerId, PointerKind, PostAccept, PostReject,
-    PresentationTime, PropertySnapshot, PropertyTreeBuilder, RasterDecision, Rect, SceneEpoch,
-    ScrollAck as CompositorScrollAck, ScrollEpoch, ScrollId, ScrollSequence, SelectablePaintPlan,
-    SpatialKind, SpatialNode, SpatialNodeId, StableSemanticId, StubPayload, TextFragmentId,
-    TextInteractionSnapshot, TextOffset, TextRange, TextSnapshotSet, TileCoverage, TileId,
-    TileKind, Vec2,
+    BidiAffinity, ClipChainId, ClipId, ClipNode, CompositorFastPath, DamageRect, DeviceEpoch,
+    EffectKind, EffectNode, EffectNodeId, EpochClock, FrameMailbox, FrameTransaction,
+    FrameTransactionParts, GeometryTile, GeometryTileSnapshot, GestureId, GlassBoundary,
+    HitTestSnapshot, IngressReject, InteractionReady, LogicalRect, NeoDisplayList, NeoPaintOp,
+    NeoScene, PaintChunk, PaintChunkId, PaintOrderKey, Point, PointerEvent, PointerId, PointerKind,
+    PostAccept, PostReject, PresentationTime, PropertySnapshot, PropertyTreeBuilder,
+    RasterDecision, Rect, SceneEpoch, ScrollAck as CompositorScrollAck, ScrollEpoch, ScrollId,
+    ScrollSequence, SelectablePaintPlan, SpatialKind, SpatialNode, SpatialNodeId, StableSemanticId,
+    StubPayload, SurfaceFrameIngress, SurfaceId, TextFragmentId, TextInteractionSnapshot,
+    TextOffset, TextRange, TextSnapshotSet, TileCoverage, TileId, TileKind, Vec2,
+    VisualSurfaceDeclare,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -34,6 +35,7 @@ pub enum SessionError {
     MissingFragment,
     FallbackNotReady,
     StaleSelection,
+    VisualIngress(IngressReject),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -113,13 +115,16 @@ pub struct PresentationSession {
     hit_spatial: Option<neotavern_neocompositor::SpatialId>,
     hit_clip: Option<ClipId>,
     autoscroll_seq: u64,
+    ingress: SurfaceFrameIngress,
 }
 
 impl PresentationSession {
     pub fn new(viewport: ViewportSession, width: f32, height: f32) -> Self {
+        let clock = EpochClock::new();
+        let ingress = SurfaceFrameIngress::new(clock.device_epoch());
         Self {
             viewport,
-            clock: EpochClock::new(),
+            clock,
             mailbox: FrameMailbox::with_defaults(),
             path: CompositorFastPath::new(),
             width,
@@ -135,6 +140,7 @@ impl PresentationSession {
             hit_spatial: None,
             hit_clip: None,
             autoscroll_seq: 0,
+            ingress,
         }
     }
 
@@ -164,6 +170,27 @@ impl PresentationSession {
 
     pub fn scroll_id(&self) -> Option<ScrollId> {
         self.scroll_id
+    }
+
+    pub fn declare_visual_surface(
+        &mut self,
+        declare: VisualSurfaceDeclare,
+    ) -> Result<SurfaceId, SessionError> {
+        self.ingress
+            .declare(declare)
+            .map_err(SessionError::VisualIngress)
+    }
+
+    pub fn visual_ingress(&self) -> &SurfaceFrameIngress {
+        &self.ingress
+    }
+
+    pub fn visual_ingress_mut(&mut self) -> &mut SurfaceFrameIngress {
+        &mut self.ingress
+    }
+
+    pub fn recover_visual_device(&mut self, epoch: DeviceEpoch) {
+        self.ingress.recover_device(epoch);
     }
 
     pub fn bind_item_text(&mut self, item: LogicalItemId, snapshot: TextInteractionSnapshot) {

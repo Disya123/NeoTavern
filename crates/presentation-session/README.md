@@ -22,6 +22,8 @@ Android cutover.
 - A selection change damages only old/new underlay and dependent glass ROI
   (`SELECTION_ONLY`). Glyph tiles stay valid.
 - Fallback tiles without a text snapshot stay `NotInteractionReady`.
+- Owns a B-level `VisualSurfaceFrameIngress` (ADR-0050): logical declare
+  plus bounded latest-ready-frame-wins queue. Not Plugin SDK.
 
 ## What this crate is not
 

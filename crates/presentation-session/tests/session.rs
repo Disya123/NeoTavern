@@ -213,3 +213,37 @@ fn map_rejects_mixed_generation() {
     mixed.generation.tiles = mixed.generation.geometry.saturating_add(1);
     assert!(map_viewport_geometry(&mixed, 240.0, neotavern_neocompositor::SceneEpoch(1)).is_err());
 }
+
+#[test]
+fn visual_surface_ingress_is_session_owned_and_not_plugin_runtime() {
+    let mut session = PresentationSession::new(three_item_session(), 240.0, 240.0);
+    let id = session
+        .declare_visual_surface(neotavern_neocompositor::VisualSurfaceDeclare::reference(
+            "vs.reference",
+        ))
+        .expect("declare");
+    let _ = session.publish().expect("publish");
+    let ops_before = session
+        .last_transaction()
+        .expect("tx")
+        .scene()
+        .display_list
+        .ops
+        .len();
+    assert_eq!(id, neotavern_neocompositor::SurfaceId(1));
+    assert!(session.visual_ingress().surface_frame_ingress());
+    assert!(!session.visual_ingress().plugin_runtime());
+    assert!(!session.visual_ingress().direct_display_list_injection());
+    session.publish().expect("republish");
+    let ops_after = session
+        .last_transaction()
+        .expect("tx")
+        .scene()
+        .display_list
+        .ops
+        .len();
+    assert_eq!(
+        ops_before, ops_after,
+        "ingress must not inject producer paint into NeoDisplayList"
+    );
+}

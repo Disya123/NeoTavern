@@ -28,6 +28,7 @@ pub mod target_pool;
 pub mod telemetry;
 pub mod text;
 pub mod transaction;
+pub mod visual_surface;
 
 pub use animation::{
     AnimValue, AnimationId, AnimationProperty, AnimationSpec, Easing, FastPathError,
@@ -108,4 +109,9 @@ pub use text::{
 };
 pub use transaction::{
     DamageRect, FrameTransaction, FrameTransactionParts, ResourceLease, ResourceLeaseId,
+};
+pub use visual_surface::{
+    IngressAccept, IngressDropReason, IngressReject, PresentSample, SurfaceContent, SurfaceFence,
+    SurfaceFrame, SurfaceFrameIngress, VisualSurfaceDeclare, INGRESS_BYTE_QUOTA, INGRESS_ITEM_CAP,
+    INGRESS_SURFACE_CAP,
 };

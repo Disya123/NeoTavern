@@ -81,7 +81,10 @@ not B PASS), bounded GPU telemetry (CPU snapshot; GPU timestamps on that
 snapshot stay `Unavailable` and are not image readbacks; not B PASS), and a
 shared-device raster interop CPU protocol (`SharedGpuContext`; one
 `DeviceEpoch`; sampleable raster texture; `image_readbacks=0`,
-`cross_device_copies=0`; not production JNI, not B PASS). Chat
+`cross_device_copies=0`; not production JNI, not B PASS). B-level
+`VisualSurfaceFrameIngress` is the trusted VisualSurface queue
+([ADR-0050](../adr/0050-visual-surface-ingress-vs-plugin.md)); it is not
+Plugin SDK. Chat
 virtualization lives
 in `crates/chat-viewport` (height index, predictor, bounded tile cache,
 geometry epochs / C0/C1 remap; compositor sees only the **active** tile
@@ -124,9 +127,11 @@ secure `SurfaceView` + fallback hit routing; capability chosen before
 Pressure/degraded admission (PERF-15) is **IMPLEMENTED** on the host
 corpus (`crates/neocompositor` `pressure`) plus a physical probe fixture
 (10k fling + live glass + image decode/upload + injected trim-memory).
-PASS requires a trusted B-level `VisualSurfaceFrameIngress` and
-reference producer ([ADR-0050](../adr/0050-visual-surface-ingress-vs-plugin.md)),
-not `PluginVisualSurface` and not a synthetic texture. D3 stays DEFERRED.
+PASS requires a trusted B-level `VisualSurfaceFrameIngress`
+(implemented in `crates/neocompositor` `visual_surface`, owned by
+`presentation-session`) and a live reference producer (not yet
+captured). `PluginVisualSurface` is Milestone D. A synthetic texture is
+not a substitute. D3 stays DEFERRED.
 Physical device-loss injection is **PASS** (`wgpu_destroyed=true`,
 `wgpu_recreated=true`, `DeviceEpoch` bumps once; surface recreation and
 background/resume are separate and do not bump the epoch).

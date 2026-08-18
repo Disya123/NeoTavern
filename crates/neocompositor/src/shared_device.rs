@@ -474,6 +474,19 @@ impl SharedGpuContext {
         Err(SharedGpuError::CpuReadbackForbidden)
     }
 
+    pub fn validate_surface(&self, handle: TypedGpuHandle) -> Result<(), SharedGpuError> {
+        self.require_ready()?;
+        self.reject_handle(handle, HandleOwner::Surface)?;
+        if handle.kind != SharedHandleKind::Surface {
+            return Err(SharedGpuError::ForeignOwner);
+        }
+        Ok(())
+    }
+
+    pub fn alloc_surface(&mut self) -> Result<TypedGpuHandle, SharedGpuError> {
+        self.alloc(HandleOwner::Surface, SharedHandleKind::Surface)
+    }
+
     pub fn cross_device_copy(&mut self) -> Result<(), SharedGpuError> {
         Err(SharedGpuError::CrossDeviceCopyForbidden)
     }
