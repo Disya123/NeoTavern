@@ -164,6 +164,17 @@
   `PERF_SCENARIO=interop` is not a production cutover. A gesture-platform
   adapter is a later stage. Milestone B remains STARTED.
 
+- **Android shared-device interop host adjudication (PASS, Milestone B STARTED).**
+  Physical Xiaomi / Vulkan RenderDoc v1.45 evidence in
+  [shared-device-interop-adjudication.json](docs/rfc/shared-device-interop-adjudication.json):
+  `shared_device_interop=PASS`, `almost_pass=false`. Capture
+  `2026-08-18T13-21-28-777Z`, control `2026-08-18T13-20-53-169Z`, APK
+  `BOUND`. One `VkDevice`; Vello raster texture is sampled by the
+  compositor/glass; bounded ROI; no `vkMapMemory` / image-to-buffer /
+  cross-device copy; `devices=1`, `image_readbacks=0`, `xdev=0`. Not a
+  production cutover. `MainActivity` / WebView rollback unchanged.
+  Milestone B remains STARTED.
+
 - **Known baseline failures (not a green full baseline).** Recorded as
   `KNOWN_BASELINE_FAILURE` in
   [known-baseline-failures.md](docs/architecture/known-baseline-failures.md):

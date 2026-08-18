@@ -22,7 +22,9 @@ probe still logs `android_gpu_capture=false` and cannot self-admit.
 - One `wgpu` `Device`/`Queue` shared by Vello raster and the glass pass.
   `SharedGpuContext` is the CPU ownership protocol: raster and compositor
   bind the same identity/`DeviceEpoch`; foreign or stale handles are
-  rejected before submit.
+  rejected before submit. Physical Vulkan host **PASS**:
+  [`docs/rfc/shared-device-interop-adjudication.json`](../../docs/rfc/shared-device-interop-adjudication.json)
+  (`shared_device_interop=PASS`; not Milestone B PASS; not production JNI).
 - Sampleable intermediate (Vello `STORAGE_BINDING|TEXTURE_BINDING` plus a
   compositor accumulator). Glass reads a **same-device ROI copy**, never a CPU
   readback and never a cross-device copy. Clip rects are resolved in

@@ -72,7 +72,10 @@ Index of the internal documentation. Each major topic has its own folder.
   runbook](rfc/m0-d2-physical-runbook.md); [admission](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/m0-d2-adjudication.json)),
   the [TrackComparison](rfc/m0-track-comparison.md), the [signed D1/D2
   record](rfc/d1-d2-decision.md) (`D1=Track D GO`, `D2=Dioxus+Blitz GO`,
-  `D3=DEFERRED`, 2026-08-18), and the [signed Gate P
+  `D3=DEFERRED`, 2026-08-18), the [PERF-18/19/20 host
+  adjudication](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/perf-18-20-adjudication.json), the [shared-device interop
+  host adjudication](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/shared-device-interop-adjudication.json)
+  (`PASS` on physical Vulkan; Milestone B STARTED), and the [signed Gate P
   record](rfc/gate-p-decision-draft.md) (`GateP:P1`, 2026-08-17, incomplete
   physical M-1 waiver).
 - [Changelog](https://github.com/Disya123/NeoTavern/blob/main/CHANGELOG.md).

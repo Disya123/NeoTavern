@@ -90,7 +90,8 @@ selection go through `crates/presentation-session` (one
 Debug-only
 `crates/presentation-perf-probe` / `PresentationPerfActivity` is the
 physical capture vehicle (not production JNI), including debug
-`PERF_SCENARIO=interop` (not cutover, not B PASS). Neither crate is linked into
+`PERF_SCENARIO=interop` (host **PASS** on physical Vulkan; not cutover,
+not B PASS). Neither crate is linked into
 production JNI. Device/surface recovery is a CPU injection-tested state
 machine in `crates/neocompositor` (`GpuRecovery`). Bounded GPU telemetry
 (`GpuTelemetry`) records queue/cache/target high-water, dropped/coalesced

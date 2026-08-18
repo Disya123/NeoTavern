@@ -3004,8 +3004,15 @@ Raster output is a sampleable compositor texture (`image_readbacks=0`,
 not `device.poll(wait)`. Retirement leases outlive latest-wins drops. Queue
 pressure is capped. Device loss uses `GpuRecovery` (epoch bump, rehydrate).
 Unsupported compute degrades the flagged path to WebView rollback without
-breaking the production host. Debug `PERF_SCENARIO=interop` is not a
-cutover. A gesture-platform adapter is a later stage.
+breaking the production host. Host stamp (2026-08-18, Xiaomi `8f5c2b7c` /
+Adreno 710 / Vulkan, APK `BOUND`):
+[`shared-device-interop-adjudication.json`](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/shared-device-interop-adjudication.json)
+`shared_device_interop=PASS`. RenderDoc v1.45 capture
+`2026-08-18T13-21-28-777Z` (control `2026-08-18T13-20-53-169Z`): one
+`VkDevice`, named `m0-d1a-vello` sampled into `m0-d1a-accumulator` then
+bounded ROI to `m0-d1a-glass-roi`, no `vkMapMemory` / image-to-buffer,
+`devices=1`, `image_readbacks=0`, `xdev=0`. This is **not** a cutover and
+**not** Milestone B PASS. A gesture-platform adapter is a later stage.
 
 ---
 
@@ -4223,7 +4230,7 @@ Platform expansion не меняет Product Wire либо durable state format.
 - [ ] ordered NeoDisplayList сохраняет upstream paint order;
 - [ ] typed GlassSurface/Media/Plugin/External boundaries;
 - [ ] обычные UI chunks существуют до и после glass barrier;
-- [ ] shared-device render-to-sampleable-target без CPU readback/cross-device copy;
+- [x] shared-device render-to-sampleable-target без CPU readback/cross-device copy;
 - [ ] pass graph validation и last-known-good fallback;
 - [ ] balanced effect scopes и explicit backdrop roots;
 - [ ] group opacity/filter/mask не теряются на glass barrier;

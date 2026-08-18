@@ -1,13 +1,16 @@
 #!/usr/bin/env node
 /**
- * Physical Xiaomi / Vulkan capture for PERF-18/19/20.
+ * Physical Xiaomi / Vulkan capture for PERF-18/19/20 and shared-device
+ * interop (`--scenario=interop`).
  *
  *   node scripts/perf-18-20-renderdoc-capture.mjs --mode=control --scenario=perf18 --serial=8f5c2b7c
  *   node scripts/perf-18-20-renderdoc-capture.mjs --mode=capture --scenario=perf18 --serial=8f5c2b7c
+ *   node scripts/perf-18-20-renderdoc-capture.mjs --mode=capture --scenario=interop --serial=8f5c2b7c
  *
  * PERF-20 continuity is the multi-frame `perf20-frame` logcat trace, not a
  * single RenderDoc snapshot. Capture mode still pulls one .rdc for Vulkan
- * `devices=1`.
+ * `devices=1`. Interop adjudication is
+ * `scripts/shared-device-interop-adjudicate.mjs`.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -124,6 +127,8 @@ function scenarioFrames(scenario) {
   if (scenario === 'perf19') return { frames: 16, capture: 4 };
   return { frames: 16, capture: 2 };
 }
+
+const ALLOWED_SCENARIOS = ['perf18', 'perf19', 'perf20', 'interop'];
 
 function captureFilenames(stamp, scenario) {
   return {
@@ -284,8 +289,12 @@ function main() {
     printJson({ ok: false, stage: 'args', reason: 'mode must be capture or control' });
     process.exit(2);
   }
-  if (!['perf18', 'perf19', 'perf20'].includes(scenario)) {
-    printJson({ ok: false, stage: 'args', reason: 'scenario must be perf18, perf19, or perf20' });
+  if (!ALLOWED_SCENARIOS.includes(scenario)) {
+    printJson({
+      ok: false,
+      stage: 'args',
+      reason: 'scenario must be perf18, perf19, perf20, or interop',
+    });
     process.exit(2);
   }
 

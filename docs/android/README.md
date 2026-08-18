@@ -178,7 +178,10 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   `crates/presentation-session` (not production JNI). Debug-only
   `PresentationPerfActivity` / `presentation-perf-probe` is the PERF-18/19/20
   and shared-device interop capture vehicle (not production JNI, not
-  Milestone B PASS). A gesture-platform adapter is a later stage.
+  Milestone B PASS). Shared-device interop is host **PASS** on physical
+  Vulkan
+  ([shared-device-interop-adjudication.json](../rfc/shared-device-interop-adjudication.json)).
+  A gesture-platform adapter is a later stage.
   Independent stamps:
   [perf-18-20-adjudication.json](../rfc/perf-18-20-adjudication.json).
   `NEOTA_NEOCOMPOSITOR=1` is a non-default flag, not a cutover switch.

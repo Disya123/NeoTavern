@@ -21,9 +21,10 @@ Admitted capture stamps (Xiaomi `8f5c2b7c` / Adreno 710 / Vulkan, APK
 `BOUND`, `evidence_dirty=false`):
 
 ```text
-perf18  2026-08-18T11-12-42-464Z
-perf19  2026-08-18T11-13-59-218Z
-perf20  2026-08-18T11-15-46-856Z
+perf18   2026-08-18T11-12-42-464Z
+perf19   2026-08-18T11-13-59-218Z
+perf20   2026-08-18T11-15-46-856Z
+interop  2026-08-18T13-21-28-777Z (control 2026-08-18T13-20-53-169Z)
 ```
 
 There is no combined «almost PASS». Milestone B stays STARTED even if all
@@ -62,7 +63,7 @@ adb shell am start -n com.neotavern.mobile/.PresentationPerfActivity --es com.ne
 adb shell am start -n com.neotavern.mobile/.PresentationPerfActivity --es com.neotavern.mobile.PERF_SCENARIO perf18 --es com.neotavern.mobile.PERF_FRAMES 16 --es com.neotavern.mobile.PERF_CAPTURE_FRAME 2
 ```
 
-Same extras with `perf19` / `perf20`. `perf20` should run ≥48 frames.
+Same extras with `perf19` / `perf20` / `interop`. `perf20` should run ≥48 frames.
 
 Helpers:
 
@@ -74,6 +75,9 @@ node scripts/perf-18-20-renderdoc-capture.mjs --mode=capture --scenario=perf19 -
 node scripts/perf-18-20-renderdoc-capture.mjs --mode=control --scenario=perf20 --serial=8f5c2b7c
 node scripts/perf-18-20-renderdoc-capture.mjs --mode=capture --scenario=perf20 --serial=8f5c2b7c
 node scripts/perf-18-20-adjudicate.mjs --perf18-stamp=... --perf19-stamp=... --perf20-stamp=...
+node scripts/perf-18-20-renderdoc-capture.mjs --mode=control --scenario=interop --serial=8f5c2b7c
+node scripts/perf-18-20-renderdoc-capture.mjs --mode=capture --scenario=interop --serial=8f5c2b7c
+node scripts/shared-device-interop-adjudicate.mjs --stamp=... --control-stamp=...
 ```
 
 Adjudicator output is always independent:

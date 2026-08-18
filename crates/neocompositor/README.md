@@ -87,7 +87,8 @@ production JNI renderer and **not** an Android cutover.
   do not block present. Retirement leases outlive latest-wins drops.
   Queue pressure is capped (`QUEUE_CAP`). Device loss uses `GpuRecovery`.
   Unsupported compute degrades to WebView rollback without a second device.
-  Debug `PERF_SCENARIO=interop` is not a cutover.
+  Debug `PERF_SCENARIO=interop` is host **PASS** on physical Vulkan (not a
+  cutover).
 
 ## What this crate is not
 
@@ -130,7 +131,7 @@ Started (CPU types + tests):
   that snapshot stay `Unavailable`; interop timestamps are separate)
 - shared-device raster interop CPU protocol (`SharedGpuContext`; one device;
   sampleable raster texture; no image readback / cross-device copy; debug
-  `interop` probe path; not production JNI)
+  `interop` probe path; host **PASS** on physical Vulkan; not production JNI)
 
 Not started (do not treat as done):
 

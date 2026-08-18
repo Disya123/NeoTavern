@@ -94,7 +94,8 @@ crates/
                        # tests; not production JNI), bounded GPU telemetry
                        # (CPU snapshot; timestamps not image readbacks),
                        # shared-device raster interop CPU protocol (one
-                       # device; not B PASS; not production JNI). Default
+                       # device; host PASS on physical Vulkan; not B PASS;
+                       # not production JNI). Default
                        # host is WebView rollback
                        # (`NEOTA_NEOCOMPOSITOR=1`). Chat virtualization is
                        # `chat-viewport`, not here.
@@ -107,7 +108,8 @@ crates/
                        # (PERF-19/20 host integration; criteria PASS on
                        # physical Vulkan; not B PASS).
   presentation-perf-probe/ # debug-only Android PERF-18/19/20 + interop
-                       # probe (not production JNI; not Milestone B PASS).
+                       # probe (interop host PASS on physical Vulkan; not
+                       # production JNI; not Milestone B PASS).
   presentation-dioxus-shell/ # Feature-flagged Dioxus Product Wire shell.
                        # Not MainActivity; not production JNI.
 ```

@@ -1,0 +1,236 @@
+{
+  "schema": "shared-device-interop-adjudication/v1",
+  "interop": "PASS",
+  "shared_device_interop": "PASS",
+  "milestone_b": "STARTED",
+  "almost_pass": false,
+  "apk_linkage": "BOUND",
+  "evidence_dirty": false,
+  "checks": {
+    "interop": {
+      "status": "PASS",
+      "ok": true,
+      "checks": [
+        {
+          "id": "vulkan",
+          "ok": true,
+          "api": {
+            "ok": true,
+            "api": "Vulkan",
+            "status": "VULKAN",
+            "admissible": true,
+            "driver": "Vulkan",
+            "vulkan_commands": true,
+            "reason": "RenderDoc dump contains Vulkan commands"
+          }
+        },
+        {
+          "id": "one_vk_device",
+          "ok": true,
+          "devices": 1,
+          "vk_device_ids": [
+            "55"
+          ],
+          "reason": "probe devices=1 and RenderDoc shows at most one VkDevice"
+        },
+        {
+          "id": "named_raster_accumulator",
+          "ok": true,
+          "vello_id": "301",
+          "accumulator_id": "299",
+          "snapshot_id": "303",
+          "reason": "named vello, accumulator, and glass-roi resources share the capture"
+        },
+        {
+          "id": "raster_then_sample",
+          "ok": true,
+          "blit": 1,
+          "roi": 3,
+          "glass": 4,
+          "named": {
+            "ok": true,
+            "vello_id": "301",
+            "accumulator_id": "299",
+            "snapshot_id": "303",
+            "reason": "named vello, accumulator, and glass-roi resources share the capture"
+          },
+          "reason": "blit samples raster into accumulator before ROI/glass composite"
+        },
+        {
+          "id": "d1a_pass_order",
+          "ok": true,
+          "order": {
+            "ok": true,
+            "indices": {
+              "roi1": 3,
+              "glass1": 4,
+              "roi2": 10,
+              "glass2": 11
+            },
+            "blit_mutations_between_glasses": 4,
+            "reason": "ROI-1 → glass-1 → raster/blit mutations → ROI-2 → glass-2"
+          }
+        },
+        {
+          "id": "bounded_same_device_roi",
+          "ok": true,
+          "roi": {
+            "ok": true,
+            "accumulator_id": "299",
+            "snapshot_id": "303",
+            "copies": [
+              {
+                "src": "299",
+                "dst": "303",
+                "x": 24,
+                "y": 40,
+                "w": 140,
+                "h": 80
+              },
+              {
+                "src": "299",
+                "dst": "303",
+                "x": 80,
+                "y": 70,
+                "w": 140,
+                "h": 80
+              }
+            ],
+            "matches": [
+              {
+                "want": {
+                  "x": 24,
+                  "y": 40,
+                  "w": 140,
+                  "h": 80
+                },
+                "got": {
+                  "src": "299",
+                  "dst": "303",
+                  "x": 24,
+                  "y": 40,
+                  "w": 140,
+                  "h": 80
+                },
+                "ok": true
+              },
+              {
+                "want": {
+                  "x": 80,
+                  "y": 70,
+                  "w": 140,
+                  "h": 80
+                },
+                "got": {
+                  "src": "299",
+                  "dst": "303",
+                  "x": 80,
+                  "y": 70,
+                  "w": 140,
+                  "h": 80
+                },
+                "ok": true
+              }
+            ],
+            "reason": "both ROIs copy named accumulator → glass-roi at 140×80, smaller than 320×200"
+          }
+        },
+        {
+          "id": "no_map_or_image_to_buffer",
+          "ok": true,
+          "forbidden": []
+        },
+        {
+          "id": "counters",
+          "ok": true,
+          "values": {
+            "gpu_ran": "true",
+            "adapter": "Adreno_(TM)_710",
+            "backend": "Vulkan",
+            "software": "false",
+            "devices": "1",
+            "readbacks": "0",
+            "xdev": "0",
+            "pass_compiles": "1",
+            "layout_rebuilds": "0",
+            "paint_scene_rebuilds": "0",
+            "vello_rebuilds": "64",
+            "raster": "64",
+            "glass": "32",
+            "frames": "16",
+            "ran_on_android": "true",
+            "capture": "false",
+            "capture_polls": "1",
+            "render_polls": "0",
+            "acc_bytes": "774144",
+            "image_readbacks": "0",
+            "timestamp": "Unavailable",
+            "raster_texture_sampled": "true",
+            "shared_identity_match": "true"
+          }
+        },
+        {
+          "id": "lease_until_composite",
+          "ok": true,
+          "destroy": 0,
+          "reason": "no vkDestroyImage before last composite submit (retirement lease held)"
+        },
+        {
+          "id": "capture_ended",
+          "ok": true,
+          "ended": true
+        },
+        {
+          "id": "control_counters",
+          "ok": true,
+          "values": {
+            "gpu_ran": "true",
+            "adapter": "Adreno_(TM)_710",
+            "backend": "Vulkan",
+            "software": "false",
+            "devices": "1",
+            "readbacks": "0",
+            "xdev": "0",
+            "pass_compiles": "1",
+            "layout_rebuilds": "0",
+            "paint_scene_rebuilds": "0",
+            "vello_rebuilds": "64",
+            "raster": "64",
+            "glass": "32",
+            "frames": "16",
+            "ran_on_android": "true",
+            "capture": "false",
+            "capture_polls": "0",
+            "render_polls": "0",
+            "acc_bytes": "774144",
+            "image_readbacks": "0",
+            "timestamp": "Unavailable",
+            "raster_texture_sampled": "true",
+            "shared_identity_match": "true"
+          }
+        },
+        {
+          "id": "provenance",
+          "ok": true,
+          "provenance": {
+            "apk_linkage": "BOUND",
+            "evidence_dirty": false
+          }
+        }
+      ],
+      "reason": "Vulkan shared-device raster texture sampled by compositor/glass"
+    }
+  },
+  "note": "Not production JNI, not a MainActivity cutover. Milestone B stays STARTED.",
+  "captures": {
+    "interop": "2026-08-18T13-21-28-777Z",
+    "control": "2026-08-18T13-20-53-169Z"
+  },
+  "apk": {
+    "path": "apps/android/app/build/outputs/apk/debug/app-debug.apk",
+    "present": true,
+    "sha256": "93af6646f315330b61fae183e2dc46574bab50d0ad54d375621847b86a1061ee",
+    "bytes": 154858343
+  },
+  "package": "com.neotavern.mobile"
+}
