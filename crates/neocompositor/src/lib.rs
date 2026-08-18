@@ -22,6 +22,7 @@ pub mod scene;
 pub mod scroll;
 pub mod selection;
 pub mod shared_device;
+pub mod surface_fallback;
 pub mod target_pool;
 pub mod telemetry;
 pub mod text;
@@ -84,6 +85,11 @@ pub use shared_device::{
     InteropPresentOutcome, InteropTelemetry, ReadinessToken, SharedFormat, SharedGpuContext,
     SharedGpuError, SharedGpuFactory, SharedHandleKind, SharedTextureFormat, TextureUsageFlags,
     TypedGpuHandle, DEFAULT_FORMAT, LIVE_HANDLE_CAP, QUEUE_CAP, TIMESTAMP_RESOLVE_CAP,
+};
+pub use surface_fallback::{
+    compile_surface_plan, surface_plan_invalid, CompiledSurfaces, FallbackPolicy, ParentEffect,
+    PosterFrameId, ResolvedKind, ResolvedSurface, SurfaceCapability, SurfaceCompileError,
+    SurfaceCompileRequest, SurfaceId, SurfacePlan, SurfaceSpec,
 };
 pub use target_pool::{TargetId, TargetPool, TargetPoolError};
 pub use telemetry::{

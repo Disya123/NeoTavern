@@ -5,8 +5,10 @@
 
 use std::sync::{Arc, Mutex, TryLockError};
 
+use crate::display_list::Rect;
 use crate::epoch::{DeviceEpoch, EpochClock, FrameId, SceneEpoch};
 use crate::pass_graph::compile_passes;
+use crate::surface_fallback::{surface_plan_invalid, SurfaceCapability, SurfaceId};
 use crate::transaction::{FrameTransaction, ResourceLease};
 
 pub const DEFAULT_ITEM_CAP: usize = 1;
@@ -106,7 +108,23 @@ impl Inner {
             self.stats.rejected_device_epoch += 1;
             return Err(PostReject::DeviceEpoch);
         }
-        if compile_passes(&tx.scene().display_list).is_err()
+        let (previous_epoch, previous_capabilities) = self.previous_surface_state();
+        let scene = tx.scene();
+        let viewport = Rect::new(
+            0.0,
+            0.0,
+            scene.display_list.width as f32,
+            scene.display_list.height as f32,
+        );
+        if surface_plan_invalid(
+            tx.scene_epoch(),
+            &scene.surfaces,
+            &scene.display_list,
+            scene.surface_plan.as_ref(),
+            previous_epoch,
+            &previous_capabilities,
+            viewport,
+        ) || compile_passes(&scene.display_list).is_err()
             || tx.properties().validate().is_err()
             || property_epoch_mismatch(&tx)
             || !tx.interaction_epochs_match()
@@ -148,6 +166,22 @@ impl Inner {
             Some(id) => PostAccept::Coalesced { dropped: id },
             None => PostAccept::Queued,
         })
+    }
+
+    fn previous_surface_state(&self) -> (Option<SceneEpoch>, Vec<(SurfaceId, SurfaceCapability)>) {
+        let Some(tx) = self.pending.as_ref().or(self.last_known_good.as_ref()) else {
+            return (None, Vec::new());
+        };
+        let caps = match tx.scene().surface_plan.as_ref() {
+            Some(plan) => plan.capabilities(),
+            None => tx
+                .scene()
+                .surfaces
+                .iter()
+                .filter_map(|spec| spec.capability.map(|capability| (spec.id, capability)))
+                .collect(),
+        };
+        (Some(tx.scene_epoch()), caps)
     }
 
     fn is_stale(&self, tx: &FrameTransaction) -> bool {

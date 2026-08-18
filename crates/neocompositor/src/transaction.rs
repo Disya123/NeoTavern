@@ -304,6 +304,12 @@ fn estimate_bytes(
     256 + scene.display_list.ops.len() * 96
         + scene.display_list.spatial.len() * 48
         + scene.glass.len() * 32
+        + scene.surfaces.len() * 64
+        + scene
+            .surface_plan
+            .as_ref()
+            .map(|plan| plan.resolved.len() * 48)
+            .unwrap_or(0)
         + damage.len() * 16
         + leases.len() * 16
         + properties.spatial_slot_count() * 80

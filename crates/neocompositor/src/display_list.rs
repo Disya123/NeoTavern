@@ -74,6 +74,19 @@ impl Rect {
             height: y1 - y,
         }
     }
+
+    pub fn contains_point(self, x: f32, y: f32) -> bool {
+        x >= self.x && y >= self.y && x < self.x1() && y < self.y1()
+    }
+
+    /// True when `self` completely covers `other`.
+    pub fn covers(self, other: Self) -> bool {
+        !other.is_empty()
+            && self.x <= other.x
+            && self.y <= other.y
+            && self.x1() >= other.x1()
+            && self.y1() >= other.y1()
+    }
 }
 
 /// Column-major affine `[a, b, c, d, e, f]` as in kurbo (`|a c e; b d f|`).

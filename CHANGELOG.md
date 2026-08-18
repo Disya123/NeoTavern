@@ -192,7 +192,27 @@
   Physical stamp `2026-08-18T16-28-13-285Z` (Xiaomi / Vulkan / locked 120 Hz).
   The debug host presents a retained texture to a window swapchain on a
   compositor thread; `actualPresentTime` comes from
-  FrameTimeline/SurfaceFlinger. Milestone B remains STARTED.
+  FrameTimeline/SurfaceFlinger. Raw input-to-present p99 `20.65 ms` is a
+  **reference-device baseline**, not a release budget (no calibration ADR).
+  The single `sf_gpu_deadline_missed` exclusion is admissible only because
+  the trace confirms timely app submit. Milestone B remains STARTED.
+
+- **Non-sampleable surface fallback (PERF-22 IMPLEMENTED, not PASS).**
+  `crates/neocompositor` assigns every surface a capability
+  (`SampleableTexture` / `NonSampleableWebView` /
+  `NonSampleableSecureVideo` / `ProtectedOverlay` / `Unavailable`) before
+  `compile_passes`. A non-sampleable node is replaced atomically by
+  `OpaquePanel` / `PosterFrame` / `FullscreenSurface` / `ExplicitError`.
+  Non-sampleable content is never a glass backdrop source; secure surfaces
+  are not copied or read back (`image_readbacks=0`, `xdev=0`);
+  opacity/mask/filter apply only to the whole fallback; the fallback owns
+  paint order, clip, and hit-test bounds; the hidden original does not
+  take input through the fallback. Capability and fallback share one
+  `SceneEpoch`; a capability change is a new atomic transaction.
+  Unsupported combinations reject with last-known-good and do not panic.
+  Host corpus: `crates/neocompositor/tests/surface_fallback.rs`. PASS still
+  requires an Android platform-surface + input-routing fixture.
+  `MainActivity` / WebView rollback unchanged. Milestone B remains STARTED.
 
 - **Known baseline failures (not a green full baseline).** Recorded as
   `KNOWN_BASELINE_FAILURE` in

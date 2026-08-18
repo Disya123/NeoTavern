@@ -3498,6 +3498,10 @@ content.
 
 ## PERF-22 — non-sampleable surface/effect rejection
 
+**Host corpus:** `IMPLEMENTED` in `crates/neocompositor` (`surface_fallback`).
+PASS still requires an Android fixture that checks a real platform surface
+and input routing. Milestone B remains STARTED.
+
 WebView/secure video помещаются под glass и внутрь opacity/mask group.
 Scene compiler обязан до present выбрать заявленный panel/poster/fullscreen/
 error fallback; partial parent effect, неверное interleaving и input

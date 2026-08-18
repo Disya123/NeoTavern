@@ -207,6 +207,10 @@ describe('input-to-present host adjudicator', () => {
     expect(record.perfetto).toBe('PASS');
     expect(record.milestone_b).toBe('STARTED');
     expect(record.almost_pass).toBe(false);
+    expect(record.input_to_present_p99_role).toBe('reference-device-baseline');
+    expect(record.release_budget_calibration_adr).toBeNull();
+    expect(record.sf_gpu_deadline_missed_exclusion.requires_timely_app_submit).toBe(true);
+    expect(record.sf_gpu_deadline_missed_exclusion.count).toBe(0);
   });
 
   it('blocks missing SurfaceFlinger present even when deadlines look fine', () => {
@@ -411,6 +415,32 @@ describe('input-to-present host adjudicator', () => {
     const fixture = passingFixture({ unjoined_cookies: 12 });
     expect(evaluateFixture(fixture, provenance).status).toBe('BLOCKED');
     expect(evaluateFixture(fixture, provenance).joinOk).toBe(false);
+  });
+
+  it('admits a single sf_gpu_deadline_missed only when the trace shows timely app submit', () => {
+    const miss = opportunity({
+      seq: 9,
+      rendererControlled: false,
+      exclusionReason: 'sf_gpu_deadline_missed',
+      actualPresentTime: 20_000_000,
+      targetPresentDeadline: 8_000_000,
+      gpu_submit_ns: 3_000_000,
+      sf_latch_ns: 4_000_000,
+    });
+    const base = passingFixture();
+    base.exclusion_reasons = ['sf_gpu_deadline_missed'];
+    base.modes = base.modes.map((mode) =>
+      mode.hz === 120 ? { ...mode, opportunities: [...mode.opportunities, miss] } : mode,
+    );
+    const blocked = evaluateFixture(base, provenance);
+    expect(blocked.sf_gpu_deadline_missed_exclusion.count).toBe(1);
+    expect(blocked.sf_gpu_deadline_missed_exclusion.admissible).toBe(false);
+    expect(blocked.status).toBe('BLOCKED');
+    const timely = { ...base, sf_gpu_deadline_missed_timely_app_submit: true };
+    const evaluated = evaluateFixture(timely, provenance);
+    expect(evaluated.sf_gpu_deadline_missed_exclusion.admissible).toBe(true);
+    expect(evaluated.sf_gpu_deadline_missed_exclusion.timely_app_submit).toBe(true);
+    expect(evaluated.status).toBe('PASS');
   });
 
   it('requires APK BOUND to 55a3174 or a descendant', () => {

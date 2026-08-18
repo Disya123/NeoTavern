@@ -38,6 +38,12 @@ export const MAX_CONSECUTIVE_MISSES = 2;
 /** Raw input-to-present must not use a one-refresh PASS threshold without a budget ADR. */
 export const INPUT_TO_PRESENT_ONE_REFRESH_GATE = false;
 
+/** Physical p99 is a reference-device baseline, not a release budget. */
+export const INPUT_TO_PRESENT_P99_ROLE = 'reference-device-baseline';
+
+export const SF_GPU_DEADLINE_MISSED_REASON =
+  'The SurfaceFlinger GPU deadline miss is an admissible exclusion only because the FrameTimeline trace confirms the app submitted on time for that renderer-controlled opportunity. It is not treated as an application-caused miss.';
+
 /** Host-test fling contract (same physical velocity under coalescing). */
 export const FLING_VELOCITY_REL_EPS = 0.15;
 
@@ -644,6 +650,7 @@ export function evaluateFixture(fixture, provenance = {}) {
     (mode) =>
       mode.p50 != null && mode.p95 != null && mode.p99 != null && mode.input_to_present?.n > 0,
   );
+  const sfGpuDeadlineMissed = sfGpuDeadlineMissedExclusion(fixture, gateModes);
   const ok =
     bound &&
     vulkan &&
@@ -667,7 +674,8 @@ export function evaluateFixture(fixture, provenance = {}) {
     stallsOk &&
     thermalOk &&
     scenariosOk &&
-    i2pPublished;
+    i2pPublished &&
+    sfGpuDeadlineMissed.admissible;
   return {
     status: ok ? 'PASS' : 'BLOCKED',
     ok,
@@ -699,11 +707,46 @@ export function evaluateFixture(fixture, provenance = {}) {
     thermalOk,
     scenariosOk,
     i2p_percentiles_published: i2pPublished,
+    sf_gpu_deadline_missed_exclusion: sfGpuDeadlineMissed,
     chain,
     modes,
     reason: ok
       ? 'physical 120 Hz input-to-present fixture meets RFC §14 renderer-controlled gate'
       : 'physical input-to-present evidence incomplete or over RFC §14 120 Hz gate',
+  };
+}
+
+export function sfGpuDeadlineMissedExclusion(fixture, gateModes = []) {
+  const count = gateModes.reduce(
+    (n, mode) => n + Number(mode.exclusions?.sf_gpu_deadline_missed ?? 0),
+    0,
+  );
+  const timelyAppSubmit = fixture?.sf_gpu_deadline_missed_timely_app_submit === true;
+  const admissible = count === 0 || (count === 1 && timelyAppSubmit);
+  return {
+    count,
+    admissible,
+    requires_timely_app_submit: true,
+    timely_app_submit: timelyAppSubmit,
+    trace_confirms_app_submit_before_deadline: count === 0 ? null : timelyAppSubmit,
+    reason: SF_GPU_DEADLINE_MISSED_REASON,
+  };
+}
+
+export function p99Baseline(p99Ns) {
+  if (p99Ns == null || !Number.isFinite(Number(p99Ns))) {
+    return {
+      input_to_present_p99_ns: null,
+      input_to_present_p99_ms: null,
+      input_to_present_p99_role: INPUT_TO_PRESENT_P99_ROLE,
+      release_budget_calibration_adr: null,
+    };
+  }
+  return {
+    input_to_present_p99_ns: Number(p99Ns),
+    input_to_present_p99_ms: Number((Number(p99Ns) / 1e6).toFixed(2)),
+    input_to_present_p99_role: INPUT_TO_PRESENT_P99_ROLE,
+    release_budget_calibration_adr: null,
   };
 }
 
@@ -751,6 +794,9 @@ export function adjudicate({ fixture = null, provenance = {} } = {}) {
     input_to_present: 'actualPresentTime - eventTime',
     input_to_present_one_refresh_gate: INPUT_TO_PRESENT_ONE_REFRESH_GATE,
     unknown_exclusion: 'application-caused',
+    sf_gpu_deadline_missed_exclusion:
+      evaluated.sf_gpu_deadline_missed_exclusion ?? sfGpuDeadlineMissedExclusion(fixture, []),
+    ...p99Baseline(hz120?.p99 ?? hz120?.input_to_present?.p99 ?? null),
     evidence: evidenceFromFixture(
       fixture,
       provenance,

@@ -111,6 +111,13 @@ does not treat `Choreographer#doFrame` as present and does not compare raw
 SurfaceFlinger stamp `2026-08-18T16-28-13-285Z`
 ([input-to-present-physical-runbook.md](../rfc/input-to-present-physical-runbook.md),
 [input-to-present-adjudication.json](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/input-to-present-adjudication.json)).
+Raw input-to-present p99 `20.65 ms` on that device is a
+**reference-device baseline**, not a release budget (no calibration ADR).
+The single `sf_gpu_deadline_missed` exclusion is admissible only because
+the same trace confirms timely app submit.
+Non-sampleable surface fallback (PERF-22) is **IMPLEMENTED** on the host
+corpus (`crates/neocompositor` `surface_fallback`); PASS still requires an
+Android platform-surface + input-routing fixture.
 Known host baseline
 failures are
 recorded in

@@ -245,7 +245,7 @@
     {
       "source": "architecture/README.md",
       "target": "architecture/README.md",
-      "sha256": "4adf27bebf5b8e4e62145b4a3dd9b8df718a045530a0bff85a00d7b927368d7c"
+      "sha256": "0afc7f408116a8b2407cb943291f649d1defb28ebb9339ce6b9396694afba698"
     },
     {
       "source": "architecture/benchmarks.md",
@@ -280,7 +280,7 @@
     {
       "source": "architecture/presentation-boundary.md",
       "target": "architecture/presentation-boundary.md",
-      "sha256": "ed3aeb7b8bc8c850190507df5d11dcc0889f9ec08bb76a43b0d266f693f63b5a"
+      "sha256": "84c1f953f1460d42de9395e52f34fdb614ce7d49b2a3dc22042fd13f3cf29f08"
     },
     {
       "source": "architecture/prompt-pipeline.md",
@@ -420,7 +420,7 @@
     {
       "source": "rfc/neoui-v4-android-presentation-backend.md",
       "target": "rfc/neoui-v4-android-presentation-backend.md",
-      "sha256": "4c58dfb5e45d63d1128a3ff5ca4a07a9f9c355d6a21910b744d4b7725a7af290"
+      "sha256": "5cce5ff54ab9732f05c4c385be457e77bd927996726064751d8a6b6fe1bcda06"
     },
     {
       "source": "rfc/perf-18-20-physical-runbook.md",

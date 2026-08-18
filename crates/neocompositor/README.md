@@ -42,7 +42,22 @@ production JNI renderer and **not** an Android cutover.
   `PresentationInputInstrumentedTest`. Status: `PASS`.
   Physical FrameTimeline/SurfaceFlinger stamp `2026-08-18T16-28-13-285Z`;
   the host adjudicator does not treat raw input-to-present as a one-refresh
-  PASS gate.
+  PASS gate. Raw p99 on the reference device (`20.65 ms`) is a baseline,
+  not a release budget, until a calibration ADR lands.
+- Non-sampleable surface fallback (PERF-22 **IMPLEMENTED**, not PASS):
+  every surface gets a capability (`SampleableTexture` /
+  `NonSampleableWebView` / `NonSampleableSecureVideo` /
+  `ProtectedOverlay` / `Unavailable`) before `compile_passes`. A
+  non-sampleable node is replaced atomically by `OpaquePanel` /
+  `PosterFrame` / `FullscreenSurface` / `ExplicitError`. Non-sampleable
+  content is never a backdrop source; secure surfaces are not copied or
+  read back; opacity/mask/filter apply only to the whole fallback;
+  hidden originals do not take input through the fallback. Capability
+  plus fallback share one `SceneEpoch`; a capability change is a new
+  transaction. Unsupported combinations reject with last-known-good and
+  do not panic. Host corpus is in
+  `crates/neocompositor/tests/surface_fallback.rs`. PASS still needs an
+  Android platform-surface + input-routing fixture.
 - Interaction-ready text snapshots (RFC §21.1): immutable
   `TextInteractionSnapshot` bound to `SceneEpoch`, generation-safe
   `TextFragmentId`, producer-authored bidi runs / clusters / line metrics /
@@ -143,11 +158,14 @@ Started (CPU types + tests):
   `interop` probe path; host **PASS** on physical Vulkan; not production JNI)
 - Android MotionEvent / Choreographer adapter (host-side; debug/flagged
   shell only; not production JNI; `PASS` on physical 120 Hz)
+- non-sampleable surface fallback (PERF-22 **IMPLEMENTED**, not PASS;
+  Android platform-surface fixture still required)
 
 Not started (do not treat as done):
 
 - remaining PERF-01…PERF-22 and 120 Hz product budgets (PERF-18/19/20
-  are independently PASS; Milestone B stays STARTED)
+  are independently PASS; PERF-22 is **IMPLEMENTED** on the host corpus,
+  not PASS; Milestone B stays STARTED)
 
 See [presentation boundary](../../docs/architecture/presentation-boundary.md)
 and [ADR-0049](../../docs/adr/0049-track-d-dioxus-presentation.md).

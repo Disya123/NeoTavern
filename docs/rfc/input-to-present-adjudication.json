@@ -17,6 +17,18 @@
   "input_to_present": "actualPresentTime - eventTime",
   "input_to_present_one_refresh_gate": false,
   "unknown_exclusion": "application-caused",
+  "sf_gpu_deadline_missed_exclusion": {
+    "count": 1,
+    "admissible": true,
+    "requires_timely_app_submit": true,
+    "timely_app_submit": true,
+    "trace_confirms_app_submit_before_deadline": true,
+    "reason": "The SurfaceFlinger GPU deadline miss is an admissible exclusion only because the FrameTimeline trace confirms the app submitted on time for that renderer-controlled opportunity. It is not treated as an application-caused miss."
+  },
+  "input_to_present_p99_ns": 20646128,
+  "input_to_present_p99_ms": 20.65,
+  "input_to_present_p99_role": "reference-device-baseline",
+  "release_budget_calibration_adr": null,
   "evidence": {
     "trace_sha256": "20b49ceeb8abca75258ae851b454f079763e7a2d372fc889958136253683b198",
     "apk_sha256": "a76b8485d572faa102d73d4f586d081bf7c741ad9306dfd1910f570ba8f636f8",
