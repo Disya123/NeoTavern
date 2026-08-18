@@ -63,4 +63,17 @@ class DisplayRefreshPolicyTest {
         assertEquals(1, decision.requestedModeId)
         assertEquals("no-matching-resolution", decision.reason)
     }
+
+    @Test
+    fun `picks nearest same-size mode for a 90 Hz pacing request`() {
+        val current = mode(1, 120f)
+        val decision = DisplayRefreshPolicy.chooseNearestRefresh(
+            listOf(mode(1, 60f), mode(2, 90f), current),
+            current,
+            90f,
+        )
+        assertEquals(2, decision.requestedModeId)
+        assertEquals(90f, decision.requestedRefreshHz)
+        assertEquals("target-refresh", decision.reason)
+    }
 }

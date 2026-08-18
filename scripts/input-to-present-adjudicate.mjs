@@ -14,12 +14,13 @@
  *   node scripts/input-to-present-adjudicate.mjs
  *   node scripts/input-to-present-adjudicate.mjs --fixture=path.json --write
  */
+import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { latestBoundBundle, ROOT } from './m0-d1a-capture-host.mjs';
 
-export const ADJUDICATION_SCHEMA = 'input-to-present-adjudication/v2';
+export const ADJUDICATION_SCHEMA = 'input-to-present-adjudication/v3';
 export const RECORD_PATH = join(ROOT, 'docs', 'rfc', 'input-to-present-adjudication.json');
 
 /** RFC §14.1 refresh deadlines. Frame-opportunity budgets, not input-to-present. */
@@ -41,6 +42,15 @@ export const INPUT_TO_PRESENT_ONE_REFRESH_GATE = false;
 export const FLING_VELOCITY_REL_EPS = 0.15;
 
 export const QUEUE_CAP = 64;
+
+/** Staging commit that split deadline_miss from raw input-to-present. */
+export const MIN_BOUND_COMMIT = '55a31747e0151ed085be2d5107beb9e149e131e2';
+
+/** RFC §14.2 120-Hz fixture: warm-up then 60 s continuous scroll. */
+export const MIN_WARMUP_NS = 1_000_000_000;
+export const MIN_CONTINUOUS_SCROLL_NS = 60_000_000_000;
+export const GATE_HZ = 120;
+export const GATE_HZ_TOLERANCE = 1.5;
 
 function argValue(name) {
   const prefix = `--${name}=`;
@@ -406,6 +416,134 @@ export function modeBudget(mode) {
   };
 }
 
+export function gitIsAncestor(ancestor, commit, cwd = ROOT) {
+  const result = spawnSync('git', ['merge-base', '--is-ancestor', ancestor, commit], {
+    cwd,
+    encoding: 'utf8',
+  });
+  return result.status === 0;
+}
+
+export function commitIsBoundEligible(commit, { ancestor } = {}) {
+  if (!commit) {
+    return { ok: false, reason: 'missing apk_source_commit' };
+  }
+  const full = String(commit);
+  if (full === MIN_BOUND_COMMIT || full.startsWith(MIN_BOUND_COMMIT.slice(0, 7))) {
+    return { ok: true, reason: 'BOUND to 55a3174' };
+  }
+  const check = ancestor ?? gitIsAncestor;
+  if (check(MIN_BOUND_COMMIT, full)) {
+    return { ok: true, reason: 'BOUND to a descendant of 55a3174' };
+  }
+  return {
+    ok: false,
+    reason: 'APK source commit is not 55a3174 or a subsequent clean descendant',
+  };
+}
+
+export function isNormativeGateMode(mode) {
+  return mode?.normative_gate === true || Number(mode?.hz) === GATE_HZ;
+}
+
+export function observedHzMatchesGate(hz) {
+  return Number.isFinite(hz) && Math.abs(hz - GATE_HZ) <= GATE_HZ_TOLERANCE;
+}
+
+export function uniqueCausalChain(links) {
+  const seqs = new Set();
+  const vsyncPresent = new Map();
+  if (!links.length) {
+    return { ok: false, reason: 'empty causal chain' };
+  }
+  for (const raw of links) {
+    const op = normalizeOpportunity(raw);
+    if (op.seq == null || op.targetVsyncId == null || op.actualPresentTime == null) {
+      return {
+        ok: false,
+        reason: 'incomplete sequence → targetVsyncId → actual present',
+      };
+    }
+    if (seqs.has(op.seq)) {
+      return { ok: false, reason: `duplicate sequence ${op.seq}` };
+    }
+    seqs.add(op.seq);
+    const key = String(op.targetVsyncId);
+    const prev = vsyncPresent.get(key);
+    if (prev != null && prev !== op.actualPresentTime) {
+      return {
+        ok: false,
+        reason: `targetVsyncId ${op.targetVsyncId} maps to multiple actual presents`,
+      };
+    }
+    vsyncPresent.set(key, op.actualPresentTime);
+  }
+  return {
+    ok: true,
+    sequences: seqs.size,
+    vsyncs: vsyncPresent.size,
+    reason: 'unique sequence → targetVsyncId → actual present',
+  };
+}
+
+export function clockDomainOk(fixture) {
+  const domain = fixture.clock_domain;
+  const aligned = fixture.clock_domain_aligned === true;
+  if (domain !== 'monotonic' && domain !== 'boottime') {
+    return {
+      ok: false,
+      reason: 'MotionEvent/Choreographer/present timestamps lack a single clock domain',
+    };
+  }
+  if (!aligned) {
+    return {
+      ok: false,
+      reason: 'clocks were not converted onto one domain',
+    };
+  }
+  return { ok: true, domain, reason: `single clock domain ${domain}` };
+}
+
+export function actualPresentSourceOk(fixture) {
+  const src = fixture.actual_present_source;
+  const ok = src === 'frametimeline' || src === 'surfaceflinger';
+  return {
+    ok,
+    source: src ?? null,
+    reason: ok
+      ? `actualPresentTime from ${src}`
+      : 'actualPresentTime is not FrameTimeline/SurfaceFlinger',
+  };
+}
+
+export function traceLossOk(fixture) {
+  const lost = fixture.trace_lost_packets ?? 1;
+  const overrun = fixture.trace_buffer_overrun ?? 1;
+  const ftrace = fixture.ftrace_lost_events ?? 1;
+  const ok = lost === 0 && overrun === 0 && ftrace === 0;
+  return {
+    ok,
+    lost_packets: lost,
+    buffer_overrun: overrun,
+    ftrace_lost_events: ftrace,
+    reason: ok ? 'no trace packet/buffer loss' : 'trace packets or buffers were lost',
+  };
+}
+
+export function continuousScrollOk(fixture) {
+  const warmup = fixture.warmup_ns ?? 0;
+  const scroll = fixture.continuous_scroll_ns ?? 0;
+  const ok = warmup >= MIN_WARMUP_NS && scroll >= MIN_CONTINUOUS_SCROLL_NS;
+  return {
+    ok,
+    warmup_ns: warmup,
+    continuous_scroll_ns: scroll,
+    reason: ok
+      ? 'warm-up and 60 s continuous scroll'
+      : 'missing warm-up or 60 s continuous-scroll window',
+  };
+}
+
 export function evaluateFixture(fixture, provenance = {}) {
   if (!fixture) {
     return {
@@ -414,20 +552,49 @@ export function evaluateFixture(fixture, provenance = {}) {
       reason: 'physical Perfetto batch not captured',
     };
   }
-  if (fixture.environment_blocked || fixture.environment === 'ENVIRONMENT_BLOCKED') {
+  const requestedHz = fixture.requested_frame_rate ?? fixture.requested_hz ?? null;
+  const observedHz = fixture.observed_display_hz ?? fixture.observed_hz ?? null;
+  if (
+    fixture.environment_blocked ||
+    fixture.environment === 'ENVIRONMENT_BLOCKED' ||
+    (requestedHz != null &&
+      Number(requestedHz) >= GATE_HZ - GATE_HZ_TOLERANCE &&
+      observedHz != null &&
+      !observedHzMatchesGate(Number(observedHz)))
+  ) {
     return {
       status: 'ENVIRONMENT_BLOCKED',
       ok: false,
       reason: 'OS held the session below the requested refresh after a correct high-Hz request',
     };
   }
-  const bound = provenance.apk_linkage === 'BOUND' && provenance.evidence_dirty === false;
+  const boundCommit = commitIsBoundEligible(
+    provenance.apk_source_commit ?? fixture.apk_source_commit,
+    { ancestor: provenance.ancestor },
+  );
+  const bound =
+    provenance.apk_linkage === 'BOUND' &&
+    provenance.evidence_dirty === false &&
+    boundCommit.ok;
   const vulkan = fixture.driver === 'Vulkan';
   const links = fixture.chain ?? [];
   const chain = links.map(chainComplete);
   const chainOk = chain.length > 0 && chain.every((item) => item.ok);
-  const modes = (fixture.modes ?? []).map(modeBudget);
-  const modesOk = modes.length > 0 && modes.every((item) => item.ok);
+  const unique = uniqueCausalChain(links);
+  const presentSource = actualPresentSourceOk(fixture);
+  const clocks = clockDomainOk(fixture);
+  const loss = traceLossOk(fixture);
+  const scrollWindow = continuousScrollOk(fixture);
+  const hzOk = observedHzMatchesGate(Number(observedHz));
+  const modes = (fixture.modes ?? []).map((mode) => ({
+    ...modeBudget(mode),
+    normative_gate: isNormativeGateMode(mode),
+    pacing_only: !isNormativeGateMode(mode),
+  }));
+  const gateModes = modes.filter((mode) => mode.normative_gate);
+  const modesOk = gateModes.length > 0 && gateModes.every((item) => item.ok);
+  const exclusionsListed = Array.isArray(fixture.exclusion_reasons);
+  const unknownAsApp = fixture.unknown_exclusion === 'application-caused';
   const fastPath =
     links.every((link) => (normalizeOpportunity(link).producer ?? 0) === 0) &&
     links.every((link) => (normalizeOpportunity(link).layout ?? 0) === 0) &&
@@ -435,6 +602,11 @@ export function evaluateFixture(fixture, provenance = {}) {
     links.every((link) => (normalizeOpportunity(link).raster ?? 0) === 0);
   const droppedEdges = fixture.dropped_edges ?? 1;
   const highWater = fixture.queue_high_water ?? Number.POSITIVE_INFINITY;
+  const productWireHigh = fixture.product_wire_high_water ?? 0;
+  const compositorHigh =
+    fixture.compositor_queue_high_water ?? fixture.queue_high_water ?? Number.POSITIVE_INFINITY;
+  const queuesOk =
+    highWater <= QUEUE_CAP && productWireHigh <= QUEUE_CAP && compositorHigh <= QUEUE_CAP;
   const fling = fixture.fling_velocity ?? {};
   const fine = Number(fling.fine);
   const coalesced = Number(fling.coalesced);
@@ -465,47 +637,98 @@ export function evaluateFixture(fixture, provenance = {}) {
     'refresh_transition',
   ];
   const scenariosOk = required.every((name) => scenarios.has(name));
+  const i2pPublished = gateModes.every(
+    (mode) =>
+      mode.p50 != null && mode.p95 != null && mode.p99 != null && mode.input_to_present?.n > 0,
+  );
   const ok =
     bound &&
     vulkan &&
     chainOk &&
+    unique.ok &&
+    presentSource.ok &&
+    clocks.ok &&
+    loss.ok &&
+    scrollWindow.ok &&
+    hzOk &&
     modesOk &&
+    exclusionsListed &&
+    unknownAsApp &&
     fastPath &&
     droppedEdges === 0 &&
-    highWater <= QUEUE_CAP &&
+    queuesOk &&
     flingOk &&
     epochOk &&
     deltaOk &&
     stallsOk &&
     thermalOk &&
-    scenariosOk;
+    scenariosOk &&
+    i2pPublished;
   return {
     status: ok ? 'PASS' : 'BLOCKED',
     ok,
     bound,
+    bound_commit: boundCommit,
     vulkan,
     chainOk,
+    unique_chain: unique,
+    actual_present_source: presentSource,
+    clock_domain: clocks,
+    trace_loss: loss,
+    continuous_scroll: scrollWindow,
+    observed_display_hz: observedHz,
+    requested_frame_rate: requestedHz,
+    hzOk,
     modesOk,
+    exclusions_listed: exclusionsListed,
+    unknown_as_application_caused: unknownAsApp,
     fastPath,
     droppedEdges,
     highWater,
+    queuesOk,
     flingOk,
     epochOk,
     deltaOk,
     stallsOk,
     thermalOk,
     scenariosOk,
+    i2p_percentiles_published: i2pPublished,
     chain,
     modes,
     reason: ok
-      ? 'physical input-to-present chain meets RFC §14 renderer-controlled opportunity gate'
-      : 'physical input-to-present evidence incomplete or over RFC §14 renderer-controlled gate',
+      ? 'physical 120 Hz input-to-present fixture meets RFC §14 renderer-controlled gate'
+      : 'physical input-to-present evidence incomplete or over RFC §14 120 Hz gate',
+  };
+}
+
+export function evidenceFromFixture(fixture, provenance = {}, denominators = null) {
+  if (!fixture) return null;
+  return {
+    trace_sha256: fixture.trace_sha256 ?? null,
+    apk_sha256: fixture.apk_sha256 ?? provenance.apk_sha256 ?? null,
+    apk_source_commit: provenance.apk_source_commit ?? fixture.apk_source_commit ?? null,
+    perfetto_config_sha256: fixture.perfetto_config_sha256 ?? null,
+    source_commit: fixture.source_commit ?? provenance.apk_source_commit ?? null,
+    device: fixture.device ?? null,
+    display_mode: fixture.display_mode ?? null,
+    denominators: denominators ?? {
+      all_frame: null,
+      renderer_controlled: null,
+    },
+    exclusions: fixture.exclusion_reasons ?? [],
+    unknown_exclusion: fixture.unknown_exclusion ?? 'application-caused',
+    trace_loss: {
+      lost_packets: fixture.trace_lost_packets ?? null,
+      buffer_overrun: fixture.trace_buffer_overrun ?? null,
+      ftrace_lost_events: fixture.ftrace_lost_events ?? null,
+    },
   };
 }
 
 export function adjudicate({ fixture = null, provenance = {} } = {}) {
   const evaluated = evaluateFixture(fixture, provenance);
   const pending = evaluated.status === 'PENDING';
+  const hz120 = evaluated.modes?.find((mode) => mode.hz === GATE_HZ);
   return {
     schema: ADJUDICATION_SCHEMA,
     platform_gesture_adapter: pending ? 'IMPLEMENTED' : evaluated.ok ? 'PASS' : 'IMPLEMENTED',
@@ -515,11 +738,19 @@ export function adjudicate({ fixture = null, provenance = {} } = {}) {
     production_cutover: 'NOT_STARTED',
     apk_linkage: provenance.apk_linkage ?? null,
     evidence_dirty: provenance.evidence_dirty ?? null,
+    apk_source_commit: provenance.apk_source_commit ?? null,
     budgets: REFRESH_DEADLINE_NS,
     deadline_miss: 'rendererControlled && actualPresentTime > targetPresentDeadline',
     input_to_present: 'actualPresentTime - eventTime',
     input_to_present_one_refresh_gate: INPUT_TO_PRESENT_ONE_REFRESH_GATE,
     unknown_exclusion: 'application-caused',
+    evidence: evidenceFromFixture(
+      fixture,
+      provenance,
+      hz120
+        ? { all_frame: hz120.all_frame, renderer_controlled: hz120.renderer_controlled }
+        : null,
+    ),
     checks: evaluated,
     reason: evaluated.reason,
   };
@@ -542,6 +773,8 @@ function main() {
   const provenance = {
     apk_linkage: bundle?.apk_linkage ?? null,
     evidence_dirty: bundle?.evidence_dirty ?? null,
+    apk_sha256: bundle?.apk_sha256 ?? null,
+    apk_source_commit: bundle?.base_commit ?? bundle?.apk_source_commit ?? null,
   };
   const record = adjudicate({
     fixture: loadFixture(fixturePath),

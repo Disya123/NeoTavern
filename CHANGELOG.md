@@ -190,7 +190,9 @@
   Raw `input-to-present` p50/p95/p99 are reported and are not gated against
   one refresh. `Choreographer#doFrame` is not present.
   Physical FrameTimeline/SurfaceFlinger batch is still pending.
-  Milestone B remains STARTED.
+  The debug host now presents a retained texture to a window swapchain on a
+  compositor thread; `actualPresentTime` still comes only from
+  FrameTimeline/SurfaceFlinger. Milestone B remains STARTED.
 
 - **Known baseline failures (not a green full baseline).** Recorded as
   `KNOWN_BASELINE_FAILURE` in

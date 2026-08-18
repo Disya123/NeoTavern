@@ -7,8 +7,10 @@
 mod android_jni;
 #[cfg(feature = "gpu")]
 mod gpu_scenarios;
+mod i2p;
 mod perf20;
 
+pub use i2p::{bind_scroll_scene, kind_from_i32, push_sample, I2pCpu, I2pFrame, I2pScene};
 pub use perf20::{run_fling_trace, Perf20Summary};
 
 pub const CAPTURE_DIR: &str = "/data/data/com.neotavern.mobile/files/perf-18-20";

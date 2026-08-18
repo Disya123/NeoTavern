@@ -77,7 +77,7 @@ Index of the internal documentation. Each major topic has its own folder.
   host adjudication](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/shared-device-interop-adjudication.json)
   (`PASS` on physical Vulkan; Milestone B STARTED), the [input-to-present
   host adjudication](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/input-to-present-adjudication.json)
-  (`IMPLEMENTED / PERFETTO_PENDING`), and the [signed Gate P
+  (`IMPLEMENTED / PERFETTO_PENDING` until the physical 120 Hz batch), and the [signed Gate P
   record](rfc/gate-p-decision-draft.md) (`GateP:P1`, 2026-08-17, incomplete
   physical M-1 waiver).
 - [Changelog](https://github.com/Disya123/NeoTavern/blob/main/CHANGELOG.md).

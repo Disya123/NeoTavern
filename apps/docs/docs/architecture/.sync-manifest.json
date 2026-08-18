@@ -5,7 +5,7 @@
     {
       "source": "README.md",
       "target": "README.md",
-      "sha256": "741df33856736e70b893f53d25698fd709832486e21e24a96013dcd639a8c21f"
+      "sha256": "0d757d91bca6b33e2b5ebfab6ccfe6919acf557076739801b9668cee8946b199"
     },
     {
       "source": "adr/0004-typebox-contracts.md",
@@ -360,7 +360,7 @@
     {
       "source": "rfc/README.md",
       "target": "rfc/README.md",
-      "sha256": "85126b72eff918e4aa9d2146e99675b47676556dbe3c17333087c306c8dc75c8"
+      "sha256": "177d987402ac8dd0e7a180ace08c6524b662e430e60ea2f63a14c61237053a56"
     },
     {
       "source": "rfc/d1-d2-decision.md",
@@ -375,7 +375,7 @@
     {
       "source": "rfc/input-to-present-physical-runbook.md",
       "target": "rfc/input-to-present-physical-runbook.md",
-      "sha256": "7ac1918dac7e2982004df5330beceaf25b59d52ddefa401486c0d70c2deb2510"
+      "sha256": "341c545e7c227f80cfd4823b5ffae34fd2c067bd6d2ebd0e849e80590710257b"
     },
     {
       "source": "rfc/m0-d1a-physical-runbook.md",

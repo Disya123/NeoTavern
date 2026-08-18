@@ -1,5 +1,5 @@
 {
-  "schema": "input-to-present-adjudication/v2",
+  "schema": "input-to-present-adjudication/v3",
   "platform_gesture_adapter": "IMPLEMENTED",
   "perfetto": "PENDING",
   "milestone_b": "STARTED",
@@ -7,6 +7,7 @@
   "production_cutover": "NOT_STARTED",
   "apk_linkage": null,
   "evidence_dirty": null,
+  "apk_source_commit": null,
   "budgets": {
     "60": 16666667,
     "90": 11111111,
@@ -16,7 +17,8 @@
   "input_to_present": "actualPresentTime - eventTime",
   "input_to_present_one_refresh_gate": false,
   "unknown_exclusion": "application-caused",
-  "staging_commit": "0a1031c0f2fbd9e4da6f958e344e25b0f89d2bb7",
+  "evidence": null,
+  "min_bound_commit": "55a31747e0151ed085be2d5107beb9e149e131e2",
   "checks": {
     "status": "PENDING",
     "ok": false,

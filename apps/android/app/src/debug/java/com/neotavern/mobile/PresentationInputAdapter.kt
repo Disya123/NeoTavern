@@ -1,6 +1,7 @@
 package com.neotavern.mobile
 
 import android.os.Build
+import android.os.SystemClock
 import android.os.Trace
 import android.util.Log
 import android.view.Choreographer
@@ -18,7 +19,17 @@ import java.util.concurrent.atomic.AtomicLong
 class PresentationInputAdapter(
     private val choreographer: Choreographer = Choreographer.getInstance(),
 ) : Choreographer.FrameCallback {
+    interface NativeSink {
+        fun tryPush(pointer: Int, kind: Int, x: Float, y: Float, timeNanos: Long)
+
+        fun loseFocus(timeNanos: Long)
+    }
+
     val queue = PresentationInputQueue()
+    var nativeSink: NativeSink? = null
+    @Volatile
+    var lastPeriodNanos: Long = 8_333_333L
+        private set
     @Volatile
     var lastVsyncNanos: Long = 0L
         private set
@@ -38,6 +49,12 @@ class PresentationInputAdapter(
     @Volatile
     var lastTargetVsyncId: Long = 0L
         private set
+    @Volatile
+    var lastNextVsyncId: Long = 0L
+        private set
+    @Volatile
+    var lastNextPresentDeadline: Long = 0L
+        private set
     private var posted = false
     private val nextSeq = AtomicLong(1)
     private var vsyncCallback: Choreographer.VsyncCallback? = null
@@ -52,12 +69,24 @@ class PresentationInputAdapter(
                     lastVsyncId = timeline.vsyncId
                     lastDeadlineNanos = timeline.deadlineNanos
                     lastExpectedPresentNanos = timeline.expectedPresentationTimeNanos
+                    val nextTimeline =
+                        data.frameTimelines
+                            .filter { it.vsyncId > timeline.vsyncId }
+                            .minByOrNull { it.vsyncId }
+                    lastNextVsyncId = nextTimeline?.vsyncId ?: (timeline.vsyncId + 1L)
+                    lastNextPresentDeadline =
+                        nextTimeline?.expectedPresentationTimeNanos
+                            ?: (timeline.expectedPresentationTimeNanos + lastPeriodNanos)
                     val callback = vsyncCallback
                     if (posted && callback != null) {
                         choreographer.postVsyncCallback(callback)
                     }
                 }
         }
+    }
+
+    fun setRefreshPeriodNanos(periodNanos: Long) {
+        if (periodNanos > 0L) lastPeriodNanos = periodNanos
     }
 
     fun startFrameCallbacks() {
@@ -94,12 +123,27 @@ class PresentationInputAdapter(
         val samples = ArrayList<PresentationInputMapping.Sample>(8)
         PresentationInputMapping.expand(frame, samples)
         val coalesced = PresentationInputMapping.coalescedLatencyTimes(frame)
-        val nextVsyncId = if (lastVsyncId == 0L) 0L else lastVsyncId + 1L
+        val nextVsyncId =
+            if (lastNextVsyncId != 0L) lastNextVsyncId
+            else if (lastVsyncId == 0L) 0L
+            else lastVsyncId + 1L
+        val nextDeadline =
+            if (lastNextPresentDeadline != 0L) lastNextPresentDeadline
+            else if (lastExpectedPresentNanos == 0L) 0L
+            else lastExpectedPresentNanos + lastPeriodNanos
         Trace.beginSection("nt.input.enqueue")
         try {
             for (sample in samples) {
                 val seq = nextSeq.getAndIncrement()
+                val enqueueNs = SystemClock.uptimeNanos()
                 queue.tryPush(sample)
+                nativeSink?.tryPush(
+                    sample.pointerId,
+                    jniKind(sample.kind),
+                    sample.x,
+                    sample.y,
+                    sample.timeNanos,
+                )
                 val target =
                     PresentationInputMapping.assignFrameTarget(
                         eventTime = sample.timeNanos,
@@ -108,7 +152,7 @@ class PresentationInputAdapter(
                         currentVsyncId = lastVsyncId,
                         currentPresentDeadline = lastExpectedPresentNanos,
                         nextVsyncId = nextVsyncId,
-                        nextPresentDeadline = 0L,
+                        nextPresentDeadline = nextDeadline,
                     )
                 lastEligibleForCurrentVsync = target.eligibleForCurrentVsync
                 lastTargetVsyncId = target.targetVsyncId
@@ -128,7 +172,7 @@ class PresentationInputAdapter(
                             newestEventTime = coalesced.newestEventTime,
                             oldestHistoricalEventTime = coalesced.oldestHistoricalEventTime,
                         ) +
-                        " pointer=${sample.pointerId} kind=${sample.kind}",
+                        " pointer=${sample.pointerId} kind=${sample.kind} enqueueNs=$enqueueNs callbackVsyncId=${lastVsyncId}",
                 )
             }
         } finally {
@@ -139,14 +183,17 @@ class PresentationInputAdapter(
 
     fun loseFocus(timeNanos: Long = lastVsyncNanos) {
         queue.cancelAll(timeNanos)
+        nativeSink?.loseFocus(timeNanos)
     }
 
     fun loseWindow(timeNanos: Long = lastVsyncNanos) {
         queue.cancelAll(timeNanos)
+        nativeSink?.loseFocus(timeNanos)
     }
 
     fun recreateSurface(timeNanos: Long = lastVsyncNanos) {
         queue.cancelAll(timeNanos)
+        nativeSink?.loseFocus(timeNanos)
     }
 
     fun attach(view: View) {
@@ -206,6 +253,14 @@ class PresentationInputAdapter(
                 if (Build.VERSION.SDK_INT >= 34) event.getHistoricalEventTimeNanos(pos) else 0L,
                 Build.VERSION.SDK_INT,
             )
+
+        fun jniKind(kind: PresentationInputMapping.Kind): Int =
+            when (kind) {
+                PresentationInputMapping.Kind.Down -> 0
+                PresentationInputMapping.Kind.Up -> 1
+                PresentationInputMapping.Kind.Cancel -> 3
+                PresentationInputMapping.Kind.Move -> 2
+            }
 
         const val TAG: String = "NeoTavernI2P"
     }

@@ -3268,6 +3268,9 @@ dependencies = [
  "neotavern-presentation-m0",
  "neotavern-presentation-m0-d2",
  "neotavern-presentation-session",
+ "pollster",
+ "raw-window-handle",
+ "wgpu",
 ]
 
 [[package]]

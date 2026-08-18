@@ -63,5 +63,43 @@ object DisplayRefreshPolicy {
         )
     }
 
+    /**
+     * Same-size mode nearest to [targetHz]. Used for 60/90 Hz pacing checks.
+     * The normative §14 gate still requires a locked 120 Hz fixture.
+     */
+    fun chooseNearestRefresh(modes: List<Mode>, current: Mode, targetHz: Float): Decision {
+        val supported = modes.map { it.refreshRateHz }.distinct().sorted()
+        if (modes.isEmpty()) {
+            return Decision(
+                requestedModeId = null,
+                requestedRefreshHz = null,
+                selected = null,
+                supportedRatesHz = emptyList(),
+                reason = "no-modes",
+            )
+        }
+        val sameSize = modes.filter { it.width == current.width && it.height == current.height }
+        if (sameSize.isEmpty()) {
+            return Decision(
+                requestedModeId = current.id,
+                requestedRefreshHz = current.refreshRateHz,
+                selected = current,
+                supportedRatesHz = supported,
+                reason = "no-matching-resolution",
+            )
+        }
+        val selected = sameSize.minBy { kotlin.math.abs(it.refreshRateHz - targetHz) }
+        val reason =
+            if (almostEqualHz(selected.refreshRateHz, targetHz)) "target-refresh"
+            else "nearest-refresh"
+        return Decision(
+            requestedModeId = selected.id,
+            requestedRefreshHz = selected.refreshRateHz,
+            selected = selected,
+            supportedRatesHz = supported,
+            reason = reason,
+        )
+    }
+
     private fun almostEqualHz(a: Float, b: Float): Boolean = kotlin.math.abs(a - b) < 0.05f
 }

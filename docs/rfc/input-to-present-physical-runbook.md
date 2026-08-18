@@ -1,33 +1,33 @@
 # Input-to-present physical Perfetto runbook
 
-**Status:** lab procedure. Adapter is implemented; Perfetto is pending.
+**Status:** lab procedure. The debug present loop is on
+`PresentationInputActivity` (window swapchain, compositor `HandlerThread`).
+`Choreographer#doFrame` is not present. Production cutover is unchanged.
 
 ```text
 platform gesture adapter = IMPLEMENTED / PERFETTO_PENDING
+  (PASS only after this batch stamps docs/rfc/input-to-present-adjudication.json)
 Milestone B = STARTED
 production cutover = NOT_STARTED
 almost_pass = false
 ```
 
 Host adjudicator:
-[`scripts/input-to-present-adjudicate.mjs`](../../scripts/input-to-present-adjudicate.mjs).
-Record:
+[`scripts/input-to-present-adjudicate.mjs`](../../scripts/input-to-present-adjudicate.mjs)
+(v3). Record:
 [`input-to-present-adjudication.json`](input-to-present-adjudication.json).
 
-Do not cite unpublished `aec937c`. Cite
-`0a1031c0f2fbd9e4da6f958e344e25b0f89d2bb7` or the `--amend` successor on
-`pr-m7-etap6-slices` whose message is
-`docs(presentation-android): stage input-to-present Perfetto pending`.
+APK must be `BOUND` to `55a31747e0151ed085be2d5107beb9e149e131e2` or a
+subsequent **clean** descendant. Do not cite unpublished `aec937c`.
 
-The next evidence commit, **after** a physical batch, is:
+Evidence commit after a successful physical batch:
 
 ```text
 test(presentation-android): adjudicate physical input-to-present
 ```
 
-RenderDoc is secondary. Gesture latency and Choreographer pacing are a
-time trace, not one GPU frame. `Choreographer#doFrame` / `frameTimeNanos`
-is **not** present.
+RenderDoc is secondary. Gesture latency is a time trace, not one GPU
+frame.
 
 ## Causal chain
 
@@ -43,10 +43,9 @@ MotionEvent(sequence, eventTime)
 → actual display present
 ```
 
-Correlate `vsyncId` (or an equivalent FrameTimeline cookie) from the
-debug adapter through SurfaceFlinger `actualTimeline` /
-`actualPresentationTime`. Expected present from `FrameTimeline` is a
-deadline, not the latch.
+UI thread only `try_push`es. Correlate `vsyncId` from the debug adapter
+through SurfaceFlinger `actualTimeline` / FrameTimeline. Expected present
+from `FrameTimeline` is a deadline, not the latch.
 
 ## Per-opportunity cookies
 
@@ -70,27 +69,23 @@ longer than one refresh without an application miss.
 
 For a coalesced `MotionEvent`, primary `eventTime` is the **newest**
 sample actually reflected in the frame. The oldest historical sample is
-published separately as diagnostic **gesture age**. It is not the
-pass/fail latency.
+published separately as diagnostic **gesture age**.
 
 `Choreographer#doFrame` is `callbackTime`, not `actualPresentTime`.
 
-## RFC budgets (not measured-from-this-run)
+## RFC budgets (not a one-refresh PASS threshold)
 
 [RFC §14.1](neoui-v4-android-presentation-backend.md):
 
 ```text
-60 Hz  → 16.67 ms
-90 Hz  → 11.11 ms
-120 Hz → 8.33 ms
+60 Hz  → 16.67 ms   (pacing only)
+90 Hz  → 11.11 ms   (pacing only)
+120 Hz → 8.33 ms    (normative gate)
 ```
 
 These numbers are deadlines for a **renderer-controlled frame
 opportunity**, not a one-refresh PASS threshold on every raw
-`input-to-present` sample. There is no such threshold without a separate
-budget ADR.
-
-Adjudicator:
+`input-to-present` sample.
 
 ```text
 deadline_miss =
@@ -100,30 +95,34 @@ deadline_miss =
 input_to_present = actualPresentTime - eventTime
 ```
 
-`input_to_present` p50/p95/p99 remain mandatory **report** metrics. A
-good mean must not hide a bad p95/p99 or missed frames, but the mean of
-`input_to_present` cannot pass or fail the gate.
+`input_to_present` p50/p95/p99 remain mandatory **report** metrics.
 
-[RFC §14.2](neoui-v4-android-presentation-backend.md) gate, per refresh
-mode:
+## Normative 120 Hz fixture
 
-- all-frame and renderer-controlled denominators are both published;
-- `unknown` exclusion is application-caused and stays in the
-  renderer-controlled denominator;
-- ≥99% eligible renderer-controlled opportunities on time;
-- application-caused misses `<1%`;
-- miss streak at most two consecutive.
+Before PASS the adjudicator also requires:
 
-`ENVIRONMENT_BLOCKED` if the device was held at 60 Hz after a correct
-120 Hz request.
+- APK `BOUND` to `55a3174` or a subsequent clean commit;
+- warm-up ≥ 1 s and 60 s continuous-scroll at the **actually locked**
+  120 Hz mode;
+- `actualPresentTime` from FrameTimeline/SurfaceFlinger;
+- MotionEvent, Choreographer, and present timestamps in one clock
+  domain;
+- unique `sequence → targetVsyncId → actual present`;
+- trace packets/buffers not lost;
+- exclusion reasons listed; `unknown` is application-caused;
+- ≥99% renderer-controlled opportunities on time;
+- application misses `<1%`, streak ≤ 2;
+- bounded input / Product Wire / compositor queues (≤ 64);
+- no producer/layout/shaping/raster on compositor-only scroll;
+- raw input-to-present p50/p95/p99 published separately.
 
-These remain a Milestone B hypothesis gate until a device-specific budget
-ADR. Milestone B stays STARTED even if this adapter later stamps PASS.
+`ENVIRONMENT_BLOCKED` if 120 Hz was requested correctly but the OS held
+the panel at 60 Hz. Milestone B stays STARTED even if the adapter stamps
+PASS.
 
 ## Scenarios
 
-Run each on the debug host (`PresentationInputActivity`), not
-`MainActivity`:
+Run on the debug host (`PresentationInputActivity`), not `MainActivity`:
 
 | Extra / fixture        | What to prove                                    |
 | ---------------------- | ------------------------------------------------ |
@@ -133,48 +132,36 @@ Run each on the debug host (`PresentationInputActivity`), not
 | `selection_autoscroll` | selection drag + edge autoscroll                 |
 | `coalesced_move`       | historical / coalesced MOVE, original timestamps |
 | `focus_cancel`         | `CANCEL` on focus / window / surface loss        |
-| `refresh_60/90/120`    | each available panel mode                        |
+| `refresh_60/90`        | pacing only                                      |
+| `refresh_120`          | locked 120 Hz + 60 s continuous-scroll           |
 | `refresh_transition`   | 60→120→90 without changing physical fling speed  |
+
+`I2P_FIXTURE=all` runs the full set. `I2P_HZ` / `I2P_WARMUP_MS` /
+`I2P_SCROLL_MS` override the 120 Hz window.
 
 ## Capture
 
-Physical Xiaomi / Vulkan, APK `BOUND`, `evidence_dirty=false`. Phone may
-stay disconnected until this batch.
+Physical Xiaomi / Vulkan. Close Android Studio first. Emulator serials
+are excluded.
 
 ```text
-perfetto config: sched, freq, idle, power, gpu, view, gfx, hal, ss, am,
-wm, input, atrace (app + SurfaceFlinger FrameTimeline)
+M0_D1A_FEATURES=gpu,android-jni bash apps/android/scripts/build-m0-d1a-libs.sh
+# assembleDebug, then bind the APK to this clean tree:
+node scripts/m0-d1a-source-bundle.mjs --apk apps/android/app/build/outputs/apk/debug/app-debug.apk --bind-apk
+node scripts/input-to-present-perfetto-capture.mjs --serial=8f5c2b7c
+node scripts/input-to-present-adjudicate.mjs --fixture=apps/android/input-to-present-captures/<stamp>/<stamp>-fixture.json --write
 ```
 
-App cookies (logcat tag `NeoTavernI2P` and `atrace` sections `nt.input.*`):
+Perfetto config: [`scripts/input-to-present.pbtxt`](../../scripts/input-to-present.pbtxt)
+(`linux.ftrace` gfx/view/input/sched/freq, `android.surfaceflinger.frametimeline`,
+`android.log` tag `NeoTavernI2P`).
 
-```text
-seq eventTime inputCutoff callbackTime targetVsyncId targetPresentDeadline
-actualPresentTime eligibleForCurrentVsync rendererControlled exclusionReason
-newestEventTime oldestHistoricalEventTime
-```
-
-Do not treat a Choreographer callback timestamp as `actualPresent`.
-
-Also record:
-
-- `supported_modes` / `requested_frame_rate` / `observed_display_mode`
-- `frame_callback_rate` vs `present_rate`
-- thermal state, CPU/GPU frequency
-- queue high-water, dropped MOVE vs dropped edges
-- producer/layout/shaping/raster counters on the consume path (must be 0
-  for compositor-only frames)
-
-## Adjudicator
-
-```text
-node scripts/input-to-present-adjudicate.mjs
-node scripts/input-to-present-adjudicate.mjs --fixture=apps/android/input-to-present-captures/<stamp>.json --write
-```
+Evidence JSON must pin: trace SHA, APK SHA, Perfetto config SHA, source
+commit, device, display mode, denominators, exclusions, trace-loss
+counters. Raw traces stay gitignored under
+`apps/android/input-to-present-captures/`.
 
 Without `--fixture` the record stays `IMPLEMENTED / PERFETTO_PENDING`.
-A fixture that uses `doFrame` as present is `BLOCKED`. A fixture that
-compares raw `input-to-present` to 8.33 ms as the PASS gate is the wrong
-denominator: the host adjudicator does not do that.
+A fixture that uses `doFrame` as present is `BLOCKED`.
 
 Production `MainActivity`, default JNI, and WebView rollback stay off.

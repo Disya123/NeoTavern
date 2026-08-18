@@ -8,13 +8,18 @@ import {
   evaluateFixture,
   INPUT_TO_PRESENT_ONE_REFRESH_GATE,
   MAX_MISSED_FRACTION,
+  MIN_BOUND_COMMIT,
   MIN_ON_TIME_FRACTION,
   modeBudget,
   REFRESH_DEADLINE_NS,
   rendererControlledForDenominator,
 } from './input-to-present-adjudicate.mjs';
 
-const provenance = { apk_linkage: 'BOUND', evidence_dirty: false };
+const provenance = {
+  apk_linkage: 'BOUND',
+  evidence_dirty: false,
+  apk_source_commit: MIN_BOUND_COMMIT,
+};
 
 function opportunity(overrides = {}) {
   return {
@@ -62,6 +67,20 @@ function passingFixture(overrides = {}) {
   });
   return {
     driver: 'Vulkan',
+    clock_domain: 'monotonic',
+    clock_domain_aligned: true,
+    actual_present_source: 'frametimeline',
+    trace_lost_packets: 0,
+    trace_buffer_overrun: 0,
+    ftrace_lost_events: 0,
+    warmup_ns: 1_000_000_000,
+    continuous_scroll_ns: 60_000_000_000,
+    observed_display_hz: 120,
+    requested_frame_rate: 120,
+    exclusion_reasons: [],
+    unknown_exclusion: 'application-caused',
+    product_wire_high_water: 0,
+    compositor_queue_high_water: 8,
     scenarios: [
       'scroll_fling',
       'nested_handoff',
@@ -334,5 +353,61 @@ describe('input-to-present host adjudicator', () => {
     expect(budget.input_to_present.max).toBeLessThan(REFRESH_DEADLINE_NS[120]);
     expect(budget.renderer_controlled.misses).toBe(1);
     expect(budget.ok).toBe(false);
+  });
+
+  it('gates only the locked 120 Hz fixture, not 60/90 pacing modes', () => {
+    const fixture = passingFixture({
+      modes: [
+        {
+          hz: 60,
+          refresh_period_ns: REFRESH_DEADLINE_NS[60],
+          opportunities: [
+            opportunity({
+              seq: 9,
+              actualPresentTime: 40_000_000,
+              targetPresentDeadline: 8_000_000,
+              gpu_submit_ns: 3_000_000,
+              sf_latch_ns: 4_000_000,
+            }),
+          ],
+        },
+        passingFixture().modes.find((mode) => mode.hz === 120),
+      ],
+    });
+    const evaluated = evaluateFixture(fixture, provenance);
+    expect(evaluated.ok).toBe(true);
+    expect(evaluated.modes.find((mode) => mode.hz === 60).pacing_only).toBe(true);
+    expect(evaluated.modes.find((mode) => mode.hz === 120).normative_gate).toBe(true);
+  });
+
+  it('blocks when clocks are not converted onto one domain', () => {
+    const fixture = passingFixture({ clock_domain_aligned: false });
+    expect(evaluateFixture(fixture, provenance).status).toBe('BLOCKED');
+  });
+
+  it('blocks lost Perfetto packets', () => {
+    const fixture = passingFixture({ trace_lost_packets: 3 });
+    expect(evaluateFixture(fixture, provenance).status).toBe('BLOCKED');
+  });
+
+  it('marks ENVIRONMENT_BLOCKED when 120 Hz was requested but the panel stayed at 60', () => {
+    const fixture = passingFixture({
+      requested_frame_rate: 120,
+      observed_display_hz: 60,
+    });
+    expect(evaluateFixture(fixture, provenance).status).toBe('ENVIRONMENT_BLOCKED');
+  });
+
+  it('requires APK BOUND to 55a3174 or a descendant', () => {
+    const fixture = passingFixture();
+    expect(
+      evaluateFixture(fixture, {
+        apk_linkage: 'BOUND',
+        evidence_dirty: false,
+        apk_source_commit: 'deadbeef',
+        ancestor: () => false,
+      }).status,
+    ).toBe('BLOCKED');
+    expect(evaluateFixture(fixture, provenance).ok).toBe(true);
   });
 });

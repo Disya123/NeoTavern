@@ -1,8 +1,9 @@
 # presentation-perf-probe (`neotavern-presentation-perf-probe`)
 
-Debug-only Android probe for PERF-18/19/20 and shared-device raster
-interop. **Not** production JNI, **not** `MainActivity`, **not**
-Milestone B PASS. Host stamps live in
+Debug-only Android probe for PERF-18/19/20, shared-device raster
+interop, and the input-to-present present loop (`PresentationI2pProbe`).
+**Not** production JNI, **not** `MainActivity`, **not** Milestone B PASS
+or production cutover. Host stamps live in
 [`docs/rfc/perf-18-20-adjudication.json`](../../docs/rfc/perf-18-20-adjudication.json)
 (`PERF-18=PASS`, `PERF-19=PASS`, `PERF-20=PASS`, `Milestone B=STARTED`).
 Interop capture does not stamp Milestone B PASS. Host stamp:
@@ -26,6 +27,23 @@ adb shell am start -n com.neotavern.mobile/.PresentationPerfActivity \
 ```
 
 Negative `PERF_CAPTURE_FRAME` disables RenderDoc.
+
+## Input-to-present (debug host)
+
+`PresentationInputActivity` presents a retained texture to a **window
+swapchain** on a compositor `HandlerThread`. The UI thread only
+`try_push`es. `Choreographer#doFrame` is not `actualPresentTime`.
+
+```text
+adb shell am start -n com.neotavern.mobile/.PresentationInputActivity \
+  --es com.neotavern.mobile.I2P_FIXTURE all \
+  --ei com.neotavern.mobile.I2P_HZ 120 \
+  --ei com.neotavern.mobile.I2P_WARMUP_MS 2000 \
+  --ei com.neotavern.mobile.I2P_SCROLL_MS 60000
+```
+
+Physical capture: `node scripts/input-to-present-perfetto-capture.mjs`.
+Host adjudication: `node scripts/input-to-present-adjudicate.mjs`.
 
 ## Commands
 

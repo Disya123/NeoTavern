@@ -12,7 +12,7 @@ crate-type = ["rlib", "cdylib"]
 
 [features]
 default = []
-gpu = ["neotavern-presentation-m0/gpu"]
+gpu = ["neotavern-presentation-m0/gpu", "dep:wgpu", "dep:pollster"]
 android-jni = ["gpu"]
 renderdoc-capture = ["gpu", "neotavern-presentation-m0/renderdoc-capture"]
 
@@ -22,6 +22,14 @@ neotavern-neocompositor = { path = "../neocompositor" }
 neotavern-presentation-m0 = { path = "../presentation-m0" }
 neotavern-presentation-m0-d2 = { path = "../presentation-m0-d2" }
 neotavern-presentation-session = { path = "../presentation-session" }
+pollster = { version = "0.4", optional = true }
+wgpu = { version = "29.0.3", optional = true, default-features = false, features = [
+    "std",
+    "wgsl",
+    "vulkan",
+    "gles",
+] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = { version = "0.21", default-features = false }
+raw-window-handle = "0.6"
