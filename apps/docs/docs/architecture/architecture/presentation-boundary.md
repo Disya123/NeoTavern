@@ -160,14 +160,29 @@ recorded in
 [known-baseline-failures.md](known-baseline-failures.md) and do not make
 PERF-18/19/20 evidence inadmissible.
 
-## Milestone C start
+## Milestone C
 
-Feature-flagged Android chat workspace (RFC §51 first slice). Debug
-`PresentationChatActivity` mounts the Product Wire chat workspace
-(header / viewport / composer) only when
-`com.neotavern.mobile.NEOTA_DIOXUS_SHELL=1`. Without the extra the route
-stays off. Production `MainActivity`, default JNI, and WebView rollback
-are unchanged. Milestone C is **not PASS**. Chat workspace on flagged
-Dioxus Android remains **DEFERRED** in the compatibility matrix until
-owner-signed PARITY. Gboard, TalkBack, 10k virtualization, and cutover
-are not this slice.
+Feature-flagged Android chat workspace (RFC §51). Debug
+`PresentationChatActivity` is a temporary harness around the same live
+Product Wire route in `crates/presentation-chat`. History, streaming,
+send, retry, prepend, drafts, and `ErrorDto` go through registered Wire
+operations only. Tests use in-memory `FakeWire`; the Activity talks to
+the existing Kernel via `KernelSession` + `EnvelopeBuilder`. The UI never
+opens SQLite or talks to the network. The visible window is virtualized
+through `crates/chat-viewport` (`waited_on_producer=false`). The harness
+mirrors that same snapshot (selectable Markdown/image rows) and hosts a
+Gboard composer (IME send, draft save, keyboard inset animation). It is
+not a second chat and not the compositor `SurfaceView` paint path.
+Header/composer glass, Markdown `data-format`, sampleable image rows, and
+TalkBack roles live on the Dioxus tree. Rotate/recreation restores
+`chatId` and composer text. Optional `NEOTA_SAFE_MODE=1` escapes to
+production `MainActivity` (WebView).
+
+The route mounts only when `com.neotavern.mobile.NEOTA_DIOXUS_SHELL=1`.
+Without the extra it stays off (`reason=flag_off`). Optional
+`NEOTA_SAFE_MODE=1` escapes to production `MainActivity` (WebView).
+Production `MainActivity`, default JNI, and WebView rollback are
+unchanged. Milestone C is **not PASS**. Chat workspace on flagged Dioxus
+Android remains **DEFERRED** in the compatibility matrix until
+owner-signed PARITY. Production cutover stays `NOT_STARTED` until C PASS
+and canary evidence.

@@ -120,6 +120,10 @@ crates/
                        # production JNI; not production cutover).
   presentation-dioxus-shell/ # Feature-flagged Dioxus Product Wire shell.
                        # Not MainActivity; not production JNI.
+  presentation-chat/   # Live Product Wire chat session for flagged Dioxus
+                       # Android. Not MainActivity; not production JNI.
+                       # PresentationChatActivity is a harness around this
+                       # same route.
 ```
 
 Dependencies only go "downward": `server`/`web` → packages; packages → `shared`/
