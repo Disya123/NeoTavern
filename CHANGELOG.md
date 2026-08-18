@@ -150,8 +150,19 @@
   `GpuTelemetry` is a copy-sized snapshot: queue/cache/target bytes and
   high-water, dropped/coalesced frames, recovery reason/duration/attempt,
   epoch, frame cause, damage/ROI, GPU timing availability (`Unavailable`
-  until shared-device raster interop), and degraded/rollback reason. Not an
+  on this snapshot; timestamp queries are not image readbacks), and
+  degraded/rollback reason. Not an
   event log. Not production JNI. Not a cutover. Milestone B remains STARTED.
+
+- **Shared-device raster compositor interop (CPU protocol + debug probe, not B PASS).**
+  One `SharedGpuContext` for raster and compositor (`DeviceEpoch`, typed
+  handles, sampleable raster texture). `image_readbacks = 0`,
+  `cross_device_copies = 0`. Timestamp resolves are bounded/async/
+  capability-gated (`GpuTiming::Unavailable` without the cap) and do not
+  block present. Device loss uses `GpuRecovery`. Unsupported compute
+  degrades to WebView rollback without a second device. Debug
+  `PERF_SCENARIO=interop` is not a production cutover. A gesture-platform
+  adapter is a later stage. Milestone B remains STARTED.
 
 - **Known baseline failures (not a green full baseline).** Recorded as
   `KNOWN_BASELINE_FAILURE` in

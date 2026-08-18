@@ -18,6 +18,7 @@ pub enum Scenario {
     Perf18,
     Perf19,
     Perf20,
+    Interop,
 }
 
 impl Scenario {
@@ -26,6 +27,7 @@ impl Scenario {
             "perf18" | "18" => Some(Self::Perf18),
             "perf19" | "19" => Some(Self::Perf19),
             "perf20" | "20" => Some(Self::Perf20),
+            "interop" | "shared" | "t18" => Some(Self::Interop),
             _ => None,
         }
     }
@@ -35,6 +37,7 @@ impl Scenario {
             Self::Perf18 => "perf18",
             Self::Perf19 => "perf19",
             Self::Perf20 => "perf20",
+            Self::Interop => "interop",
         }
     }
 }

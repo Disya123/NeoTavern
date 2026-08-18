@@ -1,8 +1,8 @@
 package com.neotavern.mobile
 
 /**
- * Launch extras for the debug-only PERF-18/19/20 probe. Production
- * [MainActivity] never reads these.
+ * Launch extras for the debug-only PERF-18/19/20 and shared-device
+ * interop probe. Production [MainActivity] never reads these.
  */
 object PresentationPerfLaunch {
     const val EXTRA_SCENARIO: String = "com.neotavern.mobile.PERF_SCENARIO"
@@ -19,6 +19,7 @@ object PresentationPerfLaunch {
             "perf18", "18" -> "perf18"
             "perf19", "19" -> "perf19"
             "perf20", "20" -> "perf20"
+            "interop", "shared", "t18" -> "interop"
             else -> DEFAULT_SCENARIO
         }
     }

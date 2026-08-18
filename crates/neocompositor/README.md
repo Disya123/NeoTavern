@@ -73,8 +73,21 @@ production JNI renderer and **not** an Android cutover.
 - Bounded GPU telemetry (CPU counters, not B PASS): `GpuTelemetry` is a
   copy-sized snapshot of queue/cache/target bytes and high-water, dropped/
   coalesced frames, recovery reason/duration/attempt, epoch, frame cause,
-  damage/ROI, GPU timing availability (`Unavailable` until shared-device
-  raster interop), and degraded/rollback reason. Not an event log.
+  damage/ROI, GPU timing availability (`Unavailable` on this snapshot;
+  timestamp queries live on `InteropTelemetry` and are not image
+  readbacks), and degraded/rollback reason. Not an event log.
+- Shared-device raster interop (RFC T18, CPU protocol + debug probe, not
+  B PASS): one `SharedGpuContext` (`Instance`/`Adapter`/`Device`/`Queue`/
+  `DeviceEpoch` protocol). Blitz/Vello raster binds that context and does
+  not open a second device. Raster tiles, accumulator, glass ROI, and
+  surface share the epoch. Typed GPU handles reject foreign/stale owners
+  before submit. Raster output is a sampleable compositor texture:
+  `image_readbacks = 0`, `cross_device_copies = 0`. Timestamp queries are
+  capability-gated (`GpuTiming::Unavailable` or bounded async resolve) and
+  do not block present. Retirement leases outlive latest-wins drops.
+  Queue pressure is capped (`QUEUE_CAP`). Device loss uses `GpuRecovery`.
+  Unsupported compute degrades to WebView rollback without a second device.
+  Debug `PERF_SCENARIO=interop` is not a cutover.
 
 ## What this crate is not
 
@@ -113,13 +126,15 @@ Started (CPU types + tests):
 - M0-D1a pass-order corpus as a production regression (not a lab re-run)
 - device/surface recovery CPU state machine (injection tests; not production
   JNI)
-- bounded GPU telemetry / recovery counters (CPU snapshot; GPU timestamps
-  `Unavailable`)
+- bounded GPU telemetry / recovery counters (CPU snapshot; GPU timestamps on
+  that snapshot stay `Unavailable`; interop timestamps are separate)
+- shared-device raster interop CPU protocol (`SharedGpuContext`; one device;
+  sampleable raster texture; no image readback / cross-device copy; debug
+  `interop` probe path; not production JNI)
 
 Not started (do not treat as done):
 
 - gesture-platform adapter
-- shared-device raster interop in this crate (still in the M0 probe)
 - remaining PERF-01…PERF-22 and 120 Hz product budgets (PERF-18/19/20
   are independently PASS; Milestone B stays STARTED)
 

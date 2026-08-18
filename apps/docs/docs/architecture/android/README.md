@@ -167,10 +167,12 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   fast paths, async hit-test / nested-scroll dispatch, interaction-ready
   text snapshots, a cross-tile selection underlay (PERF-19 **PASS** on
   physical Vulkan, not B PASS), a PERF-18
-  effect-scope capture (**PASS** on physical Vulkan, not B PASS), and a CPU
+  effect-scope capture (**PASS** on physical Vulkan, not B PASS), a CPU
   device/surface recovery state machine (injection-tested, not production
-  JNI, not B PASS), and bounded GPU telemetry (CPU snapshot; GPU timestamps
-  unavailable; not B PASS). The
+  JNI, not B PASS), bounded GPU telemetry (CPU snapshot; timestamps are
+  not image readbacks; not B PASS), and shared-device raster interop
+  (`SharedGpuContext`; one device; debug `PERF_SCENARIO=interop`; not
+  production JNI, not B PASS). The
   Blitz producer publishes interaction-ready text snapshots from already-
   shaped Parley layouts. These crates are **not** linked into
   `libneotavern_android_jni.so`. Chat virtualization
@@ -179,7 +181,8 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   compositor crate. Viewport↔compositor transactions live in
   `crates/presentation-session` (not production JNI). Debug-only
   `PresentationPerfActivity` / `presentation-perf-probe` is the PERF-18/19/20
-  capture vehicle (not production JNI, not Milestone B PASS).
+  and shared-device interop capture vehicle (not production JNI, not
+  Milestone B PASS). A gesture-platform adapter is a later stage.
   Independent stamps:
   [perf-18-20-adjudication.json](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/perf-18-20-adjudication.json).
   `NEOTA_NEOCOMPOSITOR=1` is a non-default flag, not a cutover switch.

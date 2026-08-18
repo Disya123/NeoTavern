@@ -36,6 +36,9 @@ use crate::timeline::{
     STATIC_PREFIX_LABEL, STATIC_PREFIX_LABEL_D2, VELLO_LABEL,
 };
 use crate::verdict::{ProbeReport, SubstrateVerdict};
+use neotavern_neocompositor::{
+    BoundBackend, GpuCaps, HandleOwner, InteropPresentOutcome, SharedGpuContext, SharedHandleKind,
+};
 
 #[derive(Debug)]
 pub enum GpuInitError {
@@ -149,6 +152,9 @@ pub struct ProbeGpu {
     compositor_texture_bytes: u64,
     label_mode: LabelMode,
     capture_at: Option<u64>,
+    shared: SharedGpuContext,
+    raster_backend: BoundBackend,
+    compositor_backend: BoundBackend,
 }
 
 impl ProbeGpu {
@@ -194,6 +200,28 @@ impl ProbeGpu {
         } else {
             compositor_owned_bytes(width, height)
         };
+        let mut shared = SharedGpuContext::open(GpuCaps::host_default())
+            .map_err(|err| GpuInitError::Renderer(format!("shared gpu context: {err}")))?;
+        let raster_backend = shared
+            .bind_raster()
+            .map_err(|err| GpuInitError::Renderer(format!("bind raster backend: {err}")))?;
+        let compositor_backend = shared
+            .bind_compositor()
+            .map_err(|err| GpuInitError::Renderer(format!("bind compositor backend: {err}")))?;
+        if raster_backend.identity != compositor_backend.identity {
+            return Err(GpuInitError::Renderer(
+                "vello and compositor bound different device identities".into(),
+            ));
+        }
+        shared
+            .alloc(HandleOwner::Compositor, SharedHandleKind::Accumulator)
+            .map_err(|err| GpuInitError::Renderer(format!("shared accumulator: {err}")))?;
+        shared
+            .alloc(HandleOwner::Glass, SharedHandleKind::GlassRoi)
+            .map_err(|err| GpuInitError::Renderer(format!("shared glass roi: {err}")))?;
+        shared
+            .alloc(HandleOwner::Surface, SharedHandleKind::Surface)
+            .map_err(|err| GpuInitError::Renderer(format!("shared surface: {err}")))?;
         let accumulator = device.create_texture(&TextureDescriptor {
             label: Some(ACCUMULATOR_LABEL),
             size,
@@ -475,7 +503,15 @@ impl ProbeGpu {
             first_frame_cpu_us: 0,
             compositor_texture_bytes,
             label_mode,
-            capture_at: None,
+            // CPU capture timeline at D1b/D2 generation 120. RenderDoc still
+            // requires `capture=true` in `run_dynamic_list_at`.
+            capture_at: match label_mode {
+                LabelMode::D1b | LabelMode::D2 => Some(crate::scene_d1b::D1B_CAPTURE_FRAME),
+                _ => None,
+            },
+            shared,
+            raster_backend,
+            compositor_backend,
         })
     }
 
@@ -574,6 +610,7 @@ impl ProbeGpu {
         if self.recording_capture {
             self.capture_timeline.clear();
         }
+        self.tick_shared_interop()?;
 
         if d1b && frame > 0 {
             self.restore_static_prefix()?;
@@ -1290,6 +1327,41 @@ impl ProbeGpu {
         }
         .classify()
     }
+
+    fn tick_shared_interop(&mut self) -> Result<(), GpuInitError> {
+        let tile = self
+            .shared
+            .raster_tile()
+            .map_err(|err| GpuInitError::Renderer(format!("shared raster tile: {err}")))?;
+        self.shared
+            .sample_tile(tile)
+            .map_err(|err| GpuInitError::Renderer(format!("shared sample tile: {err}")))?;
+        match self.shared.present() {
+            Ok(InteropPresentOutcome::Presented { .. }) => {}
+            Ok(outcome) => {
+                return Err(GpuInitError::Renderer(format!(
+                    "shared present not ready: {outcome:?}"
+                )));
+            }
+            Err(err) => {
+                return Err(GpuInitError::Renderer(format!("shared present: {err}")));
+            }
+        }
+        self.shared.complete_oldest();
+        let tel = self.shared.telemetry();
+        self.cpu_readbacks = tel.image_readbacks;
+        self.cross_device_copies = tel.cross_device_copies;
+        Ok(())
+    }
+
+    pub fn shared_backends_match(&self) -> bool {
+        self.raster_backend.identity == self.compositor_backend.identity
+            && self.raster_backend.epoch == self.compositor_backend.epoch
+    }
+
+    pub fn shared_telemetry(&self) -> neotavern_neocompositor::InteropTelemetry {
+        self.shared.telemetry()
+    }
 }
 
 fn probe_instance() -> wgpu::Instance {
@@ -1645,15 +1717,17 @@ pub fn run_dynamic_list_at(
     let passes = compile_passes(list).map_err(|err| GpuInitError::Renderer(format!("{err:?}")))?;
     let mut gpu = match labels {
         LabelMode::D2 => ProbeGpu::try_new_d2(list.width, list.height)?,
-        LabelMode::Perf18 | LabelMode::Perf19 | LabelMode::Perf20 => {
+        LabelMode::D1b => ProbeGpu::try_new_d1b(list.width, list.height)?,
+        LabelMode::D1a | LabelMode::Perf18 | LabelMode::Perf19 | LabelMode::Perf20 => {
             ProbeGpu::try_new_inner(list.width, list.height, false, labels)?
         }
-        _ => ProbeGpu::try_new_d1b(list.width, list.height)?,
     };
     gpu.pass_compiles = 1;
     gpu.paint_scene_rebuilds = 0;
     gpu.layout_rebuilds = 0;
-    gpu.capture_at = if capture { Some(capture_frame) } else { None };
+    if capture {
+        gpu.capture_at = Some(capture_frame);
+    }
     probe_trace(&format!(
         "gpu_ready adapter={} backend={} software={}",
         gpu.adapter_name.replace(' ', "_"),
@@ -1699,6 +1773,11 @@ pub fn run_dynamic_list_at(
     if gpu.compositor_texture_bytes != bytes_at_init {
         return Err(GpuInitError::Renderer(
             "compositor texture high-water grew during the run".to_string(),
+        ));
+    }
+    if !gpu.shared_backends_match() {
+        return Err(GpuInitError::Renderer(
+            "vello and compositor device identities differ".into(),
         ));
     }
     Ok(gpu.report(frames))

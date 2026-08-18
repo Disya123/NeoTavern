@@ -20,6 +20,9 @@ probe still logs `android_gpu_capture=false` and cannot self-admit.
 - Host-authored D1a static scene and D1b scene (wallpaper → glass A →
   vector UI → optional moving sample → glass B → overlay).
 - One `wgpu` `Device`/`Queue` shared by Vello raster and the glass pass.
+  `SharedGpuContext` is the CPU ownership protocol: raster and compositor
+  bind the same identity/`DeviceEpoch`; foreign or stale handles are
+  rejected before submit.
 - Sampleable intermediate (Vello `STORAGE_BINDING|TEXTURE_BINDING` plus a
   compositor accumulator). Glass reads a **same-device ROI copy**, never a CPU
   readback and never a cross-device copy. Clip rects are resolved in

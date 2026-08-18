@@ -5,6 +5,8 @@ fn parses_scenario_names() {
     assert_eq!(Scenario::parse("perf18"), Some(Scenario::Perf18));
     assert_eq!(Scenario::parse("19"), Some(Scenario::Perf19));
     assert_eq!(Scenario::parse("PERF20"), Some(Scenario::Perf20));
+    assert_eq!(Scenario::parse("interop"), Some(Scenario::Interop));
+    assert_eq!(Scenario::parse("t18"), Some(Scenario::Interop));
     assert_eq!(Scenario::parse("nope"), None);
 }
 
@@ -42,6 +44,28 @@ fn perf18_host_run_or_skip_without_adapter() {
         Ok(line) => {
             assert!(line.contains("perf18"), "{line}");
             assert!(line.contains("devices="), "{line}");
+        }
+        Err(err) => {
+            assert!(
+                err.contains("adapter") || err.contains("vello") || err.contains("gpu"),
+                "{err}"
+            );
+        }
+    }
+}
+
+#[cfg(feature = "gpu")]
+#[test]
+fn interop_host_run_or_skip_without_adapter() {
+    let result = neotavern_presentation_perf_probe::run_scenario(Scenario::Interop, 2, -1);
+    match result {
+        Ok(line) => {
+            assert!(line.contains("interop"), "{line}");
+            assert!(line.contains("devices=1"), "{line}");
+            assert!(line.contains("image_readbacks=0"), "{line}");
+            assert!(line.contains("xdev=0"), "{line}");
+            assert!(line.contains("timestamp=Unavailable"), "{line}");
+            assert!(line.contains("shared_identity_match=true"), "{line}");
         }
         Err(err) => {
             assert!(

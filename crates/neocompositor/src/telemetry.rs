@@ -1,8 +1,10 @@
 //! Bounded GPU telemetry and recovery counters.
 //!
-//! CPU accounting only. GPU timestamp queries are advertised as
-//! [`GpuTimingAvailability::Unavailable`] until shared-device raster interop
-//! lands. Not Milestone B PASS and not a production cutover.
+//! CPU accounting only. GPU timestamp queries are **not** image readbacks:
+//! they live on [`crate::shared_device::InteropTelemetry`] and are
+//! capability-gated (`GpuTiming::Unavailable` or bounded async resolve).
+//! This snapshot keeps [`GpuTimingAvailability::Unavailable`]. Not Milestone
+//! B PASS and not a production cutover.
 
 use crate::epoch::{DeviceEpoch, SceneEpoch};
 use crate::host::PresentationHost;

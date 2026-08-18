@@ -20,6 +20,7 @@ pub mod recovery;
 pub mod scene;
 pub mod scroll;
 pub mod selection;
+pub mod shared_device;
 pub mod target_pool;
 pub mod telemetry;
 pub mod text;
@@ -68,6 +69,12 @@ pub use scroll::{
 pub use selection::{
     apply_autoscroll, autoscroll_delta, clip_to_tile, compose_ime, compose_selectable,
     SelectablePaintPlan, SelectionError, SelectionFrame, SelectionSession, AUTOSCROLL_EDGE_PX,
+};
+pub use shared_device::{
+    AlphaMode, BoundBackend, ColorSpace, DeviceIdentity, GpuCaps, GpuTiming, HandleOwner,
+    InteropPresentOutcome, InteropTelemetry, ReadinessToken, SharedFormat, SharedGpuContext,
+    SharedGpuError, SharedGpuFactory, SharedHandleKind, SharedTextureFormat, TextureUsageFlags,
+    TypedGpuHandle, DEFAULT_FORMAT, LIVE_HANDLE_CAP, QUEUE_CAP, TIMESTAMP_RESOLVE_CAP,
 };
 pub use target_pool::{TargetId, TargetPool, TargetPoolError};
 pub use telemetry::{

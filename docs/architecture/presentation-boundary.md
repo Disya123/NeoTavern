@@ -67,10 +67,13 @@ dioxus-android-flagged     — experimental; not the launcher
 CPU scroll/animation fast paths, async hit-test / nested-scroll dispatch,
 interaction-ready text snapshots, a cross-tile selection underlay (PERF-19
 **PASS** on physical Vulkan, not B PASS), a PERF-18 effect-scope
-backdrop capture (**PASS** on physical Vulkan, not B PASS), and a CPU
+backdrop capture (**PASS** on physical Vulkan, not B PASS), a CPU
 device/surface recovery state machine (injection-tested, not production JNI,
-not B PASS), plus bounded GPU telemetry (CPU snapshot; GPU timestamps
-unavailable until shared-device raster interop; not B PASS). Chat
+not B PASS), bounded GPU telemetry (CPU snapshot; GPU timestamps on that
+snapshot stay `Unavailable` and are not image readbacks; not B PASS), and a
+shared-device raster interop CPU protocol (`SharedGpuContext`; one
+`DeviceEpoch`; sampleable raster texture; `image_readbacks=0`,
+`cross_device_copies=0`; not production JNI, not B PASS). Chat
 virtualization lives
 in `crates/chat-viewport` (height index, predictor, bounded tile cache,
 geometry epochs / C0/C1 remap; compositor sees only the **active** tile
@@ -82,13 +85,15 @@ selection go through `crates/presentation-session` (one
 [`docs/rfc/perf-18-20-adjudication.json`](../rfc/perf-18-20-adjudication.json).
 Debug-only
 `crates/presentation-perf-probe` / `PresentationPerfActivity` is the
-physical capture vehicle (not production JNI). Neither crate is linked into
+physical capture vehicle (not production JNI), including debug
+`PERF_SCENARIO=interop` (not cutover, not B PASS). Neither crate is linked into
 production JNI. Device/surface recovery is a CPU injection-tested state
 machine in `crates/neocompositor` (`GpuRecovery`). Bounded GPU telemetry
 (`GpuTelemetry`) records queue/cache/target high-water, dropped/coalesced
 frames, recovery counters, epoch, frame cause, damage/ROI, and degraded/
-rollback reason; GPU timestamps stay `Unavailable` until shared-device
-raster interop. Product cutover is not declared. Known host baseline
+rollback reason. Timestamp queries are capability-gated on
+`InteropTelemetry` and must not block present. Product cutover is not
+declared. A gesture-platform adapter is a later stage. Known host baseline
 failures are
 recorded in
 [known-baseline-failures.md](known-baseline-failures.md) and do not make

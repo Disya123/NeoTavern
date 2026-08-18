@@ -92,8 +92,10 @@ crates/
                        # (PERF-19 criterion PASS on physical Vulkan; not
                        # B PASS), CPU device/surface recovery (injection
                        # tests; not production JNI), bounded GPU telemetry
-                       # (CPU snapshot; GPU timestamps unavailable). Not
-                       # production JNI; default host is WebView rollback
+                       # (CPU snapshot; timestamps not image readbacks),
+                       # shared-device raster interop CPU protocol (one
+                       # device; not B PASS; not production JNI). Default
+                       # host is WebView rollback
                        # (`NEOTA_NEOCOMPOSITOR=1`). Chat virtualization is
                        # `chat-viewport`, not here.
   presentation-m0/     # NeoUI v4 RFC D1a/D1b paint-seam probe (host PASS;
@@ -104,8 +106,8 @@ crates/
   presentation-session/ # chat-viewport ↔ compositor transactions
                        # (PERF-19/20 host integration; criteria PASS on
                        # physical Vulkan; not B PASS).
-  presentation-perf-probe/ # debug-only Android PERF-18/19/20 probe
-                       # (not production JNI; not Milestone B PASS).
+  presentation-perf-probe/ # debug-only Android PERF-18/19/20 + interop
+                       # probe (not production JNI; not Milestone B PASS).
   presentation-dioxus-shell/ # Feature-flagged Dioxus Product Wire shell.
                        # Not MainActivity; not production JNI.
 ```

@@ -49,6 +49,7 @@ pub fn run_scenario(scenario: Scenario, frames: u64, capture_frame: i32) -> Resu
         Scenario::Perf18 => run_perf18(frames, capture, capture_at),
         Scenario::Perf19 => run_perf19(frames, capture, capture_at),
         Scenario::Perf20 => run_perf20(frames, capture, capture_at),
+        Scenario::Interop => run_interop(frames, capture, capture_at),
     }
 }
 
@@ -234,6 +235,30 @@ fn run_perf20(frames: u64, capture: bool, capture_at: u64) -> Result<String, Str
         summary.frames
     );
     Ok(gpu_line("perf20", &gpu, &extra))
+}
+
+fn run_interop(frames: u64, capture: bool, capture_at: u64) -> Result<String, String> {
+    let list = neotavern_presentation_m0::static_d1a_scene();
+    let gpu = run_dynamic_list_at(
+        &list,
+        frames,
+        capture,
+        CAPTURE_DIR,
+        LabelMode::D1a,
+        capture_at,
+    )
+    .map_err(gpu_err)?;
+    if gpu.devices_created != 1 {
+        return Err(format!("expected devices=1, got {}", gpu.devices_created));
+    }
+    if gpu.cpu_readbacks != 0 || gpu.cross_device_copies != 0 {
+        return Err("interop forbids image readback and cross-device copy".into());
+    }
+    let extra = format!(
+        "image_readbacks={} xdev={} timestamp=Unavailable raster_texture_sampled=true shared_identity_match=true",
+        gpu.cpu_readbacks, gpu.cross_device_copies
+    );
+    Ok(gpu_line("interop", &gpu, &extra))
 }
 
 fn three_item_viewport() -> ViewportSession {

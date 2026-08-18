@@ -2985,9 +2985,23 @@ builds the first restored frame from the new epoch only. Bounded recovery
 attempts then `Degraded` with acting WebView rollback. OOM does not start a
 recreate loop. Bounded `GpuTelemetry` records queue/cache/target high-water,
 dropped/coalesced frames, recovery reason/duration/attempt, epoch, frame
-cause, damage/ROI, and degraded/rollback reason. GPU timestamp queries stay
-`Unavailable` until shared-device raster interop. This is not production JNI
-and not a cutover.
+cause, damage/ROI, and degraded/rollback reason. GPU timestamp queries are
+not image readbacks: `GpuTelemetry` keeps `Unavailable`; interop timestamps
+are capability-gated (`GpuTiming::Unavailable` or bounded async resolve) and
+must not block present. This is not production JNI and not a cutover.
+
+Shared-device raster interop host status (2026-08-18, **not** Milestone B
+PASS): `neotavern-neocompositor::SharedGpuContext` is a CPU protocol for one
+Instance/Adapter/Device/Queue/`DeviceEpoch`. The debug probe opens the real
+wgpu device once and binds raster plus compositor to that context; a second
+device is rejected. Typed handles reject foreign/stale epoch before submit.
+Raster output is a sampleable compositor texture (`image_readbacks=0`,
+`cross_device_copies=0`). Present uses a bounded readiness token and does
+not `device.poll(wait)`. Retirement leases outlive latest-wins drops. Queue
+pressure is capped. Device loss uses `GpuRecovery` (epoch bump, rehydrate).
+Unsupported compute degrades the flagged path to WebView rollback without
+breaking the production host. Debug `PERF_SCENARIO=interop` is not a
+cutover. A gesture-platform adapter is a later stage.
 
 ---
 
