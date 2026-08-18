@@ -99,8 +99,10 @@ crates/
                        # Choreographer adapter (debug/flagged host only;
                        # physical 120 Hz Perfetto PASS, not B PASS),
                        # PERF-22 non-sampleable fallback (host IMPLEMENTED,
-                       # not PASS), PERF-15 pressure/degraded admission
-                       # (host IMPLEMENTED, not PASS). Default
+                       # Android fixture pending BOUND capture, not PASS),
+                       # PERF-15 pressure/degraded admission
+                       # (host IMPLEMENTED; VisualSurface missing, not PASS).
+                       # Default
                        # host is WebView rollback
                        # (`NEOTA_NEOCOMPOSITOR=1`). Chat virtualization is
                        # `chat-viewport`, not here.
@@ -113,7 +115,7 @@ crates/
                        # (PERF-19/20 host integration; criteria PASS on
                        # physical Vulkan; not B PASS).
   presentation-perf-probe/ # debug-only Android PERF-18/19/20 + interop
-                       # probe (interop host PASS on physical Vulkan; not
+                       # + PERF-15/22/device-loss fixtures (not
                        # production JNI; not Milestone B PASS).
   presentation-dioxus-shell/ # Feature-flagged Dioxus Product Wire shell.
                        # Not MainActivity; not production JNI.

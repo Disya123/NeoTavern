@@ -20,6 +20,16 @@ object PresentationPerfLaunch {
             "perf19", "19" -> "perf19"
             "perf20", "20" -> "perf20"
             "interop", "shared", "t18" -> "interop"
+            "perf15", "15", "pressure" -> "perf15"
+            "perf22", "22", "surface", "perf22-panel", "panel" -> "perf22"
+            "perf22-poster", "poster" -> "perf22-poster"
+            "perf22-fullscreen", "fullscreen" -> "perf22-fullscreen"
+            "perf22-error", "error" -> "perf22-error"
+            "recovery", "device-loss", "recovery-raster", "raster_composite" -> "recovery"
+            "recovery-fling" -> "recovery-fling"
+            "recovery-selection", "selection" -> "recovery-selection"
+            "recovery-surface", "surface-recreation" -> "recovery-surface"
+            "recovery-background", "background" -> "recovery-background"
             else -> DEFAULT_SCENARIO
         }
     }

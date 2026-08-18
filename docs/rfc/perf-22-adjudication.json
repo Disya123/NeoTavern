@@ -1,0 +1,13 @@
+{
+  "schema": "perf-22-adjudication/v1",
+  "perf22": "IMPLEMENTED",
+  "physical": false,
+  "admissible": false,
+  "milestone_b": "STARTED",
+  "almost_pass": false,
+  "production_cutover": "NOT_STARTED",
+  "kind": "host_corpus_plus_fixture",
+  "record": "apps/android/app/src/debug/java/com/neotavern/mobile/PresentationSurfaceActivity.kt",
+  "pass_requires": "android_platform_surface_fixture",
+  "reason": "PERF-22 stays IMPLEMENTED until the Android WebView + secure SurfaceView fixture is captured on a BOUND APK."
+}

@@ -3417,6 +3417,9 @@ Tap/selection/long-press во время unacknowledged compositor scroll, tile 
 ## PERF-15 — pressure/degraded path
 
 **Host corpus:** `IMPLEMENTED` in `crates/neocompositor` (`pressure`).
+Physical fixture (10k fling + live glass + image decode/upload + trim-memory)
+lives in `presentation-perf-probe`; **PASS is blocked** until a real
+VisualSurface / Product Wire surface exists (not a synthetic texture).
 `Normal → Constrained → Critical → Degraded`. Not Milestone B PASS.
 
 Memory pressure во время fling + glass + image upload + VisualSurface. Проверяет
@@ -3502,8 +3505,9 @@ content.
 ## PERF-22 — non-sampleable surface/effect rejection
 
 **Host corpus:** `IMPLEMENTED` in `crates/neocompositor` (`surface_fallback`).
-PASS still requires an Android fixture that checks a real platform surface
-and input routing. Milestone B remains STARTED.
+Android fixture: debug `PresentationSurfaceActivity` (real WebView + secure
+`SurfaceView` + fallback hit routing). PASS still requires a BOUND physical
+capture. Milestone B remains STARTED.
 
 WebView/secure video помещаются под glass и внутрь opacity/mask group.
 Scene compiler обязан до present выбрать заявленный panel/poster/fullscreen/

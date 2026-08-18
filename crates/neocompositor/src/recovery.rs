@@ -280,6 +280,18 @@ impl GpuRecovery {
         self.last_fault
     }
 
+    pub fn last_recovery_duration_us(&self) -> u64 {
+        self.last_recovery_duration_us
+    }
+
+    pub fn cache_high_water(&self) -> usize {
+        self.cache_high_water_entries
+    }
+
+    pub fn target_high_water(&self) -> usize {
+        self.target_high_water
+    }
+
     pub fn degraded_reason(&self) -> Option<DegradedReason> {
         self.degraded_reason
     }

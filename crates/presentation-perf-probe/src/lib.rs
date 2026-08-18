@@ -1,10 +1,12 @@
-//! Debug-only PERF-18/19/20 Android probe.
+//! Debug-only PERF-18/19/20 Android probe plus B-exit fixtures.
 //!
 //! Not production JNI, not `MainActivity`, not Milestone B PASS. The probe
 //! cannot stamp PERF PASS; only the host adjudicator does.
 
 #[cfg(all(feature = "android-jni", target_os = "android"))]
 mod android_jni;
+#[cfg(feature = "gpu")]
+mod b_exit;
 #[cfg(feature = "gpu")]
 mod gpu_scenarios;
 mod i2p;
@@ -14,6 +16,7 @@ pub use i2p::{bind_scroll_scene, kind_from_i32, push_sample, I2pCpu, I2pFrame, I
 pub use perf20::{run_fling_trace, Perf20Summary};
 
 pub const CAPTURE_DIR: &str = "/data/data/com.neotavern.mobile/files/perf-18-20";
+pub const B_EXIT_CAPTURE_DIR: &str = "/data/data/com.neotavern.mobile/files/b-exit";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Scenario {
@@ -21,6 +24,16 @@ pub enum Scenario {
     Perf19,
     Perf20,
     Interop,
+    Perf15,
+    Perf22,
+    Perf22Poster,
+    Perf22Fullscreen,
+    Perf22Error,
+    Recovery,
+    RecoveryFling,
+    RecoverySelection,
+    RecoverySurface,
+    RecoveryBackground,
 }
 
 impl Scenario {
@@ -30,6 +43,18 @@ impl Scenario {
             "perf19" | "19" => Some(Self::Perf19),
             "perf20" | "20" => Some(Self::Perf20),
             "interop" | "shared" | "t18" => Some(Self::Interop),
+            "perf15" | "15" | "pressure" => Some(Self::Perf15),
+            "perf22" | "22" | "surface" | "perf22-panel" | "panel" => Some(Self::Perf22),
+            "perf22-poster" | "poster" => Some(Self::Perf22Poster),
+            "perf22-fullscreen" | "fullscreen" => Some(Self::Perf22Fullscreen),
+            "perf22-error" | "error" => Some(Self::Perf22Error),
+            "recovery" | "device-loss" | "recovery-raster" | "raster_composite" => {
+                Some(Self::Recovery)
+            }
+            "recovery-fling" | "fling" => Some(Self::RecoveryFling),
+            "recovery-selection" | "selection" => Some(Self::RecoverySelection),
+            "recovery-surface" | "surface-recreation" => Some(Self::RecoverySurface),
+            "recovery-background" | "background" => Some(Self::RecoveryBackground),
             _ => None,
         }
     }
@@ -40,6 +65,16 @@ impl Scenario {
             Self::Perf19 => "perf19",
             Self::Perf20 => "perf20",
             Self::Interop => "interop",
+            Self::Perf15 => "perf15",
+            Self::Perf22 => "perf22",
+            Self::Perf22Poster => "perf22-poster",
+            Self::Perf22Fullscreen => "perf22-fullscreen",
+            Self::Perf22Error => "perf22-error",
+            Self::Recovery => "recovery",
+            Self::RecoveryFling => "recovery-fling",
+            Self::RecoverySelection => "recovery-selection",
+            Self::RecoverySurface => "recovery-surface",
+            Self::RecoveryBackground => "recovery-background",
         }
     }
 }

@@ -3,6 +3,21 @@
 ## Unreleased
 ### Added
 
+- **B-exit physical fixtures (no PASS).** Debug
+  `PresentationSurfaceActivity` hosts a real WebView, a secure
+  `SurfaceView`, glass, and fallback hit-routing for PERF-22.
+  `presentation-perf-probe` adds `perf15` / `perf22` / `recovery`
+  scenarios: 10k fling + live glass + decoded image upload + trim-memory
+  (PERF-15 stays **IMPLEMENTED** without VisualSurface), capability
+  compile before `compile_passes`, and a real wgpu `Device::destroy` +
+  recreate for device-loss (CPU `LossDetected` is not physical).
+  Independent records:
+  [perf-15-adjudication.json](docs/rfc/perf-15-adjudication.json),
+  [perf-22-adjudication.json](docs/rfc/perf-22-adjudication.json),
+  [device-loss-adjudication.json](docs/rfc/device-loss-adjudication.json).
+  Milestone B remains STARTED. Production `MainActivity` / kernel JNI
+  unchanged.
+
 - **D1/D2 GO (not production cutover).** Owner `Disya123` signed
   [d1-d2-decision.md](docs/rfc/d1-d2-decision.md) / [ADR-0049](docs/adr/0049-track-d-dioxus-presentation.md):
   `D1=Track D GO`, `D2=Dioxus+pinned Blitz GO`, `D3=DEFERRED` (Android Rust

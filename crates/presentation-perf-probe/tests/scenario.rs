@@ -7,6 +7,16 @@ fn parses_scenario_names() {
     assert_eq!(Scenario::parse("PERF20"), Some(Scenario::Perf20));
     assert_eq!(Scenario::parse("interop"), Some(Scenario::Interop));
     assert_eq!(Scenario::parse("t18"), Some(Scenario::Interop));
+    assert_eq!(Scenario::parse("perf15"), Some(Scenario::Perf15));
+    assert_eq!(
+        Scenario::parse("perf22-poster"),
+        Some(Scenario::Perf22Poster)
+    );
+    assert_eq!(Scenario::parse("device-loss"), Some(Scenario::Recovery));
+    assert_eq!(
+        Scenario::parse("recovery-surface"),
+        Some(Scenario::RecoverySurface)
+    );
     assert_eq!(Scenario::parse("nope"), None);
 }
 

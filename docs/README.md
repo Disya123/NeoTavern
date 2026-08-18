@@ -77,7 +77,10 @@ Index of the internal documentation. Each major topic has its own folder.
   `20.65 ms` is a reference-device baseline), the [Milestone B-exit
   registry](rfc/milestone-b-exit.json) (machine-checkable; refuses B PASS
   while PERF-01…05 / PERF-11…22 evidence, physical device-loss, or open
-  baseline failures remain), and the [signed Gate P
+  baseline failures remain), the [PERF-15](rfc/perf-15-adjudication.json) /
+  [PERF-22](rfc/perf-22-adjudication.json) /
+  [device-loss](rfc/device-loss-adjudication.json) fixture records
+  (`IMPLEMENTED` / `CPU_INJECTION`, not PASS), and the [signed Gate P
   record](rfc/gate-p-decision-draft.md) (`GateP:P1`, 2026-08-17, incomplete
   physical M-1 waiver).
 - [Changelog](../CHANGELOG.md).

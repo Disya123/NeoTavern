@@ -1,0 +1,14 @@
+{
+  "schema": "perf-15-adjudication/v1",
+  "perf15": "IMPLEMENTED",
+  "visual_surface": "missing",
+  "physical": false,
+  "admissible": false,
+  "milestone_b": "STARTED",
+  "almost_pass": false,
+  "production_cutover": "NOT_STARTED",
+  "kind": "host_corpus_plus_fixture",
+  "record": "crates/presentation-perf-probe/src/b_exit.rs",
+  "pass_requires": "physical_pressure_fixture_with_visual_surface",
+  "reason": "PERF-15 stays IMPLEMENTED: no real VisualSurface / Product Wire surface path. The fixture must not substitute a colored synthetic texture."
+}

@@ -1,0 +1,13 @@
+{
+  "schema": "device-loss-adjudication/v1",
+  "device_loss": "CPU_INJECTION",
+  "physical": false,
+  "admissible": false,
+  "milestone_b": "STARTED",
+  "almost_pass": false,
+  "production_cutover": "NOT_STARTED",
+  "kind": "cpu_plus_wgpu_probe",
+  "record": "crates/presentation-perf-probe/src/b_exit.rs",
+  "pass_requires": "physical_device_loss_injection",
+  "reason": "Device-loss stays CPU_INJECTION until a physical wgpu Device destroy/recreate is captured on the phone. CPU LossDetected is not enough."
+}

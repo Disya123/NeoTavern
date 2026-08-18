@@ -41,6 +41,11 @@ class PresentationPerfActivity : Activity() {
         }
     }
 
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        android.util.Log.i(TAG, "perf15-trim level=$level")
+    }
+
     private companion object {
         const val TAG: String = "NeoTavern"
     }

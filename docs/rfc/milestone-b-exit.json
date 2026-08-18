@@ -43,9 +43,10 @@
       "status": "IMPLEMENTED",
       "independent": true,
       "admissible": false,
-      "kind": "host_corpus",
-      "record": "crates/neocompositor/tests/pressure.rs",
-      "pass_requires": "physical_pressure_fixture"
+      "kind": "host_corpus_plus_fixture",
+      "record": "docs/rfc/perf-15-adjudication.json",
+      "field": "perf15",
+      "pass_requires": "physical_pressure_fixture_with_visual_surface"
     },
     "PERF-16": { "status": "MISSING", "independent": false, "admissible": false, "record": null },
     "PERF-17": { "status": "MISSING", "independent": false, "admissible": false, "record": null },
@@ -78,8 +79,9 @@
       "status": "IMPLEMENTED",
       "independent": true,
       "admissible": false,
-      "kind": "host_corpus",
-      "record": "crates/neocompositor/tests/surface_fallback.rs",
+      "kind": "host_corpus_plus_fixture",
+      "record": "docs/rfc/perf-22-adjudication.json",
+      "field": "perf22",
       "pass_requires": "android_platform_surface_fixture"
     }
   },
@@ -87,7 +89,8 @@
     "status": "CPU_INJECTION",
     "physical": false,
     "admissible": false,
-    "record": "crates/neocompositor/tests/recovery.rs",
+    "record": "docs/rfc/device-loss-adjudication.json",
+    "field": "device_loss",
     "pass_requires": "physical_device_loss_injection"
   },
   "known_baseline_failures": [

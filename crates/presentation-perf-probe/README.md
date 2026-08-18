@@ -1,12 +1,16 @@
 # presentation-perf-probe (`neotavern-presentation-perf-probe`)
 
 Debug-only Android probe for PERF-18/19/20, shared-device raster
-interop, and the input-to-present present loop (`PresentationI2pProbe`).
+interop, input-to-present, and B-exit fixtures (PERF-15 / PERF-22 /
+device-loss).
 **Not** production JNI, **not** `MainActivity`, **not** Milestone B PASS
 or production cutover. Host stamps live in
 [`docs/rfc/perf-18-20-adjudication.json`](../../docs/rfc/perf-18-20-adjudication.json)
 (`PERF-18=PASS`, `PERF-19=PASS`, `PERF-20=PASS`, `Milestone B=STARTED`).
-Interop capture does not stamp Milestone B PASS. Host stamp:
+B-exit fixtures: [`perf-15-adjudication.json`](../../docs/rfc/perf-15-adjudication.json)
+(`IMPLEMENTED`), [`perf-22-adjudication.json`](../../docs/rfc/perf-22-adjudication.json)
+(`IMPLEMENTED`), [`device-loss-adjudication.json`](../../docs/rfc/device-loss-adjudication.json)
+(`CPU_INJECTION`). Interop capture does not stamp Milestone B PASS. Host stamp:
 [`docs/rfc/shared-device-interop-adjudication.json`](../../docs/rfc/shared-device-interop-adjudication.json)
 (`shared_device_interop=PASS`, `Milestone B=STARTED`).
 
@@ -18,6 +22,9 @@ Interop capture does not stamp Milestone B PASS. Host stamp:
 | `perf19`              | Cross-tile selection underlay + autoscroll; shape/layout/glyph raster stay 0 during drag                                                                                                  |
 | `perf20`              | Multi-frame fling 10 000 px/s + exact `+350 px`; one `DeltaToken`; C0/C1 continuity                                                                                                       |
 | `interop`             | Shared-device raster↔compositor path: `devices=1`, `image_readbacks=0`, `xdev=0`; raster texture sampled by compositor/glass. Host **PASS** on physical Vulkan (not B PASS, not cutover). |
+| `perf15`              | 10k fling + live glass + decoded image upload + trim-memory. `visual_surface=missing` until a Product Wire VisualSurface exists. **IMPLEMENTED**, not PASS. |
+| `perf22` / poster / fullscreen / error | Capability compile before `compile_passes`. Debug `PresentationSurfaceActivity` hosts a real WebView + secure `SurfaceView`. **IMPLEMENTED** until BOUND capture. |
+| `recovery`            | Destroys and recreates the live wgpu device. CPU `LossDetected` is not physical. `recovery-surface` / `recovery-background` are separate and must not bump `DeviceEpoch`. |
 
 ```text
 adb shell am start -n com.neotavern.mobile/.PresentationPerfActivity \

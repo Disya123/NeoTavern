@@ -56,13 +56,19 @@ production JNI renderer and **not** an Android cutover.
   plus fallback share one `SceneEpoch`; a capability change is a new
   transaction. Unsupported combinations reject with last-known-good and
   do not panic. Host corpus is in
-  `crates/neocompositor/tests/surface_fallback.rs`. PASS still needs an
-  Android platform-surface + input-routing fixture.
+  `crates/neocompositor/tests/surface_fallback.rs`. PASS still needs a
+  BOUND Android platform-surface capture
+  (`PresentationSurfaceActivity`). Host record:
+  [`docs/rfc/perf-22-adjudication.json`](../../docs/rfc/perf-22-adjudication.json)
+  (`IMPLEMENTED`).
 - Pressure / degraded admission (PERF-15 **IMPLEMENTED**, not PASS):
   unified `Normal → Constrained → Critical → Degraded` controller,
   deterministic eviction, viewport / protected band / LKG retained,
   image-upload throttle, bounded allocation retries, no OOM loop.
-  Host corpus is `crates/neocompositor/tests/pressure.rs`.
+  Host corpus is `crates/neocompositor/tests/pressure.rs`. The debug
+  probe adds 10k fling + live glass + image decode/upload + trim-memory;
+  PERF-15 stays **IMPLEMENTED** without a real VisualSurface path
+  ([`docs/rfc/perf-15-adjudication.json`](../../docs/rfc/perf-15-adjudication.json)).
 - Interaction-ready text snapshots (RFC §21.1): immutable
   `TextInteractionSnapshot` bound to `SceneEpoch`, generation-safe
   `TextFragmentId`, producer-authored bidi runs / clusters / line metrics /

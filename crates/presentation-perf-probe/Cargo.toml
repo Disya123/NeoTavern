@@ -2,7 +2,7 @@
 name = "neotavern-presentation-perf-probe"
 version = "0.1.0"
 edition = "2021"
-description = "Debug-only Android PERF-18/19/20 probe (not production JNI, not Milestone B PASS)"
+description = "Debug-only Android PERF-18/19/20 + B-exit (PERF-15/22/device-loss) probe"
 license = "AGPL-3.0"
 publish = false
 

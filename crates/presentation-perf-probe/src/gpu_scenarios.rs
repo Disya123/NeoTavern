@@ -50,10 +50,65 @@ pub fn run_scenario(scenario: Scenario, frames: u64, capture_frame: i32) -> Resu
         Scenario::Perf19 => run_perf19(frames, capture, capture_at),
         Scenario::Perf20 => run_perf20(frames, capture, capture_at),
         Scenario::Interop => run_interop(frames, capture, capture_at),
+        Scenario::Perf15 => crate::b_exit::run_perf15(frames, capture, capture_at),
+        Scenario::Perf22 => crate::b_exit::run_perf22(
+            frames,
+            capture,
+            capture_at,
+            crate::b_exit::parse_policy("panel"),
+        ),
+        Scenario::Perf22Poster => crate::b_exit::run_perf22(
+            frames,
+            capture,
+            capture_at,
+            crate::b_exit::parse_policy("poster"),
+        ),
+        Scenario::Perf22Fullscreen => crate::b_exit::run_perf22(
+            frames,
+            capture,
+            capture_at,
+            crate::b_exit::parse_policy("fullscreen"),
+        ),
+        Scenario::Perf22Error => crate::b_exit::run_perf22(
+            frames,
+            capture,
+            capture_at,
+            crate::b_exit::parse_policy("error"),
+        ),
+        Scenario::Recovery => crate::b_exit::run_recovery(
+            frames,
+            capture,
+            capture_at,
+            crate::b_exit::RecoveryAt::RasterComposite,
+        ),
+        Scenario::RecoveryFling => crate::b_exit::run_recovery(
+            frames,
+            capture,
+            capture_at,
+            crate::b_exit::RecoveryAt::Fling,
+        ),
+        Scenario::RecoverySelection => crate::b_exit::run_recovery(
+            frames,
+            capture,
+            capture_at,
+            crate::b_exit::RecoveryAt::Selection,
+        ),
+        Scenario::RecoverySurface => crate::b_exit::run_recovery(
+            frames,
+            capture,
+            capture_at,
+            crate::b_exit::RecoveryAt::Surface,
+        ),
+        Scenario::RecoveryBackground => crate::b_exit::run_recovery(
+            frames,
+            capture,
+            capture_at,
+            crate::b_exit::RecoveryAt::Background,
+        ),
     }
 }
 
-fn gpu_line(
+pub(crate) fn gpu_line(
     prefix: &str,
     gpu: &neotavern_presentation_m0::verdict::ProbeReport,
     extra: &str,

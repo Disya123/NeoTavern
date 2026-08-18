@@ -5,7 +5,7 @@
     {
       "source": "README.md",
       "target": "README.md",
-      "sha256": "407c39c1436927ccefa24e02b4df2fa6114cf866248c35ef759fe8faf005c85c"
+      "sha256": "f41dd93ef5adad326e1f569b5d3e74e84bbbd5c0443a580f5fc40205ba68c568"
     },
     {
       "source": "adr/0004-typebox-contracts.md",
@@ -245,7 +245,7 @@
     {
       "source": "architecture/README.md",
       "target": "architecture/README.md",
-      "sha256": "b9634011330b22df5630c9857b650781d58d6b25910c0b6c24f15ce0efd26d84"
+      "sha256": "b2f02a533cc60549b8d5e429f2e147d432213c48649bdb40b5f5cf8f71ccd8aa"
     },
     {
       "source": "architecture/benchmarks.md",
@@ -280,7 +280,7 @@
     {
       "source": "architecture/presentation-boundary.md",
       "target": "architecture/presentation-boundary.md",
-      "sha256": "bec804172bc270c3ba2346254c02ebbaf59afad25b3995ce7db1e618f3c9c609"
+      "sha256": "dde7d6ea1ebd57bb458af1c527ac38d9e600dda22067cb372b04e2c116b14aee"
     },
     {
       "source": "architecture/prompt-pipeline.md",
@@ -360,7 +360,12 @@
     {
       "source": "rfc/README.md",
       "target": "rfc/README.md",
-      "sha256": "c8d09221835008180d6e1034df8b79b5ecaea1b2589f913da76f21065712e605"
+      "sha256": "aadbfefba5596dfe2fc1a76e3c0fe41fe0b51a01833ee4d05511bd62d8f33790"
+    },
+    {
+      "source": "rfc/b-exit-physical-runbook.md",
+      "target": "rfc/b-exit-physical-runbook.md",
+      "sha256": "3faa56033abff904401f21dcc3d7b098d656e0a3b67ad6d0c2ae8f0088248eb2"
     },
     {
       "source": "rfc/d1-d2-decision.md",
@@ -420,7 +425,7 @@
     {
       "source": "rfc/neoui-v4-android-presentation-backend.md",
       "target": "rfc/neoui-v4-android-presentation-backend.md",
-      "sha256": "364f638e9792f138804a9a44eb8b89479800e1b3abcbb84efc33bdf9ee59b3f9"
+      "sha256": "679b7dee19a19fbaeca89b642db47b9f9ed3fb3a1251baef1bda50caae73957e"
     },
     {
       "source": "rfc/perf-18-20-physical-runbook.md",

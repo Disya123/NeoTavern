@@ -37,7 +37,8 @@ use crate::timeline::{
 };
 use crate::verdict::{ProbeReport, SubstrateVerdict};
 use neotavern_neocompositor::{
-    BoundBackend, GpuCaps, HandleOwner, InteropPresentOutcome, SharedGpuContext, SharedHandleKind,
+    BoundBackend, DeviceEpoch, GpuCaps, GpuRecovery, HandleOwner, InteropPresentOutcome,
+    SharedGpuContext, SharedGpuError, SharedHandleKind,
 };
 
 #[derive(Debug)]
@@ -73,6 +74,24 @@ pub enum LabelMode {
     Perf18,
     Perf19,
     Perf20,
+    Perf15,
+    Perf22,
+    Recovery,
+}
+
+/// Evidence that the live wgpu device was destroyed and a new one opened.
+/// CPU `LossDetected` without `wgpu_destroyed` is not physical device-loss.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PhysicalWgpuLoss {
+    pub wgpu_destroyed: bool,
+    pub wgpu_recreated: bool,
+    pub device_epoch_before: u64,
+    pub device_epoch_after: u64,
+    pub live_wgpu_devices: u32,
+    pub devices_created: u64,
+    pub stale_handle_rejected: bool,
+    pub identity_unchanged: bool,
+    pub recovery_duration_us: u64,
 }
 
 #[cfg(target_os = "android")]
@@ -160,6 +179,14 @@ pub struct ProbeGpu {
 impl ProbeGpu {
     pub fn try_new(width: u32, height: u32) -> Result<Self, GpuInitError> {
         Self::try_new_inner(width, height, false, LabelMode::D1a)
+    }
+
+    pub fn try_new_labeled(
+        width: u32,
+        height: u32,
+        label_mode: LabelMode,
+    ) -> Result<Self, GpuInitError> {
+        Self::try_new_inner(width, height, false, label_mode)
     }
 
     pub fn try_new_d1b(width: u32, height: u32) -> Result<Self, GpuInitError> {
@@ -515,6 +542,134 @@ impl ProbeGpu {
         })
     }
 
+    /// Destroy the live wgpu device and open a replacement on the **same**
+    /// [`SharedGpuContext`]. CPU `on_device_lost` alone is not physical.
+    pub fn inject_physical_wgpu_loss(&mut self) -> Result<PhysicalWgpuLoss, GpuInitError> {
+        let stale_handle = self
+            .shared
+            .raster_tile()
+            .map_err(|err| GpuInitError::Renderer(format!("stale handle before loss: {err}")))?;
+        let old_epoch = self.shared.device_epoch();
+        let identity = self.shared.identity();
+        let old_created = self.devices_created;
+        let width = self.width;
+        let height = self.height;
+        let with_moving = self.moving.is_some();
+        let label_mode = self.label_mode;
+        let pass_compiles = self.pass_compiles;
+        let raster_passes = self.raster_passes;
+        let glass_passes = self.glass_passes;
+        let cpu_readbacks = self.cpu_readbacks;
+        let cross_device_copies = self.cross_device_copies;
+
+        self.device.destroy();
+        let mut fresh = Self::try_new_inner(width, height, with_moving, label_mode)?;
+        std::mem::swap(&mut self.device, &mut fresh.device);
+        std::mem::swap(&mut self.queue, &mut fresh.queue);
+        std::mem::swap(&mut self.renderer, &mut fresh.renderer);
+        std::mem::swap(&mut self.accumulator, &mut fresh.accumulator);
+        std::mem::swap(&mut self.vello_target, &mut fresh.vello_target);
+        std::mem::swap(&mut self.snapshot, &mut fresh.snapshot);
+        std::mem::swap(&mut self.moving, &mut fresh.moving);
+        std::mem::swap(&mut self.pre_moving, &mut fresh.pre_moving);
+        std::mem::swap(&mut self.blit_pipeline, &mut fresh.blit_pipeline);
+        std::mem::swap(&mut self.glass_pipeline, &mut fresh.glass_pipeline);
+        std::mem::swap(&mut self.sampler, &mut fresh.sampler);
+        std::mem::swap(&mut self.params_buf, &mut fresh.params_buf);
+        std::mem::swap(&mut self.blit_bgl, &mut fresh.blit_bgl);
+        std::mem::swap(&mut self.glass_bgl, &mut fresh.glass_bgl);
+        self.software_adapter = fresh.software_adapter;
+        self.adapter_name = fresh.adapter_name.clone();
+        self.adapter_backend = fresh.adapter_backend.clone();
+        self.compositor_texture_bytes = fresh.compositor_texture_bytes;
+        drop(fresh);
+
+        let mut recovery = GpuRecovery::new();
+        recovery
+            .initialize()
+            .map_err(|err| GpuInitError::Renderer(format!("recovery init: {err:?}")))?;
+        let new_epoch = self
+            .shared
+            .on_device_lost(&mut recovery)
+            .map_err(|err| GpuInitError::Renderer(format!("shared device lost: {err}")))?;
+        let stale_handle_rejected = matches!(
+            self.shared.sample_tile(stale_handle),
+            Err(SharedGpuError::StaleEpoch)
+        );
+        self.raster_backend.epoch = new_epoch;
+        self.compositor_backend.epoch = new_epoch;
+        self.shared
+            .alloc(HandleOwner::Compositor, SharedHandleKind::Accumulator)
+            .map_err(|err| GpuInitError::Renderer(format!("shared accumulator: {err}")))?;
+        self.shared
+            .alloc(HandleOwner::Glass, SharedHandleKind::GlassRoi)
+            .map_err(|err| GpuInitError::Renderer(format!("shared glass roi: {err}")))?;
+        self.shared
+            .alloc(HandleOwner::Surface, SharedHandleKind::Surface)
+            .map_err(|err| GpuInitError::Renderer(format!("shared surface: {err}")))?;
+        self.devices_created = old_created.saturating_add(1);
+        self.pass_compiles = pass_compiles;
+        self.raster_passes = raster_passes;
+        self.glass_passes = glass_passes;
+        self.cpu_readbacks = cpu_readbacks;
+        self.cross_device_copies = cross_device_copies;
+        if identity != self.shared.identity() {
+            return Err(GpuInitError::Renderer(
+                "shared device identity changed during wgpu recreate".into(),
+            ));
+        }
+        Ok(PhysicalWgpuLoss {
+            wgpu_destroyed: true,
+            wgpu_recreated: true,
+            device_epoch_before: old_epoch.0,
+            device_epoch_after: new_epoch.0,
+            live_wgpu_devices: 1,
+            devices_created: self.devices_created,
+            stale_handle_rejected,
+            identity_unchanged: true,
+            recovery_duration_us: recovery.last_recovery_duration_us(),
+        })
+    }
+
+    pub fn device_epoch(&self) -> DeviceEpoch {
+        self.shared.device_epoch()
+    }
+
+    pub fn upload_decoded_image(
+        &mut self,
+        rgba: &[u8],
+        width: u32,
+        height: u32,
+    ) -> Result<(), GpuInitError> {
+        if rgba.len() != (width as usize) * (height as usize) * 4 {
+            return Err(GpuInitError::Renderer(
+                "decoded image byte length mismatch".into(),
+            ));
+        }
+        let w = width.min(GLASS_SNAPSHOT_MAX);
+        let h = height.min(GLASS_SNAPSHOT_MAX);
+        self.queue.write_texture(
+            TexelCopyTextureInfo {
+                texture: &self.snapshot,
+                mip_level: 0,
+                origin: Origin3d::ZERO,
+                aspect: TextureAspect::All,
+            },
+            rgba,
+            TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(w * 4),
+                rows_per_image: Some(h),
+            },
+            Extent3d {
+                width: w,
+                height: h,
+                depth_or_array_layers: 1,
+            },
+        );
+        Ok(())
+    }
+
     fn restore_label(&self) -> &'static str {
         match self.label_mode {
             LabelMode::D2 => CAPTURE_PASS_D2_RESTORE,
@@ -539,7 +694,12 @@ impl ProbeGpu {
     fn follow_roi_prefix(&self) -> &'static str {
         match self.label_mode {
             LabelMode::D2 => CAPTURE_GROUP_D2_ROI_PREFIX,
-            LabelMode::Perf18 | LabelMode::Perf19 | LabelMode::Perf20 => "perf18-roi-read",
+            LabelMode::Perf18
+            | LabelMode::Perf19
+            | LabelMode::Perf20
+            | LabelMode::Perf15
+            | LabelMode::Perf22
+            | LabelMode::Recovery => "perf18-roi-read",
             _ => CAPTURE_GROUP_D1B_ROI_PREFIX,
         }
     }
@@ -547,7 +707,12 @@ impl ProbeGpu {
     fn follow_glass_prefix(&self) -> &'static str {
         match self.label_mode {
             LabelMode::D2 => CAPTURE_GROUP_D2_GLASS_PREFIX,
-            LabelMode::Perf18 | LabelMode::Perf19 | LabelMode::Perf20 => "perf18-glass",
+            LabelMode::Perf18
+            | LabelMode::Perf19
+            | LabelMode::Perf20
+            | LabelMode::Perf15
+            | LabelMode::Perf22
+            | LabelMode::Recovery => "perf18-glass",
             _ => CAPTURE_GROUP_D1B_GLASS_PREFIX,
         }
     }
@@ -555,7 +720,12 @@ impl ProbeGpu {
     fn is_perf(&self) -> bool {
         matches!(
             self.label_mode,
-            LabelMode::Perf18 | LabelMode::Perf19 | LabelMode::Perf20
+            LabelMode::Perf18
+                | LabelMode::Perf19
+                | LabelMode::Perf20
+                | LabelMode::Perf15
+                | LabelMode::Perf22
+                | LabelMode::Recovery
         )
     }
 
@@ -564,7 +734,11 @@ impl ProbeGpu {
         encoder: &mut wgpu::CommandEncoder,
         open_scopes: &[EffectScopeId],
     ) -> bool {
-        if self.label_mode != LabelMode::Perf18 || open_scopes.is_empty() {
+        if (self.label_mode != LabelMode::Perf18
+            && self.label_mode != LabelMode::Perf15
+            && self.label_mode != LabelMode::Perf22)
+            || open_scopes.is_empty()
+        {
             return false;
         }
         encoder.push_debug_group("perf18-effect-opacity");
@@ -600,6 +774,35 @@ impl ProbeGpu {
         list: &NeoDisplayList,
         passes: &[CompiledPass],
         frame: u64,
+    ) -> Result<(), GpuInitError> {
+        self.render_compiled_inner(list, passes, frame, None)
+    }
+
+    pub fn render_compiled_losing_after_raster(
+        &mut self,
+        list: &NeoDisplayList,
+        passes: &[CompiledPass],
+        frame: u64,
+    ) -> Result<PhysicalWgpuLoss, GpuInitError> {
+        let mut report = None;
+        self.render_compiled_inner(
+            list,
+            passes,
+            frame,
+            Some(&mut |gpu| {
+                report = Some(gpu.inject_physical_wgpu_loss()?);
+                Ok(())
+            }),
+        )?;
+        report.ok_or_else(|| GpuInitError::Renderer("no raster pass before device loss".into()))
+    }
+
+    fn render_compiled_inner(
+        &mut self,
+        list: &NeoDisplayList,
+        passes: &[CompiledPass],
+        frame: u64,
+        mut after_raster: Option<&mut dyn FnMut(&mut Self) -> Result<(), GpuInitError>>,
     ) -> Result<(), GpuInitError> {
         let d1b = crate::scene_d1b::list_has_moving_sample(list);
         self.recording_frame = frame == 0 && !self.is_perf();
@@ -658,6 +861,9 @@ impl ProbeGpu {
                     let chunk_count = u32::try_from(chunks.len()).unwrap_or(u32::MAX);
                     self.raster_pass(list, chunks, open_scopes, chunk_count)?;
                     self.raster_passes += 1;
+                    if let Some(hook) = after_raster.take() {
+                        hook(self)?;
+                    }
                 }
                 CompiledPass::Glass {
                     barrier,
@@ -1718,9 +1924,13 @@ pub fn run_dynamic_list_at(
     let mut gpu = match labels {
         LabelMode::D2 => ProbeGpu::try_new_d2(list.width, list.height)?,
         LabelMode::D1b => ProbeGpu::try_new_d1b(list.width, list.height)?,
-        LabelMode::D1a | LabelMode::Perf18 | LabelMode::Perf19 | LabelMode::Perf20 => {
-            ProbeGpu::try_new_inner(list.width, list.height, false, labels)?
-        }
+        LabelMode::D1a
+        | LabelMode::Perf18
+        | LabelMode::Perf19
+        | LabelMode::Perf20
+        | LabelMode::Perf15
+        | LabelMode::Perf22
+        | LabelMode::Recovery => ProbeGpu::try_new_inner(list.width, list.height, false, labels)?,
     };
     gpu.pass_compiles = 1;
     gpu.paint_scene_rebuilds = 0;
