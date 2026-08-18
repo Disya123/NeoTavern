@@ -29,6 +29,33 @@ impl DamageRect {
             height: rect.height.ceil() as u32,
         }
     }
+
+    pub fn is_empty(self) -> bool {
+        self.width == 0 || self.height == 0
+    }
+
+    pub fn union(self, other: Self) -> Self {
+        if self.is_empty() {
+            return other;
+        }
+        if other.is_empty() {
+            return self;
+        }
+        let x = self.x.min(other.x);
+        let y = self.y.min(other.y);
+        let x1 = i64::from(self.x) + i64::from(self.width);
+        let y1 = i64::from(self.y) + i64::from(self.height);
+        let ox1 = i64::from(other.x) + i64::from(other.width);
+        let oy1 = i64::from(other.y) + i64::from(other.height);
+        let nx1 = x1.max(ox1);
+        let ny1 = y1.max(oy1);
+        Self {
+            x,
+            y,
+            width: u32::try_from((nx1 - i64::from(x)).max(0)).unwrap_or(0),
+            height: u32::try_from((ny1 - i64::from(y)).max(0)).unwrap_or(0),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]

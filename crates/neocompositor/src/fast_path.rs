@@ -25,6 +25,9 @@ use crate::scroll::{
 pub enum RasterDecision {
     /// Transform/opacity/scroll composite. Display-list pixels stay valid.
     CompositeOnly,
+    /// Selection underlay, caret, and handles only. Glyph and background
+    /// rasters stay valid; shaping and layout are not re-run.
+    SelectionOnly,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

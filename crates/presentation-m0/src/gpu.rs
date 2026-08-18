@@ -602,6 +602,7 @@ impl ProbeGpu {
                     self.snapshot_static_prefix()?;
                     self.moving_blit(frame)?;
                 }
+                CompiledPass::Interaction { .. } => {}
             }
         }
         if self.recording_frame {
@@ -1316,7 +1317,11 @@ fn encode_chunk(scene: &mut Scene, list: &NeoDisplayList, chunk: &PaintChunk) {
     }
     let color = match chunk.payload {
         StubPayload::Wallpaper => Color::from_rgb8(32, 48, 72),
-        StubPayload::VectorUi => Color::from_rgb8(240, 220, 180),
+        StubPayload::VectorUi
+        | StubPayload::TransparentGlyphs
+        | StubPayload::SyntaxGlyphs
+        | StubPayload::Decoration => Color::from_rgb8(240, 220, 180),
+        StubPayload::ColorEmoji => Color::from_rgb8(255, 180, 40),
         StubPayload::Overlay => Color::from_rgb8(220, 72, 72),
         StubPayload::MovingSample => unreachable!("filtered before encode_chunk raster"),
     };
@@ -1328,7 +1333,12 @@ fn encode_chunk(scene: &mut Scene, list: &NeoDisplayList, chunk: &PaintChunk) {
             f64::from(chunk.bounds.y1()),
         ),
         StubPayload::MovingSample => unreachable!("filtered before encode_chunk raster"),
-        StubPayload::VectorUi | StubPayload::Overlay => {
+        StubPayload::VectorUi
+        | StubPayload::Overlay
+        | StubPayload::TransparentGlyphs
+        | StubPayload::ColorEmoji
+        | StubPayload::SyntaxGlyphs
+        | StubPayload::Decoration => {
             let rect = KurboRect::new(
                 f64::from(chunk.bounds.x),
                 f64::from(chunk.bounds.y),

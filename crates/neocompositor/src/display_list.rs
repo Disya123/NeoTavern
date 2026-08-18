@@ -4,6 +4,9 @@
 
 use std::sync::Arc;
 
+use crate::geometry_tiles::TileId;
+use crate::text::{TextFragmentId, TextOffset, TextRange};
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Rect {
     pub x: f32,
@@ -28,6 +31,48 @@ impl Rect {
 
     pub fn y1(self) -> f32 {
         self.y + self.height
+    }
+
+    pub fn is_empty(self) -> bool {
+        self.width <= 0.0 || self.height <= 0.0
+    }
+
+    pub fn intersect(self, other: Self) -> Option<Self> {
+        let x = self.x.max(other.x);
+        let y = self.y.max(other.y);
+        let x1 = self.x1().min(other.x1());
+        let y1 = self.y1().min(other.y1());
+        let width = x1 - x;
+        let height = y1 - y;
+        if width <= 0.0 || height <= 0.0 {
+            None
+        } else {
+            Some(Self {
+                x,
+                y,
+                width,
+                height,
+            })
+        }
+    }
+
+    pub fn union(self, other: Self) -> Self {
+        if self.is_empty() {
+            return other;
+        }
+        if other.is_empty() {
+            return self;
+        }
+        let x = self.x.min(other.x);
+        let y = self.y.min(other.y);
+        let x1 = self.x1().max(other.x1());
+        let y1 = self.y1().max(other.y1());
+        Self {
+            x,
+            y,
+            width: x1 - x,
+            height: y1 - y,
+        }
     }
 }
 
@@ -165,6 +210,14 @@ pub enum StubPayload {
     Overlay,
     /// Compositor-owned sampleable texture. Never merged into a Vello run.
     MovingSample,
+    /// Selectable glyphs replayed above the selection underlay.
+    TransparentGlyphs,
+    /// Color emoji keep their own palette; not a selection blend.
+    ColorEmoji,
+    /// Syntax-colored glyphs. Not multiplied with the underlay.
+    SyntaxGlyphs,
+    /// Underline / strike / IME marks painted after glyphs.
+    Decoration,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -196,12 +249,71 @@ pub struct ImageLayer {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct TextPaintFragment {
+    pub fragment_id: TextFragmentId,
+    pub generation: u64,
+    pub spatial_node: SpatialNodeId,
+    pub clip_chain: ClipChainId,
+    pub effect_node: EffectNodeId,
+    pub backdrop_root: BackdropRootId,
+    pub bounds: Rect,
+    pub tiles: Arc<[TileId]>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct SelectionPaintOp {
+    pub fragment_id: TextFragmentId,
+    pub generation: u64,
+    pub logical_range: TextRange,
+    pub rects: Arc<[Rect]>,
+    pub spatial_node: SpatialNodeId,
+    pub clip_chain: ClipChainId,
+    pub effect_node: EffectNodeId,
+    pub backdrop_root: BackdropRootId,
+    pub source_generation: u64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CaretPaintOp {
+    pub fragment_id: TextFragmentId,
+    pub generation: u64,
+    pub caret: TextOffset,
+    pub bounds: Rect,
+    pub spatial_node: SpatialNodeId,
+    pub clip_chain: ClipChainId,
+    pub effect_node: EffectNodeId,
+    pub backdrop_root: BackdropRootId,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HandleKind {
+    Start,
+    End,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct HandlePaintOp {
+    pub fragment_id: TextFragmentId,
+    pub generation: u64,
+    pub kind: HandleKind,
+    pub bounds: Rect,
+    pub spatial_node: SpatialNodeId,
+    pub clip_chain: ClipChainId,
+    pub effect_node: EffectNodeId,
+    pub backdrop_root: BackdropRootId,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum NeoPaintOp {
     BeginEffectScope(EffectScopeId),
     EndEffectScope(EffectScopeId),
     PaintChunk(PaintChunk),
     BackdropBarrier(GlassBoundary),
     Image(ImageLayer),
+    TextFragment(TextPaintFragment),
+    Selection(SelectionPaintOp),
+    Caret(CaretPaintOp),
+    Handle(HandlePaintOp),
 }
 
 #[derive(Clone, Debug, PartialEq)]

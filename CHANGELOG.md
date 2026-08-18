@@ -76,6 +76,23 @@
   `MainActivity` / WebView rollback unchanged. PERF-18 stays
   **IMPLEMENTED / GPU_PENDING**. Milestone B remains STARTED.
 
+- **Cross-tile selection underlay (PERF-19 IMPLEMENTED, not PASS).**
+  `crates/neocompositor` paints `SelectionPaintOp` between the
+  box/background chunk and transparent glyph/emoji chunks. Highlight is
+  not baked into background or glyph tiles. Drag updates only selection
+  ops and bounded damage (`SELECTION_ONLY`): no shaping, layout, or
+  glyph/background raster invalidation. Rects clip per tile from one
+  logical geometry with shared snapping/apron rules. Color emoji and
+  syntax colors do not go through a selection blend-mode. Old and new
+  selection damage is unioned. Selection under subsequent glass
+  invalidates the dependent glass ROI. Handles and caret use the same
+  property snapshot and async scroll state; autoscroll sends a delta to
+  an existing `ScrollId`. A fallback tile without an interaction snapshot
+  is not a text target. PERF-19 PASS still needs producer integration and
+  an Android selection/autoscroll capture. `MainActivity` / WebView
+  rollback unchanged. PERF-18 stays **IMPLEMENTED / GPU_PENDING**.
+  Milestone B remains STARTED.
+
 - **PERF-18 effect-scope backdrop host golden (IMPLEMENTED / GPU_PENDING,
   not PASS).** Canonical scene: parent backdrop root →
   `BeginEffect(opacity=0.5, transform, rounded clip)` → prefix →

@@ -227,6 +227,7 @@ pub fn expected_first_frame(list: &NeoDisplayList) -> Result<Vec<TimelineKind>, 
                     generation: 0,
                 });
             }
+            CompiledPass::Interaction { .. } => {}
         }
     }
     Ok(events)

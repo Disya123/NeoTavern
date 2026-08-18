@@ -40,8 +40,19 @@ production JNI renderer and **not** an Android cutover.
   glyph geometry. The compositor does not shape, layout, or fall back fonts.
   A fragment may span many tiles. Text, geometry, and property snapshots
   switch atomically on `FrameTransaction`. Stale/recycled fragments cancel
-  instead of selecting another message. Cross-tile selection underlay is
-  the next slice.
+  instead of selecting another message.
+- Cross-tile selection underlay (PERF-19 **IMPLEMENTED**, not PASS):
+  `SelectionPaintOp` sits between the box/background chunk and transparent
+  glyph/emoji chunks. Highlight is not baked into background or glyph
+  tiles. Drag is `SELECTION_ONLY`: bounded damage, no shaping/layout, no
+  glyph/background raster invalidation. Rects clip per tile from one
+  logical geometry with shared snapping/apron rules. Color emoji and
+  syntax colors do not go through a selection blend-mode. Selection under
+  subsequent glass invalidates the dependent glass ROI. Handles/caret use
+  the same property snapshot and async scroll state; autoscroll nudges an
+  existing `ScrollId`. A fallback tile without an interaction snapshot is
+  not a text target. This is **not** PERF-19 PASS (producer integration
+  and Android selection/autoscroll capture still required).
 - Effect-scope backdrop host golden (PERF-18 **IMPLEMENTED / GPU_PENDING**):
   ancestor opacity/filter/mask wrap prefix, glass, and foreground as one
   group; backdrop is sampled at the barrier from the parent root; group
@@ -77,21 +88,23 @@ Started (CPU types + tests):
 - async hit-test + nested-scroll dispatch (same snapshot/epoch as render;
   capture/cancel; no Dioxus round trip)
 - interaction-ready text snapshots (immutable, producer-shaped, atomic
-  with geometry + property snapshots; not PERF-19)
+  with geometry + property snapshots)
+- cross-tile selection underlay (PERF-19 **IMPLEMENTED**, not PASS;
+  producer integration and Android selection/autoscroll capture still
+  required)
 - PERF-18 effect-scope backdrop host golden (**IMPLEMENTED / GPU_PENDING**,
   not PASS; Android Vulkan capture still required)
 - M0-D1a pass-order corpus as a production regression (not a lab re-run)
 
 Not started (do not treat as done):
 
-- cross-tile selection underlay / PERF-19
 - gesture-platform adapter
 - GPU device/surface recovery
 - shared-device raster interop in this crate (still in the M0 probe)
 - GPU timing telemetry
 - PERF-01…PERF-22 PASS and 120 Hz product budgets (PERF-18 remains
-  **IMPLEMENTED / GPU_PENDING**; PERF-20 host corpus is **IMPLEMENTED** in
-  `chat-viewport`, not PASS)
+  **IMPLEMENTED / GPU_PENDING**; PERF-19 and PERF-20 host corpora are
+  **IMPLEMENTED**, not PASS)
 
 See [presentation boundary](../../docs/architecture/presentation-boundary.md)
 and [ADR-0049](../../docs/adr/0049-track-d-dioxus-presentation.md).

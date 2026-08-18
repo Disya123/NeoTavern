@@ -17,6 +17,7 @@ pub mod pass_graph;
 pub mod property_tree;
 pub mod scene;
 pub mod scroll;
+pub mod selection;
 pub mod target_pool;
 pub mod text;
 pub mod transaction;
@@ -25,9 +26,10 @@ pub use animation::{
     AnimValue, AnimationId, AnimationProperty, AnimationSpec, Easing, FastPathError,
 };
 pub use display_list::{
-    AffineCoeffs, BackdropRootId, BarrierId, ClipChainId, ClipNode, EffectKind, EffectNode,
-    EffectNodeId, EffectScopeId, GlassBoundary, ImageLayer, NeoDisplayList, NeoPaintOp, PaintChunk,
-    PaintChunkId, PaintOrderKey, Rect, SpatialNode, SpatialNodeId, StubPayload,
+    AffineCoeffs, BackdropRootId, BarrierId, CaretPaintOp, ClipChainId, ClipNode, EffectKind,
+    EffectNode, EffectNodeId, EffectScopeId, GlassBoundary, HandleKind, HandlePaintOp, ImageLayer,
+    NeoDisplayList, NeoPaintOp, PaintChunk, PaintChunkId, PaintOrderKey, Rect, SelectionPaintOp,
+    SpatialNode, SpatialNodeId, StubPayload, TextPaintFragment,
 };
 pub use epoch::{DeviceEpoch, EpochClock, FrameId, PresentationTime, SceneEpoch, ScrollEpoch};
 pub use fast_path::{CompositorFastPath, PresentOutcome, RasterDecision};
@@ -42,7 +44,9 @@ pub use mailbox::{
     DEFAULT_ITEM_CAP,
 };
 pub use neo_glass::NeoGlass;
-pub use pass_graph::{barriers_cut_raster_runs, compile_passes, CompiledPass, GraphError};
+pub use pass_graph::{
+    barriers_cut_raster_runs, compile_passes, CompiledPass, GraphError, InteractionPassKind,
+};
 pub use property_tree::{
     hit_test, ClipId, ClipTreeNode, EffectId, EffectSpec, EffectTreeNode, HitTestId, HitTestItem,
     HitTestMatch, Insets, LogicalRect, Point, PointerFlags, PropertyEffectKind, PropertySnapshot,
@@ -52,6 +56,10 @@ pub use property_tree::{
 pub use scene::{GlassSurface, NeoScene};
 pub use scroll::{
     AckResult, AsyncScrollState, GestureId, ScrollAck, ScrollInputError, ScrollSequence,
+};
+pub use selection::{
+    apply_autoscroll, autoscroll_delta, clip_to_tile, compose_selectable, SelectablePaintPlan,
+    SelectionError, SelectionFrame, SelectionSession, AUTOSCROLL_EDGE_PX,
 };
 pub use target_pool::{TargetId, TargetPool, TargetPoolError};
 pub use text::{

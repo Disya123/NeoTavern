@@ -22,6 +22,7 @@ mod tests {
                 CompiledPass::Raster { .. } => "raster",
                 CompiledPass::Glass { .. } => "glass",
                 CompiledPass::MovingSample { .. } => "moving",
+                CompiledPass::Interaction { .. } => "interaction",
             })
             .collect();
         assert_eq!(
@@ -37,7 +38,9 @@ mod tests {
                     barrier,
                     open_scopes,
                 } => Some((barrier.id.0, open_scopes.clone())),
-                CompiledPass::Raster { .. } | CompiledPass::MovingSample { .. } => None,
+                CompiledPass::Raster { .. }
+                | CompiledPass::MovingSample { .. }
+                | CompiledPass::Interaction { .. } => None,
             })
             .collect();
         assert_eq!(glass.len(), 2);
@@ -62,7 +65,7 @@ mod tests {
         for pass in &passes {
             match pass {
                 CompiledPass::Glass { .. } => seen_glass = true,
-                CompiledPass::MovingSample { .. } => {}
+                CompiledPass::MovingSample { .. } | CompiledPass::Interaction { .. } => {}
                 CompiledPass::Raster { chunks, .. } if !seen_glass => {
                     ids_before_first_glass.extend(chunks.iter().map(|chunk| chunk.id));
                 }

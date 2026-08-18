@@ -529,6 +529,10 @@ fn topology(passes: &[CompiledPass]) -> Vec<Topo> {
                 chunks: vec![chunk.id.0],
                 scopes: open_scopes.iter().map(|scope| scope.0).collect(),
             },
+            CompiledPass::Interaction { open_scopes, .. } => Topo::Raster {
+                chunks: Vec::new(),
+                scopes: open_scopes.iter().map(|scope| scope.0).collect(),
+            },
         })
         .collect()
 }
@@ -616,6 +620,7 @@ fn pass_edges(passes: &[CompiledPass]) -> Vec<(usize, usize)> {
             CompiledPass::MovingSample { chunk, open_scopes } => {
                 writers.push((i, chunk.backdrop_root, open_scopes.last().copied()));
             }
+            CompiledPass::Interaction { .. } => {}
             CompiledPass::Glass {
                 barrier,
                 open_scopes,

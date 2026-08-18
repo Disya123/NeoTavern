@@ -283,6 +283,7 @@ mod tests {
                 crate::pass_graph::CompiledPass::Raster { .. } => "raster",
                 crate::pass_graph::CompiledPass::Glass { .. } => "glass",
                 crate::pass_graph::CompiledPass::MovingSample { .. } => "moving",
+                crate::pass_graph::CompiledPass::Interaction { .. } => "interaction",
             })
             .collect();
         assert_eq!(

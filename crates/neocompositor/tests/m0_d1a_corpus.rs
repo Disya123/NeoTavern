@@ -153,6 +153,7 @@ fn m0_d1a_pass_order_is_regression_for_production_compile_passes() {
             CompiledPass::Raster { .. } => "raster",
             CompiledPass::Glass { .. } => "glass",
             CompiledPass::MovingSample { .. } => "moving",
+            CompiledPass::Interaction { .. } => "interaction",
         })
         .collect();
     assert_eq!(
