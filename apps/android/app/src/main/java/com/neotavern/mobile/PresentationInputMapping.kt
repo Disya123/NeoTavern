@@ -17,6 +17,7 @@ object PresentationInputMapping {
     const val ACTION_POINTER_INDEX_MASK: Int = 0xff00
     const val QUEUE_CAP: Int = 64
     const val EDGE_RESERVE: Int = 8
+    const val EVENT_TIME_NANOS_SDK: Int = 34
 
     enum class Kind {
         Down,
@@ -56,6 +57,14 @@ object PresentationInputMapping {
     )
 
     fun presentationTimeFromVsync(frameTimeNanos: Long): Long = frameTimeNanos
+
+    /**
+     * `MotionEvent.getEventTimeNanos()` exists from API 34. Older devices
+     * keep millisecond `eventTime` scaled to nanos so the compositor clock
+     * stays duration-based across 60/90/120 Hz.
+     */
+    fun sampleTimeNanos(eventTimeMs: Long, eventTimeNanos: Long, sdkInt: Int): Long =
+        if (sdkInt >= EVENT_TIME_NANOS_SDK) eventTimeNanos else eventTimeMs * 1_000_000L
 
     fun expand(frame: MotionFrame, out: MutableList<Sample>) {
         val count = minOf(frame.pointerCount, frame.pointerIds.size, frame.xs.size, frame.ys.size)

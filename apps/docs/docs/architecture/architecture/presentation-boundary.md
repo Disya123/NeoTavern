@@ -9,7 +9,9 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/architecture/prese
 ```text
 Milestone A = PASS
 A/Product Wire boundary = PASS
+shared-device raster interop = PASS
 Milestone B = STARTED
+production cutover = NOT_STARTED
 ```
 
 Milestone A **PASS** is the feature-flagged Product Wire shell, React ↔

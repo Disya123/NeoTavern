@@ -38,8 +38,9 @@ production JNI renderer and **not** an Android cutover.
   raw screen samples and `eventTimeNanos`, coalesces MOVE latest-wins on a
   bounded queue, and must not wait on compositor/producer/layout. It is
   wired only to the debug `PresentationInputActivity` / flagged shell, not
-  production `MainActivity` or default JNI. Physical Perfetto
-  input-to-present is still pending.
+  production `MainActivity` or default JNI. Instrumented coverage is
+  `PresentationInputInstrumentedTest`. Physical Perfetto input-to-present
+  is still pending.
 - Interaction-ready text snapshots (RFC §21.1): immutable
   `TextInteractionSnapshot` bound to `SceneEpoch`, generation-safe
   `TextFragmentId`, producer-authored bidi runs / clusters / line metrics /

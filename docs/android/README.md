@@ -182,8 +182,9 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   Vulkan
   ([shared-device-interop-adjudication.json](../rfc/shared-device-interop-adjudication.json)).
   Debug `PresentationInputActivity` hosts the MotionEvent / Choreographer
-  adapter (not production JNI, not `MainActivity`). Physical input-to-present
-  Perfetto is still pending.
+  adapter (not production JNI, not `MainActivity`). Instrumented:
+  `PresentationInputInstrumentedTest`. Physical input-to-present Perfetto is
+  still pending.
   Independent stamps:
   [perf-18-20-adjudication.json](../rfc/perf-18-20-adjudication.json).
   `NEOTA_NEOCOMPOSITOR=1` is a non-default flag, not a cutover switch.

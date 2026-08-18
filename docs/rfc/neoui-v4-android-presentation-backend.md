@@ -3018,8 +3018,8 @@ latest-wins on a bounded queue; edges are not dropped. The UI thread only
 `try_push`es. Choreographer `frameTimeNanos` maps 1:1 to `PresentationTime`.
 Hit-test / sticky / fixed / `ScrollId` latch stay in the existing compositor
 path. Debug `PresentationInputActivity` only; production `MainActivity` and
-default JNI are unchanged. Physical input-to-present Perfetto is still
-pending.
+default JNI are unchanged. Host and instrumented tests cover the adapter.
+Physical input-to-present Perfetto is still pending.
 
 ---
 

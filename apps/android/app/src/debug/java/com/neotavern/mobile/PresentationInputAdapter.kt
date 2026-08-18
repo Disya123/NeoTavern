@@ -1,5 +1,6 @@
 package com.neotavern.mobile
 
+import android.os.Build
 import android.view.Choreographer
 import android.view.MotionEvent
 import android.view.View
@@ -80,7 +81,7 @@ class PresentationInputAdapter(
             val xs = FloatArray(count) { event.getX(it) }
             val ys = FloatArray(count) { event.getY(it) }
             val history = event.historySize
-            val historicalTimes = LongArray(history) { event.getHistoricalEventTimeNanos(it) }
+            val historicalTimes = LongArray(history) { historicalSampleTimeNanos(event, it) }
             val historicalXs = FloatArray(history * count)
             val historicalYs = FloatArray(history * count)
             for (h in 0 until history) {
@@ -93,7 +94,7 @@ class PresentationInputAdapter(
             return PresentationInputMapping.MotionFrame(
                 action = event.action,
                 pointerCount = count,
-                eventTimeNanos = event.eventTimeNanos,
+                eventTimeNanos = sampleTimeNanos(event),
                 pointerIds = ids,
                 xs = xs,
                 ys = ys,
@@ -102,5 +103,19 @@ class PresentationInputAdapter(
                 historicalYs = historicalYs,
             )
         }
+
+        fun sampleTimeNanos(event: MotionEvent): Long =
+            PresentationInputMapping.sampleTimeNanos(
+                event.eventTime,
+                if (Build.VERSION.SDK_INT >= 34) event.eventTimeNanos else 0L,
+                Build.VERSION.SDK_INT,
+            )
+
+        fun historicalSampleTimeNanos(event: MotionEvent, pos: Int): Long =
+            PresentationInputMapping.sampleTimeNanos(
+                event.getHistoricalEventTime(pos),
+                if (Build.VERSION.SDK_INT >= 34) event.getHistoricalEventTimeNanos(pos) else 0L,
+                Build.VERSION.SDK_INT,
+            )
     }
 }

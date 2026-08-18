@@ -92,6 +92,18 @@ class PresentationInputMappingTest {
     }
 
     @Test
+    fun `pre-API 34 eventTime is scaled to nanos`() {
+        assertEquals(
+            16_000_000L,
+            PresentationInputMapping.sampleTimeNanos(16L, 99L, 26),
+        )
+        assertEquals(
+            99L,
+            PresentationInputMapping.sampleTimeNanos(16L, 99L, 34),
+        )
+    }
+
+    @Test
     fun `cancel covers every pointer in the frame`() {
         val out = ArrayList<PresentationInputMapping.Sample>()
         PresentationInputMapping.expand(

@@ -179,9 +179,11 @@
   `PlatformInputAdapter` in `crates/neocompositor` plus debug
   `PresentationInputActivity`: raw screen coordinates, `eventTimeNanos`,
   stable pointer ids, bounded MOVE-coalescing queue, Choreographer →
-  `PresentationTime`. Not wired to production `MainActivity` or default JNI.
-  Physical input-to-present Perfetto is still pending. Milestone B remains
-  STARTED.
+  `PresentationTime`. Host tests live in `crates/neocompositor/tests/platform_input.rs`
+  and JVM `PresentationInputMappingTest`. Instrumented coverage is
+  `PresentationInputInstrumentedTest` (debug `PresentationInputActivity`, not
+  `MainActivity`). Physical input-to-present Perfetto is still pending.
+  Milestone B remains STARTED.
 
 - **Known baseline failures (not a green full baseline).** Recorded as
   `KNOWN_BASELINE_FAILURE` in
