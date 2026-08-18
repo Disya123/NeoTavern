@@ -92,7 +92,11 @@ descriptors and geometry snapshot). PERF-20 is **PASS** on the physical
 Vulkan multi-frame trace, not B PASS. The Blitz producer publishes `TextInteractionSnapshot`
 from already-shaped Parley layouts (no compositor reshape). Viewport remap and
 selection go through `crates/presentation-session` (one
-`FrameTransaction`, logical selection, `DeltaToken`). Independent stamps:
+`FrameTransaction`, logical selection, `DeltaToken`). Host product-path
+corpus for PERF-01 / PERF-02 / PERF-16 lives in
+`presentation-session` `tests/product_path_perf.rs`
+(Wire → flagged Dioxus → Blitz → session → compositor). That host
+corpus is **not** an independent PASS. Independent stamps:
 [`docs/rfc/perf-18-20-adjudication.json`](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/perf-18-20-adjudication.json).
 Debug-only
 `crates/presentation-perf-probe` / `PresentationPerfActivity` is the
@@ -143,6 +147,9 @@ The machine-checkable B-exit registry
 `Milestone B = PASS` until PERF-01…05 and PERF-11…22 have independent
 admissible evidence, device-loss injection is physical, and known
 baseline failures are fixed or explicitly waived.
+Remaining physical fixtures are one debug Android batch
+([remaining-b-physical-runbook.md](../rfc/remaining-b-physical-runbook.md));
+host product-path / glass / viewport / hit-test corpora are not PASS.
 Known host baseline
 failures are
 recorded in

@@ -1,12 +1,10 @@
 #!/usr/bin/env node
 /**
- * Physical Xiaomi batch for PERF-15 / PERF-22 / device-loss.
- * Writes three independent evidence folders. Does not rebuild
- * libneotavern_android_jni.so. Does not stamp PASS.
+ * Physical Xiaomi batch for B-exit fixtures.
+ * Does not rebuild libneotavern_android_jni.so. Does not stamp PASS.
  *
- *   node scripts/b-exit-physical-capture.mjs --mode=control --fixture=perf22 --serial=8f5c2b7c
- *   node scripts/b-exit-physical-capture.mjs --mode=control --fixture=perf15 --serial=8f5c2b7c
- *   node scripts/b-exit-physical-capture.mjs --mode=control --fixture=recovery --serial=8f5c2b7c
+ *   node scripts/b-exit-physical-capture.mjs --fixture=perf22 --serial=8f5c2b7c
+ *   node scripts/b-exit-physical-capture.mjs --batch=remaining --serial=8f5c2b7c
  */
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -24,7 +22,7 @@ import {
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ROOT_CAPTURES = join(ROOT, 'apps', 'android', 'b-exit-captures');
 
-const FIXTURES = {
+export const FIXTURES = {
   perf15: {
     activity: 'com.neotavern.mobile.PresentationPerfActivity',
     scenario: 'perf15',
@@ -85,7 +83,118 @@ const FIXTURES = {
     frames: 4,
     needle: 'recovery ',
   },
+  'perf01-warm': {
+    activity: 'com.neotavern.mobile.PresentationPerfActivity',
+    scenario: 'perf01-warm',
+    frames: 7200,
+    captureFrame: -1,
+    needle: 'perf01 ',
+    timeoutMs: 300_000,
+  },
+  'perf01-cold': {
+    activity: 'com.neotavern.mobile.PresentationPerfActivity',
+    scenario: 'perf01-cold',
+    frames: 7200,
+    captureFrame: -1,
+    needle: 'perf01 ',
+    timeoutMs: 300_000,
+  },
+  perf02: {
+    activity: 'com.neotavern.mobile.PresentationPerfActivity',
+    scenario: 'perf02',
+    frames: 240,
+    captureFrame: -1,
+    needle: 'perf02 ',
+  },
+  perf03: {
+    activity: 'com.neotavern.mobile.PresentationPerfActivity',
+    scenario: 'perf03',
+    frames: 16,
+    captureFrame: 2,
+    needle: 'perf03 ',
+  },
+  perf04: {
+    activity: 'com.neotavern.mobile.PresentationPerfActivity',
+    scenario: 'perf04',
+    frames: 16,
+    captureFrame: 2,
+    needle: 'perf04 ',
+  },
+  perf05: {
+    activity: 'com.neotavern.mobile.PresentationPerfActivity',
+    scenario: 'perf05',
+    frames: 48,
+    captureFrame: -1,
+    needle: 'perf05 ',
+  },
+  perf11: {
+    activity: 'com.neotavern.mobile.PresentationPerfActivity',
+    scenario: 'perf11',
+    frames: 16,
+    captureFrame: 2,
+    needle: 'perf11 ',
+  },
+  perf12: {
+    activity: 'com.neotavern.mobile.PresentationPerfActivity',
+    scenario: 'perf12',
+    frames: 7200,
+    captureFrame: -1,
+    needle: 'perf12 ',
+    timeoutMs: 300_000,
+  },
+  perf13: {
+    activity: 'com.neotavern.mobile.PresentationPerfActivity',
+    scenario: 'perf13',
+    frames: 48,
+    captureFrame: -1,
+    needle: 'perf13 ',
+  },
+  perf14: {
+    activity: 'com.neotavern.mobile.PresentationPerfActivity',
+    scenario: 'perf14',
+    frames: 8,
+    captureFrame: -1,
+    needle: 'perf14 ',
+  },
+  perf16: {
+    activity: 'com.neotavern.mobile.PresentationPerfActivity',
+    scenario: 'perf16',
+    frames: 100,
+    captureFrame: -1,
+    needle: 'perf16 ',
+    timeoutMs: 900_000,
+  },
+  perf17: {
+    activity: 'com.neotavern.mobile.PresentationPerfActivity',
+    scenario: 'perf17',
+    frames: 8,
+    captureFrame: -1,
+    needle: 'perf17 ',
+  },
+  perf21: {
+    activity: 'com.neotavern.mobile.PresentationPerfActivity',
+    scenario: 'perf21',
+    frames: 8,
+    captureFrame: -1,
+    needle: 'perf21 ',
+  },
 };
+
+export const REMAINING_BATCH = [
+  'perf01-warm',
+  'perf01-cold',
+  'perf02',
+  'perf03',
+  'perf04',
+  'perf05',
+  'perf11',
+  'perf12',
+  'perf13',
+  'perf14',
+  'perf16',
+  'perf17',
+  'perf21',
+];
 
 function argValue(name) {
   const prefix = `--${name}=`;
@@ -102,37 +211,9 @@ function dumpsysLayers(adbBin, serial) {
   return `${result.stdout || ''}\n${result.stderr || ''}`;
 }
 
-function main() {
-  const fixtureName = argValue('fixture') ?? 'perf22';
+function captureFixture({ adbBin, serial, bundle, stamp, dir, fixtureName }) {
   const fixture = FIXTURES[fixtureName];
-  if (!fixture) {
-    process.stderr.write(`unknown fixture ${fixtureName}\n`);
-    process.exitCode = 1;
-    return;
-  }
-  const adbInfo = findAdb();
-  if (!adbInfo.ok) {
-    process.stderr.write('adb not found\n');
-    process.exitCode = 1;
-    return;
-  }
-  const selected = selectPhysicalDevice(adbInfo.bin);
-  const requested = argValue('serial');
-  const device =
-    (requested && selected.physical.find((row) => row.serial === requested)) ||
-    selected.physical[0] ||
-    null;
-  if (!device) {
-    process.stderr.write('no physical Android over USB (emulators excluded)\n');
-    process.exitCode = 1;
-    return;
-  }
-  const bundle = latestBoundBundle();
-  const stamp = captureStamp();
-  const dir = ROOT_CAPTURES;
-  mkdirSync(dir, { recursive: true });
-  const adbBin = adbInfo.bin;
-  const serial = device.serial;
+  const captureFrame = fixture.captureFrame ?? -1;
   adb(adbBin, serial, ['shell', 'input', 'keyevent', 'KEYCODE_WAKEUP']);
   adb(adbBin, serial, ['logcat', '-c']);
   adb(adbBin, serial, ['shell', 'am', 'force-stop', PACKAGE]);
@@ -151,13 +232,13 @@ function main() {
     String(fixture.frames),
     '--es',
     `${PACKAGE}.PERF_CAPTURE_FRAME`,
-    '-1',
+    String(captureFrame),
   ]);
   if (fixtureName === 'perf15') {
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1500);
     adb(adbBin, serial, ['shell', 'am', 'send-trim-memory', PACKAGE, 'RUNNING_CRITICAL']);
   }
-  const deadline = Date.now() + 180_000;
+  const deadline = Date.now() + (fixture.timeoutMs ?? 180_000);
   let log = '';
   while (Date.now() < deadline) {
     const dump = adb(adbBin, serial, ['logcat', '-d', '-s', 'NeoTavern:I']);
@@ -188,9 +269,55 @@ function main() {
       2,
     )}\n`,
   );
-  process.stdout.write(
-    `${JSON.stringify({ stamp, fixture: fixtureName, files, found: log.includes(fixture.needle) }, null, 2)}\n`,
+  return { stamp, fixture: fixtureName, files, found: log.includes(fixture.needle) };
+}
+
+function main() {
+  const batch = argValue('batch');
+  const names = batch === 'remaining' ? REMAINING_BATCH : [argValue('fixture') ?? 'perf22'];
+  for (const fixtureName of names) {
+    if (!FIXTURES[fixtureName]) {
+      process.stderr.write(`unknown fixture ${fixtureName}\n`);
+      process.exitCode = 1;
+      return;
+    }
+  }
+  const adbInfo = findAdb();
+  if (!adbInfo.ok) {
+    process.stderr.write('adb not found\n');
+    process.exitCode = 1;
+    return;
+  }
+  const selected = selectPhysicalDevice(adbInfo.bin);
+  const requested = argValue('serial');
+  const device =
+    (requested && selected.physical.find((row) => row.serial === requested)) ||
+    selected.physical[0] ||
+    null;
+  if (!device) {
+    process.stderr.write('no physical Android over USB (emulators excluded)\n');
+    process.exitCode = 1;
+    return;
+  }
+  const bundle = latestBoundBundle();
+  const stamp = captureStamp();
+  const dir = ROOT_CAPTURES;
+  mkdirSync(dir, { recursive: true });
+  const results = names.map((fixtureName) =>
+    captureFixture({
+      adbBin: adbInfo.bin,
+      serial: device.serial,
+      bundle,
+      stamp,
+      dir,
+      fixtureName,
+    }),
   );
+  const failed = results.filter((row) => !row.found);
+  process.stdout.write(
+    `${JSON.stringify({ stamp, results, failed: failed.map((row) => row.fixture) }, null, 2)}\n`,
+  );
+  if (failed.length) process.exitCode = 1;
 }
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {

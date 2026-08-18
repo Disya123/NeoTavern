@@ -66,3 +66,13 @@ After this batch the phone is not required to assemble the unified
 benchmark runner for PERF-01…05 and PERF-11…17/21
 (`node scripts/presentation-perf-bench-runner.mjs --execute`). Host
 corpora are not independent PASS.
+
+The remaining physical fixtures share one debug batch:
+
+```text
+node scripts/b-exit-physical-capture.mjs --batch=remaining --serial=8f5c2b7c
+node scripts/remaining-b-physical-adjudicate.mjs --write --apk-linkage=BOUND --evidence-dirty=false
+```
+
+See [remaining-b-physical-runbook.md](remaining-b-physical-runbook.md).
+The phone is required once for this remaining batch.

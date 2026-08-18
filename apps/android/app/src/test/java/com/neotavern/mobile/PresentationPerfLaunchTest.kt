@@ -22,8 +22,12 @@ class PresentationPerfLaunchTest {
         assertEquals("perf22-poster", PresentationPerfLaunch.parseScenario("poster"))
         assertEquals("recovery", PresentationPerfLaunch.parseScenario("device-loss"))
         assertEquals("recovery-surface", PresentationPerfLaunch.parseScenario("surface-recreation"))
+        assertEquals("perf01-warm", PresentationPerfLaunch.parseScenario("01"))
+        assertEquals("perf01-cold", PresentationPerfLaunch.parseScenario("perf01-cold"))
+        assertEquals("perf12", PresentationPerfLaunch.parseScenario("adversarial"))
+        assertEquals("perf16", PresentationPerfLaunch.parseScenario("cold-start"))
         assertEquals(1, PresentationPerfLaunch.parseFrames("1"))
-        assertEquals(1000, PresentationPerfLaunch.parseFrames("99999"))
+        assertEquals(7200, PresentationPerfLaunch.parseFrames("99999"))
         assertEquals(-1, PresentationPerfLaunch.parseCaptureFrame("-1"))
     }
 }

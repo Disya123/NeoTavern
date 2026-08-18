@@ -25,6 +25,14 @@ B-exit fixtures: [`perf-15-adjudication.json`](../../docs/rfc/perf-15-adjudicati
 | `perf15`                               | 10k fling + live glass + decoded image upload + trim-memory + trusted `reference-visual-surface` through `VisualSurfaceFrameIngress`. Plugin runtime stays false. Physical **PASS**. Not Plugin SDK. |
 | `perf22` / poster / fullscreen / error | Capability compile before `compile_passes`. Debug `PresentationSurfaceActivity` hosts a real WebView + secure `SurfaceView`. Physical **PASS**.                                                      |
 | `recovery`                             | Destroys and recreates the live wgpu device. Physical **PASS**. `recovery-surface` / `recovery-background` are separate and must not bump `DeviceEpoch`.                                             |
+| `perf01-warm` / `perf01-cold`          | Product-path 60 s bidirectional 120 Hz compositor ticks (warm vs cold-near-range). Host corpus is not PASS.                                                                                            |
+| `perf02`                               | Streaming coalesce + compositor-only frames without Dioxus rebuild.                                                                                                                                   |
+| `perf03` / `perf04`                    | Triple glass and nested dialog glass from the Dioxus product tree.                                                                                                                                    |
+| `perf05`                               | Image decode/upload during product-path fling.                                                                                                                                                        |
+| `perf11`                               | Paint-order wallpaper → glass → text → image → nested glass → overlay.                                                                                                                                |
+| `perf12` / `perf13`                    | Adversarial cold fling; reversal / teleport / prepend.                                                                                                                                                |
+| `perf14` / `perf17` / `perf21`         | Async hit-test, sticky/fixed, nested scroll latch/handoff plus product-path GPU.                                                                                                                      |
+| `perf16`                               | 100 cold contentful vs interaction samples. Host p99 stays none.                                                                                                                                      |
 
 ```text
 adb shell am start -n com.neotavern.mobile/.PresentationPerfActivity \

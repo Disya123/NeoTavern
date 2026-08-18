@@ -21,7 +21,7 @@ extern "C" {
     fn __android_log_write(prio: c_int, tag: *const c_char, text: *const c_char) -> c_int;
 }
 
-fn emit(line: &str) {
+pub(crate) fn emit(line: &str) {
     eprintln!("{line}");
     #[cfg(target_os = "android")]
     {
@@ -36,6 +36,9 @@ fn emit(line: &str) {
 }
 
 pub fn run_scenario(scenario: Scenario, frames: u64, capture_frame: i32) -> Result<String, String> {
+    if scenario.is_remaining_b() {
+        return crate::remaining::run(scenario, frames, capture_frame);
+    }
     let frames = frames.clamp(1, 1000);
     let capture = capture_frame >= 0;
     let capture_at = if capture {
@@ -105,6 +108,7 @@ pub fn run_scenario(scenario: Scenario, frames: u64, capture_frame: i32) -> Resu
             capture_at,
             crate::b_exit::RecoveryAt::Background,
         ),
+        _ => Err("remaining_must_dispatch_before_clamp".into()),
     }
 }
 

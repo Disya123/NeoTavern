@@ -285,7 +285,7 @@
     {
       "source": "architecture/presentation-boundary.md",
       "target": "architecture/presentation-boundary.md",
-      "sha256": "e0b7d6fe5b34b70a9b993f567010503fcc2bc7a4d665e3e6b23ed02a0e9fddde"
+      "sha256": "f822d06870b6e0a630bb33364fc04a934086ce343f8acbb65fe3b5b940ca0589"
     },
     {
       "source": "architecture/prompt-pipeline.md",
@@ -365,12 +365,12 @@
     {
       "source": "rfc/README.md",
       "target": "rfc/README.md",
-      "sha256": "7b535d925b4284173ae0bf7a2b7209ddeb824c8c123010992b169f6e38c932a9"
+      "sha256": "011892c18472eda1932d0970c13ba4bfa5a2b34f1fb10691126091db2bad9d3d"
     },
     {
       "source": "rfc/b-exit-physical-runbook.md",
       "target": "rfc/b-exit-physical-runbook.md",
-      "sha256": "89036e4c3a6a5379ed881760e34caab1928c7f8662a0dfaf7532eafc3154bcd0"
+      "sha256": "2489280321a3f21439ed4b3ac44415ddab6d20abdcd1cb5d5c084b019d7a7a45"
     },
     {
       "source": "rfc/d1-d2-decision.md",
@@ -441,6 +441,11 @@
       "source": "rfc/presentation-compatibility-matrix.md",
       "target": "rfc/presentation-compatibility-matrix.md",
       "sha256": "f91894d32a62c0ba2a8c466c685ffe2f72d30b3e6caf72c3c6ec00e9f98fa25a"
+    },
+    {
+      "source": "rfc/remaining-b-physical-runbook.md",
+      "target": "rfc/remaining-b-physical-runbook.md",
+      "sha256": "35d7e1e1938efc9a1391aa563aa74724083dd858d505f81406242fa3bffe7adc"
     },
     {
       "source": "theme-sdk/README.md",

@@ -25,6 +25,14 @@
   `HOST_CORPUS`, never `PASS`. Tile cache `pin_span` now unpins tiles
   that left the protected band. Milestone B remains STARTED.
 
+- **Remaining Milestone B physical fixtures (one debug batch, not PASS).**
+  `presentation-perf-probe` adds product-path scenarios PERF-01…05 /
+  11–14 / 16 / 17 / 21. Capture:
+  `node scripts/b-exit-physical-capture.mjs --batch=remaining`.
+  Independent adjudicator:
+  `scripts/remaining-b-physical-adjudicate.mjs`. Production
+  `MainActivity` / default JNI unchanged. Milestone B remains STARTED.
+
 - **PERF-15 PASS (not B PASS, not PluginVisualSurface).** Independent
   Xiaomi / Vulkan stamp on a BOUND debug APK:
   [perf-15-adjudication.json](docs/rfc/perf-15-adjudication.json)

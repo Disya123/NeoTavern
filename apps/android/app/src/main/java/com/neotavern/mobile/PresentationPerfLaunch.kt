@@ -11,7 +11,7 @@ object PresentationPerfLaunch {
     const val DEFAULT_SCENARIO: String = "perf18"
     const val DEFAULT_FRAMES: Int = 16
     const val DEFAULT_CAPTURE_FRAME: Int = 2
-    const val MAX_FRAMES: Int = 1000
+    const val MAX_FRAMES: Int = 7200
 
     fun parseScenario(extra: String?): String {
         val raw = extra?.trim().orEmpty().lowercase()
@@ -30,6 +30,19 @@ object PresentationPerfLaunch {
             "recovery-selection", "selection" -> "recovery-selection"
             "recovery-surface", "surface-recreation" -> "recovery-surface"
             "recovery-background", "background" -> "recovery-background"
+            "perf01", "perf01-warm", "01", "01-warm" -> "perf01-warm"
+            "perf01-cold", "01-cold" -> "perf01-cold"
+            "perf02", "02", "streaming" -> "perf02"
+            "perf03", "03", "triple-glass" -> "perf03"
+            "perf04", "04", "nested-glass" -> "perf04"
+            "perf05", "05", "image-pressure" -> "perf05"
+            "perf11", "11", "paint-order" -> "perf11"
+            "perf12", "12", "adversarial" -> "perf12"
+            "perf13", "13", "reversal", "teleport" -> "perf13"
+            "perf14", "14", "async-hit" -> "perf14"
+            "perf16", "16", "cold-start" -> "perf16"
+            "perf17", "17", "sticky" -> "perf17"
+            "perf21", "21", "nested-scroll" -> "perf21"
             else -> DEFAULT_SCENARIO
         }
     }
