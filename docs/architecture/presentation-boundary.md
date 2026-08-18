@@ -17,6 +17,7 @@ It is **not** a production migration, **not** Milestone B/C PASS, and **not**
 a `MainActivity` cutover.
 
 **Decisions:** [ADR-0049](../adr/0049-track-d-dioxus-presentation.md),
+[ADR-0050](../adr/0050-visual-surface-ingress-vs-plugin.md),
 [d1-d2-decision.md](../rfc/d1-d2-decision.md).
 **D3:** **DEFERRED** — Android may take a Rust presentation path; Web stays
 React. Rollback is the acting React/WebView host.
@@ -119,8 +120,9 @@ secure `SurfaceView` + fallback hit routing; capability chosen before
 Pressure/degraded admission (PERF-15) is **IMPLEMENTED** on the host
 corpus (`crates/neocompositor` `pressure`) plus a physical probe fixture
 (10k fling + live glass + image decode/upload + injected trim-memory).
-PASS is blocked until a real VisualSurface / Product Wire surface exists;
-a synthetic texture is not a substitute.
+PASS requires a trusted B-level `VisualSurfaceFrameIngress` and
+reference producer ([ADR-0050](../adr/0050-visual-surface-ingress-vs-plugin.md)),
+not `PluginVisualSurface` and not a synthetic texture. D3 stays DEFERRED.
 Physical device-loss injection is **PASS** (`wgpu_destroyed=true`,
 `wgpu_recreated=true`, `DeviceEpoch` bumps once; surface recreation and
 background/resume are separate and do not bump the epoch).

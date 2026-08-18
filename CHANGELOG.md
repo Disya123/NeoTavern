@@ -3,6 +3,13 @@
 ## Unreleased
 ### Added
 
+- **VisualSurfaceFrameIngress vs PluginVisualSurface (ADR-0050).** Milestone
+  B PERF-15 needs a live VisualSurface; the public plugin platform is
+  Milestone D and D3 stays **DEFERRED**. B gets an internal bounded
+  ingress and a trusted reference producer. D keeps PluginVisualSurface /
+  IR / permissions. PERF-15 is not weakened and is not yet PASS.
+  RFC 4.6 updates §29, §43/PERF-15, §50, §52.
+
 - **PERF-22 and physical device-loss PASS (not B PASS).** Independent
   Xiaomi / Vulkan stamps on a BOUND debug APK: PERF-22
   [perf-22-adjudication.json](docs/rfc/perf-22-adjudication.json)

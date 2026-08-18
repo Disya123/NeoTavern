@@ -5,14 +5,16 @@ BOUND debug APK `a6cbae7`. Independent records:
 
 | Criterion   | Record                                                         | Status                                |
 | ----------- | -------------------------------------------------------------- | ------------------------------------- |
-| PERF-15     | [perf-15-adjudication.json](perf-15-adjudication.json)         | `IMPLEMENTED` (no VisualSurface path) |
+| PERF-15     | [perf-15-adjudication.json](perf-15-adjudication.json)         | `IMPLEMENTED` (no VisualSurfaceFrameIngress yet) |
 | PERF-22     | [perf-22-adjudication.json](perf-22-adjudication.json)         | `PASS`                                |
 | device-loss | [device-loss-adjudication.json](device-loss-adjudication.json) | `PASS`                                |
 
 Milestone B remains **STARTED**. `almost_pass=false`. Production cutover
-remains **NOT_STARTED**. PERF-15 cannot become PASS without a real
-VisualSurface / Product Wire surface. A colored synthetic texture is not
-a substitute and is not an ADR.
+remains **NOT_STARTED**. PERF-15 cannot become PASS without a trusted
+B-level `VisualSurfaceFrameIngress` / logical Product Wire surface
+([ADR-0050](../adr/0050-visual-surface-ingress-vs-plugin.md)). A colored
+synthetic texture is not a substitute. `PluginVisualSurface` is Milestone D
+and does not block B.
 
 ## Required chain
 

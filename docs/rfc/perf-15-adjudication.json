@@ -9,12 +9,12 @@
   "production_cutover": "NOT_STARTED",
   "kind": "host_corpus_plus_physical_fixture_without_visual_surface",
   "record": "crates/presentation-perf-probe/src/b_exit.rs",
-  "pass_requires": "physical_pressure_fixture_with_visual_surface",
+  "pass_requires": "physical_pressure_fixture_with_visual_surface_ingress",
   "apk_linkage": "BOUND",
   "evidence_dirty": false,
   "serial": "8f5c2b7c",
   "capture_stamp": "2026-08-18T17-57-50-847Z",
-  "reason": "PERF-15 stays IMPLEMENTED: no real VisualSurface path (not a synthetic substitute). Physical Xiaomi run had 10k fling + live glass + image decode/upload + injected trim-memory; product_wire_surface=false.",
+  "reason": "PERF-15 stays IMPLEMENTED until a trusted VisualSurfaceFrameIngress reference producer is captured. PluginVisualSurface / Milestone D are not required. A synthetic texture is not a substitute. Physical Xiaomi run had 10k fling + live glass + image decode/upload + injected trim-memory; product_wire_surface=false; visual_surface=missing.",
   "checks": [
     {
       "id": "visual_surface",

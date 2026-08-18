@@ -5,9 +5,9 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/rfc/neoui-v4-andro
 # Предпроектная техническая спецификация: NeoUI v4 — Android presentation backend и 120-Hz live-glass compositor
 
 **Проект:** NeoTavern  
-**Редакция:** 4.5 (GateP:P1 signed; technical M0 PASS; D1/D2 GO signed 2026-08-18; D3 DEFERRED)  
-**Дата:** 2026-08-17  
-**Статус:** Draft Proposal / Gate P = `GateP:P1` PASSED; D1/D2 GO signed in [`d1-d2-decision.md`](d1-d2-decision.md) / [ADR-0049](../adr/0049-track-d-dioxus-presentation.md); D3 **DEFERRED**; не является blanket production migration  
+**Редакция:** 4.6 (GateP:P1 signed; technical M0 PASS; D1/D2 GO signed 2026-08-18; D3 DEFERRED; VisualSurfaceFrameIngress split 2026-08-19)  
+**Дата:** 2026-08-19  
+**Статус:** Draft Proposal / Gate P = `GateP:P1` PASSED; D1/D2 GO signed in [`d1-d2-decision.md`](d1-d2-decision.md) / [ADR-0049](../adr/0049-track-d-dioxus-presentation.md); D3 **DEFERRED**; VisualSurface B/D split in [ADR-0050](../adr/0050-visual-surface-ingress-vs-plugin.md); не является blanket production migration  
 **Целевой путь в репозитории:** `docs/rfc/neoui-v4-android-presentation-backend.md`  
 **Repository migration:** OPEN — корневая копия не считается перемещённой этой редакцией  
 **Лицензия продукта:** GNU AGPL-3.0  
@@ -94,7 +94,8 @@ NeoScene
 NeoCompositor
 NeoGlass
 NeoMedia composition bridge
-PluginVisualSurface
+VisualSurfaceFrameIngress (Milestone B, trusted)
+PluginVisualSurface (Milestone D, untrusted plugins)
 damage/layer cache
 frame scheduling fast paths
 GPU resource lifecycle
@@ -2620,9 +2621,19 @@ Plugins получают capabilities, а не ambient Kernel authority.
 
 ---
 
-# 29. PluginVisualSurface
+# 29. VisualSurfaceFrameIngress (Milestone B)
 
-VisualSurface предназначен для high-frequency producer.
+High-frequency VisualSurface для PERF-15 и compositor pressure — это
+**внутренний** `VisualSurfaceFrameIngress`, а не публичный Plugin SDK.
+Milestone D и D3 остаются отдельными. Этот ingress MUST NOT размораживать
+plugin platform.
+
+Product Wire несёт только логическое объявление surface и policy.
+Product Wire MUST NOT нести GPU handles, `wgpu::Device`, Vulkan/Metal
+device или command encoder.
+
+Эфемерный ingress живёт в presentation session и связывается через
+generation-safe `SurfaceId`.
 
 ```rust
 pub struct SurfaceFrame {
@@ -2640,18 +2651,30 @@ Queue MUST быть:
 
 ```text
 bounded
-latest-frame-wins
+latest-ready-frame-wins
 non-blocking
 generation-aware
 ```
 
-Fence/imported resource, который не ready к frame deadline, MUST NOT блокировать
-main compositor. Используется последняя готовая frame либо transparent/documented
-surface fallback; late frame дропается с reason. Imported texture проверяется по
-format, dimensions, usage, ownership, quota и device epoch. Lifetime сохраняется
-до GPU completion.
+Submit MUST проверять format, dimensions, usage, ownership, quota и
+`DeviceEpoch`. Fence/imported resource, который не ready к frame deadline,
+MUST NOT блокировать main compositor. Используется последняя готовая frame
+либо documented surface fallback; late/not-ready frame дропается с reason.
+Lifetime сохраняется до GPU completion. Recovery MUST создать новое
+generation; старые frames/fences MUST быть отвергнуты.
 
-Эти свойства уже являлись требованиями VisualSurface v3.
+Trusted reference producer (не D1b checkerboard и не цветная synthetic
+texture) MAY закрывать PERF-15. Direct insertion в `NeoDisplayList` со
+стороны producer MUST NOT считаться VisualSurface path.
+
+Эти свойства уже являлись требованиями VisualSurface v3 и остаются
+обязательными для B-level ingress.
+
+## 29.1. PluginVisualSurface (Milestone D)
+
+Публичный `PluginVisualSurface` — plugin API/IR/packages, permissions,
+quotas, isolation, update/revoke и crash isolation. Он не является
+условием Milestone B и MUST NOT поставляться этим ingress.
 
 Untrusted plugin MUST NOT получать:
 
@@ -3362,6 +3385,10 @@ Sampleable video движется под live glass.
 ## PERF-07 — VisualSurface
 
 Live2D-class surface работает вместе с chat scroll и glass.
+Это **plugin-tier** нагрузка Milestone D (`PluginVisualSurface`).
+Milestone B PERF-15 использует trusted `VisualSurfaceFrameIngress`
+([ADR-0050](../adr/0050-visual-surface-ingress-vs-plugin.md)), а не этот
+публичный plugin path.
 
 ## PERF-08 — text editing
 
@@ -3417,14 +3444,16 @@ Tap/selection/long-press во время unacknowledged compositor scroll, tile 
 ## PERF-15 — pressure/degraded path
 
 **Host corpus:** `IMPLEMENTED` in `crates/neocompositor` (`pressure`).
-Physical fixture (10k fling + live glass + image decode/upload + trim-memory)
-lives in `presentation-perf-probe`; **PASS is blocked** until a real
-VisualSurface / Product Wire surface exists (not a synthetic texture).
-`Normal → Constrained → Critical → Degraded`. Not Milestone B PASS.
+Physical fixture MUST одновременно содержать 10k fling + live glass +
+image decode/upload + VisualSurface + injected trim-memory.
+VisualSurface для B — trusted `VisualSurfaceFrameIngress` и reference
+producer ([ADR-0050](../adr/0050-visual-surface-ingress-vs-plugin.md)), не
+`PluginVisualSurface` и не synthetic texture. `Normal → Constrained →
+Critical → Degraded`. Not Milestone B PASS.
 
 Memory pressure во время fling + glass + image upload + VisualSurface. Проверяет
 hard caps, eviction order, last-known-good/fallback, allocation failure и
-отсутствие OOM/panic.
+отсутствие OOM/panic. PASS этого критерия не утверждает Plugin SDK / Milestone D.
 
 ## PERF-16 — cold pipeline/first interaction
 
@@ -4158,7 +4187,8 @@ Deliverables:
 - sticky/fixed compositor sampling and nested scroll handoff;
 - balanced effect scopes/backdrop roots;
 - interaction-ready text/selection ops;
-- geometry epochs and fling-continuous remap.
+- geometry epochs and fling-continuous remap;
+- VisualSurfaceFrameIngress (trusted B-level; not Plugin SDK; ADR-0050).
 
 Exit:
 
@@ -4218,7 +4248,7 @@ Deliverables:
 - NeoPlugin IR;
 - Plugin:P0/P1;
 - Canvas2D;
-- VisualSurface;
+- PluginVisualSurface (public plugin API; not the B-level ingress);
 - WebSurface;
 - quotas;
 - permissions;

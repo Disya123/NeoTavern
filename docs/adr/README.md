@@ -1,5 +1,14 @@
 # Architecture Decision Records
 
+## ADR-0050: VisualSurfaceFrameIngress (B) vs PluginVisualSurface (D)
+
+PERF-15 needs a live VisualSurface, but the public plugin platform is
+Milestone D and D3 is DEFERRED. B gets an internal bounded
+`VisualSurfaceFrameIngress` and a trusted reference producer. D keeps
+`PluginVisualSurface`, IR, permissions, and untrusted isolation. PERF-15
+is not weakened. Full decision:
+[ADR-0050](0050-visual-surface-ingress-vs-plugin.md).
+
 ## ADR-0049: Track D compositor and Dioxus/Blitz producer (D1/D2 GO)
 
 Owner-signed D1/D2 after technical M0 PASS and TrackComparison. **D1=Track D
