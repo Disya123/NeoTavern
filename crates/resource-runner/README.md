@@ -22,7 +22,7 @@ CreateProcessW(CREATE_SUSPENDED)
   exit `RESOURCE_LIMIT`; hard `JOB_OBJECT_LIMIT_JOB_MEMORY` (100%) as a
   backstop — Windows blocks further commit even if the runner is dead.
 - **Host headroom**: `GetPerformanceInfo` (`available_commit =
-  (CommitLimit − CommitTotal) × PageSize`), effective cap
+(CommitLimit − CommitTotal) × PageSize`), effective cap
   `min(configured, available − HOST_RESERVE)` with
   `HOST_RESERVE = max(4 GiB, 25% of the commit limit)`; below the suite
   minimum the runner refuses with exit `SKIPPED`.
@@ -64,15 +64,15 @@ designed (the workload fails cleanly; the host never feels it).
 
 ## Exit codes
 
-| Code | Meaning |
-| --- | --- |
-| 0 | success |
-| 1–255 | workload's own exit code (normal failure) |
-| 2 | runner error (usage, job creation, failed assignment — refused) |
-| 3 | `SKIPPED: insufficient host memory` (effective cap below `--min-cap`) |
-| 4 | `RESOURCE_LIMIT` (job memory violation) |
-| 5 | `BUSY` (scheduler lock timeout) |
-| 6 | `TIMEOUT` (wall-clock deadline) |
+| Code  | Meaning                                                               |
+| ----- | --------------------------------------------------------------------- |
+| 0     | success                                                               |
+| 1–255 | workload's own exit code (normal failure)                             |
+| 2     | runner error (usage, job creation, failed assignment — refused)       |
+| 3     | `SKIPPED: insufficient host memory` (effective cap below `--min-cap`) |
+| 4     | `RESOURCE_LIMIT` (job memory violation)                               |
+| 5     | `BUSY` (scheduler lock timeout)                                       |
+| 6     | `TIMEOUT` (wall-clock deadline)                                       |
 
 ## Portability
 

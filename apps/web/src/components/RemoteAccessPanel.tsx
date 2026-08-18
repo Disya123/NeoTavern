@@ -49,17 +49,13 @@ type Action = 'start' | 'stop' | 'pair' | 'revoke' | null;
  * strings map to their i18n key, everything else falls back to the generic
  * start-error text.
  */
-function remoteErrorMessage(
-  t: (key: string) => string,
-  error: unknown,
-): string {
+function remoteErrorMessage(t: (key: string) => string, error: unknown): string {
   if (error instanceof RemoteAccessError) {
     const key = ERROR_KEYS[error.code];
     if (key) return t(key);
     return error.message || t('remoteErrInternal');
   }
-  const text =
-    error instanceof Error ? error.message : typeof error === 'string' ? error : null;
+  const text = error instanceof Error ? error.message : typeof error === 'string' ? error : null;
   if (text !== null) {
     const parsed = parseRemoteError(text);
     if (parsed) {
@@ -195,7 +191,12 @@ export function RemoteAccessPanel() {
   return (
     <div className={styles.panel} data-component="remote-access-panel">
       {lastError ? (
-        <p className={styles.error} role="alert" aria-label={t('remoteLastError')} data-part="remote-error">
+        <p
+          className={styles.error}
+          role="alert"
+          aria-label={t('remoteLastError')}
+          data-part="remote-error"
+        >
           {lastError}
         </p>
       ) : null}
@@ -296,7 +297,11 @@ export function RemoteAccessPanel() {
             >
               {t('remoteStart')}
             </Button>
-            <Button variant="ghost" disabled={busy !== null || !running} onClick={() => void stop()}>
+            <Button
+              variant="ghost"
+              disabled={busy !== null || !running}
+              onClick={() => void stop()}
+            >
               {t('remoteStop')}
             </Button>
           </ActionBarGroup>
@@ -318,7 +323,11 @@ export function RemoteAccessPanel() {
                 {credential.revoked ? (
                   <span className={styles.revokedBadge}>{t('remoteRevoked')}</span>
                 ) : (
-                  <Button size="sm" disabled={busy !== null} onClick={() => void revoke(credential.id)}>
+                  <Button
+                    size="sm"
+                    disabled={busy !== null}
+                    onClick={() => void revoke(credential.id)}
+                  >
                     {t('remoteRevoke')}
                   </Button>
                 )}

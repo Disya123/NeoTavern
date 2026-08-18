@@ -126,7 +126,7 @@ const fromFiles = diffBundlesFile('prev.json', 'curr.json'); // same shape
 | added tagged-union member (unknown members preserved)             | additive       |
 | `allowedErrorCodes`: removed code                                 | breaking       |
 | `allowedErrorCodes`: added code                                   | additive       |
-| unknown additions (keys)                                          | additive note   |
+| unknown additions (keys)                                          | additive note  |
 
 Extensions applied to the operation envelope, documented here for the record:
 

@@ -19,7 +19,9 @@ import {
   validateHttpBaseUrl,
 } from '../src/index.js';
 
-function echoConfig(overrides: Partial<Record<'baseUrl' | 'model' | 'apiKey', string | null>> = {}) {
+function echoConfig(
+  overrides: Partial<Record<'baseUrl' | 'model' | 'apiKey', string | null>> = {},
+) {
   return {
     baseUrl: overrides.baseUrl ?? null,
     model: overrides.model ?? 'echo',
@@ -70,7 +72,10 @@ describe('stream contract (§6.3/§83 stream)', () => {
   it('yields exactly one terminal event and valid usage arithmetic', async () => {
     const adapter = new EchoAdapter(echoConfig());
     const events = await collect(
-      adapter.generate(request([{ role: 'user', content: 'hello world' }]), new AbortController().signal),
+      adapter.generate(
+        request([{ role: 'user', content: 'hello world' }]),
+        new AbortController().signal,
+      ),
     );
     const terminals = events.filter((e) => e.type === 'done' || e.type === 'error');
     expect(terminals).toHaveLength(1);
@@ -176,6 +181,9 @@ describe('timeouts (§83 timeouts)', () => {
   it('defaults are sane and partial overrides merge', () => {
     expect(DEFAULT_PROVIDER_TIMEOUTS.connectMs).toBeGreaterThan(0);
     expect(DEFAULT_PROVIDER_TIMEOUTS.idleMs).toBeGreaterThan(DEFAULT_PROVIDER_TIMEOUTS.connectMs);
-    expect(resolveTimeouts({ connectMs: 100 })).toEqual({ ...DEFAULT_PROVIDER_TIMEOUTS, connectMs: 100 });
+    expect(resolveTimeouts({ connectMs: 100 })).toEqual({
+      ...DEFAULT_PROVIDER_TIMEOUTS,
+      connectMs: 100,
+    });
   });
 });

@@ -158,7 +158,7 @@ layouts yield a controlled incompatibility error.
   when several legacy rows declare the default, only the **first** keeps the
   flag (the single-default invariant matches `PersonaRepository`). Personas
   convert **before** chats so the `chats.persona_id` FK (`ON DELETE SET
-  NULL`) is satisfied at insert time; a legacy `chats.persona_id` reference
+NULL`) is satisfied at insert time; a legacy `chats.persona_id` reference
   is copied verbatim, and a pre-persona source without the `persona_id`
   column converts with `NULL` (the wire keeps `personaId` optional).
   Counts are reported (`personas`).
@@ -206,11 +206,11 @@ Detect legacy data
   committed entry is a no-op.
 - **Pointer integrity** (audit P0 #3): the active-root pointer is only ever
   written for the data root itself or a versioned root under `<data-root>/
-  roots/` — an arbitrary absolute path is refused on write AND on read; a
+roots/` — an arbitrary absolute path is refused on write AND on read; a
   pointer/journal that exists but cannot be read fails closed (`Corrupt`)
   instead of being treated as missing.
 - **Migration corpus** (ТЗ §17.4) is covered by `crates/storage/tests/
-  migration.rs`: kernel databases at every released schema revision (1..6)
+migration.rs`: kernel databases at every released schema revision (1..6)
   upgrade with seeds preserved, a future schema fails closed
   (`SchemaTooNew`), a corrupted page is detected (`Corrupt`), an interrupted
   legacy migration recovers with a fresh staging root, the real Drizzle

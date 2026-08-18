@@ -42,7 +42,12 @@ function createLegacyBackend(): LegacyBackend {
       // stripped here or every typed legacy call double-prefixes and 404s
       // (`/api/v2/api/v2/...`). `legacyRaw` paths are already BASE-relative.
       request: (method, path, body, signal) =>
-        request(method, path.startsWith('/api/v2') ? path.slice('/api/v2'.length) : path, body, signal),
+        request(
+          method,
+          path.startsWith('/api/v2') ? path.slice('/api/v2'.length) : path,
+          body,
+          signal,
+        ),
       upload: (path, file, signal) => upload(path, file, signal),
       sseUrl,
     },

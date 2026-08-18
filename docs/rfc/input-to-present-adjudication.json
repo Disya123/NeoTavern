@@ -72,9 +72,7 @@
         "p99": 20646128
       }
     },
-    "exclusions": [
-      "sf_gpu_deadline_missed"
-    ],
+    "exclusions": ["sf_gpu_deadline_missed"],
     "unknown_exclusion": "application-caused",
     "input_to_present": {
       "n": 7024,

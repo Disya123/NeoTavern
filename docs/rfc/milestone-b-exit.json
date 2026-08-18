@@ -94,7 +94,7 @@
   "known_baseline_failures": [
     {
       "id": "prettier-mass-drift",
-      "status": "OPEN",
+      "status": "FIXED",
       "waiver": null
     },
     {

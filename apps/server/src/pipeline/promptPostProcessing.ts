@@ -18,7 +18,11 @@
  * - `*_tools`      — same as the base mode but keep `tool`-role messages
  *                    (the base modes rewrite `tool` → `user`).
  */
-import type { GenerationMessage, MessageRole, PromptPostProcessingMode } from '@neotavern/contracts';
+import type {
+  GenerationMessage,
+  MessageRole,
+  PromptPostProcessingMode,
+} from '@neotavern/contracts';
 
 /** Display names used to prefix folded message content (group names excluded). */
 export interface PromptPostProcessingNames {

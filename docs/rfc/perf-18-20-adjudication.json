@@ -356,10 +356,7 @@
         {
           "id": "delta_token_not_double_applied",
           "ok": true,
-          "tokens": [
-            1,
-            2
-          ]
+          "tokens": [1, 2]
         },
         {
           "id": "counters",

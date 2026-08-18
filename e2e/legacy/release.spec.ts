@@ -899,7 +899,8 @@ test('loads a trusted legacy frontend only after explicit consent and bypasses i
     .poll(() =>
       page.evaluate(
         (expected) =>
-          (window as typeof window & { __neotavernLegacyE2e?: string }).__neotavernLegacyE2e === expected,
+          (window as typeof window & { __neotavernLegacyE2e?: string }).__neotavernLegacyE2e ===
+          expected,
         pluginId,
       ),
     )
@@ -909,7 +910,9 @@ test('loads a trusted legacy frontend only after explicit consent and bypasses i
   await expect(page.getByText('Plugin safe mode is active')).toBeVisible();
   await expect(page.locator('#legacy-toolbar')).toBeEmpty();
   await expect(
-    page.evaluate(() => (window as typeof window & { __neotavernLegacyE2e?: string }).__neotavernLegacyE2e),
+    page.evaluate(
+      () => (window as typeof window & { __neotavernLegacyE2e?: string }).__neotavernLegacyE2e,
+    ),
   ).resolves.toBeUndefined();
 
   const legacySafeModeExit = page.waitForNavigation({ waitUntil: 'domcontentloaded' });
@@ -921,7 +924,8 @@ test('loads a trusted legacy frontend only after explicit consent and bypasses i
     .poll(() =>
       page.evaluate(
         (expected) =>
-          (window as typeof window & { __neotavernLegacyE2e?: string }).__neotavernLegacyE2e === expected,
+          (window as typeof window & { __neotavernLegacyE2e?: string }).__neotavernLegacyE2e ===
+          expected,
         pluginId,
       ),
     )

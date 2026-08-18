@@ -277,7 +277,8 @@ describe('moduleGraphLoader', () => {
   it('rejects dynamic import outside the graph at build time', () => {
     expect(() =>
       buildOk({
-        'src/index.js': "export const dyn = import('neotavern-plugin://evil.js').then(() => 'ok');\n",
+        'src/index.js':
+          "export const dyn = import('neotavern-plugin://evil.js').then(() => 'ok');\n",
       }),
     ).toThrowError(
       expect.objectContaining({

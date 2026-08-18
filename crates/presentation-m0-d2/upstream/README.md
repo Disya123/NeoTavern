@@ -2,11 +2,11 @@
 
 Bounded paint-seam patches. Not a private fork of Blitz layout, Styło, or Parley.
 
-| Crate         | Pin          | Patch                                                                                          | Inserted lines                                     |
-| ------------- | ------------ | ---------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| `anyrender`   | 0.11.0       | [`anyrender-0.11.0-host-node-marker.patch`](anyrender-0.11.0-host-node-marker.patch)           | **97** (`src/lib.rs`, `src/recording.rs`)          |
-| `blitz-paint` | 0.3.0-beta.1 | [`blitz-paint-0.3.0-beta.1-glass-barrier.patch`](blitz-paint-0.3.0-beta.1-glass-barrier.patch) | **197** (`src/render.rs`, `src/text.rs`)           |
-| **Total**     |              |                                                                                                | **294**                                            |
+| Crate         | Pin          | Patch                                                                                          | Inserted lines                            |
+| ------------- | ------------ | ---------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `anyrender`   | 0.11.0       | [`anyrender-0.11.0-host-node-marker.patch`](anyrender-0.11.0-host-node-marker.patch)           | **97** (`src/lib.rs`, `src/recording.rs`) |
+| `blitz-paint` | 0.3.0-beta.1 | [`blitz-paint-0.3.0-beta.1-glass-barrier.patch`](blitz-paint-0.3.0-beta.1-glass-barrier.patch) | **197** (`src/render.rs`, `src/text.rs`)  |
+| **Total**     |              |                                                                                                | **294**                                   |
 
 Vendored snapshots: [`crates/vendor/`](../../vendor/README.md) via `[patch.crates-io]` in `crates/Cargo.toml`.
 

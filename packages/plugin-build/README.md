@@ -33,7 +33,7 @@ runtime (Plugin Runtime) builds the module graph from sources itself;
   build; `--force` downgrades them to warnings.
 - `signManifest(manifest, privateKeyPem)` → `SignedManifest`;
   `verifyManifestSignature(manifest, publicKeyPem?)` → `{ok}` | `{ok:false,
-  reason}` (`PACKAGE_SIGNATURE_INVALID` / `PUBLISHER_KEY_CHANGED`).
+reason}` (`PACKAGE_SIGNATURE_INVALID` / `PUBLISHER_KEY_CHANGED`).
 - `generateKeyPair()` → PEM pair + `keyId` (`ed25519:<hex>`).
 - `transpileTypeScript(source, fileName)` — ESM TS transpilation.
 

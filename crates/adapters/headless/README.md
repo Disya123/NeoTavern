@@ -28,14 +28,14 @@ coordinator, ТЗ §22).
 neotavern-headless --root <data-root> [options]
 ```
 
-| Flag / env | Default | Meaning |
-| --- | --- | --- |
-| `--root` / `NEOTA_DATA_ROOT` | required | Canonical data-root (exclusive lease). |
-| `--bind` / `NEOTA_BIND` | `127.0.0.1:8080` | Listen address. Tests use `127.0.0.1:0`. |
-| `--remote-exposure` / `NEOTA_REMOTE_EXPOSURE=1` | off | Allow a non-loopback bind (`trusted_proxy`). |
-| `--auth` / `NEOTA_HEADLESS_AUTH=1` | off on loopback | Pairing gate on `/rpc` and `/rpc/stream`. Required for a public bind. Prints `credential-id` and `token` once on stderr. |
-| `--allowed-origin` / `NEOTA_ALLOWED_ORIGINS` | empty (deny-by-default) | CORS exact-match allowlist (repeatable flag; comma-separated env). |
-| `--secret-backend` / `NEOTA_SECRET_BACKEND` | `env` | `env` \| `session` \| `unavailable`. |
+| Flag / env                                      | Default                 | Meaning                                                                                                                  |
+| ----------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `--root` / `NEOTA_DATA_ROOT`                    | required                | Canonical data-root (exclusive lease).                                                                                   |
+| `--bind` / `NEOTA_BIND`                         | `127.0.0.1:8080`        | Listen address. Tests use `127.0.0.1:0`.                                                                                 |
+| `--remote-exposure` / `NEOTA_REMOTE_EXPOSURE=1` | off                     | Allow a non-loopback bind (`trusted_proxy`).                                                                             |
+| `--auth` / `NEOTA_HEADLESS_AUTH=1`              | off on loopback         | Pairing gate on `/rpc` and `/rpc/stream`. Required for a public bind. Prints `credential-id` and `token` once on stderr. |
+| `--allowed-origin` / `NEOTA_ALLOWED_ORIGINS`    | empty (deny-by-default) | CORS exact-match allowlist (repeatable flag; comma-separated env).                                                       |
+| `--secret-backend` / `NEOTA_SECRET_BACKEND`     | `env`                   | `env` \| `session` \| `unavailable`.                                                                                     |
 
 CLI flags override env. Stdout is a single `listening <ip:port>` line; the
 process then waits for **stdin EOF** and drains in-flight HTTP (exit 0).
@@ -45,11 +45,11 @@ logs, or the product database.
 
 ### Exit codes
 
-| Code | Meaning |
-| --- | --- |
-| `0` | `--help`, or a clean drain after stdin EOF. |
-| `1` | Kernel open / bind / pairing / shutdown failure (diagnostic on stderr). |
-| `2` | Usage error. |
+| Code | Meaning                                                                 |
+| ---- | ----------------------------------------------------------------------- |
+| `0`  | `--help`, or a clean drain after stdin EOF.                             |
+| `1`  | Kernel open / bind / pairing / shutdown failure (diagnostic on stderr). |
+| `2`  | Usage error.                                                            |
 
 ## Tests
 

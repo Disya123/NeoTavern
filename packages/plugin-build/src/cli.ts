@@ -157,7 +157,8 @@ async function main(argv: string[]): Promise<number> {
     }
     case 'genkey': {
       const outIdx = rest.indexOf('--out');
-      const base = outIdx >= 0 ? (rest[outIdx + 1] ?? 'neotavern-plugin-key') : 'neotavern-plugin-key';
+      const base =
+        outIdx >= 0 ? (rest[outIdx + 1] ?? 'neotavern-plugin-key') : 'neotavern-plugin-key';
       const pair = generateKeyPair();
       await writeFile(join(process.cwd(), `${base}.priv.pem`), `${pair.privateKeyPem}\n`, 'utf8');
       await writeFile(join(process.cwd(), `${base}.pub.pem`), `${pair.publicKeyPem}\n`, 'utf8');

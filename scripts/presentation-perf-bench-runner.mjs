@@ -59,13 +59,7 @@ export const HOST_GROUPS = [
   },
   {
     ids: ['PERF-12', 'PERF-13'],
-    cargo: [
-      'test',
-      '--manifest-path',
-      'crates/Cargo.toml',
-      '-p',
-      'neotavern-chat-viewport',
-    ],
+    cargo: ['test', '--manifest-path', 'crates/Cargo.toml', '-p', 'neotavern-chat-viewport'],
     note: 'host virtualization / remap corpus; not a physical PASS',
   },
   {
@@ -114,9 +108,7 @@ function describeItem(id, extra = {}) {
 }
 
 export function execute({ spawn = spawnSync } = {}) {
-  const byId = Object.fromEntries(
-    REMAINING.map((id) => [id, describeItem(id)]),
-  );
+  const byId = Object.fromEntries(REMAINING.map((id) => [id, describeItem(id)]));
   const groups = [];
   for (const group of HOST_GROUPS) {
     const result = spawn('cargo', group.cargo, {

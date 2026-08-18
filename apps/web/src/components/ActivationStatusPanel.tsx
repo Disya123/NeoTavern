@@ -46,7 +46,11 @@ export function ActivationStatusPanel() {
 
   const { data } = status;
   return (
-    <section className={styles.section} data-part="data-activation" data-layout={data.layoutVersion}>
+    <section
+      className={styles.section}
+      data-part="data-activation"
+      data-layout={data.layoutVersion}
+    >
       <header className={styles.sectionHeader}>
         <h2>{t('settings:dataActivation')}</h2>
         <p>{t('settings:dataActivationHint')}</p>
@@ -77,9 +81,7 @@ export function ActivationStatusPanel() {
           {t('settings:dataActivationPending')}
         </p>
       ) : null}
-      <h3 className={styles.activationJournalTitle}>
-        {t('settings:dataActivationJournal')}
-      </h3>
+      <h3 className={styles.activationJournalTitle}>{t('settings:dataActivationJournal')}</h3>
       {data.entries.length === 0 ? (
         <p className={styles.noBackups}>{t('settings:dataActivationNoJournal')}</p>
       ) : (

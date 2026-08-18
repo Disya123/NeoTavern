@@ -11,7 +11,7 @@
 **Будущий mobile target:** iOS  
 **Production Web на старте:** существующий React-клиент  
 **Исследуемый performance target:** 120 Hz на поддерживаемых high-refresh mobile devices  
-**Кандидат в hard visual invariant:** настоящий динамический live backdrop glass  
+**Кандидат в hard visual invariant:** настоящий динамический live backdrop glass
 
 ---
 
@@ -140,11 +140,11 @@ Track D означает «обязательно, если Track D принят
 NeoUI v4 MUST NOT приниматься одним пакетным голосованием. Требуются три
 независимых решения:
 
-| ID | Решение | Что доказывает | Что не доказывает |
-|---|---|---|---|
-| D1 | Кто владеет Android frame/composition path | измеренный WebView-class bottleneck и сравнительный prototype | необходимость Dioxus |
-| D2 | На чём пишется first-party Android UI | стоимость producer integration, paint seam и delivery | необходимость двух UI на всех платформах |
-| D3 | Один presentation UI или раздельные Android/Web реализации | продуктовая parity-модель, штат и roadmap | пригодность конкретного renderer backend |
+| ID  | Решение                                                    | Что доказывает                                                | Что не доказывает                        |
+| --- | ---------------------------------------------------------- | ------------------------------------------------------------- | ---------------------------------------- |
+| D1  | Кто владеет Android frame/composition path                 | измеренный WebView-class bottleneck и сравнительный prototype | необходимость Dioxus                     |
+| D2  | На чём пишется first-party Android UI                      | стоимость producer integration, paint seam и delivery         | необходимость двух UI на всех платформах |
+| D3  | Один presentation UI или раздельные Android/Web реализации | продуктовая parity-модель, штат и roadmap                     | пригодность конкретного renderer backend |
 
 Правила принятия:
 
@@ -279,12 +279,12 @@ environment, raw logs, captures, пропущенные criteria и owner. Ес�
 
 До `D1` сравниваются не лозунги, а одинаковый измеримый fixture:
 
-| Track | Backend | Обязательная проверка | Возможный исход |
-|---|---|---|---|
-| A | текущий WebView, glass off/static | high-refresh request, scroll/frame trace | дешёвый production fallback |
-| B | WebView + `WebViewAssetLoader`/HTTPS asset origin + bounded effects | тот же fixture | WebView остается owner compositor |
-| C | Compose/Flutter/иной native toolkit без product compositor | scroll + native blur feasibility | native UI без собственного engine |
-| D | product compositor + выбранный UI producer | ordered backdrop barrier + shared GPU device | максимальная capability и стоимость |
+| Track | Backend                                                             | Обязательная проверка                        | Возможный исход                     |
+| ----- | ------------------------------------------------------------------- | -------------------------------------------- | ----------------------------------- |
+| A     | текущий WebView, glass off/static                                   | high-refresh request, scroll/frame trace     | дешёвый production fallback         |
+| B     | WebView + `WebViewAssetLoader`/HTTPS asset origin + bounded effects | тот же fixture                               | WebView остается owner compositor   |
+| C     | Compose/Flutter/иной native toolkit без product compositor          | scroll + native blur feasibility             | native UI без собственного engine   |
+| D     | product compositor + выбранный UI producer                          | ordered backdrop barrier + shared GPU device | максимальная capability и стоимость |
 
 Asset origin сам по себе не считается доказательством улучшенного compositor
 пути. Каждая гипотеза получает trace и одинаковые device/thermal условия.
@@ -294,12 +294,12 @@ D запрещено выбирать только потому, что он т�
 
 До завершения M-1 статус данных явный:
 
-| Track | Evidence status в этой редакции |
-|---|---|
-| A/A0 | `MEASURED` emulator-only morning fixture; physical `BLOCKED`; evening AVD A/A0 **`INVALID_FOR_COMPARISON`** |
-| B | `MEASURED` emulator-only morning fixture; physical `BLOCKED`; evening AVD B **`INVALID_FOR_COMPARISON`** |
-| C | `NOT MEASURED` |
-| D | M0-D1a **PASS**; M0-D1b **PASS**; M0-D2 **PASS**; [TrackComparison](m0-track-comparison.md); **D1=Track D GO** signed [`d1-d2-decision.md`](d1-d2-decision.md) |
+| Track | Evidence status в этой редакции                                                                                                                                |
+| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A/A0  | `MEASURED` emulator-only morning fixture; physical `BLOCKED`; evening AVD A/A0 **`INVALID_FOR_COMPARISON`**                                                    |
+| B     | `MEASURED` emulator-only morning fixture; physical `BLOCKED`; evening AVD B **`INVALID_FOR_COMPARISON`**                                                       |
+| C     | `NOT MEASURED`                                                                                                                                                 |
+| D     | M0-D1a **PASS**; M0-D1b **PASS**; M0-D2 **PASS**; [TrackComparison](m0-track-comparison.md); **D1=Track D GO** signed [`d1-d2-decision.md`](d1-d2-decision.md) |
 
 Перед Gate P публикуется `BaselineReport M-1` с измеренными A/A0/B и только
 оценочными C/D. Он достаточен для выбора важности live glass, но **не** для D1.
@@ -360,14 +360,14 @@ repository governance.
 Baseline, который MUST быть проверен по текущему repository перед ADR, включает
 как минимум заявленные в ревью конфликты:
 
-| Область | Предполагаемый действующий contract | Конфликт Track D |
-|---|---|---|
-| First-party Web UI | React/Vite presentation | Android пишется второй раз |
-| Android host | WebView/file-origin contract (в ревью: ADR-0034) | меняется owner кадров и main renderer |
-| Product boundary | React → Product Wire → Kernel (в ревью: ADR-0038) | Dioxus требует нового adapter/ADR |
-| Theme SDK | CSS tokens/cascade layers/`data-*`/shell themes | не переносится в typed nodes 1:1 |
-| Plugin frontend | React slots/DOM islands/legacy `window` globals | требует нового ABI либо WebSurface |
-| i18n/a11y | Web catalogs и component semantics | нужен parity contract для native UI |
+| Область            | Предполагаемый действующий contract               | Конфликт Track D                      |
+| ------------------ | ------------------------------------------------- | ------------------------------------- |
+| First-party Web UI | React/Vite presentation                           | Android пишется второй раз            |
+| Android host       | WebView/file-origin contract (в ревью: ADR-0034)  | меняется owner кадров и main renderer |
+| Product boundary   | React → Product Wire → Kernel (в ревью: ADR-0038) | Dioxus требует нового adapter/ADR     |
+| Theme SDK          | CSS tokens/cascade layers/`data-*`/shell themes   | не переносится в typed nodes 1:1      |
+| Plugin frontend    | React slots/DOM islands/legacy `window` globals   | требует нового ABI либо WebSurface    |
+| i18n/a11y          | Web catalogs и component semantics                | нужен parity contract для native UI   |
 
 Номера и формулировки считаются reference из ревью, а не установленным фактом:
 ADR owner обязан сослаться на актуальные файлы/commit и исправить таблицу до
@@ -379,12 +379,12 @@ Gate P/D3.
 повторять уже известные compositor ошибки. Это не означает, что все разделы
 одновременно входят в approved backlog.
 
-| Слой | Разделы | Статус до evidence |
-|---|---|---|
-| Decision gates | 0–8, 47–49 | предмет текущего proposal/review |
-| Kill probe | 10.1 и 48 | единственный разрешённый engine scope до D1/D2 |
-| Conditional implementation design | 9–46, 50–58 | справочник; не implementation mandate |
-| Production acceptance | 43–45, 51–56 | активируется после соответствующих GO |
+| Слой                              | Разделы      | Статус до evidence                             |
+| --------------------------------- | ------------ | ---------------------------------------------- |
+| Decision gates                    | 0–8, 47–49   | предмет текущего proposal/review               |
+| Kill probe                        | 10.1 и 48    | единственный разрешённый engine scope до D1/D2 |
+| Conditional implementation design | 9–46, 50–58  | справочник; не implementation mandate          |
+| Production acceptance             | 43–45, 51–56 | активируется после соответствующих GO          |
 
 Команда MUST планировать ближайший gate, а не весь текст как одну mega-feature.
 Наличие детального будущего требования не разрешает начать его реализацию до
@@ -636,36 +636,36 @@ StandardUI / Canvas2D / VisualSurface / WebSurface
 Таблица описывает Track D при `D2=Dioxus`; до D2 колонка default implementation
 является гипотезой prototype.
 
-| Capability | NeoTavern ownership | Default implementation |
-|---|---:|---|
-| Product state | полный | Rust Kernel |
-| Storage/providers/agents | полный | Rust Kernel |
-| Product Wire | полный | NeoTavern |
-| Presentation models | полный | NeoTavern |
-| First-party reconciliation | adapter/tests | Dioxus |
-| Component runtime | adapter/tests | Dioxus |
-| Style resolution | requirements/tests | NeoBlitz/upstream |
-| Layout | requirements/tests | NeoBlitz/upstream |
-| Text shaping | requirements/tests | upstream text stack |
-| Glyph rasterization | requirements/tests | upstream raster stack |
-| IME session | contract/tests | platform |
-| Accessibility | semantic contract/virtualization adapter/tests | platform/upstream + NeoTavern adapter |
-| Generic gestures | requirements/tests | host/upstream |
-| Standard UI rasterization | adapter/tests | NeoBlitz raster backend |
-| Paint-order segmentation | полный | NeoBlitz bridge + NeoScene |
-| Spatial/scroll/effect property trees | полный | NeoBlitz bridge + NeoScene/NeoCompositor |
-| Interaction-ready selection paint | adapter/tests | upstream text data + NeoCompositor ops |
-| Virtual range prediction/preparation | полный | NeoChatViewport coordinator |
-| Async scroll physics/geometry remap | полный | NeoChatViewport + NeoCompositor |
-| Retained composition | полный | NeoCompositor |
-| Damage/layer caching | полный | NeoCompositor |
-| Live glass | полный | NeoGlass |
-| GPU surface/device policy | полный | NeoCompositor |
-| Media composition | полный | NeoMedia bridge |
-| Plugin VisualSurface | полный | NeoPluginRuntime + NeoCompositor |
-| Plugin permissions | полный | NeoPluginRuntime |
-| Legacy Web compatibility | containment | WebSurface |
-| Web production renderer | adapter | existing React/DOM |
+| Capability                           |                            NeoTavern ownership | Default implementation                   |
+| ------------------------------------ | ---------------------------------------------: | ---------------------------------------- |
+| Product state                        |                                         полный | Rust Kernel                              |
+| Storage/providers/agents             |                                         полный | Rust Kernel                              |
+| Product Wire                         |                                         полный | NeoTavern                                |
+| Presentation models                  |                                         полный | NeoTavern                                |
+| First-party reconciliation           |                                  adapter/tests | Dioxus                                   |
+| Component runtime                    |                                  adapter/tests | Dioxus                                   |
+| Style resolution                     |                             requirements/tests | NeoBlitz/upstream                        |
+| Layout                               |                             requirements/tests | NeoBlitz/upstream                        |
+| Text shaping                         |                             requirements/tests | upstream text stack                      |
+| Glyph rasterization                  |                             requirements/tests | upstream raster stack                    |
+| IME session                          |                                 contract/tests | platform                                 |
+| Accessibility                        | semantic contract/virtualization adapter/tests | platform/upstream + NeoTavern adapter    |
+| Generic gestures                     |                             requirements/tests | host/upstream                            |
+| Standard UI rasterization            |                                  adapter/tests | NeoBlitz raster backend                  |
+| Paint-order segmentation             |                                         полный | NeoBlitz bridge + NeoScene               |
+| Spatial/scroll/effect property trees |                                         полный | NeoBlitz bridge + NeoScene/NeoCompositor |
+| Interaction-ready selection paint    |                                  adapter/tests | upstream text data + NeoCompositor ops   |
+| Virtual range prediction/preparation |                                         полный | NeoChatViewport coordinator              |
+| Async scroll physics/geometry remap  |                                         полный | NeoChatViewport + NeoCompositor          |
+| Retained composition                 |                                         полный | NeoCompositor                            |
+| Damage/layer caching                 |                                         полный | NeoCompositor                            |
+| Live glass                           |                                         полный | NeoGlass                                 |
+| GPU surface/device policy            |                                         полный | NeoCompositor                            |
+| Media composition                    |                                         полный | NeoMedia bridge                          |
+| Plugin VisualSurface                 |                                         полный | NeoPluginRuntime + NeoCompositor         |
+| Plugin permissions                   |                                         полный | NeoPluginRuntime                         |
+| Legacy Web compatibility             |                                    containment | WebSurface                               |
+| Web production renderer              |                                        adapter | existing React/DOM                       |
 
 ---
 
@@ -2604,14 +2604,14 @@ Android release notes MUST явно называть неподдерживае�
 
 Сохраняются уровни:
 
-| Tier | API | Назначение |
-|---|---|---|
-| Plugin:P0 | Kernel capabilities | headless agents/tools |
-| Plugin:P1 | StandardUI | panels/forms/chat widgets |
-| Plugin:P2 | Canvas2D | charts/diagrams/simple custom visuals |
-| Plugin:P3 | VisualSurface | Live2D/3D/high-frequency visuals |
-| Plugin:P4 | WebSurface | arbitrary legacy HTML/JS |
-| Plugin:P5 | NativeExtension | reviewed trusted integration |
+| Tier      | API                 | Назначение                            |
+| --------- | ------------------- | ------------------------------------- |
+| Plugin:P0 | Kernel capabilities | headless agents/tools                 |
+| Plugin:P1 | StandardUI          | panels/forms/chat widgets             |
+| Plugin:P2 | Canvas2D            | charts/diagrams/simple custom visuals |
+| Plugin:P3 | VisualSurface       | Live2D/3D/high-frequency visuals      |
+| Plugin:P4 | WebSurface          | arbitrary legacy HTML/JS              |
+| Plugin:P5 | NativeExtension     | reviewed trusted integration          |
 
 Plugins получают capabilities, а не ambient Kernel authority.
 
@@ -2842,12 +2842,12 @@ UI строит latest state.
 
 Минимальная логическая модель:
 
-| Executor | Владеет | MUST NOT |
-|---|---|---|
-| Platform/UI | window/input/IME/accessibility callbacks, Dioxus/NeoBlitz mutable document | ждать GPU/worker, делать decode, выполнять unbounded virtualization batch |
-| Render | NeoScene snapshot, compositor state, pass graph, device/queue/surface | читать mutable UI state, ждать layout/shape/decode/plugin producer |
-| Preparation workers | Markdown parse, asset decode, safe immutable preparation jobs | менять Dioxus DOM, публиковать частичный transaction |
-| Product runtime | Kernel/Product Wire | синхронно участвовать в каждом scroll/present frame |
+| Executor            | Владеет                                                                    | MUST NOT                                                                  |
+| ------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Platform/UI         | window/input/IME/accessibility callbacks, Dioxus/NeoBlitz mutable document | ждать GPU/worker, делать decode, выполнять unbounded virtualization batch |
+| Render              | NeoScene snapshot, compositor state, pass graph, device/queue/surface      | читать mutable UI state, ждать layout/shape/decode/plugin producer        |
+| Preparation workers | Markdown parse, asset decode, safe immutable preparation jobs              | менять Dioxus DOM, публиковать частичный transaction                      |
+| Product runtime     | Kernel/Product Wire                                                        | синхронно участвовать в каждом scroll/present frame                       |
 
 Физическое совмещение executors на платформе MAY отличаться, но запреты и queue
 boundaries сохраняются. Для каждой queue фиксируются item cap, byte cap,
@@ -4022,23 +4022,23 @@ APK SHA-256. Отсутствие и commit, и такого bundle даёт `BL
 
 Snapshot фиксирует факты, но не повышает program verdict:
 
-| Object | Status | Reason |
-|---|---|---|
-| `Gate P` | **`GateP:P1` / PASSED** | signed 2026-08-17; [gate-p-decision-draft.md](gate-p-decision-draft.md) |
-| owner M-1 waiver | **explicit** | incomplete physical M-1 accepted for the **product** choice only; not an M-1 PASS |
-| normative M0 | **`PASS`** (technical) | M0-D1a/b/D2 host-side admission; not production compositor; [`m0-track-comparison.md`](m0-track-comparison.md) |
-| morning AVD M-1 A/A0/B | `MEASURED` emulator-only | 60 Hz; не RFC device set; **not raised** |
-| evening AVD M-1 A/A0/B | `INVALID_FOR_COMPARISON` | другой APK и другие экраны; **not raised** |
-| physical M-1 device set | `BLOCKED` | none attached; **not raised** |
-| runner D1a desktop Vulkan | `PRE-GATE / BLOCKED` | API timeline; нет Android production backend / GPU capture; **not admitted** |
-| evening AVD D1a (installed APK) | `BLOCKED / NON-ADMISSIBLE` | `.so` ≠ current source bundle; **not admitted** |
-| signed Gate P record | `docs/rfc/gate-p-decision-draft.md` | `GateP:P1`; owner `Disya123 <gamedisya@gmail.com>` |
-| `M0-D1a` (normative) | **`PASS`** | host-side admission [`m0-d1a-adjudication.json`](m0-d1a-adjudication.json); probe log `capture=false` expected |
-| `M0-D1b` | **`PASS`** | host-side admission [`m0-d1b-adjudication.json`](m0-d1b-adjudication.json); probe log `capture=false`; D1a JSON unchanged |
-| `M0-D2` | **`PASS`** | host-side admission [`m0-d2-adjudication.json`](m0-d2-adjudication.json); probe log `capture=false`; D1a/D1b JSON unchanged |
-| `D1=Track D GO` | **`GRANTED`** | signed 2026-08-18 [`d1-d2-decision.md`](d1-d2-decision.md); [ADR-0049](../adr/0049-track-d-dioxus-presentation.md); not production cutover |
-| `D2=Dioxus+Blitz GO` | **`GRANTED`** | same record; pinned Blitz; not a full Android UI rewrite |
-| `D3` | **`DEFERRED`** | Android Rust presentation path; Web stays React |
+| Object                          | Status                              | Reason                                                                                                                                     |
+| ------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Gate P`                        | **`GateP:P1` / PASSED**             | signed 2026-08-17; [gate-p-decision-draft.md](gate-p-decision-draft.md)                                                                    |
+| owner M-1 waiver                | **explicit**                        | incomplete physical M-1 accepted for the **product** choice only; not an M-1 PASS                                                          |
+| normative M0                    | **`PASS`** (technical)              | M0-D1a/b/D2 host-side admission; not production compositor; [`m0-track-comparison.md`](m0-track-comparison.md)                             |
+| morning AVD M-1 A/A0/B          | `MEASURED` emulator-only            | 60 Hz; не RFC device set; **not raised**                                                                                                   |
+| evening AVD M-1 A/A0/B          | `INVALID_FOR_COMPARISON`            | другой APK и другие экраны; **not raised**                                                                                                 |
+| physical M-1 device set         | `BLOCKED`                           | none attached; **not raised**                                                                                                              |
+| runner D1a desktop Vulkan       | `PRE-GATE / BLOCKED`                | API timeline; нет Android production backend / GPU capture; **not admitted**                                                               |
+| evening AVD D1a (installed APK) | `BLOCKED / NON-ADMISSIBLE`          | `.so` ≠ current source bundle; **not admitted**                                                                                            |
+| signed Gate P record            | `docs/rfc/gate-p-decision-draft.md` | `GateP:P1`; owner `Disya123 <gamedisya@gmail.com>`                                                                                         |
+| `M0-D1a` (normative)            | **`PASS`**                          | host-side admission [`m0-d1a-adjudication.json`](m0-d1a-adjudication.json); probe log `capture=false` expected                             |
+| `M0-D1b`                        | **`PASS`**                          | host-side admission [`m0-d1b-adjudication.json`](m0-d1b-adjudication.json); probe log `capture=false`; D1a JSON unchanged                  |
+| `M0-D2`                         | **`PASS`**                          | host-side admission [`m0-d2-adjudication.json`](m0-d2-adjudication.json); probe log `capture=false`; D1a/D1b JSON unchanged                |
+| `D1=Track D GO`                 | **`GRANTED`**                       | signed 2026-08-18 [`d1-d2-decision.md`](d1-d2-decision.md); [ADR-0049](../adr/0049-track-d-dioxus-presentation.md); not production cutover |
+| `D2=Dioxus+Blitz GO`            | **`GRANTED`**                       | same record; pinned Blitz; not a full Android UI rewrite                                                                                   |
+| `D3`                            | **`DEFERRED`**                      | Android Rust presentation path; Web stays React                                                                                            |
 
 Снятое partial evidence:
 
@@ -4098,17 +4098,17 @@ Android reference. Это зафиксировано 2026-08-17 как **M0-D1a 
 
 ### Scoped outcomes
 
-| Результат | Решение |
-|---|---|
-| `GateP=UNDECIDED`, есть pre-gate run | сохранить artifacts, остановить scope; M0 `NOT_ENTERED`, D1b не начинать |
-| `GateP:P1` + incomplete physical M-1 (owner waiver) | M0 `ENTERED`; PRE-GATE D1a **не** admitted; повторить D1a с physical capture |
-| `GateP:P1` + `capture_host=READY` (AGI 3.3.3 / `E:\agi`), no USB phone | M0 `ENTERED`; D1a `ENVIRONMENT_BLOCKED`; `physical_device=BLOCKED_EXTERNAL`; D1b не начинать |
-| `GateP:P1` + physical Vulkan capture admitted | M0 `ENTERED`; **M0-D1a PASS** (host-side); probe `capture=false`; D1b может начинаться; `D1=Track D GO` нет |
-| M0-D1a FAIL | остановить D1b; Track D compositor — NO-GO |
-| M0-D1a PASS, M0-D1b FAIL | static barrier доказан, dynamic live glass — NO-GO; вернуться к A/B/C либо пересмотреть Gate P |
-| M0-D1a/b PASS, M0-D2 FAIL | D1 остаётся кандидатом; Dioxus/Blitz — NO-GO, проверить другой producer/substrate |
-| M0-D1a/b PASS, M0-D2 PASS | финализировать TrackComparison; только затем можно принять D1/D2, D3 всё ещё отдельно |
-| Evidence ambiguous | продлить только конкретный probe с новым deadline; implementation milestones не начинать |
+| Результат                                                              | Решение                                                                                                     |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `GateP=UNDECIDED`, есть pre-gate run                                   | сохранить artifacts, остановить scope; M0 `NOT_ENTERED`, D1b не начинать                                    |
+| `GateP:P1` + incomplete physical M-1 (owner waiver)                    | M0 `ENTERED`; PRE-GATE D1a **не** admitted; повторить D1a с physical capture                                |
+| `GateP:P1` + `capture_host=READY` (AGI 3.3.3 / `E:\agi`), no USB phone | M0 `ENTERED`; D1a `ENVIRONMENT_BLOCKED`; `physical_device=BLOCKED_EXTERNAL`; D1b не начинать                |
+| `GateP:P1` + physical Vulkan capture admitted                          | M0 `ENTERED`; **M0-D1a PASS** (host-side); probe `capture=false`; D1b может начинаться; `D1=Track D GO` нет |
+| M0-D1a FAIL                                                            | остановить D1b; Track D compositor — NO-GO                                                                  |
+| M0-D1a PASS, M0-D1b FAIL                                               | static barrier доказан, dynamic live glass — NO-GO; вернуться к A/B/C либо пересмотреть Gate P              |
+| M0-D1a/b PASS, M0-D2 FAIL                                              | D1 остаётся кандидатом; Dioxus/Blitz — NO-GO, проверить другой producer/substrate                           |
+| M0-D1a/b PASS, M0-D2 PASS                                              | финализировать TrackComparison; только затем можно принять D1/D2, D3 всё ещё отдельно                       |
+| Evidence ambiguous                                                     | продлить только конкретный probe с новым deadline; implementation milestones не начинать                    |
 
 ### NO-GO triggers
 

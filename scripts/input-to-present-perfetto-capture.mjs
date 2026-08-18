@@ -10,7 +10,15 @@
  * normative gate is the locked 120 Hz fixture.
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
@@ -65,9 +73,13 @@ function studioHoldingAdb() {
 }
 
 function sleep(ms) {
-  spawnSync(process.execPath, ['-e', `Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,${ms})`], {
-    stdio: 'ignore',
-  });
+  spawnSync(
+    process.execPath,
+    ['-e', `Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,${ms})`],
+    {
+      stdio: 'ignore',
+    },
+  );
 }
 
 function dumpThermal(adbBin, serial) {
@@ -142,11 +154,10 @@ function ensureTraceProcessor(dir) {
   mkdirSync(dir, { recursive: true });
   const local = join(dir, 'trace_processor_shell.exe');
   if (existsSync(local)) return local;
-  const curl = spawnSync(
-    'curl',
-    ['-L', '--fail', '-o', local, TP_URL],
-    { encoding: 'utf8', timeout: 120_000 },
-  );
+  const curl = spawnSync('curl', ['-L', '--fail', '-o', local, TP_URL], {
+    encoding: 'utf8',
+    timeout: 120_000,
+  });
   if (curl.status === 0 && existsSync(local)) return local;
   return null;
 }
@@ -182,7 +193,9 @@ function main() {
     return;
   }
   const bundle = latestBoundBundle();
-  const apkPath = argValue('apk') ?? (bundle?.apk_path && existsSync(bundle.apk_path) ? bundle.apk_path : DEFAULT_APK);
+  const apkPath =
+    argValue('apk') ??
+    (bundle?.apk_path && existsSync(bundle.apk_path) ? bundle.apk_path : DEFAULT_APK);
   const bind = bundle ? bindApkMatches(bundle, apkPath) : { ok: false, reason: 'no BOUND bundle' };
   const sourceCommit = bundle?.base_commit ?? null;
   const boundOk =
@@ -241,7 +254,8 @@ function main() {
     ],
     { encoding: 'utf8' },
   );
-  const traceOut = `${pushed.stdout || ''}\n${pushed.stderr || ''}\n${startTrace.stdout || ''}\n${startTrace.stderr || ''}`.trim();
+  const traceOut =
+    `${pushed.stdout || ''}\n${pushed.stderr || ''}\n${startTrace.stdout || ''}\n${startTrace.stderr || ''}`.trim();
   const pidLine = traceOut
     .split(/\r?\n/u)
     .map((line) => line.trim())
@@ -298,11 +312,10 @@ function main() {
   const traceBytes = existsSync(tracePath) ? statSync(tracePath).size : 0;
   if (pull.status !== 0 || traceBytes < 1024) {
     const fd = openSync(tracePath, 'w');
-    pull = spawnSync(
-      adbInfo.bin,
-      ['-s', device.serial, 'exec-out', 'cat', DEVICE_TRACE],
-      { stdio: ['ignore', fd, 'pipe'], timeout: 120_000 },
-    );
+    pull = spawnSync(adbInfo.bin, ['-s', device.serial, 'exec-out', 'cat', DEVICE_TRACE], {
+      stdio: ['ignore', fd, 'pipe'],
+      timeout: 120_000,
+    });
     closeSync(fd);
   }
   const pulledBytes = existsSync(tracePath) ? statSync(tracePath).size : 0;

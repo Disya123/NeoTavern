@@ -193,9 +193,7 @@ export class LegacyServerPluginHost {
     }
     const entryPath = resolve(packageRoot, ...entrySegments);
     let loaded: unknown;
-    const inPkgSnapshot = Boolean(
-      (process as NodeJS.Process & { pkg?: string }).pkg,
-    );
+    const inPkgSnapshot = Boolean((process as NodeJS.Process & { pkg?: string }).pkg);
     if (inPkgSnapshot) {
       // pkg's snapshot VM provides no dynamic-import callback; legacy entries are
       // external files, so load them through createRequire (Node 24 require(esm)

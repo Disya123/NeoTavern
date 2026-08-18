@@ -31,8 +31,6 @@ describe('VisualSurface Product Wire declare', () => {
       };
       expect(Value.Check(VisualSurfaceDeclareSchema, poisoned)).toBe(false);
     }
-    expect(JSON.stringify(VisualSurfaceDeclareSchema)).not.toMatch(
-      /wgpu|vulkan|metal|encoder/i,
-    );
+    expect(JSON.stringify(VisualSurfaceDeclareSchema)).not.toMatch(/wgpu|vulkan|metal|encoder/i);
   });
 });

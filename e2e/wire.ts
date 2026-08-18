@@ -48,7 +48,10 @@ function optionalString(body: Record<string, unknown>, key: string): string | un
 
 /** `providers.config.set` name: `^[a-z][a-z0-9-]{0,63}$`. */
 export function slugProviderName(raw: string): string {
-  const slug = raw.toLowerCase().replace(/[^a-z0-9-]+/gu, '-').replace(/^-+|-+$/gu, '');
+  const slug = raw
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/gu, '-')
+    .replace(/^-+|-+$/gu, '');
   const named = slug.length === 0 || !/^[a-z]/u.test(slug) ? `e2e-${slug}` : slug;
   return named.slice(0, 64);
 }
@@ -164,9 +167,7 @@ export async function wirePatchSettings(patch: Record<string, unknown>): Promise
     const key = SETTINGS_WIRE_KEYS[field];
     if (key === undefined) return [];
     const wrapped =
-      typeof value === 'object' && value !== null && !Array.isArray(value)
-        ? value
-        : { value };
+      typeof value === 'object' && value !== null && !Array.isArray(value) ? value : { value };
     return [{ key, value: wrapped }];
   });
   if (settings.length === 0) return;

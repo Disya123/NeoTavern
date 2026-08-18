@@ -83,17 +83,17 @@ Record: [`m0-d1a-adjudication.json`](m0-d1a-adjudication.json)
 node scripts/m0-d1a-adjudicate.mjs
 ```
 
-| Host-side field           | Value |
-| ------------------------- | ----- |
-| `android_gpu_capture`     | **true** (host manifest only) |
-| `capture_driver`          | **Vulkan** |
-| `capture_admissible`      | **true** |
-| `d1a_verdict`             | **PASS** |
-| `d1b`                     | `NOT_STARTED` |
-| `environment_blocked`     | false |
-| probe log `capture=`      | **false** (expected; not a FAIL) |
-| crate runner verdict      | **BLOCKED** (probe cannot self-admit) |
-| `D1=Track D GO`           | **NOT_GRANTED** |
+| Host-side field       | Value                                 |
+| --------------------- | ------------------------------------- |
+| `android_gpu_capture` | **true** (host manifest only)         |
+| `capture_driver`      | **Vulkan**                            |
+| `capture_admissible`  | **true**                              |
+| `d1a_verdict`         | **PASS**                              |
+| `d1b`                 | `NOT_STARTED`                         |
+| `environment_blocked` | false                                 |
+| probe log `capture=`  | **false** (expected; not a FAIL)      |
+| crate runner verdict  | **BLOCKED** (probe cannot self-admit) |
+| `D1=Track D GO`       | **NOT_GRANTED**                       |
 
 Physical capture stamp `2026-08-17T17-18-59-431Z` (feature on) vs control
 `2026-08-17T17-17-50-237Z` (feature off). Bound APK SHA-256
@@ -101,15 +101,15 @@ Physical capture stamp `2026-08-17T17-18-59-431Z` (feature on) vs control
 `2d72a3c`. Capture tooling pin `5df24c8`. Device Xiaomi `8f5c2b7c`
 (`23122PCD1G` / `garnet`, Adreno 710).
 
-| Check | Result |
-| ----- | ------ |
-| SHA-256 of `.rdc`, XML, capture/control logs, bound APK | recorded; APK matches bind |
-| Pass order | `ROI-1 → glass-1 → raster/blit mutations → ROI-2 → glass-2` |
-| ROI identity | resource **299** `m0-d1a-accumulator` → **303** `m0-d1a-glass-roi`; 140×80 at (24,40) and (80,70); both smaller than 320×200 |
-| No full-scene flatten | four blit passes onto the accumulator; no full-target `vkCmdCopyImage` of the accumulator; `vello.flatten` is path tessellation, not a scene flatten |
-| No readback / second device | no `vkMapMemory` / `vkCmdCopyImageToBuffer`; one product `VkDevice` (id `55`) |
-| 100-frame lifetime | golden counters on both runs; `acc_bytes=774144` unchanged; `capture_ended=true`; no validation hits |
-| Capture vs control counters/timeline | identical `devices=1 readbacks=0 xdev=0 roi_copies=200 raster=400 glass=200 frames=100` and golden timeline; first-frame CPU µs is **not** required to match |
+| Check                                                   | Result                                                                                                                                                       |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| SHA-256 of `.rdc`, XML, capture/control logs, bound APK | recorded; APK matches bind                                                                                                                                   |
+| Pass order                                              | `ROI-1 → glass-1 → raster/blit mutations → ROI-2 → glass-2`                                                                                                  |
+| ROI identity                                            | resource **299** `m0-d1a-accumulator` → **303** `m0-d1a-glass-roi`; 140×80 at (24,40) and (80,70); both smaller than 320×200                                 |
+| No full-scene flatten                                   | four blit passes onto the accumulator; no full-target `vkCmdCopyImage` of the accumulator; `vello.flatten` is path tessellation, not a scene flatten         |
+| No readback / second device                             | no `vkMapMemory` / `vkCmdCopyImageToBuffer`; one product `VkDevice` (id `55`)                                                                                |
+| 100-frame lifetime                                      | golden counters on both runs; `acc_bytes=774144` unchanged; `capture_ended=true`; no validation hits                                                         |
+| Capture vs control counters/timeline                    | identical `devices=1 readbacks=0 xdev=0 roi_copies=200 raster=400 glass=200 frames=100` and golden timeline; first-frame CPU µs is **not** required to match |
 
 The 1437-byte GLES file `2026-08-17T16-53-54-457Z-d1a.rdc` stays
 `WRONG_API_CAPTURE / NON-ADMISSIBLE`. Desktop/AVD PRE-GATE logs stay
@@ -144,14 +144,14 @@ PASS.
 
 Two different questions. Do not collapse them.
 
-| Question                                             | Result                           | Meaning                                                                                                                        |
-| ---------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Gate P (`GateP:P0\|P1\|P2`)                          | **`GateP:P1` / PASSED**          | Signed 2026-08-17. Does not admit this runner as D1a PASS.                                                                     |
-| Normative M0                                         | **`ENTERED`**                    | Entry allowed; not PASS.                                                                                                       |
-| Runner-labelled M0-D1a                               | **PRE-GATE / BLOCKED**           | AVD GLES 3.1 100-frame run exists. No GPU capture, no physical-device production backend. **Not admitted.**                    |
-| Upstream Vello/wgpu API enough for this static seam? | **provisional** (non-admissible) | Shared device, sampleable RT, ROI glass, no readback on desktop Vulkan and emulator GLES. Not a D1a PASS.                      |
-| Limited supported fork needed?                       | **not indicated**                | Compositor accumulator is host code, not a Vello patch. Emulator gfxstream Vulkan is skipped, not patched.                     |
-| Replace paint substrate?                             | **not indicated** on these hosts | No readback / cross-device / dual-device failure on desktop Vulkan or emulator GLES.                                           |
+| Question                                             | Result                           | Meaning                                                                                                                                                                 |
+| ---------------------------------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Gate P (`GateP:P0\|P1\|P2`)                          | **`GateP:P1` / PASSED**          | Signed 2026-08-17. Does not admit this runner as D1a PASS.                                                                                                              |
+| Normative M0                                         | **`ENTERED`**                    | Entry allowed; not PASS.                                                                                                                                                |
+| Runner-labelled M0-D1a                               | **PRE-GATE / BLOCKED**           | AVD GLES 3.1 100-frame run exists. No GPU capture, no physical-device production backend. **Not admitted.**                                                             |
+| Upstream Vello/wgpu API enough for this static seam? | **provisional** (non-admissible) | Shared device, sampleable RT, ROI glass, no readback on desktop Vulkan and emulator GLES. Not a D1a PASS.                                                               |
+| Limited supported fork needed?                       | **not indicated**                | Compositor accumulator is host code, not a Vello patch. Emulator gfxstream Vulkan is skipped, not patched.                                                              |
+| Replace paint substrate?                             | **not indicated** on these hosts | No readback / cross-device / dual-device failure on desktop Vulkan or emulator GLES.                                                                                    |
 | RFC §48 D1a **exit**                                 | **met** (host-side)              | Physical Vulkan capture + eight adjudication checks in [`m0-d1a-adjudication.json`](m0-d1a-adjudication.json). Probe log `capture=false` does not override that record. |
 
 Do **not** record this as milestone M0 `PASS`, `PATCH`, or `REPLACE`, or as

@@ -69,12 +69,12 @@ Do not ship A0 or B as the launcher default.
 
 ## Device set
 
-| Role           | Device / OS / WebView (`m1-env`)                                                                            | Notes                                                                                                            |
-| -------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| emulator       | `sdk_gphone64_x86_64` / Android 16 SDK 36 / WebView `com.google.android.webview:150.0.7871.184` / 1080×2400 | AVD `Medium_Phone_API_36.1`. `supportedModes` id=1 @ 60.000004 Hz only.                                          |
+| Role           | Device / OS / WebView (`m1-env`)                                                                            | Notes                                                                          |
+| -------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| emulator       | `sdk_gphone64_x86_64` / Android 16 SDK 36 / WebView `com.google.android.webview:150.0.7871.184` / 1080×2400 | AVD `Medium_Phone_API_36.1`. `supportedModes` id=1 @ 60.000004 Hz only.        |
 | low/mid        | —                                                                                                           | **BLOCKED** — none attached 2026-08-17 evening (`adb devices` = emulator only) |
-| high-refresh   | —                                                                                                           | **BLOCKED** — none attached. AVD: `mRefreshRateChangeable=false` |
-| OEM (optional) | —                                                                                                           | not used                                                                                                         |
+| high-refresh   | —                                                                                                           | **BLOCKED** — none attached. AVD: `mRefreshRateChangeable=false`               |
+| OEM (optional) | —                                                                                                           | not used                                                                       |
 
 ## Results
 
@@ -138,11 +138,11 @@ reference.** RFC minimum device set is therefore **BLOCKED**.
 
 The APK on the emulator was **not** the canonical 58 337 647-byte fixture:
 
-| Field | Canonical morning fixture | Evening installed APK |
-| --- | --- | --- |
-| bytes | 58 337 647 | 44 432 284 |
-| SHA-256 | not recorded in the morning report | `A661693E006827C64654134053027C85F2A66AB5DA4F9E493DEB26EFA484BAEB` |
-| path | `app-debug.apk` from `assembleDebug` | pulled `pm path` `base.apk` |
+| Field   | Canonical morning fixture            | Evening installed APK                                              |
+| ------- | ------------------------------------ | ------------------------------------------------------------------ |
+| bytes   | 58 337 647                           | 44 432 284                                                         |
+| SHA-256 | not recorded in the morning report   | `A661693E006827C64654134053027C85F2A66AB5DA4F9E493DEB26EFA484BAEB` |
+| path    | `app-debug.apk` from `assembleDebug` | pulled `pm path` `base.apk`                                        |
 
 Evening A/A0/B cold runs (50 s helper, same AVD, **different APK**, not a
 replacement of the morning table):
@@ -151,16 +151,16 @@ replacement of the morning table):
 - `2026-08-17T14-04-29-858Z-a0-cold`
 - `2026-08-17T14-05-33-456Z-b-cold`
 
-| Field | A cold (evening) | A0 cold (evening) | B cold (evening) |
-| --- | --- | --- | --- |
-| origin | `file:///android_asset/web/index.html` | file `#/home` | `https://appassets.androidplatform.net/assets/web/index.html` then `#/chats/…` |
-| glass | Live | Off | Live |
-| rAF callback_hz / misses / streak | 59.56 / 15 / 15 | 56.6 / 104 / 45 | 58.61 / 44 / 5 |
-| Choreographer | 59.53 / 15 / 15 | 57.27 / 83 / 39 | 59.13 / 28 / 4 |
-| gfxinfo total / janky | 21 / 8 (38.10%) | 779 / 89 (11.42%) | 1278 / 154 (12.05%) |
-| startup ms | 4155 | 29984 (late `onPageFinished` after hash navigation) | 15625 |
-| thermal | 0 | 0 | 0 |
-| memory avail/total MB | 678 / 1965 | 690 / 1965 | 698 / 1965 |
+| Field                             | A cold (evening)                       | A0 cold (evening)                                   | B cold (evening)                                                               |
+| --------------------------------- | -------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------ |
+| origin                            | `file:///android_asset/web/index.html` | file `#/home`                                       | `https://appassets.androidplatform.net/assets/web/index.html` then `#/chats/…` |
+| glass                             | Live                                   | Off                                                 | Live                                                                           |
+| rAF callback_hz / misses / streak | 59.56 / 15 / 15                        | 56.6 / 104 / 45                                     | 58.61 / 44 / 5                                                                 |
+| Choreographer                     | 59.53 / 15 / 15                        | 57.27 / 83 / 39                                     | 59.13 / 28 / 4                                                                 |
+| gfxinfo total / janky             | 21 / 8 (38.10%)                        | 779 / 89 (11.42%)                                   | 1278 / 154 (12.05%)                                                            |
+| startup ms                        | 4155                                   | 29984 (late `onPageFinished` after hash navigation) | 15625                                                                          |
+| thermal                           | 0                                      | 0                                                   | 0                                                                              |
+| memory avail/total MB             | 678 / 1965                             | 690 / 1965                                          | 698 / 1965                                                                     |
 
 Evening A/A0/B classification: **`INVALID_FOR_COMPARISON`**. They violate RFC
 §0.3.1 `same APK content fixture` and `same physical device set and
@@ -173,4 +173,3 @@ settings` comparison rules:
 Physical device set remains **`BLOCKED`** (none attached). Do **not** fold
 these numbers into the morning table or into a Gate P signature. High-refresh
 GPU remains `DATA REQUIRED` until a valid M-1.
-

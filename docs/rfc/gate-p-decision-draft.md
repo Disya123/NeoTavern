@@ -48,15 +48,15 @@ Live backdrop glass on Android is MUST **only** on capability-qualified
 devices, as defined above. Unqualified devices use the allowed degraded
 semantics.
 
-| Object | Status after this signature |
-| --- | --- |
-| Gate P | **`GateP:P1` / PASSED** |
-| Normative M0 | **`ENTERED`** (entry allowed; **not** PASS) |
-| M0-D1a | may start from pinned source; existing PRE-GATE artifacts are **not** PASS |
-| M0-D1b | **`NOT_STARTED`** until D1a PASS |
-| M0-D2 | **`NOT_STARTED`** until D1a and D1b PASS |
-| `D1=Track D GO` | **`NOT_GRANTED`** until M0 PASS and TrackComparison |
-| Production React/WebView, Theme SDK, Plugin SDK | unchanged |
+| Object                                          | Status after this signature                                                |
+| ----------------------------------------------- | -------------------------------------------------------------------------- |
+| Gate P                                          | **`GateP:P1` / PASSED**                                                    |
+| Normative M0                                    | **`ENTERED`** (entry allowed; **not** PASS)                                |
+| M0-D1a                                          | may start from pinned source; existing PRE-GATE artifacts are **not** PASS |
+| M0-D1b                                          | **`NOT_STARTED`** until D1a PASS                                           |
+| M0-D2                                           | **`NOT_STARTED`** until D1a and D1b PASS                                   |
+| `D1=Track D GO`                                 | **`NOT_GRANTED`** until M0 PASS and TrackComparison                        |
+| Production React/WebView, Theme SDK, Plugin SDK | unchanged                                                                  |
 
 ## Required next technical chain (does not reuse PRE-GATE APK)
 
@@ -77,49 +77,49 @@ The signed record above is unchanged. After that signature, host-side
 adjudication of the physical Vulkan capture
 [`m0-d1a-adjudication.json`](m0-d1a-adjudication.json) set:
 
-| Object | Status after D1a admission |
-| --- | --- |
-| Gate P | still **`GateP:P1` / PASSED** |
-| Normative M0 | still **`ENTERED`**, not PASS |
-| M0-D1a | **PASS** (host-side; probe log `capture=false`) |
-| M0-D1b | **PASS** (see [m0-d1b-adjudication.json](m0-d1b-adjudication.json)); D1a JSON still records `NOT_STARTED` |
-| `D1=Track D GO` | still **`NOT_GRANTED`** |
+| Object          | Status after D1a admission                                                                                |
+| --------------- | --------------------------------------------------------------------------------------------------------- |
+| Gate P          | still **`GateP:P1` / PASSED**                                                                             |
+| Normative M0    | still **`ENTERED`**, not PASS                                                                             |
+| M0-D1a          | **PASS** (host-side; probe log `capture=false`)                                                           |
+| M0-D1b          | **PASS** (see [m0-d1b-adjudication.json](m0-d1b-adjudication.json)); D1a JSON still records `NOT_STARTED` |
+| `D1=Track D GO` | still **`NOT_GRANTED`**                                                                                   |
 
 ## Follow-on after M0-D2 admission (not part of the signed Gate P body)
 
 Host-side adjudication [`m0-d2-adjudication.json`](m0-d2-adjudication.json)
 and [m0-track-comparison.md](m0-track-comparison.md) set:
 
-| Object | Status after D2 admission |
-| --- | --- |
-| Gate P | still **`GateP:P1` / PASSED** (signed body unchanged) |
-| Normative M0 | technical **PASS** |
-| M0-D2 | **PASS** (host-side; probe log `capture=false`) |
-| TrackComparison | **published**; opens `D1=Track D GO` |
-| `D1=Track D GO` | still **`NOT_GRANTED`** |
+| Object          | Status after D2 admission                             |
+| --------------- | ----------------------------------------------------- |
+| Gate P          | still **`GateP:P1` / PASSED** (signed body unchanged) |
+| Normative M0    | technical **PASS**                                    |
+| M0-D2           | **PASS** (host-side; probe log `capture=false`)       |
+| TrackComparison | **published**; opens `D1=Track D GO`                  |
+| `D1=Track D GO` | still **`NOT_GRANTED`**                               |
 
 ## Follow-on after D1/D2 signature (not part of the signed Gate P body)
 
 [`d1-d2-decision.md`](d1-d2-decision.md) / [ADR-0049](../adr/0049-track-d-dioxus-presentation.md):
 
-| Object | Status after D1/D2 signature |
-| --- | --- |
-| Gate P | still **`GateP:P1` / PASSED** (signed body unchanged) |
-| `D1=Track D GO` | **GRANTED** |
-| `D2=Dioxus+Blitz GO` | **GRANTED** |
-| `D3` | **DEFERRED** |
-| Production WebView/React | rollback default; cutover not declared |
+| Object                   | Status after D1/D2 signature                          |
+| ------------------------ | ----------------------------------------------------- |
+| Gate P                   | still **`GateP:P1` / PASSED** (signed body unchanged) |
+| `D1=Track D GO`          | **GRANTED**                                           |
+| `D2=Dioxus+Blitz GO`     | **GRANTED**                                           |
+| `D3`                     | **DEFERRED**                                          |
+| Production WebView/React | rollback default; cutover not declared                |
 
 ## Classified input evidence (unchanged by this signature)
 
-| Track | Evidence status | What may be cited | Must not be cited as |
-| --- | --- | --- | --- |
-| A morning AVD (58 337 647 B APK, HostConnect) | `MEASURED` emulator-only 60 Hz | rAF ≈ 57.5; live glass on `file://` | high-refresh cost; Gate P device-set complete |
-| A0 morning AVD (same APK) | `MEASURED` emulator-only | rAF ≈ 57.8; glass Off | product-level live-glass delta |
-| B morning AVD (same APK) | `MEASURED` emulator-only | AssetLoader HTTPS loaded | compositor upgrade |
-| A/A0/B evening AVD | **`INVALID_FOR_COMPARISON`** | raw dumps exist | A vs A0 vs B, or vs morning table |
-| Physical low/mid + high-refresh | **`BLOCKED`** | none attached | a valid M-1 PASS |
-| C | `NOT MEASURED` | — | native-toolkit GO |
-| D / D1a AVD evening APK | **`BLOCKED / NON-ADMISSIBLE`** | older `.so`, no `timeline=` | D1a PASS |
-| D / D1a desktop Vulkan | `PRE-GATE / BLOCKED` | API timeline; 0 readback / 0 xdev | AGI/RenderDoc; Android production backend |
-| D / D1a physical Vulkan (Adreno 710) | **PASS** (host-side 2026-08-17) | RenderDoc `.rdc` + XML; eight checks | M0 PASS; `D1=Track D GO`; probe `capture=true` |
+| Track                                         | Evidence status                 | What may be cited                    | Must not be cited as                           |
+| --------------------------------------------- | ------------------------------- | ------------------------------------ | ---------------------------------------------- |
+| A morning AVD (58 337 647 B APK, HostConnect) | `MEASURED` emulator-only 60 Hz  | rAF ≈ 57.5; live glass on `file://`  | high-refresh cost; Gate P device-set complete  |
+| A0 morning AVD (same APK)                     | `MEASURED` emulator-only        | rAF ≈ 57.8; glass Off                | product-level live-glass delta                 |
+| B morning AVD (same APK)                      | `MEASURED` emulator-only        | AssetLoader HTTPS loaded             | compositor upgrade                             |
+| A/A0/B evening AVD                            | **`INVALID_FOR_COMPARISON`**    | raw dumps exist                      | A vs A0 vs B, or vs morning table              |
+| Physical low/mid + high-refresh               | **`BLOCKED`**                   | none attached                        | a valid M-1 PASS                               |
+| C                                             | `NOT MEASURED`                  | —                                    | native-toolkit GO                              |
+| D / D1a AVD evening APK                       | **`BLOCKED / NON-ADMISSIBLE`**  | older `.so`, no `timeline=`          | D1a PASS                                       |
+| D / D1a desktop Vulkan                        | `PRE-GATE / BLOCKED`            | API timeline; 0 readback / 0 xdev    | AGI/RenderDoc; Android production backend      |
+| D / D1a physical Vulkan (Adreno 710)          | **PASS** (host-side 2026-08-17) | RenderDoc `.rdc` + XML; eight checks | M0 PASS; `D1=Track D GO`; probe `capture=true` |

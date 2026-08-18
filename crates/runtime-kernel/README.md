@@ -53,7 +53,7 @@ only implements the in-process dispatch semantics.
   (ТЗ §11.1: no HTTP/port); `call(operation_id, request, cancel)` pass-through.
 - `generation` — Phase 6 durable generation workflows: state machine
   (`queued → preparing → streaming → completed | failed | cancelling →
-  cancelled`, plus `interrupted` via startup recovery), CAS transitions by
+cancelled`, plus `interrupted` via startup recovery), CAS transitions by
   `revision`, provider routing through the Phase 7 `ProviderRegistry`
   (deterministic built-in fake), per-step durable commits, atomic
   terminal commits (final message + terminal event in one transaction), lease
@@ -189,14 +189,14 @@ adapter resolved from the run's `provider` field (default `fake`).
   `CancellationFlag` is exposed to the adapter as a `CancelToken`.
 - **Provider error mapping** (kernel `ErrorDto` codes in `generation.failed`):
 
-  | Provider SDK error | Wire code | Params |
-  |---|---|---|
-  | `StepFailed` | `PROVIDER_STEP_FAILED` | `runId`, `step` (when present) |
-  | `Timeout` | `PROVIDER_TIMEOUT` | `runId` |
-  | `NetworkFault` | `PROVIDER_NETWORK_FAULT` | `runId` |
-  | `Unavailable` | `PROVIDER_UNAVAILABLE` | `provider` |
-  | `RequestInvalid` | `PROVIDER_MODEL_INVALID` | `model` |
-  | `Cancelled` | cancelled terminal (`generation.cancelled`) | — |
+  | Provider SDK error | Wire code                                   | Params                         |
+  | ------------------ | ------------------------------------------- | ------------------------------ |
+  | `StepFailed`       | `PROVIDER_STEP_FAILED`                      | `runId`, `step` (when present) |
+  | `Timeout`          | `PROVIDER_TIMEOUT`                          | `runId`                        |
+  | `NetworkFault`     | `PROVIDER_NETWORK_FAULT`                    | `runId`                        |
+  | `Unavailable`      | `PROVIDER_UNAVAILABLE`                      | `provider`                     |
+  | `RequestInvalid`   | `PROVIDER_MODEL_INVALID`                    | `model`                        |
+  | `Cancelled`        | cancelled terminal (`generation.cancelled`) | —                              |
 
   An unknown `provider` field (no registered adapter) fails the run with
   `PROVIDER_UNAVAILABLE` — unchanged product behavior. Secret values never

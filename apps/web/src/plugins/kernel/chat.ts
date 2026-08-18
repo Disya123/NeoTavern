@@ -18,11 +18,7 @@ import { kernel } from '@neotavern/plugin-sdk';
 import type { CursorPage, Message } from '@neotavern/contracts';
 import { legacyRaw } from '../../api/backend.js';
 import { ApiError } from '../../api/client.js';
-import {
-  commitMessageDraft,
-  discardMessageDraft,
-  saveMessageDraft,
-} from '../../api/wireBridge.js';
+import { commitMessageDraft, discardMessageDraft, saveMessageDraft } from '../../api/wireBridge.js';
 import type { KernelHostContext } from './types.js';
 
 const { KernelError, KernelErrorCode } = kernel;
@@ -107,7 +103,10 @@ export function attachChat(ctx: KernelHostContext): void {
     const chatId = ctx.currentChatId();
     if (!chatId) return null;
     try {
-      const chat = await legacyRaw().request<ChatMeta>('GET', `/chats/${encodeURIComponent(chatId)}`);
+      const chat = await legacyRaw().request<ChatMeta>(
+        'GET',
+        `/chats/${encodeURIComponent(chatId)}`,
+      );
       return { chatId, title: chat.title };
     } catch (error) {
       if (

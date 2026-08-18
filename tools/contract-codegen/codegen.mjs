@@ -725,12 +725,7 @@ function emitStructLines(schema, typeName, ctx) {
     lines.push('#[serde(deny_unknown_fields)]');
   }
   if (tolerant) {
-    lines.push(
-      '#[serde(transparent)]',
-      `pub struct ${typeName} {`,
-      '    pub payload: Value,',
-      '}',
-    );
+    lines.push('#[serde(transparent)]', `pub struct ${typeName} {`, '    pub payload: Value,', '}');
     return lines;
   }
   const fieldLines = [];
@@ -914,13 +909,11 @@ function emitGeneratedRs(registryIds, operations, schemas, formatPatterns) {
     '    format!("{}{}{}", path, if path.is_empty() { "" } else { "/" }, key)',
     '}',
   ].join('\n');
-  return [
-    HEADER.trimEnd(),
-    joinPath,
-    emitLimits(operations),
-    ...helperBlocks,
-    ...mainBlocks,
-  ].join('\n\n') + '\n';
+  return (
+    [HEADER.trimEnd(), joinPath, emitLimits(operations), ...helperBlocks, ...mainBlocks].join(
+      '\n\n',
+    ) + '\n'
+  );
 }
 
 /**
@@ -933,8 +926,12 @@ function emitGeneratedRs(registryIds, operations, schemas, formatPatterns) {
 function emitLimits(operations) {
   const reqMax = Math.max(...operations.map((op) => op.requestLimitBytes));
   const respMax = Math.max(...operations.map((op) => op.responseLimitBytes));
-  const reqLines = operations.map((op) => `        "${op.operationId}" => Some(${op.requestLimitBytes}),`);
-  const respLines = operations.map((op) => `        "${op.operationId}" => Some(${op.responseLimitBytes}),`);
+  const reqLines = operations.map(
+    (op) => `        "${op.operationId}" => Some(${op.requestLimitBytes}),`,
+  );
+  const respLines = operations.map(
+    (op) => `        "${op.operationId}" => Some(${op.responseLimitBytes}),`,
+  );
   return [
     '/// The maximum request byte limit across the registry (generated).',
     `pub const DEFAULT_REQUEST_LIMIT_BYTES: u64 = ${reqMax};`,

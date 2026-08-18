@@ -46,10 +46,7 @@ export default defineConfig({
   outputDir: shardOutputDir,
   forbidOnly: Boolean(process.env['CI']),
   retries: process.env['CI'] ? 2 : 0,
-  reporter: [
-    ['list'],
-    ['html', { open: 'never', outputFolder: resolve(shardReportDir) }],
-  ],
+  reporter: [['list'], ['html', { open: 'never', outputFolder: resolve(shardReportDir) }]],
   use: {
     baseURL: `http://127.0.0.1:${shardPort}`,
     trace: 'retain-on-failure',

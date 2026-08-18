@@ -53,7 +53,9 @@ describe('input-to-present parser', () => {
     const ops = joinOpportunities({
       cookies: parsed.cookies,
       presents: parsed.presents,
-      timelineRows: [{ ts: 1_000_005_000, dur: 200, display_frame_token: 440, jank_type: JANK.NONE }],
+      timelineRows: [
+        { ts: 1_000_005_000, dur: 200, display_frame_token: 440, jank_type: JANK.NONE },
+      ],
       clock: { domain: 'monotonic', delta_boot_minus_mono: 0, aligned: true },
     });
     expect(ops).toHaveLength(1);
@@ -69,7 +71,9 @@ describe('input-to-present parser', () => {
     const parsed = parseLogcat(log);
     const fixture = buildFixture({
       parsed,
-      timelineRows: [{ ts: 1_000_005_000, dur: 200, display_frame_token: 440, jank_type: JANK.NONE }],
+      timelineRows: [
+        { ts: 1_000_005_000, dur: 200, display_frame_token: 440, jank_type: JANK.NONE },
+      ],
       statsRows: [
         { name: 'traced_buf_lost_packets', value: 0 },
         { name: 'traced_buf_bytes_overwritten', value: 0 },

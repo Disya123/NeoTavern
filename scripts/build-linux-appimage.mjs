@@ -45,11 +45,19 @@ const bin = resolve(target, 'neotavern');
 const triple = process.env.TARGET_TRIPLE ?? 'x86_64-unknown-linux-gnu';
 const sidecarSrc = resolve(tauriRoot, `binaries/neotavern-server-${triple}`);
 
-if (!(await stat(sidecarSrc).then(() => true, () => false))) {
+if (
+  !(await stat(sidecarSrc).then(
+    () => true,
+    () => false,
+  ))
+) {
   throw new Error(`sidecar not found: ${sidecarSrc} (run pnpm desktop:prepare first)`);
 }
 
-const sha256 = async (p) => createHash('sha256').update(await readFile(p)).digest('hex');
+const sha256 = async (p) =>
+  createHash('sha256')
+    .update(await readFile(p))
+    .digest('hex');
 
 function run(cmd, args, opts = {}) {
   const { quiet = false, ...spawnOpts } = opts;
@@ -61,9 +69,7 @@ function run(cmd, args, opts = {}) {
   if (r.error) throw r.error;
 
   if (r.status !== 0) {
-    const outcome = r.signal
-      ? `terminated by ${r.signal}`
-      : `exited with ${r.status}`;
+    const outcome = r.signal ? `terminated by ${r.signal}` : `exited with ${r.status}`;
 
     throw new Error(`${cmd} ${args.join(' ')} ${outcome}`);
   }
@@ -72,11 +78,7 @@ function run(cmd, args, opts = {}) {
 }
 
 function runProcessGroup(cmd, args, opts = {}) {
-  const {
-    quiet = false,
-    timeoutMs = 10 * 60_000,
-    ...spawnOpts
-  } = opts;
+  const { quiet = false, timeoutMs = 10 * 60_000, ...spawnOpts } = opts;
 
   return new Promise((resolveRun, rejectRun) => {
     const child = spawn(cmd, args, {
@@ -134,9 +136,7 @@ function runProcessGroup(cmd, args, opts = {}) {
         return;
       }
 
-      const outcome = signal
-        ? `terminated by ${signal}`
-        : `exited with ${code}`;
+      const outcome = signal ? `terminated by ${signal}` : `exited with ${code}`;
 
       settle(new Error(`${cmd} ${args.join(' ')} ${outcome}`));
     });
@@ -161,11 +161,7 @@ function runProcessGroup(cmd, args, opts = {}) {
           return;
         }
 
-        settle(
-          new Error(
-            `${cmd} ${args.join(' ')} timed out after ${timeoutMs} ms`,
-          ),
-        );
+        settle(new Error(`${cmd} ${args.join(' ')} timed out after ${timeoutMs} ms`));
       }, 5_000);
     }, timeoutMs);
   });
@@ -174,11 +170,9 @@ function runProcessGroup(cmd, args, opts = {}) {
 function dumpProcessTree(child) {
   console.error('[appimage] linuxdeploy timed out; process tree snapshot:');
 
-  spawnSync(
-    'ps',
-    ['-eo', 'pid,ppid,pgid,sid,stat,wchan:32,etime,cmd', '--forest'],
-    { stdio: 'inherit' },
-  );
+  spawnSync('ps', ['-eo', 'pid,ppid,pgid,sid,stat,wchan:32,etime,cmd', '--forest'], {
+    stdio: 'inherit',
+  });
 
   try {
     spawnSync('pstree', ['-ap', String(child.pid)], { stdio: 'inherit' });
@@ -206,22 +200,15 @@ function cleanAppImageRuntimeEnv() {
 }
 
 async function runExtractedLinuxdeploy() {
-  const linuxdeployAppImage = join(
-    toolsDir,
-    `linuxdeploy-${arch}.AppImage`,
-  );
+  const linuxdeployAppImage = join(toolsDir, `linuxdeploy-${arch}.AppImage`);
 
-  const extractionDir = await mkdtemp(
-    join(tmpdir(), 'neotavern-linuxdeploy-'),
-  );
+  const extractionDir = await mkdtemp(join(tmpdir(), 'neotavern-linuxdeploy-'));
 
   try {
     const extractionEnv = cleanAppImageRuntimeEnv();
     extractionEnv.ARCH = arch;
 
-    console.log(
-      `[appimage] Extracting linuxdeploy payload from ${linuxdeployAppImage}`,
-    );
+    console.log(`[appimage] Extracting linuxdeploy payload from ${linuxdeployAppImage}`);
 
     run(linuxdeployAppImage, ['--appimage-extract'], {
       cwd: extractionDir,
@@ -231,15 +218,9 @@ async function runExtractedLinuxdeploy() {
       killSignal: 'SIGKILL',
     });
 
-    const extractedRoot = join(
-      extractionDir,
-      'squashfs-root',
-    );
+    const extractedRoot = join(extractionDir, 'squashfs-root');
 
-    const linuxdeployElf = join(
-      extractedRoot,
-      'usr/bin/linuxdeploy',
-    );
+    const linuxdeployElf = join(extractedRoot, 'usr/bin/linuxdeploy');
 
     await access(linuxdeployElf, constants.X_OK);
 
@@ -345,29 +326,19 @@ async function runExtractedLinuxdeploy() {
 
     // Stage 1: base dependency deployment, no plugins. The GTK plugin's
     // re-entry was the recursion source, so it is invoked directly in stage 2.
-    console.log(
-      `[appimage] Stage 1: raw linuxdeploy ELF (no plugins): ${linuxdeployElf}`,
-    );
-    await runProcessGroup(
-      linuxdeployElf,
-      ['--verbosity', '1', '--appdir', appDir],
-      {
-        env,
-        timeoutMs: 10 * 60_000,
-      },
-    );
+    console.log(`[appimage] Stage 1: raw linuxdeploy ELF (no plugins): ${linuxdeployElf}`);
+    await runProcessGroup(linuxdeployElf, ['--verbosity', '1', '--appdir', appDir], {
+      env,
+      timeoutMs: 10 * 60_000,
+    });
 
     // Stage 2: the GTK plugin, run directly; its re-invocation goes through
     // the guarded wrapper, so the chain is at most plugin -> wrapper -> ELF.
     console.log(`[appimage] Stage 2: GTK plugin (direct): ${gtkPlugin}`);
-    await runProcessGroup(
-      'bash',
-      [gtkPlugin, '--appdir', appDir],
-      {
-        env: { ...env, LINUXDEPLOY: reentry },
-        timeoutMs: 10 * 60_000,
-      },
-    );
+    await runProcessGroup('bash', [gtkPlugin, '--appdir', appDir], {
+      env: { ...env, LINUXDEPLOY: reentry },
+      timeoutMs: 10 * 60_000,
+    });
   } finally {
     await rm(extractionDir, {
       recursive: true,
@@ -377,7 +348,12 @@ async function runExtractedLinuxdeploy() {
 }
 
 async function download(url, dest) {
-  if (await stat(dest).then(() => true, () => false)) {
+  if (
+    await stat(dest).then(
+      () => true,
+      () => false,
+    )
+  ) {
     return;
   }
 
@@ -385,17 +361,9 @@ async function download(url, dest) {
     recursive: true,
   });
 
-  run('curl', [
-    '-fsSL',
-    '-o',
-    dest,
-    url,
-  ]);
+  run('curl', ['-fsSL', '-o', dest, url]);
 
-  run('chmod', [
-    '+x',
-    dest,
-  ]);
+  run('chmod', ['+x', dest]);
 }
 
 // 0. Fetch bundler tools (idempotent; warm ~/.cache/tauri on the runner)
@@ -420,36 +388,20 @@ await rm(appDir, {
   force: true,
 });
 
-await mkdir(
-  join(appDir, 'usr/bin'),
-  {
-    recursive: true,
-  },
-);
+await mkdir(join(appDir, 'usr/bin'), {
+  recursive: true,
+});
 
-await mkdir(
-  join(appDir, 'usr/lib', product, 'resources'),
-  {
-    recursive: true,
-  },
-);
+await mkdir(join(appDir, 'usr/lib', product, 'resources'), {
+  recursive: true,
+});
 
-await copyFile(
-  bin,
-  join(appDir, 'usr/bin/neotavern'),
-);
+await copyFile(bin, join(appDir, 'usr/bin/neotavern'));
 
-await copyFile(
-  sidecarSrc,
-  join(appDir, 'usr/bin/neotavern-server'),
-);
+await copyFile(sidecarSrc, join(appDir, 'usr/bin/neotavern-server'));
 
-const resources = JSON.parse(
-  await readFile(
-    resolve(tauriRoot, 'tauri.conf.json'),
-    'utf8',
-  ),
-).bundle.resources ?? [];
+const resources =
+  JSON.parse(await readFile(resolve(tauriRoot, 'tauri.conf.json'), 'utf8')).bundle.resources ?? [];
 
 for (const pattern of resources) {
   const [dir] = pattern.split('/**');
@@ -461,29 +413,12 @@ for (const pattern of resources) {
   // strip the resources/ base
   const rel = dir.replace(/^resources\//, '');
 
-  run(
-    'cp',
-    [
-      '-r',
-      resolve(tauriRoot, dir),
-      join(
-        appDir,
-        'usr/lib',
-        product,
-        'resources',
-        rel,
-      ),
-    ],
-    {
-      quiet: true,
-    },
-  );
+  run('cp', ['-r', resolve(tauriRoot, dir), join(appDir, 'usr/lib', product, 'resources', rel)], {
+    quiet: true,
+  });
 }
 
-await copyFile(
-  resolve(tauriRoot, 'icons/128x128.png'),
-  join(appDir, `${product}.png`),
-);
+await copyFile(resolve(tauriRoot, 'icons/128x128.png'), join(appDir, `${product}.png`));
 
 await writeFile(
   join(appDir, `${product}.desktop`),
@@ -498,49 +433,33 @@ await writeFile(
   ].join('\n'),
 );
 
-await copyFile(
-  join(toolsDir, `AppRun-${arch}`),
-  join(appDir, 'AppRun'),
-);
+await copyFile(join(toolsDir, `AppRun-${arch}`), join(appDir, 'AppRun'));
 
-run(
-  'chmod',
-  [
-    '+x',
-    join(appDir, 'AppRun'),
-    join(appDir, 'usr/bin/neotavern'),
-    join(appDir, 'usr/bin/neotavern-server'),
-  ],
-);
+run('chmod', [
+  '+x',
+  join(appDir, 'AppRun'),
+  join(appDir, 'usr/bin/neotavern'),
+  join(appDir, 'usr/bin/neotavern-server'),
+]);
 
 // 2. linuxdeploy deploy-only: base deps (stage 1) + GTK plugin direct (stage 2),
 //    both without the AppImage runtime and with guarded re-entry
 await runExtractedLinuxdeploy();
 
 // 3. Restore pristine sidecar + verify (CI invariant)
-const sidecarInApp = join(
-  appDir,
-  'usr/bin/neotavern-server',
-);
+const sidecarInApp = join(appDir, 'usr/bin/neotavern-server');
 
 const before = await sha256(sidecarSrc);
 
-await copyFile(
-  sidecarSrc,
-  sidecarInApp,
-);
+await copyFile(sidecarSrc, sidecarInApp);
 
 const after = await sha256(sidecarInApp);
 
 if (before !== after) {
-  throw new Error(
-    'sidecar sha256 mismatch after restore',
-  );
+  throw new Error('sidecar sha256 mismatch after restore');
 }
 
-console.log(
-  `sidecar restored: ${before} (${before === after ? 'ok' : 'MISMATCH'})`,
-);
+console.log(`sidecar restored: ${before} (${before === after ? 'ok' : 'MISMATCH'})`);
 
 // 4. appimagetool
 await download(
@@ -555,11 +474,7 @@ appImageToolEnv.APPIMAGE_EXTRACT_AND_RUN = '1';
 
 run(
   join(toolsDir, `appimagetool-${arch}.AppImage`),
-  [
-    '--appimage-extract-and-run',
-    appDir,
-    outAppImage,
-  ],
+  ['--appimage-extract-and-run', appDir, outAppImage],
   {
     env: appImageToolEnv,
   },
@@ -567,28 +482,23 @@ run(
 
 const appImageSha = await sha256(outAppImage);
 
-console.log(
-  `AppImage: ${outAppImage} (${appImageSha})`,
-);
+console.log(`AppImage: ${outAppImage} (${appImageSha})`);
 
 // 5. Sign (updater) when the key is provided
 const privKey = process.env.TAURI_SIGNING_PRIVATE_KEY;
 
 if (privKey) {
-  run(
-    'pnpm',
-    [
-      '--dir',
-      desktop,
-      'exec',
-      'tauri',
-      'signer',
-      'sign',
-      '-k',
-      privKey,
-      '-p',
-      process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD ?? '',
-      outAppImage,
-    ],
-  );
+  run('pnpm', [
+    '--dir',
+    desktop,
+    'exec',
+    'tauri',
+    'signer',
+    'sign',
+    '-k',
+    privKey,
+    '-p',
+    process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD ?? '',
+    outAppImage,
+  ]);
 }

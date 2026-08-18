@@ -134,7 +134,14 @@ function launchProbe(adbBin, serial) {
 }
 
 function logcatDump(adbBin, serial) {
-  const result = adb(adbBin, serial, ['logcat', '-d', '-s', 'NeoTavern:I', 'renderdoc:I', 'RenderDoc:I']);
+  const result = adb(adbBin, serial, [
+    'logcat',
+    '-d',
+    '-s',
+    'NeoTavern:I',
+    'renderdoc:I',
+    'RenderDoc:I',
+  ]);
   return `${result.stdout || ''}\n${result.stderr || ''}`;
 }
 
@@ -179,14 +186,7 @@ function capturePathFromLog(log) {
 
 function listCaptureCandidates(adbBin, serial) {
   const found = [];
-  const viaRunAs = adb(adbBin, serial, [
-    'shell',
-    'run-as',
-    PACKAGE,
-    'sh',
-    '-c',
-    'ls -1 files',
-  ]);
+  const viaRunAs = adb(adbBin, serial, ['shell', 'run-as', PACKAGE, 'sh', '-c', 'ls -1 files']);
   for (const line of (viaRunAs.stdout || '').split(/\r?\n/u)) {
     const name = line.trim().replace(/^\.\//u, '');
     if (name.endsWith('.rdc')) {

@@ -69,14 +69,11 @@ export function renderMarkdownInline(value: string): string {
   // are literal: without this, paired `_`/`*` inside them get consumed by the
   // emphasis/strong passes below and the token text is corrupted.
   const pipeSpans: string[] = [];
-  const withPipesProtected = withCodePlaceholders.replace(
-    /\|([^|\n]*)\|/g,
-    (_, inner: string) => {
-      const token = `@@md-pipe-${pipeSpans.length}@@`;
-      pipeSpans.push(`|${inner}|`);
-      return token;
-    },
-  );
+  const withPipesProtected = withCodePlaceholders.replace(/\|([^|\n]*)\|/g, (_, inner: string) => {
+    const token = `@@md-pipe-${pipeSpans.length}@@`;
+    pipeSpans.push(`|${inner}|`);
+    return token;
+  });
 
   const withQuotes = wrapDialogueQuotes(withPipesProtected);
 

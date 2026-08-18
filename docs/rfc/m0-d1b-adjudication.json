@@ -185,9 +185,7 @@
         "line": "08-18 00:15:19.805 27271 29812 I NeoTavern: m0-d1b gpu_ran=true adapter=Adreno_(TM)_710 backend=Vulkan software=false devices=1 readbacks=0 xdev=0 roi_copies=1001 raster=4 glass=1001 moving_blits=1000 pass_compiles=1 vello_rebuilds=4 layout_rebuilds=0 ui_rebuilds=0 sampled_gen=999 damage=95x88+96x62 frames=1000 ran_on_android=true capture=false timeline=clear,raster,blit,roi:1,glass:1,raster,blit,raster,blit,moving:g0,roi:2,glass:2:g0,raster,blit capture_timeline=restore,moving:g120,roi:2,glass:2:g120,overlay render_polls=0 capture_polls=0 acc_bytes=1046528 verdict=BLOCKED reason=Android_GPU_ran;_GPU_capture_with_pass/resource_order_is_still_required_for_D1a_PASS",
         "reason": "golden D1b counters/timeline; capture bit false; render_polls=0"
       },
-      "vk_device_ids": [
-        "55"
-      ],
+      "vk_device_ids": ["55"],
       "vk_create_image": 5,
       "vk_queue_submit": 4,
       "validation_errors": false,

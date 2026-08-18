@@ -23,7 +23,11 @@
  */
 import { ProductError, TransportError, type StreamEvent } from '@neotavern/client-sdk';
 import { WIRE_SCHEMA_HASH, type ProductErrorDto } from '@neotavern/contracts';
-import { ContractMismatchError, type LocalCallResult, type LocalTransport } from '@neotavern/neobackend';
+import {
+  ContractMismatchError,
+  type LocalCallResult,
+  type LocalTransport,
+} from '@neotavern/neobackend';
 import { buildRequestEnvelope } from './wireEnvelope.js';
 
 export { TransportError };
@@ -220,7 +224,11 @@ export class MobileBridgeTransport implements LocalTransport {
       });
     }
     const handshake = parsed as MobileHandshake;
-    if (handshake === null || typeof handshake !== 'object' || typeof handshake.schemaHash !== 'string') {
+    if (
+      handshake === null ||
+      typeof handshake !== 'object' ||
+      typeof handshake.schemaHash !== 'string'
+    ) {
       throw new TransportError({
         message: 'mobile bridge handshake was malformed',
         retryable: false,
@@ -259,9 +267,7 @@ export class MobileBridgeTransport implements LocalTransport {
     }
     const requestId = this.requestId();
     const callbackId = this.nextCallbackId();
-    const envelopeJson = JSON.stringify(
-      buildRequestEnvelope({ requestId, operationId, payload }),
-    );
+    const envelopeJson = JSON.stringify(buildRequestEnvelope({ requestId, operationId, payload }));
 
     return new Promise<LocalCallResult>((resolvePromise, rejectPromise) => {
       let settled = false;

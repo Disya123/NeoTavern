@@ -16,12 +16,12 @@ This is the **migration / deprecation guide** for ТЗ §20 Этап 6 (ledger
 
 ## What stays until the remaining specs are ported
 
-| Surface                         | Why it still exists                                                                 |
-| ------------------------------- | ----------------------------------------------------------------------------------- |
+| Surface                         | Why it still exists                                                                                              |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `apps/server` Fastify `/api/v2` | `pnpm test:e2e:legacy` (`playwright.legacy.config.ts` / `e2e/legacy/`) — plugins, theme ZIP, echo, context-audit |
-| `packages/db` Drizzle schema    | Legacy adapter for `app.db`                                                         |
-| `legacyRaw()`                   | Unmigrated UI calls tracked in `docs/architecture/operations-inventory.md`          |
-| ADR-0048 / ADR-0047 w7 waivers  | Expire at this stage / the release gate                                             |
+| `packages/db` Drizzle schema    | Legacy adapter for `app.db`                                                                                      |
+| `legacyRaw()`                   | Unmigrated UI calls tracked in `docs/architecture/operations-inventory.md`                                       |
+| ADR-0048 / ADR-0047 w7 waivers  | Expire at this stage / the release gate                                                                          |
 
 ## Cutover sequence (in progress on `pr-m7-etap6-slices`)
 
@@ -46,14 +46,14 @@ These surfaces are the remaining cutover targets. Slice 1 quarantined the
 Playwright Fastify boot into `e2e/legacy/` + `playwright.legacy.config.ts`;
 it did not delete `apps/server`.
 
-| Surface                                                                           | Role until cutover                                                             |
-| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `apps/server`                                                                     | Fastify `/api/v2` product host (desktop sidecar + `pnpm test:e2e:legacy`)      |
-| `packages/db`                                                                     | Drizzle schema for legacy `app.db`                                             |
-| `LegacyBackend` + `legacyRaw()` in `apps/web/src/api/backend.ts`                  | Facade transport for the sidecar                                               |
-| `apps/web/src/api/{client,events,generate,legacyExtensionSettings,wireBridge}.ts` | Remaining `/api/v2` sites (`docs/architecture/ui-legacy-surface.md`)           |
-| ADR-0048 message swipe/draft/revision routes                                      | Deleted with the Fastify product writer                                        |
-| ADR-0047 waiver 7                                                                 | Legacy Fastify product-data ownership — expires at this stage                  |
+| Surface                                                                           | Role until cutover                                                        |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `apps/server`                                                                     | Fastify `/api/v2` product host (desktop sidecar + `pnpm test:e2e:legacy`) |
+| `packages/db`                                                                     | Drizzle schema for legacy `app.db`                                        |
+| `LegacyBackend` + `legacyRaw()` in `apps/web/src/api/backend.ts`                  | Facade transport for the sidecar                                          |
+| `apps/web/src/api/{client,events,generate,legacyExtensionSettings,wireBridge}.ts` | Remaining `/api/v2` sites (`docs/architecture/ui-legacy-surface.md`)      |
+| ADR-0048 message swipe/draft/revision routes                                      | Deleted with the Fastify product writer                                   |
+| ADR-0047 waiver 7                                                                 | Legacy Fastify product-data ownership — expires at this stage             |
 
 Do not delete the versioned SillyTavern Compatibility API until a remaining
 extension surface is proven unused; plugin-compat (`apps/web/src/plugins/**`)

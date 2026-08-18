@@ -7,11 +7,11 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/rfc/b-exit-physica
 **Status:** adjudicated on Xiaomi `8f5c2b7c` / Adreno 710 / Vulkan from
 BOUND debug APK `a6cbae7`. Independent records:
 
-| Criterion   | Record                                                         | Status                                |
-| ----------- | -------------------------------------------------------------- | ------------------------------------- |
+| Criterion   | Record                                                         | Status                                                                |
+| ----------- | -------------------------------------------------------------- | --------------------------------------------------------------------- |
 | PERF-15     | [perf-15-adjudication.json](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/perf-15-adjudication.json)         | `PASS` (reference VisualSurfaceFrameIngress; not PluginVisualSurface) |
-| PERF-22     | [perf-22-adjudication.json](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/perf-22-adjudication.json)         | `PASS`                                |
-| device-loss | [device-loss-adjudication.json](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/device-loss-adjudication.json) | `PASS`                                |
+| PERF-22     | [perf-22-adjudication.json](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/perf-22-adjudication.json)         | `PASS`                                                                |
+| device-loss | [device-loss-adjudication.json](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/device-loss-adjudication.json) | `PASS`                                                                |
 
 Milestone B remains **STARTED**. `almost_pass=false`. Production cutover
 remains **NOT_STARTED**. PERF-15 PASS is the B-level

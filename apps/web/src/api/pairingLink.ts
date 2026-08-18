@@ -35,13 +35,10 @@ export function parsePairingLink(input: string): PairingTarget | null {
     if (inner === null) return null;
     const parsed = parsePairingLink(inner);
     if (parsed === null) return null;
-    return wrapperToken === undefined
-      ? parsed
-      : { baseUrl: parsed.baseUrl, token: wrapperToken };
+    return wrapperToken === undefined ? parsed : { baseUrl: parsed.baseUrl, token: wrapperToken };
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
-  const token =
-    url.searchParams.get('token') ?? url.searchParams.get('access_token') ?? undefined;
+  const token = url.searchParams.get('token') ?? url.searchParams.get('access_token') ?? undefined;
   url.search = '';
   url.hash = '';
   const baseUrl = url.toString().replace(/\/+$/u, '');

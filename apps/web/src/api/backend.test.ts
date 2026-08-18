@@ -124,8 +124,10 @@ describe('backend routing', () => {
 
   it('treats a switched-in RemoteBackend as product-wire mode', async () => {
     vi.resetModules();
-    const [{ RemoteBackend }, { createBackendForProfile, isKernelMode, legacyRaw, setActiveBackend }] =
-      await Promise.all([import('@neotavern/neobackend'), import('./backend.js')]);
+    const [
+      { RemoteBackend },
+      { createBackendForProfile, isKernelMode, legacyRaw, setActiveBackend },
+    ] = await Promise.all([import('@neotavern/neobackend'), import('./backend.js')]);
     const remote = createBackendForProfile({
       id: 'remote',
       kind: 'remote',

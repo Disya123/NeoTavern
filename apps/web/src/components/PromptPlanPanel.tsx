@@ -27,7 +27,12 @@ export function PromptPlanPanel({ open, runId, onClose }: PromptPlanPanelProps) 
   const plan = usePromptPlan(runId ?? undefined);
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+    >
       <DialogContent className={styles.dialog} title={t('chat:promptPlanTitle')}>
         <header className={styles.header}>
           <h2 className={styles.title}>{t('chat:promptPlanTitle')}</h2>
@@ -84,9 +89,8 @@ function PromptPlanContent({ plan }: { plan: PromptPlanDto }) {
         <div className={styles.metaRow}>
           <dt>{t('chat:promptPlanTokens')}</dt>
           <dd>
-            {t('chat:promptPlanInput')} {plan.inputTokens} ·{' '}
-            {t('chat:promptPlanResponseReserve')} {plan.responseReserved} ·{' '}
-            {t('chat:promptPlanContextLimit')} {plan.contextLimit}
+            {t('chat:promptPlanInput')} {plan.inputTokens} · {t('chat:promptPlanResponseReserve')}{' '}
+            {plan.responseReserved} · {t('chat:promptPlanContextLimit')} {plan.contextLimit}
           </dd>
         </div>
       </dl>

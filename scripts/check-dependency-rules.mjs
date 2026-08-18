@@ -27,9 +27,24 @@ const report = (file, rule, detail) =>
 // Transport/UI/server crates that must never appear in the Kernel workspace
 // crate. Any crate that starts with these names is rejected.
 const KERNEL_DEP_DENYLIST = [
-  'tiny_http', 'tokio', 'axum', 'actix', 'warp', 'hyper', 'rocket',
-  'tauri', 'wry', 'fastify', 'express', 'node', 'android', 'ndk', 'jni',
-  'react', 'yew', 'dioxus',
+  'tiny_http',
+  'tokio',
+  'axum',
+  'actix',
+  'warp',
+  'hyper',
+  'rocket',
+  'tauri',
+  'wry',
+  'fastify',
+  'express',
+  'node',
+  'android',
+  'ndk',
+  'jni',
+  'react',
+  'yew',
+  'dioxus',
 ];
 
 const kernelCargo = readFileSync(join(root, 'crates', 'runtime-kernel', 'Cargo.toml'), 'utf8');
@@ -104,4 +119,6 @@ if (violations.length > 0) {
   for (const v of violations) console.error(`  - ${v}`);
   process.exit(1);
 }
-console.log('[dependency-rules] OK — Kernel host-neutral, no platform branching, no Rust/app imports from packages.');
+console.log(
+  '[dependency-rules] OK — Kernel host-neutral, no platform branching, no Rust/app imports from packages.',
+);

@@ -75,19 +75,19 @@ Moving blit is 64×64 into the named accumulator. Glass B ROI copy is
 bounded (`96×60` at dest offset in the capture). No stale `glass:2:g0`
 on that frame. No `vkMapMemory` / image-to-buffer. One `VkDevice`.
 
-| Field | Control | Capture |
-| ----- | ------- | ------- |
-| `frames` | 1000 | 1000 |
-| `devices` / `readbacks` / `xdev` | 1 / 0 / 0 | 1 / 0 / 0 |
-| `moving_blits` | 1000 | 1000 |
-| `pass_compiles` | 1 | 1 |
-| `vello_rebuilds` | 4 | 4 |
-| `layout_rebuilds` / `ui_rebuilds` | 0 / 0 | 0 / 0 |
-| `raster` / `glass` | 4 / 1001 | 4 / 1001 |
-| `render_polls` | 0 | 0 |
-| `capture_polls` | 0 | 1 (after `EndFrameCapture` only) |
-| `acc_bytes` | 1046528 | 1046528 |
-| probe `capture=` | false | false |
+| Field                             | Control   | Capture                          |
+| --------------------------------- | --------- | -------------------------------- |
+| `frames`                          | 1000      | 1000                             |
+| `devices` / `readbacks` / `xdev`  | 1 / 0 / 0 | 1 / 0 / 0                        |
+| `moving_blits`                    | 1000      | 1000                             |
+| `pass_compiles`                   | 1         | 1                                |
+| `vello_rebuilds`                  | 4         | 4                                |
+| `layout_rebuilds` / `ui_rebuilds` | 0 / 0     | 0 / 0                            |
+| `raster` / `glass`                | 4 / 1001  | 4 / 1001                         |
+| `render_polls`                    | 0         | 0                                |
+| `capture_polls`                   | 0         | 1 (after `EndFrameCapture` only) |
+| `acc_bytes`                       | 1046528   | 1046528                          |
+| probe `capture=`                  | false     | false                            |
 
 Host record: `android_gpu_capture=true`, `capture_driver=Vulkan`,
 `d1b_verdict=PASS`. The crate still cannot self-admit.

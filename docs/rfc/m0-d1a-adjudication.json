@@ -185,9 +185,7 @@
         "line": "08-17 23:18:03.609 16293 22340 I NeoTavern: m0-d1a gpu_ran=true adapter=Adreno_(TM)_710 backend=Vulkan software=false devices=1 readbacks=0 xdev=0 roi_copies=200 raster=400 glass=200 frames=100 ran_on_android=true capture=false timeline=clear,raster,blit,roi:1,glass:1,raster,blit,raster,blit,roi:2,glass:2,raster,blit timeline_events=13 first_frame_cpu_us=497590 acc_bytes=774144 verdict=BLOCKED reason=Android_GPU_ran;_GPU_capture_with_pass/resource_order_is_still_required_for_D1a_PASS",
         "reason": "golden D1a counters/timeline"
       },
-      "vk_device_ids": [
-        "55"
-      ],
+      "vk_device_ids": ["55"],
       "vk_create_image": 8,
       "vk_queue_submit": 11,
       "validation_errors": false,

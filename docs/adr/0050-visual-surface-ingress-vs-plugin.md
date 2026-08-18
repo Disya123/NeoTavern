@@ -22,14 +22,14 @@ to start Plugin SDK / IR / untrusted producers early.
 Split two levels. Do **not** lower PERF-15. Do **not** unfreeze D3. Do
 **not** expose this ingress as Plugin SDK.
 
-| Milestone B | Milestone D |
-| --- | --- |
-| Internal `VisualSurfaceFrameIngress` | Public `PluginVisualSurface` |
-| `SurfaceId` / generation / sequence | Plugin API / IR / packages |
-| Bounded latest-ready-frame-wins queue | Permissions / quotas / isolation |
-| Shared-device texture validation | Untrusted producer sandbox |
-| Damage / readiness / retirement | Update / revoke / crash isolation |
-| Trusted reference producer | Real third-party plugins |
+| Milestone B                           | Milestone D                       |
+| ------------------------------------- | --------------------------------- |
+| Internal `VisualSurfaceFrameIngress`  | Public `PluginVisualSurface`      |
+| `SurfaceId` / generation / sequence   | Plugin API / IR / packages        |
+| Bounded latest-ready-frame-wins queue | Permissions / quotas / isolation  |
+| Shared-device texture validation      | Untrusted producer sandbox        |
+| Damage / readiness / retirement       | Update / revoke / crash isolation |
+| Trusted reference producer            | Real third-party plugins          |
 
 Product Wire carries only the **logical** surface declaration and policy.
 It MUST NOT carry GPU handles, `wgpu::Device`, Vulkan/Metal devices, or

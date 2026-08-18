@@ -33,18 +33,18 @@ requirement at runtime against the actually linked library version.
 
 ## Module map
 
-| Module      | Responsibility                                              |
-| ----------- | ----------------------------------------------------------- |
-| `baseline`  | SQLite version gate, `ConnectionPolicy`, connection config + verify |
-| `error`     | `StorageError`/`StorageErrorCode` classification (incl. Busy/DiskFull) |
-| `lease`     | exclusive data-root lease (fs2 lock on `.neotavern.lock`)    |
-| `schema`    | v1–v4 migration SQL literals + fresh-install fingerprint   |
-| `migrations`| migration engine: ledger + checksums, risk classes          |
-| `open`      | inspect / open sequences, read-only recovery open           |
-| `paths`     | data-root layout + managed relative-key validation          |
-| `assets`    | immutable asset protocol, symlink-safe resolution, orphan GC|
-| `snapshot`  | consistent SQLite Online-Backup-API snapshots               |
-| `recovery`  | read-only recovery diagnostics                              |
+| Module       | Responsibility                                                         |
+| ------------ | ---------------------------------------------------------------------- |
+| `baseline`   | SQLite version gate, `ConnectionPolicy`, connection config + verify    |
+| `error`      | `StorageError`/`StorageErrorCode` classification (incl. Busy/DiskFull) |
+| `lease`      | exclusive data-root lease (fs2 lock on `.neotavern.lock`)              |
+| `schema`     | v1–v4 migration SQL literals + fresh-install fingerprint               |
+| `migrations` | migration engine: ledger + checksums, risk classes                     |
+| `open`       | inspect / open sequences, read-only recovery open                      |
+| `paths`      | data-root layout + managed relative-key validation                     |
+| `assets`     | immutable asset protocol, symlink-safe resolution, orphan GC           |
+| `snapshot`   | consistent SQLite Online-Backup-API snapshots                          |
+| `recovery`   | read-only recovery diagnostics                                         |
 
 ## Constraints
 

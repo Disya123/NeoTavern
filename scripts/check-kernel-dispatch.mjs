@@ -43,9 +43,9 @@ function kernelDispatchOps(source) {
       /matches!\(\s*operation_id\s*,\s*"([a-z0-9.]+)"(?:\s*\|\s*"([a-z0-9.]+)")?/g,
     ),
   ].flatMap((match) => [match[1], match[2]].filter((id) => typeof id === 'string'));
-  const dedicated = [
-    ...source.matchAll(/if operation_id == "([a-z0-9.]+)"/g),
-  ].map((match) => match[1]);
+  const dedicated = [...source.matchAll(/if operation_id == "([a-z0-9.]+)"/g)].map(
+    (match) => match[1],
+  );
   return [...new Set([...unary, ...stream, ...dedicated])].sort();
 }
 

@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import type { PluginRuntimeBridgeMessageBody, PluginRuntimeWorkerReady } from '@neotavern/contracts';
+import type {
+  PluginRuntimeBridgeMessageBody,
+  PluginRuntimeWorkerReady,
+} from '@neotavern/contracts';
 import { sha256Hex } from './graph/digest.js';
 import { buildModuleGraph } from './graph/moduleGraphBuilder.js';
 import { PluginRuntimeClient } from './host/runtimeClient.js';

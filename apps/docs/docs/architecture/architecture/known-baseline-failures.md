@@ -4,16 +4,14 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/architecture/known
 
 # Known baseline failures
 
-**Status:** recorded, **not** waived, **not** a green full baseline.
-**Milestone B:** remains **STARTED**. Production cutover remains forbidden.
+**Status:** both listed rows are **FIXED**. This is not Milestone B PASS
+and not a waiver. Production cutover remains forbidden.
 
-These failures do **not** make the independent PERF-18/19/20 physical
-evidence inadmissible (`docs/rfc/perf-18-20-adjudication.json`). They
-**must** be fixed or given an explicit owner/waiver before Milestone B
-PASS. The machine-checkable gate is
+These rows do **not** make the independent PERF-18/19/20 physical
+evidence inadmissible (`docs/rfc/perf-18-20-adjudication.json`). The
+machine-checkable gate is
 [milestone-b-exit.json](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/milestone-b-exit.json); it will not stamp
-`Milestone B = PASS` while these rows are `OPEN`. Do not mass-format or silently skip them as part of an unrelated
-slice.
+`Milestone B = PASS` while remaining PERF evidence is missing.
 
 ## `KNOWN_BASELINE_FAILURE` — Prettier mass drift
 
@@ -22,12 +20,16 @@ slice.
 | Id          | `prettier-mass-drift`                                                                                                                            |
 | Command     | `pnpm format:check`                                                                                                                              |
 | Fingerprint | Prettier `--check` fails on a large **pre-existing** set of files (hundreds), not on the PERF-18/19/20 probe/adjudication or this recovery slice |
-| Owner       | unassigned; required before Milestone B PASS                                                                                                     |
+| Owner       | presentation / docs                                                                                                                              |
+| Status      | **FIXED**                                                                                                                                        |
 | Waiver      | none                                                                                                                                             |
 
-Do not run `pnpm format` across the tree as a drive-by. A dedicated slice
-must either restore a clean Prettier baseline or record an owner/waiver
-with a deadline.
+Generated, vendor, and capture artifacts are ignored **by path with a
+reason** in `.prettierignore` (codegen fixtures, the Docusaurus
+`docs/` mirror, the generated capability matrix, `crates/vendor/`,
+starter JSON, the local TZ dump). Maintained source and `docs/` were
+formatted in a dedicated style commit. Broad masks such as `docs/**` or
+`crates/**` are not used. `pnpm format:check` is green.
 
 ## `KNOWN_BASELINE_FAILURE` — `runtime-kernel::diagnostics_export_counts_generation_runs`
 

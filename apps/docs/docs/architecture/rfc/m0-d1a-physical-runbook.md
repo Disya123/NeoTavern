@@ -10,12 +10,12 @@ the probe logcat bit. PRE-GATE desktop/AVD artifacts stay unadmitted. D1b
 may start; it is `NOT_STARTED` in the D1a JSON. `D1=Track D GO` is not
 granted.
 
-| Split                 | Status             | Meaning                                                                                                       |
-| --------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------- |
-| `capture_host`        | **`READY`**        | RenderDoc **v1.45** pinned at `E:\renderdoc`, AGI 3.3.3 archived at `E:\agi`, Java ≥ 11, adb, bound debug APK |
-| `physical_device`     | Xiaomi `8f5c2b7c`  | Emulators remain excluded. Capture used Adreno 710 / Vulkan.                                                  |
-| D1a program           | **PASS**           | Host adjudicator admitted the Vulkan Event Browser tree                                                       |
-| `android_gpu_capture` | **true** (host)    | Probe log stays `capture=false`; only the admission record flips this bit                                     |
+| Split                 | Status            | Meaning                                                                                                       |
+| --------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------- |
+| `capture_host`        | **`READY`**       | RenderDoc **v1.45** pinned at `E:\renderdoc`, AGI 3.3.3 archived at `E:\agi`, Java ≥ 11, adb, bound debug APK |
+| `physical_device`     | Xiaomi `8f5c2b7c` | Emulators remain excluded. Capture used Adreno 710 / Vulkan.                                                  |
+| D1a program           | **PASS**          | Host adjudicator admitted the Vulkan Event Browser tree                                                       |
+| `android_gpu_capture` | **true** (host)   | Probe log stays `capture=false`; only the admission record flips this bit                                     |
 
 **RFC:** [neoui-v4-android-presentation-backend.md](neoui-v4-android-presentation-backend.md) §48  
 **Decision:** [gate-p-decision-draft.md](gate-p-decision-draft.md)  
@@ -258,15 +258,15 @@ them.
 
 Recorded 2026-08-17 after host-side adjudication of RenderDoc v1.45:
 
-| Need               | This host                                                                         |
-| ------------------ | --------------------------------------------------------------------------------- |
-| Physical Android   | Xiaomi `8f5c2b7c` (`23122PCD1G`, Adreno 710); emulators excluded                  |
-| RenderDoc          | **pinned** v1.45 at `E:\renderdoc`                                                |
-| AGI                | **archived** 3.3.3 at `E:\agi` — `.gfxtrace` is `CAPTURED_BUT_NOT_REPLAYABLE`     |
-| Full SDK / NDK     | present at `E:\android_sdk` (NDK 27–29)                                           |
-| Gradle 8.9 on PATH | unpacked under `%TEMP%\gradle-8.9\` (repo has no `gradlew`)                       |
-| Readable GPU tree  | **admitted** — Event Browser shows both ROI reads and accumulator/ROI identity    |
-| Paid device farm   | not used                                                                          |
+| Need               | This host                                                                      |
+| ------------------ | ------------------------------------------------------------------------------ |
+| Physical Android   | Xiaomi `8f5c2b7c` (`23122PCD1G`, Adreno 710); emulators excluded               |
+| RenderDoc          | **pinned** v1.45 at `E:\renderdoc`                                             |
+| AGI                | **archived** 3.3.3 at `E:\agi` — `.gfxtrace` is `CAPTURED_BUT_NOT_REPLAYABLE`  |
+| Full SDK / NDK     | present at `E:\android_sdk` (NDK 27–29)                                        |
+| Gradle 8.9 on PATH | unpacked under `%TEMP%\gradle-8.9\` (repo has no `gradlew`)                    |
+| Readable GPU tree  | **admitted** — Event Browser shows both ROI reads and accumulator/ROI identity |
+| Paid device farm   | not used                                                                       |
 
 Program D1a is **PASS**. The probe still logs `android_gpu_capture=false`.
 Flip that bit only in the evidence-admission record (already done).

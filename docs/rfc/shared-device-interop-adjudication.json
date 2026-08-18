@@ -28,9 +28,7 @@
           "id": "one_vk_device",
           "ok": true,
           "devices": 1,
-          "vk_device_ids": [
-            "55"
-          ],
+          "vk_device_ids": ["55"],
           "reason": "probe devices=1 and RenderDoc shows at most one VkDevice"
         },
         {

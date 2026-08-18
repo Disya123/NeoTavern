@@ -12,7 +12,12 @@
  * not here.
  */
 import { create } from 'zustand';
-import { LocalBackend, UnsupportedError, type LocalTransport, type NeoBackend } from '@neotavern/neobackend';
+import {
+  LocalBackend,
+  UnsupportedError,
+  type LocalTransport,
+  type NeoBackend,
+} from '@neotavern/neobackend';
 import { isMobileShell } from '../lib/mobile.js';
 import { readRemoteToken } from './hostSession.js';
 import { MobileBridgeTransport } from './mobileTransport.js';

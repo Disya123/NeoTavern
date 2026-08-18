@@ -106,9 +106,7 @@ async function copyNativeSharpRuntime(target) {
   try {
     // NB: @img/sharp-libvips-* exports only "./lib", "./package" and
     // "./versions" — "./package.json" is NOT exported (ERR_PACKAGE_PATH_NOT_EXPORTED).
-    const libvipsRoot = await findPackageRoot(
-      sharpRequire.resolve(`${libvipsPackage}/lib`),
-    );
+    const libvipsRoot = await findPackageRoot(sharpRequire.resolve(`${libvipsPackage}/lib`));
     packageNames.push(libvipsPackage);
     packageRoots.push(libvipsRoot);
   } catch {

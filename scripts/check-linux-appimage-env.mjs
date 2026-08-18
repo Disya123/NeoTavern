@@ -50,7 +50,10 @@ const version = JSON.parse(await readFile(resolve(tauriRoot, 'tauri.conf.json'),
 const outAppImage = resolve(target, 'bundle/appimage', `NeoTavern_${version}_amd64.AppImage`);
 
 const results = [];
-const sha256 = async (p) => createHash('sha256').update(await readFile(p)).digest('hex');
+const sha256 = async (p) =>
+  createHash('sha256')
+    .update(await readFile(p))
+    .digest('hex');
 const sha256Sync = (buf) => createHash('sha256').update(buf).digest('hex');
 
 function pass(name, detail = '') {
@@ -83,16 +86,38 @@ const bin = resolve(target, 'neotavern');
 const sidecarSrc = resolve(tauriRoot, `binaries/neotavern-server-${triple}`);
 check(
   'binaries present',
-  await stat(bin).then(() => true, () => false) &&
-    await stat(sidecarSrc).then(() => true, () => false),
+  (await stat(bin).then(
+    () => true,
+    () => false,
+  )) &&
+    (await stat(sidecarSrc).then(
+      () => true,
+      () => false,
+    )),
   `expected ${bin} and ${sidecarSrc} (run pnpm desktop:prepare first)`,
 );
 
 // --- 2. tools --------------------------------------------------------------
 const requiredTools = [
-  'bash', 'curl', 'env', 'find', 'ldd', 'mktemp', 'readelf', 'file',
-  'sed', 'cp', 'ln', 'chmod', 'patchelf', 'strip', 'pkgconf', 'pkg-config',
-  'glib-compile-schemas', 'timeout', 'ps',
+  'bash',
+  'curl',
+  'env',
+  'find',
+  'ldd',
+  'mktemp',
+  'readelf',
+  'file',
+  'sed',
+  'cp',
+  'ln',
+  'chmod',
+  'patchelf',
+  'strip',
+  'pkgconf',
+  'pkg-config',
+  'glib-compile-schemas',
+  'timeout',
+  'ps',
 ];
 const missingTools = requiredTools.filter((t) => !which(t));
 check(
@@ -102,7 +127,12 @@ check(
 );
 
 // --- 3./4. environment notes (the pipeline handles both) --------------------
-if (await stat('/dev/fuse').then(() => true, () => false)) {
+if (
+  await stat('/dev/fuse').then(
+    () => true,
+    () => false,
+  )
+) {
   info('FUSE present (AppImage runtimes may use mounts)');
 } else {
   info(
@@ -168,8 +198,7 @@ check(
 );
 check(
   're-entry recursion guard present',
-  scriptSrc.includes('NEOTAVERN_LINUXDEPLOY_REENTRY') &&
-    scriptSrc.includes('exit 70'),
+  scriptSrc.includes('NEOTAVERN_LINUXDEPLOY_REENTRY') && scriptSrc.includes('exit 70'),
   'a second re-entry must be blocked',
 );
 check(
@@ -199,9 +228,9 @@ if (pathArray) {
 
 // --- 7. ldd sanity on native modules (diagnostic only, pre-build) ----------
 if (!post) {
-  const resources = JSON.parse(
-    await readFile(resolve(tauriRoot, 'tauri.conf.json'), 'utf8'),
-  ).bundle.resources ?? [];
+  const resources =
+    JSON.parse(await readFile(resolve(tauriRoot, 'tauri.conf.json'), 'utf8')).bundle.resources ??
+    [];
   const nativeModules = [];
   for (const pattern of resources) {
     const dir = pattern.split('/**')[0];
@@ -212,11 +241,10 @@ if (!post) {
     }
   }
   for (const module of nativeModules) {
-    const r = spawnSync(
-      'timeout',
-      ['10s', '/usr/bin/ldd', module],
-      { encoding: 'utf8', timeout: 15_000 },
-    );
+    const r = spawnSync('timeout', ['10s', '/usr/bin/ldd', module], {
+      encoding: 'utf8',
+      timeout: 15_000,
+    });
     if (r.status === 124) {
       warn(
         `ldd unusually slow: ${module.split(/[\\/]/).pop()}`,
@@ -238,7 +266,12 @@ if (post) {
   const pristine = await sha256(sidecarSrc);
 
   const sidecarInApp = resolve(appDir, 'usr/bin/neotavern-server');
-  if (await stat(sidecarInApp).then(() => true, () => false)) {
+  if (
+    await stat(sidecarInApp).then(
+      () => true,
+      () => false,
+    )
+  ) {
     const appHash = await sha256(sidecarInApp);
     check('sidecar pristine in AppDir', appHash === pristine, `src=${pristine} app=${appHash}`);
   } else {
@@ -255,7 +288,12 @@ if (post) {
       const r = spawnSync('dpkg-deb', ['-x', deb, tmp], { encoding: 'utf8' });
       if (r.status === 0) {
         const extracted = resolve(tmp, 'usr/bin/neotavern-server');
-        if (await stat(extracted).then(() => true, () => false)) {
+        if (
+          await stat(extracted).then(
+            () => true,
+            () => false,
+          )
+        ) {
           const h = await sha256(extracted);
           check('sidecar pristine in DEB', h === pristine, `src=${pristine} deb=${h}`);
         } else {
@@ -268,7 +306,10 @@ if (post) {
       await rmrf(tmp);
     }
   } else if (debs.length > 0) {
-    warn('DEB sidecar check skipped', debs.length !== 1 ? `found ${debs.length} debs` : 'dpkg-deb missing');
+    warn(
+      'DEB sidecar check skipped',
+      debs.length !== 1 ? `found ${debs.length} debs` : 'dpkg-deb missing',
+    );
   }
 
   // RPM (newc cpio payload; compression:none in the tauri config)
@@ -287,7 +328,12 @@ if (post) {
   }
 
   // Final AppImage: extract (no FUSE needed) and verify the shipped sidecar
-  if (await stat(outAppImage).then(() => true, () => false)) {
+  if (
+    await stat(outAppImage).then(
+      () => true,
+      () => false,
+    )
+  ) {
     const tmp = await mkdtempLocal('neotavern-appimage-check-');
     try {
       const r = spawnSync(outAppImage, ['--appimage-extract'], {
@@ -297,11 +343,23 @@ if (post) {
       });
       if (r.status === 0) {
         const extracted = resolve(tmp, 'squashfs-root/usr/bin/neotavern-server');
-        if (await stat(extracted).then(() => true, () => false)) {
+        if (
+          await stat(extracted).then(
+            () => true,
+            () => false,
+          )
+        ) {
           const h = await sha256(extracted);
-          check('sidecar pristine in final AppImage', h === pristine, `src=${pristine} appimage=${h}`);
+          check(
+            'sidecar pristine in final AppImage',
+            h === pristine,
+            `src=${pristine} appimage=${h}`,
+          );
         } else {
-          fail('AppImage sidecar not found', 'squashfs-root/usr/bin/neotavern-server missing after --appimage-extract');
+          fail(
+            'AppImage sidecar not found',
+            'squashfs-root/usr/bin/neotavern-server missing after --appimage-extract',
+          );
         }
       } else {
         warn('AppImage extraction failed', `--appimage-extract rc=${r.status}`);
@@ -315,7 +373,10 @@ if (post) {
 
   // Signature: required only when signing is expected
   const sig = `${outAppImage}.sig`;
-  const signed = await stat(sig).then(() => true, () => false);
+  const signed = await stat(sig).then(
+    () => true,
+    () => false,
+  );
   const signingExpected = Boolean(process.env.TAURI_SIGNING_PRIVATE_KEY) || requireSignature;
   if (signingExpected) {
     check('AppImage updater signature', signed, `expected ${sig}`);
@@ -363,18 +424,16 @@ function sidecarInRpm(rpmPath) {
       i = j + 1; // coincidental "070701" inside payload data — rescan forward
       continue;
     }
-    const name = data.subarray(j + 110, j + 110 + nameSize).toString('utf8').replace(/\0+$/, '');
+    const name = data
+      .subarray(j + 110, j + 110 + nameSize)
+      .toString('utf8')
+      .replace(/\0+$/, '');
     const dataStart = j + 110 + nameSize + pad4(110 + nameSize);
     if (name.includes('neotavern-server')) {
       const body = data.subarray(dataStart, dataStart + size);
       // The ELF magic is an assertion, not a padding search — a parser bug
       // must surface as an error, not be silently "fixed" by offset picking.
-      if (
-        body[0] !== 0x7f ||
-        body[1] !== 0x45 ||
-        body[2] !== 0x4c ||
-        body[3] !== 0x46
-      ) {
+      if (body[0] !== 0x7f || body[1] !== 0x45 || body[2] !== 0x4c || body[3] !== 0x46) {
         throw new Error('expected ELF magic at parsed cpio payload offset');
       }
       return { name, sha: sha256Sync(body) };

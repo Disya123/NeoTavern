@@ -509,13 +509,14 @@ export function buildFixture({
   }
   const named = scenarios.filter((name) => name !== 'warmup' && name !== 'continuous_scroll');
   const driver =
-    parsed.presents.find((row) => row.driver)?.driver === 'Vulkan' ? 'Vulkan' : parsed.presents[0]?.driver;
+    parsed.presents.find((row) => row.driver)?.driver === 'Vulkan'
+      ? 'Vulkan'
+      : parsed.presents[0]?.driver;
   const highWater = Math.max(0, ...parsed.presents.map((row) => row.highWater ?? 0), 0);
   const droppedEdges = Math.max(0, ...parsed.presents.map((row) => row.dropE ?? 0), 0);
-  const display120 = parsed.displays.find((row) => row.scenario === 'refresh_120') ?? parsed.displays.at(-1);
-  const hz120 = opportunities.filter((op) =>
-    inWindow(op, parsed.scenarios, 'continuous_scroll'),
-  );
+  const display120 =
+    parsed.displays.find((row) => row.scenario === 'refresh_120') ?? parsed.displays.at(-1);
+  const hz120 = opportunities.filter((op) => inWindow(op, parsed.scenarios, 'continuous_scroll'));
   const hz60 = opportunities.filter((op) => inWindow(op, parsed.scenarios, 'refresh_60'));
   const hz90 = opportunities.filter((op) => inWindow(op, parsed.scenarios, 'refresh_90'));
   const chain = hz120.length ? hz120 : opportunities;
@@ -555,7 +556,11 @@ export function buildFixture({
     modes: [
       { hz: 60, refresh_period_ns: 16_666_667, opportunities: hz60 },
       { hz: 90, refresh_period_ns: 11_111_111, opportunities: hz90 },
-      { hz: 120, refresh_period_ns: 8_333_333, opportunities: hz120.length ? hz120 : opportunities },
+      {
+        hz: 120,
+        refresh_period_ns: 8_333_333,
+        opportunities: hz120.length ? hz120 : opportunities,
+      },
     ],
     fling_velocity: meta.fling_velocity ?? { fine: 10_000, coalesced: 10_000 },
     epoch_mismatch: 0,
@@ -596,13 +601,17 @@ function main() {
   }
   const parsedLogs = parseLogcat(readFileSync(logcatPath, 'utf8'));
   const androidRows = readJson(argValue('android_logs') ?? argValue('logs'));
-  const parsed = androidRows.length ? mergeParsed(parsedLogs, parseAndroidLogRows(androidRows)) : parsedLogs;
+  const parsed = androidRows.length
+    ? mergeParsed(parsedLogs, parseAndroidLogRows(androidRows))
+    : parsedLogs;
   const fixture = buildFixture({
     parsed,
     timelineRows: readJson(argValue('timeline')),
     statsRows: readJson(argValue('stats')),
     clockRows: readJson(argValue('clock')),
-    meta: existsSync(argValue('meta') ?? '') ? JSON.parse(readFileSync(argValue('meta'), 'utf8')) : {},
+    meta: existsSync(argValue('meta') ?? '')
+      ? JSON.parse(readFileSync(argValue('meta'), 'utf8'))
+      : {},
   });
   const text = `${JSON.stringify(fixture, null, 2)}\n`;
   if (outPath) writeFileSync(outPath, text);

@@ -64,15 +64,33 @@ check('1. all-additive -> compatible', () => {
   const curr = bundle(
     [
       userSchema({ email: { type: 'string', format: 'email' } }),
-      { $id: 't.admin', type: 'object', additionalProperties: false, properties: { id: { type: 'string' } }, required: ['id'] },
+      {
+        $id: 't.admin',
+        type: 'object',
+        additionalProperties: false,
+        properties: { id: { type: 'string' } },
+        required: ['id'],
+      },
     ],
-    [GET, op('t.list', { responseSchemaId: 't.admin', allowedErrorCodes: ['INTERNAL', 'VALIDATION'] })],
+    [
+      GET,
+      op('t.list', { responseSchemaId: 't.admin', allowedErrorCodes: ['INTERNAL', 'VALIDATION'] }),
+    ],
   );
   const result = semanticDiff(prev, curr);
   assert(result.compatible === true, `expected compatible, got ${JSON.stringify(result)}`);
-  assert(result.changes.every((c) => c.kind !== 'breaking'), 'expected no breaking changes');
-  assert(result.changes.some((c) => c.path === '/schemas/t.user/properties/email'), 'expected added-optional-field entry for email');
-  assert(result.changes.some((c) => c.path === '/operations/t.list'), 'expected added-operation entry');
+  assert(
+    result.changes.every((c) => c.kind !== 'breaking'),
+    'expected no breaking changes',
+  );
+  assert(
+    result.changes.some((c) => c.path === '/schemas/t.user/properties/email'),
+    'expected added-optional-field entry for email',
+  );
+  assert(
+    result.changes.some((c) => c.path === '/operations/t.list'),
+    'expected added-operation entry',
+  );
 });
 
 // 2. Removed field -> breaking.
@@ -89,7 +107,10 @@ check('2. removed field -> breaking', () => {
   const result = semanticDiff(prev, curr);
   assert(result.compatible === false, 'expected incompatible');
   const entry = result.changes.find((c) => c.path === '/schemas/t.user/properties/name');
-  assert(entry && entry.kind === 'breaking', `expected breaking entry for removed field name, got ${JSON.stringify(result.changes)}`);
+  assert(
+    entry && entry.kind === 'breaking',
+    `expected breaking entry for removed field name, got ${JSON.stringify(result.changes)}`,
+  );
 });
 
 // 3. Optional -> required -> breaking.
@@ -98,8 +119,13 @@ check('3. optional -> required -> breaking', () => {
   const curr = bundle([userSchema({}, ['name'])], [GET]);
   const result = semanticDiff(prev, curr);
   assert(result.compatible === false, 'expected incompatible');
-  const entry = result.changes.find((c) => c.path === '/schemas/t.user/properties/name' && c.kind === 'breaking');
-  assert(entry && /required/.test(entry.reason), `expected breaking entry for name becoming required, got ${JSON.stringify(result.changes)}`);
+  const entry = result.changes.find(
+    (c) => c.path === '/schemas/t.user/properties/name' && c.kind === 'breaking',
+  );
+  assert(
+    entry && /required/.test(entry.reason),
+    `expected breaking entry for name becoming required, got ${JSON.stringify(result.changes)}`,
+  );
 });
 
 // 4. Narrowed range (maxLength 200 -> 50) -> breaking.
@@ -116,7 +142,10 @@ check('4. narrowed range -> breaking', () => {
   const result = semanticDiff(prev, curr);
   assert(result.compatible === false, 'expected incompatible');
   const entry = result.changes.find((c) => c.path === '/schemas/t.note/properties/body/maxLength');
-  assert(entry && entry.kind === 'breaking', `expected breaking entry for maxLength, got ${JSON.stringify(result.changes)}`);
+  assert(
+    entry && entry.kind === 'breaking',
+    `expected breaking entry for maxLength, got ${JSON.stringify(result.changes)}`,
+  );
 });
 
 // 5. Widened enum with x-wire-unknown-behavior 'preserve' -> additive (compatible).
@@ -130,8 +159,13 @@ check('5. widened enum (preserve) -> additive', () => {
   const curr = bundle([roleEnum(['admin', 'user', 'moderator'])], [GET]);
   const result = semanticDiff(prev, curr);
   assert(result.compatible === true, `expected compatible, got ${JSON.stringify(result)}`);
-  const entry = result.changes.find((c) => c.path === '/schemas/t.role/anyOf' && c.kind === 'additive');
-  assert(entry && /moderator/.test(entry.reason), `expected additive entry mentioning moderator, got ${JSON.stringify(result.changes)}`);
+  const entry = result.changes.find(
+    (c) => c.path === '/schemas/t.role/anyOf' && c.kind === 'additive',
+  );
+  assert(
+    entry && /moderator/.test(entry.reason),
+    `expected additive entry mentioning moderator, got ${JSON.stringify(result.changes)}`,
+  );
 });
 
 // 6. New operation -> additive (compatible).
@@ -140,7 +174,9 @@ check('6. new operation -> additive', () => {
   const curr = bundle([userSchema()], [GET, op('t.create', { responseSchemaId: 't.user' })]);
   const result = semanticDiff(prev, curr);
   assert(result.compatible === true, `expected compatible, got ${JSON.stringify(result)}`);
-  const entry = result.changes.find((c) => c.path === '/operations/t.create' && c.kind === 'additive');
+  const entry = result.changes.find(
+    (c) => c.path === '/operations/t.create' && c.kind === 'additive',
+  );
   assert(entry, `expected additive entry for t.create, got ${JSON.stringify(result.changes)}`);
 });
 
@@ -153,7 +189,7 @@ check('7. identical bundle -> unchanged', () => {
   assert(result.compatible === true, `expected compatible, got ${JSON.stringify(result)}`);
   assert(
     result.changes.length === 1 && result.changes[0].kind === 'unchanged',
-    `expected single unchanged entry, got ${JSON.stringify(result.changes)}`
+    `expected single unchanged entry, got ${JSON.stringify(result.changes)}`,
   );
 });
 

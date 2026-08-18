@@ -219,25 +219,25 @@ filtered `wire.request.list-presets` schema (kind filter). `presets.create` /
 `(kind,name)`). All slice-3 additions are `transactional`, strict
 `additionalProperties: false`, ARC-07:
 
-| operationId                        | class         | idempotency    | retry | auth      | reqB   | respB  | eventB |
-| ---------------------------------- | ------------- | -------------- | ----- | --------- | ------ | ------ | ------ |
-| `chats.messages.variants.list`     | transactional | idempotent     | safe  | app.read  | 2048   | 262144 | –      |
-| `chats.messages.variants.create`   | transactional | non-idempotent | none  | app.write | 1048576| 262144 | –      |
-| `chats.messages.variants.delete`   | transactional | non-idempotent | none  | app.write | 2048   | 1024   | –      |
-| `chats.messages.variants.activate` | transactional | non-idempotent | none  | app.write | 2048   | 262144 | –      |
-| `chats.messages.revisions.list`    | transactional | idempotent     | safe  | app.read  | 2048   | 262144 | –      |
-| `chats.messages.drafts.get`        | transactional | idempotent     | safe  | app.read  | 2048   | 262144 | –      |
-| `chats.messages.drafts.save`       | transactional | idempotent     | safe  | app.write | 1048576| 262144 | –      |
-| `chats.messages.drafts.commit`     | transactional | idempotent     | none  | app.write | 2048   | 262144 | –      |
-| `chats.messages.drafts.discard`    | transactional | idempotent     | safe  | app.write | 2048   | 1024   | –      |
-| `presets.get`                      | transactional | idempotent     | safe  | app.read  | 2048   | 262144 | –      |
-| `presets.create`                   | transactional | non-idempotent | none  | app.write | 65536  | 262144 | –      |
-| `presets.update`                   | transactional | non-idempotent | none  | app.write | 65536  | 262144 | –      |
-| `presets.delete`                   | transactional | non-idempotent | none  | app.write | 2048   | 1024   | –      |
-| `memories.list`                    | transactional | idempotent     | safe  | app.read  | 1024   | 262144 | –      |
-| `memories.create`                  | transactional | non-idempotent | none  | app.write | 65536  | 262144 | –      |
-| `memories.update`                  | transactional | non-idempotent | none  | app.write | 65536  | 262144 | –      |
-| `memories.delete`                  | transactional | non-idempotent | none  | app.write | 2048   | 1024   | –      |
+| operationId                        | class         | idempotency    | retry | auth      | reqB    | respB  | eventB |
+| ---------------------------------- | ------------- | -------------- | ----- | --------- | ------- | ------ | ------ |
+| `chats.messages.variants.list`     | transactional | idempotent     | safe  | app.read  | 2048    | 262144 | –      |
+| `chats.messages.variants.create`   | transactional | non-idempotent | none  | app.write | 1048576 | 262144 | –      |
+| `chats.messages.variants.delete`   | transactional | non-idempotent | none  | app.write | 2048    | 1024   | –      |
+| `chats.messages.variants.activate` | transactional | non-idempotent | none  | app.write | 2048    | 262144 | –      |
+| `chats.messages.revisions.list`    | transactional | idempotent     | safe  | app.read  | 2048    | 262144 | –      |
+| `chats.messages.drafts.get`        | transactional | idempotent     | safe  | app.read  | 2048    | 262144 | –      |
+| `chats.messages.drafts.save`       | transactional | idempotent     | safe  | app.write | 1048576 | 262144 | –      |
+| `chats.messages.drafts.commit`     | transactional | idempotent     | none  | app.write | 2048    | 262144 | –      |
+| `chats.messages.drafts.discard`    | transactional | idempotent     | safe  | app.write | 2048    | 1024   | –      |
+| `presets.get`                      | transactional | idempotent     | safe  | app.read  | 2048    | 262144 | –      |
+| `presets.create`                   | transactional | non-idempotent | none  | app.write | 65536   | 262144 | –      |
+| `presets.update`                   | transactional | non-idempotent | none  | app.write | 65536   | 262144 | –      |
+| `presets.delete`                   | transactional | non-idempotent | none  | app.write | 2048    | 1024   | –      |
+| `memories.list`                    | transactional | idempotent     | safe  | app.read  | 1024    | 262144 | –      |
+| `memories.create`                  | transactional | non-idempotent | none  | app.write | 65536   | 262144 | –      |
+| `memories.update`                  | transactional | non-idempotent | none  | app.write | 65536   | 262144 | –      |
+| `memories.delete`                  | transactional | non-idempotent | none  | app.write | 2048    | 1024   | –      |
 
 The user-persona application slice (ADR-0047 waiver 3, closed in slice 3)
 adds **no new operations** — only additive optional fields on the existing

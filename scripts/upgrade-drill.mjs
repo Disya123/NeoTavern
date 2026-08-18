@@ -29,7 +29,11 @@ import { createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const CLI_DEBUG = resolve(root, 'crates/target/debug', process.platform === 'win32' ? 'neotavern-cli.exe' : 'neotavern-cli');
+const CLI_DEBUG = resolve(
+  root,
+  'crates/target/debug',
+  process.platform === 'win32' ? 'neotavern-cli.exe' : 'neotavern-cli',
+);
 
 const args = process.argv.slice(2);
 const cliPath = args.includes('--cli') ? resolve(args[args.indexOf('--cli') + 1]) : null;
@@ -124,24 +128,57 @@ function buildLegacyFixture(dbPath) {
     1700000000000,
     1700000001000,
   );
-  db.prepare(`INSERT INTO chats (id, title, character_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`)
-    .run('c1c1c1c1-0000-4000-8000-000000000002', 'Drill Chat', 'c1c1c1c1-0000-4000-8000-000000000001', 1700000002000, 1700000003000);
-  db.prepare(`INSERT INTO messages (id, chat_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)`)
-    .run('c1c1c1c1-0000-4000-8000-000000000003', 'c1c1c1c1-0000-4000-8000-000000000002', 'user', 'Hello from the old version', 1700000004000);
+  db.prepare(
+    `INSERT INTO chats (id, title, character_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+  ).run(
+    'c1c1c1c1-0000-4000-8000-000000000002',
+    'Drill Chat',
+    'c1c1c1c1-0000-4000-8000-000000000001',
+    1700000002000,
+    1700000003000,
+  );
+  db.prepare(
+    `INSERT INTO messages (id, chat_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)`,
+  ).run(
+    'c1c1c1c1-0000-4000-8000-000000000003',
+    'c1c1c1c1-0000-4000-8000-000000000002',
+    'user',
+    'Hello from the old version',
+    1700000004000,
+  );
   // A soft-deleted character and a soft-deleted provider config must be
   // skipped by the converter (never resurrected as live product data).
-  db.prepare(`INSERT INTO characters (id, name, deleted_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`)
-    .run('c1c1c1c1-0000-4000-8000-000000000099', 'Deleted', 1700000005000, 1700000000000, 1700000006000);
-  db.prepare(`INSERT INTO provider_configs (id, provider, name, api_key, deleted_at) VALUES (?, ?, ?, ?, ?)`)
-    .run('cfg-deleted', 'openai', 'dead', 'sk-dead-secret', 1700000005000);
+  db.prepare(
+    `INSERT INTO characters (id, name, deleted_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+  ).run(
+    'c1c1c1c1-0000-4000-8000-000000000099',
+    'Deleted',
+    1700000005000,
+    1700000000000,
+    1700000006000,
+  );
+  db.prepare(
+    `INSERT INTO provider_configs (id, provider, name, api_key, deleted_at) VALUES (?, ?, ?, ?, ?)`,
+  ).run('cfg-deleted', 'openai', 'dead', 'sk-dead-secret', 1700000005000);
   // Tags come from the join tables (the real Drizzle mapping).
   db.prepare(`INSERT INTO tags (id, name) VALUES (?, ?)`).run('tag-1', 'knight');
-  db.prepare(`INSERT INTO character_tags (character_id, tag_id) VALUES (?, ?)`)
-    .run('c1c1c1c1-0000-4000-8000-000000000001', 'tag-1');
-  db.prepare(`INSERT INTO lorebooks (id, name, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`)
-    .run('c1c1c1c1-0000-4000-8000-000000000004', 'Drill Lore', 'lore', 1700000007000, 1700000008000);
-  db.prepare(`INSERT INTO presets (id, kind, name, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`)
-    .run('c1c1c1c1-0000-4000-8000-000000000005', 'instruct', 'Drill Preset', '{}', 1700000009000, 1700000010000);
+  db.prepare(`INSERT INTO character_tags (character_id, tag_id) VALUES (?, ?)`).run(
+    'c1c1c1c1-0000-4000-8000-000000000001',
+    'tag-1',
+  );
+  db.prepare(
+    `INSERT INTO lorebooks (id, name, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+  ).run('c1c1c1c1-0000-4000-8000-000000000004', 'Drill Lore', 'lore', 1700000007000, 1700000008000);
+  db.prepare(
+    `INSERT INTO presets (id, kind, name, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
+  ).run(
+    'c1c1c1c1-0000-4000-8000-000000000005',
+    'instruct',
+    'Drill Preset',
+    '{}',
+    1700000009000,
+    1700000010000,
+  );
   db.close();
 }
 
@@ -152,11 +189,20 @@ function run(cli, dataRoot, legacyDb) {
 
   // --- Step 1: one-shot migration (prepare + validate + commit + kernel open)
   const migrate = runCli(cli, ['--root', dataRoot, '--migrate-legacy', legacyDb]);
-  if (migrate.status !== 0) fail(`migration exited ${migrate.status}\nstdout: ${migrate.stdout}\nstderr: ${migrate.stderr}`);
-  for (const needle of ['migration committed', 'active_root:', 'kernel opened on the active root']) {
-    if (!migrate.stdout.includes(needle)) fail(`stdout lacks ${JSON.stringify(needle)}\n${migrate.stdout}`);
+  if (migrate.status !== 0)
+    fail(
+      `migration exited ${migrate.status}\nstdout: ${migrate.stdout}\nstderr: ${migrate.stderr}`,
+    );
+  for (const needle of [
+    'migration committed',
+    'active_root:',
+    'kernel opened on the active root',
+  ]) {
+    if (!migrate.stdout.includes(needle))
+      fail(`stdout lacks ${JSON.stringify(needle)}\n${migrate.stdout}`);
   }
-  if (!migrate.stdout.includes('characters=1')) fail(`converted count mismatch:\n${migrate.stdout}`);
+  if (!migrate.stdout.includes('characters=1'))
+    fail(`converted count mismatch:\n${migrate.stdout}`);
   if (!migrate.stdout.includes('chats=1') || !migrate.stdout.includes('messages=1')) {
     fail(`chat/message counts mismatch:\n${migrate.stdout}`);
   }
@@ -170,12 +216,15 @@ function run(cli, dataRoot, legacyDb) {
 
   // --- Step 2: the upgraded user sees the same data (characters.get)
   const get = runCli(cli, [
-    '--root', dataRoot,
-    '--operation', 'characters.get',
+    '--root',
+    dataRoot,
+    '--operation',
+    'characters.get',
     JSON.stringify({ characterId: 'c1c1c1c1-0000-4000-8000-000000000001' }),
   ]);
   if (get.status !== 0) fail(`characters.get exited ${get.status}: ${get.stderr}`);
-  if (!get.stdout.includes('Drill Character')) fail(`upgraded data lost the character name:\n${get.stdout}`);
+  if (!get.stdout.includes('Drill Character'))
+    fail(`upgraded data lost the character name:\n${get.stdout}`);
   ok('characters.get returns the migrated character');
 
   // --- Step 3: the legacy database was never modified
@@ -191,7 +240,9 @@ function run(cli, dataRoot, legacyDb) {
   const stagingRoots = [];
   for (const entry of (() => {
     try {
-      return JSON.parse(readFileSync(join(dataRoot, 'activation-journal.json'), 'utf8')).entries ?? [];
+      return (
+        JSON.parse(readFileSync(join(dataRoot, 'activation-journal.json'), 'utf8')).entries ?? []
+      );
     } catch {
       return [];
     }
@@ -248,13 +299,17 @@ function run(cli, dataRoot, legacyDb) {
     sourceDb.close();
     copyDb.close();
   }
-  ok('pre-migration safety copy: integrity ok; per-table counts and content hashes match the legacy source');
+  ok(
+    'pre-migration safety copy: integrity ok; per-table counts and content hashes match the legacy source',
+  );
 
   // --- Step 6: activation journal is committed; versioned root active
   const journal = JSON.parse(readFileSync(join(dataRoot, 'activation-journal.json'), 'utf8'));
   const last = journal.entries.at(-1);
-  if (!last || last.status !== 'committed') fail(`journal last entry not committed: ${JSON.stringify(last)}`);
-  if (!last.toRoot || !last.fromRoot) fail(`journal entry lacks root paths: ${JSON.stringify(last)}`);
+  if (!last || last.status !== 'committed')
+    fail(`journal last entry not committed: ${JSON.stringify(last)}`);
+  if (!last.toRoot || !last.fromRoot)
+    fail(`journal entry lacks root paths: ${JSON.stringify(last)}`);
   ok(`activation journal committed (${last.kind}); rollback pointer retained at ${last.fromRoot}`);
 }
 

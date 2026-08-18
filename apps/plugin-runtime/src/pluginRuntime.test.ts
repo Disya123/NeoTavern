@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { PluginRuntimeHotHeader, PluginRuntimeProtocolErrorCodeValue } from '@neotavern/contracts';
+import type {
+  PluginRuntimeHotHeader,
+  PluginRuntimeProtocolErrorCodeValue,
+} from '@neotavern/contracts';
 import {
   PLUGIN_RUNTIME_HEADER_BYTES,
   PLUGIN_RUNTIME_MAX_CONTROL_PAYLOAD_BYTES,

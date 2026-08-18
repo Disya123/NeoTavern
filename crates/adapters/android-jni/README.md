@@ -18,14 +18,14 @@ transport for the same request envelope (both go through the shared
 
 ## Relationship to mobile-ffi
 
-| Concern | mobile-ffi (`nt_*`) | android-jni (`jni_*` / JNI) |
-|---|---|---|
-| Kernel access | Exported C ABI: opaque handles, bounded buffers, integer statuses | Calls `nt_*` only; no direct `Kernel` access |
-| Request decode | `nt_call` takes `(op, raw payload)` | Decodes `wire.request.envelope` (operationId + payload) via the generated DTOs — never in Kotlin |
-| Response build | Returns **raw** kernel result/error bytes | Builds the validated `wire.response.envelope` via `neotavern-envelope` (byte-identical to tauri-local) |
-| Streams | `nt_stream_start/wait/cancel/free` (notice + durable `generation.events` log) | Frames events/terminal/error into the frozen WebView bridge payloads |
-| Errors | `NT_ERR_*` status codes | `JniError { code, message }` → thrown `KernelException(int, String)` for transport/ABI failures; product errors stay in envelopes |
-| Panics | `guard()` → `NT_ERR_INTERNAL` | `catch_unwind` on every JNI entry point → `KernelException(NT_ERR_INTERNAL)` |
+| Concern        | mobile-ffi (`nt_*`)                                                           | android-jni (`jni_*` / JNI)                                                                                                       |
+| -------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Kernel access  | Exported C ABI: opaque handles, bounded buffers, integer statuses             | Calls `nt_*` only; no direct `Kernel` access                                                                                      |
+| Request decode | `nt_call` takes `(op, raw payload)`                                           | Decodes `wire.request.envelope` (operationId + payload) via the generated DTOs — never in Kotlin                                  |
+| Response build | Returns **raw** kernel result/error bytes                                     | Builds the validated `wire.response.envelope` via `neotavern-envelope` (byte-identical to tauri-local)                            |
+| Streams        | `nt_stream_start/wait/cancel/free` (notice + durable `generation.events` log) | Frames events/terminal/error into the frozen WebView bridge payloads                                                              |
+| Errors         | `NT_ERR_*` status codes                                                       | `JniError { code, message }` → thrown `KernelException(int, String)` for transport/ABI failures; product errors stay in envelopes |
+| Panics         | `guard()` → `NT_ERR_INTERNAL`                                                 | `catch_unwind` on every JNI entry point → `KernelException(NT_ERR_INTERNAL)`                                                      |
 
 `mobile-ffi` and `tauri-local` are untouched; this crate compiles as
 `cdylib` (for the device) and `rlib` (so the contract is exercised by the
@@ -33,30 +33,30 @@ host test suite).
 
 ## C ABI status codes (stable; what `KernelException.code` carries)
 
-| Code | Name | Meaning |
-|---|---|---|
-| 0 | `NT_OK` | Success |
-| 1 | `NT_ERR_INVALID_ARG` | Null/invalid pointer, non-UTF-8 string, oversized or malformed argument |
-| 2 | `NT_ERR_CONTRACT` | Contract violation (payload failed the generated DTO checks) |
-| 3 | `NT_ERR_NOT_FOUND` | Operation or record not found |
-| 4 | `NT_ERR_STORAGE` | Storage-layer failure (lease conflict, corruption, no durable storage) |
-| 5 | `NT_ERR_CANCELLED` | Operation cancelled |
-| 6 | `NT_ERR_INTERNAL` | Internal failure (including a contained Rust panic) |
-| 7 | `NT_ERR_BUFFER` | Host output buffer too small |
-| 8 | `NT_ERR_MISMATCH` | Contract/schema hash or ABI version mismatch |
+| Code | Name                 | Meaning                                                                 |
+| ---- | -------------------- | ----------------------------------------------------------------------- |
+| 0    | `NT_OK`              | Success                                                                 |
+| 1    | `NT_ERR_INVALID_ARG` | Null/invalid pointer, non-UTF-8 string, oversized or malformed argument |
+| 2    | `NT_ERR_CONTRACT`    | Contract violation (payload failed the generated DTO checks)            |
+| 3    | `NT_ERR_NOT_FOUND`   | Operation or record not found                                           |
+| 4    | `NT_ERR_STORAGE`     | Storage-layer failure (lease conflict, corruption, no durable storage)  |
+| 5    | `NT_ERR_CANCELLED`   | Operation cancelled                                                     |
+| 6    | `NT_ERR_INTERNAL`    | Internal failure (including a contained Rust panic)                     |
+| 7    | `NT_ERR_BUFFER`      | Host output buffer too small                                            |
+| 8    | `NT_ERR_MISMATCH`    | Contract/schema hash or ABI version mismatch                            |
 
 ## JNI method table (`com.neotavern.mobile.KernelBridge`, static natives)
 
-| JNI symbol | Signature | Returns | Errors |
-|---|---|---|---|
-| `nativeHandshake` | `()Ljava/lang/String;` | Handshake JSON (below) | `null` only on a broken JVM |
-| `nativeOpen` | `(Ljava/lang/String;)J` | opaque kernel handle | `0` + `KernelException` |
-| `nativeClose` | `(J)V` | — | idempotent; no exception |
-| `nativeCall` | `(J[B)[B` | response-envelope bytes | `KernelException` (transport-level only) |
-| `nativeStreamStart` | `(J[B)J` | stream handle (live or virtual error stream) | `0` + `KernelException` (ABI-level only) |
-| `nativeStreamWait` | `(JI)[B` | one framing payload, or `null` on timeout | `KernelException` |
-| `nativeStreamCancel` | `(JJ)V` | — | `KernelException` (best-effort; see Lifecycle) |
-| `nativeStreamFree` | `(J)V` | — | idempotent; no exception |
+| JNI symbol           | Signature               | Returns                                      | Errors                                         |
+| -------------------- | ----------------------- | -------------------------------------------- | ---------------------------------------------- |
+| `nativeHandshake`    | `()Ljava/lang/String;`  | Handshake JSON (below)                       | `null` only on a broken JVM                    |
+| `nativeOpen`         | `(Ljava/lang/String;)J` | opaque kernel handle                         | `0` + `KernelException`                        |
+| `nativeClose`        | `(J)V`                  | —                                            | idempotent; no exception                       |
+| `nativeCall`         | `(J[B)[B`               | response-envelope bytes                      | `KernelException` (transport-level only)       |
+| `nativeStreamStart`  | `(J[B)J`                | stream handle (live or virtual error stream) | `0` + `KernelException` (ABI-level only)       |
+| `nativeStreamWait`   | `(JI)[B`                | one framing payload, or `null` on timeout    | `KernelException`                              |
+| `nativeStreamCancel` | `(JJ)V`                 | —                                            | `KernelException` (best-effort; see Lifecycle) |
+| `nativeStreamFree`   | `(J)V`                  | —                                            | idempotent; no exception                       |
 
 The kernel is opened over the app-scoped `context.filesDir/neotavern`
 (no permissions, no HTTP, no listening port; the native bridge never blocks
@@ -124,7 +124,7 @@ One call returns exactly one payload (or `null` when nothing arrived within
 ### Error-stream handles (stream-open product errors)
 
 A streamable check, protocol mismatch or kernel/product-class failure of
-`nt_stream_start` does **not** throw — it returns a *virtual error stream*
+`nt_stream_start` does **not** throw — it returns a _virtual error stream_
 handle whose first `nativeStreamWait` yields
 `{"kind":"error","error":<error response envelope>}` (the exact envelope the
 desktop transport answers for the same request; stream-open product errors
@@ -187,16 +187,16 @@ loaded into an existing JVM on device, so `libjvm` must never be linked.
 
 Host-runnable, no JVM (`cargo test -p neotavern-android-jni`):
 
-| Test | Covers |
-|---|---|
-| `handshake_reports_abi_and_schema` | handshake JSON: ffiAbiVersion/schemaHash/wireProtocol/appVersion |
-| `open_meta_get_round_trip_and_idempotent_close` | open over a tempfile data root, `meta.get` envelope round trip, requestId echo, idempotent close |
-| `unknown_operation_returns_not_found_envelope` | product error envelope, not a transport failure |
-| `contract_violation_returns_error_envelope_not_panic` | payload fails the generated DTO checks → error envelope, never a panic |
-| `oversized_request_is_invalid_arg` | `MAX_REQUEST_LEN` bound checked before allocation |
-| `garbage_envelope_is_a_transport_error` | unparseable body → transport-level `JniError` |
-| `response_envelopes_are_byte_identical_to_tauri_local` | **byte equality** with `neotavern-tauri-local::dispatch_envelope` for ok / NOT_FOUND / contract-violation / protocol-mismatch requests |
-| `generation_stream_events_until_terminal` | stream start → per-event framing (validated `wire.event.envelope`s, strictly increasing sequences) → terminal framing → `null` after; double-free safe |
-| `stream_cancel_requests_and_terminates` | cancel flag effect against a live (slow fake) run → `generation.cancelled` terminal |
-| `stream_start_non_streamable_is_an_error_stream` | non-streamable op and protocol mismatch → virtual error stream with the desktop's exact envelope |
-| `unknown_handles_are_controlled` | stale kernel/stream handles and cancel-of-error-stream are controlled `InvalidArg` errors |
+| Test                                                   | Covers                                                                                                                                                 |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `handshake_reports_abi_and_schema`                     | handshake JSON: ffiAbiVersion/schemaHash/wireProtocol/appVersion                                                                                       |
+| `open_meta_get_round_trip_and_idempotent_close`        | open over a tempfile data root, `meta.get` envelope round trip, requestId echo, idempotent close                                                       |
+| `unknown_operation_returns_not_found_envelope`         | product error envelope, not a transport failure                                                                                                        |
+| `contract_violation_returns_error_envelope_not_panic`  | payload fails the generated DTO checks → error envelope, never a panic                                                                                 |
+| `oversized_request_is_invalid_arg`                     | `MAX_REQUEST_LEN` bound checked before allocation                                                                                                      |
+| `garbage_envelope_is_a_transport_error`                | unparseable body → transport-level `JniError`                                                                                                          |
+| `response_envelopes_are_byte_identical_to_tauri_local` | **byte equality** with `neotavern-tauri-local::dispatch_envelope` for ok / NOT_FOUND / contract-violation / protocol-mismatch requests                 |
+| `generation_stream_events_until_terminal`              | stream start → per-event framing (validated `wire.event.envelope`s, strictly increasing sequences) → terminal framing → `null` after; double-free safe |
+| `stream_cancel_requests_and_terminates`                | cancel flag effect against a live (slow fake) run → `generation.cancelled` terminal                                                                    |
+| `stream_start_non_streamable_is_an_error_stream`       | non-streamable op and protocol mismatch → virtual error stream with the desktop's exact envelope                                                       |
+| `unknown_handles_are_controlled`                       | stale kernel/stream handles and cancel-of-error-stream are controlled `InvalidArg` errors                                                              |

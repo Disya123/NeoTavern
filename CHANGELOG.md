@@ -9,6 +9,10 @@
   The kernel test waits on `generation.get` after startup recovery
   instead of sampling against an expired lease.
 
+- **Prettier baseline restored.** Generated/vendor/capture paths are
+  ignored with a documented reason; maintained source and `docs/` are
+  formatted. `pnpm format:check` is green. Not Milestone B PASS.
+
 ### Added
 
 - **PERF-15 PASS (not B PASS, not PluginVisualSurface).** Independent

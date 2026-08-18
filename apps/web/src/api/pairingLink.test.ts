@@ -24,9 +24,7 @@ describe('parsePairingLink', () => {
 
   it('unwraps the neotavern://connect wrapper', () => {
     expect(
-      parsePairingLink(
-        'neotavern://connect?url=http%3A%2F%2F10.0.0.8%3A8080%2F&token=pair-token',
-      ),
+      parsePairingLink('neotavern://connect?url=http%3A%2F%2F10.0.0.8%3A8080%2F&token=pair-token'),
     ).toEqual({
       baseUrl: 'http://10.0.0.8:8080',
       token: 'pair-token',

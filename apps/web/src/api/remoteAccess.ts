@@ -61,8 +61,7 @@ export function parseRemoteError(message: string): { code: string; message: stri
 }
 
 function toRemoteAccessError(reason: unknown): RemoteAccessError {
-  const text =
-    typeof reason === 'string' ? reason : reason instanceof Error ? reason.message : '';
+  const text = typeof reason === 'string' ? reason : reason instanceof Error ? reason.message : '';
   const parsed = parseRemoteError(text);
   if (parsed) return new RemoteAccessError(parsed.code, parsed.message);
   return new RemoteAccessError(REMOTE_INTERNAL_CODE, text || 'Remote access request failed');

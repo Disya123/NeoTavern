@@ -18,17 +18,17 @@ One controller covers three different profiles:
 - `createRowGestures(options): RowGestureController` — the gesture controller.
 - `RowGestureOptions` — options:
 
-  | Option                               | Default       | Description                                                            |
-  | ------------------------------------ | ------------- | ---------------------------------------------------------------------- |
-  | `indexAttribute`                     | —             | row attribute holding its index, e.g. `data-chat-index` (required)     |
-  | `mouseDragThresholdPx`               | `4`           | mouse movement (px) before drag activates; `0` — instantly on mousedown |
-  | `touchDragThresholdPx`               | `10`          | finger movement (px) before drag activates; `0` — instantly on touchstart |
-  | `longPressMs`                        | `700`         | hold (ms) before the menu opens; `null` disables long-press            |
-  | `canDrag(itemId)`                    | always true   | `false` disables drag for the item (the menu still works)              |
-  | `onDragStart(itemId, index)`         | —             | drag session started (close open menus)                                |
-  | `onDragMove(itemId, toIndex, point)` | —             | cursor over row `toIndex` — apply optimistic reorder                   |
-  | `onDragEnd(itemId, committed)`       | —             | drag finished; `committed=false` — no movement happened                |
-  | `onOpenMenu(itemId, at)`             | —             | open the row context menu (right click or long-press)                  |
+  | Option                               | Default     | Description                                                               |
+  | ------------------------------------ | ----------- | ------------------------------------------------------------------------- |
+  | `indexAttribute`                     | —           | row attribute holding its index, e.g. `data-chat-index` (required)        |
+  | `mouseDragThresholdPx`               | `4`         | mouse movement (px) before drag activates; `0` — instantly on mousedown   |
+  | `touchDragThresholdPx`               | `10`        | finger movement (px) before drag activates; `0` — instantly on touchstart |
+  | `longPressMs`                        | `700`       | hold (ms) before the menu opens; `null` disables long-press               |
+  | `canDrag(itemId)`                    | always true | `false` disables drag for the item (the menu still works)                 |
+  | `onDragStart(itemId, index)`         | —           | drag session started (close open menus)                                   |
+  | `onDragMove(itemId, toIndex, point)` | —           | cursor over row `toIndex` — apply optimistic reorder                      |
+  | `onDragEnd(itemId, committed)`       | —           | drag finished; `committed=false` — no movement happened                   |
+  | `onOpenMenu(itemId, at)`             | —           | open the row context menu (right click or long-press)                     |
 
 - `RowGestureController`:
   - `onMouseDown(event, itemId, index)` / `onTouchStart(event, itemId, index)`

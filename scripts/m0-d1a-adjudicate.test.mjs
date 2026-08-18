@@ -66,7 +66,8 @@ describe('m0-d1a host adjudicator', () => {
   });
 
   it('rejects GLES dumps and map-memory', () => {
-    const gles = '<?xml version="1.0"?><rdc><header><driver id="9">OpenGLES</driver></header></rdc>';
+    const gles =
+      '<?xml version="1.0"?><rdc><header><driver id="9">OpenGLES</driver></header></rdc>';
     expect(classifyRenderdocApi(gles).status).toBe('WRONG_API_CAPTURE');
     expect(forbiddenCommands('<chunk name="vkMapMemory"></chunk>')).toContain('vkMapMemory');
   });

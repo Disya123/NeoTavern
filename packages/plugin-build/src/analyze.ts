@@ -305,7 +305,8 @@ export async function analyzePackage(root: string): Promise<AnalyzerReport> {
         code: 'NPM_DEPENDENCIES',
         file: 'package.json',
         message: `runtime npm dependencies must be vendored at build time (§7.2): ${names.join(', ')}`,
-        suggestion: 'run `neotavern-plugin build` to vendor pure-JS dependencies into the signed graph',
+        suggestion:
+          'run `neotavern-plugin build` to vendor pure-JS dependencies into the signed graph',
       });
     }
   }

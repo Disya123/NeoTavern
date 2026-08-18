@@ -8,12 +8,7 @@
  */
 import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page } from '@playwright/test';
-import {
-  mapLegacyPost,
-  wireBaseUrl,
-  wireCall,
-  wirePatchSettings,
-} from './wire.js';
+import { mapLegacyPost, wireBaseUrl, wireCall, wirePatchSettings } from './wire.js';
 
 export async function postJson(
   page: Page,
@@ -35,10 +30,7 @@ export async function postJson(
   return (await response.json()) as Record<string, unknown>;
 }
 
-export async function patchSettings(
-  page: Page,
-  patch: Record<string, unknown>,
-): Promise<void> {
+export async function patchSettings(page: Page, patch: Record<string, unknown>): Promise<void> {
   if (wireBaseUrl() !== undefined) {
     await wirePatchSettings(patch);
     return;
@@ -76,10 +68,7 @@ export async function clearChats(page: Page): Promise<void> {
   }
 }
 
-export async function expectNoA11yViolations(
-  page: Page,
-  scope?: string,
-): Promise<void> {
+export async function expectNoA11yViolations(page: Page, scope?: string): Promise<void> {
   let builder = new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag22aa']);
   if (scope) builder = builder.include(scope);
   const results = await builder.analyze();

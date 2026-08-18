@@ -704,7 +704,9 @@ function openDataSocket(fd: number, mode: 'read' | 'write'): net.Socket | undefi
       writable: mode === 'write',
     });
   } catch (error) {
-    process.stderr.write(`[neotavern-plugin-runtime] data pipe fd ${fd} unavailable: ${String(error)}\n`);
+    process.stderr.write(
+      `[neotavern-plugin-runtime] data pipe fd ${fd} unavailable: ${String(error)}\n`,
+    );
     return undefined;
   }
 }

@@ -1,5 +1,12 @@
 import { useTranslation } from 'react-i18next';
-import { ActionBar, ActionBarGroup, Button, Dialog, DialogClose, DialogContent } from '@neotavern/ui';
+import {
+  ActionBar,
+  ActionBarGroup,
+  Button,
+  Dialog,
+  DialogClose,
+  DialogContent,
+} from '@neotavern/ui';
 import styles from './ConfirmActionDialog.module.css';
 
 export interface ConfirmActionDialogProps {

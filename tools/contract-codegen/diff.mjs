@@ -281,12 +281,22 @@ function diffOperation(prev, curr, path, changes) {
   const currCodes = toSet(curr.allowedErrorCodes);
   for (const code of prevCodes) {
     if (!currCodes.has(code)) {
-      push(changes, BREAKING, `${path}/allowedErrorCodes/${code}`, `removed allowed error code ${code}`);
+      push(
+        changes,
+        BREAKING,
+        `${path}/allowedErrorCodes/${code}`,
+        `removed allowed error code ${code}`,
+      );
     }
   }
   for (const code of currCodes) {
     if (!prevCodes.has(code)) {
-      push(changes, ADDITIVE, `${path}/allowedErrorCodes/${code}`, `added allowed error code ${code}`);
+      push(
+        changes,
+        ADDITIVE,
+        `${path}/allowedErrorCodes/${code}`,
+        `added allowed error code ${code}`,
+      );
     }
   }
 
@@ -295,7 +305,12 @@ function diffOperation(prev, curr, path, changes) {
     const prevValue = prev[key];
     const currValue = curr[key];
     if (prevValue !== undefined && currValue !== undefined && prevValue !== currValue) {
-      push(changes, BREAKING, `${path}/${key}`, `${key} changed ${fmt(prevValue)} -> ${fmt(currValue)}`);
+      push(
+        changes,
+        BREAKING,
+        `${path}/${key}`,
+        `${key} changed ${fmt(prevValue)} -> ${fmt(currValue)}`,
+      );
     }
   }
 
@@ -305,9 +320,19 @@ function diffOperation(prev, curr, path, changes) {
     const currValue = curr[key];
     if (typeof prevValue === 'number' && typeof currValue === 'number' && prevValue !== currValue) {
       if (currValue < prevValue) {
-        push(changes, BREAKING, `${path}/${key}`, `${key} lowered ${prevValue} -> ${currValue} (range narrowed)`);
+        push(
+          changes,
+          BREAKING,
+          `${path}/${key}`,
+          `${key} lowered ${prevValue} -> ${currValue} (range narrowed)`,
+        );
       } else {
-        push(changes, ADDITIVE, `${path}/${key}`, `${key} raised ${prevValue} -> ${currValue} (range widened)`);
+        push(
+          changes,
+          ADDITIVE,
+          `${path}/${key}`,
+          `${key} raised ${prevValue} -> ${currValue} (range widened)`,
+        );
       }
     }
   }
@@ -319,11 +344,26 @@ function diffOperation(prev, curr, path, changes) {
     prev.unknownFields !== curr.unknownFields
   ) {
     if (prev.unknownFields === 'strict' && curr.unknownFields !== 'strict') {
-      push(changes, ADDITIVE, `${path}/unknownFields`, `unknown fields now allowed (${prev.unknownFields} -> ${curr.unknownFields})`);
+      push(
+        changes,
+        ADDITIVE,
+        `${path}/unknownFields`,
+        `unknown fields now allowed (${prev.unknownFields} -> ${curr.unknownFields})`,
+      );
     } else if (prev.unknownFields !== 'strict' && curr.unknownFields === 'strict') {
-      push(changes, BREAKING, `${path}/unknownFields`, `unknown fields now rejected (${prev.unknownFields} -> ${curr.unknownFields})`);
+      push(
+        changes,
+        BREAKING,
+        `${path}/unknownFields`,
+        `unknown fields now rejected (${prev.unknownFields} -> ${curr.unknownFields})`,
+      );
     } else {
-      push(changes, ADDITIVE, `${path}/unknownFields`, `unknownFields value changed (${prev.unknownFields} -> ${curr.unknownFields}, unclassified note)`);
+      push(
+        changes,
+        ADDITIVE,
+        `${path}/unknownFields`,
+        `unknownFields value changed (${prev.unknownFields} -> ${curr.unknownFields}, unclassified note)`,
+      );
     }
   }
 
@@ -332,14 +372,29 @@ function diffOperation(prev, curr, path, changes) {
   for (const [key, value] of Object.entries(curr)) {
     if (KNOWN_OP_KEYS.has(key)) continue;
     if (!Object.hasOwn(prev, key)) {
-      push(changes, ADDITIVE, `${path}/${key}`, `new operation metadata key ${key} (unclassified note)`);
+      push(
+        changes,
+        ADDITIVE,
+        `${path}/${key}`,
+        `new operation metadata key ${key} (unclassified note)`,
+      );
     } else if (!jsonEquals(prev[key], value)) {
-      push(changes, ADDITIVE, `${path}/${key}`, `operation metadata ${key} changed (unclassified note)`);
+      push(
+        changes,
+        ADDITIVE,
+        `${path}/${key}`,
+        `operation metadata ${key} changed (unclassified note)`,
+      );
     }
   }
   for (const key of Object.keys(prev)) {
     if (KNOWN_OP_KEYS.has(key) || Object.hasOwn(curr, key)) continue;
-    push(changes, ADDITIVE, `${path}/${key}`, `operation metadata key ${key} removed (unclassified note)`);
+    push(
+      changes,
+      ADDITIVE,
+      `${path}/${key}`,
+      `operation metadata key ${key} removed (unclassified note)`,
+    );
   }
 }
 
@@ -364,7 +419,12 @@ function diffSchema(prev, curr, path, changes) {
   const prevUnion = prevEnum || prevTagged;
   const currUnion = currEnum || currTagged;
   if (prevUnion || currUnion) {
-    push(changes, BREAKING, path, 'union structure changed (enum/tagged-union replaced or removed)');
+    push(
+      changes,
+      BREAKING,
+      path,
+      'union structure changed (enum/tagged-union replaced or removed)',
+    );
     return;
   }
   diffPlain(prev, curr, path, changes);
@@ -377,7 +437,12 @@ function diffEnum(prevEnum, currEnum, path, changes) {
   const added = currEnum.values.filter((value) => !prevSet.has(value));
 
   for (const value of removed) {
-    push(changes, BREAKING, `${path}/anyOf`, `enum value ${fmt(value)} removed (old peers may send it)`);
+    push(
+      changes,
+      BREAKING,
+      `${path}/anyOf`,
+      `enum value ${fmt(value)} removed (old peers may send it)`,
+    );
   }
   if (added.length > 0) {
     if (prevEnum.behavior === 'reject') {
@@ -400,11 +465,26 @@ function diffEnum(prevEnum, currEnum, path, changes) {
   const currBehavior = currEnum.behavior ?? 'preserve';
   if (prevBehavior !== currBehavior) {
     if (prevBehavior === 'reject') {
-      push(changes, ADDITIVE, `${path}/x-wire-unknown-behavior`, `x-wire-unknown-behavior changed 'reject' -> '${currBehavior}' (unknown values now forwarded)`);
+      push(
+        changes,
+        ADDITIVE,
+        `${path}/x-wire-unknown-behavior`,
+        `x-wire-unknown-behavior changed 'reject' -> '${currBehavior}' (unknown values now forwarded)`,
+      );
     } else if (currBehavior === 'reject') {
-      push(changes, BREAKING, `${path}/x-wire-unknown-behavior`, `x-wire-unknown-behavior changed '${prevBehavior}' -> 'reject' (unknown values now rejected)`);
+      push(
+        changes,
+        BREAKING,
+        `${path}/x-wire-unknown-behavior`,
+        `x-wire-unknown-behavior changed '${prevBehavior}' -> 'reject' (unknown values now rejected)`,
+      );
     } else {
-      push(changes, ADDITIVE, `${path}/x-wire-unknown-behavior`, `x-wire-unknown-behavior changed '${prevBehavior}' -> '${currBehavior}' (unclassified note)`);
+      push(
+        changes,
+        ADDITIVE,
+        `${path}/x-wire-unknown-behavior`,
+        `x-wire-unknown-behavior changed '${prevBehavior}' -> '${currBehavior}' (unclassified note)`,
+      );
     }
   }
 }
@@ -425,7 +505,12 @@ function diffTagged(prevTagged, currTagged, path, changes) {
   }
   for (const tag of currTagged.members.keys()) {
     if (!prevTagged.members.has(tag)) {
-      push(changes, ADDITIVE, `${path}/anyOf/${tag}`, `added union member ${tag} (unknown members/events are preserved by wire peers)`);
+      push(
+        changes,
+        ADDITIVE,
+        `${path}/anyOf/${tag}`,
+        `added union member ${tag} (unknown members/events are preserved by wire peers)`,
+      );
     }
   }
   for (const [tag, prevMember] of prevTagged.members) {
@@ -449,7 +534,12 @@ function diffPlain(prev, curr, path, changes) {
     } else if (curr.const === undefined) {
       push(changes, ADDITIVE, `${path}/const`, `const removed (widened)`);
     } else {
-      push(changes, BREAKING, `${path}/const`, `const changed ${fmt(prev.const)} -> ${fmt(curr.const)}`);
+      push(
+        changes,
+        BREAKING,
+        `${path}/const`,
+        `const changed ${fmt(prev.const)} -> ${fmt(curr.const)}`,
+      );
     }
   }
 
@@ -459,7 +549,12 @@ function diffPlain(prev, curr, path, changes) {
     const currValue = curr[key];
     if (prevValue === currValue) continue;
     if (prevValue !== undefined && currValue !== undefined) {
-      push(changes, BREAKING, `${path}/${key}`, `${key} changed ${fmt(prevValue)} -> ${fmt(currValue)}`);
+      push(
+        changes,
+        BREAKING,
+        `${path}/${key}`,
+        `${key} changed ${fmt(prevValue)} -> ${fmt(currValue)}`,
+      );
     } else if (currValue !== undefined) {
       push(changes, BREAKING, `${path}/${key}`, `${key} added (new constraint ${fmt(currValue)})`);
     } else {
@@ -576,12 +671,27 @@ function diffObject(prev, curr, path, changes) {
   if (isRecord(prevAp) && isRecord(currAp)) {
     diffSchema(prevAp, currAp, `${path}/additionalProperties`, changes);
   } else if (isRecord(prevAp) !== isRecord(currAp)) {
-    push(changes, BREAKING, `${path}/additionalProperties`, 'additionalProperties changed between keyword and schema');
+    push(
+      changes,
+      BREAKING,
+      `${path}/additionalProperties`,
+      'additionalProperties changed between keyword and schema',
+    );
   } else if ((prevAp === false) !== (currAp === false)) {
     if (currAp === false) {
-      push(changes, BREAKING, `${path}/additionalProperties`, 'additionalProperties now false (unknown fields rejected)');
+      push(
+        changes,
+        BREAKING,
+        `${path}/additionalProperties`,
+        'additionalProperties now false (unknown fields rejected)',
+      );
     } else {
-      push(changes, ADDITIVE, `${path}/additionalProperties`, 'additionalProperties now allows unknown fields');
+      push(
+        changes,
+        ADDITIVE,
+        `${path}/additionalProperties`,
+        'additionalProperties now allows unknown fields',
+      );
     }
   }
 }
@@ -592,12 +702,22 @@ function diffUnknownKeys(prev, curr, path, changes) {
     if (!Object.hasOwn(prev, key)) {
       push(changes, ADDITIVE, `${path}/${key}`, `new schema keyword ${key} (unclassified note)`);
     } else if (!jsonEquals(prev[key], curr[key])) {
-      push(changes, ADDITIVE, `${path}/${key}`, `schema keyword ${key} changed (unclassified note)`);
+      push(
+        changes,
+        ADDITIVE,
+        `${path}/${key}`,
+        `schema keyword ${key} changed (unclassified note)`,
+      );
     }
   }
   for (const key of Object.keys(prev)) {
     if (HANDLED_KEYS.has(key) || DOC_KEYS.has(key) || Object.hasOwn(curr, key)) continue;
-    push(changes, ADDITIVE, `${path}/${key}`, `schema keyword ${key} removed (constraint relaxed?)`);
+    push(
+      changes,
+      ADDITIVE,
+      `${path}/${key}`,
+      `schema keyword ${key} removed (constraint relaxed?)`,
+    );
   }
 }
 

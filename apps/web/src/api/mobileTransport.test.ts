@@ -121,9 +121,8 @@ describe('call', () => {
     const bridge = new FakeBridge();
     let surfaceAtCallTime: unknown = 'not installed yet';
     bridge.onCall = () => {
-      surfaceAtCallTime = (
-        window as unknown as { __neotavernMobileCallbacks?: unknown }
-      ).__neotavernMobileCallbacks;
+      surfaceAtCallTime = (window as unknown as { __neotavernMobileCallbacks?: unknown })
+        .__neotavernMobileCallbacks;
     };
     const { transport } = makeTransport({ bridge });
     void transport.call('meta.get', {}, {}).catch(() => undefined);
@@ -243,11 +242,21 @@ describe('stream', () => {
 
     bridge.deliver(callbackId, {
       kind: 'event',
-      event: { streamId: 's1', sequence: 0, type: 'generation.delta', payload: { type: 'generation.delta', text: 'Hi' } },
+      event: {
+        streamId: 's1',
+        sequence: 0,
+        type: 'generation.delta',
+        payload: { type: 'generation.delta', text: 'Hi' },
+      },
     });
     bridge.deliver(callbackId, {
       kind: 'event',
-      event: { streamId: 's1', sequence: 1, type: 'generation.completed', payload: { type: 'generation.completed', finalMessage: { id: 'm1' } } },
+      event: {
+        streamId: 's1',
+        sequence: 1,
+        type: 'generation.completed',
+        payload: { type: 'generation.completed', finalMessage: { id: 'm1' } },
+      },
     });
     bridge.deliver(callbackId, { kind: 'terminal' });
 
@@ -306,7 +315,12 @@ describe('stream', () => {
     if (firstCall === undefined) throw new Error('bridge.call was not invoked');
     bridge.deliver(firstCall.callbackId, {
       kind: 'event',
-      event: { streamId: 's1', sequence: 0, type: 'generation.delta', payload: { type: 'generation.delta', text: 'x' } },
+      event: {
+        streamId: 's1',
+        sequence: 0,
+        type: 'generation.delta',
+        payload: { type: 'generation.delta', text: 'x' },
+      },
     });
     await iterator[Symbol.asyncIterator]().return!();
 
@@ -326,7 +340,12 @@ describe('stream', () => {
     if (firstCall === undefined) throw new Error('bridge.call was not invoked');
     bridge.deliver(firstCall.callbackId, {
       kind: 'event',
-      event: { streamId: 's9', sequence: 0, type: 'generation.delta', payload: { type: 'generation.delta', text: 'x' } },
+      event: {
+        streamId: 's9',
+        sequence: 0,
+        type: 'generation.delta',
+        payload: { type: 'generation.delta', text: 'x' },
+      },
     });
     await tick();
 

@@ -20,19 +20,19 @@ SAME `runtime_kernel::Kernel` instance the local hosts use.
 
 ## Configuration
 
-| Field | Default | Meaning |
-| --- | --- | --- |
-| `bind_addr` | `127.0.0.1:0` (loopback, ephemeral) | Address the HTTP listener binds. Port `0` → OS-assigned; the real address is `RemoteAdapter::local_addr()`. |
-| `trusted_proxy` | `false` | Gates insecure binds. When `false`, a non-loopback `bind_addr` is rejected at `start()` with `AdapterError::InsecureBind` *before* any bind happens. With `true` but **no `auth`** a public bind is still a startup error (`AdapterError::PublicBindRequiresAuth`, §10: "Публичное включение listener без настроенных auth и transport security является startup error"). |
-| `auth` | `None` | Pairing store. `Some(AuthConfig { max_credentials })` gates `/rpc` and `/rpc/stream` behind `Authorization: Bearer <token>`; `/meta` stays public. `None` (loopback only) skips the gate. |
-| `rate_limit` | `None` | Token-bucket limiter. `Some(RateLimitConfig { requests_per_second, burst, max_clients })` — buckets keyed by credential id (authed) or client IP (unauthed, see `trusted_proxies`); over-burst → `429 RATE_LIMITED` + `Retry-After`. Bucket map bounded at `max_clients` (LRU-ish eviction). |
-| `trusted_proxies` | `[]` | Reverse proxies trusted to append `X-Forwarded-For` (§10: "forwarded client/proto headers принимаются только от configured proxy addresses"). Empty (default) = forwarded headers ignored entirely; rate limiting keys by the peer socket IP. When the peer is in this list, the client IP is taken from the `X-Forwarded-For` chain (rightmost entry not appended by a trusted proxy; unparsable entries skipped; missing/unusable header falls back to the peer). Forwarded headers from any other peer are never honored — a client cannot self-spoof the bucket key. |
-| `max_streams` | `8` | Concurrent long-lived SSE streams. Over the cap → `429 RATE_LIMITED` (`rule: stream_limit`). |
-| `audit_capacity` | `256` | Bounded FIFO audit ring (`AuditKind` + detail, no token material). |
-| `allowed_origins` | `[]` | CORS/Origin allowlist (exact-match, case-sensitive). Empty (default) is deny-by-default: any request carrying an `Origin` header is rejected 403 `ORIGIN_NOT_ALLOWED` before dispatch; no `Access-Control-*` header is ever emitted. Non-browser clients (no `Origin` header) are unaffected. |
-| `max_request_bytes` | `1048576` (1 MiB) | Request body cap. Over-limit → `413 QUOTA_EXCEEDED` (`rule: request_too_large`), enforced for Content-Length and chunked bodies. |
-| `max_connections` | `64` | Worker pool size serving the single `tiny_http` listener. |
-| `drain_timeout` | `5s` | Grace period of `shutdown()` for in-flight requests; on timeout the remaining workers are abandoned. |
+| Field               | Default                             | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `bind_addr`         | `127.0.0.1:0` (loopback, ephemeral) | Address the HTTP listener binds. Port `0` → OS-assigned; the real address is `RemoteAdapter::local_addr()`.                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `trusted_proxy`     | `false`                             | Gates insecure binds. When `false`, a non-loopback `bind_addr` is rejected at `start()` with `AdapterError::InsecureBind` _before_ any bind happens. With `true` but **no `auth`** a public bind is still a startup error (`AdapterError::PublicBindRequiresAuth`, §10: "Публичное включение listener без настроенных auth и transport security является startup error").                                                                                                                                                                                                |
+| `auth`              | `None`                              | Pairing store. `Some(AuthConfig { max_credentials })` gates `/rpc` and `/rpc/stream` behind `Authorization: Bearer <token>`; `/meta` stays public. `None` (loopback only) skips the gate.                                                                                                                                                                                                                                                                                                                                                                                |
+| `rate_limit`        | `None`                              | Token-bucket limiter. `Some(RateLimitConfig { requests_per_second, burst, max_clients })` — buckets keyed by credential id (authed) or client IP (unauthed, see `trusted_proxies`); over-burst → `429 RATE_LIMITED` + `Retry-After`. Bucket map bounded at `max_clients` (LRU-ish eviction).                                                                                                                                                                                                                                                                             |
+| `trusted_proxies`   | `[]`                                | Reverse proxies trusted to append `X-Forwarded-For` (§10: "forwarded client/proto headers принимаются только от configured proxy addresses"). Empty (default) = forwarded headers ignored entirely; rate limiting keys by the peer socket IP. When the peer is in this list, the client IP is taken from the `X-Forwarded-For` chain (rightmost entry not appended by a trusted proxy; unparsable entries skipped; missing/unusable header falls back to the peer). Forwarded headers from any other peer are never honored — a client cannot self-spoof the bucket key. |
+| `max_streams`       | `8`                                 | Concurrent long-lived SSE streams. Over the cap → `429 RATE_LIMITED` (`rule: stream_limit`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `audit_capacity`    | `256`                               | Bounded FIFO audit ring (`AuditKind` + detail, no token material).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `allowed_origins`   | `[]`                                | CORS/Origin allowlist (exact-match, case-sensitive). Empty (default) is deny-by-default: any request carrying an `Origin` header is rejected 403 `ORIGIN_NOT_ALLOWED` before dispatch; no `Access-Control-*` header is ever emitted. Non-browser clients (no `Origin` header) are unaffected.                                                                                                                                                                                                                                                                            |
+| `max_request_bytes` | `1048576` (1 MiB)                   | Request body cap. Over-limit → `413 QUOTA_EXCEEDED` (`rule: request_too_large`), enforced for Content-Length and chunked bodies.                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `max_connections`   | `64`                                | Worker pool size serving the single `tiny_http` listener.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `drain_timeout`     | `5s`                                | Grace period of `shutdown()` for in-flight requests; on timeout the remaining workers are abandoned.                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 ## Security defaults
 
@@ -57,7 +57,7 @@ SAME `runtime_kernel::Kernel` instance the local hosts use.
 - **401 before body read.** The auth gate runs before the request body is
   read: an unauthenticated request gets `401 UNAUTHORIZED`
   (`missing_credential` / `invalid_credential`) with `WWW-Authenticate:
-  Bearer` even when its body would exceed `max_request_bytes` (§10).
+Bearer` even when its body would exceed `max_request_bytes` (§10).
 - **429 for rate limits.** `RATE_LIMITED` (with `Retry-After: 1`) for
   over-burst requests and for exceeding `max_streams` concurrent streams
   (`rule: stream_limit`).
@@ -79,7 +79,7 @@ SAME `runtime_kernel::Kernel` instance the local hosts use.
 - **413 for oversized bodies** — the body is never buffered past
   `max_request_bytes` (Content-Length pre-check and chunked read cap).
 - **426 for protocol mismatches** — major inequality or minor-too-new
-  requests are rejected with `PROTOCOL_MISMATCH` *before* dispatch, so a
+  requests are rejected with `PROTOCOL_MISMATCH` _before_ dispatch, so a
   mismatched client can never execute a product write (§6.5).
 - **400 for undecodable request bodies**, 404 for unknown routes, 405 for
   wrong methods — transport failures carry no request id.
@@ -89,12 +89,12 @@ SAME `runtime_kernel::Kernel` instance the local hosts use.
 
 ## Routes
 
-| Method | Path | Behavior |
-| --- | --- | --- |
-| `GET` | `/meta` | `200` + JSON `wire.meta.dto`, with `X-Neota-Schema-Hash` and `X-Neota-Protocol` diagnostic headers. |
-| `POST` | `/rpc` | Envelope dispatch. Once the envelope parses and the protocol check passes, always answers `200` with an ok/error response envelope. |
-| `POST` | `/rpc/stream` | Envelope dispatch for streaming operations; answers `text/event-stream` (error frame + `stream.closed` terminal frame in Phase 4). |
-| any | anything else | `404 NOT_FOUND`; wrong method on a known route → `405 VALIDATION`. |
+| Method | Path          | Behavior                                                                                                                            |
+| ------ | ------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`  | `/meta`       | `200` + JSON `wire.meta.dto`, with `X-Neota-Schema-Hash` and `X-Neota-Protocol` diagnostic headers.                                 |
+| `POST` | `/rpc`        | Envelope dispatch. Once the envelope parses and the protocol check passes, always answers `200` with an ok/error response envelope. |
+| `POST` | `/rpc/stream` | Envelope dispatch for streaming operations; answers `text/event-stream` (error frame + `stream.closed` terminal frame in Phase 4).  |
+| any    | anything else | `404 NOT_FOUND`; wrong method on a known route → `405 VALIDATION`.                                                                  |
 
 ## Envelope semantics
 

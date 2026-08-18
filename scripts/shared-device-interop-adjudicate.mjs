@@ -126,7 +126,9 @@ export function evaluateInterop({ xml, log, controlLog, provenance }) {
   checks.push(Object.assign({ id: 'one_vk_device' }, checkOneVkDevice(xml, parsed.values)));
   const names = extractNamedResources(xml);
   const labels = extractDebugLabels(xml);
-  checks.push(Object.assign({ id: 'named_raster_accumulator' }, checkNamedRasterAndAccumulator(names)));
+  checks.push(
+    Object.assign({ id: 'named_raster_accumulator' }, checkNamedRasterAndAccumulator(names)),
+  );
   checks.push(Object.assign({ id: 'raster_then_sample' }, checkBlitSamplesRaster(labels, names)));
   const order = checkPassOrder(labels.filter((name) => String(name).startsWith('m0-d1a-')));
   checks.push({ id: 'd1a_pass_order', ok: order.ok, order });
@@ -180,9 +182,7 @@ export function evaluateInterop({ xml, log, controlLog, provenance }) {
     status: statusOf(ok),
     ok,
     checks,
-    reason: ok
-      ? 'Vulkan shared-device raster texture sampled by compositor/glass'
-      : 'blocked',
+    reason: ok ? 'Vulkan shared-device raster texture sampled by compositor/glass' : 'blocked',
   };
 }
 

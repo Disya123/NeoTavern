@@ -135,7 +135,9 @@ describe('RemoteAccessPanel', () => {
   it('stops the server', async () => {
     const user = userEvent.setup();
     vi.mocked(isTauriRuntime).mockReturnValue(true);
-    vi.mocked(remoteStatus).mockResolvedValueOnce(RUNNING_STATUS).mockResolvedValueOnce(STOPPED_STATUS);
+    vi.mocked(remoteStatus)
+      .mockResolvedValueOnce(RUNNING_STATUS)
+      .mockResolvedValueOnce(STOPPED_STATUS);
 
     await renderWithProviders(<RemoteAccessPanel />);
     await screen.findByText('Running');
@@ -230,9 +232,7 @@ describe('RemoteAccessPanel', () => {
     const user = userEvent.setup();
     vi.mocked(isTauriRuntime).mockReturnValue(true);
     vi.mocked(remoteStatus).mockResolvedValue(STOPPED_STATUS);
-    vi.mocked(remoteStart).mockRejectedValue(
-      new Error('REMOTE_INSECURE_BIND: loopback required'),
-    );
+    vi.mocked(remoteStart).mockRejectedValue(new Error('REMOTE_INSECURE_BIND: loopback required'));
 
     await renderWithProviders(<RemoteAccessPanel />);
     await screen.findByText('Stopped');

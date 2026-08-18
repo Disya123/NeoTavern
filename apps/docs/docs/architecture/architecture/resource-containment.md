@@ -26,14 +26,14 @@ payloads and the **process-tree memory containment** for heavy workloads.
 Each stage has its own limit; no stage may materialize more than the contract
 budget:
 
-| Stage | Mechanism | Fails as |
-| --- | --- | --- |
-| Transport read | `read_body_limited` in `remote-http` (Content-Length pre-check + bounded chunked read; 413 before parse) | HTTP 413 `QUOTA_EXCEEDED` |
-| Kernel вход (линия 2) | `enforce_request_limit(op, req)` in `runtime_kernel::dispatch` / `dispatch_stream` / `handle_unary` / `generation::stream_start` — byte-length gate BEFORE any parse, transport-agnostic (CLI/FFI/JNI/Tauri all pass here) | `PAYLOAD_TOO_LARGE` product error |
-| Parse | generated DTO checkers; serde_json recursion limit (128, `unbounded_depth` never enabled) | `ContractViolation` / `RecursionLimitExceeded` |
-| Result construction | cardinality caps (`maxArrayItems`/`maxObjectKeys`/`maxStringBytes`) applied where collections are created; page size tuned so `pageLimit × 1 MiB ≤ responseLimitBytes` | bounded by construction |
-| Serialization | `product::encode_limited` → `serde_json::to_writer` + `LimitedWriter` (refuses past `limit`, mid-write) | `PAYLOAD_TOO_LARGE` |
-| Response precision | per-op `operation_response_limit(op)` post-check in `handle_unary` (bounded ≤ registry max during serialization, per-op limit enforced after) | `PAYLOAD_TOO_LARGE` |
+| Stage                 | Mechanism                                                                                                                                                                                                                  | Fails as                                       |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| Transport read        | `read_body_limited` in `remote-http` (Content-Length pre-check + bounded chunked read; 413 before parse)                                                                                                                   | HTTP 413 `QUOTA_EXCEEDED`                      |
+| Kernel вход (линия 2) | `enforce_request_limit(op, req)` in `runtime_kernel::dispatch` / `dispatch_stream` / `handle_unary` / `generation::stream_start` — byte-length gate BEFORE any parse, transport-agnostic (CLI/FFI/JNI/Tauri all pass here) | `PAYLOAD_TOO_LARGE` product error              |
+| Parse                 | generated DTO checkers; serde_json recursion limit (128, `unbounded_depth` never enabled)                                                                                                                                  | `ContractViolation` / `RecursionLimitExceeded` |
+| Result construction   | cardinality caps (`maxArrayItems`/`maxObjectKeys`/`maxStringBytes`) applied where collections are created; page size tuned so `pageLimit × 1 MiB ≤ responseLimitBytes`                                                     | bounded by construction                        |
+| Serialization         | `product::encode_limited` → `serde_json::to_writer` + `LimitedWriter` (refuses past `limit`, mid-write)                                                                                                                    | `PAYLOAD_TOO_LARGE`                            |
+| Response precision    | per-op `operation_response_limit(op)` post-check in `handle_unary` (bounded ≤ registry max during serialization, per-op limit enforced after)                                                                              | `PAYLOAD_TOO_LARGE`                            |
 
 Byte limits are **generated**, never hand-written: `codegen.mjs` emits
 `operation_request_limit` / `operation_response_limit` plus the registry-wide

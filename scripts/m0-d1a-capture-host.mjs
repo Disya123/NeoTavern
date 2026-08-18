@@ -570,8 +570,7 @@ export function classifyRenderdocApi(text) {
       text,
     );
   const glesOnly =
-    driver === 'OpenGLES' ||
-    (/glGenVertexArrays|Default VAO|OpenGL ES/u.test(text) && !vulkanCmds);
+    driver === 'OpenGLES' || (/glGenVertexArrays|Default VAO|OpenGL ES/u.test(text) && !vulkanCmds);
   if (glesOnly) {
     return {
       ok: false,

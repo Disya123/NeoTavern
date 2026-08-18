@@ -73,9 +73,7 @@ test('mobile header keeps only pencil + ellipsis; details opens the card with me
   // may have left prompt-template mode on, making the echo reply a long ChatML
   // prompt whose length changes the details sheet geometry. The rendered card
   // is asserted below; only the sheet's size must be deterministic.
-  const replyList = await page.request.get(
-    `/api/v2/chats/${chatId}/messages?order=asc&limit=50`,
-  );
+  const replyList = await page.request.get(`/api/v2/chats/${chatId}/messages?order=asc&limit=50`);
   const replyBody = (await replyList.json()) as { items: Array<{ id: string; role: string }> };
   const reply = [...replyBody.items].reverse().find((message) => message.role === 'assistant');
   const replyId = reply?.id;

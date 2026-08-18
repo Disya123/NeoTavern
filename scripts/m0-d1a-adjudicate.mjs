@@ -90,7 +90,8 @@ export function extractNamedResources(xml) {
 
 export function extractDebugLabels(xml) {
   const labels = [];
-  const re = /<chunk [^>]*name="vkCmdBeginDebugUtilsLabelEXT"[^>]*>[\s\S]*?<string name="pLabelName"[^>]*>([^<]+)<\/string>/gu;
+  const re =
+    /<chunk [^>]*name="vkCmdBeginDebugUtilsLabelEXT"[^>]*>[\s\S]*?<string name="pLabelName"[^>]*>([^<]+)<\/string>/gu;
   for (const match of xml.matchAll(re)) {
     labels.push(match[1]);
   }
@@ -124,17 +125,22 @@ export function extractCreateImageCount(xml) {
 
 export function extractCreateDeviceIds(xml) {
   const ids = new Set();
-  const re = /<chunk [^>]*name="vkCreateDevice"[\s\S]*?<ResourceId name="Device"[^>]*>(\d+)<\/ResourceId>/gu;
+  const re =
+    /<chunk [^>]*name="vkCreateDevice"[\s\S]*?<ResourceId name="Device"[^>]*>(\d+)<\/ResourceId>/gu;
   for (const match of xml.matchAll(re)) ids.add(match[1]);
   if (ids.size === 0) {
-    const fallback = xml.matchAll(/<ResourceId name="device" typename="VkDevice"[^>]*>(\d+)<\/ResourceId>/gu);
+    const fallback = xml.matchAll(
+      /<ResourceId name="device" typename="VkDevice"[^>]*>(\d+)<\/ResourceId>/gu,
+    );
     for (const match of fallback) ids.add(match[1]);
   }
   return [...ids];
 }
 
 export function forbiddenCommands(xml) {
-  return FORBIDDEN_CMDS.filter((name) => xml.includes(`name="${name}"`) || xml.includes(`>${name}<`));
+  return FORBIDDEN_CMDS.filter(
+    (name) => xml.includes(`name="${name}"`) || xml.includes(`>${name}<`),
+  );
 }
 
 export function checkPassOrder(labels) {
@@ -145,8 +151,7 @@ export function checkPassOrder(labels) {
   const blitBetween = labels.filter(
     (name, i) => name === 'm0-d1a-blit-pass' && i > glass1 && i < roi2,
   ).length;
-  const ok =
-    roi1 >= 0 && glass1 > roi1 && roi2 > glass1 && glass2 > roi2 && blitBetween >= 1;
+  const ok = roi1 >= 0 && glass1 > roi1 && roi2 > glass1 && glass2 > roi2 && blitBetween >= 1;
   return {
     ok,
     indices: { roi1, glass1, roi2, glass2 },
@@ -191,10 +196,16 @@ export function checkNoFlatten(labels, copies, names) {
   const accId = [...names.entries()].find(([, name]) => name === ACCUMULATOR_LABEL)?.[0];
   const fullCopies = copies.filter(
     (row) =>
-      row.src === accId && row.x === 0 && row.y === 0 && row.w >= ACCUMULATOR_PX.w && row.h >= ACCUMULATOR_PX.h,
+      row.src === accId &&
+      row.x === 0 &&
+      row.y === 0 &&
+      row.w >= ACCUMULATOR_PX.w &&
+      row.h >= ACCUMULATOR_PX.h,
   );
   const blitCount = labels.filter((name) => name === 'm0-d1a-blit-pass').length;
-  const rasterCount = labels.filter((name) => name === 'm0-d1a-vello' || name.includes('vello')).length;
+  const rasterCount = labels.filter(
+    (name) => name === 'm0-d1a-vello' || name.includes('vello'),
+  ).length;
   const ok = blitCount >= 4 && fullCopies.length === 0;
   return {
     ok,
@@ -255,9 +266,10 @@ export function checkLifetime(xml, captureLog, controlLog) {
     fences_completed: ended,
     acc_bytes: { capture: captureAcc, control: controlAcc },
     high_water_stable: highWaterStable,
-    reason: countersMatch && ended && !validation && highWaterStable
-      ? '100-frame counters golden on both runs; acc_bytes high-water unchanged; capture ended after poll; no validation hits'
-      : 'lifetime/counter/validation check failed',
+    reason:
+      countersMatch && ended && !validation && highWaterStable
+        ? '100-frame counters golden on both runs; acc_bytes high-water unchanged; capture ended after poll; no validation hits'
+        : 'lifetime/counter/validation check failed',
   };
 }
 

@@ -581,9 +581,7 @@ export function evaluateFixture(fixture, provenance = {}) {
     { ancestor: provenance.ancestor },
   );
   const bound =
-    provenance.apk_linkage === 'BOUND' &&
-    provenance.evidence_dirty === false &&
-    boundCommit.ok;
+    provenance.apk_linkage === 'BOUND' && provenance.evidence_dirty === false && boundCommit.ok;
   const vulkan = fixture.driver === 'Vulkan';
   const links = fixture.chain ?? [];
   const chain = links.map(chainComplete);

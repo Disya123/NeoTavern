@@ -40,11 +40,11 @@ over HTTP.
 
 ## Exit codes (stable contract)
 
-| Code | Meaning |
-|---|---|
-| `0` | Response envelope with `kind: ok` (printed to stdout). |
-| `1` | Response envelope with `kind: error` (product/contract error, printed to stdout), OR a transport failure before any envelope existed (diagnostic on stderr, stdout empty). |
-| `2` | Usage error (bad arguments). |
+| Code | Meaning                                                                                                                                                                    |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `0`  | Response envelope with `kind: ok` (printed to stdout).                                                                                                                     |
+| `1`  | Response envelope with `kind: error` (product/contract error, printed to stdout), OR a transport failure before any envelope existed (diagnostic on stderr, stdout empty). |
+| `2`  | Usage error (bad arguments).                                                                                                                                               |
 
 Examples:
 

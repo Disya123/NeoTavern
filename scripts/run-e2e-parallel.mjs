@@ -51,9 +51,7 @@ function runPlaywright(args, env) {
       if (code === 0) {
         resolvePromise();
       } else {
-        reject(
-          new Error(`playwright exited with code ${code}${signal ? ` (${signal})` : ''}`),
-        );
+        reject(new Error(`playwright exited with code ${code}${signal ? ` (${signal})` : ''}`));
       }
     });
   });
@@ -100,9 +98,10 @@ if (explicit) {
   const files = specFileCount(configPath);
   const cores = availableParallelism();
   const envShards = Number.parseInt(process.env['E2E_SHARDS'] ?? '', 10);
-  const shards = envShards > 0
-    ? Math.min(envShards, Math.max(files, 1))
-    : Math.max(1, Math.min(files, Math.floor(cores / 2) || 1));
+  const shards =
+    envShards > 0
+      ? Math.min(envShards, Math.max(files, 1))
+      : Math.max(1, Math.min(files, Math.floor(cores / 2) || 1));
   console.log(
     `[e2e] running ${files} spec files in ${shards} parallel shards (${cores} cores, ${configPath})`,
   );
@@ -120,7 +119,9 @@ if (explicit) {
     .map((r, k) => ({ result: r, shard: k + 1 }))
     .filter(({ result }) => result.status === 'rejected');
   for (const { result, shard } of failed) {
-    console.error(`[e2e] shard ${shard}/${shards} FAILED: ${result.reason?.message ?? result.reason}`);
+    console.error(
+      `[e2e] shard ${shard}/${shards} FAILED: ${result.reason?.message ?? result.reason}`,
+    );
   }
   console.log(`[e2e] ${results.length - failed.length}/${results.length} shards passed`);
   if (failed.length > 0) process.exitCode = 1;
