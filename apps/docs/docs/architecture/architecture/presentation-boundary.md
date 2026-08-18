@@ -70,8 +70,10 @@ dioxus-android-flagged     — experimental; not the launcher
 `FrameTransaction` mailbox, spatial/scroll/clip/effect property trees,
 CPU scroll/animation fast paths, async hit-test / nested-scroll dispatch,
 interaction-ready text snapshots, a cross-tile selection underlay (PERF-19
-**PASS** on physical Vulkan, not B PASS), and a PERF-18 effect-scope
-backdrop capture (**PASS** on physical Vulkan, not B PASS). Chat
+**PASS** on physical Vulkan, not B PASS), a PERF-18 effect-scope
+backdrop capture (**PASS** on physical Vulkan, not B PASS), and a CPU
+device/surface recovery state machine (injection-tested, not production JNI,
+not B PASS). Chat
 virtualization lives
 in `crates/chat-viewport` (height index, predictor, bounded tile cache,
 geometry epochs / C0/C1 remap; compositor sees only the **active** tile
@@ -84,5 +86,9 @@ selection go through `crates/presentation-session` (one
 Debug-only
 `crates/presentation-perf-probe` / `PresentationPerfActivity` is the
 physical capture vehicle (not production JNI). Neither crate is linked into
-production JNI. Recovery and GPU telemetry are not started. Product
-cutover is not declared.
+production JNI. Device/surface recovery is a CPU injection-tested state
+machine in `crates/neocompositor` (`GpuRecovery`); GPU telemetry is not
+started. Product cutover is not declared. Known host baseline failures are
+recorded in
+[known-baseline-failures.md](known-baseline-failures.md) and do not make
+PERF-18/19/20 evidence inadmissible.

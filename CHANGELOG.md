@@ -132,9 +132,27 @@
   Physical Xiaomi / Vulkan evidence in
   [perf-18-20-adjudication.json](docs/rfc/perf-18-20-adjudication.json):
   `PERF-18=PASS`, `PERF-19=PASS`, `PERF-20=PASS`, `almost_pass=false`.
-  Milestone B remains STARTED (device/surface recovery, GPU telemetry,
-  bounded queue/thermal/120 Hz, remaining PERF-01..22). Not a production
+  Milestone B remains STARTED (GPU telemetry, bounded queue/thermal/120 Hz,
+  remaining PERF-01..22; device/surface recovery is now a CPU
+  injection-tested host slice, not production JNI). Not a production
   cutover. `MainActivity` / WebView rollback unchanged.
+
+- **Device/surface recovery state machine (CPU, not B PASS).**
+  `crates/neocompositor` `GpuRecovery` implements RFC §36 phases, timeout skip,
+  surface recreate, device-epoch bump with device-bound cache/target/pipeline
+  destroy, last-known-good logical rehydrate, bounded mailbox during rebuild,
+  stale epoch reject, attempt cap then `Degraded` + acting WebView rollback,
+  and OOM-without-recreate-loop. Injection tests live in
+  `crates/neocompositor/tests/recovery.rs`. Not production JNI. Not a cutover.
+  GPU telemetry is not in this change. Milestone B remains STARTED.
+
+- **Known baseline failures (not a green full baseline).** Recorded as
+  `KNOWN_BASELINE_FAILURE` in
+  [known-baseline-failures.md](docs/architecture/known-baseline-failures.md):
+  mass existing Prettier drift (`pnpm format:check`) and
+  `runtime-kernel::diagnostics_export_counts_generation_runs`. They do not
+  make PERF-18/19/20 evidence inadmissible. They are not a waiver: each must
+  be fixed or given an explicit owner/waiver before Milestone B PASS.
 
 - **PERF-18 effect-scope backdrop host golden (IMPLEMENTED / GPU_PENDING,
   not PASS).** Canonical scene: parent backdrop root →

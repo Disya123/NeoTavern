@@ -94,9 +94,11 @@ crates/
                        # physical Vulkan; not B PASS), interaction-ready
                        # text snapshots, cross-tile selection underlay
                        # (PERF-19 criterion PASS on physical Vulkan; not
-                       # B PASS). Not production JNI; default host is
-                       # WebView rollback (`NEOTA_NEOCOMPOSITOR=1`).
-                       # Chat virtualization is `chat-viewport`, not here.
+                       # B PASS), CPU device/surface recovery (injection
+                       # tests; not production JNI). Not production JNI;
+                       # default host is WebView rollback
+                       # (`NEOTA_NEOCOMPOSITOR=1`). Chat virtualization is
+                       # `chat-viewport`, not here.
   presentation-m0/     # NeoUI v4 RFC D1a/D1b paint-seam probe (host PASS;
                        # crate log capture=false). Debug-only Activity;
                        # not production kernel JNI.
@@ -231,6 +233,10 @@ gate passes.
 - [Presentation boundary](presentation-boundary.md) — Milestone A **PASS**
   (feature-flagged Dioxus Product Wire shell). Not production cutover.
   React/WebView remains rollback; D3 DEFERRED.
+- [Known baseline failures](known-baseline-failures.md) — recorded
+  `KNOWN_BASELINE_FAILURE` fingerprints. They do not invalidate PERF-18/19/20
+  evidence and are **not** a green full baseline. Must be fixed or waived
+  with an owner before Milestone B PASS.
 - [PresentationCompatibilityMatrix](../rfc/presentation-compatibility-matrix.md)
   — baseline capability statuses after D1/D2 GO (not a cutover).
 - [Runtime Kernel + Storage foundation](https://github.com/Disya123/NeoTavern/blob/main/crates/runtime-kernel/README.md) —

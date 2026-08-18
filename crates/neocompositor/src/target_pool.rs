@@ -50,4 +50,13 @@ impl TargetPool {
             self.free.push(id);
         }
     }
+
+    /// Drop every device-bound target. Ids are not reused on the new device.
+    pub fn destroy_device_bound(&mut self) -> Vec<TargetId> {
+        let mut released = Vec::with_capacity(self.in_use.len() + self.free.len());
+        released.append(&mut self.in_use);
+        released.append(&mut self.free);
+        self.next_id = 1;
+        released
+    }
 }

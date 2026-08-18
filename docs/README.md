@@ -30,6 +30,7 @@ Index of the internal documentation. Each major topic has its own folder.
 - [Operations inventory](architecture/operations-inventory.md) — current `/api/v2` surface, feature ownership/routing.
 - [Product Wire Contracts](architecture/wire-contracts.md) — canonical contracts, codegen, handshake, corpus.
 - [Presentation boundary](architecture/presentation-boundary.md) — Milestone A **PASS** (flagged Dioxus Product Wire shell); WebView rollback.
+- [Known baseline failures](architecture/known-baseline-failures.md) — `KNOWN_BASELINE_FAILURE` fingerprints; not a green full baseline; not a B PASS waiver.
 - [PresentationCompatibilityMatrix](rfc/presentation-compatibility-matrix.md) — baseline after D1/D2 GO (not cutover).
 - [Generation durability](architecture/generation-durability.md) — Phase 6 recoverable generation workflows, state machine, SSE resume.
 - [Generation run/steps and the tool-call loop](architecture/generation-run-steps.md) — M2 / Этап 2.7: durable step journal, `waiting_for_tool`, tool registry and loop guard (ТЗ §8.3).

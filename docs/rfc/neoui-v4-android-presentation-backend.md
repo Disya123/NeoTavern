@@ -2973,6 +2973,19 @@ safe interaction surface, затем near overscan. Восстановление
 - fences;
 - command buffers.
 
+Host status (2026-08-18, **not** Milestone B PASS):
+`neotavern-neocompositor::GpuRecovery` is a CPU injection-tested state
+machine (`crates/neocompositor/tests/recovery.rs`). `Timeout` skips a frame
+without rebuild. Surface outdated/lost recreates surface/config on the same
+`DeviceEpoch`. Device loss bumps `DeviceEpoch`, destroys device-bound
+cache/targets/pipelines/handles, keeps `SceneEpoch` and product
+text/geometry/selection/logical scroll, rejects stale transactions /
+callbacks / retirement leases, keeps the mailbox bounded/latest-wins, and
+builds the first restored frame from the new epoch only. Bounded recovery
+attempts then `Degraded` with acting WebView rollback. OOM does not start a
+recreate loop. This is not production JNI and not a cutover. GPU telemetry
+is a separate follow-up slice.
+
 ---
 
 # 37. Safe mode

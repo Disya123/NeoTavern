@@ -16,6 +16,7 @@ pub mod neo_glass;
 pub mod pass_graph;
 pub mod perf18;
 pub mod property_tree;
+pub mod recovery;
 pub mod scene;
 pub mod scroll;
 pub mod selection;
@@ -54,6 +55,10 @@ pub use property_tree::{
     HitTestMatch, Insets, LogicalRect, Point, PointerFlags, PropertyEffectKind, PropertySnapshot,
     PropertyTreeBuilder, SampleError, SampledFrame, ScrollId, ScrollRange, Size, SpatialId,
     SpatialKind, SpatialTreeNode, StableSemanticId, TreeError, Vec2,
+};
+pub use recovery::{
+    CallbackReject, DegradedReason, GpuCallback, GpuFault, GpuHandle, GpuHandleKind, GpuRecovery,
+    RecoveryError, RecoveryOutcome, RecoveryPhase, SubmitReject, DEFAULT_RECOVERY_ATTEMPT_CAP,
 };
 pub use scene::{GlassSurface, NeoScene};
 pub use scroll::{

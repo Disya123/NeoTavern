@@ -60,6 +60,17 @@ production JNI renderer and **not** an Android cutover.
   group; backdrop is sampled at the barrier from the parent root; group
   targets and glass ROI stay bounded; nested glass stays acyclic; malformed
   scopes are rejected before present and keep last-known-good.
+- Device/surface recovery (RFC §36 / T13, CPU injection-tested, not B PASS):
+  `GpuRecovery` owns `Uninitialized → Ready → LossDetected → Quiescing →
+  Recreating → Rehydrating → Ready` (or `Degraded`). `Timeout` skips a frame
+  without rebuild. Surface outdated/lost recreates surface/config on the same
+  `DeviceEpoch`. Device loss bumps `DeviceEpoch`, destroys device-bound
+  cache/targets/pipelines/handles, keeps `SceneEpoch` and product
+  text/geometry/selection/logical scroll, rejects stale transactions /
+  callbacks / retirement leases, keeps the mailbox bounded/latest-wins, and
+  builds the first restored frame from the new epoch only. Bounded attempts
+  then `Degraded` with acting WebView rollback. OOM does not start a recreate
+  loop. Not production JNI.
 
 ## What this crate is not
 
@@ -67,8 +78,8 @@ production JNI renderer and **not** an Android cutover.
 - Not a cutover switch. Public Android stays on the React/WebView path.
 - `NEOTA_NEOCOMPOSITOR=1` is a **feature flag** for later host wiring. The
   default host is `PresentationHost::WebViewRollback`.
-- GPU telemetry and device-loss recovery are not started (required before
-  B PASS, not this slice). Mailbox high-water counters are in-memory only.
+- GPU telemetry is not started (required before B PASS, not this slice).
+  Mailbox high-water counters are in-memory only.
 - Virtualization lives in `crates/chat-viewport`, not here (including
   geometry epochs / C0/C1 remap). Viewport↔compositor transactions live in
   `crates/presentation-session`. A gesture-platform adapter is **not**
@@ -98,11 +109,12 @@ Started (CPU types + tests):
   production JNI)
 - PERF-18 effect-scope backdrop (**PASS** on physical Vulkan, not B PASS)
 - M0-D1a pass-order corpus as a production regression (not a lab re-run)
+- device/surface recovery CPU state machine (injection tests; not production
+  JNI)
 
 Not started (do not treat as done):
 
 - gesture-platform adapter
-- GPU device/surface recovery
 - shared-device raster interop in this crate (still in the M0 probe)
 - GPU timing telemetry
 - remaining PERF-01…PERF-22 and 120 Hz product budgets (PERF-18/19/20

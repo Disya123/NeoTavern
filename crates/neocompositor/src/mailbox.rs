@@ -59,6 +59,7 @@ pub enum TryDequeue {
 struct Inner {
     pending: Option<Arc<FrameTransaction>>,
     last_known_good: Option<Arc<FrameTransaction>>,
+    logical_snapshot: Option<Arc<FrameTransaction>>,
     clock: EpochClock,
     last_seen_frame: Option<FrameId>,
     last_seen_scene: Option<SceneEpoch>,
@@ -192,6 +193,7 @@ impl Inner {
         if let Some(lkg) = self.last_known_good.take() {
             self.retire_tx(&lkg);
         }
+        self.logical_snapshot = None;
         self.last_seen_frame = None;
         self.last_seen_scene = None;
         self.last_seen_generation = 0;
@@ -199,6 +201,60 @@ impl Inner {
         self.stats.device_epoch_bumps += 1;
         self.record_depth();
         epoch
+    }
+
+    fn remember_logical(&mut self, tx: &Arc<FrameTransaction>) {
+        self.logical_snapshot = Some(Arc::clone(tx));
+    }
+
+    fn recover_device_epoch(&mut self) -> DeviceEpoch {
+        if let Some(pending) = self.pending.take() {
+            self.remember_logical(&pending);
+            self.retire_tx(&pending);
+        }
+        if let Some(lkg) = self.last_known_good.take() {
+            let same = self
+                .logical_snapshot
+                .as_ref()
+                .is_some_and(|snapshot| Arc::ptr_eq(snapshot, &lkg));
+            if !same {
+                if self.logical_snapshot.is_none() {
+                    self.remember_logical(&lkg);
+                }
+                self.retire_tx(&lkg);
+            }
+        }
+        let epoch = self.clock.bump_device();
+        self.stats.device_epoch_bumps += 1;
+        self.record_depth();
+        epoch
+    }
+
+    fn next_frame_after_seen(&mut self) -> FrameId {
+        loop {
+            let id = self.clock.next_frame();
+            if self.last_seen_frame.map(|seen| id > seen).unwrap_or(true) {
+                return id;
+            }
+        }
+    }
+
+    fn rehydrate_logical(&mut self) -> Result<PostAccept, PostReject> {
+        if self.pending.is_some() {
+            return Ok(PostAccept::Queued);
+        }
+        let Some(source) = self.logical_snapshot.clone() else {
+            return Err(PostReject::Stale);
+        };
+        let frame = self.next_frame_after_seen();
+        let epoch = self.clock.device_epoch();
+        let accept = self.post(source.rebind_device(frame, epoch))?;
+        self.logical_snapshot = self.pending.clone();
+        Ok(accept)
+    }
+
+    fn adopt_logical(&mut self, tx: Arc<FrameTransaction>) {
+        self.logical_snapshot = Some(tx);
     }
 
     fn cancel(&mut self) {
@@ -229,6 +285,7 @@ impl FrameMailbox {
             inner: Mutex::new(Inner {
                 pending: None,
                 last_known_good: None,
+                logical_snapshot: None,
                 clock: EpochClock::new(),
                 last_seen_frame: None,
                 last_seen_scene: None,
@@ -276,6 +333,28 @@ impl FrameMailbox {
 
     pub fn bump_device_epoch(&self) -> DeviceEpoch {
         self.lock_inner().bump_device_epoch()
+    }
+
+    /// Device-loss path: bump [`DeviceEpoch`], retire GPU leases once, keep
+    /// [`SceneEpoch`] and the logical last-known-good snapshot.
+    pub fn recover_device_epoch(&self) -> DeviceEpoch {
+        self.lock_inner().recover_device_epoch()
+    }
+
+    pub fn logical_snapshot(&self) -> Option<Arc<FrameTransaction>> {
+        self.lock_inner().logical_snapshot.clone()
+    }
+
+    pub fn rehydrate_logical(&self) -> Result<PostAccept, PostReject> {
+        match self.inner.try_lock() {
+            Ok(mut inner) => inner.rehydrate_logical(),
+            Err(TryLockError::WouldBlock) => Err(PostReject::Contended),
+            Err(TryLockError::Poisoned(err)) => err.into_inner().rehydrate_logical(),
+        }
+    }
+
+    pub fn adopt_logical(&self, tx: Arc<FrameTransaction>) {
+        self.lock_inner().adopt_logical(tx);
     }
 
     pub fn cancel(&self) {

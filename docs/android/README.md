@@ -162,8 +162,10 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   not PASS) with a bounded mailbox, property trees, CPU scroll/animation
   fast paths, async hit-test / nested-scroll dispatch, interaction-ready
   text snapshots, a cross-tile selection underlay (PERF-19 **PASS** on
-  physical Vulkan, not B PASS), and a PERF-18
-  effect-scope capture (**PASS** on physical Vulkan, not B PASS). The
+  physical Vulkan, not B PASS), a PERF-18
+  effect-scope capture (**PASS** on physical Vulkan, not B PASS), and a CPU
+  device/surface recovery state machine (injection-tested, not production
+  JNI, not B PASS). The
   Blitz producer publishes interaction-ready text snapshots from already-
   shaped Parley layouts. These crates are **not** linked into
   `libneotavern_android_jni.so`. Chat virtualization

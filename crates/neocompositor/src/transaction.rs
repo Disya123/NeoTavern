@@ -241,6 +241,33 @@ impl FrameTransaction {
     pub fn byte_size(&self) -> usize {
         self.byte_size
     }
+
+    /// Keep the logical scene/text/geometry/selection-bearing snapshots and
+    /// [`SceneEpoch`]. GPU leases do not survive a device epoch bump.
+    pub fn rebind_device(&self, frame_id: FrameId, device_epoch: DeviceEpoch) -> Self {
+        let leases: Arc<[ResourceLease]> = Arc::from([]);
+        let byte_size = estimate_bytes(
+            &self.scene,
+            &self.damage,
+            &leases,
+            &self.properties,
+            &self.geometry,
+            &self.text,
+        );
+        Self {
+            frame_id,
+            scene_epoch: self.scene_epoch,
+            device_epoch,
+            generation: self.generation,
+            scene: Arc::clone(&self.scene),
+            damage: Arc::clone(&self.damage),
+            leases,
+            properties: Arc::clone(&self.properties),
+            geometry: Arc::clone(&self.geometry),
+            text: Arc::clone(&self.text),
+            byte_size,
+        }
+    }
 }
 
 fn align_geometry(snapshot: GeometryTileSnapshot, scene_epoch: SceneEpoch) -> GeometryTileSnapshot {
