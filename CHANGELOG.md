@@ -214,6 +214,24 @@
   requires an Android platform-surface + input-routing fixture.
   `MainActivity` / WebView rollback unchanged. Milestone B remains STARTED.
 
+- **Pressure and degraded admission (PERF-15 IMPLEMENTED, not PASS).**
+  `crates/neocompositor` `PressureController` walks
+  `Normal → Constrained → Critical → Degraded`. Eviction order is
+  deterministic. Viewport tiles, the protected band, and last-known-good
+  are never evicted. Image uploads throttle under Constrained+. Allocation
+  retries are bounded; OOM does not start an alloc loop. Host corpus:
+  `crates/neocompositor/tests/pressure.rs`. Not production JNI. Milestone B
+  remains STARTED.
+
+- **Milestone B-exit registry (machine-checkable, not B PASS).**
+  [`docs/rfc/milestone-b-exit.json`](docs/rfc/milestone-b-exit.json) plus
+  [`scripts/milestone-b-exit.mjs`](scripts/milestone-b-exit.mjs) refuse
+  `Milestone B = PASS` until PERF-01…05 and PERF-11…22 have independent
+  admissible evidence records, device-loss injection is physical, and
+  known baseline failures are fixed or explicitly waived. PERF-22 remains
+  **IMPLEMENTED**. Raw input-to-present p99 `20.65 ms` is a
+  reference-device baseline, not a release budget.
+
 - **Known baseline failures (not a green full baseline).** Recorded as
   `KNOWN_BASELINE_FAILURE` in
   [known-baseline-failures.md](docs/architecture/known-baseline-failures.md):

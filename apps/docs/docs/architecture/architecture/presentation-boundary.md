@@ -118,6 +118,13 @@ the same trace confirms timely app submit.
 Non-sampleable surface fallback (PERF-22) is **IMPLEMENTED** on the host
 corpus (`crates/neocompositor` `surface_fallback`); PASS still requires an
 Android platform-surface + input-routing fixture.
+Pressure/degraded admission (PERF-15) is **IMPLEMENTED** on the host
+corpus (`crates/neocompositor` `pressure`); not B PASS.
+The machine-checkable B-exit registry
+[`docs/rfc/milestone-b-exit.json`](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/milestone-b-exit.json) refuses
+`Milestone B = PASS` until PERF-01…05 and PERF-11…22 have independent
+admissible evidence, device-loss injection is physical, and known
+baseline failures are fixed or explicitly waived.
 Known host baseline
 failures are
 recorded in

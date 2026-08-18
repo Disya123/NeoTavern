@@ -16,6 +16,7 @@ pub mod neo_glass;
 pub mod pass_graph;
 pub mod perf18;
 pub mod platform_input;
+pub mod pressure;
 pub mod property_tree;
 pub mod recovery;
 pub mod scene;
@@ -61,6 +62,10 @@ pub use platform_input::{
     ANDROID_ACTION_POINTER_DOWN, ANDROID_ACTION_POINTER_INDEX_MASK,
     ANDROID_ACTION_POINTER_INDEX_SHIFT, ANDROID_ACTION_POINTER_UP, ANDROID_ACTION_UP,
     INPUT_EDGE_RESERVE, INPUT_MAX_POINTERS, INPUT_QUEUE_CAP,
+};
+pub use pressure::{
+    AdmissionItem, Admit, EvictReport, EvictionClass, PressureController, PressureReject,
+    PressureStats, PressureTier, ResourceId, DEFAULT_ALLOC_RETRY_CAP, DEFAULT_PRESSURE_CAP_BYTES,
 };
 pub use property_tree::{
     hit_test, ClipId, ClipTreeNode, EffectId, EffectSpec, EffectTreeNode, HitTestId, HitTestItem,

@@ -99,7 +99,8 @@ crates/
                        # Choreographer adapter (debug/flagged host only;
                        # physical 120 Hz Perfetto PASS, not B PASS),
                        # PERF-22 non-sampleable fallback (host IMPLEMENTED,
-                       # not PASS). Default
+                       # not PASS), PERF-15 pressure/degraded admission
+                       # (host IMPLEMENTED, not PASS). Default
                        # host is WebView rollback
                        # (`NEOTA_NEOCOMPOSITOR=1`). Chat virtualization is
                        # `chat-viewport`, not here.
@@ -241,7 +242,8 @@ gate passes.
 - [Known baseline failures](known-baseline-failures.md) — recorded
   `KNOWN_BASELINE_FAILURE` fingerprints. They do not invalidate PERF-18/19/20
   evidence and are **not** a green full baseline. Must be fixed or waived
-  with an owner before Milestone B PASS.
+  with an owner before Milestone B PASS. Gated by
+  [milestone-b-exit.json](../rfc/milestone-b-exit.json).
 - [PresentationCompatibilityMatrix](../rfc/presentation-compatibility-matrix.md)
   — baseline capability statuses after D1/D2 GO (not a cutover).
 - [Runtime Kernel + Storage foundation](../../crates/runtime-kernel/README.md) —

@@ -6,7 +6,9 @@
 These failures do **not** make the independent PERF-18/19/20 physical
 evidence inadmissible (`docs/rfc/perf-18-20-adjudication.json`). They
 **must** be fixed or given an explicit owner/waiver before Milestone B
-PASS. Do not mass-format or silently skip them as part of an unrelated
+PASS. The machine-checkable gate is
+[milestone-b-exit.json](../rfc/milestone-b-exit.json); it will not stamp
+`Milestone B = PASS` while these rows are `OPEN`. Do not mass-format or silently skip them as part of an unrelated
 slice.
 
 ## `KNOWN_BASELINE_FAILURE` — Prettier mass drift

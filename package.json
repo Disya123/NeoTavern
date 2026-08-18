@@ -35,6 +35,7 @@
     "docs:sync:check": "node scripts/docs-sync.mjs --check",
     "milestone:gates": "node scripts/check-milestone-gates.mjs",
     "milestone:gates:check": "node scripts/check-milestone-gates.mjs --check && node scripts/check-milestone-gates.mjs --self-test",
+    "milestone:b-exit": "node scripts/milestone-b-exit.mjs --check",
     "contained:run": "node scripts/contained-run.mjs",
     "test:contracts:heavy": "node scripts/contained-run.mjs --cap 4096 --min-cap 2048 --deadline 900 --lock neota-heavy -- pnpm exec vitest run packages/contracts/test/fuzz.test.ts packages/contracts/test/bench.test.ts",
     "test:rust-fuzz:contained": "node scripts/contained-run.mjs --cap 4096 --min-cap 2048 --deadline 900 --lock neota-heavy -- cargo test --manifest-path crates\\Cargo.toml -p contracts-generated --test fuzz_deserialization",

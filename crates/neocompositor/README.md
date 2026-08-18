@@ -58,6 +58,11 @@ production JNI renderer and **not** an Android cutover.
   do not panic. Host corpus is in
   `crates/neocompositor/tests/surface_fallback.rs`. PASS still needs an
   Android platform-surface + input-routing fixture.
+- Pressure / degraded admission (PERF-15 **IMPLEMENTED**, not PASS):
+  unified `Normal → Constrained → Critical → Degraded` controller,
+  deterministic eviction, viewport / protected band / LKG retained,
+  image-upload throttle, bounded allocation retries, no OOM loop.
+  Host corpus is `crates/neocompositor/tests/pressure.rs`.
 - Interaction-ready text snapshots (RFC §21.1): immutable
   `TextInteractionSnapshot` bound to `SceneEpoch`, generation-safe
   `TextFragmentId`, producer-authored bidi runs / clusters / line metrics /
@@ -160,12 +165,13 @@ Started (CPU types + tests):
   shell only; not production JNI; `PASS` on physical 120 Hz)
 - non-sampleable surface fallback (PERF-22 **IMPLEMENTED**, not PASS;
   Android platform-surface fixture still required)
+- pressure / degraded admission (PERF-15 **IMPLEMENTED**, not PASS)
 
 Not started (do not treat as done):
 
 - remaining PERF-01…PERF-22 and 120 Hz product budgets (PERF-18/19/20
-  are independently PASS; PERF-22 is **IMPLEMENTED** on the host corpus,
-  not PASS; Milestone B stays STARTED)
+  are independently PASS; PERF-15/22 are **IMPLEMENTED** on the host
+  corpus, not PASS; Milestone B stays STARTED)
 
 See [presentation boundary](../../docs/architecture/presentation-boundary.md)
 and [ADR-0049](../../docs/adr/0049-track-d-dioxus-presentation.md).

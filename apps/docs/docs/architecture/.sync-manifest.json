@@ -5,7 +5,7 @@
     {
       "source": "README.md",
       "target": "README.md",
-      "sha256": "935290c1e4bd892478410d7c2f1f019cbdd4dff342a84c551f270a230fd23af2"
+      "sha256": "407c39c1436927ccefa24e02b4df2fa6114cf866248c35ef759fe8faf005c85c"
     },
     {
       "source": "adr/0004-typebox-contracts.md",
@@ -245,7 +245,7 @@
     {
       "source": "architecture/README.md",
       "target": "architecture/README.md",
-      "sha256": "0afc7f408116a8b2407cb943291f649d1defb28ebb9339ce6b9396694afba698"
+      "sha256": "b9634011330b22df5630c9857b650781d58d6b25910c0b6c24f15ce0efd26d84"
     },
     {
       "source": "architecture/benchmarks.md",
@@ -265,7 +265,7 @@
     {
       "source": "architecture/known-baseline-failures.md",
       "target": "architecture/known-baseline-failures.md",
-      "sha256": "50802f0d152dc7c36b06ba628930d7e6385d8d6b0aaebe51ba4e2909d186c58d"
+      "sha256": "05ef21ca769f3f46351751b005fc1f1c886a650dca72919555b5da32525f410f"
     },
     {
       "source": "architecture/operations-inventory.md",
@@ -280,7 +280,7 @@
     {
       "source": "architecture/presentation-boundary.md",
       "target": "architecture/presentation-boundary.md",
-      "sha256": "84c1f953f1460d42de9395e52f34fdb614ce7d49b2a3dc22042fd13f3cf29f08"
+      "sha256": "bec804172bc270c3ba2346254c02ebbaf59afad25b3995ce7db1e618f3c9c609"
     },
     {
       "source": "architecture/prompt-pipeline.md",
@@ -360,7 +360,7 @@
     {
       "source": "rfc/README.md",
       "target": "rfc/README.md",
-      "sha256": "b41914822fa0aa0c04a42b50f7645a88b53e5fe0d25b34548bfcdc469912c30c"
+      "sha256": "c8d09221835008180d6e1034df8b79b5ecaea1b2589f913da76f21065712e605"
     },
     {
       "source": "rfc/d1-d2-decision.md",
@@ -420,7 +420,7 @@
     {
       "source": "rfc/neoui-v4-android-presentation-backend.md",
       "target": "rfc/neoui-v4-android-presentation-backend.md",
-      "sha256": "5cce5ff54ab9732f05c4c385be457e77bd927996726064751d8a6b6fe1bcda06"
+      "sha256": "364f638e9792f138804a9a44eb8b89479800e1b3abcbb84efc33bdf9ee59b3f9"
     },
     {
       "source": "rfc/perf-18-20-physical-runbook.md",

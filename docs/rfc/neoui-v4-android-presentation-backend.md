@@ -3412,6 +3412,9 @@ Tap/selection/long-press во время unacknowledged compositor scroll, tile 
 
 ## PERF-15 — pressure/degraded path
 
+**Host corpus:** `IMPLEMENTED` in `crates/neocompositor` (`pressure`).
+`Normal → Constrained → Critical → Degraded`. Not Milestone B PASS.
+
 Memory pressure во время fling + glass + image upload + VisualSurface. Проверяет
 hard caps, eviction order, last-known-good/fallback, allocation failure и
 отсутствие OOM/panic.

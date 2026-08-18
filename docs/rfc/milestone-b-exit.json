@@ -1,0 +1,105 @@
+{
+  "schema": "milestone-b-exit/v1",
+  "milestone_b": "STARTED",
+  "almost_pass": false,
+  "production_cutover": "NOT_STARTED",
+  "platform_gesture_adapter": "PASS",
+  "perf15": "IMPLEMENTED",
+  "perf22": "IMPLEMENTED",
+  "input_to_present_p99_ns": 20646128,
+  "input_to_present_p99_ms": 20.65,
+  "input_to_present_p99_role": "reference-device-baseline",
+  "release_budget_calibration_adr": null,
+  "required_perf": [
+    "PERF-01",
+    "PERF-02",
+    "PERF-03",
+    "PERF-04",
+    "PERF-05",
+    "PERF-11",
+    "PERF-12",
+    "PERF-13",
+    "PERF-14",
+    "PERF-15",
+    "PERF-16",
+    "PERF-17",
+    "PERF-18",
+    "PERF-19",
+    "PERF-20",
+    "PERF-21",
+    "PERF-22"
+  ],
+  "criteria": {
+    "PERF-01": { "status": "MISSING", "independent": false, "admissible": false, "record": null },
+    "PERF-02": { "status": "MISSING", "independent": false, "admissible": false, "record": null },
+    "PERF-03": { "status": "MISSING", "independent": false, "admissible": false, "record": null },
+    "PERF-04": { "status": "MISSING", "independent": false, "admissible": false, "record": null },
+    "PERF-05": { "status": "MISSING", "independent": false, "admissible": false, "record": null },
+    "PERF-11": { "status": "MISSING", "independent": false, "admissible": false, "record": null },
+    "PERF-12": { "status": "MISSING", "independent": false, "admissible": false, "record": null },
+    "PERF-13": { "status": "MISSING", "independent": false, "admissible": false, "record": null },
+    "PERF-14": { "status": "MISSING", "independent": false, "admissible": false, "record": null },
+    "PERF-15": {
+      "status": "IMPLEMENTED",
+      "independent": true,
+      "admissible": false,
+      "kind": "host_corpus",
+      "record": "crates/neocompositor/tests/pressure.rs",
+      "pass_requires": "physical_pressure_fixture"
+    },
+    "PERF-16": { "status": "MISSING", "independent": false, "admissible": false, "record": null },
+    "PERF-17": { "status": "MISSING", "independent": false, "admissible": false, "record": null },
+    "PERF-18": {
+      "status": "PASS",
+      "independent": true,
+      "admissible": true,
+      "kind": "physical",
+      "record": "docs/rfc/perf-18-20-adjudication.json",
+      "field": "perf18"
+    },
+    "PERF-19": {
+      "status": "PASS",
+      "independent": true,
+      "admissible": true,
+      "kind": "physical",
+      "record": "docs/rfc/perf-18-20-adjudication.json",
+      "field": "perf19"
+    },
+    "PERF-20": {
+      "status": "PASS",
+      "independent": true,
+      "admissible": true,
+      "kind": "physical",
+      "record": "docs/rfc/perf-18-20-adjudication.json",
+      "field": "perf20"
+    },
+    "PERF-21": { "status": "MISSING", "independent": false, "admissible": false, "record": null },
+    "PERF-22": {
+      "status": "IMPLEMENTED",
+      "independent": true,
+      "admissible": false,
+      "kind": "host_corpus",
+      "record": "crates/neocompositor/tests/surface_fallback.rs",
+      "pass_requires": "android_platform_surface_fixture"
+    }
+  },
+  "device_loss_injection": {
+    "status": "CPU_INJECTION",
+    "physical": false,
+    "admissible": false,
+    "record": "crates/neocompositor/tests/recovery.rs",
+    "pass_requires": "physical_device_loss_injection"
+  },
+  "known_baseline_failures": [
+    {
+      "id": "prettier-mass-drift",
+      "status": "OPEN",
+      "waiver": null
+    },
+    {
+      "id": "runtime-kernel.diagnostics_export_counts_generation_runs",
+      "status": "OPEN",
+      "waiver": null
+    }
+  ]
+}
