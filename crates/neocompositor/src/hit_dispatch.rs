@@ -102,6 +102,44 @@ impl CompositorFastPath {
         Ok(())
     }
 
+    pub fn bind_text(
+        &mut self,
+        text: Arc<crate::text::TextSnapshotSet>,
+    ) -> Result<(), DispatchError> {
+        let snapshot = self
+            .snapshot
+            .as_ref()
+            .ok_or(DispatchError::MissingSnapshot)?;
+        if snapshot.scene_epoch() != text.scene_epoch() {
+            return Err(DispatchError::StaleEpoch);
+        }
+        self.text = Some(text);
+        Ok(())
+    }
+
+    pub fn bind_geometry(
+        &mut self,
+        geometry: Arc<crate::geometry_tiles::GeometryTileSnapshot>,
+    ) -> Result<(), DispatchError> {
+        let snapshot = self
+            .snapshot
+            .as_ref()
+            .ok_or(DispatchError::MissingSnapshot)?;
+        if snapshot.scene_epoch() != geometry.scene_epoch() {
+            return Err(DispatchError::StaleEpoch);
+        }
+        self.geometry = Some(geometry);
+        Ok(())
+    }
+
+    pub fn text_snapshot(&self) -> Option<&crate::text::TextSnapshotSet> {
+        self.text.as_deref()
+    }
+
+    pub fn geometry_snapshot(&self) -> Option<&crate::geometry_tiles::GeometryTileSnapshot> {
+        self.geometry.as_deref()
+    }
+
     pub fn hit_snapshot(&self) -> Option<&HitTestSnapshot> {
         self.hits.as_deref()
     }
@@ -312,6 +350,16 @@ impl CompositorFastPath {
             || snapshot.scene_epoch() != hits.scene_epoch()
         {
             return Err(DispatchError::StaleEpoch);
+        }
+        if let Some(text) = self.text.as_ref() {
+            if text.scene_epoch() != snapshot.scene_epoch() {
+                return Err(DispatchError::StaleEpoch);
+            }
+        }
+        if let Some(geometry) = self.geometry.as_ref() {
+            if geometry.scene_epoch() != snapshot.scene_epoch() {
+                return Err(DispatchError::StaleEpoch);
+            }
         }
         Ok(())
     }

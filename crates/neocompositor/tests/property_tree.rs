@@ -1,11 +1,12 @@
 use neotavern_neocompositor::{
     hit_test, AffineCoeffs, BackdropRootId, BarrierId, ClipChainId, ClipNode, EffectId, EffectKind,
     EffectNode, EffectNodeId, EffectScopeId, EffectSpec, EpochClock, FrameMailbox,
-    FrameTransaction, FrameTransactionParts, GlassBoundary, HitTestItem, Insets, LogicalRect,
-    NeoDisplayList, NeoPaintOp, NeoScene, PaintChunk, PaintChunkId, PaintOrderKey, Point,
-    PostReject, PropertyEffectKind, PropertySnapshot, PropertyTreeBuilder, Rect, SampleError,
-    SampledFrame, SceneEpoch, ScrollId, ScrollRange, Size, SpatialId, SpatialKind, SpatialNode,
-    SpatialNodeId, StubPayload, TreeError, TryDequeue, Vec2,
+    FrameTransaction, FrameTransactionParts, GeometryTileSnapshot, GlassBoundary, HitTestItem,
+    Insets, LogicalRect, NeoDisplayList, NeoPaintOp, NeoScene, PaintChunk, PaintChunkId,
+    PaintOrderKey, Point, PostReject, PropertyEffectKind, PropertySnapshot, PropertyTreeBuilder,
+    Rect, SampleError, SampledFrame, SceneEpoch, ScrollId, ScrollRange, Size, SpatialId,
+    SpatialKind, SpatialNode, SpatialNodeId, StubPayload, TextSnapshotSet, TreeError, TryDequeue,
+    Vec2,
 };
 use std::sync::Arc;
 use std::thread;
@@ -107,6 +108,8 @@ fn publish_tree(clock: &mut EpochClock, properties: PropertySnapshot) -> FrameTr
         damage: Vec::new(),
         leases: Vec::new(),
         properties,
+        geometry: GeometryTileSnapshot::empty(epoch),
+        text: TextSnapshotSet::empty(epoch),
     })
 }
 
@@ -447,6 +450,8 @@ fn mailbox_rejects_property_epoch_mismatch() {
         damage: Vec::new(),
         leases: Vec::new(),
         properties: tree.snapshot,
+        geometry: GeometryTileSnapshot::empty(SceneEpoch(99)),
+        text: TextSnapshotSet::empty(SceneEpoch(99)),
     });
     assert_eq!(mailbox.post(tx), Err(PostReject::InvalidGraph));
     assert_eq!(mailbox.stats().rejected_invalid, 1);

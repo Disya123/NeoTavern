@@ -7,8 +7,10 @@ use std::sync::Arc;
 
 use crate::display_list::Rect;
 use crate::epoch::{DeviceEpoch, FrameId, SceneEpoch};
+use crate::geometry_tiles::GeometryTileSnapshot;
 use crate::property_tree::PropertySnapshot;
 use crate::scene::NeoScene;
+use crate::text::TextSnapshotSet;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DamageRect {
@@ -48,6 +50,8 @@ pub struct FrameTransactionParts {
     pub damage: Vec<DamageRect>,
     pub leases: Vec<ResourceLease>,
     pub properties: PropertySnapshot,
+    pub geometry: GeometryTileSnapshot,
+    pub text: TextSnapshotSet,
 }
 
 /// Immutable UI→render snapshot. Fields are not mutated after [`Self::publish`].
@@ -61,6 +65,8 @@ pub struct FrameTransaction {
     damage: Arc<[DamageRect]>,
     leases: Arc<[ResourceLease]>,
     properties: Arc<PropertySnapshot>,
+    geometry: Arc<GeometryTileSnapshot>,
+    text: Arc<TextSnapshotSet>,
     byte_size: usize,
 }
 
@@ -71,7 +77,9 @@ impl FrameTransaction {
         let damage: Arc<[DamageRect]> = parts.damage.into();
         let leases: Arc<[ResourceLease]> = parts.leases.into();
         let properties = Arc::new(parts.properties);
-        let byte_size = estimate_bytes(&scene, &damage, &leases, &properties);
+        let geometry = Arc::new(align_geometry(parts.geometry, parts.scene_epoch));
+        let text = Arc::new(align_text(parts.text, parts.scene_epoch));
+        let byte_size = estimate_bytes(&scene, &damage, &leases, &properties, &geometry, &text);
         Self {
             frame_id: parts.frame_id,
             scene_epoch: parts.scene_epoch,
@@ -81,6 +89,8 @@ impl FrameTransaction {
             damage,
             leases,
             properties,
+            geometry,
+            text,
             byte_size,
         }
     }
@@ -97,7 +107,9 @@ impl FrameTransaction {
         let damage: Arc<[DamageRect]> = damage.into();
         let leases: Arc<[ResourceLease]> = leases.into();
         let properties = Arc::new(PropertySnapshot::empty());
-        let byte_size = estimate_bytes(&scene, &damage, &leases, &properties);
+        let geometry = Arc::new(GeometryTileSnapshot::empty(scene_epoch));
+        let text = Arc::new(TextSnapshotSet::empty(scene_epoch));
+        let byte_size = estimate_bytes(&scene, &damage, &leases, &properties, &geometry, &text);
         Self {
             frame_id,
             scene_epoch,
@@ -107,6 +119,8 @@ impl FrameTransaction {
             damage,
             leases,
             properties,
+            geometry,
+            text,
             byte_size,
         }
     }
@@ -127,6 +141,8 @@ impl FrameTransaction {
             damage,
             leases: Vec::new(),
             properties: PropertySnapshot::empty(),
+            geometry: GeometryTileSnapshot::empty(SceneEpoch(generation)),
+            text: TextSnapshotSet::empty(SceneEpoch(generation)),
         })
     }
 
@@ -170,8 +186,49 @@ impl FrameTransaction {
         Arc::clone(&self.properties)
     }
 
+    pub fn geometry(&self) -> &GeometryTileSnapshot {
+        &self.geometry
+    }
+
+    pub fn geometry_arc(&self) -> Arc<GeometryTileSnapshot> {
+        Arc::clone(&self.geometry)
+    }
+
+    pub fn text(&self) -> &TextSnapshotSet {
+        &self.text
+    }
+
+    pub fn text_arc(&self) -> Arc<TextSnapshotSet> {
+        Arc::clone(&self.text)
+    }
+
+    pub fn interaction_epochs_match(&self) -> bool {
+        let properties_ok =
+            self.properties.is_empty() || self.properties.scene_epoch() == self.scene_epoch;
+        let geometry_ok =
+            self.geometry.is_empty() || self.geometry.scene_epoch() == self.scene_epoch;
+        let text_ok = self.text.is_empty() || self.text.scene_epoch() == self.scene_epoch;
+        properties_ok && geometry_ok && text_ok
+    }
+
     pub fn byte_size(&self) -> usize {
         self.byte_size
+    }
+}
+
+fn align_geometry(snapshot: GeometryTileSnapshot, scene_epoch: SceneEpoch) -> GeometryTileSnapshot {
+    if snapshot.is_empty() {
+        GeometryTileSnapshot::empty(scene_epoch)
+    } else {
+        snapshot
+    }
+}
+
+fn align_text(snapshot: TextSnapshotSet, scene_epoch: SceneEpoch) -> TextSnapshotSet {
+    if snapshot.is_empty() {
+        TextSnapshotSet::empty(scene_epoch)
+    } else {
+        snapshot
     }
 }
 
@@ -180,6 +237,8 @@ fn estimate_bytes(
     damage: &[DamageRect],
     leases: &[ResourceLease],
     properties: &PropertySnapshot,
+    geometry: &GeometryTileSnapshot,
+    text: &TextSnapshotSet,
 ) -> usize {
     256 + scene.display_list.ops.len() * 96
         + scene.display_list.spatial.len() * 48
@@ -190,4 +249,6 @@ fn estimate_bytes(
         + properties.clip_slot_count() * 48
         + properties.effect_slot_count() * 64
         + properties.scroll_slot_count() * 16
+        + geometry.tiles().len() * 32
+        + text.fragments().len() * 192
 }

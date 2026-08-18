@@ -7,6 +7,7 @@ pub mod animation;
 pub mod display_list;
 pub mod epoch;
 pub mod fast_path;
+pub mod geometry_tiles;
 pub mod hit_dispatch;
 pub mod host;
 pub mod layer_cache;
@@ -17,6 +18,7 @@ pub mod property_tree;
 pub mod scene;
 pub mod scroll;
 pub mod target_pool;
+pub mod text;
 pub mod transaction;
 
 pub use animation::{
@@ -29,6 +31,7 @@ pub use display_list::{
 };
 pub use epoch::{DeviceEpoch, EpochClock, FrameId, PresentationTime, SceneEpoch, ScrollEpoch};
 pub use fast_path::{CompositorFastPath, PresentOutcome, RasterDecision};
+pub use geometry_tiles::{GeometryTile, GeometryTileSnapshot, TileId, TileKind};
 pub use hit_dispatch::{DispatchError, HitTestSnapshot, PointerEvent, PointerId, PointerKind};
 pub use host::{
     production_host_from_env, production_host_from_flag, PresentationHost, NEOCOMPOSITOR_FLAG,
@@ -51,6 +54,11 @@ pub use scroll::{
     AckResult, AsyncScrollState, GestureId, ScrollAck, ScrollInputError, ScrollSequence,
 };
 pub use target_pool::{TargetId, TargetPool, TargetPoolError};
+pub use text::{
+    BidiAffinity, ClusterBoundary, LineMetric, ProducerGlyph, ProducerTextWork, ShapedRunRef,
+    TextCommitError, TextFragmentId, TextInteractionSnapshot, TextOffset, TextRange,
+    TextSnapshotSet, TileCoverage,
+};
 pub use transaction::{
     DamageRect, FrameTransaction, FrameTransactionParts, ResourceLease, ResourceLeaseId,
 };

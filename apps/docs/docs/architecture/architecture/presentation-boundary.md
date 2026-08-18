@@ -69,12 +69,12 @@ dioxus-android-flagged     — experimental; not the launcher
 `crates/neocompositor` holds production interchange types, a bounded
 `FrameTransaction` mailbox, spatial/scroll/clip/effect property trees,
 CPU scroll/animation fast paths, async hit-test / nested-scroll dispatch,
-and a PERF-18 effect-scope backdrop host golden (**IMPLEMENTED /
-GPU_PENDING**, not PASS). Chat virtualization lives in
-`crates/chat-viewport` (height index, predictor, bounded tile cache,
+interaction-ready text snapshots, and a PERF-18 effect-scope backdrop host
+golden (**IMPLEMENTED / GPU_PENDING**, not PASS). Chat virtualization lives
+in `crates/chat-viewport` (height index, predictor, bounded tile cache,
 geometry epochs / C0/C1 remap; compositor sees only the **active** tile
 descriptors and geometry snapshot). PERF-20 is **IMPLEMENTED** on the
 host corpus, not PASS (compositor integration and an Android high-velocity
-trace still required). Neither crate is linked into production JNI.
-Recovery and GPU telemetry are not started. Product cutover is not
-declared.
+trace still required). PERF-19 is not started until the selection-underlay
+slice. Neither crate is linked into production JNI. Recovery and GPU
+telemetry are not started. Product cutover is not declared.

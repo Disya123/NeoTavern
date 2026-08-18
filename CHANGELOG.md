@@ -66,6 +66,16 @@
   `MainActivity` / WebView rollback unchanged. PERF-18 stays
   **IMPLEMENTED / GPU_PENDING**.
 
+- **Interaction-ready text snapshots (not PERF-19).** `crates/neocompositor`
+  publishes an immutable `TextInteractionSnapshot` bound to `SceneEpoch`
+  with generation-safe `TextFragmentId`, producer bidi/cluster/line/glyph
+  geometry, and multi-tile coverage. The compositor does not shape, layout,
+  or fall back fonts. Text, geometry, and property snapshots switch
+  atomically. A stale or recycled fragment cancels instead of selecting
+  another message. Cross-tile selection underlay is not in this change.
+  `MainActivity` / WebView rollback unchanged. PERF-18 stays
+  **IMPLEMENTED / GPU_PENDING**. Milestone B remains STARTED.
+
 - **PERF-18 effect-scope backdrop host golden (IMPLEMENTED / GPU_PENDING,
   not PASS).** Canonical scene: parent backdrop root →
   `BeginEffect(opacity=0.5, transform, rounded clip)` → prefix →

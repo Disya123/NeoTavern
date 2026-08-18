@@ -86,7 +86,8 @@ crates/
                        # clip/effect property trees, CPU scroll/animation
                        # fast paths, async hit-test / nested-scroll
                        # dispatch, PERF-18 host golden (IMPLEMENTED /
-                       # GPU_PENDING, not PASS). Not production JNI;
+                       # GPU_PENDING, not PASS), interaction-ready text
+                       # snapshots. Not production JNI;
                        # default host is WebView rollback
                        # (`NEOTA_NEOCOMPOSITOR=1`).
                        # Chat virtualization is `chat-viewport`, not here.

@@ -34,6 +34,14 @@ production JNI renderer and **not** an Android cutover.
   across async scroll; a removed/recycled target gets `Cancel` and does not
   fall through to another message. Gesture latch/handoff reuse the same
   `ScrollId`. Targeting does not round-trip through Dioxus/layout.
+- Interaction-ready text snapshots (RFC §21.1): immutable
+  `TextInteractionSnapshot` bound to `SceneEpoch`, generation-safe
+  `TextFragmentId`, producer-authored bidi runs / clusters / line metrics /
+  glyph geometry. The compositor does not shape, layout, or fall back fonts.
+  A fragment may span many tiles. Text, geometry, and property snapshots
+  switch atomically on `FrameTransaction`. Stale/recycled fragments cancel
+  instead of selecting another message. Cross-tile selection underlay is
+  the next slice.
 - Effect-scope backdrop host golden (PERF-18 **IMPLEMENTED / GPU_PENDING**):
   ancestor opacity/filter/mask wrap prefix, glass, and foreground as one
   group; backdrop is sampled at the barrier from the parent root; group
@@ -68,13 +76,15 @@ Started (CPU types + tests):
   latch/handoff, timestamp animation)
 - async hit-test + nested-scroll dispatch (same snapshot/epoch as render;
   capture/cancel; no Dioxus round trip)
+- interaction-ready text snapshots (immutable, producer-shaped, atomic
+  with geometry + property snapshots; not PERF-19)
 - PERF-18 effect-scope backdrop host golden (**IMPLEMENTED / GPU_PENDING**,
   not PASS; Android Vulkan capture still required)
 - M0-D1a pass-order corpus as a production regression (not a lab re-run)
 
 Not started (do not treat as done):
 
-- interaction-ready text and cross-tile selection (chat-viewport follow-up)
+- cross-tile selection underlay / PERF-19
 - gesture-platform adapter
 - GPU device/surface recovery
 - shared-device raster interop in this crate (still in the M0 probe)

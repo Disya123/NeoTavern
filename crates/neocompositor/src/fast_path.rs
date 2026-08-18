@@ -47,6 +47,8 @@ pub struct CompositorFastPath {
     pub(crate) hits: Option<Arc<HitTestSnapshot>>,
     pub(crate) capture: Option<PointerCapture>,
     pub(crate) next_input_seq: u64,
+    pub(crate) text: Option<Arc<crate::text::TextSnapshotSet>>,
+    pub(crate) geometry: Option<Arc<crate::geometry_tiles::GeometryTileSnapshot>>,
 }
 
 impl CompositorFastPath {

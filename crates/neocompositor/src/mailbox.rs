@@ -108,6 +108,7 @@ impl Inner {
         if compile_passes(&tx.scene().display_list).is_err()
             || tx.properties().validate().is_err()
             || property_epoch_mismatch(&tx)
+            || !tx.interaction_epochs_match()
         {
             self.retire_tx(&tx);
             self.stats.rejected_invalid += 1;
