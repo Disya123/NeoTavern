@@ -24,6 +24,7 @@ pub enum StreamOp {
     PushLayer { alpha: f32, clip: bool },
     PopLayer,
     Glass { node_id: u64, bounds: Rect },
+    Text(anyrender::HostTextFragment),
 }
 
 #[derive(Default)]
@@ -145,5 +146,9 @@ impl PaintScene for ProducerSink {
                 marker.bounds.height() as f32,
             ),
         });
+    }
+
+    fn host_text_fragment(&mut self, fragment: anyrender::HostTextFragment) {
+        self.ops.push(StreamOp::Text(fragment));
     }
 }

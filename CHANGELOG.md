@@ -88,10 +88,26 @@
   invalidates the dependent glass ROI. Handles and caret use the same
   property snapshot and async scroll state; autoscroll sends a delta to
   an existing `ScrollId`. A fallback tile without an interaction snapshot
-  is not a text target. PERF-19 PASS still needs producer integration and
-  an Android selection/autoscroll capture. `MainActivity` / WebView
+  is not a text target. PERF-19 PASS still needs an Android
+  selection/autoscroll capture. `MainActivity` / WebView
   rollback unchanged. PERF-18 stays **IMPLEMENTED / GPU_PENDING**.
   Milestone B remains STARTED.
+
+- **Blitz producer text interaction snapshots (not PERF-19 PASS).**
+  `VirtualDom` → Blitz layout/paint publishes `TextInteractionSnapshot`
+  through a bounded `PaintScene::host_text_fragment` hook that copies
+  already-shaped Parley clusters, bidi maps, caret stops, and glyph
+  geometry. Glyph/emoji output is a separate raster family from
+  box/background. `TextInteractionSnapshot`, `GeometrySnapshot`,
+  `PropertySnapshot`, and the display list commit in one
+  `FrameTransaction`; a mixed/partial epoch is `InvalidGraph`. Fallback
+  without a snapshot is `NotInteractionReady`, not an approximate hit.
+  IME composition uses separate underline/background ops and does not
+  redraw glyph tiles. Drag counters stay
+  `shape_calls_after_commit=0`, `layout_rebuilds_during_drag=0`,
+  `glyph_rasters_during_drag=0`. PERF-19 remains **IMPLEMENTED**, not
+  PASS. `MainActivity` / WebView rollback unchanged. Milestone B remains
+  STARTED.
 
 - **PERF-18 effect-scope backdrop host golden (IMPLEMENTED / GPU_PENDING,
   not PASS).** Canonical scene: parent backdrop root →

@@ -77,6 +77,62 @@ pub struct HostNodeMarker {
     pub bounds: kurbo::Rect,
 }
 
+/// Replayable shaped-text snapshot emitted at paint time. Not a shaper.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct HostTextGlyph {
+    pub glyph_id: u32,
+    pub cluster: u32,
+    pub x: f32,
+    pub y: f32,
+    pub advance: f32,
+    pub font_key: u64,
+    pub color_emoji: bool,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct HostTextRun {
+    pub run_id: u64,
+    pub logical_start: u32,
+    pub logical_end: u32,
+    pub visual_order: u32,
+    pub bidi_level: u8,
+    pub rtl: bool,
+    pub glyphs: Vec<HostTextGlyph>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct HostTextCluster {
+    pub logical_start: u32,
+    pub logical_end: u32,
+    pub caret_stop: bool,
+    pub ligature: bool,
+    pub combining: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct HostTextLine {
+    pub logical_start: u32,
+    pub logical_end: u32,
+    pub origin_x: f32,
+    pub origin_y: f32,
+    pub width: f32,
+    pub ascent: f32,
+    pub descent: f32,
+    pub baseline: f32,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct HostTextFragment {
+    pub node_id: u64,
+    pub bounds: kurbo::Rect,
+    pub logical_end: u32,
+    pub runs: Vec<HostTextRun>,
+    pub clusters: Vec<HostTextCluster>,
+    pub lines: Vec<HostTextLine>,
+    pub logical_to_visual: Vec<u32>,
+    pub visual_to_logical: Vec<u32>,
+}
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum RegisterResourceErrorKind {
     /// The `RenderContext` you tried to register the resource with does not support the kind of resource
@@ -273,6 +329,12 @@ pub trait PaintScene: RenderContext {
     ///
     /// Default: no-op. Recording sinks and compositor probes override this.
     fn host_node_marker(&mut self, _marker: HostNodeMarker) {}
+
+    /// Publish a producer-authored text interaction snapshot.
+    ///
+    /// Default: no-op. Geometry comes from the already-shaped Parley layout;
+    /// backends must not reshape here.
+    fn host_text_fragment(&mut self, _fragment: HostTextFragment) {}
 
     // --- Provided methods
 

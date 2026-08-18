@@ -51,8 +51,10 @@ production JNI renderer and **not** an Android cutover.
   subsequent glass invalidates the dependent glass ROI. Handles/caret use
   the same property snapshot and async scroll state; autoscroll nudges an
   existing `ScrollId`. A fallback tile without an interaction snapshot is
-  not a text target. This is **not** PERF-19 PASS (producer integration
-  and Android selection/autoscroll capture still required).
+  not a text target. This is **not** PERF-19 PASS (Android
+  selection/autoscroll capture still required). The Blitz producer now
+  publishes real snapshots via `PaintScene::host_text_fragment`; IME
+  composition uses separate underlay ops without glyph-tile redraw.
 - Effect-scope backdrop host golden (PERF-18 **IMPLEMENTED / GPU_PENDING**):
   ancestor opacity/filter/mask wrap prefix, glass, and foreground as one
   group; backdrop is sampled at the barrier from the parent root; group
@@ -90,8 +92,8 @@ Started (CPU types + tests):
 - interaction-ready text snapshots (immutable, producer-shaped, atomic
   with geometry + property snapshots)
 - cross-tile selection underlay (PERF-19 **IMPLEMENTED**, not PASS;
-  producer integration and Android selection/autoscroll capture still
-  required)
+  Blitz producer snapshots land in this slice; Android selection/autoscroll
+  capture still required)
 - PERF-18 effect-scope backdrop host golden (**IMPLEMENTED / GPU_PENDING**,
   not PASS; Android Vulkan capture still required)
 - M0-D1a pass-order corpus as a production regression (not a lab re-run)

@@ -22,6 +22,7 @@ pub enum GraphError {
 pub enum InteractionPassKind {
     Text,
     Selection,
+    Composition,
     Caret,
     Handle,
 }
@@ -151,12 +152,14 @@ pub fn compile_passes(list: &NeoDisplayList) -> Result<Vec<CompiledPass>, GraphE
             }
             NeoPaintOp::TextFragment(_)
             | NeoPaintOp::Selection(_)
+            | NeoPaintOp::Composition(_)
             | NeoPaintOp::Caret(_)
             | NeoPaintOp::Handle(_) => {
                 flush(&mut current, &mut passes, &scope_stack);
                 let kind = match op {
                     NeoPaintOp::TextFragment(_) => InteractionPassKind::Text,
                     NeoPaintOp::Selection(_) => InteractionPassKind::Selection,
+                    NeoPaintOp::Composition(_) => InteractionPassKind::Composition,
                     NeoPaintOp::Caret(_) => InteractionPassKind::Caret,
                     NeoPaintOp::Handle(_) => InteractionPassKind::Handle,
                     _ => unreachable!("interaction arm"),

@@ -5,9 +5,12 @@
 //! highlight into background/glyph tiles. Color emoji and syntax colors
 //! never go through a selection blend-mode.
 
+use std::sync::Arc;
+
 use crate::display_list::{
-    AffineCoeffs, CaretPaintOp, GlassBoundary, HandleKind, HandlePaintOp, NeoPaintOp, PaintChunk,
-    PaintChunkId, PaintOrderKey, Rect, SelectionPaintOp, StubPayload, TextPaintFragment,
+    AffineCoeffs, CaretPaintOp, CompositionMarkKind, CompositionPaintOp, GlassBoundary, HandleKind,
+    HandlePaintOp, NeoPaintOp, PaintChunk, PaintChunkId, PaintOrderKey, Rect, SelectionPaintOp,
+    StubPayload, TextPaintFragment,
 };
 use crate::epoch::{PresentationTime, SceneEpoch};
 use crate::fast_path::{CompositorFastPath, RasterDecision};
@@ -316,6 +319,46 @@ pub fn compose_selectable(
         glass_roi_invalidations,
         autoscroll: None,
     })
+}
+
+pub fn compose_ime(
+    fragment: &TextInteractionSnapshot,
+    geometry: &GeometryTileSnapshot,
+    range: TextRange,
+) -> Result<Vec<NeoPaintOp>, SelectionError> {
+    if geometry.scene_epoch() != fragment.scene_epoch {
+        return Err(SelectionError::StaleEpoch);
+    }
+    let logical_rects = logical_cluster_rects(fragment, range);
+    let clipped = clip_rects_to_geometry(&logical_rects, geometry, None);
+    if clipped.is_empty() {
+        return Ok(Vec::new());
+    }
+    let rects: Arc<[Rect]> = clipped.into();
+    Ok(vec![
+        NeoPaintOp::Composition(CompositionPaintOp {
+            fragment_id: fragment.fragment_id,
+            generation: fragment.generation,
+            logical_range: range,
+            rects: Arc::clone(&rects),
+            kind: CompositionMarkKind::Background,
+            spatial_node: fragment.spatial_node,
+            clip_chain: fragment.clip_chain,
+            effect_node: fragment.effect_node,
+            backdrop_root: fragment.backdrop_root,
+        }),
+        NeoPaintOp::Composition(CompositionPaintOp {
+            fragment_id: fragment.fragment_id,
+            generation: fragment.generation,
+            logical_range: range,
+            rects,
+            kind: CompositionMarkKind::Underline,
+            spatial_node: fragment.spatial_node,
+            clip_chain: fragment.clip_chain,
+            effect_node: fragment.effect_node,
+            backdrop_root: fragment.backdrop_root,
+        }),
+    ])
 }
 
 #[allow(clippy::too_many_arguments)]

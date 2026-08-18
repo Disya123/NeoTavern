@@ -167,8 +167,10 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   fast paths, async hit-test / nested-scroll dispatch, interaction-ready
   text snapshots, a cross-tile selection underlay (PERF-19 **IMPLEMENTED**,
   not PASS), and a PERF-18
-  effect-scope host golden (**IMPLEMENTED / GPU_PENDING**, not PASS), and
-  are **not** linked into `libneotavern_android_jni.so`. Chat virtualization
+  effect-scope host golden (**IMPLEMENTED / GPU_PENDING**, not PASS). The
+  Blitz producer publishes interaction-ready text snapshots from already-
+  shaped Parley layouts. These crates are **not** linked into
+  `libneotavern_android_jni.so`. Chat virtualization
   is `crates/chat-viewport` (height index, predictor, tile cache, geometry
   epochs / C0/C1 remap; PERF-20 **IMPLEMENTED**, not PASS), not the
   compositor crate.

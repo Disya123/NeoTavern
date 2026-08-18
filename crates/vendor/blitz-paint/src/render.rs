@@ -731,6 +731,13 @@ impl ElementCx<'_, '_> {
                 self.node.id,
             );
 
+            crate::text::emit_host_text_fragment(
+                scene,
+                &text_layout.layout,
+                self.node.id,
+                transform,
+            );
+
             // Render text selection highlight (if any) using cached selection ranges
             if let Some(&(sel_start, sel_end)) = self.context.selection_ranges.get(&self.node.id) {
                 crate::text::draw_text_selection(
@@ -803,6 +810,10 @@ impl ElementCx<'_, '_> {
                         &convert_rect(&cursor),
                     );
                 };
+            }
+
+            if let Some(layout) = input_data.editor.try_layout() {
+                crate::text::emit_host_text_fragment(scene, layout, self.node.id, transform);
             }
 
             // Render text

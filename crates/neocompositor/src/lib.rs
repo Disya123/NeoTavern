@@ -26,10 +26,11 @@ pub use animation::{
     AnimValue, AnimationId, AnimationProperty, AnimationSpec, Easing, FastPathError,
 };
 pub use display_list::{
-    AffineCoeffs, BackdropRootId, BarrierId, CaretPaintOp, ClipChainId, ClipNode, EffectKind,
-    EffectNode, EffectNodeId, EffectScopeId, GlassBoundary, HandleKind, HandlePaintOp, ImageLayer,
-    NeoDisplayList, NeoPaintOp, PaintChunk, PaintChunkId, PaintOrderKey, Rect, SelectionPaintOp,
-    SpatialNode, SpatialNodeId, StubPayload, TextPaintFragment,
+    AffineCoeffs, BackdropRootId, BarrierId, CaretPaintOp, ClipChainId, ClipNode,
+    CompositionMarkKind, CompositionPaintOp, EffectKind, EffectNode, EffectNodeId, EffectScopeId,
+    GlassBoundary, HandleKind, HandlePaintOp, ImageLayer, NeoDisplayList, NeoPaintOp, PaintChunk,
+    PaintChunkId, PaintOrderKey, Rect, SelectionPaintOp, SpatialNode, SpatialNodeId, StubPayload,
+    TextPaintFragment,
 };
 pub use epoch::{DeviceEpoch, EpochClock, FrameId, PresentationTime, SceneEpoch, ScrollEpoch};
 pub use fast_path::{CompositorFastPath, PresentOutcome, RasterDecision};
@@ -58,13 +59,13 @@ pub use scroll::{
     AckResult, AsyncScrollState, GestureId, ScrollAck, ScrollInputError, ScrollSequence,
 };
 pub use selection::{
-    apply_autoscroll, autoscroll_delta, clip_to_tile, compose_selectable, SelectablePaintPlan,
-    SelectionError, SelectionFrame, SelectionSession, AUTOSCROLL_EDGE_PX,
+    apply_autoscroll, autoscroll_delta, clip_to_tile, compose_ime, compose_selectable,
+    SelectablePaintPlan, SelectionError, SelectionFrame, SelectionSession, AUTOSCROLL_EDGE_PX,
 };
 pub use target_pool::{TargetId, TargetPool, TargetPoolError};
 pub use text::{
-    BidiAffinity, ClusterBoundary, LineMetric, ProducerGlyph, ProducerTextWork, ShapedRunRef,
-    TextCommitError, TextFragmentId, TextInteractionSnapshot, TextOffset, TextRange,
+    BidiAffinity, ClusterBoundary, InteractionReady, LineMetric, ProducerGlyph, ProducerTextWork,
+    ShapedRunRef, TextCommitError, TextFragmentId, TextInteractionSnapshot, TextOffset, TextRange,
     TextSnapshotSet, TileCoverage,
 };
 pub use transaction::{

@@ -303,6 +303,25 @@ pub struct HandlePaintOp {
     pub backdrop_root: BackdropRootId,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CompositionMarkKind {
+    Background,
+    Underline,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CompositionPaintOp {
+    pub fragment_id: TextFragmentId,
+    pub generation: u64,
+    pub logical_range: TextRange,
+    pub rects: Arc<[Rect]>,
+    pub kind: CompositionMarkKind,
+    pub spatial_node: SpatialNodeId,
+    pub clip_chain: ClipChainId,
+    pub effect_node: EffectNodeId,
+    pub backdrop_root: BackdropRootId,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum NeoPaintOp {
     BeginEffectScope(EffectScopeId),
@@ -312,6 +331,7 @@ pub enum NeoPaintOp {
     Image(ImageLayer),
     TextFragment(TextPaintFragment),
     Selection(SelectionPaintOp),
+    Composition(CompositionPaintOp),
     Caret(CaretPaintOp),
     Handle(HandlePaintOp),
 }

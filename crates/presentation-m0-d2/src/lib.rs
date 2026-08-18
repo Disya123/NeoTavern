@@ -16,6 +16,7 @@ mod assemble;
 #[cfg(feature = "gpu")]
 mod gpu_run;
 mod sink;
+mod text_publish;
 
 use blitz_dom::BaseDocument;
 use blitz_paint::paint_scene;
@@ -30,10 +31,16 @@ pub use assemble::{assemble_from_stream, insert_moving_sample_before_last_glass}
 #[cfg(feature = "gpu")]
 pub use gpu_run::{run_dynamic_d2, run_dynamic_d2_with_capture, DynamicD2Report};
 pub use sink::{DrawKind, ProducerSink, StreamOp};
+pub use text_publish::{
+    fallback_without_snapshot_is_not_ready, ime_ops_without_glyph_reraster,
+    mixed_epoch_is_rejected, produce_selectable_app, publish_fallback_placeholder,
+    publish_interaction_from_producer, publish_selectable_text, InteractionPublish,
+    ProducerCounters, PublishError,
+};
 
 pub const D2_WIDTH: u32 = D1A_WIDTH;
 pub const D2_HEIGHT: u32 = D1A_HEIGHT;
-pub const D2_PATCH_LINES: u64 = 65;
+pub const D2_PATCH_LINES: u64 = 294;
 pub const D2_REBASE_ANYRENDER_0111: &str = "PASS";
 pub const D2_BLITZ_NEWER: &str = "NOT_AVAILABLE";
 pub const D2_PRODUCER_SOURCE: &str = "dioxus-virtualdom+blitz-paint-traversal+host-node-marker";
@@ -44,8 +51,8 @@ pub const D2_CAPTURE_DIR: &str = "/data/data/com.neotavern.mobile/files/m0-d2";
 pub const D2_PIN_NOTES: &str = concat!(
     "dioxus-core/html/native-dom 0.8.0-alpha.1; ",
     "blitz-dom/paint/traits 0.3.0-beta.1; ",
-    "anyrender 0.11.0 + host_node_marker patch; ",
-    "blitz-paint emits glass markers during render_element. ",
+    "anyrender 0.11.0 + host_node_marker/host_text_fragment patch; ",
+    "blitz-paint emits glass markers and Parley text snapshots during paint. ",
     "dioxus-native 0.7.10 is rejected (old wgpu). ",
     "Full dioxus-native 0.8 is avoided (winit 0.31 window shell)."
 );
@@ -54,6 +61,7 @@ pub const D2_PIN_NOTES: &str = concat!(
 pub fn missing_upstream_capabilities() -> &'static [&'static str] {
     &[
         "upstream landing of PaintScene::host_node_marker (local crates.io patch)",
+        "upstream landing of PaintScene::host_text_fragment (local crates.io patch)",
         "typed Blitz Glass paint node beyond the data-neoui host marker",
     ]
 }
@@ -484,7 +492,7 @@ mod tests {
         assert_eq!(glasses.len(), 2);
         assert!(glasses[0] < moving && moving < glasses[1]);
         assert!(
-            kinds[glasses[1] + 1..].iter().any(|kind| *kind == "raster"),
+            kinds[glasses[1] + 1..].contains(&"raster"),
             "overlay raster must remain after Glass B"
         );
         let glass_b = passes.iter().filter(|pass| pass.is_glass()).nth(1).unwrap();
@@ -520,7 +528,7 @@ mod tests {
             D2_CAPTURE_DIR,
             "/data/data/com.neotavern.mobile/files/m0-d2"
         );
-        assert_eq!(D2_PATCH_LINES, 65);
+        assert_eq!(D2_PATCH_LINES, 294);
         assert_eq!(D2_REBASE_ANYRENDER_0111, "PASS");
         assert_eq!(D2_BLITZ_NEWER, "NOT_AVAILABLE");
     }

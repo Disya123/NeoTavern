@@ -111,6 +111,7 @@ pub fn assemble_from_stream(stream: &[StreamOp]) -> Result<NeoDisplayList, Strin
                     ops.push(NeoPaintOp::EndEffectScope(id));
                 }
             }
+            StreamOp::Text(_) => {}
         }
     }
 

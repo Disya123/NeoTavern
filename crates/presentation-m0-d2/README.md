@@ -19,7 +19,7 @@ admission). D1a/D1b evidence JSON is unchanged. Debug APK can load
   `VirtualDom`.
 - Pinned Blitz `BaseDocument::resolve` lays out that tree.
 - `blitz_paint::paint_scene` drives a `ProducerSink`. Glass barriers are
-  emitted from `render_element` via `PaintScene::host_node_marker` (**65**
+  emitted from `render_element` via `PaintScene::host_node_marker` (**294**
   inserted lines; see [`upstream/`](upstream/README.md)).
 - Canonical z-order is the paint stream. A second DOM walk is diagnostics
   only (`z-index` fixture: later sibling paints before hoisted glass).
@@ -27,6 +27,11 @@ admission). D1a/D1b evidence JSON is unchanged. Debug APK can load
 - The compositor moving sample is inserted **after** that seam, immediately
   before Glass B. Motion is compile-once:
   `pass_compiles=1`, `layout_rebuilds=0`, `paint_scene_rebuilds=0`.
+- A separate selectable-text path publishes `TextInteractionSnapshot` from
+  already-shaped Parley layouts (`PaintScene::host_text_fragment`). Glyph
+  and emoji chunks stay off the box/background raster family. IME
+  composition uses dedicated underlay ops. The D1a-shaped D2 assemble path
+  still ignores text markers so Program D2 stays PASS.
 
 ## What it does not prove
 

@@ -353,20 +353,47 @@ impl TextSnapshotSet {
         clip: ClipId,
         paint_order: u32,
     ) -> Option<HitTestItem> {
+        match self.interaction_hit_for_tile(geometry, tile, spatial, clip, paint_order) {
+            InteractionReady::Ready(item) => Some(item),
+            InteractionReady::NotInteractionReady => None,
+        }
+    }
+
+    /// Missing snapshot on a fallback tile is [`NotInteractionReady`], not an
+    /// approximate hit on a neighbour.
+    pub fn interaction_hit_for_tile(
+        &self,
+        geometry: &GeometryTileSnapshot,
+        tile: TileId,
+        spatial: SpatialId,
+        clip: ClipId,
+        paint_order: u32,
+    ) -> InteractionReady {
         if geometry.is_fallback(tile) {
             let has_snapshot = self
                 .fragments
                 .iter()
                 .any(|fragment| fragment.covers_tile(tile));
             if !has_snapshot {
-                return None;
+                return InteractionReady::NotInteractionReady;
             }
         }
-        self.fragments
+        match self
+            .fragments
             .iter()
             .find(|fragment| fragment.covers_tile(tile))
             .map(|fragment| fragment.hit_test_item(spatial, clip, paint_order))
+        {
+            Some(item) => InteractionReady::Ready(item),
+            None => InteractionReady::NotInteractionReady,
+        }
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum InteractionReady {
+    Ready(crate::property_tree::HitTestItem),
+    NotInteractionReady,
 }
 
 impl Default for TextSnapshotSet {
