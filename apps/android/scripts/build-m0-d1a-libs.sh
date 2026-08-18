@@ -43,8 +43,16 @@ cargo ndk \
   -o "$OUT_DIR" \
   build --release -p neotavern-presentation-m0-d2 --features "$FEATURES"
 
+echo "Building neotavern-presentation-perf-probe ($FEATURES) -> $OUT_DIR"
+cargo ndk \
+  -t arm64-v8a \
+  -t x86_64 \
+  -o "$OUT_DIR" \
+  build --release -p neotavern-presentation-perf-probe --features "$FEATURES"
+
 echo "Built:"
 ls -1 "$OUT_DIR"/*/libneotavern_presentation_m0.so
 ls -1 "$OUT_DIR"/*/libneotavern_presentation_m0_d2.so
+ls -1 "$OUT_DIR"/*/libneotavern_presentation_perf_probe.so
 # cargo-ndk -o copies every workspace cdylib for the target; keep only the probes.
 find "$OUT_DIR" -name 'libneotavern_android_jni.so' -delete

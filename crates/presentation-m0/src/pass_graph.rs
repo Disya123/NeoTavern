@@ -3,7 +3,7 @@
 //! D1a graph tests stay here because they need `static_d1a_scene()`.
 
 pub use neotavern_neocompositor::{
-    barriers_cut_raster_runs, compile_passes, CompiledPass, GraphError,
+    barriers_cut_raster_runs, compile_passes, CompiledPass, GraphError, InteractionPassKind,
 };
 
 #[cfg(test)]

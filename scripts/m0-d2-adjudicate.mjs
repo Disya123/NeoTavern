@@ -60,7 +60,7 @@ export const ACCUMULATOR_PX = { w: 320, h: 200 };
 export const SNAPSHOT_MAX = 256;
 export const MOVING_SIZE = 64;
 export const EXPECTED_ACC_BYTES = 1_046_528;
-export const EXPECTED_PATCH_LINES = 65;
+export const EXPECTED_PATCH_LINES = 294;
 export const GOLDEN_D2_COUNTERS = {
   devices: 1,
   readbacks: 0,

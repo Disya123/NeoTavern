@@ -235,7 +235,7 @@
     {
       "source": "android/README.md",
       "target": "android/README.md",
-      "sha256": "9dec38297e6f80c076fc7d14d17646b1827a320363b091840b8e1a373bbac71f"
+      "sha256": "e3aa58a0da3119e8cf0401f7264aced978f710a52ed46a9f3f6ea3e052c4cb14"
     },
     {
       "source": "api/README.md",
@@ -245,7 +245,7 @@
     {
       "source": "architecture/README.md",
       "target": "architecture/README.md",
-      "sha256": "a4b198bad701f89e0dad4b7bcefd1d47f7afc8a408163f91af86d8b4db3e8e6c"
+      "sha256": "245ae2ad65f2d1a779d43a5f82ef2729acd4ef3a50aeed2da088f26b4fd3b585"
     },
     {
       "source": "architecture/benchmarks.md",
@@ -275,7 +275,7 @@
     {
       "source": "architecture/presentation-boundary.md",
       "target": "architecture/presentation-boundary.md",
-      "sha256": "8a318d5df6308ecd0f72d617beeb6fc0adc8c68cecf763b4c0019bbbe452f4f1"
+      "sha256": "794a56e64ab57dae23e1cba781e98527b5c69a0834a273687b3c9f5de325ea49"
     },
     {
       "source": "architecture/prompt-pipeline.md",
@@ -355,7 +355,7 @@
     {
       "source": "rfc/README.md",
       "target": "rfc/README.md",
-      "sha256": "f1c1b2b6fec7c0b4b5a0794d5f29b4575656d9b01660d00f5330ba51245168a0"
+      "sha256": "be0bf87966eff1ef6f58dad2e7c72d52854620df9d1cb215802526f37b59d41e"
     },
     {
       "source": "rfc/d1-d2-decision.md",
@@ -411,6 +411,11 @@
       "source": "rfc/neoui-v4-android-presentation-backend.md",
       "target": "rfc/neoui-v4-android-presentation-backend.md",
       "sha256": "7f736bbd36c12ca4f4e74d45e45e4ff99cf814cda4e69da4efad13fceebb819b"
+    },
+    {
+      "source": "rfc/perf-18-20-physical-runbook.md",
+      "target": "rfc/perf-18-20-physical-runbook.md",
+      "sha256": "86d5eab2327f84123fb51b40e22b4f3e57984797a8180a8af7a081c93a640558"
     },
     {
       "source": "rfc/presentation-compatibility-matrix.md",

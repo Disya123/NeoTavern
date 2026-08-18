@@ -1,0 +1,27 @@
+[package]
+name = "neotavern-presentation-perf-probe"
+version = "0.1.0"
+edition = "2021"
+description = "Debug-only Android PERF-18/19/20 probe (not production JNI, not Milestone B PASS)"
+license = "AGPL-3.0"
+publish = false
+
+[lib]
+name = "neotavern_presentation_perf_probe"
+crate-type = ["rlib", "cdylib"]
+
+[features]
+default = []
+gpu = ["neotavern-presentation-m0/gpu"]
+android-jni = ["gpu"]
+renderdoc-capture = ["gpu", "neotavern-presentation-m0/renderdoc-capture"]
+
+[dependencies]
+neotavern-chat-viewport = { path = "../chat-viewport" }
+neotavern-neocompositor = { path = "../neocompositor" }
+neotavern-presentation-m0 = { path = "../presentation-m0" }
+neotavern-presentation-m0-d2 = { path = "../presentation-m0-d2" }
+neotavern-presentation-session = { path = "../presentation-session" }
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = { version = "0.21", default-features = false }

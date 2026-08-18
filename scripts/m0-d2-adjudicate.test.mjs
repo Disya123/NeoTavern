@@ -22,7 +22,7 @@ import {
 const ROOT = join(import.meta.dirname, '..');
 
 const goldenLine =
-  'm0-d2 gpu_ran=true adapter=Adreno_710 backend=Vulkan software=false devices=1 readbacks=0 xdev=0 roi_copies=1001 raster=7 glass=1001 moving_blits=1000 pass_compiles=1 vello_rebuilds=7 layout_rebuilds=0 ui_rebuilds=0 paint_scene_rebuilds=0 sampled_gen=999 damage=95x88+96x62 frames=1000 ran_on_android=true capture=false timeline=clear,raster,blit,roi:1,glass:1,raster,blit,moving:g0,roi:2,glass:2:g0,raster,blit capture_timeline=restore,moving:g120,roi:2,glass:2:g120,overlay render_polls=0 capture_polls=1 acc_bytes=1046528 producer_source=dioxus-virtualdom+blitz-paint-traversal+host-node-marker glass_from_hook=2 patch_lines=65 rebase_anyrender_0111=PASS blitz_newer=NOT_AVAILABLE verdict=BLOCKED reason=Android_GPU_ran;_GPU_capture_with_pass/resource_order_is_still_required_for_D1a_PASS';
+    'm0-d2 gpu_ran=true adapter=Adreno_710 backend=Vulkan software=false devices=1 readbacks=0 xdev=0 roi_copies=1001 raster=7 glass=1001 moving_blits=1000 pass_compiles=1 vello_rebuilds=7 layout_rebuilds=0 ui_rebuilds=0 paint_scene_rebuilds=0 sampled_gen=999 damage=95x88+96x62 frames=1000 ran_on_android=true capture=false timeline=clear,raster,blit,roi:1,glass:1,raster,blit,moving:g0,roi:2,glass:2:g0,raster,blit capture_timeline=restore,moving:g120,roi:2,glass:2:g120,overlay render_polls=0 capture_polls=1 acc_bytes=1046528 producer_source=dioxus-virtualdom+blitz-paint-traversal+host-node-marker glass_from_hook=2 patch_lines=294 rebase_anyrender_0111=PASS blitz_newer=NOT_AVAILABLE verdict=BLOCKED reason=Android_GPU_ran;_GPU_capture_with_pass/resource_order_is_still_required_for_D1a_PASS';
 
 const fixture = `<?xml version="1.0"?><rdc><header><driver id="8">Vulkan</driver></header>
 <chunk name="vkSetDebugUtilsObjectNameEXT">
@@ -70,7 +70,7 @@ describe('m0-d2 host adjudicator schema', () => {
     expect(parsed.values.capture_timeline).toBe(D2_MOTION_TIMELINE_G120);
     expect(parsed.values.producer_source).toBe(D2_PRODUCER_SOURCE);
     expect(parsed.values.glass_from_hook).toBe(2);
-    expect(parsed.values.patch_lines).toBe(65);
+    expect(parsed.values.patch_lines).toBe(EXPECTED_PATCH_LINES);
     expect(parsed.values.rebase_anyrender_0111).toBe('PASS');
     expect(parsed.values.blitz_newer).toBe('NOT_AVAILABLE');
     expect(parsed.values.capture).toBe(false);
@@ -137,7 +137,7 @@ describe('m0-d2 host adjudicator schema', () => {
     expect(isRehearsalStamp('2026-08-18T00-00-00-000Z')).toBe(false);
   });
 
-  it('counts the bounded 65-line paint hook and records rebase NOT_AVAILABLE for newer Blitz', () => {
+  it('counts the bounded paint-hook patch lines and records rebase NOT_AVAILABLE for newer Blitz', () => {
     expect(countPatchInsertedLines()).toBe(EXPECTED_PATCH_LINES);
     expect(checkD2PatchAndRebase().ok).toBe(true);
     expect(checkD2PatchAndRebase().blitz_newer).toBe('NOT_AVAILABLE');

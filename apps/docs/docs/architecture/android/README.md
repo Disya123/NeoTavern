@@ -174,7 +174,9 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   is `crates/chat-viewport` (height index, predictor, tile cache, geometry
   epochs / C0/C1 remap; PERF-20 **IMPLEMENTED**, not PASS), not the
   compositor crate. Viewport↔compositor transactions live in
-  `crates/presentation-session` (not production JNI).
+  `crates/presentation-session` (not production JNI). Debug-only
+  `PresentationPerfActivity` / `presentation-perf-probe` is the PERF-18/19/20
+  capture vehicle (not production JNI, not Milestone B PASS).
   `NEOTA_NEOCOMPOSITOR=1` is a non-default flag, not a cutover switch.
 
 ## Background execution (Phase 8)

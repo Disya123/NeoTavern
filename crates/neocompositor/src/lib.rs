@@ -14,6 +14,7 @@ pub mod layer_cache;
 pub mod mailbox;
 pub mod neo_glass;
 pub mod pass_graph;
+pub mod perf18;
 pub mod property_tree;
 pub mod scene;
 pub mod scroll;

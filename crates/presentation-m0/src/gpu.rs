@@ -21,10 +21,10 @@ use vello::wgpu::{
 use vello::{AaConfig, AaSupport, RenderParams, Renderer, RendererOptions, Scene};
 
 use crate::display_list::{
-    ClipChainId, EffectKind, EffectNodeId, EffectScopeId, NeoDisplayList, PaintChunk,
+    ClipChainId, EffectKind, EffectNodeId, EffectScopeId, NeoDisplayList, NeoPaintOp, PaintChunk,
     SpatialNodeId, StubPayload,
 };
-use crate::pass_graph::{compile_passes, CompiledPass};
+use crate::pass_graph::{compile_passes, CompiledPass, InteractionPassKind};
 use crate::timeline::{
     compositor_owned_bytes, compositor_owned_bytes_d1b, encode_timeline, expected_first_frame,
     expected_motion_frame, resolved_glass_roi, TimelineKind, ACCUMULATOR_LABEL,
@@ -67,6 +67,9 @@ pub enum LabelMode {
     D1a,
     D1b,
     D2,
+    Perf18,
+    Perf19,
+    Perf20,
 }
 
 #[cfg(target_os = "android")]
@@ -145,6 +148,7 @@ pub struct ProbeGpu {
     first_frame_cpu_us: u64,
     compositor_texture_bytes: u64,
     label_mode: LabelMode,
+    capture_at: Option<u64>,
 }
 
 impl ProbeGpu {
@@ -471,6 +475,7 @@ impl ProbeGpu {
             first_frame_cpu_us: 0,
             compositor_texture_bytes,
             label_mode,
+            capture_at: None,
         })
     }
 
@@ -498,6 +503,7 @@ impl ProbeGpu {
     fn follow_roi_prefix(&self) -> &'static str {
         match self.label_mode {
             LabelMode::D2 => CAPTURE_GROUP_D2_ROI_PREFIX,
+            LabelMode::Perf18 | LabelMode::Perf19 | LabelMode::Perf20 => "perf18-roi-read",
             _ => CAPTURE_GROUP_D1B_ROI_PREFIX,
         }
     }
@@ -505,8 +511,41 @@ impl ProbeGpu {
     fn follow_glass_prefix(&self) -> &'static str {
         match self.label_mode {
             LabelMode::D2 => CAPTURE_GROUP_D2_GLASS_PREFIX,
+            LabelMode::Perf18 | LabelMode::Perf19 | LabelMode::Perf20 => "perf18-glass",
             _ => CAPTURE_GROUP_D1B_GLASS_PREFIX,
         }
+    }
+
+    fn is_perf(&self) -> bool {
+        matches!(
+            self.label_mode,
+            LabelMode::Perf18 | LabelMode::Perf19 | LabelMode::Perf20
+        )
+    }
+
+    fn push_perf18_effect_labels(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        open_scopes: &[EffectScopeId],
+    ) -> bool {
+        if self.label_mode != LabelMode::Perf18 || open_scopes.is_empty() {
+            return false;
+        }
+        encoder.push_debug_group("perf18-effect-opacity");
+        encoder.push_debug_group("perf18-transform");
+        encoder.push_debug_group("perf18-rounded-clip");
+        encoder.push_debug_group("perf18-group-target");
+        true
+    }
+
+    fn pop_perf18_effect_labels(&self, encoder: &mut wgpu::CommandEncoder, nested: bool) {
+        if !nested {
+            return;
+        }
+        encoder.pop_debug_group();
+        encoder.pop_debug_group();
+        encoder.pop_debug_group();
+        encoder.pop_debug_group();
     }
 
     pub fn first_frame_timeline(&self) -> &[TimelineKind] {
@@ -527,8 +566,8 @@ impl ProbeGpu {
         frame: u64,
     ) -> Result<(), GpuInitError> {
         let d1b = crate::scene_d1b::list_has_moving_sample(list);
-        self.recording_frame = frame == 0;
-        self.recording_capture = d1b && frame == crate::scene_d1b::D1B_CAPTURE_FRAME;
+        self.recording_frame = frame == 0 && !self.is_perf();
+        self.recording_capture = self.capture_at == Some(frame) && (d1b || self.is_perf());
         if self.recording_frame {
             self.timeline.clear();
         }
@@ -547,7 +586,16 @@ impl ProbeGpu {
                 let opacity = group_opacity(list, open_scopes);
                 let ordinal = crate::scene_d1b::glass_ordinal(list, barrier.id);
                 let roi = crate::scene_d1b::glass_b_follow_roi_in(frame, barrier.roi);
-                self.glass_pass(list, ordinal, true, roi, barrier.clip_chain, opacity, frame)?;
+                self.glass_pass(
+                    list,
+                    ordinal,
+                    true,
+                    roi,
+                    barrier.clip_chain,
+                    opacity,
+                    open_scopes,
+                    frame,
+                )?;
                 self.glass_passes += 1;
             }
             self.overlay_blit_from_cache()?;
@@ -594,6 +642,7 @@ impl ProbeGpu {
                         roi,
                         barrier.clip_chain,
                         opacity,
+                        open_scopes,
                         frame,
                     )?;
                     self.glass_passes += 1;
@@ -602,7 +651,13 @@ impl ProbeGpu {
                     self.snapshot_static_prefix()?;
                     self.moving_blit(frame)?;
                 }
-                CompiledPass::Interaction { .. } => {}
+                CompiledPass::Interaction { kind, .. } => {
+                    if self.label_mode == LabelMode::Perf19
+                        && *kind == InteractionPassKind::Selection
+                    {
+                        self.selection_underlay_pass(list)?;
+                    }
+                }
             }
         }
         if self.recording_frame {
@@ -853,6 +908,22 @@ impl ProbeGpu {
             .create_command_encoder(&CommandEncoderDescriptor {
                 label: Some("m0-d1a-blit"),
             });
+        let nested_perf18 = self.push_perf18_effect_labels(&mut encoder, open_scopes);
+        if self.label_mode == LabelMode::Perf19 {
+            let glyph = chunks.iter().any(|chunk| {
+                matches!(
+                    chunk.payload,
+                    StubPayload::TransparentGlyphs
+                        | StubPayload::ColorEmoji
+                        | StubPayload::SyntaxGlyphs
+                )
+            });
+            encoder.push_debug_group(if glyph {
+                "perf19-glyphs"
+            } else {
+                "perf19-background"
+            });
+        }
         encoder.push_debug_group(CAPTURE_PASS_BLIT);
         {
             let mut rp = encoder.begin_render_pass(&RenderPassDescriptor {
@@ -876,6 +947,10 @@ impl ProbeGpu {
             rp.draw(0..4, 0..1);
         }
         encoder.pop_debug_group();
+        self.pop_perf18_effect_labels(&mut encoder, nested_perf18);
+        if self.label_mode == LabelMode::Perf19 {
+            encoder.pop_debug_group();
+        }
         self.queue.submit([encoder.finish()]);
         self.record(TimelineKind::BlitVelloToAccumulator);
         Ok(())
@@ -948,6 +1023,7 @@ impl ProbeGpu {
         roi: crate::display_list::Rect,
         clip: ClipChainId,
         opacity: f32,
+        open_scopes: &[EffectScopeId],
         frame: u64,
     ) -> Result<(), GpuInitError> {
         let Some(px) = resolved_glass_roi(list, roi, clip, self.width, self.height) else {
@@ -963,7 +1039,10 @@ impl ProbeGpu {
             .create_command_encoder(&CommandEncoderDescriptor {
                 label: Some("m0-d1a-glass-copy"),
             });
-        let roi_group = if follow {
+        let nested_perf18 = self.push_perf18_effect_labels(&mut encoder, open_scopes);
+        let roi_group = if self.is_perf() {
+            format!("perf18-backdrop-barrier:{barrier}")
+        } else if follow {
             format!("{}:{barrier}", self.follow_roi_prefix())
         } else {
             format!("{CAPTURE_GROUP_ROI_PREFIX}:{barrier}")
@@ -1034,7 +1113,9 @@ impl ProbeGpu {
                 },
             ],
         });
-        let glass_group = if follow {
+        let glass_group = if self.is_perf() {
+            format!("perf18-glass:{barrier}:g{frame}")
+        } else if follow {
             format!("{}:{barrier}:g{frame}", self.follow_glass_prefix())
         } else {
             format!("{CAPTURE_GROUP_GLASS_PREFIX}:{barrier}")
@@ -1063,6 +1144,7 @@ impl ProbeGpu {
             rp.draw(0..4, 0..1);
         }
         encoder.pop_debug_group();
+        self.pop_perf18_effect_labels(&mut encoder, nested_perf18);
         self.queue.submit([encoder.finish()]);
         self.record(TimelineKind::GlassSampleSnapshotWriteAccumulator {
             barrier,
@@ -1072,6 +1154,96 @@ impl ProbeGpu {
             h,
             generation: if follow { Some(frame) } else { None },
         });
+        Ok(())
+    }
+
+    fn selection_underlay_pass(&mut self, list: &NeoDisplayList) -> Result<(), GpuInitError> {
+        let mut scene = Scene::new();
+        for op in list.ops.iter() {
+            let NeoPaintOp::Selection(selection) = op else {
+                continue;
+            };
+            for rect in selection.rects.iter() {
+                scene.fill(
+                    Fill::NonZero,
+                    Affine::IDENTITY,
+                    Color::from_rgb8(80, 160, 255),
+                    None,
+                    &KurboRect::new(
+                        f64::from(rect.x),
+                        f64::from(rect.y),
+                        f64::from(rect.x1()),
+                        f64::from(rect.y1()),
+                    ),
+                );
+            }
+        }
+        let view = self
+            .vello_target
+            .create_view(&TextureViewDescriptor::default());
+        self.renderer
+            .render_to_texture(
+                &self.device,
+                &self.queue,
+                &scene,
+                &view,
+                &RenderParams {
+                    base_color: palette::css::TRANSPARENT,
+                    width: self.width,
+                    height: self.height,
+                    antialiasing_method: AaConfig::Area,
+                },
+            )
+            .map_err(|err| GpuInitError::Renderer(err.to_string()))?;
+        let src_view = self
+            .vello_target
+            .create_view(&TextureViewDescriptor::default());
+        let acc_view = self
+            .accumulator
+            .create_view(&TextureViewDescriptor::default());
+        let bind = self.device.create_bind_group(&BindGroupDescriptor {
+            label: Some("perf19-selection-underlay"),
+            layout: &self.blit_bgl,
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: BindingResource::TextureView(&src_view),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: BindingResource::Sampler(&self.sampler),
+                },
+            ],
+        });
+        let mut encoder = self
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor {
+                label: Some("perf19-selection-underlay"),
+            });
+        encoder.push_debug_group("perf19-selection-underlay");
+        {
+            let mut rp = encoder.begin_render_pass(&RenderPassDescriptor {
+                label: Some("perf19-selection-underlay"),
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: &acc_view,
+                    resolve_target: None,
+                    ops: Operations {
+                        load: LoadOp::Load,
+                        store: StoreOp::Store,
+                    },
+                    depth_slice: None,
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+            rp.set_pipeline(&self.blit_pipeline);
+            rp.set_bind_group(0, &bind, &[]);
+            rp.draw(0..4, 0..1);
+        }
+        encoder.pop_debug_group();
+        self.queue.submit([encoder.finish()]);
         Ok(())
     }
 
@@ -1449,18 +1621,40 @@ pub fn run_dynamic_list(
     capture_dir: &str,
     labels: LabelMode,
 ) -> Result<ProbeReport, GpuInitError> {
+    run_dynamic_list_at(
+        list,
+        frames,
+        capture,
+        capture_dir,
+        labels,
+        crate::scene_d1b::D1B_CAPTURE_FRAME,
+    )
+}
+
+/// Same as [`run_dynamic_list`] with an explicit RenderDoc capture frame.
+pub fn run_dynamic_list_at(
+    list: &NeoDisplayList,
+    frames: u64,
+    capture: bool,
+    capture_dir: &str,
+    labels: LabelMode,
+    capture_frame: u64,
+) -> Result<ProbeReport, GpuInitError> {
     probe_trace(&format!(
-        "run_dynamic_list frames={frames} capture={capture} capture_frame={} labels={labels:?}",
-        crate::scene_d1b::D1B_CAPTURE_FRAME
+        "run_dynamic_list frames={frames} capture={capture} capture_frame={capture_frame} labels={labels:?}"
     ));
     let passes = compile_passes(list).map_err(|err| GpuInitError::Renderer(format!("{err:?}")))?;
     let mut gpu = match labels {
         LabelMode::D2 => ProbeGpu::try_new_d2(list.width, list.height)?,
+        LabelMode::Perf18 | LabelMode::Perf19 | LabelMode::Perf20 => {
+            ProbeGpu::try_new_inner(list.width, list.height, false, labels)?
+        }
         _ => ProbeGpu::try_new_d1b(list.width, list.height)?,
     };
     gpu.pass_compiles = 1;
     gpu.paint_scene_rebuilds = 0;
     gpu.layout_rebuilds = 0;
+    gpu.capture_at = if capture { Some(capture_frame) } else { None };
     probe_trace(&format!(
         "gpu_ready adapter={} backend={} software={}",
         gpu.adapter_name.replace(' ', "_"),
@@ -1477,7 +1671,7 @@ pub fn run_dynamic_list(
         } else {
             None
         };
-        let capturing = capture && frame == crate::scene_d1b::D1B_CAPTURE_FRAME;
+        let capturing = capture && frame == capture_frame;
         #[cfg(all(feature = "renderdoc-capture", target_os = "android"))]
         if capturing {
             let _rdoc = crate::renderdoc_capture::FrameGuard::begin_for_device_path(

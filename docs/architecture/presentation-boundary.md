@@ -76,6 +76,8 @@ from already-shaped Parley layouts (no compositor reshape). PERF-19 PASS
 still needs an Android selection/autoscroll capture. Viewport remap and
 selection now go through `crates/presentation-session` (one
 `FrameTransaction`, logical selection, `DeltaToken`). PERF-20 PASS still
-needs an Android high-velocity trace. Neither crate is linked into
+needs an Android high-velocity trace. Debug-only
+`crates/presentation-perf-probe` / `PresentationPerfActivity` is the
+physical capture vehicle (not production JNI). Neither crate is linked into
 production JNI. Recovery and GPU telemetry are not started. Product
 cutover is not declared.

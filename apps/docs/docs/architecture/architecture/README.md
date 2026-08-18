@@ -104,6 +104,8 @@ crates/
                        # (host-side; crate log capture=false).
   presentation-session/ # chat-viewport ↔ compositor transactions
                        # (PERF-19/20 host integration, not PASS).
+  presentation-perf-probe/ # debug-only Android PERF-18/19/20 probe
+                       # (not production JNI; not Milestone B PASS).
   presentation-dioxus-shell/ # Feature-flagged Dioxus Product Wire shell.
                        # Not MainActivity; not production JNI.
 ```

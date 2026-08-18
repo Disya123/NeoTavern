@@ -121,6 +121,13 @@
   not PASS. `MainActivity` / WebView rollback unchanged. Milestone B
   remains STARTED.
 
+- **Android PERF-18/19/20 debug probe (not PASS).** Debug-only
+  `PresentationPerfActivity` + `crates/presentation-perf-probe` run the
+  three scenarios on a physical device. The host adjudicator stamps each
+  of PERF-18/19/20 independently as PASS or BLOCKED. Milestone B remains
+  STARTED even if all three pass. `MainActivity` / WebView rollback
+  unchanged.
+
 - **PERF-18 effect-scope backdrop host golden (IMPLEMENTED / GPU_PENDING,
   not PASS).** Canonical scene: parent backdrop root →
   `BeginEffect(opacity=0.5, transform, rounded clip)` → prefix →

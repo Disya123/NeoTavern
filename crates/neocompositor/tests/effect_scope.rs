@@ -34,8 +34,11 @@ const ROOT_CLIP: ClipChainId = ClipChainId(0);
 const CARD_CLIP: ClipChainId = ClipChainId(1);
 const ROOT_EFFECT: EffectNodeId = EffectNodeId(0);
 const OPACITY_EFFECT: EffectNodeId = EffectNodeId(1);
+#[allow(dead_code)]
 const FILTER_EFFECT: EffectNodeId = EffectNodeId(2);
+#[allow(dead_code)]
 const MASK_EFFECT: EffectNodeId = EffectNodeId(3);
+#[allow(dead_code)]
 const ROUNDED_EFFECT: EffectNodeId = EffectNodeId(4);
 const CONTENTS_EFFECT: EffectNodeId = EffectNodeId(5);
 const OPACITY_SCOPE: EffectScopeId = EffectScopeId(1);
@@ -150,6 +153,7 @@ fn barrier(
     }
 }
 
+#[allow(dead_code)]
 fn list(ops: Vec<NeoPaintOp>, extra_effects: Vec<EffectNode>) -> NeoDisplayList {
     let mut effects = vec![
         EffectNode {
@@ -255,67 +259,9 @@ fn contents_chunk(id: PaintChunkId, payload: StubPayload, bounds: Rect) -> Paint
     )
 }
 
-/// Canonical PERF-18 scene:
-/// backdrop root → BeginEffect(opacity/transform/rounded clip) → prefix →
-/// glass → foreground text/media → EndEffect → following sibling.
+/// Canonical PERF-18 scene lives in `neotavern_neocompositor::perf18`.
 fn reference_scene() -> NeoDisplayList {
-    let roi = expected_glass_roi();
-    list(
-        vec![
-            NeoPaintOp::Image(ImageLayer {
-                chunk: chunk(
-                    WALLPAPER,
-                    StubPayload::Wallpaper,
-                    ROOT_SPATIAL,
-                    ROOT_CLIP,
-                    ROOT_EFFECT,
-                    PARENT_ROOT,
-                    framebuffer(),
-                ),
-            }),
-            NeoPaintOp::BeginEffectScope(OPACITY_SCOPE),
-            NeoPaintOp::BeginEffectScope(FILTER_SCOPE),
-            NeoPaintOp::BeginEffectScope(MASK_SCOPE),
-            NeoPaintOp::PaintChunk(contents_chunk(
-                PREFIX,
-                StubPayload::VectorUi,
-                Rect::new(0.0, 0.0, CARD_W, 18.0),
-            )),
-            NeoPaintOp::BackdropBarrier(barrier(
-                GLASS,
-                CARD_SPATIAL,
-                CARD_CLIP,
-                CONTENTS_EFFECT,
-                PARENT_ROOT,
-                roi,
-            )),
-            NeoPaintOp::PaintChunk(contents_chunk(
-                FOREGROUND,
-                StubPayload::VectorUi,
-                Rect::new(8.0, 84.0, 160.0, 24.0),
-            )),
-            NeoPaintOp::Image(ImageLayer {
-                chunk: contents_chunk(
-                    MEDIA,
-                    StubPayload::VectorUi,
-                    Rect::new(8.0, 84.0, 48.0, 24.0),
-                ),
-            }),
-            NeoPaintOp::EndEffectScope(MASK_SCOPE),
-            NeoPaintOp::EndEffectScope(FILTER_SCOPE),
-            NeoPaintOp::EndEffectScope(OPACITY_SCOPE),
-            NeoPaintOp::PaintChunk(chunk(
-                SIBLING,
-                StubPayload::Overlay,
-                ROOT_SPATIAL,
-                ROOT_CLIP,
-                ROOT_EFFECT,
-                PARENT_ROOT,
-                Rect::new(40.0, 640.0, 200.0, 40.0),
-            )),
-        ],
-        Vec::new(),
-    )
+    neotavern_neocompositor::perf18::reference_scene()
 }
 
 fn nested_opacity_scene() -> NeoDisplayList {

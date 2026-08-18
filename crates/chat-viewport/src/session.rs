@@ -673,7 +673,7 @@ impl ViewportSession {
         None
     }
 
-    fn current_anchor_screen(&self) -> f64 {
+    pub fn current_anchor_screen(&self) -> f64 {
         let Some(anchor) = self.resolve_anchor() else {
             return 0.0;
         };
