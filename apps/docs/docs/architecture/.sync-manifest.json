@@ -5,7 +5,7 @@
     {
       "source": "README.md",
       "target": "README.md",
-      "sha256": "1da3b612ca8989fcbb0a6cfbb3444a5f09dbe806e760ff4eb2b19cb4658d16d3"
+      "sha256": "d402c00b3ede61d2d92b1b888fa0dd157500b6a1f08f4c11bf13aceebc12e559"
     },
     {
       "source": "adr/0004-typebox-contracts.md",
@@ -240,7 +240,7 @@
     {
       "source": "android/README.md",
       "target": "android/README.md",
-      "sha256": "e3d5afea99b28938d650cdc26f1436efaba4b9ea7ff6cfd58a6195c4ab7aa8e9"
+      "sha256": "62412fe9b9bf17309fdf5f072a37ea643073e3c50549eed34e3e45634b8de2f8"
     },
     {
       "source": "api/README.md",
@@ -250,7 +250,7 @@
     {
       "source": "architecture/README.md",
       "target": "architecture/README.md",
-      "sha256": "ab0db296e3e30cceada9943f7f064a0652e8df77eda63a89341ea972550a15bc"
+      "sha256": "94f421d042b0f78e2d5161498737021845bfc36f226cdabac03dcda7161d0e5f"
     },
     {
       "source": "architecture/benchmarks.md",
@@ -285,7 +285,7 @@
     {
       "source": "architecture/presentation-boundary.md",
       "target": "architecture/presentation-boundary.md",
-      "sha256": "4a2534f476ef826957e43e8e38102142b6270e40a7f59c35d31d4f7f41f5df4c"
+      "sha256": "8dfd81fe0f16e21910f203d054a5607919a1b852fd0d944b39f27bf41a982edb"
     },
     {
       "source": "architecture/prompt-pipeline.md",
@@ -440,7 +440,7 @@
     {
       "source": "rfc/presentation-compatibility-matrix.md",
       "target": "rfc/presentation-compatibility-matrix.md",
-      "sha256": "e0ea248c422947f5641a791a3785c82f9e6bd6ef309528c69fa78ecd31f37d5a"
+      "sha256": "fdfcb424ddb0ed73e56d0447bdabcdc54a2bac501e920d8a67e05ef5803351ad"
     },
     {
       "source": "rfc/remaining-b-physical-runbook.md",

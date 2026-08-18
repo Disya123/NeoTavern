@@ -186,9 +186,14 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   `PresentationInputInstrumentedTest`. Status:
   `PASS`
   ([input-to-present-adjudication.json](../rfc/input-to-present-adjudication.json)).
-  Debug `PresentationChatActivity` is the Milestone C flagged chat
-  workspace (`NEOTA_DIOXUS_SHELL=1` extra). Not the launcher, not
-  production JNI, not cutover.
+  Debug `PresentationChatActivity` is a harness around the live Product
+  Wire chat route (`crates/presentation-chat`, `NEOTA_DIOXUS_SHELL=1`).
+  Same route later attaches to production `MainActivity` behind a canary;
+  it is not a second chat. Launch:
+  `adb shell am start -n com.neotavern.mobile/.PresentationChatActivity --es com.neotavern.mobile.NEOTA_DIOXUS_SHELL 1`
+  (`NEOTA_CHAT_ID` optional; `NEOTA_SAFE_MODE=1` escapes to WebView
+  `MainActivity`). Not the launcher, not production JNI, not cutover.
+  Kernel stays in `libneotavern_android_jni.so`.
   Raw input-to-present is not gated against one refresh; deadline miss is
   renderer-controlled present vs `targetPresentDeadline`.
   Physical stamp `2026-08-18T16-28-13-285Z`.

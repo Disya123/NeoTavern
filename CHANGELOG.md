@@ -15,11 +15,18 @@
 
 ### Added
 
-- **Flagged Android Dioxus chat route (Milestone C start, not cutover).**
-  Debug `PresentationChatActivity` mounts the Product Wire chat
-  workspace only when `NEOTA_DIOXUS_SHELL=1`. Production
-  `MainActivity` / default JNI / WebView stay the launcher. Compatibility
-  matrix chat-workspace row remains **DEFERRED** (not PARITY).
+- **Live Product Wire Dioxus chat route (Milestone C, not cutover).**
+  `crates/presentation-chat` binds history, streaming, send, retry,
+  prepend, drafts, and errors to registered Product Wire operations.
+  The visible window is virtualized through `chat-viewport`
+  (`waited_on_producer=false`). Debug `PresentationChatActivity` is a
+  harness around that same route (snapshot of the live view, Kernel via
+  `KernelSession` + `EnvelopeBuilder`, Gboard composer, IME inset,
+  TalkBack roles, rotate/composer restore, `NEOTA_SAFE_MODE=1` WebView
+  escape). Not the compositor `SurfaceView` paint path.
+  Production `MainActivity` / default JNI / WebView stay the launcher.
+  Compatibility matrix chat-workspace / Gboard / 10k / a11y / safe-mode
+  rows remain **DEFERRED** (not PARITY).
 
 - **Milestone B PASS (not production cutover).** Independent Xiaomi /
   Vulkan records for PERF-01…05 / 11–14 / 16 / 17 / 21 on stamp
