@@ -210,6 +210,19 @@ class PresentationInputActivity : Activity(), SurfaceHolder.Callback {
             val callback =
                 Choreographer.VsyncCallback { data ->
                     val timeline = data.preferredFrameTimeline
+                    val nextTimeline =
+                        data.frameTimelines
+                            .filter { it.vsyncId > timeline.vsyncId }
+                            .minByOrNull { it.vsyncId }
+                    adapter.applyCompositorFrameTimeline(
+                        data.frameTimeNanos,
+                        timeline.vsyncId,
+                        timeline.deadlineNanos,
+                        timeline.expectedPresentationTimeNanos,
+                        nextTimeline?.vsyncId ?: (timeline.vsyncId + 1L),
+                        nextTimeline?.expectedPresentationTimeNanos
+                            ?: (timeline.expectedPresentationTimeNanos + adapter.lastPeriodNanos),
+                    )
                     Trace.beginSection("nt.input.present")
                     val line =
                         try {

@@ -398,6 +398,12 @@ describe('input-to-present host adjudicator', () => {
     expect(evaluateFixture(fixture, provenance).status).toBe('ENVIRONMENT_BLOCKED');
   });
 
+  it('requires every continuous-scroll cookie to join FrameTimeline', () => {
+    const fixture = passingFixture({ unjoined_cookies: 12 });
+    expect(evaluateFixture(fixture, provenance).status).toBe('BLOCKED');
+    expect(evaluateFixture(fixture, provenance).joinOk).toBe(false);
+  });
+
   it('requires APK BOUND to 55a3174 or a descendant', () => {
     const fixture = passingFixture();
     expect(

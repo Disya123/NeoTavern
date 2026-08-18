@@ -9,8 +9,8 @@
  * Emulator serials are excluded. 60/90 Hz windows are pacing-only; the
  * normative gate is the locked 120 Hz fixture.
  */
-import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
@@ -31,12 +31,12 @@ const ACTIVITY = 'com.neotavern.mobile.PresentationInputActivity';
 const COMPONENT = `${PACKAGE}/.PresentationInputActivity`;
 const CAPTURES_DIR = join(ROOT, 'apps', 'android', 'input-to-present-captures');
 const CONFIG_PATH = join(ROOT, CONFIG_REL);
-const DEVICE_TRACE = '/data/local/tmp/i2p.perfetto-trace';
-const DEVICE_CFG = '/data/local/tmp/i2p.pbtxt';
-const WAIT_MS = 140_000;
+const DEVICE_TRACE = '/data/misc/perfetto-traces/i2p.perfetto-trace';
+const DEVICE_CFG = '/data/misc/perfetto-configs/i2p.pbtxt';
+const WAIT_MS = 210_000;
 const POLL_MS = 2_000;
 const TP_URL =
-  'https://commondatastorage.googleapis.com/perfetto-luci-artifacts/v49.0/win-amd64/trace_processor_shell.exe';
+  'https://commondatastorage.googleapis.com/perfetto-luci-artifacts/v56.0/windows-amd64/trace_processor_shell.exe';
 
 function printJson(value) {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
@@ -49,7 +49,11 @@ function argValue(name) {
 }
 
 function adb(adbBin, serial, args, extra = {}) {
-  return spawnSync(adbBin, ['-s', serial, ...args], { encoding: 'utf8', ...extra });
+  return spawnSync(adbBin, ['-s', serial, ...args], {
+    encoding: extra.encoding ?? 'utf8',
+    maxBuffer: extra.maxBuffer ?? 8 * 1024 * 1024,
+    ...extra,
+  });
 }
 
 function studioHoldingAdb() {
@@ -88,6 +92,48 @@ function dumpThermal(adbBin, serial) {
     gpu_khz: Number.isFinite(gpuHz) ? [Math.round(gpuHz / 1000)] : [0],
     raw: text.slice(0, 2000),
   };
+}
+
+function runPython(args, extra = {}) {
+  const attempts = [
+    ['python', ...args],
+    ['py', '-3', ...args],
+  ];
+  let last = null;
+  for (const command of attempts) {
+    last = spawnSync(command[0], command.slice(1), extra);
+    if (last.status === 0) return last;
+  }
+  return last;
+}
+
+function startLogcatStream(adbBin, serial, path) {
+  const fd = openSync(path, 'w');
+  const child = spawn(
+    adbBin,
+    ['-s', serial, 'logcat', '-v', 'threadtime', '-s', 'NeoTavernI2P:I'],
+    { stdio: ['ignore', fd, 'pipe'], windowsHide: true },
+  );
+  return { child, fd };
+}
+
+function stopLogcatStream(stream) {
+  if (!stream) return;
+  try {
+    stream.child.kill();
+  } catch {
+    // adb logcat exits with the host process
+  }
+  try {
+    closeSync(stream.fd);
+  } catch {
+    // already closed
+  }
+}
+
+function logcatContains(path, needle) {
+  if (!path || !existsSync(path)) return false;
+  return readFileSync(path, 'utf8').includes(needle);
 }
 
 function ensureTraceProcessor(dir) {
@@ -160,37 +206,52 @@ function main() {
   const stamp = captureStamp();
   const outDir = join(CAPTURES_DIR, stamp);
   mkdirSync(outDir, { recursive: true });
-  const install = adb(adbInfo.bin, device.serial, ['install', '-r', '-g', apkPath], {
-    timeout: 180_000,
-  });
-  if (install.status !== 0) {
-    printJson({ ok: false, reason: 'apk install failed', stderr: install.stderr });
-    process.exitCode = 1;
-    return;
+  if (!process.argv.includes('--skip-install')) {
+    const install = adb(adbInfo.bin, device.serial, ['install', '-r', '-g', apkPath], {
+      timeout: 180_000,
+    });
+    if (install.status !== 0) {
+      printJson({ ok: false, reason: 'apk install failed', stderr: install.stderr });
+      process.exitCode = 1;
+      return;
+    }
   }
   adb(adbInfo.bin, device.serial, ['shell', 'am', 'force-stop', PACKAGE]);
   adb(adbInfo.bin, device.serial, ['logcat', '-c']);
-  const cfgPush = adb(adbInfo.bin, device.serial, ['push', CONFIG_PATH, DEVICE_CFG]);
-  if (cfgPush.status !== 0) {
-    printJson({ ok: false, reason: 'failed to push Perfetto config', stderr: cfgPush.stderr });
+  const logcatPath = join(outDir, `${stamp}-logcat.txt`);
+  const logcatStream = startLogcatStream(adbInfo.bin, device.serial, logcatPath);
+  adb(adbInfo.bin, device.serial, ['shell', 'rm', '-f', DEVICE_TRACE]);
+  const startTrace = spawnSync(
+    adbInfo.bin,
+    [
+      '-s',
+      device.serial,
+      'shell',
+      'perfetto',
+      '--txt',
+      '-c',
+      '-',
+      '-o',
+      DEVICE_TRACE,
+      '--background',
+    ],
+    { encoding: 'utf8', input: readFileSync(CONFIG_PATH) },
+  );
+  const traceOut = `${startTrace.stdout || ''}\n${startTrace.stderr || ''}`.trim();
+  const pidLine = traceOut
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => /^\d+$/u.test(line))
+    .at(-1);
+  const perfettoPid = pidLine ?? null;
+  if (/permission denied|Could not open|FAILED/iu.test(traceOut) && !perfettoPid) {
+    stopLogcatStream(logcatStream);
+    printJson({ ok: false, reason: 'perfetto failed to start', start_trace: traceOut });
     process.exitCode = 1;
     return;
   }
-  adb(adbInfo.bin, device.serial, ['shell', 'rm', '-f', DEVICE_TRACE]);
-  const startTrace = adb(adbInfo.bin, device.serial, [
-    'shell',
-    'perfetto',
-    '--txt',
-    '-c',
-    DEVICE_CFG,
-    '-o',
-    DEVICE_TRACE,
-    '--background',
-  ]);
-  const pidMatch = `${startTrace.stdout || ''} ${startTrace.stderr || ''}`.match(/\b(\d+)\b/);
-  const perfettoPid = pidMatch ? pidMatch[1] : null;
   sleep(1_500);
-  const startApp = adb(adbInfo.bin, device.serial, [
+  adb(adbInfo.bin, device.serial, [
     'shell',
     'am',
     'start',
@@ -209,28 +270,36 @@ function main() {
     'com.neotavern.mobile.I2P_SCROLL_MS',
     '60000',
   ]);
-  const logcatPath = join(outDir, `${stamp}-logcat.txt`);
   const deadline = Date.now() + WAIT_MS;
   let done = false;
   while (Date.now() < deadline) {
-    const dump = adb(adbInfo.bin, device.serial, ['logcat', '-d', '-s', 'NeoTavernI2P:I']);
-    writeFileSync(logcatPath, dump.stdout || '');
-    if ((dump.stdout || '').includes('i2p fixture done')) {
+    if (logcatContains(logcatPath, 'i2p fixture done')) {
       done = true;
       break;
     }
     sleep(POLL_MS);
   }
-  if (perfettoPid) {
-    adb(adbInfo.bin, device.serial, ['shell', 'kill', perfettoPid]);
-  } else {
-    adb(adbInfo.bin, device.serial, ['shell', 'pkill', 'perfetto']);
+  sleep(500);
+  stopLogcatStream(logcatStream);
+  if (logcatContains(logcatPath, 'i2p fixture done')) {
+    done = true;
   }
+  adb(adbInfo.bin, device.serial, ['shell', 'kill', '-INT', perfettoPid ?? '']);
+  adb(adbInfo.bin, device.serial, ['shell', 'pkill', '-INT', 'perfetto']);
   sleep(2_000);
   const tracePath = join(outDir, `${stamp}.perfetto-trace`);
-  const pull = adb(adbInfo.bin, device.serial, ['pull', DEVICE_TRACE, tracePath], {
+  let pull = adb(adbInfo.bin, device.serial, ['pull', DEVICE_TRACE, tracePath], {
     timeout: 120_000,
   });
+  if (pull.status !== 0 || !existsSync(tracePath)) {
+    const fd = openSync(tracePath, 'w');
+    pull = spawnSync(
+      adbInfo.bin,
+      ['-s', device.serial, 'exec-out', 'cat', DEVICE_TRACE],
+      { stdio: ['ignore', fd, 'pipe'], timeout: 120_000 },
+    );
+    closeSync(fd);
+  }
   const thermal = dumpThermal(adbInfo.bin, device.serial);
   const meta = {
     stamp,
@@ -252,14 +321,15 @@ function main() {
   writeFileSync(join(outDir, `${stamp}-meta.json`), `${JSON.stringify(meta, null, 2)}\n`);
   const tp = ensureTraceProcessor(join(CAPTURES_DIR, 'tools'));
   let queried = false;
+  let tpOut = '';
   if (tp && existsSync(tracePath)) {
-    const py = spawnSync(
-      'python',
+    const py = runPython(
       [join(ROOT, 'scripts', 'input-to-present-tp.py'), tp, tracePath, join(outDir, stamp)],
       { encoding: 'utf8', timeout: 180_000 },
     );
     queried = py.status === 0;
-    writeFileSync(join(outDir, `${stamp}-tp.txt`), `${py.stdout || ''}\n${py.stderr || ''}`);
+    tpOut = `${py.stdout || ''}\n${py.stderr || ''}`;
+    writeFileSync(join(outDir, `${stamp}-tp.txt`), tpOut);
   }
   const parse = spawnSync(
     process.execPath,
@@ -269,13 +339,27 @@ function main() {
       `--timeline=${join(outDir, `${stamp}-timeline.json`)}`,
       `--stats=${join(outDir, `${stamp}-stats.json`)}`,
       `--clock=${join(outDir, `${stamp}-clock.json`)}`,
+      `--android_logs=${join(outDir, `${stamp}-android_logs.json`)}`,
       `--meta=${join(outDir, `${stamp}-meta.json`)}`,
       `--out=${join(outDir, `${stamp}-fixture.json`)}`,
     ],
     { encoding: 'utf8' },
   );
+  const fixturePath = join(outDir, `${stamp}-fixture.json`);
+  let fixtureHint = null;
+  if (existsSync(fixturePath)) {
+    try {
+      fixtureHint = JSON.parse(readFileSync(fixturePath, 'utf8'));
+    } catch {
+      fixtureHint = null;
+    }
+  }
+  const windowsOk =
+    (fixtureHint?.warmup_ns ?? 0) >= 1_000_000_000 &&
+    (fixtureHint?.continuous_scroll_ns ?? 0) >= 60_000_000_000;
+  const captureOk = done && pull.status === 0 && parse.status === 0 && queried && windowsOk;
   printJson({
-    ok: done && pull.status === 0 && parse.status === 0,
+    ok: captureOk,
     stamp,
     serial: device.serial,
     activity: ACTIVITY,
@@ -283,18 +367,28 @@ function main() {
     sourceCommit,
     fixture_done: done,
     perfetto_pid: perfettoPid,
-    start_app: (startApp.stdout || '').trim(),
+    start_trace: traceOut.slice(0, 400),
     pulled: pull.status === 0,
     queried,
     parse_ok: parse.status === 0,
+    warmup_ns: fixtureHint?.warmup_ns ?? null,
+    continuous_scroll_ns: fixtureHint?.continuous_scroll_ns ?? null,
+    unjoined_cookies: fixtureHint?.unjoined_cookies ?? null,
+    trace_buffer_overrun: fixtureHint?.trace_buffer_overrun ?? null,
     logcat: logcatPath,
     trace: existsSync(tracePath) ? tracePath : null,
-    fixture: join(outDir, `${stamp}-fixture.json`),
-    reason: done
+    fixture: fixturePath,
+    reason: captureOk
       ? 'physical Perfetto batch captured; adjudicate with --fixture and --write'
-      : 'fixture did not finish within the wait window',
+      : !done
+        ? 'fixture did not finish within the wait window'
+        : !queried
+          ? 'trace_processor_shell did not query FrameTimeline'
+          : !windowsOk
+            ? 'logcat missing warm-up or 60 s continuous-scroll window'
+            : 'capture incomplete',
   });
-  if (!done || pull.status !== 0 || parse.status !== 0) process.exitCode = 1;
+  if (!captureOk) process.exitCode = 1;
 }
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {

@@ -30,6 +30,27 @@ export const JANK = {
   DROPPED: 1024,
 };
 
+const JANK_NAME = {
+  none: JANK.NONE,
+  unspecified: JANK.UNSPECIFIED,
+  'surfaceflinger scheduling': JANK.SF_SCHEDULING,
+  'sf scheduling': JANK.SF_SCHEDULING,
+  'prediction error': JANK.PREDICTION_ERROR,
+  'display hal': JANK.DISPLAY_HAL,
+  'surfaceflinger cpu deadline missed': JANK.SF_CPU_DEADLINE_MISSED,
+  'sf cpu deadline missed': JANK.SF_CPU_DEADLINE_MISSED,
+  'surfaceflinger gpu deadline missed': JANK.SF_GPU_DEADLINE_MISSED,
+  'sf gpu deadline missed': JANK.SF_GPU_DEADLINE_MISSED,
+  'application deadline missed': JANK.APP_DEADLINE_MISSED,
+  'app deadline missed': JANK.APP_DEADLINE_MISSED,
+  'buffer stuffing': JANK.BUFFER_STUFFING,
+  'unknown jank': JANK.UNKNOWN,
+  unknown: JANK.UNKNOWN,
+  'surfaceflinger stuffing': JANK.SF_STUFFING,
+  'sf stuffing': JANK.SF_STUFFING,
+  dropped: JANK.DROPPED,
+};
+
 const OS_JANK =
   JANK.SF_SCHEDULING |
   JANK.PREDICTION_ERROR |
@@ -148,9 +169,25 @@ export function parseLogcat(text) {
   return { cookies, presents, scenarios, displays };
 }
 
+export function parseJankType(value) {
+  if (value == null || value === '') return 0;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  const text = String(value).trim();
+  if (/^-?\d+$/u.test(text)) return Number(text);
+  let bits = 0;
+  for (const part of text
+    .split(/[,|]/u)
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean)) {
+    bits |= JANK_NAME[part] ?? JANK.UNKNOWN;
+  }
+  return bits;
+}
+
 export function jankReason(jankType) {
-  const bits = Number(jankType) || 0;
-  if (bits === JANK.NONE || bits === 0) return { reason: null, os: false, unknown: bits === 0 };
+  const bits = parseJankType(jankType);
+  if (bits === JANK.NONE) return { reason: null, os: false, unknown: false };
+  if (bits === 0) return { reason: null, os: false, unknown: true };
   const names = [];
   for (const [name, mask] of Object.entries(JANK)) {
     if (name === 'UNSPECIFIED' || name === 'NONE') continue;
@@ -231,20 +268,25 @@ export function traceLossFromStats(rows = []) {
   const map = {};
   for (const row of rows) {
     const name = row.name ?? row.key;
-    if (name) map[name] = Number(row.value ?? row.idx ?? 0);
+    if (!name) continue;
+    map[name] = (map[name] ?? 0) + Number(row.value ?? row.idx ?? 0);
   }
   const lost =
     (map.traced_buf_lost_packets ?? 0) +
     (map.android_log_num_lost ?? 0) +
-    (map.traced_buf_chunks_discarded ?? 0);
-  const overrun =
-    (map.traced_buf_bytes_overwritten ?? 0) > 0 || (map.buffer_overrun ?? 0) > 0
-      ? 1
-      : (map.traced_buf_bytes_overwritten ?? 0);
-  const ftrace = map.ftrace_cpu_overrun ?? map.ftrace_lost_events ?? 0;
+    (map.traced_buf_chunks_discarded ?? 0) +
+    (map.traced_buf_trace_writer_packet_loss ?? 0) +
+    (map.traced_buf_sequence_packet_loss ?? 0);
+  const overwritten = map.traced_buf_bytes_overwritten ?? 0;
+  const chunksOverwritten = map.traced_buf_chunks_overwritten ?? 0;
+  const overrun = overwritten > 0 || chunksOverwritten > 0 || (map.buffer_overrun ?? 0) > 0 ? 1 : 0;
+  const ftrace =
+    (map.ftrace_cpu_overrun_delta ?? 0) +
+    (map.ftrace_cpu_overrun ?? 0) +
+    (map.ftrace_lost_events ?? 0);
   return {
     trace_lost_packets: lost,
-    trace_buffer_overrun: Number(overrun) || 0,
+    trace_buffer_overrun: overrun,
     ftrace_lost_events: Number(ftrace) || 0,
     raw: map,
   };
@@ -317,8 +359,16 @@ export function joinOpportunities({ cookies, presents, timelineRows, clock }) {
   return opportunities;
 }
 
-function stallNs(presents, observedHz) {
+function stallNs(presents, observedHz, scenarios = [], windowName = null) {
   const times = presents
+    .filter((row) => {
+      if (!windowName) return true;
+      return inWindow(
+        { eventTime: row.callbackTime, enqueue_ns: row.consume_ns },
+        scenarios,
+        windowName,
+      );
+    })
     .map((row) => row.callbackTime)
     .filter((value) => Number.isFinite(value))
     .sort((a, b) => a - b);
@@ -344,6 +394,40 @@ function inWindow(op, scenarios, name) {
   const t = op.eventTime ?? op.enqueue_ns;
   if (t == null) return false;
   return t >= start.tNs && t <= end.tNs;
+}
+
+export function parseAndroidLogRows(rows = []) {
+  const text = rows
+    .map((row) => String(row.msg ?? row.message ?? ''))
+    .filter(Boolean)
+    .join('\n');
+  return parseLogcat(text);
+}
+
+export function mergeParsed(primary, extra) {
+  const cookies = [...(primary.cookies ?? [])];
+  const seenSeq = new Set(cookies.map((row) => row.seq));
+  for (const cookie of extra.cookies ?? []) {
+    if (!seenSeq.has(cookie.seq)) {
+      cookies.push(cookie);
+      seenSeq.add(cookie.seq);
+    }
+  }
+  cookies.sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0));
+  const presents = [...(primary.presents ?? [])];
+  const seenFrame = new Set(presents.map((row) => row.frame_id));
+  for (const present of extra.presents ?? []) {
+    if (!seenFrame.has(present.frame_id)) {
+      presents.push(present);
+      seenFrame.add(present.frame_id);
+    }
+  }
+  return {
+    cookies,
+    presents,
+    scenarios: [...(primary.scenarios ?? []), ...(extra.scenarios ?? [])],
+    displays: [...(primary.displays ?? []), ...(extra.displays ?? [])],
+  };
 }
 
 export function buildFixture({
@@ -377,8 +461,14 @@ export function buildFixture({
   const hz60 = opportunities.filter((op) => inWindow(op, parsed.scenarios, 'refresh_60'));
   const hz90 = opportunities.filter((op) => inWindow(op, parsed.scenarios, 'refresh_90'));
   const chain = hz120.length ? hz120 : opportunities;
+  const windowCookies = parsed.cookies.filter((cookie) =>
+    inWindow(cookie, parsed.scenarios, 'continuous_scroll'),
+  );
+  const joinedSeq = new Set(chain.map((op) => op.seq));
+  const unjoinedCookies = windowCookies.filter((cookie) => !joinedSeq.has(cookie.seq)).length;
   const observedHz = display120?.observedHz ?? meta.observed_display_hz ?? null;
   const requestedHz = display120?.requestedHz ?? meta.requested_frame_rate ?? 120;
+  const stall = stallNs(parsed.presents, observedHz, parsed.scenarios, 'continuous_scroll');
   return {
     schema: PARSER_SCHEMA,
     driver: driver ?? meta.driver ?? null,
@@ -412,8 +502,10 @@ export function buildFixture({
     fling_velocity: meta.fling_velocity ?? { fine: 10_000, coalesced: 10_000 },
     epoch_mismatch: 0,
     double_delta: 0,
-    ui_stall_ns_max: meta.ui_stall_ns_max ?? stallNs(parsed.presents, observedHz),
-    compositor_stall_ns_max: meta.compositor_stall_ns_max ?? stallNs(parsed.presents, observedHz),
+    unjoined_cookies: unjoinedCookies,
+    cookies_in_window: windowCookies.length,
+    ui_stall_ns_max: meta.ui_stall_ns_max ?? stall,
+    compositor_stall_ns_max: meta.compositor_stall_ns_max ?? stall,
     thermal: meta.thermal ?? { state: 'unknown', cpu_khz: null, gpu_khz: null },
     device: meta.device ?? null,
     display_mode: display120 ?? meta.display_mode ?? null,
@@ -444,7 +536,9 @@ function main() {
     process.exitCode = 1;
     return;
   }
-  const parsed = parseLogcat(readFileSync(logcatPath, 'utf8'));
+  const parsedLogs = parseLogcat(readFileSync(logcatPath, 'utf8'));
+  const androidRows = readJson(argValue('android_logs') ?? argValue('logs'));
+  const parsed = androidRows.length ? mergeParsed(parsedLogs, parseAndroidLogRows(androidRows)) : parsedLogs;
   const fixture = buildFixture({
     parsed,
     timelineRows: readJson(argValue('timeline')),

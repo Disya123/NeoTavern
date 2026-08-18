@@ -617,6 +617,7 @@ export function evaluateFixture(fixture, provenance = {}) {
     Math.abs(fine - coalesced) / Math.max(fine, coalesced) <= FLING_VELOCITY_REL_EPS;
   const epochOk = (fixture.epoch_mismatch ?? 1) === 0;
   const deltaOk = (fixture.double_delta ?? 1) === 0;
+  const joinOk = (fixture.unjoined_cookies ?? 0) === 0;
   const stallDeadline = Math.max(...Object.values(REFRESH_DEADLINE_NS));
   const stallsOk =
     (fixture.ui_stall_ns_max ?? stallDeadline + 1) <= stallDeadline &&
@@ -660,6 +661,7 @@ export function evaluateFixture(fixture, provenance = {}) {
     flingOk &&
     epochOk &&
     deltaOk &&
+    joinOk &&
     stallsOk &&
     thermalOk &&
     scenariosOk &&
@@ -689,6 +691,8 @@ export function evaluateFixture(fixture, provenance = {}) {
     flingOk,
     epochOk,
     deltaOk,
+    joinOk,
+    unjoined_cookies: fixture.unjoined_cookies ?? 0,
     stallsOk,
     thermalOk,
     scenariosOk,

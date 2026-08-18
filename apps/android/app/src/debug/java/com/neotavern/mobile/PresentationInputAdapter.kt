@@ -58,25 +58,36 @@ class PresentationInputAdapter(
     private var posted = false
     private val nextSeq = AtomicLong(1)
     private var vsyncCallback: Choreographer.VsyncCallback? = null
+    /**
+     * Compositor [HandlerThread] FrameTimeline is the present token.
+     * UI Choreographer vsync IDs are a different stream on Xiaomi and
+     * must not be used for `sequence → targetVsyncId → actual present`.
+     */
+    @Volatile
+    var compositorOwnsTimeline: Boolean = false
+        private set
 
     init {
         if (Build.VERSION.SDK_INT >= 33) {
             vsyncCallback =
                 Choreographer.VsyncCallback { data ->
-                    lastVsyncNanos =
-                        PresentationInputMapping.presentationTimeFromVsync(data.frameTimeNanos)
-                    val timeline = data.preferredFrameTimeline
-                    lastVsyncId = timeline.vsyncId
-                    lastDeadlineNanos = timeline.deadlineNanos
-                    lastExpectedPresentNanos = timeline.expectedPresentationTimeNanos
-                    val nextTimeline =
-                        data.frameTimelines
-                            .filter { it.vsyncId > timeline.vsyncId }
-                            .minByOrNull { it.vsyncId }
-                    lastNextVsyncId = nextTimeline?.vsyncId ?: (timeline.vsyncId + 1L)
-                    lastNextPresentDeadline =
-                        nextTimeline?.expectedPresentationTimeNanos
-                            ?: (timeline.expectedPresentationTimeNanos + lastPeriodNanos)
+                    if (!compositorOwnsTimeline) {
+                        val timeline = data.preferredFrameTimeline
+                        val nextTimeline =
+                            data.frameTimelines
+                                .filter { it.vsyncId > timeline.vsyncId }
+                                .minByOrNull { it.vsyncId }
+                        applyFrameTimeline(
+                            frameTimeNanos = data.frameTimeNanos,
+                            vsyncId = timeline.vsyncId,
+                            deadlineNanos = timeline.deadlineNanos,
+                            expectedPresentNanos = timeline.expectedPresentationTimeNanos,
+                            nextVsyncId = nextTimeline?.vsyncId ?: (timeline.vsyncId + 1L),
+                            nextPresentDeadline =
+                                nextTimeline?.expectedPresentationTimeNanos
+                                    ?: (timeline.expectedPresentationTimeNanos + lastPeriodNanos),
+                        )
+                    }
                     val callback = vsyncCallback
                     if (posted && callback != null) {
                         choreographer.postVsyncCallback(callback)
@@ -87,6 +98,41 @@ class PresentationInputAdapter(
 
     fun setRefreshPeriodNanos(periodNanos: Long) {
         if (periodNanos > 0L) lastPeriodNanos = periodNanos
+    }
+
+    fun applyCompositorFrameTimeline(
+        frameTimeNanos: Long,
+        vsyncId: Long,
+        deadlineNanos: Long,
+        expectedPresentNanos: Long,
+        nextVsyncId: Long,
+        nextPresentDeadline: Long,
+    ) {
+        compositorOwnsTimeline = true
+        applyFrameTimeline(
+            frameTimeNanos,
+            vsyncId,
+            deadlineNanos,
+            expectedPresentNanos,
+            nextVsyncId,
+            nextPresentDeadline,
+        )
+    }
+
+    private fun applyFrameTimeline(
+        frameTimeNanos: Long,
+        vsyncId: Long,
+        deadlineNanos: Long,
+        expectedPresentNanos: Long,
+        nextVsyncId: Long,
+        nextPresentDeadline: Long,
+    ) {
+        lastVsyncNanos = PresentationInputMapping.presentationTimeFromVsync(frameTimeNanos)
+        lastVsyncId = vsyncId
+        lastDeadlineNanos = deadlineNanos
+        lastExpectedPresentNanos = expectedPresentNanos
+        lastNextVsyncId = nextVsyncId
+        lastNextPresentDeadline = nextPresentDeadline
     }
 
     fun startFrameCallbacks() {

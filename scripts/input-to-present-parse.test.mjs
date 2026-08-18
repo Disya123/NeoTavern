@@ -84,4 +84,47 @@ describe('input-to-present parser', () => {
     expect(fixture.modes.find((mode) => mode.hz === 120).opportunities).toHaveLength(1);
     expect(fixture.trace_lost_packets).toBe(0);
   });
+
+  it('maps FrameTimeline string jank; None is not unknown', () => {
+    expect(exclusionForTimeline({ jank_type: 'None' })).toEqual({
+      rendererControlled: true,
+      exclusionReason: null,
+    });
+    expect(exclusionForTimeline({ jank_type: 'SurfaceFlinger GPU Deadline Missed' })).toEqual({
+      rendererControlled: false,
+      exclusionReason: 'sf_gpu_deadline_missed',
+    });
+    expect(exclusionForTimeline({ jank_type: 'Unknown Jank' }).exclusionReason).toBe('unknown');
+    expect(exclusionForTimeline({ jank_type: 'Unknown Jank' }).rendererControlled).toBe(true);
+  });
+
+  it('sums overwritten Perfetto buffers as loss', () => {
+    const fixture = buildFixture({
+      parsed: parseLogcat(log),
+      timelineRows: [{ ts: 1_000_005_000, dur: 200, display_frame_token: 440, jank_type: 'None' }],
+      statsRows: [
+        { name: 'traced_buf_bytes_overwritten', value: 414_797_824 },
+        { name: 'traced_buf_bytes_overwritten', value: 0 },
+        { name: 'traced_buf_chunks_overwritten', value: 12_922 },
+        { name: 'traced_buf_lost_packets', value: 0 },
+        { name: 'ftrace_cpu_overrun_delta', value: 0 },
+      ],
+      clockRows: [{ clock_name: 'monotonic', clock_value: 1 }],
+    });
+    expect(fixture.trace_buffer_overrun).toBe(1);
+  });
+
+  it('counts unjoined cookies inside the 120 Hz window', () => {
+    const parsed = parseLogcat(`${log}
+NeoTavernI2P: i2p seq=2 eventTime=1000004000 inputCutoff=1000010000 callbackTime=1000002500 targetVsyncId=441 targetPresentDeadline=1000008000 actualPresentTime=pending eligibleForCurrentVsync=true rendererControlled=pending exclusionReason=pending newestEventTime=1000004000 oldestHistoricalEventTime=1000004000 pointer=0 kind=Move enqueueNs=1000004100 callbackVsyncId=441
+`);
+    const fixture = buildFixture({
+      parsed,
+      timelineRows: [{ ts: 1_000_005_000, dur: 200, display_frame_token: 440, jank_type: 'None' }],
+      statsRows: [{ name: 'traced_buf_bytes_overwritten', value: 0 }],
+      clockRows: [{ clock_name: 'monotonic', clock_value: 1 }],
+    });
+    expect(fixture.unjoined_cookies).toBe(1);
+    expect(fixture.cookies_in_window).toBe(2);
+  });
 });
