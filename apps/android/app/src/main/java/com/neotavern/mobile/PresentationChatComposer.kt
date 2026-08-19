@@ -13,7 +13,7 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 
 /**
- * Debug composer that traces Gboard InputConnection calls without logging text.
+ * Chat composer that traces Gboard InputConnection calls without logging text.
  */
 class PresentationChatComposer(context: Context) : EditText(context) {
     var journeyLog: PresentationChatJourneyLog? = null

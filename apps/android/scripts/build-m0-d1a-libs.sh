@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 #
-# Builds the debug-only M0-D1a/D1b/D2 paint probes and the Milestone C
-# presentation chat JNI into
-# app/src/debug/jniLibs/{arm64-v8a,x86_64}/libneotavern_presentation_m0.so,
-# libneotavern_presentation_m0_d2.so, libneotavern_presentation_perf_probe.so,
-# and libneotavern_presentation_chat.so
+# Builds the debug-only M0-D1a/D1b/D2 paint probes into
+# app/src/debug/jniLibs/{arm64-v8a,x86_64}/ and the Milestone C
+# presentation chat JNI into both debug and production main jniLibs
+# (libneotavern_presentation_chat.so). Probe libs never go to main.
 #
 # Default features: gpu,android-jni (control counters).
 # Capture APK: M0_D1A_FEATURES=gpu,android-jni,renderdoc-capture
@@ -27,6 +26,7 @@ if ! command -v cargo-ndk >/dev/null 2>&1; then
 fi
 
 OUT_DIR="$APP_DIR/app/src/debug/jniLibs"
+MAIN_JNI="$APP_DIR/app/src/main/jniLibs"
 mkdir -p "$OUT_DIR"
 FEATURES="${M0_D1A_FEATURES:-gpu,android-jni}"
 
@@ -59,12 +59,21 @@ cargo ndk \
   -o "$OUT_DIR" \
   build --release -p neotavern-presentation-chat --features android-jni
 
+for abi in arm64-v8a x86_64; do
+  mkdir -p "$MAIN_JNI/$abi"
+  cp "$OUT_DIR/$abi/libneotavern_presentation_chat.so" "$MAIN_JNI/$abi/"
+done
+
 echo "Built:"
 ls -1 "$OUT_DIR"/*/libneotavern_presentation_m0.so
 ls -1 "$OUT_DIR"/*/libneotavern_presentation_m0_d2.so
 ls -1 "$OUT_DIR"/*/libneotavern_presentation_perf_probe.so
 ls -1 "$OUT_DIR"/*/libneotavern_presentation_chat.so
+ls -1 "$MAIN_JNI"/*/libneotavern_presentation_chat.so
 # cargo-ndk -o copies every workspace cdylib for the target; keep the probes
 # and the Milestone C presentation chat library. Production kernel JNI stays in
-# app/src/main/jniLibs.
+# app/src/main/jniLibs and must not be deleted here.
 find "$OUT_DIR" -name 'libneotavern_android_jni.so' -delete
+find "$MAIN_JNI" -name 'libneotavern_presentation_m0.so' -delete
+find "$MAIN_JNI" -name 'libneotavern_presentation_m0_d2.so' -delete
+find "$MAIN_JNI" -name 'libneotavern_presentation_perf_probe.so' -delete

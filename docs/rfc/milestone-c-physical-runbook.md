@@ -5,8 +5,10 @@ on Xiaomi `8f5c2b7c` / `23122PCD1G`. Stamp `2026-08-18T21-55-58-696Z` stays a
 preserved **`FAILED_ATTEMPT`** in `failed_attempts` (live open of Kernel chat
 `Hazel` passed, send round-trip did not persist `messageCount`). RFC §51
 Milestone C remains **STARTED**, not PASS. Compatibility matrix rows stay
-**DEFERRED**. Production cutover stays **NOT_STARTED**. Canary on
-`MainActivity` was **not** enabled.
+**DEFERRED**. Production cutover is **STARTED / CANARY** in
+[`milestone-c-canary.md`](milestone-c-canary.md); the physical canary batch
+is **NOT_RUN**. This harness stamp does **not** enable `MainActivity` canary
+(`canary=false` is preserved).
 
 Do not overwrite the failed stamp. Later successful batches must keep it in
 `failed_attempts`.
@@ -53,7 +55,7 @@ gboard_typing_insets_send = PASS
 ime_composition_contract = HOST_CONFORMANCE
 lifecycle = PASS
 safe_mode = PASS
-cutover = NOT_STARTED
+cutover = NOT_STARTED   # this harness stamp; product cutover is STARTED/CANARY in milestone-c-canary.md
 canary = false
 ```
 
@@ -89,5 +91,5 @@ conformance test (`PresentationChatMockIme`), not by this physical stamp.
 - RFC §51 DoD (i18n/RTL, Theme SDK v2, plugin matrix, no-WebView renderer)
 - RFC §51 native TalkBack (`SKIPPED` ≠ Exit item; ADR-0051)
 - owner-signed PARITY
-- production `MainActivity` canary
+- production `MainActivity` canary physical batch (`canary_batch=NOT_RUN`)
 - TalkBack focus traversal, scroll/click actions, streaming announcement as a proven journey

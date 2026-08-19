@@ -64,10 +64,11 @@ android {
         }
     }
 
-    // The native kernel library (libneotavern_android_jni.so) is a PREBUILT
-    // artifact produced by scripts/build-libs.sh into
-    // src/main/jniLibs/{arm64-v8a,x86_64}/ — it is never committed and needs
-    // no externalNativeBuild configuration.
+    // The native kernel library (libneotavern_android_jni.so) and the
+    // guarded presentation chat library (libneotavern_presentation_chat.so)
+    // are PREBUILT artifacts in src/main/jniLibs/{arm64-v8a,x86_64}/ —
+    // they are never committed and need no externalNativeBuild configuration.
+    // Probe libs stay in src/debug/jniLibs/. WebView remains in the APK.
 }
 
 tasks.configureEach {

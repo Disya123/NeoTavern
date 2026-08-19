@@ -41,6 +41,17 @@ class PresentationChatLaunchTest {
     }
 
     @Test
+    fun `canary extras are explicit 1 values and 0 is flag off`() {
+        assertTrue(PresentationChatLaunch.isForceInitFailure("1"))
+        assertFalse(PresentationChatLaunch.isForceInitFailure(null))
+        assertTrue(PresentationChatLaunch.isCanarySession("1"))
+        assertTrue(PresentationChatLaunch.isCanaryReset("1"))
+        assertTrue(PresentationChatLaunch.isFlagOff("0"))
+        assertFalse(PresentationChatLaunch.isFlagOff("1"))
+        assertFalse(PresentationChatLaunch.isFlagOff(null))
+    }
+
+    @Test
     fun `isolated 10k profile is an explicit extra`() {
         assertFalse(PresentationChatLaunch.isIsolated10k(null))
         assertFalse(PresentationChatLaunch.isIsolated10k("10k"))

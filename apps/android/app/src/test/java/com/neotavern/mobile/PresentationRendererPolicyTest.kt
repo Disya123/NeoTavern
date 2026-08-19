@@ -28,6 +28,10 @@ class PresentationRendererPolicyTest {
         assertEquals(PresentationRendererPolicy.REASON_TOUCH_EXPLORATION, decision.reason)
         assertFalse(decision.rustHostAllowed)
         assertFalse(rustHostCreated)
+        assertEquals(
+            "presentation_renderer=WEBVIEW reason=accessibility_touch_exploration rust_host_allowed=false",
+            PresentationRendererPolicy.logLine(decision),
+        )
     }
 
     @Test

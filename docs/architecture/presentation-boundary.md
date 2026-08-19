@@ -8,14 +8,17 @@ A/Product Wire boundary = PASS
 shared-device raster interop = PASS
 platform gesture adapter = PASS
 Milestone B = PASS
-production cutover = NOT_STARTED
+Milestone C = STARTED
+core chat journey batch = PASS
+production cutover = STARTED / CANARY
+canary_batch = NOT_RUN
 ```
 
 Milestone A **PASS** is the feature-flagged Product Wire shell, React ↔
 Dioxus canonical projection parity, and presentation-path streaming tests.
 Milestone B **PASS** is the independent physical PERF-01…22 / device-loss
-registry. Neither is a production migration, Milestone C PASS, or a
-`MainActivity` cutover.
+registry. Neither is a production migration, Milestone C PASS, or an unguarded
+`MainActivity` cutover. Cutover is **STARTED / CANARY**.
 
 **Decisions:** [ADR-0049](../adr/0049-track-d-dioxus-presentation.md),
 [ADR-0050](../adr/0050-visual-surface-ingress-vs-plugin.md),
@@ -49,12 +52,13 @@ This is not a production migration and not Milestone C PASS.
    Wire for product mutations.
 3. A presentation command is invalid unless its `wireOperationId` exists in
    `buildProductWireRegistry()`.
-4. Production Android `MainActivity` stays WebView until Milestone C DoD
-   and an explicit production cutover.
+4. Production Android `MainActivity` stays WebView until the guarded canary
+   selector allows Dioxus. That selector MUST run **before** a Rust
+   presentation host (`System.loadLibrary` / JNI open). Default remains
+   WebView. `NEOTA_DIOXUS_SHELL=1` is a **non-default** persisted canary
+   flag, not an unguarded cutover.
    `NEOTA_NEOCOMPOSITOR=1` is a **non-default** feature flag for
    `crates/neocompositor`, not a cutover switch.
-   `NEOTA_DIOXUS_SHELL=1` is a **non-default** flag for the Dioxus Product
-   Wire shell crate; it is not a launcher switch.
    TalkBack / touch exploration MUST select WebView **before** a Rust
    presentation host is created ([ADR-0051](../adr/0051-android-talkback-webview-fallback.md)).
 5. M0 probe crates stay probes and are not production JNI. Interchange
@@ -65,9 +69,9 @@ This is not a production migration and not Milestone C PASS.
 
 ```text
 react-web                  — production Web / desktop UI
-webview-android-rollback   — production Android default
-dioxus-android-flagged     — experimental; not the launcher
-dioxus-android-chat-route  — debug PresentationChatActivity; NEOTA_DIOXUS_SHELL=1; not cutover
+webview-android-rollback   — production Android default (retained)
+dioxus-android-canary      — MainActivity selector; STARTED / CANARY; not default
+dioxus-android-chat-route  — PresentationChatActivity; same Kernel; canary + debug harness
 ```
 
 ## Milestone B
@@ -161,14 +165,13 @@ PERF-18/19/20 evidence inadmissible.
 
 ## Milestone C
 
-Feature-flagged Android chat workspace (RFC §51). Debug
-`PresentationChatActivity` is a temporary harness around the same live
-Product Wire route in `crates/presentation-chat`. History, streaming,
-send, retry, prepend, drafts, and `ErrorDto` go through registered Wire
+Feature-flagged Android chat workspace (RFC §51). `PresentationChatActivity`
+hosts the live Product Wire route in `crates/presentation-chat`. History,
+streaming, send, retry, prepend, drafts, and `ErrorDto` go through registered Wire
 operations only. Tests use in-memory `FakeWire`; the Activity talks to
 the existing Kernel via `KernelSession` + `EnvelopeBuilder`. The UI never
 opens SQLite or talks to the network. The visible window is virtualized
-through `crates/chat-viewport` (`waited_on_producer=false`). The harness
+through `crates/chat-viewport` (`waited_on_producer=false`). The host
 mirrors that same snapshot (selectable Markdown/image rows) and hosts a
 Gboard composer (IME send, **Send** button, draft save, keyboard inset animation). It is
 not a second chat and not the compositor `SurfaceView` paint path.
@@ -177,17 +180,21 @@ TalkBack roles live on the Dioxus tree. Rotate/recreation restores
 `chatId` and composer text. Optional `NEOTA_SAFE_MODE=1` escapes to
 production `MainActivity` (WebView).
 
-The route mounts only when `com.neotavern.mobile.NEOTA_DIOXUS_SHELL=1`.
-Without the extra it stays off (`reason=flag_off`). Optional
-`NEOTA_SAFE_MODE=1` escapes to production `MainActivity` (WebView).
-Production `MainActivity`, default JNI, and WebView rollback are
-unchanged. Send round-trip uses Kernel `chats.get.messageCount` as the
+Guarded canary: `MainActivity` may start this activity when the selector
+allows a Rust host. Production APK packages
+`libneotavern_presentation_chat.so`. Kernel and `filesDir/neotavern` stay
+shared. Isolated 10k remains a debug harness profile
+(`NEOTA_CHAT_PROFILE=isolated-10k` → `filesDir/neotavern-isolated-10k`).
+Physical canary batch is **NOT_RUN**
+([milestone-c-canary.md](../rfc/milestone-c-canary.md)).
+
+The route mounts only when `com.neotavern.mobile.NEOTA_DIOXUS_SHELL=1`
+(extra or persisted canary flag). Without it the selector stays on
+WebView (`reason=flag_off`). Optional `NEOTA_SAFE_MODE=1` escapes to
+WebView. Send round-trip uses Kernel `chats.get.messageCount` as the
 source of truth (not a local `+= 1`). IME action Send and a Send button
 both issue `chats.messages.create`; a failed `generation.start` must not
-drop an accepted durable row. The isolated test profile
-`NEOTA_CHAT_PROFILE=isolated-10k` seeds 10k messages through the same
-Product Wire ops into `filesDir/neotavern-isolated-10k` (never the
-production `neotavern` store). Physical stamp `2026-08-18T21-55-58-696Z` stays a preserved
+drop an accepted durable row. Physical stamp `2026-08-18T21-55-58-696Z` stays a preserved
 **`FAILED_ATTEMPT`**. Stamp `2026-08-19T10-29-35-149Z` is the successful
 journey batch (**PASS**) on the same Xiaomi debug harness: send round-trip,
 isolated 10k, Gboard InputConnection keys, lifecycle, and safe-mode WebView
@@ -197,6 +204,6 @@ does **not** satisfy RFC §51 TalkBack; native Dioxus TalkBack is
 **WEBVIEW_FALLBACK** ([ADR-0051](../adr/0051-android-talkback-webview-fallback.md)).
 ([milestone-c-adjudication.json](../rfc/milestone-c-adjudication.json),
 [runbook](../rfc/milestone-c-physical-runbook.md)). Milestone C is
-**STARTED**, not RFC §51 PASS. Chat workspace on flagged Dioxus Android
+**STARTED**, not RFC §51 PASS. Cutover is **STARTED / CANARY**;
+`canary_batch` is **NOT_RUN**. Chat workspace on flagged Dioxus Android
 remains **DEFERRED** in the compatibility matrix until owner-signed PARITY.
-Production cutover stays `NOT_STARTED` until C PASS and canary evidence.

@@ -18,6 +18,7 @@ import android.view.Choreographer
 import android.view.Display
 import android.view.Gravity
 import android.view.View
+import android.view.accessibility.AccessibilityManager
 import android.webkit.ConsoleMessage
 import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
@@ -55,7 +56,11 @@ import java.io.IOException
  *    holder refcount before this activity can be destroyed, so the kernel
  *    never dies mid-run,
  *  - on destroy the bridge closes (JS delivery stops, the claimed streams
- *    stay open) and the activity releases its holder refcount.
+ *    stay open) and the activity releases its holder refcount,
+ *  - a guarded Dioxus canary may finish this activity before creating a
+ *    WebView when [PresentationRendererPolicy] allows a Rust host; TalkBack
+ *    / touch exploration, safe mode, kill switch, crash-loop, unqualified
+ *    GPU, and a flag-off stay on WebView (ADR-0051).
  *
  * Security posture: javaScriptEnabled for the bundled UI, DOM storage on,
  * file access OFF (assets remain reachable via `file:///android_asset` or,
@@ -96,9 +101,15 @@ class MainActivity : Activity() {
 
     private var frameCallback: Choreographer.FrameCallback? = null
 
+    /** True when this launcher hands off to [PresentationChatActivity] without a WebView. */
+    private var presentationHandoff = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         createElapsedMs = SystemClock.elapsedRealtime()
+        if (tryHandoffDioxusCanary()) {
+            return
+        }
         WindowCompat.setDecorFitsSystemWindows(window, false)
         applyPreferredDisplayMode()
 
@@ -317,6 +328,10 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        if (presentationHandoff) {
+            super.onDestroy()
+            return
+        }
         frameCallback?.let { callback ->
             Choreographer.getInstance().removeFrameCallback(callback)
             frameCallback = null
@@ -324,8 +339,12 @@ class MainActivity : Activity() {
         // Stop bridge deliveries only — the claimed streams stay open and are
         // pumped by GenerationService, which holds its own holder refcount, so
         // the kernel keeps running while the app is backgrounded.
-        bridge.close()
-        holder.release()
+        if (::bridge.isInitialized) {
+            bridge.close()
+        }
+        if (::holder.isInitialized) {
+            holder.release()
+        }
         if (::webView.isInitialized) {
             try {
                 webView.removeJavascriptInterface("__neotavernMobile")
@@ -579,6 +598,86 @@ class MainActivity : Activity() {
         true
     } catch (e: IOException) {
         false
+    }
+
+    /**
+     * Selector runs before WebView, Kernel acquire, or presentation JNI.
+     * Returns true when this activity finishes into [PresentationChatActivity].
+     */
+    private fun tryHandoffDioxusCanary(): Boolean {
+        val prefs = PresentationCanaryPrefs(this)
+        if (PresentationChatLaunch.isCanaryReset(
+                intent.getStringExtra(PresentationChatLaunch.EXTRA_CANARY_RESET),
+            )
+        ) {
+            prefs.resetGuards()
+        }
+        val flagExtra = intent.getStringExtra(PresentationChatLaunch.EXTRA_DIOXUS_SHELL)
+        prefs.applyFlagExtra(flagExtra)
+        val chatId = PresentationChatLaunch.parseChatId(
+            intent.getStringExtra(PresentationChatLaunch.EXTRA_CHAT_ID),
+        )
+        if (chatId.isNotEmpty()) {
+            prefs.rememberChatId(chatId)
+        }
+        if (PresentationChatLaunch.isForceInitFailure(
+                intent.getStringExtra(PresentationChatLaunch.EXTRA_FORCE_INIT_FAILURE),
+            )
+        ) {
+            prefs.armKillSwitch()
+            Log.i(
+                TAG,
+                "presentation_renderer=WEBVIEW reason=forced_init_failure rust_host_allowed=false",
+            )
+            return false
+        }
+        val touchExploration = getSystemService(AccessibilityManager::class.java)
+            ?.isTouchExplorationEnabled == true
+        val emulator = PresentationDeviceQualification.isEmulator(
+            Build.FINGERPRINT,
+            Build.MODEL,
+            Build.HARDWARE,
+            Build.PRODUCT,
+        )
+        val inputs = PresentationRendererPolicy.Inputs(
+            safeMode = PresentationChatLaunch.isSafeMode(
+                intent.getStringExtra(PresentationChatLaunch.EXTRA_SAFE_MODE),
+            ),
+            killSwitch = prefs.killSwitch,
+            crashLoop = PresentationCanaryState.crashLoop(prefs.crashFailures),
+            touchExplorationEnabled = touchExploration,
+            deviceQualified = PresentationDeviceQualification.isQualified(
+                physicalDevice = !emulator,
+                vulkanHardware = packageManager.hasSystemFeature(
+                    PackageManager.FEATURE_VULKAN_HARDWARE_LEVEL,
+                ),
+                softwareRenderer = PresentationDeviceQualification.isSoftwareRenderer(
+                    Build.HARDWARE,
+                    Build.FINGERPRINT,
+                ),
+            ),
+            canaryFlag = PresentationCanaryState.canaryFlag(flagExtra, prefs.canaryEnabled),
+        )
+        val decision = PresentationRendererPolicy.decide(inputs)
+        Log.i(TAG, PresentationRendererPolicy.logLine(decision))
+        if (!decision.rustHostAllowed) {
+            return false
+        }
+        presentationHandoff = true
+        return try {
+            PresentationCanaryHost.launch(this, intent, prefs.lastChatId)
+            finish()
+            true
+        } catch (err: Throwable) {
+            presentationHandoff = false
+            prefs.armKillSwitch()
+            Log.e(TAG, "dioxus canary host failed", err)
+            Log.i(
+                TAG,
+                "presentation_renderer=WEBVIEW reason=init_failure rust_host_allowed=false",
+            )
+            false
+        }
     }
 
     private companion object {

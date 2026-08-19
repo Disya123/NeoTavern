@@ -1,0 +1,27 @@
+{
+  "schema": "milestone-c-canary/v1",
+  "milestone_c": "STARTED",
+  "journey_batch": "PASS",
+  "journey_batch_stamp": "2026-08-19T10-29-35-149Z",
+  "journey_batch_canary": false,
+  "production_cutover": "STARTED",
+  "cutover": "CANARY",
+  "canary": "STARTED",
+  "canary_batch": "NOT_RUN",
+  "webview_retained": true,
+  "talkback_rfc51": "DEFERRED_BY_OWNER",
+  "product_accessibility_path": "WEBVIEW_FALLBACK",
+  "physical": true,
+  "serial": "8f5c2b7c",
+  "reason": "Guarded MainActivity selector is in the production APK; physical canary batch has not run",
+  "cases": {
+    "rust_launch": "NOT_RUN",
+    "process_death": "NOT_RUN",
+    "upgrade_relaunch": "NOT_RUN",
+    "send_reopen": "NOT_RUN",
+    "safe_mode": "NOT_RUN",
+    "forced_init_failure": "NOT_RUN",
+    "flag_off": "NOT_RUN",
+    "accessibility_fallback": "NOT_RUN"
+  }
+}

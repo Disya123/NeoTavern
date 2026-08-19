@@ -131,6 +131,12 @@ Produces `app/src/main/jniLibs/{arm64-v8a,x86_64}/libneotavern_android_jni.so`
 (both ABIs; x86_64 is what the CI emulator loads). The script is
 cwd-independent and locates the Rust workspace (`crates/`) itself.
 
+The guarded Dioxus canary also needs
+`libneotavern_presentation_chat.so` in the same main `jniLibs` folders
+(`bash scripts/build-m0-d1a-libs.sh` copies it there; probe libs stay in
+`src/debug/jniLibs`). WebView remains in the APK. Default launcher is
+still WebView until `NEOTA_DIOXUS_SHELL=1` persists the canary flag.
+
 ## Building and running the app
 
 ### Android Studio

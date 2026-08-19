@@ -33,9 +33,10 @@ Index of the internal documentation. Each major topic has its own folder.
 - [Legacy UI surface](architecture/ui-legacy-surface.md) — baseline inventory of `/api/v2`/`legacyRaw` in production UI (ARC-02/ARC-03).
 - [Operations inventory](architecture/operations-inventory.md) — current `/api/v2` surface, feature ownership/routing.
 - [Product Wire Contracts](architecture/wire-contracts.md) — canonical contracts, codegen, handshake, corpus.
-- [Presentation boundary](architecture/presentation-boundary.md) — Milestone A **PASS**; Milestone B **PASS**; live Product Wire chat route (Milestone C STARTED, core chat journey batch PASS, native TalkBack DEFERRED_BY_OWNER / WEBVIEW_FALLBACK, not RFC C PASS); WebView rollback.
+- [Presentation boundary](architecture/presentation-boundary.md) — Milestone A **PASS**; Milestone B **PASS**; live Product Wire chat route (Milestone C STARTED, core chat journey batch PASS, native TalkBack DEFERRED_BY_OWNER / WEBVIEW_FALLBACK, cutover STARTED/CANARY, canary_batch NOT_RUN, not RFC C PASS); WebView rollback.
 - [ADR-0051](adr/0051-android-talkback-webview-fallback.md) — native Dioxus TalkBack deferred; TalkBack/touch exploration selects WebView before a Rust host.
-- [Milestone C physical runbook](rfc/milestone-c-physical-runbook.md) — Xiaomi journey batch PASS; FAILED_ATTEMPT preserved; not cutover.
+- [Milestone C physical runbook](rfc/milestone-c-physical-runbook.md) — Xiaomi journey batch PASS; FAILED_ATTEMPT preserved; harness stamp is not canary.
+- [Milestone C guarded canary](rfc/milestone-c-canary.md) — `MainActivity` selector STARTED/CANARY; physical canary batch NOT_RUN.
 - [Known baseline failures](architecture/known-baseline-failures.md) — `KNOWN_BASELINE_FAILURE` fingerprints; not a green full baseline; not a B PASS waiver.
 - [PresentationCompatibilityMatrix](rfc/presentation-compatibility-matrix.md) — baseline after D1/D2 GO; ADR-0051 TalkBack `DEFERRED_BY_OWNER` / `WEBVIEW_FALLBACK` (not cutover).
 - [Generation durability](architecture/generation-durability.md) — Phase 6 recoverable generation workflows, state machine, SSE resume.

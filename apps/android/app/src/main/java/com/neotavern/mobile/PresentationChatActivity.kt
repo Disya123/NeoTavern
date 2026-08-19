@@ -2,6 +2,7 @@ package com.neotavern.mobile
 
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.os.Bundle
 import android.provider.Settings
 import android.text.Editable
@@ -31,9 +32,12 @@ import java.io.File
 import java.lang.ref.WeakReference
 
 /**
- * Debug harness around the live Product Wire chat route. Not a launcher.
+ * Live Product Wire chat host used by the guarded MainActivity canary and the
+ * debug harness. Not a launcher.
  *
- * `adb shell am start -n com.neotavern.mobile/.PresentationChatActivity --es com.neotavern.mobile.NEOTA_DIOXUS_SHELL 1`
+ * Canary: `MainActivity` starts this activity only after
+ * [PresentationRendererPolicy] allows a Rust host.
+ * Harness: `adb shell am start -n com.neotavern.mobile/.PresentationChatActivity --es com.neotavern.mobile.NEOTA_DIOXUS_SHELL 1`
  *
  * Safe mode extra opens production [MainActivity] (WebView rollback).
  */
@@ -52,15 +56,19 @@ class PresentationChatActivity : Activity() {
     private var lastVisibleIds: String = ""
     private var streamBeginLogged: Boolean = false
     private val sendGate = PresentationChatSendGate()
+    private var canarySession: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         currentRef = WeakReference(this)
         WindowCompat.setDecorFitsSystemWindows(window, false)
+        canarySession = PresentationChatLaunch.isCanarySession(
+            intent.getStringExtra(PresentationChatLaunch.EXTRA_CANARY_SESSION),
+        )
         val restoredComposer = savedInstanceState?.getString(STATE_COMPOSER).orEmpty()
         Log.i(
             TAG,
-            "chat_restore saved=${savedInstanceState != null} composer_len=${restoredComposer.length} production_cutover=false",
+            "chat_restore saved=${savedInstanceState != null} composer_len=${restoredComposer.length} canary_session=$canarySession production_cutover=false",
         )
 
         if (PresentationChatLaunch.isSafeMode(intent.getStringExtra(PresentationChatLaunch.EXTRA_SAFE_MODE))) {
@@ -72,7 +80,26 @@ class PresentationChatActivity : Activity() {
             return
         }
 
-        val log = PresentationChatJourneyLog(File(filesDir, PresentationChatJourneyMarkers.FILE_NAME))
+        if (canarySession && touchExplorationEnabled()) {
+            Log.i(
+                TAG,
+                "presentation_renderer=WEBVIEW reason=accessibility_touch_exploration rust_host_allowed=false",
+            )
+            startActivity(
+                Intent(this, MainActivity::class.java).addFlags(
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP,
+                ),
+            )
+            finish()
+            return
+        }
+
+        val debugBuild = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        val log = if (debugBuild) {
+            PresentationChatJourneyLog(File(filesDir, PresentationChatJourneyMarkers.FILE_NAME))
+        } else {
+            null
+        }
         journeyLog = log
 
         val root = LinearLayout(this)
@@ -229,13 +256,45 @@ class PresentationChatActivity : Activity() {
             return
         }
 
+        if (canarySession) {
+            PresentationCanaryPrefs(this).noteDioxusStart()
+        }
+
+        try {
+            PresentationChatNative.ensureLoaded()
+        } catch (err: UnsatisfiedLinkError) {
+            if (rollbackCanaryIfNeeded("missing_jni")) {
+                return
+            }
+            val line =
+                "chat_route=false dioxus_shell=true live_wire=false reason=missing_jni main_activity=false production_jni=false production_cutover=false"
+            Log.i(TAG, line)
+            header.text = "Chat"
+            viewport.text = line.replace(' ', '\n')
+            composer.isEnabled = false
+            send.isEnabled = false
+            return
+        } catch (err: Throwable) {
+            if (rollbackCanaryIfNeeded("load_failed:${err.javaClass.simpleName}")) {
+                return
+            }
+            val line =
+                "chat_route=false dioxus_shell=true live_wire=false reason=load_failed:${err.javaClass.simpleName} main_activity=false production_jni=false production_cutover=false"
+            Log.i(TAG, line)
+            header.text = "Chat"
+            viewport.text = line.replace(' ', '\n')
+            composer.isEnabled = false
+            send.isEnabled = false
+            return
+        }
+
         header.text = "Chat"
         viewport.text = "live Product Wire chat route starting…"
         val profile = PresentationChatLaunch.parseProfile(
             intent.getStringExtra(PresentationChatLaunch.EXTRA_CHAT_PROFILE)
                 ?: savedInstanceState?.getString(PresentationChatLaunch.EXTRA_CHAT_PROFILE),
         )
-        val isolated = PresentationChatLaunch.isIsolated10k(profile)
+        val isolated = !canarySession && PresentationChatLaunch.isIsolated10k(profile)
         val dataRoot = if (isolated) {
             val isolatedRoot = File(applicationContext.filesDir, PresentationChatLaunch.ISOLATED_DATA_ROOT)
             if (!isolatedRoot.exists() && !isolatedRoot.mkdirs()) {
@@ -280,9 +339,16 @@ class PresentationChatActivity : Activity() {
             }
             Log.i(TAG, line)
             runOnUiThread {
+                if (!line.contains("chat_route=true") && rollbackCanaryIfNeeded(openFailureReason(line))) {
+                    return@runOnUiThread
+                }
                 bindComposer(holder)
                 if (line.contains("chat_route=true")) {
                     routeReady = true
+                    PresentationCanaryPrefs(this).noteSuccess()
+                    if (chatId.isNotEmpty()) {
+                        PresentationCanaryPrefs(this).rememberChatId(chatId)
+                    }
                     savedInstanceState?.getString(STATE_COMPOSER)?.let { restored ->
                         if (restored.isNotEmpty()) {
                             holder.executor.execute { PresentationChatNative.saveDraft(restored) }
@@ -293,6 +359,20 @@ class PresentationChatActivity : Activity() {
                     viewport.text = line.replace(' ', '\n')
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val incoming = PresentationChatLaunch.parseChatId(
+            intent.getStringExtra(PresentationChatLaunch.EXTRA_CHAT_ID),
+        )
+        if (incoming.isNotEmpty()) {
+            PresentationCanaryPrefs(this).rememberChatId(incoming)
+        }
+        if (routeReady) {
+            holder?.let { refreshFromRoute(it) }
         }
     }
 
@@ -543,6 +623,9 @@ class PresentationChatActivity : Activity() {
         viewport.text = snap.rowsText()
         viewport.contentDescription = "Chat messages"
         lastVisibleIds = snap.visible.joinToString(",") { row -> row.id }
+        if (snap.chatId.isNotEmpty()) {
+            PresentationCanaryPrefs(this).rememberChatId(snap.chatId)
+        }
         Log.i(
             TAG,
             "chat_snapshot live_wire=true messageCount=${snap.messageCount} kernelMessageCount=${snap.kernelMessageCount} pageLen=${snap.pageLen} visible=${snap.visible.size} sceneEpoch=${snap.sceneEpoch} sendAccepted=${snap.sendAccepted} streaming=${snap.streaming} error=${snap.error ?: "none"} production_cutover=false",
@@ -690,6 +773,38 @@ class PresentationChatActivity : Activity() {
             Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
         ).orEmpty()
         return enabled.contains("talkback", ignoreCase = true)
+    }
+
+    private fun touchExplorationEnabled(): Boolean {
+        return getSystemService(AccessibilityManager::class.java)?.isTouchExplorationEnabled == true
+    }
+
+    private fun rollbackCanaryIfNeeded(reason: String): Boolean {
+        if (!canarySession) {
+            return false
+        }
+        Log.i(
+            TAG,
+            "presentation_renderer=WEBVIEW reason=$reason rust_host_allowed=false",
+        )
+        PresentationCanaryPrefs(this).armKillSwitch()
+        startActivity(
+            Intent(this, MainActivity::class.java).addFlags(
+                Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP,
+            ),
+        )
+        finish()
+        return true
+    }
+
+    private fun openFailureReason(line: String): String {
+        val marker = "reason="
+        val start = line.indexOf(marker)
+        if (start < 0) {
+            return "load_failed"
+        }
+        val rest = line.substring(start + marker.length)
+        return rest.substringBefore(' ').ifEmpty { "load_failed" }
     }
 
     private fun hasWebView(view: View): Boolean {

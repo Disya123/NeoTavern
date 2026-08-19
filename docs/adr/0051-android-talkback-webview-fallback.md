@@ -53,8 +53,9 @@ the Dioxus host.
 
 ## Consequences
 
-- Milestone C stays **STARTED**. Cutover stays **NOT_STARTED** until a
-  separate guarded canary lands.
+- Milestone C stays **STARTED**. Cutover is **STARTED / CANARY** once the
+  guarded `MainActivity` selector lands; the physical canary batch stays
+  **NOT_RUN** until a later Xiaomi pass.
 - Compatibility matrix records `DEFERRED_BY_OWNER` and
   `WEBVIEW_FALLBACK`; neither is owner-signed PARITY.
 - Canary physical batch MUST include an accessibility fallback case:

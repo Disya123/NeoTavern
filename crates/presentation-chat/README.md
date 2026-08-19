@@ -1,10 +1,12 @@
 # Product chat route (`neotavern-presentation-chat`)
 
 Live Product Wire chat workspace for the flagged Dioxus Android host.
-`PresentationChatActivity` is a temporary harness around **this** route; the
-same session later attaches to production `MainActivity` behind a canary.
-This crate is **not** production JNI cutover and **not** a second chat
-implementation.
+`PresentationChatActivity` hosts **this** route for the guarded
+`MainActivity` canary and the debug harness. Same Kernel store as WebView
+(`KernelHost` + `filesDir/neotavern`). Isolated 10k is a harness profile
+only. This crate is **not** an unguarded cutover and **not** a second chat
+implementation. Cutover is **STARTED / CANARY**; the physical canary batch
+is **NOT_RUN**.
 
 ## What this crate is
 
@@ -31,7 +33,7 @@ implementation.
 ## What this crate is not
 
 - Not linked into production `libneotavern_android_jni.so`.
-- Not a production `MainActivity` cutover.
+- Not an unguarded `MainActivity` cutover (selector + kill switch + WebView rollback).
 - Not a fixture-backed VDOM (Milestone A `canonical-chat.json` stays the
   A corpus in `presentation-dioxus-shell`).
 - Not a PERF probe. M0/B fixtures remain a frozen regression corpus.

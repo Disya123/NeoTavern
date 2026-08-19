@@ -188,20 +188,28 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   ([input-to-present-adjudication.json](../rfc/input-to-present-adjudication.json)).
   Debug `PresentationChatActivity` is a harness around the live Product
   Wire chat route (`crates/presentation-chat`, `NEOTA_DIOXUS_SHELL=1`).
-  Same route later attaches to production `MainActivity` behind a canary;
-  it is not a second chat. Launch:
-  `adb shell am start -n com.neotavern.mobile/.PresentationChatActivity --es com.neotavern.mobile.NEOTA_DIOXUS_SHELL 1`
-  (`NEOTA_CHAT_ID` optional; `NEOTA_SAFE_MODE=1` escapes to WebView
-  `MainActivity`). Send uses the IME action and a Send button; Kernel
+  The same activity is the guarded canary host: production `MainActivity`
+  selects WebView or Dioxus **before** creating a Rust presentation host
+  ([milestone-c-canary.md](../rfc/milestone-c-canary.md)). It is not a
+  second chat. Launch canary:
+  `adb shell am start -n com.neotavern.mobile/.MainActivity --es com.neotavern.mobile.NEOTA_DIOXUS_SHELL 1`
+  (`NEOTA_CHAT_ID` optional; `NEOTA_SAFE_MODE=1` escapes to WebView).
+  Debug harness remains
+  `adb shell am start -n com.neotavern.mobile/.PresentationChatActivity --es com.neotavern.mobile.NEOTA_DIOXUS_SHELL 1`.
+  Send uses the IME action and a Send button; Kernel
   `messageCount` is the source of truth. Isolated 10k:
   `--es com.neotavern.mobile.NEOTA_CHAT_PROFILE isolated-10k` (separate
-  store `neotavern-isolated-10k`, same Product Wire route). Physical stamp
+  store `neotavern-isolated-10k`, same Product Wire route; not the canary
+  store). Physical stamp
   `2026-08-19T10-29-35-149Z` is core chat journey batch PASS (TalkBack
   SKIPPED, **not** RFC §51 TalkBack; ADR-0051 WEBVIEW_FALLBACK);
-  `2026-08-18T21-55-58-696Z` stays a preserved FAILED_ATTEMPT. Re-run:
+  `2026-08-18T21-55-58-696Z` stays a preserved FAILED_ATTEMPT. Cutover is
+  **STARTED / CANARY**; physical canary batch is **NOT_RUN**. Re-run
+  harness:
   `node scripts/milestone-c-physical-capture.mjs --serial=8f5c2b7c`
   ([runbook](../rfc/milestone-c-physical-runbook.md)).
-  Kernel stays in `libneotavern_android_jni.so`.
+  Kernel stays in `libneotavern_android_jni.so`. Production APK also
+  packages `libneotavern_presentation_chat.so`. WebView is retained.
   Raw input-to-present is not gated against one refresh; deadline miss is
   renderer-controlled present vs `targetPresentDeadline`.
   Physical stamp `2026-08-18T16-28-13-285Z`.

@@ -7,7 +7,8 @@ package com.neotavern.mobile
  * most ONE live holder may exist in the process at a time — in particular a
  * recreated [MainActivity] must never open a second kernel while
  * [GenerationService] still owns the first one. Every host component
- * ([MainActivity], [GenerationService], [MaintenanceWorker]) obtains the
+ * ([MainActivity], [PresentationChatActivity], [GenerationService],
+ * [MaintenanceWorker]) obtains the
  * holder through [holder]:
  *
  *  - the registered holder is returned while it is alive (`!isReleased`),
@@ -18,6 +19,8 @@ package com.neotavern.mobile
  * release in onDestroy/onStop/at the end of doWork. The dataRoot argument is
  * only used when a fresh holder has to be constructed (all production callers
  * pass `<filesDir>/neotavern`; the instrumented test injects its own root).
+ * [PresentationChatActivity] on the guarded canary uses this same holder so
+ * renderer switches do not open a second Kernel or a second chat store.
  */
 object KernelHost {
 

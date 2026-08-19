@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <!-- Debug/probe variant only. Production `main`/`release` must not declare
          this. Optional: physical D1a prefers wgpu Vulkan. required=false so
          GLES fallback devices still install; AGI capture uses -api vulkan. -->
@@ -12,7 +13,8 @@
         android:version="0x00401000" />
 
     <application>
-        <!-- Debug-only; not a launcher. Production MainActivity is unchanged. -->
+        <!-- Debug overlay: export the canary chat host for the harness.
+             Production main declares it exported=false without LAUNCHER. -->
         <activity
             android:name=".M0D1aActivity"
             android:exported="true"
@@ -74,8 +76,10 @@
             android:name=".PresentationChatActivity"
             android:exported="true"
             android:label="Flagged Dioxus chat"
+            android:launchMode="singleTop"
             android:resizeableActivity="true"
-            android:windowSoftInputMode="adjustResize">
+            android:windowSoftInputMode="adjustResize"
+            tools:replace="android:exported">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.DEFAULT" />

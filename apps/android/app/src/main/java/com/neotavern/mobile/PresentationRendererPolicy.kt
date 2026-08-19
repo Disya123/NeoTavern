@@ -56,6 +56,11 @@ object PresentationRendererPolicy {
         return decision
     }
 
+    fun logLine(decision: Decision): String {
+        return "presentation_renderer=${decision.renderer.name} " +
+            "reason=${decision.reason} rust_host_allowed=${decision.rustHostAllowed}"
+    }
+
     private fun webView(reason: String): Decision {
         return Decision(Renderer.WEBVIEW, reason, rustHostAllowed = false)
     }

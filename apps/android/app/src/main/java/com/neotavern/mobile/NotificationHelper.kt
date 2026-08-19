@@ -79,9 +79,17 @@ object NotificationHelper {
             GenerationService.stopIntent(context),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
+        val chatId = PresentationCanaryPrefs(context).lastChatId
+        val openIntent = PendingIntent.getActivity(
+            context,
+            1,
+            PresentationCanaryHost.openLauncherIntent(context, chatId),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
         return NotificationCompat.Builder(context, NotificationState.CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_generation)
             .setContentTitle(title)
+            .setContentIntent(openIntent)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)

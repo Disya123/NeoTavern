@@ -15,6 +15,14 @@
 
 ### Added
 
+- **Guarded Dioxus presentation canary (cutover STARTED/CANARY, not RFC C PASS).**
+  `MainActivity` selects WebView or Dioxus **before** creating a Rust host.
+  TalkBack/touch exploration, safe mode, kill switch, crash-loop, unqualified
+  GPU, and flag-off stay on WebView. Production APK packages
+  `libneotavern_presentation_chat.so`; WebView is retained. Physical canary
+  batch is **NOT_RUN**. Record:
+  [`docs/rfc/milestone-c-canary.md`](docs/rfc/milestone-c-canary.md).
+
 - **Native Dioxus TalkBack deferred; product a11y is WebView (ADR-0051).**
   `talkback_journey=SKIPPED` is not RFC §51. TalkBack / touch exploration
   must select WebView before a Rust presentation host. Gboard typing/insets

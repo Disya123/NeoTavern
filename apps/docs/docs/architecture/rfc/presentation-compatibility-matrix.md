@@ -7,7 +7,8 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/rfc/presentation-c
 **Status:** baseline after D1/D2 GO and [ADR-0051](../adr/0051-android-talkback-webview-fallback.md).
 Milestone A is **PASS** (flagged Dioxus Product Wire shell, not cutover).
 Milestone B is **PASS**. Milestone C core chat journey batch is **PASS**;
-Milestone C remains **STARTED**. Not a product cutover. Owners have not
+Milestone C remains **STARTED**. Cutover is **STARTED / CANARY** (guarded
+`MainActivity` selector). Physical canary batch is **NOT_RUN**. Owners have not
 signed PARITY for Android native UI.
 
 **RFC:** [neoui-v4-android-presentation-backend.md](neoui-v4-android-presentation-backend.md) §2.4, §51  
@@ -20,7 +21,7 @@ Allowed statuses: `PARITY` | `ADAPTED` | `CONTAINED` | `DEFERRED` |
 | Capability                             | React / Web                 | Android WebView (rollback) | Android Dioxus/NeoCompositor | Notes                                                           |
 | -------------------------------------- | --------------------------- | -------------------------- | ---------------------------- | --------------------------------------------------------------- |
 | Product Wire durable state             | PARITY                      | PARITY                     | PARITY (same Kernel)         | Presentation never owns SQLite                                  |
-| Chat workspace as main screen          | PARITY                      | PARITY                     | DEFERRED (Milestone C)       | Core chat journey_batch PASS (`2026-08-19T10-29-35-149Z`); not launcher; not cutover |
+| Chat workspace as main screen          | PARITY                      | PARITY                     | DEFERRED (Milestone C)       | Core chat journey_batch PASS; guarded canary STARTED; not default; not PARITY |
 | Live backdrop glass                    | CONTAINED (CSS)             | CONTAINED (CSS)            | DEFERRED (Milestone B/C)     | GateP:P1 on qualified devices; compositor not in production APK |
 | Theme SDK (CSS tokens / shells)        | PARITY                      | PARITY                     | DEFERRED                     | Native theme ABI not chosen                                     |
 | Plugin frontend slots / DOM islands    | PARITY                      | PARITY                     | CONTAINED (WebSurface later) | No silent Plugin SDK rewrite                                    |
@@ -30,12 +31,12 @@ Allowed statuses: `PARITY` | `ADAPTED` | `CONTAINED` | `DEFERRED` |
 | Product accessibility path             | PARITY                      | WEBVIEW_FALLBACK           | WEBVIEW_FALLBACK             | TalkBack/touch exploration → WebView before Rust host           |
 | Accessibility (WCAG 2.2 AA / TalkBack) | PARITY (web)                | PARITY (WebView)           | DEFERRED_BY_OWNER            | Semantics PASS on harness; native TalkBack not implemented      |
 | Generation streaming / backpressure    | PARITY                      | PARITY                     | PARITY (Wire events)         | Kernel-owned                                                    |
-| Deep links / HostConnect               | PARITY                      | PARITY                     | DEFERRED                     | Same Kernel chat id across renderers                            |
+| Deep links / HostConnect               | PARITY                      | PARITY                     | DEFERRED                     | Same Kernel chat id; notification opens MainActivity selector   |
 | Gboard typing / insets / editor-send   | n/a (web)                   | PARITY (WebView)           | PASS (harness)               | Physical Gboard keys; not owner-signed PARITY                   |
 | IME composition contract               | n/a (web)                   | PARITY (WebView)           | HOST_CONFORMANCE             | MockIme/InputConnection; layout may only `commitText`           |
 | 10k message virtualization             | PARITY (web virt)           | PARITY                     | DEFERRED (Milestone C)       | Isolated 10k physical PASS on debug harness; not PARITY         |
 | Safe mode (disable 3p theme/plugin)    | PARITY                      | PARITY                     | DEFERRED (Milestone C)       | `NEOTA_SAFE_MODE=1` → WebView `MainActivity`                    |
-| Production no-WebView cutover          | REMOVED from this milestone | rollback default           | DEFERRED                     | Forbidden until C DoD; WebView stays in the APK                 |
+| Production no-WebView cutover          | REMOVED from this milestone | rollback default           | DEFERRED                     | Canary is STARTED/CANARY; WebView stays in the APK              |
 
 Critical Android journeys stay on WebView until the DEFERRED rows are closed
 with owner signatures. Estimated rows cannot be presented as PARITY.

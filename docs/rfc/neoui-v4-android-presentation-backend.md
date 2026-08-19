@@ -4247,6 +4247,11 @@ Owner amendment (2026-08-19, [ADR-0051](../adr/0051-android-talkback-webview-fal
   composition / cursor / delete APIs are a separate MockIme/InputConnection
   conformance test. A Gboard layout is not required to call
   `setComposingText`.
+- Guarded Dioxus canary (2026-08-19): `MainActivity` selector may choose
+  Dioxus only when TalkBack/touch exploration is off, the device is
+  qualified, and the persisted canary flag is on. Cutover = **STARTED /
+  CANARY**. Physical canary batch is required before Milestone C may close
+  under this owner-amended scope. WebView is retained.
 
 ---
 
