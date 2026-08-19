@@ -58,25 +58,31 @@ Guarantees:
 - production APK packages `libneotavern_presentation_chat.so` next to kernel JNI;
 - WebView is not removed.
 
-Default remains WebView. `NEOTA_DIOXUS_SHELL=1` persists the canary flag;
-`NEOTA_DIOXUS_SHELL=0` persists off. Isolated 10k is a debug harness
-profile and is not the canary store.
+Default remains WebView. In a **debuggable** build, `NEOTA_DIOXUS_SHELL=1`
+commits an app-private opt-in (`commit()`, not async `apply()`);
+`NEOTA_DIOXUS_SHELL=0` clears it. Later launcher / notification / deep-link
+starts use that opt-in and do not need the extra. Safe mode, crash-loop,
+TalkBack / touch exploration, and an unqualified device still select
+WebView. Release ignores these extras and waits for a signed rollout
+config. Isolated 10k is a debug harness profile and is not the canary store.
 
 ## Lab extras
 
 | Extra | Effect |
 | ----- | ------ |
-| `com.neotavern.mobile.NEOTA_DIOXUS_SHELL=1` | persist canary on; selector may choose Dioxus |
-| `com.neotavern.mobile.NEOTA_DIOXUS_SHELL=0` | persist canary off → WebView |
+| `com.neotavern.mobile.NEOTA_DIOXUS_SHELL=1` | debug only: persist opt-in; selector may choose Dioxus |
+| `com.neotavern.mobile.NEOTA_DIOXUS_SHELL=0` | debug only: persist opt-in off → WebView |
 | `com.neotavern.mobile.NEOTA_SAFE_MODE=1` | WebView this launch |
 | `com.neotavern.mobile.NEOTA_FORCE_INIT_FAILURE=1` | arm kill switch **before** `loadLibrary` → WebView |
 | `com.neotavern.mobile.NEOTA_CANARY_RESET=1` | clear kill switch and crash-loop counter |
 | `com.neotavern.mobile.NEOTA_CHAT_ID` | same Kernel chat across renderers |
 
-Enable (Xiaomi `8f5c2b7c` only):
+Enable once (Xiaomi `8f5c2b7c` only), then use the icon:
 
 ```text
 adb shell am start -n com.neotavern.mobile/.MainActivity --es com.neotavern.mobile.NEOTA_DIOXUS_SHELL 1
+adb shell am force-stop com.neotavern.mobile
+adb shell monkey -p com.neotavern.mobile -c android.intent.category.LAUNCHER 1
 ```
 
 Look for `presentation_renderer=... rust_host_allowed=...` in logcat

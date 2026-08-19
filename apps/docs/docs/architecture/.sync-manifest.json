@@ -245,7 +245,7 @@
     {
       "source": "android/README.md",
       "target": "android/README.md",
-      "sha256": "9357dbb54b0b68cb7f3b432320f0dfd624a3ee20ccdd7ec72492bb2ffaf9b552"
+      "sha256": "90985e77e852610aa4d92d0acd69944815b00aa96b705a93c5e55a172736743f"
     },
     {
       "source": "api/README.md",
@@ -290,7 +290,7 @@
     {
       "source": "architecture/presentation-boundary.md",
       "target": "architecture/presentation-boundary.md",
-      "sha256": "b40c760407ff91963423f13fc8ea4d20bef893727529e7d7fdda9b75d7c25b62"
+      "sha256": "a0ed9c5f767a0914a9c31b44a8c80ea8c087886c968b05bfd6caf41ee785816c"
     },
     {
       "source": "architecture/prompt-pipeline.md",
@@ -435,7 +435,7 @@
     {
       "source": "rfc/milestone-c-canary.md",
       "target": "rfc/milestone-c-canary.md",
-      "sha256": "b4a0c8d3855a1cf9f45155d5f433f84894a509868b14441cef68e9d2457d60a8"
+      "sha256": "0d286afb750d0ff43adaf9d6bf39a61fbe1d1a226e293763ad891a281067452e"
     },
     {
       "source": "rfc/milestone-c-physical-runbook.md",

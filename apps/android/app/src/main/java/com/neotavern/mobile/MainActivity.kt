@@ -5,6 +5,7 @@ import android.app.Activity
 import android.app.ActivityManager
 import android.app.ForegroundServiceStartNotAllowedException
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Build
@@ -606,21 +607,28 @@ class MainActivity : Activity() {
      */
     private fun tryHandoffDioxusCanary(): Boolean {
         val prefs = PresentationCanaryPrefs(this)
-        if (PresentationChatLaunch.isCanaryReset(
+        val extrasTrusted = PresentationCanaryState.extrasTrusted(
+            (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0,
+        )
+        if (extrasTrusted && PresentationChatLaunch.isCanaryReset(
                 intent.getStringExtra(PresentationChatLaunch.EXTRA_CANARY_RESET),
             )
         ) {
             prefs.resetGuards()
         }
         val flagExtra = intent.getStringExtra(PresentationChatLaunch.EXTRA_DIOXUS_SHELL)
-        prefs.applyFlagExtra(flagExtra)
+        prefs.applyFlagExtra(flagExtra, extrasTrusted)
+        Log.i(
+            TAG,
+            "presentation_canary_opt_in persisted=${prefs.canaryEnabled} extras_trusted=$extrasTrusted",
+        )
         val chatId = PresentationChatLaunch.parseChatId(
             intent.getStringExtra(PresentationChatLaunch.EXTRA_CHAT_ID),
         )
         if (chatId.isNotEmpty()) {
             prefs.rememberChatId(chatId)
         }
-        if (PresentationChatLaunch.isForceInitFailure(
+        if (extrasTrusted && PresentationChatLaunch.isForceInitFailure(
                 intent.getStringExtra(PresentationChatLaunch.EXTRA_FORCE_INIT_FAILURE),
             )
         ) {
@@ -640,7 +648,7 @@ class MainActivity : Activity() {
             Build.PRODUCT,
         )
         val inputs = PresentationRendererPolicy.Inputs(
-            safeMode = PresentationChatLaunch.isSafeMode(
+            safeMode = extrasTrusted && PresentationChatLaunch.isSafeMode(
                 intent.getStringExtra(PresentationChatLaunch.EXTRA_SAFE_MODE),
             ),
             killSwitch = prefs.killSwitch,
@@ -656,7 +664,11 @@ class MainActivity : Activity() {
                     Build.FINGERPRINT,
                 ),
             ),
-            canaryFlag = PresentationCanaryState.canaryFlag(flagExtra, prefs.canaryEnabled),
+            canaryFlag = PresentationCanaryState.canaryFlag(
+                flagExtra,
+                prefs.canaryEnabled,
+                extrasTrusted,
+            ),
         )
         val decision = PresentationRendererPolicy.decide(inputs)
         Log.i(TAG, PresentationRendererPolicy.logLine(decision))

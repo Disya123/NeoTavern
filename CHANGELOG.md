@@ -13,9 +13,11 @@
   ignored with a documented reason; maintained source and `docs/` are
   formatted. `pnpm format:check` is green. Not production cutover.
 
-### Added
-
-- **Guarded Dioxus presentation canary (cutover STARTED/CANARY, not RFC C PASS).**
+- **Debug canary opt-in survives a normal icon launch.**
+  Debuggable `NEOTA_DIOXUS_SHELL=1` commits an app-private flag so
+  launcher / notification / deep-link starts keep Dioxus. `=0` clears it.
+  Safe mode, crash-loop, TalkBack, and unqualified devices still force
+  WebView. Release ignores these extras pending a signed rollout config.
   `MainActivity` selects WebView or Dioxus **before** creating a Rust host.
   TalkBack/touch exploration, safe mode, kill switch, crash-loop, unqualified
   GPU, and flag-off stay on WebView. Production APK packages

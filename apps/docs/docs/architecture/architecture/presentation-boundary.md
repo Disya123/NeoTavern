@@ -59,8 +59,10 @@ This is not a production migration and not Milestone C PASS.
 4. Production Android `MainActivity` stays WebView until the guarded canary
    selector allows Dioxus. That selector MUST run **before** a Rust
    presentation host (`System.loadLibrary` / JNI open). Default remains
-   WebView. `NEOTA_DIOXUS_SHELL=1` is a **non-default** persisted canary
-   flag, not an unguarded cutover.
+   WebView. In a debuggable build, `NEOTA_DIOXUS_SHELL=1` is a
+   **non-default** persisted canary opt-in (cleared by `=0`); launcher and
+   notification starts then reuse it. Release ignores these extras pending
+   a signed rollout config.
    `NEOTA_NEOCOMPOSITOR=1` is a **non-default** feature flag for
    `crates/neocompositor`, not a cutover switch.
    TalkBack / touch exploration MUST select WebView **before** a Rust
@@ -192,9 +194,11 @@ shared. Isolated 10k remains a debug harness profile
 Physical canary batch is **NOT_RUN**
 ([milestone-c-canary.md](../rfc/milestone-c-canary.md)).
 
-The route mounts only when `com.neotavern.mobile.NEOTA_DIOXUS_SHELL=1`
-(extra or persisted canary flag). Without it the selector stays on
-WebView (`reason=flag_off`). Optional `NEOTA_SAFE_MODE=1` escapes to
+The route mounts when the guarded selector allows a Rust host. A debug
+`com.neotavern.mobile.NEOTA_DIOXUS_SHELL=1` extra persists that opt-in for
+later icon / notification launches. Without the persisted flag (or in
+release, without a signed rollout) the selector stays on WebView
+(`reason=flag_off`). Optional `NEOTA_SAFE_MODE=1` (debug extra) escapes to
 WebView. Send round-trip uses Kernel `chats.get.messageCount` as the
 source of truth (not a local `+= 1`). IME action Send and a Send button
 both issue `chats.messages.create`; a failed `generation.start` must not

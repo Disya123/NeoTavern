@@ -2,7 +2,10 @@ package com.neotavern.mobile
 
 /**
  * PURE persisted-canary rules (ADR-0051). No android.* so JVM tests can
- * cover flag persistence, crash-loop, and extra `0`/`1` without a device.
+ * cover debug opt-in, crash-loop, and extra trust without a device.
+ *
+ * Debug extras may set or clear the app-private opt-in. Release ignores
+ * extras and waits for a signed rollout config.
  */
 object PresentationCanaryState {
     const val PREFS_NAME: String = "neotavern_presentation_canary"
@@ -16,19 +19,46 @@ object PresentationCanaryState {
         return failures >= MAX_CRASH_LOOP
     }
 
+    fun extrasTrusted(debuggable: Boolean): Boolean {
+        return debuggable
+    }
+
     /**
-     * Extra `1` enables, extra `0` disables. An absent extra uses the
-     * persisted flag. Default persisted is off (WebView).
+     * Debug extra `1` persists on, extra `0` persists off.
+     * Untrusted extras (release) and absent extras do not change storage.
      */
-    fun canaryFlag(extra: String?, persisted: Boolean): Boolean {
-        val parsed = extra?.trim().orEmpty()
-        if (parsed == PresentationChatLaunch.FLAG_OFF) {
-            return false
+    fun persistFromExtra(extra: String?, extraTrusted: Boolean): Boolean? {
+        if (!extraTrusted) {
+            return null
         }
-        if (parsed == PresentationChatLaunch.FLAG_ON) {
-            return true
+        return when (PresentationChatLaunch.parseFlag(extra)) {
+            PresentationChatLaunch.FLAG_ON -> true
+            PresentationChatLaunch.FLAG_OFF -> false
+            else -> null
         }
-        return persisted
+    }
+
+    /**
+     * Debug: extra `1`/`0` wins this launch; otherwise the persisted opt-in.
+     * Release: extras are ignored; only a signed rollout config can enable.
+     */
+    fun canaryFlag(
+        extra: String?,
+        persisted: Boolean,
+        extraTrusted: Boolean,
+        signedRollout: Boolean = false,
+    ): Boolean {
+        if (extraTrusted) {
+            val parsed = PresentationChatLaunch.parseFlag(extra)
+            if (parsed == PresentationChatLaunch.FLAG_OFF) {
+                return false
+            }
+            if (parsed == PresentationChatLaunch.FLAG_ON) {
+                return true
+            }
+            return persisted
+        }
+        return signedRollout
     }
 
     fun incrementFailures(current: Int): Int {

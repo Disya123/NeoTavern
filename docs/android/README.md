@@ -190,8 +190,10 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   Wire chat route (`crates/presentation-chat`, `NEOTA_DIOXUS_SHELL=1`).
   The same activity is the guarded canary host: production `MainActivity`
   selects WebView or Dioxus **before** creating a Rust presentation host
-  ([milestone-c-canary.md](../rfc/milestone-c-canary.md)). It is not a
-  second chat. Launch canary:
+  ([milestone-c-canary.md](../rfc/milestone-c-canary.md)). Debug
+  `NEOTA_DIOXUS_SHELL=1` persists opt-in for later icon launches; `=0`
+  clears it. Release ignores the extra. It is not a
+  second chat. First opt-in:
   `adb shell am start -n com.neotavern.mobile/.MainActivity --es com.neotavern.mobile.NEOTA_DIOXUS_SHELL 1`
   (`NEOTA_CHAT_ID` optional; `NEOTA_SAFE_MODE=1` escapes to WebView).
   Debug harness remains

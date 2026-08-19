@@ -65,6 +65,13 @@ class PresentationChatActivity : Activity() {
         canarySession = PresentationChatLaunch.isCanarySession(
             intent.getStringExtra(PresentationChatLaunch.EXTRA_CANARY_SESSION),
         )
+        val extrasTrusted = PresentationCanaryState.extrasTrusted(
+            (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0,
+        )
+        PresentationCanaryPrefs(this).applyFlagExtra(
+            intent.getStringExtra(PresentationChatLaunch.EXTRA_DIOXUS_SHELL),
+            extrasTrusted,
+        )
         val restoredComposer = savedInstanceState?.getString(STATE_COMPOSER).orEmpty()
         Log.i(
             TAG,

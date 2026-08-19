@@ -135,7 +135,9 @@ The guarded Dioxus canary also needs
 `libneotavern_presentation_chat.so` in the same main `jniLibs` folders
 (`bash scripts/build-m0-d1a-libs.sh` copies it there; probe libs stay in
 `src/debug/jniLibs`). WebView remains in the APK. Default launcher is
-still WebView until `NEOTA_DIOXUS_SHELL=1` persists the canary flag.
+still WebView until a debug `NEOTA_DIOXUS_SHELL=1` extra persists the
+canary opt-in (later icon launches reuse it; `=0` clears). Release ignores
+the extra.
 
 ## Building and running the app
 

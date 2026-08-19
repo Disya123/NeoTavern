@@ -2,7 +2,9 @@ package com.neotavern.mobile
 
 /**
  * Launch extras for the Milestone C chat route and guarded MainActivity canary.
- * `NEOTA_DIOXUS_SHELL=1` is required for Dioxus; it is not an unguarded cutover.
+ * In a **debuggable** build, `NEOTA_DIOXUS_SHELL=1` persists opt-in and `0`
+ * clears it; later launcher / notification / deep-link starts use that flag.
+ * Release ignores these extras and waits for a signed rollout config.
  * TalkBack / touch exploration still selects WebView (ADR-0051).
  */
 object PresentationChatLaunch {
