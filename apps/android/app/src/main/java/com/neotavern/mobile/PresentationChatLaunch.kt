@@ -1,11 +1,10 @@
 package com.neotavern.mobile
 
 /**
- * Launch extras for the Milestone C chat route and guarded MainActivity canary.
- * In a **debuggable** build, `NEOTA_DIOXUS_SHELL=1` persists opt-in and `0`
- * clears it; later launcher / notification / deep-link starts use that flag.
- * Release ignores these extras and waits for a signed rollout config.
- * TalkBack / touch exploration still selects WebView (ADR-0051).
+ * Launch extras for the Rust App Shell host ([PresentationChatActivity]).
+ * The home-screen icon opens this activity with the Dioxus shell on by
+ * default. Pass `NEOTA_DIOXUS_SHELL=0` to disable the shell for harness
+ * tests. WebView is not a route fallback.
  */
 object PresentationChatLaunch {
     const val EXTRA_DIOXUS_SHELL: String = "com.neotavern.mobile.NEOTA_DIOXUS_SHELL"

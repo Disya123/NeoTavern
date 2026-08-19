@@ -1,6 +1,6 @@
 use contracts_generated::generated::{
-    CharacterDto, ChatDto, GenerationEvent, MessageDraftDto, MessageDto, MessageRole, PagedChats,
-    PagedMessages,
+    CharacterDto, ChatDto, GenerationEvent, MessageDraftDto, MessageDto, MessageRole,
+    PagedCharacters, PagedChats, PagedMessages,
 };
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -10,6 +10,7 @@ use crate::wire::{ProductWire, StreamFrame, WireCall};
 
 pub const DEMO_CHAT_ID: &str = "7f3a2b4c-1d2e-4f5a-8b9c-0d1e2f3a4b5c";
 pub const DEMO_CHARACTER_ID: &str = "4f2f0a1e-9b3c-4d5e-8f6a-7b8c9d0e1f2a";
+pub const DEMO_AVATAR_ASSET_ID: &str = "8a1b2c3d-4e5f-4061-8a9b-0c1d2e3f4a5b";
 pub const DEMO_PERSONA_ID: &str = "0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f";
 const TS: &str = "2026-08-12T10:00:00Z";
 
@@ -54,6 +55,7 @@ impl FakeWire {
 
     pub fn demo() -> Self {
         let mut wire = Self::default();
+        wire.insert_character(demo_character());
         wire.insert_chat(demo_chat(2));
         wire.push_message(user_message(DEMO_CHAT_ID, 0, "Hello there"));
         wire.push_message(assistant_message(
@@ -65,8 +67,16 @@ impl FakeWire {
         wire
     }
 
+    /// Kernel can have characters without a chat. Character Manager still lists them.
+    pub fn character_catalog() -> Self {
+        let mut wire = Self::default();
+        wire.insert_character(demo_character());
+        wire
+    }
+
     pub fn with_message_count(count: u32) -> Self {
         let mut wire = Self::default();
+        wire.insert_character(demo_character());
         wire.insert_chat(demo_chat(i64::from(count)));
         for index in 0..count {
             let content = if index.is_multiple_of(5) {
@@ -151,6 +161,19 @@ impl FakeWire {
         self.chats
             .get(chat_id)
             .ok_or_else(|| Self::product("CHAT_NOT_FOUND", "chatId", chat_id))
+    }
+
+    fn list_characters(&self, limit: i64) -> PagedCharacters {
+        let mut items: Vec<CharacterDto> = self.characters.values().cloned().collect();
+        items.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        let cap = limit.clamp(1, 200) as usize;
+        if items.len() > cap {
+            items.truncate(cap);
+        }
+        PagedCharacters {
+            items,
+            next_cursor: None,
+        }
     }
 
     fn list_chats(&self, limit: i64) -> PagedChats {
@@ -436,6 +459,53 @@ impl ProductWire for FakeWire {
                 let created = self.create_character(&payload)?;
                 self.wrap_call(operation_id, to_value(&created))
             }
+            "characters.list" => {
+                let page = self
+                    .list_characters(payload.get("limit").and_then(Value::as_i64).unwrap_or(50));
+                self.wrap_call(operation_id, to_value(&page))
+            }
+            "characters.get" => {
+                let character_id = payload_str(&payload, "characterId")?;
+                let character = self.require_character(&character_id)?.clone();
+                self.wrap_call(operation_id, to_value(&character))
+            }
+            "characters.update" => {
+                let character_id = payload_str(&payload, "characterId")?;
+                let mut character = self.require_character(&character_id)?.clone();
+                if let Some(name) = payload.get("name").and_then(Value::as_str) {
+                    character.name = name.to_string();
+                }
+                if let Some(description) = payload.get("description").and_then(Value::as_str) {
+                    character.description = Some(description.to_string());
+                }
+                if let Some(tags) = payload.get("tags").and_then(Value::as_array) {
+                    character.tags = tags
+                        .iter()
+                        .filter_map(Value::as_str)
+                        .map(str::to_string)
+                        .collect();
+                }
+                character.updated_at = TS.into();
+                self.insert_character(character.clone());
+                self.wrap_call(operation_id, to_value(&character))
+            }
+            "characters.delete" => {
+                let character_id = payload_str(&payload, "characterId")?;
+                self.require_character(&character_id)?;
+                self.characters.remove(&character_id);
+                self.ok_call(operation_id, json!({}))
+            }
+            "assets.content" => {
+                let asset_id = payload_str(&payload, "assetId")?;
+                self.ok_call(
+                    operation_id,
+                    json!({
+                        "assetId": asset_id,
+                        "contentType": "image/png",
+                        "contentBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+                    }),
+                )
+            }
             "chats.create" => {
                 let created = self.create_chat(&payload)?;
                 self.wrap_call(operation_id, to_value(&created))
@@ -574,6 +644,28 @@ fn role_str(role: &MessageRole) -> &'static str {
 
 fn wire_id(n: u64) -> String {
     format!("00000000-0000-4000-8000-{n:012x}")
+}
+
+fn demo_character() -> CharacterDto {
+    CharacterDto {
+        id: DEMO_CHARACTER_ID.into(),
+        name: "Hazel".into(),
+        description: Some(
+            "[Hazel's Personality= \"sharp\", \"wry\", \"self-taught\", \"stubborn\", \"streetwise\"]"
+                .into(),
+        ),
+        avatar_asset_id: Some(DEMO_AVATAR_ASSET_ID.into()),
+        tags: vec![
+            "sharp".into(),
+            "wry".into(),
+            "self-taught".into(),
+            "stubborn".into(),
+            "streetwise".into(),
+        ],
+        profile_id: None,
+        created_at: TS.into(),
+        updated_at: TS.into(),
+    }
 }
 
 fn demo_chat(message_count: i64) -> ChatDto {

@@ -186,32 +186,35 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   `PresentationInputInstrumentedTest`. Status:
   `PASS`
   ([input-to-present-adjudication.json](../rfc/input-to-present-adjudication.json)).
-  Debug `PresentationChatActivity` is a harness around the live Product
-  Wire chat route (`crates/presentation-chat`, `NEOTA_DIOXUS_SHELL=1`).
-  The same activity is the guarded canary host: production `MainActivity`
-  selects WebView or Dioxus **before** creating a Rust presentation host
-  ([milestone-c-canary.md](../rfc/milestone-c-canary.md)). Debug
-  `NEOTA_DIOXUS_SHELL=1` persists opt-in for later icon launches; `=0`
-  clears it. Release ignores the extra. It is not a
-  second chat. First opt-in:
-  `adb shell am start -n com.neotavern.mobile/.MainActivity --es com.neotavern.mobile.NEOTA_DIOXUS_SHELL 1`
-  (`NEOTA_CHAT_ID` optional; `NEOTA_SAFE_MODE=1` escapes to WebView).
-  Debug harness remains
-  `adb shell am start -n com.neotavern.mobile/.PresentationChatActivity --es com.neotavern.mobile.NEOTA_DIOXUS_SHELL 1`.
-  Send uses the IME action and a Send button; Kernel
-  `messageCount` is the source of truth. Isolated 10k:
+  Debug `PresentationChatActivity` is the home-screen launcher and the live
+  Product Wire host (`crates/presentation-chat`). The same activity remains
+  the guarded canary host. **WebView is not a route fallback.** Unmigrated
+  rail destinations show a Rust `NotYetMigrated` screen. `MainActivity` is
+  retained as an explicit WebView harness for instrumented tests, not the
+  launcher icon. Debug `NEOTA_DIOXUS_SHELL=0` disables the shell on this
+  Activity; omitting the extra (icon launch) enables it. Isolated 10k:
   `--es com.neotavern.mobile.NEOTA_CHAT_PROFILE isolated-10k` (separate
   store `neotavern-isolated-10k`, same Product Wire route; not the canary
   store). Physical stamp
   `2026-08-19T10-29-35-149Z` is core chat journey batch PASS (TalkBack
-  SKIPPED, **not** RFC §51 TalkBack; ADR-0051 WEBVIEW_FALLBACK);
+  SKIPPED, **not** RFC §51 TalkBack);
   `2026-08-18T21-55-58-696Z` stays a preserved FAILED_ATTEMPT. Cutover is
   **STARTED / CANARY**; physical canary batch is **NOT_RUN**. Re-run
   harness:
   `node scripts/milestone-c-physical-capture.mjs --serial=8f5c2b7c`
   ([runbook](../rfc/milestone-c-physical-runbook.md)).
   Kernel stays in `libneotavern_android_jni.so`. Production APK also
-  packages `libneotavern_presentation_chat.so`. WebView is retained.
+  packages `libneotavern_presentation_chat.so`. The live SurfaceView route now loads the packed React design system
+  (`crates/presentation-design-system`: Outfit / JetBrains Mono, `--st-*`
+  tokens, Phosphor regular icons, App Shell / Character Manager CSS) and
+  paints Character Manager from Product Wire `characters.list`. WindowInsets
+  are JNI `setSafeArea` physical px → CSS px (`density`), baked into
+  `--nt-inset-*` / `--nt-safe-area-*` as literal lengths (Blitz `env()` is
+  0) and applied as RSX `padding-top` / `padding-bottom` on the rail, header,
+  and bottom tabs. Packed `--st-*` tokens, `color-mix()`, and logical
+  properties are flattened to physical pixels; Blitz `DEFAULT_CSS` is
+  removed so radii/colors survive. Phosphor icons are inline SVG fills, not
+  CSS masks. This is not visual golden PASS and not WebView removal.
   Raw input-to-present is not gated against one refresh; deadline miss is
   renderer-controlled present vs `targetPresentDeadline`.
   Physical stamp `2026-08-18T16-28-13-285Z`.

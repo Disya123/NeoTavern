@@ -4,25 +4,36 @@
 //! `MainActivity` cutover. `PresentationChatActivity` is a harness around
 //! this same route.
 
+mod avatar;
+mod compositor;
 mod error;
 mod fake_wire;
 mod seed;
 mod session;
+mod shell_hit;
 mod wire;
 
 #[cfg(all(feature = "android-jni", target_os = "android"))]
 mod android_jni;
+#[cfg(all(feature = "android-jni", feature = "gpu", target_os = "android"))]
+mod android_surface;
 
 use neotavern_presentation_dioxus_shell::{dioxus_shell_from_flag, DioxusShellHost};
 
+pub use avatar::{
+    display_avatar_data_uri, display_avatar_from_bytes, AVATAR_DISPLAY_MAX_PX,
+    AVATAR_DISPLAY_URI_MAX_CHARS,
+};
+pub use compositor::ChatCompositor;
 pub use error::ChatRouteError;
-pub use fake_wire::{FakeWire, DEMO_CHAT_ID};
+pub use fake_wire::{FakeWire, DEMO_AVATAR_ASSET_ID, DEMO_CHARACTER_ID, DEMO_CHAT_ID};
 pub use seed::{
     ensure_isolated_10k_workspace, is_isolated_10k_profile, isolated_message_content,
     seed_trace_line, IsolatedSeedReport, ISOLATED_10K_COUNT, ISOLATED_10K_PROFILE,
     ISOLATED_10K_TITLE,
 };
 pub use session::{ChatRouteState, ChatSession};
+pub use shell_hit::{hit_test, next_sort, ShellAction, ShellHit, RAIL_PANELS, SORTS, TABS};
 pub use wire::{ProductWire, StreamFrame, WireCall, PAGE_LIMIT};
 
 #[derive(Clone, Debug, PartialEq, Eq)]

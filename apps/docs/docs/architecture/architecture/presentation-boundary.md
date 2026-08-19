@@ -74,10 +74,11 @@ This is not a production migration and not Milestone C PASS.
 ## Surfaces
 
 ```text
-react-web                  — production Web / desktop UI
-webview-android-rollback   — production Android default (retained)
+react-web                  — production Web / desktop UI (migration golden)
+webview-android-rollback   — production Android default (retained until Character Manager visual golden PASS)
 dioxus-android-canary      — MainActivity selector; STARTED / CANARY; not default
-dioxus-android-chat-route  — PresentationChatActivity; same Kernel; canary + debug harness
+dioxus-android-chat-route  — PresentationChatActivity; NeoCompositor SurfaceView; same Kernel; canary + debug harness
+dioxus-android-design-system — packed React fonts/tokens/icons/CSS; Character Manager RSX STARTED; visual golden NOT PASS
 ```
 
 ## Milestone B
@@ -178,9 +179,11 @@ operations only. Tests use in-memory `FakeWire`; the Activity talks to
 the existing Kernel via `KernelSession` + `EnvelopeBuilder`. The UI never
 opens SQLite or talks to the network. The visible window is virtualized
 through `crates/chat-viewport` (`waited_on_producer=false`). The host
-mirrors that same snapshot (selectable Markdown/image rows) and hosts a
-Gboard composer (IME send, **Send** button, draft save, keyboard inset animation). It is
-not a second chat and not the compositor `SurfaceView` paint path.
+mirrors that same snapshot for a11y/IME (invisible platform composer) while
+NeoCompositor paints header, viewport, messages, and composer chrome onto a
+`SurfaceView` at device density (`DisplayMetrics.density` → Blitz
+`hidpi_scale`). It is not a second chat. Snapshot TextViews are not the
+primary renderer.
 Header/composer glass, Markdown `data-format`, sampleable image rows, and
 TalkBack roles live on the Dioxus tree. Rotate/recreation restores
 `chatId` and composer text. Optional `NEOTA_SAFE_MODE=1` escapes to
@@ -215,3 +218,32 @@ does **not** satisfy RFC §51 TalkBack; native Dioxus TalkBack is
 **STARTED**, not RFC §51 PASS. Cutover is **STARTED / CANARY**;
 `canary_batch` is **PASS**. Chat workspace on flagged Dioxus Android
 remains **DEFERRED** in the compatibility matrix until owner-signed PARITY.
+
+## Visual parity (Character Manager)
+
+React (`apps/web` + `@neotavern/ui`) is the golden source: exact font files,
+`--st-*` tokens, Phosphor regular SVG paths, and CSS-module geometry. Packed
+assets live in `crates/presentation-design-system`. Pack-time flatten inlines
+dark token values because Blitz/Stylo does not apply UA `:root` custom
+properties. Logical CSS and leftover `color-mix()` are rewritten to physical
+pixels; light `:root` is stripped; translucent mixes composite onto
+`#151311`; compact 600px overlay rules are unwrapped; `--shell-rail-current-width`
+stays 60px; the blit prefers non-sRGB; NeoGlass is omitted until opaque
+screenshots match. Blitz `DEFAULT_CSS` is removed before paint. WindowInsets are JNI
+physical px → CSS px → RSX padding on the rail, header, and bottom tabs.
+The live SurfaceView route now mounts App Shell + Character Manager Cards
+through Product Wire `characters.list` with that sheet. Header/card avatars
+resolve `avatarAssetId` via `assets.content`, then downscale to a 192px
+display PNG `data:` URI (the starter Hazel file is 1024×1536 / ~2.2 MiB;
+the original must not enter `<img src>` or Vello leaves the SurfaceView
+black). Packed Phosphor `mask-image` `data:image/svg+xml` URLs are not
+fetched. Header/card avatars keep the clipped React initial (a live `<img>`
+in this Blitz→Vello Vulkan path clears the framebuffer). The session still
+hydrates a 192px display PNG for a later sampled blit. On the live Android
+Vulkan device Vello GPU compute left the content texture empty; bind rasters
+with Vello `use_cpu` and copies into a sampled texture before blit.
+Cards use the React description formatter and 2-line
+clamp. Native composer/Send overlay is destroyed off the chat route. This is **not** a
+visual golden PASS (device overlay / ≤1 dp geometry diff is not signed) and
+**not** WebView runtime removal. Unmigrated rail panels render `not-yet-migrated`; they do
+not fall back to WebView.

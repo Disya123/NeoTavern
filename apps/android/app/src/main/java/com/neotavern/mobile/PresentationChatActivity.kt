@@ -3,13 +3,24 @@ package com.neotavern.mobile
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.ApplicationInfo
+import android.graphics.Color
+import android.graphics.PixelFormat
+import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.HandlerThread
+import android.os.SystemClock
+import android.os.Trace
 import android.provider.Settings
 import android.text.Editable
 import android.text.InputType
 import android.text.TextWatcher
 import android.util.Log
+import android.view.Choreographer
 import android.view.Gravity
+import android.view.MotionEvent
+import android.view.SurfaceHolder
+import android.view.SurfaceView
 import android.view.View
 import android.view.ViewGroup
 import android.view.accessibility.AccessibilityEvent
@@ -19,35 +30,39 @@ import android.view.inputmethod.BaseInputConnection
 import android.view.inputmethod.EditorInfo
 import android.webkit.WebView
 import android.widget.Button
-import android.widget.LinearLayout
-import android.widget.ScrollView
+import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.core.view.AccessibilityDelegateCompat
+import androidx.core.view.OnApplyWindowInsetsListener
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsAnimationCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import java.io.File
 import java.lang.ref.WeakReference
 
 /**
- * Live Product Wire chat host used by the guarded MainActivity canary and the
- * debug harness. Not a launcher.
- *
- * Canary: `MainActivity` starts this activity only after
- * [PresentationRendererPolicy] allows a Rust host.
- * Harness: `adb shell am start -n com.neotavern.mobile/.PresentationChatActivity --es com.neotavern.mobile.NEOTA_DIOXUS_SHELL 1`
- *
- * Safe mode extra opens production [MainActivity] (WebView rollback).
+ * Live Product Wire chat host. The visible renderer is NeoCompositor
+ * [SurfaceView]; the snapshot TextView list is not the primary path.
+ * An invisible platform IME bridge is retained for Gboard.
  */
-class PresentationChatActivity : Activity() {
+class PresentationChatActivity : Activity(), SurfaceHolder.Callback {
     private var holder: KernelHolder? = null
+    private lateinit var root: FrameLayout
+    private lateinit var surfaceView: SurfaceView
     private lateinit var header: TextView
-    private lateinit var viewport: TextView
-    private lateinit var scroller: ScrollView
+    private lateinit var messages: View
     private lateinit var composer: PresentationChatComposer
     private lateinit var send: Button
+    private val adapter = PresentationInputAdapter()
+    private val compositorThread = HandlerThread("neocompositor-chat")
+    private var compositorHandler: Handler? = null
+    private var presentPosted = false
+    private var presentCallback: Choreographer.VsyncCallback? = null
+    private var presentFrameCallback: Choreographer.FrameCallback? = null
+    @Volatile
+    private var nativeReady: Boolean = false
+    private var lastSafeArea = floatArrayOf(0f, 0f, 0f, 0f)
     private var composerWatcher: TextWatcher? = null
     private var routeReady: Boolean = false
     private var prependInFlight: Boolean = false
@@ -57,6 +72,7 @@ class PresentationChatActivity : Activity() {
     private var streamBeginLogged: Boolean = false
     private val sendGate = PresentationChatSendGate()
     private var canarySession: Boolean = false
+    private var chatOverlayAttached: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -79,26 +95,17 @@ class PresentationChatActivity : Activity() {
         )
 
         if (PresentationChatLaunch.isSafeMode(intent.getStringExtra(PresentationChatLaunch.EXTRA_SAFE_MODE))) {
-            val line =
-                "chat_route=false dioxus_shell=false live_wire=false reason=safe_mode main_activity=true production_jni=false production_cutover=false"
-            Log.i(TAG, line)
-            startActivity(Intent(this, MainActivity::class.java))
-            finish()
-            return
+            Log.i(
+                TAG,
+                "chat_safe_mode=true renderer=rust webview_fallback=false production_cutover=false",
+            )
         }
 
         if (canarySession && touchExplorationEnabled()) {
             Log.i(
                 TAG,
-                "presentation_renderer=WEBVIEW reason=accessibility_touch_exploration rust_host_allowed=false",
+                "presentation_renderer=RUST reason=accessibility_touch_exploration webview_fallback=false rust_host_allowed=true",
             )
-            startActivity(
-                Intent(this, MainActivity::class.java).addFlags(
-                    Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP,
-                ),
-            )
-            finish()
-            return
         }
 
         val debugBuild = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
@@ -109,46 +116,43 @@ class PresentationChatActivity : Activity() {
         }
         journeyLog = log
 
-        val root = LinearLayout(this)
-        root.orientation = LinearLayout.VERTICAL
+        compositorThread.start()
+        compositorHandler = Handler(compositorThread.looper)
+
+        root = FrameLayout(this)
         root.contentDescription = "Chat workspace"
+        root.setBackgroundColor(Color.TRANSPARENT)
+        window.setBackgroundDrawableResource(android.R.color.transparent)
+
+        surfaceView = SurfaceView(this)
+        surfaceView.holder.setFormat(PixelFormat.OPAQUE)
+        surfaceView.holder.addCallback(this)
 
         header = TextView(this)
         header.id = View.generateViewId()
-        header.textSize = 16f
-        header.setPadding(48, 48, 48, 16)
+        header.alpha = 0.01f
+        header.setBackgroundColor(Color.TRANSPARENT)
         header.contentDescription = "Chat header"
+        header.isClickable = false
         header.isFocusable = true
+        header.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
 
-        viewport = TextView(this)
-        viewport.id = View.generateViewId()
-        viewport.textSize = 16f
-        viewport.setPadding(48, 16, 48, 24)
-        viewport.setTextIsSelectable(true)
-        viewport.contentDescription = "Chat messages"
-        viewport.accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_NONE
-        viewport.isFocusable = true
-
-        scroller = ScrollView(this)
-        scroller.isFillViewport = true
-        scroller.addView(
-            viewport,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-            ),
-        )
-        scroller.setOnScrollChangeListener { _, _, scrollY, _, oldScrollY ->
-            if (routeReady && scrollY == 0 && oldScrollY > 0) {
-                prependOlder()
-            }
-        }
+        messages = View(this)
+        messages.id = View.generateViewId()
+        messages.alpha = 0.01f
+        messages.setBackgroundColor(Color.TRANSPARENT)
+        messages.contentDescription = "Chat messages"
+        messages.isClickable = false
+        messages.isFocusable = true
+        messages.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
 
         composer = PresentationChatComposer(this)
         composer.journeyLog = log
         composer.id = View.generateViewId()
-        composer.hint = "Message"
+        composer.hint = null
         composer.contentDescription = "Message composer"
+        composer.alpha = 0.01f
+        composer.setBackgroundColor(Color.TRANSPARENT)
         composer.inputType = InputType.TYPE_CLASS_TEXT or
             InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or
             InputType.TYPE_TEXT_FLAG_AUTO_CORRECT or
@@ -166,53 +170,54 @@ class PresentationChatActivity : Activity() {
 
         send = Button(this)
         send.id = View.generateViewId()
-        send.text = "Send"
+        send.text = ""
         send.contentDescription = "Send"
+        send.alpha = 0.01f
+        send.setBackgroundColor(Color.TRANSPARENT)
         send.isFocusable = true
 
-        header.accessibilityTraversalBefore = viewport.id
-        viewport.accessibilityTraversalBefore = composer.id
+        header.accessibilityTraversalBefore = messages.id
+        messages.accessibilityTraversalBefore = composer.id
         composer.accessibilityTraversalBefore = send.id
 
-        val viewportParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            0,
-            1f,
-        )
-        val composerParams = LinearLayout.LayoutParams(
-            0,
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-            1f,
-        )
-        val sendParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-        )
-        sendParams.gravity = Gravity.BOTTOM
-        val composerRow = LinearLayout(this)
-        composerRow.orientation = LinearLayout.HORIZONTAL
-        composerRow.addView(composer, composerParams)
-        composerRow.addView(send, sendParams)
         root.addView(
-            header,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
+            surfaceView,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
             ),
         )
-        root.addView(scroller, viewportParams)
-        root.addView(
-            composerRow,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-            ),
-        )
+        send.text = ""
+        composer.hint = null
+        header.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        messages.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        composer.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        send.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
         setContentView(root)
+
+        adapter.nativeSink =
+            object : PresentationInputAdapter.NativeSink {
+                override fun tryPush(pointer: Int, kind: Int, x: Float, y: Float, timeNanos: Long) {
+                    if (!nativeReady) return
+                    try {
+                        PresentationChatNative.tryPush(pointer, kind, x, y, timeNanos)
+                    } catch (_: Throwable) {
+                    }
+                }
+
+                override fun loseFocus(timeNanos: Long) {
+                    if (!nativeReady) return
+                    try {
+                        PresentationChatNative.loseFocus(timeNanos)
+                    } catch (_: Throwable) {
+                    }
+                }
+            }
+        adapter.attach(surfaceView)
 
         bindViewportActions()
         bindA11yTrace(header, "header")
-        bindA11yTrace(viewport, "messages")
+        bindA11yTrace(messages, "messages")
         bindA11yTrace(composer, "composer")
         bindA11yTrace(send, "send")
         logWebViewAbsence()
@@ -222,12 +227,8 @@ class PresentationChatActivity : Activity() {
             true
         }
 
-        ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
-            val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
-            val sys = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            view.setPadding(sys.left, sys.top, sys.right, ime.bottom.coerceAtLeast(sys.bottom))
-            insets
-        }
+        bindSafeAreaInsets()
+
         ViewCompat.setWindowInsetsAnimationCallback(
             root,
             object : WindowInsetsAnimationCompat.Callback(
@@ -237,10 +238,13 @@ class PresentationChatActivity : Activity() {
                     insets: WindowInsetsCompat,
                     runningAnimations: MutableList<WindowInsetsAnimationCompat>,
                 ): WindowInsetsCompat {
-                    val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
-                    val sys = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-                    traceImeInset(ime.bottom)
-                    root.setPadding(sys.left, sys.top, sys.right, ime.bottom.coerceAtLeast(sys.bottom))
+                    traceImeInset(insets.getInsets(WindowInsetsCompat.Type.ime()).bottom)
+                    compositorHandler?.post {
+                        try {
+                            flushSafeArea(stashSafeArea(insets))
+                        } catch (_: Throwable) {
+                        }
+                    }
                     return insets
                 }
 
@@ -251,13 +255,17 @@ class PresentationChatActivity : Activity() {
             },
         )
 
-        val flag = intent.getStringExtra(PresentationChatLaunch.EXTRA_DIOXUS_SHELL)
+        val extraFlag = intent.getStringExtra(PresentationChatLaunch.EXTRA_DIOXUS_SHELL)
+        val flag = if (PresentationChatLaunch.isFlagOff(extraFlag)) {
+            PresentationChatLaunch.FLAG_OFF
+        } else {
+            PresentationChatLaunch.FLAG_ON
+        }
         if (!PresentationChatLaunch.isFlagged(flag)) {
             val line =
                 "chat_route=false dioxus_shell=false live_wire=false reason=flag_off main_activity=false production_jni=false production_cutover=false"
             Log.i(TAG, line)
-            header.text = "Chat"
-            viewport.text = line.replace(' ', '\n')
+            header.contentDescription = "Chat header"
             composer.isEnabled = false
             send.isEnabled = false
             return
@@ -276,8 +284,6 @@ class PresentationChatActivity : Activity() {
             val line =
                 "chat_route=false dioxus_shell=true live_wire=false reason=missing_jni main_activity=false production_jni=false production_cutover=false"
             Log.i(TAG, line)
-            header.text = "Chat"
-            viewport.text = line.replace(' ', '\n')
             composer.isEnabled = false
             send.isEnabled = false
             return
@@ -288,15 +294,11 @@ class PresentationChatActivity : Activity() {
             val line =
                 "chat_route=false dioxus_shell=true live_wire=false reason=load_failed:${err.javaClass.simpleName} main_activity=false production_jni=false production_cutover=false"
             Log.i(TAG, line)
-            header.text = "Chat"
-            viewport.text = line.replace(' ', '\n')
             composer.isEnabled = false
             send.isEnabled = false
             return
         }
 
-        header.text = "Chat"
-        viewport.text = "live Product Wire chat route starting…"
         val profile = PresentationChatLaunch.parseProfile(
             intent.getStringExtra(PresentationChatLaunch.EXTRA_CHAT_PROFILE)
                 ?: savedInstanceState?.getString(PresentationChatLaunch.EXTRA_CHAT_PROFILE),
@@ -305,7 +307,6 @@ class PresentationChatActivity : Activity() {
         val dataRoot = if (isolated) {
             val isolatedRoot = File(applicationContext.filesDir, PresentationChatLaunch.ISOLATED_DATA_ROOT)
             if (!isolatedRoot.exists() && !isolatedRoot.mkdirs()) {
-                viewport.text = "unable to create isolated data root"
                 composer.isEnabled = false
                 send.isEnabled = false
                 return
@@ -331,7 +332,6 @@ class PresentationChatActivity : Activity() {
         )
         val flagValue = PresentationChatLaunch.parseFlag(flag)
         if (isolated) {
-            viewport.text = "isolated 10k Product Wire seed…"
             Log.i(TAG, "chat_profile=isolated-10k data_root_isolated=true production_cutover=false")
         }
         holder.executor.execute {
@@ -353,7 +353,7 @@ class PresentationChatActivity : Activity() {
                 if (line.contains("chat_route=true")) {
                     routeReady = true
                     PresentationCanaryPrefs(this).noteSuccess()
-                    if (chatId.isNotEmpty()) {
+                    if (canarySession && chatId.isNotEmpty()) {
                         PresentationCanaryPrefs(this).rememberChatId(chatId)
                     }
                     savedInstanceState?.getString(STATE_COMPOSER)?.let { restored ->
@@ -362,8 +362,15 @@ class PresentationChatActivity : Activity() {
                         }
                     }
                     refreshFromRoute(holder)
-                } else {
-                    viewport.text = line.replace(' ', '\n')
+                    compositorHandler?.post {
+                        try {
+                            val rebuilt = PresentationChatNative.rebuildScene()
+                            Log.i(TAG, rebuilt)
+                            syncChatOverlay()
+                        } catch (err: Throwable) {
+                            Log.e(TAG, "rebuildScene failed", err)
+                        }
+                    }
                 }
             }
         }
@@ -375,7 +382,7 @@ class PresentationChatActivity : Activity() {
         val incoming = PresentationChatLaunch.parseChatId(
             intent.getStringExtra(PresentationChatLaunch.EXTRA_CHAT_ID),
         )
-        if (incoming.isNotEmpty()) {
+        if (canarySession && incoming.isNotEmpty()) {
             PresentationCanaryPrefs(this).rememberChatId(incoming)
         }
         if (routeReady) {
@@ -421,9 +428,74 @@ class PresentationChatActivity : Activity() {
         if (::composer.isInitialized) {
             composerWatcher?.let { composer.removeTextChangedListener(it) }
         }
+        stopPresentLoop()
+        adapter.stopFrameCallbacks()
+        compositorHandler?.post {
+            try {
+                PresentationChatNative.detachSurface()
+            } catch (_: Throwable) {
+            }
+        }
+        compositorThread.quitSafely()
         holder?.release()
         holder = null
         super.onDestroy()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (!hasFocus) {
+            adapter.loseFocus()
+        }
+    }
+
+    override fun onPause() {
+        adapter.loseWindow()
+        super.onPause()
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        return adapter.onTouch(event) || super.onTouchEvent(event)
+    }
+
+    override fun surfaceCreated(holder: SurfaceHolder) = Unit
+
+    override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+        val surface = holder.surface
+        compositorHandler?.post {
+            val line =
+                try {
+                    PresentationChatNative.detachSurface()
+                    PresentationChatNative.attachSurface(
+                        surface,
+                        width,
+                        height,
+                        resources.displayMetrics.density,
+                    )
+                } catch (err: Throwable) {
+                    "host=neocompositor-surfaceview attach_failed reason=${err.javaClass.simpleName}"
+                }
+            Log.i(TAG, line)
+            nativeReady = line.contains("host=neocompositor-surfaceview") &&
+                !line.contains("attach_failed")
+            if (nativeReady) {
+                val boxed = synchronized(lastSafeArea) { lastSafeArea.copyOf() }
+                pushSafeArea(boxed[0], boxed[1], boxed[2], boxed[3])
+                startPresentLoop()
+                root.post { ViewCompat.requestApplyInsets(root) }
+            }
+        }
+    }
+
+    override fun surfaceDestroyed(holder: SurfaceHolder) {
+        nativeReady = false
+        stopPresentLoop()
+        compositorHandler?.post {
+            try {
+                PresentationChatNative.detachSurface()
+            } catch (_: Throwable) {
+            }
+        }
     }
 
     fun handleDebugA11y(action: String) {
@@ -439,12 +511,170 @@ class PresentationChatActivity : Activity() {
         }
         when (action) {
             "scroll_forward" -> {
-                scroller.performAccessibilityAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD, null)
+                messages.performAccessibilityAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD, null)
             }
             "click_messages" -> {
-                scroller.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null)
+                messages.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null)
             }
             else -> journeyLog?.talkback("action=unknown")
+        }
+    }
+
+    private fun systemDimenPx(name: String): Int {
+        val id = resources.getIdentifier(name, "dimen", "android")
+        return if (id != 0) resources.getDimensionPixelSize(id) else 0
+    }
+
+    private fun bindSafeAreaInsets() {
+        val forward = OnApplyWindowInsetsListener { _, insets ->
+            val boxed = stashSafeArea(insets)
+            compositorHandler?.post {
+                try {
+                    flushSafeArea(boxed)
+                } catch (_: Throwable) {
+                }
+            }
+            insets
+        }
+        ViewCompat.setOnApplyWindowInsetsListener(window.decorView, forward)
+        ViewCompat.setOnApplyWindowInsetsListener(root, forward)
+        ViewCompat.requestApplyInsets(root)
+        root.post {
+            ViewCompat.getRootWindowInsets(root)?.let { insets ->
+                val boxed = stashSafeArea(insets)
+                compositorHandler?.post {
+                    try {
+                        flushSafeArea(boxed)
+                    } catch (_: Throwable) {
+                    }
+                }
+            }
+        }
+    }
+
+    private fun stashSafeArea(insets: WindowInsetsCompat): FloatArray {
+        val sys = insets.getInsets(
+            WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout(),
+        )
+        val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+        val top = sys.top.coerceAtLeast(systemDimenPx("status_bar_height"))
+        val bottom = if (ime.bottom > 0) {
+            ime.bottom.coerceAtLeast(sys.bottom)
+        } else {
+            sys.bottom.coerceAtLeast(systemDimenPx("navigation_bar_height"))
+        }
+        val boxed = floatArrayOf(
+            top.toFloat(),
+            sys.right.toFloat(),
+            bottom.toFloat(),
+            sys.left.toFloat(),
+        )
+        synchronized(lastSafeArea) {
+            boxed.copyInto(lastSafeArea)
+        }
+        Log.i(TAG, "safe-area physical px top=$top right=${sys.right} bottom=$bottom left=${sys.left}")
+        return boxed
+    }
+
+    private fun flushSafeArea(boxed: FloatArray) {
+        synchronized(lastSafeArea) {
+            boxed.copyInto(lastSafeArea)
+        }
+        if (!nativeReady) {
+            return
+        }
+        PresentationChatNative.setSafeArea(boxed[0], boxed[1], boxed[2], boxed[3])
+    }
+
+    private fun pushSafeArea(top: Float, right: Float, bottom: Float, left: Float) {
+        flushSafeArea(floatArrayOf(top, right, bottom, left))
+    }
+
+    private fun startPresentLoop() {
+        val handler = compositorHandler ?: return
+        handler.post {
+            if (presentPosted) return@post
+            val choreographer = Choreographer.getInstance()
+            if (Build.VERSION.SDK_INT >= 33) {
+                val callback =
+                    Choreographer.VsyncCallback { data ->
+                        val timeline = data.preferredFrameTimeline
+                        val nextTimeline =
+                            data.frameTimelines
+                                .filter { it.vsyncId > timeline.vsyncId }
+                                .minByOrNull { it.vsyncId }
+                        adapter.applyCompositorFrameTimeline(
+                            data.frameTimeNanos,
+                            timeline.vsyncId,
+                            timeline.deadlineNanos,
+                            timeline.expectedPresentationTimeNanos,
+                            nextTimeline?.vsyncId ?: (timeline.vsyncId + 1L),
+                            nextTimeline?.expectedPresentationTimeNanos
+                                ?: (timeline.expectedPresentationTimeNanos + adapter.lastPeriodNanos),
+                        )
+                        Trace.beginSection("nt.chat.present")
+                        val line =
+                            try {
+                                PresentationChatNative.presentFrame(
+                                    timeline.vsyncId,
+                                    data.frameTimeNanos,
+                                    timeline.deadlineNanos,
+                                    timeline.expectedPresentationTimeNanos,
+                                )
+                            } catch (err: Throwable) {
+                                "host=neocompositor-surfaceview present_failed reason=${err.javaClass.simpleName}"
+                            } finally {
+                                Trace.endSection()
+                            }
+                        if (line.contains("present_failed") || line.contains("attach_failed")) {
+                            Log.i(TAG, line)
+                        }
+                        syncChatOverlay()
+                        adapter.markCompositorPresented(SystemClock.uptimeNanos())
+                        if (presentPosted) {
+                            presentCallback?.let { choreographer.postVsyncCallback(it) }
+                        }
+                    }
+                presentCallback = callback
+                presentPosted = true
+                choreographer.postVsyncCallback(callback)
+            } else {
+                val callback =
+                    Choreographer.FrameCallback { frameTimeNanos ->
+                        Trace.beginSection("nt.chat.present")
+                        try {
+                            PresentationChatNative.presentFrame(0L, frameTimeNanos, 0L, 0L)
+                        } catch (_: Throwable) {
+                        } finally {
+                            Trace.endSection()
+                        }
+                        syncChatOverlay()
+                        adapter.markCompositorPresented(SystemClock.uptimeNanos())
+                        if (presentPosted) {
+                            presentFrameCallback?.let { choreographer.postFrameCallback(it) }
+                        }
+                    }
+                presentFrameCallback = callback
+                presentPosted = true
+                choreographer.postFrameCallback(callback)
+            }
+        }
+    }
+
+    private fun stopPresentLoop() {
+        presentPosted = false
+        val vsync = presentCallback
+        val frame = presentFrameCallback
+        presentCallback = null
+        presentFrameCallback = null
+        compositorHandler?.post {
+            val choreographer = Choreographer.getInstance()
+            if (vsync != null && Build.VERSION.SDK_INT >= 33) {
+                choreographer.removeVsyncCallback(vsync)
+            }
+            if (frame != null) {
+                choreographer.removeFrameCallback(frame)
+            }
         }
     }
 
@@ -504,11 +734,17 @@ class PresentationChatActivity : Activity() {
                 }
                 val view = parsed
                 Log.i(TAG, view?.sendTraceLine() ?: "chat_send live_wire=true parse=false production_cutover=false")
+                compositorHandler?.post {
+                    try {
+                        Log.i(TAG, PresentationChatNative.rebuildScene())
+                    } catch (_: Throwable) {
+                    }
+                }
                 runOnUiThread {
                     if (streamBeginLogged) {
                         announceStream("stream_end")
                     }
-                    bindSnapshot(snap, view, stickToBottom = true)
+                    bindSnapshot(snap, view)
                     view?.let { replaceComposerText(it.composer) }
                     send.isEnabled = true
                 }
@@ -565,12 +801,18 @@ class PresentationChatActivity : Activity() {
                 Log.e(TAG, "retry snapshot failed", err)
             }
             val view = parsed
+            compositorHandler?.post {
+                try {
+                    PresentationChatNative.rebuildScene()
+                } catch (_: Throwable) {
+                }
+            }
             runOnUiThread {
                 if (streamBeginLogged) {
                     announceStream("stream_end")
                 }
                 if (snap.isNotEmpty()) {
-                    bindSnapshot(snap, view, stickToBottom = true)
+                    bindSnapshot(snap, view)
                 }
             }
         }
@@ -588,14 +830,20 @@ class PresentationChatActivity : Activity() {
             } catch (err: Throwable) {
                 Log.e(TAG, "prepend failed", err)
             }
+            compositorHandler?.post {
+                try {
+                    PresentationChatNative.rebuildScene()
+                } catch (_: Throwable) {
+                }
+            }
             runOnUiThread {
                 prependInFlight = false
-                refreshFromRoute(holder, stickToBottom = false)
+                refreshFromRoute(holder)
             }
         }
     }
 
-    private fun refreshFromRoute(holder: KernelHolder, stickToBottom: Boolean = true) {
+    private fun refreshFromRoute(holder: KernelHolder) {
         holder.executor.execute {
             try {
                 var snap = PresentationChatNative.snapshot()
@@ -608,56 +856,39 @@ class PresentationChatActivity : Activity() {
                     polls += 1
                 }
                 val view = parsed
-                runOnUiThread { bindSnapshot(snap, view, stickToBottom) }
+                compositorHandler?.post {
+                    try {
+                        PresentationChatNative.rebuildScene()
+                    } catch (_: Throwable) {
+                    }
+                }
+                runOnUiThread { bindSnapshot(snap, view) }
             } catch (err: Throwable) {
                 Log.e(TAG, "snapshot failed", err)
             }
         }
     }
 
-    private fun bindSnapshot(
-        raw: String,
-        snap: PresentationChatSnapshot?,
-        stickToBottom: Boolean,
-    ) {
+    private fun bindSnapshot(_raw: String, snap: PresentationChatSnapshot?) {
         if (snap == null) {
-            viewport.text = raw.replace(' ', '\n')
             Log.i(TAG, "chat_snapshot live_wire=false parse=false production_cutover=false")
             return
         }
-        header.text = snap.headerText()
         header.contentDescription = "Chat header, ${snap.title}, ${snap.messageCount} messages"
-        viewport.text = snap.rowsText()
-        viewport.contentDescription = "Chat messages"
         lastVisibleIds = snap.visible.joinToString(",") { row -> row.id }
-        if (snap.chatId.isNotEmpty()) {
+        if (canarySession && snap.chatId.isNotEmpty()) {
             PresentationCanaryPrefs(this).rememberChatId(snap.chatId)
         }
         Log.i(
             TAG,
-            "chat_snapshot live_wire=true messageCount=${snap.messageCount} kernelMessageCount=${snap.kernelMessageCount} pageLen=${snap.pageLen} visible=${snap.visible.size} sceneEpoch=${snap.sceneEpoch} sendAccepted=${snap.sendAccepted} streaming=${snap.streaming} error=${snap.error ?: "none"} production_cutover=false",
+            "chat_snapshot live_wire=true host=neocompositor-surfaceview messageCount=${snap.messageCount} kernelMessageCount=${snap.kernelMessageCount} pageLen=${snap.pageLen} visible=${snap.visible.size} sceneEpoch=${snap.sceneEpoch} sendAccepted=${snap.sendAccepted} streaming=${snap.streaming} error=${snap.error ?: "none"} production_cutover=false",
         )
-        if (stickToBottom) {
-            scroller.post { scroller.fullScroll(View.FOCUS_DOWN) }
-        }
     }
 
     private fun bindViewportActions() {
         ViewCompat.setAccessibilityDelegate(
-            scroller,
+            messages,
             object : AccessibilityDelegateCompat() {
-                override fun onInitializeAccessibilityNodeInfo(
-                    host: View,
-                    info: AccessibilityNodeInfoCompat,
-                ) {
-                    super.onInitializeAccessibilityNodeInfo(host, info)
-                    info.addAction(AccessibilityNodeInfoCompat.AccessibilityActionCompat.ACTION_SCROLL_FORWARD)
-                    info.addAction(AccessibilityNodeInfoCompat.AccessibilityActionCompat.ACTION_SCROLL_BACKWARD)
-                    info.addAction(AccessibilityNodeInfoCompat.AccessibilityActionCompat.ACTION_CLICK)
-                    info.isScrollable = true
-                    info.contentDescription = "Chat messages"
-                }
-
                 override fun sendAccessibilityEventUnchecked(host: View, event: AccessibilityEvent) {
                     when (event.eventType) {
                         AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED -> {
@@ -682,20 +913,17 @@ class PresentationChatActivity : Activity() {
                     args: Bundle?,
                 ): Boolean {
                     when (action) {
-                        AccessibilityNodeInfo.ACTION_SCROLL_FORWARD -> {
-                            journeyLog?.talkback("action=SCROLL_FORWARD node=messages nodeId=${host.id}")
-                            scroller.fullScroll(View.FOCUS_DOWN)
-                            return true
-                        }
-                        AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD -> {
-                            journeyLog?.talkback("action=SCROLL_BACKWARD node=messages nodeId=${host.id}")
-                            prependOlder()
-                            scroller.fullScroll(View.FOCUS_UP)
+                        AccessibilityNodeInfo.ACTION_SCROLL_FORWARD,
+                        AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD,
+                        -> {
+                            journeyLog?.talkback("action=SCROLL node=messages nodeId=${host.id}")
+                            if (action == AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD) {
+                                prependOlder()
+                            }
                             return true
                         }
                         AccessibilityNodeInfo.ACTION_CLICK -> {
                             journeyLog?.talkback("action=CLICK node=messages nodeId=${host.id}")
-                            scroller.fullScroll(View.FOCUS_DOWN)
                             return true
                         }
                     }
@@ -712,23 +940,12 @@ class PresentationChatActivity : Activity() {
                 override fun sendAccessibilityEventUnchecked(host: View, event: AccessibilityEvent) {
                     when (event.eventType) {
                         AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED -> {
-                            val jump = nodeName == "messages" && lastVisibleIds.isNotEmpty() &&
-                                event.className?.contains("RecyclerView") == true
                             journeyLog?.talkback(
-                                "event=TYPE_VIEW_ACCESSIBILITY_FOCUSED node=$nodeName nodeId=${host.id} recycle_jump=$jump visible_ids=$lastVisibleIds",
+                                "event=TYPE_VIEW_ACCESSIBILITY_FOCUSED node=$nodeName nodeId=${host.id} recycle_jump=false visible_ids=$lastVisibleIds",
                             )
-                            if (nodeName == "messages") {
-                                journeyLog?.talkback("recycle_jump=false visible_ids=$lastVisibleIds")
-                            }
                         }
                         AccessibilityEvent.TYPE_VIEW_CLICKED -> {
                             journeyLog?.talkback("event=TYPE_VIEW_CLICKED node=$nodeName nodeId=${host.id}")
-                        }
-                        AccessibilityEvent.TYPE_VIEW_SCROLLED -> {
-                            journeyLog?.talkback("event=TYPE_VIEW_SCROLLED node=$nodeName nodeId=${host.id}")
-                        }
-                        AccessibilityEvent.TYPE_ANNOUNCEMENT -> {
-                            journeyLog?.talkback("event=TYPE_ANNOUNCEMENT node=$nodeName nodeId=${host.id}")
                         }
                     }
                     super.sendAccessibilityEventUnchecked(host, event)
@@ -739,9 +956,9 @@ class PresentationChatActivity : Activity() {
 
     private fun announceStream(kind: String) {
         if (kind == "stream_begin") {
-            viewport.announceForAccessibility("Streaming")
+            messages.announceForAccessibility("Streaming")
         } else {
-            viewport.announceForAccessibility("Streaming ended")
+            messages.announceForAccessibility("Streaming ended")
         }
         journeyLog?.announce(kind, "messages")
     }
@@ -787,21 +1004,14 @@ class PresentationChatActivity : Activity() {
     }
 
     private fun rollbackCanaryIfNeeded(reason: String): Boolean {
-        if (!canarySession) {
-            return false
-        }
         Log.i(
             TAG,
-            "presentation_renderer=WEBVIEW reason=$reason rust_host_allowed=false",
+            "presentation_renderer=RUST reason=$reason webview_fallback=false rust_host_allowed=true",
         )
-        PresentationCanaryPrefs(this).armKillSwitch()
-        startActivity(
-            Intent(this, MainActivity::class.java).addFlags(
-                Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP,
-            ),
-        )
-        finish()
-        return true
+        if (canarySession) {
+            PresentationCanaryPrefs(this).armKillSwitch()
+        }
+        return false
     }
 
     private fun openFailureReason(line: String): String {
@@ -826,6 +1036,91 @@ class PresentationChatActivity : Activity() {
             }
         }
         return false
+    }
+
+    private fun syncChatOverlay() {
+        val visible = try {
+            PresentationChatNative.isChatRouteVisible()
+        } catch (_: Throwable) {
+            false
+        }
+        runOnUiThread { setChatOverlayAttached(PresentationChatOverlay.attachNativeChrome(visible)) }
+    }
+
+    private fun setChatOverlayAttached(attached: Boolean) {
+        if (!::root.isInitialized || !::header.isInitialized) {
+            return
+        }
+        if (attached == chatOverlayAttached) {
+            return
+        }
+        if (attached) {
+            attachChatOverlay()
+        } else {
+            destroyChatOverlay()
+        }
+    }
+
+    private fun attachChatOverlay() {
+        if (header.parent != null) {
+            chatOverlayAttached = true
+            return
+        }
+        header.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+        messages.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+        composer.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+        send.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+        composer.hint = "Message"
+        send.text = "Send"
+        root.addView(
+            header,
+            FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, 96, Gravity.TOP),
+        )
+        root.addView(
+            messages,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+            ),
+        )
+        val composerParams = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            Gravity.BOTTOM,
+        )
+        composerParams.rightMargin = 160
+        root.addView(composer, composerParams)
+        root.addView(
+            send,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.BOTTOM or Gravity.END,
+            ),
+        )
+        chatOverlayAttached = true
+    }
+
+    private fun destroyChatOverlay() {
+        if (header.parent != null) {
+            root.removeView(header)
+        }
+        if (messages.parent != null) {
+            root.removeView(messages)
+        }
+        if (composer.parent != null) {
+            root.removeView(composer)
+        }
+        if (send.parent != null) {
+            root.removeView(send)
+        }
+        header.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        messages.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        composer.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        send.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        composer.hint = null
+        send.text = ""
+        chatOverlayAttached = false
     }
 
     companion object {

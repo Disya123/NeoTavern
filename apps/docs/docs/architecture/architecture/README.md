@@ -250,7 +250,7 @@ gate passes.
 - [Presentation boundary](presentation-boundary.md) — Milestone A **PASS**
   (feature-flagged Dioxus Product Wire shell). Milestone B **PASS**
   (independent physical PERF/device-loss registry). Milestone C **STARTED**
-  (cutover STARTED/CANARY; physical canary batch NOT_RUN). WebView remains
+  **STARTED / CANARY**; physical canary batch **PASS**. WebView remains
   rollback; D3 DEFERRED.
 - [Known baseline failures](known-baseline-failures.md) — recorded
   `KNOWN_BASELINE_FAILURE` fingerprints. They do not invalidate PERF-18/19/20

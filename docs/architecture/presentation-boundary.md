@@ -70,10 +70,11 @@ This is not a production migration and not Milestone C PASS.
 ## Surfaces
 
 ```text
-react-web                  — production Web / desktop UI
-webview-android-rollback   — production Android default (retained)
+react-web                  — production Web / desktop UI (migration golden)
+webview-android-rollback   — production Android default (retained until Character Manager visual golden PASS)
 dioxus-android-canary      — MainActivity selector; STARTED / CANARY; not default
-dioxus-android-chat-route  — PresentationChatActivity; same Kernel; canary + debug harness
+dioxus-android-chat-route  — PresentationChatActivity; NeoCompositor SurfaceView; same Kernel; canary + debug harness
+dioxus-android-design-system — packed React fonts/tokens/icons/CSS; Character Manager RSX STARTED; visual golden NOT PASS
 ```
 
 ## Milestone B
@@ -168,41 +169,48 @@ PERF-18/19/20 evidence inadmissible.
 ## Milestone C
 
 Feature-flagged Android chat workspace (RFC §51). `PresentationChatActivity`
-hosts the live Product Wire route in `crates/presentation-chat`. History,
-streaming, send, retry, prepend, drafts, and `ErrorDto` go through registered Wire
-operations only. Tests use in-memory `FakeWire`; the Activity talks to
-the existing Kernel via `KernelSession` + `EnvelopeBuilder`. The UI never
-opens SQLite or talks to the network. The visible window is virtualized
-through `crates/chat-viewport` (`waited_on_producer=false`). The host
-mirrors that same snapshot (selectable Markdown/image rows) and hosts a
-Gboard composer (IME send, **Send** button, draft save, keyboard inset animation). It is
-not a second chat and not the compositor `SurfaceView` paint path.
+is the home-screen launcher and hosts the live Product Wire route in
+`crates/presentation-chat`. History, streaming, send, retry, prepend, drafts,
+Character Manager (`characters.list` / `create` / `get` / `update` / `delete`),
+and `ErrorDto` go through registered Wire operations only. Tests use
+in-memory `FakeWire`; the Activity talks to the existing Kernel via
+`KernelSession` + `EnvelopeBuilder`. The UI never opens SQLite or talks to
+the network. Unmigrated rail destinations render a Rust `NotYetMigrated`
+surface. **WebView is not a route fallback** — missing JNI or a canary
+fault stays on this Activity. Optional `NEOTA_SAFE_MODE=1` no longer
+escapes to `MainActivity`.
+
+The visible window is virtualized through `crates/chat-viewport`
+(`waited_on_producer=false`). The host mirrors that same snapshot for
+a11y/IME (invisible platform composer) while NeoCompositor paints App
+Shell, Character Manager, header, viewport, messages, and composer chrome
+onto a `SurfaceView` at device density (`DisplayMetrics.density` → Blitz
+`hidpi_scale`). Density-aware hit testing maps rail / tabs / New / cards
+onto session mutations. It is not a second chat. Snapshot TextViews are
+not the primary renderer.
 Header/composer glass, Markdown `data-format`, sampleable image rows, and
 TalkBack roles live on the Dioxus tree. Rotate/recreation restores
-`chatId` and composer text. Optional `NEOTA_SAFE_MODE=1` escapes to
-production `MainActivity` (WebView).
+`chatId` and composer text.
 
-Guarded canary: `MainActivity` may start this activity when the selector
-allows a Rust host. Production APK packages
-`libneotavern_presentation_chat.so`. Kernel and `filesDir/neotavern` stay
-shared. Isolated 10k remains a debug harness profile
-(`NEOTA_CHAT_PROFILE=isolated-10k` → `filesDir/neotavern-isolated-10k`).
+Guarded canary extras still exist for debug opt-in, but the packaged
+launcher icon opens `PresentationChatActivity` with the Rust renderer
+(`NEOTA_DIOXUS_SHELL` defaults on). `MainActivity` remains the WebView
+harness for instrumented tests and is **not** the home-screen entry.
+Production APK packages `libneotavern_presentation_chat.so`. Kernel and
+`filesDir/neotavern` stay shared. Isolated 10k remains a debug harness
+profile (`NEOTA_CHAT_PROFILE=isolated-10k` → `filesDir/neotavern-isolated-10k`).
 Physical canary batch is **PASS**
 ([milestone-c-canary.md](../rfc/milestone-c-canary.md)).
 
-The route mounts when the guarded selector allows a Rust host. A debug
-`com.neotavern.mobile.NEOTA_DIOXUS_SHELL=1` extra persists that opt-in for
-later icon / notification launches. Without the persisted flag (or in
-release, without a signed rollout) the selector stays on WebView
-(`reason=flag_off`). Optional `NEOTA_SAFE_MODE=1` (debug extra) escapes to
-WebView. Send round-trip uses Kernel `chats.get.messageCount` as the
+The route mounts when this Activity starts. A debug
+`com.neotavern.mobile.NEOTA_DIOXUS_SHELL=0` extra can still disable the
+shell for host tests. Send round-trip uses Kernel `chats.get.messageCount` as the
 source of truth (not a local `+= 1`). IME action Send and a Send button
 both issue `chats.messages.create`; a failed `generation.start` must not
 drop an accepted durable row. Physical stamp `2026-08-18T21-55-58-696Z` stays a preserved
 **`FAILED_ATTEMPT`**. Stamp `2026-08-19T10-29-35-149Z` is the successful
 journey batch (**PASS**) on the same Xiaomi debug harness: send round-trip,
-isolated 10k, Gboard InputConnection keys, lifecycle, and safe-mode WebView
-escape. TalkBack was operator-waived (**SKIPPED**, not PASS). That skip
+isolated 10k, Gboard InputConnection keys, lifecycle. TalkBack was operator-waived (**SKIPPED**, not PASS). That skip
 does **not** satisfy RFC §51 TalkBack; native Dioxus TalkBack is
 **DEFERRED_BY_OWNER** and the product accessibility path is
 **WEBVIEW_FALLBACK** ([ADR-0051](../adr/0051-android-talkback-webview-fallback.md)).
@@ -211,3 +219,47 @@ does **not** satisfy RFC §51 TalkBack; native Dioxus TalkBack is
 **STARTED**, not RFC §51 PASS. Cutover is **STARTED / CANARY**;
 `canary_batch` is **PASS**. Chat workspace on flagged Dioxus Android
 remains **DEFERRED** in the compatibility matrix until owner-signed PARITY.
+
+## Visual parity (Character Manager)
+
+React (`apps/web` + `@neotavern/ui`) is the golden source: exact font files,
+`--st-*` tokens, Phosphor regular SVG paths, and CSS-module geometry. Packed
+assets live in `crates/presentation-design-system`. Pack-time flatten inlines
+dark token values because Blitz/Stylo does not apply UA `:root` custom
+properties (`var(--st-radius-control)` was dropping to 0). Icons are inline
+`<svg><path>` with explicit fills (CSS `mask-image` is not the paint path).
+WindowInsets arrive through JNI `setSafeArea` as physical pixels, convert to
+CSS px on the session, bake `--nt-inset-*` to literal lengths, and pad the
+rail, panel header, and bottom tab bar in RSX (`env(safe-area-inset-*)` and
+CSS logical properties are 0 / ignored in Blitz). Packed CSS flattens dark
+`--st-*` tokens, `color-mix()`, and remaining custom properties to pixels and
+rewrites `padding-block-*` / `min-block-size` to physical properties so
+Stylo actually paints `#e38a62` / `10px` / `16px` instead of dropping the
+declaration. Light `:root { color-scheme: light }` is stripped; translucent
+surface mixes composite onto `#151311`. Compact `@media (max-width: 600px)`
+is unwrapped so the panel column (not the viewport) owns header and tabs.
+The live blit prefers a non-sRGB swapchain so Vello's sRGB bytes are not
+gamma-encoded twice (that wash is the gray veil). NeoGlass host markers are
+omitted on this route until opaque screenshots match React. Blitz
+`DEFAULT_CSS` (grey buttons, 1px radius) is removed before
+the product sheet is applied. Icons are inline
+`<svg><path>` with explicit fills (CSS `mask-image` is not the paint path).
+The live SurfaceView route now mounts App Shell + Character Manager Cards
+through Product Wire `characters.list` with that sheet. Header/card avatars
+resolve `avatarAssetId` via `assets.content`, then downscale to a 192px
+display PNG `data:` URI (the starter Hazel file is 1024×1536 / ~2.2 MiB;
+the original must not enter `<img src>` or Vello leaves the SurfaceView
+black). Packed Phosphor `mask-image` `data:image/svg+xml` URLs are not
+fetched. Header/card avatars keep the clipped React initial: a live `<img>`
+in this Blitz→Vello 0.9 Vulkan path clears the framebuffer even after Image
+brushes are skipped. The session still hydrates a 192px display PNG for a
+later sampled blit. On the live Android Vulkan device Vello GPU compute left
+the content texture empty; bind rasters with Vello `use_cpu` and copies into
+a sampled texture before blit. Blitz does not sample the raster on device yet.
+The React card formatter is `description || "No character
+description yet."` with a 2-line clamp. Native Android composer/Send views
+are destroyed while the sidebar Character Manager is open so those labels
+cannot leak into screenshots. This is **not** a
+visual golden PASS (device overlay / ≤1 dp geometry diff is not signed) and
+**not** WebView runtime removal. Unmigrated rail panels render
+`not-yet-migrated`; they do not fall back to WebView.

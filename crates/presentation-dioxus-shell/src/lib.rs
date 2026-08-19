@@ -12,12 +12,18 @@ use std::sync::Mutex;
 
 mod chat_route;
 mod product_path;
+mod product_shell;
 pub use chat_route::{chat_route_line, flagged_chat_route, ChatRouteReport};
+pub use neotavern_presentation_design_system::SafeAreaInsets;
 pub use product_path::{
-    current_product_chat, install_product_chat, message_id, mixed_height, mixed_height_catalog,
-    product_chat_from_fixture, product_chat_with_chrome, streaming_schedule, visible_rows,
-    ProductChatView, ProductChrome, RowKind, VisibleRow, PRODUCT_PATH_CHAT_ID, PRODUCT_PATH_ITEMS,
-    PRODUCT_PATH_VISIBLE,
+    chrome_metrics, current_product_chat, install_product_chat, message_id, mixed_height,
+    mixed_height_catalog, product_chat_from_fixture, product_chat_with_chrome, streaming_schedule,
+    visible_rows, ProductChatView, ProductChrome, RowKind, VisibleRow, PRODUCT_PATH_CHAT_ID,
+    PRODUCT_PATH_ITEMS, PRODUCT_PATH_VISIBLE,
+};
+pub use product_shell::{
+    character_card_description, current_product_shell, install_product_shell, product_shell_app,
+    CharacterCardView, CharacterDraftView, ProductShellView,
 };
 
 pub const DIOXUS_SHELL_FLAG: &str = "NEOTA_DIOXUS_SHELL";
@@ -230,11 +236,49 @@ pub fn expected_projection() -> CanonicalProjection {
     serde_json::from_str(EXPECTED_PROJECTION_JSON).expect("expected-projection.json")
 }
 
+fn message_bubble_style(user: bool, compact: bool, font_px: u32) -> String {
+    let bg = if user { "#2a4a6a" } else { "#243044" };
+    if compact {
+        format!(
+            "box-sizing:border-box;min-height:24px;margin:4px 0;padding:6px 8px;color:#e8eef7;font-size:{font_px}px;white-space:pre-wrap;overflow-wrap:break-word;background:{bg};"
+        )
+    } else {
+        let start = if user { "20%" } else { "0" };
+        format!(
+            "box-sizing:border-box;width:80%;margin:8px 0;margin-left:{start};padding:10px 12px;color:#e8eef7;font-size:{font_px}px;white-space:pre-wrap;overflow-wrap:break-word;background:{bg};"
+        )
+    }
+}
+
 /// Flagged Product Wire chat workspace: header glass, visible Markdown/image
 /// rows, composer glass. Blitz consumes this tree; callers must not inject a
 /// hand-built `NeoDisplayList`.
 pub fn product_chat_app() -> Element {
     let view = current_product_chat();
+    let (width, header_h, viewport_h, composer_h) =
+        crate::chrome_metrics(view.viewport_width, view.viewport_height);
+    let composer_top = header_h.saturating_add(viewport_h);
+    let compact = view.viewport_height <= 240;
+    let font_px = if compact { 12 } else { 18 };
+    let title_px = if compact { 13 } else { 20 };
+    let pad = if compact { 8 } else { 16 };
+    let workspace_style = format!(
+        "position:relative;box-sizing:border-box;width:{width}px;height:{}px;background:#101820;color:#e8eef7;font-family:sans-serif;",
+        view.viewport_height.max(1)
+    );
+    let wallpaper_style = format!(
+        "position:absolute;left:0;top:0;width:{width}px;height:{}px;background:#243044;",
+        view.viewport_height.max(1)
+    );
+    let header_style = format!(
+        "position:absolute;left:0;top:0;width:{width}px;height:{header_h}px;box-sizing:border-box;padding:{pad}px;background:#15202b;color:#f2f6fb;font-size:{title_px}px;"
+    );
+    let viewport_style = format!(
+        "position:absolute;left:0;top:{header_h}px;width:{width}px;height:{viewport_h}px;box-sizing:border-box;padding:{pad}px;overflow:hidden;background:#101820;"
+    );
+    let composer_style = format!(
+        "position:absolute;left:0;top:{composer_top}px;width:{width}px;height:{composer_h}px;box-sizing:border-box;padding:{pad}px;background:#15202b;color:#d7e3f0;font-size:{font_px}px;"
+    );
     let wallpaper = matches!(view.chrome, ProductChrome::PaintOrder);
     let overlay = matches!(
         view.chrome,
@@ -244,14 +288,19 @@ pub fn product_chat_app() -> Element {
         view.chrome,
         ProductChrome::NestedDialog | ProductChrome::PaintOrder
     );
+    let composer_label = if view.composer_text.is_empty() {
+        "Message"
+    } else {
+        view.composer_text.as_str()
+    };
     rsx! {
         div {
             "data-component": "chat-workspace",
-            style: "position:relative;width:320px;height:200px;background:#101820;",
+            style: "{workspace_style}",
             if wallpaper {
                 div {
                     "data-part": "wallpaper",
-                    style: "position:absolute;left:0;top:0;width:320px;height:200px;background:#243044;"
+                    style: "{wallpaper_style}"
                 }
             }
             div {
@@ -259,14 +308,14 @@ pub fn product_chat_app() -> Element {
                 "data-neoui": "glass",
                 "data-part": "header",
                 role: "banner",
-                style: "position:absolute;left:0;top:0;width:320px;height:36px;",
+                style: "{header_style}",
                 "{view.title} ({view.message_count})"
                 if nested {
                     div {
                         class: "neoui-glass",
                         "data-neoui": "glass",
                         "data-part": "dialog",
-                        style: "position:absolute;left:48px;top:4px;width:160px;height:28px;"
+                        style: "position:absolute;left:48px;top:4px;width:160px;height:28px;background:#243044;"
                     }
                 }
             }
@@ -276,14 +325,14 @@ pub fn product_chat_app() -> Element {
                 role: "list",
                 "aria-label": "Chat messages",
                 "data-state": if view.streaming { "streaming" } else { "idle" },
-                style: "position:absolute;left:0;top:36px;width:320px;height:124px;overflow:hidden;",
+                style: "{viewport_style}",
                 for row in view.visible.iter() {
                     div {
                         "data-part": "message",
                         "data-role": "{row.role}",
                         "data-format": "markdown",
                         role: "listitem",
-                        style: "min-height:24px;color:#e8eef7;font-size:12px;",
+                        style: message_bubble_style(row.role == "user", compact, font_px),
                         "{row.content}"
                         if matches!(row.kind, RowKind::Image | RowKind::Mixed) {
                             img {
@@ -300,6 +349,7 @@ pub fn product_chat_app() -> Element {
                 div {
                     "data-part": "error",
                     role: "alert",
+                    style: "position:absolute;left:{pad}px;bottom:{composer_h}px;color:#f2b8b5;font-size:{font_px}px;",
                     "{code}"
                 }
             }
@@ -310,15 +360,15 @@ pub fn product_chat_app() -> Element {
                 role: "region",
                 "aria-label": "Message composer",
                 "data-state": if view.streaming { "streaming" } else { "idle" },
-                style: "position:absolute;left:0;top:160px;width:320px;height:40px;",
-                "{view.composer_text}"
+                style: "{composer_style}",
+                "{composer_label}"
             }
             if overlay {
                 div {
                     class: "neoui-glass",
                     "data-neoui": "glass",
                     "data-part": "overlay",
-                    style: "position:absolute;left:240px;top:8px;width:72px;height:24px;"
+                    style: "position:absolute;left:240px;top:8px;width:72px;height:24px;background:#3a4a60;"
                 }
             }
         }

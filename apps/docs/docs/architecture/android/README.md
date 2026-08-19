@@ -216,6 +216,17 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   ([runbook](../rfc/milestone-c-physical-runbook.md)).
   Kernel stays in `libneotavern_android_jni.so`. Production APK also
   packages `libneotavern_presentation_chat.so`. WebView is retained.
+  The live SurfaceView route now loads the packed React design system
+  (`crates/presentation-design-system`: Outfit / JetBrains Mono, `--st-*`
+  tokens, Phosphor regular icons, App Shell / Character Manager CSS) and
+  paints Character Manager from Product Wire `characters.list`. WindowInsets
+  are JNI `setSafeArea` physical px → CSS px (`density`), baked into
+  `--nt-inset-*` / `--nt-safe-area-*` as literal lengths (Blitz `env()` is
+  0) and applied as RSX padding on the rail, header, and bottom tabs. Packed
+  `--st-*` tokens, `color-mix()`, and logical properties are flattened to
+  physical pixels; Blitz `DEFAULT_CSS` is removed so radii/colors survive.
+  Phosphor icons are inline SVG fills, not CSS masks. This is not visual
+  golden PASS and not WebView removal.
   Raw input-to-present is not gated against one refresh; deadline miss is
   renderer-controlled present vs `targetPresentDeadline`.
   Physical stamp `2026-08-18T16-28-13-285Z`.

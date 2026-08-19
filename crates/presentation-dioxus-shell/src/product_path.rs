@@ -46,6 +46,8 @@ pub struct ProductChatView {
     pub composer_text: String,
     pub error_code: Option<String>,
     pub streaming: bool,
+    pub viewport_width: u32,
+    pub viewport_height: u32,
 }
 
 impl Default for ProductChatView {
@@ -58,8 +60,27 @@ impl Default for ProductChatView {
             composer_text: String::new(),
             error_code: None,
             streaming: false,
+            viewport_width: 320,
+            viewport_height: 200,
         }
     }
+}
+
+/// Header / message viewport / composer chrome in CSS pixels.
+pub fn chrome_metrics(width: u32, height: u32) -> (u32, u32, u32, u32) {
+    let width = width.max(1);
+    let height = height.max(1);
+    let (header, composer): (u32, u32) = if height <= 240 {
+        (36, 40)
+    } else if height <= 1200 {
+        (56, 72)
+    } else {
+        (72, 88)
+    };
+    let viewport = height
+        .saturating_sub(header.saturating_add(composer))
+        .max(1);
+    (width, header, viewport, composer)
 }
 
 thread_local! {
@@ -214,6 +235,8 @@ pub fn product_chat_from_fixture(fixture: &CanonicalFixture, start: usize) -> Pr
         composer_text: String::new(),
         error_code: None,
         streaming: false,
+        viewport_width: 320,
+        viewport_height: 200,
     }
 }
 

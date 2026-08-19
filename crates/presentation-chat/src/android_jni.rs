@@ -12,7 +12,7 @@ use contracts_generated::generated::{
     GenerationEvent, ResponseEnvelope,
 };
 use jni::objects::{GlobalRef, JByteArray, JClass, JObject, JString, JValue};
-use jni::sys::{jint, jstring};
+use jni::sys::{jboolean, jfloat, jint, jlong, jstring};
 use jni::{JNIEnv, JavaVM};
 use serde_json::{json, Value};
 
@@ -361,6 +361,8 @@ pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_openRout
         *ROUTE
             .lock()
             .map_err(|_| ChatRouteError::Transport("route_poisoned".into()))? = Some(session);
+        #[cfg(feature = "gpu")]
+        crate::android_surface::mark_dirty();
         Ok::<String, ChatRouteError>(line)
     }))
     .unwrap_or_else(|_| Err(ChatRouteError::Transport("panic".into())))
@@ -400,6 +402,11 @@ pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_send(
     let value = read_string(&mut env, &text);
     let line = with_route(|session| {
         session.send(Some(&value))?;
+        #[cfg(feature = "gpu")]
+        {
+            crate::android_surface::mark_dirty();
+            let _ = crate::android_surface::bind_from_session(session);
+        }
         Ok(session.send_trace_line())
     });
     to_jstring(&mut env, line)
@@ -424,6 +431,8 @@ pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_prepend(
 ) -> jstring {
     let line = with_route(|session| {
         session.prepend()?;
+        #[cfg(feature = "gpu")]
+        crate::android_surface::mark_dirty();
         Ok(session_line(session))
     });
     to_jstring(&mut env, line)
@@ -437,6 +446,8 @@ pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_pollStre
 ) -> jstring {
     let line = with_route(|session| {
         let _ = session.poll_stream(timeout_ms.max(0) as u32)?;
+        #[cfg(feature = "gpu")]
+        crate::android_surface::mark_dirty();
         Ok(session_line(session))
     });
     to_jstring(&mut env, line)
@@ -476,4 +487,160 @@ pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_commitDr
         Ok(session_line(session))
     });
     to_jstring(&mut env, line)
+}
+
+fn gpu_bind_line() -> String {
+    #[cfg(feature = "gpu")]
+    {
+        crate::android_surface::mark_dirty();
+        return with_route(|session| Ok(crate::android_surface::bind_from_session(session)));
+    }
+    #[cfg(not(feature = "gpu"))]
+    "host=neocompositor-surfaceview bind_failed reason=gpu_disabled".into()
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_attachSurface(
+    env: JNIEnv,
+    _class: JClass,
+    surface: JObject,
+    width: jint,
+    height: jint,
+    density: jfloat,
+) -> jstring {
+    let mut env = env;
+    #[cfg(feature = "gpu")]
+    let text = {
+        let attach = crate::android_surface::attach(&env, &surface, width, height, density);
+        let bound = gpu_bind_line();
+        if bound.contains("product_wire=live") {
+            bound
+        } else {
+            attach
+        }
+    };
+    #[cfg(not(feature = "gpu"))]
+    let text = "host=neocompositor-surfaceview attach_failed reason=gpu_disabled".to_string();
+    to_jstring(&mut env, text)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_setSafeArea(
+    env: JNIEnv,
+    _class: JClass,
+    top: jfloat,
+    right: jfloat,
+    bottom: jfloat,
+    left: jfloat,
+) -> jstring {
+    let mut env = env;
+    #[cfg(feature = "gpu")]
+    {
+        crate::android_surface::set_safe_area(top, right, bottom, left);
+        return to_jstring(&mut env, gpu_bind_line());
+    }
+    #[cfg(not(feature = "gpu"))]
+    to_jstring(
+        &mut env,
+        "host=neocompositor-surfaceview bind_failed reason=gpu_disabled".into(),
+    )
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_detachSurface(
+    mut env: JNIEnv,
+    _class: JClass,
+) -> jstring {
+    #[cfg(feature = "gpu")]
+    let text = crate::android_surface::detach();
+    #[cfg(not(feature = "gpu"))]
+    let text = "host=neocompositor-surfaceview detach=ok".to_string();
+    to_jstring(&mut env, text)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_presentFrame(
+    mut env: JNIEnv,
+    _class: JClass,
+    vsync_id: jlong,
+    callback_time: jlong,
+    deadline: jlong,
+    expected_present: jlong,
+) -> jstring {
+    #[cfg(feature = "gpu")]
+    let text = {
+        let pending = crate::android_surface::take_shell_action();
+        if pending.is_some()
+            || (crate::android_surface::is_dirty() && !crate::android_surface::is_scrolling())
+        {
+            let _ = with_route(|session| {
+                if let Some(action) = pending {
+                    session.apply_shell_action(action);
+                }
+                Ok(crate::android_surface::bind_from_session(session))
+            });
+        }
+        crate::android_surface::present_frame(vsync_id, callback_time, deadline, expected_present)
+    };
+    #[cfg(not(feature = "gpu"))]
+    let text = "host=neocompositor-surfaceview present_failed reason=gpu_disabled".to_string();
+    to_jstring(&mut env, text)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_tryPush(
+    _env: JNIEnv,
+    _class: JClass,
+    pointer: jint,
+    kind: jint,
+    x: jfloat,
+    y: jfloat,
+    time_nanos: jlong,
+) {
+    #[cfg(feature = "gpu")]
+    crate::android_surface::try_push(pointer, kind, x, y, time_nanos);
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_loseFocus(
+    _env: JNIEnv,
+    _class: JClass,
+    time_nanos: jlong,
+) {
+    #[cfg(feature = "gpu")]
+    crate::android_surface::lose_focus(time_nanos);
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_rebuildScene(
+    mut env: JNIEnv,
+    _class: JClass,
+) -> jstring {
+    to_jstring(&mut env, gpu_bind_line())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_isChatRouteVisible(
+    _env: JNIEnv,
+    _class: JClass,
+) -> jboolean {
+    #[cfg(feature = "gpu")]
+    {
+        return u8::from(crate::android_surface::chat_route_visible());
+    }
+    #[cfg(not(feature = "gpu"))]
+    0
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_scrollTelemetry(
+    mut env: JNIEnv,
+    _class: JClass,
+) -> jstring {
+    #[cfg(feature = "gpu")]
+    let text = crate::android_surface::telemetry();
+    #[cfg(not(feature = "gpu"))]
+    let text = "composite_only_frames=0 layout_rebuilds_on_scroll=0 paint_rebuilds_on_scroll=0"
+        .to_string();
+    to_jstring(&mut env, text)
 }

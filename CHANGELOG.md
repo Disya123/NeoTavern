@@ -1,7 +1,102 @@
 # Changelog
 
 ## Unreleased
+### Added
+
+- **Rust App Shell + Character Manager is the Android launcher.**
+  `PresentationChatActivity` is the home-screen icon. NeoCompositor
+  `SurfaceView` paints packed React tokens, fonts, Phosphor icons, App
+  Shell, and Character Manager (Cards / Edit / Advanced / Gallery, New /
+  Import, search / sort / list-grid, empty state and cards) through Product
+  Wire `characters.list` / `create` / `get` / `update` / `delete`. Unmigrated
+  rail destinations show a Rust `NotYetMigrated` screen. WebView is not a
+  route fallback. Density-aware hit testing drives rail, tabs, New, and
+  cards. Screenshot / overlay / 120 Hz capture on device is required before
+  visual parity is declared. Record:
+  [`docs/architecture/presentation-boundary.md`](docs/architecture/presentation-boundary.md).
+
+- **Android Rust presentation now consumes the React design system.**
+  Packed Outfit / JetBrains Mono, `--st-*` tokens, Phosphor regular SVGs,
+  and App Shell / Sidebar / Character Manager CSS modules live in
+  `crates/presentation-design-system`. The live SurfaceView route paints
+  Character Manager through Product Wire `characters.list` with that
+  stylesheet, not Dioxus defaults. React source stays the golden
+  reference. Screenshot parity and WebView runtime removal are **not**
+  declared. Record:
+  [`docs/architecture/presentation-boundary.md`](docs/architecture/presentation-boundary.md).
+
+- **Live Product Wire chat paints through NeoCompositor SurfaceView.**
+  `PresentationChatActivity` hosts a real `SurfaceView`; one Rust session is
+  live Product Wire → Dioxus VirtualDom → Blitz paint → presentation-session
+  → NeoCompositor → Vulkan. HiDPI (`DisplayMetrics.density`) maps CSS chrome
+  onto the physical SurfaceView so header / messages / composer are readable.
+  Scroll uses compositor-only ticks (no Dioxus or layout rebuild). Commit
+  `60a4d6a` stays `HOST_CANARY_PASS` (selector / Kernel / rollback). Milestone C
+  remains **STARTED** until physical 10k compositor scroll is proven. Record:
+  [`docs/rfc/milestone-c-canary.md`](docs/rfc/milestone-c-canary.md).
+
 ### Fixed
+
+- **Character Manager opaque surfaces match React canvas/panel tokens.** The
+  packer drops light `:root { color-scheme: light }`, composites translucent
+  `color-mix(..., transparent)` onto `#151311`, unwraps the 600px overlay
+  breakpoint, keeps `--shell-rail-current-width` at `60px` (not collapsed
+  `0`), and maps `position:fixed`/`sticky` to flex flow so header and tabs
+  use the panel column. The SurfaceView blit prefers a non-sRGB swapchain
+  so Vello colors are not gamma-encoded twice. NeoGlass stays off until
+  opaque parity is signed. Compact layout is rail + panel column (header /
+  toolbar / search / content / tabs); the chat `main` is not a sibling
+  flex competitor.
+
+- **Character Manager no longer paints a black SurfaceView when a live
+  avatar is present.** Product Wire `assets.content` still returns the
+  original (Hazel is 1024×1536 / ~2.2 MiB). The shell hydrates a 192px
+  display PNG. Packed CSS `mask-image` SVG data URIs are not fetched.
+  A live `<img>` in the Blitz→Vello 0.9 Vulkan tree cleared the framebuffer
+  (bind still reported paint commands); header/card keep the clipped
+  initial until a sampled atlas blit is proven. On this Android Vulkan
+  device Vello GPU compute left the content texture empty (`a=0`); bind
+  rasters with Vello `use_cpu` and copies into a sampled texture before
+  blit. Bind retries without images if raster fails. Record:
+  [`docs/architecture/presentation-boundary.md`](docs/architecture/presentation-boundary.md).
+
+- **Character Manager component geometry follows the React source.** Header
+  loads the Product Wire avatar into a clipped 44px box (fallback initial
+  stays inside that box), ellipsizes the title, and paints the header
+  divider as a real node because Blitz does not emit `::after`. The rail
+  centers 40px controls and keeps the separator after the menu toggle.
+  Cards tab padding/gap, segmented list/grid, and the right-aligned loaded
+  count come from `CharacterManagementPanel.module.css`. Character cards
+  use the React description formatter, 2-line clamp, pin, and grid
+  `auto minmax(0,1fr) auto`. Bottom tabs use the panel column with
+  `margin: 8px 16px max(32px, inset)`. Native chat composer/Send overlay
+  is removed from the view hierarchy off the chat route.
+
+- **Packed React tokens now flatten to CSS pixels for Blitz.** Stylo does not
+  apply `:root` custom properties from a UA stylesheet, so `var(--st-*)`
+  was invalid and Blitz `DEFAULT_CSS` (grey buttons, 0 radius) won. The pack
+  script inlines dark `tokens.css` values (`#e38a62`, `10px`, …), resolves
+  leftover `color-mix(#hex %)`, rewrites logical properties to physical
+  `padding-top` / `min-height`, and the producer removes Blitz `DEFAULT_CSS`
+  before applying the product sheet. Record:
+  [`docs/architecture/presentation-boundary.md`](docs/architecture/presentation-boundary.md).
+
+- **Phosphor icons paint as inline SVG fills, not CSS masks.** Blitz `svg`
+  + usvg cannot resolve `currentColor` / `mask-image` data URIs; RSX emits
+  `<svg><path fill="#…">` with packed regular paths.
+
+- **NeoCompositor reads Android WindowInsets as CSS pixels.** JNI
+  `setSafeArea` stashes insets until Surface attach, divides by density, bakes
+  `--nt-inset-*` / `--nt-safe-area-*` to `{n}px` (Blitz has no `env()`), and
+  the rail, Character Manager header, and bottom tab bar set `padding-top` /
+  `padding-bottom` / `margin-bottom` from `view.insets` (CSS `padding-block-*`
+  is ignored). Record:
+  [`docs/architecture/presentation-boundary.md`](docs/architecture/presentation-boundary.md).
+
+- **SurfaceView chat painted CSS pixels as physical pixels.** On a 3.0x
+  phone that showed as a tiny unstyled dump (`Hazel (8)` jammed in the
+  corner). Layout now uses `DisplayMetrics.density`; header, bubbles, and
+  composer have painted chrome.
 
 - **Generation diagnostics waiting count is deterministic.**
   `diagnostics.export` counts `waiting` as the derived lifecycle

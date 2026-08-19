@@ -13,21 +13,36 @@
 #[cfg(all(feature = "android-jni", target_os = "android"))]
 mod android_jni;
 mod assemble;
+mod data_uri;
 #[cfg(feature = "gpu")]
 mod gpu_run;
 mod sink;
+#[cfg(feature = "gpu")]
+mod tee;
 mod text_publish;
+#[cfg(feature = "gpu")]
+mod vello_sink;
 
-use blitz_dom::BaseDocument;
+use blitz_dom::{BaseDocument, StyleThreading};
 use blitz_paint::paint_scene;
 use blitz_traits::shell::{ColorScheme, Viewport};
 use dioxus_core::{Element, VirtualDom};
 use dioxus_core_macro::rsx;
 use dioxus_native_dom::{DioxusDocument, DocumentConfig};
+use neotavern_presentation_design_system::{
+    product_font_context, product_stylesheets, SafeAreaInsets,
+};
 use neotavern_presentation_m0::display_list::NeoDisplayList;
 use neotavern_presentation_m0::scene_d1a::{D1A_HEIGHT, D1A_WIDTH};
+use std::sync::Arc;
 
-pub use assemble::{assemble_from_stream, insert_moving_sample_before_last_glass};
+use crate::data_uri::DataUriNetProvider;
+
+pub use neotavern_presentation_design_system::SafeAreaInsets as ProductSafeAreaInsets;
+
+pub use assemble::{
+    assemble_from_stream, assemble_from_stream_at, insert_moving_sample_before_last_glass,
+};
 #[cfg(feature = "gpu")]
 pub use gpu_run::{run_dynamic_d2, run_dynamic_d2_with_capture, DynamicD2Report};
 pub use sink::{DrawKind, ProducerSink, StreamOp};
@@ -79,6 +94,8 @@ pub struct ProducerReport {
     pub diagnostic_dom_glass: Vec<u64>,
     /// Glass ids in Blitz paint-stream order.
     pub stream_glass: Vec<u64>,
+    /// `<img>` nodes that decoded to a sampleable raster (data: URI provider).
+    pub raster_images: u64,
 }
 
 pub struct ProducerOutput {
@@ -91,13 +108,31 @@ pub fn produce_app(app: fn() -> Element) -> Result<ProducerOutput, String> {
     produce_vdom(VirtualDom::new(app))
 }
 
+pub fn produce_app_at(
+    app: fn() -> Element,
+    width: u32,
+    height: u32,
+) -> Result<ProducerOutput, String> {
+    produce_vdom_at(VirtualDom::new(app), width, height)
+}
+
 /// Layout and paint an already-built Product Wire VirtualDom through Blitz.
 /// Callers must not assemble a `NeoDisplayList` by hand.
 pub fn produce_vdom(vdom: VirtualDom) -> Result<ProducerOutput, String> {
+    produce_vdom_at(vdom, D2_WIDTH, D2_HEIGHT)
+}
+
+pub fn produce_vdom_at(
+    vdom: VirtualDom,
+    width: u32,
+    height: u32,
+) -> Result<ProducerOutput, String> {
+    let width = width.max(1);
+    let height = height.max(1);
     let mut doc = DioxusDocument::new(
         vdom,
         DocumentConfig {
-            viewport: Some(Viewport::new(D2_WIDTH, D2_HEIGHT, 1.0, ColorScheme::Light)),
+            viewport: Some(Viewport::new(width, height, 1.0, ColorScheme::Light)),
             ..Default::default()
         },
     );
@@ -110,8 +145,172 @@ pub fn produce_vdom(vdom: VirtualDom) -> Result<ProducerOutput, String> {
     let mut sink = ProducerSink::default();
     {
         let mut inner = doc.inner.borrow_mut();
-        paint_scene(&mut sink, &mut inner, 1.0, D2_WIDTH, D2_HEIGHT, 0, 0);
+        paint_scene(&mut sink, &mut inner, 1.0, width, height, 0, 0);
     }
+    finish_producer(sink, diagnostic_dom_glass, 0, width, height)
+}
+
+/// Same Blitz traversal, plus a Vello scene for the live GPU compositor.
+#[cfg(feature = "gpu")]
+pub fn produce_gpu_app_at(
+    app: fn() -> Element,
+    width: u32,
+    height: u32,
+) -> Result<(ProducerOutput, vello::Scene), String> {
+    produce_gpu_app_scaled(app, width, height, 1.0)
+}
+
+/// Same Blitz traversal as [`produce_gpu_app_at`], with a HiDPI scale so CSS
+/// pixels map onto the physical SurfaceView.
+#[cfg(feature = "gpu")]
+pub fn produce_gpu_app_scaled(
+    app: fn() -> Element,
+    width: u32,
+    height: u32,
+    scale: f32,
+) -> Result<(ProducerOutput, vello::Scene), String> {
+    let width = width.max(1);
+    let height = height.max(1);
+    let scale = scale.max(1.0);
+    let mut doc = DioxusDocument::new(
+        VirtualDom::new(app),
+        DocumentConfig {
+            viewport: Some(Viewport::new(width, height, scale, ColorScheme::Dark)),
+            ..Default::default()
+        },
+    );
+    doc.initial_build();
+    {
+        let mut inner = doc.inner.borrow_mut();
+        inner.resolve(0.0);
+    }
+    let diagnostic_dom_glass = diagnostic_glass_dom_order(&doc.inner.borrow());
+    let mut sink = ProducerSink::default();
+    let mut vello_sink = vello_sink::VelloSink::new();
+    {
+        let mut inner = doc.inner.borrow_mut();
+        let mut tee = tee::TeeSink {
+            a: &mut sink,
+            b: &mut vello_sink,
+        };
+        paint_scene(&mut tee, &mut inner, f64::from(scale), width, height, 0, 0);
+    }
+    let out = finish_producer(sink, diagnostic_dom_glass, 0, width, height)?;
+    Ok((out, vello_sink.scene))
+}
+
+fn product_document_config(
+    width: u32,
+    height: u32,
+    scale: f32,
+    _insets: SafeAreaInsets,
+) -> DocumentConfig {
+    DocumentConfig {
+        viewport: Some(Viewport::new(width, height, scale, ColorScheme::Dark)),
+        // Empty Some skips Blitz DEFAULT_CSS in BaseDocument. DioxusDocument
+        // still injects DEFAULT_CSS; beat_blitz_default_css removes it.
+        ua_stylesheets: Some(Vec::new()),
+        font_ctx: Some(product_font_context()),
+        style_threading: StyleThreading::Sequential,
+        net_provider: Some(Arc::new(DataUriNetProvider)),
+        ..Default::default()
+    }
+}
+
+fn beat_blitz_default_css(doc: &DioxusDocument, insets: SafeAreaInsets) {
+    let mut inner = doc.inner.borrow_mut();
+    inner.remove_user_agent_stylesheet(blitz_dom::DEFAULT_CSS);
+    for sheet in product_stylesheets(insets) {
+        inner.add_user_agent_stylesheet(&sheet);
+    }
+}
+
+/// Product UI path: React packed fonts/CSS, no system fonts, Dark scheme.
+pub fn produce_product_app_at(
+    app: fn() -> Element,
+    width: u32,
+    height: u32,
+    scale: f32,
+    insets: SafeAreaInsets,
+) -> Result<ProducerOutput, String> {
+    produce_product_vdom_at(VirtualDom::new(app), width, height, scale, insets)
+}
+
+pub fn produce_product_vdom_at(
+    vdom: VirtualDom,
+    width: u32,
+    height: u32,
+    scale: f32,
+    insets: SafeAreaInsets,
+) -> Result<ProducerOutput, String> {
+    let width = width.max(1);
+    let height = height.max(1);
+    let scale = scale.max(1.0);
+    let mut doc = DioxusDocument::new(vdom, product_document_config(width, height, scale, insets));
+    beat_blitz_default_css(&doc, insets);
+    doc.initial_build();
+    {
+        let mut inner = doc.inner.borrow_mut();
+        inner.handle_messages();
+        inner.resolve(0.0);
+    }
+    let diagnostic_dom_glass = diagnostic_glass_dom_order(&doc.inner.borrow());
+    let raster_images = count_raster_images(&doc.inner.borrow());
+    let mut sink = ProducerSink::default();
+    {
+        let mut inner = doc.inner.borrow_mut();
+        paint_scene(&mut sink, &mut inner, f64::from(scale), width, height, 0, 0);
+    }
+    finish_producer(sink, diagnostic_dom_glass, raster_images, width, height)
+}
+
+/// Same as [`produce_product_app_at`] plus a Vello scene for NeoCompositor.
+#[cfg(feature = "gpu")]
+pub fn produce_product_gpu_app_scaled(
+    app: fn() -> Element,
+    width: u32,
+    height: u32,
+    scale: f32,
+    insets: SafeAreaInsets,
+) -> Result<(ProducerOutput, vello::Scene), String> {
+    let width = width.max(1);
+    let height = height.max(1);
+    let scale = scale.max(1.0);
+    let mut doc = DioxusDocument::new(
+        VirtualDom::new(app),
+        product_document_config(width, height, scale, insets),
+    );
+    beat_blitz_default_css(&doc, insets);
+    doc.initial_build();
+    {
+        let mut inner = doc.inner.borrow_mut();
+        inner.handle_messages();
+        inner.resolve(0.0);
+    }
+    let diagnostic_dom_glass = diagnostic_glass_dom_order(&doc.inner.borrow());
+    let raster_images = count_raster_images(&doc.inner.borrow());
+    let mut sink = ProducerSink::default();
+    let mut vello_sink = vello_sink::VelloSink::new();
+    vello_sink.fill_canvas(width, height);
+    {
+        let mut inner = doc.inner.borrow_mut();
+        let mut tee = tee::TeeSink {
+            a: &mut sink,
+            b: &mut vello_sink,
+        };
+        paint_scene(&mut tee, &mut inner, f64::from(scale), width, height, 0, 0);
+    }
+    let out = finish_producer(sink, diagnostic_dom_glass, raster_images, width, height)?;
+    Ok((out, vello_sink.scene))
+}
+
+fn finish_producer(
+    sink: ProducerSink,
+    diagnostic_dom_glass: Vec<u64>,
+    raster_images: u64,
+    width: u32,
+    height: u32,
+) -> Result<ProducerOutput, String> {
     let stream_glass = sink.glass_ids();
     let paint_commands = sink
         .ops
@@ -123,21 +322,21 @@ pub fn produce_vdom(vdom: VirtualDom) -> Result<ProducerOutput, String> {
         .iter()
         .filter(|op| matches!(op, StreamOp::PushLayer { alpha, clip } if !clip && *alpha < 1.0))
         .count() as u64;
-    let list = assemble_from_stream(&sink.ops)?;
-    let report = ProducerReport {
-        vdom_rebuilt: true,
-        layout_resolved: true,
-        paint_commands,
-        glass_hooks: stream_glass.len() as u64,
-        effect_scopes,
-        source: D2_PRODUCER_SOURCE,
-        pin_notes: D2_PIN_NOTES,
-        diagnostic_dom_glass,
-        stream_glass: stream_glass.clone(),
-    };
+    let list = assemble_from_stream_at(&sink.ops, width, height)?;
     Ok(ProducerOutput {
         list,
-        report,
+        report: ProducerReport {
+            vdom_rebuilt: true,
+            layout_resolved: true,
+            paint_commands,
+            glass_hooks: stream_glass.len() as u64,
+            effect_scopes,
+            source: D2_PRODUCER_SOURCE,
+            pin_notes: D2_PIN_NOTES,
+            diagnostic_dom_glass,
+            stream_glass: stream_glass.clone(),
+            raster_images,
+        },
         stream: sink.ops,
     })
 }
@@ -154,6 +353,25 @@ pub fn produce_dynamic_list() -> Result<(NeoDisplayList, ProducerReport), String
     let (list, report) = produce_static_d1a_list()?;
     let list = insert_moving_sample_before_last_glass(list)?;
     Ok((list, report))
+}
+
+#[cfg(test)]
+fn phosphor_icon_app() -> Element {
+    let path =
+        neotavern_presentation_design_system::phosphor_path("UsersThree").expect("UsersThree");
+    rsx! {
+        svg {
+            xmlns: "http://www.w3.org/2000/svg",
+            view_box: "0 0 256 256",
+            width: "48",
+            height: "48",
+            fill: "#998f87",
+            path {
+                d: "{path}",
+                fill: "#998f87",
+            }
+        }
+    }
 }
 
 /// D1a-shaped first-party scene. Glass B sits inside one bounded opacity/clip
@@ -250,6 +468,28 @@ fn transform_clip_glass() -> Element {
                 }
             }
         }
+    }
+}
+
+fn count_raster_images(doc: &BaseDocument) -> u64 {
+    let mut count = 0;
+    walk_raster_images(doc, doc.root_element().id, &mut count);
+    count
+}
+
+fn walk_raster_images(doc: &BaseDocument, node_id: usize, count: &mut u64) {
+    let Some(node) = doc.get_node(node_id) else {
+        return;
+    };
+    if node
+        .element_data()
+        .and_then(|data| data.raster_image_data())
+        .is_some()
+    {
+        *count += 1;
+    }
+    for child_id in node.children.clone() {
+        walk_raster_images(doc, child_id, count);
     }
 }
 
@@ -536,5 +776,28 @@ mod tests {
         assert_eq!(D2_PATCH_LINES, 294);
         assert_eq!(D2_REBASE_ANYRENDER_0111, "PASS");
         assert_eq!(D2_BLITZ_NEWER, "NOT_AVAILABLE");
+    }
+
+    #[test]
+    fn inline_phosphor_svg_paints_a_fill() {
+        let out = produce_product_app_at(phosphor_icon_app, 64, 64, 1.0, SafeAreaInsets::default())
+            .expect("icon");
+        let fills = out
+            .stream
+            .iter()
+            .filter(|op| {
+                matches!(
+                    op,
+                    StreamOp::Draw {
+                        kind: DrawKind::Fill
+                    }
+                )
+            })
+            .count();
+        assert!(
+            fills >= 1,
+            "usvg/blitz-paint must fill the Phosphor path, stream={:?}",
+            out.stream
+        );
     }
 }

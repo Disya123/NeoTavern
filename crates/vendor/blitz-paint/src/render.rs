@@ -111,9 +111,10 @@ impl<'dom, 'a> BlitzDomPainter<'dom, 'a> {
     /// This assumes styles are resolved and layout is complete.
     /// Make sure you do those before trying to render
     pub fn paint_scene(&self, scene: &mut impl PaintScene) {
-        if self.dom.has_pending_critical_resources() {
-            return;
-        }
+        // Product CSS is injected as a UA sheet. A pending head <link> (or a
+        // Dummy/DataUri net fetch that never completes) must not skip the
+        // entire frame — that leaves NeoCompositor presenting a black
+        // SurfaceView. Images are not critical; paint whatever is laid out.
 
         // Simply render the document (the root element (note that this is not the same as the root node)))
         // scene.reset();

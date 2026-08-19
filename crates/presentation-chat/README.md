@@ -1,12 +1,15 @@
 # Product chat route (`neotavern-presentation-chat`)
 
-Live Product Wire chat workspace for the flagged Dioxus Android host.
-`PresentationChatActivity` hosts **this** route for the guarded
-`MainActivity` canary and the debug harness. Same Kernel store as WebView
-(`KernelHost` + `filesDir/neotavern`). Isolated 10k is a harness profile
-only. This crate is **not** an unguarded cutover and **not** a second chat
-implementation. Cutover is **STARTED / CANARY**; the physical canary batch
-is **NOT_RUN**.
+Live Product Wire chat workspace for the Android Rust host.
+`PresentationChatActivity` is the home-screen launcher for this route.
+The visible renderer is NeoCompositor `SurfaceView` (live Product Wire →
+Dioxus → Blitz → presentation-session → Vulkan). Same Kernel store as the
+WebView harness (`KernelHost` + `filesDir/neotavern`). Isolated 10k is a
+harness profile only. Unmigrated rail panels render `NotYetMigrated`.
+WebView is **not** a fallback. This crate is **not** an unguarded cutover
+and **not** a second chat implementation. Cutover is **STARTED / CANARY**;
+host canary `60a4d6a` is `HOST_CANARY_PASS`. Physical compositor scroll is
+not yet proven.
 
 ## What this crate is
 
@@ -26,9 +29,12 @@ is **NOT_RUN**.
   `[dev-dependencies]` integration test.
 - Host tests use in-memory [`FakeWire`](src/fake_wire.rs). Opaque list
   cursors are never parsed by the session.
-- Android JNI (feature `android-jni`) calls a Kotlin host that already
+- Android JNI (feature `android-jni` + `gpu`) calls a Kotlin host that already
   holds `KernelSession` + `EnvelopeBuilder`. Kernel stays in
-  `libneotavern_android_jni.so`.
+  `libneotavern_android_jni.so`. GPU present uses the same `.so` and a
+  `SurfaceView` lifecycle (`attachSurface` / `presentFrame` / `tryPush`).
+  `attachSurface` takes physical width/height plus display density so CSS
+  chrome maps onto the SurfaceView.
 
 ## What this crate is not
 

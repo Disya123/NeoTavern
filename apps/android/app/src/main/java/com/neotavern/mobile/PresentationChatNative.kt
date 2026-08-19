@@ -50,4 +50,46 @@ object PresentationChatNative {
 
     @JvmStatic
     external fun cancelGeneration(): String
+
+    @JvmStatic
+    external fun attachSurface(
+        surface: android.view.Surface,
+        width: Int,
+        height: Int,
+        density: Float,
+    ): String
+
+    @JvmStatic
+    external fun setSafeArea(
+        top: Float,
+        right: Float,
+        bottom: Float,
+        left: Float,
+    ): String
+
+    @JvmStatic
+    external fun detachSurface(): String
+
+    @JvmStatic
+    external fun presentFrame(
+        vsyncId: Long,
+        callbackTime: Long,
+        deadline: Long,
+        expectedPresent: Long,
+    ): String
+
+    @JvmStatic
+    external fun tryPush(pointer: Int, kind: Int, x: Float, y: Float, timeNanos: Long)
+
+    @JvmStatic
+    external fun loseFocus(timeNanos: Long)
+
+    @JvmStatic
+    external fun rebuildScene(): String
+
+    @JvmStatic
+    external fun isChatRouteVisible(): Boolean
+
+    @JvmStatic
+    external fun scrollTelemetry(): String
 }

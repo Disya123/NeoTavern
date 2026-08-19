@@ -52,12 +52,12 @@ cargo ndk \
   -o "$OUT_DIR" \
   build --release -p neotavern-presentation-perf-probe --features "$FEATURES"
 
-echo "Building neotavern-presentation-chat (android-jni) -> $OUT_DIR"
+echo "Building neotavern-presentation-chat (android-jni,gpu) -> $OUT_DIR"
 cargo ndk \
   -t arm64-v8a \
   -t x86_64 \
   -o "$OUT_DIR" \
-  build --release -p neotavern-presentation-chat --features android-jni
+  build --release -p neotavern-presentation-chat --features android-jni,gpu
 
 for abi in arm64-v8a x86_64; do
   mkdir -p "$MAIN_JNI/$abi"

@@ -1,8 +1,9 @@
+use dioxus_core::VirtualDom;
 use neotavern_presentation_dioxus_shell::{
-    assert_registered_command, chat_route_line, dioxus_shell_from_flag, expected_projection,
-    flagged_chat_route, load_canonical_fixture, mixed_height_catalog, mount_product_chat,
-    mount_virtual_dom, product_chat_from_fixture, project_canonical, DioxusShellHost, ShellError,
-    PRODUCT_PATH_ITEMS,
+    assert_registered_command, chat_route_line, chrome_metrics, dioxus_shell_from_flag,
+    expected_projection, flagged_chat_route, load_canonical_fixture, mixed_height_catalog,
+    mount_product_chat, mount_virtual_dom, product_chat_from_fixture, project_canonical,
+    DioxusShellHost, ShellError, PRODUCT_PATH_ITEMS,
 };
 use std::fs;
 use std::path::PathBuf;
@@ -73,6 +74,46 @@ fn product_path_catalog_is_ten_thousand_wire_messages() {
 }
 
 #[test]
+fn product_shell_virtualdom_contains_character_manager() {
+    use neotavern_presentation_dioxus_shell::{
+        install_product_shell, product_shell_app, CharacterCardView, CharacterDraftView,
+        ProductShellView,
+    };
+    install_product_shell(ProductShellView::default());
+    let mut vdom = VirtualDom::new(product_shell_app);
+    let mutations = vdom.rebuild_to_vec();
+    assert!(
+        mutations.edits.len() > 0,
+        "Character Manager shell must emit mutations"
+    );
+
+    let mut view = ProductShellView::default();
+    view.panel = "home".into();
+    install_product_shell(view);
+    let mut vdom = VirtualDom::new(product_shell_app);
+    assert!(vdom.rebuild_to_vec().edits.len() > 0);
+
+    let mut view = ProductShellView::default();
+    view.characters = vec![CharacterCardView {
+        id: "4f2f0a1e-9b3c-4d5e-8f6a-7b8c9d0e1f2a".into(),
+        name: "Hazel".into(),
+        description: "wry".into(),
+        tags: vec!["wry".into()],
+        avatar_data_uri: None,
+    }];
+    view.selected_character_id = Some("4f2f0a1e-9b3c-4d5e-8f6a-7b8c9d0e1f2a".into());
+    view.selected_draft = Some(CharacterDraftView {
+        id: "4f2f0a1e-9b3c-4d5e-8f6a-7b8c9d0e1f2a".into(),
+        name: "Hazel".into(),
+        ..CharacterDraftView::default()
+    });
+    view.tab = "edit".into();
+    install_product_shell(view);
+    let mut vdom = VirtualDom::new(product_shell_app);
+    assert!(vdom.rebuild_to_vec().edits.len() > 0);
+}
+
+#[test]
 fn flagged_chat_route_requires_dioxus_shell_flag() {
     let err = flagged_chat_route(None).unwrap_err();
     assert!(matches!(err, ShellError::FlagDisabled));
@@ -99,4 +140,30 @@ fn flagged_chat_route_mounts_canonical_workspace() {
     assert!(line.contains("main_activity=false"));
     assert!(line.contains("production_jni=false"));
     assert!(line.contains("production_cutover=false"));
+}
+
+#[test]
+fn chrome_metrics_phone_uses_readable_bands() {
+    let (width, header, viewport, composer) = chrome_metrics(407, 904);
+    assert_eq!(width, 407);
+    assert_eq!(header, 56);
+    assert_eq!(composer, 72);
+    assert_eq!(viewport, 904 - 56 - 72);
+}
+
+#[test]
+fn character_card_description_matches_react_formatter() {
+    use neotavern_presentation_dioxus_shell::character_card_description;
+    assert_eq!(
+        character_card_description(""),
+        "No character description yet."
+    );
+    assert_eq!(character_card_description("wry"), "wry");
+}
+
+#[test]
+fn chrome_metrics_probe_stays_compact() {
+    let (_, header, _, composer) = chrome_metrics(320, 200);
+    assert_eq!(header, 36);
+    assert_eq!(composer, 40);
 }

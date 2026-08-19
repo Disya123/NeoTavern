@@ -4,6 +4,9 @@
 
 ```text
 core chat journey batch = PASS
+host canary = HOST_CANARY_PASS   # 60a4d6a
+NeoCompositor product SurfaceView = CONNECTED
+compositor-driven smooth scroll = PENDING_PHYSICAL
 Milestone C = STARTED
 cutover = STARTED / CANARY
 canary_batch = PASS
@@ -85,11 +88,20 @@ Look for `presentation_renderer=... rust_host_allowed=...` in logcat
 (`NeoTavern`). MIUI may hide the tag; dumpsys activity is the fallback.
 
 Physical stamp `2026-08-19T11-20-00-000Z` on Xiaomi `8f5c2b7c` after
-`cef4f8f` (debug opt-in persist): all eight canary cases **PASS**. The
-visible Android host is `PresentationChatActivity` (live Product Wire
-snapshot + Gboard composer). It is **not** the compositor `SurfaceView`
-paint path. TalkBack was enabled only for accessibility fallback, then
-restored **off**. Device left on Dioxus Hazel after restore.
+`cef4f8f` (debug opt-in persist): all eight canary cases **PASS**. That
+stamp is **`HOST_CANARY_PASS`** (source commit `60a4d6a` keeps the same
+selector / Kernel / rollback proof). It does **not** prove GPU-renderer
+cutover.
+
+The live canary host now creates a NeoCompositor `SurfaceView`. Runtime
+logs `host=neocompositor-surfaceview backend=Vulkan product_wire=live
+producer=dioxus+blitz devices=1 density=… readbacks=0 xdev=0`. Paint uses
+`DisplayMetrics.density` so CSS chrome is not 1:1 with the SurfaceView
+pixel size; a density-1 dump (tiny top-left glyphs, no header/composer
+fill) is a HiDPI miss, not `NOT_CONNECTED`. Physical compositor scroll
+(`composite_only_frames > 0`, `layout_rebuilds_on_scroll = 0`) is
+**PENDING_PHYSICAL**. TalkBack was enabled only for accessibility
+fallback, then restored **off**.
 
 | Case | Result |
 | ---- | ------ |

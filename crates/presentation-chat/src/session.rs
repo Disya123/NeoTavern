@@ -1,24 +1,30 @@
 use contracts_generated::generated::{
-    decode_chat_dto, decode_message_draft_dto, decode_message_dto, decode_paged_chats,
-    decode_paged_messages, ChatDto, ErrorDto, GenerationEvent, MessageDraftDto, MessageDto,
-    MessageRole, PagedChats, PagedMessages, RequestCancelGeneration, RequestCreateMessage,
-    RequestGetChat, RequestListChats, RequestListMessages, RequestMessageDraftCommit,
-    RequestMessageDraftDiscard, RequestMessageDraftGet, RequestMessageDraftSave,
-    RequestRetryGeneration, RequestStartGeneration,
+    decode_chat_dto, decode_character_dto, decode_message_draft_dto, decode_message_dto,
+    decode_paged_characters, decode_paged_chats, decode_paged_messages, decode_result_assets_content,
+    CharacterDto, ChatDto, ErrorDto, GenerationEvent, MessageDraftDto, MessageDto, MessageRole,
+    PagedCharacters, PagedChats, PagedMessages, RequestAssetsContent, RequestCancelGeneration,
+    RequestCreateCharacter, RequestCreateMessage, RequestDeleteCharacter, RequestGetChat,
+    RequestGetCharacter, RequestListCharacters, RequestListChats, RequestListMessages,
+    RequestMessageDraftCommit, RequestMessageDraftDiscard, RequestMessageDraftGet,
+    RequestMessageDraftSave, RequestRetryGeneration, RequestStartGeneration, RequestUpdateCharacter,
+    ResultAssetsContent,
 };
 use neotavern_chat_viewport::{
     GeometrySnapshot, HeightIndex, HeightKind, LogicalItemId, PredictorBudgets, PresentDecision,
     PresentOutcome, TileCache, ViewportSession,
 };
 use neotavern_presentation_dioxus_shell::{
-    assert_registered_command, mount_product_chat, ProductChatView, ProductChrome, RowKind,
+    assert_registered_command, chrome_metrics, mount_product_chat, CharacterCardView,
+    CharacterDraftView, ProductChatView, ProductChrome, ProductShellView, RowKind, SafeAreaInsets,
     VisibleRow, PRODUCT_PATH_VISIBLE,
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::{json, Value};
+use std::collections::HashMap;
 
 use crate::error::ChatRouteError;
+use crate::shell_hit::{next_sort, ShellAction};
 use crate::wire::{ProductWire, StreamFrame, PAGE_LIMIT};
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -40,6 +46,30 @@ pub struct ChatRouteState {
     pub last_durable_message_id: Option<String>,
     pub send_accepted: bool,
     pub scene_epoch: u64,
+    pub characters: Vec<CharacterDto>,
+    pub selected_character_id: Option<String>,
+    pub character_search: String,
+    pub character_sort: String,
+    pub character_view: String,
+    pub character_tab: String,
+    pub sidebar_panel: String,
+    pub sidebar_open: bool,
+    pub rail_expanded: bool,
+    pub insets: SafeAreaInsets,
+    /// Full draft for the selected character (Edit / Advanced / Gallery tabs).
+    pub character_draft: Option<CharacterDraftView>,
+    /// Cached `assets.content` data URIs keyed by avatar asset id.
+    pub avatar_data_uris: HashMap<String, String>,
+    /// Cached avatar data URI for the selected character (from `assets.content`).
+    pub avatar_data_uri: Option<String>,
+    /// Matches React `useUiStore.pinnedCharacterId` (select also pins).
+    pub pinned_character_id: Option<String>,
+    pub create_dialog_open: bool,
+    pub delete_dialog_open: bool,
+    pub create_name: String,
+    pub create_description: String,
+    pub create_first_message: String,
+    pub status_message: Option<String>,
 }
 
 pub struct ChatSession<W: ProductWire> {
@@ -49,6 +79,9 @@ pub struct ChatSession<W: ProductWire> {
     issued: Vec<String>,
     send_in_flight: bool,
     last_acked_epoch: u64,
+    viewport_width: u32,
+    viewport_height: u32,
+    hidpi_scale: f32,
 }
 
 impl<W: ProductWire> ChatSession<W> {
@@ -60,10 +93,19 @@ impl<W: ProductWire> ChatSession<W> {
             issued: Vec::new(),
             send_in_flight: false,
             last_acked_epoch: 0,
+            viewport_width: 320,
+            viewport_height: 200,
+            hidpi_scale: 1.0,
         };
         if let Err(err) = session.load_workspace() {
             session.record_error(err);
         }
+        session.state.sidebar_panel = "characters".into();
+        session.state.sidebar_open = true;
+        session.state.rail_expanded = true;
+        session.state.character_sort = "name".into();
+        session.state.character_view = "list".into();
+        session.state.character_tab = "cards".into();
         Ok(session)
     }
 
@@ -117,6 +159,48 @@ impl<W: ProductWire> ChatSession<W> {
 
     pub fn set_send_in_flight(&mut self, in_flight: bool) {
         self.send_in_flight = in_flight;
+    }
+
+    pub fn set_surface_size(&mut self, width: u32, height: u32, scale: f32) {
+        let scale = scale.max(1.0);
+        self.hidpi_scale = scale;
+        self.viewport_width = ((width as f32) / scale).round().max(1.0) as u32;
+        self.viewport_height = ((height as f32) / scale).round().max(1.0) as u32;
+    }
+
+    pub fn set_safe_area_physical(&mut self, top: f32, right: f32, bottom: f32, left: f32) {
+        let scale = self.hidpi_scale.max(1.0);
+        self.state.insets = SafeAreaInsets {
+            top: top / scale,
+            right: right / scale,
+            bottom: bottom / scale,
+            left: left / scale,
+        };
+    }
+
+    pub fn insets(&self) -> SafeAreaInsets {
+        self.state.insets
+    }
+
+    pub fn hidpi_scale(&self) -> f32 {
+        self.hidpi_scale.max(1.0)
+    }
+
+    pub fn surface_size(&self) -> (u32, u32) {
+        (self.viewport_width, self.viewport_height)
+    }
+
+    pub fn compositor_height_index(&self) -> HeightIndex {
+        let mut index = HeightIndex::new();
+        let n = self
+            .kernel_message_count()
+            .max(self.state.messages.len())
+            .max(1);
+        let row_h = 56.0 * f64::from(self.hidpi_scale());
+        for i in 0..n {
+            let _ = index.push(LogicalItemId(i as u64 + 1), row_h, HeightKind::Estimated);
+        }
+        index
     }
 
     pub fn state(&self) -> &ChatRouteState {
@@ -434,6 +518,89 @@ impl<W: ProductWire> ChatSession<W> {
             composer_text: self.state.composer_text.clone(),
             error_code: self.state.last_error.as_ref().map(|err| err.code.clone()),
             streaming: !self.state.streaming_text.is_empty() || self.state.stream_handle.is_some(),
+            viewport_width: self.viewport_width,
+            viewport_height: self.viewport_height,
+        }
+    }
+
+    pub fn shell_view(&self) -> ProductShellView {
+        let mut characters: Vec<CharacterCardView> = self
+            .state
+            .characters
+            .iter()
+            .filter(|row| {
+                let q = self.state.character_search.trim().to_lowercase();
+                if q.is_empty() {
+                    return true;
+                }
+                row.name.to_lowercase().contains(&q)
+                    || row
+                        .description
+                        .as_deref()
+                        .unwrap_or("")
+                        .to_lowercase()
+                        .contains(&q)
+                    || row.tags.iter().any(|tag| tag.to_lowercase().contains(&q))
+            })
+            .map(|row| CharacterCardView {
+                id: row.id.clone(),
+                name: row.name.clone(),
+                description: row.description.clone().unwrap_or_default(),
+                tags: row.tags.clone(),
+                avatar_data_uri: row
+                    .avatar_asset_id
+                    .as_ref()
+                    .and_then(|id| self.state.avatar_data_uris.get(id).cloned()),
+            })
+            .collect();
+        match self.state.character_sort.as_str() {
+            "name-desc" => {
+                characters.sort_by(|a, b| b.name.to_lowercase().cmp(&a.name.to_lowercase()))
+            }
+            "newest" | "oldest" => {}
+            _ => characters.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase())),
+        }
+        if self.state.character_sort == "oldest" {
+            characters.reverse();
+        }
+        let selected = self
+            .state
+            .selected_character_id
+            .clone()
+            .or_else(|| characters.first().map(|row| row.id.clone()));
+        let selected_draft = self.state.character_draft.clone();
+        ProductShellView {
+            chat: self.view(),
+            characters,
+            selected_character_id: selected.clone(),
+            selected_draft,
+            pinned_character_id: self
+                .state
+                .pinned_character_id
+                .clone()
+                .or_else(|| selected.clone()),
+            search: self.state.character_search.clone(),
+            sort: self.state.character_sort.clone(),
+            view: self.state.character_view.clone(),
+            tab: self.state.character_tab.clone(),
+            panel: self.state.sidebar_panel.clone(),
+            sidebar_open: self.state.sidebar_open,
+            rail_expanded: self.state.rail_expanded,
+            density: "comfortable".into(),
+            font_scale: "medium".into(),
+            insets: self.state.insets,
+            editor_mode: "view".into(),
+            create_dialog_open: self.state.create_dialog_open,
+            delete_dialog_open: self.state.delete_dialog_open,
+            create_name: self.state.create_name.clone(),
+            create_description: self.state.create_description.clone(),
+            create_first_message: self.state.create_first_message.clone(),
+            status_message: self.state.status_message.clone(),
+            error_message: self.state.last_error.as_ref().map(|err| err.code.clone()),
+            gallery_columns: 3,
+            gallery_sort: "oldest".into(),
+            expanded_greeting: None,
+            tag_input: String::new(),
         }
     }
 
@@ -446,7 +613,8 @@ impl<W: ProductWire> ChatSession<W> {
     }
 
     fn visible_window(&self) -> (Vec<VisibleRow>, PresentOutcome) {
-        virtualized_window(&self.state.messages)
+        let (_, _, viewport_h, _) = chrome_metrics(self.viewport_width, self.viewport_height);
+        virtualized_window(&self.state.messages, f64::from(viewport_h))
     }
 
     pub fn mount_vdom(&self) -> usize {
@@ -508,6 +676,12 @@ impl<W: ProductWire> ChatSession<W> {
     }
 
     fn load_workspace(&mut self) -> Result<(), ChatRouteError> {
+        let chat_result = self.load_open_chat();
+        self.load_characters();
+        chat_result
+    }
+
+    fn load_open_chat(&mut self) -> Result<(), ChatRouteError> {
         let chat_id = match self.chat_id.clone() {
             Some(id) => id,
             None => {
@@ -539,6 +713,340 @@ impl<W: ProductWire> ChatSession<W> {
         let page = self.list_messages(&chat_id, None)?;
         self.absorb_latest_page(page);
         Ok(())
+    }
+
+    fn load_characters(&mut self) {
+        match self.call_decode(
+            "characters.list",
+            &RequestListCharacters {
+                cursor: None,
+                limit: Some(PAGE_LIMIT),
+            },
+            decode_paged_characters,
+        ) {
+            Ok(PagedCharacters { items, .. }) => {
+                if self.state.selected_character_id.is_none() {
+                    self.state.selected_character_id = items.first().map(|row| row.id.clone());
+                    self.load_character_draft();
+                }
+                if self.state.pinned_character_id.is_none() {
+                    self.state.pinned_character_id = self.state.selected_character_id.clone();
+                }
+                self.state.characters = items;
+                self.hydrate_character_avatars();
+            }
+            Err(err) => self.record_error(err),
+        }
+    }
+
+    /// Reload the character list from the Kernel and refresh the draft.
+    pub fn refresh_characters(&mut self) {
+        self.load_characters();
+        self.load_character_draft();
+    }
+
+    /// Select a character by id and load its draft + avatar.
+    pub fn select_character(&mut self, id: &str) {
+        if self.state.selected_character_id.as_deref() == Some(id) {
+            return;
+        }
+        self.state.selected_character_id = Some(id.to_string());
+        self.state.pinned_character_id = Some(id.to_string());
+        self.load_character_draft();
+        self.bump_scene();
+    }
+
+    pub fn set_character_search(&mut self, query: &str) {
+        self.state.character_search = query.to_string();
+        self.bump_scene();
+    }
+
+    pub fn set_character_sort(&mut self, sort: &str) {
+        self.state.character_sort = sort.to_string();
+        self.bump_scene();
+    }
+
+    pub fn set_character_view(&mut self, view: &str) {
+        self.state.character_view = view.to_string();
+        self.bump_scene();
+    }
+
+    pub fn set_character_tab(&mut self, tab: &str) {
+        self.state.character_tab = tab.to_string();
+        self.bump_scene();
+    }
+
+    pub fn set_panel(&mut self, panel: &str) {
+        self.state.sidebar_panel = panel.to_string();
+        self.state.sidebar_open = true;
+        self.bump_scene();
+    }
+
+    pub fn toggle_sidebar(&mut self) {
+        self.state.sidebar_open = !self.state.sidebar_open;
+        self.bump_scene();
+    }
+
+    pub fn toggle_rail(&mut self) {
+        self.state.rail_expanded = !self.state.rail_expanded;
+        self.bump_scene();
+    }
+
+    pub fn open_create_dialog(&mut self) {
+        self.state.create_dialog_open = true;
+        if self.state.create_name.trim().is_empty() {
+            self.state.create_name = "New character".into();
+        }
+        self.state.create_description.clear();
+        self.state.create_first_message.clear();
+        self.bump_scene();
+    }
+
+    pub fn close_create_dialog(&mut self) {
+        self.state.create_dialog_open = false;
+        self.bump_scene();
+    }
+
+    pub fn set_create_name(&mut self, value: &str) {
+        self.state.create_name = value.to_string();
+        self.bump_scene();
+    }
+
+    pub fn set_create_description(&mut self, value: &str) {
+        self.state.create_description = value.to_string();
+        self.bump_scene();
+    }
+
+    pub fn set_create_first_message(&mut self, value: &str) {
+        self.state.create_first_message = value.to_string();
+        self.bump_scene();
+    }
+
+    /// Create a character via `characters.create` and refresh the list.
+    pub fn confirm_create_character(&mut self) {
+        let name = self.state.create_name.trim().to_string();
+        if name.is_empty() {
+            self.record_error(ChatRouteError::product(
+                "CHARACTER_NAME_REQUIRED",
+                json!({ "field": "name" }),
+            ));
+            return;
+        }
+        let description = if self.state.create_description.trim().is_empty() {
+            None
+        } else {
+            Some(self.state.create_description.clone())
+        };
+        let req = RequestCreateCharacter {
+            name,
+            description,
+            tags: None,
+            avatar_asset_id: None,
+            profile_id: None,
+        };
+        match self.call_decode("characters.create", &req, decode_character_dto) {
+            Ok(created) => {
+                self.state.create_dialog_open = false;
+                self.state.create_name.clear();
+                self.state.create_description.clear();
+                self.state.create_first_message.clear();
+                self.state.selected_character_id = Some(created.id.clone());
+                self.state.pinned_character_id = Some(created.id.clone());
+                self.state.character_tab = "edit".into();
+                self.refresh_characters();
+                self.state.status_message = Some("Character created.".into());
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    pub fn open_delete_dialog(&mut self) {
+        if self.state.selected_character_id.is_some() {
+            self.state.delete_dialog_open = true;
+            self.bump_scene();
+        }
+    }
+
+    pub fn close_delete_dialog(&mut self) {
+        self.state.delete_dialog_open = false;
+        self.bump_scene();
+    }
+
+    /// Delete the selected character via `characters.delete` and refresh.
+    pub fn confirm_delete_character(&mut self) {
+        let Some(id) = self.state.selected_character_id.clone() else {
+            self.state.delete_dialog_open = false;
+            return;
+        };
+        match self.call_value(
+            "characters.delete",
+            &RequestDeleteCharacter { character_id: id },
+        ) {
+            Ok(_) => {
+                self.state.delete_dialog_open = false;
+                self.state.selected_character_id = None;
+                self.state.character_draft = None;
+                self.state.avatar_data_uri = None;
+                self.state.character_tab = "cards".into();
+                self.refresh_characters();
+                self.state.status_message = Some("Character deleted.".into());
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    /// Toggle favorite flag on the local draft (Kernel contract does not yet
+    /// persist favorites; this keeps the UI state honest until it does).
+    pub fn toggle_favorite(&mut self) {
+        if let Some(draft) = self.state.character_draft.as_mut() {
+            draft.favorite = !draft.favorite;
+            self.bump_scene();
+        }
+    }
+
+    pub fn apply_shell_action(&mut self, action: ShellAction) {
+        match action {
+            ShellAction::ToggleRail => self.toggle_rail(),
+            ShellAction::SetPanel(panel) => self.set_panel(&panel),
+            ShellAction::ClosePanel => {
+                self.state.sidebar_open = false;
+                self.bump_scene();
+            }
+            ShellAction::SetTab(tab) => self.set_character_tab(&tab),
+            ShellAction::SetView(view) => self.set_character_view(&view),
+            ShellAction::CycleSort => {
+                let next = next_sort(&self.state.character_sort);
+                self.set_character_sort(next);
+            }
+            ShellAction::SelectCharacter(id) => self.select_character(&id),
+            ShellAction::OpenCreate => self.open_create_dialog(),
+            ShellAction::CloseCreate => self.close_create_dialog(),
+            ShellAction::ConfirmCreate => self.confirm_create_character(),
+            ShellAction::OpenDelete => self.open_delete_dialog(),
+            ShellAction::CloseDelete => self.close_delete_dialog(),
+            ShellAction::ConfirmDelete => self.confirm_delete_character(),
+            ShellAction::ToggleFavorite => self.toggle_favorite(),
+            ShellAction::BackToCards => self.set_character_tab("cards"),
+            ShellAction::Import => {
+                self.state.status_message =
+                    Some("Import a JSON or PNG character card from this device.".into());
+                self.bump_scene();
+            }
+        }
+    }
+
+    pub fn save_selected_character(&mut self) {
+        let Some(draft) = self.state.character_draft.clone() else {
+            return;
+        };
+        let req = RequestUpdateCharacter {
+            character_id: draft.id,
+            name: Some(draft.name),
+            description: Some(draft.description),
+            tags: Some(draft.tags),
+            avatar_asset_id: draft.avatar_asset_id,
+            profile_id: None,
+        };
+        match self.call_decode("characters.update", &req, decode_character_dto) {
+            Ok(_) => {
+                self.refresh_characters();
+                self.state.status_message = Some("Saved.".into());
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    /// Load the full draft for the currently selected character.
+    fn load_character_draft(&mut self) {
+        let Some(id) = self.state.selected_character_id.clone() else {
+            self.state.character_draft = None;
+            self.state.avatar_data_uri = None;
+            return;
+        };
+        match self.call_decode(
+            "characters.get",
+            &RequestGetCharacter { character_id: id.clone() },
+            decode_character_dto,
+        ) {
+            Ok(dto) => {
+                let mut draft = CharacterDraftView::default();
+                draft.id = dto.id.clone();
+                draft.name = dto.name.clone();
+                draft.description = dto.description.clone().unwrap_or_default();
+                draft.tags = dto.tags.clone();
+                draft.avatar_asset_id = dto.avatar_asset_id.clone();
+                self.state.character_draft = Some(draft);
+                self.load_avatar_data_uri(dto.avatar_asset_id.as_deref());
+            }
+            Err(err) => {
+                self.record_error(err);
+                self.state.character_draft = None;
+                self.state.avatar_data_uri = None;
+            }
+        }
+    }
+
+    /// Resolve avatars for every listed character via Product Wire `assets.content`.
+    fn hydrate_character_avatars(&mut self) {
+        let asset_ids: Vec<String> = self
+            .state
+            .characters
+            .iter()
+            .filter_map(|row| row.avatar_asset_id.clone())
+            .collect();
+        for asset_id in asset_ids {
+            if self.state.avatar_data_uris.contains_key(&asset_id) {
+                continue;
+            }
+            if let Some(uri) = self.fetch_avatar_data_uri(&asset_id) {
+                self.state.avatar_data_uris.insert(asset_id, uri);
+            }
+        }
+    }
+
+    fn fetch_avatar_data_uri(&mut self, asset_id: &str) -> Option<String> {
+        match self.call_decode(
+            "assets.content",
+            &RequestAssetsContent {
+                asset_id: asset_id.to_string(),
+            },
+            decode_result_assets_content,
+        ) {
+            Ok(ResultAssetsContent {
+                content_base64, ..
+            }) => crate::avatar::display_avatar_data_uri(&content_base64),
+            Err(_) => None,
+        }
+    }
+
+    /// Resolve the avatar asset into a `data:` URI via `assets.content`.
+    fn load_avatar_data_uri(&mut self, asset_id: Option<&str>) {
+        let Some(asset_id) = asset_id else {
+            self.state.avatar_data_uri = None;
+            return;
+        };
+        if let Some(cached) = self.state.avatar_data_uris.get(asset_id).cloned() {
+            self.state.avatar_data_uri = Some(cached.clone());
+            if let Some(draft) = self.state.character_draft.as_mut() {
+                draft.avatar_data_uri = Some(cached);
+            }
+            return;
+        }
+        match self.fetch_avatar_data_uri(asset_id) {
+            Some(uri) => {
+                self.state.avatar_data_uris.insert(asset_id.to_string(), uri.clone());
+                self.state.avatar_data_uri = Some(uri.clone());
+                if let Some(draft) = self.state.character_draft.as_mut() {
+                    draft.avatar_data_uri = Some(uri);
+                }
+            }
+            None => {
+                self.state.avatar_data_uri = None;
+            }
+        }
     }
 
     fn refresh_chat(&mut self) -> Result<(), ChatRouteError> {
@@ -687,7 +1195,10 @@ impl<W: ProductWire> ChatSession<W> {
     }
 }
 
-fn virtualized_window(messages: &[MessageDto]) -> (Vec<VisibleRow>, PresentOutcome) {
+fn virtualized_window(
+    messages: &[MessageDto],
+    viewport_height: f64,
+) -> (Vec<VisibleRow>, PresentOutcome) {
     let mut index = HeightIndex::new();
     for message in messages {
         let _ = index.push(
@@ -696,7 +1207,7 @@ fn virtualized_window(messages: &[MessageDto]) -> (Vec<VisibleRow>, PresentOutco
             HeightKind::Estimated,
         );
     }
-    let viewport_height = 124.0;
+    let viewport_height = viewport_height.max(1.0);
     let extent = index.extent();
     if messages.is_empty() || extent <= viewport_height {
         return (

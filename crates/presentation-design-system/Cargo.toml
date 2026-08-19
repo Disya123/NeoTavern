@@ -1,0 +1,13 @@
+[package]
+name = "neotavern-presentation-design-system"
+version = "0.1.0"
+edition = "2021"
+description = "React golden design tokens, fonts, and Phosphor icons packed for Blitz"
+license = "AGPL-3.0"
+publish = false
+
+[lib]
+name = "neotavern_presentation_design_system"
+
+[dependencies]
+parley = { version = "0.10", default-features = false, features = ["std"] }

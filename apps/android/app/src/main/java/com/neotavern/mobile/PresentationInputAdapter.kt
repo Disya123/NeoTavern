@@ -10,9 +10,7 @@ import android.view.View
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * Debug/flagged-shell MotionEvent + Choreographer adapter.
- * Not wired to production [MainActivity] or default JNI.
- *
+ * MotionEvent + Choreographer adapter for NeoCompositor.
  * Kotlin only forwards raw screen coordinates and `eventTimeNanos`.
  * Hit-test / sticky / fixed correction happens in NeoCompositor.
  */

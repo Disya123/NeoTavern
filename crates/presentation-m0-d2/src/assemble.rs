@@ -12,6 +12,14 @@ use crate::sink::{DrawKind, StreamOp};
 use crate::{D2_HEIGHT, D2_WIDTH};
 
 pub fn assemble_from_stream(stream: &[StreamOp]) -> Result<NeoDisplayList, String> {
+    assemble_from_stream_at(stream, D2_WIDTH, D2_HEIGHT)
+}
+
+pub fn assemble_from_stream_at(
+    stream: &[StreamOp],
+    width: u32,
+    height: u32,
+) -> Result<NeoDisplayList, String> {
     let root_spatial = SpatialNodeId(0);
     let root_clip = ClipChainId(0);
     let root_effect = EffectNodeId(0);
@@ -23,13 +31,13 @@ pub fn assemble_from_stream(stream: &[StreamOp]) -> Result<NeoDisplayList, Strin
     let mut chunk_id = 1u32;
     let mut paint_order = 10u32;
     let mut emitted_wallpaper = false;
-    let mut opacity_bounds = Rect::new(0.0, 0.0, D2_WIDTH as f32, D2_HEIGHT as f32);
+    let mut opacity_bounds = Rect::new(0.0, 0.0, width as f32, height as f32);
     let mut effect_nodes = vec![EffectNode {
         id: root_effect,
         parent: None,
         spatial_node: root_spatial,
         clip_chain: root_clip,
-        bounds: Rect::new(0.0, 0.0, D2_WIDTH as f32, D2_HEIGHT as f32),
+        bounds: Rect::new(0.0, 0.0, width as f32, height as f32),
         kind: EffectKind::Isolation,
         backdrop_root: root_backdrop,
     }];
@@ -96,7 +104,7 @@ pub fn assemble_from_stream(stream: &[StreamOp]) -> Result<NeoDisplayList, Strin
                         kind: EffectKind::Opacity(*alpha),
                         backdrop_root: root_backdrop,
                     });
-                    opacity_bounds = Rect::new(0.0, 0.0, D2_WIDTH as f32, D2_HEIGHT as f32);
+                    opacity_bounds = Rect::new(0.0, 0.0, width as f32, height as f32);
                     ops.push(NeoPaintOp::BeginEffectScope(id));
                 }
             }
@@ -121,8 +129,8 @@ pub fn assemble_from_stream(stream: &[StreamOp]) -> Result<NeoDisplayList, Strin
 
     Ok(NeoDisplayList {
         generation: 1,
-        width: D2_WIDTH,
-        height: D2_HEIGHT,
+        width,
+        height,
         spatial: Arc::from([SpatialNode {
             id: root_spatial,
             parent: None,
@@ -131,7 +139,7 @@ pub fn assemble_from_stream(stream: &[StreamOp]) -> Result<NeoDisplayList, Strin
         clips: Arc::from([ClipNode {
             id: root_clip,
             parent: None,
-            rect: Rect::new(0.0, 0.0, D2_WIDTH as f32, D2_HEIGHT as f32),
+            rect: Rect::new(0.0, 0.0, width as f32, height as f32),
         }]),
         effects: Arc::from(effect_nodes),
         ops: Arc::from(ops),
