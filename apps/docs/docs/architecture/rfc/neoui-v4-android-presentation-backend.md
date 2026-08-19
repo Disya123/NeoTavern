@@ -4240,6 +4240,18 @@ Exit:
   parity;
 - rollback возвращает действующий backend без миграции durable Kernel state.
 
+Owner amendment (2026-08-19, [ADR-0051](../adr/0051-android-talkback-webview-fallback.md)):
+
+- `talkback_journey = SKIPPED` **does not** satisfy the TalkBack Exit item.
+- Dioxus native TalkBack = `DEFERRED_BY_OWNER`.
+- Product accessibility path = `WEBVIEW_FALLBACK`: TalkBack / touch
+  exploration MUST select WebView **before** a Rust presentation host is
+  created.
+- Gboard typing / insets / editor-send is a physical corpus. IME
+  composition / cursor / delete APIs are a separate MockIme/InputConnection
+  conformance test. A Gboard layout is not required to call
+  `setComposingText`.
+
 ---
 
 # 52. Milestone D — Plugin platform

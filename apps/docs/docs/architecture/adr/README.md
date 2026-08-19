@@ -4,6 +4,15 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/adr/README.md
 
 # Architecture Decision Records
 
+## ADR-0051: Defer native Dioxus TalkBack; product a11y is WebView fallback
+
+Native TalkBack on the Dioxus/Rust path is **DEFERRED_BY_OWNER**.
+`talkback_journey = SKIPPED` does not satisfy RFC §51. Product
+accessibility is **WEBVIEW_FALLBACK**: TalkBack / touch exploration
+selects WebView **before** any Rust presentation host. Gboard typing is
+split from MockIme composition conformance. Full decision:
+[ADR-0051](0051-android-talkback-webview-fallback.md).
+
 ## ADR-0050: VisualSurfaceFrameIngress (B) vs PluginVisualSurface (D)
 
 PERF-15 needs a live VisualSurface, but the public plugin platform is

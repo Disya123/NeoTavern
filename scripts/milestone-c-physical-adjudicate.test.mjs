@@ -101,6 +101,10 @@ describe('Milestone C physical journey adjudicator', () => {
     expect(record.physical_10k).toBe('PASS');
     expect(record.gboard_journey).toBe('PASS');
     expect(record.talkback_journey).toBe('SKIPPED');
+    expect(record.talkback_rfc51).toBe('DEFERRED_BY_OWNER');
+    expect(record.product_accessibility_path).toBe('WEBVIEW_FALLBACK');
+    expect(record.gboard_typing_insets_send).toBe('PASS');
+    expect(record.ime_composition_contract).toBe('HOST_CONFORMANCE');
     expect(record.lifecycle).toBe('PASS');
     expect(record.safe_mode).toBe('PASS');
     expect(record.successful_attempt?.stamp).toBe(passing.stamp);

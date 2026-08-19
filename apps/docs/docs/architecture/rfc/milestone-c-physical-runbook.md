@@ -17,6 +17,9 @@ Do not overwrite the failed stamp. Later successful batches must keep it in
 
 TalkBack was **not** enabled on this batch (operator waived).
 `talkback_journey` is **SKIPPED**, not PASS, and is not a journey-batch gate.
+**SKIPPED is not RFC §51 TalkBack.** Native Dioxus TalkBack is
+`DEFERRED_BY_OWNER`; the product accessibility path is `WEBVIEW_FALLBACK`
+([ADR-0051](../adr/0051-android-talkback-webview-fallback.md)).
 
 Evidence is UIAutomator / dumpsys / InputConnection markers on the debug
 harness `PresentationChatActivity`, not RenderDoc. MIUI does not reliably
@@ -48,6 +51,10 @@ gboard_environment = READY
 gboard_journey = PASS
 talkback_semantics = PASS
 talkback_journey = SKIPPED
+talkback_rfc51 = DEFERRED_BY_OWNER
+product_accessibility_path = WEBVIEW_FALLBACK
+gboard_typing_insets_send = PASS
+ime_composition_contract = HOST_CONFORMANCE
 lifecycle = PASS
 safe_mode = PASS
 cutover = NOT_STARTED
@@ -75,13 +82,16 @@ canary = false
 | compositor SurfaceView chat | —                                         | not this harness                      |
 
 This device's Gboard Alphabet/Russian layout commits letters through
-`commitText` rather than `setComposingText`. Admission accepts that IC
-corpus when `deleteSurroundingText` and `performEditorAction SEND` are also
-present. `Gboard environment=READY` alone is not a Gboard journey.
+`commitText` rather than `setComposingText`. Physical admission does **not**
+require `setComposingText` from a specific layout. Composition / cursor /
+delete APIs of the composer are proven by a separate MockIme/InputConnection
+conformance test (`PresentationChatMockIme`), not by this physical stamp.
+`Gboard environment=READY` alone is not a Gboard journey.
 
 ## Not claimed
 
 - RFC §51 DoD (i18n/RTL, Theme SDK v2, plugin matrix, no-WebView renderer)
+- RFC §51 native TalkBack (`SKIPPED` ≠ Exit item; ADR-0051)
 - owner-signed PARITY
 - production `MainActivity` canary
 - TalkBack focus traversal, scroll/click actions, streaming announcement as a proven journey

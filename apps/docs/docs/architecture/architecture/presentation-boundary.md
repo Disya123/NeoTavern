@@ -23,6 +23,7 @@ registry. Neither is a production migration, Milestone C PASS, or a
 
 **Decisions:** [ADR-0049](../adr/0049-track-d-dioxus-presentation.md),
 [ADR-0050](../adr/0050-visual-surface-ingress-vs-plugin.md),
+[ADR-0051](../adr/0051-android-talkback-webview-fallback.md),
 [d1-d2-decision.md](../rfc/d1-d2-decision.md).
 **D3:** **DEFERRED** — Android may take a Rust presentation path; Web stays
 React. Rollback is the acting React/WebView host.
@@ -58,6 +59,8 @@ This is not a production migration and not Milestone C PASS.
    `crates/neocompositor`, not a cutover switch.
    `NEOTA_DIOXUS_SHELL=1` is a **non-default** flag for the Dioxus Product
    Wire shell crate; it is not a launcher switch.
+   TalkBack / touch exploration MUST select WebView **before** a Rust
+   presentation host is created ([ADR-0051](../adr/0051-android-talkback-webview-fallback.md)).
 5. M0 probe crates stay probes and are not production JNI. Interchange
    types (`NeoDisplayList`, `compile_passes`) live in
    `neotavern-neocompositor`; probes re-export them.
@@ -192,7 +195,10 @@ production `neotavern` store). Physical stamp `2026-08-18T21-55-58-696Z` stays a
 **`FAILED_ATTEMPT`**. Stamp `2026-08-19T10-29-35-149Z` is the successful
 journey batch (**PASS**) on the same Xiaomi debug harness: send round-trip,
 isolated 10k, Gboard InputConnection keys, lifecycle, and safe-mode WebView
-escape. TalkBack was operator-waived (**SKIPPED**, not PASS).
+escape. TalkBack was operator-waived (**SKIPPED**, not PASS). That skip
+does **not** satisfy RFC §51 TalkBack; native Dioxus TalkBack is
+**DEFERRED_BY_OWNER** and the product accessibility path is
+**WEBVIEW_FALLBACK** ([ADR-0051](../adr/0051-android-talkback-webview-fallback.md)).
 ([milestone-c-adjudication.json](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/milestone-c-adjudication.json),
 [runbook](../rfc/milestone-c-physical-runbook.md)). Milestone C is
 **STARTED**, not RFC §51 PASS. Chat workspace on flagged Dioxus Android

@@ -250,6 +250,10 @@ export function adjudicateMilestoneC(evidence, log = '', previous = null) {
     gboard_journey: gboardOk ? 'PASS' : 'NOT_PROVEN',
     talkback_semantics: row(evidence, 'a11y_semantics')?.ok ? 'PASS' : 'FAIL',
     talkback_journey: talkbackStatus,
+    talkback_rfc51: 'DEFERRED_BY_OWNER',
+    product_accessibility_path: 'WEBVIEW_FALLBACK',
+    gboard_typing_insets_send: gboardOk ? 'PASS' : 'NOT_PROVEN',
+    ime_composition_contract: 'HOST_CONFORMANCE',
     lifecycle: lifecycleOk ? 'PASS' : 'FAIL',
     safe_mode: safeOk ? 'PASS' : 'FAIL',
     reason:

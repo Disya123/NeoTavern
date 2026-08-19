@@ -15,6 +15,12 @@
 
 ### Added
 
+- **Native Dioxus TalkBack deferred; product a11y is WebView (ADR-0051).**
+  `talkback_journey=SKIPPED` is not RFC §51. TalkBack / touch exploration
+  must select WebView before a Rust presentation host. Gboard typing/insets
+  /editor-send stays a physical PASS; IME composition is a MockIme
+  conformance test. Production `MainActivity` / canary unchanged.
+
 - **Milestone C physical journey batch PASS (not RFC C PASS, not cutover).**
   Xiaomi `8f5c2b7c` stamp `2026-08-19T10-29-35-149Z` on debug
   `PresentationChatActivity`: send round-trip via Gboard keys, isolated
