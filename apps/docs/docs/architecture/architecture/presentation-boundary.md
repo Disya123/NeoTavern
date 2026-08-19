@@ -188,11 +188,13 @@ both issue `chats.messages.create`; a failed `generation.start` must not
 drop an accepted durable row. The isolated test profile
 `NEOTA_CHAT_PROFILE=isolated-10k` seeds 10k messages through the same
 Product Wire ops into `filesDir/neotavern-isolated-10k` (never the
-production `neotavern` store). Physical stamp `2026-08-18T21-55-58-696Z`
-is a preserved **`FAILED_ATTEMPT`**
+production `neotavern` store). Physical stamp `2026-08-18T21-55-58-696Z` stays a preserved
+**`FAILED_ATTEMPT`**. Stamp `2026-08-19T10-29-35-149Z` is the successful
+journey batch (**PASS**) on the same Xiaomi debug harness: send round-trip,
+isolated 10k, Gboard InputConnection keys, lifecycle, and safe-mode WebView
+escape. TalkBack was operator-waived (**SKIPPED**, not PASS).
 ([milestone-c-adjudication.json](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/milestone-c-adjudication.json),
-[runbook](../rfc/milestone-c-physical-runbook.md)): live open passed,
-send did not persist. Milestone C is **STARTED**, not PASS. Chat
-workspace on flagged Dioxus Android remains **DEFERRED** in the
-compatibility matrix until owner-signed PARITY. Production cutover
-stays `NOT_STARTED` until C PASS and canary evidence.
+[runbook](../rfc/milestone-c-physical-runbook.md)). Milestone C is
+**STARTED**, not RFC §51 PASS. Chat workspace on flagged Dioxus Android
+remains **DEFERRED** in the compatibility matrix until owner-signed PARITY.
+Production cutover stays `NOT_STARTED` until C PASS and canary evidence.

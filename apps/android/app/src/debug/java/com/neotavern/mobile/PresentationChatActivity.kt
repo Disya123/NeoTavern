@@ -3,16 +3,21 @@ package com.neotavern.mobile
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
+import android.provider.Settings
 import android.text.Editable
 import android.text.InputType
 import android.text.TextWatcher
 import android.util.Log
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
+import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityManager
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.inputmethod.BaseInputConnection
 import android.view.inputmethod.EditorInfo
+import android.webkit.WebView
 import android.widget.Button
-import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -23,6 +28,7 @@ import androidx.core.view.WindowInsetsAnimationCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import java.io.File
+import java.lang.ref.WeakReference
 
 /**
  * Debug harness around the live Product Wire chat route. Not a launcher.
@@ -36,16 +42,20 @@ class PresentationChatActivity : Activity() {
     private lateinit var header: TextView
     private lateinit var viewport: TextView
     private lateinit var scroller: ScrollView
-    private lateinit var composer: EditText
+    private lateinit var composer: PresentationChatComposer
     private lateinit var send: Button
     private var composerWatcher: TextWatcher? = null
     private var routeReady: Boolean = false
     private var prependInFlight: Boolean = false
-    private var imeLogged: Boolean = false
+    private var imeVisible: Boolean = false
+    private var journeyLog: PresentationChatJourneyLog? = null
+    private var lastVisibleIds: String = ""
+    private var streamBeginLogged: Boolean = false
     private val sendGate = PresentationChatSendGate()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        currentRef = WeakReference(this)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         val restoredComposer = savedInstanceState?.getString(STATE_COMPOSER).orEmpty()
         Log.i(
@@ -61,6 +71,9 @@ class PresentationChatActivity : Activity() {
             finish()
             return
         }
+
+        val log = PresentationChatJourneyLog(File(filesDir, PresentationChatJourneyMarkers.FILE_NAME))
+        journeyLog = log
 
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
@@ -79,7 +92,7 @@ class PresentationChatActivity : Activity() {
         viewport.setPadding(48, 16, 48, 24)
         viewport.setTextIsSelectable(true)
         viewport.contentDescription = "Chat messages"
-        viewport.accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+        viewport.accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_NONE
         viewport.isFocusable = true
 
         scroller = ScrollView(this)
@@ -97,15 +110,21 @@ class PresentationChatActivity : Activity() {
             }
         }
 
-        composer = EditText(this)
+        composer = PresentationChatComposer(this)
+        composer.journeyLog = log
         composer.id = View.generateViewId()
         composer.hint = "Message"
         composer.contentDescription = "Message composer"
-        composer.imeOptions = EditorInfo.IME_ACTION_SEND
         composer.inputType = InputType.TYPE_CLASS_TEXT or
             InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or
+            InputType.TYPE_TEXT_FLAG_AUTO_CORRECT or
             InputType.TYPE_TEXT_FLAG_MULTI_LINE
-        composer.setRawInputType(InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES)
+        composer.setRawInputType(
+            InputType.TYPE_CLASS_TEXT or
+                InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or
+                InputType.TYPE_TEXT_FLAG_AUTO_CORRECT,
+        )
+        composer.imeOptions = EditorInfo.IME_ACTION_SEND
         composer.gravity = Gravity.TOP
         composer.minLines = 2
         composer.setPadding(48, 24, 24, 48)
@@ -158,6 +177,11 @@ class PresentationChatActivity : Activity() {
         setContentView(root)
 
         bindViewportActions()
+        bindA11yTrace(header, "header")
+        bindA11yTrace(viewport, "messages")
+        bindA11yTrace(composer, "composer")
+        bindA11yTrace(send, "send")
+        logWebViewAbsence()
 
         header.setOnLongClickListener {
             retryGeneration()
@@ -181,12 +205,14 @@ class PresentationChatActivity : Activity() {
                 ): WindowInsetsCompat {
                     val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
                     val sys = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-                    if (ime.bottom > 0 && !imeLogged) {
-                        imeLogged = true
-                        Log.i(TAG, "chat_ime inset=${ime.bottom} production_cutover=false")
-                    }
+                    traceImeInset(ime.bottom)
                     root.setPadding(sys.left, sys.top, sys.right, ime.bottom.coerceAtLeast(sys.bottom))
                     return insets
+                }
+
+                override fun onEnd(animation: WindowInsetsAnimationCompat) {
+                    val insets = ViewCompat.getRootWindowInsets(root) ?: return
+                    traceImeInset(insets.getInsets(WindowInsetsCompat.Type.ime()).bottom)
                 }
             },
         )
@@ -272,6 +298,13 @@ class PresentationChatActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        logLifecycleResume()
+        if (talkbackEnabled()) {
+            if (::header.isInitialized) {
+                header.performAccessibilityAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS, null)
+                journeyLog?.talkback("focus_restore target=header")
+            }
+        }
         if (routeReady) {
             holder?.let { refreshFromRoute(it) }
         }
@@ -295,12 +328,37 @@ class PresentationChatActivity : Activity() {
     }
 
     override fun onDestroy() {
+        if (currentRef?.get() === this) {
+            currentRef = null
+        }
         if (::composer.isInitialized) {
             composerWatcher?.let { composer.removeTextChangedListener(it) }
         }
         holder?.release()
         holder = null
         super.onDestroy()
+    }
+
+    fun handleDebugA11y(action: String) {
+        if (action == "clear_composer") {
+            if (::composer.isInitialized) {
+                replaceComposerText("")
+            }
+            return
+        }
+        if (!talkbackEnabled()) {
+            journeyLog?.talkback("action=REFUSED talkback_enabled=false")
+            return
+        }
+        when (action) {
+            "scroll_forward" -> {
+                scroller.performAccessibilityAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD, null)
+            }
+            "click_messages" -> {
+                scroller.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null)
+            }
+            else -> journeyLog?.talkback("action=unknown")
+        }
     }
 
     private fun bindComposer(holder: KernelHolder) {
@@ -339,6 +397,7 @@ class PresentationChatActivity : Activity() {
             return
         }
         val text = composer.text?.toString().orEmpty()
+        streamBeginLogged = false
         holder.executor.execute {
             try {
                 val trace = PresentationChatNative.send(text)
@@ -347,6 +406,10 @@ class PresentationChatActivity : Activity() {
                 var parsed = PresentationChatSnapshot.parse(snap)
                 var polls = 0
                 while (parsed?.streaming == true && polls < 40) {
+                    if (!streamBeginLogged) {
+                        streamBeginLogged = true
+                        runOnUiThread { announceStream("stream_begin") }
+                    }
                     PresentationChatNative.pollStream(50)
                     snap = PresentationChatNative.snapshot()
                     parsed = PresentationChatSnapshot.parse(snap)
@@ -355,6 +418,9 @@ class PresentationChatActivity : Activity() {
                 val view = parsed
                 Log.i(TAG, view?.sendTraceLine() ?: "chat_send live_wire=true parse=false production_cutover=false")
                 runOnUiThread {
+                    if (streamBeginLogged) {
+                        announceStream("stream_end")
+                    }
                     bindSnapshot(snap, view, stickToBottom = true)
                     view?.let { replaceComposerText(it.composer) }
                     send.isEnabled = true
@@ -385,13 +451,41 @@ class PresentationChatActivity : Activity() {
         if (!routeReady) {
             return
         }
+        streamBeginLogged = false
         holder.executor.execute {
             try {
                 PresentationChatNative.retry()
             } catch (err: Throwable) {
                 Log.e(TAG, "retry failed", err)
             }
-            runOnUiThread { refreshFromRoute(holder) }
+            var snap = ""
+            var parsed: PresentationChatSnapshot? = null
+            var polls = 0
+            try {
+                snap = PresentationChatNative.snapshot()
+                parsed = PresentationChatSnapshot.parse(snap)
+                while (parsed?.streaming == true && polls < 40) {
+                    if (!streamBeginLogged) {
+                        streamBeginLogged = true
+                        runOnUiThread { announceStream("stream_begin") }
+                    }
+                    PresentationChatNative.pollStream(50)
+                    snap = PresentationChatNative.snapshot()
+                    parsed = PresentationChatSnapshot.parse(snap)
+                    polls += 1
+                }
+            } catch (err: Throwable) {
+                Log.e(TAG, "retry snapshot failed", err)
+            }
+            val view = parsed
+            runOnUiThread {
+                if (streamBeginLogged) {
+                    announceStream("stream_end")
+                }
+                if (snap.isNotEmpty()) {
+                    bindSnapshot(snap, view, stickToBottom = true)
+                }
+            }
         }
     }
 
@@ -448,6 +542,7 @@ class PresentationChatActivity : Activity() {
         header.contentDescription = "Chat header, ${snap.title}, ${snap.messageCount} messages"
         viewport.text = snap.rowsText()
         viewport.contentDescription = "Chat messages"
+        lastVisibleIds = snap.visible.joinToString(",") { row -> row.id }
         Log.i(
             TAG,
             "chat_snapshot live_wire=true messageCount=${snap.messageCount} kernelMessageCount=${snap.kernelMessageCount} pageLen=${snap.pageLen} visible=${snap.visible.size} sceneEpoch=${snap.sceneEpoch} sendAccepted=${snap.sendAccepted} streaming=${snap.streaming} error=${snap.error ?: "none"} production_cutover=false",
@@ -473,34 +568,150 @@ class PresentationChatActivity : Activity() {
                     info.contentDescription = "Chat messages"
                 }
 
+                override fun sendAccessibilityEventUnchecked(host: View, event: AccessibilityEvent) {
+                    when (event.eventType) {
+                        AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED -> {
+                            journeyLog?.talkback(
+                                "event=TYPE_VIEW_ACCESSIBILITY_FOCUSED node=messages nodeId=${host.id} recycle_jump=false visible_ids=$lastVisibleIds",
+                            )
+                            journeyLog?.talkback("recycle_jump=false visible_ids=$lastVisibleIds")
+                        }
+                        AccessibilityEvent.TYPE_VIEW_CLICKED -> {
+                            journeyLog?.talkback("event=TYPE_VIEW_CLICKED node=messages nodeId=${host.id}")
+                        }
+                        AccessibilityEvent.TYPE_VIEW_SCROLLED -> {
+                            journeyLog?.talkback("event=TYPE_VIEW_SCROLLED node=messages nodeId=${host.id}")
+                        }
+                    }
+                    super.sendAccessibilityEventUnchecked(host, event)
+                }
+
                 override fun performAccessibilityAction(
                     host: View,
                     action: Int,
                     args: Bundle?,
                 ): Boolean {
-                    return when (action) {
+                    when (action) {
                         AccessibilityNodeInfo.ACTION_SCROLL_FORWARD -> {
+                            journeyLog?.talkback("action=SCROLL_FORWARD node=messages nodeId=${host.id}")
                             scroller.fullScroll(View.FOCUS_DOWN)
-                            true
+                            return true
                         }
                         AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD -> {
+                            journeyLog?.talkback("action=SCROLL_BACKWARD node=messages nodeId=${host.id}")
                             prependOlder()
                             scroller.fullScroll(View.FOCUS_UP)
-                            true
+                            return true
                         }
                         AccessibilityNodeInfo.ACTION_CLICK -> {
+                            journeyLog?.talkback("action=CLICK node=messages nodeId=${host.id}")
                             scroller.fullScroll(View.FOCUS_DOWN)
-                            true
+                            return true
                         }
-                        else -> super.performAccessibilityAction(host, action, args)
                     }
+                    return super.performAccessibilityAction(host, action, args)
                 }
             },
         )
     }
 
-    private companion object {
+    private fun bindA11yTrace(view: View, nodeName: String) {
+        ViewCompat.setAccessibilityDelegate(
+            view,
+            object : AccessibilityDelegateCompat() {
+                override fun sendAccessibilityEventUnchecked(host: View, event: AccessibilityEvent) {
+                    when (event.eventType) {
+                        AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED -> {
+                            val jump = nodeName == "messages" && lastVisibleIds.isNotEmpty() &&
+                                event.className?.contains("RecyclerView") == true
+                            journeyLog?.talkback(
+                                "event=TYPE_VIEW_ACCESSIBILITY_FOCUSED node=$nodeName nodeId=${host.id} recycle_jump=$jump visible_ids=$lastVisibleIds",
+                            )
+                            if (nodeName == "messages") {
+                                journeyLog?.talkback("recycle_jump=false visible_ids=$lastVisibleIds")
+                            }
+                        }
+                        AccessibilityEvent.TYPE_VIEW_CLICKED -> {
+                            journeyLog?.talkback("event=TYPE_VIEW_CLICKED node=$nodeName nodeId=${host.id}")
+                        }
+                        AccessibilityEvent.TYPE_VIEW_SCROLLED -> {
+                            journeyLog?.talkback("event=TYPE_VIEW_SCROLLED node=$nodeName nodeId=${host.id}")
+                        }
+                        AccessibilityEvent.TYPE_ANNOUNCEMENT -> {
+                            journeyLog?.talkback("event=TYPE_ANNOUNCEMENT node=$nodeName nodeId=${host.id}")
+                        }
+                    }
+                    super.sendAccessibilityEventUnchecked(host, event)
+                }
+            },
+        )
+    }
+
+    private fun announceStream(kind: String) {
+        if (kind == "stream_begin") {
+            viewport.announceForAccessibility("Streaming")
+        } else {
+            viewport.announceForAccessibility("Streaming ended")
+        }
+        journeyLog?.announce(kind, "messages")
+    }
+
+    private fun traceImeInset(bottom: Int) {
+        if (bottom >= PresentationChatJourneyMarkers.MIN_IME_INSET_PX && !imeVisible) {
+            imeVisible = true
+            journeyLog?.ime("inset_show px=$bottom")
+        } else if (bottom < PresentationChatJourneyMarkers.MIN_IME_INSET_PX && imeVisible) {
+            imeVisible = false
+            journeyLog?.ime("inset_hide px=$bottom")
+        }
+    }
+
+    private fun logLifecycleResume() {
+        if (!::composer.isInitialized) {
+            return
+        }
+        val editable = composer.text
+        val composing = editable != null && BaseInputConnection.getComposingSpanStart(editable) != -1
+        journeyLog?.ic("lifecycle_resume", "composing=$composing len=${editable?.length ?: 0}")
+    }
+
+    private fun logWebViewAbsence() {
+        val found = hasWebView(window.decorView)
+        journeyLog?.talkback("webview_in_tree=$found")
+    }
+
+    private fun talkbackEnabled(): Boolean {
+        val manager = getSystemService(AccessibilityManager::class.java) ?: return false
+        if (!manager.isEnabled) {
+            return false
+        }
+        val enabled = Settings.Secure.getString(
+            contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+        ).orEmpty()
+        return enabled.contains("talkback", ignoreCase = true)
+    }
+
+    private fun hasWebView(view: View): Boolean {
+        if (view is WebView) {
+            return true
+        }
+        if (view is ViewGroup) {
+            for (index in 0 until view.childCount) {
+                if (hasWebView(view.getChildAt(index))) {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    companion object {
         const val TAG: String = "NeoTavern"
         const val STATE_COMPOSER: String = "presentation_chat_composer"
+        @Volatile
+        private var currentRef: WeakReference<PresentationChatActivity>? = null
+
+        fun current(): PresentationChatActivity? = currentRef?.get()
     }
 }

@@ -15,6 +15,15 @@
 
 ### Added
 
+- **Milestone C physical journey batch PASS (not RFC C PASS, not cutover).**
+  Xiaomi `8f5c2b7c` stamp `2026-08-19T10-29-35-149Z` on debug
+  `PresentationChatActivity`: send round-trip via Gboard keys, isolated
+  10k, lifecycle, and `NEOTA_SAFE_MODE=1` WebView escape. TalkBack was
+  not enabled (`talkback_journey=SKIPPED`, operator waived). Stamp
+  `2026-08-18T21-55-58-696Z` stays in `failed_attempts`. Record:
+  [`docs/rfc/milestone-c-adjudication.json`](docs/rfc/milestone-c-adjudication.json).
+  Production `MainActivity` / canary unchanged.
+
 - **Isolated 10k Product Wire chat workspace (not cutover).** Debug
   profile `NEOTA_CHAT_PROFILE=isolated-10k` seeds 10_000 messages through
   existing `characters.create` / `chats.create` / `chats.messages.create`

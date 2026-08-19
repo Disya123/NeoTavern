@@ -18,17 +18,17 @@ Allowed statuses: `PARITY` | `ADAPTED` | `CONTAINED` | `DEFERRED` | `REMOVED`.
 | Capability                             | React / Web                 | Android WebView (rollback) | Android Dioxus/NeoCompositor | Notes                                                           |
 | -------------------------------------- | --------------------------- | -------------------------- | ---------------------------- | --------------------------------------------------------------- |
 | Product Wire durable state             | PARITY                      | PARITY                     | PARITY (same Kernel)         | Presentation never owns SQLite                                  |
-| Chat workspace as main screen          | PARITY                      | PARITY                     | DEFERRED (Milestone C)       | Physical FAILED_ATTEMPT on debug harness (Hazel live Wire, send did not persist); not PARITY; not launcher; not cutover |
+| Chat workspace as main screen          | PARITY                      | PARITY                     | DEFERRED (Milestone C)       | Debug harness journey_batch PASS (`2026-08-19T10-29-35-149Z`); not PARITY; not launcher; not cutover |
 | Live backdrop glass                    | CONTAINED (CSS)             | CONTAINED (CSS)            | DEFERRED (Milestone B/C)     | GateP:P1 on qualified devices; compositor not in production APK |
 | Theme SDK (CSS tokens / shells)        | PARITY                      | PARITY                     | DEFERRED                     | Native theme ABI not chosen                                     |
 | Plugin frontend slots / DOM islands    | PARITY                      | PARITY                     | CONTAINED (WebSurface later) | No silent Plugin SDK rewrite                                    |
 | Legacy `window.SillyTavern`            | CONTAINED                   | CONTAINED                  | DEFERRED                     | Unmanaged islands stay Web                                      |
 | i18n catalogs / RTL                    | PARITY                      | PARITY                     | DEFERRED                     | Same catalogs when native UI exists                             |
-| Accessibility (WCAG 2.2 AA / TalkBack) | PARITY (web)                | PARITY (WebView)           | DEFERRED (Milestone C)       | Dioxus tree has TalkBack roles/order; not owner-signed PARITY               |
+| Accessibility (WCAG 2.2 AA / TalkBack) | PARITY (web)                | PARITY (WebView)           | DEFERRED (Milestone C)       | Semantics PASS; TalkBack journey SKIPPED (operator waived); not owner-signed PARITY |
 | Generation streaming / backpressure    | PARITY                      | PARITY                     | PARITY (Wire events)         | Kernel-owned                                                    |
 | Deep links / HostConnect               | PARITY                      | PARITY                     | DEFERRED                     |                                                                 |
-| Gboard / IME composer                  | n/a (web)                   | PARITY (WebView)           | DEFERRED (Milestone C)       | Debug harness EditText + IME inset; not owner-signed PARITY     |
-| 10k message virtualization             | PARITY (web virt)           | PARITY                     | DEFERRED (Milestone C)       | `chat-viewport` visible window on live Wire pages; not PARITY   |
+| Gboard / IME composer                  | n/a (web)                   | PARITY (WebView)           | DEFERRED (Milestone C)       | Gboard keys + IC SEND on debug harness; not owner-signed PARITY |
+| 10k message virtualization             | PARITY (web virt)           | PARITY                     | DEFERRED (Milestone C)       | Isolated 10k physical PASS on debug harness; not PARITY         |
 | Safe mode (disable 3p theme/plugin)    | PARITY                      | PARITY                     | DEFERRED (Milestone C)       | `NEOTA_SAFE_MODE=1` escapes harness to WebView `MainActivity`   |
 | Production no-WebView cutover          | REMOVED from this milestone | rollback default           | DEFERRED                     | Forbidden until C DoD                                           |
 

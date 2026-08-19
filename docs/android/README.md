@@ -196,8 +196,8 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   `messageCount` is the source of truth. Isolated 10k:
   `--es com.neotavern.mobile.NEOTA_CHAT_PROFILE isolated-10k` (separate
   store `neotavern-isolated-10k`, same Product Wire route). Physical stamp
-  `2026-08-18T21-55-58-696Z` is a preserved FAILED_ATTEMPT (send did not
-  persist). Re-run:
+  `2026-08-19T10-29-35-149Z` is journey batch PASS (TalkBack SKIPPED);
+  `2026-08-18T21-55-58-696Z` stays a preserved FAILED_ATTEMPT. Re-run:
   `node scripts/milestone-c-physical-capture.mjs --serial=8f5c2b7c`
   ([runbook](../rfc/milestone-c-physical-runbook.md)).
   Kernel stays in `libneotavern_android_jni.so`.

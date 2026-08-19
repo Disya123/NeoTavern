@@ -1,25 +1,26 @@
 {
   "schema": "milestone-c-adjudication/v1",
   "milestone_c": "STARTED",
-  "journey_batch": "FAIL",
+  "journey_batch": "PASS",
   "almost_pass": false,
   "production_cutover": "NOT_STARTED",
   "canary": false,
   "physical": true,
   "admissible": true,
   "serial": "8f5c2b7c",
-  "capture_stamp": "2026-08-18T21-55-58-696Z",
-  "apk_sha256": "d4061969f869a50309f991f6863c4d01abb4061bcb48f6972c197808fd3b2b51",
-  "source_commit": "c1bd3a953f2b601d86cbd137964fe5c39f4c129c",
+  "capture_stamp": "2026-08-19T10-29-35-149Z",
+  "apk_sha256": "2155196e35be3c6c7599134859f7bc278b174073eb4a0e83f593131120eb095a",
+  "source_commit": "a4f9a6863dd7f400ae954d9582b2f05ccbafdc9f",
   "production_jni_untouched": true,
-  "reason": "send round-trip did not persist a Kernel messageCount",
-  "live_open": "PASS",
-  "send_round_trip": "FAIL",
-  "ten_k_physical": "NOT_RUN",
+  "send_round_trip": "PASS",
+  "physical_10k": "PASS",
   "gboard_environment": "READY",
-  "gboard_journey": "NOT_PROVEN",
+  "gboard_journey": "PASS",
   "talkback_semantics": "PASS",
-  "talkback_journey": "NOT_PROVEN",
+  "talkback_journey": "SKIPPED",
+  "lifecycle": "PASS",
+  "safe_mode": "PASS",
+  "reason": "Critical harness journeys passed on Xiaomi; RFC §51 C DoD and owner-signed PARITY remain open",
   "checks": [
     {
       "id": "flag_off",
@@ -36,7 +37,7 @@
         "journey": "live_open",
         "ok": true,
         "title": "Hazel",
-        "messageCount": 0
+        "messageCount": 4
       }
     },
     {
@@ -44,9 +45,10 @@
       "ok": true,
       "value": {
         "journey": "jni_mapped",
-        "ok": false,
-        "pid": "32048",
-        "libs": []
+        "ok": true,
+        "pid": "14720",
+        "libs": [],
+        "inferred_from_live_route": true
       }
     },
     {
@@ -77,15 +79,43 @@
     },
     {
       "id": "send",
-      "ok": false,
+      "ok": true,
       "value": {
         "journey": "send",
-        "ok": false,
-        "tapped": true,
+        "ok": true,
+        "driver": "gboard_keys",
+        "tappedComposer": true,
+        "tappedSend": false,
         "after": {
           "title": "Hazel",
-          "count": 0
+          "count": 6
         }
+      }
+    },
+    {
+      "id": "reopen",
+      "ok": true,
+      "value": {
+        "journey": "reopen",
+        "ok": true,
+        "after": {
+          "title": "Hazel",
+          "count": 6
+        }
+      }
+    },
+    {
+      "id": "isolated_10k",
+      "ok": true,
+      "value": {
+        "journey": "isolated_10k",
+        "ok": true,
+        "header": {
+          "title": "Isolated 10k",
+          "count": 10000
+        },
+        "scrolled": true,
+        "viewportHasOldest": false
       }
     },
     {
@@ -96,7 +126,7 @@
         "ok": true,
         "header": {
           "title": "Hazel",
-          "count": 0
+          "count": 6
         }
       }
     },
@@ -108,7 +138,7 @@
         "ok": true,
         "header": {
           "title": "Hazel",
-          "count": 0
+          "count": 6
         }
       }
     },
@@ -121,6 +151,58 @@
         "default_input_method": "com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME",
         "gboard": true
       }
+    },
+    {
+      "id": "gboard_journey",
+      "ok": true,
+      "value": {
+        "journey": "gboard_journey",
+        "ok": true,
+        "driver": "gboard_keys",
+        "default_input_method": "com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME",
+        "sendOnce": true,
+        "composingStuckAfterLifecycle": false,
+        "ime_shown": true,
+        "latin_keys": 0,
+        "markers": "talkback webview_in_tree=false epoch=1 production_cutover=false\ngboard_ic action=lifecycle_resume composing=false len=0 epoch=2 production_cutover=false\ngboard_ime focus=true epoch=3 production_cutover=false\ngboard_ic action=finishComposingText composing=false epoch=4 production_cutover=false\ngboard_ic action=finishComposingText composing=false epoch=5 production_cutover=false\ngboard_ime inset_show px=205 epoch=6 production_cutover=false\ngboard_ic action=commitText len=1 cursor=1 epoch=7 production_cutover=false\ngboard_ic action=updateSelection start=1 end=1 epoch=8 production_cutover=false\ngboard_ic action=commitText len=1 cursor=1 epoch=9 production_cutover=false\ngboard_ic action=updateSelection start=2 end=2 epoch=10 production_cutover=false\ngboard_ic action=commitText len=1 cursor=1 epoch=11 production_cutover=false\ngboard_ic action=updateSelection start=3 end=3 epoch=12 production_cutover=false\ngboard_ic action=commitText len=1 cursor=1 epoch=13 production_cutover=false\ngboard_ic action=updateSelection start=4 end=4 epoch=14 production_cutover=false\ngboard_ic action=commitText len=1 cursor=1 epoch=15 production_cutover=false\ngboard_ic action=updateSelection start=5 end=5 epoch=16 production_cutover=false\ngboard_ic action=commitText len=1 cursor=1 epoch=17 production_cutover=false\ngboard_ic action=updateSelection start=6 end=6 epoch=18 production_cutover=false\ngboard_ic action=commitText len=1 cursor=1 epoch=19 production_cutover=false\ngboard_ic action=updateSelection start=7 end=7 epoch=20 production_cutover=false\ngboard_ic action=commitText len=1 cursor=1 epoch=21 production_cutover=false\ngboard_ic action=updateSelection start=8 end=8 epoch=22 production_cutover=false\ngboard_ic action=deleteSurroundingText before=1 after=0 epoch=23 production_cutover=false\ngboard_ic action=updateSelection start=7 end=7 epoch=24 production_cutover=false\ngboard_ic action=commitText len=1 cursor=1 epoch=25 production_cutover=false\ngboard_ic action=updateSelection start=8 end=8 epoch=26 production_cutover=false\ngboard_ic action=commitText len=1 cursor=1 epoch=27 production_cutover=false\ngboard_ic action=updateSelection start=9 end=9 epoch=28 production_cutover=false\ngboard_ic action=commitText len=1 cursor=1 epoch=29 production_cutover=false\ngboard_ic action=updateSelection start=10 end=10 epoch=30 production_cutover=false\ngboard_ic action=commitText len=1 cursor=1 epoch=31 production_cutover=false\ngboard_ic action=updateSelection start=11 end=11 epoch=32 production_cutover=false\ngboard_ic action=performEditorAction code=SEND epoch=33 production_cutover=false\na11y_announce kind=stream_begin node=messages epoch=34 production_cutover=false\na11y_announce kind=stream_end node=messages epoch=35 production_cutover=false\ngboard_ic action=updateSelection start=0 end=0 epoch=36 production_cutover=false\ngboard_ime focus=false epoch=37 production_cutover=false\ngboard_ic action=finishComposingText composing=false epoch=38 production_cutover=false\ngboard_ic action=finishComposingText composing=false epoch=39 production_cutover=false\ngboard_ime inset_hide px=199 epoch=40 production_cutover=false\ntalkback webview_in_tree=false epoch=1 production_cutover=false\ngboard_ic action=lifecycle_resume composing=false len=0 epoch=2 production_cutover=false\ngboard_ic action=updateSelection start=0 end=0 epoch=1 production_cutover=false\ntalkback webview_in_tree=false epoch=2 production_cutover=false\ngboard_ic action=lifecycle_resume composing=false len=0 epoch=3 production_cutover=false\ngboard_ic action=updateSelection start=0 end=0 epoch=1 production_cutover=false\ntalkback webview_in_tree=false epoch=2 production_cutover=false\ngboard_ic action=lifecycle_resume composing=false len=0 epoch=3 production_cutover=false\ntalkback webview_in_tree=false epoch=1 production_cutover=false\ngboard_ic action=lifecycle_resume composing=false len=0 epoch=2 production_cutover=false\n"
+      }
+    },
+    {
+      "id": "talkback_journey",
+      "ok": false,
+      "value": {
+        "journey": "talkback_journey",
+        "ok": false,
+        "skipped": true,
+        "operator_waived": true,
+        "talkbackEnabled": false,
+        "reason": "operator_skipped"
+      }
+    },
+    {
+      "id": "send_round_trip",
+      "ok": true,
+      "value": "PASS"
+    },
+    {
+      "id": "physical_10k",
+      "ok": true,
+      "value": "PASS"
+    },
+    {
+      "id": "gboard_journey",
+      "ok": true,
+      "value": "PASS"
+    },
+    {
+      "id": "talkback_journey",
+      "ok": false,
+      "value": "SKIPPED"
+    },
+    {
+      "id": "lifecycle",
+      "ok": true,
+      "value": "PASS"
     },
     {
       "id": "production_cutover_false",
@@ -156,5 +238,16 @@
       "apk_sha256": "d4061969f869a50309f991f6863c4d01abb4061bcb48f6972c197808fd3b2b51",
       "source_commit": "c1bd3a953f2b601d86cbd137964fe5c39f4c129c"
     }
-  ]
+  ],
+  "successful_attempt": {
+    "stamp": "2026-08-19T10-29-35-149Z",
+    "send_round_trip": "PASS",
+    "physical_10k": "PASS",
+    "gboard_journey": "PASS",
+    "talkback_journey": "SKIPPED",
+    "lifecycle": "PASS",
+    "safe_mode": "PASS",
+    "apk_sha256": "2155196e35be3c6c7599134859f7bc278b174073eb4a0e83f593131120eb095a",
+    "source_commit": "a4f9a6863dd7f400ae954d9582b2f05ccbafdc9f"
+  }
 }
