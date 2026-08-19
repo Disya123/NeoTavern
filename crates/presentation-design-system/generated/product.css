@@ -171,8 +171,13 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
 .SidebarPanelHeader_avatar {
   display: flex;
   flex: none;
+  width: 44px;
+  height: 44px;
+  max-width: 44px;
+  max-height: 44px;
   align-items: center;
   justify-content: center;
+  align-self: center;
 }
 .SidebarPanelHeader_copy {
   display: flex;
@@ -190,10 +195,23 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
 .SidebarPanelHeader_headerDivider {
   display: block;
   flex: none;
+  align-self: stretch;
   width: 100%;
   height: 1px;
+  min-height: 1px;
   background: #39342f;
   pointer-events: none;
+}
+.SidebarPanelHeader_close,
+.SidebarPanelHeader_actions [data-component='button'] {
+  min-width: 40px;
+  min-height: 40px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  flex: none;
+  background: transparent;
+  border: 1px solid transparent;
 }
 .CharacterManagementPanel_headerAvatar,
 .CharacterManagementPanel_cardAvatar,
@@ -216,10 +234,25 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
 .CharacterManagementPanel_headerAvatar {
   width: 44px;
   height: 44px;
+  max-width: 44px;
+  max-height: 44px;
+  align-self: center;
 }
 .CharacterManagementPanel_cardAvatar {
   width: 52px;
   height: 52px;
+  max-width: 52px;
+  max-height: 52px;
+  aspect-ratio: auto;
+  grid-column: auto;
+  align-self: start;
+}
+.CharacterManagementPanel_editorAvatar {
+  width: 64px;
+  height: 64px;
+  max-width: 64px;
+  max-height: 64px;
+  align-self: start;
 }
 
 .nt-icon,
@@ -278,9 +311,20 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   line-height: 1.45;
   text-overflow: ellipsis;
 }
+.CharacterManagementPanel_cardCopy > span[data-part='card-description'] {
+  display: block;
+  max-height: 2.9em;
+  overflow: hidden;
+  color: #c5bbb2;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
 .CharacterManagementPanel_pinnedIcon {
   display: flex;
   flex: none;
+  width: 18px;
+  height: 18px;
+  align-self: start;
   color: #e38a62;
 }
 
@@ -408,12 +452,26 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   flex-direction: column;
   order: 1;
   overflow: hidden;
+  align-items: stretch;
+  justify-content: flex-start;
+}
+[data-part='floating-tab-content'] {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  height: auto;
 }
 .CharacterManagementPanel_cardsTab {
   display: flex;
   min-height: 0;
-  flex: 1;
+  flex: 1 1 auto;
   flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  height: auto;
   padding: 8px 16px 16px;
   gap: 12px;
 }
@@ -457,6 +515,12 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   flex: none;
   gap: 4px;
   height: auto;
+  max-height: none;
+  align-self: stretch;
+  align-items: flex-start;
+  justify-content: flex-start;
+  align-content: flex-start;
+  grid-auto-rows: min-content;
 }
 .CharacterManagementPanel_characterCard {
   display: grid;
@@ -464,11 +528,16 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   min-width: 0;
   min-height: 0;
   height: auto;
+  max-height: 140px;
   padding: 8px;
   flex: none;
+  align-self: flex-start;
   align-items: center;
+  align-content: start;
+  grid-auto-rows: min-content;
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 8px;
+  overflow: hidden;
   border: 1px solid #39342f;
   border-radius: 16px;
   color: #f3eee8;
@@ -4889,8 +4958,13 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
 .SidebarPanelHeader_avatar {
   display: flex;
   flex: none;
+  width: 44px;
+  height: 44px;
+  max-width: 44px;
+  max-height: 44px;
   align-items: center;
   justify-content: center;
+  align-self: center;
 }
 .SidebarPanelHeader_copy {
   display: flex;
@@ -4908,10 +4982,23 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
 .SidebarPanelHeader_headerDivider {
   display: block;
   flex: none;
+  align-self: stretch;
   width: 100%;
   height: 1px;
+  min-height: 1px;
   background: #39342f;
   pointer-events: none;
+}
+.SidebarPanelHeader_close,
+.SidebarPanelHeader_actions [data-component='button'] {
+  min-width: 40px;
+  min-height: 40px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  flex: none;
+  background: transparent;
+  border: 1px solid transparent;
 }
 .CharacterManagementPanel_headerAvatar,
 .CharacterManagementPanel_cardAvatar,
@@ -4934,10 +5021,25 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
 .CharacterManagementPanel_headerAvatar {
   width: 44px;
   height: 44px;
+  max-width: 44px;
+  max-height: 44px;
+  align-self: center;
 }
 .CharacterManagementPanel_cardAvatar {
   width: 52px;
   height: 52px;
+  max-width: 52px;
+  max-height: 52px;
+  aspect-ratio: auto;
+  grid-column: auto;
+  align-self: start;
+}
+.CharacterManagementPanel_editorAvatar {
+  width: 64px;
+  height: 64px;
+  max-width: 64px;
+  max-height: 64px;
+  align-self: start;
 }
 
 .nt-icon,
@@ -4996,9 +5098,20 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   line-height: 1.45;
   text-overflow: ellipsis;
 }
+.CharacterManagementPanel_cardCopy > span[data-part='card-description'] {
+  display: block;
+  max-height: 2.9em;
+  overflow: hidden;
+  color: #c5bbb2;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
 .CharacterManagementPanel_pinnedIcon {
   display: flex;
   flex: none;
+  width: 18px;
+  height: 18px;
+  align-self: start;
   color: #e38a62;
 }
 
@@ -5126,12 +5239,26 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   flex-direction: column;
   order: 1;
   overflow: hidden;
+  align-items: stretch;
+  justify-content: flex-start;
+}
+[data-part='floating-tab-content'] {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  height: auto;
 }
 .CharacterManagementPanel_cardsTab {
   display: flex;
   min-height: 0;
-  flex: 1;
+  flex: 1 1 auto;
   flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  height: auto;
   padding: 8px 16px 16px;
   gap: 12px;
 }
@@ -5175,6 +5302,12 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   flex: none;
   gap: 4px;
   height: auto;
+  max-height: none;
+  align-self: stretch;
+  align-items: flex-start;
+  justify-content: flex-start;
+  align-content: flex-start;
+  grid-auto-rows: min-content;
 }
 .CharacterManagementPanel_characterCard {
   display: grid;
@@ -5182,11 +5315,16 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   min-width: 0;
   min-height: 0;
   height: auto;
+  max-height: 140px;
   padding: 8px;
   flex: none;
+  align-self: flex-start;
   align-items: center;
+  align-content: start;
+  grid-auto-rows: min-content;
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 8px;
+  overflow: hidden;
   border: 1px solid #39342f;
   border-radius: 16px;
   color: #f3eee8;

@@ -1,22 +1,85 @@
-//! Display-sized avatar rasters for Blitz/Vello.
+//! Display-sized premultiplied avatar thumbnails for the GPU overlay.
 //!
 //! Product Wire `assets.content` returns the original bytes. The Hazel starter
-//! avatar is a 1024×1536 PNG (~2.2 MiB). Putting that in `<img src="data:…">`
-//! makes Blitz `Url::join` / Vello image upload fail or leave the SurfaceView
-//! uncleared (literal black). Header/card paint at 44–52 CSS px, so the DOM
-//! only gets a downscaled PNG.
+//! avatar is a 1024×1536 PNG (~2.2 MiB). Those bytes never enter Blitz as a
+//! `data:` URI and never become a Vello `Image` brush. The compositor uploads a
+//! cover-cropped 192×192 premultiplied RGBA thumbnail onto the same GPU
+//! device/queue as NeoCompositor.
 
 use base64::Engine;
-use image::imageops::FilterType;
-use image::{DynamicImage, ImageFormat, ImageReader};
+use image::imageops::{crop_imm, FilterType};
+use image::{DynamicImage, ImageReader, RgbaImage};
 use std::io::Cursor;
 
 /// Longest side for a header (44px) / card (52px) avatar at density 3.
 pub const AVATAR_DISPLAY_MAX_PX: u32 = 192;
 
-/// Reject data URIs that would still blow the Blitz/Vello path.
+/// Reject leftover `data:` payloads. Not used on the paint path.
 pub const AVATAR_DISPLAY_URI_MAX_CHARS: usize = 96_000;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AvatarThumb {
+    pub width: u32,
+    pub height: u32,
+    pub premul_rgba: Vec<u8>,
+}
+
+impl AvatarThumb {
+    pub fn byte_len(&self) -> usize {
+        self.premul_rgba.len()
+    }
+}
+
+pub fn premultiplied_cover_thumbnail(content_base64: &str) -> Option<AvatarThumb> {
+    let compact: String = content_base64
+        .chars()
+        .filter(|ch| !ch.is_ascii_whitespace())
+        .collect();
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(compact.as_bytes())
+        .ok()?;
+    thumbnail_from_bytes(&bytes)
+}
+
+pub fn thumbnail_from_bytes(bytes: &[u8]) -> Option<AvatarThumb> {
+    let image = ImageReader::new(Cursor::new(bytes))
+        .with_guessed_format()
+        .ok()?
+        .decode()
+        .ok()?;
+    Some(cover_square_premul(image, AVATAR_DISPLAY_MAX_PX))
+}
+
+fn cover_square_premul(image: DynamicImage, size: u32) -> AvatarThumb {
+    let size = size.max(1);
+    let rgba = image.to_rgba8();
+    let (width, height) = rgba.dimensions();
+    let side = width.min(height).max(1);
+    let x = (width.saturating_sub(side)) / 2;
+    let y = (height.saturating_sub(side)) / 2;
+    let cropped = crop_imm(&rgba, x, y, side, side).to_image();
+    let resized = DynamicImage::ImageRgba8(cropped).resize_exact(size, size, FilterType::Triangle);
+    let rgba = resized.to_rgba8();
+    AvatarThumb {
+        width: rgba.width(),
+        height: rgba.height(),
+        premul_rgba: premultiply(&rgba),
+    }
+}
+
+fn premultiply(image: &RgbaImage) -> Vec<u8> {
+    let mut out = Vec::with_capacity(image.len());
+    for pixel in image.pixels() {
+        let a = u16::from(pixel[3]);
+        out.push(((u16::from(pixel[0]) * a + 127) / 255) as u8);
+        out.push(((u16::from(pixel[1]) * a + 127) / 255) as u8);
+        out.push(((u16::from(pixel[2]) * a + 127) / 255) as u8);
+        out.push(pixel[3]);
+    }
+    out
+}
+
+/// Test helper only. Production paint never feeds this URI to Blitz/Vello.
 pub fn display_avatar_data_uri(content_base64: &str) -> Option<String> {
     let compact: String = content_base64
         .chars()
@@ -29,15 +92,12 @@ pub fn display_avatar_data_uri(content_base64: &str) -> Option<String> {
 }
 
 pub fn display_avatar_from_bytes(bytes: &[u8]) -> Option<String> {
-    let image = ImageReader::new(Cursor::new(bytes))
-        .with_guessed_format()
-        .ok()?
-        .decode()
-        .ok()?;
-    let image = fit_display(image);
+    let thumb = thumbnail_from_bytes(bytes)?;
+    let rgba = unpremultiply(&thumb.premul_rgba)?;
+    let img = RgbaImage::from_raw(thumb.width, thumb.height, rgba)?;
     let mut png = Vec::new();
-    image
-        .write_to(&mut Cursor::new(&mut png), ImageFormat::Png)
+    DynamicImage::ImageRgba8(img)
+        .write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png)
         .ok()?;
     if png.len() > AVATAR_DISPLAY_URI_MAX_CHARS {
         return None;
@@ -51,29 +111,38 @@ pub fn display_avatar_from_bytes(bytes: &[u8]) -> Option<String> {
     }
 }
 
-fn fit_display(image: DynamicImage) -> DynamicImage {
-    if image.width() <= AVATAR_DISPLAY_MAX_PX && image.height() <= AVATAR_DISPLAY_MAX_PX {
-        image
-    } else {
-        image.resize(
-            AVATAR_DISPLAY_MAX_PX,
-            AVATAR_DISPLAY_MAX_PX,
-            FilterType::Triangle,
-        )
+fn unpremultiply(premul: &[u8]) -> Option<Vec<u8>> {
+    if !premul.len().is_multiple_of(4) {
+        return None;
     }
+    let mut out = Vec::with_capacity(premul.len());
+    for chunk in premul.chunks_exact(4) {
+        let a = chunk[3];
+        if a == 0 {
+            out.extend_from_slice(&[0, 0, 0, 0]);
+        } else {
+            let scale = 255u16;
+            out.push(((u16::from(chunk[0]) * scale) / u16::from(a)).min(255) as u8);
+            out.push(((u16::from(chunk[1]) * scale) / u16::from(a)).min(255) as u8);
+            out.push(((u16::from(chunk[2]) * scale) / u16::from(a)).min(255) as u8);
+            out.push(a);
+        }
+    }
+    Some(out)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{display_avatar_from_bytes, AVATAR_DISPLAY_MAX_PX, AVATAR_DISPLAY_URI_MAX_CHARS};
-    use base64::Engine;
+    use super::{
+        thumbnail_from_bytes, AvatarThumb, AVATAR_DISPLAY_MAX_PX,
+    };
     use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
     use std::io::Cursor;
 
-    fn solid_png(width: u32, height: u32) -> Vec<u8> {
+    fn solid_png(width: u32, height: u32, color: [u8; 4]) -> Vec<u8> {
         let mut img = RgbaImage::new(width, height);
         for pixel in img.pixels_mut() {
-            *pixel = Rgba([227, 138, 98, 255]);
+            *pixel = Rgba(color);
         }
         let mut bytes = Vec::new();
         DynamicImage::ImageRgba8(img)
@@ -83,30 +152,25 @@ mod tests {
     }
 
     #[test]
-    fn keeps_a_1x1_png_sampleable() {
-        let png = solid_png(1, 1);
-        let uri = display_avatar_from_bytes(&png).expect("uri");
-        assert!(uri.starts_with("data:image/png;base64,"));
-        assert!(uri.len() < AVATAR_DISPLAY_URI_MAX_CHARS);
+    fn cover_crops_a_tall_raster_to_a_square_thumb() {
+        let png = solid_png(1024, 1536, [227, 138, 98, 255]);
+        let thumb = thumbnail_from_bytes(&png).expect("thumb");
+        assert_eq!(thumb.width, AVATAR_DISPLAY_MAX_PX);
+        assert_eq!(thumb.height, AVATAR_DISPLAY_MAX_PX);
+        assert_eq!(
+            thumb.premul_rgba.len(),
+            (AVATAR_DISPLAY_MAX_PX * AVATAR_DISPLAY_MAX_PX * 4) as usize
+        );
+        assert_eq!(&thumb.premul_rgba[0..4], &[227, 138, 98, 255]);
     }
 
     #[test]
-    fn downscales_a_1024_class_raster_for_the_dom() {
-        let png = solid_png(1024, 768);
-        let uri = display_avatar_from_bytes(&png).expect("uri");
-        assert!(
-            uri.len() < AVATAR_DISPLAY_URI_MAX_CHARS,
-            "display uri still too large: {}",
-            uri.len()
-        );
-        let b64 = uri
-            .strip_prefix("data:image/png;base64,")
-            .expect("prefix");
-        let bytes = base64::engine::general_purpose::STANDARD
-            .decode(b64.as_bytes())
-            .expect("b64");
-        let decoded = image::load_from_memory(&bytes).expect("decode");
-        assert!(decoded.width() <= AVATAR_DISPLAY_MAX_PX);
-        assert!(decoded.height() <= AVATAR_DISPLAY_MAX_PX);
+    fn premultiplies_partial_alpha() {
+        let png = solid_png(4, 8, [200, 100, 50, 128]);
+        let AvatarThumb { premul_rgba, .. } = thumbnail_from_bytes(&png).expect("thumb");
+        let r = ((200u16 * 128 + 127) / 255) as u8;
+        let g = ((100u16 * 128 + 127) / 255) as u8;
+        let b = ((50u16 * 128 + 127) / 255) as u8;
+        assert_eq!(&premul_rgba[0..4], &[r, g, b, 128]);
     }
 }

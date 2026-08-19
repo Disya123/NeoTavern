@@ -17,12 +17,26 @@ mod wire;
 mod android_jni;
 #[cfg(all(feature = "android-jni", feature = "gpu", target_os = "android"))]
 mod android_surface;
+#[cfg(all(feature = "android-jni", feature = "gpu", target_os = "android"))]
+mod avatar_gpu;
+#[cfg(feature = "gpu")]
+#[cfg_attr(
+    not(all(feature = "android-jni", target_os = "android")),
+    allow(dead_code)
+)]
+mod vello_diag;
+#[cfg(feature = "gpu")]
+#[cfg_attr(
+    not(all(feature = "android-jni", target_os = "android")),
+    allow(dead_code)
+)]
+mod vello_gpu;
 
 use neotavern_presentation_dioxus_shell::{dioxus_shell_from_flag, DioxusShellHost};
 
 pub use avatar::{
-    display_avatar_data_uri, display_avatar_from_bytes, AVATAR_DISPLAY_MAX_PX,
-    AVATAR_DISPLAY_URI_MAX_CHARS,
+    display_avatar_data_uri, display_avatar_from_bytes, premultiplied_cover_thumbnail,
+    thumbnail_from_bytes, AvatarThumb, AVATAR_DISPLAY_MAX_PX, AVATAR_DISPLAY_URI_MAX_CHARS,
 };
 pub use compositor::ChatCompositor;
 pub use error::ChatRouteError;

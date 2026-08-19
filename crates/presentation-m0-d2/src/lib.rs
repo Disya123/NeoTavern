@@ -16,6 +16,7 @@ mod assemble;
 mod data_uri;
 #[cfg(feature = "gpu")]
 mod gpu_run;
+mod layout_probe;
 mod sink;
 #[cfg(feature = "gpu")]
 mod tee;
@@ -43,8 +44,14 @@ pub use neotavern_presentation_design_system::SafeAreaInsets as ProductSafeAreaI
 pub use assemble::{
     assemble_from_stream, assemble_from_stream_at, insert_moving_sample_before_last_glass,
 };
+pub use layout_probe::{
+    attach_image_paints, collect_paint_layout, image_paints_from_layout, AvatarKind, AvatarSlot,
+    ProductPaintLayout, AVATAR_CLIP_RADIUS_CSS,
+};
 #[cfg(feature = "gpu")]
 pub use gpu_run::{run_dynamic_d2, run_dynamic_d2_with_capture, DynamicD2Report};
+#[cfg(feature = "gpu")]
+pub use vello_sink::{LayerDiag, VelloFilter, VelloSink};
 pub use sink::{DrawKind, ProducerSink, StreamOp};
 pub use text_publish::{
     fallback_without_snapshot_is_not_ready, ime_ops_without_glyph_reraster,
@@ -264,6 +271,30 @@ pub fn produce_product_vdom_at(
     finish_producer(sink, diagnostic_dom_glass, raster_images, width, height)
 }
 
+/// One Blitz layout of the product shell without a Vello paint. Used to lock
+/// compact card geometry (Hazel must not stretch to the leftover viewport).
+pub fn inspect_product_layout(
+    app: fn() -> Element,
+    width: u32,
+    height: u32,
+    scale: f32,
+    insets: SafeAreaInsets,
+) -> Result<ProductPaintLayout, String> {
+    let width = width.max(1);
+    let height = height.max(1);
+    let scale = scale.max(1.0);
+    let mut doc = DioxusDocument::new(VirtualDom::new(app), product_document_config(width, height, scale, insets));
+    beat_blitz_default_css(&doc, insets);
+    doc.initial_build();
+    {
+        let mut inner = doc.inner.borrow_mut();
+        inner.handle_messages();
+        inner.resolve(0.0);
+    }
+    let layout = collect_paint_layout(&doc.inner.borrow(), scale);
+    Ok(layout)
+}
+
 /// Same as [`produce_product_app_at`] plus a Vello scene for NeoCompositor.
 #[cfg(feature = "gpu")]
 pub fn produce_product_gpu_app_scaled(
@@ -302,6 +333,102 @@ pub fn produce_product_gpu_app_scaled(
     }
     let out = finish_producer(sink, diagnostic_dom_glass, raster_images, width, height)?;
     Ok((out, vello_sink.scene))
+}
+
+/// Reusable product VDOM so GPU diagnostics can re-paint with filters
+/// without rebuilding layout each prefix.
+#[cfg(feature = "gpu")]
+pub struct ProductVelloSession {
+    doc: DioxusDocument,
+    width: u32,
+    height: u32,
+    scale: f32,
+    diagnostic_dom_glass: Vec<u64>,
+    raster_images: u64,
+    paint_layout: ProductPaintLayout,
+}
+
+#[cfg(feature = "gpu")]
+impl ProductVelloSession {
+    pub fn open(
+        app: fn() -> Element,
+        width: u32,
+        height: u32,
+        scale: f32,
+        insets: SafeAreaInsets,
+    ) -> Result<Self, String> {
+        let width = width.max(1);
+        let height = height.max(1);
+        let scale = scale.max(1.0);
+        let mut doc = DioxusDocument::new(
+            VirtualDom::new(app),
+            product_document_config(width, height, scale, insets),
+        );
+        beat_blitz_default_css(&doc, insets);
+        doc.initial_build();
+        {
+            let mut inner = doc.inner.borrow_mut();
+            inner.handle_messages();
+            inner.resolve(0.0);
+        }
+        let diagnostic_dom_glass = diagnostic_glass_dom_order(&doc.inner.borrow());
+        let raster_images = count_raster_images(&doc.inner.borrow());
+        let paint_layout = collect_paint_layout(&doc.inner.borrow(), scale);
+        Ok(Self {
+            doc,
+            width,
+            height,
+            scale,
+            diagnostic_dom_glass,
+            raster_images,
+            paint_layout,
+        })
+    }
+
+    pub fn paint_layout(&self) -> &ProductPaintLayout {
+        &self.paint_layout
+    }
+
+    pub fn scale(&self) -> f32 {
+        self.scale
+    }
+
+    pub fn paint(
+        &mut self,
+        filter: vello_sink::VelloFilter,
+    ) -> Result<(ProducerOutput, vello::Scene, vello_sink::LayerDiag), String> {
+        let mut sink = ProducerSink {
+            max_ops: filter.max_ops,
+            ..ProducerSink::default()
+        };
+        let mut vello_sink = vello_sink::VelloSink::with_filter(filter);
+        {
+            let mut inner = self.doc.inner.borrow_mut();
+            let mut tee = tee::TeeSink {
+                a: &mut sink,
+                b: &mut vello_sink,
+            };
+            paint_scene(
+                &mut tee,
+                &mut inner,
+                f64::from(self.scale),
+                self.width,
+                self.height,
+                0,
+                0,
+            );
+        }
+        vello_sink.close_unbalanced_layers();
+        let diag = vello_sink.diag;
+        let out = finish_producer(
+            sink,
+            self.diagnostic_dom_glass.clone(),
+            self.raster_images,
+            self.width,
+            self.height,
+        )?;
+        Ok((out, vello_sink.scene, diag))
+    }
 }
 
 fn finish_producer(

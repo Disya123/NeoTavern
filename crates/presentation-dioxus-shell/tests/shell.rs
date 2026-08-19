@@ -99,6 +99,7 @@ fn product_shell_virtualdom_contains_character_manager() {
         name: "Hazel".into(),
         description: "wry".into(),
         tags: vec!["wry".into()],
+        avatar_asset_id: None,
         avatar_data_uri: None,
     }];
     view.selected_character_id = Some("4f2f0a1e-9b3c-4d5e-8f6a-7b8c9d0e1f2a".into());
@@ -153,12 +154,23 @@ fn chrome_metrics_phone_uses_readable_bands() {
 
 #[test]
 fn character_card_description_matches_react_formatter() {
-    use neotavern_presentation_dioxus_shell::character_card_description;
+    use neotavern_presentation_dioxus_shell::{
+        character_card_description, character_manager_title, ellipsize_css,
+        CHARACTER_MANAGER_TITLE,
+    };
     assert_eq!(
         character_card_description(""),
         "No character description yet."
     );
     assert_eq!(character_card_description("wry"), "wry");
+    assert_eq!(
+        ellipsize_css(CHARACTER_MANAGER_TITLE, 400.0, 20.0),
+        CHARACTER_MANAGER_TITLE
+    );
+    let clipped = ellipsize_css(CHARACTER_MANAGER_TITLE, 90.0, 20.0);
+    assert!(clipped.ends_with('…'), "{clipped}");
+    let phone = character_manager_title(407);
+    assert!(phone.starts_with("Character"), "{phone}");
 }
 
 #[test]

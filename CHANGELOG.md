@@ -50,24 +50,43 @@
 
 - **Character Manager no longer paints a black SurfaceView when a live
   avatar is present.** Product Wire `assets.content` still returns the
-  original (Hazel is 1024×1536 / ~2.2 MiB). The shell hydrates a 192px
-  display PNG. Packed CSS `mask-image` SVG data URIs are not fetched.
-  A live `<img>` in the Blitz→Vello 0.9 Vulkan tree cleared the framebuffer
-  (bind still reported paint commands); header/card keep the clipped
-  initial until a sampled atlas blit is proven. On this Android Vulkan
-  device Vello GPU compute left the content texture empty (`a=0`); bind
-  rasters with Vello `use_cpu` and copies into a sampled texture before
-  blit. Bind retries without images if raster fails. Record:
+  original (Hazel is 1024×1536 / ~2.2 MiB). The session hydrates a 192×192
+  premultiplied cover thumbnail. Packed CSS `mask-image` SVG data URIs are
+  not fetched. Blitz never sees a `data:` URI; Vello never samples an Image
+  brush. Header/card keep the clipped initial until the GPU texture is
+  uploaded, then `ImagePaintOp` blits the same cached handle onto both
+  dest rects (rounded clip, `object-fit: cover`) without a layout rebuild.
+  Production/canary bind
+  uses GPU Vello (`renderer=vello-gpu`) on the same shared-device request
+  as M0-D2 (`Limits::default()` first, `CLEAR_TEXTURE` when present).
+  Vello writes a non-sRGB `Rgba8Unorm` storage target; a GPU copy/compute
+  convert produces the sampled NeoCompositor texture (`sampled_output=true`,
+  `cpu_full_frame_raster=0`, `image_readbacks=0`, `cross_device_copies=0`).
+  CPU Vello (`use_cpu`) is only `NEOTA_SOFTWARE_RASTER_DEBUG=1` /
+  `com.neotavern.mobile.NEOTA_SOFTWARE_RASTER_DEBUG=1`. A GPU rect is
+  plumbing only; UI rasters use a fresh storage/sampled pair and diagnostic
+  `base_color` `#3d5cff` so a retained rect cannot look like success.
+  First bind A/B compiles Vello `unchecked` vs naga bounds checks (no WGSL
+  index patch until that A/B says so), then resolution and display-list
+  prefix bisection. Full-resolution-only failure uses GPU tiled raster
+  (one layout / one PaintScene / one SceneEpoch, `Scene::append` with
+  `-tile_origin`) , not CPU. Bind still retries without images if raster
+  fails. Record:
   [`docs/architecture/presentation-boundary.md`](docs/architecture/presentation-boundary.md).
 
 - **Character Manager component geometry follows the React source.** Header
   loads the Product Wire avatar into a clipped 44px box (fallback initial
-  stays inside that box), ellipsizes the title, and paints the header
-  divider as a real node because Blitz does not emit `::after`. The rail
+  stays inside that box), ellipsizes the title (Blitz clips
+  `overflow:hidden` without a `text-overflow` glyph, so RSX emits `…`),
+  and paints the header divider as a sibling under the header row because
+  Blitz does not emit `::after` and a `width:100%` divider inside the
+  header flex row squeezed the title. The rail
   centers 40px controls and keeps the separator after the menu toggle.
   Cards tab padding/gap, segmented list/grid, and the right-aligned loaded
   count come from `CharacterManagementPanel.module.css`. Character cards
-  use the React description formatter, 2-line clamp, pin, and grid
+  stay a compact list row (`height: auto`, `align-self: start`, max 140 CSS
+  px) with avatar + pin on one grid row; they must not stretch into the
+  leftover tab panel. Description formatter, 2-line clamp, pin, and grid
   `auto minmax(0,1fr) auto`. Bottom tabs use the panel column with
   `margin: 8px 16px max(32px, inset)`. Native chat composer/Send overlay
   is removed from the view hierarchy off the chat route.

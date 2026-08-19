@@ -79,6 +79,7 @@ config. Isolated 10k is a debug harness profile and is not the canary store.
 | `com.neotavern.mobile.NEOTA_FORCE_INIT_FAILURE=1` | arm kill switch **before** `loadLibrary` → WebView |
 | `com.neotavern.mobile.NEOTA_CANARY_RESET=1` | clear kill switch and crash-loop counter |
 | `com.neotavern.mobile.NEOTA_CHAT_ID` | same Kernel chat across renderers |
+| `com.neotavern.mobile.NEOTA_SOFTWARE_RASTER_DEBUG=1` | CPU Vello only (not production/canary) |
 
 Enable once (Xiaomi `8f5c2b7c` only), then use the icon:
 
@@ -99,7 +100,8 @@ cutover.
 
 The live canary host now creates a NeoCompositor `SurfaceView`. Runtime
 logs `host=neocompositor-surfaceview backend=Vulkan product_wire=live
-producer=dioxus+blitz devices=1 density=… readbacks=0 xdev=0`. Paint uses
+producer=dioxus+blitz renderer=vello-gpu devices=1 cpu_full_frame_raster=0
+image_readbacks=0 cross_device_copies=0 sampled_output=true`. Paint uses
 `DisplayMetrics.density` so CSS chrome is not 1:1 with the SurfaceView
 pixel size; a density-1 dump (tiny top-left glyphs, no header/composer
 fill) is a HiDPI miss, not `NOT_CONNECTED`. Physical compositor scroll

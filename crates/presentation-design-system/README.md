@@ -32,9 +32,10 @@ left as `var(--nt-safe-area-*)` and baked to CSS pixels at produce time from
 Android WindowInsets.
 
 Component geometry that Blitz cannot express (`::after` dividers,
-`-webkit-line-clamp`, display-sized `data:` avatar images, sibling rail
-separators) is added as
-real nodes / flattened rules in `BLITZ_NEUTRALIZE`. Token values stay the
+`-webkit-line-clamp`, sibling rail separators, `text-overflow: ellipsis`
+glyphs) is added as real nodes / flattened rules / RSX ellipsis in
+`BLITZ_NEUTRALIZE`. Avatars are GPU
+overlays, not display-sized `data:` images in the DOM. Token values stay the
 React dark sheet; do not retune `#151311` / `#24211e` from screenshots.
 
 Visual screenshot diffs are a later verification gate. Implementation is from

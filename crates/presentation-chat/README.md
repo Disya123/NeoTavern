@@ -34,7 +34,14 @@ not yet proven.
   `libneotavern_android_jni.so`. GPU present uses the same `.so` and a
   `SurfaceView` lifecycle (`attachSurface` / `presentFrame` / `tryPush`).
   `attachSurface` takes physical width/height plus display density so CSS
-  chrome maps onto the SurfaceView.
+  chrome maps onto the SurfaceView. Production/canary raster is GPU Vello
+  (`renderer=vello-gpu`); CPU Vello is only
+  `NEOTA_SOFTWARE_RASTER_DEBUG=1` /
+  `--es com.neotavern.mobile.NEOTA_SOFTWARE_RASTER_DEBUG 1`.
+  First-bind GPU diagnostics use a unique UI `base_color` and fresh
+  textures; a terracotta rect is not a production pass. Tiled GPU present
+  keeps one Blitz layout and one full-viewport PaintScene. Avatars are a
+  sampled GPU overlay (`ImagePaintOp`), not a `data:` URI in Blitz/Vello.
 
 ## What this crate is not
 
@@ -48,6 +55,7 @@ not yet proven.
 
 ```bash
 cargo test -p neotavern-presentation-chat
+cargo test -p neotavern-presentation-chat --features gpu
 cargo clippy -p neotavern-presentation-chat --all-targets -- -D warnings
 ```
 

@@ -246,18 +246,49 @@ the product sheet is applied. Icons are inline
 `<svg><path>` with explicit fills (CSS `mask-image` is not the paint path).
 The live SurfaceView route now mounts App Shell + Character Manager Cards
 through Product Wire `characters.list` with that sheet. Header/card avatars
-resolve `avatarAssetId` via `assets.content`, then downscale to a 192px
-display PNG `data:` URI (the starter Hazel file is 1024×1536 / ~2.2 MiB;
-the original must not enter `<img src>` or Vello leaves the SurfaceView
-black). Packed Phosphor `mask-image` `data:image/svg+xml` URLs are not
-fetched. Header/card avatars keep the clipped React initial: a live `<img>`
-in this Blitz→Vello 0.9 Vulkan path clears the framebuffer even after Image
-brushes are skipped. The session still hydrates a 192px display PNG for a
-later sampled blit. On the live Android Vulkan device Vello GPU compute left
-the content texture empty; bind rasters with Vello `use_cpu` and copies into
-a sampled texture before blit. Blitz does not sample the raster on device yet.
+resolve `avatarAssetId` via `assets.content`, decode/resize off the Vello
+path to a 192×192 premultiplied RGBA thumbnail (`object-fit: cover` crop),
+and upload once onto the same GPU device/queue as NeoCompositor
+(`ImagePaintOp`, `readbacks=0`, `xdev=0`). Blitz never receives a `data:`
+URI and Vello never samples an `Image` brush (that path blacks the
+SurfaceView on Android Vulkan). Until the GPU texture is ready the clipped
+React initial (`H`) remains; after the readiness token the sampled texture
+replaces it without a layout rebuild. Header and card share one cached
+texture handle, with a 10px CSS rounded clip. Packed Phosphor `mask-image`
+`data:image/svg+xml` URLs are not fetched. Production/canary SurfaceView bind uses GPU Vello
+  (`renderer=vello-gpu`, `use_cpu=false`) with the M0-D2 device request
+  (`Limits::default()` first, `CLEAR_TEXTURE` / `PIPELINE_CACHE` when the
+  adapter has them, one `SharedGpuContext` / `DeviceEpoch`). Format
+  capabilities must include storage-write `Rgba8Unorm` (non-sRGB,
+  premultiplied). The compositor samples a GPU-converted texture
+  (`STORAGE` → GPU copy or compute convert → `TEXTURE_BINDING`), not the
+  storage target itself. CPU Vello is only the explicit
+  `NEOTA_SOFTWARE_RASTER_DEBUG=1` flag. A one-path GPU rect is plumbing
+  only: each diagnostic raster uses a **new** storage/sampled pair so a
+  retained rect cannot mask a missing UI write. Full-UI
+  `RenderParams.base_color` is diagnostic `#3d5cff` (not a product token):
+  black means submit did not run; that blue with no chrome means coarse/fine
+  did not write paths. Bind logs `render_to_texture` Result, wgpu error
+  scopes, uncaptured errors, and submit-done; `device.poll(wait)` is
+  diagnostic-only. Android debug Vello A/B compiles shaders
+  `unchecked` vs naga bounds checks; Vello 0.9 WGSL contains
+  `select(0u, array[index-1u], index>0u)` in coarse/fine/tile_alloc, but
+  that index is **not** patched until a bounds-checked capture writes UI
+  and unchecked does not. Resolution and display-list prefix bisection
+  run on first bind; if only small targets write, GPU tiled raster is used
+  (not CPU full-frame raster). Tiled present keeps **one** Blitz layout and
+  **one** full-viewport `PaintScene` / `SceneEpoch`. Each tile is
+  `Scene::append(full, translate(-tile_origin))` onto a tile-sized target
+  (encoding-level seam-test locked; do not retune WGSL). Images stay out of
+  Vello; avatars are a post-Vello sampled overlay. Bind retries
+  without images if raster fails. Blitz does not sample the raster on device yet.
 The React card formatter is `description || "No character
-description yet."` with a 2-line clamp. Native Android composer/Send views
+description yet."` with a 2-line clamp. Blitz does not paint
+`text-overflow: ellipsis`; the header title string is ellipsized in RSX
+and the header divider is a sibling under the header row so a
+`width:100%` flex item cannot squeeze the title. Selected cards set
+`background:#492a20` / `border-color:#e38a62` inline because attribute
+selectors are not reliable in this Stylo subset. Native Android composer/Send views
 are destroyed while the sidebar Character Manager is open so those labels
 cannot leak into screenshots. This is **not** a
 visual golden PASS (device overlay / ≤1 dp geometry diff is not signed) and

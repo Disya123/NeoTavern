@@ -214,7 +214,14 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   and bottom tabs. Packed `--st-*` tokens, `color-mix()`, and logical
   properties are flattened to physical pixels; Blitz `DEFAULT_CSS` is
   removed so radii/colors survive. Phosphor icons are inline SVG fills, not
-  CSS masks. This is not visual golden PASS and not WebView removal.
+  CSS masks. Avatars are a sampled GPU overlay (`ImagePaintOp`) from
+  Product Wire `assets.content`; Blitz/Vello never see a `data:` URI.
+  Production/canary raster is GPU Vello (`renderer=vello-gpu`);
+  CPU Vello is only `--es com.neotavern.mobile.NEOTA_SOFTWARE_RASTER_DEBUG 1`.
+  GPU diagnostics: unique UI `base_color` `#3d5cff` on a fresh target;
+  terracotta rect is plumbing only. Tiled present uses one layout and one
+  full-viewport PaintScene.
+  This is not visual golden PASS and not WebView removal.
   Raw input-to-present is not gated against one refresh; deadline miss is
   renderer-controlled present vs `targetPresentDeadline`.
   Physical stamp `2026-08-18T16-28-13-285Z`.

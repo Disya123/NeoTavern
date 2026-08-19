@@ -2,27 +2,41 @@
 //!
 //! One session: Wire → Dioxus → Blitz → presentation-session → NeoCompositor → wgpu.
 
-use std::num::NonZeroUsize;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr::NonNull;
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 
+use crate::vello_diag::{
+    classify_samples, encoding_line, format_error_scopes, resolution_ladder, scene_with_tile_origin,
+    tile_origins, SampleClass, UI_BASE_COLOR, UI_BASE_RGBA,
+};
+use crate::vello_gpu::{
+    adapter_sort_key, coarse_bin_count, create_storage_convert_pipeline, gpu_storage_to_sampled,
+    opaque_rect_scene, peek_texture_rgba, plan_vello_target, production_host_line, renderer_name,
+    request_vello_device, skip_emulator_vulkan, software_raster_debug_enabled,
+    vello_renderer_options, ConvertMode, StorageConvert, VelloTargets,
+};
 use jni::objects::JObject;
 use jni::JNIEnv;
 use neotavern_neocompositor::{
-    GpuFault, GpuRecovery, PlatformInputAdapter, PlatformPointerKind, PlatformPointerSample,
-    PointerId, PresentationTime,
+    GpuCaps, GpuFault, GpuRecovery, HandleOwner, ImagePaintOp, PlatformInputAdapter,
+    PlatformPointerKind, PlatformPointerSample, PointerId, PresentationTime, SharedGpuContext,
+    SharedHandleKind,
 };
 use neotavern_presentation_dioxus_shell::{
     chrome_metrics, install_product_shell, product_shell_app, ProductShellView, SafeAreaInsets,
 };
-use neotavern_presentation_m0_d2::produce_product_gpu_app_scaled;
+use neotavern_presentation_m0_d2::{
+    attach_image_paints, image_paints_from_layout, ProductPaintLayout, ProductVelloSession,
+    VelloFilter,
+};
 use raw_window_handle::{
     AndroidDisplayHandle, AndroidNdkWindowHandle, RawDisplayHandle, RawWindowHandle,
 };
-use vello::{AaConfig, AaSupport, RenderParams, Renderer, RendererOptions};
+use vello::{AaConfig, RenderParams, Renderer};
 
+use crate::avatar_gpu::AvatarGpu;
 use crate::compositor::ChatCompositor;
 use crate::session::ChatSession;
 use crate::shell_hit::{hit_test, ShellAction, ShellHit};
@@ -99,6 +113,7 @@ struct GpuSurface {
     pipeline: wgpu::RenderPipeline,
     #[allow(dead_code)]
     content: wgpu::Texture,
+    #[allow(dead_code)]
     content_view: wgpu::TextureView,
     resolve: wgpu::Texture,
     resolve_view: wgpu::TextureView,
@@ -108,6 +123,16 @@ struct GpuSurface {
     window: *mut std::ffi::c_void,
     backend: String,
     srgb_target: bool,
+    convert: ConvertMode,
+    convert_pipeline: Option<wgpu::ComputePipeline>,
+    convert_bgl: Option<wgpu::BindGroupLayout>,
+    storage_usages: wgpu::TextureUsages,
+    sampled_usages: wgpu::TextureUsages,
+    software_debug: bool,
+    shader_bounds: bool,
+    tile: Option<(u32, u32)>,
+    device_epoch: u64,
+    avatars: AvatarGpu,
 }
 
 unsafe impl Send for GpuSurface {}
@@ -123,6 +148,7 @@ struct GpuHost {
     gpu: GpuSurface,
     compositor: Option<ChatCompositor>,
     recovery: GpuRecovery,
+    shared: SharedGpuContext,
     input: PlatformInputAdapter,
     velocity: f64,
     last_y: Option<f32>,
@@ -133,12 +159,15 @@ struct GpuHost {
     shell_overlay: bool,
     hit_view: Option<ProductShellView>,
     pending_ui: Option<PendingUi>,
+    gpu_probed: bool,
+    image_paints: Vec<ImagePaintOp>,
 }
 
 unsafe impl Send for GpuHost {}
 
 static HOST: Mutex<Option<GpuHost>> = Mutex::new(None);
 static DIRTY: AtomicBool = AtomicBool::new(true);
+static AVATAR_OVERLAY: AtomicBool = AtomicBool::new(false);
 static COMPOSITE_LOGGED: AtomicU64 = AtomicU64::new(0);
 static SHELL_ACTION: Mutex<Option<ShellAction>> = Mutex::new(None);
 static PENDING_INSETS: Mutex<Option<[f32; 4]>> = Mutex::new(None);
@@ -168,7 +197,7 @@ fn open_gpu(
     }
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: wgpu::Backends::VULKAN | wgpu::Backends::GL,
-        flags: wgpu::InstanceFlags::from_build_config()
+        flags: wgpu::InstanceFlags::from_build_config().with_env()
             | wgpu::InstanceFlags::ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER
             | wgpu::InstanceFlags::DEBUG,
         memory_budget_thresholds: wgpu::MemoryBudgetThresholds::default(),
@@ -185,31 +214,29 @@ fn open_gpu(
     let mut adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::all()));
     adapters.sort_by_key(|adapter| {
         let info = adapter.get_info();
-        (
-            u8::from(info.backend != wgpu::Backend::Vulkan),
-            u8::from(matches!(info.device_type, wgpu::DeviceType::Cpu)),
-        )
+        adapter_sort_key(info.backend, info.device_type)
     });
     let adapter = adapters
         .into_iter()
         .find(|adapter| {
-            let name = adapter.get_info().name.to_ascii_lowercase();
-            if name.contains("goldfish")
-                || name.contains("gfxstream")
-                || name.contains("swiftshader")
-            {
+            let info = adapter.get_info();
+            if skip_emulator_vulkan(&info) {
                 return false;
             }
             adapter.is_surface_supported(&surface)
         })
         .ok_or_else(|| "no surface-capable Vulkan/GLES adapter".to_string())?;
     let info = adapter.get_info();
-    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-        label: Some("neocompositor-chat"),
-        required_limits: adapter.limits(),
-        ..Default::default()
-    }))
-    .map_err(|err| format!("device: {err}"))?;
+    let (device, queue) = request_vello_device(&adapter)?;
+    device.on_uncaptured_error(Arc::new(|err| {
+        trace(&format!(
+            "wgpu_uncaptured {}",
+            err.to_string().replace([' ', '\n'], "_")
+        ));
+    }));
+    let plan =
+        plan_vello_target(adapter.get_texture_format_features(wgpu::TextureFormat::Rgba8Unorm))?;
+    trace(&plan.log_line());
     let cap = surface.get_capabilities(&adapter);
     let format = pick_surface_format(&cap.formats).ok_or("no swapchain format")?;
     let srgb_target = format_is_srgb(format);
@@ -224,18 +251,11 @@ fn open_gpu(
         desired_maximum_frame_latency: 2,
     };
     surface.configure(&device, &config);
-    let renderer = Renderer::new(
-        &device,
-        RendererOptions {
-            use_cpu: true,
-            antialiasing_support: AaSupport::area_only(),
-            num_init_threads: NonZeroUsize::new(1),
-            ..Default::default()
-        },
-    )
-    .map_err(|err| format!("vello: {err}"))?;
+    let software_debug = software_raster_debug_enabled();
+    let renderer = Renderer::new(&device, vello_renderer_options(software_debug))
+        .map_err(|err| format!("vello: {err}"))?;
     let content = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("neocompositor-content"),
+        label: Some("neocompositor-vello-storage"),
         size: wgpu::Extent3d {
             width: config.width,
             height: config.height,
@@ -244,15 +264,13 @@ fn open_gpu(
         mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::Rgba8Unorm,
-        usage: wgpu::TextureUsages::STORAGE_BINDING
-            | wgpu::TextureUsages::TEXTURE_BINDING
-            | wgpu::TextureUsages::COPY_SRC,
+        format: plan.format,
+        usage: plan.storage_usages,
         view_formats: &[],
     });
     let content_view = content.create_view(&wgpu::TextureViewDescriptor::default());
     let resolve = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("neocompositor-resolve"),
+        label: Some("neocompositor-sampled"),
         size: wgpu::Extent3d {
             width: config.width,
             height: config.height,
@@ -261,10 +279,8 @@ fn open_gpu(
         mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::Rgba8Unorm,
-        usage: wgpu::TextureUsages::COPY_DST
-            | wgpu::TextureUsages::TEXTURE_BINDING
-            | wgpu::TextureUsages::RENDER_ATTACHMENT,
+        format: plan.format,
+            usage: plan.sampled_usages | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
     });
     let resolve_view = resolve.create_view(&wgpu::TextureViewDescriptor::default());
@@ -365,6 +381,13 @@ fn open_gpu(
         ],
     });
     clear_canvas_view(&device, &queue, &resolve_view);
+    let (convert_pipeline, convert_bgl) = if plan.convert == ConvertMode::Compute {
+        let (pipeline, bgl) = create_storage_convert_pipeline(&device);
+        (Some(pipeline), Some(bgl))
+    } else {
+        (None, None)
+    };
+    let avatars = AvatarGpu::new(&device, plan.format);
     Ok(GpuSurface {
         device,
         queue,
@@ -381,6 +404,16 @@ fn open_gpu(
         window,
         backend: format!("{:?}", info.backend),
         srgb_target,
+        convert: plan.convert,
+        convert_pipeline,
+        convert_bgl,
+        storage_usages: plan.storage_usages,
+        sampled_usages: plan.sampled_usages | wgpu::TextureUsages::COPY_SRC,
+        software_debug,
+        shader_bounds: false,
+        tile: None,
+        device_epoch: 0,
+        avatars,
     })
 }
 
@@ -424,55 +457,364 @@ fn pick_alpha_mode(modes: &[wgpu::CompositeAlphaMode]) -> wgpu::CompositeAlphaMo
     }
 }
 
-fn host_line(
-    backend: &str,
-    product_wire: &str,
-    devices: u32,
-    density: f32,
-    swapchain: wgpu::TextureFormat,
-) -> String {
-    format!(
-        "host=neocompositor-surfaceview backend={backend} product_wire={product_wire} producer=dioxus+blitz devices={devices} density={density} swapchain={swapchain:?} srgb={} readbacks=0 xdev=0",
-        u8::from(format_is_srgb(swapchain))
+fn host_line(gpu: &GpuSurface, product_wire: &str, devices: u32, density: f32) -> String {
+    production_host_line(
+        &gpu.backend,
+        product_wire,
+        devices,
+        density,
+        gpu.config.format,
+        gpu.device_epoch,
+        gpu.software_debug,
     )
 }
 
-fn raster_scene(gpu: &mut GpuSurface, scene: &vello::Scene) -> Result<(), String> {
-    gpu.renderer
-        .render_to_texture(
+struct RasterReport {
+    class: SampleClass,
+    samples: [[u8; 4]; 3],
+}
+
+fn ui_base_clear_color() -> wgpu::Color {
+    wgpu::Color {
+        r: 0x3d as f64 / 255.0,
+        g: 0x5c as f64 / 255.0,
+        b: 1.0,
+        a: 1.0,
+    }
+}
+
+fn alloc_fresh_targets(
+    gpu: &GpuSurface,
+    width: u32,
+    height: u32,
+) -> (wgpu::Texture, wgpu::Texture, wgpu::TextureView, wgpu::TextureView) {
+    let size = wgpu::Extent3d {
+        width: width.max(1),
+        height: height.max(1),
+        depth_or_array_layers: 1,
+    };
+    let storage = gpu.device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("vello-diag-storage"),
+        size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: gpu.storage_usages,
+        view_formats: &[],
+    });
+    let sampled = gpu.device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("vello-diag-sampled"),
+        size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: gpu.sampled_usages,
+        view_formats: &[],
+    });
+    let storage_view = storage.create_view(&wgpu::TextureViewDescriptor::default());
+    let sampled_view = sampled.create_view(&wgpu::TextureViewDescriptor::default());
+    (storage, sampled, storage_view, sampled_view)
+}
+
+fn copy_sampled_to_resolve(gpu: &GpuSurface, sampled: &wgpu::Texture, width: u32, height: u32) {
+    if width != gpu.config.width || height != gpu.config.height {
+        clear_view_color(&gpu.device, &gpu.queue, &gpu.resolve_view, ui_base_clear_color());
+    }
+    let mut encoder = gpu
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("vello-diag-present-copy"),
+        });
+    encoder.copy_texture_to_texture(
+        wgpu::TexelCopyTextureInfo {
+            texture: sampled,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        wgpu::TexelCopyTextureInfo {
+            texture: &gpu.resolve,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        wgpu::Extent3d {
+            width: width.min(gpu.config.width).max(1),
+            height: height.min(gpu.config.height).max(1),
+            depth_or_array_layers: 1,
+        },
+    );
+    gpu.queue.submit(Some(encoder.finish()));
+}
+
+fn recreate_renderer(gpu: &mut GpuSurface, bounds: bool) -> Result<(), String> {
+    vello::set_debug_shader_bounds_checks(bounds);
+    gpu.renderer = Renderer::new(&gpu.device, vello_renderer_options(gpu.software_debug))
+        .map_err(|err| format!("vello renderer: {err}"))?;
+    gpu.shader_bounds = bounds;
+    trace(&format!(
+        "vello_gpu shader_bounds={} use_cpu={}",
+        u8::from(bounds),
+        u8::from(gpu.software_debug)
+    ));
+    Ok(())
+}
+
+fn raster_fresh(
+    gpu: &mut GpuSurface,
+    scene: &vello::Scene,
+    stage: &str,
+    width: u32,
+    height: u32,
+    base_color: vello::peniko::Color,
+    present: bool,
+    capture: bool,
+) -> Result<RasterReport, String> {
+    let width = width.max(1);
+    let height = height.max(1);
+    trace(&format!(
+        "vello_gpu stage={stage} renderer={} use_cpu={} shader_bounds={} paths={} empty={} bins={} convert={:?} target={}x{} {}",
+        renderer_name(gpu.software_debug),
+        u8::from(gpu.software_debug),
+        u8::from(gpu.shader_bounds),
+        scene.encoding().n_paths,
+        u8::from(scene.encoding().is_empty()),
+        coarse_bin_count(width, height),
+        gpu.convert,
+        width,
+        height,
+        encoding_line(scene, width, height),
+    ));
+    let (storage, sampled, storage_view, sampled_view) = alloc_fresh_targets(gpu, width, height);
+    if capture {
+        unsafe {
+            gpu.device.start_graphics_debugger_capture();
+        }
+    }
+    let g_internal = gpu.device.push_error_scope(wgpu::ErrorFilter::Internal);
+    let g_oom = gpu.device.push_error_scope(wgpu::ErrorFilter::OutOfMemory);
+    let g_validation = gpu.device.push_error_scope(wgpu::ErrorFilter::Validation);
+    let render = gpu.renderer.render_to_texture(
+        &gpu.device,
+        &gpu.queue,
+        scene,
+        &storage_view,
+        &RenderParams {
+            base_color,
+            width,
+            height,
+            antialiasing_method: AaConfig::Area,
+        },
+    );
+    let render_ok = render.is_ok();
+    if let Err(err) = &render {
+        trace(&format!(
+            "vello_gpu stage={stage} render_to_texture={}",
+            err.to_string().replace(' ', "_")
+        ));
+    }
+    if render_ok {
+        gpu_storage_to_sampled(
             &gpu.device,
             &gpu.queue,
-            scene,
-            &gpu.content_view,
+            VelloTargets {
+                storage: &storage,
+                sampled: &sampled,
+                storage_view: &storage_view,
+                sampled_view: &sampled_view,
+                size: wgpu::Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+                dest_origin: wgpu::Origin3d::ZERO,
+            },
+            StorageConvert {
+                mode: gpu.convert,
+                pipeline: gpu.convert_pipeline.as_ref(),
+                layout: gpu.convert_bgl.as_ref(),
+            },
+        );
+    }
+    let (tx, rx) = std::sync::mpsc::channel();
+    gpu.queue.on_submitted_work_done(move || {
+        let _ = tx.send(());
+    });
+    let _ = gpu.device.poll(wgpu::PollType::wait_indefinitely());
+    let submit_done = u8::from(rx.try_recv().is_ok());
+    let validation = pollster::block_on(g_validation.pop());
+    let oom = pollster::block_on(g_oom.pop());
+    let internal = pollster::block_on(g_internal.pop());
+    trace(&format!(
+        "vello_gpu stage={stage} render_ok={} submit_done={} {}",
+        u8::from(render_ok),
+        submit_done,
+        format_error_scopes(validation, oom, internal),
+    ));
+    if capture {
+        unsafe {
+            gpu.device.stop_graphics_debugger_capture();
+        }
+    }
+    let cx = width / 2;
+    let cy = height / 2;
+    let samples = [
+        peek_texture_rgba(&gpu.device, &gpu.queue, &sampled, 0, 0),
+        peek_texture_rgba(&gpu.device, &gpu.queue, &sampled, cx, cy),
+        peek_texture_rgba(
+            &gpu.device,
+            &gpu.queue,
+            &sampled,
+            width.saturating_sub(1).min(80),
+            height.saturating_sub(1).min(80),
+        ),
+    ];
+    let rgba = base_color.to_rgba8();
+    let base_rgba = [rgba.r, rgba.g, rgba.b, rgba.a];
+    let class = classify_samples(&samples, base_rgba);
+    trace(&format!(
+        "vello_gpu stage={stage} sample={} p00={:?} center={:?} p80={:?}",
+        class.as_str(),
+        samples[0],
+        samples[1],
+        samples[2],
+    ));
+    if present && render_ok {
+        copy_sampled_to_resolve(gpu, &sampled, width, height);
+    }
+    Ok(RasterReport {
+        class,
+        samples,
+    })
+}
+
+fn raster_tiled(
+    gpu: &mut GpuSurface,
+    scene: &vello::Scene,
+    tile_w: u32,
+    tile_h: u32,
+) -> Result<RasterReport, String> {
+    let full_w = gpu.config.width;
+    let full_h = gpu.config.height;
+    clear_view_color(
+        &gpu.device,
+        &gpu.queue,
+        &gpu.resolve_view,
+        ui_base_clear_color(),
+    );
+    trace(&format!(
+        "vello_gpu stage=ui-tiled tile={}x{} surface={}x{} tiles={} {}",
+        tile_w,
+        tile_h,
+        full_w,
+        full_h,
+        tile_origins(full_w, full_h, tile_w, tile_h).len(),
+        encoding_line(scene, tile_w, tile_h),
+    ));
+    let mut last = RasterReport {
+        class: SampleClass::BaseColorOnly,
+        samples: [UI_BASE_RGBA; 3],
+    };
+    for (x, y, tw, th) in tile_origins(full_w, full_h, tile_w, tile_h) {
+        let tile_scene = scene_with_tile_origin(scene, x, y);
+        let (storage, sampled, storage_view, sampled_view) = alloc_fresh_targets(gpu, tw, th);
+        let render = gpu.renderer.render_to_texture(
+            &gpu.device,
+            &gpu.queue,
+            &tile_scene,
+            &storage_view,
             &RenderParams {
-                base_color: vello::peniko::Color::from_rgb8(0x15, 0x13, 0x11),
-                width: gpu.config.width,
-                height: gpu.config.height,
+                base_color: UI_BASE_COLOR,
+                width: tw,
+                height: th,
                 antialiasing_method: AaConfig::Area,
             },
-        )
-        .map_err(|err| format!("vello raster: {err}"))?;
-    let _ = gpu.device.poll(wgpu::PollType::wait_indefinitely());
-    static VELLO_WROTE: AtomicU8 = AtomicU8::new(0);
-    let wrote = match VELLO_WROTE.load(Ordering::SeqCst) {
-        0 => {
-            let px = peek_content_once(gpu);
-            let wrote = px[3] > 0;
-            VELLO_WROTE.store(u8::from(wrote) + 1, Ordering::SeqCst);
-            if !wrote {
-                trace("vello_wrote_empty keeping_canvas");
-            }
-            wrote
+        );
+        if let Err(err) = &render {
+            trace(&format!(
+                "vello_gpu stage=ui-tiled origin={x},{y} render_to_texture={}",
+                err.to_string().replace(' ', "_")
+            ));
+            continue;
         }
-        2 => true,
-        _ => false,
-    };
-    if wrote {
-        resolve_content(gpu);
-    } else {
-        clear_canvas_view(&gpu.device, &gpu.queue, &gpu.resolve_view);
+        gpu_storage_to_sampled(
+            &gpu.device,
+            &gpu.queue,
+            VelloTargets {
+                storage: &storage,
+                sampled: &sampled,
+                storage_view: &storage_view,
+                sampled_view: &sampled_view,
+                size: wgpu::Extent3d {
+                    width: tw,
+                    height: th,
+                    depth_or_array_layers: 1,
+                },
+                dest_origin: wgpu::Origin3d::ZERO,
+            },
+            StorageConvert {
+                mode: gpu.convert,
+                pipeline: gpu.convert_pipeline.as_ref(),
+                layout: gpu.convert_bgl.as_ref(),
+            },
+        );
+        let mut encoder = gpu
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("vello-diag-tile-copy"),
+            });
+        encoder.copy_texture_to_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &sampled,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::TexelCopyTextureInfo {
+                texture: &gpu.resolve,
+                mip_level: 0,
+                origin: wgpu::Origin3d { x, y, z: 0 },
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::Extent3d {
+                width: tw,
+                height: th,
+                depth_or_array_layers: 1,
+            },
+        );
+        gpu.queue.submit(Some(encoder.finish()));
+        last = RasterReport {
+            class: SampleClass::PathsWrote,
+            samples: last.samples,
+        };
     }
-    Ok(())
+    let _ = gpu.device.poll(wgpu::PollType::wait_indefinitely());
+    last.samples = [
+        peek_texture_rgba(&gpu.device, &gpu.queue, &gpu.resolve, 0, 0),
+        peek_texture_rgba(
+            &gpu.device,
+            &gpu.queue,
+            &gpu.resolve,
+            full_w / 2,
+            full_h / 2,
+        ),
+        peek_texture_rgba(
+            &gpu.device,
+            &gpu.queue,
+            &gpu.resolve,
+            full_w.saturating_sub(1).min(80),
+            full_h.saturating_sub(1).min(80),
+        ),
+    ];
+    last.class = classify_samples(&last.samples, UI_BASE_RGBA);
+    trace(&format!(
+        "vello_gpu stage=ui-tiled sample={} center={:?}",
+        last.class.as_str(),
+        last.samples[1],
+    ));
+    Ok(last)
 }
 
 fn canvas_clear_color() -> wgpu::Color {
@@ -484,7 +826,12 @@ fn canvas_clear_color() -> wgpu::Color {
     }
 }
 
-fn clear_canvas_view(device: &wgpu::Device, queue: &wgpu::Queue, view: &wgpu::TextureView) {
+fn clear_view_color(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    view: &wgpu::TextureView,
+    color: wgpu::Color,
+) {
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
         label: Some("neocompositor-canvas"),
     });
@@ -496,7 +843,7 @@ fn clear_canvas_view(device: &wgpu::Device, queue: &wgpu::Queue, view: &wgpu::Te
                 depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(canvas_clear_color()),
+                    load: wgpu::LoadOp::Clear(color),
                     store: wgpu::StoreOp::Store,
                 },
             })],
@@ -509,97 +856,8 @@ fn clear_canvas_view(device: &wgpu::Device, queue: &wgpu::Queue, view: &wgpu::Te
     queue.submit(Some(encoder.finish()));
 }
 
-fn resolve_content(gpu: &GpuSurface) {
-    let mut encoder = gpu
-        .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("neocompositor-resolve"),
-        });
-    encoder.copy_texture_to_texture(
-        wgpu::TexelCopyTextureInfo {
-            texture: &gpu.content,
-            mip_level: 0,
-            origin: wgpu::Origin3d::ZERO,
-            aspect: wgpu::TextureAspect::All,
-        },
-        wgpu::TexelCopyTextureInfo {
-            texture: &gpu.resolve,
-            mip_level: 0,
-            origin: wgpu::Origin3d::ZERO,
-            aspect: wgpu::TextureAspect::All,
-        },
-        wgpu::Extent3d {
-            width: gpu.config.width,
-            height: gpu.config.height,
-            depth_or_array_layers: 1,
-        },
-    );
-    gpu.queue.submit(Some(encoder.finish()));
-    let _ = gpu.device.poll(wgpu::PollType::wait_indefinitely());
-}
-
-fn peek_content_once(gpu: &GpuSurface) -> [u8; 4] {
-    static LOGGED: AtomicBool = AtomicBool::new(false);
-    let padded = 256u64;
-    let buffer = gpu.device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("neocompositor-peek"),
-        size: padded,
-        usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-        mapped_at_creation: false,
-    });
-    let mut encoder = gpu
-        .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("neocompositor-peek"),
-        });
-    encoder.copy_texture_to_buffer(
-        wgpu::TexelCopyTextureInfo {
-            texture: &gpu.content,
-            mip_level: 0,
-            origin: wgpu::Origin3d::ZERO,
-            aspect: wgpu::TextureAspect::All,
-        },
-        wgpu::TexelCopyBufferInfo {
-            buffer: &buffer,
-            layout: wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(256),
-                rows_per_image: Some(1),
-            },
-        },
-        wgpu::Extent3d {
-            width: 1,
-            height: 1,
-            depth_or_array_layers: 1,
-        },
-    );
-    gpu.queue.submit(Some(encoder.finish()));
-    let _ = gpu.device.poll(wgpu::PollType::wait_indefinitely());
-    let slice = buffer.slice(..4);
-    let (sender, receiver) = std::sync::mpsc::channel();
-    slice.map_async(wgpu::MapMode::Read, move |result| {
-        let _ = sender.send(result);
-    });
-    let _ = gpu.device.poll(wgpu::PollType::wait_indefinitely());
-    let px = match receiver.try_recv() {
-        Ok(Ok(())) => {
-            let data = slice.get_mapped_range();
-            [data[0], data[1], data[2], data[3]]
-        }
-        other => {
-            if !LOGGED.swap(true, Ordering::SeqCst) {
-                trace(&format!("content_px peek_failed {other:?}"));
-            }
-            [0, 0, 0, 0]
-        }
-    };
-    if !LOGGED.swap(true, Ordering::SeqCst) {
-        trace(&format!(
-            "content_px r={} g={} b={} a={}",
-            px[0], px[1], px[2], px[3]
-        ));
-    }
-    px
+fn clear_canvas_view(device: &wgpu::Device, queue: &wgpu::Queue, view: &wgpu::TextureView) {
+    clear_view_color(device, queue, view, canvas_clear_color());
 }
 
 fn blit(gpu: &GpuSurface, scroll_y: f32, header: f32, composer_top: f32) -> Result<(), String> {
@@ -631,6 +889,7 @@ fn blit(gpu: &GpuSurface, scroll_y: f32, header: f32, composer_top: f32) -> Resu
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("neocompositor-enc"),
         });
+    encoder.push_debug_group("neocompositor-blit");
     {
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("neocompositor-blit"),
@@ -652,6 +911,7 @@ fn blit(gpu: &GpuSurface, scroll_y: f32, header: f32, composer_top: f32) -> Resu
         pass.set_bind_group(0, &gpu.bind, &[]);
         pass.draw(0..3, 0..1);
     }
+    encoder.pop_debug_group();
     gpu.queue.submit(Some(encoder.finish()));
     frame.present();
     Ok(())
@@ -674,14 +934,49 @@ pub fn mark_dirty() {
     DIRTY.store(true, Ordering::SeqCst);
 }
 
+fn attach_failed(err: impl std::fmt::Display) -> String {
+    let line = format!(
+        "host=neocompositor-surfaceview attach_failed reason={}",
+        err.to_string().replace(' ', "_")
+    );
+    trace(&line);
+    line
+}
+
+fn bind_shared_device(gpu: &mut GpuSurface) -> Result<SharedGpuContext, String> {
+    let mut shared = SharedGpuContext::open(GpuCaps {
+        compute: true,
+        timestamp_queries: false,
+        max_texture_dimension_2d: 4096,
+    })
+    .map_err(|err| err.to_string())?;
+    let raster = shared.bind_raster().map_err(|err| err.to_string())?;
+    let compositor = shared.bind_compositor().map_err(|err| err.to_string())?;
+    if raster.identity != compositor.identity || raster.epoch != compositor.epoch {
+        return Err("raster and compositor bound different DeviceEpoch".into());
+    }
+    shared
+        .alloc(HandleOwner::Raster, SharedHandleKind::RasterTile)
+        .map_err(|err| err.to_string())?;
+    shared
+        .alloc(HandleOwner::Surface, SharedHandleKind::Surface)
+        .map_err(|err| err.to_string())?;
+    gpu.device_epoch = shared.device_epoch().0;
+    Ok(shared)
+}
+
 pub fn attach(env: &JNIEnv, surface: &JObject, width: i32, height: i32, density: f32) -> String {
     detach();
     let width = if width > 0 { width as u32 } else { 1 };
     let height = if height > 0 { height as u32 } else { 1 };
     let density = if density >= 1.0 { density } else { 1.0 };
     match open_gpu(env, surface, width, height) {
-        Ok(gpu) => {
-            let backend = gpu.backend.clone();
+        Ok(mut gpu) => {
+            let shared = match bind_shared_device(&mut gpu) {
+                Ok(shared) => shared,
+                Err(err) => return attach_failed(err),
+            };
+            let devices = shared.telemetry().devices;
             let mut recovery = GpuRecovery::new();
             let _ = recovery.initialize();
             let pending = PENDING_INSETS
@@ -693,37 +988,27 @@ pub fn attach(env: &JNIEnv, surface: &JObject, width: i32, height: i32, density:
                 gpu,
                 compositor: None,
                 recovery,
+                shared,
                 input: PlatformInputAdapter::new(),
                 velocity: 0.0,
                 last_y: None,
                 last_t: None,
-                devices: 1,
+                devices,
                 density,
                 inset_physical: pending,
                 shell_overlay: true,
                 hit_view: None,
                 pending_ui: None,
+                gpu_probed: false,
+                image_paints: Vec::new(),
             };
             DIRTY.store(true, Ordering::SeqCst);
-            let line = host_line(
-                &backend,
-                "live",
-                host.devices,
-                density,
-                host.gpu.config.format,
-            );
+            let line = host_line(&host.gpu, "live", host.devices, density);
             *HOST.lock().unwrap_or_else(|p| p.into_inner()) = Some(host);
             trace(&line);
             line
         }
-        Err(err) => {
-            let line = format!(
-                "host=neocompositor-surfaceview attach_failed reason={}",
-                err.replace(' ', "_")
-            );
-            trace(&line);
-            line
-        }
+        Err(err) => attach_failed(err),
     }
 }
 
@@ -859,6 +1144,37 @@ pub fn bind_from_session<W: ProductWire>(session: &mut ChatSession<W>) -> String
     }
 }
 
+fn overlay_avatars<W: ProductWire>(
+    host: &mut GpuHost,
+    session: &ChatSession<W>,
+    mut produced: neotavern_presentation_m0_d2::ProducerOutput,
+    layout: ProductPaintLayout,
+) -> neotavern_presentation_m0_d2::ProducerOutput {
+    produced.list.generation = session.scene_epoch();
+    for (asset_id, thumb) in session.avatar_thumbs() {
+        let uploaded = host
+            .gpu
+            .avatars
+            .upload(&host.gpu.device, &host.gpu.queue, asset_id, thumb);
+        if uploaded {
+            trace(&format!("avatar_gpu uploaded asset={asset_id}"));
+        }
+    }
+    let paints = image_paints_from_layout(&layout, host.density, host.gpu.avatars.ready_token());
+    host.gpu.avatars.blit(
+        &host.gpu.device,
+        &host.gpu.queue,
+        &host.gpu.resolve_view,
+        host.gpu.config.width,
+        host.gpu.config.height,
+        &paints,
+    );
+    produced.list = attach_image_paints(produced.list, &paints);
+    host.image_paints = paints;
+    AVATAR_OVERLAY.store(false, Ordering::SeqCst);
+    produced
+}
+
 fn shell_without_avatars(mut shell: ProductShellView) -> ProductShellView {
     for item in &mut shell.characters {
         item.avatar_data_uri = None;
@@ -869,16 +1185,259 @@ fn shell_without_avatars(mut shell: ProductShellView) -> ProductShellView {
     shell
 }
 
-fn produce_product_scene(
+fn bisect_b_filters() -> [(&'static str, VelloFilter); 6] {
+    [
+        ("background", VelloFilter::background()),
+        ("sidebar_rects", VelloFilter::rects()),
+        (
+            "glyphs",
+            VelloFilter {
+                fills: true,
+                glyphs: true,
+                clips: false,
+                layers: false,
+                shadows: false,
+                max_ops: None,
+            },
+        ),
+        (
+            "clips",
+            VelloFilter {
+                fills: true,
+                glyphs: true,
+                clips: true,
+                layers: false,
+                shadows: false,
+                max_ops: None,
+            },
+        ),
+        (
+            "layers",
+            VelloFilter {
+                fills: true,
+                glyphs: true,
+                clips: true,
+                layers: true,
+                shadows: false,
+                max_ops: None,
+            },
+        ),
+        ("shadows", VelloFilter::full()),
+    ]
+}
+
+fn prefix_writes(
+    session: &mut ProductVelloSession,
+    gpu: &mut GpuSurface,
     width: u32,
     height: u32,
-    density: f32,
-    insets: SafeAreaInsets,
-) -> Result<(neotavern_presentation_m0_d2::ProducerOutput, vello::Scene), String> {
-    catch_unwind(AssertUnwindSafe(|| {
-        produce_product_gpu_app_scaled(product_shell_app, width, height, density, insets)
-    }))
-    .unwrap_or_else(|_| Err("produce_panic".into()))
+    max_ops: u32,
+) -> Result<bool, String> {
+    if max_ops == 0 {
+        return Ok(false);
+    }
+    let (produced, scene, diag) = session.paint(VelloFilter::full().with_max_ops(max_ops))?;
+    trace(&format!(
+        "vello_gpu bisect_prefix max_ops={} list_ops={} {}",
+        max_ops,
+        produced.list.ops.len(),
+        diag.line(),
+    ));
+    let report = raster_fresh(
+        gpu,
+        &scene,
+        "ui-prefix",
+        width,
+        height,
+        UI_BASE_COLOR,
+        false,
+        false,
+    )?;
+    Ok(report.class == SampleClass::PathsWrote)
+}
+
+fn run_gpu_diagnostics(
+    host: &mut GpuHost,
+    session: &mut ProductVelloSession,
+    produced: &neotavern_presentation_m0_d2::ProducerOutput,
+    full_scene: &vello::Scene,
+    width: u32,
+    height: u32,
+) -> Result<(), String> {
+    let gpu = &mut host.gpu;
+    let rect_report = raster_fresh(
+        gpu,
+        &opaque_rect_scene(width, height),
+        "rect",
+        width,
+        height,
+        vello::peniko::Color::from_rgb8(0x15, 0x13, 0x11),
+        false,
+        false,
+    )?;
+    trace(&format!(
+        "vello_gpu plumbing_rect={} (not presented)",
+        rect_report.class.as_str()
+    ));
+    let clear_report = raster_fresh(
+        gpu,
+        &vello::Scene::new(),
+        "clear",
+        width,
+        height,
+        UI_BASE_COLOR,
+        false,
+        false,
+    )?;
+    trace(&format!(
+        "vello_gpu unique_base_clear={}",
+        clear_report.class.as_str()
+    ));
+
+    recreate_renderer(gpu, false)?;
+    let unchecked = raster_fresh(
+        gpu,
+        full_scene,
+        "ui-unchecked",
+        width,
+        height,
+        UI_BASE_COLOR,
+        false,
+        true,
+    )?;
+    recreate_renderer(gpu, true)?;
+    let checked = raster_fresh(
+        gpu,
+        full_scene,
+        "ui-checked",
+        width,
+        height,
+        UI_BASE_COLOR,
+        false,
+        true,
+    )?;
+    let oob = checked.class == SampleClass::PathsWrote
+        && unchecked.class != SampleClass::PathsWrote;
+    if oob {
+        trace("vello_gpu oob_regression=1 shader_bounds_checked_wrote_ui=1 (no WGSL patch)");
+        recreate_renderer(gpu, true)?;
+    } else {
+        recreate_renderer(gpu, false)?;
+        if checked.class != SampleClass::PathsWrote && unchecked.class != SampleClass::PathsWrote {
+            trace("vello_gpu oob_regression=0 shader_bounds_ab=both_failed");
+        } else {
+            trace("vello_gpu oob_regression=0 shader_bounds_ab=unchecked_kept");
+        }
+    }
+
+    let mut best_res: Option<(u32, u32)> = None;
+    for (rw, rh, name) in resolution_ladder(width, height) {
+        let report = raster_fresh(
+            gpu,
+            full_scene,
+            &format!("ui-res-{name}"),
+            rw,
+            rh,
+            UI_BASE_COLOR,
+            false,
+            false,
+        )?;
+        trace(&format!(
+            "vello_gpu bisect_a size={name} sample={}",
+            report.class.as_str()
+        ));
+        if report.class == SampleClass::PathsWrote {
+            best_res = Some((rw, rh));
+        }
+    }
+
+    for (name, filter) in bisect_b_filters() {
+        let (stage_out, scene, diag) = session.paint(filter)?;
+        trace(&format!(
+            "vello_gpu bisect_b stage={name} list_ops={} {}",
+            stage_out.list.ops.len(),
+            diag.line(),
+        ));
+        let report = raster_fresh(
+            gpu,
+            &scene,
+            &format!("ui-feat-{name}"),
+            width,
+            height,
+            UI_BASE_COLOR,
+            false,
+            false,
+        )?;
+        trace(&format!(
+            "vello_gpu bisect_b stage={name} sample={}",
+            report.class.as_str()
+        ));
+    }
+    trace("vello_gpu bisect_b stage=rectangles same_as=sidebar_rects");
+
+    let full_ops = session
+        .paint(VelloFilter::full())
+        .map(|(_, _, diag)| diag.ops)
+        .unwrap_or(0);
+    let full_wrote = unchecked.class == SampleClass::PathsWrote
+        || checked.class == SampleClass::PathsWrote;
+    if !full_wrote && full_ops > 0 {
+        let mut lo = 0u32;
+        let mut hi = full_ops;
+        while lo < hi {
+            let mid = lo + (hi - lo + 1) / 2;
+            if prefix_writes(session, gpu, width, height, mid)? {
+                lo = mid;
+            } else {
+                hi = mid.saturating_sub(1);
+            }
+        }
+        trace(&format!(
+            "vello_gpu bisect_prefix last_write_ops={lo} first_fail_ops={} of {full_ops} list_ops={}",
+            lo.saturating_add(1),
+            produced.list.ops.len(),
+        ));
+    }
+
+    let present = if full_wrote {
+        gpu.tile = None;
+        raster_fresh(
+            gpu,
+            full_scene,
+            "ui",
+            width,
+            height,
+            UI_BASE_COLOR,
+            true,
+            false,
+        )?
+    } else if let Some((tw, th)) = best_res.filter(|(tw, th)| *tw < width || *th < height) {
+        gpu.tile = Some((tw, th));
+        trace(&format!(
+            "vello_gpu full_res_fail tile_raster={}x{} (not cpu_full_frame_raster)",
+            tw, th
+        ));
+        raster_tiled(gpu, full_scene, tw, th)?
+    } else {
+        gpu.tile = None;
+        raster_fresh(
+            gpu,
+            full_scene,
+            "ui",
+            width,
+            height,
+            UI_BASE_COLOR,
+            true,
+            false,
+        )?
+    };
+    trace(&format!(
+        "vello_gpu present_class={} shader_bounds={} tile={:?}",
+        present.class.as_str(),
+        u8::from(gpu.shader_bounds),
+        gpu.tile,
+    ));
+    Ok(())
 }
 
 fn produce_and_raster(
@@ -887,15 +1446,42 @@ fn produce_and_raster(
     height: u32,
     density: f32,
     insets: SafeAreaInsets,
-) -> Result<neotavern_presentation_m0_d2::ProducerOutput, String> {
-    let (produced, scene) = produce_product_scene(width, height, density, insets)?;
+) -> Result<(neotavern_presentation_m0_d2::ProducerOutput, ProductPaintLayout), String> {
+    let mut session = catch_unwind(AssertUnwindSafe(|| {
+        ProductVelloSession::open(product_shell_app, width, height, density, insets)
+    }))
+    .unwrap_or_else(|_| Err("produce_panic".into()))?;
+    let (produced, full_scene, diag) = session.paint(VelloFilter::full())?;
+    let layout = session.paint_layout().clone();
+    trace(&diag.line());
+    let tile_count = host
+        .gpu
+        .tile
+        .map(|(tw, th)| tile_origins(width, height, tw, th).len())
+        .unwrap_or(1);
     trace(&format!(
-        "vello_scene paths={} empty={}",
-        scene.encoding().n_paths,
-        scene.encoding().is_empty()
+        "vello_gpu paint_scene=1 scene_epoch={} layout=1 tiles={}",
+        produced.list.generation,
+        tile_count
     ));
-    raster_scene(&mut host.gpu, &scene)?;
-    Ok(produced)
+    if !host.gpu_probed {
+        run_gpu_diagnostics(host, &mut session, &produced, &full_scene, width, height)?;
+        host.gpu_probed = true;
+    } else if let Some((tw, th)) = host.gpu.tile {
+        raster_tiled(&mut host.gpu, &full_scene, tw, th)?;
+    } else {
+        raster_fresh(
+            &mut host.gpu,
+            &full_scene,
+            "ui",
+            width,
+            height,
+            UI_BASE_COLOR,
+            true,
+            false,
+        )?;
+    }
+    Ok((produced, layout))
 }
 
 fn bind_host<W: ProductWire>(
@@ -919,7 +1505,9 @@ fn bind_host<W: ProductWire>(
     host.hit_view = Some(shell.clone());
     install_product_shell(shell.clone());
     let produced = match produce_and_raster(host, width, height, host.density, session.insets()) {
-        Ok(produced) => produced,
+        Ok((produced, layout)) => {
+            overlay_avatars(host, session, produced, layout)
+        }
         Err(err) => {
             trace(&format!(
                 "product_bind retry_without_avatars reason={}",
@@ -928,12 +1516,17 @@ fn bind_host<W: ProductWire>(
             let stripped = shell_without_avatars(shell);
             host.hit_view = Some(stripped.clone());
             install_product_shell(stripped);
-            produce_and_raster(host, width, height, host.density, session.insets())?
+            let (produced, layout) =
+                produce_and_raster(host, width, height, host.density, session.insets())?;
+            overlay_avatars(host, session, produced, layout)
         }
     };
     trace(&format!(
-        "product_paint cmds={} rasters={}",
-        produced.report.paint_commands, produced.report.raster_images
+        "product_paint cmds={} rasters={} avatars={} ready={}",
+        produced.report.paint_commands,
+        produced.report.raster_images,
+        host.image_paints.len(),
+        host.gpu.avatars.ready_token(),
     ));
     match host.compositor.as_mut() {
         Some(compositor) => {
@@ -950,13 +1543,7 @@ fn bind_host<W: ProductWire>(
         }
     }
     DIRTY.store(false, Ordering::SeqCst);
-    let line = host_line(
-        &host.gpu.backend,
-        "live",
-        host.devices,
-        host.density,
-        host.gpu.config.format,
-    );
+    let line = host_line(&host.gpu, "live", host.devices, host.density);
     trace(&line);
     Ok(line)
 }
@@ -1001,9 +1588,13 @@ pub fn present_frame(
                     trace(&compositor.telemetry_line());
                 }
                 format!(
-                    "host=neocompositor-surfaceview present vsync={vsync_id} deadline={deadline} expected={expected_present} {} backend={} devices=1 readbacks=0 xdev=0",
+                    "host=neocompositor-surfaceview present vsync={vsync_id} deadline={deadline} expected={expected_present} {} backend={} renderer={} devices={} device_epoch={} cpu_full_frame_raster={} image_readbacks=0 cross_device_copies=0 sampled_output=true",
                     compositor.telemetry_line(),
                     host.gpu.backend,
+                    renderer_name(host.gpu.software_debug),
+                    host.devices,
+                    host.shared.device_epoch().0,
+                    u8::from(host.gpu.software_debug),
                 )
             }
             Err(err) => {
@@ -1016,13 +1607,7 @@ pub fn present_frame(
         }
     } else {
         match blit(&host.gpu, 0.0, 0.0, host.gpu.config.height as f32) {
-            Ok(()) => host_line(
-                &host.gpu.backend,
-                "live",
-                host.devices,
-                host.density,
-                host.gpu.config.format,
-            ),
+            Ok(()) => host_line(&host.gpu, "live", host.devices, host.density),
             Err(err) => {
                 recover_fault(host, &err);
                 format!(
@@ -1071,6 +1656,31 @@ pub fn is_scrolling() -> bool {
 
 pub fn is_dirty() -> bool {
     DIRTY.load(Ordering::SeqCst)
+}
+
+pub fn is_avatar_overlay() -> bool {
+    AVATAR_OVERLAY.load(Ordering::SeqCst)
+}
+
+pub fn composite_avatar_overlay() -> bool {
+    let mut slot = HOST.lock().unwrap_or_else(|p| p.into_inner());
+    let Some(host) = slot.as_mut() else {
+        return false;
+    };
+    if host.image_paints.is_empty() {
+        AVATAR_OVERLAY.store(false, Ordering::SeqCst);
+        return false;
+    }
+    host.gpu.avatars.blit(
+        &host.gpu.device,
+        &host.gpu.queue,
+        &host.gpu.resolve_view,
+        host.gpu.config.width,
+        host.gpu.config.height,
+        &host.image_paints,
+    );
+    AVATAR_OVERLAY.store(false, Ordering::SeqCst);
+    true
 }
 
 /// Native chat composer/Send overlay is only attached on the chat route.

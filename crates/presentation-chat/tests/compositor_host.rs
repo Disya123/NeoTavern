@@ -1,9 +1,13 @@
 //! Host compositor bind: Dioxus+Blitz once, then compositor-only ticks.
 
 use neotavern_neocompositor::PresentationTime;
-use neotavern_presentation_chat::{start_flagged_session, ChatCompositor, FakeWire};
+use neotavern_presentation_chat::{
+    start_flagged_session, ChatCompositor, FakeWire, DEMO_AVATAR_ASSET_ID, AVATAR_DISPLAY_MAX_PX,
+};
 use neotavern_presentation_dioxus_shell::{product_chat_app, product_shell_app};
-use neotavern_presentation_m0_d2::{produce_app_at, produce_product_app_at};
+use neotavern_presentation_m0_d2::{
+    inspect_product_layout, produce_app_at, produce_product_app_at, AvatarKind,
+};
 
 #[test]
 fn compositor_scroll_does_not_rebuild_dioxus_or_blitz() {
@@ -68,14 +72,19 @@ fn demo_session_loads_characters_list_for_character_manager() {
     assert_eq!(shell.characters[0].name, "Hazel");
     assert_eq!(shell.sort, "name");
     assert_eq!(shell.tab, "cards");
-    assert!(
-        shell.characters[0]
-            .avatar_data_uri
-            .as_deref()
-            .is_some_and(|uri| uri.starts_with("data:image/png;base64,")
-                && uri.len() <= neotavern_presentation_chat::AVATAR_DISPLAY_URI_MAX_CHARS),
-        "Product Wire avatar must hydrate to a display-sized data URI"
+    assert_eq!(
+        shell.characters[0].avatar_asset_id.as_deref(),
+        Some(DEMO_AVATAR_ASSET_ID)
     );
+    assert!(
+        shell.characters[0].avatar_data_uri.is_none(),
+        "Blitz/Vello must not receive a data: URI"
+    );
+    let thumb = session
+        .avatar_thumb(DEMO_AVATAR_ASSET_ID)
+        .expect("premultiplied GPU thumbnail");
+    assert_eq!(thumb.width, AVATAR_DISPLAY_MAX_PX);
+    assert_eq!(thumb.height, AVATAR_DISPLAY_MAX_PX);
     assert_eq!(
         shell.pinned_character_id.as_deref(),
         Some(shell.characters[0].id.as_str())
@@ -85,8 +94,7 @@ fn demo_session_loads_characters_list_for_character_manager() {
 #[test]
 fn character_manager_lists_kernel_characters_without_a_chat() {
     let (session, _) =
-        start_flagged_session(Some("1"), FakeWire::character_catalog(), None, None)
-            .expect("route");
+        start_flagged_session(Some("1"), FakeWire::character_catalog(), None, None).expect("route");
     let shell = session.shell_view();
     assert_eq!(shell.characters.len(), 1);
     assert_eq!(shell.characters[0].name, "Hazel");
@@ -121,14 +129,19 @@ fn demo_session_hydrates_a_display_sized_avatar() {
     let (session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
     let shell = session.shell_view();
-    assert!(
-        shell.characters[0]
-            .avatar_data_uri
-            .as_deref()
-            .is_some_and(|uri| uri.starts_with("data:image/png;base64,")
-                && uri.len() <= neotavern_presentation_chat::AVATAR_DISPLAY_URI_MAX_CHARS),
-        "Product Wire avatar must hydrate to a display-sized data URI"
+    assert_eq!(
+        shell.characters[0].avatar_asset_id.as_deref(),
+        Some(DEMO_AVATAR_ASSET_ID)
     );
+    assert!(
+        shell.characters[0].avatar_data_uri.is_none(),
+        "Blitz/Vello must not receive a data: URI"
+    );
+    let thumb = session
+        .avatar_thumb(DEMO_AVATAR_ASSET_ID)
+        .expect("premultiplied GPU thumbnail");
+    assert_eq!(thumb.width, AVATAR_DISPLAY_MAX_PX);
+    assert_eq!(thumb.height, AVATAR_DISPLAY_MAX_PX);
     neotavern_presentation_dioxus_shell::install_product_shell(shell);
     let produced = produce_product_app_at(product_shell_app, 407, 904, 1.0, session.insets())
         .expect("product blitz");
@@ -136,6 +149,78 @@ fn demo_session_hydrates_a_display_sized_avatar() {
     assert_eq!(
         produced.report.raster_images, 0,
         "GPU Vello blacks the SurfaceView if <img data:> is in the tree; letter fallback only"
+    );
+}
+
+#[test]
+fn hazel_card_stays_compact_on_the_phone_viewport() {
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    session.set_surface_size(1220, 2712, 3.0);
+    neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
+    let layout = inspect_product_layout(product_shell_app, 1220, 2712, 3.0, session.insets())
+        .expect("product layout");
+    assert!(
+        layout.card_css_height > 52.0 && layout.card_css_height <= 140.0,
+        "Hazel card must be a compact list row, css height={}",
+        layout.card_css_height
+    );
+    let header = layout
+        .avatars
+        .iter()
+        .find(|slot| slot.kind == AvatarKind::Header)
+        .expect("header avatar slot");
+    let card = layout
+        .avatars
+        .iter()
+        .find(|slot| slot.kind == AvatarKind::Card)
+        .expect("card avatar slot");
+    assert_eq!(header.asset_id, card.asset_id);
+    assert_eq!(header.asset_id, DEMO_AVATAR_ASSET_ID);
+    assert!(
+        (header.css_height - 44.0).abs() < 8.0,
+        "header avatar css height={}",
+        header.css_height
+    );
+    assert!(
+        (card.css_height - 52.0).abs() < 8.0,
+        "card avatar css height={}",
+        card.css_height
+    );
+    assert!(
+        (header.css_y - card.css_y).abs() > 8.0,
+        "header and card dest rects must be distinct"
+    );
+}
+
+#[test]
+fn header_title_ellipsizes_on_the_phone_viewport() {
+    use neotavern_presentation_dioxus_shell::{
+        character_manager_title, ellipsize_css, CHARACTER_MANAGER_TITLE,
+    };
+    assert_eq!(
+        ellipsize_css(CHARACTER_MANAGER_TITLE, 400.0, 20.0),
+        CHARACTER_MANAGER_TITLE
+    );
+    let narrow = ellipsize_css(CHARACTER_MANAGER_TITLE, 100.0, 20.0);
+    assert!(narrow.ends_with('…'), "{narrow}");
+    assert!(narrow.starts_with("Char"), "{narrow}");
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    session.set_surface_size(1220, 2712, 3.0);
+    let title = character_manager_title(session.view().viewport_width);
+    assert!(
+        title.ends_with('…') || title == CHARACTER_MANAGER_TITLE,
+        "title={title}"
+    );
+    assert!(title.starts_with("Character"), "{title}");
+    neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
+    let layout = inspect_product_layout(product_shell_app, 1220, 2712, 3.0, session.insets())
+        .expect("product layout");
+    assert!(
+        layout.title_css_width >= 96.0,
+        "header title box must not be squeezed by the divider, css width={}",
+        layout.title_css_width
     );
 }
 

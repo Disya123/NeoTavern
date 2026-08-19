@@ -261,6 +261,16 @@ pub struct ImageLayer {
     pub chunk: PaintChunk,
 }
 
+/// Sampled GPU overlay. Not a Vello `Image` brush and not a `data:` URI.
+/// Header and card avatars share one cached texture per `asset_id`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ImagePaintOp {
+    pub asset_id: String,
+    pub dest: Rect,
+    pub clip_radius: f32,
+    pub ready_token: u64,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct TextPaintFragment {
     pub fragment_id: TextFragmentId,
@@ -342,6 +352,7 @@ pub enum NeoPaintOp {
     PaintChunk(PaintChunk),
     BackdropBarrier(GlassBoundary),
     Image(ImageLayer),
+    ImagePaint(ImagePaintOp),
     TextFragment(TextPaintFragment),
     Selection(SelectionPaintOp),
     Composition(CompositionPaintOp),

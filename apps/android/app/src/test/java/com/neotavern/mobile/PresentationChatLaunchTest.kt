@@ -49,6 +49,13 @@ class PresentationChatLaunchTest {
         assertTrue(PresentationChatLaunch.isFlagOff("0"))
         assertFalse(PresentationChatLaunch.isFlagOff("1"))
         assertFalse(PresentationChatLaunch.isFlagOff(null))
+        assertTrue(PresentationChatLaunch.isSoftwareRasterDebug("1"))
+        assertFalse(PresentationChatLaunch.isSoftwareRasterDebug(null))
+        assertFalse(PresentationChatLaunch.isSoftwareRasterDebug("true"))
+        assertEquals(
+            "com.neotavern.mobile.NEOTA_SOFTWARE_RASTER_DEBUG",
+            PresentationChatLaunch.EXTRA_SOFTWARE_RASTER_DEBUG,
+        )
     }
 
     @Test

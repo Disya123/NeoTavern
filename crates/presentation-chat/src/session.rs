@@ -1,13 +1,13 @@
 use contracts_generated::generated::{
-    decode_chat_dto, decode_character_dto, decode_message_draft_dto, decode_message_dto,
-    decode_paged_characters, decode_paged_chats, decode_paged_messages, decode_result_assets_content,
-    CharacterDto, ChatDto, ErrorDto, GenerationEvent, MessageDraftDto, MessageDto, MessageRole,
-    PagedCharacters, PagedChats, PagedMessages, RequestAssetsContent, RequestCancelGeneration,
-    RequestCreateCharacter, RequestCreateMessage, RequestDeleteCharacter, RequestGetChat,
-    RequestGetCharacter, RequestListCharacters, RequestListChats, RequestListMessages,
-    RequestMessageDraftCommit, RequestMessageDraftDiscard, RequestMessageDraftGet,
-    RequestMessageDraftSave, RequestRetryGeneration, RequestStartGeneration, RequestUpdateCharacter,
-    ResultAssetsContent,
+    decode_character_dto, decode_chat_dto, decode_message_draft_dto, decode_message_dto,
+    decode_paged_characters, decode_paged_chats, decode_paged_messages,
+    decode_result_assets_content, CharacterDto, ChatDto, ErrorDto, GenerationEvent,
+    MessageDraftDto, MessageDto, MessageRole, PagedCharacters, PagedChats, PagedMessages,
+    RequestAssetsContent, RequestCancelGeneration, RequestCreateCharacter, RequestCreateMessage,
+    RequestDeleteCharacter, RequestGetCharacter, RequestGetChat, RequestListCharacters,
+    RequestListChats, RequestListMessages, RequestMessageDraftCommit, RequestMessageDraftDiscard,
+    RequestMessageDraftGet, RequestMessageDraftSave, RequestRetryGeneration,
+    RequestStartGeneration, RequestUpdateCharacter, ResultAssetsContent,
 };
 use neotavern_chat_viewport::{
     GeometrySnapshot, HeightIndex, HeightKind, LogicalItemId, PredictorBudgets, PresentDecision,
@@ -58,9 +58,10 @@ pub struct ChatRouteState {
     pub insets: SafeAreaInsets,
     /// Full draft for the selected character (Edit / Advanced / Gallery tabs).
     pub character_draft: Option<CharacterDraftView>,
-    /// Cached `assets.content` data URIs keyed by avatar asset id.
-    pub avatar_data_uris: HashMap<String, String>,
-    /// Cached avatar data URI for the selected character (from `assets.content`).
+    /// Cached cover-cropped premultiplied thumbnails keyed by avatar asset id.
+    pub avatar_thumbs: HashMap<String, crate::avatar::AvatarThumb>,
+    pub avatar_ready_token: u64,
+    /// Always `None` on the paint path (no `data:` URI in Blitz).
     pub avatar_data_uri: Option<String>,
     /// Matches React `useUiStore.pinnedCharacterId` (select also pins).
     pub pinned_character_id: Option<String>,
@@ -131,6 +132,18 @@ impl<W: ProductWire> ChatSession<W> {
 
     pub fn scene_epoch(&self) -> u64 {
         self.state.scene_epoch
+    }
+
+    pub fn avatar_thumbs(&self) -> &HashMap<String, crate::avatar::AvatarThumb> {
+        &self.state.avatar_thumbs
+    }
+
+    pub fn avatar_thumb(&self, asset_id: &str) -> Option<&crate::avatar::AvatarThumb> {
+        self.state.avatar_thumbs.get(asset_id)
+    }
+
+    pub fn avatar_ready_token(&self) -> u64 {
+        self.state.avatar_ready_token
     }
 
     pub fn last_durable_message_id(&self) -> Option<&str> {
@@ -547,10 +560,8 @@ impl<W: ProductWire> ChatSession<W> {
                 name: row.name.clone(),
                 description: row.description.clone().unwrap_or_default(),
                 tags: row.tags.clone(),
-                avatar_data_uri: row
-                    .avatar_asset_id
-                    .as_ref()
-                    .and_then(|id| self.state.avatar_data_uris.get(id).cloned()),
+                avatar_asset_id: row.avatar_asset_id.clone(),
+                avatar_data_uri: None,
             })
             .collect();
         match self.state.character_sort.as_str() {
@@ -968,7 +979,9 @@ impl<W: ProductWire> ChatSession<W> {
         };
         match self.call_decode(
             "characters.get",
-            &RequestGetCharacter { character_id: id.clone() },
+            &RequestGetCharacter {
+                character_id: id.clone(),
+            },
             decode_character_dto,
         ) {
             Ok(dto) => {
@@ -998,16 +1011,17 @@ impl<W: ProductWire> ChatSession<W> {
             .filter_map(|row| row.avatar_asset_id.clone())
             .collect();
         for asset_id in asset_ids {
-            if self.state.avatar_data_uris.contains_key(&asset_id) {
+            if self.state.avatar_thumbs.contains_key(&asset_id) {
                 continue;
             }
-            if let Some(uri) = self.fetch_avatar_data_uri(&asset_id) {
-                self.state.avatar_data_uris.insert(asset_id, uri);
+            if let Some(thumb) = self.fetch_avatar_thumb(&asset_id) {
+                self.state.avatar_thumbs.insert(asset_id, thumb);
+                self.state.avatar_ready_token = self.state.avatar_ready_token.saturating_add(1);
             }
         }
     }
 
-    fn fetch_avatar_data_uri(&mut self, asset_id: &str) -> Option<String> {
+    fn fetch_avatar_thumb(&mut self, asset_id: &str) -> Option<crate::avatar::AvatarThumb> {
         match self.call_decode(
             "assets.content",
             &RequestAssetsContent {
@@ -1015,37 +1029,33 @@ impl<W: ProductWire> ChatSession<W> {
             },
             decode_result_assets_content,
         ) {
-            Ok(ResultAssetsContent {
-                content_base64, ..
-            }) => crate::avatar::display_avatar_data_uri(&content_base64),
+            Ok(ResultAssetsContent { content_base64, .. }) => {
+                crate::avatar::premultiplied_cover_thumbnail(&content_base64)
+            }
             Err(_) => None,
         }
     }
 
-    /// Resolve the avatar asset into a `data:` URI via `assets.content`.
+    /// Resolve the avatar asset into a GPU thumbnail. Never a `data:` URI.
     fn load_avatar_data_uri(&mut self, asset_id: Option<&str>) {
         let Some(asset_id) = asset_id else {
             self.state.avatar_data_uri = None;
             return;
         };
-        if let Some(cached) = self.state.avatar_data_uris.get(asset_id).cloned() {
-            self.state.avatar_data_uri = Some(cached.clone());
+        if self.state.avatar_thumbs.contains_key(asset_id) {
+            self.state.avatar_data_uri = None;
             if let Some(draft) = self.state.character_draft.as_mut() {
-                draft.avatar_data_uri = Some(cached);
+                draft.avatar_data_uri = None;
             }
             return;
         }
-        match self.fetch_avatar_data_uri(asset_id) {
-            Some(uri) => {
-                self.state.avatar_data_uris.insert(asset_id.to_string(), uri.clone());
-                self.state.avatar_data_uri = Some(uri.clone());
-                if let Some(draft) = self.state.character_draft.as_mut() {
-                    draft.avatar_data_uri = Some(uri);
-                }
-            }
-            None => {
-                self.state.avatar_data_uri = None;
-            }
+        if let Some(thumb) = self.fetch_avatar_thumb(asset_id) {
+            self.state.avatar_thumbs.insert(asset_id.to_string(), thumb);
+            self.state.avatar_ready_token = self.state.avatar_ready_token.saturating_add(1);
+        }
+        self.state.avatar_data_uri = None;
+        if let Some(draft) = self.state.character_draft.as_mut() {
+            draft.avatar_data_uri = None;
         }
     }
 

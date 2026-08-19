@@ -33,7 +33,7 @@ pub mod verdict;
 
 pub use display_list::{
     AffineCoeffs, BackdropRootId, BarrierId, ClipChainId, ClipNode, EffectKind, EffectNode,
-    EffectNodeId, EffectScopeId, GlassBoundary, ImageLayer, NeoDisplayList, NeoPaintOp, PaintChunk,
+    EffectNodeId, EffectScopeId, GlassBoundary, ImageLayer, ImagePaintOp, NeoDisplayList, NeoPaintOp, PaintChunk,
     PaintChunkId, PaintOrderKey, Rect, SpatialNode, SpatialNodeId, StubPayload,
 };
 pub use pass_graph::{compile_passes, CompiledPass, GraphError};

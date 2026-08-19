@@ -10,3 +10,6 @@ members = ["contracts-generated", "runtime-kernel", "storage", "secret-store", "
 [patch.crates-io]
 anyrender = { path = "vendor/anyrender" }
 blitz-paint = { path = "vendor/blitz-paint" }
+# Diagnostic hook: `set_debug_shader_bounds_checks` for A/B vs upstream `unchecked`.
+# Not a WGSL index patch. Default remains upstream unchecked.
+vello = { path = "vendor/vello" }

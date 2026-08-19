@@ -150,6 +150,7 @@ pub fn compile_passes(list: &NeoDisplayList) -> Result<Vec<CompiledPass>, GraphE
                     open_scopes: scope_stack.clone(),
                 });
             }
+            NeoPaintOp::ImagePaint(_) => {}
             NeoPaintOp::TextFragment(_)
             | NeoPaintOp::Selection(_)
             | NeoPaintOp::Composition(_)

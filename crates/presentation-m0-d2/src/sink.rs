@@ -30,9 +30,22 @@ pub enum StreamOp {
 #[derive(Default)]
 pub struct ProducerSink {
     pub ops: Vec<StreamOp>,
+    pub max_ops: Option<u32>,
+    pub(crate) counted: u32,
+    pub(crate) skip_stack: Vec<bool>,
 }
 
 impl ProducerSink {
+    fn admit(&mut self) -> bool {
+        self.counted = self.counted.saturating_add(1);
+        if let Some(max) = self.max_ops {
+            if self.counted > max {
+                return false;
+            }
+        }
+        true
+    }
+
     pub fn glass_ids(&self) -> Vec<u64> {
         self.ops
             .iter()
@@ -49,6 +62,8 @@ impl RenderContext for ProducerSink {}
 impl PaintScene for ProducerSink {
     fn reset(&mut self) {
         self.ops.clear();
+        self.counted = 0;
+        self.skip_stack.clear();
     }
 
     fn push_layer(
@@ -60,17 +75,31 @@ impl PaintScene for ProducerSink {
         _filter: Option<Arc<Filter>>,
         _backdrop_filter: Option<Arc<Filter>>,
     ) {
+        if !self.admit() {
+            self.skip_stack.push(true);
+            return;
+        }
         self.ops.push(StreamOp::PushLayer { alpha, clip: false });
+        self.skip_stack.push(false);
     }
 
     fn push_clip_layer(&mut self, _transform: Affine, _clip: &impl Shape) {
+        if !self.admit() {
+            self.skip_stack.push(true);
+            return;
+        }
         self.ops.push(StreamOp::PushLayer {
             alpha: 1.0,
             clip: true,
         });
+        self.skip_stack.push(false);
     }
 
     fn pop_layer(&mut self) {
+        self.counted = self.counted.saturating_add(1);
+        if self.skip_stack.pop() == Some(true) {
+            return;
+        }
         self.ops.push(StreamOp::PopLayer);
     }
 
@@ -82,6 +111,9 @@ impl PaintScene for ProducerSink {
         _brush_transform: Option<Affine>,
         _shape: &impl Shape,
     ) {
+        if !self.admit() {
+            return;
+        }
         self.ops.push(StreamOp::Draw {
             kind: DrawKind::Stroke,
         });
@@ -95,6 +127,9 @@ impl PaintScene for ProducerSink {
         _brush_transform: Option<Affine>,
         _shape: &impl Shape,
     ) {
+        if !self.admit() {
+            return;
+        }
         self.ops.push(StreamOp::Draw {
             kind: DrawKind::Fill,
         });
@@ -115,6 +150,9 @@ impl PaintScene for ProducerSink {
         glyphs: impl Iterator<Item = Glyph> + Clone,
     ) {
         let _ = glyphs.count();
+        if !self.admit() {
+            return;
+        }
         self.ops.push(StreamOp::Draw {
             kind: DrawKind::Glyph,
         });
@@ -128,6 +166,9 @@ impl PaintScene for ProducerSink {
         _radius: f64,
         _std_dev: f64,
     ) {
+        if !self.admit() {
+            return;
+        }
         self.ops.push(StreamOp::Draw {
             kind: DrawKind::BoxShadow,
         });

@@ -39,7 +39,7 @@ pub struct CharacterDraftView {
     pub character_note_role: String,
     pub talkativeness: f32,
     pub avatar_asset_id: Option<String>,
-    /// Resolved `assets.content` data: URI for the avatar (transport layer).
+    /// Never a `data:` URI in the Dioxus tree. GPU overlay uses `avatar_asset_id`.
     pub avatar_data_uri: Option<String>,
 }
 
@@ -77,7 +77,9 @@ pub struct CharacterCardView {
     pub name: String,
     pub description: String,
     pub tags: Vec<String>,
-    /// Resolved `assets.content` data: URI. `None` until the transport layer hydrates it.
+    /// Product Wire asset id. GPU compositor samples a cached texture; Blitz never sees a `data:` URI.
+    pub avatar_asset_id: Option<String>,
+    /// Always `None` on the paint path. Kept so older view constructors compile.
     pub avatar_data_uri: Option<String>,
 }
 
@@ -89,6 +91,35 @@ pub fn character_card_description(description: &str) -> &str {
     } else {
         description
     }
+}
+
+/// React `SidebarPanelHeader` title. Packed CSS is `font-size: 1.25rem`.
+pub const CHARACTER_MANAGER_TITLE: &str = "Character Management";
+
+/// Blitz clips `overflow: hidden` and does not paint `text-overflow: ellipsis`.
+/// Approximate Outfit advance at `font_size_px` so the visible string includes `…`.
+pub fn ellipsize_css(text: &str, max_css_px: f32, font_size_px: f32) -> String {
+    let advance = font_size_px.max(1.0) * 0.52;
+    let max_chars = (max_css_px.max(0.0) / advance).floor() as usize;
+    let n = text.chars().count();
+    if max_chars == 0 {
+        return String::new();
+    }
+    if n <= max_chars {
+        return text.to_string();
+    }
+    let take = max_chars.saturating_sub(1).max(1);
+    let mut out: String = text.chars().take(take).collect();
+    out.push('…');
+    out
+}
+
+/// Title that fits the Character Manager header on a CSS viewport.
+/// Rail 60 + header padding 32 + avatar 44 + gaps + two 40px actions.
+pub fn character_manager_title(viewport_css_width: u32) -> String {
+    let css_w = viewport_css_width.max(1) as f32;
+    let avail = css_w - 60.0 - 32.0 - 44.0 - 8.0 - 40.0 - 8.0 - 40.0;
+    ellipsize_css(CHARACTER_MANAGER_TITLE, avail.max(48.0), 20.0)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -330,23 +361,33 @@ fn rail_button(item: &RailSpec, selected: bool) -> Element {
     }
 }
 
-fn character_avatar(name: &str, class: &'static str) -> Element {
+fn character_avatar(name: &str, class: &'static str, asset_id: Option<&str>) -> Element {
     let letter = name
         .chars()
         .next()
         .map(|ch| ch.to_uppercase().to_string())
         .unwrap_or_default();
+    let asset = asset_id.unwrap_or("");
+    let box_style = if class.contains("headerAvatar") {
+        "width:44px;height:44px;max-width:44px;max-height:44px;flex:none;align-self:center;overflow:hidden;"
+    } else if class.contains("editorAvatar") {
+        "width:64px;height:64px;max-width:64px;max-height:64px;flex:none;align-self:start;overflow:hidden;"
+    } else {
+        "width:52px;height:52px;max-width:52px;max-height:52px;flex:none;align-self:start;overflow:hidden;"
+    };
     rsx! {
         span {
             class: "{class}",
+            style: "{box_style}",
             "aria-hidden": "true",
             "data-part": "avatar-fallback",
+            "data-avatar-asset": "{asset}",
             if letter.is_empty() {
                 {icon("UsersThree", 20)}
             } else {
                 span {
                     "data-part": "avatar-initial",
-                    style: "display:flex;width:100%;height:100%;overflow:hidden;align-items:center;justify-content:center;",
+                    style: "display:flex;width:100%;overflow:hidden;align-items:center;justify-content:center;",
                     "{letter}"
                 }
             }
@@ -354,13 +395,8 @@ fn character_avatar(name: &str, class: &'static str) -> Element {
     }
 }
 
-fn character_avatar_with_asset(name: &str, data_uri: Option<&str>, class: &'static str) -> Element {
-    // Live Hazel avatars decode (session still hydrates a 192px data URI), but
-    // `<img src="data:…">` in this Blitz→Vello 0.9 Vulkan path leaves the
-    // SurfaceView black even when Image brushes are skipped. Keep the clipped
-    // React fallback until a sampled atlas blit is proven on device.
-    let _ = data_uri;
-    character_avatar(name, class)
+fn character_avatar_with_asset(name: &str, asset_id: Option<&str>, class: &'static str) -> Element {
+    character_avatar(name, class, asset_id)
 }
 
 fn editor_field(
@@ -547,20 +583,30 @@ fn cards_tab(view: &ProductShellView) -> Element {
                             let selected = view.selected_character_id.as_deref() == Some(item.id.as_str());
                             let pinned = view.pinned_character_id.as_deref() == Some(item.id.as_str());
                             let desc = character_card_description(&item.description).to_string();
+                            let card_style = if selected {
+                                "height:auto;max-height:140px;align-self:flex-start;flex:none;border:1px solid #e38a62;background:#492a20;"
+                            } else {
+                                "height:auto;max-height:140px;align-self:flex-start;flex:none;"
+                            };
                             rsx! {
                                 button {
                                     class: "CharacterManagementPanel_characterCard",
                                     r#type: "button",
+                                    style: "{card_style}",
                                     "data-part": "character-card",
                                     "data-name": "{item.name}",
                                     "data-state": if selected { "selected" } else { "idle" },
                                     "data-pinned": if pinned { "true" } else { "false" },
                                     "aria-pressed": selected,
-                                    {character_avatar_with_asset(&item.name, item.avatar_data_uri.as_deref(), "CharacterManagementPanel_cardAvatar")}
+                                    {character_avatar_with_asset(&item.name, item.avatar_asset_id.as_deref(), "CharacterManagementPanel_cardAvatar")}
                                     span {
                                         class: "CharacterManagementPanel_cardCopy",
                                         strong { "{item.name}" }
-                                        span { "{desc}" }
+                                        span {
+                                            "data-part": "card-description",
+                                            style: "display:block;overflow:hidden;max-height:2.9em;line-height:1.45;font-size:0.75rem;color:#c5bbb2;",
+                                            "{desc}"
+                                        }
                                         if !item.tags.is_empty() {
                                             span {
                                                 class: "CharacterManagementPanel_tags",
@@ -634,7 +680,7 @@ fn edit_tab(draft: &CharacterDraftView) -> Element {
                     class: "CharacterManagementPanel_avatarButton",
                     r#type: "button",
                     "aria-label": "Change",
-                    {character_avatar_with_asset(&draft.name, draft.avatar_data_uri.as_deref(), "CharacterManagementPanel_editorAvatar")}
+                    {character_avatar_with_asset(&draft.name, draft.avatar_asset_id.as_deref(), "CharacterManagementPanel_editorAvatar")}
                     span { {icon("Pencil", 11)} }
                 }
                 div {
@@ -938,6 +984,7 @@ fn character_manager(view: &ProductShellView) -> Element {
     let tab = view.tab.as_str();
     let (pad_top, pad_bottom) = chrome_insets(view);
     let header_min = 52.0 + pad_top;
+    let header_title = character_manager_title(view.chat.viewport_width);
     let root_style =
         "display:flex;flex-direction:column;height:100%;min-height:0;overflow:hidden;background:#24211e;";
     let header_style = format!(
@@ -974,7 +1021,7 @@ fn character_manager(view: &ProductShellView) -> Element {
                         "data-part": "avatar",
                         {character_avatar_with_asset(
                             selected.map(|item| item.name.as_str()).unwrap_or(""),
-                            selected.and_then(|item| item.avatar_data_uri.as_deref()),
+                            selected.and_then(|item| item.avatar_asset_id.as_deref()),
                             "CharacterManagementPanel_headerAvatar",
                         )}
                     }
@@ -985,8 +1032,8 @@ fn character_manager(view: &ProductShellView) -> Element {
                         h2 {
                             class: "SidebarPanelHeader_title",
                             "data-part": "title",
-                            style: "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;",
-                            "Character Management"
+                            style: "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1 1 auto;",
+                            "{header_title}"
                         }
                     }
                 }
@@ -1000,6 +1047,7 @@ fn character_manager(view: &ProductShellView) -> Element {
                         "data-component": "button",
                         "data-variant": "ghost",
                         "data-icon": "",
+                        style: "min-width:40px;min-height:40px;width:40px;height:40px;padding:0;flex:none;background:transparent;",
                         disabled: !can_edit,
                         "aria-label": "View character card",
                         title: "View character card",
@@ -1010,14 +1058,15 @@ fn character_manager(view: &ProductShellView) -> Element {
                     class: "SidebarPanelHeader_close",
                     r#type: "button",
                     "data-part": "close",
+                    style: "min-width:40px;min-height:40px;width:40px;height:40px;padding:0;flex:none;background:transparent;",
                     "aria-label": "Close menu",
                     {icon("X", 20)}
                 }
-                div {
-                    class: "SidebarPanelHeader_headerDivider",
-                    "data-part": "header-divider",
-                    style: "position:absolute;left:0;right:0;bottom:0;height:1px;background:#39342f;pointer-events:none;",
-                }
+            }
+            div {
+                class: "SidebarPanelHeader_headerDivider",
+                "data-part": "header-divider",
+                style: "flex:none;width:100%;height:1px;min-height:1px;background:#39342f;pointer-events:none;",
             }
             div {
                 class: "st-tabs CharacterManagementPanel_tabs",

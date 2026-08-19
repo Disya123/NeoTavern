@@ -91,5 +91,8 @@ object PresentationChatNative {
     external fun isChatRouteVisible(): Boolean
 
     @JvmStatic
+    external fun setSoftwareRasterDebug(enabled: Boolean)
+
+    @JvmStatic
     external fun scrollTelemetry(): String
 }

@@ -14,6 +14,8 @@ object PresentationChatLaunch {
     const val EXTRA_FORCE_INIT_FAILURE: String = "com.neotavern.mobile.NEOTA_FORCE_INIT_FAILURE"
     const val EXTRA_CANARY_SESSION: String = "com.neotavern.mobile.NEOTA_CANARY_SESSION"
     const val EXTRA_CANARY_RESET: String = "com.neotavern.mobile.NEOTA_CANARY_RESET"
+    const val EXTRA_SOFTWARE_RASTER_DEBUG: String =
+        "com.neotavern.mobile.NEOTA_SOFTWARE_RASTER_DEBUG"
     const val FLAG_ON: String = "1"
     const val FLAG_OFF: String = "0"
     const val PROFILE_ISOLATED_10K: String = "isolated-10k"
@@ -44,6 +46,10 @@ object PresentationChatLaunch {
     }
 
     fun isCanaryReset(extra: String?): Boolean {
+        return parseFlag(extra) == FLAG_ON
+    }
+
+    fun isSoftwareRasterDebug(extra: String?): Boolean {
         return parseFlag(extra) == FLAG_ON
     }
 

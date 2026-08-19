@@ -299,6 +299,14 @@ class PresentationChatActivity : Activity(), SurfaceHolder.Callback {
             return
         }
 
+        val softwareRaster = intent.getStringExtra(PresentationChatLaunch.EXTRA_SOFTWARE_RASTER_DEBUG)
+        if (PresentationChatLaunch.isSoftwareRasterDebug(softwareRaster)) {
+            PresentationChatNative.setSoftwareRasterDebug(true)
+            Log.i(TAG, "software_raster_debug=1 renderer=vello-cpu")
+        } else if (PresentationChatLaunch.isFlagOff(softwareRaster)) {
+            PresentationChatNative.setSoftwareRasterDebug(false)
+        }
+
         val profile = PresentationChatLaunch.parseProfile(
             intent.getStringExtra(PresentationChatLaunch.EXTRA_CHAT_PROFILE)
                 ?: savedInstanceState?.getString(PresentationChatLaunch.EXTRA_CHAT_PROFILE),

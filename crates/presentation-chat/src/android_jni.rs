@@ -445,9 +445,13 @@ pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_pollStre
     timeout_ms: jint,
 ) -> jstring {
     let line = with_route(|session| {
-        let _ = session.poll_stream(timeout_ms.max(0) as u32)?;
-        #[cfg(feature = "gpu")]
-        crate::android_surface::mark_dirty();
+        match session.poll_stream(timeout_ms.max(0) as u32)? {
+            crate::wire::StreamFrame::Timeout => {}
+            _ => {
+                #[cfg(feature = "gpu")]
+                crate::android_surface::mark_dirty();
+            }
+        }
         Ok(session_line(session))
     });
     to_jstring(&mut env, line)
@@ -579,6 +583,8 @@ pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_presentF
                 }
                 Ok(crate::android_surface::bind_from_session(session))
             });
+        } else if crate::android_surface::is_avatar_overlay() {
+            let _ = crate::android_surface::composite_avatar_overlay();
         }
         crate::android_surface::present_frame(vsync_id, callback_time, deadline, expected_present)
     };
@@ -643,4 +649,16 @@ pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_scrollTe
     let text = "composite_only_frames=0 layout_rebuilds_on_scroll=0 paint_rebuilds_on_scroll=0"
         .to_string();
     to_jstring(&mut env, text)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_setSoftwareRasterDebug(
+    _env: JNIEnv,
+    _class: JClass,
+    enabled: jboolean,
+) {
+    #[cfg(feature = "gpu")]
+    crate::vello_gpu::set_software_raster_debug(Some(enabled != 0));
+    #[cfg(not(feature = "gpu"))]
+    let _ = enabled;
 }

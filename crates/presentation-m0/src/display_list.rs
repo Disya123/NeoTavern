@@ -4,6 +4,7 @@
 
 pub use neotavern_neocompositor::{
     AffineCoeffs, BackdropRootId, BarrierId, ClipChainId, ClipNode, EffectKind, EffectNode,
-    EffectNodeId, EffectScopeId, GlassBoundary, ImageLayer, NeoDisplayList, NeoPaintOp, PaintChunk,
-    PaintChunkId, PaintOrderKey, Rect, SpatialNode, SpatialNodeId, StubPayload,
+    EffectNodeId, EffectScopeId, GlassBoundary, ImageLayer, ImagePaintOp, NeoDisplayList,
+    NeoPaintOp, PaintChunk, PaintChunkId, PaintOrderKey, Rect, SpatialNode, SpatialNodeId,
+    StubPayload,
 };

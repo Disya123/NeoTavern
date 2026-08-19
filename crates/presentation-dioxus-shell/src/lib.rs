@@ -22,8 +22,9 @@ pub use product_path::{
     PRODUCT_PATH_ITEMS, PRODUCT_PATH_VISIBLE,
 };
 pub use product_shell::{
-    character_card_description, current_product_shell, install_product_shell, product_shell_app,
-    CharacterCardView, CharacterDraftView, ProductShellView,
+    character_card_description, character_manager_title, current_product_shell, ellipsize_css,
+    install_product_shell, product_shell_app, CharacterCardView, CharacterDraftView,
+    ProductShellView, CHARACTER_MANAGER_TITLE,
 };
 
 pub const DIOXUS_SHELL_FLAG: &str = "NEOTA_DIOXUS_SHELL";
