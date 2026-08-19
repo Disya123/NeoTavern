@@ -7,21 +7,39 @@
   "production_cutover": "STARTED",
   "cutover": "CANARY",
   "canary": "STARTED",
-  "canary_batch": "NOT_RUN",
+  "canary_batch": "PASS",
   "webview_retained": true,
   "talkback_rfc51": "DEFERRED_BY_OWNER",
   "product_accessibility_path": "WEBVIEW_FALLBACK",
+  "compositor_surfaceview_chat": false,
   "physical": true,
   "serial": "8f5c2b7c",
-  "reason": "Guarded MainActivity selector is in the production APK; physical canary batch has not run",
+  "capture_stamp": "2026-08-19T11-20-00-000Z",
+  "apk_sha256": "4e063dddf3ca7380f654741194dc33b6013e242095bd8bbfb634633f2a983ad4",
+  "source_commit": "cef4f8fc05ff4886846037cf6a39323ff3bd95b7",
+  "reason": "Physical canary batch PASS on Xiaomi after debug opt-in persist. RFC §51 residual items remain; owner may close C under the amended scope. Visible host is PresentationChatActivity snapshot, not NeoCompositor SurfaceView.",
   "cases": {
-    "rust_launch": "NOT_RUN",
-    "process_death": "NOT_RUN",
-    "upgrade_relaunch": "NOT_RUN",
-    "send_reopen": "NOT_RUN",
-    "safe_mode": "NOT_RUN",
-    "forced_init_failure": "NOT_RUN",
-    "flag_off": "NOT_RUN",
-    "accessibility_fallback": "NOT_RUN"
+    "rust_launch": "PASS",
+    "process_death": "PASS",
+    "upgrade_relaunch": "PASS",
+    "send_reopen": "PASS",
+    "safe_mode": "PASS",
+    "forced_init_failure": "PASS",
+    "flag_off": "PASS",
+    "accessibility_fallback": "PASS"
+  },
+  "send_reopen": {
+    "title": "Hazel",
+    "before": 6,
+    "after": 8,
+    "reopen": 8,
+    "driver": "composer_input_text_and_send_button"
+  },
+  "accessibility_fallback": {
+    "talkback_enabled": true,
+    "resume": "com.neotavern.mobile/.MainActivity",
+    "webview": true,
+    "rust_host_created": false,
+    "talkback_restored_off": true
   }
 }

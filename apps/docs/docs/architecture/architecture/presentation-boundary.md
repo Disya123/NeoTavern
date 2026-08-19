@@ -15,7 +15,7 @@ Milestone B = PASS
 Milestone C = STARTED
 core chat journey batch = PASS
 production cutover = STARTED / CANARY
-canary_batch = NOT_RUN
+canary_batch = PASS
 ```
 
 Milestone A **PASS** is the feature-flagged Product Wire shell, React ↔
@@ -191,7 +191,7 @@ allows a Rust host. Production APK packages
 `libneotavern_presentation_chat.so`. Kernel and `filesDir/neotavern` stay
 shared. Isolated 10k remains a debug harness profile
 (`NEOTA_CHAT_PROFILE=isolated-10k` → `filesDir/neotavern-isolated-10k`).
-Physical canary batch is **NOT_RUN**
+Physical canary batch is **PASS**
 ([milestone-c-canary.md](../rfc/milestone-c-canary.md)).
 
 The route mounts when the guarded selector allows a Rust host. A debug
@@ -213,5 +213,5 @@ does **not** satisfy RFC §51 TalkBack; native Dioxus TalkBack is
 ([milestone-c-adjudication.json](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/milestone-c-adjudication.json),
 [runbook](../rfc/milestone-c-physical-runbook.md)). Milestone C is
 **STARTED**, not RFC §51 PASS. Cutover is **STARTED / CANARY**;
-`canary_batch` is **NOT_RUN**. Chat workspace on flagged Dioxus Android
+`canary_batch` is **PASS**. Chat workspace on flagged Dioxus Android
 remains **DEFERRED** in the compatibility matrix until owner-signed PARITY.

@@ -32,7 +32,7 @@ Index of the internal documentation. Each major topic has its own folder.
 - [Presentation boundary](architecture/presentation-boundary.md) — Milestone A **PASS**; Milestone B **PASS**; live Product Wire chat route (Milestone C STARTED, core chat journey batch PASS, native TalkBack DEFERRED_BY_OWNER / WEBVIEW_FALLBACK, cutover STARTED/CANARY, canary_batch NOT_RUN, not RFC C PASS); WebView rollback.
 - [ADR-0051](adr/0051-android-talkback-webview-fallback.md) — native Dioxus TalkBack deferred; TalkBack/touch exploration selects WebView before a Rust host.
 - [Milestone C physical runbook](rfc/milestone-c-physical-runbook.md) — Xiaomi journey batch PASS; FAILED_ATTEMPT preserved; harness stamp is not canary.
-- [Milestone C guarded canary](rfc/milestone-c-canary.md) — `MainActivity` selector STARTED/CANARY; physical canary batch NOT_RUN.
+- [Milestone C guarded canary](rfc/milestone-c-canary.md) — `MainActivity` selector STARTED/CANARY; physical canary batch PASS; not RFC C PASS.
 - [Known baseline failures](architecture/known-baseline-failures.md) — `KNOWN_BASELINE_FAILURE` fingerprints; not a green full baseline; not a B PASS waiver.
 - [PresentationCompatibilityMatrix](rfc/presentation-compatibility-matrix.md) — baseline after D1/D2 GO; ADR-0051 TalkBack `DEFERRED_BY_OWNER` / `WEBVIEW_FALLBACK` (not cutover).
 - [Generation durability](architecture/generation-durability.md) — Phase 6 recoverable generation workflows, state machine, SSE resume.

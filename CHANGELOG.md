@@ -18,6 +18,14 @@
   launcher / notification / deep-link starts keep Dioxus. `=0` clears it.
   Safe mode, crash-loop, TalkBack, and unqualified devices still force
   WebView. Release ignores these extras pending a signed rollout config.
+
+- **Guarded Dioxus canary batch PASS on Xiaomi (Milestone C still STARTED).**
+  Stamp `2026-08-19T11-20-00-000Z`, APK `cef4f8f`: Rust launch, process
+  death, upgrade/relaunch, send/reopen (Hazel 6→8), safe mode, forced init
+  failure, flag off, and TalkBack→WebView fallback. Visible host is
+  `PresentationChatActivity`, not compositor SurfaceView. TalkBack restored
+  off. Record:
+  [`docs/rfc/milestone-c-canary.md`](docs/rfc/milestone-c-canary.md).
   `MainActivity` selects WebView or Dioxus **before** creating a Rust host.
   TalkBack/touch exploration, safe mode, kill switch, crash-loop, unqualified
   GPU, and flag-off stay on WebView. Production APK packages

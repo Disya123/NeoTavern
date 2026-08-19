@@ -5,7 +5,7 @@
     {
       "source": "README.md",
       "target": "README.md",
-      "sha256": "2a1beb8838af33933a7d97ddb2fbff8ce0454b5cb9aa052c4d39452c9c172369"
+      "sha256": "a5d44e7e071c74ed788a0f9d547b8270f528e7b063d6a7b19f02dfb774f8b1d2"
     },
     {
       "source": "adr/0004-typebox-contracts.md",
@@ -290,7 +290,7 @@
     {
       "source": "architecture/presentation-boundary.md",
       "target": "architecture/presentation-boundary.md",
-      "sha256": "a0ed9c5f767a0914a9c31b44a8c80ea8c087886c968b05bfd6caf41ee785816c"
+      "sha256": "e69ac616cf22f9ba7306a41ec166fbbd930736e684c5a870b74fb20dd604e82b"
     },
     {
       "source": "architecture/prompt-pipeline.md",
@@ -435,7 +435,7 @@
     {
       "source": "rfc/milestone-c-canary.md",
       "target": "rfc/milestone-c-canary.md",
-      "sha256": "0d286afb750d0ff43adaf9d6bf39a61fbe1d1a226e293763ad891a281067452e"
+      "sha256": "db57f655659e841ff4fd0211aa6d67ed486cf67cb462a5c2b791e4f2f1a95943"
     },
     {
       "source": "rfc/milestone-c-physical-runbook.md",
