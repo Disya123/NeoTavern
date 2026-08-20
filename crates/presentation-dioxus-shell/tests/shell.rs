@@ -179,3 +179,48 @@ fn chrome_metrics_probe_stays_compact() {
     assert_eq!(header, 36);
     assert_eq!(composer, 40);
 }
+
+#[test]
+fn character_card_renders_with_grid_clip_and_no_height_clamp_golden() {
+    use std::fs;
+    use std::path::PathBuf;
+
+    // Golden corpus: Rust card must match React grid/line-clamp, no height clamp.
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/product_shell.rs");
+    let text = fs::read_to_string(manifest).expect("product_shell.rs");
+    assert!(
+        text.contains("CharacterManagementPanel_characterCard"),
+        "card class missing in source"
+    );
+    // The old compact clamp `height:auto;max-height:140px` must be gone from the card.
+    // product.css still has it (React's original), but product_shell.rs must not inline it.
+    let card_section = text
+        .split("fn cards_tab")
+        .nth(1)
+        .unwrap_or("");
+    assert!(
+        !card_section.contains("max-height:140px"),
+        "old height clamp must be gone from cards_tab"
+    );
+    assert!(
+        card_section.contains("-webkit-line-clamp:2"),
+        "React parity line-clamp missing in cards_tab"
+    );
+    assert!(
+        card_section.contains("display:-webkit-box"),
+        "clip display must be -webkit-box in cards_tab"
+    );
+    // Seam corpus: one full-viewport layout/PaintScene/SceneEpoch, no per-tile layout.
+    // Verify android_surface.rs no longer does per-tile raster_tiled in production path.
+    let chat_surface = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../presentation-chat/src/android_surface.rs");
+    let surface_text = fs::read_to_string(chat_surface).expect("android_surface.rs");
+    assert!(
+        surface_text.contains("Single full-viewport path"),
+        "seam corpus: single viewport comment missing"
+    );
+    assert!(
+        !surface_text.contains("raster_tiled(&mut host.gpu"),
+        "seam corpus: per-tile raster_tiled must not be in produce_and_raster"
+    );
+}
