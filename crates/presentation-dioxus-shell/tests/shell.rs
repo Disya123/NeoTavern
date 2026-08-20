@@ -210,6 +210,11 @@ fn character_card_renders_with_grid_clip_and_no_height_clamp_golden() {
         card_section.contains("display:-webkit-box"),
         "clip display must be -webkit-box in cards_tab"
     );
+    // Avatar size parity: cardAvatar must be 48px (React --st-control-height-large), not 52px.
+    assert!(
+        text.contains("width:48px;height:48px;max-width:48px;max-height:48px"),
+        "card avatar must be 48px for React parity, not 52px"
+    );
     // Seam corpus: one full-viewport layout/PaintScene/SceneEpoch, no per-tile layout.
     // Verify android_surface.rs no longer does per-tile raster_tiled in production path.
     let chat_surface = PathBuf::from(env!("CARGO_MANIFEST_DIR"))

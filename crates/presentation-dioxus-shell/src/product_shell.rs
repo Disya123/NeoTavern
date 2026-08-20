@@ -363,7 +363,8 @@ fn character_avatar(name: &str, class: &'static str, asset_id: Option<&str>) -> 
     } else if class.contains("editorAvatar") {
         "width:64px;height:64px;max-width:64px;max-height:64px;flex:none;align-self:start;overflow:hidden;"
     } else {
-        "width:52px;height:52px;max-width:52px;max-height:52px;flex:none;align-self:start;overflow:hidden;"
+        // React parity: cardAvatar is var(--st-control-height-large) = 48px, not 52px.
+        "width:48px;height:48px;max-width:48px;max-height:48px;flex:none;align-self:start;overflow:hidden;"
     };
     rsx! {
         span {
