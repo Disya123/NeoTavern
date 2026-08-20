@@ -17,6 +17,14 @@ pub const AVATAR_DISPLAY_MAX_PX: u32 = 192;
 /// Reject leftover `data:` payloads. Not used on the paint path.
 pub const AVATAR_DISPLAY_URI_MAX_CHARS: usize = 96_000;
 
+// Decode preflight limits: a malicious `assets.content` must not be able to make
+// the decoder allocate an unbounded raster. Dimensions are read from the image
+// header (no pixel allocation) before any decode, and both the compressed input
+// length and the decoded pixel count are bounded with checked arithmetic.
+pub const THUMBNAIL_INPUT_MAX_BYTES: usize = 16 * 1024 * 1024;
+pub const THUMBNAIL_MAX_DIMENSION: u32 = 4096;
+pub const THUMBNAIL_MAX_DECODED_PIXELS: u64 = 16 * 1024 * 1024;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AvatarThumb {
     pub width: u32,
@@ -28,6 +36,30 @@ impl AvatarThumb {
     pub fn byte_len(&self) -> usize {
         self.premul_rgba.len()
     }
+}
+
+/// Reject inputs that would decode to an unbounded raster.
+///
+/// Reads only the image header (no pixel allocation) and bounds the compressed
+/// length, each axis, and the decoded pixel count (checked multiply). Returns the
+/// `(width, height)` so callers can also size their GPU upload without re-reading.
+fn check_image_limits(bytes: &[u8]) -> Option<(u32, u32)> {
+    if bytes.len() > THUMBNAIL_INPUT_MAX_BYTES {
+        return None;
+    }
+    let reader = ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?;
+    let (width, height) = reader.into_dimensions().ok()?;
+    if width == 0 || height == 0 {
+        return None;
+    }
+    if width > THUMBNAIL_MAX_DIMENSION || height > THUMBNAIL_MAX_DIMENSION {
+        return None;
+    }
+    let pixels = u64::from(width).checked_mul(u64::from(height))?;
+    if pixels > THUMBNAIL_MAX_DECODED_PIXELS {
+        return None;
+    }
+    Some((width, height))
 }
 
 pub fn premultiplied_cover_thumbnail(content_base64: &str) -> Option<AvatarThumb> {
@@ -42,6 +74,7 @@ pub fn premultiplied_cover_thumbnail(content_base64: &str) -> Option<AvatarThumb
 }
 
 pub fn thumbnail_from_bytes(bytes: &[u8]) -> Option<AvatarThumb> {
+    let _dims = check_image_limits(bytes)?;
     let image = ImageReader::new(Cursor::new(bytes))
         .with_guessed_format()
         .ok()?
@@ -134,7 +167,7 @@ fn unpremultiply(premul: &[u8]) -> Option<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::{
-        thumbnail_from_bytes, AvatarThumb, AVATAR_DISPLAY_MAX_PX,
+        thumbnail_from_bytes, AvatarThumb, AVATAR_DISPLAY_MAX_PX, THUMBNAIL_INPUT_MAX_BYTES,
     };
     use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
     use std::io::Cursor;
@@ -149,6 +182,16 @@ mod tests {
             .write_to(&mut Cursor::new(&mut bytes), ImageFormat::Png)
             .expect("png");
         bytes
+    }
+
+    /// Build a PNG that declares `w`×`h` in its IHDR (CRC intentionally left
+    /// stale). Used only to exercise the dimension preflight via the header reader.
+    fn huge_dimensions_png(w: u32, h: u32) -> Vec<u8> {
+        let mut v = solid_png(1, 1, [0, 0, 0, 255]);
+        // IHDR width occupies bytes 16..20 and height 20..24 within the file.
+        v[16..20].copy_from_slice(&w.to_be_bytes());
+        v[20..24].copy_from_slice(&h.to_be_bytes());
+        v
     }
 
     #[test]
@@ -172,5 +215,21 @@ mod tests {
         let g = ((100u16 * 128 + 127) / 255) as u8;
         let b = ((50u16 * 128 + 127) / 255) as u8;
         assert_eq!(&premul_rgba[0..4], &[r, g, b, 128]);
+    }
+
+    #[test]
+    fn rejects_oversize_input_before_decode() {
+        // 17 MiB of non-image bytes must be rejected by the length guard without
+        // attempting a decode / allocation.
+        let big = vec![0u8; THUMBNAIL_INPUT_MAX_BYTES + 1];
+        assert!(thumbnail_from_bytes(&big).is_none());
+    }
+
+    #[test]
+    fn rejects_huge_declared_dimensions() {
+        // A PNG whose IHDR declares a 9000x9000 raster must be rejected by the
+        // dimension / decoded-pixel guards (read from the header, no pixel decode).
+        let png = huge_dimensions_png(9000, 9000);
+        assert!(thumbnail_from_bytes(&png).is_none());
     }
 }
