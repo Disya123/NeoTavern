@@ -97,21 +97,11 @@ pub fn character_card_description(description: &str) -> &str {
 pub const CHARACTER_MANAGER_TITLE: &str = "Character Management";
 
 /// Blitz clips `overflow: hidden` and does not paint `text-overflow: ellipsis`.
-/// Approximate Outfit advance at `font_size_px` so the visible string includes `…`.
+/// Trim `text` to the real Outfit advance width measured by Parley so the
+/// visible string includes `…` and actually fits. The fixed `font_size * 0.52`
+/// heuristic is gone.
 pub fn ellipsize_css(text: &str, max_css_px: f32, font_size_px: f32) -> String {
-    let advance = font_size_px.max(1.0) * 0.52;
-    let max_chars = (max_css_px.max(0.0) / advance).floor() as usize;
-    let n = text.chars().count();
-    if max_chars == 0 {
-        return String::new();
-    }
-    if n <= max_chars {
-        return text.to_string();
-    }
-    let take = max_chars.saturating_sub(1).max(1);
-    let mut out: String = text.chars().take(take).collect();
-    out.push('…');
-    out
+    neotavern_presentation_design_system::ellipsize_to_width(text, max_css_px, font_size_px)
 }
 
 /// Title that fits the Character Manager header on a CSS viewport.
