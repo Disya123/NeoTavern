@@ -1,6 +1,7 @@
 package com.neotavern.mobile
 
 import android.app.Activity
+import android.content.ComponentCallbacks2
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.graphics.Color
@@ -401,6 +402,17 @@ class PresentationChatActivity : Activity(), SurfaceHolder.Callback {
         holder?.release()
         holder = null
         super.onDestroy()
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
+            try {
+                val line = PresentationChatNative.evictForPressure(2 * 1024 * 1024)
+                Log.i(TAG, line)
+            } catch (_: Throwable) {
+            }
+        }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

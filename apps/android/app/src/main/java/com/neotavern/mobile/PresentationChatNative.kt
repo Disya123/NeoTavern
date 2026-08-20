@@ -95,4 +95,7 @@ object PresentationChatNative {
 
     @JvmStatic
     external fun scrollTelemetry(): String
+
+    @JvmStatic
+    external fun evictForPressure(bytes: Int): String
 }

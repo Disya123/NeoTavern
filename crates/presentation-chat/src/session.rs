@@ -215,6 +215,10 @@ impl<W: ProductWire> ChatSession<W> {
         self.state.avatar_thumbs.get(asset_id)
     }
 
+    pub fn evict_avatars_for_pressure(&mut self, bytes: usize) -> usize {
+        self.state.evict_avatars_for_pressure(bytes)
+    }
+
     pub fn avatar_ready_token(&self) -> u64 {
         self.state.avatar_ready_token
     }

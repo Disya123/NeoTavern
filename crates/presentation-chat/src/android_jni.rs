@@ -662,3 +662,31 @@ pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_setSoftw
     #[cfg(not(feature = "gpu"))]
     let _ = enabled;
 }
+
+#[no_mangle]
+pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_evictForPressure(
+    mut env: JNIEnv,
+    _class: JClass,
+    bytes: jint,
+) -> jstring {
+    let want = bytes.max(0) as usize;
+    let mut evicted_gpu = 0usize;
+    let mut evicted_cpu = 0usize;
+    #[cfg(feature = "gpu")]
+    {
+        // GPU avatar cache.
+        if let Ok(mut slot) = crate::android_surface::HOST.lock() {
+            if let Some(host) = slot.as_mut() {
+                evicted_gpu = host.gpu.avatars.evict_for_pressure(want);
+            }
+        }
+        // CPU avatar cache in the route session.
+        if let Ok(mut route) = ROUTE.lock() {
+            if let Some(session) = route.as_mut() {
+                evicted_cpu = session.evict_avatars_for_pressure(want);
+            }
+        }
+    }
+    let line = format!("pressure_evict bytes={want} gpu={evicted_gpu} cpu={evicted_cpu}");
+    to_jstring(&mut env, line)
+}
