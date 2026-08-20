@@ -7,10 +7,32 @@ pub const PAGE_LIMIT: i64 = 50;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum StreamFrame {
-    Event(Box<GenerationEvent>),
+    /// One generation event. `sequence` is the Kernel envelope sequence when
+    /// the host supplied it (JNI); `None` for in-memory FakeWire frames that
+    /// only carry the payload. Duplicate `sequence` values are not applied.
+    Event {
+        sequence: Option<i64>,
+        event: Box<GenerationEvent>,
+    },
     Terminal,
     Error(ErrorDto),
     Timeout,
+}
+
+impl StreamFrame {
+    pub fn from_event(event: GenerationEvent) -> Self {
+        Self::Event {
+            sequence: None,
+            event: Box::new(event),
+        }
+    }
+
+    pub fn from_sequenced(sequence: i64, event: GenerationEvent) -> Self {
+        Self::Event {
+            sequence: Some(sequence),
+            event: Box::new(event),
+        }
+    }
 }
 
 /// One Product Wire request/response. Presentation never opens Kernel.

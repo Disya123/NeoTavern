@@ -1,0 +1,17 @@
+[package]
+name = "neotavern-presentation-blueprint"
+version = "0.1.0"
+edition = "2021"
+description = "Renderer-neutral Character Manager blueprint and scene ABI"
+license = "AGPL-3.0"
+publish = false
+
+[lib]
+name = "neotavern_presentation_blueprint"
+
+[dependencies]
+contracts-generated = { path = "../contracts-generated" }
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+serde_json = "1"

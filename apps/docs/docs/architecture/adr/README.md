@@ -4,6 +4,36 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/adr/README.md
 
 # Architecture Decision Records
 
+## ADR-0054: Plugin frontend stays CONTAINED in WebSurface
+
+Plugin DOM islands and legacy `window.SillyTavern` are not rewritten into
+Dioxus. The Plugins rail panel lists Product Wire `plugins.*` rows; frontend
+slots run only in a sandboxed `WebSurface`. Public `PluginVisualSurface`
+stays Milestone D ([ADR-0050](0050-visual-surface-ingress-vs-plugin.md)).
+Full decision: [ADR-0054](0054-plugin-visual-surface-contained.md).
+
+## ADR-0053: Android 120-Hz release-budget calibration
+
+The 120-Hz claim stays at `baseline`, not `budget`, until this ADR is signed.
+Calibrated budget: `input-to-present` **p99 ≤ 12 ms** / **p95 ≤ 9 ms** on the
+Xiaomi `8f5c2b7c` reference (Adreno 710, Vulkan); `composite_only_frames > 0`
+and `layout_rebuilds_on_scroll == 0` during a 60 s capped 10k fling;
+`sf_gpu_deadline_missed` admissible only with a confirmed timely app submit.
+Companion to [ADR-0052](0052-webview-removal.md). Full decision:
+[ADR-0053](0053-android-120hz-release-budget.md).
+
+## ADR-0052: Production no-WebView cutover (Android Rust presentation is the default)
+
+The Android production default becomes the Rust `SurfaceView` renderer;
+`PresentationChatActivity` is `LAUNCHER`, `MainActivity` is the guarded
+fallback (accessibility/crash-loop/safe-mode). `WebView` is removed from the
+released `APK` as a main-screen renderer (retained only for a scoped
+`CONTAINED` `WebSurface` if a shipped plugin needs it). Cutover is gated on
+owner-signed `PARITY` for every compatibility-matrix row and on signed
+`≤1 dp` visual parity. Companion to
+[ADR-0053](0053-android-120hz-release-budget.md). Full decision:
+[ADR-0052](0052-webview-removal.md).
+
 ## ADR-0051: Defer native Dioxus TalkBack; product a11y is WebView fallback
 
 Native TalkBack on the Dioxus/Rust path is **DEFERRED_BY_OWNER**.

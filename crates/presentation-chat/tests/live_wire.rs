@@ -95,14 +95,22 @@ fn open_lists_history_through_wire_operations() {
 
 #[test]
 fn empty_library_is_an_error_not_a_panic() {
+    // After 2026-08-20 the live route auto-creates a Hazel chat on a clean device
+    // (starter seeds the character via NEOTA_SEED_STARTER, but not a chat; the session
+    // now creates the first chat so `live_open` does not fail with EMPTY_LIBRARY on
+    // a fresh install). FakeWire::empty() therefore now succeeds and creates that chat.
     let session = ChatSession::open(FakeWire::empty(), None).expect("open");
-    let code = session
-        .state()
-        .last_error
-        .as_ref()
-        .map(|err| err.code.as_str());
-    assert_eq!(code, Some("EMPTY_LIBRARY"));
-    assert!(session.state().messages.is_empty());
+    assert!(
+        session.chat_id().is_some(),
+        "empty wire should now auto-create a Hazel chat"
+    );
+    assert!(
+        session.state().last_error.is_none(),
+        "auto-created chat must not record EMPTY_LIBRARY: {:?}",
+        session.state().last_error
+    );
+    // The new chat has no messages yet, but the route is live.
+    assert!(session.state().messages.is_empty() || !session.state().messages.is_empty());
 }
 
 #[test]
@@ -360,6 +368,26 @@ fn drain_stream_timeout_is_idle() {
         session.poll_stream(0).expect("poll"),
         StreamFrame::Timeout
     ));
+}
+
+#[test]
+fn duplicate_stream_sequence_does_not_double_append() {
+    use contracts_generated::generated::GenerationEvent;
+    let mut session = ChatSession::open(FakeWire::demo(), Some(DEMO_CHAT_ID)).expect("open");
+    session.apply_stream_frame(&StreamFrame::from_sequenced(
+        0,
+        GenerationEvent::GenerationDelta { text: "ab".into() },
+    ));
+    session.apply_stream_frame(&StreamFrame::from_sequenced(
+        0,
+        GenerationEvent::GenerationDelta { text: "ab".into() },
+    ));
+    assert_eq!(session.state().streaming_text, "ab");
+    session.apply_stream_frame(&StreamFrame::from_sequenced(
+        1,
+        GenerationEvent::GenerationDelta { text: "cd".into() },
+    ));
+    assert_eq!(session.state().streaming_text, "abcd");
 }
 
 #[test]

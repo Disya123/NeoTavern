@@ -10,9 +10,7 @@ use std::cell::RefCell;
 
 use dioxus_core::Element;
 use dioxus_core_macro::rsx;
-use neotavern_presentation_design_system::{
-    phosphor_path, product_stylesheets, SafeAreaInsets,
-};
+use neotavern_presentation_design_system::{phosphor_path, product_stylesheets, SafeAreaInsets};
 
 use crate::{product_chat_app, ProductChatView};
 
@@ -93,8 +91,81 @@ pub fn character_card_description(description: &str) -> &str {
     }
 }
 
+/// React `PersonasPanel` card copy: `persona.description.trim() || t('personas:noDescription')`.
+pub fn persona_card_description(description: &str) -> &str {
+    if description.trim().is_empty() {
+        "No description"
+    } else {
+        description
+    }
+}
+
+/// React `LorebookPanel` card copy.
+pub fn lorebook_card_description(description: &str) -> &str {
+    if description.trim().is_empty() {
+        "No description"
+    } else {
+        description
+    }
+}
+
 /// React `SidebarPanelHeader` title. Packed CSS is `font-size: 1.25rem`.
 pub const CHARACTER_MANAGER_TITLE: &str = "Character Management";
+pub const PERSONA_MANAGER_TITLE: &str = "Persona Management";
+pub const LOREBOOK_MANAGER_TITLE: &str = "Lorebooks";
+pub const BACKGROUNDS_MANAGER_TITLE: &str = "Backgrounds";
+pub const AI_SETTINGS_TITLE: &str = "AI Settings";
+pub const PLUGINS_MANAGER_TITLE: &str = "Plugins";
+pub const SETTINGS_TITLE: &str = "Settings";
+pub const CHATS_MANAGER_TITLE: &str = "Chats";
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PersonaCardView {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub is_default: bool,
+    pub is_active: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LorebookCardView {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub entry_count: i64,
+    pub character_id: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PluginCardView {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub enabled: bool,
+    pub trust_state: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProviderCardView {
+    pub id: String,
+    pub name: String,
+    pub availability: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PresetCardView {
+    pub id: String,
+    pub name: String,
+    pub kind: String,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct PanelTab {
+    pub id: &'static str,
+    pub label: &'static str,
+    pub disabled: bool,
+}
 
 /// Blitz clips `overflow: hidden` and does not paint `text-overflow: ellipsis`.
 /// Trim `text` to the real Outfit advance width measured by Parley so the
@@ -104,12 +175,20 @@ pub fn ellipsize_css(text: &str, max_css_px: f32, font_size_px: f32) -> String {
     neotavern_presentation_design_system::ellipsize_to_width(text, max_css_px, font_size_px)
 }
 
+/// Title that fits a management header on a CSS viewport.
+pub fn panel_header_title(title: &str, viewport_css_width: u32) -> String {
+    let css_w = viewport_css_width.max(1) as f32;
+    let panel_w = (css_w - 60.0).max(120.0);
+    let avail = (panel_w - 140.0).max(120.0);
+    ellipsize_css(title, avail, 18.0)
+}
+
 /// Title that fits the Character Manager header on a CSS viewport.
-/// Rail 60 + header padding 32 + avatar 44 + gaps + two 40px actions.
 pub fn character_manager_title(viewport_css_width: u32) -> String {
     let css_w = viewport_css_width.max(1) as f32;
-    let avail = css_w - 60.0 - 32.0 - 44.0 - 8.0 - 40.0 - 8.0 - 40.0;
-    ellipsize_css(CHARACTER_MANAGER_TITLE, avail.max(48.0), 20.0)
+    let panel_w = (css_w - 60.0).max(120.0);
+    let avail = (panel_w - 215.0).max(80.0);
+    ellipsize_css(CHARACTER_MANAGER_TITLE, avail, 18.0)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -141,6 +220,33 @@ pub struct ProductShellView {
     pub gallery_sort: String,
     pub expanded_greeting: Option<usize>,
     pub tag_input: String,
+    pub personas: Vec<PersonaCardView>,
+    pub selected_persona_id: Option<String>,
+    pub persona_tab: String,
+    pub persona_search: String,
+    pub persona_sort: String,
+    pub persona_name_draft: String,
+    pub persona_description_draft: String,
+    pub persona_create_open: bool,
+    pub persona_delete_open: bool,
+    pub persona_create_name: String,
+    pub active_persona_id: Option<String>,
+    pub lorebooks: Vec<LorebookCardView>,
+    pub selected_lorebook_id: Option<String>,
+    pub lorebook_tab: String,
+    pub lorebook_search: String,
+    pub lorebook_create_open: bool,
+    pub lorebook_delete_open: bool,
+    pub lorebook_create_name: String,
+    pub lorebook_name_draft: String,
+    pub lorebook_description_draft: String,
+    pub plugins: Vec<PluginCardView>,
+    pub providers: Vec<ProviderCardView>,
+    pub presets: Vec<PresetCardView>,
+    pub language: String,
+    pub dir: String,
+    pub ai_tab: String,
+    pub settings_tab: String,
 }
 
 impl Default for ProductShellView {
@@ -173,6 +279,33 @@ impl Default for ProductShellView {
             gallery_sort: "oldest".into(),
             expanded_greeting: None,
             tag_input: String::new(),
+            personas: Vec::new(),
+            selected_persona_id: None,
+            persona_tab: "cards".into(),
+            persona_search: String::new(),
+            persona_sort: "asc".into(),
+            persona_name_draft: String::new(),
+            persona_description_draft: String::new(),
+            persona_create_open: false,
+            persona_delete_open: false,
+            persona_create_name: String::new(),
+            active_persona_id: None,
+            lorebooks: Vec::new(),
+            selected_lorebook_id: None,
+            lorebook_tab: "books".into(),
+            lorebook_search: String::new(),
+            lorebook_create_open: false,
+            lorebook_delete_open: false,
+            lorebook_create_name: String::new(),
+            lorebook_name_draft: String::new(),
+            lorebook_description_draft: String::new(),
+            plugins: Vec::new(),
+            providers: Vec::new(),
+            presets: Vec::new(),
+            language: "en".into(),
+            dir: "ltr".into(),
+            ai_tab: "providers".into(),
+            settings_tab: "general".into(),
         }
     }
 }
@@ -248,11 +381,11 @@ const RAIL: &[RailSpec] = &[
     },
 ];
 
-fn icon(name: &'static str, size: u32) -> Element {
+pub(crate) fn icon(name: &'static str, size: u32) -> Element {
     icon_fill(name, size, "#998f87")
 }
 
-fn icon_fill(name: &'static str, size: u32, fill: &'static str) -> Element {
+pub(crate) fn icon_fill(name: &'static str, size: u32, fill: &'static str) -> Element {
     let path = phosphor_path(name).unwrap_or("");
     let class = format!("nt-icon nt-icon-{name}");
     rsx! {
@@ -292,11 +425,12 @@ fn sort_label(sort: &str) -> &'static str {
     }
 }
 
-fn chrome_insets(view: &ProductShellView) -> (f32, f32) {
+pub(crate) fn chrome_insets(view: &ProductShellView) -> (f32, f32) {
     let compact = view.chat.viewport_width <= 600;
     // React compact chrome: max(--st-space-2xl, --nt-inset-*).
+    // Floor at 48px on compact mobile so rail and header chrome stay comfortably below status bar clock.
     let top = if compact {
-        view.insets.top.max(32.0)
+        view.insets.top.max(48.0)
     } else {
         view.insets.top.max(8.0)
     };
@@ -308,7 +442,7 @@ fn chrome_insets(view: &ProductShellView) -> (f32, f32) {
     (top, bottom)
 }
 
-fn tab_trigger_style(active: bool) -> &'static str {
+pub(crate) fn tab_trigger_style(active: bool) -> &'static str {
     if active {
         "flex:1;min-height:44px;border-radius:10px;background:#492a20;color:#ffc4a8;font-weight:600;"
     } else {
@@ -488,36 +622,39 @@ fn cards_tab(view: &ProductShellView) -> Element {
             }
             label {
                 class: "CharacterManagementPanel_searchControl",
+                style: "display:flex;flex-direction:row;align-items:center;gap:8px;padding:0 12px;min-height:40px;border:1px solid #39342f;border-radius:8px;background:#1e1b18;",
                 {icon_fill("MagnifyingGlass", 17, "#998f87")}
                 span {
                     class: "CharacterManagementPanel_srOnly",
                     style: "display:none;",
-                    "Search characters…"
+                    "Search characters..."
                 }
                 if view.search.trim().is_empty() {
                     span {
                         "data-part": "placeholder",
-                        style: "color:#998f87;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
-                        "Search characters…"
+                        style: "color:#998f87;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;",
+                        "Search characters..."
                     }
                 }
                 input {
                     r#type: "search",
-                    placeholder: "Search characters…",
+                    placeholder: "Search characters...",
                     value: "{view.search}",
                     style: if view.search.trim().is_empty() {
-                        "flex:1;min-width:0;color:transparent;"
+                        "flex:1;min-width:0;background:transparent;border:none;outline:none;color:transparent;font-size:14px;"
                     } else {
-                        "flex:1;min-width:0;color:#f3eee8;"
+                        "flex:1;min-width:0;background:transparent;border:none;outline:none;color:#f3eee8;font-size:14px;"
                     }
                 }
             }
             div {
                 class: "CharacterManagementPanel_listMeta",
+                style: "display:flex;flex-direction:row;flex-wrap:nowrap;width:100%;align-items:center;justify-content:space-between;box-sizing:border-box;padding:4px 0;",
                 div {
                     class: "CharacterManagementPanel_viewToggle",
                     "data-part": "view-toggle",
                     "aria-label": "Character view",
+                    style: "display:flex;flex:none;flex-direction:row;align-items:center;padding:2px;gap:2px;border:1px solid #39342f;border-radius:8px;background:#1e1b18;",
                     button {
                         class: "st-button st-icon-button CharacterManagementPanel_iconButton",
                         r#type: "button",
@@ -527,7 +664,12 @@ fn cards_tab(view: &ProductShellView) -> Element {
                         "data-state": if list_active { "active" } else { "inactive" },
                         "aria-label": "List view",
                         "aria-pressed": list_active,
-                        {icon("List", 17)}
+                        style: if list_active {
+                            "display:flex;align-items:center;justify-content:center;width:30px;height:28px;min-width:30px;min-height:28px;padding:0;border:none;border-radius:6px;background:#352e28;color:#f3eee8;"
+                        } else {
+                            "display:flex;align-items:center;justify-content:center;width:30px;height:28px;min-width:30px;min-height:28px;padding:0;border:none;border-radius:6px;background:transparent;color:#998f87;"
+                        },
+                        {icon("List", 16)}
                     }
                     button {
                         class: "st-button st-icon-button CharacterManagementPanel_iconButton",
@@ -538,11 +680,18 @@ fn cards_tab(view: &ProductShellView) -> Element {
                         "data-state": if list_active { "inactive" } else { "active" },
                         "aria-label": "Grid view",
                         "aria-pressed": !list_active,
-                        {icon("SquaresFour", 17)}
+                        style: if !list_active {
+                            "display:flex;align-items:center;justify-content:center;width:30px;height:28px;min-width:30px;min-height:28px;padding:0;border:none;border-radius:6px;background:#352e28;color:#f3eee8;"
+                        } else {
+                            "display:flex;align-items:center;justify-content:center;width:30px;height:28px;min-width:30px;min-height:28px;padding:0;border:none;border-radius:6px;background:transparent;color:#998f87;"
+                        },
+                        {icon("SquaresFour", 16)}
                     }
                 }
-                span {
+                div {
+                    class: "CharacterManagementPanel_loadedCount",
                     "data-part": "loaded-count",
+                    style: "display:flex;flex:none;align-items:center;justify-content:flex-end;color:#998f87;font-size:12px;font-weight:400;height:28px;line-height:28px;text-align:right;white-space:nowrap;",
                     "{loaded} loaded"
                 }
             }
@@ -569,17 +718,28 @@ fn cards_tab(view: &ProductShellView) -> Element {
                 div {
                     class: "CharacterManagementPanel_characterList",
                     "data-view": "{view.view}",
+                    style: if view.view == "grid" {
+                        "display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;width:100%;box-sizing:border-box;"
+                    } else {
+                        "display:flex;flex-direction:column;gap:8px;width:100%;box-sizing:border-box;"
+                    },
                     for item in view.characters.iter() {
                         {
                             let selected = view.selected_character_id.as_deref() == Some(item.id.as_str());
-                            let pinned = view.pinned_character_id.as_deref() == Some(item.id.as_str());
-                            let desc = character_card_description(&item.description).to_string();
-                            // React parity: grid card, no height clamp, border via data-state.
-                            let card_style = if selected {
-                                "border-color:#e38a62;background:#492a20;"
+                            // React fallback: pinned defaults to selected when pinned is None (Home pinned character).
+                            let pinned = view
+                                .pinned_character_id
+                                .as_deref()
+                                .or(view.selected_character_id.as_deref())
+                                == Some(item.id.as_str());
+                            let desc_raw = character_card_description(&item.description);
+                            let desc = if desc_raw.chars().count() > 80 {
+                                let base: String = desc_raw.chars().take(78).collect();
+                                format!("{}...", base.trim_end_matches([',', '.', ' ', ';', ':']))
                             } else {
-                                ""
+                                desc_raw.to_string()
                             };
+                            let card_style = if selected { "border-color:#e38a62;background:#492a20;" } else { "" };
                             rsx! {
                                 button {
                                     class: "CharacterManagementPanel_characterCard",
@@ -596,7 +756,7 @@ fn cards_tab(view: &ProductShellView) -> Element {
                                         strong { "{item.name}" }
                                         span {
                                             "data-part": "card-description",
-                                            style: "display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-height:1.45;font-size:0.75rem;color:#c5bbb2;",
+                                            style: "display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;",
                                             "{desc}"
                                         }
                                         if !item.tags.is_empty() {
@@ -975,18 +1135,18 @@ fn character_manager(view: &ProductShellView) -> Element {
         .find(|item| Some(item.id.as_str()) == view.selected_character_id.as_deref());
     let tab = view.tab.as_str();
     let (pad_top, pad_bottom) = chrome_insets(view);
-    let header_min = 52.0 + pad_top;
+    let header_min = 52.0_f32;
     let header_title = character_manager_title(view.chat.viewport_width);
     let root_style =
         "display:flex;flex-direction:column;height:100%;min-height:0;overflow:hidden;background:#24211e;";
     let header_style = format!(
-        "flex:none;position:relative;z-index:0;display:flex;flex-direction:row;flex-wrap:nowrap;align-items:center;min-width:0;width:100%;overflow:hidden;padding:{pad_top}px 16px 8px;min-height:{header_min}px;background:#24211e;"
+        "flex:none;position:relative;z-index:0;display:flex;flex-direction:row;flex-wrap:nowrap;align-items:center;min-width:0;width:100%;overflow:hidden;padding:8px 16px 8px;min-height:{header_min}px;background:#24211e;"
     );
-    let body_style =
-        "flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;position:relative;";
-    let tabs_style = format!(
-        "display:flex;flex-direction:row;flex:none;box-sizing:border-box;align-self:stretch;position:relative;top:auto;bottom:auto;left:auto;right:auto;z-index:0;width:auto;max-width:100%;margin:8px 16px {pad_bottom}px;padding:4px;border:1px solid #39342f;border-radius:10px;background:#24211e;"
+    let body_style = format!(
+        "flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;position:relative;padding-bottom:{pad_bottom}px;"
     );
+    let tabs_style =
+        "display:flex;flex-direction:row;flex:none;box-sizing:border-box;align-self:stretch;position:relative;width:auto;max-width:100%;margin:8px 16px 8px;padding:4px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;";
     let tabs_wrap =
         "flex:none;align-self:stretch;box-sizing:border-box;width:100%;max-width:100%;overflow:visible;";
     let cards_tab_style = tab_trigger_style(tab == "cards");
@@ -1024,7 +1184,7 @@ fn character_manager(view: &ProductShellView) -> Element {
                         h2 {
                             class: "SidebarPanelHeader_title",
                             "data-part": "title",
-                            style: "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1 1 auto;",
+                            style: "font-size:13.5px;font-weight:600;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1 1 auto;margin:0;color:#f3eee8;",
                             "{header_title}"
                         }
                     }
@@ -1067,6 +1227,45 @@ fn character_manager(view: &ProductShellView) -> Element {
                 "data-variant": "segment",
                 "data-scroll-mode": "root",
                 div {
+                    "data-component": "tabs-list",
+                    "data-part": "list",
+                    "data-variant": "segment",
+                    "data-layout": "content",
+                    "aria-label": "Character management sections",
+                    style: "{tabs_style}",
+                    button {
+                        "data-component": "tabs-trigger",
+                        "data-part": "trigger",
+                        "data-state": if tab == "cards" { "active" } else { "inactive" },
+                        style: "{cards_tab_style}",
+                        "Cards"
+                    }
+                    button {
+                        "data-component": "tabs-trigger",
+                        "data-part": "trigger",
+                        "data-state": if tab == "edit" { "active" } else { "inactive" },
+                        disabled: !can_edit,
+                        style: "{edit_tab_style}",
+                        "Edit"
+                    }
+                    button {
+                        "data-component": "tabs-trigger",
+                        "data-part": "trigger",
+                        "data-state": if tab == "advanced" { "active" } else { "inactive" },
+                        disabled: !can_edit,
+                        style: "{advanced_tab_style}",
+                        "Advanced"
+                    }
+                    button {
+                        "data-component": "tabs-trigger",
+                        "data-part": "trigger",
+                        "data-state": if tab == "gallery" { "active" } else { "inactive" },
+                        disabled: !can_edit,
+                        style: "{gallery_tab_style}",
+                        "Gallery"
+                    }
+                }
+                div {
                     "data-component": "tabs-scroll-content",
                     "data-part": "scroll-content",
                     div {
@@ -1102,48 +1301,6 @@ fn character_manager(view: &ProductShellView) -> Element {
                             }
                         }
                     }
-                }
-            }
-            div {
-                style: "{tabs_wrap}",
-                div {
-                    "data-component": "tabs-list",
-                    "data-part": "list",
-                    "data-variant": "segment",
-                    "data-layout": "content",
-                    "aria-label": "Character management sections",
-                    style: "{tabs_style}",
-                    button {
-                        "data-component": "tabs-trigger",
-                        "data-part": "trigger",
-                        "data-state": if tab == "cards" { "active" } else { "inactive" },
-                        style: "{cards_tab_style}",
-                        "Cards"
-                    }
-                    button {
-                        "data-component": "tabs-trigger",
-                        "data-part": "trigger",
-                        "data-state": if tab == "edit" { "active" } else { "inactive" },
-                        disabled: !can_edit,
-                        style: "{edit_tab_style}",
-                        "Edit"
-                    }
-                button {
-                    "data-component": "tabs-trigger",
-                    "data-part": "trigger",
-                    "data-state": if tab == "advanced" { "active" } else { "inactive" },
-                    disabled: !can_edit,
-                    style: "{advanced_tab_style}",
-                    "Advanced"
-                }
-                button {
-                    "data-component": "tabs-trigger",
-                    "data-part": "trigger",
-                    "data-state": if tab == "gallery" { "active" } else { "inactive" },
-                    disabled: !can_edit,
-                    style: "{gallery_tab_style}",
-                    "Gallery"
-                }
                 }
             }
             if view.create_dialog_open {
@@ -1278,6 +1435,154 @@ fn delete_character_dialog(view: &ProductShellView) -> Element {
     }
 }
 
+/// Shared React `FloatingTabPanel` chrome: header, divider, body, bottom tabs.
+pub(crate) fn management_shell(
+    view: &ProductShellView,
+    component: &'static str,
+    header_part: &'static str,
+    title: &str,
+    avatar_icon: &'static str,
+    avatar_letter: Option<&str>,
+    tabs: &[PanelTab],
+    active_tab: &str,
+    body: Element,
+) -> Element {
+    let (pad_top, pad_bottom) = chrome_insets(view);
+    let header_min = 52.0_f32;
+    let header_title = panel_header_title(title, view.chat.viewport_width);
+    let root_style =
+        "display:flex;flex-direction:column;height:100%;min-height:0;overflow:hidden;background:#24211e;";
+    let header_style = format!(
+        "flex:none;position:relative;z-index:0;display:flex;flex-direction:row;flex-wrap:nowrap;align-items:center;min-width:0;width:100%;overflow:hidden;padding:8px 16px 8px;min-height:{header_min}px;background:#24211e;"
+    );
+    let body_style = format!(
+        "flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;position:relative;padding-bottom:{pad_bottom}px;"
+    );
+    let tabs_style =
+        "display:flex;flex-direction:row;flex:none;box-sizing:border-box;align-self:stretch;position:relative;width:auto;max-width:100%;margin:8px 16px 8px;padding:4px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;";
+    let tabs_wrap =
+        "flex:none;align-self:stretch;box-sizing:border-box;width:100%;max-width:100%;overflow:visible;";
+    let letter = avatar_letter.unwrap_or("");
+    rsx! {
+        div {
+            class: "FloatingTabPanel_root",
+            style: "{root_style}",
+            "data-component": "{component}",
+            "data-role": "floating-tab-panel",
+            header {
+                class: "SidebarPanelHeader_header",
+                style: "{header_style}",
+                "data-component": "sidebar-panel-header",
+                "data-part": "{header_part}",
+                div {
+                    class: "SidebarPanelHeader_identity",
+                    "data-part": "identity",
+                    style: "display:flex;flex-direction:row;flex-wrap:nowrap;align-items:center;min-width:0;flex:1 1 auto;",
+                    span {
+                        class: "SidebarPanelHeader_avatar",
+                        "data-part": "avatar",
+                        style: "width:44px;height:44px;max-width:44px;max-height:44px;flex:none;align-self:center;overflow:hidden;display:flex;align-items:center;justify-content:center;",
+                        if letter.is_empty() {
+                            {icon(avatar_icon, 20)}
+                        } else {
+                            span {
+                                "data-part": "avatar-initial",
+                                style: "display:flex;width:100%;overflow:hidden;align-items:center;justify-content:center;font-weight:600;",
+                                "{letter}"
+                            }
+                        }
+                    }
+                    div {
+                        class: "SidebarPanelHeader_copy",
+                        "data-part": "title-group",
+                        style: "min-width:0;flex:1 1 auto;overflow:hidden;",
+                        h2 {
+                            class: "SidebarPanelHeader_title",
+                            "data-part": "title",
+                            style: "font-size:13.5px;font-weight:600;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1 1 auto;margin:0;color:#f3eee8;",
+                            "{header_title}"
+                        }
+                    }
+                }
+                button {
+                    class: "SidebarPanelHeader_close",
+                    r#type: "button",
+                    "data-part": "close",
+                    style: "min-width:40px;min-height:40px;width:40px;height:40px;padding:0;flex:none;background:transparent;",
+                    "aria-label": "Close menu",
+                    {icon("X", 20)}
+                }
+            }
+            div {
+                class: "SidebarPanelHeader_headerDivider",
+                "data-part": "header-divider",
+                style: "flex:none;width:100%;height:1px;min-height:1px;background:#39342f;pointer-events:none;",
+            }
+            div {
+                class: "st-tabs",
+                style: "{body_style}",
+                "data-component": "tabs",
+                "data-variant": "segment",
+                "data-scroll-mode": "root",
+                if !tabs.is_empty() {
+                    div {
+                        "data-component": "tabs-list",
+                        "data-part": "list",
+                        "data-variant": "segment",
+                        "data-layout": "content",
+                        style: "{tabs_style}",
+                        for tab in tabs.iter() {
+                            {
+                                let style = tab_trigger_style(tab.id == active_tab);
+                                let state = if tab.id == active_tab { "active" } else { "inactive" };
+                                rsx! {
+                                    button {
+                                        "data-component": "tabs-trigger",
+                                        "data-part": "trigger",
+                                        "data-state": "{state}",
+                                        disabled: tab.disabled,
+                                        style: "{style}",
+                                        "{tab.label}"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                div {
+                    "data-component": "tabs-scroll-content",
+                    "data-part": "scroll-content",
+                    div {
+                        "data-component": "tabs-content",
+                        "data-part": "content",
+                        div {
+                            "data-part": "floating-tab-content",
+                            {body}
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+pub(crate) fn overlay_dialog(title: &str, description: &str, body: Element) -> Element {
+    rsx! {
+        div {
+            "data-component": "dialog-overlay",
+            "data-state": "open",
+            div {
+                "data-component": "dialog-content",
+                role: "dialog",
+                "aria-modal": "true",
+                h2 { "data-component": "dialog-title", "{title}" }
+                p { "data-component": "dialog-description", "{description}" }
+                {body}
+            }
+        }
+    }
+}
+
 /// Fallback for any unmigrated or unknown route/panel. WebView is a
 /// temporary migration blocker only; unknown routes must render this Rust
 /// surface, never a hidden WebView.
@@ -1317,9 +1622,87 @@ fn not_yet_migrated(title: &str) -> Element {
     }
 }
 
+fn bottom_nav_bar(view: &ProductShellView) -> Element {
+    let (_, pad_bottom) = chrome_insets(view);
+    let nav_style = format!(
+        "display:flex;flex-direction:row;align-items:center;justify-content:space-around;width:100%;min-height:56px;padding-bottom:{pad_bottom}px;background:#151311;border-top:1px solid #39342f;flex:none;z-index:100;"
+    );
+    let nav_items: &[RailSpec] = &[
+        RailSpec {
+            theme_id: "chats",
+            panel: "home",
+            label: "Chats",
+            icon: "ChatsCircle",
+        },
+        RailSpec {
+            theme_id: "characters",
+            panel: "characters",
+            label: "Characters",
+            icon: "UsersThree",
+        },
+        RailSpec {
+            theme_id: "personas",
+            panel: "personas",
+            label: "Personas",
+            icon: "Smiley",
+        },
+        RailSpec {
+            theme_id: "lorebooks",
+            panel: "lorebooks",
+            label: "Lorebooks",
+            icon: "BookOpenText",
+        },
+        RailSpec {
+            theme_id: "settings",
+            panel: "settings",
+            label: "Settings",
+            icon: "SlidersHorizontal",
+        },
+    ];
+    rsx! {
+        nav {
+            class: "BottomNav_root",
+            style: "{nav_style}",
+            "data-component": "bottom-navigation",
+            "aria-label": "Mobile navigation",
+            for item in nav_items.iter() {
+                {
+                    let active = if !view.sidebar_open {
+                        item.panel == "home"
+                    } else {
+                        view.panel == item.panel
+                    };
+                    let fill = if active { "#ffc4a8" } else { "#998f87" };
+                    let text_color = if active { "#ffc4a8" } else { "#998f87" };
+                    let btn_style = format!(
+                        "display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;min-height:48px;padding:4px 0;background:transparent;border:none;color:{text_color};"
+                    );
+                    rsx! {
+                        button {
+                            class: "BottomNav_item",
+                            r#type: "button",
+                            style: "{btn_style}",
+                            "data-part": "bottom-nav-item",
+                            "data-item": "{item.theme_id}",
+                            "data-state": if active { "active" } else { "inactive" },
+                            "aria-label": "{item.label}",
+                            {icon_fill(item.icon, 22, fill)}
+                            span {
+                                style: "font-size:11px;font-weight:500;margin-top:2px;color:{text_color};",
+                                "{item.label}"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// Product App Shell with Character Manager as the first golden route.
 pub fn product_shell_app() -> Element {
     let view = current_product_shell();
+    let is_compact = view.chat.viewport_width <= 600;
     let rail_state = if view.rail_expanded {
         "expanded"
     } else {
@@ -1327,7 +1710,11 @@ pub fn product_shell_app() -> Element {
     };
     let sidebar_state = if view.sidebar_open { "open" } else { "closed" };
     let main_class = if view.sidebar_open {
-        "AppShell_mainShifted"
+        if is_compact {
+            "AppShell_main"
+        } else {
+            "AppShell_mainShifted"
+        }
     } else {
         "AppShell_main"
     };
@@ -1337,96 +1724,131 @@ pub fn product_shell_app() -> Element {
         .map(|item| item.label)
         .unwrap_or("Home");
     let (pad_top, pad_bottom) = chrome_insets(&view);
-    let rail_pad = format!("flex:none;width:60px;height:100%;z-index:2;padding-top:{pad_top}px;padding-bottom:{pad_bottom}px;background:#151311;");
-    let panel_pad = format!("display:flex;flex-direction:column;flex:1 1 auto;min-width:0;width:auto;max-width:none;height:100%;margin:0;padding-bottom:0;overflow:hidden;background:#24211e;");
-    let sidebar_style = "display:flex;flex-direction:row;flex-wrap:nowrap;align-items:stretch;width:100%;height:100%;min-width:0;";
-    let shell_style = "display:flex;flex-direction:row;width:100%;height:100%;background:#151311;color:#f3eee8;";
+    let rtl = view.dir == "rtl";
+    let (pad_start, pad_end) = if rtl {
+        (view.insets.right, view.insets.left)
+    } else {
+        (view.insets.left, view.insets.right)
+    };
+    let rail_pad = format!("flex:none;width:60px;height:100%;z-index:2;box-sizing:border-box;padding-bottom:{pad_bottom}px;padding-left:calc(4px + {pad_start}px);padding-right:calc(4px + {pad_end}px);background:#151311;");
+    let panel_pad = if is_compact {
+        format!("display:flex;flex-direction:column;flex:1 1 calc(100% - 60px);min-width:calc(100% - 60px);width:calc(100% - 60px);max-width:calc(100% - 60px);height:100%;margin:0;padding-top:{pad_top}px;padding-bottom:0;box-sizing:border-box;overflow:hidden;background:#24211e;")
+    } else {
+        "display:flex;flex-direction:column;flex:0 0 380px;min-width:320px;width:380px;max-width:480px;height:100%;margin:0;padding-bottom:0;overflow:hidden;background:#24211e;".to_string()
+    };
+    let row_dir = if rtl { "row-reverse" } else { "row" };
+    let sidebar_style = if is_compact {
+        format!("display:flex;flex-direction:{row_dir};flex-wrap:nowrap;align-items:stretch;width:100%;height:100%;min-width:100%;position:absolute;inset:0;z-index:20;padding-top:{pad_top}px;box-sizing:border-box;")
+    } else {
+        format!("display:flex;flex-direction:{row_dir};flex-wrap:nowrap;align-items:stretch;height:100%;min-width:0;flex:none;")
+    };
+    let shell_style = format!("display:flex;flex-direction:{row_dir};width:100%;height:100%;background:#151311;color:#f3eee8;position:relative;overflow:hidden;");
     let product_css = product_stylesheets(view.insets).join("\n");
+    let show_rail = !is_compact || view.rail_expanded || view.sidebar_open;
+    let show_panel = view.sidebar_open;
+    let show_chat = !is_compact || !view.sidebar_open;
+    let show_bottom_nav = is_compact && !view.sidebar_open;
+
     rsx! {
         style { "{product_css}" }
         div {
             class: "AppShell_shell",
             style: "{shell_style}",
+            lang: "{view.language}",
+            dir: "{view.dir}",
             "data-component": "app-shell",
             "data-slot": "app.shell",
             "data-theme-mode": "dark",
+            "data-dir": "{view.dir}",
+            "data-lang": "{view.language}",
             "data-sidebar": "{sidebar_state}",
             "data-ui-density": "{view.density}",
             "data-ui-scale": "{view.font_scale}",
             a { class: "AppShell_skipLink", href: "#chat-workspace", "Skip to chat" }
-            aside {
-                class: "Sidebar_sidebar",
-                style: "{sidebar_style}",
-                "data-component": "navigation-rail",
-                "data-state": "{rail_state}",
-                nav {
-                    id: "primary-navigation",
-                    class: "Sidebar_rail",
-                    "data-slot": "navigation.primary",
+            if show_rail || show_panel {
+                aside {
+                    class: "Sidebar_sidebar",
+                    style: "{sidebar_style}",
+                    "data-component": "navigation-rail",
                     "data-state": "{rail_state}",
-                    "data-has-menu-toggle": "true",
-                    "data-leading-menu-toggle": "true",
-                    "aria-label": "Main navigation",
-                    style: "{rail_pad}",
-                    div {
-                        class: "Sidebar_railMain",
-                        "data-part": "main-items",
-                        span {
-                            class: "Sidebar_railItem",
-                            "data-part": "item",
-                            "data-item": "menu-toggle",
-                            "data-group": "main",
-                            button {
-                                class: "Sidebar_railButton",
-                                r#type: "button",
-                                style: "display:flex;width:40px;height:40px;padding:0;align-items:center;justify-content:center;",
-                                "data-part": "item-control",
-                                "data-action": "menu-toggle",
-                                "data-state": "{rail_state}",
-                                "aria-label": "Close menu",
-                                title: "Close menu",
-                                "aria-expanded": view.rail_expanded,
-                                "aria-controls": "primary-navigation",
-                                {icon("SidebarSimple", 21)}
-                                span { class: "Sidebar_railLabel", "Close menu" }
+                    if show_rail {
+                        nav {
+                            id: "primary-navigation",
+                            class: "Sidebar_rail",
+                            "data-slot": "navigation.primary",
+                            "data-state": "{rail_state}",
+                            "data-has-menu-toggle": "true",
+                            "data-leading-menu-toggle": "true",
+                            "aria-label": "Main navigation",
+                            style: "{rail_pad}",
+                            div {
+                                class: "Sidebar_railMain",
+                                "data-part": "main-items",
+                                span {
+                                    class: "Sidebar_railItem",
+                                    "data-part": "item",
+                                    "data-item": "menu-toggle",
+                                    "data-group": "main",
+                                    button {
+                                        class: "Sidebar_railButton",
+                                        r#type: "button",
+                                        style: "display:flex;width:40px;height:40px;padding:0;align-items:center;justify-content:center;",
+                                        "data-part": "item-control",
+                                        "data-action": "menu-toggle",
+                                        "data-state": "{rail_state}",
+                                        "aria-label": "Close menu",
+                                        title: "Close menu",
+                                        "aria-expanded": view.rail_expanded,
+                                        "aria-controls": "primary-navigation",
+                                        {icon("SidebarSimple", 21)}
+                                        span { class: "Sidebar_railLabel", "Close menu" }
+                                    }
+                                }
+                                for item in RAIL.iter() {
+                                    {rail_button(item, view.sidebar_open && view.panel == item.panel)}
+                                }
                             }
                         }
-                        div {
-                            class: "Sidebar_railSeparator",
-                            "data-part": "rail-separator",
-                            "aria-hidden": "true",
-                        }
-                        for item in RAIL.iter() {
-                            {rail_button(item, view.sidebar_open && view.panel == item.panel)}
-                        }
                     }
-                }
-                if view.sidebar_open {
-                    section {
-                        id: "navigation-context-panel",
-                        class: "Sidebar_panelOpen",
-                        style: "{panel_pad}",
-                        "data-component": "navigation-panel",
-                        "data-state": "open",
-                        "data-panel": "{view.panel}",
-                        "data-slot": "panel.left",
-                        "data-management-tabs-pinned": "false",
-                        "aria-label": "{panel_title}",
-                        if view.panel == "characters" {
-                            {character_manager(&view)}
-                        } else {
-                            {not_yet_migrated(panel_title)}
+                    if show_panel {
+                        section {
+                            id: "navigation-context-panel",
+                            class: "Sidebar_panelOpen",
+                            style: "{panel_pad}",
+                            "data-component": "navigation-panel",
+                            "data-state": "open",
+                            "data-panel": "{view.panel}",
+                            "data-slot": "panel.left",
+                            "data-management-tabs-pinned": "false",
+                            "aria-label": "{panel_title}",
+                            match view.panel.as_str() {
+                                "characters" => {character_manager(&view)},
+                                "personas" => {crate::personas_tab::personas_panel(&view)},
+                                "lorebooks" => {crate::lorebooks_tab::lorebooks_panel(&view)},
+                                "backgrounds" => {crate::backgrounds_tab::backgrounds_panel(&view)},
+                                "providers" => {crate::ai_settings_tab::ai_settings_panel(&view)},
+                                "plugins" => {crate::plugins_tab::plugins_panel(&view)},
+                                "settings" => {crate::settings_tab::settings_panel(&view)},
+                                "home" => {crate::chats_tab::chats_panel(&view)},
+                                _ => {not_yet_migrated(panel_title)},
+                            }
                         }
                     }
                 }
             }
-            main {
-                id: "chat-workspace",
-                class: "{main_class}",
-                "data-component": "main-area",
-                "data-slot": "chat.viewport",
-                tabindex: "-1",
-                {product_chat_app()}
+            if show_chat {
+                main {
+                    id: "chat-workspace",
+                    class: "{main_class}",
+                    "data-component": "main-area",
+                    "data-slot": "chat.viewport",
+                    tabindex: "-1",
+                    style: if is_compact { "flex:1 1 auto;width:100%;height:100%;min-width:0;min-height:0;overflow:hidden;" } else { "" },
+                    {product_chat_app()}
+                }
+            }
+            if show_bottom_nav {
+                {bottom_nav_bar(&view)}
             }
         }
     }

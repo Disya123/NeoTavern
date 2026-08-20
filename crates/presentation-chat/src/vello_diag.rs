@@ -80,7 +80,12 @@ pub fn resolution_ladder(full_w: u32, full_h: u32) -> Vec<(u32, u32, &'static st
     ]
 }
 
-pub fn tile_origins(full_w: u32, full_h: u32, tile_w: u32, tile_h: u32) -> Vec<(u32, u32, u32, u32)> {
+pub fn tile_origins(
+    full_w: u32,
+    full_h: u32,
+    tile_w: u32,
+    tile_h: u32,
+) -> Vec<(u32, u32, u32, u32)> {
     let tile_w = tile_w.max(1);
     let tile_h = tile_h.max(1);
     let mut out = Vec::new();
@@ -272,7 +277,12 @@ mod tests {
             .min_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap();
         assert!(
-            (ty + 200.0).abs() < 0.6 || seam.encoding().transforms.iter().any(|t| (t.translation[1] + 200.0).abs() < 0.6),
+            (ty + 200.0).abs() < 0.6
+                || seam
+                    .encoding()
+                    .transforms
+                    .iter()
+                    .any(|t| (t.translation[1] + 200.0).abs() < 0.6),
             "translate(0,-200) must appear in the tiled encoding, got {:?}",
             seam.encoding()
                 .transforms

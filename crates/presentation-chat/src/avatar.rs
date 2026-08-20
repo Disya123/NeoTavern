@@ -47,7 +47,9 @@ fn check_image_limits(bytes: &[u8]) -> Option<(u32, u32)> {
     if bytes.len() > THUMBNAIL_INPUT_MAX_BYTES {
         return None;
     }
-    let reader = ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?;
+    let reader = ImageReader::new(Cursor::new(bytes))
+        .with_guessed_format()
+        .ok()?;
     let (width, height) = reader.into_dimensions().ok()?;
     if width == 0 || height == 0 {
         return None;

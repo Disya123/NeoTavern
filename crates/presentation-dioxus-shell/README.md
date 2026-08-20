@@ -11,15 +11,19 @@ issues only registered Wire commands.
 - Streaming applies stale-generation rejection and a bounded backpressure cap.
 - Product-path 10k mixed catalog (`product_path.rs`) mounts only the
   visible window plus header/composer glass. Blitz consumes this tree.
+- Chat bubbles render the React ST1 markdown contract as RSX
+  (`markdown.rs`), not as HTML.
+- App Shell rail panels (Characters, Personas, Lorebooks, Backgrounds,
+  AI Settings, Plugins catalog, Settings, Chats) are native RSX.
 
 ## What this crate is not
 
 - Not linked into `libneotavern_android_jni.so`.
-- Not wired to production `MainActivity`.
 - Not a Kernel, SQLite, or network client. Those stay behind Product Wire.
 - `NEOTA_DIOXUS_SHELL=1` is a **non-default** flag, not a cutover switch.
-- Milestone C start: debug `PresentationChatActivity` is a harness
-  around `crates/presentation-chat` (live Product Wire). Not the launcher.
+- `PresentationChatActivity` is the Android launcher around
+  `crates/presentation-chat` (live Product Wire). `MainActivity` is the
+  WebView rollback.
 - The Android MotionEvent adapter attaches to debug
   `PresentationInputActivity`, not this crate and not default JNI.
 

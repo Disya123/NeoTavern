@@ -5,7 +5,7 @@
     {
       "source": "README.md",
       "target": "README.md",
-      "sha256": "a5d44e7e071c74ed788a0f9d547b8270f528e7b063d6a7b19f02dfb774f8b1d2"
+      "sha256": "a1e11767ea8ff9a4ccfd4abd0ea8264f74864ae157091b4a4ed31cef51c4991b"
     },
     {
       "source": "adr/0004-typebox-contracts.md",
@@ -238,14 +238,29 @@
       "sha256": "7498c277ac5097ac936c7c3747dacf82da0dd862cc1866a76e2caabf227ad454"
     },
     {
+      "source": "adr/0052-webview-removal.md",
+      "target": "adr/0052-webview-removal.md",
+      "sha256": "cc10d375bc4473a3bb536784fea718164f29d47d25c9034904c7c549b66eb8b0"
+    },
+    {
+      "source": "adr/0053-android-120hz-release-budget.md",
+      "target": "adr/0053-android-120hz-release-budget.md",
+      "sha256": "a402b6e7f4c79c72a6d0cc22f7aba8a79d17b12e1612c7091010b7a80b67ee8b"
+    },
+    {
+      "source": "adr/0054-plugin-visual-surface-contained.md",
+      "target": "adr/0054-plugin-visual-surface-contained.md",
+      "sha256": "d861f8d9a75ec32dfd5e9f7fd04b6794a8d694fc4c3aff7cb08ee61cfd1f5435"
+    },
+    {
       "source": "adr/README.md",
       "target": "adr/README.md",
-      "sha256": "3385ae73e675fc4a713798b89665bd6de3d40fe314ce68990e55e1095ded8bfb"
+      "sha256": "91ab75947b8a2bad79dd947782e2f8eded41641c2746763c94d8ae1dedd6801c"
     },
     {
       "source": "android/README.md",
       "target": "android/README.md",
-      "sha256": "11dc29a06e42eab7f1290bd170850a579e45fde500eeb90aa83845ce63713a88"
+      "sha256": "4d7887c2085ba062cdd6ffaf9c3b929fed5dd42297f85cbc800b29887514d979"
     },
     {
       "source": "api/README.md",
@@ -290,7 +305,7 @@
     {
       "source": "architecture/presentation-boundary.md",
       "target": "architecture/presentation-boundary.md",
-      "sha256": "02c03f1f7130f6a6a55da5e499a38c9ae6e9b3420dd5d5c65606b909a22a4b28"
+      "sha256": "632b97b09666a93aa79238fe9332dff95fa4456d7b6fbb040d31915b5a96d8bc"
     },
     {
       "source": "architecture/prompt-pipeline.md",
@@ -455,7 +470,7 @@
     {
       "source": "rfc/presentation-compatibility-matrix.md",
       "target": "rfc/presentation-compatibility-matrix.md",
-      "sha256": "23a58af9dd5d5a9e33683090f6dec301da5be2862a204afc9cd4cc37b1617f06"
+      "sha256": "eea3a2341293500085d12669d9615a70b9db5b5664da59b2d78443a572994b78"
     },
     {
       "source": "rfc/remaining-b-physical-runbook.md",

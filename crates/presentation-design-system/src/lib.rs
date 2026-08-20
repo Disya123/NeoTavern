@@ -261,9 +261,9 @@ pub fn measure_text_width(text: &str, font_size_px: f32) -> Option<f32> {
     let mut builder = lcx.ranged_builder(&mut fcx, text, 1.0, true);
     builder.push_default(StyleProperty::FontSize(font_size_px));
     // `sans-serif` is mapped to the golden Outfit face by `product_font_context`.
-    builder.push_default(StyleProperty::FontFamily(FontFamily::Source(Cow::Borrowed(
-        "sans-serif",
-    ))));
+    builder.push_default(StyleProperty::FontFamily(FontFamily::Source(
+        Cow::Borrowed("sans-serif"),
+    )));
     let mut layout: Layout<[u8; 4]> = builder.build(text);
     layout.break_all_lines(None);
     let width = layout.width();
@@ -360,6 +360,20 @@ mod tests {
     use super::*;
 
     #[test]
+    fn packed_sheet_keeps_all_react_tokens() {
+        assert!(PRODUCT_CSS.contains(".PersonasPanel_personaCard"));
+        assert!(PRODUCT_CSS.contains(".LorebookPanel_booksTab"));
+        assert!(PRODUCT_CSS.contains(".BackgroundsPanel_"));
+        assert!(PRODUCT_CSS.contains(".SettingsPanel_"));
+        assert!(PRODUCT_CSS.contains(".PluginsPage_"));
+        assert!(PRODUCT_CSS.contains(".MessageMarkdown_root"));
+        assert!(phosphor_path("Crown").is_some());
+        assert!(phosphor_path("Lock").is_some());
+        assert!(phosphor_path("PencilSimple").is_some());
+        assert!(phosphor_path("ShieldCheck").is_some());
+    }
+
+    #[test]
     fn packed_sheet_keeps_react_tokens_and_module_classes() {
         assert!(PRODUCT_CSS.contains("--st-color-accent: #e38a62"));
         assert!(PRODUCT_CSS.contains("--st-color-surface-canvas: #151311"));
@@ -382,6 +396,15 @@ mod tests {
         assert!(PRODUCT_CSS.contains(".AppShell_shell"));
         assert!(PRODUCT_CSS.contains(".Sidebar_railButtonActive"));
         assert!(PRODUCT_CSS.contains(".CharacterManagementPanel_emptyState"));
+        assert!(PRODUCT_CSS.contains(".PersonasPanel_personaCard"));
+        assert!(PRODUCT_CSS.contains(".LorebookPanel_booksTab"));
+        assert!(PRODUCT_CSS.contains(".BackgroundsPanel_"));
+        assert!(PRODUCT_CSS.contains(".SettingsPanel_"));
+        assert!(
+            PRODUCT_CSS.contains(".AiSettings_tabBody") || PRODUCT_CSS.contains(".AiSettings_")
+        );
+        assert!(PRODUCT_CSS.contains(".PluginsPage_"));
+        assert!(PRODUCT_CSS.contains(".MessageMarkdown_root"));
         assert!(PRODUCT_CSS.contains("[data-component='button']"));
         assert!(PRODUCT_CSS.contains("[data-component='tabs']"));
         assert!(phosphor_path("UsersThree").is_some());
@@ -478,42 +501,78 @@ mod tests {
     #[test]
     fn collapse_max_two_args() {
         let css = "padding-top: max(8px, var(--nt-inset-top));";
-        let baked = bake_insets(css, SafeAreaInsets { top: 41.0, ..Default::default() });
+        let baked = bake_insets(
+            css,
+            SafeAreaInsets {
+                top: 41.0,
+                ..Default::default()
+            },
+        );
         assert_eq!(baked, "padding-top: 41px;");
     }
 
     #[test]
     fn collapse_nested_calc_inside_max() {
         let css = "padding: max(8px, calc(12px + var(--nt-inset-top)));";
-        let baked = bake_insets(css, SafeAreaInsets { top: 41.0, ..Default::default() });
+        let baked = bake_insets(
+            css,
+            SafeAreaInsets {
+                top: 41.0,
+                ..Default::default()
+            },
+        );
         assert_eq!(baked, "padding: 53px;");
     }
 
     #[test]
     fn collapse_max_three_args_fixed_point() {
         let css = "height: max(8px, var(--nt-inset-top), 24px);";
-        let baked = bake_insets(css, SafeAreaInsets { top: 41.0, ..Default::default() });
+        let baked = bake_insets(
+            css,
+            SafeAreaInsets {
+                top: 41.0,
+                ..Default::default()
+            },
+        );
         assert_eq!(baked, "height: 41px;");
     }
 
     #[test]
     fn collapse_min_keeps_smallest() {
         let css = "inset: min(var(--nt-inset-bottom), 32px);";
-        let baked = bake_insets(css, SafeAreaInsets { bottom: 24.0, ..Default::default() });
+        let baked = bake_insets(
+            css,
+            SafeAreaInsets {
+                bottom: 24.0,
+                ..Default::default()
+            },
+        );
         assert_eq!(baked, "inset: 24px;");
     }
 
     #[test]
     fn collapse_clamp_with_px_only() {
         let css = "width: clamp(8px, var(--nt-inset-left), 60px);";
-        let baked = bake_insets(css, SafeAreaInsets { left: 0.0, ..Default::default() });
+        let baked = bake_insets(
+            css,
+            SafeAreaInsets {
+                left: 0.0,
+                ..Default::default()
+            },
+        );
         assert_eq!(baked, "width: 8px;");
     }
 
     #[test]
     fn leaves_unresolved_units_intact() {
         let css = "width: calc(100% - var(--nt-inset-top));";
-        let baked = bake_insets(css, SafeAreaInsets { top: 41.0, ..Default::default() });
+        let baked = bake_insets(
+            css,
+            SafeAreaInsets {
+                top: 41.0,
+                ..Default::default()
+            },
+        );
         // `100%` is not a px literal, so the whole expression is preserved.
         assert_eq!(baked, "width: calc(100% - 41px);");
     }
@@ -521,15 +580,30 @@ mod tests {
     #[test]
     fn leaves_unknown_var_intact() {
         let css = "padding: max(8px, var(--st-unknown-token));";
-        let baked = bake_insets(css, SafeAreaInsets { top: 41.0, ..Default::default() });
+        let baked = bake_insets(
+            css,
+            SafeAreaInsets {
+                top: 41.0,
+                ..Default::default()
+            },
+        );
         assert_eq!(baked, "padding: max(8px, var(--st-unknown-token));");
     }
 
     #[test]
     fn does_not_corrupt_rgba_or_comments() {
         let css = "color: rgba(21, 19, 17, 0.5); /* max(8px, 9px) comment */";
-        let baked = bake_insets(css, SafeAreaInsets { top: 41.0, ..Default::default() });
-        assert_eq!(baked, "color: rgba(21, 19, 17, 0.5); /* max(8px, 9px) comment */");
+        let baked = bake_insets(
+            css,
+            SafeAreaInsets {
+                top: 41.0,
+                ..Default::default()
+            },
+        );
+        assert_eq!(
+            baked,
+            "color: rgba(21, 19, 17, 0.5); /* max(8px, 9px) comment */"
+        );
     }
 
     #[test]
@@ -545,9 +619,6 @@ mod tests {
                 left: 12.0,
             },
         );
-        assert_eq!(
-            baked,
-            ".x { padding: 41px 8px 8px 12px; }"
-        );
+        assert_eq!(baked, ".x { padding: 41px 8px 8px 12px; }");
     }
 }

@@ -76,16 +76,10 @@
             android:name=".PresentationChatActivity"
             android:label="NeoTavern"
             android:exported="true"
-            android:launchMode="singleTop"
+            android:launchMode="singleTask"
             android:resizeableActivity="true"
             android:windowSoftInputMode="adjustResize"
-            tools:replace="android:exported,android:label">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-        </activity>
+            tools:replace="android:exported,android:label,android:launchMode" />
         <receiver
             android:name=".PresentationChatA11yReceiver"
             android:exported="true">

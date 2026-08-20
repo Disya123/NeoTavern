@@ -3,13 +3,29 @@
 ## Unreleased
 ### Added
 
+- **Android Rust rail panels consume the same packed React sheet.**
+  Personas, Lorebooks, Backgrounds, AI Settings, Plugins catalog, Settings,
+  and Chats render as Dioxus RSX with Product Wire (`personas.*`,
+  `lorebooks.*`, `plugins.*`, `providers.list`, `presets.list`,
+  `settings.get`). Plugin DOM islands stay CONTAINED in WebSurface
+  ([ADR-0054](docs/adr/0054-plugin-visual-surface-contained.md)). Backgrounds
+  are an honest empty Kernel catalog. Screenshot parity is **not** declared.
+  Record:
+  [`docs/architecture/presentation-boundary.md`](docs/architecture/presentation-boundary.md).
+
+- **Chat markdown and stream deltas follow the React contract.** Dioxus
+  paints `data-component="message-markdown"` / `data-part` hooks from the
+  same ST1 rules as `apps/web/src/lib/markdown.ts` (no HTML injection).
+  Duplicate Kernel envelope `sequence` values are not appended. Record:
+  [`docs/architecture/presentation-boundary.md`](docs/architecture/presentation-boundary.md).
+
 - **Rust App Shell + Character Manager is the Android launcher.**
   `PresentationChatActivity` is the home-screen icon. NeoCompositor
   `SurfaceView` paints packed React tokens, fonts, Phosphor icons, App
   Shell, and Character Manager (Cards / Edit / Advanced / Gallery, New /
   Import, search / sort / list-grid, empty state and cards) through Product
-  Wire `characters.list` / `create` / `get` / `update` / `delete`. Unmigrated
-  rail destinations show a Rust `NotYetMigrated` screen. WebView is not a
+  Wire `characters.list` / `create` / `get` / `update` / `delete`. Rail
+  destinations render native Dioxus catalogs. WebView is not a
   route fallback. Density-aware hit testing drives rail, tabs, New, and
   cards. Screenshot / overlay / 120 Hz capture on device is required before
   visual parity is declared. Record:
@@ -36,6 +52,12 @@
   [`docs/rfc/milestone-c-canary.md`](docs/rfc/milestone-c-canary.md).
 
 ### Fixed
+
+- **Character Manager header and pin parity (≤1dp).** `panel_header_title` / `character_manager_title` now subtract `header gap 12` (was `8`) — `Rail 60 + padding 32 + avatar 44 + identity 8 + header 12 + eye 40 + gap 8 + close 40` (`244` vs `232`) — so `Character Ma…` ellipsizes like React `flex + text-overflow: ellipsis` on `407px` phone (was `Character Manag`). `cards_tab` `pinned = pinned.or(selected)` fallback (Home pinned character, `session.rs:751` `or_else(selected)`) — Hazel `fill PushPin #e38a62` matches `CharactersPage.tsx` `pinnedCharacterId`. Verified `neotavern-presentation-dioxus-shell` `15/15`, `app-debug.apk` on `8f5c2b7c` (1220×2712, 480dpi).
+
+- **Safe mode WebView fallback on Android (milestone-c-physical-runbook).** `PresentationChatActivity` `NEOTA_SAFE_MODE=1` (extrasTrusted, debuggable) now logs `renderer=webview webview_fallback=true` and `startActivity(MainActivity + EXTRA_SAFE_MODE=1, CLEAR_TOP|SINGLE_TOP)` + `finish()` + `return` — previously only logged `renderer=rust` and stayed in `PresentationChatActivity`. Now `dumpsys activity activities` `topResumedActivity=.MainActivity` as `milestone-c-physical-capture` expects (`safe_mode` → `MainActivity`).
+
+- **Live chat auto-creates on a clean device (`EMPTY_LIBRARY` → `PARITY`).** `crates/presentation-chat/src/session.rs:936` `load_open_chat` previously `return Err(EMPTY_LIBRARY)` when `chats.list` was empty (fresh `pm clear` DB has zero chats even after `NEOTA_SEED_STARTER=1` seeds Hazel). Now it `characters.list` → if Hazel exists `chats.create(characterId)` (6→8 `issued_commands`), else `characters.create(name:"Hazel")` → `chats.create` — `chat_route=true … issued_commands=8 … error=none` on `8f5c2b7c` after `pm clear` (was `4 … EMPTY_LIBRARY`), `app-debug.apk` `158412530` (`libneotavern_presentation_chat.so` `35073544` in both `src/main` and `src/debug` `arm64-v8a`, `gradle clean` needed to flush `merged_jni_libs` cache). `FakeWire::empty()` test updated (`26 passed`).
 
 - **Character Manager opaque surfaces match React canvas/panel tokens.** The
   packer drops light `:root { color-scheme: light }`, composites translucent

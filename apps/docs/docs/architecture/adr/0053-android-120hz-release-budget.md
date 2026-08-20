@@ -1,0 +1,96 @@
+---
+editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/adr/0053-android-120hz-release-budget.md
+---
+
+# ADR-0053: Android 120-Hz release-budget calibration
+
+Date: 2026-08-20. Status: **Proposed** — companion to
+[ADR-0052](0052-webview-removal.md); active when the Rust presentation host
+becomes the production default. Not active while cutover is `CANARY`.
+
+Related: [RFC 4.6](../rfc/neoui-v4-android-presentation-backend.md) §1/§2.1
+(120-Hz live glass requirement),
+[presentation-boundary.md](../architecture/presentation-boundary.md)
+(`release_budget_calibration_adr: null`, `p99 20.65 ms` baseline),
+[input-to-present-adjudication.json](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/input-to-present-adjudication.json),
+[ADR-0052](0052-webview-removal.md).
+
+## Context
+
+`docs/architecture/presentation-boundary.md` records:
+
+```text
+Raw input-to-present p99 20.65 ms on that device is a
+reference-device baseline, not a release budget (no calibration ADR).
+```
+
+The audit (`audit-neoui-v4` §Executive / `01-COMPLIANCE-MATRIX.md`) named the
+missing `release_budget_calibration_adr` as the reason `120 Hz` could not be
+declared `PASS`: `composite_only_frames` is `PENDING_PHYSICAL`, and the
+`p99` figure is explicitly a baseline, not a budget.
+
+Declaring a 120-Hz capable device "PASS" without a calibrated budget would be
+a false `PASS` (forbidden by the NeoUI v4 methodology and ADR-0052 §5).
+
+## Decision
+
+Adopt the following release budget for capability-qualified 120-Hz Android
+devices (GateP:P1 scope — qualified devices only; see §3 the degraded mode):
+
+| Parameter                         | Calibrated value                                  |
+| --------------------------------- | ------------------------------------------------- |
+| Refresh target                    | 120 Hz (`≈ 8.333 ms` frame budget)                |
+| `input-to-present` p99 budget     | **≤ 12 ms** on the reference device (Xiaomi `8f5c2b7c`, Adreno 710, Vulkan) |
+| `input-to-present` p95 budget     | **≤ 9 ms**                                         |
+| Sustained thermal window           | 10 min capped fling; no `GPU thermal` downgrade below 90 Hz in that window |
+| `sf_gpu_deadline_missed` admissibility | admissible **only** when the same `FrameTimeline`/`SurfaceFlinger` trace confirms a timely app `submit` (the existing single-exclusion rule) |
+| `composite_only_frames`           | **> 0** sustained during scroll (compositor-driven, no `layout_rebuilds_on_scroll`) |
+| `layout_rebuilds_on_scroll`       | **== 0** during steady scroll (fast-path `present()` contract) |
+| Memory pressure admission         | `onTrimMemory >= RUNNING_LOW` → `evictForPressure(2 MiB)`; avatar LRU `AVATAR_GPU_MAX_BYTES=8 MiB` |
+| Degraded mode (unqualified GPU)   | static/opaque glass, no live `BackdropBarrier`; chat still functional |
+
+The budget is measured with the existing
+`scripts/input-to-present-adjudicate.mjs` host adjudicator, which MUST NOT
+treat `Choreographer#doFrame` as present and MUST NOT compare raw
+`input-to-present` to one refresh.
+
+`composite_only_frames > 0 && layout_rebuilds_on_scroll == 0` is closed as
+**physical PASS** only when the re-run on the reference device (after glass
+enable per ADR-0052 §5) reproduces:
+- `composite_only_frames > 0` across a 60 s capped 10k fling, and
+- `layout_rebuilds_on_scroll == 0` for the same window
+using `crates/neocompositor` `telemetry_line` (already emitted) and the
+`PERF-15` pressure fixture.
+
+Until this ADR is signed and the physical re-run passes, the 120-Hz claim
+stays at `baseline`, not `budget`, and `Milestone C` cannot reach
+`PARITY` for the glass/compositor rows.
+
+## Alternatives
+
+1. **Treat the `20.65 ms` baseline as the budget.** Rejected: the source
+   document explicitly says it is a baseline, not a budget; adopting it would
+   be a false PASS.
+2. **Gate 120 Hz behind GateP:P2 (whole matrix).** Rejected: P2 requires a
+   low-tier staffing/thermal budget this ADR does not assert; P1 qualified
+   devices are sufficient for the live-glass claim.
+3. **No budget, rely on `canary_batch`.** Rejected: canary does not exercise
+   sustained thermal / `composite_only_frames` under load.
+
+## Consequences
+
+- `docs/architecture/presentation-boundary.md` `release_budget_calibration_adr: null`
+  is replaced by a reference to this ADR.
+- `Live backdrop glass` compatibility row can move `DEFERRED → PARITY` (qualified)
+  / `CONTAINED` (degraded) only after this budget is signed and the physical
+  re-run passes.
+- `NeoCompositor` `telemetry_line` and `GpuTelemetry` remain the source of
+  truth; no new blocking `device.poll(wait)`.
+- The budget is device-class specific; a new qualified device requires a
+  re-run, not a re-argument. Low/unqualified devices keep the degraded
+  (opaque glass) path and are not held to the 120-Hz budget.
+
+**Owner:** Disya123 `<gamedisya@gmail.com>`
+**Target date:** signed before the `PARITY` cutover gate in ADR-0052.
+**Revert trigger:** sustained `p99 > 12 ms` or `composite_only_frames == 0`
+on the reference device under the calibrated fixture.

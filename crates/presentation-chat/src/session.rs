@@ -1,13 +1,19 @@
 use contracts_generated::generated::{
-    decode_character_dto, decode_chat_dto, decode_message_draft_dto, decode_message_dto,
-    decode_paged_characters, decode_paged_chats, decode_paged_messages,
-    decode_result_assets_content, CharacterDto, ChatDto, ErrorDto, GenerationEvent,
-    MessageDraftDto, MessageDto, MessageRole, PagedCharacters, PagedChats, PagedMessages,
-    RequestAssetsContent, RequestCancelGeneration, RequestCreateCharacter, RequestCreateMessage,
-    RequestDeleteCharacter, RequestGetCharacter, RequestGetChat, RequestListCharacters,
-    RequestListChats, RequestListMessages, RequestMessageDraftCommit, RequestMessageDraftDiscard,
-    RequestMessageDraftGet, RequestMessageDraftSave, RequestRetryGeneration,
-    RequestStartGeneration, RequestUpdateCharacter, ResultAssetsContent,
+    decode_character_dto, decode_chat_dto, decode_lorebook_dto, decode_message_draft_dto,
+    decode_message_dto, decode_paged_characters, decode_paged_chats, decode_paged_messages,
+    decode_persona_dto, decode_result_assets_content, decode_result_list_lorebooks,
+    decode_result_list_personas, decode_result_list_presets, decode_result_list_providers,
+    decode_result_plugins_list, decode_result_settings, CharacterDto, ChatDto, ErrorDto,
+    GenerationEvent, LorebookDto, MessageDraftDto, MessageDto, MessageRole, PagedCharacters,
+    PagedChats, PagedMessages, PersonaDto, PluginsItem, RequestAssetsContent,
+    RequestCancelGeneration, RequestCreateCharacter, RequestCreateChat, RequestCreateLorebook, RequestCreateMessage,
+    RequestCreatePersona, RequestDeleteCharacter, RequestDeleteLorebook, RequestDeletePersona,
+    RequestEmpty, RequestGetCharacter, RequestGetChat, RequestListCharacters, RequestListChats,
+    RequestListLorebooks, RequestListMessages, RequestListPresets, RequestMessageDraftCommit,
+    RequestMessageDraftDiscard, RequestMessageDraftGet, RequestMessageDraftSave,
+    RequestRetryGeneration, RequestSettingsGet, RequestStartGeneration, RequestUpdateCharacter,
+    ResultAssetsContent, ResultListLorebooks, ResultListPersonas, ResultListPresets,
+    ResultListProviders, ResultPluginsList, ResultSettings, SettingsItem,
 };
 use neotavern_chat_viewport::{
     GeometrySnapshot, HeightIndex, HeightKind, LogicalItemId, PredictorBudgets, PresentDecision,
@@ -15,7 +21,8 @@ use neotavern_chat_viewport::{
 };
 use neotavern_presentation_dioxus_shell::{
     assert_registered_command, chrome_metrics, mount_product_chat, CharacterCardView,
-    CharacterDraftView, ProductChatView, ProductChrome, ProductShellView, RowKind, SafeAreaInsets,
+    CharacterDraftView, LorebookCardView, PersonaCardView, PluginCardView, PresetCardView,
+    ProductChatView, ProductChrome, ProductShellView, ProviderCardView, RowKind, SafeAreaInsets,
     VisibleRow, PRODUCT_PATH_VISIBLE,
 };
 use serde::de::DeserializeOwned;
@@ -79,6 +86,30 @@ pub struct ChatRouteState {
     pub create_description: String,
     pub create_first_message: String,
     pub status_message: Option<String>,
+    pub personas: Vec<PersonaDto>,
+    pub selected_persona_id: Option<String>,
+    pub persona_tab: String,
+    pub persona_search: String,
+    pub persona_sort: String,
+    pub persona_name_draft: String,
+    pub persona_description_draft: String,
+    pub active_persona_id: Option<String>,
+    pub lorebooks: Vec<LorebookDto>,
+    pub selected_lorebook_id: Option<String>,
+    pub lorebook_tab: String,
+    pub lorebook_search: String,
+    pub lorebook_name_draft: String,
+    pub lorebook_description_draft: String,
+    pub plugins: Vec<PluginsItem>,
+    pub providers: Vec<ProviderCardView>,
+    pub presets: Vec<PresetCardView>,
+    pub language: String,
+    pub dir: String,
+    pub ai_tab: String,
+    pub settings_tab: String,
+    /// Last applied Kernel stream envelope sequence (`EventEnvelope.sequence`).
+    pub last_applied_stream_sequence: Option<i64>,
+    pub last_checkpoint_sequence: Option<i64>,
 }
 
 impl ChatRouteState {
@@ -180,6 +211,13 @@ impl<W: ProductWire> ChatSession<W> {
         session.state.character_sort = "name".into();
         session.state.character_view = "list".into();
         session.state.character_tab = "cards".into();
+        session.state.persona_tab = "cards".into();
+        session.state.persona_sort = "asc".into();
+        session.state.lorebook_tab = "books".into();
+        session.state.language = "en".into();
+        session.state.dir = "ltr".into();
+        session.state.ai_tab = "providers".into();
+        session.state.settings_tab = "general".into();
         Ok(session)
     }
 
@@ -261,10 +299,10 @@ impl<W: ProductWire> ChatSession<W> {
     pub fn set_safe_area_physical(&mut self, top: f32, right: f32, bottom: f32, left: f32) {
         let scale = self.hidpi_scale.max(1.0);
         self.state.insets = SafeAreaInsets {
-            top: top / scale,
-            right: right / scale,
-            bottom: bottom / scale,
-            left: left / scale,
+            top: (top / scale).round(),
+            right: (right / scale).round(),
+            bottom: (bottom / scale).round(),
+            left: (left / scale).round(),
         };
     }
 
@@ -483,46 +521,94 @@ impl<W: ProductWire> ChatSession<W> {
             return Ok(StreamFrame::Timeout);
         };
         let frame = self.wire.poll_stream(&handle, timeout_ms)?;
-        match &frame {
-            StreamFrame::Event(event) => match event.as_ref() {
-                GenerationEvent::GenerationDelta { text } => {
-                    self.state.streaming_text.push_str(text);
+        self.apply_stream_frame(&frame);
+        Ok(frame)
+    }
+
+    /// Applies a stream frame, skipping duplicate envelope `sequence` values
+    /// and identical unsequenced deltas at the same offset.
+    pub fn apply_stream_frame(&mut self, frame: &StreamFrame) {
+        match frame {
+            StreamFrame::Event { sequence, event } => {
+                if !self.accept_stream_sequence(*sequence) {
+                    return;
                 }
-                GenerationEvent::GenerationCompleted { final_message } => {
-                    self.state.streaming_text.clear();
-                    self.note_durable(final_message);
-                    self.state.active_run_id = final_message.generation_run_id.clone();
-                    let _ = self.refresh_chat();
+                match event.as_ref() {
+                    GenerationEvent::GenerationDelta { text } => {
+                        self.state.streaming_text.push_str(text);
+                    }
+                    GenerationEvent::GenerationCheckpoint {
+                        sequence: checkpoint,
+                        partial_length,
+                    } => {
+                        if self
+                            .state
+                            .last_checkpoint_sequence
+                            .is_some_and(|prev| *checkpoint <= prev)
+                        {
+                            return;
+                        }
+                        self.state.last_checkpoint_sequence = Some(*checkpoint);
+                        let keep = usize::try_from(*partial_length).unwrap_or(0);
+                        if self.state.streaming_text.len() > keep {
+                            self.state.streaming_text.truncate(keep);
+                        }
+                    }
+                    GenerationEvent::GenerationCompleted { final_message } => {
+                        self.clear_stream_progress();
+                        self.note_durable(final_message);
+                        self.state.active_run_id = final_message.generation_run_id.clone();
+                        let _ = self.refresh_chat();
+                    }
+                    GenerationEvent::GenerationFailed { error } => {
+                        self.clear_stream_progress();
+                        self.state.last_error = Some(error.clone());
+                    }
+                    GenerationEvent::GenerationCancelled => {
+                        self.clear_stream_progress();
+                    }
+                    GenerationEvent::GenerationStep { .. }
+                    | GenerationEvent::ConsumerLagged { .. } => {}
                 }
-                GenerationEvent::GenerationFailed { error } => {
-                    self.state.streaming_text.clear();
-                    self.state.last_error = Some(error.clone());
-                }
-                GenerationEvent::GenerationCancelled => {
-                    self.state.streaming_text.clear();
-                }
-                GenerationEvent::GenerationCheckpoint { .. }
-                | GenerationEvent::GenerationStep { .. }
-                | GenerationEvent::ConsumerLagged { .. } => {}
-            },
+            }
             StreamFrame::Error(error) => {
                 self.state.last_error = Some(error.clone());
                 self.state.stream_handle = None;
+                self.clear_stream_progress();
             }
             StreamFrame::Terminal => {
                 self.state.stream_handle = None;
-                self.state.streaming_text.clear();
+                self.clear_stream_progress();
             }
             StreamFrame::Timeout => {}
         }
-        Ok(frame)
+    }
+
+    fn accept_stream_sequence(&mut self, sequence: Option<i64>) -> bool {
+        let Some(seq) = sequence else {
+            return true;
+        };
+        if self
+            .state
+            .last_applied_stream_sequence
+            .is_some_and(|prev| seq <= prev)
+        {
+            return false;
+        }
+        self.state.last_applied_stream_sequence = Some(seq);
+        true
+    }
+
+    fn clear_stream_progress(&mut self) {
+        self.state.streaming_text.clear();
+        self.state.last_checkpoint_sequence = None;
     }
 
     pub fn drain_stream(&mut self) -> Result<(), ChatRouteError> {
         for _ in 0..64 {
             match self.poll_stream(0)? {
                 StreamFrame::Timeout | StreamFrame::Terminal | StreamFrame::Error(_) => break,
-                StreamFrame::Event(event)
+                StreamFrame::Event { event, .. }
                     if matches!(
                         event.as_ref(),
                         GenerationEvent::GenerationCompleted { .. }
@@ -533,7 +619,7 @@ impl<W: ProductWire> ChatSession<W> {
                     let _ = self.poll_stream(0)?;
                     break;
                 }
-                StreamFrame::Event(_) => {}
+                StreamFrame::Event { .. } => {}
             }
         }
         Ok(())
@@ -689,7 +775,85 @@ impl<W: ProductWire> ChatSession<W> {
             gallery_sort: "oldest".into(),
             expanded_greeting: None,
             tag_input: String::new(),
+            personas: self.persona_cards(),
+            selected_persona_id: self.state.selected_persona_id.clone(),
+            persona_tab: self.state.persona_tab.clone(),
+            persona_search: self.state.persona_search.clone(),
+            persona_sort: self.state.persona_sort.clone(),
+            persona_name_draft: self.state.persona_name_draft.clone(),
+            persona_description_draft: self.state.persona_description_draft.clone(),
+            persona_create_open: self.state.sidebar_panel == "personas"
+                && self.state.create_dialog_open,
+            persona_delete_open: self.state.sidebar_panel == "personas"
+                && self.state.delete_dialog_open,
+            persona_create_name: self.state.create_name.clone(),
+            active_persona_id: self.state.active_persona_id.clone(),
+            lorebooks: self.lorebook_cards(),
+            selected_lorebook_id: self.state.selected_lorebook_id.clone(),
+            lorebook_tab: self.state.lorebook_tab.clone(),
+            lorebook_search: self.state.lorebook_search.clone(),
+            lorebook_create_open: self.state.sidebar_panel == "lorebooks"
+                && self.state.create_dialog_open,
+            lorebook_delete_open: self.state.sidebar_panel == "lorebooks"
+                && self.state.delete_dialog_open,
+            lorebook_create_name: self.state.create_name.clone(),
+            lorebook_name_draft: self.state.lorebook_name_draft.clone(),
+            lorebook_description_draft: self.state.lorebook_description_draft.clone(),
+            plugins: self
+                .state
+                .plugins
+                .iter()
+                .map(|row| PluginCardView {
+                    id: row.id.clone(),
+                    name: row.name.clone(),
+                    version: row.version.clone(),
+                    enabled: row.enabled,
+                    trust_state: row.trust_state.clone(),
+                })
+                .collect(),
+            providers: self.state.providers.clone(),
+            presets: self.state.presets.clone(),
+            language: if self.state.language.is_empty() {
+                "en".into()
+            } else {
+                self.state.language.clone()
+            },
+            dir: if self.state.dir.is_empty() {
+                "ltr".into()
+            } else {
+                self.state.dir.clone()
+            },
+            ai_tab: self.state.ai_tab.clone(),
+            settings_tab: self.state.settings_tab.clone(),
         }
+    }
+
+    fn persona_cards(&self) -> Vec<PersonaCardView> {
+        self.state
+            .personas
+            .iter()
+            .map(|row| PersonaCardView {
+                id: row.id.clone(),
+                name: row.name.clone(),
+                description: row.description.clone().unwrap_or_default(),
+                is_default: row.is_default,
+                is_active: self.state.active_persona_id.as_deref() == Some(row.id.as_str()),
+            })
+            .collect()
+    }
+
+    fn lorebook_cards(&self) -> Vec<LorebookCardView> {
+        self.state
+            .lorebooks
+            .iter()
+            .map(|row| LorebookCardView {
+                id: row.id.clone(),
+                name: row.name.clone(),
+                description: row.description.clone().unwrap_or_default(),
+                entry_count: row.entry_count,
+                character_id: row.character_id.clone(),
+            })
+            .collect()
     }
 
     pub fn present_visible(&self) -> (Vec<VisibleRow>, PresentOutcome) {
@@ -782,10 +946,50 @@ impl<W: ProductWire> ChatSession<W> {
                     },
                     decode_paged_chats,
                 )?;
-                let Some(first) = page.items.first() else {
-                    return Err(ChatRouteError::EmptyLibrary);
-                };
-                first.id.clone()
+                if let Some(first) = page.items.first() {
+                    first.id.clone()
+                } else {
+                    // No chat yet on a fresh device. If a starter character (Hazel) exists, create the first chat
+                    // so `live_open` does not fail with EMPTY_LIBRARY on a clean install. The starter seeds the
+                    // character via `NEOTA_SEED_STARTER=1` (mobile-ffi `nt_kernel_open` sets the env), but not a chat.
+                    let characters_page: PagedCharacters = self.call_decode(
+                        "characters.list",
+                        &RequestListCharacters {
+                            cursor: None,
+                            limit: Some(PAGE_LIMIT),
+                        },
+                        decode_paged_characters,
+                    )?;
+                    let character_id = if let Some(character) = characters_page.items.first() {
+                        character.id.clone()
+                    } else {
+                        // No character at all (clean DB and starter did not run). Create a minimal Hazel so the
+                        // first chat can be created. This mirrors the desktop starter fallback and keeps the
+                        // live route usable on a fresh install without requiring `pm clear` data.
+                        let hazel: CharacterDto = self.call_decode(
+                            "characters.create",
+                            &RequestCreateCharacter {
+                                name: "Hazel".to_string(),
+                                description: Some("[Hazel's Personality= \"sharp\", \"wry\", \"self-taught\", \"stubborn\", \"streetwise\"]".to_string()),
+                                tags: Some(vec!["wry".to_string()]),
+                                avatar_asset_id: None,
+                                profile_id: None,
+                            },
+                            decode_character_dto,
+                        )?;
+                        hazel.id.clone()
+                    };
+                    let created: ChatDto = self.call_decode(
+                        "chats.create",
+                        &RequestCreateChat {
+                            character_id,
+                            title: None,
+                            persona_id: None,
+                        },
+                        decode_chat_dto,
+                    )?;
+                    created.id.clone()
+                }
             }
         };
         let chat = self.call_decode(
@@ -865,8 +1069,22 @@ impl<W: ProductWire> ChatSession<W> {
     }
 
     pub fn set_panel(&mut self, panel: &str) {
-        self.state.sidebar_panel = panel.to_string();
-        self.state.sidebar_open = true;
+        if panel == "home" {
+            self.state.sidebar_open = false;
+            self.state.sidebar_panel = "home".to_string();
+        } else {
+            self.state.sidebar_panel = panel.to_string();
+            self.state.sidebar_open = true;
+            match panel {
+                "characters" => self.refresh_characters(),
+                "personas" => self.load_personas(),
+                "lorebooks" => self.load_lorebooks(),
+                "plugins" => self.load_plugins(),
+                "providers" => self.load_ai_settings(),
+                "settings" => self.load_settings(),
+                _ => {}
+            }
+        }
         self.bump_scene();
     }
 
@@ -883,7 +1101,11 @@ impl<W: ProductWire> ChatSession<W> {
     pub fn open_create_dialog(&mut self) {
         self.state.create_dialog_open = true;
         if self.state.create_name.trim().is_empty() {
-            self.state.create_name = "New character".into();
+            self.state.create_name = match self.state.sidebar_panel.as_str() {
+                "personas" => "New persona".into(),
+                "lorebooks" => "New lorebook".into(),
+                _ => "New character".into(),
+            };
         }
         self.state.create_description.clear();
         self.state.create_first_message.clear();
@@ -950,7 +1172,12 @@ impl<W: ProductWire> ChatSession<W> {
     }
 
     pub fn open_delete_dialog(&mut self) {
-        if self.state.selected_character_id.is_some() {
+        let can_delete = match self.state.sidebar_panel.as_str() {
+            "personas" => self.state.selected_persona_id.is_some(),
+            "lorebooks" => self.state.selected_lorebook_id.is_some(),
+            _ => self.state.selected_character_id.is_some(),
+        };
+        if can_delete {
             self.state.delete_dialog_open = true;
             self.bump_scene();
         }
@@ -1002,21 +1229,57 @@ impl<W: ProductWire> ChatSession<W> {
                 self.state.sidebar_open = false;
                 self.bump_scene();
             }
-            ShellAction::SetTab(tab) => self.set_character_tab(&tab),
+            ShellAction::SetTab(tab) => match self.state.sidebar_panel.as_str() {
+                "personas" => self.set_persona_tab(&tab),
+                "lorebooks" => self.set_lorebook_tab(&tab),
+                "providers" => {
+                    self.state.ai_tab = tab;
+                    self.bump_scene();
+                }
+                "settings" => {
+                    self.state.settings_tab = tab;
+                    self.bump_scene();
+                }
+                _ => self.set_character_tab(&tab),
+            },
             ShellAction::SetView(view) => self.set_character_view(&view),
-            ShellAction::CycleSort => {
-                let next = next_sort(&self.state.character_sort);
-                self.set_character_sort(next);
-            }
+            ShellAction::CycleSort => match self.state.sidebar_panel.as_str() {
+                "personas" => {
+                    self.state.persona_sort = if self.state.persona_sort == "asc" {
+                        "desc".into()
+                    } else {
+                        "asc".into()
+                    };
+                    self.bump_scene();
+                }
+                _ => {
+                    let next = next_sort(&self.state.character_sort);
+                    self.set_character_sort(next);
+                }
+            },
             ShellAction::SelectCharacter(id) => self.select_character(&id),
+            ShellAction::SelectPersona(id) => self.select_persona(&id),
+            ShellAction::SelectLorebook(id) => self.select_lorebook(&id),
             ShellAction::OpenCreate => self.open_create_dialog(),
             ShellAction::CloseCreate => self.close_create_dialog(),
-            ShellAction::ConfirmCreate => self.confirm_create_character(),
+            ShellAction::ConfirmCreate => match self.state.sidebar_panel.as_str() {
+                "personas" => self.confirm_create_persona(),
+                "lorebooks" => self.confirm_create_lorebook(),
+                _ => self.confirm_create_character(),
+            },
             ShellAction::OpenDelete => self.open_delete_dialog(),
             ShellAction::CloseDelete => self.close_delete_dialog(),
-            ShellAction::ConfirmDelete => self.confirm_delete_character(),
+            ShellAction::ConfirmDelete => match self.state.sidebar_panel.as_str() {
+                "personas" => self.confirm_delete_persona(),
+                "lorebooks" => self.confirm_delete_lorebook(),
+                _ => self.confirm_delete_character(),
+            },
             ShellAction::ToggleFavorite => self.toggle_favorite(),
-            ShellAction::BackToCards => self.set_character_tab("cards"),
+            ShellAction::BackToCards => match self.state.sidebar_panel.as_str() {
+                "personas" => self.set_persona_tab("cards"),
+                "lorebooks" => self.set_lorebook_tab("books"),
+                _ => self.set_character_tab("cards"),
+            },
             ShellAction::Import => {
                 self.state.status_message =
                     Some("Import a JSON or PNG character card from this device.".into());
@@ -1136,6 +1399,274 @@ impl<W: ProductWire> ChatSession<W> {
         }
     }
 
+    fn load_personas(&mut self) {
+        match self.call_decode(
+            "personas.list",
+            &RequestEmpty {},
+            decode_result_list_personas,
+        ) {
+            Ok(ResultListPersonas { items }) => {
+                self.state.personas = items;
+                if self.state.selected_persona_id.is_none() {
+                    self.state.selected_persona_id =
+                        self.state.personas.first().map(|row| row.id.clone());
+                }
+                if let Some(id) = self.state.selected_persona_id.clone() {
+                    self.seed_persona_draft(&id);
+                }
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.load_settings();
+    }
+
+    fn seed_persona_draft(&mut self, id: &str) {
+        if let Some(row) = self.state.personas.iter().find(|item| item.id == id) {
+            self.state.persona_name_draft = row.name.clone();
+            self.state.persona_description_draft = row.description.clone().unwrap_or_default();
+        }
+    }
+
+    pub fn select_persona(&mut self, id: &str) {
+        self.state.selected_persona_id = Some(id.to_string());
+        self.seed_persona_draft(id);
+        self.state.persona_tab = "edit".into();
+        self.bump_scene();
+    }
+
+    pub fn set_persona_tab(&mut self, tab: &str) {
+        self.state.persona_tab = tab.to_string();
+        self.bump_scene();
+    }
+
+    fn confirm_create_persona(&mut self) {
+        let name = self.state.create_name.trim();
+        let name = if name.is_empty() { "New persona" } else { name };
+        let req = RequestCreatePersona {
+            name: name.to_string(),
+            description: None,
+            avatar: None,
+            is_default: Some(self.state.personas.is_empty()),
+        };
+        match self.call_decode("personas.create", &req, decode_persona_dto) {
+            Ok(created) => {
+                self.state.create_dialog_open = false;
+                self.state.create_name.clear();
+                self.state.selected_persona_id = Some(created.id.clone());
+                self.state.persona_tab = "edit".into();
+                if self.state.active_persona_id.is_none() {
+                    self.state.active_persona_id = Some(created.id);
+                }
+                self.load_personas();
+                self.state.status_message = Some("Persona created.".into());
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    fn confirm_delete_persona(&mut self) {
+        let Some(id) = self.state.selected_persona_id.clone() else {
+            self.state.delete_dialog_open = false;
+            return;
+        };
+        if self.state.personas.len() <= 1 {
+            self.state.delete_dialog_open = false;
+            self.state.status_message = Some("At least one persona must remain.".into());
+            self.bump_scene();
+            return;
+        }
+        match self.call_value(
+            "personas.delete",
+            &RequestDeletePersona {
+                persona_id: id.clone(),
+            },
+        ) {
+            Ok(_) => {
+                self.state.delete_dialog_open = false;
+                if self.state.active_persona_id.as_deref() == Some(id.as_str()) {
+                    self.state.active_persona_id = self
+                        .state
+                        .personas
+                        .iter()
+                        .find(|row| row.id != id)
+                        .map(|row| row.id.clone());
+                }
+                self.state.selected_persona_id = None;
+                self.state.persona_tab = "cards".into();
+                self.load_personas();
+                self.state.status_message = Some("Persona deleted.".into());
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    fn load_lorebooks(&mut self) {
+        match self.call_decode(
+            "lorebooks.list",
+            &RequestListLorebooks { character_id: None },
+            decode_result_list_lorebooks,
+        ) {
+            Ok(ResultListLorebooks { items }) => {
+                self.state.lorebooks = items;
+                if self.state.selected_lorebook_id.is_none() {
+                    self.state.selected_lorebook_id =
+                        self.state.lorebooks.first().map(|row| row.id.clone());
+                }
+                if let Some(id) = self.state.selected_lorebook_id.clone() {
+                    self.seed_lorebook_draft(&id);
+                }
+            }
+            Err(err) => self.record_error(err),
+        }
+    }
+
+    fn seed_lorebook_draft(&mut self, id: &str) {
+        if let Some(row) = self.state.lorebooks.iter().find(|item| item.id == id) {
+            self.state.lorebook_name_draft = row.name.clone();
+            self.state.lorebook_description_draft = row.description.clone().unwrap_or_default();
+        }
+    }
+
+    pub fn select_lorebook(&mut self, id: &str) {
+        self.state.selected_lorebook_id = Some(id.to_string());
+        self.seed_lorebook_draft(id);
+        self.state.lorebook_tab = "book".into();
+        self.bump_scene();
+    }
+
+    pub fn set_lorebook_tab(&mut self, tab: &str) {
+        self.state.lorebook_tab = tab.to_string();
+        self.bump_scene();
+    }
+
+    fn confirm_create_lorebook(&mut self) {
+        let name = self.state.create_name.trim();
+        let name = if name.is_empty() {
+            "New lorebook"
+        } else {
+            name
+        };
+        let req = RequestCreateLorebook {
+            name: name.to_string(),
+            description: None,
+            entries: None,
+            character_id: None,
+        };
+        match self.call_decode("lorebooks.create", &req, decode_lorebook_dto) {
+            Ok(created) => {
+                self.state.create_dialog_open = false;
+                self.state.create_name.clear();
+                self.state.selected_lorebook_id = Some(created.id);
+                self.state.lorebook_tab = "book".into();
+                self.load_lorebooks();
+                self.state.status_message = Some("Lorebook created.".into());
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    fn confirm_delete_lorebook(&mut self) {
+        let Some(id) = self.state.selected_lorebook_id.clone() else {
+            self.state.delete_dialog_open = false;
+            return;
+        };
+        match self.call_value(
+            "lorebooks.delete",
+            &RequestDeleteLorebook { lorebook_id: id },
+        ) {
+            Ok(_) => {
+                self.state.delete_dialog_open = false;
+                self.state.selected_lorebook_id = None;
+                self.state.lorebook_tab = "books".into();
+                self.load_lorebooks();
+                self.state.status_message = Some("Lorebook deleted.".into());
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    fn load_plugins(&mut self) {
+        match self.call_decode("plugins.list", &RequestEmpty {}, decode_result_plugins_list) {
+            Ok(ResultPluginsList { items }) => self.state.plugins = items,
+            Err(err) => self.record_error(err),
+        }
+    }
+
+    fn load_ai_settings(&mut self) {
+        match self.call_decode(
+            "providers.list",
+            &RequestEmpty {},
+            decode_result_list_providers,
+        ) {
+            Ok(ResultListProviders { items }) => {
+                self.state.providers = items
+                    .into_iter()
+                    .map(|row| ProviderCardView {
+                        id: row.id,
+                        name: row.name,
+                        availability: match row.availability {
+                            contracts_generated::generated::ProviderAvailability::Available => {
+                                "available".into()
+                            }
+                            contracts_generated::generated::ProviderAvailability::Degraded {
+                                ..
+                            } => "degraded".into(),
+                            contracts_generated::generated::ProviderAvailability::Unavailable {
+                                ..
+                            } => "unavailable".into(),
+                        },
+                    })
+                    .collect();
+            }
+            Err(err) => self.record_error(err),
+        }
+        match self.call_decode(
+            "presets.list",
+            &RequestListPresets {
+                kind: Some("generation".into()),
+            },
+            decode_result_list_presets,
+        ) {
+            Ok(ResultListPresets { items }) => {
+                self.state.presets = items
+                    .into_iter()
+                    .map(|row| PresetCardView {
+                        id: row.id,
+                        name: row.name,
+                        kind: row.kind,
+                    })
+                    .collect();
+            }
+            Err(err) => self.record_error(err),
+        }
+    }
+
+    fn load_settings(&mut self) {
+        match self.call_decode(
+            "settings.get",
+            &RequestSettingsGet { keys: None },
+            decode_result_settings,
+        ) {
+            Ok(ResultSettings { items }) => {
+                if let Some(language) = settings_string(&items, "language") {
+                    self.state.language = language;
+                    self.state.dir = match self.state.language.as_str() {
+                        "ar" | "he" | "fa" | "ur" => "rtl".into(),
+                        _ => "ltr".into(),
+                    };
+                }
+                if let Some(id) = settings_string(&items, "active-persona-id") {
+                    self.state.active_persona_id = Some(id);
+                }
+            }
+            Err(err) => self.record_error(err),
+        }
+    }
+
     fn refresh_chat(&mut self) -> Result<(), ChatRouteError> {
         let Some(chat_id) = self.chat_id.clone() else {
             return Ok(());
@@ -1201,6 +1732,8 @@ impl<W: ProductWire> ChatSession<W> {
                 self.state.stream_handle = Some(handle.clone());
                 self.state.active_run_id = Some(handle);
                 self.state.streaming_text.clear();
+                self.state.last_applied_stream_sequence = None;
+                self.state.last_checkpoint_sequence = None;
                 self.state.last_error = None;
                 self.drain_stream()
             }
@@ -1280,6 +1813,18 @@ impl<W: ProductWire> ChatSession<W> {
             }
         }
     }
+}
+
+fn settings_string(items: &[SettingsItem], key: &str) -> Option<String> {
+    let item = items.iter().find(|row| row.key == key)?;
+    if let Some(text) = item.value.as_str() {
+        return Some(text.to_string());
+    }
+    let obj = item.value.as_object()?;
+    obj.get("value")
+        .and_then(Value::as_str)
+        .or_else(|| obj.get("locale").and_then(Value::as_str))
+        .map(str::to_string)
 }
 
 fn virtualized_window(

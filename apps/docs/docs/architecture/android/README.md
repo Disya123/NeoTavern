@@ -192,8 +192,11 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   ([input-to-present-adjudication.json](https://github.com/Disya123/NeoTavern/blob/main/docs/rfc/input-to-present-adjudication.json)).
   Debug `PresentationChatActivity` is the home-screen launcher and the live
   Product Wire host (`crates/presentation-chat`). The same activity remains
-  the guarded canary host. **WebView is not a route fallback.** Unmigrated
-  rail destinations show a Rust `NotYetMigrated` screen. `MainActivity` is
+  the guarded canary host. **WebView is not a route fallback.** Rail
+  destinations (Characters, Personas, Lorebooks, Backgrounds, AI Settings,
+  Plugins, Settings, Chats) render native Dioxus surfaces. Plugin DOM
+  islands stay CONTAINED ([ADR-0054](../adr/0054-plugin-visual-surface-contained.md)).
+  `MainActivity` is
   retained as an explicit WebView harness for instrumented tests, not the
   launcher icon. Debug `NEOTA_DIOXUS_SHELL=0` disables the shell on this
   Activity; omitting the extra (icon launch) enables it. Isolated 10k:
@@ -210,8 +213,13 @@ displayCutout`) as both `--nt-safe-area-*` and `--nt-inset-*` on
   Kernel stays in `libneotavern_android_jni.so`. Production APK also
   packages `libneotavern_presentation_chat.so`. The live SurfaceView route now loads the packed React design system
   (`crates/presentation-design-system`: Outfit / JetBrains Mono, `--st-*`
-  tokens, Phosphor regular icons, App Shell / Character Manager CSS) and
-  paints Character Manager from Product Wire `characters.list`. WindowInsets
+  tokens, Phosphor regular icons, App Shell / Character Manager / Personas /
+  Lorebooks / Backgrounds / AI Settings / Plugins / Settings CSS) and
+  paints those rail panels from Product Wire (`characters.*`, `personas.*`,
+  `lorebooks.*`, `plugins.*`, `providers.list`, `presets.list`,
+  `settings.get`). Backgrounds stay an honest empty catalog (Kernel has no
+  wallpaper capability). Plugin frontend slots stay CONTAINED in WebSurface
+  ([ADR-0054](../adr/0054-plugin-visual-surface-contained.md)). WindowInsets
   are JNI `setSafeArea` physical px → CSS px (`density`), baked into
   `--nt-inset-*` / `--nt-safe-area-*` as literal lengths (Blitz `env()` is
   0) and applied as RSX `padding-top` / `padding-bottom` on the rail, header,

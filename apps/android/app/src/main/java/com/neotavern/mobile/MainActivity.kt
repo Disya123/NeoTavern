@@ -37,15 +37,16 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewCompat
 import java.io.IOException
+import kotlin.math.roundToInt
 
 /**
  * NeoTavern Android Host — Phase 5 local foundation + Phase 8 background
  * execution (ТЗ §8, §19, §65, §66).
  *
- * WebView is a TEMPORARY migration blocker for unmigrated routes only.
- * Unknown routes must open the Rust `NotYetMigrated` surface, not a
- * WebView fallback. Do not ADR its permanence; replace routes
- * sequentially with Dioxus RSX (see `product_shell.rs:not_yet_migrated`).
+ * WebView is the guarded rollback / TalkBack host (`MainActivity`), not a
+ * route fallback. Rail destinations render native Dioxus surfaces.
+ * Plugin DOM islands stay CONTAINED in WebSurface (ADR-0054). Unknown
+ * panel ids still open the Rust `NotYetMigrated` surface.
  *
  * Renders the packaged web UI (`assets/web/index.html`) in a hardened
  * WebView and exposes the in-process kernel through [NeotavernBridge]:
@@ -418,7 +419,9 @@ class MainActivity : Activity() {
 
     private fun cssPx(physicalPx: Int): String {
         val density = resources.displayMetrics.density.coerceAtLeast(1f)
-        val css = (physicalPx / density).toInt()
+        // Round (not truncate) so the WebView fallback safe-area matches the
+        // Rust host's `round`-based chrome and avoids a ~1px rail/glass gap.
+        val css = (physicalPx / density).roundToInt()
         return "${if (physicalPx > 0) css.coerceAtLeast(1) else 0}px"
     }
 

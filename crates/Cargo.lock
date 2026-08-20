@@ -3306,6 +3306,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "neotavern-presentation-blueprint"
+version = "0.1.0"
+dependencies = [
+ "contracts-generated",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "neotavern-presentation-chat"
 version = "0.1.0"
 dependencies = [

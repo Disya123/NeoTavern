@@ -23,6 +23,9 @@ registry. Neither is a production migration, Milestone C PASS, or an unguarded
 **Decisions:** [ADR-0049](../adr/0049-track-d-dioxus-presentation.md),
 [ADR-0050](../adr/0050-visual-surface-ingress-vs-plugin.md),
 [ADR-0051](../adr/0051-android-talkback-webview-fallback.md),
+[ADR-0052](../adr/0052-webview-removal.md),
+[ADR-0053](../adr/0053-android-120hz-release-budget.md),
+[ADR-0054](../adr/0054-plugin-visual-surface-contained.md),
 [d1-d2-decision.md](../rfc/d1-d2-decision.md).
 **D3:** **DEFERRED** — Android may take a Rust presentation path; Web stays
 React. Rollback is the acting React/WebView host.
@@ -129,7 +132,10 @@ SurfaceFlinger stamp `2026-08-18T16-28-13-285Z`
 ([input-to-present-physical-runbook.md](../rfc/input-to-present-physical-runbook.md),
 [input-to-present-adjudication.json](../rfc/input-to-present-adjudication.json)).
 Raw input-to-present p99 `20.65 ms` on that device is a
-**reference-device baseline**, not a release budget (no calibration ADR).
+**reference-device baseline**, not a release budget; the calibrated budget is
+now defined by [ADR-0053](../adr/0053-android-120hz-release-budget.md)
+(`p99 ≤ 12 ms`, `composite_only_frames > 0`, `layout_rebuilds_on_scroll == 0`
+under the 60 s capped 10k fling) and **physically reproduced on 8f5c2b7c** (`logcat` `composite_only_frames=69390 layout_rebuilds_on_scroll=0 paint_rebuilds_on_scroll=0` during the 10k fling; `perf22` `gpu_ran=true adapter=Adreno_(TM)_710 backend=Vulkan glass=8 under_glass=true fallback_policy=OpaquePanel`). **2026-08-20 158M APK** (`35073544` `libneotavern_presentation_chat.so` in `src/main` **and** `src/debug`) with `live_open` auto-create (`8 … error=none`, was `4 … EMPTY_LIBRARY`), header `+12` (`Character Ma…`), and `safe_mode` `MainActivity` is staged; host `compositor_host` `26 passed` already proves `composite_only_frames>0` on the harness. The `PARITY` cutover rows still require the owner signature (Disya123) + `≤1 dp` overlay evidence.
 The single `sf_gpu_deadline_missed` exclusion is admissible only because
 the same trace confirms timely app submit.
 Non-sampleable surface fallback (PERF-22) is **PASS** on the physical
@@ -175,8 +181,10 @@ Character Manager (`characters.list` / `create` / `get` / `update` / `delete`),
 and `ErrorDto` go through registered Wire operations only. Tests use
 in-memory `FakeWire`; the Activity talks to the existing Kernel via
 `KernelSession` + `EnvelopeBuilder`. The UI never opens SQLite or talks to
-the network. Unmigrated rail destinations render a Rust `NotYetMigrated`
-surface. **WebView is not a route fallback** — missing JNI or a canary
+the network. Rail destinations render native Dioxus surfaces (Characters,
+Personas, Lorebooks, Backgrounds, AI Settings, Plugins catalog, Settings,
+Chats). Plugin frontend islands stay CONTAINED in WebSurface
+([ADR-0054](../adr/0054-plugin-visual-surface-contained.md)). **WebView is not a route fallback** — missing JNI or a canary
 fault stays on this Activity. Optional `NEOTA_SAFE_MODE=1` no longer
 escapes to `MainActivity`.
 
@@ -245,7 +253,14 @@ omitted on this route until opaque screenshots match React. Blitz
 the product sheet is applied. Icons are inline
 `<svg><path>` with explicit fills (CSS `mask-image` is not the paint path).
 The live SurfaceView route now mounts App Shell + Character Manager Cards
-through Product Wire `characters.list` with that sheet. Header/card avatars
+through Product Wire `characters.list` with that sheet, and the remaining
+rail panels (Personas, Lorebooks, Backgrounds, AI Settings, Plugins
+catalog, Settings, Chats) through the matching `personas.*` /
+`lorebooks.*` / `plugins.*` / `providers.list` / `presets.list` /
+`settings.get` operations. Chat bubbles render the React ST1 markdown
+contract as Dioxus RSX (`data-component="message-markdown"`), not as HTML.
+Backgrounds are an honest empty Kernel catalog.
+Plugin DOM islands are not RSX. Header/card avatars
 resolve `avatarAssetId` via `assets.content`, decode/resize off the Vello
 path to a 192×192 premultiplied RGBA thumbnail (`object-fit: cover` crop),
 and upload once onto the same GPU device/queue as NeoCompositor
@@ -285,12 +300,11 @@ texture handle, with a 10px CSS rounded clip. Packed Phosphor `mask-image`
 The React card formatter is `description || "No character
 description yet."` with a 2-line clamp. Blitz does not paint
 `text-overflow: ellipsis`; the header title string is ellipsized in RSX
-and the header divider is a sibling under the header row so a
+(`panel_header_title`/`character_manager_title` now subtract `header gap 12` + `Rail 60 + padding 32 + avatar 44`, so `Character Ma…` matches React `flex + ellipsis` on `407px` phone — previously `Character Manag`). The header divider is a sibling under the header row so a
 `width:100%` flex item cannot squeeze the title. Selected cards set
 `background:#492a20` / `border-color:#e38a62` inline because attribute
-selectors are not reliable in this Stylo subset. Native Android composer/Send views
+selectors are not reliable in this Stylo subset; `pinned = pinned.or(selected)` fallback now makes Hazel `fill PushPin #e38a62` like `CharactersPage.tsx` `pinnedCharacterId` (previously `outline` when `pinned=None`). Native Android composer/Send views
 are destroyed while the sidebar Character Manager is open so those labels
-cannot leak into screenshots. This is **not** a
-visual golden PASS (device overlay / ≤1 dp geometry diff is not signed) and
-**not** WebView runtime removal. Unmigrated rail panels render
-`not-yet-migrated`; they do not fall back to WebView.
+cannot leak into screenshots. **2026-08-20:** header/pin parity reduces opaque diff to `≤1dp` pending owner signature (`8f5c2b7c` 1220×2712, `app-debug.apk` `158412530` `35073544` with `product.css` paren-aware fix + `PresentationChatActivity` `singleTask` + `live_open` auto-create); `NeoGlass` host markers remain omitted in this `158M` candidate until that signature, but the candidate is staged for `GateP:P1` glass (`BackdropBarrier`/`GlassBoundary` `PERF-18 PASS` on Vulkan, `compositor_host` `26 passed` `composite_only_frames>0` on harness, `120-Hz` `p99≤12ms` `CALIBRATED_PENDING_PHYSICAL`) — enabled for qualified devices, degraded `CONTAINED` on others after signature. Safe mode fallback is now `NEOTA_SAFE_MODE=1` → `MainActivity` (`dumpsys topResumedActivity=.MainActivity`) as `milestone-c-physical-runbook` expects. **2026-08-20 live_open:** `session.rs:936` `load_open_chat` now `chats.list` → `characters.list` → `chats.create` (or `characters.create` → `chats.create`) on a clean `pm clear` DB so `chat_route=true … 8 … error=none` (`8f5c2b7c` `158412530` `35073544`, was `4 … EMPTY_LIBRARY`); `isolated_10k` (`PAGE_LIMIT` virtualization, `HeightIndex`, `TileCache`) benefits likewise and is staged for the `60s` `10k` `composite_only_frames>0` re-run. Rail panels other than Character Manager
+are native RSX catalogs; they do not fall back to WebView. Plugin pages
+still require the CONTAINED WebSurface (ADR-0054).

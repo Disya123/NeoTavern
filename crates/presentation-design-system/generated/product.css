@@ -1,4 +1,4 @@
-/* Packed from packages/ui + Character Manager/App Shell CSS modules. */
+/* Packed from packages/ui + App Shell / panel CSS modules (React golden). */
 
 
 /* Beat Blitz DEFAULT_CSS (body margin, grey buttons, white inputs, hidden options). */
@@ -154,7 +154,14 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
 }
 .AppShell_skipLink,
 .Sidebar_railLabel,
-.CharacterManagementPanel_srOnly {
+.CharacterManagementPanel_srOnly,
+.PersonasPanel_srOnly,
+.LorebookPanel_srOnly,
+.BackgroundsPanel_srOnly,
+.SettingsPanel_srOnly,
+.ChatManagementPanel_srOnly,
+.AiSettings_srOnly,
+.PluginsPage_srOnly {
   display: none;
   width: 0;
   height: 0;
@@ -239,11 +246,12 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   align-self: center;
 }
 .CharacterManagementPanel_cardAvatar {
-  width: 52px;
-  height: 52px;
-  max-width: 52px;
-  max-height: 52px;
+  width: 48px;
+  height: 48px;
+  max-width: 48px;
+  max-height: 48px;
   aspect-ratio: auto;
+  box-sizing: border-box;
   grid-column: auto;
   align-self: start;
 }
@@ -417,7 +425,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   inset: auto;
   z-index: 2;
   width: auto;
-  margin: 8px 16px max(32px, var(--nt-inset-bottom));
+  margin: 8px 16px 8px;
   padding: 4px;
   align-items: center;
   border: 1px solid #39342f;
@@ -528,7 +536,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   min-width: 0;
   min-height: 0;
   height: auto;
-  max-height: 140px;
+  max-height: 80px;
   padding: 8px;
   flex: none;
   align-self: flex-start;
@@ -538,6 +546,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 8px;
   overflow: hidden;
+  box-sizing: border-box;
   border: 1px solid #39342f;
   border-radius: 16px;
   color: #f3eee8;
@@ -1810,8 +1819,8 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     max-height: 100%;
     overflow-y: auto;
     flex-direction: column;
-    padding-top: max(32px,; padding-bottom: var(--nt-inset-top));
-    padding-left: max(16px,; padding-right: var(--nt-inset-left));
+    padding-top: max(32px, var(--nt-inset-top)); padding-bottom: max(32px, var(--nt-inset-bottom));
+    padding-left: max(16px, var(--nt-inset-left)); padding-right: max(16px, var(--nt-inset-right));
     color: #f3eee8;
     background: #151311;
   }
@@ -2434,7 +2443,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
 
 
 
-/* AppShell.module.css -> AppShell_* */
+/* components/AppShell.module.css -> AppShell_* */
 
 
   :root {
@@ -2477,7 +2486,9 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     position: relative;
     z-index: 1500;
     top: max(8px, var(--nt-inset-top));
-    left: calc(; right: 60px;
+    left: calc(
+        60px + 12px
+      ); right: 12px;
     display: flex;
     justify-content: center;
     pointer-events: none;
@@ -2574,7 +2585,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
 
 
 
-/* Sidebar.module.css -> Sidebar_* */
+/* components/Sidebar.module.css -> Sidebar_* */
 
 
   .Sidebar_sidebar {
@@ -3373,20 +3384,17 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
 
     [data-role='floating-tab-panel'] [data-component='tabs-list'][data-variant='segment'] {
       position: relative;
-      top: auto;
-      bottom: var(--management-tabs-edge-inset);
-      left: auto; right: auto;
-      margin: 8px 16px var(--management-tabs-edge-inset);
-      margin-top: auto;
+      inset: auto;
+      margin: 8px 16px 8px;
     }
 
     [data-role='floating-tab-panel'] [data-part='floating-tab-content']::before {
+      display: none;
       flex-basis: 0;
     }
 
     [data-role='floating-tab-panel'] [data-part='floating-tab-content']::after {
-      display: block;
-      flex: 0 0 var(--management-tabs-safe-offset);
+      display: none;
       content: '';
     }
   
@@ -3638,7 +3646,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
 
 
 
-/* SidebarPanelHeader.module.css -> SidebarPanelHeader_* */
+/* components/SidebarPanelHeader.module.css -> SidebarPanelHeader_* */
 
 
   .SidebarPanelHeader_header {
@@ -3750,7 +3758,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
 
 
 
-/* FloatingTabPanel.module.css -> FloatingTabPanel_* */
+/* components/FloatingTabPanel.module.css -> FloatingTabPanel_* */
 
 
   .FloatingTabPanel_root {
@@ -3766,7 +3774,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
 
 
 
-/* CharacterManagementPanel.module.css -> CharacterManagementPanel_* */
+/* components/CharacterManagementPanel.module.css -> CharacterManagementPanel_* */
 
 
   .CharacterManagementPanel_characterActionBar,
@@ -4788,6 +4796,3394 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
 
 
 
+/* components/PersonasPanel.module.css -> PersonasPanel_* */
+
+
+  .PersonasPanel_headerAvatar {
+    display: grid;
+    width: 44px;
+    height: 44px;
+    flex: none;
+    align-items: center; justify-content: center;
+    border: 1px solid #625a53;
+    border-radius: 999px;
+    color: #f3eee8;
+    background: #302c28;
+    font-size: 0.8125rem;
+    font-weight: 700;
+  }
+
+  .PersonasPanel_tabs {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+  }
+
+  .PersonasPanel_tabPanel {
+    min-height: 0;
+    flex: 1;
+    overflow: hidden;
+    padding-top: 0;
+  }
+
+  .PersonasPanel_cardsTab,
+  .PersonasPanel_editor {
+    display: flex;
+    padding: 8px 16px 16px;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .PersonasPanel_cardToolbar,
+  .PersonasPanel_listMeta,
+  .PersonasPanel_editorActionBar,
+  .PersonasPanel_dialogActions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .PersonasPanel_primaryActions {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .PersonasPanel_primaryActions .PersonasPanel_st-button {
+    min-width: 0;
+  }
+
+  .PersonasPanel_cardToolbar .PersonasPanel_sortControl {
+    flex: none;
+  }
+
+  .PersonasPanel_sortControl select,
+  .PersonasPanel_searchControl,
+  .PersonasPanel_editorField input,
+  .PersonasPanel_editorField textarea,
+  .PersonasPanel_editorField select {
+    border: 1px solid #39342f;
+    border-radius: 10px;
+    color: #f3eee8;
+    background: #302c28;
+    font: inherit;
+  }
+
+  .PersonasPanel_sortControl select {
+    width: 6.5rem;
+    height: 44px;
+    padding: 0 8px;
+    font-size: 0.8125rem;
+  }
+
+  .PersonasPanel_searchControl {
+    display: grid;
+    min-height: 44px;
+    padding: 0 8px;
+    align-items: center;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  .PersonasPanel_searchControl input {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    color: inherit;
+    background: transparent;
+    font: inherit;
+  }
+
+  .PersonasPanel_searchControl input::placeholder,
+  .PersonasPanel_editorField input::placeholder,
+  .PersonasPanel_editorField textarea::placeholder {
+    color: #998f87;
+  }
+
+  .PersonasPanel_listMeta {
+    color: #998f87;
+    font-size: 0.8125rem;
+  }
+
+  .PersonasPanel_personaList {
+    display: grid;
+    gap: 4px;
+  }
+
+  .PersonasPanel_personaCard {
+    display: grid;
+    width: 100%;
+    min-width: 0;
+    padding: 8px;
+    align-items: center;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 8px;
+    border: 1px solid #39342f;
+    border-radius: 16px;
+    color: inherit;
+    background: #24211e;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+    transition:
+      border-color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      background 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .PersonasPanel_personaCard:hover {
+    border-color: #625a53;
+    background: #302c28;
+  }
+
+  .PersonasPanel_personaCard[data-state='selected'] {
+    border-color: #e38a62;
+    background: #492a20;
+  }
+
+  .PersonasPanel_cardAvatar {
+    display: grid;
+    width: 52px;
+    height: 52px;
+    flex: none;
+    align-items: center; justify-content: center;
+    border: 1px solid #39342f;
+    border-radius: 999px;
+    color: #998f87;
+    background: #302c28;
+    font-size: 1rem;
+    font-weight: 700;
+  }
+
+  .PersonasPanel_cardCopy {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .PersonasPanel_cardCopy strong,
+  .PersonasPanel_cardCopy > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .PersonasPanel_cardCopy strong {
+    color: #f3eee8;
+    font-size: 0.8125rem;
+    white-space: nowrap;
+  }
+
+  .PersonasPanel_cardCopy > span {
+    color: #c5bbb2;
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .PersonasPanel_badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .PersonasPanel_badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 4px;
+    border-radius: 999px;
+    color: #ffc4a8;
+    background: #492a20;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .PersonasPanel_emptyState {
+    display: flex;
+    padding: 24px 12px;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    border: 1px dashed #39342f;
+    border-radius: 16px;
+    color: #c5bbb2;
+    text-align: center;
+  }
+
+  .PersonasPanel_emptyState strong {
+    color: #f3eee8;
+    font-size: 1rem;
+  }
+
+  .PersonasPanel_emptyState p {
+    margin: 0;
+    font-size: 0.8125rem;
+    line-height: 1.45;
+  }
+
+  .PersonasPanel_editorField {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    color: #c5bbb2;
+    font-size: 0.8125rem;
+  }
+
+  .PersonasPanel_editorField > span,
+  .PersonasPanel_sectionLabel {
+    color: #f3eee8;
+    font-weight: 650;
+  }
+
+  .PersonasPanel_editorField input,
+  .PersonasPanel_editorField select {
+    min-height: 44px;
+    padding: 0 8px;
+  }
+
+  .PersonasPanel_editorField textarea {
+    min-height: calc(52px * 2.5);
+    padding: 8px;
+    resize: vertical;
+    line-height: 1.45;
+  }
+
+  .PersonasPanel_fieldHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .PersonasPanel_tokenCount {
+    color: #998f87;
+    font-family: 'JetBrains Mono Variable', 'Cascadia Code', monospace;
+    font-size: 0.8125rem;
+  }
+
+  .PersonasPanel_connections {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid #39342f;
+    border-radius: 10px;
+    background: #151311;
+  }
+
+  .PersonasPanel_connectionButton {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding-left: 4px; padding-right: 4px;
+    border: 1px solid transparent;
+    border-radius: calc(10px - 4px);
+    color: #998f87;
+    background: transparent;
+    font: inherit;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+      color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      background 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .PersonasPanel_connectionButton:hover:not(:disabled) {
+    color: #f3eee8;
+    background: #302c28;
+  }
+
+  .PersonasPanel_connectionButton[data-state='active'] {
+    color: #ffc4a8;
+    background: #492a20;
+  }
+
+  .PersonasPanel_connectionButton:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  .PersonasPanel_connectionLabel {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .PersonasPanel_hint {
+    margin: 0;
+    color: #998f87;
+    font-size: 0.8125rem;
+    line-height: 1.45;
+  }
+
+  .PersonasPanel_globalSettings {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #39342f;
+  }
+
+  .PersonasPanel_checkboxRow {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    color: #c5bbb2;
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    cursor: pointer;
+  }
+
+  .PersonasPanel_status,
+  .PersonasPanel_error {
+    margin: 0;
+    padding: 0 12px 8px;
+    font-size: 0.8125rem;
+  }
+
+  .PersonasPanel_error {
+    color: #f0837d;
+  }
+
+  .PersonasPanel_dialogActions {
+    justify-content: flex-end;
+    margin-top: 8px;
+  }
+
+  .PersonasPanel_srOnly {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  @container (max-width: 20rem) {
+    .PersonasPanel_connectionLabel {
+      display: none;
+    }
+
+    .PersonasPanel_connectionButton {
+      padding-left: 0; padding-right: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .PersonasPanel_personaCard,
+    .PersonasPanel_connectionButton {
+      transition: none;
+    }
+  }
+
+
+
+/* components/LorebookPanel.module.css -> LorebookPanel_* */
+
+
+  .LorebookPanel_headerAvatar {
+    display: grid;
+    width: 44px;
+    height: 44px;
+    flex: none;
+    align-items: center; justify-content: center;
+    border: 1px solid #625a53;
+    border-radius: 999px;
+    color: #f3eee8;
+    background: #302c28;
+  }
+
+  .LorebookPanel_tabs {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+  }
+
+  .LorebookPanel_tabPanel {
+    min-height: 0;
+    flex: 1;
+    overflow: hidden;
+    padding-top: 0;
+  }
+
+  .LorebookPanel_booksTab,
+  .LorebookPanel_bookTab,
+  .LorebookPanel_entriesTab {
+    display: flex;
+    padding: 8px 16px 16px;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .LorebookPanel_cardToolbar,
+  .LorebookPanel_listMeta,
+  .LorebookPanel_editorActionBar,
+  .LorebookPanel_dialogActions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .LorebookPanel_primaryActions {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .LorebookPanel_primaryActions .LorebookPanel_st-button {
+    min-width: 0;
+  }
+
+  .LorebookPanel_scopeControl {
+    flex: none;
+  }
+
+  .LorebookPanel_scopeControl select,
+  .LorebookPanel_searchControl,
+  .LorebookPanel_editorField input,
+  .LorebookPanel_editorField textarea,
+  .LorebookPanel_editorField select,
+  .LorebookPanel_dialogField input,
+  .LorebookPanel_dialogField textarea {
+    border: 1px solid #39342f;
+    border-radius: 10px;
+    color: #f3eee8;
+    background: #302c28;
+    font: inherit;
+  }
+
+  .LorebookPanel_scopeControl select {
+    width: 9.5rem;
+    height: 44px;
+    padding: 0 8px;
+    font-size: 0.8125rem;
+  }
+
+  .LorebookPanel_searchControl {
+    display: grid;
+    min-height: 44px;
+    padding: 0 8px;
+    align-items: center;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  .LorebookPanel_searchControl input {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    color: inherit;
+    background: transparent;
+    font: inherit;
+  }
+
+  .LorebookPanel_searchControl input::placeholder,
+  .LorebookPanel_editorField input::placeholder,
+  .LorebookPanel_editorField textarea::placeholder {
+    color: #998f87;
+  }
+
+  .LorebookPanel_listMeta {
+    color: #998f87;
+    font-size: 0.8125rem;
+  }
+
+  .LorebookPanel_bookList,
+  .LorebookPanel_entryList {
+    display: grid;
+    gap: 4px;
+  }
+
+  .LorebookPanel_bookCard {
+    display: grid;
+    width: 100%;
+    min-width: 0;
+    padding: 8px;
+    align-items: start;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 8px;
+    border: 1px solid #39342f;
+    border-radius: 16px;
+    color: inherit;
+    background: #24211e;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+    transition:
+      border-color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      background 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .LorebookPanel_bookCard:hover {
+    border-color: #625a53;
+    background: #302c28;
+  }
+
+  .LorebookPanel_cardIcon {
+    display: grid;
+    width: 44px;
+    height: 44px;
+    flex: none;
+    align-items: center; justify-content: center;
+    border: 1px solid #39342f;
+    border-radius: 10px;
+    color: #998f87;
+    background: #302c28;
+  }
+
+  .LorebookPanel_cardCopy {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .LorebookPanel_cardCopy strong,
+  .LorebookPanel_cardCopy > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .LorebookPanel_cardCopy strong {
+    color: #f3eee8;
+    font-size: 0.8125rem;
+    white-space: nowrap;
+  }
+
+  .LorebookPanel_cardCopy > span {
+    color: #c5bbb2;
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .LorebookPanel_badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .LorebookPanel_emptyState {
+    display: flex;
+    padding: 24px 12px;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    border: 1px dashed #39342f;
+    border-radius: 16px;
+    color: #c5bbb2;
+    text-align: center;
+  }
+
+  .LorebookPanel_emptyState strong {
+    color: #f3eee8;
+    font-size: 1rem;
+  }
+
+  .LorebookPanel_emptyState p {
+    margin: 0;
+    font-size: 0.8125rem;
+    line-height: 1.45;
+  }
+
+  .LorebookPanel_editorField,
+  .LorebookPanel_dialogField {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    color: #c5bbb2;
+    font-size: 0.8125rem;
+  }
+
+  .LorebookPanel_editorField > span,
+  .LorebookPanel_dialogField > span {
+    color: #f3eee8;
+    font-weight: 650;
+  }
+
+  .LorebookPanel_editorField input,
+  .LorebookPanel_editorField select,
+  .LorebookPanel_dialogField input,
+  .LorebookPanel_dialogField textarea {
+    min-height: 44px;
+    padding: 0 8px;
+  }
+
+  .LorebookPanel_editorField textarea {
+    min-height: calc(52px * 2.5);
+    padding: 8px;
+    resize: vertical;
+    line-height: 1.45;
+  }
+
+  .LorebookPanel_fieldHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .LorebookPanel_tokenCount {
+    color: #998f87;
+    font-family: 'JetBrains Mono Variable', 'Cascadia Code', monospace;
+    font-size: 0.8125rem;
+  }
+
+  .LorebookPanel_hint {
+    margin: 0;
+    color: #998f87;
+    font-size: 0.8125rem;
+    line-height: 1.45;
+  }
+
+  .LorebookPanel_status,
+  .LorebookPanel_error {
+    margin: 0;
+    padding: 0 12px 8px;
+    font-size: 0.8125rem;
+  }
+
+  .LorebookPanel_error,
+  .LorebookPanel_fieldError {
+    color: #f0837d;
+  }
+
+  .LorebookPanel_fieldError {
+    margin: 0;
+    font-size: 0.8125rem;
+  }
+
+  .LorebookPanel_dialogField textarea.fieldInvalid {
+    border-color: #f0837d;
+  }
+
+  .LorebookPanel_entryRow {
+    display: flex;
+    min-width: 0;
+    padding: 8px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    border: 1px solid #39342f;
+    border-radius: 16px;
+    background: #24211e;
+  }
+
+  .LorebookPanel_entryRow[data-state='disabled'] {
+    opacity: 0.6;
+  }
+
+  .LorebookPanel_entryMain {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .LorebookPanel_entryMain strong,
+  .LorebookPanel_entryMain > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .LorebookPanel_entryMain strong {
+    color: #f3eee8;
+    font-size: 0.8125rem;
+    white-space: nowrap;
+  }
+
+  .LorebookPanel_entryMain > span {
+    color: #c5bbb2;
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    white-space: nowrap;
+  }
+
+  .LorebookPanel_entryActions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .LorebookPanel_iconButton,
+  .LorebookPanel_iconButtonDanger {
+    display: grid;
+    width: 40px;
+    height: 40px;
+    align-items: center; justify-content: center;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    color: #998f87;
+    background: transparent;
+    font: inherit;
+    cursor: pointer;
+    transition:
+      color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      background 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .LorebookPanel_iconButton:hover {
+    color: #f3eee8;
+    background: #302c28;
+  }
+
+  .LorebookPanel_iconButtonDanger:hover {
+    color: #f0837d;
+    background: #302c28;
+  }
+
+  .LorebookPanel_picker {
+    position: relative;
+    min-width: 0;
+  }
+
+  .LorebookPanel_pickerTrigger {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    padding: 0 8px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    border: 1px solid #39342f;
+    border-radius: 10px;
+    color: #f3eee8;
+    background: #302c28;
+    font: inherit;
+    font-size: 0.8125rem;
+    cursor: pointer;
+  }
+
+  .LorebookPanel_pickerValue {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .LorebookPanel_pickerChevron {
+    display: grid;
+    flex: none;
+    align-items: center; justify-content: center;
+    color: #998f87;
+  }
+
+  .LorebookPanel_pickerMenu {
+    position: absolute;
+    z-index: 1100;
+    inset: calc(100% + 4px) auto auto 0;
+    display: flex;
+    width: min(18rem, 100%);
+    max-height: 16rem;
+    padding: 4px;
+    flex-direction: column;
+    gap: 4px;
+    overflow-y: auto;
+    border: 1px solid #625a53;
+    border-radius: 16px;
+    background: #302c28;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.26);
+  }
+
+  .LorebookPanel_pickerSearch {
+    display: grid;
+    min-height: 44px;
+    padding: 0 8px;
+    align-items: center;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  .LorebookPanel_pickerSearch input {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    color: inherit;
+    background: transparent;
+    font: inherit;
+  }
+
+  .LorebookPanel_pickerSearch input::placeholder {
+    color: #998f87;
+  }
+
+  .LorebookPanel_pickerOption {
+    display: flex;
+    width: 100%;
+    min-height: 44px;
+    padding: 0 8px;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    color: #c5bbb2;
+    background: transparent;
+    font: inherit;
+    font-size: 0.8125rem;
+    text-align: start;
+    cursor: pointer;
+  }
+
+  .LorebookPanel_pickerOption:hover {
+    color: #f3eee8;
+    background: #24211e;
+  }
+
+  .LorebookPanel_pickerOption[aria-selected='true'] {
+    color: #ffc4a8;
+    background: #492a20;
+  }
+
+  .LorebookPanel_pickerOption span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .LorebookPanel_pickerEmpty {
+    margin: 0;
+    padding: 8px;
+    color: #998f87;
+    font-size: 0.8125rem;
+  }
+
+  .LorebookPanel_dialogGrid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 12px;
+  }
+
+  .LorebookPanel_dialogField textarea {
+    min-height: calc(44px * 2);
+  }
+
+  .LorebookPanel_dialogField textarea.contentField {
+    min-height: calc(52px * 4);
+  }
+
+  .LorebookPanel_checkboxRow {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    color: #c5bbb2;
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    cursor: pointer;
+  }
+
+  .LorebookPanel_dialogActions {
+    justify-content: flex-end;
+    margin-top: 8px;
+  }
+
+  .LorebookPanel_srOnly {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  @container (max-width: 20rem) {
+    .LorebookPanel_scopeControl select {
+      width: 8rem;
+    }
+
+    .LorebookPanel_entryActions .LorebookPanel_iconButton,
+    .LorebookPanel_entryActions .LorebookPanel_iconButtonDanger {
+      display: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .LorebookPanel_bookCard,
+    .LorebookPanel_iconButton,
+    .LorebookPanel_iconButtonDanger {
+      transition: none;
+    }
+  }
+
+
+
+/* components/BackgroundsPanel.module.css -> BackgroundsPanel_* */
+
+
+  .BackgroundsPanel_headerAvatar {
+    display: grid;
+    width: 44px;
+    height: 44px;
+    flex: none;
+    align-items: center; justify-content: center;
+    border: 1px solid #625a53;
+    border-radius: 999px;
+    color: #f3eee8;
+    background: #302c28;
+  }
+
+  .BackgroundsPanel_body {
+    min-height: 0;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .BackgroundsPanel_content {
+    display: flex;
+    padding: 8px 16px 16px;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .BackgroundsPanel_uploadRow {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .BackgroundsPanel_fileInput {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
+  .BackgroundsPanel_uploadHint {
+    min-width: 0;
+    flex: 1;
+    color: #998f87;
+    font-size: 0.8125rem;
+  }
+
+  .BackgroundsPanel_error {
+    margin: 0;
+    color: #f0837d;
+    font-size: 0.8125rem;
+  }
+
+  .BackgroundsPanel_current {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border: 1px solid #39342f;
+    border-radius: 28px;
+    background: #302c28;
+  }
+
+  .BackgroundsPanel_currentLabel {
+    flex: none;
+    color: #c5bbb2;
+    font-size: 0.8125rem;
+  }
+
+  .BackgroundsPanel_currentName {
+    min-width: 0;
+    overflow: hidden;
+    flex: 1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+  }
+
+  .BackgroundsPanel_currentEmpty,
+  .BackgroundsPanel_noChat {
+    flex: 1;
+    margin: 0;
+    color: #998f87;
+    font-size: 0.8125rem;
+  }
+
+  .BackgroundsPanel_grid {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+    gap: 12px;
+    list-style: none;
+  }
+
+  .BackgroundsPanel_card {
+    position: relative;
+    display: flex;
+    min-width: 0;
+    overflow: hidden;
+    flex-direction: column;
+    border: 2px solid transparent;
+    border-radius: 28px;
+    background: #24211e;
+    cursor: pointer;
+    user-select: none;
+    transition:
+      transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .BackgroundsPanel_card:hover {
+    transform: scale(1.02);
+  }
+
+  .BackgroundsPanel_card[data-applied='true'] {
+    border-color: #e38a62;
+  }
+
+  .BackgroundsPanel_preview {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 10;
+    overflow: hidden;
+    background: #302c28;
+  }
+
+  .BackgroundsPanel_preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .BackgroundsPanel_previewFallback {
+    display: grid;
+    width: 100%;
+    height: 100%;
+    align-items: center; justify-content: center;
+    color: #998f87;
+  }
+
+  .BackgroundsPanel_state {
+    display: flex;
+    min-height: 12rem;
+    padding: 24px;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 8px;
+    text-align: center;
+  }
+
+  .BackgroundsPanel_state h3 {
+    margin: 8px 0 0;
+    font-size: 1rem;
+  }
+
+  .BackgroundsPanel_state p {
+    max-width: 32ch;
+    margin: 0;
+    color: #c5bbb2;
+    font-size: 0.8125rem;
+  }
+
+  .BackgroundsPanel_stateIcon {
+    display: grid;
+    width: 48px;
+    height: 48px;
+    align-items: center; justify-content: center;
+    border: 1px solid #39342f;
+    border-radius: 20px;
+    color: #ffc4a8;
+    background: #302c28;
+  }
+
+  .BackgroundsPanel_skeleton {
+    height: 7.5rem;
+    border-radius: 28px;
+    background: rgb(22, 19, 17);
+  }
+
+
+
+/* components/SettingsPanel.module.css -> SettingsPanel_* */
+
+
+  .SettingsPanel_headerAvatar {
+    display: grid;
+    width: 44px;
+    height: 44px;
+    flex: none;
+    align-items: center; justify-content: center;
+    border: 1px solid #625a53;
+    border-radius: 10px;
+    color: #f3eee8;
+    background: #302c28;
+  }
+
+  .SettingsPanel_tabs {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+  }
+
+  .SettingsPanel_tabPanel {
+    min-height: 0;
+    flex: 1;
+    overflow: hidden;
+    padding-top: 0;
+  }
+
+  .SettingsPanel_body {
+    display: flex;
+    padding: 8px 16px 16px;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .SettingsPanel_section {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .SettingsPanel_sectionHeader {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-top: 12px;
+    border-top: 1px solid #39342f;
+  }
+
+  .SettingsPanel_body > .SettingsPanel_section:first-child > .SettingsPanel_sectionHeader {
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .SettingsPanel_sectionHeader h2 {
+    color: #f3eee8;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .SettingsPanel_sectionHeader p {
+    color: #998f87;
+    font-size: 0.8125rem;
+    line-height: 1.45;
+  }
+
+  .SettingsPanel_field {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  .SettingsPanel_fieldLabel {
+    color: #f3eee8;
+    font-size: 0.8125rem;
+    font-weight: 500;
+  }
+
+  .SettingsPanel_fieldHint {
+    color: #998f87;
+    font-size: 0.75rem;
+    line-height: 1.45;
+  }
+
+  .SettingsPanel_rangeHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: #f3eee8;
+    font-size: 0.8125rem;
+    font-weight: 500;
+  }
+
+  .SettingsPanel_rangeValue {
+    color: #998f87;
+    font-size: 0.75rem;
+    font-family: 'JetBrains Mono Variable', 'Cascadia Code', monospace;
+  }
+
+  .SettingsPanel_rangeInput {
+    width: 100%;
+    height: 36px;
+    accent-color: #e38a62;
+    cursor: pointer;
+  }
+
+  .SettingsPanel_field select {
+    width: 100%;
+    min-height: 44px;
+    border: 1px solid #39342f;
+    border-radius: 10px;
+    color: #f3eee8;
+    background: #302c28;
+  }
+
+  .SettingsPanel_installButton {
+    align-self: flex-start;
+  }
+
+  .SettingsPanel_fileInput {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
+  .SettingsPanel_managerLink {
+    align-self: flex-start;
+    min-height: 44px;
+    padding: 0 8px;
+    border-radius: 10px;
+    color: #ffc4a8;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    text-decoration: none;
+  }
+
+  .SettingsPanel_managerLink:hover {
+    background: #492a20;
+  }
+
+  .SettingsPanel_backupActions {
+    padding: 8px 0;
+  }
+
+  .SettingsPanel_backups {
+    margin: 0;
+    padding: 0;
+    border-top: 1px solid #39342f;
+    list-style: none;
+  }
+
+  .SettingsPanel_backupItem {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    min-height: 68px;
+    padding: 8px 12px;
+    border-bottom: 1px solid #39342f;
+  }
+
+  .SettingsPanel_backupItem:last-child {
+    border-bottom: 0;
+  }
+
+  .SettingsPanel_backupIcon {
+    display: grid;
+    width: 34px;
+    height: 34px;
+    align-items: center; justify-content: center;
+    flex: none;
+    border-radius: 10px;
+    color: #ffc4a8;
+    background: #492a20;
+  }
+
+  .SettingsPanel_backupCopy {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+  }
+
+  .SettingsPanel_backupCopy small {
+    margin-top: 4px;
+    color: #998f87;
+    font-size: 0.75rem;
+  }
+
+  .SettingsPanel_createRow {
+    display: flex;
+    gap: 8px;
+  }
+
+  .SettingsPanel_createRow > :first-child {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .SettingsPanel_renameRow {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .SettingsPanel_renameRow > :first-child {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .SettingsPanel_profileInitial {
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .SettingsPanel_secretsMode {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    border: 1px solid #39342f;
+    border-radius: 16px;
+  }
+
+  .SettingsPanel_secretsMode[data-state='unavailable'] {
+    border-color: #f0837d;
+  }
+
+  .SettingsPanel_secretsFlags {
+    display: grid;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .SettingsPanel_secretsFlags li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 0;
+    border-bottom: 1px solid #2b2723;
+    color: #f3eee8;
+    font-size: 0.8125rem;
+  }
+
+  .SettingsPanel_secretsFlags li:last-child {
+    border-bottom: 0;
+  }
+
+  .SettingsPanel_secretsFlags li span {
+    color: #998f87;
+  }
+
+  .SettingsPanel_error,
+  .SettingsPanel_noBackups {
+    margin: 0;
+    color: #f0837d;
+    font-size: 0.8125rem;
+  }
+
+  .SettingsPanel_noBackups {
+    color: #998f87;
+  }
+
+  /* Tool-registry entry supporting copy (М5 slice 43). */
+  .SettingsPanel_hint {
+    margin: 0;
+    color: #c5bbb2;
+    font-size: 0.8125rem;
+  }
+
+  .SettingsPanel_notice {
+    margin: 0;
+    color: #63c98d;
+    font-size: 0.8125rem;
+  }
+
+  .SettingsPanel_activationMeta {
+    display: grid;
+    margin: 0;
+    gap: 4px;
+    font-size: 0.8125rem;
+  }
+
+  .SettingsPanel_activationMetaRow {
+    display: grid;
+    grid-template-columns: minmax(0, 10rem) minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .SettingsPanel_activationMetaRow dt {
+    color: #998f87;
+  }
+
+  .SettingsPanel_activationMetaRow dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: #f3eee8;
+  }
+
+  .SettingsPanel_activationPath {
+    font-family: 'JetBrains Mono Variable', 'Cascadia Code', monospace;
+    font-size: 0.75rem;
+  }
+
+  .SettingsPanel_activationPending {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    padding: 8px 12px;
+    border-radius: 10px;
+    background: #3f2f1a;
+    color: #e0a35c;
+    font-size: 0.8125rem;
+  }
+
+  .SettingsPanel_activationJournalTitle {
+    margin: 0;
+    color: #c5bbb2;
+    font-size: 0.8125rem;
+  }
+
+  .SettingsPanel_activationJournal {
+    display: flex;
+    margin: 0;
+    padding: 0;
+    flex-direction: column;
+    gap: 4px;
+    list-style: none;
+  }
+
+  .SettingsPanel_activationEntry {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    gap: 8px;
+    padding: 8px 12px;
+    border: 1px solid #39342f;
+    border-radius: 10px;
+    font-size: 0.8125rem;
+  }
+
+  .SettingsPanel_activationEntryKind,
+  .SettingsPanel_activationEntryStatus {
+    align-self: start;
+    padding: 0 4px;
+    border-radius: 10px;
+    background: #302c28;
+    color: #c5bbb2;
+    font-size: 0.75rem;
+    text-transform: capitalize;
+  }
+
+  .SettingsPanel_activationEntry[data-status='activation_pending'] .SettingsPanel_activationEntryStatus {
+    background: #3f2f1a;
+    color: #e0a35c;
+  }
+
+  .SettingsPanel_activationEntryTimes {
+    color: #998f87;
+    font-size: 0.75rem;
+  }
+
+  .SettingsPanel_activationEntryError {
+    grid-column: 1 / -1;
+    color: #f0837d;
+    font-size: 0.75rem;
+  }
+
+  .SettingsPanel_activationEntryRoots {
+    grid-column: 1 / -1;
+    overflow-wrap: anywhere;
+    color: #998f87;
+    font-family: 'JetBrains Mono Variable', 'Cascadia Code', monospace;
+    font-size: 0.75rem;
+  }
+
+  .SettingsPanel_signOutRow {
+    display: flex;
+    min-height: 52px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 12px;
+    border: 1px solid #39342f;
+    border-radius: 10px;
+    color: #c5bbb2;
+  }
+
+  @media (max-width: 30rem) {
+    .SettingsPanel_backupItem {
+      grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .SettingsPanel_backupItem [data-component='button'] {
+      grid-column: 1 / -1;
+      width: 100%;
+    }
+  }
+
+
+
+/* components/ChatManagementPanel.module.css -> ChatManagementPanel_* */
+
+
+  .ChatManagementPanel_toolbar {
+    display: flex;
+    padding: 8px 16px;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid #39342f;
+  }
+
+  .ChatManagementPanel_searchControl {
+    display: grid;
+    min-width: 0;
+    min-height: 44px;
+    flex: 1;
+    padding: 0 8px;
+    align-items: center;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 4px;
+    border: 1px solid #39342f;
+    border-radius: 10px;
+    color: #998f87;
+    background: #302c28;
+  }
+
+  .ChatManagementPanel_searchControl:focus-within {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(227, 138, 98, 0.2);
+  }
+
+  .ChatManagementPanel_searchControl input {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    color: #f3eee8;
+    background: transparent;
+    font: inherit;
+  }
+
+  .ChatManagementPanel_searchControl input::placeholder {
+    color: #998f87;
+  }
+
+  .ChatManagementPanel_scroll {
+    min-height: 0;
+    flex: 1;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .ChatManagementPanel_body {
+    display: flex;
+    padding: 8px 16px 16px;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .ChatManagementPanel_newChatAction {
+    display: flex;
+    justify-content: flex-start;
+  }
+
+  .ChatManagementPanel_chatList {
+    display: flex;
+    margin: 0;
+    padding: 0;
+    flex-direction: column;
+    gap: 4px;
+    list-style: none;
+  }
+
+  .ChatManagementPanel_chatRow {
+    display: flex;
+    min-width: 0;
+    min-height: 52px;
+    border: 1px solid #39342f;
+    border-radius: 10px;
+    color: inherit;
+    background: #24211e;
+    cursor: grab;
+    user-select: none;
+    transition:
+      border-color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      background 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .ChatManagementPanel_chatRow:hover {
+    border-color: #625a53;
+    background: #302c28;
+  }
+
+  .ChatManagementPanel_chatRow[data-state='active'] {
+    border-color: #e38a62;
+    background: #492a20;
+  }
+
+  .ChatManagementPanel_chatRow[data-dragging='true'] {
+    opacity: 0.45;
+    cursor: grabbing;
+  }
+
+  .ChatManagementPanel_chatLink {
+    display: grid;
+    min-width: 0;
+    flex: 1;
+    padding: 8px;
+    align-items: center;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 8px;
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .ChatManagementPanel_chatAvatar {
+    display: grid;
+    width: 44px;
+    height: 44px;
+    flex: none;
+    align-items: center;
+    justify-items: center;
+    border: 1px solid #625a53;
+    border-radius: 10px;
+    color: #f3eee8;
+    background: #302c28;
+  }
+
+  .ChatManagementPanel_chatCopy {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .ChatManagementPanel_chatCopy strong,
+  .ChatManagementPanel_chatCopy > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .ChatManagementPanel_chatCopy strong {
+    color: #f3eee8;
+    font-size: 0.8125rem;
+    font-weight: 650;
+  }
+
+  .ChatManagementPanel_chatCopy > span {
+    color: #c5bbb2;
+    font-size: 0.75rem;
+  }
+
+  .ChatManagementPanel_characterLabel {
+    color: #ffc4a8;
+    font-size: 0.75rem;
+  }
+
+  .ChatManagementPanel_chatCopy .ChatManagementPanel_originBadge {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    padding: 0 8px;
+    border: 1px solid rgb(93, 61, 45);
+    border-radius: 999px;
+    color: #e38a62;
+    background: #492a20;
+    font-size: 0.75rem;
+    line-height: 1.6;
+  }
+
+  .ChatManagementPanel_loadMore {
+    align-self: center;
+  }
+
+  .ChatManagementPanel_emptyState {
+    display: flex;
+    min-height: 12rem;
+    padding: 16px;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 8px;
+    color: #c5bbb2;
+    text-align: center;
+  }
+
+  .ChatManagementPanel_emptyState p {
+    max-width: 30rem;
+    margin: 0;
+    color: #998f87;
+    font-size: 0.8125rem;
+    line-height: 1.45;
+  }
+
+  .ChatManagementPanel_panelSkeleton {
+    display: grid;
+    gap: 8px;
+  }
+
+  .ChatManagementPanel_panelSkeleton span {
+    min-height: calc(52px + 8px);
+    border-radius: 10px;
+    background: #302c28;
+  }
+
+  .ChatManagementPanel_error {
+    margin: 0;
+    padding: 4px 12px;
+    border-top: 1px solid #39342f;
+    color: #f0837d;
+    font-size: 0.75rem;
+    line-height: 1.45;
+  }
+
+  .ChatManagementPanel_dialogActions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .ChatManagementPanel_srOnly {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+
+
+/* components/PluginPanels.module.css -> PluginPanels_* */
+
+
+  .PluginPanels_settings,
+  .PluginPanels_sidebar {
+    border: 1px solid #39342f;
+    border-radius: 16px;
+    background: #24211e;
+  }
+
+  .PluginPanels_settings {
+    padding: 24px;
+  }
+
+  .PluginPanels_sidebar {
+    padding: 12px;
+  }
+
+  .PluginPanels_tabs {
+    margin-top: 12px;
+  }
+
+  .PluginPanels_host {
+    height: calc(52px * 7);
+    margin-top: 12px;
+    border-radius: 10px;
+    overflow: hidden;
+    padding-top: 0;
+  }
+
+  /* The sandbox frame is positioned over the anchor div; the anchor is empty
+     by design, so it must inherit the sized tab content. */
+  .PluginPanels_host > [data-part='sandbox-host'] {
+    height: 100%;
+  }
+
+  .PluginPanels_sidebar .PluginPanels_host {
+    height: calc(52px * 5);
+  }
+
+
+
+/* components/ai-settings/AiSettings.module.css -> AiSettings_* */
+
+
+  .AiSettings_headerAvatar {
+    display: grid;
+    width: 44px;
+    height: 44px;
+    flex: none;
+    align-items: center; justify-content: center;
+    border: 1px solid #625a53;
+    border-radius: 10px;
+    color: #f3eee8;
+    background: #302c28;
+  }
+
+  .AiSettings_tabs {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+  }
+
+  .AiSettings_tabPanel {
+    min-height: 0;
+    flex: 1;
+    overflow: hidden;
+    padding-top: 0;
+  }
+
+  .AiSettings_tabBody,
+  .AiSettings_providerEditor,
+  .AiSettings_generationEditor,
+  .AiSettings_templateEditor {
+    container-type: inline-size;
+    display: grid;
+    gap: 12px;
+    color: #f3eee8;
+  }
+
+  .AiSettings_providerEditor {
+    container-name: provider-settings;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .AiSettings_providerFormGrid {
+    align-items: start;
+  }
+
+  .AiSettings_tabBody {
+    padding: 8px 16px 16px;
+  }
+
+  /* Tabs use the shared segmented Tabs primitive (@neotavern/ui, DUP-23); only the
+     generic button treatment for other inline icon actions stays local. */
+  .AiSettings_iconActions button,
+  .AiSettings_keyStatus button,
+  .AiSettings_textAction {
+    min-height: 44px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    color: #c5bbb2;
+    background: transparent;
+    font: inherit;
+    cursor: pointer;
+    transition:
+      color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      background 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .AiSettings_iconActions button:hover,
+  .AiSettings_keyStatus button:hover,
+  .AiSettings_textAction:hover {
+    color: #f3eee8;
+    background: #302c28;
+  }
+
+  .AiSettings_editorToolbar,
+  .AiSettings_actionRow,
+  .AiSettings_keyStatus,
+  .AiSettings_privacyHint,
+  .AiSettings_connectionStatus,
+  .AiSettings_presetToolbar,
+  .AiSettings_nameEditor,
+  .AiSettings_checkboxField {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Selector toolbars (generation preset, provider profile, prompt/chat
+     templates): a stacked layout at every width — label above the select,
+     the select spanning the full row, and the icon group on its own line
+     below, compact and pinned left. One shared rule keeps every toolbar
+     identical and stops the select from sitting left of the icons. */
+  .AiSettings_editorToolbar,
+  .AiSettings_presetToolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .AiSettings_editorToolbar > .AiSettings_field > span,
+  .AiSettings_presetToolbar > .AiSettings_field > span {
+    white-space: nowrap;
+  }
+
+  .AiSettings_editorToolbar > .AiSettings_iconActions,
+  .AiSettings_presetToolbar > .AiSettings_iconActions {
+    align-self: flex-start;
+  }
+
+  .AiSettings_iconActions {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .AiSettings_iconActions button {
+    display: grid;
+    flex: 0 0 auto;
+    min-width: 44px;
+    padding: 0;
+    align-items: center; justify-content: center;
+  }
+
+  .AiSettings_iconActions button:disabled,
+  .AiSettings_tabs button:disabled,
+  .AiSettings_textAction:disabled {
+    color: #998f87;
+    cursor: not-allowed;
+  }
+
+  .AiSettings_formGrid,
+  .AiSettings_controlGrid,
+  .AiSettings_testArea,
+  .AiSettings_pluginSummary {
+    display: grid;
+    gap: 8px;
+  }
+
+  .AiSettings_field {
+    display: grid;
+    min-width: 0;
+    gap: 4px;
+    color: #c5bbb2;
+    font-size: 0.8125rem;
+  }
+
+  .AiSettings_field > span,
+  .AiSettings_field > strong {
+    color: #f3eee8;
+    font-weight: 600;
+  }
+
+  .AiSettings_field input,
+  .AiSettings_field select,
+  .AiSettings_field textarea,
+  .AiSettings_nameEditor input {
+    width: 100%;
+    min-height: 44px;
+    padding-left: 8px; padding-right: 8px;
+    border: 1px solid #625a53;
+    border-radius: 10px;
+    color: #f3eee8;
+    background: #302c28;
+    font: inherit;
+  }
+
+  .AiSettings_field textarea {
+    min-height: calc(44px * 2);
+    padding-top: 8px; padding-bottom: 8px;
+    resize: vertical;
+  }
+
+  .AiSettings_field small,
+  .AiSettings_fieldHint,
+  .AiSettings_privacyHint,
+  .AiSettings_unsupportedHint,
+  .AiSettings_unlockHint {
+    color: #998f87;
+    font-size: 0.75rem;
+    line-height: 1.45;
+  }
+
+  .AiSettings_fieldGroup {
+    display: grid;
+    min-width: 0;
+    gap: 4px;
+  }
+
+  .AiSettings_modelRow,
+  .AiSettings_apiKeyRow,
+  .AiSettings_toolbarControlRow {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .AiSettings_modelRow > input,
+  .AiSettings_apiKeyRow > select,
+  .AiSettings_toolbarControlRow > input,
+  .AiSettings_toolbarControlRow > select {
+    min-width: 0;
+    flex: 1 1 auto;
+    width: auto;
+  }
+
+  .AiSettings_toolbarControlRow > .AiSettings_iconActions,
+  .AiSettings_toolbarControlRow > :not(input):not(select):not(.AiSettings_iconActions):not(.AiSettings_manageKeyButton) {
+    flex: 0 0 auto;
+  }
+
+  .AiSettings_toolbarControlRow > .AiSettings_manageKeyButton {
+    flex: none;
+    width: 44px;
+    min-width: 44px;
+    max-width: 44px;
+    height: 44px;
+  }
+
+  /* Default shell panel (~380px) stays single-column. Two columns only after the
+     user widens the panel past the documented shell max comfortable pair width. */
+  @container provider-settings (min-width: 28rem) {
+    .AiSettings_providerFormGrid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .AiSettings_providerFormGrid > .AiSettings_formFieldFull {
+      grid-column: 1 / -1;
+    }
+  }
+
+  .AiSettings_manageKeyButton {
+    display: grid;
+    flex: none;
+    box-sizing: border-box;
+    padding: 0;
+    border: 1px solid #625a53;
+    border-radius: 10px;
+    color: #c5bbb2;
+    background: #302c28;
+    align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+
+  .AiSettings_manageKeyButton:hover:not(:disabled) {
+    color: #f3eee8;
+    background: #24211e;
+  }
+
+  .AiSettings_manageKeyButton:disabled {
+    color: #998f87;
+    cursor: not-allowed;
+  }
+
+  .AiSettings_field input:disabled,
+  .AiSettings_field select:disabled,
+  .AiSettings_field textarea:disabled {
+    color: #998f87;
+    cursor: not-allowed;
+  }
+
+  .AiSettings_checkboxField {
+    min-height: 44px;
+    color: #c5bbb2;
+    font-size: 0.8125rem;
+  }
+
+  .AiSettings_unlockRow {
+    display: grid;
+    gap: 4px;
+  }
+
+  .AiSettings_keyStatus {
+    justify-content: space-between;
+    color: #998f87;
+    font-size: 0.75rem;
+  }
+
+  .AiSettings_keyStatus span[data-state='stored'] {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: #63c98d;
+  }
+
+  .AiSettings_keyStatusActions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .AiSettings_keyStatus button,
+  .AiSettings_textAction {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-height: auto;
+    padding: 4px;
+    color: #f0a07d;
+    font-size: 0.75rem;
+  }
+
+  .AiSettings_pluginSummary,
+  .AiSettings_testResult {
+    padding: 8px;
+    border: 1px solid #39342f;
+    border-radius: 16px;
+    background: #24211e;
+  }
+
+  .AiSettings_pluginSummary pre,
+  .AiSettings_testResult {
+    margin: 0;
+    color: #c5bbb2;
+    font-family: 'JetBrains Mono Variable', 'Cascadia Code', monospace;
+    font-size: 0.75rem;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
+
+  .AiSettings_testResult {
+    display: block;
+  }
+
+  .AiSettings_actionRow {
+    flex-wrap: wrap;
+  }
+
+  .AiSettings_connectionStatus {
+    margin-left: auto;
+    color: #998f87;
+    font-size: 0.75rem;
+  }
+
+  .AiSettings_connectionStatus[data-state='ready'] {
+    color: #63c98d;
+  }
+
+  .AiSettings_connectionStatus[data-state='error'] {
+    color: #f0837d;
+  }
+
+  .AiSettings_inlineError {
+    margin: 0;
+    padding: 8px;
+    border: 1px solid #f0837d;
+    color: #f0837d;
+    background: rgb(39, 28, 26);
+    font-size: 0.8125rem;
+  }
+
+  .AiSettings_privacyHint {
+    margin: 0;
+  }
+
+  .AiSettings_sectionHeading {
+    display: grid;
+    gap: 4px;
+  }
+
+  .AiSettings_sectionHeading h2,
+  .AiSettings_sectionHeading strong,
+  .AiSettings_sectionHeading p {
+    margin: 0;
+  }
+
+  .AiSettings_sectionHeading p,
+  .AiSettings_sectionHeading span {
+    color: #998f87;
+    font-size: 0.8125rem;
+  }
+
+  .AiSettings_rangeField {
+    display: grid;
+    gap: 4px;
+    padding-top: 4px; padding-bottom: 4px;
+  }
+
+  .AiSettings_rangeHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .AiSettings_rangeHeader > span:first-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  /* Editable value box (replaces the read-only output): type a number
+     directly, the slider follows; blur/Enter clamps to min/max/step. */
+  .AiSettings_rangeValue {
+    flex: 0 0 auto;
+    width: 6.5rem;
+    min-height: 44px;
+    padding-left: 8px; padding-right: 8px;
+    border: 1px solid #625a53;
+    border-radius: 10px;
+    color: #f3eee8;
+    background: #302c28;
+    font-family: 'JetBrains Mono Variable', 'Cascadia Code', monospace;
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  .AiSettings_rangeValue:disabled {
+    color: #998f87;
+    cursor: not-allowed;
+  }
+
+  .AiSettings_rangeField input[type='range'] {
+    width: 100%;
+    accent-color: #e38a62;
+  }
+
+  .AiSettings_rangeField[data-state='unsupported'] {
+    color: #998f87;
+    filter: grayscale(1);
+  }
+
+  .AiSettings_nameEditor {
+    align-items: end;
+    padding: 8px;
+    border: 1px solid #39342f;
+    border-radius: 16px;
+    background: #24211e;
+  }
+
+  .AiSettings_nameEditor .AiSettings_field {
+    flex: 1;
+  }
+
+  .AiSettings_templateFields {
+    display: grid;
+    gap: 8px;
+  }
+
+  .AiSettings_modeSwitch {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 4px;
+    margin: 0;
+    padding: 8px;
+    border: 1px solid #39342f;
+    border-radius: 10px;
+    background: #24211e;
+  }
+
+  .AiSettings_modeSwitchLabel {
+    position: absolute;
+    top: 0;
+    left: 8px;
+    padding-left: 4px; padding-right: 4px;
+    color: #998f87;
+    font-size: 0.75rem;
+    line-height: 1;
+    background: #24211e;
+    translate: 0 -50%;
+  }
+
+  .AiSettings_modeSwitch label {
+    display: flex;
+    flex-wrap: nowrap;
+    box-sizing: border-box;
+    min-width: 0;
+    width: 100%;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding-top: 4px; padding-bottom: 4px;
+    padding-left: 8px; padding-right: 8px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    color: #c5bbb2;
+    background: transparent;
+    cursor: pointer;
+    transition:
+      color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      background 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .AiSettings_modeSwitch label:hover {
+    color: #f3eee8;
+    background: #302c28;
+  }
+
+  .AiSettings_modeSwitch label span {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: calc(100% - 1em - 4px);
+    line-height: 1.45;
+    text-align: center;
+    overflow-wrap: anywhere;
+  }
+
+  .AiSettings_modeSwitch label[data-state='active'] {
+    color: #ffc4a8;
+    background: #492a20;
+    font-weight: 600;
+  }
+
+  .AiSettings_modeSwitch label[data-state='active']:hover {
+    color: #ffc4a8;
+    background: #492a20;
+  }
+
+  .AiSettings_modeSwitch input {
+    flex-shrink: 0;
+    accent-color: #e38a62;
+  }
+
+  .AiSettings_promptManagerHeader,
+  .AiSettings_promptManagerFooter {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .AiSettings_promptManagerHeader {
+    min-width: 0;
+    flex-wrap: wrap;
+    padding-left: 4px; padding-right: 4px;
+    color: #c5bbb2;
+    font-size: 0.8125rem;
+  }
+
+  .AiSettings_promptManagerHeader strong {
+    color: #f3eee8;
+  }
+
+  .AiSettings_promptManagerHeader output,
+  .AiSettings_promptTokens {
+    font-family: 'JetBrains Mono Variable', 'Cascadia Code', monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .AiSettings_promptManagerHeader output {
+    flex: 0 0 auto;
+    color: #f3eee8;
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .AiSettings_promptTable {
+    min-width: 0;
+    padding: 4px;
+    border: 1px solid #39342f;
+    border-radius: 10px;
+    background: #1b1917;
+  }
+
+  .AiSettings_promptTableHead {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 52px;
+    gap: 8px;
+    padding: 4px 8px 8px;
+    border-bottom: 1px solid #39342f;
+    color: #c5bbb2;
+    font-size: 0.8125rem;
+  }
+
+  .AiSettings_promptTableHead span:last-child {
+    text-align: end;
+  }
+
+  .AiSettings_promptTableHead span:nth-child(2) {
+    display: none;
+  }
+
+  .AiSettings_promptBlockList {
+    display: grid;
+    gap: 4px;
+    margin: 4px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .AiSettings_promptBlock {
+    position: relative;
+    display: grid;
+    grid-template-columns:
+      auto auto minmax(0, 1fr) auto
+      52px;
+    min-height: 44px;
+    align-items: center;
+    gap: calc(4px / 2);
+    padding: calc(4px / 2) 4px;
+    border: 1px solid #39342f;
+    border-radius: calc(10px / 2);
+    background: #24211e;
+    transition:
+      border-color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      background 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .AiSettings_promptBlock:hover,
+  .AiSettings_promptBlock:focus-within {
+    border-color: #625a53;
+    background: #302c28;
+  }
+
+  .AiSettings_promptBlock:active {
+    transform: translateY(1px);
+  }
+
+  .AiSettings_promptBlock[data-dragging='true'] {
+    border-color: #e38a62;
+    background: #492a20;
+    opacity: 0.78;
+    transform: scale(0.99);
+  }
+
+  .AiSettings_promptBlock[data-state='disabled'] {
+    color: #998f87;
+    background: #1b1917;
+  }
+
+  .AiSettings_promptBlock[data-state='disabled'] .AiSettings_promptName,
+  .AiSettings_promptBlock[data-state='disabled'] .AiSettings_promptKindIcon {
+    color: #998f87;
+  }
+
+  .AiSettings_dragHandle {
+    display: grid;
+    width: calc(44px * 0.42);
+    height: calc(44px * 0.68);
+    padding: 0;
+    border: 0;
+    border-radius: calc(10px / 2);
+    color: #998f87;
+    background: transparent;
+    cursor: grab;
+    align-items: center; justify-content: center;
+    touch-action: none;
+  }
+
+  .AiSettings_dragHandle:active {
+    cursor: grabbing;
+  }
+
+  .AiSettings_dragHandle:disabled {
+    color: #c5bbb2;
+    cursor: default;
+    opacity: 0.75;
+    touch-action: auto;
+  }
+
+  .AiSettings_promptName {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 4px;
+    color: #f3eee8;
+    font-size: 0.8125rem;
+  }
+
+  .AiSettings_promptName > button {
+    min-width: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    color: inherit;
+    background: transparent;
+    font: inherit;
+    text-align: start;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .AiSettings_promptName > button:hover {
+    text-decoration: underline;
+  }
+
+  .AiSettings_promptName small {
+    flex: 0 0 auto;
+    color: #998f87;
+    font-family: 'JetBrains Mono Variable', 'Cascadia Code', monospace;
+    font-size: 0.75rem;
+  }
+
+  .AiSettings_promptKindIcon {
+    flex: 0 0 auto;
+    color: #c5bbb2;
+  }
+
+  .AiSettings_promptBlock[data-kind='custom'] .AiSettings_promptKindIcon {
+    color: #e38a62;
+  }
+
+  .AiSettings_promptRowControls,
+  .AiSettings_keyboardMoveActions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: calc(4px / 2);
+  }
+
+  .AiSettings_promptToggle,
+  .AiSettings_promptRowControls button,
+  .AiSettings_keyboardMoveActions button {
+    display: grid;
+    width: calc(44px * 0.64);
+    height: calc(44px * 0.64);
+    padding: 0;
+    border: 0;
+    border-radius: calc(10px / 2);
+    color: #998f87;
+    background: transparent;
+    align-items: center; justify-content: center;
+    cursor: pointer;
+    transition:
+      color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      background 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .AiSettings_promptToggle:hover,
+  .AiSettings_promptRowControls button:hover,
+  .AiSettings_keyboardMoveActions button:hover {
+    color: #f3eee8;
+    background: rgb(25, 23, 21);
+  }
+
+  .AiSettings_promptToggle:active,
+  .AiSettings_promptRowControls button:active,
+  .AiSettings_keyboardMoveActions button:active {
+    transform: scale(0.96);
+  }
+
+  .AiSettings_promptToggle[aria-pressed='true'] {
+    color: #e38a62;
+  }
+
+  .AiSettings_promptToggle:disabled,
+  .AiSettings_promptRowControls button:disabled,
+  .AiSettings_keyboardMoveActions button:disabled {
+    color: #998f87;
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  .AiSettings_promptTokens {
+    color: #f3eee8;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    text-align: end;
+  }
+
+  .AiSettings_promptTokens[data-state='dynamic'] {
+    color: #c5bbb2;
+    font-weight: 500;
+  }
+
+  .AiSettings_keyboardMoveActions {
+    position: absolute;
+    top: 50%;
+    right: calc(52px + 8px);
+    padding-left: 4px; padding-right: 4px;
+    background: #302c28;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-50%);
+    transition: opacity 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .AiSettings_keyboardMoveActions:focus-within {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .AiSettings_promptManagerFooter {
+    justify-content: flex-end;
+  }
+
+  .AiSettings_visuallyHidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    border: 0;
+    white-space: nowrap;
+  }
+
+  @container (min-width: 36rem) {
+    .AiSettings_formGrid:not(.AiSettings_providerFormGrid),
+    .AiSettings_controlGrid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .AiSettings_pluginSummary,
+    .AiSettings_testArea,
+    .AiSettings_actionRow,
+    .AiSettings_inlineError,
+    .AiSettings_privacyHint {
+      grid-column: 1 / -1;
+    }
+  }
+
+  @container (max-width: 28rem) {
+    .AiSettings_keyboardMoveActions {
+      right: 52px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .AiSettings_tabs button,
+    .AiSettings_modeSwitch label,
+    .AiSettings_iconActions button,
+    .AiSettings_keyStatus button,
+    .AiSettings_textAction,
+    .AiSettings_promptBlock,
+    .AiSettings_promptToggle,
+    .AiSettings_promptRowControls button,
+    .AiSettings_keyboardMoveActions,
+    .AiSettings_keyboardMoveActions button {
+      transition: none;
+    }
+  }
+
+  @media (pointer: coarse) {
+    .AiSettings_dragHandle,
+    .AiSettings_promptToggle,
+    .AiSettings_promptRowControls button,
+    .AiSettings_keyboardMoveActions button {
+      width: 44px;
+      height: 44px;
+    }
+
+    .AiSettings_keyboardMoveActions:not(:focus-within) {
+      opacity: 0;
+      pointer-events: none;
+    }
+  }
+
+
+
+  /* Memory settings editor (ТЗ §4.4, Этап 4 slice 3) */
+  .AiSettings_inlineHint {
+    color: #c5bbb2;
+    font-size: 0.8125rem;
+  }
+
+  .AiSettings_memoryList {
+    display: grid;
+    gap: 8px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .AiSettings_memoryCard {
+    display: grid;
+    gap: 8px;
+    padding: 8px;
+    border: 1px solid #2b2723;
+    border-radius: 10px;
+    background: #24211e;
+  }
+
+  .AiSettings_memoryCard[data-state='disabled'] {
+    opacity: 0.65;
+  }
+
+  .AiSettings_memoryCardHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .AiSettings_memoryMeta {
+    color: #c5bbb2;
+    font-size: 0.8125rem;
+  }
+
+  .AiSettings_memoryContent {
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .AiSettings_memoryCreate {
+    display: grid;
+    gap: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #2b2723;
+  }
+
+  .AiSettings_memoryTextarea {
+    min-height: calc(44px * 2);
+    resize: vertical;
+  }
+
+
+
+/* pages/PluginsPage.module.css -> PluginsPage_* */
+
+
+  .PluginsPage_page {
+    height: 100%;
+    overflow-y: auto;
+    padding-bottom: var(--nt-inset-bottom);
+  }
+
+  .PluginsPage_header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 32px;
+    border-bottom: 1px solid #39342f;
+  }
+
+  .PluginsPage_header > div > span {
+    color: #ffc4a8;
+    font-size: 0.8125rem;
+    font-weight: 650;
+  }
+
+  .PluginsPage_header h1 {
+    margin-top: 4px;
+    font-size: 2.125rem;
+    line-height: 1.1;
+  }
+
+  .PluginsPage_header p {
+    max-width: 66ch;
+    margin-top: 8px;
+    color: #c5bbb2;
+  }
+
+  .PluginsPage_fileInput {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .PluginsPage_security,
+  .PluginsPage_safeBanner {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    width: min(calc(100% - 2 * 32px), 1180px);
+    margin: 16px auto 0;
+    padding: 12px 16px;
+    border: 1px solid #39342f;
+    border-radius: 16px;
+    background: #24211e;
+  }
+
+  .PluginsPage_security {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .PluginsPage_security > svg,
+  .PluginsPage_safeBanner > svg {
+    color: #ffc4a8;
+    font-size: 1.75rem;
+  }
+
+  .PluginsPage_security p,
+  .PluginsPage_safeBanner p {
+    margin-top: 4px;
+    color: #c5bbb2;
+    font-size: 0.8125rem;
+  }
+
+  .PluginsPage_safeBanner[data-state='active'] {
+    border-color: #e0a35c;
+    background: rgb(51, 43, 35);
+  }
+
+  .PluginsPage_gitInstall {
+    width: min(calc(100% - 2 * 32px), 1180px);
+    margin: 16px auto 0;
+    padding: 12px 16px 16px;
+    border: 1px solid #39342f;
+    border-radius: 16px;
+    background: #24211e;
+  }
+
+  .PluginsPage_gitInstallHeading {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .PluginsPage_gitInstallHeading > svg {
+    flex: none;
+    margin-top: 4px;
+    color: #ffc4a8;
+    font-size: 1.75rem;
+  }
+
+  .PluginsPage_gitInstallHeading p {
+    margin-top: 4px;
+    color: #c5bbb2;
+    font-size: 0.8125rem;
+  }
+
+  .PluginsPage_gitInstallFields {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 12px;
+    margin-top: 12px;
+  }
+
+  .PluginsPage_notice,
+  .PluginsPage_error {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: min(calc(100% - 2 * 32px), 1180px);
+    margin: 12px auto 0;
+    padding: 8px 12px;
+    border-radius: 10px;
+    font-size: 0.8125rem;
+  }
+
+  .PluginsPage_notice {
+    color: #63c98d;
+    background: rgb(29, 37, 29);
+  }
+
+  .PluginsPage_error {
+    color: #f0837d;
+    background: rgb(43, 30, 28);
+  }
+
+  .PluginsPage_runtimeNote {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: min(calc(100% - 2 * 32px), 1180px);
+    margin: 12px auto 0;
+    color: #c5bbb2;
+    font-size: 0.8125rem;
+  }
+
+  .PluginsPage_runtimeNote > svg {
+    flex: none;
+    color: #63c98d;
+  }
+
+  .PluginsPage_runtimeNote[data-state='unavailable'] > svg {
+    color: #e0a35c;
+  }
+
+  .PluginsPage_content {
+    width: min(100%, 1180px);
+    margin: 0 auto;
+    padding: 32px;
+  }
+
+  .PluginsPage_sectionHeading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  .PluginsPage_sectionHeading h2 {
+    font-size: 1.25rem;
+  }
+
+  .PluginsPage_sectionHeading p {
+    margin-top: 4px;
+    color: #c5bbb2;
+    font-size: 0.8125rem;
+  }
+
+  .PluginsPage_sectionHeading > span {
+    min-width: 30px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    color: #ffc4a8;
+    background: #492a20;
+    text-align: center;
+    font-size: 0.8125rem;
+    font-weight: 650;
+  }
+
+  .PluginsPage_list {
+    display: grid;
+    gap: 16px;
+  }
+
+  /* Base skin from the shared card primitive (`.PluginsPage_st-card`, DUP-24). */
+  .PluginsPage_card {
+    overflow: hidden;
+  }
+
+  .PluginsPage_card[data-state='active'] {
+    border-color: #63c98d;
+  }
+
+  .PluginsPage_card[data-state='error'] {
+    border-color: #f0837d;
+  }
+
+  .PluginsPage_cardHeader {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .PluginsPage_pluginIcon {
+    display: grid;
+    width: 48px;
+    height: 48px;
+    align-items: center; justify-content: center;
+    border-radius: 10px;
+    color: #ffc4a8;
+    background: #492a20;
+    font-size: 1.75rem;
+  }
+
+  .PluginsPage_identity {
+    display: flex;
+    min-width: 0;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .PluginsPage_identity p {
+    margin-top: 4px;
+    overflow: hidden;
+    color: #998f87;
+    font-family: 'JetBrains Mono Variable', 'Cascadia Code', monospace;
+    font-size: 0.75rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .PluginsPage_identity > span,
+  .PluginsPage_status {
+    flex: none;
+    color: #c5bbb2;
+    font-size: 0.8125rem;
+  }
+
+  .PluginsPage_cardMeta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: none;
+  }
+
+  .PluginsPage_sourceBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    color: #ffc4a8;
+    background: #492a20;
+    font-size: 0.8125rem;
+  }
+
+  .PluginsPage_sourceBadge[data-source='zip'] {
+    color: #c5bbb2;
+    background: #302c28;
+  }
+
+  .PluginsPage_status {
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: #302c28;
+  }
+
+  .PluginsPage_legacyWarning {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 0 16px;
+    padding: 12px;
+    border: 1px solid rgb(132, 102, 67);
+    border-radius: 10px;
+    color: #f3eee8;
+    background: rgb(51, 43, 35);
+  }
+
+  .PluginsPage_legacyWarning > svg {
+    flex: none;
+    color: #e0a35c;
+  }
+
+  .PluginsPage_legacyWarning p {
+    margin-top: 4px;
+    color: #c5bbb2;
+    font-size: 0.8125rem;
+  }
+
+  .PluginsPage_depsWarning {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 0 16px;
+    padding: 12px;
+    border: 1px solid rgb(132, 102, 67);
+    border-radius: 10px;
+    color: #f3eee8;
+    background: rgb(51, 43, 35);
+  }
+
+  .PluginsPage_depsWarning > svg {
+    flex: none;
+    color: #e0a35c;
+  }
+
+  .PluginsPage_depsWarning p {
+    margin-top: 4px;
+    color: #c5bbb2;
+    font-size: 0.8125rem;
+  }
+
+  .PluginsPage_depsList {
+    margin-top: 8px;
+  }
+
+  .PluginsPage_depsList summary {
+    cursor: pointer;
+    color: #f3eee8;
+    font-size: 0.8125rem;
+    font-weight: 650;
+  }
+
+  .PluginsPage_depsList ul {
+    display: grid;
+    gap: 4px;
+    margin-top: 8px;
+    padding: 8px 12px;
+    border: 1px solid #39342f;
+    border-radius: 10px;
+    background: #24211e;
+    list-style: none;
+  }
+
+  .PluginsPage_depsList li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .PluginsPage_depsList code {
+    font-family: 'JetBrains Mono Variable', 'Cascadia Code', monospace;
+    font-size: 0.8125rem;
+  }
+
+  .PluginsPage_depsList li > span {
+    color: #c5bbb2;
+    font-size: 0.8125rem;
+  }
+
+  .PluginsPage_depsHint {
+    margin-top: 8px;
+  }
+
+  .PluginsPage_permissions {
+    margin: 0 16px;
+    padding: 12px;
+    border: 1px solid #39342f;
+    border-radius: 10px;
+  }
+
+  .PluginsPage_permissions legend {
+    padding: 0 4px;
+    font-weight: 650;
+  }
+
+  .PluginsPage_permissions > p {
+    margin-bottom: 8px;
+    color: #c5bbb2;
+    font-size: 0.8125rem;
+  }
+
+  .PluginsPage_permissions label {
+    display: flex;
+    min-height: 44px;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .PluginsPage_permissions label > span {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .PluginsPage_permissions code {
+    color: #f3eee8;
+    font-family: 'JetBrains Mono Variable', 'Cascadia Code', monospace;
+    font-size: 0.8125rem;
+  }
+
+  .PluginsPage_permissions strong {
+    padding: 4px 8px;
+    border-radius: 999px;
+    color: #e0a35c;
+    background: rgb(41, 33, 24);
+    font-size: 0.8125rem;
+  }
+
+  .PluginsPage_noPermissions {
+    margin: 0 16px;
+    color: #c5bbb2;
+    font-size: 0.8125rem;
+  }
+
+  .PluginsPage_actions {
+    padding: 16px;
+  }
+
+  .PluginsPage_empty {
+    display: flex;
+    min-height: 260px;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+    border: 1px dashed #625a53;
+    border-radius: 16px;
+    flex-direction: column;
+    text-align: center;
+    color: #ffc4a8;
+  }
+
+  .PluginsPage_empty h3 {
+    margin-top: 12px;
+    color: #f3eee8;
+  }
+
+  .PluginsPage_empty p {
+    max-width: 44ch;
+    margin: 8px 0 16px;
+    color: #c5bbb2;
+  }
+
+  @media (max-width: 760px) {
+    .PluginsPage_header {
+      align-items: stretch;
+      padding: 24px 16px;
+      flex-direction: column;
+    }
+
+    .PluginsPage_header > [data-component='button'] {
+      width: 100%;
+    }
+
+    .PluginsPage_security,
+    .PluginsPage_safeBanner,
+    .PluginsPage_gitInstall,
+    .PluginsPage_notice,
+    .PluginsPage_error {
+      width: calc(100% - 2 * 16px);
+    }
+
+    .PluginsPage_gitInstallFields {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .PluginsPage_gitInstallFields > [data-component='button'] {
+      justify-self: stretch;
+    }
+
+    .PluginsPage_cardMeta {
+      grid-column: 2;
+      justify-self: start;
+    }
+
+    .PluginsPage_safeBanner {
+      grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .PluginsPage_safeBanner > [data-component='button'] {
+      grid-column: 1 / -1;
+    }
+
+    .PluginsPage_content {
+      padding: 24px 16px 96px;
+    }
+
+    .PluginsPage_cardHeader {
+      grid-template-columns: auto minmax(0, 1fr);
+    }
+  }
+
+
+
+/* components/MessageMarkdown.module.css -> MessageMarkdown_* */
+
+
+  .MessageMarkdown_root {
+    color: inherit;
+    word-break: break-word;
+    line-height: inherit;
+  }
+
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown {
+    display: flow-root;
+  }
+
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown > :first-child {
+    margin-top: 0;
+  }
+
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown > :last-child {
+    margin-bottom: 0;
+  }
+
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown h1,
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown h2,
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown h3,
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown h4,
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown h5,
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown h6 {
+    margin: 12px 0 8px;
+    color: #f3eee8;
+    font-weight: 700;
+    line-height: 1.25;
+  }
+
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown p,
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown ul,
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown ol {
+    margin: 0 0 8px;
+  }
+
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown p:last-child,
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown ul:last-child,
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown ol:last-child {
+    margin-bottom: 0;
+  }
+
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown li + li {
+    margin-top: 4px;
+  }
+
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown blockquote {
+    margin: 0 0 8px;
+    padding-left: 12px;
+    border-left: 2px solid #e8943a;
+    color: #c5bbb2;
+    background: rgb(36, 33, 30);
+  }
+
+  /* ST1: "dialogue" → <q>, colored via Quote token (default amber/yellow). */
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown q,
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown [data-part='message-quote'] {
+    color: #e8943a;
+  }
+
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown q::before,
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown q::after {
+    content: '';
+  }
+
+  /* Nested emphasis inside dialogue keeps quote color (ST1). */
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown q em,
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown q i,
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown [data-part='message-quote'] em,
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown [data-part='message-quote'] i {
+    color: inherit;
+  }
+
+  /* ST1: *...* / em → emphasis color. */
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown em,
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown i,
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown [data-part='message-emphasis'] {
+    color: #919191;
+    font-style: italic;
+  }
+
+  /* ST1: **...** → bold. */
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown strong,
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown [data-part='message-strong'] {
+    color: inherit;
+    font-weight: 700;
+  }
+
+  /* ST1: `...` → highlighted code. */
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown code,
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown [data-part='message-code'] {
+    padding: 0.1em 0.35em;
+    border-radius: 10px;
+    color: #c5bbb2;
+    font-family: 'JetBrains Mono Variable', 'Cascadia Code', monospace;
+    font-size: 0.92em;
+    background: #302c28;
+  }
+
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown pre {
+    overflow-x: auto;
+    margin: 0 0 8px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    white-space: pre-wrap;
+    background: #302c28;
+  }
+
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown pre code {
+    padding: 0;
+    background: transparent;
+  }
+
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown a,
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown [data-part='message-link'] {
+    color: #f0a07d;
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+  }
+
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown img,
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown [data-part='message-image'] {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 8px 0;
+    border-radius: 16px;
+  }
+
+  .MessageMarkdown_root > .MessageMarkdown_chat-message-markdown hr {
+    margin: 12px 0;
+    border: 0;
+    border-top: 1px solid #39342f;
+  }
+
+  .MessageMarkdown_root[data-state='streaming'] > .MessageMarkdown_chat-message-markdown::after {
+    content: '';
+    display: inline-block;
+    width: 0.45em;
+    height: 1em;
+    margin-left: 0.12em;
+    vertical-align: text-bottom;
+    background: currentColor;
+    opacity: 0.75;
+    animation: streamCursor 1400ms steps(1, end) infinite;
+  }
+
+  @keyframes streamCursor {
+    50% {
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .MessageMarkdown_root[data-state='streaming'] > .MessageMarkdown_chat-message-markdown::after {
+      animation: none;
+      opacity: 0.55;
+    }
+  }
+
+
+
 /* Beat Blitz DEFAULT_CSS (body margin, grey buttons, white inputs, hidden options). */
 html, body, #main, #root {
   margin: 0;
@@ -4941,7 +8337,14 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
 }
 .AppShell_skipLink,
 .Sidebar_railLabel,
-.CharacterManagementPanel_srOnly {
+.CharacterManagementPanel_srOnly,
+.PersonasPanel_srOnly,
+.LorebookPanel_srOnly,
+.BackgroundsPanel_srOnly,
+.SettingsPanel_srOnly,
+.ChatManagementPanel_srOnly,
+.AiSettings_srOnly,
+.PluginsPage_srOnly {
   display: none;
   width: 0;
   height: 0;
@@ -5026,11 +8429,12 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   align-self: center;
 }
 .CharacterManagementPanel_cardAvatar {
-  width: 52px;
-  height: 52px;
-  max-width: 52px;
-  max-height: 52px;
+  width: 48px;
+  height: 48px;
+  max-width: 48px;
+  max-height: 48px;
   aspect-ratio: auto;
+  box-sizing: border-box;
   grid-column: auto;
   align-self: start;
 }
@@ -5204,7 +8608,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   inset: auto;
   z-index: 2;
   width: auto;
-  margin: 8px 16px max(32px, var(--nt-inset-bottom));
+  margin: 8px 16px 8px;
   padding: 4px;
   align-items: center;
   border: 1px solid #39342f;
@@ -5315,7 +8719,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   min-width: 0;
   min-height: 0;
   height: auto;
-  max-height: 140px;
+  max-height: 80px;
   padding: 8px;
   flex: none;
   align-self: flex-start;
@@ -5325,6 +8729,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 8px;
   overflow: hidden;
+  box-sizing: border-box;
   border: 1px solid #39342f;
   border-radius: 16px;
   color: #f3eee8;

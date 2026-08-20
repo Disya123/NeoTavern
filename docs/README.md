@@ -29,12 +29,15 @@ Index of the internal documentation. Each major topic has its own folder.
 - [Legacy UI surface](architecture/ui-legacy-surface.md) — baseline inventory of `/api/v2`/`legacyRaw` in production UI (ARC-02/ARC-03).
 - [Operations inventory](architecture/operations-inventory.md) — current `/api/v2` surface, feature ownership/routing.
 - [Product Wire Contracts](architecture/wire-contracts.md) — canonical contracts, codegen, handshake, corpus.
-- [Presentation boundary](architecture/presentation-boundary.md) — Milestone A **PASS**; Milestone B **PASS**; live Product Wire chat route (Milestone C STARTED, core chat journey batch PASS, native TalkBack DEFERRED_BY_OWNER / WEBVIEW_FALLBACK, cutover STARTED/CANARY, canary_batch NOT_RUN, not RFC C PASS); WebView rollback.
+- [Presentation boundary](architecture/presentation-boundary.md) — Milestone A **PASS**; Milestone B **PASS**; live Product Wire chat route (Milestone C STARTED, core chat journey batch PASS, native TalkBack DEFERRED_BY_OWNER / WEBVIEW_FALLBACK, cutover STARTED/CANARY, canary_batch PASS, not RFC C PASS); [ADR-0052](adr/0052-webview-removal.md) cutover contract; [ADR-0053](adr/0053-android-120hz-release-budget.md) 120 Hz budget; [ADR-0054](adr/0054-plugin-visual-surface-contained.md) plugin WebSurface.
 - [ADR-0051](adr/0051-android-talkback-webview-fallback.md) — native Dioxus TalkBack deferred; TalkBack/touch exploration selects WebView before a Rust host.
+- [ADR-0052](adr/0052-webview-removal.md) — production no-WebView cutover contract (Proposed until owner-signed PARITY).
+- [ADR-0053](adr/0053-android-120hz-release-budget.md) — calibrated 120 Hz `input-to-present` budget (p99 ≤ 12 ms).
+- [ADR-0054](adr/0054-plugin-visual-surface-contained.md) — plugin frontend CONTAINED in WebSurface; not a Dioxus rewrite.
 - [Milestone C physical runbook](rfc/milestone-c-physical-runbook.md) — Xiaomi journey batch PASS; FAILED_ATTEMPT preserved; harness stamp is not canary.
 - [Milestone C guarded canary](rfc/milestone-c-canary.md) — `MainActivity` selector STARTED/CANARY; physical canary batch PASS; not RFC C PASS.
 - [Known baseline failures](architecture/known-baseline-failures.md) — `KNOWN_BASELINE_FAILURE` fingerprints; not a green full baseline; not a B PASS waiver.
-- [PresentationCompatibilityMatrix](rfc/presentation-compatibility-matrix.md) — baseline after D1/D2 GO; ADR-0051 TalkBack `DEFERRED_BY_OWNER` / `WEBVIEW_FALLBACK` (not cutover).
+- [PresentationCompatibilityMatrix](rfc/presentation-compatibility-matrix.md) — signed migration target after D1/D2 GO; ADR-0051 TalkBack `DEFERRED_BY_OWNER` / `WEBVIEW_FALLBACK`; plugin slots `CONTAINED (WebSurface)` (ADR-0054); PARITY rows gated on owner signature.
 - [Generation durability](architecture/generation-durability.md) — Phase 6 recoverable generation workflows, state machine, SSE resume.
 - [Generation run/steps and the tool-call loop](architecture/generation-run-steps.md) — M2 / Этап 2.7: durable step journal, `waiting_for_tool`, tool registry and loop guard (ТЗ §8.3).
 - [Providers](architecture/providers.md) — Phase 7 provider contract, built-in adapters, secrets, conformance.

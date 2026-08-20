@@ -1,6 +1,8 @@
 use contracts_generated::generated::{
-    CharacterDto, ChatDto, GenerationEvent, MessageDraftDto, MessageDto, MessageRole,
-    PagedCharacters, PagedChats, PagedMessages,
+    CharacterDto, ChatDto, GenerationEvent, LorebookDto, MessageDraftDto, MessageDto, MessageRole,
+    PagedCharacters, PagedChats, PagedMessages, PersonaDto, PluginsItem, ResultListLorebooks,
+    ResultListPersonas, ResultListPresets, ResultListProviders, ResultPluginsList, ResultSettings,
+    SettingsItem,
 };
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -27,6 +29,10 @@ pub struct FakeWire {
     chats: HashMap<String, ChatDto>,
     messages: HashMap<String, Vec<MessageDto>>,
     drafts: HashMap<String, MessageDraftDto>,
+    personas: HashMap<String, PersonaDto>,
+    lorebooks: HashMap<String, LorebookDto>,
+    plugins: Vec<PluginsItem>,
+    settings: Vec<SettingsItem>,
     streams: HashMap<String, VecDeque<StreamFrame>>,
     cursors: HashMap<String, CursorCut>,
     fail_ops: HashSet<String>,
@@ -40,6 +46,21 @@ impl Default for FakeWire {
             chats: HashMap::new(),
             messages: HashMap::new(),
             drafts: HashMap::new(),
+            personas: HashMap::new(),
+            lorebooks: HashMap::new(),
+            plugins: Vec::new(),
+            settings: vec![
+                SettingsItem {
+                    key: "language".into(),
+                    value: json!({ "value": "en" }),
+                    updated_at: TS.into(),
+                },
+                SettingsItem {
+                    key: "active-persona-id".into(),
+                    value: json!({ "value": DEMO_PERSONA_ID }),
+                    updated_at: TS.into(),
+                },
+            ],
             streams: HashMap::new(),
             cursors: HashMap::new(),
             fail_ops: HashSet::new(),
@@ -56,6 +77,7 @@ impl FakeWire {
     pub fn demo() -> Self {
         let mut wire = Self::default();
         wire.insert_character(demo_character());
+        wire.insert_persona(demo_persona());
         wire.insert_chat(demo_chat(2));
         wire.push_message(user_message(DEMO_CHAT_ID, 0, "Hello there"));
         wire.push_message(assistant_message(
@@ -71,12 +93,14 @@ impl FakeWire {
     pub fn character_catalog() -> Self {
         let mut wire = Self::default();
         wire.insert_character(demo_character());
+        wire.insert_persona(demo_persona());
         wire
     }
 
     pub fn with_message_count(count: u32) -> Self {
         let mut wire = Self::default();
         wire.insert_character(demo_character());
+        wire.insert_persona(demo_persona());
         wire.insert_chat(demo_chat(i64::from(count)));
         for index in 0..count {
             let content = if index.is_multiple_of(5) {
@@ -116,6 +140,10 @@ impl FakeWire {
 
     fn insert_chat(&mut self, chat: ChatDto) {
         self.chats.insert(chat.id.clone(), chat);
+    }
+
+    fn insert_persona(&mut self, persona: PersonaDto) {
+        self.personas.insert(persona.id.clone(), persona);
     }
 
     fn push_message(&mut self, message: MessageDto) {
@@ -429,20 +457,28 @@ impl FakeWire {
             .unwrap_or(-1)
             + 1;
         let final_message = assistant_message(&chat_id, sequence, &reply, Some(run_id.clone()));
+        let first: String = reply.chars().take(6).collect();
+        let rest: String = reply.chars().skip(6).collect();
         let mut frames = VecDeque::new();
-        frames.push_back(StreamFrame::Event(Box::new(
+        frames.push_back(StreamFrame::from_sequenced(
+            0,
             GenerationEvent::GenerationDelta {
-                text: reply.chars().take(6).collect(),
+                text: first.clone(),
             },
-        )));
-        frames.push_back(StreamFrame::Event(Box::new(
-            GenerationEvent::GenerationDelta {
-                text: reply.chars().skip(6).collect(),
-            },
-        )));
-        frames.push_back(StreamFrame::Event(Box::new(
+        ));
+        // Replay of envelope sequence 0 must not double-append.
+        frames.push_back(StreamFrame::from_sequenced(
+            0,
+            GenerationEvent::GenerationDelta { text: first },
+        ));
+        frames.push_back(StreamFrame::from_sequenced(
+            1,
+            GenerationEvent::GenerationDelta { text: rest },
+        ));
+        frames.push_back(StreamFrame::from_sequenced(
+            2,
             GenerationEvent::GenerationCompleted { final_message },
-        )));
+        ));
         frames.push_back(StreamFrame::Terminal);
         self.streams.insert(run_id.clone(), frames);
         Ok(run_id)
@@ -551,6 +587,110 @@ impl ProductWire for FakeWire {
                 self.ok_call(operation_id, discarded)
             }
             "generation.cancel" => self.ok_call(operation_id, json!({})),
+            "personas.list" => {
+                let mut items: Vec<PersonaDto> = self.personas.values().cloned().collect();
+                items.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+                self.wrap_call(operation_id, to_value(&ResultListPersonas { items }))
+            }
+            "personas.create" => {
+                let name = payload
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .unwrap_or("New persona")
+                    .to_string();
+                let created = PersonaDto {
+                    id: self.alloc_id(),
+                    name,
+                    description: payload
+                        .get("description")
+                        .and_then(Value::as_str)
+                        .map(str::to_string),
+                    avatar: None,
+                    is_default: payload
+                        .get("isDefault")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(self.personas.is_empty()),
+                    created_at: TS.into(),
+                    updated_at: TS.into(),
+                };
+                self.insert_persona(created.clone());
+                self.wrap_call(operation_id, to_value(&created))
+            }
+            "personas.update" => {
+                let persona_id = payload_str(&payload, "personaId")?;
+                let mut persona =
+                    self.personas.get(&persona_id).cloned().ok_or_else(|| {
+                        Self::product("PERSONA_NOT_FOUND", "personaId", &persona_id)
+                    })?;
+                if let Some(name) = payload.get("name").and_then(Value::as_str) {
+                    persona.name = name.to_string();
+                }
+                if let Some(description) = payload.get("description").and_then(Value::as_str) {
+                    persona.description = Some(description.to_string());
+                }
+                persona.updated_at = TS.into();
+                self.insert_persona(persona.clone());
+                self.wrap_call(operation_id, to_value(&persona))
+            }
+            "personas.delete" => {
+                let persona_id = payload_str(&payload, "personaId")?;
+                self.personas.remove(&persona_id);
+                self.ok_call(operation_id, json!({}))
+            }
+            "lorebooks.list" => {
+                let mut items: Vec<LorebookDto> = self.lorebooks.values().cloned().collect();
+                items.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+                self.wrap_call(operation_id, to_value(&ResultListLorebooks { items }))
+            }
+            "lorebooks.create" => {
+                let name = payload
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .unwrap_or("New lorebook")
+                    .to_string();
+                let created = LorebookDto {
+                    id: self.alloc_id(),
+                    name,
+                    description: payload
+                        .get("description")
+                        .and_then(Value::as_str)
+                        .map(str::to_string),
+                    entry_count: 0,
+                    character_id: payload
+                        .get("characterId")
+                        .and_then(Value::as_str)
+                        .map(str::to_string),
+                    created_at: TS.into(),
+                    updated_at: TS.into(),
+                };
+                self.lorebooks.insert(created.id.clone(), created.clone());
+                self.wrap_call(operation_id, to_value(&created))
+            }
+            "lorebooks.delete" => {
+                let lorebook_id = payload_str(&payload, "lorebookId")?;
+                self.lorebooks.remove(&lorebook_id);
+                self.ok_call(operation_id, json!({}))
+            }
+            "plugins.list" => self.wrap_call(
+                operation_id,
+                to_value(&ResultPluginsList {
+                    items: self.plugins.clone(),
+                }),
+            ),
+            "providers.list" => self.wrap_call(
+                operation_id,
+                to_value(&ResultListProviders { items: Vec::new() }),
+            ),
+            "presets.list" => self.wrap_call(
+                operation_id,
+                to_value(&ResultListPresets { items: Vec::new() }),
+            ),
+            "settings.get" => self.wrap_call(
+                operation_id,
+                to_value(&ResultSettings {
+                    items: self.settings.clone(),
+                }),
+            ),
             other => Err(ChatRouteError::UnknownCommand(other.to_string())),
         }
     }
@@ -580,7 +720,7 @@ impl ProductWire for FakeWire {
             return Ok(StreamFrame::Timeout);
         };
         let frame = frames.pop_front().unwrap_or(StreamFrame::Timeout);
-        if let StreamFrame::Event(event) = &frame {
+        if let StreamFrame::Event { event, .. } = &frame {
             if let GenerationEvent::GenerationCompleted { final_message } = event.as_ref() {
                 if !self
                     .messages
@@ -602,9 +742,10 @@ impl ProductWire for FakeWire {
     fn cancel_stream(&mut self, handle: &str) -> Result<(), ChatRouteError> {
         if let Some(frames) = self.streams.get_mut(handle) {
             frames.clear();
-            frames.push_back(StreamFrame::Event(Box::new(
+            frames.push_back(StreamFrame::from_sequenced(
+                i64::MAX,
                 GenerationEvent::GenerationCancelled,
-            )));
+            ));
             frames.push_back(StreamFrame::Terminal);
         }
         Ok(())
@@ -663,6 +804,18 @@ fn demo_character() -> CharacterDto {
             "streetwise".into(),
         ],
         profile_id: None,
+        created_at: TS.into(),
+        updated_at: TS.into(),
+    }
+}
+
+fn demo_persona() -> PersonaDto {
+    PersonaDto {
+        id: DEMO_PERSONA_ID.into(),
+        name: "You".into(),
+        description: Some("The user.".into()),
+        avatar: None,
+        is_default: true,
         created_at: TS.into(),
         updated_at: TS.into(),
     }

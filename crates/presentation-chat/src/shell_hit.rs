@@ -55,6 +55,8 @@ pub enum ShellAction {
     SetView(String),
     CycleSort,
     SelectCharacter(String),
+    SelectPersona(String),
+    SelectLorebook(String),
     OpenCreate,
     CloseCreate,
     ConfirmCreate,
@@ -90,8 +92,13 @@ fn css_size(view: &ProductShellView) -> (f32, f32) {
 
 fn panel_origin(view: &ProductShellView) -> (f32, f32) {
     let (width, _) = css_size(view);
-    let panel_w = PANEL_WIDTH.min((width - RAIL_WIDTH).max(0.0));
-    (RAIL_WIDTH, panel_w)
+    let is_compact = width <= 600.0;
+    if is_compact {
+        (RAIL_WIDTH, (width - RAIL_WIDTH).max(0.0))
+    } else {
+        let panel_w = PANEL_WIDTH.min((width - RAIL_WIDTH).max(0.0));
+        (RAIL_WIDTH, panel_w)
+    }
 }
 
 fn chrome_top(view: &ProductShellView) -> f32 {
@@ -154,6 +161,22 @@ fn dialog_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
 }
 
 fn rail_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
+    let (width, height) = css_size(view);
+    let is_compact = width <= 600.0;
+    if is_compact && !view.sidebar_open {
+        // Mobile bottom navigation bar hit testing
+        let bottom_pad = chrome_bottom(view);
+        let nav_top = height - 56.0 - bottom_pad;
+        if y >= nav_top && y <= height {
+            let nav_panels = ["home", "characters", "personas", "lorebooks", "settings"];
+            let item_w = width / nav_panels.len() as f32;
+            let idx = (x / item_w).floor() as usize;
+            let panel = nav_panels[idx.min(nav_panels.len() - 1)];
+            return Some(ShellHit::Action(ShellAction::SetPanel(panel.into())));
+        }
+        return None;
+    }
+
     if x < 0.0 || x >= RAIL_WIDTH {
         return None;
     }
@@ -165,16 +188,13 @@ fn rail_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
     if y < menu_bottom {
         return Some(ShellHit::Action(ShellAction::ToggleRail));
     }
-    if !view.rail_expanded && css_size(view).0 > 600.0 {
-        return Some(ShellHit::Absorb);
-    }
     let mut cursor = menu_bottom + SPACE_SM + SPACE_XS;
     for panel in RAIL_PANELS {
         let bottom = cursor + CONTROL_SM + SPACE_XS;
         if y >= cursor && y < bottom {
             return Some(ShellHit::Action(ShellAction::SetPanel((*panel).into())));
         }
-        cursor = bottom;
+        cursor = bottom + SPACE_XS;
     }
     Some(ShellHit::Absorb)
 }
@@ -195,10 +215,8 @@ fn character_manager_hit(view: &ProductShellView, x: f32, y: f32) -> Option<Shel
         }
         return Some(ShellHit::Absorb);
     }
-    let (_, height) = css_size(view);
-    let tab_margin = chrome_bottom(view);
-    let tabs_bottom = height - tab_margin;
-    let tabs_top = tabs_bottom - CONTROL;
+    let tabs_top = header_end + SPACE_XS;
+    let tabs_bottom = tabs_top + CONTROL_SM + SPACE_XS;
     let tabs_x0 = panel_x + SPACE_LG;
     let tabs_x1 = x1 - SPACE_LG;
     if y >= tabs_top && y < tabs_bottom && x >= tabs_x0 && x < tabs_x1 {
@@ -210,7 +228,7 @@ fn character_manager_hit(view: &ProductShellView, x: f32, y: f32) -> Option<Shel
         }
         return Some(ShellHit::Action(ShellAction::SetTab(tab.into())));
     }
-    let content_top = header_end;
+    let content_top = tabs_bottom + SPACE_XS;
     match view.tab.as_str() {
         "cards" => cards_hit(view, panel_x, panel_w, x1, content_top, x, y),
         "edit" | "advanced" | "gallery" => editor_hit(view, panel_x, x1, content_top, x, y),
@@ -338,32 +356,143 @@ fn editor_hit(
 
 /// Hit-test CSS-pixel coordinates against the current shell view.
 pub fn hit_test(view: &ProductShellView, css_x: f32, css_y: f32) -> Option<ShellHit> {
-    if let Some(hit) = dialog_hit(view, css_x, css_y) {
+    let (width, _) = css_size(view);
+    let x = if view.dir == "rtl" {
+        (width - css_x).max(0.0)
+    } else {
+        css_x
+    };
+    let y = css_y;
+    if let Some(hit) = dialog_hit(view, x, y) {
         return Some(hit);
     }
-    if let Some(hit) = rail_hit(view, css_x, css_y) {
+    if let Some(hit) = rail_hit(view, x, y) {
         return Some(hit);
     }
     if view.sidebar_open && view.panel == "characters" {
-        if let Some(hit) = character_manager_hit(view, css_x, css_y) {
+        if let Some(hit) = character_manager_hit(view, x, y) {
+            return Some(hit);
+        }
+    } else if view.sidebar_open && view.panel == "personas" {
+        if let Some(hit) = personas_hit(view, x, y) {
+            return Some(hit);
+        }
+    } else if view.sidebar_open && view.panel == "lorebooks" {
+        if let Some(hit) = lorebooks_hit(view, x, y) {
             return Some(hit);
         }
     } else if view.sidebar_open {
         let (panel_x, panel_w) = panel_origin(view);
-        if contains(
-            css_x,
-            css_y,
-            panel_x,
-            0.0,
-            panel_x + panel_w,
-            css_size(view).1,
-        ) {
+        if contains(x, y, panel_x, 0.0, panel_x + panel_w, css_size(view).1) {
             let header_end = header_bottom(view);
-            if css_y < header_end && css_x >= panel_x + panel_w - CONTROL_SM - SPACE_LG {
+            if y < header_end && x >= panel_x + panel_w - CONTROL_SM - SPACE_LG {
                 return Some(ShellHit::Action(ShellAction::ClosePanel));
             }
             return Some(ShellHit::Absorb);
         }
     }
     None
+}
+
+fn personas_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
+    list_panel_hit(
+        view,
+        x,
+        y,
+        &["cards", "edit"],
+        view.persona_tab.as_str(),
+        view.selected_persona_id.is_some(),
+        view.personas.iter().map(|item| item.id.as_str()),
+        |id| ShellAction::SelectPersona(id.into()),
+    )
+}
+
+fn lorebooks_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
+    list_panel_hit(
+        view,
+        x,
+        y,
+        &["books", "book", "entries"],
+        view.lorebook_tab.as_str(),
+        view.selected_lorebook_id.is_some(),
+        view.lorebooks.iter().map(|item| item.id.as_str()),
+        |id| ShellAction::SelectLorebook(id.into()),
+    )
+}
+
+fn list_panel_hit<'a, I, F>(
+    view: &ProductShellView,
+    x: f32,
+    y: f32,
+    tabs: &[&str],
+    active_tab: &str,
+    can_edit: bool,
+    ids: I,
+    select: F,
+) -> Option<ShellHit>
+where
+    I: IntoIterator<Item = &'a str>,
+    F: Fn(&str) -> ShellAction,
+{
+    if !view.sidebar_open {
+        return None;
+    }
+    let (panel_x, panel_w) = panel_origin(view);
+    let x1 = panel_x + panel_w;
+    if x < panel_x || x >= x1 {
+        return None;
+    }
+    let header_end = header_bottom(view);
+    if y < header_end {
+        if x >= x1 - CONTROL_SM - SPACE_LG {
+            return Some(ShellHit::Action(ShellAction::ClosePanel));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    let mut content_top = header_end;
+    if !tabs.is_empty() {
+        let tabs_top = header_end + SPACE_XS;
+        let tabs_bottom = tabs_top + CONTROL_SM + SPACE_XS;
+        let tabs_x0 = panel_x + SPACE_LG;
+        let tabs_x1 = x1 - SPACE_LG;
+        if y >= tabs_top && y < tabs_bottom && x >= tabs_x0 && x < tabs_x1 {
+            let span = (tabs_x1 - tabs_x0).max(1.0);
+            let idx = (((x - tabs_x0) / span) * tabs.len() as f32).floor() as usize;
+            let tab = tabs[idx.min(tabs.len() - 1)];
+            if tab != tabs[0] && !can_edit {
+                return Some(ShellHit::Absorb);
+            }
+            return Some(ShellHit::Action(ShellAction::SetTab(tab.into())));
+        }
+        content_top = tabs_bottom + SPACE_XS;
+    }
+    let pad = SPACE_LG;
+    let inner_x0 = panel_x + pad;
+    let toolbar_top = content_top + SPACE_SM;
+    let toolbar_bottom = toolbar_top + CONTROL;
+    if active_tab == tabs[0]
+        && contains(x, y, inner_x0, toolbar_top, inner_x0 + 88.0, toolbar_bottom)
+    {
+        return Some(ShellHit::Action(ShellAction::OpenCreate));
+    }
+    if active_tab != tabs[0] && y < content_top + CONTROL + SPACE_SM {
+        if x < panel_x + SPACE_LG + 140.0 {
+            return Some(ShellHit::Action(ShellAction::BackToCards));
+        }
+        if x >= x1 - CONTROL_SM - SPACE_LG {
+            return Some(ShellHit::Action(ShellAction::OpenDelete));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    if active_tab == tabs[0] {
+        let mut cursor = toolbar_bottom + CONTROL + SPACE_MD;
+        for id in ids {
+            let bottom = cursor + CONTROL_LG + SPACE_SM;
+            if y >= cursor && y < bottom {
+                return Some(ShellHit::Action(select(id)));
+            }
+            cursor = bottom;
+        }
+    }
+    Some(ShellHit::Absorb)
 }

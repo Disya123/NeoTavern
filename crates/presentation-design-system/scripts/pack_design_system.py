@@ -12,7 +12,8 @@ from fontTools.ttLib.woff2 import decompress
 ROOT = Path(__file__).resolve().parents[3]
 WEB_NM = ROOT / "apps" / "web" / "node_modules"
 UI = ROOT / "packages" / "ui" / "src" / "styles"
-WEB_COMP = ROOT / "apps" / "web" / "src" / "components"
+WEB_SRC = ROOT / "apps" / "web" / "src"
+WEB_COMP = WEB_SRC / "components"
 OUT = Path(__file__).resolve().parents[1] / "generated"
 PHOSPHOR = WEB_NM / "@phosphor-icons" / "react" / "dist" / "defs"
 
@@ -43,14 +44,30 @@ ICONS = [
     "DownloadSimple",
     "Image",
     "Copy",
+    "Crown",
+    "User",
+    "Lock",
+    "PencilSimple",
+    "ShieldCheck",
+    "WarningCircle",
 ]
 
+# (directory under apps/web/src, module filename)
 MODULES = (
-    "AppShell.module.css",
-    "Sidebar.module.css",
-    "SidebarPanelHeader.module.css",
-    "FloatingTabPanel.module.css",
-    "CharacterManagementPanel.module.css",
+    ("components", "AppShell.module.css"),
+    ("components", "Sidebar.module.css"),
+    ("components", "SidebarPanelHeader.module.css"),
+    ("components", "FloatingTabPanel.module.css"),
+    ("components", "CharacterManagementPanel.module.css"),
+    ("components", "PersonasPanel.module.css"),
+    ("components", "LorebookPanel.module.css"),
+    ("components", "BackgroundsPanel.module.css"),
+    ("components", "SettingsPanel.module.css"),
+    ("components", "ChatManagementPanel.module.css"),
+    ("components", "PluginPanels.module.css"),
+    ("components/ai-settings", "AiSettings.module.css"),
+    ("pages", "PluginsPage.module.css"),
+    ("components", "MessageMarkdown.module.css"),
 )
 
 BLITZ_NEUTRALIZE = """
@@ -207,7 +224,14 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
 }
 .AppShell_skipLink,
 .Sidebar_railLabel,
-.CharacterManagementPanel_srOnly {
+.CharacterManagementPanel_srOnly,
+.PersonasPanel_srOnly,
+.LorebookPanel_srOnly,
+.BackgroundsPanel_srOnly,
+.SettingsPanel_srOnly,
+.ChatManagementPanel_srOnly,
+.AiSettings_srOnly,
+.PluginsPage_srOnly {
   display: none;
   width: 0;
   height: 0;
@@ -292,11 +316,12 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   align-self: center;
 }
 .CharacterManagementPanel_cardAvatar {
-  width: 52px;
-  height: 52px;
-  max-width: 52px;
-  max-height: 52px;
+  width: 48px;
+  height: 48px;
+  max-width: 48px;
+  max-height: 48px;
   aspect-ratio: auto;
+  box-sizing: border-box;
   grid-column: auto;
   align-self: start;
 }
@@ -591,6 +616,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 8px;
   overflow: hidden;
+  box-sizing: border-box;
   border: 1px solid #39342f;
   border-radius: 16px;
   color: #f3eee8;
@@ -1036,8 +1062,39 @@ LOGICAL_PROPS = [
 def expand_axis_shorthand(css: str, name: str, start: str, end: str) -> str:
     pattern = re.compile(rf"{re.escape(name)}\s*:\s*([^;]+);")
 
+    def split_top_level(value: str) -> list[str]:
+        parts: list[str] = []
+        current: list[str] = []
+        depth = 0
+        i = 0
+        while i < len(value):
+            ch = value[i]
+            if ch == "(":
+                depth += 1
+                current.append(ch)
+            elif ch == ")":
+                depth = max(0, depth - 1)
+                current.append(ch)
+            elif ch.isspace() and depth == 0:
+                if current:
+                    token = "".join(current).strip()
+                    if token:
+                        parts.append(token)
+                    current = []
+                # skip consecutive whitespace
+                while i + 1 < len(value) and value[i + 1].isspace():
+                    i += 1
+            else:
+                current.append(ch)
+            i += 1
+        if current:
+            token = "".join(current).strip()
+            if token:
+                parts.append(token)
+        return parts
+
     def repl(match: re.Match[str]) -> str:
-        parts = [part.strip() for part in match.group(1).split() if part.strip()]
+        parts = split_top_level(match.group(1))
         if not parts:
             return match.group(0)
         first = parts[0]
@@ -1213,7 +1270,7 @@ pub fn phosphor_path(name: &str) -> Option<&'static str> {
 
 def pack_css() -> None:
     parts = [
-        "/* Packed from packages/ui + Character Manager/App Shell CSS modules. */",
+        "/* Packed from packages/ui + App Shell / panel CSS modules (React golden). */",
         BLITZ_NEUTRALIZE,
         DARK_ROOT,
         strip_layer(read_css(UI / "tokens.css")),
@@ -1223,13 +1280,13 @@ def pack_css() -> None:
         strip_layer(read_css(UI / "components.css")),
         strip_layer(read_css(WEB_COMP.parent / "styles" / "preferences.css")),
     ]
-    for name in MODULES:
-        stem = name.split(".", 1)[0]
+    for folder, name in MODULES:
+        stem = Path(name).name.split(".", 1)[0]
         css = prefix_classes(
-            flatten_composes(unglobal(strip_layer(read_css(WEB_COMP / name)))),
+            flatten_composes(unglobal(strip_layer(read_css(WEB_SRC / folder / name)))),
             stem,
         )
-        parts.append(f"/* {name} -> {stem}_* */")
+        parts.append(f"/* {folder}/{name} -> {stem}_* */")
         parts.append(css)
     sheet = resolve_color_mix("\n\n".join(parts))
     tokens = collect_root_tokens(sheet)

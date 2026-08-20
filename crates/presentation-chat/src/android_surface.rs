@@ -8,8 +8,8 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::vello_diag::{
-    classify_samples, encoding_line, format_error_scopes, resolution_ladder, scene_with_tile_origin,
-    tile_origins, SampleClass, UI_BASE_COLOR, UI_BASE_RGBA,
+    classify_samples, encoding_line, format_error_scopes, resolution_ladder,
+    scene_with_tile_origin, tile_origins, SampleClass, UI_BASE_COLOR, UI_BASE_RGBA,
 };
 use crate::vello_gpu::{
     adapter_sort_key, coarse_bin_count, create_storage_convert_pipeline, gpu_storage_to_sampled,
@@ -105,7 +105,7 @@ fn trace(msg: &str) {
     }
 }
 
-struct GpuSurface {
+pub(crate) struct GpuSurface {
     device: wgpu::Device,
     queue: wgpu::Queue,
     surface: wgpu::Surface<'static>,
@@ -132,7 +132,7 @@ struct GpuSurface {
     shader_bounds: bool,
     tile: Option<(u32, u32)>,
     device_epoch: u64,
-    avatars: AvatarGpu,
+    pub(crate) avatars: AvatarGpu,
 }
 
 unsafe impl Send for GpuSurface {}
@@ -144,8 +144,8 @@ struct PendingUi {
     hit: ShellHit,
 }
 
-struct GpuHost {
-    gpu: GpuSurface,
+pub(crate) struct GpuHost {
+    pub(crate) gpu: GpuSurface,
     compositor: Option<ChatCompositor>,
     recovery: GpuRecovery,
     shared: SharedGpuContext,
@@ -165,7 +165,7 @@ struct GpuHost {
 
 unsafe impl Send for GpuHost {}
 
-static HOST: Mutex<Option<GpuHost>> = Mutex::new(None);
+pub(crate) static HOST: Mutex<Option<GpuHost>> = Mutex::new(None);
 static DIRTY: AtomicBool = AtomicBool::new(true);
 static AVATAR_OVERLAY: AtomicBool = AtomicBool::new(false);
 static COMPOSITE_LOGGED: AtomicU64 = AtomicU64::new(0);
@@ -280,7 +280,7 @@ fn open_gpu(
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
         format: plan.format,
-            usage: plan.sampled_usages | wgpu::TextureUsages::COPY_SRC,
+        usage: plan.sampled_usages | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
     });
     let resolve_view = resolve.create_view(&wgpu::TextureViewDescriptor::default());
@@ -487,7 +487,12 @@ fn alloc_fresh_targets(
     gpu: &GpuSurface,
     width: u32,
     height: u32,
-) -> (wgpu::Texture, wgpu::Texture, wgpu::TextureView, wgpu::TextureView) {
+) -> (
+    wgpu::Texture,
+    wgpu::Texture,
+    wgpu::TextureView,
+    wgpu::TextureView,
+) {
     let size = wgpu::Extent3d {
         width: width.max(1),
         height: height.max(1),
@@ -520,7 +525,12 @@ fn alloc_fresh_targets(
 
 fn copy_sampled_to_resolve(gpu: &GpuSurface, sampled: &wgpu::Texture, width: u32, height: u32) {
     if width != gpu.config.width || height != gpu.config.height {
-        clear_view_color(&gpu.device, &gpu.queue, &gpu.resolve_view, ui_base_clear_color());
+        clear_view_color(
+            &gpu.device,
+            &gpu.queue,
+            &gpu.resolve_view,
+            ui_base_clear_color(),
+        );
     }
     let mut encoder = gpu
         .device
@@ -684,10 +694,7 @@ fn raster_fresh(
     if present && render_ok {
         copy_sampled_to_resolve(gpu, &sampled, width, height);
     }
-    Ok(RasterReport {
-        class,
-        samples,
-    })
+    Ok(RasterReport { class, samples })
 }
 
 fn raster_tiled(
@@ -1316,8 +1323,8 @@ fn run_gpu_diagnostics(
         false,
         true,
     )?;
-    let oob = checked.class == SampleClass::PathsWrote
-        && unchecked.class != SampleClass::PathsWrote;
+    let oob =
+        checked.class == SampleClass::PathsWrote && unchecked.class != SampleClass::PathsWrote;
     if oob {
         trace("vello_gpu oob_regression=1 shader_bounds_checked_wrote_ui=1 (no WGSL patch)");
         recreate_renderer(gpu, true)?;
@@ -1379,8 +1386,8 @@ fn run_gpu_diagnostics(
         .paint(VelloFilter::full())
         .map(|(_, _, diag)| diag.ops)
         .unwrap_or(0);
-    let full_wrote = unchecked.class == SampleClass::PathsWrote
-        || checked.class == SampleClass::PathsWrote;
+    let full_wrote =
+        unchecked.class == SampleClass::PathsWrote || checked.class == SampleClass::PathsWrote;
     if !full_wrote && full_ops > 0 {
         let mut lo = 0u32;
         let mut hi = full_ops;
@@ -1429,7 +1436,13 @@ fn produce_and_raster(
     height: u32,
     density: f32,
     insets: SafeAreaInsets,
-) -> Result<(neotavern_presentation_m0_d2::ProducerOutput, ProductPaintLayout), String> {
+) -> Result<
+    (
+        neotavern_presentation_m0_d2::ProducerOutput,
+        ProductPaintLayout,
+    ),
+    String,
+> {
     let mut session = catch_unwind(AssertUnwindSafe(|| {
         ProductVelloSession::open(product_shell_app, width, height, density, insets)
     }))
@@ -1444,8 +1457,7 @@ fn produce_and_raster(
         .unwrap_or(1);
     trace(&format!(
         "vello_gpu paint_scene=1 scene_epoch={} layout=1 tiles={}",
-        produced.list.generation,
-        tile_count
+        produced.list.generation, tile_count
     ));
     if !host.gpu_probed {
         run_gpu_diagnostics(host, &mut session, &produced, &full_scene, width, height)?;
@@ -1487,9 +1499,7 @@ fn bind_host<W: ProductWire>(
     host.hit_view = Some(shell.clone());
     install_product_shell(shell.clone());
     let produced = match produce_and_raster(host, width, height, host.density, session.insets()) {
-        Ok((produced, layout)) => {
-            overlay_avatars(host, session, produced, layout)
-        }
+        Ok((produced, layout)) => overlay_avatars(host, session, produced, layout),
         Err(err) => {
             trace(&format!(
                 "product_bind retry_without_avatars reason={}",

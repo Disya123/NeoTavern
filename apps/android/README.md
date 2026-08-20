@@ -137,10 +137,11 @@ The guarded Dioxus canary also needs
 probe libs stay in `src/debug/jniLibs`). The canary host is NeoCompositor
 `SurfaceView` (Vulkan), not a native TextView chat list. The JNI attach
 passes `DisplayMetrics.density` so Blitz layouts in CSS dp and rasters
-at the physical SurfaceView size. `PresentationChatActivity` is the
-home-screen launcher. Unmigrated rail destinations render a Rust
-`NotYetMigrated` screen. WebView remains in the APK as an explicit
-`MainActivity` harness, not as a route fallback.
+at the physical SurfaceView size. `PresentationChatActivity` is the home-screen launcher. Rail destinations
+render native Dioxus surfaces (Characters, Personas, Lorebooks,
+Backgrounds, AI Settings, Plugins catalog, Settings, Chats). Plugin DOM
+islands stay CONTAINED in WebSurface. WebView remains in the APK as an
+explicit `MainActivity` harness, not as a route fallback.
 
 ## Building and running the app
 

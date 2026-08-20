@@ -10,10 +10,19 @@ use serde::Deserialize;
 use std::collections::HashSet;
 use std::sync::Mutex;
 
+mod ai_settings_tab;
+mod backgrounds_tab;
 mod chat_route;
+mod chats_tab;
+mod lorebooks_tab;
+mod markdown;
+mod personas_tab;
+mod plugins_tab;
 mod product_path;
 mod product_shell;
+mod settings_tab;
 pub use chat_route::{chat_route_line, flagged_chat_route, ChatRouteReport};
+pub use markdown::{contains_part, message_markdown, parse_document, parse_inline, Block, Inline};
 pub use neotavern_presentation_design_system::SafeAreaInsets;
 pub use product_path::{
     chrome_metrics, current_product_chat, install_product_chat, message_id, mixed_height,
@@ -23,8 +32,11 @@ pub use product_path::{
 };
 pub use product_shell::{
     character_card_description, character_manager_title, current_product_shell, ellipsize_css,
-    install_product_shell, product_shell_app, CharacterCardView, CharacterDraftView,
-    ProductShellView, CHARACTER_MANAGER_TITLE,
+    install_product_shell, lorebook_card_description, panel_header_title, persona_card_description,
+    product_shell_app, CharacterCardView, CharacterDraftView, LorebookCardView, PersonaCardView,
+    PluginCardView, PresetCardView, ProductShellView, ProviderCardView, AI_SETTINGS_TITLE,
+    BACKGROUNDS_MANAGER_TITLE, CHARACTER_MANAGER_TITLE, CHATS_MANAGER_TITLE,
+    LOREBOOK_MANAGER_TITLE, PERSONA_MANAGER_TITLE, PLUGINS_MANAGER_TITLE, SETTINGS_TITLE,
 };
 
 pub const DIOXUS_SHELL_FLAG: &str = "NEOTA_DIOXUS_SHELL";
@@ -334,11 +346,9 @@ pub fn product_chat_app() -> Element {
                         "data-format": "markdown",
                         role: "listitem",
                         style: message_bubble_style(row.role == "user", compact, font_px),
-                        "{row.content}"
+                        {crate::markdown::message_markdown(&row.content, view.streaming && row.id == "streaming")}
                         if matches!(row.kind, RowKind::Image | RowKind::Mixed) {
-                            img {
-                                src: "asset:thumb",
-                                alt: "message image",
+                            span {
                                 "data-part": "message-image",
                                 style: "width:48px;height:32px;background:#3a4a60;"
                             }

@@ -92,9 +92,10 @@ impl JniProductWire {
                     .ok_or_else(|| ChatRouteError::Transport("missing event".into()))?;
                 let envelope = decode_event_envelope(&serde_json::to_vec(event)?)
                     .map_err(|err| ChatRouteError::Wire(err.message))?;
-                Ok(StreamFrame::Event(Box::new(generation_from_envelope(
-                    &envelope,
-                )?)))
+                Ok(StreamFrame::Event {
+                    sequence: Some(envelope.sequence),
+                    event: Box::new(generation_from_envelope(&envelope)?),
+                })
             }
             _ => Err(ChatRouteError::Transport("unknown stream frame".into())),
         }
@@ -196,7 +197,7 @@ impl ProductWire for JniProductWire {
                 StreamFrame::Error(error) => {
                     return Err(ChatRouteError::Product(error.clone()));
                 }
-                StreamFrame::Event(_) | StreamFrame::Terminal => {
+                StreamFrame::Event { .. } | StreamFrame::Terminal => {
                     let key = stream_key_from_frame(&bytes).unwrap_or_else(|| format!("s{native}"));
                     self.native_handles.insert(key.clone(), native);
                     self.pending

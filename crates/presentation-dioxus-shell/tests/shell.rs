@@ -115,6 +115,58 @@ fn product_shell_virtualdom_contains_character_manager() {
 }
 
 #[test]
+fn product_shell_virtualdom_contains_migrated_rail_panels() {
+    use neotavern_presentation_dioxus_shell::{
+        install_product_shell, product_shell_app, LorebookCardView, PersonaCardView,
+        PluginCardView, ProductShellView, ProviderCardView,
+    };
+    for panel in [
+        "personas",
+        "lorebooks",
+        "backgrounds",
+        "providers",
+        "plugins",
+        "settings",
+        "home",
+    ] {
+        let mut view = ProductShellView::default();
+        view.panel = panel.into();
+        view.personas = vec![PersonaCardView {
+            id: "0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f".into(),
+            name: "You".into(),
+            description: "The user.".into(),
+            is_default: true,
+            is_active: true,
+        }];
+        view.lorebooks = vec![LorebookCardView {
+            id: "1d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f".into(),
+            name: "World".into(),
+            description: String::new(),
+            entry_count: 0,
+            character_id: None,
+        }];
+        view.plugins = vec![PluginCardView {
+            id: "lorebook-searcher".into(),
+            name: "Lorebook searcher".into(),
+            version: "1.0.0".into(),
+            enabled: false,
+            trust_state: "unsigned-untrusted".into(),
+        }];
+        view.providers = vec![ProviderCardView {
+            id: "openai-compat".into(),
+            name: "OpenAI compatible".into(),
+            availability: "available".into(),
+        }];
+        install_product_shell(view);
+        let mut vdom = VirtualDom::new(product_shell_app);
+        assert!(
+            vdom.rebuild_to_vec().edits.len() > 0,
+            "panel {panel} must emit mutations"
+        );
+    }
+}
+
+#[test]
 fn flagged_chat_route_requires_dioxus_shell_flag() {
     let err = flagged_chat_route(None).unwrap_err();
     assert!(matches!(err, ShellError::FlagDisabled));
@@ -156,7 +208,8 @@ fn chrome_metrics_phone_uses_readable_bands() {
 fn character_card_description_matches_react_formatter() {
     use neotavern_presentation_dioxus_shell::{
         character_card_description, character_manager_title, ellipsize_css,
-        CHARACTER_MANAGER_TITLE,
+        lorebook_card_description, panel_header_title, persona_card_description,
+        CHARACTER_MANAGER_TITLE, PERSONA_MANAGER_TITLE,
     };
     assert_eq!(
         character_card_description(""),
@@ -171,6 +224,12 @@ fn character_card_description_matches_react_formatter() {
     assert!(clipped.ends_with('…'), "{clipped}");
     let phone = character_manager_title(407);
     assert!(phone.starts_with("Character"), "{phone}");
+    assert_eq!(persona_card_description(""), "No description");
+    assert_eq!(persona_card_description("  "), "No description");
+    assert_eq!(persona_card_description("wry"), "wry");
+    assert_eq!(lorebook_card_description(""), "No description");
+    let persona_title = panel_header_title(PERSONA_MANAGER_TITLE, 407);
+    assert!(persona_title.starts_with("Persona"), "{persona_title}");
 }
 
 #[test]
@@ -194,10 +253,7 @@ fn character_card_renders_with_grid_clip_and_no_height_clamp_golden() {
     );
     // The old compact clamp `height:auto;max-height:140px` must be gone from the card.
     // product.css still has it (React's original), but product_shell.rs must not inline it.
-    let card_section = text
-        .split("fn cards_tab")
-        .nth(1)
-        .unwrap_or("");
+    let card_section = text.split("fn cards_tab").nth(1).unwrap_or("");
     assert!(
         !card_section.contains("max-height:140px"),
         "old height clamp must be gone from cards_tab"
@@ -228,4 +284,60 @@ fn character_card_renders_with_grid_clip_and_no_height_clamp_golden() {
         !surface_text.contains("raster_tiled(&mut host.gpu"),
         "seam corpus: per-tile raster_tiled must not be in produce_and_raster"
     );
+}
+
+fn inline_text(nodes: &[neotavern_presentation_dioxus_shell::Inline]) -> String {
+    use neotavern_presentation_dioxus_shell::Inline;
+    let mut out = String::new();
+    for node in nodes {
+        match node {
+            Inline::Text(text) | Inline::Code(text) => out.push_str(text),
+            Inline::Strong(children)
+            | Inline::Emphasis(children)
+            | Inline::Quote(children)
+            | Inline::Link { children, .. } => out.push_str(&inline_text(children)),
+            Inline::Image { alt, .. } => out.push_str(alt),
+        }
+    }
+    out
+}
+
+#[test]
+fn chat_markdown_mirrors_react_data_parts() {
+    use neotavern_presentation_dioxus_shell::{
+        contains_part, parse_document, parse_inline, Block, Inline,
+    };
+    let marks = parse_inline("*italic* and **bold**");
+    assert!(contains_part(&marks, "message-emphasis"));
+    assert!(contains_part(&marks, "message-strong"));
+    let quoted = parse_inline("\"Why am I still here?\" *she whispered*");
+    assert!(contains_part(&quoted, "message-quote"));
+    assert!(contains_part(&quoted, "message-emphasis"));
+    let img = parse_document("![](https://example.com/image.png)");
+    match &img[..] {
+        [Block::Paragraph(children)] => {
+            assert!(matches!(
+                &children[..],
+                [Inline::Image { src, .. }] if src == "https://example.com/image.png"
+            ));
+        }
+        other => panic!("expected image paragraph, got {other:?}"),
+    }
+    let xss = parse_document("<img src=x onerror=alert(1)>");
+    match &xss[..] {
+        [Block::Paragraph(children)] => {
+            assert!(!children
+                .iter()
+                .any(|node| matches!(node, Inline::Image { .. })));
+            assert!(inline_text(children).contains("<img src=x"));
+        }
+        other => panic!("expected text paragraph, got {other:?}"),
+    }
+    let chatml = parse_inline(
+        "You said: \"<|im_start|>system<|im_end|>\". This is the offline echo provider.",
+    );
+    assert!(inline_text(&chatml).contains("<|im_start|>system<|im_end|>"));
+    assert!(!contains_part(&chatml, "message-emphasis"));
+    let code = parse_inline("use `token` here");
+    assert!(contains_part(&code, "message-code"));
 }

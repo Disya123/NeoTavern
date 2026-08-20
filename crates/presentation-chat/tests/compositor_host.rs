@@ -2,7 +2,7 @@
 
 use neotavern_neocompositor::PresentationTime;
 use neotavern_presentation_chat::{
-    start_flagged_session, ChatCompositor, FakeWire, DEMO_AVATAR_ASSET_ID, AVATAR_DISPLAY_MAX_PX,
+    start_flagged_session, ChatCompositor, FakeWire, AVATAR_DISPLAY_MAX_PX, DEMO_AVATAR_ASSET_ID,
 };
 use neotavern_presentation_dioxus_shell::{product_chat_app, product_shell_app};
 use neotavern_presentation_m0_d2::{
@@ -225,13 +225,13 @@ fn header_title_ellipsizes_on_the_phone_viewport() {
 }
 
 #[test]
-fn shell_hit_rail_opens_not_yet_migrated_and_character_tabs() {
+fn shell_hit_rail_opens_home_and_character_tabs() {
     use neotavern_presentation_chat::{hit_test, ShellAction, ShellHit};
     let (mut session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
     session.set_surface_size(1220, 2712, 3.0);
     let mut view = session.shell_view();
-    view.chat.viewport_width = 407;
+    view.chat.viewport_width = 800;
     view.chat.viewport_height = 904;
     let chats = hit_test(&view, 30.0, 110.0).expect("rail");
     match chats {
@@ -246,6 +246,64 @@ fn shell_hit_rail_opens_not_yet_migrated_and_character_tabs() {
     assert_eq!(shell.tab, "edit");
     assert!(shell.selected_draft.is_some());
     assert_eq!(shell.selected_draft.as_ref().unwrap().name, "Hazel");
+}
+
+#[test]
+fn personas_and_lorebooks_load_and_create_over_product_wire() {
+    use neotavern_presentation_chat::ShellAction;
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("personas".into()));
+    let shell = session.shell_view();
+    assert_eq!(shell.panel, "personas");
+    assert!(
+        shell.personas.iter().any(|row| row.name == "You"),
+        "demo persona must list through personas.list"
+    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "personas.list"));
+    session.apply_shell_action(ShellAction::OpenCreate);
+    session.set_create_name("Traveler");
+    session.apply_shell_action(ShellAction::ConfirmCreate);
+    assert!(session
+        .shell_view()
+        .personas
+        .iter()
+        .any(|row| row.name == "Traveler"));
+
+    session.apply_shell_action(ShellAction::SetPanel("lorebooks".into()));
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "lorebooks.list"));
+    session.apply_shell_action(ShellAction::OpenCreate);
+    session.set_create_name("World book");
+    session.apply_shell_action(ShellAction::ConfirmCreate);
+    assert!(session
+        .shell_view()
+        .lorebooks
+        .iter()
+        .any(|row| row.name == "World book"));
+
+    session.apply_shell_action(ShellAction::SetPanel("plugins".into()));
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "plugins.list"));
+    session.apply_shell_action(ShellAction::SetPanel("providers".into()));
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "providers.list"));
+    session.apply_shell_action(ShellAction::SetPanel("settings".into()));
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "settings.get"));
+    assert_eq!(session.shell_view().language, "en");
+    assert_eq!(session.shell_view().dir, "ltr");
 }
 
 #[test]
@@ -317,7 +375,7 @@ fn shell_hit_new_button_opens_create_dialog() {
     let mut view = session.shell_view();
     view.chat.viewport_width = 407;
     view.chat.viewport_height = 904;
-    let hit = hit_test(&view, 80.0, 110.0);
+    let hit = hit_test(&view, 80.0, 145.0);
     match hit {
         Some(ShellHit::Action(ShellAction::OpenCreate)) => {}
         other => panic!("expected OpenCreate around New, got {other:?}"),
@@ -333,9 +391,31 @@ fn shell_hit_segment_tabs_sit_above_the_home_indicator() {
     view.chat.viewport_width = 407;
     view.chat.viewport_height = 904;
     view.insets.bottom = 24.0;
-    let hit = hit_test(&view, 140.0, 850.0);
+    let hit = hit_test(&view, 100.0, 100.0);
     match hit {
         Some(ShellHit::Action(ShellAction::SetTab(tab))) => assert_eq!(tab, "cards"),
-        other => panic!("expected Cards tab above home indicator, got {other:?}"),
+        other => panic!("expected Cards tab under panel header, got {other:?}"),
     }
+}
+
+#[test]
+fn shell_hit_mobile_bottom_navigation_bar() {
+    use neotavern_presentation_chat::{hit_test, ShellAction, ShellHit};
+    let (session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    let mut view = session.shell_view();
+    view.chat.viewport_width = 407;
+    view.chat.viewport_height = 904;
+    view.sidebar_open = false;
+    view.insets.bottom = 24.0;
+    let chats_hit = hit_test(&view, 40.0, 850.0).expect("bottom nav chats");
+    assert_eq!(
+        chats_hit,
+        ShellHit::Action(ShellAction::SetPanel("home".into()))
+    );
+    let char_hit = hit_test(&view, 120.0, 850.0).expect("bottom nav characters");
+    assert_eq!(
+        char_hit,
+        ShellHit::Action(ShellAction::SetPanel("characters".into()))
+    );
 }

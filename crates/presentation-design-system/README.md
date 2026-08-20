@@ -14,7 +14,8 @@ python crates/presentation-design-system/scripts/pack_design_system.py
 
 The packer copies exact Outfit / JetBrains Mono variable TTF files, Phosphor
 regular SVG paths (`viewBox 0 0 256 256`), and the dark-theme `--st-*` token
-sheet plus App Shell / Sidebar / Character Manager CSS modules (class names
+sheet plus App Shell / Sidebar / Character Manager / Personas / Lorebooks /
+Backgrounds / AI Settings / Plugins / Settings / MessageMarkdown CSS modules (class names
 prefixed to avoid collisions). `--st-*` `var()` usages, leftover
 `color-mix()`, and component custom properties (`--tabs-segment-*`) are
 flattened to literal dark values because Blitz does not apply UA custom

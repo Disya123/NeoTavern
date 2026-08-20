@@ -5,7 +5,9 @@ Live Product Wire chat workspace for the Android Rust host.
 The visible renderer is NeoCompositor `SurfaceView` (live Product Wire →
 Dioxus → Blitz → presentation-session → Vulkan). Same Kernel store as the
 WebView harness (`KernelHost` + `filesDir/neotavern`). Isolated 10k is a
-harness profile only. Unmigrated rail panels render `NotYetMigrated`.
+harness profile only. Rail panels render native Dioxus catalogs; plugin
+DOM islands stay CONTAINED in WebSurface. Unrecognized panel ids still
+render `NotYetMigrated`.
 WebView is **not** a fallback. This crate is **not** an unguarded cutover
 and **not** a second chat implementation. Cutover is **STARTED / CANARY**;
 host canary `60a4d6a` is `HOST_CANARY_PASS`. Physical compositor scroll is

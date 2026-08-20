@@ -91,10 +91,22 @@ class PresentationChatActivity : Activity(), SurfaceHolder.Callback {
             "chat_restore saved=${savedInstanceState != null} composer_len=${restoredComposer.length} canary_session=$canarySession production_cutover=false",
         )
 
-        if (PresentationChatLaunch.isSafeMode(intent.getStringExtra(PresentationChatLaunch.EXTRA_SAFE_MODE))) {
+        val safeMode = extrasTrusted && PresentationChatLaunch.isSafeMode(intent.getStringExtra(PresentationChatLaunch.EXTRA_SAFE_MODE))
+        if (safeMode) {
             Log.i(
                 TAG,
-                "chat_safe_mode=true renderer=rust webview_fallback=false production_cutover=false",
+                "chat_safe_mode=true renderer=webview webview_fallback=true production_cutover=false",
+            )
+            startActivity(Intent(this, MainActivity::class.java).apply {
+                putExtra(PresentationChatLaunch.EXTRA_SAFE_MODE, "1")
+                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            })
+            finish()
+            return
+        } else {
+            Log.i(
+                TAG,
+                "chat_safe_mode=false renderer=rust webview_fallback=false production_cutover=false",
             )
         }
 
