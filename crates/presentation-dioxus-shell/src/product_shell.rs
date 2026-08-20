@@ -573,10 +573,11 @@ fn cards_tab(view: &ProductShellView) -> Element {
                             let selected = view.selected_character_id.as_deref() == Some(item.id.as_str());
                             let pinned = view.pinned_character_id.as_deref() == Some(item.id.as_str());
                             let desc = character_card_description(&item.description).to_string();
+                            // React parity: grid card, no height clamp, border via data-state.
                             let card_style = if selected {
-                                "height:auto;max-height:140px;align-self:flex-start;flex:none;border:1px solid #e38a62;background:#492a20;"
+                                "border-color:#e38a62;background:#492a20;"
                             } else {
-                                "height:auto;max-height:140px;align-self:flex-start;flex:none;"
+                                ""
                             };
                             rsx! {
                                 button {
@@ -594,7 +595,7 @@ fn cards_tab(view: &ProductShellView) -> Element {
                                         strong { "{item.name}" }
                                         span {
                                             "data-part": "card-description",
-                                            style: "display:block;overflow:hidden;max-height:2.9em;line-height:1.45;font-size:0.75rem;color:#c5bbb2;",
+                                            style: "display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-height:1.45;font-size:0.75rem;color:#c5bbb2;",
                                             "{desc}"
                                         }
                                         if !item.tags.is_empty() {

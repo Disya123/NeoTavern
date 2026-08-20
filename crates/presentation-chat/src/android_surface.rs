@@ -1399,26 +1399,9 @@ fn run_gpu_diagnostics(
         ));
     }
 
-    let present = if full_wrote {
-        gpu.tile = None;
-        raster_fresh(
-            gpu,
-            full_scene,
-            "ui",
-            width,
-            height,
-            UI_BASE_COLOR,
-            true,
-            false,
-        )?
-    } else if let Some((tw, th)) = best_res.filter(|(tw, th)| *tw < width || *th < height) {
-        gpu.tile = Some((tw, th));
-        trace(&format!(
-            "vello_gpu full_res_fail tile_raster={}x{} (not cpu_full_frame_raster)",
-            tw, th
-        ));
-        raster_tiled(gpu, full_scene, tw, th)?
-    } else {
+    // Single full-viewport path: one layout/PaintScene/SceneEpoch, no layout per tile.
+    // The tiled fallback is removed to avoid seam and tile-origin coordinate bugs.
+    let present = {
         gpu.tile = None;
         raster_fresh(
             gpu,
@@ -1467,9 +1450,8 @@ fn produce_and_raster(
     if !host.gpu_probed {
         run_gpu_diagnostics(host, &mut session, &produced, &full_scene, width, height)?;
         host.gpu_probed = true;
-    } else if let Some((tw, th)) = host.gpu.tile {
-        raster_tiled(&mut host.gpu, &full_scene, tw, th)?;
     } else {
+        // One full-viewport raster per frame, no tiled layout.
         raster_fresh(
             &mut host.gpu,
             &full_scene,
