@@ -50,10 +50,7 @@ class PresentationChatActivity : Activity(), SurfaceHolder.Callback {
     private var holder: KernelHolder? = null
     private lateinit var root: FrameLayout
     private lateinit var surfaceView: SurfaceView
-    private lateinit var header: TextView
-    private lateinit var messages: View
     private lateinit var composer: PresentationChatComposer
-    private lateinit var send: Button
     private val adapter = PresentationInputAdapter()
     private val compositorThread = HandlerThread("neocompositor-chat")
     private var compositorHandler: Handler? = null
@@ -72,7 +69,6 @@ class PresentationChatActivity : Activity(), SurfaceHolder.Callback {
     private var streamBeginLogged: Boolean = false
     private val sendGate = PresentationChatSendGate()
     private var canarySession: Boolean = false
-    private var chatOverlayAttached: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -128,31 +124,19 @@ class PresentationChatActivity : Activity(), SurfaceHolder.Callback {
         surfaceView.holder.setFormat(PixelFormat.OPAQUE)
         surfaceView.holder.addCallback(this)
 
-        header = TextView(this)
-        header.id = View.generateViewId()
-        header.alpha = 0.01f
-        header.setBackgroundColor(Color.TRANSPARENT)
-        header.contentDescription = "Chat header"
-        header.isClickable = false
-        header.isFocusable = true
-        header.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
-
-        messages = View(this)
-        messages.id = View.generateViewId()
-        messages.alpha = 0.01f
-        messages.setBackgroundColor(Color.TRANSPARENT)
-        messages.contentDescription = "Chat messages"
-        messages.isClickable = false
-        messages.isFocusable = true
-        messages.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
-
+        // Single non-drawing platform IME bridge. No native header/messages/send:
+        // the Rust compositor is the sole visual renderer. This view only
+        // provides an InputConnection for Gboard.
         composer = PresentationChatComposer(this)
         composer.journeyLog = log
         composer.id = View.generateViewId()
         composer.hint = null
         composer.contentDescription = "Message composer"
-        composer.alpha = 0.01f
         composer.setBackgroundColor(Color.TRANSPARENT)
+        composer.alpha = 0f
+        composer.visibility = View.INVISIBLE
+        composer.isFocusable = true
+        composer.isFocusableInTouchMode = true
         composer.inputType = InputType.TYPE_CLASS_TEXT or
             InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or
             InputType.TYPE_TEXT_FLAG_AUTO_CORRECT or
@@ -164,21 +148,9 @@ class PresentationChatActivity : Activity(), SurfaceHolder.Callback {
         )
         composer.imeOptions = EditorInfo.IME_ACTION_SEND
         composer.gravity = Gravity.TOP
-        composer.minLines = 2
-        composer.setPadding(48, 24, 24, 48)
+        composer.minLines = 1
+        composer.setPadding(0, 0, 0, 0)
         savedInstanceState?.getString(STATE_COMPOSER)?.let { composer.setText(it) }
-
-        send = Button(this)
-        send.id = View.generateViewId()
-        send.text = ""
-        send.contentDescription = "Send"
-        send.alpha = 0.01f
-        send.setBackgroundColor(Color.TRANSPARENT)
-        send.isFocusable = true
-
-        header.accessibilityTraversalBefore = messages.id
-        messages.accessibilityTraversalBefore = composer.id
-        composer.accessibilityTraversalBefore = send.id
 
         root.addView(
             surfaceView,
@@ -187,12 +159,11 @@ class PresentationChatActivity : Activity(), SurfaceHolder.Callback {
                 FrameLayout.LayoutParams.MATCH_PARENT,
             ),
         )
-        send.text = ""
-        composer.hint = null
-        header.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
-        messages.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
-        composer.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
-        send.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        // IME bridge is 1×1 invisible but focusable for InputConnection.
+        root.addView(
+            composer,
+            FrameLayout.LayoutParams(1, 1, Gravity.TOP or Gravity.START),
+        )
         setContentView(root)
 
         adapter.nativeSink =
@@ -215,17 +186,10 @@ class PresentationChatActivity : Activity(), SurfaceHolder.Callback {
             }
         adapter.attach(surfaceView)
 
-        bindViewportActions()
-        bindA11yTrace(header, "header")
-        bindA11yTrace(messages, "messages")
+        // Rust compositor is the sole renderer; no native header/messages/send.
+        // Keep only the IME bridge for accessibility.
         bindA11yTrace(composer, "composer")
-        bindA11yTrace(send, "send")
         logWebViewAbsence()
-
-        header.setOnLongClickListener {
-            retryGeneration()
-            true
-        }
 
         bindSafeAreaInsets()
 
@@ -265,9 +229,7 @@ class PresentationChatActivity : Activity(), SurfaceHolder.Callback {
             val line =
                 "chat_route=false dioxus_shell=false live_wire=false reason=flag_off main_activity=false production_jni=false production_cutover=false"
             Log.i(TAG, line)
-            header.contentDescription = "Chat header"
             composer.isEnabled = false
-            send.isEnabled = false
             return
         }
 
@@ -285,7 +247,6 @@ class PresentationChatActivity : Activity(), SurfaceHolder.Callback {
                 "chat_route=false dioxus_shell=true live_wire=false reason=missing_jni main_activity=false production_jni=false production_cutover=false"
             Log.i(TAG, line)
             composer.isEnabled = false
-            send.isEnabled = false
             return
         } catch (err: Throwable) {
             if (rollbackCanaryIfNeeded("load_failed:${err.javaClass.simpleName}")) {
@@ -295,7 +256,6 @@ class PresentationChatActivity : Activity(), SurfaceHolder.Callback {
                 "chat_route=false dioxus_shell=true live_wire=false reason=load_failed:${err.javaClass.simpleName} main_activity=false production_jni=false production_cutover=false"
             Log.i(TAG, line)
             composer.isEnabled = false
-            send.isEnabled = false
             return
         }
 
@@ -316,7 +276,6 @@ class PresentationChatActivity : Activity(), SurfaceHolder.Callback {
             val isolatedRoot = File(applicationContext.filesDir, PresentationChatLaunch.ISOLATED_DATA_ROOT)
             if (!isolatedRoot.exists() && !isolatedRoot.mkdirs()) {
                 composer.isEnabled = false
-                send.isEnabled = false
                 return
             }
             isolatedRoot.absolutePath
@@ -401,12 +360,6 @@ class PresentationChatActivity : Activity(), SurfaceHolder.Callback {
     override fun onResume() {
         super.onResume()
         logLifecycleResume()
-        if (talkbackEnabled()) {
-            if (::header.isInitialized) {
-                header.performAccessibilityAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS, null)
-                journeyLog?.talkback("focus_restore target=header")
-            }
-        }
         if (routeReady) {
             holder?.let { refreshFromRoute(it) }
         }
@@ -519,10 +472,10 @@ class PresentationChatActivity : Activity(), SurfaceHolder.Callback {
         }
         when (action) {
             "scroll_forward" -> {
-                messages.performAccessibilityAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD, null)
+                surfaceView.performAccessibilityAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD, null)
             }
             "click_messages" -> {
-                messages.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null)
+                surfaceView.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null)
             }
             else -> journeyLog?.talkback("action=unknown")
         }
@@ -695,7 +648,6 @@ class PresentationChatActivity : Activity(), SurfaceHolder.Callback {
                 false
             }
         }
-        send.setOnClickListener { sendComposer(holder) }
         val watcher = object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
@@ -713,6 +665,52 @@ class PresentationChatActivity : Activity(), SurfaceHolder.Callback {
         composer.addTextChangedListener(watcher)
     }
 
+    /**
+     * Bounded, non-blocking streaming poll state machine. Each poll is a
+     * single `pollStream` + `snapshot` on the holder's single-thread
+     * executor, scheduled via the compositor handler so the executor is never
+     * held for 40×50 ms. No concurrent access to the unsafe Kernel session:
+     * every session touch is on `holder.executor`.
+     */
+    private fun pollStreamingBounded(
+        holder: KernelHolder,
+        initialSnap: String,
+        initialParsed: PresentationChatSnapshot?,
+        maxPolls: Int = 40,
+        intervalMs: Int = 50,
+        onComplete: (String, PresentationChatSnapshot?) -> Unit,
+    ) {
+        var polls = 0
+        var snap = initialSnap
+        var parsed = initialParsed
+        fun step() {
+            if (parsed?.streaming != true || polls >= maxPolls) {
+                onComplete(snap, parsed)
+                return
+            }
+            if (!streamBeginLogged) {
+                streamBeginLogged = true
+                runOnUiThread { announceStream("stream_begin") }
+            }
+            holder.executor.execute {
+                try {
+                    PresentationChatNative.pollStream(intervalMs)
+                } catch (_: Throwable) {
+                }
+                try {
+                    snap = PresentationChatNative.snapshot()
+                    parsed = PresentationChatSnapshot.parse(snap)
+                } catch (_: Throwable) {
+                }
+                polls += 1
+                // Yield to the holder executor's queue before the next poll so
+                // saveDraft / other session ops can interleave.
+                compositorHandler?.post { step() } ?: step()
+            }
+        }
+        step()
+    }
+
     private fun sendComposer(holder: KernelHolder) {
         if (!routeReady) {
             return
@@ -727,39 +725,28 @@ class PresentationChatActivity : Activity(), SurfaceHolder.Callback {
             try {
                 val trace = PresentationChatNative.send(text)
                 Log.i(TAG, trace)
-                var snap = PresentationChatNative.snapshot()
-                var parsed = PresentationChatSnapshot.parse(snap)
-                var polls = 0
-                while (parsed?.streaming == true && polls < 40) {
-                    if (!streamBeginLogged) {
-                        streamBeginLogged = true
-                        runOnUiThread { announceStream("stream_begin") }
+                val snap = PresentationChatNative.snapshot()
+                val parsed = PresentationChatSnapshot.parse(snap)
+                pollStreamingBounded(holder, snap, parsed) { finalSnap, finalParsed ->
+                    val view = finalParsed
+                    Log.i(TAG, view?.sendTraceLine() ?: "chat_send live_wire=true parse=false production_cutover=false")
+                    compositorHandler?.post {
+                        try {
+                            Log.i(TAG, PresentationChatNative.rebuildScene())
+                        } catch (_: Throwable) {
+                        }
                     }
-                    PresentationChatNative.pollStream(50)
-                    snap = PresentationChatNative.snapshot()
-                    parsed = PresentationChatSnapshot.parse(snap)
-                    polls += 1
-                }
-                val view = parsed
-                Log.i(TAG, view?.sendTraceLine() ?: "chat_send live_wire=true parse=false production_cutover=false")
-                compositorHandler?.post {
-                    try {
-                        Log.i(TAG, PresentationChatNative.rebuildScene())
-                    } catch (_: Throwable) {
+                    runOnUiThread {
+                        if (streamBeginLogged) {
+                            announceStream("stream_end")
+                        }
+                        bindSnapshot(finalSnap, view)
+                        view?.let { replaceComposerText(it.composer) }
                     }
-                }
-                runOnUiThread {
-                    if (streamBeginLogged) {
-                        announceStream("stream_end")
-                    }
-                    bindSnapshot(snap, view)
-                    view?.let { replaceComposerText(it.composer) }
-                    send.isEnabled = true
+                    sendGate.end()
                 }
             } catch (err: Throwable) {
                 Log.e(TAG, "send failed", err)
-                runOnUiThread { send.isEnabled = true }
-            } finally {
                 sendGate.end()
             }
         }
@@ -789,38 +776,29 @@ class PresentationChatActivity : Activity(), SurfaceHolder.Callback {
             } catch (err: Throwable) {
                 Log.e(TAG, "retry failed", err)
             }
-            var snap = ""
-            var parsed: PresentationChatSnapshot? = null
-            var polls = 0
+            val snap: String
+            val parsed: PresentationChatSnapshot?
             try {
                 snap = PresentationChatNative.snapshot()
                 parsed = PresentationChatSnapshot.parse(snap)
-                while (parsed?.streaming == true && polls < 40) {
-                    if (!streamBeginLogged) {
-                        streamBeginLogged = true
-                        runOnUiThread { announceStream("stream_begin") }
-                    }
-                    PresentationChatNative.pollStream(50)
-                    snap = PresentationChatNative.snapshot()
-                    parsed = PresentationChatSnapshot.parse(snap)
-                    polls += 1
-                }
             } catch (err: Throwable) {
                 Log.e(TAG, "retry snapshot failed", err)
+                return@execute
             }
-            val view = parsed
-            compositorHandler?.post {
-                try {
-                    PresentationChatNative.rebuildScene()
-                } catch (_: Throwable) {
+            pollStreamingBounded(holder, snap, parsed) { finalSnap, finalParsed ->
+                compositorHandler?.post {
+                    try {
+                        PresentationChatNative.rebuildScene()
+                    } catch (_: Throwable) {
+                    }
                 }
-            }
-            runOnUiThread {
-                if (streamBeginLogged) {
-                    announceStream("stream_end")
-                }
-                if (snap.isNotEmpty()) {
-                    bindSnapshot(snap, view)
+                runOnUiThread {
+                    if (streamBeginLogged) {
+                        announceStream("stream_end")
+                    }
+                    if (finalSnap.isNotEmpty()) {
+                        bindSnapshot(finalSnap, finalParsed)
+                    }
                 }
             }
         }
@@ -854,23 +832,17 @@ class PresentationChatActivity : Activity(), SurfaceHolder.Callback {
     private fun refreshFromRoute(holder: KernelHolder) {
         holder.executor.execute {
             try {
-                var snap = PresentationChatNative.snapshot()
-                var parsed = PresentationChatSnapshot.parse(snap)
-                var polls = 0
-                while (parsed?.streaming == true && polls < 40) {
-                    PresentationChatNative.pollStream(50)
-                    snap = PresentationChatNative.snapshot()
-                    parsed = PresentationChatSnapshot.parse(snap)
-                    polls += 1
-                }
-                val view = parsed
-                compositorHandler?.post {
-                    try {
-                        PresentationChatNative.rebuildScene()
-                    } catch (_: Throwable) {
+                val snap = PresentationChatNative.snapshot()
+                val parsed = PresentationChatSnapshot.parse(snap)
+                pollStreamingBounded(holder, snap, parsed) { finalSnap, finalParsed ->
+                    compositorHandler?.post {
+                        try {
+                            PresentationChatNative.rebuildScene()
+                        } catch (_: Throwable) {
+                        }
                     }
+                    runOnUiThread { bindSnapshot(finalSnap, finalParsed) }
                 }
-                runOnUiThread { bindSnapshot(snap, view) }
             } catch (err: Throwable) {
                 Log.e(TAG, "snapshot failed", err)
             }
@@ -882,7 +854,6 @@ class PresentationChatActivity : Activity(), SurfaceHolder.Callback {
             Log.i(TAG, "chat_snapshot live_wire=false parse=false production_cutover=false")
             return
         }
-        header.contentDescription = "Chat header, ${snap.title}, ${snap.messageCount} messages"
         lastVisibleIds = snap.visible.joinToString(",") { row -> row.id }
         if (canarySession && snap.chatId.isNotEmpty()) {
             PresentationCanaryPrefs(this).rememberChatId(snap.chatId)
@@ -894,22 +865,20 @@ class PresentationChatActivity : Activity(), SurfaceHolder.Callback {
     }
 
     private fun bindViewportActions() {
+        // Viewport a11y is driven by the Rust compositor's semantics; keep a
+        // minimal delegate on the SurfaceView for scroll/talkback.
         ViewCompat.setAccessibilityDelegate(
-            messages,
+            surfaceView,
             object : AccessibilityDelegateCompat() {
                 override fun sendAccessibilityEventUnchecked(host: View, event: AccessibilityEvent) {
                     when (event.eventType) {
                         AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED -> {
                             journeyLog?.talkback(
-                                "event=TYPE_VIEW_ACCESSIBILITY_FOCUSED node=messages nodeId=${host.id} recycle_jump=false visible_ids=$lastVisibleIds",
+                                "event=TYPE_VIEW_ACCESSIBILITY_FOCUSED node=surface nodeId=${host.id} recycle_jump=false visible_ids=$lastVisibleIds",
                             )
-                            journeyLog?.talkback("recycle_jump=false visible_ids=$lastVisibleIds")
-                        }
-                        AccessibilityEvent.TYPE_VIEW_CLICKED -> {
-                            journeyLog?.talkback("event=TYPE_VIEW_CLICKED node=messages nodeId=${host.id}")
                         }
                         AccessibilityEvent.TYPE_VIEW_SCROLLED -> {
-                            journeyLog?.talkback("event=TYPE_VIEW_SCROLLED node=messages nodeId=${host.id}")
+                            journeyLog?.talkback("event=TYPE_VIEW_SCROLLED node=surface nodeId=${host.id}")
                         }
                     }
                     super.sendAccessibilityEventUnchecked(host, event)
@@ -924,14 +893,10 @@ class PresentationChatActivity : Activity(), SurfaceHolder.Callback {
                         AccessibilityNodeInfo.ACTION_SCROLL_FORWARD,
                         AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD,
                         -> {
-                            journeyLog?.talkback("action=SCROLL node=messages nodeId=${host.id}")
+                            journeyLog?.talkback("action=SCROLL node=surface nodeId=${host.id}")
                             if (action == AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD) {
                                 prependOlder()
                             }
-                            return true
-                        }
-                        AccessibilityNodeInfo.ACTION_CLICK -> {
-                            journeyLog?.talkback("action=CLICK node=messages nodeId=${host.id}")
                             return true
                         }
                     }
@@ -963,12 +928,14 @@ class PresentationChatActivity : Activity(), SurfaceHolder.Callback {
     }
 
     private fun announceStream(kind: String) {
-        if (kind == "stream_begin") {
-            messages.announceForAccessibility("Streaming")
+        // Announce via the IME bridge / root since there is no native messages view.
+        val text = if (kind == "stream_begin") "Streaming" else "Streaming ended"
+        if (::composer.isInitialized) {
+            composer.announceForAccessibility(text)
         } else {
-            messages.announceForAccessibility("Streaming ended")
+            root.announceForAccessibility(text)
         }
-        journeyLog?.announce(kind, "messages")
+        journeyLog?.announce(kind, "surface")
     }
 
     private fun traceImeInset(bottom: Int) {
@@ -1047,89 +1014,18 @@ class PresentationChatActivity : Activity(), SurfaceHolder.Callback {
     }
 
     private fun syncChatOverlay() {
-        val visible = try {
+        // No native overlay: the Rust compositor (NeoCompositor) is the sole
+        // visual renderer. Keep only the IME bridge; route visibility is still
+        // queried for journey logs but does not attach native views.
+        try {
             PresentationChatNative.isChatRouteVisible()
         } catch (_: Throwable) {
-            false
-        }
-        runOnUiThread { setChatOverlayAttached(PresentationChatOverlay.attachNativeChrome(visible)) }
-    }
-
-    private fun setChatOverlayAttached(attached: Boolean) {
-        if (!::root.isInitialized || !::header.isInitialized) {
-            return
-        }
-        if (attached == chatOverlayAttached) {
-            return
-        }
-        if (attached) {
-            attachChatOverlay()
-        } else {
-            destroyChatOverlay()
         }
     }
 
-    private fun attachChatOverlay() {
-        if (header.parent != null) {
-            chatOverlayAttached = true
-            return
-        }
-        header.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
-        messages.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
-        composer.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
-        send.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
-        composer.hint = "Message"
-        send.text = "Send"
-        root.addView(
-            header,
-            FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, 96, Gravity.TOP),
-        )
-        root.addView(
-            messages,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT,
-            ),
-        )
-        val composerParams = FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT,
-            Gravity.BOTTOM,
-        )
-        composerParams.rightMargin = 160
-        root.addView(composer, composerParams)
-        root.addView(
-            send,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                Gravity.BOTTOM or Gravity.END,
-            ),
-        )
-        chatOverlayAttached = true
-    }
-
-    private fun destroyChatOverlay() {
-        if (header.parent != null) {
-            root.removeView(header)
-        }
-        if (messages.parent != null) {
-            root.removeView(messages)
-        }
-        if (composer.parent != null) {
-            root.removeView(composer)
-        }
-        if (send.parent != null) {
-            root.removeView(send)
-        }
-        header.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
-        messages.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
-        composer.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
-        send.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
-        composer.hint = null
-        send.text = ""
-        chatOverlayAttached = false
-    }
+    private fun setChatOverlayAttached(@Suppress("UNUSED_PARAMETER") attached: Boolean) = Unit
+    private fun attachChatOverlay() = Unit
+    private fun destroyChatOverlay() = Unit
 
     companion object {
         const val TAG: String = "NeoTavern"

@@ -42,6 +42,11 @@ import java.io.IOException
  * NeoTavern Android Host — Phase 5 local foundation + Phase 8 background
  * execution (ТЗ §8, §19, §65, §66).
  *
+ * WebView is a TEMPORARY migration blocker for unmigrated routes only.
+ * Unknown routes must open the Rust `NotYetMigrated` surface, not a
+ * WebView fallback. Do not ADR its permanence; replace routes
+ * sequentially with Dioxus RSX (see `product_shell.rs:not_yet_migrated`).
+ *
  * Renders the packaged web UI (`assets/web/index.html`) in a hardened
  * WebView and exposes the in-process kernel through [NeotavernBridge]:
  *

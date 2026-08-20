@@ -1276,6 +1276,9 @@ fn delete_character_dialog(view: &ProductShellView) -> Element {
     }
 }
 
+/// Fallback for any unmigrated or unknown route/panel. WebView is a
+/// temporary migration blocker only; unknown routes must render this Rust
+/// surface, never a hidden WebView.
 fn not_yet_migrated(title: &str) -> Element {
     rsx! {
         div {
