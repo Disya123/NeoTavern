@@ -3,12 +3,18 @@
 //! Not a Vello Image brush and not a CPU full-frame raster. Header and card
 //! share one cached texture per `asset_id`.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::num::NonZeroU64;
 
 use neotavern_neocompositor::ImagePaintOp;
 
 use crate::avatar::AvatarThumb;
+
+/// How many avatar textures the GPU cache may retain before the oldest are
+/// evicted. One cached texture per `asset_id` is shared by header and card.
+pub const AVATAR_GPU_MAX_ENTRIES: usize = 64;
+/// Total GPU bytes budget for avatar textures (147 KiB per 192×192 thumbnail).
+pub const AVATAR_GPU_MAX_BYTES: usize = 8 * 1024 * 1024;
 
 const AVATAR_WGSL: &str = r#"
 struct Uniform {
@@ -58,6 +64,11 @@ pub struct AvatarGpu {
     bgl: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
     textures: HashMap<String, CachedAvatar>,
+    /// LRU order: front = most-recently used, back = least-recently used.
+    order: VecDeque<String>,
+    sizes: HashMap<String, usize>,
+    total_bytes: usize,
+    device_epoch: u64,
     ready_token: u64,
     target_format: wgpu::TextureFormat,
 }
@@ -141,6 +152,10 @@ impl AvatarGpu {
             bgl,
             sampler,
             textures: HashMap::new(),
+            order: VecDeque::new(),
+            sizes: HashMap::new(),
+            total_bytes: 0,
+            device_epoch: 0,
             ready_token: 0,
             target_format,
         }
@@ -148,6 +163,87 @@ impl AvatarGpu {
 
     pub fn ready_token(&self) -> u64 {
         self.ready_token
+    }
+
+    /// Returns the number of cached avatar textures.
+    pub fn len(&self) -> usize {
+        self.textures.len()
+    }
+
+    /// Whether the cache holds no textures.
+    pub fn is_empty(&self) -> bool {
+        self.textures.is_empty()
+    }
+
+    /// Total GPU bytes currently held by avatar textures.
+    pub fn total_bytes(&self) -> usize {
+        self.total_bytes
+    }
+
+    /// Invalidate every cached texture when the wgpu `Device` epoch changes.
+    /// Textures belong to the old device/queue and would otherwise be sampled
+    /// as `StaleEpoch` by `SharedGpuContext`. Returns the number of evicted
+    /// entries.
+    pub fn set_device_epoch(&mut self, epoch: u64) -> usize {
+        if epoch == self.device_epoch {
+            return 0;
+        }
+        let evicted = self.textures.len();
+        self.textures.clear();
+        self.order.clear();
+        self.sizes.clear();
+        self.total_bytes = 0;
+        self.device_epoch = epoch;
+        // Bump ready_token so the compositor re-uploads after the clear.
+        if evicted > 0 {
+            self.ready_token = self.ready_token.saturating_add(1);
+        }
+        evicted
+    }
+
+    /// Evict the least-recently used avatars until `bytes_to_free` have been
+    /// released. Used by the pressure controller.
+    pub fn evict_for_pressure(&mut self, bytes_to_free: usize) -> usize {
+        let mut freed = 0usize;
+        let mut evicted = 0usize;
+        while freed < bytes_to_free {
+            let Some(key) = self.order.pop_back() else {
+                break;
+            };
+            if let Some(size) = self.sizes.remove(&key) {
+                freed = freed.saturating_add(size);
+                self.total_bytes = self.total_bytes.saturating_sub(size);
+            }
+            if self.textures.remove(&key).is_some() {
+                evicted += 1;
+            }
+        }
+        if evicted > 0 {
+            self.ready_token = self.ready_token.saturating_add(1);
+        }
+        evicted
+    }
+
+    fn touch(&mut self, asset_id: &str) {
+        if let Some(pos) = self.order.iter().position(|k| k == asset_id) {
+            self.order.remove(pos);
+            self.order.push_front(asset_id.to_string());
+        }
+    }
+
+    fn make_room(&mut self, need_bytes: usize) {
+        while (self.total_bytes.saturating_add(need_bytes) > AVATAR_GPU_MAX_BYTES
+            || self.order.len() + 1 > AVATAR_GPU_MAX_ENTRIES)
+            && !self.order.is_empty()
+        {
+            let Some(key) = self.order.pop_back() else {
+                break;
+            };
+            if let Some(size) = self.sizes.remove(&key) {
+                self.total_bytes = self.total_bytes.saturating_sub(size);
+            }
+            self.textures.remove(&key);
+        }
     }
 
     pub fn upload(
@@ -158,6 +254,7 @@ impl AvatarGpu {
         thumb: &AvatarThumb,
     ) -> bool {
         if self.textures.contains_key(asset_id) {
+            self.touch(asset_id);
             return false;
         }
         if thumb.width == 0 || thumb.height == 0 {
@@ -169,6 +266,8 @@ impl AvatarGpu {
         if thumb.premul_rgba.len() != expected {
             return false;
         }
+        let need_bytes = expected;
+        self.make_room(need_bytes);
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("avatar-thumb"),
             size: wgpu::Extent3d {
@@ -210,13 +309,16 @@ impl AvatarGpu {
                 _texture: texture,
             },
         );
+        self.order.push_front(asset_id.to_string());
+        self.sizes.insert(asset_id.to_string(), need_bytes);
+        self.total_bytes = self.total_bytes.saturating_add(need_bytes);
         self.ready_token = self.ready_token.saturating_add(1);
         let _ = self.target_format;
         true
     }
 
     pub fn blit(
-        &self,
+        &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         target: &wgpu::TextureView,
@@ -226,6 +328,15 @@ impl AvatarGpu {
     ) {
         if ops.is_empty() {
             return;
+        }
+        // Promote visible avatars so the LRU keeps header/card shared handles hot.
+        let to_touch: Vec<String> = ops
+            .iter()
+            .filter(|op| !op.dest.is_empty() && self.textures.contains_key(&op.asset_id))
+            .map(|op| op.asset_id.clone())
+            .collect();
+        for id in to_touch {
+            self.touch(&id);
         }
         let mut draws: Vec<(wgpu::BindGroup, wgpu::Buffer)> = Vec::new();
         for op in ops {

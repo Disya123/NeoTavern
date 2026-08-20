@@ -21,11 +21,17 @@ use neotavern_presentation_dioxus_shell::{
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use crate::error::ChatRouteError;
 use crate::shell_hit::{next_sort, ShellAction};
 use crate::wire::{ProductWire, StreamFrame, PAGE_LIMIT};
+
+/// Bounded CPU avatar thumbnail cache: one entry per `asset_id` is shared by
+/// header and card, evicted LRU under a byte budget and wired to the same
+/// pressure signal as the GPU cache.
+pub const AVATAR_CPU_MAX_ENTRIES: usize = 64;
+pub const AVATAR_CPU_MAX_BYTES: usize = 8 * 1024 * 1024;
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ChatRouteState {
@@ -60,6 +66,8 @@ pub struct ChatRouteState {
     pub character_draft: Option<CharacterDraftView>,
     /// Cached cover-cropped premultiplied thumbnails keyed by avatar asset id.
     pub avatar_thumbs: HashMap<String, crate::avatar::AvatarThumb>,
+    pub(crate) avatar_order: VecDeque<String>,
+    pub(crate) avatar_total_bytes: usize,
     pub avatar_ready_token: u64,
     /// Always `None` on the paint path (no `data:` URI in Blitz).
     pub avatar_data_uri: Option<String>,
@@ -71,6 +79,71 @@ pub struct ChatRouteState {
     pub create_description: String,
     pub create_first_message: String,
     pub status_message: Option<String>,
+}
+
+impl ChatRouteState {
+    fn touch_avatar(&mut self, asset_id: &str) {
+        if let Some(pos) = self.avatar_order.iter().position(|k| k == asset_id) {
+            self.avatar_order.remove(pos);
+            self.avatar_order.push_front(asset_id.to_string());
+        }
+    }
+
+    fn make_avatar_room(&mut self, need_bytes: usize) {
+        while (self.avatar_total_bytes.saturating_add(need_bytes) > AVATAR_CPU_MAX_BYTES
+            || self.avatar_order.len() + 1 > AVATAR_CPU_MAX_ENTRIES)
+            && !self.avatar_order.is_empty()
+        {
+            let Some(key) = self.avatar_order.pop_back() else {
+                break;
+            };
+            if let Some(thumb) = self.avatar_thumbs.remove(&key) {
+                self.avatar_total_bytes = self.avatar_total_bytes.saturating_sub(thumb.byte_len());
+            }
+        }
+    }
+
+    /// Insert a CPU thumbnail keyed by `asset_id` (shared header/card handle).
+    /// Returns `true` when the entry was newly inserted (caller should bump
+    /// `avatar_ready_token`). A hit only promotes the LRU order.
+    pub(crate) fn insert_avatar_thumb(
+        &mut self,
+        asset_id: String,
+        thumb: crate::avatar::AvatarThumb,
+    ) -> bool {
+        if self.avatar_thumbs.contains_key(&asset_id) {
+            self.touch_avatar(&asset_id);
+            return false;
+        }
+        let need = thumb.byte_len();
+        self.make_avatar_room(need);
+        self.avatar_order.push_front(asset_id.clone());
+        self.avatar_total_bytes = self.avatar_total_bytes.saturating_add(need);
+        self.avatar_thumbs.insert(asset_id, thumb);
+        self.avatar_ready_token = self.avatar_ready_token.saturating_add(1);
+        true
+    }
+
+    /// Evict the least-recently used CPU thumbnails until `bytes_to_free` have
+    /// been released. Returns the number of evicted entries.
+    pub fn evict_avatars_for_pressure(&mut self, bytes_to_free: usize) -> usize {
+        let mut freed = 0usize;
+        let mut evicted = 0usize;
+        while freed < bytes_to_free {
+            let Some(key) = self.avatar_order.pop_back() else {
+                break;
+            };
+            if let Some(thumb) = self.avatar_thumbs.remove(&key) {
+                freed = freed.saturating_add(thumb.byte_len());
+                self.avatar_total_bytes = self.avatar_total_bytes.saturating_sub(thumb.byte_len());
+                evicted += 1;
+            }
+        }
+        if evicted > 0 {
+            self.avatar_ready_token = self.avatar_ready_token.saturating_add(1);
+        }
+        evicted
+    }
 }
 
 pub struct ChatSession<W: ProductWire> {
@@ -1012,11 +1085,11 @@ impl<W: ProductWire> ChatSession<W> {
             .collect();
         for asset_id in asset_ids {
             if self.state.avatar_thumbs.contains_key(&asset_id) {
+                self.state.touch_avatar(&asset_id);
                 continue;
             }
             if let Some(thumb) = self.fetch_avatar_thumb(&asset_id) {
-                self.state.avatar_thumbs.insert(asset_id, thumb);
-                self.state.avatar_ready_token = self.state.avatar_ready_token.saturating_add(1);
+                self.state.insert_avatar_thumb(asset_id, thumb);
             }
         }
     }
@@ -1043,6 +1116,7 @@ impl<W: ProductWire> ChatSession<W> {
             return;
         };
         if self.state.avatar_thumbs.contains_key(asset_id) {
+            self.state.touch_avatar(asset_id);
             self.state.avatar_data_uri = None;
             if let Some(draft) = self.state.character_draft.as_mut() {
                 draft.avatar_data_uri = None;
@@ -1050,8 +1124,7 @@ impl<W: ProductWire> ChatSession<W> {
             return;
         }
         if let Some(thumb) = self.fetch_avatar_thumb(asset_id) {
-            self.state.avatar_thumbs.insert(asset_id.to_string(), thumb);
-            self.state.avatar_ready_token = self.state.avatar_ready_token.saturating_add(1);
+            self.state.insert_avatar_thumb(asset_id.to_string(), thumb);
         }
         self.state.avatar_data_uri = None;
         if let Some(draft) = self.state.character_draft.as_mut() {
