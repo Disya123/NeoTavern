@@ -65,6 +65,15 @@ jobs:
       - name: Legacy UI surface gate (ARC-02/ARC-03)
         run: pnpm ui:api:check
 
+      # React golden → Blitz product.css must be committed fresh (AGENTS §27,
+      # docs/desktop/rust-ui-style-port.md). fontTools+brotli are packer deps
+      # for woff2 decompression; --check rebuilds the sheet in-memory and
+      # compares bytes with the committed artifact.
+      - name: Packed design system freshness
+        run: |
+          pip install --quiet fonttools brotli
+          pnpm design:pack:check
+
       - name: Android APK web-assets scanner self-test (ТЗ §18.3)
         run: node scripts/check-android-apk-web-assets.mjs --self-test
 

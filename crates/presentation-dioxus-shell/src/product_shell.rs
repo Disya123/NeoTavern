@@ -10,7 +10,9 @@ use std::cell::RefCell;
 
 use dioxus_core::Element;
 use dioxus_core_macro::rsx;
-use neotavern_presentation_design_system::{phosphor_path, product_stylesheets, SafeAreaInsets};
+use neotavern_presentation_design_system::{
+    phosphor_path, product_stylesheets_dev, SafeAreaInsets,
+};
 
 use crate::{product_chat_app, ProductChatView};
 
@@ -119,6 +121,18 @@ pub const PLUGINS_MANAGER_TITLE: &str = "Plugins";
 pub const SETTINGS_TITLE: &str = "Settings";
 pub const CHATS_MANAGER_TITLE: &str = "Chats";
 
+/// Unmanaged DOM insertion points for documented SillyTavern legacy
+/// extensions. Mirrors `LEGACY_ISLANDS` in `packages/legacy-compat` (single
+/// source of truth lives there; keep the two lists in the same order).
+pub const LEGACY_ISLAND_SLOTS: &[&str] = &[
+    "legacy.extensions.settings",
+    "legacy.chat.actions",
+    "legacy.character.actions",
+    "legacy.toolbar",
+    "legacy.drawer",
+    "legacy.modal",
+];
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PersonaCardView {
     pub id: String,
@@ -158,6 +172,15 @@ pub struct PresetCardView {
     pub id: String,
     pub name: String,
     pub kind: String,
+}
+
+/// Home/chats panel row (React `ChatManagementPanel_chatRow`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ChatCardView {
+    pub id: String,
+    pub title: String,
+    pub message_count: i64,
+    pub character_label: String,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -205,6 +228,9 @@ pub struct ProductShellView {
     pub panel: String,
     pub sidebar_open: bool,
     pub rail_expanded: bool,
+    /// CSS-px width of the open desktop side panel (`--st-shell-panel-width`).
+    /// Clamped to `--st-shell-panel-min-width`/`max-width` (260..720).
+    pub panel_width: f32,
     pub density: String,
     pub font_scale: String,
     pub insets: SafeAreaInsets,
@@ -243,6 +269,9 @@ pub struct ProductShellView {
     pub plugins: Vec<PluginCardView>,
     pub providers: Vec<ProviderCardView>,
     pub presets: Vec<PresetCardView>,
+    pub chat_list: Vec<ChatCardView>,
+    pub selected_chat_id: Option<String>,
+    pub chat_search: String,
     pub language: String,
     pub dir: String,
     pub ai_tab: String,
@@ -264,6 +293,7 @@ impl Default for ProductShellView {
             panel: "characters".into(),
             sidebar_open: true,
             rail_expanded: true,
+            panel_width: 380.0,
             density: "comfortable".into(),
             font_scale: "medium".into(),
             insets: SafeAreaInsets::default(),
@@ -302,6 +332,9 @@ impl Default for ProductShellView {
             plugins: Vec::new(),
             providers: Vec::new(),
             presets: Vec::new(),
+            chat_list: Vec::new(),
+            selected_chat_id: None,
+            chat_search: String::new(),
             language: "en".into(),
             dir: "ltr".into(),
             ai_tab: "providers".into(),
@@ -381,11 +414,11 @@ const RAIL: &[RailSpec] = &[
     },
 ];
 
-pub(crate) fn icon(name: &'static str, size: u32) -> Element {
+pub(crate) fn icon(name: &str, size: u32) -> Element {
     icon_fill(name, size, "#998f87")
 }
 
-pub(crate) fn icon_fill(name: &'static str, size: u32, fill: &'static str) -> Element {
+pub(crate) fn icon_fill(name: &str, size: u32, fill: &str) -> Element {
     let path = phosphor_path(name).unwrap_or("");
     let class = format!("nt-icon nt-icon-{name}");
     rsx! {
@@ -574,6 +607,7 @@ fn cards_tab(view: &ProductShellView) -> Element {
         div {
             class: "CharacterManagementPanel_cardsTab",
             "data-part": "character-cards",
+            style: "display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;gap:12px;padding:8px 16px 16px;",
             div {
                 class: "st-action-bar CharacterManagementPanel_cardToolbar",
                 "data-component": "action-bar",
@@ -638,6 +672,11 @@ fn cards_tab(view: &ProductShellView) -> Element {
                 }
                 input {
                     r#type: "search",
+                    // Theme SDK hook for the native hit-rect snapshot
+                    // (`presentation_chat::hit_rects`) — mirrors React's
+                    // CharacterManagementPanel search control.
+                    "data-component": "text-field",
+                    "data-part": "search",
                     placeholder: "Search characters...",
                     value: "{view.search}",
                     style: if view.search.trim().is_empty() {
@@ -719,9 +758,9 @@ fn cards_tab(view: &ProductShellView) -> Element {
                     class: "CharacterManagementPanel_characterList",
                     "data-view": "{view.view}",
                     style: if view.view == "grid" {
-                        "display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;width:100%;box-sizing:border-box;"
+                        "display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;width:100%;box-sizing:border-box;flex:1;min-height:0;overflow:auto;"
                     } else {
-                        "display:flex;flex-direction:column;gap:8px;width:100%;box-sizing:border-box;"
+                        "display:flex;flex-direction:column;gap:8px;width:100%;box-sizing:border-box;flex:1;min-height:0;overflow:auto;"
                     },
                     for item in view.characters.iter() {
                         {
@@ -1138,17 +1177,17 @@ fn character_manager(view: &ProductShellView) -> Element {
     let header_min = 52.0_f32;
     let header_title = character_manager_title(view.chat.viewport_width);
     let root_style =
-        "display:flex;flex-direction:column;height:100%;min-height:0;overflow:hidden;background:#24211e;";
+        "display:flex;flex-direction:column;height:100%;min-height:0;overflow:hidden;background:rgba(36,33,30,0.72);";
     let header_style = format!(
-        "flex:none;position:relative;z-index:0;display:flex;flex-direction:row;flex-wrap:nowrap;align-items:center;min-width:0;width:100%;overflow:hidden;padding:8px 16px 8px;min-height:{header_min}px;background:#24211e;"
+        "flex:none;position:relative;z-index:0;display:flex;flex-direction:row;flex-wrap:nowrap;align-items:center;min-width:0;width:100%;overflow:hidden;padding:8px 16px 8px;min-height:{header_min}px;background:transparent;"
     );
     let body_style = format!(
         "flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;position:relative;padding-bottom:{pad_bottom}px;"
     );
     let tabs_style =
-        "display:flex;flex-direction:row;flex:none;box-sizing:border-box;align-self:stretch;position:relative;width:auto;max-width:100%;margin:8px 16px 8px;padding:4px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;";
+        "display:flex;flex-direction:row;flex:none;box-sizing:border-box;align-self:stretch;position:static;width:auto;max-width:100%;order:0;z-index:0;margin:8px 16px 8px;padding:4px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;";
     let tabs_wrap =
-        "flex:none;align-self:stretch;box-sizing:border-box;width:100%;max-width:100%;overflow:visible;";
+        "flex:none;align-self:stretch;box-sizing:border-box;width:100%;max-width:100%;overflow:visible;order:1;";
     let cards_tab_style = tab_trigger_style(tab == "cards");
     let edit_tab_style = tab_trigger_style(tab == "edit");
     let advanced_tab_style = tab_trigger_style(tab == "advanced");
@@ -1268,6 +1307,12 @@ fn character_manager(view: &ProductShellView) -> Element {
                 div {
                     "data-component": "tabs-scroll-content",
                     "data-part": "scroll-content",
+                    // Packed css gives the scroll root `flex:1;min-height:0`
+                    // inside the tab column; Blitz misses those descendant
+                    // rules, so the geometry rides inline. Explicit `order`
+                    // keeps the list above the content (a packed `order:1`
+                    // rule otherwise leaks onto the wrong node).
+                    style: "flex:1 1 0%;min-height:0;overflow:hidden;display:flex;flex-direction:column;order:1;",
                     div {
                         class: "CharacterManagementPanel_tabPanel",
                         "data-component": "tabs-content",
@@ -1303,136 +1348,35 @@ fn character_manager(view: &ProductShellView) -> Element {
                     }
                 }
             }
-            if view.create_dialog_open {
-                {create_character_dialog(view)}
-            }
-            if view.delete_dialog_open {
-                {delete_character_dialog(view)}
-            }
         }
     }
 }
 
-fn create_character_dialog(view: &ProductShellView) -> Element {
-    rsx! {
-        div {
-            "data-component": "dialog-overlay",
-            "data-state": "open",
-            div {
-                "data-component": "dialog-content",
-                role: "dialog",
-                "aria-modal": "true",
-                "aria-labelledby": "create-character-title",
-                h2 {
-                    id: "create-character-title",
-                    "data-component": "dialog-title",
-                    "New character"
-                }
-                p {
-                    "data-component": "dialog-description",
-                    "Start with the essentials. You can expand the character later."
-                }
-                form {
-                    class: "CharacterManagementPanel_createForm",
-                    label {
-                        class: "CharacterManagementPanel_editorField",
-                        span { class: "CharacterManagementPanel_fieldHeading", strong { "Name" } }
-                        input {
-                            value: "{view.create_name}",
-                            required: true,
-                        }
-                    }
-                    label {
-                        class: "CharacterManagementPanel_editorField",
-                        span { class: "CharacterManagementPanel_fieldHeading", strong { "Description" } }
-                        textarea {
-                            class: "CharacterManagementPanel_textarea",
-                            value: "{view.create_description}",
-                        }
-                    }
-                    label {
-                        class: "CharacterManagementPanel_editorField",
-                        span { class: "CharacterManagementPanel_fieldHeading", strong { "First message" } }
-                        textarea {
-                            class: "CharacterManagementPanel_textarea",
-                            value: "{view.create_first_message}",
-                        }
-                    }
-                    div {
-                        class: "CharacterManagementPanel_dialogActions",
-                        button {
-                            class: "st-button",
-                            r#type: "button",
-                            "data-component": "button",
-                            "data-variant": "default",
-                            "data-size": "md",
-                            span { "data-part": "label", "Cancel" }
-                        }
-                        button {
-                            class: "st-button",
-                            r#type: "submit",
-                            "data-component": "button",
-                            "data-variant": "primary",
-                            "data-size": "md",
-                            span { "data-part": "label", "Create" }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-fn delete_character_dialog(view: &ProductShellView) -> Element {
-    let name = view
-        .selected_draft
-        .as_ref()
-        .map(|draft| draft.name.as_str())
-        .or_else(|| {
-            view.characters
-                .iter()
-                .find(|item| Some(item.id.as_str()) == view.selected_character_id.as_deref())
-                .map(|item| item.name.as_str())
-        })
-        .unwrap_or("");
-    let confirm = format!("Delete \"{name}\"? It will move to trash.");
-    rsx! {
-        div {
-            "data-component": "dialog-overlay",
-            "data-state": "open",
-            div {
-                "data-component": "dialog-content",
-                role: "dialog",
-                "aria-modal": "true",
-                "aria-labelledby": "delete-character-title",
-                h2 {
-                    id: "delete-character-title",
-                    "data-component": "dialog-title",
-                    "Delete character"
-                }
-                p { "data-component": "dialog-description", "{confirm}" }
-                div {
-                    class: "CharacterManagementPanel_dialogActions",
-                    button {
-                        class: "st-button",
-                        r#type: "button",
-                        "data-component": "button",
-                        "data-variant": "default",
-                        "data-size": "md",
-                        span { "data-part": "label", "Cancel" }
-                    }
-                    button {
-                        class: "st-button",
-                        r#type: "button",
-                        "data-component": "button",
-                        "data-variant": "danger",
-                        "data-size": "md",
-                        span { "data-part": "label", "Delete character" }
-                    }
-                }
-            }
-        }
-    }
+/// Modal geometry in window CSS px — centered over the chat main area with
+/// the React dialog sizes. Mirrors `shell_hit::dialog_hit` (rail 60 + panel
+/// 380 offset on non-compact open sidebars).
+fn modal_geometry(view: &ProductShellView, dw: f32, dh: f32) -> (f32, f32, f32, f32) {
+    let width = view.chat.viewport_width.max(1) as f32;
+    let height = view.chat.viewport_height.max(1) as f32;
+    let compact = width <= 600.0;
+    let panel_w = if view.panel_width < 1.0 {
+        380.0
+    } else {
+        view.panel_width.clamp(260.0, 720.0)
+    };
+    let chat_x0 = if compact {
+        0.0
+    } else if view.sidebar_open {
+        60.0 + panel_w
+    } else {
+        60.0
+    };
+    (
+        chat_x0 + (width - chat_x0 - dw).max(0.0) * 0.5,
+        (height - dh) * 0.5,
+        dw,
+        dh,
+    )
 }
 
 /// Shared React `FloatingTabPanel` chrome: header, divider, body, bottom tabs.
@@ -1451,17 +1395,17 @@ pub(crate) fn management_shell(
     let header_min = 52.0_f32;
     let header_title = panel_header_title(title, view.chat.viewport_width);
     let root_style =
-        "display:flex;flex-direction:column;height:100%;min-height:0;overflow:hidden;background:#24211e;";
+        "display:flex;flex-direction:column;height:100%;min-height:0;overflow:hidden;background:rgba(36,33,30,0.72);";
     let header_style = format!(
-        "flex:none;position:relative;z-index:0;display:flex;flex-direction:row;flex-wrap:nowrap;align-items:center;min-width:0;width:100%;overflow:hidden;padding:8px 16px 8px;min-height:{header_min}px;background:#24211e;"
+        "flex:none;position:relative;z-index:0;display:flex;flex-direction:row;flex-wrap:nowrap;align-items:center;min-width:0;width:100%;overflow:hidden;padding:8px 16px 8px;min-height:{header_min}px;background:transparent;"
     );
     let body_style = format!(
         "flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;position:relative;padding-bottom:{pad_bottom}px;"
     );
     let tabs_style =
-        "display:flex;flex-direction:row;flex:none;box-sizing:border-box;align-self:stretch;position:relative;width:auto;max-width:100%;margin:8px 16px 8px;padding:4px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;";
+        "display:flex;flex-direction:row;flex:none;box-sizing:border-box;align-self:stretch;position:static;width:auto;max-width:100%;order:0;z-index:0;margin:8px 16px 8px;padding:4px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;";
     let tabs_wrap =
-        "flex:none;align-self:stretch;box-sizing:border-box;width:100%;max-width:100%;overflow:visible;";
+        "flex:none;align-self:stretch;box-sizing:border-box;width:100%;max-width:100%;overflow:visible;order:1;";
     let letter = avatar_letter.unwrap_or("");
     rsx! {
         div {
@@ -1552,6 +1496,7 @@ pub(crate) fn management_shell(
                 div {
                     "data-component": "tabs-scroll-content",
                     "data-part": "scroll-content",
+                    style: "flex:1 1 0%;min-height:0;overflow:hidden;display:flex;flex-direction:column;order:1;",
                     div {
                         "data-component": "tabs-content",
                         "data-part": "content",
@@ -1725,29 +1670,61 @@ pub fn product_shell_app() -> Element {
         .unwrap_or("Home");
     let (pad_top, pad_bottom) = chrome_insets(&view);
     let rtl = view.dir == "rtl";
+    // React `AppShell` status strip sits right of the 60px rail with a 12px
+    // gutter (`AppShell.module.css` grid); the slot is passive either way.
+    let status_left = if rtl { 8.0 } else { 72.0 };
     let (pad_start, pad_end) = if rtl {
         (view.insets.right, view.insets.left)
     } else {
         (view.insets.left, view.insets.right)
     };
-    let rail_pad = format!("flex:none;width:60px;height:100%;z-index:2;box-sizing:border-box;padding-bottom:{pad_bottom}px;padding-left:calc(4px + {pad_start}px);padding-right:calc(4px + {pad_end}px);background:#151311;");
-    let panel_pad = if is_compact {
-        format!("display:flex;flex-direction:column;flex:1 1 calc(100% - 60px);min-width:calc(100% - 60px);width:calc(100% - 60px);max-width:calc(100% - 60px);height:100%;margin:0;padding-top:{pad_top}px;padding-bottom:0;box-sizing:border-box;overflow:hidden;background:#24211e;")
+    let panel_w = if view.panel_width < 1.0 {
+        380.0
     } else {
-        "display:flex;flex-direction:column;flex:0 0 380px;min-width:320px;width:380px;max-width:480px;height:100%;margin:0;padding-bottom:0;overflow:hidden;background:#24211e;".to_string()
+        view.panel_width.clamp(260.0, 720.0)
+    };
+    let rail_pad = format!("flex:none;width:60px;height:100%;z-index:2;box-sizing:border-box;padding-bottom:{pad_bottom}px;padding-left:calc(4px + {pad_start}px);padding-right:calc(4px + {pad_end}px);background:rgba(21,19,17,0.82);");
+    let panel_pad = if is_compact {
+        format!("display:flex;flex-direction:column;flex:1 1 calc(100% - 60px);min-width:calc(100% - 60px);width:calc(100% - 60px);max-width:calc(100% - 60px);height:100%;margin:0;padding-top:{pad_top}px;padding-bottom:0;box-sizing:border-box;overflow:hidden;background:rgba(36,33,30,0.88);position:relative;")
+    } else {
+        format!("display:flex;flex-direction:column;flex:0 0 {panel_w}px;min-width:260px;width:{panel_w}px;max-width:720px;height:100%;margin:0;padding-bottom:0;overflow:hidden;background:rgba(36,33,30,0.88);position:relative;")
     };
     let row_dir = if rtl { "row-reverse" } else { "row" };
     let sidebar_style = if is_compact {
         format!("display:flex;flex-direction:{row_dir};flex-wrap:nowrap;align-items:stretch;width:100%;height:100%;min-width:100%;position:absolute;inset:0;z-index:20;padding-top:{pad_top}px;box-sizing:border-box;")
     } else {
-        format!("display:flex;flex-direction:{row_dir};flex-wrap:nowrap;align-items:stretch;height:100%;min-width:0;flex:none;")
+        format!("display:flex;flex-direction:{row_dir};flex-wrap:nowrap;align-items:stretch;height:100%;min-width:0;flex:none;position:relative;z-index:2;")
     };
-    let shell_style = format!("display:flex;flex-direction:{row_dir};width:100%;height:100%;background:#151311;color:#f3eee8;position:relative;overflow:hidden;");
-    let product_css = product_stylesheets(view.insets).join("\n");
+    let shell_style = format!("display:flex;flex-direction:{row_dir};width:100%;height:100%;background:transparent;color:#f3eee8;position:relative;overflow:hidden;");
+    let product_css = product_stylesheets_dev(view.insets).join("\n");
     let show_rail = !is_compact || view.rail_expanded || view.sidebar_open;
     let show_panel = view.sidebar_open;
     let show_chat = !is_compact || !view.sidebar_open;
     let show_bottom_nav = is_compact && !view.sidebar_open;
+
+    // Modal geometry (window CSS px) mirrors `shell_hit::dialog_hit`: centered
+    // over the chat main area; surface = packer-baked `.st-card` tokens
+    // (bg #292522 / border #39342f / radius 16px / shadow rgba(0,0,0,.35)).
+    let (cdlg_x, cdlg_y, cdlg_w, cdlg_h) = modal_geometry(&view, 320.0, 360.0);
+    let create_style = format!(
+        "position:absolute;left:{cdlg_x}px;top:{cdlg_y}px;width:{cdlg_w}px;height:{cdlg_h}px;box-sizing:border-box;z-index:50;padding:16px;color:#f3eee8;"
+    );
+    let (ddlg_x, ddlg_y, ddlg_w, ddlg_h) = modal_geometry(&view, 300.0, 200.0);
+    let delete_style = format!(
+        "position:absolute;left:{ddlg_x}px;top:{ddlg_y}px;width:{ddlg_w}px;height:{ddlg_h}px;box-sizing:border-box;z-index:50;padding:16px;color:#f3eee8;"
+    );
+    let delete_name = view
+        .selected_draft
+        .as_ref()
+        .map(|draft| draft.name.as_str())
+        .or_else(|| {
+            view.characters
+                .iter()
+                .find(|item| Some(item.id.as_str()) == view.selected_character_id.as_deref())
+                .map(|item| item.name.as_str())
+        })
+        .unwrap_or("");
+    let delete_confirm = format!("Delete \"{delete_name}\"? It will move to trash.");
 
     rsx! {
         style { "{product_css}" }
@@ -1765,6 +1742,16 @@ pub fn product_shell_app() -> Element {
             "data-ui-density": "{view.density}",
             "data-ui-scale": "{view.font_scale}",
             a { class: "AppShell_skipLink", href: "#chat-workspace", "Skip to chat" }
+            div {
+                "data-part": "chat-wallpaper",
+                "aria-hidden": "true",
+                style: "position:absolute;left:-16px;top:-16px;right:-16px;bottom:-16px;z-index:0;pointer-events:none;background:#c5cdd6;",
+            }
+            div {
+                "data-part": "chat-wallpaper-overlay",
+                "aria-hidden": "true",
+                style: "position:absolute;left:0;top:0;right:0;bottom:0;z-index:0;pointer-events:none;background:rgba(21,19,17,0.46);",
+            }
             if show_rail || show_panel {
                 aside {
                     class: "Sidebar_sidebar",
@@ -1832,6 +1819,16 @@ pub fn product_shell_app() -> Element {
                                 "home" => {crate::chats_tab::chats_panel(&view)},
                                 _ => {not_yet_migrated(panel_title)},
                             }
+                            if !is_compact {
+                                button {
+                                    class: "Sidebar_resizeHandle",
+                                    r#type: "button",
+                                    "data-part": "resize-handle",
+                                    "aria-label": "Drag to resize panel",
+                                    title: "Drag to resize panel",
+                                    style: "position:absolute;top:0;bottom:0;right:-4px;width:8px;padding:0;border:0;background:transparent;z-index:6;",
+                                }
+                            }
                         }
                     }
                 }
@@ -1843,12 +1840,147 @@ pub fn product_shell_app() -> Element {
                     "data-component": "main-area",
                     "data-slot": "chat.viewport",
                     tabindex: "-1",
-                    style: if is_compact { "flex:1 1 auto;width:100%;height:100%;min-width:0;min-height:0;overflow:hidden;" } else { "" },
+                    style: "flex:1 1 auto;width:auto;height:100%;min-width:0;min-height:0;overflow:hidden;position:relative;z-index:1;",
                     {product_chat_app()}
+                }
+            }
+            // React `AppShell` named regions the native shell did not mount
+            // yet. They are passive mount points (pointer-events:none) so
+            // themes and the DOM-parity contract see the same slots.
+            div {
+                class: "AppShell_statusArea",
+                "data-slot": "status.area",
+                style: "position:absolute;top:8px;left:{status_left}px;right:8px;height:0;display:flex;align-items:flex-start;justify-content:flex-end;pointer-events:none;z-index:3;",
+            }
+            div {
+                class: "AppShell_pluginRuntimeLayer",
+                "data-component": "plugin-runtime-layer",
+                "data-slot": "modal.layer",
+                style: "position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none;z-index:2;",
+            }
+            // Unmanaged DOM insertion points for documented SillyTavern
+            // legacy extensions (`packages/legacy-compat` LEGACY_ISLANDS).
+            div {
+                class: "LegacyIslands_layer",
+                "data-component": "legacy-island-layer",
+                style: "position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none;",
+                for island_slot in LEGACY_ISLAND_SLOTS {
+                    div {
+                        class: "LegacyIslands_island",
+                        id: "native-island-{island_slot}",
+                        "data-component": "legacy-island",
+                        "data-slot": "{island_slot}",
+                        style: "position:absolute;left:0;top:0;width:0;height:0;overflow:hidden;pointer-events:none;",
+                    }
                 }
             }
             if show_bottom_nav {
                 {bottom_nav_bar(&view)}
+            }
+            // Modals render at the shell root (the panel subtree clips at
+            // overflow:hidden, so a centered dialog would never paint there).
+            // Inline `if { div ... }` is what this Blitz RSX translation
+            // actually mounts (a component call `{fn}` is dropped under any
+            // conditional), so the dialog markup is inlined here. The React
+            // `[data-component='dialog-overlay']` style (position:relative /
+            // inset:0, product.css) overrides inline absolute geometry in the
+            // Blitz cascade and hid the dialog, so no dialog-* data attrs are
+            // used on the positioned box — the packer-baked `.st-card` tokens
+            // give the surface (see presentation-boundary parity notes).
+            if view.create_dialog_open {
+                div {
+                    class: "st-card",
+                    style: "{create_style}",
+                    div {
+                        "data-component": "dialog-title",
+                        "New character"
+                    }
+                    div {
+                        "data-component": "dialog-description",
+                        style: "margin:4px 0 12px;",
+                        "Start with the essentials. You can expand the character later."
+                    }
+                    div {
+                        class: "CharacterManagementPanel_createForm",
+                        div {
+                            class: "CharacterManagementPanel_editorField",
+                            // Hit-rect focus target for the bin's keyboard
+                            // typing (create dialog renders values as text).
+                            "data-part": "create-name",
+                            span { class: "CharacterManagementPanel_fieldHeading", strong { "Name" } }
+                            strong { style: "display:block;font-weight:400;color:#e8eef7;", "{view.create_name}" }
+                        }
+                        div {
+                            class: "CharacterManagementPanel_editorField",
+                            span { class: "CharacterManagementPanel_fieldHeading", strong { "Description" } }
+                            span { style: "color:#c5bbb2;", "{view.create_description}" }
+                        }
+                        div {
+                            class: "CharacterManagementPanel_editorField",
+                            span { class: "CharacterManagementPanel_fieldHeading", strong { "First message" } }
+                            span { style: "color:#c5bbb2;", "{view.create_first_message}" }
+                        }
+                        div {
+                            class: "CharacterManagementPanel_dialogActions",
+                            style: "display:flex;gap:8px;justify-content:flex-end;margin-top:12px;",
+                            button {
+                                r#type: "button",
+                                "data-variant": "default",
+                                "data-size": "md",
+                                span { "Cancel" }
+                            }
+                            button {
+                                r#type: "submit",
+                                "data-variant": "primary",
+                                "data-size": "md",
+                                span { "Create" }
+                            }
+                        }
+                    }
+                }
+            }
+            if view.delete_dialog_open {
+                div {
+                    class: "st-card",
+                    style: "{delete_style}",
+                    div {
+                        "data-component": "dialog-title",
+                        "Delete character"
+                    }
+                    div { "data-component": "dialog-description", "{delete_confirm}" }
+                    div {
+                        class: "CharacterManagementPanel_dialogActions",
+                        style: "display:flex;gap:8px;justify-content:flex-end;margin-top:12px;",
+                        button {
+                            r#type: "button",
+                            "data-variant": "default",
+                            "data-size": "md",
+                            span { "Cancel" }
+                        }
+                        button {
+                            r#type: "button",
+                            "data-variant": "danger",
+                            "data-size": "md",
+                            span { "Delete character" }
+                        }
+                    }
+                }
+            }
+            // Phase C toast: transient `status_message` (e.g. "Character
+            // created.") as a bottom-left status strip. Visual = packer-baked
+            // `.st-card` rule (background #292522 / border #39342f / radius 16 /
+            // shadow rgba(0,0,0,.35)) + shell text #f3eee8; this React build
+            // packs no app-toast CSS, so this is a documented waiver (see
+            // presentation-boundary parity notes).
+            if let Some(msg) = view.status_message.as_deref() {
+                div {
+                    "data-component": "toast",
+                    "data-state": "open",
+                    role: "status",
+                    "aria-live": "polite",
+                    style: "position:absolute;left:16px;bottom:16px;z-index:60;max-width:340px;box-sizing:border-box;padding:12px 16px;background:#292522;border:1px solid #39342f;border-radius:16px;box-shadow:0 1px 2px rgba(0,0,0,.35);color:#f3eee8;font-size:14px;",
+                    "{msg}"
+                }
             }
         }
     }

@@ -1,0 +1,476 @@
+﻿<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Rust UiScene — phone preview</title>
+<style>
+  *{box-sizing:border-box} body{font-family:Inter,ui-sans-serif,system-ui;margin:0;padding:16px;background:#0b0b0f;color:#e6e6eb}
+  h1{font-size:22px;margin:0 0 6px} .subtitle{opacity:.65;margin:0 0 12px;line-height:1.4}
+  a{color:#8ab4ff} .hint{background:#1a1a22;border:1px solid #2a2a33;border-radius:8px;padding:10px;margin:12px 0;opacity:.9}
+  .rust-viewport{border:1px solid #242438;border-radius:14px;padding:14px;margin:18px 0;background:#111118}
+  .phone-preview-wrap{display:flex;flex-direction:column;align-items:center;gap:8px}
+  .phone-meta{font-size:12px;opacity:.55}
+  .phone-frame{background:#0f0f14;border:1px solid #2a2a3a;border-radius:16px;box-shadow:0 10px 40px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.06); overflow:hidden; display:flex; flex-direction:column}
+  .phone-header{padding:14px 14px 10px; background:linear-gradient(180deg,#1b1b24,#13131a); border-bottom:1px solid #232332}
+  .phone-eyebrow{font-size:10px; letter-spacing:.14em; opacity:.5} .phone-title{font-size:16px; font-weight:700; margin-top:2px}
+  .phone-tabs{display:flex; gap:6px; padding:10px 10px 0; overflow:auto}
+  .phone-tab{flex:0 0 auto; padding:7px 10px; border-radius:999px; border:1px solid #2a2a3a; background:#1a1a22; color:#c9c9d6; font-size:13px}
+  .phone-tab.is-active{background:#2d2dff; border-color:#4a4aff; color:white; box-shadow:0 2px 10px rgba(45,45,255,.35)}
+  .phone-toolbar{display:flex; gap:8px; align-items:center; padding:10px}
+  .btn{padding:7px 11px; border-radius:10px; border:1px solid #2a2a3a; background:#1e1e28; color:#e6e6eb; font-size:13px}
+  .btn.primary{background:#2d2dff; border-color:#4a4aff; color:white} .spacer{flex:1}
+  .pill{font-size:12px; padding:4px 8px; border-radius:999px; background:#1e1e28; border:1px solid #2a2a3a; opacity:.8}
+  .phone-search{display:flex; align-items:center; gap:8px; margin:0 10px; padding:8px 10px; background:#0d0d12; border:1px solid #242438; border-radius:10px}
+  .phone-search input{flex:1; background:transparent; border:0; color:#e6e6eb; outline:none} .kbd{font-size:11px; opacity:.45}
+  .phone-cards{padding:10px; display:grid; gap:10px} .phone-cards.is-list{grid-template-columns:1fr} .phone-cards.is-grid{grid-template-columns:1fr 1fr}
+  .phone-card{display:flex; gap:10px; align-items:center; padding:10px; background:#1a1a22; border:1px solid #262637; border-radius:12px}
+  .phone-card.is-selected{border-color:#4a4aff; box-shadow:0 0 0 1px rgba(74,74,255,.25) inset} .avatar{width:36px; height:36px; border-radius:10px; display:grid; place-items:center; background:#2a2a3a; font-weight:700} .card-name{font-weight:700; font-size:14px} .card-desc{font-size:12px; opacity:.65; margin-top:2px} .card-id{font-size:10px; opacity:.35} .badge{font-size:10px; margin-left:6px; padding:2px 6px; border-radius:999px; background:#2a2a3a} .badge.selected{background:#2d2dff; color:white} .btn.load-more{margin:10px; align-self:center}
+  .rust-node{border:1px dashed #232334; border-radius:8px; padding:6px; margin:6px 0; background:#15151d; font-size:12px}
+  pre{white-space:pre-wrap; word-break:break-word; font-size:11px; background:#0d0d12; padding:8px; border-radius:8px; border:1px solid #222233}
+  details{margin-top:8px} details summary{cursor:pointer; opacity:.8}
+</style>
+</head>
+<body>
+<h1>Rust UiScene — телефон превью (без компиляции телефона)</h1>
+<p class="subtitle">Сгенерировано <b>чистым Rust</b> из <code>UiBlueprintDocumentV1 + CharacterManagerStateV1 + ViewportClassV1</code>. React не используется. Это тот же <code>UiSceneV1</code>, что поедет на Android/desktop/iOS/WebGPU — здесь просто отрисован HTML-адаптером для дебага.</p>
+<p><a href="http://localhost:5173/">← React эталон (5173)</a> · <code>apps/web/public/rust-scene.html</code> · <code>cargo run -p neotavern-presentation-blueprint --example debug_render</code> → F5 (1.5 сек, без телефона)</p>
+<div class="hint">💡 <b>Как дебажить без телефона:</b> меняешь <code>crates/presentation-blueprint/src/v1/*.rs</code> → <code>cargo test</code> (1 сек) → <code>cargo run --example debug_render | Out-File -Encoding utf8 apps/web/public/rust-scene.html</code> → F5. <code>hit_test_tree</code> и <code>selected/pinned</code> уже внизу.</div>
+<section class="rust-viewport" data-viewport="compact 360×800">
+<h2>compact 360×800 — Compact — revision 7</h2>
+<div class="phone-preview-wrap">
+  <div class="phone-meta"><b>compact 360×800</b> · compact-panel (phone) · revision 7 · 15 paint / 10 hit</div>
+  <div class="phone-frame" style="width:360px; min-height:740px">
+    <div class="phone-header">
+      <div class="phone-eyebrow">NEOTAVERN</div>
+      <div class="phone-title">Управление персонажами</div>
+    </div>
+    <div class="phone-tabs"><button class="phone-tab is-active">Карточки</button>
+<button class="phone-tab ">Редактирование</button>
+<button class="phone-tab ">Дополнительно</button>
+<button class="phone-tab ">Галерея</button></div>
+    <div class="phone-toolbar">
+      <button class="btn primary">＋ Создать</button>
+      <button class="btn">⤓ Импорт</button>
+      <span class="spacer"></span>
+      <span class="pill">Список</span>
+    </div>
+    <label class="phone-search"><span>🔍</span><input placeholder="Поиск персонажей…" value="" readonly /><span class="kbd">Rust • Viewport Compact</span></label>
+    <div class="phone-cards is-list"><div class="phone-card is-selected" data-node-id="character-manager.card:11111111-1111-4111-8111-111111111111">
+                  <div class="avatar">H</div>
+                  <div class="card-copy">
+                    <div class="card-name">Hazel <span class="badge selected">● выбрано</span><span class="badge pinned">📌</span></div>
+                    <div class="card-desc">A quiet companion for the deterministic Cards pilot.</div>
+                    <code class="card-id">11111111</code>
+                  </div>
+                </div><div class="phone-card " data-node-id="character-manager.card:33333333-3333-4333-8333-333333333333">
+                  <div class="avatar">S</div>
+                  <div class="card-copy">
+                    <div class="card-name">Seraphina </div>
+                    <div class="card-desc">Second fixed card for collection and selection coverage.</div>
+                    <code class="card-id">33333333</code>
+                  </div>
+                </div></div>
+    <button class="btn load-more">Загрузить ещё</button>
+  </div>
+</div><details open><summary>Структура Rust UiScene (данные, не пиксели) — paint/hit/text/semantic</summary>
+  <div class="rust-node" data-component="character-management" data-role="region" data-state="compact">
+    <div class="rust-node" data-component="tabs" data-role="tablist" data-part="root">
+      <div class="rust-node" data-component="tabs" data-role="tab" data-part="trigger" data-state="active">
+        <span class="rust-text-key">Карточки</span>
+      </div>
+      <div class="rust-node" data-component="tabs" data-role="tab" data-part="trigger">
+        <span class="rust-text-key">Редактирование</span>
+      </div>
+      <div class="rust-node" data-component="tabs" data-role="tab" data-part="trigger">
+        <span class="rust-text-key">Дополнительно</span>
+      </div>
+      <div class="rust-node" data-component="tabs" data-role="tab" data-part="trigger">
+        <span class="rust-text-key">Галерея</span>
+      </div>
+    </div>
+    <div class="rust-node" data-component="character-management" data-role="group" data-part="character-cards">
+      <div class="rust-node" data-component="action-bar" data-role="toolbar" data-part="character-card-toolbar">
+        <div class="rust-node" data-component="button" data-role="button" data-part="create">
+          <span class="rust-text-key">Создать</span>
+        </div>
+        <div class="rust-node" data-component="button" data-role="button" data-part="import">
+          <span class="rust-text-key">Импорт</span>
+        </div>
+      </div>
+      <div class="rust-node" data-component="text-field" data-role="searchbox" data-part="search">
+        <label class="rust-input"><span>Поиск персонажей…</span><input value="" readonly /></label>
+      </div>
+      <div class="rust-node" data-component="character-management" data-role="list" data-part="character-cards" data-state="list">
+        <div class="rust-node" data-component="character-card" data-role="button" data-part="catalog-item" data-state="selected pinned">
+          <div class="rust-card"><strong>Hazel</strong><p>A quiet companion for the deterministic Cards pilot.</p></div>
+        </div>
+        <div class="rust-node" data-component="character-card" data-role="button" data-part="catalog-item">
+          <div class="rust-card"><strong>Seraphina</strong><p>Second fixed card for collection and selection coverage.</p></div>
+        </div>
+      </div>
+      <div class="rust-node" data-component="button" data-role="button" data-part="load-more">
+        <span class="rust-text-key">Загрузить ещё</span>
+      </div>
+    </div>
+  </div>
+<details><summary>hit_test_tree (10 targets)</summary><pre>[
+    UiHitTargetV1 {
+        id: &quot;character-manager&quot;,
+        action: ClosePanel,
+    },
+    UiHitTargetV1 {
+        id: &quot;character-manager.tab.cards&quot;,
+        action: SetTab {
+            value: Cards,
+        },
+    },
+    UiHitTargetV1 {
+        id: &quot;character-manager.tab.edit&quot;,
+        action: SetTab {
+            value: Edit,
+        },
+    },
+    UiHitTargetV1 {
+        id: &quot;character-manager.tab.advanced&quot;,
+        action: SetTab {
+            value: Advanced,
+        },
+    },
+    UiHitTargetV1 {
+        id: &quot;character-manager.tab.gallery&quot;,
+        action: SetTab {
+            value: Gallery,
+        },
+    },
+    UiHitTargetV1 {
+        id: &quot;character-manager.action.create&quot;,
+        action: OpenCreate,
+    },
+    UiHitTargetV1 {
+        id: &quot;character-manager.action.import&quot;,
+        action: BeginImport,
+    },
+    UiHitTargetV1 {
+        id: &quot;character-manager.cards.search&quot;,
+        action: SetQuery {
+            value: &quot;&quot;,
+        },
+    },
+    UiHitTargetV1 {
+        id: &quot;character-manager.card:11111111-1111-4111-8111-111111111111&quot;,
+        action: SelectCharacter {
+            character_id: &quot;11111111-1111-4111-8111-111111111111&quot;,
+        },
+    },
+    UiHitTargetV1 {
+        id: &quot;character-manager.card:33333333-3333-4333-8333-333333333333&quot;,
+        action: SelectCharacter {
+            character_id: &quot;33333333-3333-4333-8333-333333333333&quot;,
+        },
+    },
+]</pre></details>
+<details><summary>text_interaction_tree</summary><pre>[
+    UiTextInteractionV1 {
+        id: &quot;character-manager.cards.search&quot;,
+        value: &quot;&quot;,
+        label_key: &quot;characters:searchPlaceholder&quot;,
+        editable: true,
+    },
+]</pre></details>
+</details>
+</section>
+
+<section class="rust-viewport" data-viewport="medium 720×800">
+<h2>medium 720×800 — Medium — revision 7</h2>
+<div class="phone-preview-wrap">
+  <div class="phone-meta"><b>medium 720×800</b> · rail-overlay-panel · revision 7 · 15 paint / 10 hit</div>
+  <div class="phone-frame" style="width:720px; min-height:740px">
+    <div class="phone-header">
+      <div class="phone-eyebrow">NEOTAVERN</div>
+      <div class="phone-title">Управление персонажами</div>
+    </div>
+    <div class="phone-tabs"><button class="phone-tab is-active">Карточки</button>
+<button class="phone-tab ">Редактирование</button>
+<button class="phone-tab ">Дополнительно</button>
+<button class="phone-tab ">Галерея</button></div>
+    <div class="phone-toolbar">
+      <button class="btn primary">＋ Создать</button>
+      <button class="btn">⤓ Импорт</button>
+      <span class="spacer"></span>
+      <span class="pill">Список</span>
+    </div>
+    <label class="phone-search"><span>🔍</span><input placeholder="Поиск персонажей…" value="" readonly /><span class="kbd">Rust • Viewport Medium</span></label>
+    <div class="phone-cards is-list"><div class="phone-card is-selected" data-node-id="character-manager.card:11111111-1111-4111-8111-111111111111">
+                  <div class="avatar">H</div>
+                  <div class="card-copy">
+                    <div class="card-name">Hazel <span class="badge selected">● выбрано</span><span class="badge pinned">📌</span></div>
+                    <div class="card-desc">A quiet companion for the deterministic Cards pilot.</div>
+                    <code class="card-id">11111111</code>
+                  </div>
+                </div><div class="phone-card " data-node-id="character-manager.card:33333333-3333-4333-8333-333333333333">
+                  <div class="avatar">S</div>
+                  <div class="card-copy">
+                    <div class="card-name">Seraphina </div>
+                    <div class="card-desc">Second fixed card for collection and selection coverage.</div>
+                    <code class="card-id">33333333</code>
+                  </div>
+                </div></div>
+    <button class="btn load-more">Загрузить ещё</button>
+  </div>
+</div><details open><summary>Структура Rust UiScene (данные, не пиксели) — paint/hit/text/semantic</summary>
+  <div class="rust-node" data-component="character-management" data-role="region" data-state="medium">
+    <div class="rust-node" data-component="tabs" data-role="tablist" data-part="root">
+      <div class="rust-node" data-component="tabs" data-role="tab" data-part="trigger" data-state="active">
+        <span class="rust-text-key">Карточки</span>
+      </div>
+      <div class="rust-node" data-component="tabs" data-role="tab" data-part="trigger">
+        <span class="rust-text-key">Редактирование</span>
+      </div>
+      <div class="rust-node" data-component="tabs" data-role="tab" data-part="trigger">
+        <span class="rust-text-key">Дополнительно</span>
+      </div>
+      <div class="rust-node" data-component="tabs" data-role="tab" data-part="trigger">
+        <span class="rust-text-key">Галерея</span>
+      </div>
+    </div>
+    <div class="rust-node" data-component="character-management" data-role="group" data-part="character-cards">
+      <div class="rust-node" data-component="action-bar" data-role="toolbar" data-part="character-card-toolbar">
+        <div class="rust-node" data-component="button" data-role="button" data-part="create">
+          <span class="rust-text-key">Создать</span>
+        </div>
+        <div class="rust-node" data-component="button" data-role="button" data-part="import">
+          <span class="rust-text-key">Импорт</span>
+        </div>
+      </div>
+      <div class="rust-node" data-component="text-field" data-role="searchbox" data-part="search">
+        <label class="rust-input"><span>Поиск персонажей…</span><input value="" readonly /></label>
+      </div>
+      <div class="rust-node" data-component="character-management" data-role="list" data-part="character-cards" data-state="list">
+        <div class="rust-node" data-component="character-card" data-role="button" data-part="catalog-item" data-state="selected pinned">
+          <div class="rust-card"><strong>Hazel</strong><p>A quiet companion for the deterministic Cards pilot.</p></div>
+        </div>
+        <div class="rust-node" data-component="character-card" data-role="button" data-part="catalog-item">
+          <div class="rust-card"><strong>Seraphina</strong><p>Second fixed card for collection and selection coverage.</p></div>
+        </div>
+      </div>
+      <div class="rust-node" data-component="button" data-role="button" data-part="load-more">
+        <span class="rust-text-key">Загрузить ещё</span>
+      </div>
+    </div>
+  </div>
+<details><summary>hit_test_tree (10 targets)</summary><pre>[
+    UiHitTargetV1 {
+        id: &quot;character-manager&quot;,
+        action: ClosePanel,
+    },
+    UiHitTargetV1 {
+        id: &quot;character-manager.tab.cards&quot;,
+        action: SetTab {
+            value: Cards,
+        },
+    },
+    UiHitTargetV1 {
+        id: &quot;character-manager.tab.edit&quot;,
+        action: SetTab {
+            value: Edit,
+        },
+    },
+    UiHitTargetV1 {
+        id: &quot;character-manager.tab.advanced&quot;,
+        action: SetTab {
+            value: Advanced,
+        },
+    },
+    UiHitTargetV1 {
+        id: &quot;character-manager.tab.gallery&quot;,
+        action: SetTab {
+            value: Gallery,
+        },
+    },
+    UiHitTargetV1 {
+        id: &quot;character-manager.action.create&quot;,
+        action: OpenCreate,
+    },
+    UiHitTargetV1 {
+        id: &quot;character-manager.action.import&quot;,
+        action: BeginImport,
+    },
+    UiHitTargetV1 {
+        id: &quot;character-manager.cards.search&quot;,
+        action: SetQuery {
+            value: &quot;&quot;,
+        },
+    },
+    UiHitTargetV1 {
+        id: &quot;character-manager.card:11111111-1111-4111-8111-111111111111&quot;,
+        action: SelectCharacter {
+            character_id: &quot;11111111-1111-4111-8111-111111111111&quot;,
+        },
+    },
+    UiHitTargetV1 {
+        id: &quot;character-manager.card:33333333-3333-4333-8333-333333333333&quot;,
+        action: SelectCharacter {
+            character_id: &quot;33333333-3333-4333-8333-333333333333&quot;,
+        },
+    },
+]</pre></details>
+<details><summary>text_interaction_tree</summary><pre>[
+    UiTextInteractionV1 {
+        id: &quot;character-manager.cards.search&quot;,
+        value: &quot;&quot;,
+        label_key: &quot;characters:searchPlaceholder&quot;,
+        editable: true,
+    },
+]</pre></details>
+</details>
+</section>
+
+<section class="rust-viewport" data-viewport="expanded 1280×800">
+<h2>expanded 1280×800 — Expanded — revision 7</h2>
+<div class="phone-preview-wrap">
+  <div class="phone-meta"><b>expanded 1280×800</b> · rail-resizable-panel · revision 7 · 15 paint / 10 hit</div>
+  <div class="phone-frame" style="width:980px; min-height:560px">
+    <div class="phone-header">
+      <div class="phone-eyebrow">NEOTAVERN</div>
+      <div class="phone-title">Управление персонажами</div>
+    </div>
+    <div class="phone-tabs"><button class="phone-tab is-active">Карточки</button>
+<button class="phone-tab ">Редактирование</button>
+<button class="phone-tab ">Дополнительно</button>
+<button class="phone-tab ">Галерея</button></div>
+    <div class="phone-toolbar">
+      <button class="btn primary">＋ Создать</button>
+      <button class="btn">⤓ Импорт</button>
+      <span class="spacer"></span>
+      <span class="pill">Список</span>
+    </div>
+    <label class="phone-search"><span>🔍</span><input placeholder="Поиск персонажей…" value="" readonly /><span class="kbd">Rust • Viewport Expanded</span></label>
+    <div class="phone-cards is-list"><div class="phone-card is-selected" data-node-id="character-manager.card:11111111-1111-4111-8111-111111111111">
+                  <div class="avatar">H</div>
+                  <div class="card-copy">
+                    <div class="card-name">Hazel <span class="badge selected">● выбрано</span><span class="badge pinned">📌</span></div>
+                    <div class="card-desc">A quiet companion for the deterministic Cards pilot.</div>
+                    <code class="card-id">11111111</code>
+                  </div>
+                </div><div class="phone-card " data-node-id="character-manager.card:33333333-3333-4333-8333-333333333333">
+                  <div class="avatar">S</div>
+                  <div class="card-copy">
+                    <div class="card-name">Seraphina </div>
+                    <div class="card-desc">Second fixed card for collection and selection coverage.</div>
+                    <code class="card-id">33333333</code>
+                  </div>
+                </div></div>
+    <button class="btn load-more">Загрузить ещё</button>
+  </div>
+</div><details open><summary>Структура Rust UiScene (данные, не пиксели) — paint/hit/text/semantic</summary>
+  <div class="rust-node" data-component="character-management" data-role="region" data-state="expanded">
+    <div class="rust-node" data-component="tabs" data-role="tablist" data-part="root">
+      <div class="rust-node" data-component="tabs" data-role="tab" data-part="trigger" data-state="active">
+        <span class="rust-text-key">Карточки</span>
+      </div>
+      <div class="rust-node" data-component="tabs" data-role="tab" data-part="trigger">
+        <span class="rust-text-key">Редактирование</span>
+      </div>
+      <div class="rust-node" data-component="tabs" data-role="tab" data-part="trigger">
+        <span class="rust-text-key">Дополнительно</span>
+      </div>
+      <div class="rust-node" data-component="tabs" data-role="tab" data-part="trigger">
+        <span class="rust-text-key">Галерея</span>
+      </div>
+    </div>
+    <div class="rust-node" data-component="character-management" data-role="group" data-part="character-cards">
+      <div class="rust-node" data-component="action-bar" data-role="toolbar" data-part="character-card-toolbar">
+        <div class="rust-node" data-component="button" data-role="button" data-part="create">
+          <span class="rust-text-key">Создать</span>
+        </div>
+        <div class="rust-node" data-component="button" data-role="button" data-part="import">
+          <span class="rust-text-key">Импорт</span>
+        </div>
+      </div>
+      <div class="rust-node" data-component="text-field" data-role="searchbox" data-part="search">
+        <label class="rust-input"><span>Поиск персонажей…</span><input value="" readonly /></label>
+      </div>
+      <div class="rust-node" data-component="character-management" data-role="list" data-part="character-cards" data-state="list">
+        <div class="rust-node" data-component="character-card" data-role="button" data-part="catalog-item" data-state="selected pinned">
+          <div class="rust-card"><strong>Hazel</strong><p>A quiet companion for the deterministic Cards pilot.</p></div>
+        </div>
+        <div class="rust-node" data-component="character-card" data-role="button" data-part="catalog-item">
+          <div class="rust-card"><strong>Seraphina</strong><p>Second fixed card for collection and selection coverage.</p></div>
+        </div>
+      </div>
+      <div class="rust-node" data-component="button" data-role="button" data-part="load-more">
+        <span class="rust-text-key">Загрузить ещё</span>
+      </div>
+    </div>
+  </div>
+<details><summary>hit_test_tree (10 targets)</summary><pre>[
+    UiHitTargetV1 {
+        id: &quot;character-manager&quot;,
+        action: ClosePanel,
+    },
+    UiHitTargetV1 {
+        id: &quot;character-manager.tab.cards&quot;,
+        action: SetTab {
+            value: Cards,
+        },
+    },
+    UiHitTargetV1 {
+        id: &quot;character-manager.tab.edit&quot;,
+        action: SetTab {
+            value: Edit,
+        },
+    },
+    UiHitTargetV1 {
+        id: &quot;character-manager.tab.advanced&quot;,
+        action: SetTab {
+            value: Advanced,
+        },
+    },
+    UiHitTargetV1 {
+        id: &quot;character-manager.tab.gallery&quot;,
+        action: SetTab {
+            value: Gallery,
+        },
+    },
+    UiHitTargetV1 {
+        id: &quot;character-manager.action.create&quot;,
+        action: OpenCreate,
+    },
+    UiHitTargetV1 {
+        id: &quot;character-manager.action.import&quot;,
+        action: BeginImport,
+    },
+    UiHitTargetV1 {
+        id: &quot;character-manager.cards.search&quot;,
+        action: SetQuery {
+            value: &quot;&quot;,
+        },
+    },
+    UiHitTargetV1 {
+        id: &quot;character-manager.card:11111111-1111-4111-8111-111111111111&quot;,
+        action: SelectCharacter {
+            character_id: &quot;11111111-1111-4111-8111-111111111111&quot;,
+        },
+    },
+    UiHitTargetV1 {
+        id: &quot;character-manager.card:33333333-3333-4333-8333-333333333333&quot;,
+        action: SelectCharacter {
+            character_id: &quot;33333333-3333-4333-8333-333333333333&quot;,
+        },
+    },
+]</pre></details>
+<details><summary>text_interaction_tree</summary><pre>[
+    UiTextInteractionV1 {
+        id: &quot;character-manager.cards.search&quot;,
+        value: &quot;&quot;,
+        label_key: &quot;characters:searchPlaceholder&quot;,
+        editable: true,
+    },
+]</pre></details>
+</details>
+</section>
+
+</body>
+</html>
+

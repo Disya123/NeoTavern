@@ -54,21 +54,53 @@ pub fn plugins_panel(view: &ProductShellView) -> Element {
             } else {
                 div {
                     class: "PluginsPage_list",
-                    style: "padding:8px 16px;display:flex;flex-direction:column;gap:8px;",
+                    style: "padding:8px 16px;display:flex;flex-direction:column;gap:16px;",
                     for item in view.plugins.iter() {
                         {
-                            let status = if item.enabled { "Active" } else { "Disabled" };
+                            // React `PluginsPage.tsx` sets `data-state` = plugin
+                            // status and brightens the enabled card border:
+                            // `.PluginsPage_card[data-state='active'] { border-color:
+                            // #63c98d }` — inlined because Blitz drops attribute
+                            // selectors. `st-card` is the shared card primitive
+                            // React applies via cx('st-card', styles.card).
+                            let status = if item.enabled { "active" } else { "error" };
+                            let status_label = if item.enabled { "Active" } else { "Disabled" };
+                            let card_style = if item.enabled {
+                                "border-color:#63c98d;"
+                            } else {
+                                ""
+                            };
                             rsx! {
                                 div {
-                                    class: "PluginsPage_card",
-                                    "data-part": "plugin-card",
+                                    class: "st-card PluginsPage_card",
+                                    "data-component": "plugin-card",
                                     "data-plugin-id": "{item.id}",
                                     "data-enabled": "{item.enabled}",
-                                    strong { "{item.name}" }
-                                    span { "{item.version} · {status} · {item.trust_state}" }
-                                    p {
-                                        style: "color:#998f87;font-size:0.75rem;",
-                                        "Open in WebSurface (contained)"
+                                    "data-state": "{status}",
+                                    style: "{card_style}",
+                                    div {
+                                        class: "PluginsPage_cardHeader",
+                                        span {
+                                            class: "PluginsPage_pluginIcon",
+                                            {icon("Cube", 24)}
+                                        }
+                                        div {
+                                            class: "PluginsPage_identity",
+                                            div {
+                                                strong { "{item.name}" }
+                                                p { "{item.id}" }
+                                            }
+                                            span { "v{item.version}" }
+                                        }
+                                        div {
+                                            class: "PluginsPage_cardMeta",
+                                            span {
+                                                class: "PluginsPage_sourceBadge",
+                                                "data-source": "zip",
+                                                {icon_fill("Package", 14, "#998f87")}
+                                            }
+                                            span { class: "PluginsPage_status", "{status_label}" }
+                                        }
                                     }
                                 }
                             }

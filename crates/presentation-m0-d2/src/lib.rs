@@ -31,7 +31,7 @@ use dioxus_core::{Element, VirtualDom};
 use dioxus_core_macro::rsx;
 use dioxus_native_dom::{DioxusDocument, DocumentConfig};
 use neotavern_presentation_design_system::{
-    product_font_context, product_stylesheets, SafeAreaInsets,
+    product_font_context, product_stylesheets_dev, SafeAreaInsets,
 };
 use neotavern_presentation_m0::display_list::NeoDisplayList;
 use neotavern_presentation_m0::scene_d1a::{D1A_HEIGHT, D1A_WIDTH};
@@ -44,14 +44,13 @@ pub use neotavern_presentation_design_system::SafeAreaInsets as ProductSafeAreaI
 pub use assemble::{
     assemble_from_stream, assemble_from_stream_at, insert_moving_sample_before_last_glass,
 };
-pub use layout_probe::{
-    attach_image_paints, collect_paint_layout, image_paints_from_layout, AvatarKind, AvatarSlot,
-    ProductPaintLayout, AVATAR_CLIP_RADIUS_CSS,
-};
 #[cfg(feature = "gpu")]
 pub use gpu_run::{run_dynamic_d2, run_dynamic_d2_with_capture, DynamicD2Report};
-#[cfg(feature = "gpu")]
-pub use vello_sink::{LayerDiag, VelloFilter, VelloSink};
+pub use layout_probe::{
+    attach_image_paints, collect_paint_layout, collect_slot_skeleton, image_paints_from_layout,
+    slot_identity, slot_skeleton_to_json, tab_debug_rects, write_slot_skeleton, AvatarKind,
+    AvatarSlot, MessageRect, ProductPaintLayout, SlotNode, SlotSkeleton, AVATAR_CLIP_RADIUS_CSS,
+};
 pub use sink::{DrawKind, ProducerSink, StreamOp};
 pub use text_publish::{
     fallback_without_snapshot_is_not_ready, ime_ops_without_glyph_reraster,
@@ -59,6 +58,8 @@ pub use text_publish::{
     publish_interaction_from_producer, publish_selectable_text, InteractionPublish,
     ProducerCounters, PublishError,
 };
+#[cfg(feature = "gpu")]
+pub use vello_sink::{LayerDiag, VelloFilter, VelloSink};
 
 pub const D2_WIDTH: u32 = D1A_WIDTH;
 pub const D2_HEIGHT: u32 = D1A_HEIGHT;
@@ -227,7 +228,7 @@ fn product_document_config(
 fn beat_blitz_default_css(doc: &DioxusDocument, insets: SafeAreaInsets) {
     let mut inner = doc.inner.borrow_mut();
     inner.remove_user_agent_stylesheet(blitz_dom::DEFAULT_CSS);
-    for sheet in product_stylesheets(insets) {
+    for sheet in product_stylesheets_dev(insets) {
         inner.add_user_agent_stylesheet(&sheet);
     }
 }
@@ -283,7 +284,10 @@ pub fn inspect_product_layout(
     let width = width.max(1);
     let height = height.max(1);
     let scale = scale.max(1.0);
-    let mut doc = DioxusDocument::new(VirtualDom::new(app), product_document_config(width, height, scale, insets));
+    let mut doc = DioxusDocument::new(
+        VirtualDom::new(app),
+        product_document_config(width, height, scale, insets),
+    );
     beat_blitz_default_css(&doc, insets);
     doc.initial_build();
     {
@@ -293,6 +297,36 @@ pub fn inspect_product_layout(
     }
     let layout = collect_paint_layout(&doc.inner.borrow(), scale);
     Ok(layout)
+}
+
+/// One Blitz layout of the product shell, dumped as the Theme SDK slot
+/// skeleton (`data-component` / `data-part` / `data-slot` / `data-role` /
+/// `data-action` + CSS-px rects). Used to compare the native tree with a
+/// React dump of the same hooks.
+pub fn inspect_slot_skeleton(
+    app: fn() -> Element,
+    width: u32,
+    height: u32,
+    scale: f32,
+    insets: SafeAreaInsets,
+) -> Result<SlotSkeleton, String> {
+    let width = width.max(1);
+    let height = height.max(1);
+    let scale = scale.max(1.0);
+    let mut doc = DioxusDocument::new(
+        VirtualDom::new(app),
+        product_document_config(width, height, scale, insets),
+    );
+    beat_blitz_default_css(&doc, insets);
+    doc.initial_build();
+    {
+        let mut inner = doc.inner.borrow_mut();
+        inner.handle_messages();
+        inner.resolve(0.0);
+    }
+    let _ = scale;
+    let skeleton = collect_slot_skeleton(&doc.inner.borrow(), "native", width, height);
+    Ok(skeleton)
 }
 
 /// Same as [`produce_product_app_at`] plus a Vello scene for NeoCompositor.
@@ -389,6 +423,12 @@ impl ProductVelloSession {
         &self.paint_layout
     }
 
+    pub fn slot_skeleton(&self) -> SlotSkeleton {
+        let skeleton =
+            collect_slot_skeleton(&self.doc.inner.borrow(), "native", self.width, self.height);
+        skeleton
+    }
+
     pub fn scale(&self) -> f32 {
         self.scale
     }
@@ -427,6 +467,10 @@ impl ProductVelloSession {
             self.width,
             self.height,
         )?;
+        // Keep the paint layout (avatar slots etc.) in sync with the frame we
+        // just painted — the GPU avatar overlay consumes `paint_layout` every
+        // produce, like Android's per-produce layout.
+        self.paint_layout = collect_paint_layout(&self.doc.inner.borrow(), self.scale);
         Ok((out, vello_sink.scene, diag))
     }
 }

@@ -294,7 +294,9 @@ fn split_images(value: &str) -> Vec<Inline> {
             return out;
         };
         let src = &after_url[..url_end];
-        if src.starts_with("https://") || src.starts_with("http://") {
+        // http(s) links and packed `asset:` thumbnails both render as image
+        // blocks; anything else stays literal text.
+        if src.starts_with("https://") || src.starts_with("http://") || src.starts_with("asset:") {
             out.push(Inline::Image {
                 src: src.to_string(),
                 alt: alt.to_string(),
@@ -458,6 +460,7 @@ pub fn message_markdown(text: &str, streaming: bool) -> Element {
     }
     let blocks = parse_document(text);
     let state = if streaming { "streaming" } else { "done" };
+    let last = blocks.len().saturating_sub(1);
     rsx! {
         div {
             class: "MessageMarkdown_root",
@@ -466,34 +469,77 @@ pub fn message_markdown(text: &str, streaming: bool) -> Element {
             "data-state": "{state}",
             article {
                 class: "MessageMarkdown_chat-message-markdown chat-message-markdown",
-                for block in blocks.iter() {
-                    {render_block(block)}
+                for (index, block) in blocks.iter().enumerate() {
+                    {render_block(block, index == 0, index == last)}
                 }
             }
         }
     }
 }
 
-fn render_block(block: &Block) -> Element {
+// Block/inline spacing below is baked inline from the React sheet
+// (`MessageMarkdown.module.css` packed into product.css). Blitz does not match
+// the packed `.MessageMarkdown_root > …` child-combinator rules AND does not
+// apply the HTML UA defaults (p/ul/li render inline without an explicit
+// display role), so both the declared values and the display role ride inline
+// on the elements (same pattern as the dialog bake).
+fn block_margin(is_first: bool, is_last: bool) -> &'static str {
+    // p/ul/ol declare `margin: 0 0 8px` only (:last-child → margin-bottom 0);
+    // the 12px top margin belongs to headings, handled in their own branch.
+    let _ = is_first;
+    if is_last {
+        "margin:0;"
+    } else {
+        "margin:0 0 8px;"
+    }
+}
+
+fn render_block(block: &Block, is_first: bool, is_last: bool) -> Element {
     match block {
         Block::Rule => rsx! { hr {} },
-        Block::Heading { level, children } => match *level {
-            1 => rsx! { h1 { {render_inlines(children)} } },
-            2 => rsx! { h2 { {render_inlines(children)} } },
-            3 => rsx! { h3 { {render_inlines(children)} } },
-            4 => rsx! { h4 { {render_inlines(children)} } },
-            5 => rsx! { h5 { {render_inlines(children)} } },
-            _ => rsx! { h6 { {render_inlines(children)} } },
+        // Sheet: headings margin 12px 0 8px (:first-child margin-top 0,
+        // :last-child margin-bottom 0), color #f3eee8, weight 700, lh 1.25.
+        Block::Heading { level, children } => {
+            let style = if is_first {
+                "display:block;margin:0 0 8px;color:#f3eee8;font-weight:700;line-height:1.25;"
+            } else if is_last {
+                "display:block;margin:12px 0 0;color:#f3eee8;font-weight:700;line-height:1.25;"
+            } else {
+                "display:block;margin:12px 0 8px;color:#f3eee8;font-weight:700;line-height:1.25;"
+            };
+            match *level {
+                1 => rsx! { h1 { style: "{style}", {render_inlines(children)} } },
+                2 => rsx! { h2 { style: "{style}", {render_inlines(children)} } },
+                3 => rsx! { h3 { style: "{style}", {render_inlines(children)} } },
+                4 => rsx! { h4 { style: "{style}", {render_inlines(children)} } },
+                5 => rsx! { h5 { style: "{style}", {render_inlines(children)} } },
+                _ => rsx! { h6 { style: "{style}", {render_inlines(children)} } },
+            }
+        }
+        // Sheet: p/ul/ol margin 0 0 8px with :last-child margin-bottom 0.
+        Block::Paragraph(children) => rsx! {
+            p {
+                style: "display:block;{block_margin(is_first, is_last)}",
+                {render_inlines(children)}
+            }
         },
-        Block::Paragraph(children) => rsx! { p { {render_inlines(children)} } },
-        Block::Quote(children) => rsx! { blockquote { {render_inlines(children)} } },
+        Block::Quote(children) => rsx! {
+            blockquote {
+                style: "display:block;margin:0 0 8px;padding-left:12px;border-left:2px solid #e8943a;color:#c5bbb2;background:#24211e;",
+                {render_inlines(children)}
+            }
+        },
+        // List margins per sheet; padding-left/list-style are the UA defaults
+        // React pages rely on (the sheet does not override them). li needs the
+        // explicit list-item role or Blitz flows it inline.
         Block::List {
             ordered: false,
             items,
         } => rsx! {
             ul {
+                style: "display:block;margin:{block_margin(is_first, is_last)}padding-left:24px;list-style:disc;",
                 for item in items.iter() {
-                    li { {render_inlines(item)} }
+                    li { style: "display:list-item;", {render_inlines(item)} }
                 }
             }
         },
@@ -502,8 +548,9 @@ fn render_block(block: &Block) -> Element {
             items,
         } => rsx! {
             ol {
+                style: "display:block;margin:{block_margin(is_first, is_last)}padding-left:24px;list-style:decimal;",
                 for item in items.iter() {
-                    li { {render_inlines(item)} }
+                    li { style: "display:list-item;", {render_inlines(item)} }
                 }
             }
         },
@@ -521,30 +568,55 @@ fn render_inlines(nodes: &[Inline]) -> Element {
 fn render_inline(node: &Inline) -> Element {
     match node {
         Inline::Text(text) => rsx! { "{text}" },
+        // Sheet: padding .1em/.35em, radius 10, #c5bbb2 on #302c28, mono.
         Inline::Code(text) => rsx! {
-            code { "data-part": "message-code", "{text}" }
+            code {
+                "data-part": "message-code",
+                style: "padding:0.1em 0.35em;border-radius:10px;color:#c5bbb2;font-family:'JetBrains Mono Variable','Cascadia Code',monospace;font-size:0.92em;background:#302c28;",
+                "{text}"
+            }
         },
+        // Sheet: color inherit, weight 700.
         Inline::Strong(children) => rsx! {
-            strong { "data-part": "message-strong", {render_inlines(children)} }
+            strong {
+                "data-part": "message-strong",
+                style: "color:inherit;font-weight:700;",
+                {render_inlines(children)}
+            }
         },
+        // Sheet: #919191 italic (ST1 emphasis).
         Inline::Emphasis(children) => rsx! {
-            em { "data-part": "message-emphasis", {render_inlines(children)} }
+            em {
+                "data-part": "message-emphasis",
+                style: "color:#919191;font-style:italic;",
+                {render_inlines(children)}
+            }
         },
+        // Sheet: ST1 dialogue → amber #e8943a; ::before/::after suppressed.
         Inline::Quote(children) => rsx! {
-            q { "data-part": "message-quote", {render_inlines(children)} }
+            q {
+                "data-part": "message-quote",
+                style: "color:#e8943a;",
+                {render_inlines(children)}
+            }
         },
+        // Sheet: [data-part='message-link'] → #f0a07d underlined.
         Inline::Link { href, children } => rsx! {
             span {
                 "data-part": "message-link",
                 title: "{href}",
+                style: "color:#f0a07d;text-decoration:underline;text-underline-offset:0.15em;",
                 {render_inlines(children)}
             }
         },
+        // Sheet: block image margin 8px 0 radius 16; probe keeps the asset
+        // placeholder block (no network images in the probe) on the warm
+        // tertiary surface with the standard border.
         Inline::Image { alt, .. } => rsx! {
             span {
                 "data-part": "message-image",
                 "aria-label": "{alt}",
-                style: "display:block;max-width:100%;height:32px;background:#3a4a60;",
+                style: "display:block;max-width:100%;height:32px;margin:8px 0;border-radius:16px;background:#302c28;border:1px solid #39342f;",
             }
         },
     }

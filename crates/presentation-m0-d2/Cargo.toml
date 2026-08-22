@@ -22,8 +22,11 @@ kurbo = "0.13.1"
 base64 = "0.22"
 neotavern-presentation-m0 = { path = "../presentation-m0" }
 neotavern-neocompositor = { path = "../neocompositor" }
+neotavern-presentation-dioxus-shell = { path = "../presentation-dioxus-shell" }
 peniko = "0.6"
 vello = { version = "0.9.0", optional = true, default-features = false, features = ["wgpu"] }
+image = { version = "0.25", optional = true, default-features = false, features = ["png"] }
+pollster = { version = "0.4", optional = true }
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = { version = "0.21", default-features = false }
@@ -34,11 +37,16 @@ crate-type = ["rlib", "cdylib"]
 
 [features]
 default = []
-gpu = ["neotavern-presentation-m0/gpu", "dep:vello"]
+gpu = ["neotavern-presentation-m0/gpu", "dep:vello", "dep:image", "dep:pollster"]
 android-jni = ["gpu"]
 renderdoc-capture = ["gpu", "neotavern-presentation-m0/renderdoc-capture"]
 
 [[bin]]
 name = "m0-d2-probe"
 path = "src/bin/d2.rs"
+required-features = ["gpu"]
+
+[[bin]]
+name = "product-shot"
+path = "src/bin/product-shot.rs"
 required-features = ["gpu"]

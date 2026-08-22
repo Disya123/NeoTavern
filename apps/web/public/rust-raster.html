@@ -1,0 +1,7 @@
+<!doctype html><meta charset="utf-8"><title>Rust GPU raster</title>
+<style>body{margin:0;background:#0b0a08;display:grid;place-items:center;min-height:100vh;font-family:ui-sans-serif,system-ui,sans-serif;color:#e6e6e6} img{box-shadow:0 20px 60px rgba(0,0,0,.7);border-radius:18px} p{color:#8a6a4a;text-align:center;max-width:400px} a{color:#ff7a1a} .hint{background:#1a1a22;border:1px solid #2a2a33;border-radius:8px;padding:10px;margin:12px 0;font-size:13px;color:#a08060}</style>
+<h2 style="font-size:18px;margin:20px 0 8px">Rust GPU raster — vello/wgpu</h2>
+<p>Тот же пайплайн что на Android: <code>UiSceneV1</code> → <code>vello::Scene</code> → <code>vello::Renderer::render_to_texture</code> → <code>wgpu</code> GPU → readback → PNG. Не HTML, не SVG, не React.</p>
+<div class="hint"><b>Обновить:</b> <code>cargo run -p neotavern-presentation-m0 --features gpu --bin cm-raster</code> → F5</div>
+<img src="/rust-raster.png" width="360" height="800" alt="Rust GPU raster">
+<p>360×800 · revision 7 · 15 paint nodes · 10 hit targets · <a href="/rust-scene.html">debug HTML</a> · <a href="/">React 5173</a></p>

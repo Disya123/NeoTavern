@@ -154,6 +154,52 @@ pub enum UiActionV1 {
     Export {
         request: RequestCharactersExportCard,
     },
+    // Chat surface (M2 slice). Local intents mirror the React composer
+    // controls; the two wire-backed operations map onto the same Product Wire
+    // ops the session uses (`chats.messages.create` / `chats.messages.delete`).
+    ChatSend,
+    ChatComposerSettings,
+    ChatComposerReset,
+    /// Context-budget trigger in the composer toolbar (`data-action="composer-context"`).
+    /// Local-only today: the context meter is display state, not a command.
+    ChatComposerContext,
+    ChatScrollLatest,
+    ChatMessageCopy {
+        message_id: String,
+    },
+    ChatMessageDelete {
+        message_id: String,
+    },
+    /// Remaining per-row intents from the native action bar. All local:
+    /// their Product Wire bridges land with the row-feature slices.
+    ChatMessageContext {
+        message_id: String,
+    },
+    ChatMessageEdit {
+        message_id: String,
+    },
+    ChatMessageCheckpoint {
+        message_id: String,
+    },
+    ChatMessageBranch {
+        message_id: String,
+    },
+    ChatMessageRollback {
+        message_id: String,
+    },
+    /// Assistant-row version controls (no message-id parameter).
+    ChatMessageHistory,
+    ChatMessageRegenerate,
+    ChatMessageSwipePrevious,
+    ChatMessageSwipeNext,
+    /// Declarative `custom.<owner>.<name>` intent authored straight in a
+    /// document. It carries NO Product Wire authority: hosts resolve the name
+    /// through their own registry and default to an observable no-op trace.
+    /// Params are bounded plain strings (see `UiCustomParamV1`).
+    Custom {
+        name: String,
+        params: Vec<crate::v1::scene::UiCustomParamV1>,
+    },
 }
 
 /// Backwards-compatible domain name for the closed Character Manager action
@@ -180,6 +226,8 @@ impl UiActionV1 {
             Self::SaveBasic { .. } => "characters.update",
             Self::ImportStaged { .. } => "imports.character.card",
             Self::Export { .. } => "characters.export.card",
+            Self::ChatSend => "chats.messages.create",
+            Self::ChatMessageDelete { .. } => "chats.messages.delete",
             Self::ClosePanel
             | Self::SetQuery { .. }
             | Self::SetSort { .. }
@@ -190,7 +238,23 @@ impl UiActionV1 {
             | Self::CancelCreate
             | Self::OpenDelete { .. }
             | Self::CancelDelete
-            | Self::BeginImport => return None,
+            | Self::BeginImport
+            | Self::ChatComposerSettings
+            | Self::ChatComposerReset
+            | Self::ChatComposerContext
+            | Self::ChatScrollLatest
+            | Self::ChatMessageCopy { .. }
+            | Self::ChatMessageContext { .. }
+            | Self::ChatMessageEdit { .. }
+            | Self::ChatMessageCheckpoint { .. }
+            | Self::ChatMessageBranch { .. }
+            | Self::ChatMessageRollback { .. }
+            | Self::ChatMessageHistory
+            | Self::ChatMessageRegenerate
+            | Self::ChatMessageSwipePrevious
+            | Self::ChatMessageSwipeNext
+            // Custom intents are authority-free by contract.
+            | Self::Custom { .. } => return None,
         };
         Some(UiWireEffectV1 {
             operation_id: operation_id.to_owned(),

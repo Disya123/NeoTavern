@@ -12,6 +12,69 @@ import { Value } from '@sinclair/typebox/value';
 export const CAPTURE_BUNDLE_FORMAT_V1 = 'neotavern.capture.v1';
 export const UI_BLUEPRINT_FORMAT_V1 = 'neotavern.ui-blueprint.v1';
 
+/**
+ * `$id` of the exported JSON Schema (`pnpm ui:schema`). Documents may carry
+ * `$schema` so editors resolve completions without workspace settings.
+ */
+export const UI_BLUEPRINT_SCHEMA_ID = 'https://neotavern.dev/schemas/ui-blueprint.v1.json';
+
+/**
+ * Closed icon registry: mirrors `PHOSPHOR_REGULAR`
+ * (`crates/presentation-design-system/generated/phosphor.rs`) — the only
+ * glyphs a native renderer can draw. Additive policy: new ids append;
+ * existing ids never change meaning.
+ */
+export const UI_ICON_IDS = [
+  'Plus',
+  'UploadSimple',
+  'MagnifyingGlass',
+  'List',
+  'SquaresFour',
+  'Eye',
+  'EyeSlash',
+  'X',
+  'UsersThree',
+  'ChatsCircle',
+  'Smiley',
+  'BookOpenText',
+  'ImageSquare',
+  'Globe',
+  'Cube',
+  'SlidersHorizontal',
+  'SidebarSimple',
+  'CaretDown',
+  'Pencil',
+  'PushPin',
+  'Check',
+  'ArrowLeft',
+  'Star',
+  'Trash',
+  'DownloadSimple',
+  'Image',
+  'Copy',
+  'Crown',
+  'User',
+  'Lock',
+  'PencilSimple',
+  'ShieldCheck',
+  'WarningCircle',
+  'GearSix',
+  'PaperPlaneRight',
+  'MagicWand',
+  'ArrowDown',
+  'Database',
+  'Flag',
+  'GitBranch',
+  'ArrowCounterClockwise',
+  'ClockCounterClockwise',
+  'ArrowUUpLeft',
+  'CaretLeft',
+  'CaretRight',
+  'ArrowClockwise',
+] as const;
+const UiIconIdSchema = Type.Union(UI_ICON_IDS.map((id) => Type.Literal(id)));
+export type UiIconId = Static<typeof UiIconIdSchema>;
+
 const UiNodeIdSchema = Type.String({
   minLength: 1,
   maxLength: 128,
@@ -28,8 +91,46 @@ const UiActionIdSchema = Type.Union([
   Type.Literal('characters.load-more'),
   Type.Literal('tabs.select'),
   Type.Literal('panel.close'),
+  // Chat surface (M2 slice): mirrors the Theme SDK actions published by both
+  // the React composer/message rows and the native RSX (`data-action`).
+  Type.Literal('chat.send'),
+  Type.Literal('chat.composer.settings'),
+  Type.Literal('chat.composer.reset'),
+  Type.Literal('chat.composer.context'),
+  Type.Literal('chat.scroll-latest'),
+  Type.Literal('chat.message.copy'),
+  Type.Literal('chat.message.delete'),
+  // Per-row message actions (`parameter: "messageId"`): mirrors the native
+  // `data-action` set on `MessageBubble` action buttons.
+  Type.Literal('chat.message.context'),
+  Type.Literal('chat.message.edit'),
+  Type.Literal('chat.message.checkpoint'),
+  Type.Literal('chat.message.branch'),
+  Type.Literal('chat.message.rollback'),
+  // Version controls inside an assistant row (no message-id parameter):
+  // history / regenerate / swipe pager.
+  Type.Literal('chat.message.history'),
+  Type.Literal('chat.message.regenerate'),
+  Type.Literal('chat.message.swipe-previous'),
+  Type.Literal('chat.message.swipe-next'),
 ]);
 export type UiActionId = Static<typeof UiActionIdSchema>;
+
+/**
+ * Declarative custom intents (`custom.<owner>.<name>`): documents may bind
+ * them to nodes without touching the closed builtin union or the kernel.
+ * They carry NO Product Wire authority — hosts resolve the name through their
+ * own registry and default to an observable no-op trace.
+ */
+export const UI_CUSTOM_ACTION_ID_PATTERN = '^custom\\.[a-z][a-z0-9-]{0,62}\\.[a-z][a-z0-9-]{0,62}$';
+export function isCustomActionId(id: string): boolean {
+  return /^custom\.[a-z][a-z0-9-]{0,62}\.[a-z][a-z0-9-]{0,62}$/.test(id);
+}
+const UiCustomActionIdSchema = Type.String({
+  minLength: 8,
+  maxLength: 128,
+  pattern: UI_CUSTOM_ACTION_ID_PATTERN,
+});
 
 const UiViewportClassSchema = Type.Union([
   Type.Literal('compact'),
@@ -175,8 +276,24 @@ export type CaptureMatrix = Static<typeof CaptureMatrixSchema>;
 
 const UiBlueprintActionSchema = Type.Object(
   {
-    id: UiActionIdSchema,
+    // Builtin ids stay a closed union; `custom.<owner>.<name>` intents join
+    // through the pattern member and are validated by the TS validator.
+    id: Type.Union([UiActionIdSchema, UiCustomActionIdSchema]),
     parameter: Type.Optional(Type.String({ minLength: 1, maxLength: 128 })),
+    // Bounded declarative payload for custom intents: no nesting, no blobs.
+    params: Type.Optional(
+      Type.Array(
+        Type.Object({
+          key: Type.String({
+            minLength: 1,
+            maxLength: 32,
+            pattern: '^[a-z][a-z0-9_-]{0,31}$',
+          }),
+          value: Type.String({ minLength: 1, maxLength: 128 }),
+        }),
+        { maxItems: 8 },
+      ),
+    ),
   },
   { additionalProperties: false },
 );
@@ -190,58 +307,6 @@ const UiBlueprintBindingSchema = Type.Object(
   { additionalProperties: false },
 );
 export type UiBlueprintBinding = Static<typeof UiBlueprintBindingSchema>;
-
-const UiBlueprintNodeSchema = Type.Recursive(
-  (This) =>
-    Type.Object(
-      {
-        nodeId: UiNodeIdSchema,
-        component: Type.String({ minLength: 1, maxLength: 128 }),
-        recipe: Type.String({ minLength: 1, maxLength: 128 }),
-        role: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
-        stateSlots: Type.Array(Type.String({ minLength: 1, maxLength: 64 }), { maxItems: 32 }),
-        actions: Type.Array(UiBlueprintActionSchema, { maxItems: 16 }),
-        children: Type.Array(This, { maxItems: 256 }),
-      },
-      { additionalProperties: false },
-    ),
-  { $id: 'presentation.ui.blueprint.node.v1' },
-);
-export type UiBlueprintNode = Static<typeof UiBlueprintNodeSchema>;
-
-const UiResponsiveRuleSchema = Type.Object(
-  {
-    viewportClass: UiViewportClassSchema,
-    layout: Type.Union([
-      Type.Literal('compact-panel'),
-      Type.Literal('rail-overlay-panel'),
-      Type.Literal('rail-resizable-panel'),
-    ]),
-  },
-  { additionalProperties: false },
-);
-export type UiResponsiveRule = Static<typeof UiResponsiveRuleSchema>;
-
-/**
- * Stable, renderer-neutral description consumed by the Rust presentation
- * SDK. It contains recipes and constraints, never browser bounds or computed
- * CSS pixels.
- */
-export const UiBlueprintSchema = Type.Object(
-  {
-    format: Type.Literal(UI_BLUEPRINT_FORMAT_V1),
-    id: Type.Literal('character-manager'),
-    root: UiBlueprintNodeSchema,
-    responsive: Type.Array(UiResponsiveRuleSchema, { minItems: 3, maxItems: 3 }),
-    bindings: Type.Array(UiBlueprintBindingSchema, { maxItems: 256 }),
-    sourceFixtureIds: Type.Array(Type.String({ minLength: 1, maxLength: 160 }), {
-      minItems: 1,
-      maxItems: 32,
-    }),
-  },
-  { additionalProperties: false },
-);
-export type UiBlueprint = Static<typeof UiBlueprintSchema>;
 
 export const SUPPORTED_CAPTURE_STYLE_PROPERTIES = [
   'align-content',
@@ -328,6 +393,103 @@ export const SUPPORTED_CAPTURE_STYLE_PROPERTIES = [
 ] as const;
 
 const SUPPORTED_CAPTURE_STYLE_PROPERTY_SET = new Set<string>(SUPPORTED_CAPTURE_STYLE_PROPERTIES);
+
+const UiBlueprintNodeLabelSchema = Type.Object({
+  text: Type.String({ minLength: 1, maxLength: 256 }),
+  i18nKey: Type.Optional(
+    Type.String({
+      minLength: 3,
+      maxLength: 160,
+      pattern: '^chat\\.[A-Za-z0-9_-]+(\\.[A-Za-z0-9_-]+)*$',
+    }),
+  ),
+});
+const UiStyleRefSchema = Type.Object({
+  property: Type.Union(
+    SUPPORTED_CAPTURE_STYLE_PROPERTIES.map((property) => Type.Literal(property)),
+  ),
+  token: Type.String({
+    minLength: 5,
+    maxLength: 128,
+    pattern: '^var\\(--[a-zA-Z0-9-]+\\)$',
+  }),
+});
+
+const UiBlueprintNodeSchema = Type.Recursive(
+  (This) =>
+    Type.Object(
+      {
+        nodeId: UiNodeIdSchema,
+        component: Type.String({ minLength: 1, maxLength: 128 }),
+        recipe: Type.String({ minLength: 1, maxLength: 128 }),
+        role: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
+        stateSlots: Type.Array(Type.String({ minLength: 1, maxLength: 64 }), { maxItems: 32 }),
+        actions: Type.Array(UiBlueprintActionSchema, { maxItems: 16 }),
+        // Presentation overrides (M4 wave 1): authored documents may override
+        // the renderer's built-in presentation table per node. Values are
+        // data, never code: labels reference i18n resources and styles
+        // reference design tokens only.
+        label: Type.Optional(UiBlueprintNodeLabelSchema),
+        icon: Type.Optional(UiIconIdSchema),
+        styleRefs: Type.Optional(Type.Array(UiStyleRefSchema, { maxItems: 16 })),
+        children: Type.Array(This, { maxItems: 256 }),
+      },
+      { additionalProperties: false },
+    ),
+  { $id: 'presentation.ui.blueprint.node.v1' },
+);
+export type UiBlueprintNode = Static<typeof UiBlueprintNodeSchema>;
+export type UiBlueprintNodeLabel = Static<typeof UiBlueprintNodeLabelSchema>;
+export type UiStyleRef = Static<typeof UiStyleRefSchema>;
+
+const UiResponsiveRuleSchema = Type.Object(
+  {
+    viewportClass: UiViewportClassSchema,
+    layout: Type.Union([
+      Type.Literal('compact-panel'),
+      Type.Literal('rail-overlay-panel'),
+      Type.Literal('rail-resizable-panel'),
+      // Chat surface: the sidebar overlays the chat below 600 CSS px and
+      // splits (rail + panel + main) above — mirrors AppShell breakpoints.
+      Type.Literal('chat-compact-overlay'),
+      Type.Literal('chat-split-panel'),
+    ]),
+  },
+  { additionalProperties: false },
+);
+export type UiResponsiveRule = Static<typeof UiResponsiveRuleSchema>;
+
+/**
+ * Stable, renderer-neutral description consumed by the Rust presentation
+ * SDK. It contains recipes and constraints, never browser bounds or computed
+ * CSS pixels.
+ */
+export const UiBlueprintSchema = Type.Object(
+  {
+    // Optional editor hint (`pnpm ui:schema`); validated, never required.
+    $schema: Type.Optional(
+      Type.String({
+        minLength: 8,
+        maxLength: 160,
+        pattern: '^https://neotavern\\.dev/schemas/ui-blueprint\\.v[0-9]+\\.json$',
+      }),
+    ),
+    format: Type.Literal(UI_BLUEPRINT_FORMAT_V1),
+    // Additive union: new first-party surfaces join as new ids (migration
+    // policy — never mutate an existing document shape in place).
+    id: Type.Union([Type.Literal('character-manager'), Type.Literal('chat')]),
+    root: UiBlueprintNodeSchema,
+    responsive: Type.Array(UiResponsiveRuleSchema, { minItems: 3, maxItems: 3 }),
+    bindings: Type.Array(UiBlueprintBindingSchema, { maxItems: 256 }),
+    sourceFixtureIds: Type.Array(Type.String({ minLength: 1, maxLength: 160 }), {
+      minItems: 1,
+      maxItems: 32,
+    }),
+  },
+  { additionalProperties: false },
+);
+export type UiBlueprint = Static<typeof UiBlueprintSchema>;
+
 const SUPPORTED_CSS_FUNCTIONS = new Set([
   'blur',
   'calc',
@@ -513,6 +675,9 @@ function actionParameter(action: UiActionId): string | undefined {
       return 'view';
     case 'tabs.select':
       return 'tab';
+    case 'chat.message.copy':
+    case 'chat.message.delete':
+      return 'messageId';
     default:
       return undefined;
   }

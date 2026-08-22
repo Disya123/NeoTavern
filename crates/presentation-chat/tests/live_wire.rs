@@ -400,7 +400,7 @@ fn ten_thousand_wire_messages_virtualize_the_visible_window() {
     assert!(visible.len() <= PRODUCT_PATH_VISIBLE);
     assert!(!outcome.waited_on_producer);
     assert!(session.mount_vdom() > 0);
-    assert_eq!(session.view().chrome, ProductChrome::TripleGlass);
+    assert_eq!(session.view().chrome, ProductChrome::HeaderComposer);
 }
 
 #[test]

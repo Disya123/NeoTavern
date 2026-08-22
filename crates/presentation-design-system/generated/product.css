@@ -133,24 +133,67 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   margin-left: 0;
   height: 100%;
 }
-.AppShell_shell[data-sidebar='open'] .AppShell_main,
-.AppShell_shell[data-sidebar='open'] .AppShell_mainShifted {
+/* Compact (phone): the sidebar is a full-screen drawer positioned by the RSX
+   inline styles (`position:absolute;inset:0;width:100%`), so the chat
+   workspace (`show_chat` is false there) must not share space. Clean
+   desktop/split behavior needs NO `[data-sidebar='open']` layout override on
+   `.Sidebar_sidebar`/`.Sidebar_panelOpen` here: those rules were stretching the
+   non-compact sidebar to 100% and squeezing `.AppShell_mainShifted` to zero —
+   the empty-brown-chat bug. Left only a defensive hide for compact
+   `.AppShell_main` (which the RSX does not even emit while compact). */
+.AppShell_shell[data-sidebar='open'] .AppShell_main {
   display: none;
   width: 0;
   flex: none;
   overflow: hidden;
 }
-.AppShell_shell[data-sidebar='open'] .Sidebar_sidebar {
-  flex: 1 1 auto;
+/* ChatWorkspace: Blitz has no fixed/sticky/backdrop-filter. Keep the React
+   slot tree in flex flow so header + composer occupy chrome_metrics bands
+   instead of overlaying the viewport. */
+.ChatWorkspace_page,
+.ChatWorkspace_workspace,
+.ChatWorkspace_chatPanel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
   width: 100%;
+  height: 100%;
   min-width: 0;
+  min-height: 0;
 }
-.AppShell_shell[data-sidebar='open'] .Sidebar_panelOpen,
-.AppShell_shell[data-sidebar='open'] .Sidebar_panelOpen[data-state='closing'] {
-  max-width: none;
+.ChatWorkspace_wallpaper {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 0;
+  pointer-events: none;
+  filter: none;
+  transform: none;
+}
+.ChatWorkspace_chatHeader {
+  position: relative;
+  inset: auto;
+  flex: none;
+}
+.ChatWorkspace_viewport {
   flex: 1 1 auto;
-  min-width: 0;
-  width: auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.ChatWorkspace_scrollBody {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.ChatWorkspace_composerWrapper {
+  position: relative;
+  flex: none;
+}
+.ChatWorkspace_composer {
+  display: flex;
+  flex-direction: column;
 }
 .AppShell_skipLink,
 .Sidebar_railLabel,
@@ -425,7 +468,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   inset: auto;
   z-index: 2;
   width: auto;
-  margin: 8px 16px 8px;
+  margin: 8px 16px max(32px, var(--nt-inset-bottom));
   padding: 4px;
   align-items: center;
   border: 1px solid #39342f;
@@ -536,7 +579,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   min-width: 0;
   min-height: 0;
   height: auto;
-  max-height: 80px;
+  max-height: 140px;
   padding: 8px;
   flex: none;
   align-self: flex-start;
@@ -3384,17 +3427,20 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
 
     [data-role='floating-tab-panel'] [data-component='tabs-list'][data-variant='segment'] {
       position: relative;
-      inset: auto;
-      margin: 8px 16px 8px;
+      top: auto;
+      bottom: var(--management-tabs-edge-inset);
+      left: auto; right: auto;
+      margin: 8px 16px var(--management-tabs-edge-inset);
+      margin-top: auto;
     }
 
     [data-role='floating-tab-panel'] [data-part='floating-tab-content']::before {
-      display: none;
       flex-basis: 0;
     }
 
     [data-role='floating-tab-panel'] [data-part='floating-tab-content']::after {
-      display: none;
+      display: block;
+      flex: 0 0 var(--management-tabs-safe-offset);
       content: '';
     }
   
@@ -8184,6 +8230,935 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
 
 
 
+/* components/ChatWorkspace.module.css -> ChatWorkspace_* */
+
+
+  /*
+ * Shared chat shell — the single source of truth for the conversation
+ * workspace used by both the Home preview (`/home`) and the live chat
+ * (`/chats/:id`). Keeping the wallpaper, centred panel, header, scrollable
+ * viewport and composer in one module is what guarantees the two routes stay
+ * visually identical (AGENTS.md §14/§15: one shell contract, themed via slots).
+ * Page-specific states (onboarding, empty, loading skeletons) live in the page
+ * modules and are rendered *inside* the neutral flex viewport below.
+ */
+
+  .ChatWorkspace_page {
+    position: relative;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    isolation: isolate;
+  }
+
+  .ChatWorkspace_wallpaper {
+    position: relative;
+    z-index: calc(0 - 1);
+    inset: calc(12px * -1);
+    background-image:
+      linear-gradient(rgba(18, 16, 14, 0.3), rgba(18, 16, 14, 0.3)),
+      none;
+    background-position: center, center;
+    background-size: cover, cover;
+    filter: blur(0px);
+    transform: scale(1.025);
+    pointer-events: none;
+  }
+
+  .ChatWorkspace_workspace,
+  .ChatWorkspace_chatPanel {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .ChatWorkspace_workspace {
+    width: min(100%, 1080px);
+    margin: 0 auto;
+  }
+
+  .ChatWorkspace_chatPanel {
+    --chat-composer-edge-inset: 16px;
+    --chat-content-inline-inset: 16px;
+    --st-chat-markdown-column-width: 75ch;
+
+    display: grid;
+    position: relative;
+    min-width: 0;
+    padding-left: 16px; padding-right: 16px;
+    isolation: isolate;
+    grid-template-rows: minmax(0, 1fr);
+    background: rgb(36, 33, 30);
+  }
+
+  .ChatWorkspace_viewport {
+    grid-row: 1;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .ChatWorkspace_viewport::-webkit-scrollbar {
+    display: none;
+  }
+
+  .ChatWorkspace_scrollBody {
+    display: flex;
+    box-sizing: border-box;
+    min-height: 100%;
+    flex-direction: column;
+    gap: 24px;
+    padding-top: calc(52px + var(--nt-inset-top) + 16px); padding-bottom: 12px;
+    padding-left: var(--chat-content-inline-inset); padding-right: var(--chat-content-inline-inset);
+  }
+
+  .ChatWorkspace_composerWrapper {
+    position: relative;
+    z-index: 100;
+    bottom: 0;
+    box-sizing: border-box;
+    width: 100%;
+    padding-left: var(--chat-content-inline-inset); padding-right: var(--chat-content-inline-inset);
+    padding-bottom: var(--chat-composer-edge-inset);
+    margin-top: calc(-1 * 8px);
+    margin-left: 0; margin-right: 0;
+    margin-bottom: 0;
+  }
+
+  .ChatWorkspace_composerWrapper > [data-slot='chat.ChatWorkspace_composer'] {
+    box-sizing: border-box;
+    width: 100%;
+  }
+
+  .ChatWorkspace_chatPanel [data-component='chat-message'] .ChatWorkspace_chat-message-markdown {
+    box-sizing: border-box;
+    width: min(100%, 75ch);
+  }
+
+  /* Optional inline error beneath the composer (e.g. Home submit failure). */
+  .ChatWorkspace_footer {
+    min-width: 0;
+  }
+
+  .ChatWorkspace_footerError {
+    margin-top: 4px;
+    color: #f0837d;
+  }
+
+  .ChatWorkspace_scrollBody > [data-component='chat-message'] {
+    margin: 0;
+  }
+
+  /* Let a lone empty/loading state fill the scroll surface and centre itself. */
+  .ChatWorkspace_scrollBody > [data-component='chat-state'] {
+    flex: 1;
+  }
+
+  /* Shared empty/error panels for Home, live chat, and the chats library so the
+   three surfaces cannot drift on icon chrome or copy rhythm. */
+  .ChatWorkspace_chatState {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+    padding: 24px;
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .ChatWorkspace_chatStateIcon {
+    display: grid;
+    align-items: center; justify-content: center;
+    width: 56px;
+    height: 56px;
+    border: 1px solid rgb(46, 42, 38);
+    border-radius: 20px;
+    color: #ffc4a8;
+    background: rgb(35, 32, 29);
+    
+  }
+
+  .ChatWorkspace_chatState h2,
+  .ChatWorkspace_chatState h3 {
+    margin-top: 16px;
+    font-size: 1.25rem;
+  }
+
+  .ChatWorkspace_chatState p {
+    max-width: 54ch;
+    margin-top: 8px;
+    color: #c5bbb2;
+  }
+
+  .ChatWorkspace_chatState > [data-component='button'] {
+    margin-top: 24px;
+  }
+
+  /* --- header (identity + conversation search) ------------------------------ */
+
+  .ChatWorkspace_chatHeader {
+    position: absolute;
+    z-index: calc(100 + 1);
+    top: 0;
+    left: 0; right: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    min-height: calc(52px + var(--nt-inset-top));
+    gap: 8px;
+    padding-top: var(--nt-inset-top);
+    padding-left: 8px; padding-right: 8px;
+    border-bottom: 1px solid rgb(38, 35, 31);
+    background: rgb(36, 33, 30);
+    
+  }
+
+  .ChatWorkspace_headerAvatar,
+  .ChatWorkspace_headerAvatarFallback {
+    width: 32px;
+    height: 32px;
+    border-radius: 999px;
+  }
+
+  .ChatWorkspace_headerAvatar {
+    object-fit: cover;
+  }
+
+  .ChatWorkspace_headerAvatarFallback {
+    display: grid;
+    align-items: center; justify-content: center;
+    color: #ffc4a8;
+    background: #492a20;
+    font-size: 0.8125rem;
+    font-weight: 700;
+  }
+
+  .ChatWorkspace_chatIdentity {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    gap: 8px;
+  }
+
+  .ChatWorkspace_chatIdentity h1 {
+    overflow: hidden;
+    min-width: 0;
+    font-size: 0.8125rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .ChatWorkspace_headerSearch {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    color: #c5bbb2;
+    background: transparent;
+    transition:
+      color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      background 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .ChatWorkspace_headerSearch:hover {
+    color: #f3eee8;
+    background: rgb(22, 20, 17);
+  }
+
+  .ChatWorkspace_headerSearch:active {
+    transform: scale(0.96);
+  }
+
+  .ChatWorkspace_chatSearch {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    align-items: center;
+    min-width: 0;
+    gap: 8px;
+    color: #998f87;
+  }
+
+  .ChatWorkspace_chatSearch input {
+    min-width: 0;
+    height: 36px;
+    border: 0;
+    color: #f3eee8;
+    background: transparent;
+  }
+
+  .ChatWorkspace_chatSearch input:focus {
+    outline: 0;
+  }
+
+  .ChatWorkspace_searchMatchCount {
+    color: #998f87;
+    font-size: 0.8125rem;
+    white-space: nowrap;
+  }
+
+  /* --- composer ------------------------------------------------------------- */
+
+  .ChatWorkspace_composer {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid rgb(22, 20, 18);
+    border-radius: 28px;
+    background: rgb(21, 19, 17);
+    
+  }
+
+  .ChatWorkspace_composerToolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-height: 42px;
+    padding: 0 16px;
+    box-sizing: border-box;
+    border-bottom: 1px solid rgb(22, 20, 17);
+    background: rgb(21, 19, 17);
+  }
+
+  .ChatWorkspace_contextPanelSlot {
+    overflow: hidden;
+    max-height: 0;
+    border-bottom: 1px solid rgb(22, 20, 17);
+    transition: max-height 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .ChatWorkspace_contextPanelSlot[data-state='visible'] {
+    max-height: 40rem;
+  }
+
+  .ChatWorkspace_contextPanelSlot[data-state='leaving'] {
+    border-block-end-color: transparent;
+    pointer-events: none;
+  }
+
+  .ChatWorkspace_contextPanelSlot[data-state='hidden'] {
+    pointer-events: none;
+  }
+
+  .ChatWorkspace_toolbarActions,
+  .ChatWorkspace_composerUtilities {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .ChatWorkspace_menuButton,
+  .ChatWorkspace_contextTrigger,
+  .ChatWorkspace_iconButton {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 32px;
+    gap: 4px;
+    padding: 0 8px;
+    border: 1px solid rgb(22, 20, 18);
+    border-radius: 999px;
+    color: #c5bbb2;
+    background: rgb(22, 19, 17);
+    transition:
+      color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      background 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .ChatWorkspace_iconButton {
+    width: 32px;
+    padding: 0;
+    border-color: transparent;
+    background: transparent;
+  }
+
+  .ChatWorkspace_iconButton:disabled {
+    opacity: 0.42;
+    cursor: not-allowed;
+  }
+
+  .ChatWorkspace_menuButton:hover,
+  .ChatWorkspace_contextTrigger:hover,
+  .ChatWorkspace_iconButton:hover {
+    color: #f3eee8;
+    background: rgb(22, 20, 18);
+  }
+
+  .ChatWorkspace_menuButton:active,
+  .ChatWorkspace_contextTrigger:active,
+  .ChatWorkspace_iconButton:active {
+    transform: scale(0.96);
+  }
+
+  .ChatWorkspace_composerField {
+    display: flex;
+    min-width: 0;
+    min-height: 132px;
+    width: 100%;
+    flex-direction: column;
+    padding: 12px 16px 8px;
+    box-sizing: border-box;
+    background: rgb(36, 33, 30);
+  }
+
+  .ChatWorkspace_composerField [data-component='textarea'] {
+    min-height: 58px;
+    max-height: 160px;
+    width: 100%;
+    border: 0;
+    background: transparent;
+    resize: none;
+  }
+
+  .ChatWorkspace_composerField [data-component='textarea']:focus {
+    box-shadow: none;
+  }
+
+  .ChatWorkspace_composerActions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    padding-top: 8px;
+  }
+
+  .ChatWorkspace_composerUtilities {
+    margin-right: auto;
+    gap: 8px;
+  }
+
+  /* Wraps ChatComposer's owned Send/Stop control so the responsive rules below
+   apply regardless of the button's own class. */
+  .ChatWorkspace_sendSlot {
+    display: flex;
+    flex: none;
+  }
+
+  /* Composer-owned utilities and page-supplied extra toolbar actions share the
+   transparent icon-button skin so Home / live chat cannot drift. */
+  .ChatWorkspace_composerUtilities button,
+  .ChatWorkspace_extraActions button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    color: #c5bbb2;
+    background: transparent;
+    transition:
+      color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      background 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .ChatWorkspace_composerUtilities button:hover,
+  .ChatWorkspace_extraActions button:hover {
+    color: #f3eee8;
+    background: rgb(22, 20, 18);
+  }
+
+  .ChatWorkspace_composerUtilities button:active,
+  .ChatWorkspace_extraActions button:active {
+    transform: scale(0.96);
+  }
+
+  .ChatWorkspace_composerUtilities button:disabled,
+  .ChatWorkspace_extraActions button:disabled {
+    opacity: 0.42;
+    cursor: not-allowed;
+  }
+
+  .ChatWorkspace_srOnly {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
+  
+    .ChatWorkspace_chatHeader {
+      border-bottom: 0;
+      min-height: calc(
+        52px + max(32px, var(--nt-inset-top))
+      );
+      padding-top: max(32px, var(--nt-inset-top));
+    }
+
+    .ChatWorkspace_chatHeader::after {
+      position: absolute;
+      bottom: 0;
+      left: 4px; right: 4px;
+      border-bottom: 1px solid rgb(38, 35, 31);
+      content: '';
+      pointer-events: none;
+    }
+
+    :root[data-navigation-rail-state='collapsed'] .ChatWorkspace_chatHeader {
+      padding-left: calc(60px - 8px);
+    }
+
+    .ChatWorkspace_chatPanel {
+      padding-left: 8px; padding-right: 8px;
+      --chat-composer-edge-inset: max(32px, var(--nt-inset-bottom));
+      --chat-content-inline-inset: 12px;
+    }
+
+    .ChatWorkspace_scrollBody {
+      padding-top: calc(
+          52px + max(32px, var(--nt-inset-top)) +
+            8px
+        ); padding-bottom: 12px;
+      padding-left: var(--chat-content-inline-inset); padding-right: var(--chat-content-inline-inset);
+    }
+
+    .ChatWorkspace_composerWrapper {
+      padding-left: var(--chat-content-inline-inset); padding-right: var(--chat-content-inline-inset);
+    }
+
+    .ChatWorkspace_menuButton span,
+    .ChatWorkspace_sendSlot [data-component='button'] span {
+      display: none;
+    }
+
+    .ChatWorkspace_composerField {
+      min-height: 104px;
+    }
+
+    .ChatWorkspace_sendSlot [data-component='button'] {
+      width: 52px;
+      min-width: 52px;
+      padding: 0;
+      font-size: 0;
+    }
+
+    .ChatWorkspace_sendSlot [data-component='button'] svg {
+      width: 20px;
+      height: 20px;
+    }
+  
+
+  @media (prefers-reduced-motion: reduce) {
+    .ChatWorkspace_viewport {
+      scroll-behavior: auto;
+    }
+  }
+
+
+
+/* components/MessageBubble.module.css -> MessageBubble_* */
+
+
+  .MessageBubble_rowUser,
+  .MessageBubble_rowAssistant {
+    position: relative;
+    display: flex;
+    width: 100%;
+    margin: 0;
+    padding-top: 12px; padding-bottom: 12px;
+    flex-direction: column;
+  }
+
+  .MessageBubble_rowUser[data-context-state='excluded'] .MessageBubble_bubble,
+  .MessageBubble_rowAssistant[data-context-state='excluded'] .MessageBubble_bubble {
+    text-decoration: line-through;
+    text-decoration-thickness: 1px;
+  }
+
+  .MessageBubble_messageHeader {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+    padding-right: 0;
+    align-self: stretch;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .MessageBubble_rowUser .MessageBubble_messageHeader {
+    width: 100%;
+    max-width: 100%;
+    margin-left: auto;
+    margin-right: 0;
+    padding-left: 0;
+    padding-right: 0;
+    align-self: flex-end;
+    justify-content: flex-end;
+    flex-direction: row-reverse;
+    text-align: end;
+  }
+
+  .MessageBubble_avatar {
+    display: grid;
+    align-items: center; justify-content: center;
+    width: 36px;
+    height: 36px;
+    flex: none;
+    overflow: hidden;
+    border-radius: 999px;
+    color: #ffc4a8;
+    background: #492a20;
+  }
+
+  .MessageBubble_avatarImage {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .MessageBubble_avatarInitial {
+    font-size: 1rem;
+    font-weight: 700;
+  }
+
+  .MessageBubble_rowUser .MessageBubble_avatar {
+    color: #c5bbb2;
+    background: #302c28;
+  }
+
+  .MessageBubble_content {
+    display: flex;
+    min-width: 0;
+    margin-top: 4px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .MessageBubble_rowUser .MessageBubble_content {
+    align-items: flex-end;
+  }
+
+  .MessageBubble_identity {
+    display: flex;
+    min-width: 0;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  .MessageBubble_messageFrame {
+    display: contents;
+  }
+
+  .MessageBubble_pluginBlocks {
+    display: flex;
+    margin-top: 8px;
+    flex-direction: column;
+    gap: 8px;
+    width: min(100%, 75ch);
+  }
+
+  .MessageBubble_pluginBlocks > div {
+    min-height: 52px;
+    overflow: hidden;
+    border-radius: 10px;
+  }
+
+  .MessageBubble_messageArt {
+    display: none;
+  }
+
+  .MessageBubble_rowAssistant[data-swipeable='true'],
+  .MessageBubble_rowUser[data-swipeable='true'] {
+    touch-action: pan-y;
+  }
+
+  .MessageBubble_editorActions button,
+  .MessageBubble_actionButton,
+  .MessageBubble_versionQuickActions button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    min-height: 32px;
+    gap: 4px;
+    border: 1px solid rgb(22, 20, 18);
+    border-radius: 999px;
+    color: #c5bbb2;
+    background: rgb(30, 28, 25);
+    cursor: pointer;
+  }
+
+  .MessageBubble_editorActions button:hover,
+  .MessageBubble_actionButton:hover:not(:disabled),
+  .MessageBubble_versionQuickActions button:hover:not(:disabled) {
+    color: #f3eee8;
+    background: #302c28;
+  }
+
+  .MessageBubble_editorActions button:disabled,
+  .MessageBubble_actionButton:disabled,
+  .MessageBubble_versionQuickActions button:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  /* Always-visible message action bar. Desktop (data-part="message-actions-
+     inline") renders EVERY available action in one wrapping row — built-ins
+     first, then plugin actions (placement="all"), no overflow menu. Mobile
+     (data-part="message-actions-compact") shows only pencil + ellipsis. NOT
+     hover-gated. */
+  .MessageBubble_actionBar {
+    position: relative;
+    display: flex;
+    flex: none;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-left: auto;
+  }
+
+  .MessageBubble_rowUser .MessageBubble_actionBar {
+    margin-left: 0;
+    margin-right: auto;
+  }
+
+  .MessageBubble_swipeRow {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    margin-top: 8px;
+  }
+
+  .MessageBubble_versionControls {
+    display: flex;
+    width: min(100%, 75ch);
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .MessageBubble_rowUser .MessageBubble_versionControls {
+    margin-left: auto;
+  }
+
+  .MessageBubble_versionQuickActions {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 2px;
+    flex-wrap: wrap;
+  }
+
+  .MessageBubble_versionQuickActions button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: calc(32px + (4px * 2) + 2px);
+    height: calc(32px + (4px * 2) + 2px);
+    padding: 0;
+    border: 1px solid rgb(22, 20, 18);
+    border-radius: 999px;
+    color: #c5bbb2;
+    background: rgb(30, 28, 25);
+    cursor: pointer;
+  }
+
+  .MessageBubble_versionQuickActions span {
+    display: none;
+  }
+
+  .MessageBubble_versionQuickActions button:hover:not(:disabled) {
+    color: #f3eee8;
+    background: #302c28;
+  }
+
+  .MessageBubble_versionQuickActions button:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  .MessageBubble_versionQuickActions button:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(227, 138, 98, 0.2);
+  }
+
+  .MessageBubble_versionControls [data-component='message-swipe-pager'] {
+    margin-top: 0;
+    margin-left: auto;
+    flex: none;
+  }
+
+  .MessageBubble_editor {
+    display: flex;
+    box-sizing: border-box;
+    width: 100%;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid rgb(22, 20, 18);
+    border-radius: 16px;
+    background: rgb(32, 29, 26);
+    box-shadow: inset 0 1px 0 rgb(22, 20, 17);
+  }
+
+  .MessageBubble_editor textarea {
+    width: 100%;
+    min-height: 96px;
+    overflow-y: hidden;
+    resize: none;
+  }
+
+  .MessageBubble_editorError {
+    margin: 0;
+    color: #f0837d;
+    font-size: 0.8125rem;
+  }
+
+  .MessageBubble_editorActions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .MessageBubble_editorActions button {
+    padding: 0 8px;
+  }
+
+  .MessageBubble_srOnly {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
+  .MessageBubble_author {
+    display: block;
+    color: #f3eee8;
+    font-size: 0.8125rem;
+    font-weight: 650;
+  }
+
+  .MessageBubble_timestamp {
+    overflow: hidden;
+    color: #998f87;
+    font-size: 0.75rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .MessageBubble_bubble {
+    box-sizing: border-box;
+    width: min(100%, 75ch);
+    color: #c5bbb2;
+    word-break: break-word;
+    line-height: 1.65;
+  }
+
+  .MessageBubble_rowUser .MessageBubble_bubble {
+    width: fit-content;
+    max-width: min(100%, 75ch);
+    margin-left: auto;
+    margin-right: 0;
+    color: #f3eee8;
+  }
+
+  .MessageBubble_typing {
+    letter-spacing: 0.18em;
+    animation: typing 1400ms cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  }
+
+  @keyframes typing {
+    50% {
+      opacity: 0.35;
+    }
+  }
+
+  
+    .MessageBubble_rowUser,
+    .MessageBubble_rowAssistant {
+      padding-top: 8px; padding-bottom: 8px;
+    }
+
+    .MessageBubble_messageHeader {
+      gap: 8px;
+    }
+
+    /* Mobile compact header (pencil + ellipsis) meets the 44px touch target. */
+    .MessageBubble_actionBar[data-part='message-actions-compact'] .MessageBubble_actionButton {
+      min-width: 44px;
+      min-height: 44px;
+    }
+  
+
+  /* Independent message side positions for user and character/assistant. */
+  :root[data-user-message-position='left'] .MessageBubble_rowUser .MessageBubble_messageHeader {
+    width: 100%;
+    max-width: 100%;
+    margin-left: 0;
+    margin-right: auto;
+    padding-left: 0;
+    padding-right: 0;
+    align-self: flex-start;
+    justify-content: flex-start;
+    flex-direction: row;
+    text-align: start;
+  }
+
+  :root[data-user-message-position='left'] .MessageBubble_rowUser .MessageBubble_actionBar {
+    margin-left: auto;
+    margin-right: 0;
+  }
+
+  :root[data-user-message-position='left'] .MessageBubble_rowUser .MessageBubble_content {
+    align-items: flex-start;
+  }
+
+  :root[data-user-message-position='left'] .MessageBubble_rowUser .MessageBubble_bubble {
+    margin-left: 0;
+    margin-right: auto;
+  }
+
+  :root[data-character-message-position='right'] .MessageBubble_rowAssistant .MessageBubble_messageHeader {
+    width: 100%;
+    max-width: 100%;
+    margin-left: auto;
+    margin-right: 0;
+    padding-left: 0;
+    padding-right: 0;
+    align-self: flex-end;
+    justify-content: flex-end;
+    flex-direction: row-reverse;
+    text-align: end;
+  }
+
+  :root[data-character-message-position='right'] .MessageBubble_rowAssistant .MessageBubble_actionBar {
+    margin-left: 0;
+    margin-right: auto;
+  }
+
+  :root[data-character-message-position='right'] .MessageBubble_rowAssistant .MessageBubble_content {
+    align-items: flex-end;
+  }
+
+  :root[data-character-message-position='right'] .MessageBubble_rowAssistant .MessageBubble_bubble {
+    margin-left: auto;
+    margin-right: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .MessageBubble_typing {
+      animation: none;
+    }
+  }
+
+
+
 /* Beat Blitz DEFAULT_CSS (body margin, grey buttons, white inputs, hidden options). */
 html, body, #main, #root {
   margin: 0;
@@ -8316,24 +9291,67 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   margin-left: 0;
   height: 100%;
 }
-.AppShell_shell[data-sidebar='open'] .AppShell_main,
-.AppShell_shell[data-sidebar='open'] .AppShell_mainShifted {
+/* Compact (phone): the sidebar is a full-screen drawer positioned by the RSX
+   inline styles (`position:absolute;inset:0;width:100%`), so the chat
+   workspace (`show_chat` is false there) must not share space. Clean
+   desktop/split behavior needs NO `[data-sidebar='open']` layout override on
+   `.Sidebar_sidebar`/`.Sidebar_panelOpen` here: those rules were stretching the
+   non-compact sidebar to 100% and squeezing `.AppShell_mainShifted` to zero —
+   the empty-brown-chat bug. Left only a defensive hide for compact
+   `.AppShell_main` (which the RSX does not even emit while compact). */
+.AppShell_shell[data-sidebar='open'] .AppShell_main {
   display: none;
   width: 0;
   flex: none;
   overflow: hidden;
 }
-.AppShell_shell[data-sidebar='open'] .Sidebar_sidebar {
-  flex: 1 1 auto;
+/* ChatWorkspace: Blitz has no fixed/sticky/backdrop-filter. Keep the React
+   slot tree in flex flow so header + composer occupy chrome_metrics bands
+   instead of overlaying the viewport. */
+.ChatWorkspace_page,
+.ChatWorkspace_workspace,
+.ChatWorkspace_chatPanel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
   width: 100%;
+  height: 100%;
   min-width: 0;
+  min-height: 0;
 }
-.AppShell_shell[data-sidebar='open'] .Sidebar_panelOpen,
-.AppShell_shell[data-sidebar='open'] .Sidebar_panelOpen[data-state='closing'] {
-  max-width: none;
+.ChatWorkspace_wallpaper {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 0;
+  pointer-events: none;
+  filter: none;
+  transform: none;
+}
+.ChatWorkspace_chatHeader {
+  position: relative;
+  inset: auto;
+  flex: none;
+}
+.ChatWorkspace_viewport {
   flex: 1 1 auto;
-  min-width: 0;
-  width: auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.ChatWorkspace_scrollBody {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.ChatWorkspace_composerWrapper {
+  position: relative;
+  flex: none;
+}
+.ChatWorkspace_composer {
+  display: flex;
+  flex-direction: column;
 }
 .AppShell_skipLink,
 .Sidebar_railLabel,
@@ -8608,7 +9626,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   inset: auto;
   z-index: 2;
   width: auto;
-  margin: 8px 16px 8px;
+  margin: 8px 16px max(32px, var(--nt-inset-bottom));
   padding: 4px;
   align-items: center;
   border: 1px solid #39342f;
@@ -8719,7 +9737,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   min-width: 0;
   min-height: 0;
   height: auto;
-  max-height: 80px;
+  max-height: 140px;
   padding: 8px;
   flex: none;
   align-self: flex-start;
@@ -8781,4 +9799,23 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   border: 1px solid #39342f;
   border-radius: 10px;
   background: #302c28;
+}
+
+
+/* --- Late Blitz fallbacks (cascade winners; see rust-ui-style-port.md) --- */
+.AppShell_main,
+.AppShell_mainShifted {
+  position: relative;
+  flex: 1 1 0%;
+  min-width: 0;
+  width: auto;
+  height: 100%;
+  overflow: hidden;
+}
+.ChatWorkspace_workspace {
+  position: relative;
+  width: 100%;
+}
+.ChatWorkspace_viewport {
+  overflow: hidden;
 }

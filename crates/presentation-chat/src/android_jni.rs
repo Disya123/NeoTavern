@@ -575,12 +575,72 @@ pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_presentF
     #[cfg(feature = "gpu")]
     let text = {
         let pending = crate::android_surface::take_shell_action();
+        let tap_intent = crate::android_surface::take_host_intent();
         if pending.is_some()
+            || tap_intent.is_some()
             || (crate::android_surface::is_dirty() && !crate::android_surface::is_scrolling())
         {
             let _ = with_route(|session| {
                 if let Some(action) = pending {
                     session.apply_shell_action(action);
+                }
+                // Layout-resolved taps вЂ” the same intents the desktop host
+                // dispatches in `pointer_up` (hit_rects decision table).
+                if let Some(intent) = tap_intent {
+                    match intent {
+                        crate::hit_rects::TapIntent::Quick(quick) => match quick {
+                            crate::hit_rects::QuickIntent::Send => {
+                                if let Err(err) = session.send(None) {
+                                    eprintln!("[jni] composer send error: {err}");
+                                }
+                            }
+                            crate::hit_rects::QuickIntent::ComposerSettings => session
+                                .apply_shell_action(crate::ShellAction::SetPanel(
+                                    "settings".into(),
+                                )),
+                            crate::hit_rects::QuickIntent::ComposerReset => {
+                                let _ = session.set_composer_text(String::new());
+                            }
+                            crate::hit_rects::QuickIntent::ScrollLatest => {
+                                session.scroll_chat_by(1.0e6);
+                            }
+                        },
+                        crate::hit_rects::TapIntent::MessageAction { kind, row_id } => {
+                            use crate::hit_rects::MessageActionKind;
+                            match kind {
+                                MessageActionKind::Delete => session.delete_message(&row_id),
+                                MessageActionKind::Rollback => {
+                                    session.rollback_to_message(&row_id)
+                                }
+                                MessageActionKind::Regenerate => {
+                                    session.regenerate_message(&row_id)
+                                }
+                                MessageActionKind::SwipePrevious => {
+                                    session.swipe_variant(&row_id, -1)
+                                }
+                                MessageActionKind::SwipeNext => {
+                                    session.swipe_variant(&row_id, 1)
+                                }
+                                // Platform clipboard bridge is not wired yet;
+                                // skip honestly instead of faking a "copied"
+                                // state.
+                                MessageActionKind::Copy => {
+                                    eprintln!(
+                                        "[jni] copy skipped reason=clipboard_bridge_pending row={row_id}"
+                                    );
+                                }
+                                other => eprintln!(
+                                    "[jni] message:{other:?} skipped reason=not_wired_yet row={row_id}"
+                                ),
+                            }
+                        }
+                        // Declarative custom intents: same authority-free
+                        // trace default as the desktop host.
+                        crate::hit_rects::TapIntent::Custom { name } => {
+                            session.custom_intent(&name);
+                        }
+                        crate::hit_rects::TapIntent::None => {}
+                    }
                 }
                 Ok(crate::android_surface::bind_from_session(session))
             });

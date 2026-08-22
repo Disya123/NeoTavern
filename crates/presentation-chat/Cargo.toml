@@ -21,6 +21,7 @@ gpu = [
     "neotavern-presentation-m0/gpu",
     "neotavern-presentation-m0-d2/gpu",
 ]
+desktop-host = ["gpu", "dep:winit", "dep:arboard"]
 
 [dependencies]
 contracts-generated = { path = "../contracts-generated" }
@@ -36,6 +37,8 @@ base64 = "0.22"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 pollster = { version = "0.4", optional = true }
 raw-window-handle = { version = "0.6", optional = true }
+winit = { version = "0.30", optional = true }
+arboard = { version = "3", optional = true }
 vello = { version = "0.9.0", optional = true, default-features = false, features = ["wgpu"] }
 wgpu = { version = "29.0.3", optional = true, default-features = false, features = [
     "std",
@@ -43,6 +46,11 @@ wgpu = { version = "29.0.3", optional = true, default-features = false, features
     "vulkan",
     "gles",
 ] }
+
+[[bin]]
+name = "neocompositor-desktop"
+path = "src/bin/neocompositor-desktop.rs"
+required-features = ["desktop-host"]
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = { version = "0.21", default-features = false }

@@ -1,5 +1,26 @@
 # Architecture Decision Records
 
+## ADR-0056: Blueprint as the canonical chat chrome renderer (staged flip)
+
+**Stage 1 done (internal host).** `neocompositor-desktop` renders the inner
+chat chrome from the embedded canonical document by default; opt-outs are
+`--legacy-chrome` / `NEOTA_LEGACY_CHROME=1` (safe mode, also used by the
+golden capture gate), then `--blueprint <path|embedded>` and
+`NEOTA_CHAT_BLUEPRINT_DOC=<path>`. Compact height is document-covered and
+pinned by a `900×220` golden row; overlay/nested are retired as probe-only
+scenarios. The release-artifact matrix (`pnpm blueprint:packaged-check`)
+verifies default/rollback behavior including broken-document fallback;
+Tauri bundles do not ship this host today. Remaining for a public
+announcement: zero open P0 + explicit product decision.
+Full decision: [ADR-0056](0056-blueprint-canonical-chat-render.md).
+
+## ADR-0055: Experimental React UI oracle and renderer-neutral UiBlueprint pilot
+
+**Experimental / pilot only.** React fixture capture is build-time migration
+tooling, not a production renderer ABI; it is normalized into a
+renderer-neutral UiBlueprint. Full decision:
+[ADR-0055](0055-react-ui-oracle-blueprint-pilot.md).
+
 ## ADR-0054: Plugin frontend stays CONTAINED in WebSurface
 
 Plugin DOM islands and legacy `window.SillyTavern` are not rewritten into

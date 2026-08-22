@@ -1,0 +1,490 @@
+{
+  "$schema": "https://neotavern.dev/schemas/ui-blueprint.v1.json",
+  "format": "neotavern.ui-blueprint.v1",
+  "id": "chat",
+  "root": {
+    "nodeId": "chat",
+    "component": "Chat",
+    "recipe": "chat",
+    "stateSlots": [],
+    "actions": [],
+    "children": [
+      {
+        "nodeId": "chat-header",
+        "component": "ChatHeader",
+        "recipe": "chat-header",
+        "role": "banner",
+        "stateSlots": [],
+        "actions": [],
+        "children": [
+          {
+            "nodeId": "chat-identity",
+            "component": "ChatIdentity",
+            "recipe": "character-identity",
+            "stateSlots": [],
+            "actions": [],
+            "children": [
+              {
+                "nodeId": "identity-avatar",
+                "component": "IdentityAvatar",
+                "recipe": "avatar",
+                "stateSlots": ["image", "fallback"],
+                "actions": [],
+                "children": []
+              },
+              {
+                "nodeId": "identity-title",
+                "component": "IdentityTitle",
+                "recipe": "title",
+                "stateSlots": [],
+                "actions": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "nodeId": "header-search",
+            "component": "HeaderSearch",
+            "recipe": "icon-button",
+            "role": "button",
+            "stateSlots": [],
+            "actions": [],
+            "children": []
+          }
+        ]
+      },
+      {
+        "nodeId": "chat-viewport",
+        "component": "ChatViewport",
+        "recipe": "chat-canvas",
+        "stateSlots": ["streaming", "idle"],
+        "actions": [],
+        "children": [
+          {
+            "nodeId": "chat-scroll",
+            "component": "ChatScroll",
+            "recipe": "chat-scroll",
+            "stateSlots": [],
+            "actions": [],
+            "children": [
+              {
+                "nodeId": "chat-message-list",
+                "component": "ChatMessageList",
+                "recipe": "message-list",
+                "role": "list",
+                "stateSlots": [],
+                "actions": [],
+                "children": [
+                  {
+                    "nodeId": "chat-message",
+                    "component": "ChatMessage",
+                    "recipe": "message-row",
+                    "role": "listitem",
+                    "stateSlots": ["user", "assistant", "streaming", "done"],
+                    "actions": [],
+                    "children": [
+                      {
+                        "nodeId": "message-header",
+                        "component": "MessageHeader",
+                        "recipe": "message-header",
+                        "stateSlots": [],
+                        "actions": [],
+                        "children": [
+                          {
+                            "nodeId": "message-avatar",
+                            "component": "MessageAvatar",
+                            "recipe": "avatar",
+                            "stateSlots": ["image", "fallback"],
+                            "actions": [],
+                            "children": []
+                          },
+                          {
+                            "nodeId": "message-identity",
+                            "component": "MessageIdentity",
+                            "recipe": "message-identity",
+                            "stateSlots": [],
+                            "actions": [],
+                            "children": [
+                              {
+                                "nodeId": "message-author",
+                                "component": "MessageAuthor",
+                                "recipe": "message-author",
+                                "stateSlots": [],
+                                "actions": [],
+                                "children": []
+                              },
+                              {
+                                "nodeId": "message-timestamp",
+                                "component": "MessageTimestamp",
+                                "recipe": "message-timestamp",
+                                "stateSlots": [],
+                                "actions": [],
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "nodeId": "message-action-bar",
+                            "component": "message-action-bar",
+                            "recipe": "message-actions-inline",
+                            "role": "toolbar",
+                            "stateSlots": ["idle"],
+                            "actions": [
+                              { "id": "chat.message.context", "parameter": "messageId" },
+                              { "id": "chat.message.edit", "parameter": "messageId" },
+                              { "id": "chat.message.copy", "parameter": "messageId" },
+                              { "id": "chat.message.checkpoint", "parameter": "messageId" },
+                              { "id": "chat.message.branch", "parameter": "messageId" },
+                              { "id": "chat.message.delete", "parameter": "messageId" },
+                              { "id": "chat.message.rollback", "parameter": "messageId" }
+                            ],
+                            "children": [
+                              {
+                                "nodeId": "message-action-context",
+                                "component": "MessageActionButton",
+                                "recipe": "icon-button",
+                                "role": "button",
+                                "stateSlots": [],
+                                "actions": [
+                                  { "id": "chat.message.context", "parameter": "messageId" }
+                                ],
+                                "children": []
+                              },
+                              {
+                                "nodeId": "message-action-edit",
+                                "component": "MessageActionButton",
+                                "recipe": "icon-button",
+                                "role": "button",
+                                "stateSlots": [],
+                                "actions": [
+                                  { "id": "chat.message.edit", "parameter": "messageId" }
+                                ],
+                                "children": []
+                              },
+                              {
+                                "nodeId": "message-action-copy",
+                                "component": "MessageActionButton",
+                                "recipe": "icon-button",
+                                "role": "button",
+                                "stateSlots": [],
+                                "actions": [
+                                  { "id": "chat.message.copy", "parameter": "messageId" }
+                                ],
+                                "children": []
+                              },
+                              {
+                                "nodeId": "message-action-checkpoint",
+                                "component": "MessageActionButton",
+                                "recipe": "icon-button",
+                                "role": "button",
+                                "stateSlots": [],
+                                "actions": [
+                                  { "id": "chat.message.checkpoint", "parameter": "messageId" }
+                                ],
+                                "children": []
+                              },
+                              {
+                                "nodeId": "message-action-branch",
+                                "component": "MessageActionButton",
+                                "recipe": "icon-button",
+                                "role": "button",
+                                "stateSlots": [],
+                                "actions": [
+                                  { "id": "chat.message.branch", "parameter": "messageId" }
+                                ],
+                                "children": []
+                              },
+                              {
+                                "nodeId": "message-action-delete",
+                                "component": "MessageActionButton",
+                                "recipe": "icon-button",
+                                "role": "button",
+                                "stateSlots": [],
+                                "actions": [
+                                  { "id": "chat.message.delete", "parameter": "messageId" }
+                                ],
+                                "children": []
+                              },
+                              {
+                                "nodeId": "message-action-rollback",
+                                "component": "MessageActionButton",
+                                "recipe": "icon-button",
+                                "role": "button",
+                                "stateSlots": [],
+                                "actions": [
+                                  { "id": "chat.message.rollback", "parameter": "messageId" }
+                                ],
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "nodeId": "message-content",
+                        "component": "MessageContent",
+                        "recipe": "message-content",
+                        "stateSlots": [],
+                        "actions": [],
+                        "children": [
+                          {
+                            "nodeId": "message-frame",
+                            "component": "MessageFrame",
+                            "recipe": "message-frame",
+                            "stateSlots": [],
+                            "actions": [],
+                            "children": [
+                              {
+                                "nodeId": "message-bubble",
+                                "component": "MessageBubbleBody",
+                                "recipe": "message-body",
+                                "stateSlots": [],
+                                "actions": [],
+                                "children": []
+                              },
+                              {
+                                "nodeId": "message-art",
+                                "component": "MessageArt",
+                                "recipe": "message-art",
+                                "stateSlots": [],
+                                "actions": [],
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "nodeId": "version-controls",
+                        "component": "message-version-controls",
+                        "recipe": "message-version-controls",
+                        "stateSlots": [],
+                        "actions": [],
+                        "children": [
+                          {
+                            "nodeId": "version-actions",
+                            "component": "message-version-controls",
+                            "recipe": "message-version-actions",
+                            "stateSlots": [],
+                            "actions": [],
+                            "children": [
+                              {
+                                "nodeId": "version-history",
+                                "component": "MessageActionButton",
+                                "recipe": "pill-button",
+                                "role": "button",
+                                "stateSlots": [],
+                                "actions": [{ "id": "chat.message.history" }],
+                                "children": []
+                              },
+                              {
+                                "nodeId": "version-regenerate",
+                                "component": "MessageActionButton",
+                                "recipe": "pill-button",
+                                "role": "button",
+                                "stateSlots": [],
+                                "actions": [{ "id": "chat.message.regenerate" }],
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "nodeId": "swipe-pager",
+                            "component": "message-swipe-pager",
+                            "recipe": "message-swipes",
+                            "stateSlots": [],
+                            "actions": [],
+                            "children": [
+                              {
+                                "nodeId": "swipe-previous",
+                                "component": "MessageActionButton",
+                                "recipe": "pill-button",
+                                "role": "button",
+                                "stateSlots": [],
+                                "actions": [{ "id": "chat.message.swipe-previous" }],
+                                "children": []
+                              },
+                              {
+                                "nodeId": "swipe-label",
+                                "component": "SwipeLabel",
+                                "recipe": "status",
+                                "role": "status",
+                                "stateSlots": [],
+                                "actions": [],
+                                "children": []
+                              },
+                              {
+                                "nodeId": "swipe-next",
+                                "component": "MessageActionButton",
+                                "recipe": "pill-button",
+                                "role": "button",
+                                "stateSlots": [],
+                                "actions": [{ "id": "chat.message.swipe-next" }],
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "nodeId": "chat-composer",
+        "component": "ChatComposer",
+        "recipe": "chat-composer",
+        "stateSlots": ["streaming", "idle"],
+        "actions": [],
+        "children": [
+          {
+            "nodeId": "composer-toolbar",
+            "component": "ComposerToolbar",
+            "recipe": "composer-toolbar",
+            "stateSlots": [],
+            "actions": [],
+            "children": [
+              {
+                "nodeId": "composer-toolbar-actions",
+                "component": "ComposerToolbarActions",
+                "recipe": "composer-toolbar-actions",
+                "stateSlots": [],
+                "actions": [],
+                "children": [
+                  {
+                    "nodeId": "composer-settings",
+                    "component": "ComposerSettingsButton",
+                    "recipe": "menu-button",
+                    "role": "button",
+                    "stateSlots": [],
+                    "actions": [{ "id": "chat.composer.settings" }],
+                    "label": { "text": "Settings", "i18nKey": "chat.settings" },
+                    "icon": "GearSix",
+                    "children": []
+                  },
+                  {
+                    "nodeId": "composer-reset",
+                    "component": "ComposerResetButton",
+                    "recipe": "icon-button",
+                    "role": "button",
+                    "stateSlots": [],
+                    "actions": [{ "id": "chat.composer.reset" }],
+                    "label": { "text": "Reset", "i18nKey": "chat.reset" },
+                    "icon": "X",
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "nodeId": "composer-context",
+                "component": "ComposerContextTrigger",
+                "recipe": "context-trigger",
+                "role": "button",
+                "stateSlots": [],
+                "actions": [{ "id": "chat.composer.context" }],
+                "children": []
+              }
+            ]
+          },
+          {
+            "nodeId": "composer-field",
+            "component": "ComposerField",
+            "recipe": "composer-field",
+            "stateSlots": [],
+            "actions": [],
+            "children": [
+              {
+                "nodeId": "composer-textarea",
+                "component": "ComposerTextarea",
+                "recipe": "textarea",
+                "stateSlots": [],
+                "actions": [],
+                "children": []
+              },
+              {
+                "nodeId": "composer-actions",
+                "component": "ComposerActions",
+                "recipe": "composer-actions",
+                "stateSlots": [],
+                "actions": [],
+                "children": [
+                  {
+                    "nodeId": "composer-utilities",
+                    "component": "ComposerUtilities",
+                    "recipe": "composer-utilities",
+                    "stateSlots": [],
+                    "actions": [],
+                    "children": [
+                      {
+                        "nodeId": "utility-settings",
+                        "component": "UtilitySettingsButton",
+                        "recipe": "icon-button",
+                        "role": "button",
+                        "stateSlots": [],
+                        "actions": [{ "id": "chat.composer.settings" }],
+                        "label": { "text": "Settings", "i18nKey": "chat.settings" },
+                        "icon": "List",
+                        "children": []
+                      },
+                      {
+                        "nodeId": "utility-scroll-latest",
+                        "component": "UtilityScrollLatestButton",
+                        "recipe": "icon-button",
+                        "role": "button",
+                        "stateSlots": [],
+                        "actions": [{ "id": "chat.scroll-latest" }],
+                        "label": {
+                          "text": "Scroll to latest",
+                          "i18nKey": "chat.scrollToLatestShort"
+                        },
+                        "icon": "ArrowDown",
+                        "children": []
+                      },
+                      {
+                        "nodeId": "utility-wand",
+                        "component": "UtilityWandButton",
+                        "recipe": "icon-button",
+                        "role": "button",
+                        "stateSlots": [],
+                        "actions": [{ "id": "chat.composer.reset" }],
+                        "label": { "text": "Reset", "i18nKey": "chat.reset" },
+                        "icon": "MagicWand",
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "nodeId": "composer-send",
+                    "component": "ComposerSendButton",
+                    "recipe": "primary-button",
+                    "role": "button",
+                    "stateSlots": [],
+                    "actions": [{ "id": "chat.send" }],
+                    "label": { "text": "Send", "i18nKey": "chat.send" },
+                    "icon": "PaperPlaneRight",
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "responsive": [
+    { "viewportClass": "compact", "layout": "chat-compact-overlay" },
+    { "viewportClass": "medium", "layout": "chat-split-panel" },
+    { "viewportClass": "expanded", "layout": "chat-split-panel" }
+  ],
+  "bindings": [
+    { "nodeId": "chat-message-list", "expression": "messages.items[*]" },
+    { "nodeId": "chat-message", "expression": "messages.items[*]" },
+    { "nodeId": "composer-textarea", "expression": "chat.draft" }
+  ],
+  "sourceFixtureIds": ["chat.canonical.expanded"]
+}

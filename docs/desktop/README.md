@@ -173,6 +173,13 @@ error; a clean exit is marked separately and leaves no orphan sidecar.
 
 ## Headless host
 
+Native UI tooling: the desktop host and its diagnostics are documented in
+[`neocompositor-desktop-host.md`](neocompositor-desktop-host.md); the
+style-port loop, DOM parity and pixel gates live in
+[`rust-ui-style-port.md`](rust-ui-style-port.md); editing chat UI as data
+(blueprint documents) is covered step by step in
+[`chat-ui-recipe.md`](chat-ui-recipe.md).
+
 The Headless server is a **transport adapter over the Kernel**, not a second
 application core. `crates/adapters/remote-http` remains the library
 (envelope-over-HTTP, ADR-0030). `crates/adapters/headless`

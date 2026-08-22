@@ -5,7 +5,7 @@
     {
       "source": "README.md",
       "target": "README.md",
-      "sha256": "a1e11767ea8ff9a4ccfd4abd0ea8264f74864ae157091b4a4ed31cef51c4991b"
+      "sha256": "b292b0d7690731708ecccc6b6e294506685906f8bffeeccf477cdcfd6f391e75"
     },
     {
       "source": "adr/0004-typebox-contracts.md",
@@ -240,12 +240,12 @@
     {
       "source": "adr/0052-webview-removal.md",
       "target": "adr/0052-webview-removal.md",
-      "sha256": "cc10d375bc4473a3bb536784fea718164f29d47d25c9034904c7c549b66eb8b0"
+      "sha256": "24111779577e8412c6512d123a8286aec1d904c7fd6541c52515b309a32a257a"
     },
     {
       "source": "adr/0053-android-120hz-release-budget.md",
       "target": "adr/0053-android-120hz-release-budget.md",
-      "sha256": "a402b6e7f4c79c72a6d0cc22f7aba8a79d17b12e1612c7091010b7a80b67ee8b"
+      "sha256": "fc556671cfbbb06f1b6b3792cc8f569ff31b8c73261d3100d0510e042eb58f5c"
     },
     {
       "source": "adr/0054-plugin-visual-surface-contained.md",
@@ -253,9 +253,14 @@
       "sha256": "d861f8d9a75ec32dfd5e9f7fd04b6794a8d694fc4c3aff7cb08ee61cfd1f5435"
     },
     {
+      "source": "adr/0055-react-ui-oracle-blueprint-pilot.md",
+      "target": "adr/0055-react-ui-oracle-blueprint-pilot.md",
+      "sha256": "e8816a1a036ddc8a2fbc17cd48806f7315f6134cf1526500dedf008904cecfee"
+    },
+    {
       "source": "adr/README.md",
       "target": "adr/README.md",
-      "sha256": "91ab75947b8a2bad79dd947782e2f8eded41641c2746763c94d8ae1dedd6801c"
+      "sha256": "722bcc2520fefb595687e82eee168ae2ab5366913d33486f826b18edb28b78b0"
     },
     {
       "source": "android/README.md",
@@ -305,7 +310,7 @@
     {
       "source": "architecture/presentation-boundary.md",
       "target": "architecture/presentation-boundary.md",
-      "sha256": "632b97b09666a93aa79238fe9332dff95fa4456d7b6fbb040d31915b5a96d8bc"
+      "sha256": "699688e42ebf028f8b8b97c07c30cfcef7e80d8f70e8555cfa4153ab34d978cf"
     },
     {
       "source": "architecture/prompt-pipeline.md",
@@ -351,6 +356,16 @@
       "source": "desktop/README.md",
       "target": "desktop/README.md",
       "sha256": "83f92fc4e068f9f5a9096e3616d633afa3f1b4d74e5ba5afcfae7ada5a29a068"
+    },
+    {
+      "source": "desktop/neocompositor-desktop-host.md",
+      "target": "desktop/neocompositor-desktop-host.md",
+      "sha256": "923ee4921ffb05318bc15c781100e359719a6a9d8caf87a68c069b2647006906"
+    },
+    {
+      "source": "desktop/rust-ui-style-port.md",
+      "target": "desktop/rust-ui-style-port.md",
+      "sha256": "b95f52a7f3687e9f672a91f4cd52f11df898b5f8a8a1043286401b2ef6322999"
     },
     {
       "source": "migrations/README.md",

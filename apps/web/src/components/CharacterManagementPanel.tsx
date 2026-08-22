@@ -444,6 +444,13 @@ export function CharacterManagementPanel({ onClose }: CharacterManagementPanelPr
     <FloatingTabPanel
       component="character-management"
       headerPart="character-management-header"
+      uiCapture={{
+        node: 'character-manager',
+        component: 'CharacterManager',
+        root: 'character-manager',
+        version: '1',
+        action: 'panel.close',
+      }}
       avatar={
         <CharacterAvatar character={selectedSummary} className={styles.headerAvatar} decorative />
       }
@@ -489,7 +496,18 @@ export function CharacterManagementPanel({ onClose }: CharacterManagementPanelPr
         ariaLabel={t('characters:managementTabs')}
         tabs={TABS.map((tab) => ({
           value: tab,
-          label: t(`characters:tab_${tab}`),
+          label: (
+            <span
+              data-ui-node={`character-tab-${tab}`}
+              data-ui-component="CharacterTabs"
+              data-ui-key={tab}
+              data-ui-state={activeTab === tab ? 'selected' : 'idle'}
+              data-ui-action="tabs.select"
+              data-ui-bind="activeTab"
+            >
+              {t(`characters:tab_${tab}`)}
+            </span>
+          ),
           disabled: tab !== 'cards' && !canEdit,
           content: (
             <FloatingTabContent>
@@ -647,17 +665,38 @@ function CardsTab({
 }: CardsTabProps) {
   const { t } = useTranslation();
   return (
-    <div className={styles.cardsTab} data-part="character-cards">
+    <div
+      className={styles.cardsTab}
+      data-part="character-cards"
+      data-ui-node="character-cards"
+      data-ui-component="CharacterCards"
+      data-ui-bind="characters.items"
+    >
       <ActionBar
         collapse="compact"
         className={styles.cardToolbar}
         data-part="character-card-toolbar"
+        data-ui-node="character-toolbar"
+        data-ui-component="CharacterToolbar"
       >
         <ActionBarGroup placement="primary">
-          <Button variant="primary" startIcon={<Plus aria-hidden="true" />} onClick={onCreate}>
+          <Button
+            variant="primary"
+            startIcon={<Plus aria-hidden="true" />}
+            onClick={onCreate}
+            data-ui-node="character-create"
+            data-ui-component="CharacterToolbar"
+            data-ui-action="characters.create"
+          >
             {t('characters:createShort')}
           </Button>
-          <Button startIcon={<UploadSimple aria-hidden="true" />} onClick={onImport}>
+          <Button
+            startIcon={<UploadSimple aria-hidden="true" />}
+            onClick={onImport}
+            data-ui-node="character-import"
+            data-ui-component="CharacterToolbar"
+            data-ui-action="characters.import"
+          >
             {t('characters:importShort')}
           </Button>
         </ActionBarGroup>
@@ -666,6 +705,10 @@ function CardsTab({
           <select
             value={sort}
             onChange={(event) => onSortChange(event.target.value as CharacterSort)}
+            data-ui-node="character-sort"
+            data-ui-component="CharacterToolbar"
+            data-ui-action="characters.sort"
+            data-ui-bind="characters.sort"
           >
             <option value="name">{t('characters:sort_name')}</option>
             <option value="name-desc">{t('characters:sort_name_desc')}</option>
@@ -690,16 +733,31 @@ function CardsTab({
           placeholder={t('characters:searchPlaceholder')}
           value={searchInput}
           onChange={(event) => onSearchChange(event.target.value)}
+          data-ui-node="character-search"
+          data-ui-component="CharacterSearch"
+          data-ui-action="characters.search"
+          data-ui-bind="characters.query"
         />
       </label>
 
       <div className={styles.listMeta}>
-        <div className={styles.viewToggle} aria-label={t('characters:viewLabel')}>
+        <div
+          className={styles.viewToggle}
+          aria-label={t('characters:viewLabel')}
+          data-ui-node="character-view-toggle"
+          data-ui-component="CharacterViewToggle"
+          data-ui-state={view}
+          data-ui-bind="characters.view"
+        >
           <IconButton
             className={styles.iconButton}
             data-state={view === 'list' ? 'active' : 'inactive'}
             onClick={() => onViewChange('list')}
             aria-label={t('characters:viewList')}
+            data-ui-node="character-view-list"
+            data-ui-component="CharacterViewToggle"
+            data-ui-key="list"
+            data-ui-action="characters.view.set"
             aria-pressed={view === 'list'}
           >
             <List size={17} aria-hidden="true" />
@@ -709,6 +767,10 @@ function CardsTab({
             data-state={view === 'grid' ? 'active' : 'inactive'}
             onClick={() => onViewChange('grid')}
             aria-label={t('characters:viewGrid')}
+            data-ui-node="character-view-grid"
+            data-ui-component="CharacterViewToggle"
+            data-ui-key="grid"
+            data-ui-action="characters.view.set"
             aria-pressed={view === 'grid'}
           >
             <SquaresFour size={17} aria-hidden="true" />
@@ -747,6 +809,12 @@ function CardsTab({
                 data-pinned={pinned ? 'true' : 'false'}
                 onClick={() => onSelect(item.id)}
                 aria-pressed={selected}
+                data-ui-node="character-card"
+                data-ui-component="CharacterCard"
+                data-ui-key={item.id}
+                data-ui-state={selected ? 'selected' : 'idle'}
+                data-ui-action="characters.select"
+                data-ui-bind="characters.items[*]"
               >
                 <CharacterAvatar character={item} className={styles.cardAvatar} />
                 <span className={styles.cardCopy}>
@@ -774,7 +842,14 @@ function CardsTab({
       )}
 
       {hasMore ? (
-        <Button className={styles.loadMore} onClick={onLoadMore} disabled={loadingMore}>
+        <Button
+          className={styles.loadMore}
+          onClick={onLoadMore}
+          disabled={loadingMore}
+          data-ui-node="character-load-more"
+          data-ui-component="CharacterCards"
+          data-ui-action="characters.load-more"
+        >
           {loadingMore ? t('common:loading') : t('common:loadMore')}
         </Button>
       ) : null}

@@ -423,10 +423,8 @@ mod tests {
     #[test]
     fn background_filter_disables_draw_classes() {
         let filter = VelloFilter::background();
-        assert!(!filter.fills
-            && !filter.glyphs
-            && !filter.clips
-            && !filter.layers
-            && !filter.shadows);
+        assert!(
+            !filter.fills && !filter.glyphs && !filter.clips && !filter.layers && !filter.shadows
+        );
     }
 }

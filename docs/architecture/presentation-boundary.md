@@ -228,6 +228,43 @@ does **not** satisfy RFC §51 TalkBack; native Dioxus TalkBack is
 `canary_batch` is **PASS**. Chat workspace on flagged Dioxus Android
 remains **DEFERRED** in the compatibility matrix until owner-signed PARITY.
 
+## Porting rules (React → NeoCompositor)
+
+Standing rules for every port step. They are not negotiable per-panel; a
+change that breaks one is a regression, not a fix.
+
+1. **React is the golden source.** `apps/web` + `@neotavern/ui` is the
+   reference renderer and it stays untouched. If the Rust side and React
+   disagree, the port is wrong — never React.
+2. **Never edit React styles.** The compiled `product.css` (and the fonts,
+   `--st-*` tokens, Phosphor paths, CSS-module geometry) is copied bit-for-bit
+   by the design-system packer. No local overrides, no `!important`, no
+   tuning numbers, no `[data-sidebar=...]`-style hacks on top of the sheet.
+3. **No hardcoded presentation constants.** Colors, fonts, spacing, radii,
+   sizes, shadows, easing, and z-index come only from the packed React sheet
+   and its tokens. A literal in RSX must be a value already proven present in
+   the React sheet (or baked from it) and must carry a comment naming the
+   source token and the reason Blitz needs the literal
+   (`var()` / `color-mix()` / logical properties / attribute selectors are
+   not applied). Inventing a local number "to look close" is a violation.
+4. **Single source of truth for the scene.** Class names,
+   `data-component` / `data-part` / `data-role` / `data-state`, and the
+   Product Wire DTOs are shared; the RSX shell consumes them and never
+   re-derives or remixes its own variant of the layout.
+5. **Packer-only token baking.** When Blitz cannot consume a declaration
+   (`:root` custom properties, `color-mix()`, compact drawer selectors,
+   logical `*-block-*`, `env(safe-area-inset-*)`, `mask-image` icons), the
+   packer flattens it to the React-resolved value — it never invents a
+   style. Every bake is listed in `crates/presentation-design-system` with
+   its source token.
+6. **Parity is the gate, and it is measured.** A screenshot or readback that
+   drifts from React is not patched by dress-up; it is a regression to
+   investigate. Bit-for-bit (compact) / `≤1 dp` (density) or an explicit
+   owner waiver is required before a step counts as done.
+7. **Only honest artifacts.** A native shell via vello/wgpu on the shared
+   host; no blueprint/svg lookalikes standing in for the real surface, and
+   no image/avatar placeholders masquerading as content.
+
 ## Visual parity (Character Manager)
 
 React (`apps/web` + `@neotavern/ui`) is the golden source: exact font files,
@@ -271,32 +308,32 @@ React initial (`H`) remains; after the readiness token the sampled texture
 replaces it without a layout rebuild. Header and card share one cached
 texture handle, with a 10px CSS rounded clip. Packed Phosphor `mask-image`
 `data:image/svg+xml` URLs are not fetched. Production/canary SurfaceView bind uses GPU Vello
-  (`renderer=vello-gpu`, `use_cpu=false`) with the M0-D2 device request
-  (`Limits::default()` first, `CLEAR_TEXTURE` / `PIPELINE_CACHE` when the
-  adapter has them, one `SharedGpuContext` / `DeviceEpoch`). Format
-  capabilities must include storage-write `Rgba8Unorm` (non-sRGB,
-  premultiplied). The compositor samples a GPU-converted texture
-  (`STORAGE` → GPU copy or compute convert → `TEXTURE_BINDING`), not the
-  storage target itself. CPU Vello is only the explicit
-  `NEOTA_SOFTWARE_RASTER_DEBUG=1` flag. A one-path GPU rect is plumbing
-  only: each diagnostic raster uses a **new** storage/sampled pair so a
-  retained rect cannot mask a missing UI write. Full-UI
-  `RenderParams.base_color` is diagnostic `#3d5cff` (not a product token):
-  black means submit did not run; that blue with no chrome means coarse/fine
-  did not write paths. Bind logs `render_to_texture` Result, wgpu error
-  scopes, uncaptured errors, and submit-done; `device.poll(wait)` is
-  diagnostic-only. Android debug Vello A/B compiles shaders
-  `unchecked` vs naga bounds checks; Vello 0.9 WGSL contains
-  `select(0u, array[index-1u], index>0u)` in coarse/fine/tile_alloc, but
-  that index is **not** patched until a bounds-checked capture writes UI
-  and unchecked does not. Resolution and display-list prefix bisection
-  run on first bind; if only small targets write, GPU tiled raster is used
-  (not CPU full-frame raster). Tiled present keeps **one** Blitz layout and
-  **one** full-viewport `PaintScene` / `SceneEpoch`. Each tile is
-  `Scene::append(full, translate(-tile_origin))` onto a tile-sized target
-  (encoding-level seam-test locked; do not retune WGSL). Images stay out of
-  Vello; avatars are a post-Vello sampled overlay. Bind retries
-  without images if raster fails. Blitz does not sample the raster on device yet.
+(`renderer=vello-gpu`, `use_cpu=false`) with the M0-D2 device request
+(`Limits::default()` first, `CLEAR_TEXTURE` / `PIPELINE_CACHE` when the
+adapter has them, one `SharedGpuContext` / `DeviceEpoch`). Format
+capabilities must include storage-write `Rgba8Unorm` (non-sRGB,
+premultiplied). The compositor samples a GPU-converted texture
+(`STORAGE` → GPU copy or compute convert → `TEXTURE_BINDING`), not the
+storage target itself. CPU Vello is only the explicit
+`NEOTA_SOFTWARE_RASTER_DEBUG=1` flag. A one-path GPU rect is plumbing
+only: each diagnostic raster uses a **new** storage/sampled pair so a
+retained rect cannot mask a missing UI write. Full-UI
+`RenderParams.base_color` is diagnostic `#3d5cff` (not a product token):
+black means submit did not run; that blue with no chrome means coarse/fine
+did not write paths. Bind logs `render_to_texture` Result, wgpu error
+scopes, uncaptured errors, and submit-done; `device.poll(wait)` is
+diagnostic-only. Android debug Vello A/B compiles shaders
+`unchecked` vs naga bounds checks; Vello 0.9 WGSL contains
+`select(0u, array[index-1u], index>0u)` in coarse/fine/tile_alloc, but
+that index is **not** patched until a bounds-checked capture writes UI
+and unchecked does not. Resolution and display-list prefix bisection
+run on first bind; if only small targets write, GPU tiled raster is used
+(not CPU full-frame raster). Tiled present keeps **one** Blitz layout and
+**one** full-viewport `PaintScene` / `SceneEpoch`. Each tile is
+`Scene::append(full, translate(-tile_origin))` onto a tile-sized target
+(encoding-level seam-test locked; do not retune WGSL). Images stay out of
+Vello; avatars are a post-Vello sampled overlay. Bind retries
+without images if raster fails. Blitz does not sample the raster on device yet.
 The React card formatter is `description || "No character
 description yet."` with a 2-line clamp. Blitz does not paint
 `text-overflow: ellipsis`; the header title string is ellipsized in RSX

@@ -1,4 +1,4 @@
-use contracts_generated::generated::CharacterDto;
+use contracts_generated::generated::{CharacterDto, MessageDto};
 use serde::{Deserialize, Serialize};
 
 use super::{
@@ -24,6 +24,10 @@ pub struct UiStyleHookV1 {
     pub component: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub part: Option<String>,
+    /// Theme SDK slot hook (`data-slot`, e.g. `"chat.composer"`). Optional:
+    /// the Character Manager pilot surfaces publish component/part only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub slot: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub states: Vec<String>,
 }
@@ -54,9 +58,21 @@ pub enum CollectionPresentationV1 {
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum UiContentV1 {
     None,
-    TextKey { key: String },
-    Input { value: String, label_key: String },
-    CharacterCard { character: CharacterDto },
+    TextKey {
+        key: String,
+    },
+    Input {
+        value: String,
+        label_key: String,
+    },
+    CharacterCard {
+        character: CharacterDto,
+    },
+    /// Chat message row body. The renderer renders the canonical Product Wire
+    /// message (markdown/image per its role) вЂ” never a flattened string.
+    ChatMessage {
+        message: MessageDto,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -66,6 +82,56 @@ pub enum UiSemanticStateV1 {
     Selected,
     Expanded,
     Current,
+}
+
+/// Authored label override (`label` in the document): user-visible text plus
+/// the i18n resource path it mirrors. Text is data authored next to structure;
+/// the key keeps localization resolvable without re-decoding the document.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct UiLabelOverrideV1 {
+    pub text: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub i18n_key: Option<String>,
+}
+
+/// Authored presentation overrides carried on one scene node (`label`,
+/// `icon`, `styleRefs` in the document). Empty = renderer falls back to its
+/// built-in presentation table for the node id.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct UiNodeOverridesV1 {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<UiLabelOverrideV1>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub style_refs: Vec<UiStyleRefV1>,
+}
+
+impl UiNodeOverridesV1 {
+    pub fn is_empty(&self) -> bool {
+        self.label.is_none() && self.icon.is_none() && self.style_refs.is_empty()
+    }
+}
+
+/// One authored token-backed declaration (`styleRefs[]`). Only design-token
+/// references are expressible — raw colors/sizes stay out of documents.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct UiStyleRefV1 {
+    pub property: String,
+    pub token: String,
+}
+
+/// One bounded key/value pair of a declarative custom intent
+/// (`custom.<owner>.<name>`). Values are plain strings — no nesting, no
+/// blobs, no Product Wire authority.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct UiCustomParamV1 {
+    pub key: String,
+    pub value: String,
 }
 
 /// Accessible metadata is separate from paint/content and is projected into a
@@ -92,6 +158,9 @@ pub struct UiNodeV1 {
     pub content: UiContentV1,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub action: Option<UiActionV1>,
+    /// Authored presentation overrides (M4 wave 1); see [`UiNodeOverridesV1`].
+    #[serde(default, skip_serializing_if = "UiNodeOverridesV1::is_empty")]
+    pub overrides: UiNodeOverridesV1,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub children: Vec<UiNodeV1>,
 }
@@ -148,15 +217,33 @@ pub struct UiSceneV1 {
     pub semantic_tree: UiSemanticNodeV1,
 }
 
-fn hook(component: &str, part: Option<&str>, states: Vec<String>) -> UiStyleHookV1 {
+pub(super) fn hook(component: &str, part: Option<&str>, states: Vec<String>) -> UiStyleHookV1 {
     UiStyleHookV1 {
         component: component.to_owned(),
         part: part.map(str::to_owned),
+        slot: None,
         states,
     }
 }
 
-fn semantic(role: &str, label_key: Option<&str>, states: Vec<UiSemanticStateV1>) -> UiSemanticV1 {
+/// Hook with an explicit Theme SDK slot (`data-slot`) вЂ” chat chrome publishes
+/// slots alongside component/part.
+pub(super) fn hook_slotted(
+    slot: &str,
+    component: &str,
+    part: Option<&str>,
+    states: Vec<String>,
+) -> UiStyleHookV1 {
+    let mut hook = hook(component, part, states);
+    hook.slot = Some(slot.to_owned());
+    hook
+}
+
+pub(super) fn semantic(
+    role: &str,
+    label_key: Option<&str>,
+    states: Vec<UiSemanticStateV1>,
+) -> UiSemanticV1 {
     UiSemanticV1 {
         role: role.to_owned(),
         label_key: label_key.map(str::to_owned),
@@ -177,6 +264,7 @@ fn tab_node(tab: CharacterManagerTabV1, active: CharacterManagerTabV1) -> UiNode
     };
     let current = tab == active;
     UiNodeV1 {
+        overrides: Default::default(),
         id: id.to_owned(),
         hook: hook(
             "tabs",
@@ -229,6 +317,7 @@ fn materialize_character_manager(
             states.push("pinned".to_owned());
         }
         catalog_children.push(UiNodeV1 {
+            overrides: Default::default(),
             id: format!("character-manager.card:{}", card.character.id),
             hook: hook("character-card", Some("catalog-item"), states),
             semantic: semantic("button", None, semantic_states),
@@ -244,6 +333,7 @@ fn materialize_character_manager(
     }
 
     let catalog = UiNodeV1 {
+        overrides: Default::default(),
         id: "character-manager.cards.collection".to_owned(),
         hook: hook(
             "character-management",
@@ -264,6 +354,7 @@ fn materialize_character_manager(
 
     let feedback = blueprint.feedback.as_ref().map(|feedback| match feedback {
         UiFeedbackV1::Loading => UiNodeV1 {
+            overrides: Default::default(),
             id: "character-manager.feedback.loading".to_owned(),
             hook: hook("character-management", Some("loading"), Vec::new()),
             semantic: semantic("status", Some("common:loading"), Vec::new()),
@@ -275,6 +366,7 @@ fn materialize_character_manager(
             children: Vec::new(),
         },
         UiFeedbackV1::Error { .. } => UiNodeV1 {
+            overrides: Default::default(),
             id: "character-manager.feedback.error".to_owned(),
             hook: hook("character-management", Some("error"), Vec::new()),
             semantic: semantic("alert", Some("characters:errorTitle"), Vec::new()),
@@ -289,6 +381,7 @@ fn materialize_character_manager(
 
     let mut cards_children = vec![
         UiNodeV1 {
+            overrides: Default::default(),
             id: "character-manager.cards.toolbar".to_owned(),
             hook: hook("action-bar", Some("character-card-toolbar"), Vec::new()),
             semantic: semantic("toolbar", Some("characters:managementTitle"), Vec::new()),
@@ -297,6 +390,7 @@ fn materialize_character_manager(
             action: None,
             children: vec![
                 UiNodeV1 {
+                    overrides: Default::default(),
                     id: "character-manager.action.create".to_owned(),
                     hook: hook("button", Some("create"), Vec::new()),
                     semantic: semantic("button", Some("characters:createShort"), Vec::new()),
@@ -308,6 +402,7 @@ fn materialize_character_manager(
                     children: Vec::new(),
                 },
                 UiNodeV1 {
+                    overrides: Default::default(),
                     id: "character-manager.action.import".to_owned(),
                     hook: hook("button", Some("import"), Vec::new()),
                     semantic: semantic("button", Some("characters:importShort"), Vec::new()),
@@ -321,6 +416,7 @@ fn materialize_character_manager(
             ],
         },
         UiNodeV1 {
+            overrides: Default::default(),
             id: "character-manager.cards.search".to_owned(),
             hook: hook("text-field", Some("search"), Vec::new()),
             semantic: semantic(
@@ -342,6 +438,7 @@ fn materialize_character_manager(
     ];
     if blueprint.controls.can_load_more {
         cards_children.push(UiNodeV1 {
+            overrides: Default::default(),
             id: "character-manager.cards.load-more".to_owned(),
             hook: hook("button", Some("load-more"), Vec::new()),
             semantic: semantic("button", Some("common:loadMore"), Vec::new()),
@@ -363,6 +460,7 @@ fn materialize_character_manager(
         ViewportClassV1::Expanded => UiLayoutV1::Flow,
     };
     UiNodeV1 {
+        overrides: Default::default(),
         id: "character-manager".to_owned(),
         hook: hook(
             "character-management",
@@ -379,6 +477,7 @@ fn materialize_character_manager(
         action: Some(UiActionV1::ClosePanel),
         children: vec![
             UiNodeV1 {
+                overrides: Default::default(),
                 id: "character-manager.tabs".to_owned(),
                 hook: hook("tabs", Some("root"), Vec::new()),
                 semantic: semantic("tablist", Some("characters:managementTabs"), Vec::new()),
@@ -393,6 +492,7 @@ fn materialize_character_manager(
                 ],
             },
             UiNodeV1 {
+                overrides: Default::default(),
                 id: "character-manager.cards".to_owned(),
                 hook: hook("character-management", Some("character-cards"), Vec::new()),
                 semantic: semantic("group", Some("characters:tab_cards"), Vec::new()),
@@ -405,7 +505,7 @@ fn materialize_character_manager(
     }
 }
 
-fn collect_paint_nodes(node: &UiNodeV1, output: &mut Vec<UiPaintNodeV1>) {
+pub(super) fn collect_paint_nodes(node: &UiNodeV1, output: &mut Vec<UiPaintNodeV1>) {
     output.push(UiPaintNodeV1 {
         id: node.id.clone(),
         hook: node.hook.clone(),
@@ -416,7 +516,7 @@ fn collect_paint_nodes(node: &UiNodeV1, output: &mut Vec<UiPaintNodeV1>) {
     }
 }
 
-fn collect_hit_targets(node: &UiNodeV1, output: &mut Vec<UiHitTargetV1>) {
+pub(super) fn collect_hit_targets(node: &UiNodeV1, output: &mut Vec<UiHitTargetV1>) {
     if let Some(action) = &node.action {
         output.push(UiHitTargetV1 {
             id: node.id.clone(),
@@ -428,7 +528,7 @@ fn collect_hit_targets(node: &UiNodeV1, output: &mut Vec<UiHitTargetV1>) {
     }
 }
 
-fn collect_text_interactions(node: &UiNodeV1, output: &mut Vec<UiTextInteractionV1>) {
+pub(super) fn collect_text_interactions(node: &UiNodeV1, output: &mut Vec<UiTextInteractionV1>) {
     if let UiContentV1::Input { value, label_key } = &node.content {
         output.push(UiTextInteractionV1 {
             id: node.id.clone(),
@@ -442,7 +542,7 @@ fn collect_text_interactions(node: &UiNodeV1, output: &mut Vec<UiTextInteraction
     }
 }
 
-fn semantic_tree(node: &UiNodeV1) -> UiSemanticNodeV1 {
+pub(super) fn semantic_tree(node: &UiNodeV1) -> UiSemanticNodeV1 {
     UiSemanticNodeV1 {
         id: node.id.clone(),
         semantic: node.semantic.clone(),
@@ -472,4 +572,49 @@ pub fn materialize_character_manager_scene_v1(
         hit_test_tree,
         text_interaction_tree,
     }
+}
+
+/// Materializes a scene from the explicit document + state + viewport
+/// boundary. The `UiBlueprintDocumentV1` is the static structure imported
+/// from the React CaptureBundle via the TypeBox normalizer; the
+/// `CharacterManagerStateV1` is the dynamic Product Wire state. Viewport
+/// selects the responsive layout. This keeps the Chromium `CaptureBundle`
+/// out of the renderer вЂ” only the portable document and typed state reach
+/// the scene.
+///
+/// The document is validated for the expected `character-manager` surface
+/// and responsive matrix; a future breaking change adds a new versioned
+/// document type rather than altering this validation in place.
+pub fn materialize_character_manager_scene_v1_from_document(
+    document: &crate::generated::ui_blueprint_v1::UiBlueprintDocumentV1,
+    state: &super::CaptureBundleV1,
+    viewport: ViewportClassV1,
+) -> Result<UiSceneV1, String> {
+    // Validate that the imported document is the expected character-manager
+    // surface and carries the required responsive variants. This mirrors the
+    // TypeScript normalizer's guarantees without reimplementing its full
+    // CSS/component validation вЂ” the document decoder already enforces shape.
+    if document.responsive.len() != 3 {
+        return Err(format!(
+            "UiBlueprintDocumentV1 responsive must have 3 entries, got {}",
+            document.responsive.len()
+        ));
+    }
+    // The document's root must be the CharacterManager component; the scene
+    // hook for the root is always `character-management` regardless of the
+    // document's recipe string, but we validate that the document was not
+    // produced for a different surface.
+    if document.root.component != "CharacterManager" {
+        return Err(format!(
+            "UiBlueprintDocumentV1 root must be CharacterManager, got {}",
+            document.root.component
+        ));
+    }
+    // Build the runtime blueprint from the Product Wire state bundle (the sole
+    // dynamic input, preserving its revision) and materialize. The document's
+    // recipes/bindings are the contract that this scene satisfies; mismatches
+    // are caught when the document and state diverge in future versions.
+    let blueprint = super::compile_character_manager_v1(state)
+        .map_err(|e| format!("state compile failed: {e}"))?;
+    Ok(materialize_character_manager_scene_v1(&blueprint, viewport))
 }

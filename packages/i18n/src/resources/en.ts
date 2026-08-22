@@ -144,6 +144,10 @@ export const en = {
     continueChat: 'Continue',
     placeholder: 'Type a message…',
     send: 'Send',
+    // Native chat chrome (blueprint documents reference these paths).
+    settings: 'Settings',
+    reset: 'Reset',
+    scrollToLatestShort: 'Scroll to latest',
     regenerate: 'Regenerate',
     stop: 'Stop generating',
     toolRunning: 'Running tool: {{name}}…',

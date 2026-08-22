@@ -26,6 +26,12 @@ pub struct VisibleRow {
     pub role: String,
     pub content: String,
     pub kind: RowKind,
+    /// Header author (React `message-author`): character name for assistant
+    /// rows, "You" for user rows.
+    pub author: String,
+    /// Pre-formatted timestamp label (React `message-timestamp`); empty means
+    /// no `<time>` element, like React's conditional render.
+    pub timestamp: String,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -44,10 +50,24 @@ pub struct ProductChatView {
     pub visible: Vec<VisibleRow>,
     pub chrome: ProductChrome,
     pub composer_text: String,
+    /// Composer placeholder (React `home:composerPlaceholder` with the
+    /// character name, e.g. "Message Hazel…").
+    pub composer_placeholder: String,
+    /// Pinned character avatar asset id (React header/message avatars). Empty
+    /// disables the avatar-fallback slot; the GPU overlay paints the real
+    /// thumbnail over it.
+    pub character_avatar_asset: String,
+    /// Pinned character display name (React `ChatHeader` `<h1>`). Empty falls
+    /// back to the chat title.
+    pub character_name: String,
     pub error_code: Option<String>,
     pub streaming: bool,
     pub viewport_width: u32,
     pub viewport_height: u32,
+    /// Width of the chat main area in CSS px (surface minus the rail/panel
+    /// strip when the split shell occupies the left side). `0` = probe
+    /// fixture without the shell; consumers fall back to `viewport_width`.
+    pub column_width: u32,
 }
 
 impl Default for ProductChatView {
@@ -58,24 +78,32 @@ impl Default for ProductChatView {
             visible: Vec::new(),
             chrome: ProductChrome::HeaderComposer,
             composer_text: String::new(),
+            composer_placeholder: String::new(),
+            character_avatar_asset: String::new(),
+            character_name: String::new(),
             error_code: None,
             streaming: false,
             viewport_width: 320,
             viewport_height: 200,
+            column_width: 0,
         }
     }
 }
 
 /// Header / message viewport / composer chrome in CSS pixels.
+///
+/// Desktop composer matches React `ChatComposer`: toolbar 42px + field
+/// min-height 132px (`ChatWorkspace.module.css`). Compact/probe heights keep
+/// the short single-row band so 200 CSS-px fixtures still fit.
 pub fn chrome_metrics(width: u32, height: u32) -> (u32, u32, u32, u32) {
     let width = width.max(1);
     let height = height.max(1);
     let (header, composer): (u32, u32) = if height <= 240 {
         (36, 40)
     } else if height <= 1200 {
-        (56, 72)
+        (56, 174)
     } else {
-        (72, 88)
+        (56, 188)
     };
     let viewport = height
         .saturating_sub(header.saturating_add(composer))
@@ -208,6 +236,21 @@ pub fn visible_rows(fixture: &CanonicalFixture, start: usize) -> Vec<VisibleRow>
                     .unwrap_or("")
                     .to_string(),
                 kind: row_kind(index),
+                author: if value
+                    .get("role")
+                    .and_then(Value::as_str)
+                    .unwrap_or("assistant")
+                    == "user"
+                {
+                    "You".into()
+                } else {
+                    "Assistant".into()
+                },
+                timestamp: value
+                    .get("createdAt")
+                    .and_then(Value::as_str)
+                    .map(format_timestamp)
+                    .unwrap_or_default(),
             }
         })
         .collect()
@@ -215,6 +258,46 @@ pub fn visible_rows(fixture: &CanonicalFixture, start: usize) -> Vec<VisibleRow>
 
 pub fn install_product_chat(view: ProductChatView) {
     PRODUCT_CHAT.with(|slot| *slot.borrow_mut() = view);
+}
+
+/// en-US `Intl` label for RFC3339 UTC stamps
+/// ("2026-08-12T10:00:00Z" → "Aug 12, 2026, 10:00 AM"); empty when the shape
+/// does not match (React renders no `<time>` in that case either).
+pub fn format_timestamp(value: &str) -> String {
+    let b = value.as_bytes();
+    if b.len() < 16 || b[4] != b'-' || b[7] != b'-' || b[10] != b'T' || b[13] != b':' {
+        return String::new();
+    }
+    let month = match &value[5..7] {
+        "01" => "Jan",
+        "02" => "Feb",
+        "03" => "Mar",
+        "04" => "Apr",
+        "05" => "May",
+        "06" => "Jun",
+        "07" => "Jul",
+        "08" => "Aug",
+        "09" => "Sep",
+        "10" => "Oct",
+        "11" => "Nov",
+        "12" => "Dec",
+        _ => return String::new(),
+    };
+    let Ok(hour) = value[11..13].parse::<u32>() else {
+        return String::new();
+    };
+    let (h12, ampm) = match hour {
+        0 => (12, "AM"),
+        1..=11 => (hour, "AM"),
+        12 => (12, "PM"),
+        other => (other - 12, "PM"),
+    };
+    format!(
+        "{month} {}, {}, {h12}:{} {ampm}",
+        &value[8..10],
+        &value[0..4],
+        &value[14..16]
+    )
 }
 
 pub fn current_product_chat() -> ProductChatView {
@@ -233,10 +316,14 @@ pub fn product_chat_from_fixture(fixture: &CanonicalFixture, start: usize) -> Pr
         visible: visible_rows(fixture, start),
         chrome: ProductChrome::HeaderComposer,
         composer_text: String::new(),
+        composer_placeholder: "Message Hazel…".into(),
+        character_avatar_asset: String::new(),
+        character_name: "Hazel".into(),
         error_code: None,
         streaming: false,
         viewport_width: 320,
         viewport_height: 200,
+        column_width: 0,
     }
 }
 

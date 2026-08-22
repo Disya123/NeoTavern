@@ -152,6 +152,10 @@ export const ru: Resources = {
     continueChat: '\u041f\u0440\u043e\u0434\u043e\u043b\u0436\u0438\u0442\u044c',
     placeholder: 'Введите сообщение…',
     send: 'Отправить',
+    // Нативный хром чата (blueprint-документы ссылаются на эти пути).
+    settings: 'Настройки',
+    reset: 'Сбросить',
+    scrollToLatestShort: 'К последним',
     regenerate: 'Перегенерировать',
     stop: 'Остановить генерацию',
     toolRunning: 'Выполняется инструмент: {{name}}…',

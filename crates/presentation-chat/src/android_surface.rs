@@ -1,6 +1,6 @@
 //! Live Vulkan SurfaceView host for Product Wire chat.
 //!
-//! One session: Wire → Dioxus → Blitz → presentation-session → NeoCompositor → wgpu.
+//! One session: Wire РІвЂ вЂ™ Dioxus РІвЂ вЂ™ Blitz РІвЂ вЂ™ presentation-session РІвЂ вЂ™ NeoCompositor РІвЂ вЂ™ wgpu.
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr::NonNull;
@@ -38,6 +38,7 @@ use vello::{AaConfig, RenderParams, Renderer};
 
 use crate::avatar_gpu::AvatarGpu;
 use crate::compositor::ChatCompositor;
+use crate::hit_rects::{HitRects, TapIntent};
 use crate::session::ChatSession;
 use crate::shell_hit::{hit_test, ShellAction, ShellHit};
 use crate::wire::ProductWire;
@@ -144,6 +145,17 @@ struct PendingUi {
     hit: ShellHit,
 }
 
+/// Layout-resolved tap captured at `Down` (mirror of [`PendingUi`]); released
+/// into `HOST_INTENT` at `Up` within the shared slop. Decision table is the
+/// same `hit_rects::TapIntent` the desktop host uses — Android stays
+/// behaviorally identical to PC.
+struct PendingTap {
+    pointer: i32,
+    x: f32,
+    y: f32,
+    intent: TapIntent,
+}
+
 pub(crate) struct GpuHost {
     pub(crate) gpu: GpuSurface,
     compositor: Option<ChatCompositor>,
@@ -159,6 +171,10 @@ pub(crate) struct GpuHost {
     shell_overlay: bool,
     hit_view: Option<ProductShellView>,
     pending_ui: Option<PendingUi>,
+    /// Layout-derived hit rects from the last produced frame — the same
+    /// geometry source the desktop host taps against.
+    hit_rects: HitRects,
+    pending_tap: Option<PendingTap>,
     gpu_probed: bool,
     image_paints: Vec<ImagePaintOp>,
 }
@@ -170,7 +186,14 @@ static DIRTY: AtomicBool = AtomicBool::new(true);
 static AVATAR_OVERLAY: AtomicBool = AtomicBool::new(false);
 static COMPOSITE_LOGGED: AtomicU64 = AtomicU64::new(0);
 static SHELL_ACTION: Mutex<Option<ShellAction>> = Mutex::new(None);
+/// Layout-resolved taps (`hit_rects::TapIntent`) awaiting the JNI consumer in
+/// `presentFrame` — the Android twin of the desktop `pointer_up` dispatch.
+static HOST_INTENT: Mutex<Option<TapIntent>> = Mutex::new(None);
 static PENDING_INSETS: Mutex<Option<[f32; 4]>> = Mutex::new(None);
+
+pub fn take_host_intent() -> Option<TapIntent> {
+    HOST_INTENT.lock().unwrap_or_else(|p| p.into_inner()).take()
+}
 
 fn input_kind(kind: i32) -> PlatformPointerKind {
     match kind {
@@ -1006,6 +1029,8 @@ pub fn attach(env: &JNIEnv, surface: &JObject, width: i32, height: i32, density:
                 shell_overlay: true,
                 hit_view: None,
                 pending_ui: None,
+                hit_rects: HitRects::default(),
+                pending_tap: None,
                 gpu_probed: false,
                 image_paints: Vec::new(),
             };
@@ -1062,6 +1087,22 @@ pub fn try_push(pointer: i32, kind: i32, x: f32, y: f32, time_nanos: i64) {
     let css_x = x / density;
     let css_y = y / density;
     if kind == PlatformPointerKind::Down {
+        // Layout-resolved controls first (composer chrome + inline message
+        // actions) — identical decision table to the desktop host. A captured
+        // intent must not start scroll tracking underneath a button.
+        match host.hit_rects.resolve_tap(css_x, css_y) {
+            TapIntent::None => {}
+            intent => {
+                host.pending_tap = Some(PendingTap {
+                    pointer,
+                    x: css_x,
+                    y: css_y,
+                    intent,
+                });
+                host.velocity = 0.0;
+                return;
+            }
+        }
         if let Some(view) = host.hit_view.as_ref() {
             if let Some(hit) = hit_test(view, css_x, css_y) {
                 host.pending_ui = Some(PendingUi {
@@ -1081,8 +1122,19 @@ pub fn try_push(pointer: i32, kind: i32, x: f32, y: f32, time_nanos: i64) {
             compositor.note_scroll(true);
         }
     } else if kind == PlatformPointerKind::Move {
+        if let Some(pending) = host.pending_tap.as_ref() {
+            if (css_x - pending.x).abs() > crate::TOUCH_SLOP_CSS
+                || (css_y - pending.y).abs() > crate::TOUCH_SLOP_CSS
+            {
+                host.pending_tap = None;
+            } else {
+                return;
+            }
+        }
         if let Some(pending) = host.pending_ui.as_ref() {
-            if (css_x - pending.x).abs() > 16.0 || (css_y - pending.y).abs() > 16.0 {
+            if (css_x - pending.x).abs() > crate::TOUCH_SLOP_CSS
+                || (css_y - pending.y).abs() > crate::TOUCH_SLOP_CSS
+            {
                 host.pending_ui = None;
             } else {
                 return;
@@ -1095,10 +1147,20 @@ pub fn try_push(pointer: i32, kind: i32, x: f32, y: f32, time_nanos: i64) {
         host.last_y = Some(y);
         host.last_t = Some(time);
     } else {
+        if let Some(pending) = host.pending_tap.take() {
+            if pending.pointer == pointer
+                && (css_x - pending.x).abs() <= crate::TOUCH_SLOP_CSS
+                && (css_y - pending.y).abs() <= crate::TOUCH_SLOP_CSS
+            {
+                *HOST_INTENT.lock().unwrap_or_else(|p| p.into_inner()) = Some(pending.intent);
+                DIRTY.store(true, Ordering::SeqCst);
+            }
+            return;
+        }
         if let Some(pending) = host.pending_ui.take() {
             if pending.pointer == pointer
-                && (css_x - pending.x).abs() <= 16.0
-                && (css_y - pending.y).abs() <= 16.0
+                && (css_x - pending.x).abs() <= crate::TOUCH_SLOP_CSS
+                && (css_y - pending.y).abs() <= crate::TOUCH_SLOP_CSS
             {
                 if let ShellHit::Action(action) = pending.hit {
                     *SHELL_ACTION.lock().unwrap_or_else(|p| p.into_inner()) = Some(action);
@@ -1449,6 +1511,9 @@ fn produce_and_raster(
     .unwrap_or_else(|_| Err("produce_panic".into()))?;
     let (produced, full_scene, diag) = session.paint(VelloFilter::full())?;
     let layout = session.paint_layout().clone();
+    // Same geometry source the desktop host taps against: hit rects are read
+    // back from the Blitz/Taffy pass that painted this frame.
+    host.hit_rects = HitRects::from_skeleton(&session.slot_skeleton());
     trace(&diag.line());
     let tile_count = host
         .gpu

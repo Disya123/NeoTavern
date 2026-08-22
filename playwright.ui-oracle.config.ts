@@ -46,7 +46,7 @@ export default defineConfig({
     ...devices['Desktop Chrome'],
   },
   webServer: {
-    command: 'node apps/server/dist/main.js',
+    command: 'pnpm --filter @neotavern/contracts build && node apps/server/dist/main.js',
     env: serverEnv(),
     url: `http://127.0.0.1:${serverPort}/api/v2/health`,
     reuseExistingServer: false,

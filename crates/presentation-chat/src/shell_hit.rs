@@ -8,8 +8,10 @@
 
 use neotavern_presentation_dioxus_shell::ProductShellView;
 
-const RAIL_WIDTH: f32 = 60.0;
-const PANEL_WIDTH: f32 = 380.0;
+pub const RAIL_WIDTH: f32 = 60.0;
+pub const PANEL_WIDTH_DEFAULT: f32 = 380.0;
+pub const PANEL_WIDTH_MIN: f32 = 260.0;
+pub const PANEL_WIDTH_MAX: f32 = 720.0;
 const CONTROL: f32 = 44.0;
 const CONTROL_SM: f32 = 40.0;
 const CONTROL_LG: f32 = 52.0;
@@ -57,6 +59,8 @@ pub enum ShellAction {
     SelectCharacter(String),
     SelectPersona(String),
     SelectLorebook(String),
+    SelectChat(String),
+    CreateChat,
     OpenCreate,
     CloseCreate,
     ConfirmCreate,
@@ -90,19 +94,61 @@ fn css_size(view: &ProductShellView) -> (f32, f32) {
     )
 }
 
+pub fn panel_css_width(view: &ProductShellView) -> f32 {
+    let width = view.panel_width;
+    if width < 1.0 {
+        PANEL_WIDTH_DEFAULT
+    } else {
+        width.clamp(PANEL_WIDTH_MIN, PANEL_WIDTH_MAX)
+    }
+}
+
+pub fn is_compact(view: &ProductShellView) -> bool {
+    css_size(view).0 <= 600.0
+}
+
+/// Left edge of the chat main area in window CSS px.
+pub fn chat_origin_x(view: &ProductShellView) -> f32 {
+    chat_origin_from_parts(css_size(view).0, view.sidebar_open, view.panel_width)
+}
+
+/// Occupied CSS width of rail + open panel on desktop; 0 on compact overlay.
+pub fn sidebar_occupied_css(view: &ProductShellView) -> f32 {
+    chat_origin_from_parts(css_size(view).0, view.sidebar_open, view.panel_width)
+}
+
+/// `chat_origin_x` from raw shell inputs so callers that hold session state
+/// (not a built [`ProductShellView`]) share the single origin rule.
+pub fn chat_origin_from_parts(viewport_width: f32, sidebar_open: bool, panel_width: f32) -> f32 {
+    if viewport_width <= 600.0 {
+        0.0
+    } else if sidebar_open {
+        RAIL_WIDTH + panel_css_width_from(panel_width)
+    } else {
+        RAIL_WIDTH
+    }
+}
+
+fn panel_css_width_from(panel_width: f32) -> f32 {
+    if panel_width < 1.0 {
+        PANEL_WIDTH_DEFAULT
+    } else {
+        panel_width.clamp(PANEL_WIDTH_MIN, PANEL_WIDTH_MAX)
+    }
+}
+
 fn panel_origin(view: &ProductShellView) -> (f32, f32) {
     let (width, _) = css_size(view);
-    let is_compact = width <= 600.0;
-    if is_compact {
+    if is_compact(view) {
         (RAIL_WIDTH, (width - RAIL_WIDTH).max(0.0))
     } else {
-        let panel_w = PANEL_WIDTH.min((width - RAIL_WIDTH).max(0.0));
+        let panel_w = panel_css_width(view).min((width - RAIL_WIDTH).max(0.0));
         (RAIL_WIDTH, panel_w)
     }
 }
 
 fn chrome_top(view: &ProductShellView) -> f32 {
-    if css_size(view).0 <= 600.0 {
+    if is_compact(view) {
         view.insets.top.max(SPACE_2XL)
     } else {
         view.insets.top.max(SPACE_SM)
@@ -110,7 +156,7 @@ fn chrome_top(view: &ProductShellView) -> f32 {
 }
 
 fn chrome_bottom(view: &ProductShellView) -> f32 {
-    if css_size(view).0 <= 600.0 {
+    if is_compact(view) {
         view.insets.bottom.max(SPACE_2XL)
     } else {
         view.insets.bottom.max(SPACE_SM)
@@ -123,10 +169,11 @@ fn header_bottom(view: &ProductShellView) -> f32 {
 
 fn dialog_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
     let (width, height) = css_size(view);
+    let chat_x0 = chat_origin_x(view);
     if view.create_dialog_open {
         let dlg_w = 320.0_f32.min(width - 32.0);
         let dlg_h = 360.0_f32.min(height - 48.0);
-        let x0 = (width - dlg_w) * 0.5;
+        let x0 = chat_x0 + (width - chat_x0 - dlg_w).max(0.0) * 0.5;
         let y0 = (height - dlg_h) * 0.5;
         if !contains(x, y, x0, y0, x0 + dlg_w, y0 + dlg_h) {
             return Some(ShellHit::Action(ShellAction::CloseCreate));
@@ -143,7 +190,7 @@ fn dialog_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
     if view.delete_dialog_open {
         let dlg_w = 300.0_f32.min(width - 32.0);
         let dlg_h = 200.0_f32.min(height - 48.0);
-        let x0 = (width - dlg_w) * 0.5;
+        let x0 = chat_x0 + (width - chat_x0 - dlg_w).max(0.0) * 0.5;
         let y0 = (height - dlg_h) * 0.5;
         if !contains(x, y, x0, y0, x0 + dlg_w, y0 + dlg_h) {
             return Some(ShellHit::Action(ShellAction::CloseDelete));
@@ -162,8 +209,7 @@ fn dialog_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
 
 fn rail_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
     let (width, height) = css_size(view);
-    let is_compact = width <= 600.0;
-    if is_compact && !view.sidebar_open {
+    if is_compact(view) && !view.sidebar_open {
         // Mobile bottom navigation bar hit testing
         let bottom_pad = chrome_bottom(view);
         let nav_top = height - 56.0 - bottom_pad;
@@ -381,17 +427,103 @@ pub fn hit_test(view: &ProductShellView, css_x: f32, css_y: f32) -> Option<Shell
         if let Some(hit) = lorebooks_hit(view, x, y) {
             return Some(hit);
         }
+    } else if view.sidebar_open && view.panel == "home" {
+        if let Some(hit) = chats_hit(view, x, y) {
+            return Some(hit);
+        }
     } else if view.sidebar_open {
         let (panel_x, panel_w) = panel_origin(view);
-        if contains(x, y, panel_x, 0.0, panel_x + panel_w, css_size(view).1) {
-            let header_end = header_bottom(view);
-            if y < header_end && x >= panel_x + panel_w - CONTROL_SM - SPACE_LG {
-                return Some(ShellHit::Action(ShellAction::ClosePanel));
+        if !contains(x, y, panel_x, 0.0, panel_x + panel_w, css_size(view).1) {
+            return None;
+        }
+        match view.panel.as_str() {
+            "providers" => {
+                return catalog_panel_hit(
+                    view,
+                    x,
+                    y,
+                    &["providers", "presets"],
+                    view.ai_tab.as_str(),
+                    0.0,
+                    core::iter::empty(),
+                    |_: &str| ShellAction::ClosePanel,
+                );
             }
-            return Some(ShellHit::Absorb);
+            "settings" => {
+                return catalog_panel_hit(
+                    view,
+                    x,
+                    y,
+                    &["general", "host"],
+                    view.settings_tab.as_str(),
+                    0.0,
+                    core::iter::empty(),
+                    |_: &str| ShellAction::ClosePanel,
+                );
+            }
+            _ => {
+                let header_end = header_bottom(view);
+                if y < header_end && x >= panel_x + panel_w - CONTROL_SM - SPACE_LG {
+                    return Some(ShellHit::Action(ShellAction::ClosePanel));
+                }
+                return Some(ShellHit::Absorb);
+            }
         }
     }
     None
+}
+
+/// Hit-test a managed catalog panel: optional tab row (AI providers/presets,
+/// Settings general/host) plus a vertical selectable card list under it.
+fn catalog_panel_hit<'a, I, F>(
+    view: &ProductShellView,
+    x: f32,
+    y: f32,
+    tabs: &[&str],
+    _active_tab: &str,
+    rows_top_relative: f32,
+    ids: I,
+    select: F,
+) -> Option<ShellHit>
+where
+    I: IntoIterator<Item = &'a str>,
+    F: Fn(&str) -> ShellAction,
+{
+    if !view.sidebar_open {
+        return None;
+    }
+    let (panel_x, panel_w) = panel_origin(view);
+    let x1 = panel_x + panel_w;
+    let header_end = header_bottom(view);
+    if y < header_end {
+        if x >= x1 - CONTROL_SM - SPACE_LG {
+            return Some(ShellHit::Action(ShellAction::ClosePanel));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    if !tabs.is_empty() {
+        let tabs_top = header_end + SPACE_XS;
+        let tabs_bottom = tabs_top + CONTROL_SM + SPACE_XS;
+        let tabs_x0 = panel_x + SPACE_LG;
+        let tabs_x1 = x1 - SPACE_LG;
+        if y >= tabs_top && y < tabs_bottom && x >= tabs_x0 && x < tabs_x1 {
+            let span = (tabs_x1 - tabs_x0).max(1.0);
+            let idx = (((x - tabs_x0) / span) * tabs.len() as f32).floor() as usize;
+            return Some(ShellHit::Action(ShellAction::SetTab(
+                tabs[idx.min(tabs.len() - 1)].into(),
+            )));
+        }
+    }
+    // Selectable card list below the tab row / chrome.
+    let mut cursor = header_end + rows_top_relative;
+    for id in ids {
+        let bottom = cursor + CONTROL_LG + SPACE_MD;
+        if y >= cursor && y < bottom {
+            return Some(ShellHit::Action(select(id)));
+        }
+        cursor = bottom;
+    }
+    Some(ShellHit::Absorb)
 }
 
 fn personas_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
@@ -418,6 +550,59 @@ fn lorebooks_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
         view.lorebooks.iter().map(|item| item.id.as_str()),
         |id| ShellAction::SelectLorebook(id.into()),
     )
+}
+
+/// Home/chats panel: the real `chats.list` rows; a tap opens that chat.
+/// Dedicated helper (no tab row / create toolbar like the persona lists).
+fn chats_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
+    if !view.sidebar_open {
+        return None;
+    }
+    let (panel_x, panel_w) = panel_origin(view);
+    let x1 = panel_x + panel_w;
+    if x < panel_x || x >= x1 {
+        return None;
+    }
+    let header_end = header_bottom(view);
+    if y < header_end {
+        if x >= x1 - CONTROL_SM - SPACE_LG {
+            return Some(ShellHit::Action(ShellAction::ClosePanel));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    // Measured from the live Windows render (snapshot color-band mapping at
+    // 1100×760): the panel's own `SidebarPanelHeader` sits above these bands,
+    // so anchors are taken from the rendered pixels, not re-derived:
+    // search field [86,130), `newChatAction` button [146,190), list rows from
+    // 198 with a measured ~76px row height (React chatCopy stacks
+    // strong/span/characterLabel) plus the 4px list gap.
+    let search_top = 86.0;
+    let search_bottom = 130.0;
+    if y >= search_top && y < search_bottom {
+        // Typing focus is bin-local (like the character manager search).
+        return Some(ShellHit::Absorb);
+    }
+    let new_chat_top = 146.0;
+    let new_chat_bottom = 190.0;
+    if contains(
+        x,
+        y,
+        panel_x + SPACE_LG,
+        new_chat_top,
+        panel_x + SPACE_LG + 140.0,
+        new_chat_bottom,
+    ) {
+        return Some(ShellHit::Action(ShellAction::CreateChat));
+    }
+    let mut cursor = 198.0;
+    for id in view.chat_list.iter().map(|item| item.id.as_str()) {
+        let bottom = cursor + 76.0;
+        if y >= cursor && y < bottom {
+            return Some(ShellHit::Action(ShellAction::SelectChat(id.into())));
+        }
+        cursor = bottom + SPACE_XS;
+    }
+    Some(ShellHit::Absorb)
 }
 
 fn list_panel_hit<'a, I, F>(

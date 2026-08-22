@@ -435,6 +435,712 @@ pub fn peek_texture_rgba(
     [data[0], data[1], data[2], data[3]]
 }
 
+// --- Cross-platform present host (Android SurfaceView host, generalized) ---
+//
+// The Android `android_surface.rs` host owns: adapter/device request, the
+// Rgba8Unorm Vello storage target, a sampled accumulation/`resolve` texture,
+// a fullscreen blit pipeline into the swapchain, and the present. The only
+// platform-specific input is the `wgpu::Surface` (Android: ANativeWindow via
+// `create_surface_unsafe`; Windows/macOS: a winit window via `create_surface`).
+// This module is that host, available on every `gpu` build; Android can
+// migrate onto it without changing behavior.
+
+/// Fullscreen-triangle blit: samples `resolve` into the swapchain, with the
+/// NeoCompositor scroll blend band and optional sRGB re-encode.
+pub const BLIT_WGSL: &str = r#"
+struct VsOut { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32> }
+@group(0) @binding(0) var tex: texture_2d<f32>;
+@group(0) @binding(1) var samp: sampler;
+@group(0) @binding(2) var<uniform> scroll: vec4<f32>;
+@vertex fn vs(@builtin(vertex_index) i: u32) -> VsOut {
+    var p = array<vec2<f32>, 3>(vec2<f32>(-1.0, -1.0), vec2<f32>(3.0, -1.0), vec2<f32>(-1.0, 3.0));
+    let pos = p[i];
+    var out: VsOut;
+    out.pos = vec4<f32>(pos, 0.0, 1.0);
+    out.uv = vec2<f32>(pos.x * 0.5 + 0.5, 1.0 - (pos.y * 0.5 + 0.5));
+    return out;
+}
+@fragment fn fs(in: VsOut) -> @location(0) vec4<f32> {
+    var uv = in.uv;
+    if (uv.y >= scroll.y && uv.y < scroll.z) {
+        let src_y = uv.y + scroll.x;
+        if (src_y < scroll.y || src_y >= scroll.z) {
+            return vec4<f32>(0.082, 0.075, 0.067, 1.0);
+        }
+        uv.y = src_y;
+    }
+    let c = textureSample(tex, samp, uv);
+    var rgb = c.rgb;
+    if (scroll.w > 0.5) {
+        let lo = rgb / 12.92;
+        let hi = pow((rgb + 0.055) / 1.055, vec3<f32>(2.4));
+        rgb = select(hi, lo, rgb <= vec3<f32>(0.04045));
+    }
+    return vec4<f32>(rgb, 1.0);
+}
+"#;
+
+pub fn format_is_srgb(format: wgpu::TextureFormat) -> bool {
+    matches!(
+        format,
+        wgpu::TextureFormat::Rgba8UnormSrgb | wgpu::TextureFormat::Bgra8UnormSrgb
+    )
+}
+
+/// Prefer non-sRGB `Rgba8Unorm`/`Bgra8Unorm` so the swapchain target never
+/// needs re-encoding before the storage-blit path (same preference as the
+/// Android host).
+pub fn pick_surface_format(formats: &[wgpu::TextureFormat]) -> Option<wgpu::TextureFormat> {
+    const PREFER: &[wgpu::TextureFormat] = &[
+        wgpu::TextureFormat::Rgba8Unorm,
+        wgpu::TextureFormat::Bgra8Unorm,
+    ];
+    for want in PREFER {
+        if formats.contains(want) {
+            return Some(*want);
+        }
+    }
+    formats
+        .iter()
+        .copied()
+        .find(|format| format_is_srgb(*format))
+        .or_else(|| formats.first().copied())
+}
+
+pub fn pick_alpha_mode(modes: &[wgpu::CompositeAlphaMode]) -> wgpu::CompositeAlphaMode {
+    if modes.contains(&wgpu::CompositeAlphaMode::Opaque) {
+        wgpu::CompositeAlphaMode::Opaque
+    } else {
+        modes
+            .first()
+            .copied()
+            .unwrap_or(wgpu::CompositeAlphaMode::Opaque)
+    }
+}
+
+pub fn canvas_clear_color() -> wgpu::Color {
+    wgpu::Color {
+        r: 0x15 as f64 / 255.0,
+        g: 0x13 as f64 / 255.0,
+        b: 0x11 as f64 / 255.0,
+        a: 1.0,
+    }
+}
+
+pub fn clear_view_color(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    view: &wgpu::TextureView,
+    color: wgpu::Color,
+) {
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("neocompositor-canvas"),
+    });
+    {
+        let _pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("neocompositor-canvas"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(color),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+    }
+    queue.submit(Some(encoder.finish()));
+}
+
+/// Vello storage + sampled accumulation target pair at a given size.
+pub struct PresentTargets {
+    pub storage: wgpu::Texture,
+    pub storage_view: wgpu::TextureView,
+    pub resolve: wgpu::Texture,
+    pub resolve_view: wgpu::TextureView,
+}
+
+impl PresentTargets {
+    pub fn alloc(device: &wgpu::Device, plan: &VelloTargetPlan, width: u32, height: u32) -> Self {
+        let size = wgpu::Extent3d {
+            width: width.max(1),
+            height: height.max(1),
+            depth_or_array_layers: 1,
+        };
+        let storage = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("neocompositor-vello-storage"),
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: plan.format,
+            usage: plan.storage_usages,
+            view_formats: &[],
+        });
+        let storage_view = storage.create_view(&wgpu::TextureViewDescriptor::default());
+        let resolve = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("neocompositor-sampled"),
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: plan.format,
+            usage: plan.sampled_usages | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        let resolve_view = resolve.create_view(&wgpu::TextureViewDescriptor::default());
+        Self {
+            storage,
+            storage_view,
+            resolve,
+            resolve_view,
+        }
+    }
+}
+
+/// The shared render/present host. Identical behavior to the Android
+/// `GpuSurface`: Vello renders into the non-sRGB storage target, the result is
+/// copied into a sampled accumulation texture, and a fullscreen blit draws it
+/// into the swapchain.
+pub struct PresentSurface {
+    pub device: wgpu::Device,
+    pub queue: wgpu::Queue,
+    pub surface: wgpu::Surface<'static>,
+    pub config: wgpu::SurfaceConfiguration,
+    pub backend: String,
+    pub srgb_target: bool,
+    pub convert: ConvertMode,
+    plan: VelloTargetPlan,
+    targets: PresentTargets,
+    pipeline: wgpu::RenderPipeline,
+    bind_layout: wgpu::BindGroupLayout,
+    bind: wgpu::BindGroup,
+    sampler: wgpu::Sampler,
+    uniform: wgpu::Buffer,
+    renderer: vello::Renderer,
+    convert_pipeline: Option<wgpu::ComputePipeline>,
+    convert_bgl: Option<wgpu::BindGroupLayout>,
+    avatars: crate::avatar_gpu::AvatarGpu,
+}
+
+impl PresentSurface {
+    /// Pick the best surface-capable adapter, request the Vello-capable device
+    /// and build the full present pipeline. `surface,width,height` are the only
+    /// platform inputs; the caller owns the `Surface`.
+    pub fn open(
+        instance: &wgpu::Instance,
+        surface: wgpu::Surface<'static>,
+        width: u32,
+        height: u32,
+    ) -> Result<Self, String> {
+        let mut adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::all()));
+        adapters.sort_by_key(|adapter| {
+            let info = adapter.get_info();
+            adapter_sort_key(info.backend, info.device_type)
+        });
+        let adapter = adapters
+            .into_iter()
+            .find(|adapter| {
+                let info = adapter.get_info();
+                !skip_emulator_vulkan(&info) && adapter.is_surface_supported(&surface)
+            })
+            .ok_or_else(|| "no surface-capable wgpu adapter".to_string())?;
+        let info = adapter.get_info();
+        let (device, queue) = request_vello_device(&adapter)?;
+        let plan = plan_vello_target(
+            adapter.get_texture_format_features(wgpu::TextureFormat::Rgba8Unorm),
+        )?;
+        let cap = surface.get_capabilities(&adapter);
+        let format = pick_surface_format(&cap.formats).ok_or("no swapchain format")?;
+        let srgb_target = format_is_srgb(format);
+        let config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            format,
+            width: width.max(1),
+            height: height.max(1),
+            present_mode: wgpu::PresentMode::Fifo,
+            alpha_mode: pick_alpha_mode(&cap.alpha_modes),
+            view_formats: vec![],
+            desired_maximum_frame_latency: 2,
+        };
+        surface.configure(&device, &config);
+        let renderer = vello::Renderer::new(&device, vello_renderer_options(false))
+            .map_err(|err| format!("vello: {err}"))?;
+        let targets = PresentTargets::alloc(&device, &plan, width, height);
+        clear_view_color(&device, &queue, &targets.resolve_view, canvas_clear_color());
+
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("neocompositor-blit"),
+            source: wgpu::ShaderSource::Wgsl(BLIT_WGSL.into()),
+        });
+        let bind_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("neocompositor-bgl"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+            ],
+        });
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("neocompositor-pl"),
+            bind_group_layouts: &[Some(&bind_layout)],
+            immediate_size: 0,
+        });
+        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("neocompositor-blit-pipe"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs"),
+                compilation_options: Default::default(),
+                buffers: &[],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs"),
+                compilation_options: Default::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        });
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            ..Default::default()
+        });
+        let uniform = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("neocompositor-scroll"),
+            size: 16,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("neocompositor-bg"),
+            layout: &bind_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&targets.resolve_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: uniform.as_entire_binding(),
+                },
+            ],
+        });
+        let (convert_pipeline, convert_bgl) = if plan.convert == ConvertMode::Compute {
+            let (pipeline, bgl) = create_storage_convert_pipeline(&device);
+            (Some(pipeline), Some(bgl))
+        } else {
+            (None, None)
+        };
+        let avatars = crate::avatar_gpu::AvatarGpu::new(&device, plan.format);
+        Ok(Self {
+            device,
+            queue,
+            surface,
+            config,
+            backend: format!("{:?}", info.backend),
+            srgb_target,
+            convert: plan.convert,
+            plan,
+            targets,
+            pipeline,
+            bind_layout,
+            bind,
+            sampler,
+            uniform,
+            renderer,
+            convert_pipeline,
+            convert_bgl,
+            avatars,
+        })
+    }
+
+    /// Upload an avatar thumbnail into the overlay GPU cache (Android parity:
+    /// `GpuHost` calls `avatars.upload` once per `asset_id`).
+    pub fn upload_avatar(&mut self, asset_id: &str, thumb: &crate::avatar::AvatarThumb) -> bool {
+        self.avatars
+            .upload(&self.device, &self.queue, asset_id, thumb)
+    }
+
+    /// Draw cached avatar thumbnails on top of `resolve` (before the swapchain
+    /// blit) — the shared-host equivalent of Android
+    /// `composite_avatar_overlay`, so desktop / macOS composite the same image
+    /// the Android surface shows.
+    pub fn composite_avatars(&mut self, paints: &[neotavern_neocompositor::ImagePaintOp]) {
+        if paints.is_empty() {
+            return;
+        }
+        let (w, h) = self.size();
+        self.avatars.blit(
+            &self.device,
+            &self.queue,
+            &self.targets.resolve_view,
+            w,
+            h,
+            paints,
+        );
+    }
+
+    pub fn size(&self) -> (u32, u32) {
+        (self.config.width, self.config.height)
+    }
+
+    /// Vello-rasterize `scene` into the storage target then move it into the
+    /// sampled accumulation `resolve` (the same GPU→GPU path as the Android
+    /// host, without avatars).
+    pub fn render(
+        &mut self,
+        scene: &vello::Scene,
+        base_color: vello::peniko::Color,
+    ) -> Result<(), String> {
+        let (width, height) = self.size();
+        if let Err(err) = self.renderer.render_to_texture(
+            &self.device,
+            &self.queue,
+            scene,
+            &self.targets.storage_view,
+            &vello::RenderParams {
+                base_color,
+                width,
+                height,
+                antialiasing_method: vello::AaConfig::Area,
+            },
+        ) {
+            return Err(format!("render_to_texture: {err}"));
+        }
+        gpu_storage_to_sampled(
+            &self.device,
+            &self.queue,
+            VelloTargets {
+                storage: &self.targets.storage,
+                sampled: &self.targets.resolve,
+                storage_view: &self.targets.storage_view,
+                sampled_view: &self.targets.resolve_view,
+                size: wgpu::Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+                dest_origin: wgpu::Origin3d::ZERO,
+            },
+            StorageConvert {
+                mode: self.convert,
+                pipeline: self.convert_pipeline.as_ref(),
+                layout: self.convert_bgl.as_ref(),
+            },
+        );
+        Ok(())
+    }
+
+    /// Draw `resolve` into the swapchain and present (mirror of the Android
+    /// host's `blit`). Scroll/header/composer are the NeoCompositor blend
+    /// window; header/composer may be 0 when the shell overlay is attached.
+    pub fn present(&mut self, scroll_y: f32, header: f32, composer_top: f32) -> Result<(), String> {
+        self.present_opt(scroll_y, header, composer_top, None)
+    }
+
+    /// `present` plus a one-shot swapchain read-back diagnostic (what the user
+    /// actually sees). `swap_save` copies the backbuffer right after the blit,
+    /// before `frame.present()`.
+    pub fn present_and_dump(
+        &mut self,
+        scroll_y: f32,
+        header: f32,
+        composer_top: f32,
+        swap_save: &str,
+    ) -> Result<(), String> {
+        self.present_opt(scroll_y, header, composer_top, Some(swap_save))
+    }
+
+    fn present_opt(
+        &mut self,
+        scroll_y: f32,
+        header: f32,
+        composer_top: f32,
+        swap_save: Option<&str>,
+    ) -> Result<(), String> {
+        let height = self.config.height.max(1) as f32;
+        let offset = scroll_y / height;
+        let header_uv = header / height;
+        let composer_uv = composer_top / height;
+        let mut uniform = [0u8; 16];
+        uniform[0..4].copy_from_slice(&offset.to_le_bytes());
+        uniform[4..8].copy_from_slice(&header_uv.to_le_bytes());
+        uniform[8..12].copy_from_slice(&composer_uv.to_le_bytes());
+        let srgb = if self.srgb_target { 1.0f32 } else { 0.0 };
+        uniform[12..16].copy_from_slice(&srgb.to_le_bytes());
+        self.queue.write_buffer(&self.uniform, 0, &uniform);
+        let frame = match self.surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(frame)
+            | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
+            wgpu::CurrentSurfaceTexture::Timeout => return Err("acquire_timeout".into()),
+            wgpu::CurrentSurfaceTexture::Occluded => return Err("acquire_occluded".into()),
+            wgpu::CurrentSurfaceTexture::Outdated => return Err("acquire_outdated".into()),
+            wgpu::CurrentSurfaceTexture::Lost => return Err("acquire_lost".into()),
+            wgpu::CurrentSurfaceTexture::Validation => return Err("acquire_validation".into()),
+        };
+        let view = frame
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("neocompositor-enc"),
+            });
+        encoder.push_debug_group("neocompositor-blit");
+        {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("neocompositor-blit"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(canvas_clear_color()),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+            pass.set_pipeline(&self.pipeline);
+            pass.set_bind_group(0, &self.bind, &[]);
+            pass.draw(0..3, 0..1);
+        }
+        encoder.pop_debug_group();
+        self.queue.submit(Some(encoder.finish()));
+        if let Some(path) = swap_save {
+            self.swapchain_snapshot(path, &frame)?;
+        }
+        frame.present();
+        Ok(())
+    }
+
+    /// Re-tie the blit bind group to the (possibly re-allocated) `resolve`.
+    /// Failing to do this after `resize` lets the blit keep sampling the old,
+    /// cleared target — the swapchain shows the clear color while every other
+    /// path (render/snapshot) still sees the fresh content.
+    fn rebuild_bind(&mut self) {
+        self.bind = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("neocompositor-bg"),
+            layout: &self.bind_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&self.targets.resolve_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: self.uniform.as_entire_binding(),
+                },
+            ],
+        });
+    }
+
+    /// Re-create targets and re-configure the swapchain at a new size.
+    pub fn resize(&mut self, width: u32, height: u32) {
+        let width = width.max(1);
+        let height = height.max(1);
+        if width == self.config.width && height == self.config.height {
+            return;
+        }
+        self.config.width = width;
+        self.config.height = height;
+        self.targets = PresentTargets::alloc(&self.device, &self.plan, width, height);
+        self.rebuild_bind();
+        clear_view_color(
+            &self.device,
+            &self.queue,
+            &self.targets.resolve_view,
+            canvas_clear_color(),
+        );
+        self.surface.configure(&self.device, &self.config);
+    }
+
+    /// Headless diagnostic: read back the accumulated `resolve` (before the
+    /// swapchain blit) and save it as a PNG — exactly what the blit samples.
+    pub fn snapshot(&self, path: &str) -> Result<(), String> {
+        let width = self.config.width.max(1);
+        let height = self.config.height.max(1);
+        let bytes_per_row = (width * 4).div_ceil(256) * 256;
+        let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("neocompositor-snapshot"),
+            size: u64::from(bytes_per_row * height),
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("neocompositor-snapshot"),
+            });
+        encoder.copy_texture_to_buffer(
+            wgpu::TexelCopyTextureInfo {
+                texture: &self.targets.resolve,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::TexelCopyBufferInfo {
+                buffer: &buffer,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(bytes_per_row),
+                    rows_per_image: Some(height),
+                },
+            },
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+        );
+        self.queue.submit(Some(encoder.finish()));
+        let _ = self.device.poll(wgpu::PollType::wait_indefinitely());
+        let slice = buffer.slice(..);
+        let (sender, receiver) = std::sync::mpsc::channel();
+        slice.map_async(wgpu::MapMode::Read, move |result| {
+            let _ = sender.send(result);
+        });
+        let _ = self.device.poll(wgpu::PollType::wait_indefinitely());
+        receiver
+            .recv()
+            .map_err(|_| "snapshot map recv failed".to_string())?
+            .map_err(|err| format!("snapshot map: {err}"))?;
+        let data = slice.get_mapped_range();
+        let row_bytes = (width as usize) * 4;
+        let mut pixels = Vec::with_capacity(row_bytes * height as usize);
+        for row in 0..(height as usize) {
+            let start = row * (bytes_per_row as usize);
+            pixels.extend_from_slice(&data[start..start + row_bytes]);
+        }
+        drop(data);
+        buffer.unmap();
+        image::save_buffer(path, &pixels, width, height, image::ColorType::Rgba8)
+            .map_err(|err| format!("snapshot save: {err}"))?;
+        Ok(())
+    }
+
+    /// Diagnostic: read back the swapchain backbuffer immediately after a
+    /// `present` — the pixels the user actually sees on screen — instead of the
+    /// pre-blit `resolve`. Returns an error string on the acquire result.
+    pub fn swapchain_snapshot(
+        &self,
+        path: &str,
+        frame: &wgpu::SurfaceTexture,
+    ) -> Result<(), String> {
+        let width = self.config.width.max(1);
+        let height = self.config.height.max(1);
+        let bytes_per_row = (width * 4).div_ceil(256) * 256;
+        let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("neocompositor-swap-snapshot"),
+            size: u64::from(bytes_per_row * height),
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("neocompositor-swap-snapshot"),
+            });
+        encoder.copy_texture_to_buffer(
+            wgpu::TexelCopyTextureInfo {
+                texture: &frame.texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::TexelCopyBufferInfo {
+                buffer: &buffer,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(bytes_per_row),
+                    rows_per_image: Some(height),
+                },
+            },
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+        );
+        self.queue.submit(Some(encoder.finish()));
+        let _ = self.device.poll(wgpu::PollType::wait_indefinitely());
+        let slice = buffer.slice(..);
+        let (sender, receiver) = std::sync::mpsc::channel();
+        slice.map_async(wgpu::MapMode::Read, move |result| {
+            let _ = sender.send(result);
+        });
+        let _ = self.device.poll(wgpu::PollType::wait_indefinitely());
+        receiver
+            .recv()
+            .map_err(|_| "swap snapshot map recv failed".to_string())?
+            .map_err(|err| format!("swap snapshot map: {err}"))?;
+        let data = slice.get_mapped_range();
+        let row_bytes = (width as usize) * 4;
+        let mut pixels = Vec::with_capacity(row_bytes * height as usize);
+        for row in 0..(height as usize) {
+            let start = row * (bytes_per_row as usize);
+            pixels.extend_from_slice(&data[start..start + row_bytes]);
+        }
+        drop(data);
+        buffer.unmap();
+        image::save_buffer(path, &pixels, width, height, image::ColorType::Rgba8)
+            .map_err(|err| format!("swap snapshot save: {err}"))?;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

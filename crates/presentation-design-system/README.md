@@ -41,3 +41,20 @@ React dark sheet; do not retune `#151311` / `#24211e` from screenshots.
 
 Visual screenshot diffs are a later verification gate. Implementation is from
 this packed source, not from device photographs.
+
+## Dev iteration (hot stylesheet)
+
+`PRODUCT_CSS` is `include_str!`'d, so editing a token normally recompiles this
+crate. For a no-recompile loop set `NEOTA_DEV_HOT_STYLES=1` (optionally
+`NEOTA_DEV_HOT_STYLES_PATH=<path>`): `product_stylesheets_dev()` then reads
+`generated/product.css` from disk (mtime-cached) through the same
+`product_stylesheets_from_css()` core. Without the env the behavior is
+byte-identical to `product_stylesheets()`.
+
+Recommended workflow (see
+[`docs/desktop/rust-ui-style-port.md`](../../docs/desktop/rust-ui-style-port.md)):
+
+```text
+edit React CSS → pnpm design:watch (auto re-pack) → restart the desktop
+producer with NEOTA_DEV_HOT_STYLES=1 → node scripts/style-golden-diff.mjs
+```

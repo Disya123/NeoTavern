@@ -7,7 +7,9 @@ use parley::fontique::{
     Blob, Collection, CollectionOptions, FontInfoOverride, GenericFamily, SourceCache,
 };
 use parley::FontContext;
-use std::sync::Arc;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::SystemTime;
 
 include!(concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -237,7 +239,111 @@ fn bake_insets(css: &str, insets: SafeAreaInsets) -> String {
 }
 
 pub fn product_stylesheets(insets: SafeAreaInsets) -> Vec<String> {
-    vec![bake_insets(PRODUCT_CSS, insets), inset_stylesheet(insets)]
+    product_stylesheets_from_css(PRODUCT_CSS, insets)
+}
+
+/// Bake safe-area insets into an arbitrary already-packed stylesheet.
+///
+/// This is the pure core of [`product_stylesheets`] and is also used by the
+/// dev hot-stylesheet path, so a runtime-loaded sheet passes through exactly
+/// the same token/safe-area flattening as the compile-time embedded one.
+pub fn product_stylesheets_from_css(css: &str, insets: SafeAreaInsets) -> Vec<String> {
+    vec![bake_insets(css, insets), inset_stylesheet(insets)]
+}
+
+/// Env switch that turns on runtime stylesheet hot-reload (dev only).
+///
+/// When set (any value except `0`/empty), `product_stylesheets_dev` reads the
+/// packed `product.css` from disk instead of the compile-time embedded copy,
+/// so CSS/token edits apply without recompiling any Rust crate. When unset
+/// the behavior is byte-identical to [`product_stylesheets`].
+pub const DEV_HOT_STYLES_ENV: &str = "NEOTA_DEV_HOT_STYLES";
+
+/// Optional override for the hot stylesheet path (absolute or relative).
+///
+/// Defaults to `<this crate>/generated/product.css` (the pack output). Tests
+/// point this at a temp file.
+pub const DEV_HOT_STYLES_PATH_ENV: &str = "NEOTA_DEV_HOT_STYLES_PATH";
+
+/// Default location of the hot-reloadable stylesheet: the pack output in this
+/// crate's `generated/` directory.
+pub fn default_hot_stylesheet_path() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("generated")
+        .join("product.css")
+}
+
+/// Resolve the hot stylesheet path honoring `NEOTA_DEV_HOT_STYLES_PATH`.
+pub fn hot_stylesheet_path() -> PathBuf {
+    std::env::var(DEV_HOT_STYLES_PATH_ENV)
+        .ok()
+        .filter(|p| !p.trim().is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(default_hot_stylesheet_path)
+}
+
+#[derive(Default)]
+struct HotStyleCache {
+    mtime: Option<SystemTime>,
+    css: Option<String>,
+}
+
+static HOT_STYLE_CACHE: OnceLock<Mutex<HotStyleCache>> = OnceLock::new();
+
+/// Read the current hot stylesheet from [`hot_stylesheet_path`], re-reading
+/// from disk only when the file's mtime changed since the last read.
+///
+/// Returns `None` when the file is missing so callers fall back to the
+/// compile-time embedded sheet instead of rendering un-styled.
+pub fn load_hot_stylesheet() -> Option<String> {
+    load_hot_stylesheet_from(&hot_stylesheet_path())
+}
+
+/// Same as [`load_hot_stylesheet`] but against an explicit path (testable in
+/// isolation without touching the pack output).
+pub fn load_hot_stylesheet_from(path: &Path) -> Option<String> {
+    let meta = std::fs::metadata(path).ok()?;
+    let mtime = meta.modified().ok();
+    let mut cache = HOT_STYLE_CACHE
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap();
+    if cache.mtime == mtime {
+        return cache.css.clone();
+    }
+    let css = std::fs::read_to_string(path).ok()?;
+    *cache = HotStyleCache {
+        mtime,
+        css: Some(css.clone()),
+    };
+    Some(css)
+}
+
+/// Drop the cached hot stylesheet so the next read re-reads the file.
+///
+/// Needed when a filesystem reports a coarse mtime (same-timestamp writes) or
+/// when tests switch between two hot paths.
+pub fn reset_hot_stylesheet_cache() {
+    if let Some(cache) = HOT_STYLE_CACHE.get() {
+        if let Ok(mut guard) = cache.lock() {
+            *guard = HotStyleCache::default();
+        }
+    }
+}
+
+/// Development stylesheet source: when `NEOTA_DEV_HOT_STYLES` is set, the
+/// packed sheet is re-read from disk (mtime-cached) so CSS/token edits apply
+/// without recompiling Rust. Production path (env unset) is byte-identical to
+/// [`product_stylesheets`].
+pub fn product_stylesheets_dev(insets: SafeAreaInsets) -> Vec<String> {
+    let hot = std::env::var(DEV_HOT_STYLES_ENV)
+        .ok()
+        .filter(|v| !v.is_empty() && v != "0")
+        .and_then(|_| load_hot_stylesheet());
+    match hot {
+        Some(css) => product_stylesheets_from_css(&css, insets),
+        None => product_stylesheets(insets),
+    }
 }
 
 /// Measure the rendered advance width of `text` in the golden Outfit font at
@@ -367,10 +473,14 @@ mod tests {
         assert!(PRODUCT_CSS.contains(".SettingsPanel_"));
         assert!(PRODUCT_CSS.contains(".PluginsPage_"));
         assert!(PRODUCT_CSS.contains(".MessageMarkdown_root"));
+        assert!(PRODUCT_CSS.contains(".ChatWorkspace_page"));
         assert!(phosphor_path("Crown").is_some());
         assert!(phosphor_path("Lock").is_some());
         assert!(phosphor_path("PencilSimple").is_some());
         assert!(phosphor_path("ShieldCheck").is_some());
+        assert!(phosphor_path("GearSix").is_some());
+        assert!(phosphor_path("PaperPlaneRight").is_some());
+        assert!(phosphor_path("MagicWand").is_some());
     }
 
     #[test]
@@ -405,6 +515,8 @@ mod tests {
         );
         assert!(PRODUCT_CSS.contains(".PluginsPage_"));
         assert!(PRODUCT_CSS.contains(".MessageMarkdown_root"));
+        assert!(PRODUCT_CSS.contains(".ChatWorkspace_composer"));
+        assert!(PRODUCT_CSS.contains(".MessageBubble_rowAssistant"));
         assert!(PRODUCT_CSS.contains("[data-component='button']"));
         assert!(PRODUCT_CSS.contains("[data-component='tabs']"));
         assert!(phosphor_path("UsersThree").is_some());
@@ -620,5 +732,97 @@ mod tests {
             },
         );
         assert_eq!(baked, ".x { padding: 41px 8px 8px 12px; }");
+    }
+}
+
+#[cfg(test)]
+mod hot_styles_tests {
+    use super::*;
+
+    /// STY-1: the from-css core and the embedded path must produce identical
+    /// sheets for the same insets, so hot reload cannot drift from pack output.
+    #[test]
+    fn from_css_matches_embedded() {
+        let insets = SafeAreaInsets {
+            top: 41.0,
+            right: 0.0,
+            bottom: 24.0,
+            left: 12.0,
+        };
+        assert_eq!(
+            product_stylesheets(insets),
+            product_stylesheets_from_css(PRODUCT_CSS, insets)
+        );
+    }
+
+    /// STY-2: with the env switch off the dev path behaves like the embedded
+    /// path (production surface stays byte-identical).
+    #[test]
+    fn dev_path_without_env_matches_embedded() {
+        // Ensure no leftover env from another (parallel) test in the same binary.
+        std::env::remove_var(DEV_HOT_STYLES_ENV);
+        std::env::remove_var(DEV_HOT_STYLES_PATH_ENV);
+        reset_hot_stylesheet_cache();
+        let insets = SafeAreaInsets::default();
+        assert_eq!(product_stylesheets(insets), product_stylesheets_dev(insets));
+    }
+
+    /// STY-3: a dirty hot path is cached after the first read (two reads, same
+    /// content), forcing a cache reset re-reads the changed file, and a missing
+    /// file returns `None`. Uses explicit paths only — no process-global env —
+    /// so it cannot race with other parallel tests.
+    #[test]
+    fn hot_stylesheet_from_path_caches_and_reloads() {
+        let dir = std::env::temp_dir().join(format!(
+            "nt-hot-styles-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("product.css");
+        std::fs::write(&path, ":root { color: #aa0000; }").unwrap();
+        reset_hot_stylesheet_cache();
+
+        let first = load_hot_stylesheet_from(&path).expect("first read");
+        assert!(first.contains("color: #aa0000"));
+        // Second read without touching the file hits the cache.
+        let second = load_hot_stylesheet_from(&path).expect("cached read");
+        assert_eq!(first, second, "unchanged file must be served from cache");
+
+        // Change the file and reset the cache → the new content is served.
+        std::fs::write(&path, ":root { color: #bb0000; }").unwrap();
+        reset_hot_stylesheet_cache();
+        let third = load_hot_stylesheet_from(&path).expect("re-read");
+        assert!(
+            third.contains("color: #bb0000"),
+            "re-read must pick up the new file"
+        );
+
+        // Missing file → None (callers fall back to the embedded sheet).
+        std::fs::remove_file(&path).ok();
+        reset_hot_stylesheet_cache();
+        assert!(load_hot_stylesheet_from(&path).is_none());
+
+        reset_hot_stylesheet_cache();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// STY-4: the hot sheet still goes through the same safe-area baking as the
+    /// embedded sheet (`product_stylesheets_from_css` is that shared core).
+    #[test]
+    fn from_css_bakes_safe_area_like_embedded() {
+        let css = ":root { padding-top: max(8px, var(--nt-safe-area-top)); }";
+        let baked = product_stylesheets_from_css(
+            css,
+            SafeAreaInsets {
+                top: 41.0,
+                ..Default::default()
+            },
+        );
+        assert!(
+            baked[0].contains("padding-top: 41px;"),
+            "from-css must bake insets like the embedded path, got {:?}",
+            baked[0]
+        );
     }
 }

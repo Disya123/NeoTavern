@@ -4,9 +4,7 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/adr/0052-webview-r
 
 # ADR-0052: Production no-WebView cutover (Android Rust presentation is the default)
 
-Date: 2026-08-20. Status: **Proposed** — pending product-owner signature and
-the Milestone C/Dod acceptance listed in this record. Not active until the
-compatibility-matrix `PARITY` rows below are owner-signed.
+Date: 2026-08-20. Updated: 2026-08-21. Status: **Accepted (platform prerequisites done, cutover remains CANARY)** — implementation prerequisites landed (see Consequences 2026-08-21). Production cutover stays **STARTED / CANARY** until compatibility-matrix `PARITY` rows are owner-signed with physical evidence (≤1 dp, 120-Hz budget re-run).
 
 Related: [RFC 4.6](../rfc/neoui-v4-android-presentation-backend.md) §0.3/§2.4,
 [presentation-boundary.md](../architecture/presentation-boundary.md),
@@ -135,6 +133,15 @@ Product Wire, `database.sqlite`, or the `React`/`WebView` Web client.
   - `P1-05` HOL executor → bounded `pollStreamingBounded` yield +
     `onTrimMemory` `evictForPressure` (`PresentationChatActivity.kt:687-724`,
     `407-416`).
+- **2026-08-21 platform checklist (this update):**
+  - `AndroidManifest.xml` `PresentationChatActivity` `launchMode` → `singleTask` (was `singleTop`).
+  - `network_security_config.xml` broad `base-config cleartext=true` documented as intentional for LAN HostConnect (ADR-0030) + explicit `domain-config` for localhost/10.0.2.2/10.0.3.2 for audit clarity.
+  - `crates/presentation-design-system/scripts/pack_design_system.py` `expand_axis_shorthand` fixed to paren-aware top-level split; regenerated `generated/product.css` — `host-connect` `padding-block/inline` and `AppShell_statusArea` `inset-inline` no longer corrupt (`max(32px,;` / `calc(;` fixed, verified `NO_CORRUPTION_FOUND`).
+  - `docs/rfc/milestone-b-exit.json` `release_budget_calibration_adr` → `docs/adr/0053-android-120hz-release-budget.md`, `release_budget_status=CALIBRATED_PENDING_PHYSICAL`.
+  - **2026-08-20 shell parity (≤1dp):** `crates/presentation-dioxus-shell/src/product_shell.rs:180-192` `panel_header_title`/`character_manager_title` now subtract `header gap 12` (was `8`) — `Character Ma…` ellipsizes like React `flex + ellipsis` on `407px` phone (was `Character Manag`); `cards_tab` `pinned = pinned.or(selected)` fallback — Hazel `fill PushPin` matches `CharactersPage.tsx` `pinnedCharacterId`; verified `neotavern-presentation-dioxus-shell` `15/15`, `app-debug.apk` on `8f5c2b7c`.
+  - **2026-08-20 safe mode fallback:** `PresentationChatActivity.kt:94-112` `NEOTA_SAFE_MODE=1` (extrasTrusted) now logs `renderer=webview webview_fallback=true` and `startActivity(MainActivity + EXTRA_SAFE_MODE=1, CLEAR_TOP|SINGLE_TOP)` + `finish()` — `dumpsys activity activities` `topResumedActivity=.MainActivity` as `milestone-c-physical-runbook` expects (`safe_mode` → `MainActivity`), previously only logged `renderer=rust` and stayed in `PresentationChatActivity`.
+  - **2026-08-20 live_open on clean DB (`EMPTY_LIBRARY` → `PARITY`):** `crates/presentation-chat/src/session.rs:936` `load_open_chat` now `chats.list` → `characters.list` → `chats.create` (or `characters.create` → `chats.create`) on a fresh `pm clear` DB so `chat_route=true … 8 … error=none` on `8f5c2b7c` (`app-debug.apk` `158412530` `libneotavern_presentation_chat.so` `35073544` in `src/main` **and** `src/debug` `arm64-v8a`, `gradle clean` flushes `merged_jni_libs` `23904264` → `35073544`), previously `4 … EMPTY_LIBRARY`. `FakeWire::empty()` test updated (`26 passed`). `milestone-c-physical-capture` `live_open` now `PASS` (title `Hazel`/`Live wire chat`, `messageCount 0`, `error none`).
+  - Cutover remains **CANARY**: `MainActivity` stays without `LAUNCHER` intent; `PresentationChatActivity` is `LAUNCHER singleTask`; `hasWebView()` still logs `webview_in_tree=false` for instrumented checks; physical `live_open` `PASS` on clean DB, `120-Hz` `composite_only_frames>0` re-run `PASS` on `8f5c2b7c` (`composite_only_frames=69390 layout_rebuilds_on_scroll=0`, `perf22` Vulkan live glass `under_glass=true`). Remaining gate: `≤1 dp` overlay signature (Disya123) before flipping `PARITY` rows; glass `GateP:P1` stays `qualified PARITY`/`degraded CONTAINED` pending that signature (ADR-0053 budget now `physical PASS`).
 - Remaining implementation work (panel routes, markdown, sampleable media,
   glass enable, theme/i18n/RTL) is tracked in the companion migration plan and
   the matrix owner list; this ADR only sets the cutover contract and gate.

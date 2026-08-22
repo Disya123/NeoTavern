@@ -3,6 +3,500 @@
 ## Unreleased
 ### Added
 
+- **Packaged-check матрица (этап 2 ADR-0056).** `pnpm blueprint:packaged-check`
+  верифицирует release-артефакт хоста: дефолтный embedded-рендер, откат через
+  `--legacy-chrome` и `NEOTA_LEGACY_CHROME=1`, приоритет источников
+  (safe-mode > флаг > env-doc), битый документ — ровно одна диагностика в
+  stderr на изменение ошибки (дедупликация), кадры продолжают рендериться,
+  без паник. Tauri-пакеты композитор не поставляют — bundle-уровень
+  задокументирован как N/A до продуктового включения. Попутно: спам stderr
+  при невалидном документе устранён.
+
+- **Компактный breakpoint из документа (этап 2 ADR-0056).** Хром чата при
+  высоте ≤240 CSS px рендерится blueprint-путём с легаси-презентацией
+  (плоский композер, паддинг 8, шрифт 12, без version controls) и закреплён
+  золотой строкой **900×220 — 0.0000%**. Overlay/nested выведены из этапа 2
+  как probe-only сценарии M0 (не product UI): для активного
+  blueprint-источника — кадровый фоллбек с однократным уведомлением.
+  Матрица goldens теперь 4 размера.
+
+- **Blueprint — канонический рендер хрома чата (M4 волна 4, ADR-0056,
+  этап 1).** `neocompositor-desktop` по умолчанию рендерит внутренний хром
+  из встроенного канонического документа. Приоритет: `--blueprint` →
+  `NEOTA_CHAT_BLUEPRINT_DOC` → embedded; safe-mode выход на рукописный RSX —
+  `--legacy-chrome` / `NEOTA_LEGACY_CHROME=1`. Золотой capture-гейт явно
+  уходит в легаси. Непокрытые варианты (компакт <240 px, overlay/nested
+  стекло) кадрово фоллбекятся с однократным stderr-уведомлением; публичный
+  flip закрыт этапом 2 (документ-покрытие вариантов + packaged-верификация +
+  ноль P0), после которого парити-тест превращается в сверку с собственным
+  зафиксированным скелетом.
+
+- **Кастомные декларативные интенты (M4 волна 3).** Документы привязывают
+  `custom.<владелец>.<имя>` (плюс ограниченные `params`: ≤8 пар
+  ключ/значение) к любому узлу без правки ядра и регенерации: материалайзер
+  кладёт их в сцену как `UiActionV1::Custom` (`wire_effect` = None — без
+  Product Wire authority), хит-тест маршрутизирует как `TapIntent::Custom`,
+  хосты (desktop + Android JNI) показывают честный тост
+  `[custom] …`. Опечатки builtin-id отклоняются материалайзером
+  (`unknown chat action id`). Кодген: смешанные union'а схемы декодируются
+  строкой, документ-декодер освобождён от ручного enum'а действий.
+
+- **Инструменты UI-петли (M4 волна 2).** `pnpm ui:dev [doc]` — одна команда:
+  сеeding-копия канонического документа, валидация, сборка бина при нужде и
+  живой кадр с mtime-hot-reload; `pnpm blueprint-preview <doc>` —
+  самодостаточный HTML-отчёт (скриншот + интерактивный SVG-оверлей всех
+  Theme SDK-хуков из dom-dump, детали узла по клику). React-quickstart со
+  словарём соответствий и тремя рецептами в chat-ui-recipe.
+
+- **Презентация как данные (M4 волна 1).** Узлы blueprint-документа получили
+  опциональные `label` (текст + i18n-ключ `chat.*`), `icon` (закрытый
+  реестр `UI_ICON_IDS`, зеркалирует PHOSPHOR_REGULAR) и токен-only
+  `styleRefs`; документ перекрывает встроенные таблицы рендерера. Кнопки
+  композера в канонической фикстуре авторятся данными; правка JSON меняет
+  живой кадр без Rust (пиксельно доказано). Инфраструктура: `pnpm ui:schema`
+  экспортирует JSON Schema (+`$schema` в фикстурах, VS Code-ассоциация),
+  валидатор предупреждает о неизвестных i18n-ключах; ошибка разбора документа
+  печатается в stderr и больше не паникует — включается легаси-фоллбек.
+  Новые i18n-ключи: `chat.settings`, `chat.reset`, `chat.scrollToLatestShort`.
+
+- **Рецепт правки UI как данных (M3).** `docs/desktop/chat-ui-recipe.md` —
+  единая петля: правка документа → `pnpm blueprint:validate`
+  (`packages/contracts/tools/validate-document.mjs`, TypeBox-схема, код
+  выхода 0/1/2) → запуск хоста с `--blueprint`/`NEOTA_CHAT_BLUEPRINT_DOC` →
+  парити-тест + goldens; правила документа (структура из JSON, презентация по
+  node-id, границы и фоллбеки) с мини-примером. Тесты валидатора.
+
+- **Swipes подключены (version controls, оба хоста).** Тап по
+  swipe-previous/next идёт в `chats.messages.variants.list` + `.activate`:
+  активированный вариант становится контентом сообщения (in-place), видимое
+  окно перестраивается из стора; тост «Variant N of M.», края — «No more
+  variants.» без смены. FakeWire сидирует 3 варианта у хвостового ответа;
+  `variants.create/delete` пока не реализованы (свайпам не нужны). Тест +
+  e2e (paths растут, kernel_messages неизменен).
+
+- **Chat golden gate (M0.5).** `pnpm chat:golden` / `pnpm chat:golden:check`
+  (`scripts/chat-golden.mjs`): goldens — легаси-RSX растры
+  `neocompositor-desktop` (1100×760 / 900×700 / 620×800, в ассетах крейта);
+  check перерисовывает кадры blueprint-документом и пиксельно диффит — на
+  эталонной машине 0.0000% (шум глифового AA delta≤1), гейт ≤0.01%/delta≤2.
+  Локальный гейт (растр wgpu не воспроизводим в CI); скрипт сам ждёт снапшот
+  и завершает хост. Негативная верификация: испорченная строка пикселей →
+  GATE FAILED. Тесты констант + goldens-on-disk.
+
+- **Regenerate подключён (version controls, оба хоста).** Тап по
+  «Regenerate» идёт в durable `generation.retry` с СОБСТВЕННЫМ source-run
+  строки (`MessageDto.generation_run_id`) — регенерируется именно этот ответ;
+  строка без сохранённого run даёт честный `GENERATION_RUN_NOT_FOUND`.
+  FakeWire добавляет перегенерированный ответ ("retry of …"); вариантные
+  замены остаются за kernel. Тест + e2e (`kernel_messages 12 → 13`).
+
+- **Rollback подключён к поведению (оба хоста).** Тап по «Rollback to here»
+  идёт в durable `chats.snapshots.rollback`
+  (`RequestSnapshotsRollback{chatId,toMessageId}`): стор удаляет всё после
+  цели, цель остаётся и становится хвостом; видимое окно перестраивается из
+  авторитетного стора, счётчик чата уменьшается на `result.deleted`, тост
+  «Chat rolled back (N messages removed).». FakeWire реализовал операцию
+  (`MESSAGE_NOT_FOUND` на чужой id; checkpoint-child пока отсутствует —
+  `checkpointChatId` честно не отдаётся). E2E: тап →
+  `kernel_messages 12 → 4`. Тест: suffix удаляется, цель остаётся.
+
+- **Hit-таблица: полный словарь действий строки + наследование ключа.**
+  `hit_rects::resolve_tap` классифицирует все задокументированные
+  `data-action` строки (`context/edit/copy/checkpoint/branch/delete/rollback`
+  + `history/regenerate/swipe-previous/swipe-next`) в общий
+  `TapIntent::MessageAction{kind,row_id}` (вместо отдельных Copy/Delete).
+  Кнопки version controls без собственного `data-message-id` наследуют
+  владельца от ближайшего ключевого предка skeleton-цепочки — тап всегда
+  знает свою строку; un-keyed действие отбрасывается. Оба хоста переведены
+  на общий словарь: desktop исполняет copy/delete и честно логирует
+  «not wired yet», Android JNI — то же с `clipboard_bridge_pending`.
+  Тест: наследование ключа из layout-предков.
+
+- **Blueprint: hot-reload документа доказан тестом.**
+  `blueprint_document_edit_changes_the_live_skeleton`: правка авторского JSON
+  на диске (удаление context-trigger) меняет живой скелет на следующем кадре
+  без перекомпиляции — mtime-кэш перечитывает документ.
+
+- **Blueprint: chat surface как второй документ ABI (M2, срез 1).** Схема
+  TypeBox расширена аддитивно: id-union `chat`, действия `chat.send` /
+  `chat.composer.settings|reset` / `chat.scroll-latest` /
+  `chat.message.copy|delete`, layout'ы `chat-compact-overlay` /
+  `chat-split-panel`; Rust-декодер перегенерирован кодегеном. Канонический
+  документ `ui-blueprint-document-chat-v1.json` (структура композера/хедера/
+  ленты с Theme SDK-хуками) парсится и TS-, и Rust-стороной.
+  `materialize_chat_scene_v1_from_document(document, ChatSurfaceStateV1,
+  viewport)` материализует стандартную проекцию `UiSceneV1`: хуки несут слоты
+  (`slot:chat.header/composer`), строки разворачиваются per-message с ролью в
+  hook.states, черновик — единственный text-interaction, hit-test несёт общую с
+  хостами таблицу действий (wire-эффекты `chats.messages.create/delete`
+  классифицированы в `UiActionV1::wire_effect`). Тесты: парсинг фикстуры,
+  материализация (строки/хит-дерево/draft), отказ на чужом документе и на
+  неожиданном responsive-layout.
+
+- **Blueprint: весь хром чата рендерится из документа (M2, фаза 2).**
+  Материалайзер `materialize_chat_scene_v1_from_document` читает структуру из
+  авторского JSON целиком: хедер, вьюпорт и композер идут из узлов документа,
+  строки сообщений разворачиваются из шаблона `chat-message` (действия
+  `parameter:"messageId"` привязываются к конкретному сообщению; неизвестные
+  узлы проходят как generic-flow). Фикстура дополнена полной структурой:
+  identity с аватаром/заголовком, action bar из семи действий
+  (`chat.message.context/edit/copy/checkpoint/branch/delete/rollback`),
+  version controls и swipe pager — схема расширена аддитивно. Новый
+  рендерер `scene_chat.rs` (`presentation-dioxus-shell`) рисует хедер +
+  вьюпорт + композер из сцены за флагом `--blueprint <path|embedded>` /
+  `NEOTA_CHAT_BLUEPRINT_DOC`; документ кэшируется по mtime, сломанный файл
+  включает легаси-фоллбек. Паритет с рукописным RSX закреплён тестом
+  `blueprint_chrome_skeleton_matches_legacy_rsx`: идентичные теги/хуки/
+  действия и геометрия ±0.5px для всех трёх слотов. Компактный режим,
+  nested-dialog и overlay-варианты chrome пока на легаси-пути.
+
+- **Hit-rects: ввод NeoCompositor из layout-геометрии вместо пиксельных
+  бэндов (M1, desktop + Android).** Новый `presentation_chat::hit_rects` строит
+  снапшот прямоугольников всех узлов с Theme SDK-хуками из того же Blitz/Taffy
+  прохода, который рисует кадр (`SlotSkeleton`). Единая таблица решений
+  `resolve_tap() → TapIntent` исполняется обоими хостами: десктоп-бин в
+  `pointer_up`, Android — через новую очередь `take_host_intent()` в JNI
+  `presentFrame` (Send/Settings/Reset/scroll-latest/delete против той же
+  сессии; поведение идентично ПК). Десктоп резолвит также inline copy/delete
+  (владелец строки — новый `data-message-id` на кнопках) и фокусы текстовых
+  полей (новые хуки `text-field/search`, `text-field/chat-search`,
+  `part:create-name`). Удалены все ручные зоны: `composer_band()`,
+  координатные прямоугольники кнопок (`right-32/-64/-96/-128`), бэнды обоих
+  поисков; Android-литерал slop заменён общим
+  `presentation_chat::TOUCH_SLOP_CSS`. Ограничение: MessageCopy на Android
+  пропускается до моста системного буфера обмена
+  (`clipboard_bridge_pending`). Регрессионный тест фиксирует Send прижатым к
+  краю `.composerActions` (защита от Taffy-бага двойного распределения
+  свободного места); Android-таргет проверен `cargo check --target
+  aarch64-linux-android --features android-jni,gpu`.
+
+- **Гейты UI-паритета React↔native (M0, ADR-0055 oracle).**
+
+- **Гейты UI-паритета React↔native (M0, ADR-0055 oracle).**
+  `scripts/dom-parity/compare.mjs`: строгий режим `--fail-on-diff` (exit 1 при
+  любом identity-расхождении скелетов — React оракул) и сверка высот
+  хром-бэндов `slot:chat.header` / `slot:chat.composer` с допуском
+  `--rect-tolerance` (±1px по умолчанию) — прямой паритет `chrome_metrics()`
+  с React-прямоугольниками против класса дрейфа «композер уехал / пузыри
+  обрезаны». Свежесть упакованного листа: `pnpm design:pack:check`
+  (`pack_design_system.py --check`, детерминированная пересборка в памяти и
+  побайтовое сравнение с закоммиченным `product.css`) — подключено шагом CI в
+  job `checks`. Полный строгий прогон React-vs-native требует живого
+  дев-стенда и задокументирован как локальный/пре-пуш гейт в
+  `docs/desktop/rust-ui-style-port.md`.
+
+### Fixed
+
+- **Невидимый композер и обрезанные пузыри в NeoCompositor desktop host.**
+  Три причины, три фикса: (1) chat-колонка размерялась от ширины всего окна —
+  новое поле `ProductChatView.column_width` (окно минус rail/панель,
+  `shell_hit::chat_origin_from_parts` как единое правило origin), RSX-колонка
+  и хит-полосы бина переведены на неё; (2) `composer-sticky` лежал внутри
+  scroll-viewport'а и уезжал под ленту (sticky→relative в Blitz) — композер
+  хойстнут сиблингом-полосой после viewport'а, тем же контрактом, что уже
+  используют `chrome_metrics()`/компоситорные бэнды; (3) Blitz/Taffy
+  распределяет свободное место дважды при `justify-content` + авто-маржине
+  соседа — Send улетал на ~385px за строку; строка `.composerActions`
+  использует `flex-start` + авто-маржин (визуал идентичен React). Пакер
+  получил секцию `LATE_BLITZ_FALLBACKS` в конце `product.css` (ранний
+  Blitz-блок проигрывал каскад сплющенным модулям): `flex: 1 1 0%` для
+  `<main>`, `width: 100%` для workspace. Изоляция бага Taffy:
+  `cargo run -p neotavern-presentation-m0-d2 --example send_layout_probe`.
+  Верификация: снимки 1100×760 / 900×700 / 620×800 + dom-dump (композер
+  y=570 h=174, Send right edge = край строки), тесты presentation-{chat,
+  dioxus-shell,m0-d2,design-system} без отказов.
+
+- **Пустые пилюли history/regenerate, схлопнутый user-пузырь и лагающий
+  drag-resize панели (desktop host).** Иконки версий рендерились пустыми:
+  упакованный лист прячет все `span` внутри `.MessageBubble_versionQuickActions`,
+  а нативные глифы — это `span.nt-icon`; класс убран с контейнера, `data-part`
+  сохранён. Пузырь пользовательского сообщения сжимал контент в 2px-полоску у
+  правого края: упакованный `.rowUser .bubble` задаёт `margin-left:auto`,
+  который Blitz в блочном лейауте резолвит мимо родителя; на нативном
+  `message-body` задана явная ширина. Перетаскивание панели: квантование живой
+  ширины до 6 CSS px со снапом точного значения на отпускании (один полный
+  produce — remount VDOM + Blitz layout + vello raster окна — на шаг кванта, а
+  не на каждое событие мыши), кэш OS-иконки курсора (`set_cursor` больше не
+  зовётся на каждый пиксель) и однократная сборка view-модели за кадр. Флаги
+  `--w/--h` теперь действительно задают размер окна (раньше всегда 1100×760).
+  Замеры release, тёплый produce ≈30 мс при 1100×760; полная плавность требует
+  инкрементального лейаута (persistent VirtualDom + частичная растеризация), а
+  фото-обои под растером — отдельной задачи (vello ImageBrush или упорядоченный
+  слой оверлея); заметка: на kernel-плоскости React обои тоже отключены
+  (`wallpaperBackgroundUrl` → `null` в kernel mode).
+
+### Added
+
+- **Полный DOM-паритет React-чата на NeoCompositor («only in React: 0»).**
+  Нативная chat-поверхность публикует недостающие Theme SDK-хуки из React:
+  обёртка `chat-message-list` (виртуализируемый канвас `ChatPage`), `message-body`
+  вокруг markdown и `message-art` внутри message-frame (как
+  `PluginMessageRenderers`), действия `context` (EyeSlash) и `branch`
+  (GitBranch) в каноническом порядке панели действий, `history`/`regenerate`
+  в `message-version-actions`, пейджер свайпов в собственном контейнере
+  `message-swipe-pager` (`data-part="message-swipes"`, как
+  `MessageSwipePager`), слоты оболочки `status.area`, `modal.layer`
+  (`plugin-runtime-layer`) и слой legacy-островов `slot:legacy.*` (6 островов
+  из `LEGACY_ISLANDS`). Идентичности выровнены с React: слоты `chat.header` /
+  `chat.composer` без лишних `data-part`, кнопка отправки — контракт UI-кита
+  `Button` (`component:button+action:send`, иконка в `span[data-part="icon"]`),
+  строки сообщений без `part:message`. В генератор дизайн-системы добавлены
+  иконки EyeSlash и GitBranch. Инструмент `dump-react.mjs` использует
+  стандартный `@playwright/test` и флаг `--viewport WxH` для совпадения окна с
+  native-дампом. Известное ограничение Blitz: авто-маргины из упакованного CSS
+  резолвятся мимо флекс-родителя — новые нативные узлы стилизуются inline
+  (см. docs/desktop/rust-ui-style-port.md).
+
+- **DOM-паритет слотов React ↔ NeoCompositor.** Дамп Theme SDK-хуков
+  (`data-component` / `data-part` / `data-slot` / `data-role` / `data-action`
+  + CSS-px rects) с native layout (`inspect_slot_skeleton`,
+  `neocompositor-desktop --dom-dump`, `product-shot --dom-dump`) и с живого
+  React (`scripts/dom-parity/dump-react.mjs`). Сравнение:
+  `scripts/dom-parity/compare.mjs` + каталог обязательных слотов чата
+  `chat-slots.json`. Чат RSX публикует то же дерево, что React
+  `ChatWorkspace` (`chat-view` / `chat-panel` / `chat-viewport` /
+  `chat-message` / `chat.composer`), шапка показывает имя персонажа, а пак
+  включает `ChatWorkspace.module.css` и `MessageBubble.module.css`.
+
+- **React chat chrome on the NeoCompositor host: real composer, resizable
+  panel, wallpaper, three demo characters.** The desktop host no longer
+  subtracts a hardcoded 440px from the chat surface (that made
+  `viewport_width ≤ 600` on ordinary windows and hid the chat). The shell
+  now lays out rail + panel + flex chat column against the full window;
+  `ToggleRail` collapses the side panel and the chat expands into the
+  remaining space. Panel width is session state (`--st-shell-panel-width`,
+  clamped 260–720) with an 8px `resize-handle` drag on the panel edge.
+  The composer is the React `ChatComposer` structure (Settings toolbar,
+  field, List/ArrowDown/MagicWand utilities, primary Send + PaperPlane).
+  Message bubbles show the React action row (edit/copy/flag/delete/rollback
+  — copy and delete stay wired; the others are visual chrome) and the
+  round swipe buttons under assistant rows. FakeWire demo/with_message_count
+  seed Hazel, Seraphina and Vayle so the manager list matches the golden
+  screenshot. Wallpaper is a light facade plane + dark overlay with
+  translucent panel/header/composer surfaces (not `backdrop-filter`; Blitz
+  still has no live glass).
+
+- **Character avatars in the chat surface and management tabs pinned to the
+  panel top (React composition).** `ProductChatView.character_avatar_asset`
+  renders standard `avatar-fallback` slots — a 32px header avatar next to the
+  chat title plus a search icon on the far edge, and 20px avatars in
+  assistant message headers — with the existing GPU overlay painting real
+  thumbnails over the slots. The management panel tab row now sits directly
+  under the panel header (Cards/Edit/Advanced/Gallery) instead of the bottom:
+  the packed stylesheet's `order:1` rule was leaking onto the wrong node in
+  Blitz, so the list rendered after the content; explicit inline
+  `order`/`position` values pin the React order, verified by a new
+  `tab_debug_rects` DOM-rect probe (`tab_rects_debug_dump`) and direct
+  snapshot inspection.
+
+- **Chat workspace recolored to the React warm theme (screenshot-review
+  follow-up).** The M0-probe cold blues (#101820/#15202b/#2a4a6a/#243044) are
+  replaced by the packed sheet / dark-token values: workspace
+  `--st-color-surface-primary` #1b1917, header/composer surface-secondary
+  #24211e, bubbles per the `data-chat-style='paragraphs'` rule (assistant
+  rgb(38,34,31) + border #39342f; user rgb(54,34,27) + border rgb(105,76,61)
+  + margin-left auto; radius 16, fit-content, max-width 78ch), composer
+  placeholder muted #998f87 turning primary while typing, a real primary Send
+  button (#e38a62 on #2a130b, radius 10), muted action icons, and a warm
+  bordered asset-image placeholder. The session no longer arms the M0
+  glass-probe chrome (`TripleGlass` overlay/nested-dialog decorations) —
+  product chrome is always `HeaderComposer`; the probe variants remain for
+  perf-probe scenarios. Verified by direct snapshot inspection plus the full
+  chat/shell suites.
+
+- **Shared NeoCompositor present host, now running as a Windows/macOS app.**
+  `PresentSurface` in `crates/presentation-chat/src/vello_gpu.rs` generalizes the
+  Android `GpuSurface`/`blit` render host (adapter/device request, non-sRGB
+  `Rgba8Unorm` swapchain bias, Vello storage target + sampled `resolve`
+  accumulation, fullscreen blit into the swapchain) down to a single platform
+  input: the `wgpu::Surface`. `neocompositor-desktop` (feature
+  `desktop-host`, winit) drives the same `ProductWire → Dioxus → Blitz →
+  NeoCompositor → vello → swapchain` route in a native window with Android's
+  frame cadence (produce/raster on dirty, composite-only present each frame).
+  Docs:
+  [`docs/desktop/neocompositor-desktop-host.md`](docs/desktop/neocompositor-desktop-host.md).
+  The Android host is unchanged; migrating it onto `PresentSurface` is a follow-up.
+- **Phase C on the shared NeoCompositor host: toasts and modals render and react
+  to input.** The transient `status_message` strip (bottom-left, `.st-card`
+  tokens; no product toast CSS exists in the React build → documented waiver)
+  shows on create/delete/save and auto-dismisses after 3.5 s
+  (`status_shown_at` + `clear_status_message`, ~10 Hz poll while live). The
+  create/delete-character dialogs now actually paint at the shell root
+  (panel subtree clips at `overflow:hidden`), centered over the chat area by
+  the same geometry as `shell_hit::dialog_hit`, with the React dialog tokens
+  (`CharacterManagementPanel_createForm` / `_dialogActions`). Two Blitz quirks
+  documented in the host doc: component calls (`{fn}`) are dropped inside
+  `if`/`then` (dialogs inlined at the root instead), and the React
+  `[data-component='dialog-overlay'] { position:relative; inset:0 }` rule
+  overrides inline absolute geometry in the Blitz cascade (dropped the
+  `dialog-*` data attrs on the positioned box; the `.st-card` bake gives the
+  surface). Verified via harness: `--pointer 100,150 --pointer 700,250
+  --type "Memo" --pointer 830,530` → create dialog focuses/accepts typing →
+  ConfirmCreate → `characters=2` + toast shown and auto-dismissed (second
+  produce).
+- **Message bubble parity: header, markdown spacing, composer placeholder.**
+  A screenshot comparison against the React app surfaced three visible gaps,
+  all closed with values from React sources: (1) every bubble now renders the
+  `MessageBubble` header — `message-author` (pinned character name for
+  assistant rows, "You" for user rows) plus an en-US `Intl`-style timestamp
+  ("Aug 12, 2026, 10:00 AM"; unparseable stamps render no `<time>`, matching
+  React's conditional); (2) the packed sheet's `.MessageMarkdown_root > …`
+  child-combinator rules never match in Blitz, so markdown blocks collapsed
+  into run-together text — the declared values are now baked inline onto
+  p/ul/ol/li/headings/blockquote/code/strong/em/q/links (paragraph margins
+  0 0 8px, li+li 4px, code #c5bbb2 on #302c28, dialogue amber #e8943a, …),
+  with UA-default list markers React gets from the browser; (3) the composer
+  placeholder is `home:composerPlaceholder` with the character name
+  ("Message Hazel…") instead of a bare "Message". Verified by a new session
+  test and live snapshots: bubbles grew 46 → 69 CSS px, inline-code
+  backgrounds and primary-text headers are present in the dump.
+- **Follow-up parity fixes from the same screenshot review**: `asset:`
+  markdown images now render as `message-image` blocks (previously the scheme
+  fell through `split_images` and the raw "![photo 0](asset:thumb-0)" text
+  landed in the bubble; the duplicate non-markdown image span is gone), the
+  author name resolves on every visible-row path (the virtualization
+  early-return fallback used to leak a literal "Assistant"), and
+  `ProductPaintLayout` gained DOM probes (`markdown_code_nodes`,
+  `markdown_image_blocks`, `author_css_width`) so tests assert the rendered
+  Blitz tree itself — code spans, image blocks and the resolved ~34px "Hazel"
+  author node — not just the parser.
+- **Home/Chats panel: real `chats.list` rows with chat switching.** The
+  desktop rail Home button now opens the React `ChatManagementPanel` over the
+  workspace (compact ≤600 CSS-px bottom navigation still returns to the chat).
+  The panel renders the actual wire rows — FakeWire seeds a second "Archived
+  ideas" chat (2 messages, sequences from 0x40 so derived ids stay unique) —
+  using the React structure/classes (`chatList/chatRow/chatLink/chatAvatar/
+  chatCopy` + `characterLabel`, `data-state="active|idle"`). A row tap issues
+  `ShellAction::SelectChat` → durable `chats.get` + `chats.messages.list`:
+  the workspace swaps chats live (`kernel_messages 12 → 2` on the archive),
+  scroll resets, the list re-reads. Hit-testing follows the React sheet
+  metrics (body pad 8, 52px+border rows, gap 4). The `newChatAction` button
+  (React primary/sm `st-button` with a Plus icon, label `chat:newChat`) is
+  wired too: tap → `ShellAction::CreateChat` → durable `chats.create` on the
+  pinned character → list re-reads and the fresh empty chat opens in the
+  workspace. The search toolbar (`.toolbar`/`.searchControl`, placeholder
+  `chat:searchPlaceholder`) filters rows by title client-side through a
+  bin-local keyboard focus (`TextFocus::ChatSearch` → `set_chat_search`),
+  mirroring the character manager search. Panel hit-test anchors are
+  calibrated against the live render (measured color-band snapshot): field
+  [86,130), button [146,190), rows from y=198 with a ~76px content-driven
+  pitch + 4px gap. Honest gap: row timestamps are not shown. Verified by a
+  new session test (`chats_panel_lists_wire_chats_and_opens_one`) and on the
+  live window (type "arch" → one row → tap opens the archive chat).
+- **Message copy + delete actions (React builtins) on chat bubbles.** Each
+  bubble carries the React `MessageBubble` inline action row hook
+  (`data-part="message-actions"`) with `data-action="copy"` and
+  `data-action="delete"` at its top-right. Hit-testing uses the painted layout
+  row rects (`ProductPaintLayout.messages`, keyed by `data-message-id`). Copy
+  writes the real OS clipboard as a host capability (`arboard`,
+  `desktop-host` only) so the shared `PresentSurface` stays OS-neutral, then
+  the session surfaces an honest "Message copied to clipboard." toast. Delete
+  goes through the durable `chats.messages.delete` wire op (implemented in
+  FakeWire with `MESSAGE_NOT_FOUND`), removes the row from the session cache,
+  decrements the cached chat count and toasts "Message deleted.". Measured
+  waiver: React's `messageActions.ts` has no "like" builtin (canonical order:
+  context/edit/copy/regenerate/history/checkpoint/branch/delete-checkpoint/
+  delete/rollback) and `MessageDto` carries no liked field — nothing to port,
+  no UI invented. Verified end-to-end: copy tap → `Get-Clipboard` returns the
+  message text; delete tap → `kernel_messages 12 → 11` + toast.
+
+### Fixed
+- **Windows/macOS NeoCompositor window showed a flat dark canvas instead of the
+  chat.** Two independent causes, both fixed:
+  1. *Layout:* the Blitz-compat AppShell subset in
+     `crates/presentation-design-system/scripts/pack_design_system.py` stretched
+     the sidebar to 100% (`[data-sidebar='open']`) and hid/collapsed the chat
+     `.AppShell_mainShifted` to zero on wide (non-compact) layouts. Removed the
+     compact drawer overrides (desktop split layout now shows sidebar + chat);
+     compact phone layout is byte-identical (360×800 raster unchanged), no
+     numbers tuned from screenshots.
+  2. *Present:* even with the chat in `resolve`, the screen stayed brown because
+     the blit bind group kept sampling the resolve texture allocated at `open()`
+     after a startup `resize()` re-allocated the targets (`(1100,760) ->
+     (1424,714)` on Windows). `PresentSurface` now stores the bind layout and
+     recreates the bind group on `resize` (`rebuild_bind`), so the swapchain
+     always draws the fresh resolve. Verified by reading the swapchain backbuffer
+     after `present()` (`--snapshot` for resolve + `--swapchain` for the
+     post-blit backbuffer; screen capture of the live window matches the resolve
+     1:1 — 175 colors, rail + characters sidebar + chat messages).
+  Also switched the desktop host to event-driven redraws with a bounded present
+  retry (any acquire failure incl. `Timeout`/`Occluded` re-arms a redraw at
+  ~50 ms), so the idle window no longer spins the CPU and transient acquire
+  failures do not leave a stale brown frame.
+- **NeoCompositor desktop window is now clickable and scrollable.** winit
+  pointer → CSS coords → `shell_hit::hit_test` → `ShellAction` →
+  `session.apply_shell_action` (the exact Android `try_push` tap pipeline with
+  its 16 CSS-px slop): rail (menu toggle, panel switching), character manager
+  (cards, tabs, favorite, delete, back), create/delete dialogs and the panel
+  close button all work. The mouse wheel scrolls the chat viewport via a new
+  `ChatRouteState.scroll_offset_css` (`session.scroll_chat_by`,
+  `virtualized_window` clamps it to the message extent) instead of always
+  teleporting to the bottom. `--pointer <x>,<y>` simulates one CSS-px tap for
+  snapshot verification; doc updated.
+- **Desktop host interaction latency: fixed by using a release build.** Every
+  click/scroll re-creates the scene (Blitz paint + Vello raster) on the event
+  thread — in a debug build that is ~550 ms per update (window felt frozen /
+  laggy), in release ~40–80 ms. The host logs a per-produce timing
+  (`[layout Xms raster Yms total Zms]`); the docs run command is
+  `cargo run --release`. No behavioral change was needed — debug builds were
+  the bottleneck.
+- **Character avatars now load in the shared NeoCompositor host (Windows/macOS
+  too, not just Android).** The Dioxus/Blitz tree intentionally carries only the
+  letter fallback; the real image is a GPU overlay (`AvatarGpu`) drawn on
+  `resolve` before the swapchain blit, previously Android-only. `PresentSurface`
+  exposes `upload_avatar`/`composite_avatars` (same `AvatarGpu`), the desktop
+  bin hydrates thumbs via `assets.content` and composites
+  `image_paints_from_layout(sess.paint_layout(), …)` per frame; the avatar_gpu
+  module now compiles for any `gpu` build and
+  `ProductVelloSession::paint` refreshes `paint_layout` each frame so avatar
+  rects never go stale across panel navigation (`avatars=2` on characters,
+  `avatars=0` on personas). The `FakeWire` demo avatar is now the **real Hazel
+  starter portrait** (1024×1536 from `apps/server/data/files/avatars/`,
+  downscaled to 192×288 and bundled via `include_bytes!`), replacing the old
+  synthetic band placeholder, so Windows matches the Android surface.
+- **Panel chrome is now interactive on the shared host (Phase A of the
+  React→NeoCompositor port).** `catalog_panel_hit` in `shell_hit.rs` makes the
+  AI Settings (API/Config) and Settings (General/Host) tab rows clickable
+  (`SetTab` → the session already switches `ai_tab`/`settings_tab`), and the
+  Plugins rail now renders real `plugins.list` rows as React-faithful cards
+  (`st-card` primitive + `PluginsPage_cardHeader/pluginIcon/identity/cardMeta`,
+  `data-state` = status, enabled border `#63c98d` inlined because Blitz drops
+  attribute selectors). The desktop bin accepts repeated `--pointer x,y` and
+  replays the sequence through the pointer pipeline — the multi-step probe
+  harness for panel walkthroughs. Card-level clicks are not invented where
+  React has none.
+- **Typing works in the desktop NeoCompositor window.** Winit keyboard is now
+  wired (focus → composer / character search): a tap on the composer bar or the
+  Character Manager search field sets bin-local focus, then characters and
+  Backspace pipe into `session.set_composer_text` / `set_character_search`
+  (the view model already owned both strings). The probe harness gained
+  `--type "<text>"` to type after the taps that set focus: `--pointer 700,720
+  --type "hello"` → composer shows it; `--pointer 200,190 --type "zzz"` →
+  `characters=0` (live grid filter).
+- **Composer Send sends.** The chat composer gained a **Send** control
+  (`st-button`, a real React-sheet class). The desktop host now reports the
+  honest chat viewport width — with the sidebar open on a non-compact window
+  it is `window − rail(60) − panel(380)` instead of the full window width
+  (previously the 1100px chat workspace overflowed past the screen and its
+  chrome was clipped), via the new `ChatSession::sidebar_open()` getter. Probe
+  `--pointer 700,720 --type "hello" --pointer 1050,724` → typed, `composer
+  send tapped`, `kernel_messages=14` (durable message via
+  `chats.messages.create`).
+
+
+- **Dev loop for the React→Rust style port without recompiling on every tweak.**
+  (1) `NEOTA_DEV_HOT_STYLES` reads the packed `generated/product.css` from disk
+  at runtime (mtime-cached, byte-identical embedded fallback) — CSS/token fixes
+  no longer recompile Rust (`product_stylesheets_dev` /
+  `product_stylesheets_from_css` in
+  `crates/presentation-design-system`, consumed by `product_shell.rs` and
+  `presentation-m0-d2`). (2) `pnpm design:watch` auto re-packs on React CSS
+  changes. (3) `node scripts/style-golden-diff.mjs` closes the eyeball loop
+  with a React-vs-native pixel diff (diff PNG + %) via a zero-dependency PNG
+  codec. (4) Workflow documented in
+  [`docs/desktop/rust-ui-style-port.md`](docs/desktop/rust-ui-style-port.md).
+  All dev switches are off by default; production paths are unchanged.
+
 - **Android Rust rail panels consume the same packed React sheet.**
   Personas, Lorebooks, Backgrounds, AI Settings, Plugins catalog, Settings,
   and Chats render as Dioxus RSX with Product Wire (`personas.*`,

@@ -3,17 +3,19 @@ use contracts_generated::generated::{
     decode_message_dto, decode_paged_characters, decode_paged_chats, decode_paged_messages,
     decode_persona_dto, decode_result_assets_content, decode_result_list_lorebooks,
     decode_result_list_personas, decode_result_list_presets, decode_result_list_providers,
-    decode_result_plugins_list, decode_result_settings, CharacterDto, ChatDto, ErrorDto,
-    GenerationEvent, LorebookDto, MessageDraftDto, MessageDto, MessageRole, PagedCharacters,
-    PagedChats, PagedMessages, PersonaDto, PluginsItem, RequestAssetsContent,
-    RequestCancelGeneration, RequestCreateCharacter, RequestCreateChat, RequestCreateLorebook, RequestCreateMessage,
-    RequestCreatePersona, RequestDeleteCharacter, RequestDeleteLorebook, RequestDeletePersona,
-    RequestEmpty, RequestGetCharacter, RequestGetChat, RequestListCharacters, RequestListChats,
-    RequestListLorebooks, RequestListMessages, RequestListPresets, RequestMessageDraftCommit,
-    RequestMessageDraftDiscard, RequestMessageDraftGet, RequestMessageDraftSave,
-    RequestRetryGeneration, RequestSettingsGet, RequestStartGeneration, RequestUpdateCharacter,
-    ResultAssetsContent, ResultListLorebooks, ResultListPersonas, ResultListPresets,
-    ResultListProviders, ResultPluginsList, ResultSettings, SettingsItem,
+    decode_result_message_variant_list, decode_result_plugins_list, decode_result_settings,
+    decode_result_snapshots_rollback, CharacterDto, ChatDto, ErrorDto, GenerationEvent,
+    LorebookDto, MessageDraftDto, MessageDto, MessageRole, PagedCharacters, PagedChats,
+    PagedMessages, PersonaDto, PluginsItem, RequestAssetsContent, RequestCancelGeneration,
+    RequestCreateCharacter, RequestCreateChat, RequestCreateLorebook, RequestCreateMessage,
+    RequestCreatePersona, RequestDeleteCharacter, RequestDeleteLorebook, RequestDeleteMessage,
+    RequestDeletePersona, RequestEmpty, RequestGetCharacter, RequestGetChat, RequestListCharacters,
+    RequestListChats, RequestListLorebooks, RequestListMessages, RequestListPresets,
+    RequestMessageDraftCommit, RequestMessageDraftDiscard, RequestMessageDraftGet,
+    RequestMessageDraftSave, RequestMessageVariantActivate, RequestMessageVariantsList,
+    RequestRetryGeneration, RequestSettingsGet, RequestSnapshotsRollback, RequestStartGeneration,
+    RequestUpdateCharacter, ResultAssetsContent, ResultListLorebooks, ResultListPersonas,
+    ResultListPresets, ResultListProviders, ResultPluginsList, ResultSettings, SettingsItem,
 };
 use neotavern_chat_viewport::{
     GeometrySnapshot, HeightIndex, HeightKind, LogicalItemId, PredictorBudgets, PresentDecision,
@@ -21,9 +23,9 @@ use neotavern_chat_viewport::{
 };
 use neotavern_presentation_dioxus_shell::{
     assert_registered_command, chrome_metrics, mount_product_chat, CharacterCardView,
-    CharacterDraftView, LorebookCardView, PersonaCardView, PluginCardView, PresetCardView,
-    ProductChatView, ProductChrome, ProductShellView, ProviderCardView, RowKind, SafeAreaInsets,
-    VisibleRow, PRODUCT_PATH_VISIBLE,
+    CharacterDraftView, ChatCardView, LorebookCardView, PersonaCardView, PluginCardView,
+    PresetCardView, ProductChatView, ProductChrome, ProductShellView, ProviderCardView, RowKind,
+    SafeAreaInsets, VisibleRow, PRODUCT_PATH_VISIBLE,
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -68,6 +70,12 @@ pub struct ChatRouteState {
     pub sidebar_panel: String,
     pub sidebar_open: bool,
     pub rail_expanded: bool,
+    /// CSS-px side panel width. `0` means "use the React default 380".
+    pub panel_width: f32,
+    /// CSS-px offset the chat viewport is scrolled from the bottom; `0` = stick
+    /// to the latest messages (Android default). Clamped to the message extent
+    /// inside `visible_window` on each `view()`.
+    pub scroll_offset_css: f32,
     pub insets: SafeAreaInsets,
     /// Full draft for the selected character (Edit / Advanced / Gallery tabs).
     pub character_draft: Option<CharacterDraftView>,
@@ -103,6 +111,10 @@ pub struct ChatRouteState {
     pub plugins: Vec<PluginsItem>,
     pub providers: Vec<ProviderCardView>,
     pub presets: Vec<PresetCardView>,
+    /// Home/chats panel rows (`chats.list`).
+    pub chat_list: Vec<ChatDto>,
+    /// Home/chats panel search query (client-side title filter).
+    pub chat_search: String,
     pub language: String,
     pub dir: String,
     pub ai_tab: String,
@@ -208,6 +220,7 @@ impl<W: ProductWire> ChatSession<W> {
         session.state.sidebar_panel = "characters".into();
         session.state.sidebar_open = true;
         session.state.rail_expanded = true;
+        session.state.panel_width = 380.0;
         session.state.character_sort = "name".into();
         session.state.character_view = "list".into();
         session.state.character_tab = "cards".into();
@@ -294,6 +307,39 @@ impl<W: ProductWire> ChatSession<W> {
         self.hidpi_scale = scale;
         self.viewport_width = ((width as f32) / scale).round().max(1.0) as u32;
         self.viewport_height = ((height as f32) / scale).round().max(1.0) as u32;
+    }
+
+    /// Whether the shell sidebar is currently open (desktop hosts shrink the
+    /// chat viewport by the sidebar when it is; Android overlays it instead).
+    pub fn sidebar_open(&self) -> bool {
+        self.state.sidebar_open
+    }
+
+    /// React `--st-shell-panel-width`, clamped to the token min/max.
+    pub fn panel_width(&self) -> f32 {
+        let width = self.state.panel_width;
+        if width < 1.0 {
+            380.0
+        } else {
+            width.clamp(260.0, 720.0)
+        }
+    }
+
+    pub fn set_panel_width(&mut self, width: f32) {
+        let next = width.clamp(260.0, 720.0);
+        if (self.panel_width() - next).abs() < 0.5 {
+            return;
+        }
+        self.state.panel_width = next;
+        self.bump_scene();
+    }
+
+    pub fn scroll_chat_by(&mut self, dy_css: f32) {
+        if dy_css == 0.0 {
+            return;
+        }
+        self.state.scroll_offset_css = (self.state.scroll_offset_css + dy_css).max(0.0);
+        self.bump_scene();
     }
 
     pub fn set_safe_area_physical(&mut self, top: f32, right: f32, bottom: f32, left: f32) {
@@ -660,6 +706,53 @@ impl<W: ProductWire> ChatSession<W> {
         Ok(())
     }
 
+    /// Message header data (React `MessageBubble` header): author name per
+    /// role plus an en-US `Intl`-style timestamp label.
+    fn build_row(&self, message: &MessageDto) -> VisibleRow {
+        let author = if message.role == MessageRole::User {
+            "You".into()
+        } else {
+            self.assistant_author()
+        };
+        VisibleRow {
+            id: message.id.clone(),
+            role: role_name(&message.role).into(),
+            content: message.content.clone(),
+            kind: row_kind(&message.content),
+            author,
+            timestamp: neotavern_presentation_dioxus_shell::format_timestamp(&message.created_at),
+        }
+    }
+
+    fn assistant_author(&self) -> String {
+        self.state
+            .pinned_character_id
+            .as_deref()
+            .or(self.state.selected_character_id.as_deref())
+            .and_then(|id| {
+                self.state
+                    .characters
+                    .iter()
+                    .find(|card| card.id == id)
+                    .map(|card| card.name.clone())
+            })
+            .or_else(|| self.state.chat.as_ref().map(|chat| chat.title.clone()))
+            .unwrap_or_else(|| "Assistant".into())
+    }
+
+    /// Chat main-area width in CSS px: surface minus the occupied rail/panel
+    /// strip (`shell_hit::chat_origin_from_parts`), so the RSX column and the
+    /// host hit zones size against the area React's `<main>` actually gives
+    /// the workspace — not the full window.
+    fn chat_column_width(&self) -> u32 {
+        let occupied = crate::shell_hit::chat_origin_from_parts(
+            self.viewport_width.max(1) as f32,
+            self.state.sidebar_open,
+            self.panel_width(),
+        );
+        (self.viewport_width as f32 - occupied).max(1.0) as u32
+    }
+
     pub fn view(&self) -> ProductChatView {
         let title = self
             .state
@@ -674,28 +767,69 @@ impl<W: ProductWire> ChatSession<W> {
                 role: "assistant".into(),
                 content: self.state.streaming_text.clone(),
                 kind: RowKind::Markdown,
+                author: self.assistant_author(),
+                timestamp: String::new(),
             });
         }
-        let chrome = if self
+        // React chat chrome is header + composer only; the TripleGlass /
+        // PaintOrder variants are M0 glass-layering probes (perf-probe
+        // scenarios construct them explicitly), not product UI.
+        let chrome = ProductChrome::HeaderComposer;
+        let composer_placeholder = self
             .state
-            .messages
-            .iter()
-            .any(|row| row.content.contains("!["))
-        {
-            ProductChrome::TripleGlass
-        } else {
-            ProductChrome::HeaderComposer
-        };
+            .pinned_character_id
+            .as_deref()
+            .or(self.state.selected_character_id.as_deref())
+            .and_then(|id| {
+                self.state
+                    .characters
+                    .iter()
+                    .find(|card| card.id == id)
+                    .map(|card| card.name.clone())
+            })
+            .map(|name| format!("Message {name}…"))
+            .unwrap_or_else(|| "Message…".into());
+        let character_name = self
+            .state
+            .pinned_character_id
+            .as_deref()
+            .or(self.state.selected_character_id.as_deref())
+            .and_then(|id| {
+                self.state
+                    .characters
+                    .iter()
+                    .find(|card| card.id == id)
+                    .map(|card| card.name.clone())
+            })
+            .unwrap_or_default();
+        // React header/message avatars use the pinned character's asset.
+        let character_avatar_asset = self
+            .state
+            .pinned_character_id
+            .as_deref()
+            .or(self.state.selected_character_id.as_deref())
+            .and_then(|id| {
+                self.state
+                    .characters
+                    .iter()
+                    .find(|card| card.id == id)
+                    .and_then(|card| card.avatar_asset_id.clone())
+            })
+            .unwrap_or_default();
         ProductChatView {
             title,
             message_count: self.kernel_message_count(),
             visible,
             chrome,
             composer_text: self.state.composer_text.clone(),
+            composer_placeholder,
+            character_avatar_asset,
+            character_name,
             error_code: self.state.last_error.as_ref().map(|err| err.code.clone()),
             streaming: !self.state.streaming_text.is_empty() || self.state.stream_handle.is_some(),
             viewport_width: self.viewport_width,
             viewport_height: self.viewport_height,
+            column_width: self.chat_column_width(),
         }
     }
 
@@ -760,6 +894,7 @@ impl<W: ProductWire> ChatSession<W> {
             panel: self.state.sidebar_panel.clone(),
             sidebar_open: self.state.sidebar_open,
             rail_expanded: self.state.rail_expanded,
+            panel_width: self.panel_width(),
             density: "comfortable".into(),
             font_scale: "medium".into(),
             insets: self.state.insets,
@@ -813,6 +948,34 @@ impl<W: ProductWire> ChatSession<W> {
                 .collect(),
             providers: self.state.providers.clone(),
             presets: self.state.presets.clone(),
+            chat_list: {
+                let query = self.state.chat_search.trim().to_lowercase();
+                self.state
+                    .chat_list
+                    .iter()
+                    .filter(|row| query.is_empty() || row.title.to_lowercase().contains(&query))
+                    .map(|row| {
+                        let character_label = if row.character_id.is_empty() {
+                            String::new()
+                        } else {
+                            self.state
+                                .characters
+                                .iter()
+                                .find(|card| card.id == row.character_id)
+                                .map(|card| card.name.clone())
+                                .unwrap_or_default()
+                        };
+                        ChatCardView {
+                            id: row.id.clone(),
+                            title: row.title.clone(),
+                            message_count: row.message_count,
+                            character_label,
+                        }
+                    })
+                    .collect()
+            },
+            selected_chat_id: self.chat_id.clone(),
+            chat_search: self.state.chat_search.clone(),
             language: if self.state.language.is_empty() {
                 "en".into()
             } else {
@@ -866,7 +1029,12 @@ impl<W: ProductWire> ChatSession<W> {
 
     fn visible_window(&self) -> (Vec<VisibleRow>, PresentOutcome) {
         let (_, _, viewport_h, _) = chrome_metrics(self.viewport_width, self.viewport_height);
-        virtualized_window(&self.state.messages, f64::from(viewport_h))
+        virtualized_window(
+            &self.state.messages,
+            f64::from(viewport_h),
+            f64::from(self.state.scroll_offset_css),
+            &self.assistant_author(),
+        )
     }
 
     pub fn mount_vdom(&self) -> usize {
@@ -930,7 +1098,90 @@ impl<W: ProductWire> ChatSession<W> {
     fn load_workspace(&mut self) -> Result<(), ChatRouteError> {
         let chat_result = self.load_open_chat();
         self.load_characters();
+        self.load_chat_list();
         chat_result
+    }
+
+    /// Refresh the home/chats panel list (`chats.list`).
+    fn load_chat_list(&mut self) {
+        match self.call_decode(
+            "chats.list",
+            &RequestListChats {
+                character_id: None,
+                cursor: None,
+                limit: Some(PAGE_LIMIT),
+            },
+            decode_paged_chats,
+        ) {
+            Ok(PagedChats { items, .. }) => self.state.chat_list = items,
+            Err(err) => self.record_error(err),
+        }
+    }
+
+    /// Chat search field on the home/chats panel (client-side title filter,
+    /// like the React `searchInput` state).
+    pub fn set_chat_search(&mut self, query: &str) {
+        self.state.chat_search = query.to_string();
+        self.bump_scene();
+    }
+
+    /// "New chat" action from the home/chats panel: durable `chats.create` on
+    /// the pinned (or first) character, then open the fresh chat in place —
+    /// React's `handleCreate` navigates to the new chat.
+    pub fn create_chat(&mut self) {
+        let Some(character_id) = self
+            .state
+            .pinned_character_id
+            .clone()
+            .or_else(|| self.state.selected_character_id.clone())
+        else {
+            return;
+        };
+        match self.call_decode(
+            "chats.create",
+            &RequestCreateChat {
+                character_id,
+                title: None,
+                persona_id: None,
+            },
+            decode_chat_dto,
+        ) {
+            Ok(chat) => {
+                let chat_id = chat.id.clone();
+                self.load_chat_list();
+                self.open_chat(&chat_id);
+            }
+            Err(err) => self.record_error(err),
+        }
+    }
+
+    /// Open another chat from the home/chats list (React opens it in place —
+    /// the workspace stays on this screen).
+    pub fn open_chat(&mut self, chat_id: &str) {
+        if self.chat_id.as_deref() == Some(chat_id) {
+            return;
+        }
+        match self.call_decode(
+            "chats.get",
+            &RequestGetChat {
+                chat_id: chat_id.to_string(),
+            },
+            decode_chat_dto,
+        ) {
+            Ok(chat) => {
+                self.chat_id = Some(chat.id.clone());
+                self.state.chat = Some(chat);
+                self.state.messages.clear();
+                self.state.scroll_offset_css = 0.0;
+                match self.list_messages(chat_id, None) {
+                    Ok(page) => self.absorb_latest_page(page),
+                    Err(err) => self.record_error(err),
+                }
+                self.load_chat_list();
+                self.bump_scene();
+            }
+            Err(err) => self.record_error(err),
+        }
     }
 
     fn load_open_chat(&mut self) -> Result<(), ChatRouteError> {
@@ -1069,21 +1320,27 @@ impl<W: ProductWire> ChatSession<W> {
     }
 
     pub fn set_panel(&mut self, panel: &str) {
-        if panel == "home" {
+        if panel == "home" && self.viewport_width <= 600 {
+            // Mobile bottom navigation: Home returns to the chat workspace
+            // (React navigates to the chat route).
             self.state.sidebar_open = false;
             self.state.sidebar_panel = "home".to_string();
-        } else {
-            self.state.sidebar_panel = panel.to_string();
-            self.state.sidebar_open = true;
-            match panel {
-                "characters" => self.refresh_characters(),
-                "personas" => self.load_personas(),
-                "lorebooks" => self.load_lorebooks(),
-                "plugins" => self.load_plugins(),
-                "providers" => self.load_ai_settings(),
-                "settings" => self.load_settings(),
-                _ => {}
-            }
+            self.bump_scene();
+            return;
+        }
+        self.state.sidebar_panel = panel.to_string();
+        self.state.sidebar_open = true;
+        match panel {
+            "characters" => self.refresh_characters(),
+            "personas" => self.load_personas(),
+            "lorebooks" => self.load_lorebooks(),
+            "plugins" => self.load_plugins(),
+            "providers" => self.load_ai_settings(),
+            "settings" => self.load_settings(),
+            // Desktop rail Home opens the chats management panel over the
+            // workspace (React `ChatManagementPanel`).
+            "home" => self.load_chat_list(),
+            _ => {}
         }
         self.bump_scene();
     }
@@ -1094,7 +1351,10 @@ impl<W: ProductWire> ChatSession<W> {
     }
 
     pub fn toggle_rail(&mut self) {
-        self.state.rail_expanded = !self.state.rail_expanded;
+        // React `Sidebar_railButton[data-action=menu-toggle]` ("Close menu"):
+        // the rail's top button collapses/expands the side panel itself, the
+        // 60px icon rail always stays.
+        self.state.sidebar_open = !self.state.sidebar_open;
         self.bump_scene();
     }
 
@@ -1119,6 +1379,207 @@ impl<W: ProductWire> ChatSession<W> {
 
     pub fn set_create_name(&mut self, value: &str) {
         self.state.create_name = value.to_string();
+        self.bump_scene();
+    }
+
+    /// Clear the transient status message (toast) shown by the host.
+    pub fn clear_status_message(&mut self) {
+        if self.state.status_message.is_some() {
+            self.state.status_message = None;
+            self.bump_scene();
+        }
+    }
+
+    /// Observability for declarative `custom.<owner>.<name>` intents. They
+    /// carry no Product Wire authority by contract, so the default behavior
+    /// is an honest trace toast; a future plugin registry attaches real
+    /// handlers without changing the document or this call site.
+    pub fn custom_intent(&mut self, name: &str) {
+        self.state.status_message = Some(format!("[custom] {name} — no handler attached."));
+        self.bump_scene();
+    }
+
+    /// Full text of a message row by id (host clipboard copy reads this; the
+    /// actual OS clipboard write stays on the host, off the shared surface).
+    pub fn message_text(&self, row_id: &str) -> Option<String> {
+        self.state
+            .messages
+            .iter()
+            .find(|row| row.id == row_id)
+            .map(|row| row.content.clone())
+    }
+
+    /// Reflect that the host copied a message to the OS clipboard. The toast is
+    /// only honest: the host writes the clipboard first and calls this after
+    /// the write succeeded. Mirrors React `MessageBubble` copy (client-side).
+    pub fn copied_message(&mut self, row_id: &str) {
+        if self.state.messages.iter().any(|row| row.id == row_id) {
+            self.state.status_message = Some("Message copied to clipboard.".into());
+            self.bump_scene();
+        }
+    }
+
+    /// Delete a message via `chats.messages.delete` (React builtin action,
+    /// `data-action="delete"` in the inline row).
+    pub fn delete_message(&mut self, row_id: &str) {
+        let Some(chat_id) = self.chat_id().map(str::to_string) else {
+            return;
+        };
+        match self.call_value(
+            "chats.messages.delete",
+            &RequestDeleteMessage {
+                chat_id,
+                message_id: row_id.to_string(),
+            },
+        ) {
+            Ok(_) => {
+                self.state.messages.retain(|row| row.id != row_id);
+                // Keep the cached chat DTO in step with the wire store (the
+                // count also feeds the header/chats panel).
+                if let Some(chat) = self.state.chat.as_mut() {
+                    chat.message_count = (chat.message_count - 1).max(0);
+                }
+                self.state.status_message = Some("Message deleted.".into());
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    /// Roll the chat back to this message via `chats.snapshots.rollback`
+    /// (React builtin action, `data-action="rollback"`): the wire store
+    /// removes everything after the target (higher sequence), the message
+    /// itself stays. The visible window is rebuilt from the authoritative
+    /// store so the target may sit outside the previously cached page.
+    pub fn rollback_to_message(&mut self, row_id: &str) {
+        let Some(chat_id) = self.chat_id().map(str::to_string) else {
+            return;
+        };
+        match self.call_decode(
+            "chats.snapshots.rollback",
+            &RequestSnapshotsRollback {
+                chat_id: chat_id.clone(),
+                to_message_id: row_id.to_string(),
+            },
+            decode_result_snapshots_rollback,
+        ) {
+            Ok(result) => {
+                match self.list_messages(&chat_id, None) {
+                    Ok(page) => {
+                        self.state.messages.clear();
+                        self.absorb_latest_page(page);
+                    }
+                    Err(err) => self.record_error(err),
+                }
+                if let Some(chat) = self.state.chat.as_mut() {
+                    chat.message_count = (chat.message_count - result.deleted).max(0);
+                }
+                self.state.status_message = Some(format!(
+                    "Chat rolled back ({deleted} messages removed).",
+                    deleted = result.deleted
+                ));
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    /// Regenerate one assistant response via `generation.retry` with that
+    /// row's own source run (`MessageDto.generation_run_id`) — the React
+    /// version-controls "Regenerate" action. Rows without a stored run
+    /// surface an honest error instead of silently retrying the latest run.
+    pub fn regenerate_message(&mut self, row_id: &str) {
+        let Some(source_run_id) = self
+            .state
+            .messages
+            .iter()
+            .find(|row| row.id == row_id)
+            .and_then(|row| row.generation_run_id.clone())
+        else {
+            self.record_error(ChatRouteError::product(
+                "GENERATION_RUN_NOT_FOUND",
+                json!({ "messageId": row_id }),
+            ));
+            return;
+        };
+        if let Err(err) = self.start_stream_op(
+            "generation.retry",
+            &RequestRetryGeneration { source_run_id },
+        ) {
+            self.record_error(err);
+        }
+        self.bump_scene();
+    }
+
+    /// Swipe to the previous/next variant of an assistant response
+    /// (`chats.messages.variants.list` + `.activate`, React
+    /// `MessageSwipePager`). The current position is derived from the row's
+    /// content; activation swaps the message content on the wire and the
+    /// visible window is refreshed from the authoritative store.
+    pub fn swipe_variant(&mut self, row_id: &str, direction: i32) {
+        let Some(chat_id) = self.chat_id().map(str::to_string) else {
+            return;
+        };
+        let mut items = match self.call_decode(
+            "chats.messages.variants.list",
+            &RequestMessageVariantsList {
+                chat_id: chat_id.clone(),
+                message_id: row_id.to_string(),
+            },
+            decode_result_message_variant_list,
+        ) {
+            Ok(result) => result.items,
+            Err(err) => {
+                self.record_error(err);
+                return;
+            }
+        };
+        if items.len() < 2 {
+            self.state.status_message = Some("No other variants.".into());
+            self.bump_scene();
+            return;
+        }
+        items.sort_by_key(|variant| variant.position);
+        let current = self
+            .state
+            .messages
+            .iter()
+            .find(|row| row.id == row_id)
+            .and_then(|row| {
+                items
+                    .iter()
+                    .position(|variant| variant.content == row.content)
+            })
+            .unwrap_or(0);
+        let target_index = current as isize + direction as isize;
+        if target_index < 0 || target_index >= items.len() as isize {
+            self.state.status_message = Some("No more variants.".into());
+            self.bump_scene();
+            return;
+        }
+        if let Err(err) = self.call_value(
+            "chats.messages.variants.activate",
+            &RequestMessageVariantActivate {
+                chat_id: chat_id.clone(),
+                message_id: row_id.to_string(),
+                variant_id: items[target_index as usize].id.clone(),
+            },
+        ) {
+            self.record_error(err);
+            return;
+        }
+        match self.list_messages(&chat_id, None) {
+            Ok(page) => {
+                self.state.messages.clear();
+                self.absorb_latest_page(page);
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.state.status_message = Some(format!(
+            "Variant {current} of {total}.",
+            current = target_index + 1,
+            total = items.len()
+        ));
         self.bump_scene();
     }
 
@@ -1260,6 +1721,8 @@ impl<W: ProductWire> ChatSession<W> {
             ShellAction::SelectCharacter(id) => self.select_character(&id),
             ShellAction::SelectPersona(id) => self.select_persona(&id),
             ShellAction::SelectLorebook(id) => self.select_lorebook(&id),
+            ShellAction::SelectChat(id) => self.open_chat(&id),
+            ShellAction::CreateChat => self.create_chat(),
             ShellAction::OpenCreate => self.open_create_dialog(),
             ShellAction::CloseCreate => self.close_create_dialog(),
             ShellAction::ConfirmCreate => match self.state.sidebar_panel.as_str() {
@@ -1830,6 +2293,8 @@ fn settings_string(items: &[SettingsItem], key: &str) -> Option<String> {
 fn virtualized_window(
     messages: &[MessageDto],
     viewport_height: f64,
+    scroll_from_bottom_css: f64,
+    assistant_author: &str,
 ) -> (Vec<VisibleRow>, PresentOutcome) {
     let mut index = HeightIndex::new();
     for message in messages {
@@ -1843,7 +2308,7 @@ fn virtualized_window(
     let extent = index.extent();
     if messages.is_empty() || extent <= viewport_height {
         return (
-            visible_rows(messages),
+            visible_rows(messages, assistant_author),
             PresentOutcome {
                 decision: PresentDecision::Prepared,
                 blank_px: 0.0,
@@ -1860,7 +2325,9 @@ fn virtualized_window(
         8_333_333,
     );
     let extent = viewport.index().extent();
-    viewport.teleport((extent - viewport_height).max(0.0));
+    let budget = (extent - viewport_height).max(0.0);
+    let scroll = scroll_from_bottom_css.max(0.0).min(budget);
+    viewport.teleport(budget - scroll);
     let outcome = viewport.present();
     let start = viewport.offset();
     let span = viewport
@@ -1870,17 +2337,26 @@ fn virtualized_window(
     for i in span.start..span.end {
         if let Some((id, _, _)) = viewport.index().height_at(i) {
             if let Some(message) = messages.iter().find(|row| row.sequence as u64 == id.0) {
+                let author = if message.role == MessageRole::User {
+                    "You".to_string()
+                } else {
+                    assistant_author.to_string()
+                };
                 visible.push(VisibleRow {
                     id: message.id.clone(),
                     role: role_name(&message.role).into(),
                     content: message.content.clone(),
                     kind: row_kind(&message.content),
+                    author,
+                    timestamp: neotavern_presentation_dioxus_shell::format_timestamp(
+                        &message.created_at,
+                    ),
                 });
             }
         }
     }
     if visible.is_empty() {
-        visible = visible_rows(messages);
+        visible = visible_rows(messages, assistant_author);
     }
     (visible, outcome)
 }
@@ -1889,7 +2365,7 @@ fn estimate_height(message: &MessageDto) -> f64 {
     48.0 + (message.content.len() as f64 / 8.0).min(160.0)
 }
 
-fn visible_rows(messages: &[MessageDto]) -> Vec<VisibleRow> {
+fn visible_rows(messages: &[MessageDto], assistant_author: &str) -> Vec<VisibleRow> {
     let start = messages.len().saturating_sub(PRODUCT_PATH_VISIBLE);
     messages[start..]
         .iter()
@@ -1898,6 +2374,12 @@ fn visible_rows(messages: &[MessageDto]) -> Vec<VisibleRow> {
             role: role_name(&row.role).into(),
             content: row.content.clone(),
             kind: row_kind(&row.content),
+            author: if row.role == MessageRole::User {
+                "You".into()
+            } else {
+                assistant_author.to_string()
+            },
+            timestamp: neotavern_presentation_dioxus_shell::format_timestamp(&row.created_at),
         })
         .collect()
 }

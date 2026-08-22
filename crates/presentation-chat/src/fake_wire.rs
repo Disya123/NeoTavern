@@ -1,19 +1,29 @@
 use contracts_generated::generated::{
     CharacterDto, ChatDto, GenerationEvent, LorebookDto, MessageDraftDto, MessageDto, MessageRole,
-    PagedCharacters, PagedChats, PagedMessages, PersonaDto, PluginsItem, ResultListLorebooks,
-    ResultListPersonas, ResultListPresets, ResultListProviders, ResultPluginsList, ResultSettings,
+    MessageVariantDto, PagedCharacters, PagedChats, PagedMessages, PersonaDto, PluginsItem,
+    ResultListLorebooks, ResultListPersonas, ResultListPresets, ResultListProviders,
+    ResultMessageVariantList, ResultPluginsList, ResultSettings, ResultSnapshotsRollback,
     SettingsItem,
 };
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet, VecDeque};
 
+use base64::Engine as _;
+
 use crate::error::ChatRouteError;
 use crate::wire::{ProductWire, StreamFrame, WireCall};
+
+// Real Hazel portrait (downscaled 192×288) bundled with the crate; serves as
+// the demo `assets.content` so the GPU avatar overlay composites an actual
+// character picture, matching the Android surface.
+const DEMO_AVATAR_PNG: &[u8] = include_bytes!("../assets/demo_avatar.png");
 
 pub const DEMO_CHAT_ID: &str = "7f3a2b4c-1d2e-4f5a-8b9c-0d1e2f3a4b5c";
 pub const DEMO_CHARACTER_ID: &str = "4f2f0a1e-9b3c-4d5e-8f6a-7b8c9d0e1f2a";
 pub const DEMO_AVATAR_ASSET_ID: &str = "8a1b2c3d-4e5f-4061-8a9b-0c1d2e3f4a5b";
 pub const DEMO_PERSONA_ID: &str = "0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f";
+pub const DEMO_SERAPHINA_ID: &str = "5c6d7e8f-0a1b-4c2d-8e3f-4a5b6c7d8e9f";
+pub const DEMO_VAYLE_ID: &str = "6d7e8f0a-1b2c-4d3e-8f4a-5b6c7d8e9f0a";
 const TS: &str = "2026-08-12T10:00:00Z";
 
 #[derive(Clone, Copy)]
@@ -28,6 +38,9 @@ pub struct FakeWire {
     characters: HashMap<String, CharacterDto>,
     chats: HashMap<String, ChatDto>,
     messages: HashMap<String, Vec<MessageDto>>,
+    /// Per-message response variants (`chats.messages.variants.*`), keyed by
+    /// `(chatId, messageId)`; activation rewrites the message content.
+    variants: HashMap<(String, String), Vec<MessageVariantDto>>,
     drafts: HashMap<String, MessageDraftDto>,
     personas: HashMap<String, PersonaDto>,
     lorebooks: HashMap<String, LorebookDto>,
@@ -45,10 +58,38 @@ impl Default for FakeWire {
             characters: HashMap::new(),
             chats: HashMap::new(),
             messages: HashMap::new(),
+            variants: HashMap::new(),
             drafts: HashMap::new(),
             personas: HashMap::new(),
             lorebooks: HashMap::new(),
-            plugins: Vec::new(),
+            plugins: vec![
+                PluginsItem {
+                    id: "tavern-speed-dial".into(),
+                    name: "Tavern Speed Dial".into(),
+                    version: "1.2.0".into(),
+                    enabled: true,
+                    trust_state: "verified-publisher".into(),
+                    publisher_key_id: None,
+                    permissions: vec!["ui.quick-actions".into()],
+                    last_error_code: None,
+                    installed_at: TS.into(),
+                    updated_at: TS.into(),
+                    manifest: None,
+                },
+                PluginsItem {
+                    id: "lore-almanac".into(),
+                    name: "Lore Almanac".into(),
+                    version: "0.4.1".into(),
+                    enabled: false,
+                    trust_state: "unsigned-untrusted".into(),
+                    publisher_key_id: None,
+                    permissions: Vec::new(),
+                    last_error_code: Some("E0107".into()),
+                    installed_at: TS.into(),
+                    updated_at: TS.into(),
+                    manifest: None,
+                },
+            ],
             settings: vec![
                 SettingsItem {
                     key: "language".into(),
@@ -77,6 +118,8 @@ impl FakeWire {
     pub fn demo() -> Self {
         let mut wire = Self::default();
         wire.insert_character(demo_character());
+        wire.insert_character(demo_seraphina());
+        wire.insert_character(demo_vayle());
         wire.insert_persona(demo_persona());
         wire.insert_chat(demo_chat(2));
         wire.push_message(user_message(DEMO_CHAT_ID, 0, "Hello there"));
@@ -100,13 +143,19 @@ impl FakeWire {
     pub fn with_message_count(count: u32) -> Self {
         let mut wire = Self::default();
         wire.insert_character(demo_character());
+        wire.insert_character(demo_seraphina());
+        wire.insert_character(demo_vayle());
         wire.insert_persona(demo_persona());
         wire.insert_chat(demo_chat(i64::from(count)));
         for index in 0..count {
             let content = if index.is_multiple_of(5) {
                 format!("![photo {index}](asset:thumb-{index})")
-            } else {
+            } else if index.is_multiple_of(2) {
                 format!("**msg {index}**\n\n- item one\n- `code`")
+            } else {
+                format!(
+                    "**msg {index}**\n\n\"Stay close.\" *the kestrel clicks her tongue.*\n\n- item one\n- `code`"
+                )
             };
             if index.is_multiple_of(2) {
                 wire.push_message(user_message(DEMO_CHAT_ID, i64::from(index), &content));
@@ -119,6 +168,60 @@ impl FakeWire {
                 ));
             }
         }
+        // Response variants for the tail assistant message: position 0 keeps
+        // the original content so the active-variant cursor starts there.
+        // React `MessageSwipePager` (swipe previous/next) navigates these.
+        let tail_id = wire_id((u64::from(count - 1)) + 0x2000);
+        let tail_content = format!(
+            "**msg {}**\n\n\"Stay close.\" *the kestrel clicks her tongue.*\n\n- item one\n- `code`",
+            count - 1
+        );
+        if count >= 2 {
+            let variant = |position, id_high, content: String| MessageVariantDto {
+                id: wire_id(id_high),
+                message_id: tail_id.clone(),
+                content,
+                position,
+                created_at: TS.into(),
+            };
+            let original = tail_content.clone();
+            let alt_a = format!("*variant A* of {tail_content}");
+            let alt_b = format!("*variant B* of {tail_content}");
+            let list = vec![
+                variant(0, 0x3101, original),
+                variant(1, 0x3102, alt_a),
+                variant(2, 0x3103, alt_b),
+            ];
+            wire.variants
+                .insert((DEMO_CHAT_ID.to_string(), tail_id), list);
+        }
+        // A second chat so the home/chats panel lists real `chats.list` rows
+        // and switching works (React `ChatManagementPanel`). Sequences start
+        // at 0x40 so the derived message ids stay unique across chats.
+        let archive_id = wire_id(0x51);
+        wire.insert_chat(ChatDto {
+            id: archive_id.clone(),
+            title: "Archived ideas".into(),
+            character_id: DEMO_CHARACTER_ID.into(),
+            persona_id: Some(DEMO_PERSONA_ID.into()),
+            message_count: 2,
+            created_at: TS.into(),
+            updated_at: TS.into(),
+            parent_chat_id: None,
+            origin: None,
+            source_message_id: None,
+        });
+        wire.push_message(user_message(
+            &archive_id,
+            0x40,
+            "Draft: voice notes pipeline",
+        ));
+        wire.push_message(assistant_message(
+            &archive_id,
+            0x41,
+            "Saved to the ideas chat.",
+            None,
+        ));
         wire
     }
 
@@ -297,6 +400,90 @@ impl FakeWire {
             chat.updated_at = TS.into();
         }
         Ok(message)
+    }
+
+    /// Remove one message (`chats.messages.delete`); keeps the chat's
+    /// `message_count` honest like `create_message` does.
+    /// `chats.messages.variants.activate`: the activated variant becomes the
+    /// message content (kernel semantics); the chat's updated_at moves.
+    fn activate_variant(
+        &mut self,
+        chat_id: &str,
+        message_id: &str,
+        variant_id: &str,
+    ) -> Result<(), ChatRouteError> {
+        self.require_chat(chat_id)?;
+        let key = (chat_id.to_string(), message_id.to_string());
+        let variants = self
+            .variants
+            .get(&key)
+            .ok_or_else(|| Self::product("VARIANT_NOT_FOUND", "variantId", variant_id))?;
+        let variant = variants
+            .iter()
+            .find(|variant| variant.id == variant_id)
+            .ok_or_else(|| Self::product("VARIANT_NOT_FOUND", "variantId", variant_id))?
+            .clone();
+        let rows = self
+            .messages
+            .get_mut(chat_id)
+            .ok_or_else(|| Self::product("MESSAGE_NOT_FOUND", "messageId", message_id))?;
+        let row = rows
+            .iter_mut()
+            .find(|row| row.id == message_id)
+            .ok_or_else(|| Self::product("MESSAGE_NOT_FOUND", "messageId", message_id))?;
+        row.content = variant.content;
+        if let Some(chat) = self.chats.get_mut(chat_id) {
+            chat.updated_at = TS.into();
+        }
+        Ok(())
+    }
+
+    /// `chats.snapshots.rollback`: keep everything up to and including
+    /// `to_message_id`, remove the higher-sequence suffix, decrement the chat
+    /// counter. FakeWire keeps no checkpoint-child store yet, so
+    /// `checkpointChatId` stays honestly absent (no recoverable copy).
+    fn rollback_chat(
+        &mut self,
+        chat_id: &str,
+        to_message_id: &str,
+    ) -> Result<ResultSnapshotsRollback, ChatRouteError> {
+        self.require_chat(chat_id)?;
+        let rows = self
+            .messages
+            .get_mut(chat_id)
+            .ok_or_else(|| Self::product("MESSAGE_NOT_FOUND", "toMessageId", to_message_id))?;
+        let pos = rows
+            .iter()
+            .position(|row| row.id == to_message_id)
+            .ok_or_else(|| Self::product("MESSAGE_NOT_FOUND", "toMessageId", to_message_id))?;
+        let removed = rows.len() - pos - 1;
+        rows.truncate(pos + 1);
+        if let Some(chat) = self.chats.get_mut(chat_id) {
+            chat.message_count = i64::try_from(rows.len()).unwrap_or(0);
+            chat.updated_at = TS.into();
+        }
+        Ok(ResultSnapshotsRollback {
+            deleted: i64::try_from(removed).unwrap_or(0),
+            checkpoint_chat_id: None,
+        })
+    }
+
+    fn delete_message(&mut self, chat_id: &str, message_id: &str) -> Result<(), ChatRouteError> {
+        self.require_chat(chat_id)?;
+        let rows = self
+            .messages
+            .get_mut(chat_id)
+            .ok_or_else(|| Self::product("MESSAGE_NOT_FOUND", "messageId", message_id))?;
+        let pos = rows
+            .iter()
+            .position(|row| row.id == message_id)
+            .ok_or_else(|| Self::product("MESSAGE_NOT_FOUND", "messageId", message_id))?;
+        rows.remove(pos);
+        if let Some(chat) = self.chats.get_mut(chat_id) {
+            chat.message_count = i64::try_from(rows.len()).unwrap_or(0);
+            chat.updated_at = TS.into();
+        }
+        Ok(())
     }
 
     fn create_character(&mut self, payload: &Value) -> Result<CharacterDto, ChatRouteError> {
@@ -538,7 +725,8 @@ impl ProductWire for FakeWire {
                     json!({
                         "assetId": asset_id,
                         "contentType": "image/png",
-                        "contentBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+                        "contentBase64": base64::engine::general_purpose::STANDARD
+                            .encode(DEMO_AVATAR_PNG),
                     }),
                 )
             }
@@ -569,6 +757,37 @@ impl ProductWire for FakeWire {
             "chats.messages.create" => {
                 let created = self.create_message(&payload)?;
                 self.wrap_call(operation_id, to_value(&created))
+            }
+            "chats.messages.delete" => {
+                let chat_id = payload_str(&payload, "chatId")?;
+                let message_id = payload_str(&payload, "messageId")?;
+                self.delete_message(&chat_id, &message_id)?;
+                self.ok_call(operation_id, json!({}))
+            }
+            "chats.snapshots.rollback" => {
+                let chat_id = payload_str(&payload, "chatId")?;
+                let to_message_id = payload_str(&payload, "toMessageId")?;
+                let result = self.rollback_chat(&chat_id, &to_message_id)?;
+                self.wrap_call(operation_id, to_value(&result))
+            }
+            "chats.messages.variants.list" => {
+                let chat_id = payload_str(&payload, "chatId")?;
+                let message_id = payload_str(&payload, "messageId")?;
+                self.require_chat(&chat_id)?;
+                let mut items = self
+                    .variants
+                    .get(&(chat_id, message_id))
+                    .cloned()
+                    .unwrap_or_default();
+                items.sort_by_key(|variant| variant.position);
+                self.wrap_call(operation_id, to_value(&ResultMessageVariantList { items }))
+            }
+            "chats.messages.variants.activate" => {
+                let chat_id = payload_str(&payload, "chatId")?;
+                let message_id = payload_str(&payload, "messageId")?;
+                let variant_id = payload_str(&payload, "variantId")?;
+                self.activate_variant(&chat_id, &message_id, &variant_id)?;
+                self.ok_call(operation_id, json!({}))
             }
             "chats.messages.drafts.save" => {
                 let draft = self.save_draft(&payload)?;
@@ -803,6 +1022,37 @@ fn demo_character() -> CharacterDto {
             "stubborn".into(),
             "streetwise".into(),
         ],
+        profile_id: None,
+        created_at: TS.into(),
+        updated_at: TS.into(),
+    }
+}
+
+fn demo_seraphina() -> CharacterDto {
+    CharacterDto {
+        id: DEMO_SERAPHINA_ID.into(),
+        name: "Seraphina".into(),
+        description: Some(
+            "A celestial archivist who keeps the old names. Soft-spoken, precise, and a little too fond of rules."
+                .into(),
+        ),
+        avatar_asset_id: Some(DEMO_AVATAR_ASSET_ID.into()),
+        tags: vec!["sfw".into(), "fantasy".into()],
+        profile_id: None,
+        created_at: TS.into(),
+        updated_at: TS.into(),
+    }
+}
+
+fn demo_vayle() -> CharacterDto {
+    CharacterDto {
+        id: DEMO_VAYLE_ID.into(),
+        name: "Vayle".into(),
+        description: Some(
+            "Woodland elf with a dry sense of humor and a bow she never quite puts down.".into(),
+        ),
+        avatar_asset_id: Some(DEMO_AVATAR_ASSET_ID.into()),
+        tags: vec!["Elf".into()],
         profile_id: None,
         created_at: TS.into(),
         updated_at: TS.into(),

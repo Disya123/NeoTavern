@@ -1,0 +1,831 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://neotavern.dev/schemas/ui-blueprint.v1.json",
+  "title": "NeoTavern UiBlueprint document v1",
+  "description": "Renderer-neutral authored UI structure plus optional presentation overrides. See docs/desktop/chat-ui-recipe.md.",
+  "additionalProperties": false,
+  "type": "object",
+  "required": ["format", "id", "root", "responsive", "bindings", "sourceFixtureIds"],
+  "properties": {
+    "$schema": {
+      "minLength": 8,
+      "maxLength": 160,
+      "pattern": "^https://neotavern\\.dev/schemas/ui-blueprint\\.v[0-9]+\\.json$",
+      "type": "string"
+    },
+    "format": {
+      "const": "neotavern.ui-blueprint.v1",
+      "type": "string"
+    },
+    "id": {
+      "anyOf": [
+        {
+          "const": "character-manager",
+          "type": "string"
+        },
+        {
+          "const": "chat",
+          "type": "string"
+        }
+      ]
+    },
+    "root": {
+      "$id": "presentation.ui.blueprint.node.v1",
+      "additionalProperties": false,
+      "type": "object",
+      "required": ["nodeId", "component", "recipe", "stateSlots", "actions", "children"],
+      "properties": {
+        "nodeId": {
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-z][a-z0-9.-]*$",
+          "type": "string"
+        },
+        "component": {
+          "minLength": 1,
+          "maxLength": 128,
+          "type": "string"
+        },
+        "recipe": {
+          "minLength": 1,
+          "maxLength": 128,
+          "type": "string"
+        },
+        "role": {
+          "minLength": 1,
+          "maxLength": 64,
+          "type": "string"
+        },
+        "stateSlots": {
+          "maxItems": 32,
+          "type": "array",
+          "items": {
+            "minLength": 1,
+            "maxLength": 64,
+            "type": "string"
+          }
+        },
+        "actions": {
+          "maxItems": 16,
+          "type": "array",
+          "items": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": ["id"],
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "const": "characters.select",
+                    "type": "string"
+                  },
+                  {
+                    "const": "characters.create",
+                    "type": "string"
+                  },
+                  {
+                    "const": "characters.import",
+                    "type": "string"
+                  },
+                  {
+                    "const": "characters.search",
+                    "type": "string"
+                  },
+                  {
+                    "const": "characters.sort",
+                    "type": "string"
+                  },
+                  {
+                    "const": "characters.view.set",
+                    "type": "string"
+                  },
+                  {
+                    "const": "characters.load-more",
+                    "type": "string"
+                  },
+                  {
+                    "const": "tabs.select",
+                    "type": "string"
+                  },
+                  {
+                    "const": "panel.close",
+                    "type": "string"
+                  },
+                  {
+                    "const": "chat.send",
+                    "type": "string"
+                  },
+                  {
+                    "const": "chat.composer.settings",
+                    "type": "string"
+                  },
+                  {
+                    "const": "chat.composer.reset",
+                    "type": "string"
+                  },
+                  {
+                    "const": "chat.composer.context",
+                    "type": "string"
+                  },
+                  {
+                    "const": "chat.scroll-latest",
+                    "type": "string"
+                  },
+                  {
+                    "const": "chat.message.copy",
+                    "type": "string"
+                  },
+                  {
+                    "const": "chat.message.delete",
+                    "type": "string"
+                  },
+                  {
+                    "const": "chat.message.context",
+                    "type": "string"
+                  },
+                  {
+                    "const": "chat.message.edit",
+                    "type": "string"
+                  },
+                  {
+                    "const": "chat.message.checkpoint",
+                    "type": "string"
+                  },
+                  {
+                    "const": "chat.message.branch",
+                    "type": "string"
+                  },
+                  {
+                    "const": "chat.message.rollback",
+                    "type": "string"
+                  },
+                  {
+                    "const": "chat.message.history",
+                    "type": "string"
+                  },
+                  {
+                    "const": "chat.message.regenerate",
+                    "type": "string"
+                  },
+                  {
+                    "const": "chat.message.swipe-previous",
+                    "type": "string"
+                  },
+                  {
+                    "const": "chat.message.swipe-next",
+                    "type": "string"
+                  }
+                ]
+              },
+              "parameter": {
+                "minLength": 1,
+                "maxLength": 128,
+                "type": "string"
+              }
+            }
+          }
+        },
+        "label": {
+          "type": "object",
+          "required": ["text"],
+          "properties": {
+            "text": {
+              "minLength": 1,
+              "maxLength": 256,
+              "type": "string"
+            },
+            "i18nKey": {
+              "minLength": 3,
+              "maxLength": 160,
+              "pattern": "^chat\\.[A-Za-z0-9_-]+(\\.[A-Za-z0-9_-]+)*$",
+              "type": "string"
+            }
+          }
+        },
+        "icon": {
+          "anyOf": [
+            {
+              "const": "Plus",
+              "type": "string"
+            },
+            {
+              "const": "UploadSimple",
+              "type": "string"
+            },
+            {
+              "const": "MagnifyingGlass",
+              "type": "string"
+            },
+            {
+              "const": "List",
+              "type": "string"
+            },
+            {
+              "const": "SquaresFour",
+              "type": "string"
+            },
+            {
+              "const": "Eye",
+              "type": "string"
+            },
+            {
+              "const": "EyeSlash",
+              "type": "string"
+            },
+            {
+              "const": "X",
+              "type": "string"
+            },
+            {
+              "const": "UsersThree",
+              "type": "string"
+            },
+            {
+              "const": "ChatsCircle",
+              "type": "string"
+            },
+            {
+              "const": "Smiley",
+              "type": "string"
+            },
+            {
+              "const": "BookOpenText",
+              "type": "string"
+            },
+            {
+              "const": "ImageSquare",
+              "type": "string"
+            },
+            {
+              "const": "Globe",
+              "type": "string"
+            },
+            {
+              "const": "Cube",
+              "type": "string"
+            },
+            {
+              "const": "SlidersHorizontal",
+              "type": "string"
+            },
+            {
+              "const": "SidebarSimple",
+              "type": "string"
+            },
+            {
+              "const": "CaretDown",
+              "type": "string"
+            },
+            {
+              "const": "Pencil",
+              "type": "string"
+            },
+            {
+              "const": "PushPin",
+              "type": "string"
+            },
+            {
+              "const": "Check",
+              "type": "string"
+            },
+            {
+              "const": "ArrowLeft",
+              "type": "string"
+            },
+            {
+              "const": "Star",
+              "type": "string"
+            },
+            {
+              "const": "Trash",
+              "type": "string"
+            },
+            {
+              "const": "DownloadSimple",
+              "type": "string"
+            },
+            {
+              "const": "Image",
+              "type": "string"
+            },
+            {
+              "const": "Copy",
+              "type": "string"
+            },
+            {
+              "const": "Crown",
+              "type": "string"
+            },
+            {
+              "const": "User",
+              "type": "string"
+            },
+            {
+              "const": "Lock",
+              "type": "string"
+            },
+            {
+              "const": "PencilSimple",
+              "type": "string"
+            },
+            {
+              "const": "ShieldCheck",
+              "type": "string"
+            },
+            {
+              "const": "WarningCircle",
+              "type": "string"
+            },
+            {
+              "const": "GearSix",
+              "type": "string"
+            },
+            {
+              "const": "PaperPlaneRight",
+              "type": "string"
+            },
+            {
+              "const": "MagicWand",
+              "type": "string"
+            },
+            {
+              "const": "ArrowDown",
+              "type": "string"
+            },
+            {
+              "const": "Database",
+              "type": "string"
+            },
+            {
+              "const": "Flag",
+              "type": "string"
+            },
+            {
+              "const": "GitBranch",
+              "type": "string"
+            },
+            {
+              "const": "ArrowCounterClockwise",
+              "type": "string"
+            },
+            {
+              "const": "ClockCounterClockwise",
+              "type": "string"
+            },
+            {
+              "const": "ArrowUUpLeft",
+              "type": "string"
+            },
+            {
+              "const": "CaretLeft",
+              "type": "string"
+            },
+            {
+              "const": "CaretRight",
+              "type": "string"
+            },
+            {
+              "const": "ArrowClockwise",
+              "type": "string"
+            }
+          ]
+        },
+        "styleRefs": {
+          "maxItems": 16,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["property", "token"],
+            "properties": {
+              "property": {
+                "anyOf": [
+                  {
+                    "const": "align-content",
+                    "type": "string"
+                  },
+                  {
+                    "const": "align-items",
+                    "type": "string"
+                  },
+                  {
+                    "const": "align-self",
+                    "type": "string"
+                  },
+                  {
+                    "const": "background",
+                    "type": "string"
+                  },
+                  {
+                    "const": "background-color",
+                    "type": "string"
+                  },
+                  {
+                    "const": "background-image",
+                    "type": "string"
+                  },
+                  {
+                    "const": "background-position",
+                    "type": "string"
+                  },
+                  {
+                    "const": "background-size",
+                    "type": "string"
+                  },
+                  {
+                    "const": "border",
+                    "type": "string"
+                  },
+                  {
+                    "const": "border-color",
+                    "type": "string"
+                  },
+                  {
+                    "const": "border-radius",
+                    "type": "string"
+                  },
+                  {
+                    "const": "border-style",
+                    "type": "string"
+                  },
+                  {
+                    "const": "border-width",
+                    "type": "string"
+                  },
+                  {
+                    "const": "bottom",
+                    "type": "string"
+                  },
+                  {
+                    "const": "box-shadow",
+                    "type": "string"
+                  },
+                  {
+                    "const": "box-sizing",
+                    "type": "string"
+                  },
+                  {
+                    "const": "color",
+                    "type": "string"
+                  },
+                  {
+                    "const": "column-gap",
+                    "type": "string"
+                  },
+                  {
+                    "const": "contain",
+                    "type": "string"
+                  },
+                  {
+                    "const": "cursor",
+                    "type": "string"
+                  },
+                  {
+                    "const": "display",
+                    "type": "string"
+                  },
+                  {
+                    "const": "filter",
+                    "type": "string"
+                  },
+                  {
+                    "const": "flex",
+                    "type": "string"
+                  },
+                  {
+                    "const": "flex-basis",
+                    "type": "string"
+                  },
+                  {
+                    "const": "flex-direction",
+                    "type": "string"
+                  },
+                  {
+                    "const": "flex-grow",
+                    "type": "string"
+                  },
+                  {
+                    "const": "flex-shrink",
+                    "type": "string"
+                  },
+                  {
+                    "const": "flex-wrap",
+                    "type": "string"
+                  },
+                  {
+                    "const": "font-family",
+                    "type": "string"
+                  },
+                  {
+                    "const": "font-size",
+                    "type": "string"
+                  },
+                  {
+                    "const": "font-style",
+                    "type": "string"
+                  },
+                  {
+                    "const": "font-weight",
+                    "type": "string"
+                  },
+                  {
+                    "const": "gap",
+                    "type": "string"
+                  },
+                  {
+                    "const": "grid-auto-columns",
+                    "type": "string"
+                  },
+                  {
+                    "const": "grid-auto-rows",
+                    "type": "string"
+                  },
+                  {
+                    "const": "grid-column",
+                    "type": "string"
+                  },
+                  {
+                    "const": "grid-row",
+                    "type": "string"
+                  },
+                  {
+                    "const": "grid-template-columns",
+                    "type": "string"
+                  },
+                  {
+                    "const": "grid-template-rows",
+                    "type": "string"
+                  },
+                  {
+                    "const": "height",
+                    "type": "string"
+                  },
+                  {
+                    "const": "inset",
+                    "type": "string"
+                  },
+                  {
+                    "const": "justify-content",
+                    "type": "string"
+                  },
+                  {
+                    "const": "justify-items",
+                    "type": "string"
+                  },
+                  {
+                    "const": "justify-self",
+                    "type": "string"
+                  },
+                  {
+                    "const": "left",
+                    "type": "string"
+                  },
+                  {
+                    "const": "letter-spacing",
+                    "type": "string"
+                  },
+                  {
+                    "const": "line-height",
+                    "type": "string"
+                  },
+                  {
+                    "const": "margin",
+                    "type": "string"
+                  },
+                  {
+                    "const": "margin-block",
+                    "type": "string"
+                  },
+                  {
+                    "const": "margin-inline",
+                    "type": "string"
+                  },
+                  {
+                    "const": "max-height",
+                    "type": "string"
+                  },
+                  {
+                    "const": "max-width",
+                    "type": "string"
+                  },
+                  {
+                    "const": "min-height",
+                    "type": "string"
+                  },
+                  {
+                    "const": "min-width",
+                    "type": "string"
+                  },
+                  {
+                    "const": "object-fit",
+                    "type": "string"
+                  },
+                  {
+                    "const": "opacity",
+                    "type": "string"
+                  },
+                  {
+                    "const": "order",
+                    "type": "string"
+                  },
+                  {
+                    "const": "outline",
+                    "type": "string"
+                  },
+                  {
+                    "const": "overflow",
+                    "type": "string"
+                  },
+                  {
+                    "const": "overflow-x",
+                    "type": "string"
+                  },
+                  {
+                    "const": "overflow-y",
+                    "type": "string"
+                  },
+                  {
+                    "const": "padding",
+                    "type": "string"
+                  },
+                  {
+                    "const": "padding-block",
+                    "type": "string"
+                  },
+                  {
+                    "const": "padding-inline",
+                    "type": "string"
+                  },
+                  {
+                    "const": "place-content",
+                    "type": "string"
+                  },
+                  {
+                    "const": "place-items",
+                    "type": "string"
+                  },
+                  {
+                    "const": "position",
+                    "type": "string"
+                  },
+                  {
+                    "const": "right",
+                    "type": "string"
+                  },
+                  {
+                    "const": "row-gap",
+                    "type": "string"
+                  },
+                  {
+                    "const": "text-align",
+                    "type": "string"
+                  },
+                  {
+                    "const": "text-decoration",
+                    "type": "string"
+                  },
+                  {
+                    "const": "text-overflow",
+                    "type": "string"
+                  },
+                  {
+                    "const": "text-transform",
+                    "type": "string"
+                  },
+                  {
+                    "const": "top",
+                    "type": "string"
+                  },
+                  {
+                    "const": "transform",
+                    "type": "string"
+                  },
+                  {
+                    "const": "transform-origin",
+                    "type": "string"
+                  },
+                  {
+                    "const": "transition",
+                    "type": "string"
+                  },
+                  {
+                    "const": "visibility",
+                    "type": "string"
+                  },
+                  {
+                    "const": "white-space",
+                    "type": "string"
+                  },
+                  {
+                    "const": "width",
+                    "type": "string"
+                  },
+                  {
+                    "const": "z-index",
+                    "type": "string"
+                  }
+                ]
+              },
+              "token": {
+                "minLength": 5,
+                "maxLength": 128,
+                "pattern": "^var\\(--[a-zA-Z0-9-]+\\)$",
+                "type": "string"
+              }
+            }
+          }
+        },
+        "children": {
+          "maxItems": 256,
+          "type": "array",
+          "items": {
+            "$ref": "presentation.ui.blueprint.node.v1"
+          }
+        }
+      }
+    },
+    "responsive": {
+      "minItems": 3,
+      "maxItems": 3,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["viewportClass", "layout"],
+        "properties": {
+          "viewportClass": {
+            "anyOf": [
+              {
+                "const": "compact",
+                "type": "string"
+              },
+              {
+                "const": "medium",
+                "type": "string"
+              },
+              {
+                "const": "expanded",
+                "type": "string"
+              }
+            ]
+          },
+          "layout": {
+            "anyOf": [
+              {
+                "const": "compact-panel",
+                "type": "string"
+              },
+              {
+                "const": "rail-overlay-panel",
+                "type": "string"
+              },
+              {
+                "const": "rail-resizable-panel",
+                "type": "string"
+              },
+              {
+                "const": "chat-compact-overlay",
+                "type": "string"
+              },
+              {
+                "const": "chat-split-panel",
+                "type": "string"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "bindings": {
+      "maxItems": 256,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["nodeId", "expression"],
+        "properties": {
+          "nodeId": {
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[a-z][a-z0-9.-]*$",
+            "type": "string"
+          },
+          "expression": {
+            "minLength": 1,
+            "maxLength": 256,
+            "type": "string"
+          }
+        }
+      }
+    },
+    "sourceFixtureIds": {
+      "minItems": 1,
+      "maxItems": 32,
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "maxLength": 160,
+        "type": "string"
+      }
+    }
+  }
+}

@@ -200,8 +200,8 @@ fn chrome_metrics_phone_uses_readable_bands() {
     let (width, header, viewport, composer) = chrome_metrics(407, 904);
     assert_eq!(width, 407);
     assert_eq!(header, 56);
-    assert_eq!(composer, 72);
-    assert_eq!(viewport, 904 - 56 - 72);
+    assert_eq!(composer, 174);
+    assert_eq!(viewport, 904 - 56 - 174);
 }
 
 #[test]

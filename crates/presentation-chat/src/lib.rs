@@ -17,7 +17,14 @@ mod wire;
 mod android_jni;
 #[cfg(all(feature = "android-jni", feature = "gpu", target_os = "android"))]
 mod android_surface;
-#[cfg(all(feature = "android-jni", feature = "gpu", target_os = "android"))]
+/// GPU avatar overlay, now shared by the Android host and the cross-platform
+/// `PresentSurface` host (`desktop-host`). Compiled whenever `gpu` is on;
+/// only Android feeds it at build time.
+#[cfg(feature = "gpu")]
+#[cfg_attr(
+    not(all(feature = "android-jni", target_os = "android")),
+    allow(dead_code)
+)]
 mod avatar_gpu;
 #[cfg(feature = "gpu")]
 #[cfg_attr(
@@ -40,14 +47,22 @@ pub use avatar::{
 };
 pub use compositor::ChatCompositor;
 pub use error::ChatRouteError;
+pub mod hit_rects;
 pub use fake_wire::{FakeWire, DEMO_AVATAR_ASSET_ID, DEMO_CHARACTER_ID, DEMO_CHAT_ID};
+pub use hit_rects::{HitRect, HitRects, MessageActionKind, QuickIntent, TapIntent, TOUCH_SLOP_CSS};
 pub use seed::{
     ensure_isolated_10k_workspace, is_isolated_10k_profile, isolated_message_content,
     seed_trace_line, IsolatedSeedReport, ISOLATED_10K_COUNT, ISOLATED_10K_PROFILE,
     ISOLATED_10K_TITLE,
 };
 pub use session::{ChatRouteState, ChatSession};
-pub use shell_hit::{hit_test, next_sort, ShellAction, ShellHit, RAIL_PANELS, SORTS, TABS};
+pub use shell_hit::{
+    chat_origin_x, hit_test, is_compact, next_sort, panel_css_width, sidebar_occupied_css,
+    ShellAction, ShellHit, PANEL_WIDTH_DEFAULT, PANEL_WIDTH_MAX, PANEL_WIDTH_MIN, RAIL_PANELS,
+    RAIL_WIDTH, SORTS, TABS,
+};
+#[cfg(feature = "gpu")]
+pub use vello_gpu::PresentSurface;
 pub use wire::{ProductWire, StreamFrame, WireCall, PAGE_LIMIT};
 
 #[derive(Clone, Debug, PartialEq, Eq)]

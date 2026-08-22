@@ -20,24 +20,26 @@ mod personas_tab;
 mod plugins_tab;
 mod product_path;
 mod product_shell;
+mod scene_chat;
 mod settings_tab;
 pub use chat_route::{chat_route_line, flagged_chat_route, ChatRouteReport};
 pub use markdown::{contains_part, message_markdown, parse_document, parse_inline, Block, Inline};
 pub use neotavern_presentation_design_system::SafeAreaInsets;
 pub use product_path::{
-    chrome_metrics, current_product_chat, install_product_chat, message_id, mixed_height,
-    mixed_height_catalog, product_chat_from_fixture, product_chat_with_chrome, streaming_schedule,
-    visible_rows, ProductChatView, ProductChrome, RowKind, VisibleRow, PRODUCT_PATH_CHAT_ID,
-    PRODUCT_PATH_ITEMS, PRODUCT_PATH_VISIBLE,
+    chrome_metrics, current_product_chat, format_timestamp, install_product_chat, message_id,
+    mixed_height, mixed_height_catalog, product_chat_from_fixture, product_chat_with_chrome,
+    streaming_schedule, visible_rows, ProductChatView, ProductChrome, RowKind, VisibleRow,
+    PRODUCT_PATH_CHAT_ID, PRODUCT_PATH_ITEMS, PRODUCT_PATH_VISIBLE,
 };
 pub use product_shell::{
     character_card_description, character_manager_title, current_product_shell, ellipsize_css,
     install_product_shell, lorebook_card_description, panel_header_title, persona_card_description,
-    product_shell_app, CharacterCardView, CharacterDraftView, LorebookCardView, PersonaCardView,
-    PluginCardView, PresetCardView, ProductShellView, ProviderCardView, AI_SETTINGS_TITLE,
-    BACKGROUNDS_MANAGER_TITLE, CHARACTER_MANAGER_TITLE, CHATS_MANAGER_TITLE,
+    product_shell_app, CharacterCardView, CharacterDraftView, ChatCardView, LorebookCardView,
+    PersonaCardView, PluginCardView, PresetCardView, ProductShellView, ProviderCardView,
+    AI_SETTINGS_TITLE, BACKGROUNDS_MANAGER_TITLE, CHARACTER_MANAGER_TITLE, CHATS_MANAGER_TITLE,
     LOREBOOK_MANAGER_TITLE, PERSONA_MANAGER_TITLE, PLUGINS_MANAGER_TITLE, SETTINGS_TITLE,
 };
+pub use scene_chat::{set_chat_blueprint_source, ChatBlueprintSource};
 
 pub const DIOXUS_SHELL_FLAG: &str = "NEOTA_DIOXUS_SHELL";
 pub const CANONICAL_FIXTURE_JSON: &str =
@@ -249,50 +251,120 @@ pub fn expected_projection() -> CanonicalProjection {
     serde_json::from_str(EXPECTED_PROJECTION_JSON).expect("expected-projection.json")
 }
 
-fn message_bubble_style(user: bool, compact: bool, font_px: u32) -> String {
-    let bg = if user { "#2a4a6a" } else { "#243044" };
+pub(crate) fn message_bubble_style(user: bool, compact: bool, font_px: u32) -> String {
+    // React sheet (`data-chat-style='paragraphs'`): assistant bubble
+    // rgb(38,34,31) with border #39342f; user rgb(54,34,27) with border
+    // #694c3d and margin-left auto; radius 16; text primary #f3eee8.
+    let (bg, border) = if user {
+        ("#36221b", "#694c3d")
+    } else {
+        ("#26221f", "#39342f")
+    };
+    // `position:relative` anchors the inline message action row (React
+    // `MessageBubble` header) at the bubble's top-right.
     if compact {
         format!(
-            "box-sizing:border-box;min-height:24px;margin:4px 0;padding:6px 8px;color:#e8eef7;font-size:{font_px}px;white-space:pre-wrap;overflow-wrap:break-word;background:{bg};"
+            "box-sizing:border-box;position:relative;min-height:24px;margin:4px 0;padding:8px 12px;color:#f3eee8;font-size:{font_px}px;white-space:pre-wrap;overflow-wrap:break-word;background:{bg};border:1px solid {border};border-radius:16px;"
         )
     } else {
-        let start = if user { "20%" } else { "0" };
+        let align = if user {
+            "margin-left:auto;"
+        } else {
+            "margin-right:auto;"
+        };
         format!(
-            "box-sizing:border-box;width:80%;margin:8px 0;margin-left:{start};padding:10px 12px;color:#e8eef7;font-size:{font_px}px;white-space:pre-wrap;overflow-wrap:break-word;background:{bg};"
+            "box-sizing:border-box;position:relative;width:fit-content;max-width:78ch;{align}margin-top:8px;margin-bottom:8px;padding:8px 12px;color:#f3eee8;font-size:{font_px}px;white-space:pre-wrap;overflow-wrap:break-word;background:{bg};border:1px solid {border};border-radius:16px;"
         )
+    }
+}
+
+fn message_action_button(
+    action: &'static str,
+    label: &'static str,
+    icon_name: &'static str,
+    message_id: &str,
+) -> Element {
+    rsx! {
+        button {
+            class: "MessageBubble_actionButton",
+            r#type: "button",
+            "data-action": "{action}",
+            // Lets the native hit-rect snapshot resolve the owning row
+            // (`SlotNode.key` = data-ui-key || data-message-id).
+            "data-message-id": "{message_id}",
+            "aria-label": "{label}",
+            title: "{label}",
+            style: "width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(243,238,232,0.10);border-radius:16px;background:rgba(36,33,30,0.62);color:#c5bbb2;cursor:pointer;",
+            {crate::product_shell::icon(icon_name, 16)}
+        }
     }
 }
 
 /// Flagged Product Wire chat workspace: header glass, visible Markdown/image
 /// rows, composer glass. Blitz consumes this tree; callers must not inject a
 /// hand-built `NeoDisplayList`.
+///
+/// The `data-*` hooks and CSS module class names match React
+/// `ChatWorkspace` / `ChatHeader` / `ChatComposer` / `MessageBubble` so packed
+/// `product.css` and the DOM-parity dump share one contract.
 pub fn product_chat_app() -> Element {
     let view = current_product_chat();
-    let (width, header_h, viewport_h, composer_h) =
+    // Blueprint-driven chrome (M2 phase 2): when a document source is
+    // installed, header/viewport/composer structure comes from the authored
+    // JSON; the legacy RSX below stays the fallback and the parity oracle.
+    let chrome_parts = crate::scene_chat::blueprint_chrome(&view);
+    let (_width, header_h, _viewport_h, composer_h) =
         crate::chrome_metrics(view.viewport_width, view.viewport_height);
-    let composer_top = header_h.saturating_add(viewport_h);
     let compact = view.viewport_height <= 240;
     let font_px = if compact { 12 } else { 18 };
-    let title_px = if compact { 13 } else { 20 };
     let pad = if compact { 8 } else { 16 };
+    let header_title = if view.character_name.is_empty() {
+        view.title.clone()
+    } else {
+        view.character_name.clone()
+    };
+    // React `.workspace`: a centered column capped at the
+    // `--st-size-chat-column-max` token (1080px); the wallpaper stays visible
+    // on both sides. Computed in CSS px because Blitz resolves var()/min()
+    // from packed sheets against this tree unreliably (see rust-ui-style-port).
+    // The base is the chat main area (`column_width`), not the full window:
+    // sizing against the window overflowed the column past `<main>` and
+    // clipped bubbles at the window edge.
+    let chat_area_w = if view.column_width > 0 {
+        view.column_width
+    } else {
+        view.viewport_width
+    };
+    let chat_column_w = chat_area_w.min(1080);
     let workspace_style = format!(
-        "position:relative;box-sizing:border-box;width:{width}px;height:{}px;background:#101820;color:#e8eef7;font-family:sans-serif;",
-        view.viewport_height.max(1)
+        "position:relative;box-sizing:border-box;display:flex;flex-direction:column;width:{chat_column_w}px;height:100%;min-width:0;min-height:0;margin-left:auto;margin-right:auto;background:transparent;color:#f3eee8;font-family:sans-serif;"
     );
-    let wallpaper_style = format!(
-        "position:absolute;left:0;top:0;width:{width}px;height:{}px;background:#243044;",
-        view.viewport_height.max(1)
+    let panel_style = format!(
+        "position:relative;box-sizing:border-box;display:flex;flex-direction:column;width:100%;height:100%;min-width:0;min-height:0;padding:0 {pad}px;background:#24211e;"
     );
     let header_style = format!(
-        "position:absolute;left:0;top:0;width:{width}px;height:{header_h}px;box-sizing:border-box;padding:{pad}px;background:#15202b;color:#f2f6fb;font-size:{title_px}px;"
+        "flex:none;position:relative;z-index:2;width:100%;height:{header_h}px;box-sizing:border-box;padding:0 {pad}px;background:rgba(36,33,30,0.82);color:#f3eee8;border-bottom:1px solid rgba(57,52,47,0.48);display:flex;align-items:center;justify-content:space-between;gap:8px;"
     );
     let viewport_style = format!(
-        "position:absolute;left:0;top:{header_h}px;width:{width}px;height:{viewport_h}px;box-sizing:border-box;padding:{pad}px;overflow:hidden;background:#101820;"
+        "flex:1 1 auto;position:relative;width:100%;min-height:0;box-sizing:border-box;overflow:hidden;background:transparent;"
     );
-    let composer_style = format!(
-        "position:absolute;left:0;top:{composer_top}px;width:{width}px;height:{composer_h}px;box-sizing:border-box;padding:{pad}px;background:#15202b;color:#d7e3f0;font-size:{font_px}px;"
+    let scroll_style = format!(
+        "display:flex;flex-direction:column;gap:24px;box-sizing:border-box;min-height:100%;padding:{pad}px;"
     );
-    let wallpaper = matches!(view.chrome, ProductChrome::PaintOrder);
+    let composer_color = if view.composer_text.is_empty() {
+        "#998f87"
+    } else {
+        "#f3eee8"
+    };
+    let composer_style = if compact {
+        format!(
+            "position:relative;width:100%;height:{composer_h}px;box-sizing:border-box;padding:{pad}px;background:rgba(36,33,30,0.88);color:{composer_color};font-size:{font_px}px;"
+        )
+    } else {
+        format!(
+            "position:relative;width:100%;height:{composer_h}px;box-sizing:border-box;padding:0;overflow:hidden;border:1px solid rgba(243,238,232,0.10);border-radius:28px;background:rgba(21,19,17,0.78);color:{composer_color};font-size:{font_px}px;"
+        )
+    };
     let overlay = matches!(
         view.chrome,
         ProductChrome::TripleGlass | ProductChrome::PaintOrder
@@ -302,78 +374,452 @@ pub fn product_chat_app() -> Element {
         ProductChrome::NestedDialog | ProductChrome::PaintOrder
     );
     let composer_label = if view.composer_text.is_empty() {
-        "Message"
+        if view.composer_placeholder.is_empty() {
+            "Message"
+        } else {
+            view.composer_placeholder.as_str()
+        }
     } else {
         view.composer_text.as_str()
     };
     rsx! {
-        div {
-            "data-component": "chat-workspace",
+        section {
+            class: "ChatWorkspace_page",
+            "data-component": "chat-view",
             style: "{workspace_style}",
-            if wallpaper {
+            div {
+                class: "ChatWorkspace_wallpaper",
+                "data-part": "chat-wallpaper",
+                "aria-hidden": "true",
+                style: "position:absolute;left:0;top:0;right:0;bottom:0;z-index:0;pointer-events:none;background:transparent;",
+            }
+            div {
+                class: "ChatWorkspace_workspace",
+                style: "{workspace_style}",
                 div {
-                    "data-part": "wallpaper",
-                    style: "{wallpaper_style}"
-                }
-            }
-            div {
-                class: "neoui-glass",
-                "data-neoui": "glass",
-                "data-part": "header",
-                role: "banner",
-                style: "{header_style}",
-                "{view.title} ({view.message_count})"
-                if nested {
+                    class: "ChatWorkspace_chatPanel",
+                    style: "{panel_style}",
+                    "data-component": "chat-panel",
+                    if let Some(parts) = &chrome_parts {
+                        {parts.header.clone()}
+                    } else {
                     div {
-                        class: "neoui-glass",
+                        class: "ChatWorkspace_chatHeader neoui-glass",
                         "data-neoui": "glass",
-                        "data-part": "dialog",
-                        style: "position:absolute;left:48px;top:4px;width:160px;height:28px;background:#243044;"
+                        "data-slot": "chat.header",
+                        role: "banner",
+                        style: "{header_style}",
+                        div {
+                            class: "ChatWorkspace_chatIdentity",
+                            "data-part": "character-identity",
+                            style: "display:flex;align-items:center;gap:8px;min-width:0;flex:1;",
+                            if !view.character_avatar_asset.is_empty() {
+                                span {
+                                    class: "ChatWorkspace_headerAvatar",
+                                    "data-part": "character-avatar",
+                                    "aria-hidden": "true",
+                                    style: "flex:none;width:32px;height:32px;border-radius:16px;overflow:hidden;background:#302c28;",
+                                    span {
+                                        "data-part": "avatar-fallback",
+                                        "data-avatar-asset": "{view.character_avatar_asset}",
+                                        class: "headerAvatar",
+                                        style: "display:block;width:32px;height:32px;border-radius:16px;background:#302c28;",
+                                    }
+                                }
+                            }
+                            h1 {
+                                style: "margin:0;overflow:hidden;min-width:0;font-size:13px;font-weight:600;text-overflow:ellipsis;white-space:nowrap;color:#f3eee8;",
+                                "{header_title}"
+                            }
+                        }
+                        button {
+                            class: "ChatWorkspace_headerSearch",
+                            r#type: "button",
+                            "data-part": "header-search",
+                            "aria-label": "Search messages",
+                            style: "flex:none;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:none;border-radius:20px;background:transparent;color:#c5bbb2;",
+                            {crate::product_shell::icon("MagnifyingGlass", 17)}
+                        }
+                        if nested {
+                            div {
+                                class: "neoui-glass",
+                                "data-neoui": "glass",
+                                "data-part": "dialog",
+                                style: "position:absolute;left:48px;top:4px;width:160px;height:28px;background:#302c28;"
+                            }
+                        }
                     }
-                }
-            }
-            div {
-                "data-part": "viewport",
-                "data-region": "chat-viewport",
-                role: "list",
-                "aria-label": "Chat messages",
-                "data-state": if view.streaming { "streaming" } else { "idle" },
-                style: "{viewport_style}",
-                for row in view.visible.iter() {
+                    }
+                    if let Some(parts) = &chrome_parts {
+                        {parts.viewport.clone()}
+                    } else {
                     div {
-                        "data-part": "message",
-                        "data-role": "{row.role}",
-                        "data-format": "markdown",
-                        role: "listitem",
-                        style: message_bubble_style(row.role == "user", compact, font_px),
-                        {crate::markdown::message_markdown(&row.content, view.streaming && row.id == "streaming")}
-                        if matches!(row.kind, RowKind::Image | RowKind::Mixed) {
-                            span {
-                                "data-part": "message-image",
-                                style: "width:48px;height:32px;background:#3a4a60;"
+                        class: "ChatWorkspace_viewport",
+                        "data-component": "chat-viewport",
+                        "data-part": "canvas",
+                        "data-region": "chat-viewport",
+                        role: "list",
+                        "aria-label": "Chat messages",
+                        "data-state": if view.streaming { "streaming" } else { "idle" },
+                        style: "{viewport_style}",
+                        div {
+                            class: "ChatWorkspace_scrollBody",
+                            "data-part": "chat-scroll",
+                            style: "{scroll_style}",
+                            // React `ChatPage` renders the virtualized rows
+                            // inside a `data-component="chat-message-list"`
+                            // canvas; the native surface publishes the same
+                            // hook so themes can target both identically.
+                            div {
+                                class: "ChatPage_messageCanvas",
+                                "data-component": "chat-message-list",
+                                style: "display:flex;flex-direction:column;gap:24px;min-height:0;",
+                            for row in view.visible.iter() {
+                                article {
+                                    class: if row.role == "user" { "MessageBubble_rowUser" } else { "MessageBubble_rowAssistant" },
+                                    "data-component": "chat-message",
+                                    "data-role": "{row.role}",
+                                    "data-state": if view.streaming && row.id == "streaming" { "streaming" } else { "done" },
+                                    "data-format": "markdown",
+                                    "data-message-id": "{row.id}",
+                                    role: "listitem",
+                                    "aria-label": "{row.author}",
+                                    style: message_bubble_style(row.role == "user", compact, font_px),
+                                    header {
+                                        class: "MessageBubble_messageHeader",
+                                        "data-part": "message-header",
+                                        style: "display:flex;align-items:center;width:100%;gap:8px;margin-bottom:4px;",
+                                        span {
+                                            class: "MessageBubble_avatar",
+                                            "data-part": "message-avatar",
+                                            "data-state": if !view.character_avatar_asset.is_empty() && row.role == "assistant" { "image" } else { "fallback" },
+                                            "aria-hidden": "true",
+                                            style: "flex:none;width:36px;height:36px;border-radius:18px;overflow:hidden;background:#492a20;",
+                                            if !view.character_avatar_asset.is_empty() && row.role == "assistant" {
+                                                span {
+                                                    "data-part": "avatar-fallback",
+                                                    "data-avatar-asset": "{view.character_avatar_asset}",
+                                                    class: "messageAvatar",
+                                                    style: "display:block;width:36px;height:36px;border-radius:18px;background:#302c28;",
+                                                }
+                                            }
+                                        }
+                                        span {
+                                            class: "MessageBubble_identity",
+                                            "data-part": "message-identity",
+                                            style: "display:flex;align-items:baseline;gap:8px;min-width:0;",
+                                            span {
+                                                class: "MessageBubble_author",
+                                                "data-part": "message-author",
+                                                style: "color:#f3eee8;font-size:13px;font-weight:700;",
+                                                "{row.author}"
+                                            }
+                                            if !row.timestamp.is_empty() {
+                                                span {
+                                                    class: "MessageBubble_timestamp",
+                                                    "data-part": "message-timestamp",
+                                                    style: "overflow:hidden;color:#998f87;font-size:12px;text-overflow:ellipsis;white-space:nowrap;",
+                                                    "{row.timestamp}"
+                                                }
+                                            }
+                                        }
+                                        div {
+                                            class: "MessageBubble_actionBar",
+                                            "data-component": "message-action-bar",
+                                            "data-part": "message-actions-inline",
+                                            "data-state": "idle",
+                                            style: "display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-left:auto;",
+                                            {message_action_button("context", "Exclude from prompt context", "EyeSlash", &row.id)}
+                                            {message_action_button("edit", "Edit message", "PencilSimple", &row.id)}
+                                            {message_action_button("copy", "Copy", "Copy", &row.id)}
+                                            {message_action_button("checkpoint", "Checkpoint", "Flag", &row.id)}
+                                            {message_action_button("branch", "Branch", "GitBranch", &row.id)}
+                                            {message_action_button("delete", "Delete message", "Trash", &row.id)}
+                                            {message_action_button("rollback", "Rollback to here", "ArrowUUpLeft", &row.id)}
+                                        }
+                                    }
+                                    div {
+                                        class: "MessageBubble_content",
+                                        "data-part": "message-content",
+                                        div {
+                                            class: "MessageBubble_messageFrame",
+                                            "data-part": "message-frame",
+                                            // Explicit width: the packed
+                                            // `.rowUser .bubble` sheet uses
+                                            // `margin-left:auto`, which Blitz
+                                            // resolves against the wrong
+                                            // containing block and collapses
+                                            // the body to a sliver on user
+                                            // rows.
+                                            div {
+                                                class: "MessageBubble_bubble",
+                                                "data-part": "message-body",
+                                                style: "position:relative;width:100%;box-sizing:border-box;",
+                                                {crate::markdown::message_markdown(&row.content, view.streaming && row.id == "streaming")}
+                                            }
+                                            // Assistant avatar art (React
+                                            // `.messageArt`); hidden on the
+                                            // desktop sheet, present for themes.
+                                            if row.role == "assistant" && !view.character_avatar_asset.is_empty() {
+                                                span {
+                                                    class: "MessageBubble_messageArt",
+                                                    "data-part": "message-art",
+                                                    "aria-hidden": "true",
+                                                    style: "display:none;",
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if row.role == "assistant" && !compact {
+                                        div {
+                                            // No `MessageBubble_versionControls`
+                                            // class on purpose: the packed
+                                            // sheet right-aligns
+                                            // `[data-component='message-swipe-pager']`
+                                            // via an auto margin that Blitz
+                                            // resolves against the wrong
+                                            // containing block.
+                                            "data-component": "message-version-controls",
+                                            "data-part": "message-version-controls",
+                                            style: "display:flex;align-items:center;gap:8px;margin-top:8px;",
+                                            // No `MessageBubble_versionQuickActions`
+                                            // class either: the packed sheet
+                                            // hides every `span` inside it,
+                                            // and the native icon glyphs are
+                                            // spans (`nt-icon`) Р Р†Р вЂљРІР‚Сњ the pills
+                                            // would render empty.
+                                            div {
+                                                "data-part": "message-version-actions",
+                                                style: "display:flex;align-items:center;gap:8px;",
+                                                button {
+                                                    class: "MessageBubble_actionButton",
+                                                    r#type: "button",
+                                                    "data-action": "history",
+                                                    "aria-label": "Revision history",
+                                                    title: "Revision history",
+                                                    style: "display:flex;align-items:center;justify-content:center;gap:4px;width:32px;height:32px;border-radius:16px;border:1px solid rgba(57,52,47,0.70);background:rgba(36,33,30,0.70);color:#998f87;",
+                                                    {crate::product_shell::icon("ClockCounterClockwise", 14)}
+                                                }
+                                                button {
+                                                    class: "MessageBubble_actionButton",
+                                                    r#type: "button",
+                                                    "data-action": "regenerate",
+                                                    "aria-label": "Regenerate",
+                                                    title: "Regenerate",
+                                                    style: "display:flex;align-items:center;justify-content:center;gap:4px;width:32px;height:32px;border-radius:16px;border:1px solid rgba(57,52,47,0.70);background:rgba(36,33,30,0.70);color:#998f87;",
+                                                    {crate::product_shell::icon("ArrowCounterClockwise", 14)}
+                                                }
+                                            }
+                                            // React `MessageSwipePager`: the
+                                            // swipe pair lives in its own
+                                            // `data-component` container.
+                                            // Inline styles only Р Р†Р вЂљРІР‚Сњ the packed
+                                            // `.pager` sheet carries a logical
+                                            // auto-margin that Blitz resolves
+                                            // against the wrong containing
+                                            // block and pushes the pager off
+                                            // the panel.
+                                            div {
+                                                "data-component": "message-swipe-pager",
+                                                "data-part": "message-swipes",
+                                                style: "display:flex;align-items:center;gap:4px;",
+                                                button {
+                                                    class: "MessageBubble_actionButton",
+                                                    r#type: "button",
+                                                    "data-action": "swipe-previous",
+                                                    "aria-label": "Previous variant",
+                                                    style: "width:32px;height:32px;border-radius:16px;border:1px solid rgba(57,52,47,0.70);background:rgba(36,33,30,0.70);color:#998f87;display:flex;align-items:center;justify-content:center;",
+                                                    {crate::product_shell::icon("CaretLeft", 14)}
+                                                }
+                                                span {
+                                                    "aria-live": "polite",
+                                                    style: "color:#998f87;font-size:12px;",
+                                                }
+                                                button {
+                                                    class: "MessageBubble_actionButton",
+                                                    r#type: "button",
+                                                    "data-action": "swipe-next",
+                                                    "aria-label": "Next variant",
+                                                    style: "width:32px;height:32px;border-radius:16px;border:1px solid rgba(57,52,47,0.70);background:rgba(36,33,30,0.70);color:#998f87;display:flex;align-items:center;justify-content:center;",
+                                                    {crate::product_shell::icon("CaretRight", 14)}
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            }
+                        }
+                    }
+                    }
+                    // Composer sits AFTER the viewport as a flex sibling (the
+                    // packed Blitz sheet models the same bands): the native
+                    // surface materializes row windows from the canvas top, so
+                    // a composer inside the scrolling subtree always ended up
+                    // painted over the newest message. React keeps it inside
+                    // via position:sticky, which Blitz cannot express.
+                    div {
+                        class: "ChatWorkspace_composerWrapper",
+                        "data-part": "composer-sticky",
+                            style: "flex:none;box-sizing:border-box;width:100%;padding:0 {pad}px {pad}px;",
+                            if let Some(code) = view.error_code.as_deref() {
+                                div {
+                                    "data-part": "error",
+                                    role: "alert",
+                                    style: "padding:0 0 8px;color:#f2b8b5;font-size:{font_px}px;",
+                                    "{code}"
+                                }
+                            }
+                            // Blueprint-driven composer (M2 phase 2): when a
+                            // document source is installed, structure comes
+                            // from the authored JSON; the legacy RSX below
+                            // stays the fallback and the parity oracle.
+                            if let Some(parts) = &chrome_parts {
+                                {parts.composer.clone()}
+                            } else {
+                            div {
+                                class: "ChatWorkspace_composer neoui-glass",
+                                "data-neoui": "glass",
+                                role: "region",
+                                "aria-label": "Message composer",
+                                "data-state": if view.streaming { "streaming" } else { "idle" },
+                                "data-slot": "chat.composer",
+                                style: "{composer_style}",
+                                if compact {
+                                    "{composer_label}"
+                                    button {
+                                        class: "st-button",
+                                        r#type: "button",
+                                        "data-component": "button",
+                                        "data-variant": "primary",
+                                        "data-size": "md",
+                                        "data-action": "send",
+                                        style: "position:absolute;right:12px;top:50%;transform:translateY(-50%);display:flex;align-items:center;justify-content:center;min-width:44px;min-height:36px;padding:4px 16px;border:none;border-radius:10px;color:#2a130b;background:#e38a62;font-size:13px;font-weight:500;",
+                                        span { "data-part": "label", "Send" }
+                                        span {
+                                            "data-part": "icon",
+                                            "data-position": "end",
+                                            "aria-hidden": "true",
+                                            {crate::product_shell::icon_fill("PaperPlaneRight", 16, "#2a130b")}
+                                        }
+                                    }
+                                } else {
+                                    div {
+                                        class: "ChatWorkspace_composerToolbar",
+                                        "data-part": "toolbar",
+                                        style: "display:flex;align-items:center;justify-content:space-between;width:100%;height:42px;padding:0 16px;box-sizing:border-box;border-bottom:1px solid rgba(243,238,232,0.08);",
+                                        div {
+                                            class: "ChatWorkspace_toolbarActions",
+                                            style: "display:flex;align-items:center;gap:4px;",
+                                            button {
+                                                class: "ChatWorkspace_menuButton",
+                                                r#type: "button",
+                                                "data-action": "composer-settings",
+                                                "aria-label": "Settings",
+                                                title: "Settings",
+                                                style: "display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 8px;border:1px solid rgba(243,238,232,0.10);border-radius:16px;color:#c5bbb2;background:rgba(243,238,232,0.05);",
+                                                {crate::product_shell::icon("GearSix", 15)}
+                                                span { style: "font-size:13px;", "Settings" }
+                                            }
+                                            button {
+                                                class: "ChatWorkspace_iconButton",
+                                                r#type: "button",
+                                                "data-action": "composer-reset",
+                                                "aria-label": "Reset",
+                                                title: "Reset",
+                                                style: "width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;border-radius:16px;background:transparent;color:#998f87;",
+                                                {crate::product_shell::icon("X", 17)}
+                                            }
+                                        }
+                                        button {
+                                            class: "ChatWorkspace_contextTrigger",
+                                            r#type: "button",
+                                            "data-action": "composer-context",
+                                            "aria-label": "Context",
+                                            title: "Context 4%",
+                                            style: "display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 8px;border:1px solid rgba(243,238,232,0.10);border-radius:16px;color:#c5bbb2;background:rgba(243,238,232,0.05);",
+                                            {crate::product_shell::icon("Database", 15)}
+                                            span { style: "font-size:13px;", "4%" }
+                                        }
+                                    }
+                                    div {
+                                        class: "ChatWorkspace_composerField",
+                                        "data-part": "field",
+                                        style: "display:flex;flex-direction:column;flex:1;min-height:0;padding:12px 16px 8px;box-sizing:border-box;background:rgba(36,33,30,0.55);",
+                                        div {
+                                            "data-component": "textarea",
+                                            style: "flex:1;min-height:48px;color:{composer_color};font-size:16px;line-height:1.4;",
+                                            "{composer_label}"
+                                        }
+                                        div {
+                                            class: "ChatWorkspace_composerActions",
+                                            "data-part": "composer-actions",
+                                            // React `.composerActions` uses
+                                            // `justify-content:flex-end`, but
+                                            // this Blitz/Taffy build misplaces
+                                            // items when justify-content is
+                                            // combined with the sibling's
+                                            // `margin-inline-end:auto`
+                                            // (`ChatWorkspace_composerUtilities`):
+                                            // free space is distributed twice
+                                            // and the Send button lands ~385px
+                                            // past the row. `flex-start` plus
+                                            // the auto margin produces the same
+                                            // visual (utils left, Send right);
+                                            // probe: presentation-m0-d2
+                                            // examples/send_layout_probe.rs.
+                                            style: "display:flex;align-items:center;justify-content:flex-start;gap:12px;margin-top:8px;",
+                                            div {
+                                                class: "ChatWorkspace_composerUtilities",
+                                                style: "display:flex;align-items:center;gap:4px;",
+                                                button {
+                                                    r#type: "button",
+                                                    "data-action": "composer-settings",
+                                                    "aria-label": "Settings",
+                                                    style: "width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;background:transparent;color:#998f87;",
+                                                    {crate::product_shell::icon("List", 19)}
+                                                }
+                                                button {
+                                                    r#type: "button",
+                                                    "data-action": "scroll-latest",
+                                                    "aria-label": "Scroll to latest",
+                                                    style: "width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;background:transparent;color:#998f87;",
+                                                    {crate::product_shell::icon("ArrowDown", 19)}
+                                                }
+                                                button {
+                                                    r#type: "button",
+                                                    "data-action": "composer-reset",
+                                                    "aria-label": "Reset",
+                                                    style: "width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;background:transparent;color:#998f87;",
+                                                    {crate::product_shell::icon("MagicWand", 19)}
+                                                }
+                                            }
+                                            button {
+                                                class: "st-button",
+                                                r#type: "button",
+                                                "data-component": "button",
+                                                "data-variant": "primary",
+                                                "data-size": "md",
+                                                "data-action": "send",
+                                                "aria-label": "Send",
+                                                title: "Send",
+                                                style: "display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:44px;min-height:36px;padding:4px 16px;border:none;border-radius:10px;color:#2a130b;background:#e38a62;font-size:13px;font-weight:500;",
+                                                span { "data-part": "label", "Send" }
+                                                span {
+                                                    "data-part": "icon",
+                                                    "data-position": "end",
+                                                    "aria-hidden": "true",
+                                                    {crate::product_shell::icon_fill("PaperPlaneRight", 16, "#2a130b")}
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             }
                         }
                     }
                 }
-            }
-            if let Some(code) = view.error_code.as_deref() {
-                div {
-                    "data-part": "error",
-                    role: "alert",
-                    style: "position:absolute;left:{pad}px;bottom:{composer_h}px;color:#f2b8b5;font-size:{font_px}px;",
-                    "{code}"
-                }
-            }
-            div {
-                class: "neoui-glass",
-                "data-neoui": "glass",
-                "data-part": "composer",
-                role: "region",
-                "aria-label": "Message composer",
-                "data-state": if view.streaming { "streaming" } else { "idle" },
-                style: "{composer_style}",
-                "{composer_label}"
-            }
             if overlay {
                 div {
                     class: "neoui-glass",

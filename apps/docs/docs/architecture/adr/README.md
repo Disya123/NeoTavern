@@ -4,6 +4,13 @@ editUrl: https://github.com/Disya123/NeoTavern/edit/main/docs/adr/README.md
 
 # Architecture Decision Records
 
+## ADR-0055: Experimental React UI oracle and renderer-neutral UiBlueprint pilot
+
+**Experimental / pilot only.** React fixture capture is build-time migration
+tooling, not a production renderer ABI; it is normalized into a
+renderer-neutral UiBlueprint. Full decision:
+[ADR-0055](0055-react-ui-oracle-blueprint-pilot.md).
+
 ## ADR-0054: Plugin frontend stays CONTAINED in WebSurface
 
 Plugin DOM islands and legacy `window.SillyTavern` are not rewritten into

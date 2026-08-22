@@ -1,0 +1,9 @@
+{
+  "json.schemas": [
+    {
+      "fileMatch": ["ui-blueprint-document*.json", "*blueprint*.json"],
+      "url": "./packages/contracts/schemas/ui-blueprint.schema.json"
+    }
+  ],
+  "json.validate.enable": true
+}

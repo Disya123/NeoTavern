@@ -1,0 +1,24 @@
+{
+  "surface": "chat",
+  "notes": "Required Theme SDK hooks from React ChatWorkspace / ChatHeader / ChatComposer / MessageBubble. Native must publish the same data-* so packed CSS and this compare can share one contract.",
+  "required": [
+    { "slot": "app.shell" },
+    { "component": "navigation-rail" },
+    { "part": "chat-wallpaper" },
+    { "component": "chat-view" },
+    { "component": "chat-panel" },
+    { "slot": "chat.header" },
+    { "part": "character-identity" },
+    { "component": "chat-viewport", "part": "canvas" },
+    { "part": "chat-scroll" },
+    { "component": "chat-message", "min": 1 },
+    { "component": "message-action-bar" },
+    { "part": "message-header" },
+    { "part": "message-author" },
+    { "slot": "chat.composer" },
+    { "part": "toolbar" },
+    { "part": "field" },
+    { "component": "textarea" },
+    { "action": "send" }
+  ]
+}

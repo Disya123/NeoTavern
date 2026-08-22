@@ -1,0 +1,79 @@
+{
+  "$schema": "https://neotavern.dev/schemas/ui-blueprint.v1.json",
+  "format": "neotavern.ui-blueprint.v1",
+  "id": "character-manager",
+  "root": {
+    "nodeId": "character-manager",
+    "component": "CharacterManager",
+    "recipe": "character-manager",
+    "stateSlots": [],
+    "actions": [],
+    "children": [
+      {
+        "nodeId": "character-tabs",
+        "component": "CharacterTabs",
+        "recipe": "tabs",
+        "stateSlots": [],
+        "actions": [{ "id": "tabs.select", "parameter": "tab" }],
+        "children": []
+      },
+      {
+        "nodeId": "character-cards",
+        "component": "CharacterCards",
+        "recipe": "character-collection",
+        "stateSlots": [],
+        "actions": [],
+        "children": [
+          {
+            "nodeId": "character-toolbar",
+            "component": "CharacterToolbar",
+            "recipe": "character-toolbar",
+            "stateSlots": [],
+            "actions": [{ "id": "characters.create" }, { "id": "characters.import" }],
+            "children": []
+          },
+          {
+            "nodeId": "character-search",
+            "component": "CharacterSearch",
+            "recipe": "search-field",
+            "stateSlots": [],
+            "actions": [{ "id": "characters.search", "parameter": "query" }],
+            "children": []
+          },
+          {
+            "nodeId": "character-view-toggle",
+            "component": "CharacterViewToggle",
+            "recipe": "view-toggle",
+            "stateSlots": [],
+            "actions": [{ "id": "characters.view.set", "parameter": "view" }],
+            "children": []
+          },
+          {
+            "nodeId": "character-card",
+            "component": "CharacterCard",
+            "recipe": "character-card",
+            "stateSlots": [],
+            "actions": [{ "id": "characters.select", "parameter": "characterId" }],
+            "children": []
+          }
+        ]
+      }
+    ]
+  },
+  "responsive": [
+    { "viewportClass": "compact", "layout": "compact-panel" },
+    { "viewportClass": "medium", "layout": "rail-overlay-panel" },
+    { "viewportClass": "expanded", "layout": "rail-resizable-panel" }
+  ],
+  "bindings": [
+    { "nodeId": "character-card", "expression": "characters.items[*]" },
+    { "nodeId": "character-cards", "expression": "characters.items" },
+    { "nodeId": "character-search", "expression": "characters.query" },
+    { "nodeId": "character-view-toggle", "expression": "characters.view" }
+  ],
+  "sourceFixtureIds": [
+    "character-manager.populated.compact",
+    "character-manager.populated.expanded",
+    "character-manager.populated.medium"
+  ]
+}

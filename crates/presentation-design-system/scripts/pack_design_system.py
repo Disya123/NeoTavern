@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 from urllib.parse import quote
 
@@ -24,6 +25,7 @@ ICONS = [
     "List",
     "SquaresFour",
     "Eye",
+    "EyeSlash",
     "X",
     "UsersThree",
     "ChatsCircle",
@@ -50,6 +52,19 @@ ICONS = [
     "PencilSimple",
     "ShieldCheck",
     "WarningCircle",
+    "GearSix",
+    "PaperPlaneRight",
+    "MagicWand",
+    "ArrowDown",
+    "Database",
+    "Flag",
+    "GitBranch",
+    "ArrowCounterClockwise",
+    "ClockCounterClockwise",
+    "ArrowUUpLeft",
+    "CaretLeft",
+    "CaretRight",
+    "ArrowClockwise",
 ]
 
 # (directory under apps/web/src, module filename)
@@ -68,6 +83,8 @@ MODULES = (
     ("components/ai-settings", "AiSettings.module.css"),
     ("pages", "PluginsPage.module.css"),
     ("components", "MessageMarkdown.module.css"),
+    ("components", "ChatWorkspace.module.css"),
+    ("components", "MessageBubble.module.css"),
 )
 
 BLITZ_NEUTRALIZE = """
@@ -203,24 +220,67 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   margin-inline-start: 0;
   height: 100%;
 }
-.AppShell_shell[data-sidebar='open'] .AppShell_main,
-.AppShell_shell[data-sidebar='open'] .AppShell_mainShifted {
+/* Compact (phone): the sidebar is a full-screen drawer positioned by the RSX
+   inline styles (`position:absolute;inset:0;width:100%`), so the chat
+   workspace (`show_chat` is false there) must not share space. Clean
+   desktop/split behavior needs NO `[data-sidebar='open']` layout override on
+   `.Sidebar_sidebar`/`.Sidebar_panelOpen` here: those rules were stretching the
+   non-compact sidebar to 100% and squeezing `.AppShell_mainShifted` to zero —
+   the empty-brown-chat bug. Left only a defensive hide for compact
+   `.AppShell_main` (which the RSX does not even emit while compact). */
+.AppShell_shell[data-sidebar='open'] .AppShell_main {
   display: none;
   width: 0;
   flex: none;
   overflow: hidden;
 }
-.AppShell_shell[data-sidebar='open'] .Sidebar_sidebar {
-  flex: 1 1 auto;
+/* ChatWorkspace: Blitz has no fixed/sticky/backdrop-filter. Keep the React
+   slot tree in flex flow so header + composer occupy chrome_metrics bands
+   instead of overlaying the viewport. */
+.ChatWorkspace_page,
+.ChatWorkspace_workspace,
+.ChatWorkspace_chatPanel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
   width: 100%;
+  height: 100%;
   min-width: 0;
+  min-height: 0;
 }
-.AppShell_shell[data-sidebar='open'] .Sidebar_panelOpen,
-.AppShell_shell[data-sidebar='open'] .Sidebar_panelOpen[data-state='closing'] {
-  max-width: none;
+.ChatWorkspace_wallpaper {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 0;
+  pointer-events: none;
+  filter: none;
+  transform: none;
+}
+.ChatWorkspace_chatHeader {
+  position: relative;
+  inset: auto;
+  flex: none;
+}
+.ChatWorkspace_viewport {
   flex: 1 1 auto;
-  min-width: 0;
-  width: auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.ChatWorkspace_scrollBody {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.ChatWorkspace_composerWrapper {
+  position: relative;
+  flex: none;
+}
+.ChatWorkspace_composer {
+  display: flex;
+  flex-direction: column;
 }
 .AppShell_skipLink,
 .Sidebar_railLabel,
@@ -671,6 +731,34 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
 }
 """
 
+# Appended LAST so these win the cascade over flattened module rules above
+# (the early BLITZ_NEUTRALIZE chat block loses same-specificity ties to the
+# later ChatWorkspace/AppShell module sections). Every literal is tied to a
+# React source: chrome_metrics() bands in presentation-dioxus-shell
+# (composer 174px desktop / 40 compact, product_path.rs) and the App Shell
+# flex row in AppShell.module.css. The composer needs no sticky fallback here:
+# the native RSX hoists `composer-sticky` out of the scroll viewport as a flex
+# sibling, so the canvas band always ends above the composer.
+LATE_BLITZ_FALLBACKS = """
+/* --- Late Blitz fallbacks (cascade winners; see rust-ui-style-port.md) --- */
+.AppShell_main,
+.AppShell_mainShifted {
+  position: relative;
+  flex: 1 1 0%;
+  min-width: 0;
+  width: auto;
+  height: 100%;
+  overflow: hidden;
+}
+.ChatWorkspace_workspace {
+  position: relative;
+  width: 100%;
+}
+.ChatWorkspace_viewport {
+  overflow: hidden;
+}
+"""
+
 DARK_ROOT = """
 :root {
   color-scheme: dark;
@@ -810,11 +898,13 @@ TOKENS = {
     "--st-control-height-large": "52px",
     "--st-control-height-sm": "40px",
     "--st-control-height-xs": "36px",
+    "--st-control-height-2xs": "32px",
     "--st-control-hit-min": "44px",
     "--st-shell-rail-width": "60px",
     "--st-shell-panel-width": "380px",
     "--st-shell-panel-min-width": "260px",
     "--st-shell-panel-max-width": "720px",
+    "--st-size-chat-column-max": "1080px",
     "--st-font-ui": "'Outfit Variable', sans-serif",
     "--st-font-mono": "'JetBrains Mono Variable', monospace",
     "--st-font-size-2xs": "0.6875rem",
@@ -824,6 +914,7 @@ TOKENS = {
     "--st-font-size-lg": "1.25rem",
     "--st-font-weight-medium": "500",
     "--st-font-weight-semibold": "600",
+    "--st-font-weight-bold": "700",
     "--st-line-height-body": "1.45",
     "--st-border-width": "1px",
     "--st-layer-panel": "100",
@@ -1268,7 +1359,7 @@ pub fn phosphor_path(name: &str) -> Option<&'static str> {
     (OUT / "icon-masks.css").write_text("\n".join(masks) + "\n", encoding="utf-8")
 
 
-def pack_css() -> None:
+def build_sheet() -> str:
     parts = [
         "/* Packed from packages/ui + App Shell / panel CSS modules (React golden). */",
         BLITZ_NEUTRALIZE,
@@ -1299,12 +1390,36 @@ def pack_css() -> None:
     # Last wins over module `position:fixed` / CSS masks. Token vars are already
     # flattened, so the button reset cannot punch out `border-radius: 10px`.
     sheet = rewrite_logical_props(f"{sheet}\n{BLITZ_NEUTRALIZE}")
+    sheet = rewrite_logical_props(f"{sheet}\n{LATE_BLITZ_FALLBACKS}")
+    return sheet
+
+
+def pack_css() -> None:
+    sheet = build_sheet()
     out = OUT / "product.css"
     out.write_text(sheet, encoding="utf-8")
     print(f"css {out.stat().st_size}")
 
 
+def check_css() -> int:
+    """CI gate: fail when the committed product.css drifts from the sources."""
+    out = OUT / "product.css"
+    if not out.exists():
+        print(f"check FAIL: {out} is missing — run `pnpm design:pack`")
+        return 1
+    if out.read_text(encoding="utf-8") != build_sheet():
+        print(
+            "check FAIL: generated/product.css is stale relative to "
+            "apps/web / packages/ui — run `pnpm design:pack` and commit"
+        )
+        return 1
+    print(f"check OK: generated/product.css is fresh ({out.stat().st_size} bytes)")
+    return 0
+
+
 def main() -> None:
+    if "--check" in sys.argv:
+        raise SystemExit(check_css())
     OUT.mkdir(parents=True, exist_ok=True)
     pack_fonts()
     pack_icons()

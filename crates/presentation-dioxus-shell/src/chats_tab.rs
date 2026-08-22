@@ -1,33 +1,87 @@
-//! Home / Chats rail panel: the open chat from Product Wire, not a page.
+//! Home / Chats rail panel: the real `chats.list` rows from Product Wire, not
+//! a page. A row tap opens that chat in the workspace; the `newChatAction`
+//! button creates one (`chats.create`); the search toolbar filters titles
+//! client-side. Structure/classes mirror the React component (`toolbar` /
+//! `searchControl` / `chatList` / `chatRow` / `chatLink` / `chatAvatar` /
+//! `chatCopy`).
 
 use dioxus_core::Element;
 use dioxus_core_macro::rsx;
 
-use crate::product_shell::{icon, management_shell, ProductShellView, CHATS_MANAGER_TITLE};
+use crate::product_shell::{
+    icon, icon_fill, management_shell, ChatCardView, ProductShellView, CHATS_MANAGER_TITLE,
+};
 
 pub fn chats_panel(view: &ProductShellView) -> Element {
-    let title = if view.chat.title.is_empty() {
-        "Live wire chat"
-    } else {
-        view.chat.title.as_str()
-    };
-    let count = view.chat.message_count;
     let body = rsx! {
+        // React `.toolbar`: search control over a bottom border. Typing is
+        // wired through the host keyboard focus (like the character search).
         div {
-            class: "ChatManagementPanel_list",
-            "data-part": "chat-list",
-            style: "padding:8px 16px;display:flex;flex-direction:column;gap:8px;",
-            button {
-                class: "ChatManagementPanel_chatCard",
-                r#type: "button",
-                "data-part": "chat-card",
-                "data-state": "selected",
+            class: "ChatManagementPanel_toolbar",
+            "data-part": "chat-toolbar",
+            style: "display:flex;padding:8px 16px;align-items:center;gap:8px;border-bottom:1px solid #39342f;",
+            label {
+                class: "ChatManagementPanel_searchControl",
+                style: "display:flex;flex-direction:row;align-items:center;gap:4px;padding:0 8px;min-height:44px;flex:1;min-width:0;border:1px solid #39342f;border-radius:8px;color:#998f87;background:#1e1b18;",
+                {icon_fill("MagnifyingGlass", 17, "#998f87")}
                 span {
-                    strong { "{title}" }
-                    span { "{count} messages" }
+                    class: "ChatManagementPanel_srOnly",
+                    style: "display:none;",
+                    "Search chats and messages…"
+                }
+                if view.chat_search.trim().is_empty() {
+                    span {
+                        "data-part": "placeholder",
+                        style: "color:#998f87;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;",
+                        "Search chats and messages…"
+                    }
+                }
+                input {
+                    r#type: "search",
+                    // Theme SDK hook for the native hit-rect snapshot
+                    // (`presentation_chat::hit_rects`).
+                    "data-component": "text-field",
+                    "data-part": "chat-search",
+                    placeholder: "Search chats and messages…",
+                    value: "{view.chat_search}",
+                    style: if view.chat_search.trim().is_empty() {
+                        "flex:1;min-width:0;background:transparent;border:none;outline:none;color:transparent;font-size:14px;"
+                    } else {
+                        "flex:1;min-width:0;background:transparent;border:none;outline:none;color:#f3eee8;font-size:14px;"
+                    }
                 }
             }
-            if view.chat.title.is_empty() && view.chat.message_count == 0 {
+        }
+        div {
+            class: "ChatManagementPanel_body",
+            "data-part": "chat-body",
+            style: "padding:8px 16px 16px;display:flex;flex-direction:column;gap:8px;",
+            // React `newChatAction`: primary sm `Button` with a Plus start
+            // icon (`chat:newChat`).
+            div {
+                class: "ChatManagementPanel_newChatAction",
+                "data-part": "chat-actions",
+                style: "display:flex;justify-content:flex-start;",
+                button {
+                    class: "st-button",
+                    r#type: "button",
+                    "data-component": "button",
+                    "data-variant": "primary",
+                    "data-size": "sm",
+                    "data-has-icon": "start",
+                    span { "data-part": "icon", "data-position": "start", "aria-hidden": "true", {icon_fill("Plus", 18, "#2a130b")} }
+                    span { "data-part": "label", "New chat" }
+                }
+            }
+            ul {
+                class: "ChatManagementPanel_chatList",
+                "data-part": "chat-list",
+                style: "display:flex;margin:0;padding:0;flex-direction:column;gap:4px;list-style:none;",
+                for (index, item) in view.chat_list.iter().enumerate() {
+                    li { "data-chat-index": "{index}", {chat_row(item, view.selected_chat_id.as_deref())} }
+                }
+            }
+            if view.chat_list.is_empty() {
                 div {
                     class: "ChatManagementPanel_emptyState",
                     {icon("ChatsCircle", 32)}
@@ -39,8 +93,8 @@ pub fn chats_panel(view: &ProductShellView) -> Element {
     };
     management_shell(
         view,
-        "chats-panel",
-        "chats-header",
+        "chat-management",
+        "chat-management-header",
         CHATS_MANAGER_TITLE,
         "ChatsCircle",
         None,
@@ -48,4 +102,36 @@ pub fn chats_panel(view: &ProductShellView) -> Element {
         "",
         body,
     )
+}
+
+fn chat_row(item: &ChatCardView, selected_id: Option<&str>) -> Element {
+    let state = if Some(item.id.as_str()) == selected_id {
+        "active"
+    } else {
+        "idle"
+    };
+    rsx! {
+        div {
+            class: "ChatManagementPanel_chatRow",
+            "data-component": "chat-item",
+            "data-state": "{state}",
+            span {
+                class: "ChatManagementPanel_chatLink",
+                "data-chat-id": "{item.id}",
+                span {
+                    class: "ChatManagementPanel_chatAvatar",
+                    "aria-hidden": "true",
+                    {icon("ChatsCircle", 20)}
+                }
+                span {
+                    class: "ChatManagementPanel_chatCopy",
+                    strong { "{item.title}" }
+                    span { "{item.message_count} messages" }
+                    if !item.character_label.is_empty() {
+                        span { class: "ChatManagementPanel_characterLabel", "{item.character_label}" }
+                    }
+                }
+            }
+        }
+    }
 }

@@ -14,6 +14,14 @@ export interface FloatingTabPanelProps {
   actions?: ReactNode;
   onClose: () => void;
   className?: string;
+  /** Optional migration-only metadata for renderer-neutral UI capture. */
+  uiCapture?: {
+    node: string;
+    component: string;
+    root?: string;
+    version?: string;
+    action?: string;
+  };
   children: ReactNode;
 }
 
@@ -31,6 +39,7 @@ export function FloatingTabPanel({
   actions,
   onClose,
   className,
+  uiCapture,
   children,
 }: FloatingTabPanelProps) {
   return (
@@ -38,6 +47,11 @@ export function FloatingTabPanel({
       className={cx(styles.root, className)}
       data-component={component}
       data-role="floating-tab-panel"
+      data-ui-node={uiCapture?.node}
+      data-ui-component={uiCapture?.component}
+      data-ui-root={uiCapture?.root}
+      data-ui-version={uiCapture?.version}
+      data-ui-action={uiCapture?.action}
     >
       <SidebarPanelHeader
         part={headerPart}

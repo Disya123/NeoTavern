@@ -6,9 +6,14 @@
 
 #![forbid(unsafe_code)]
 
+pub mod generated;
 pub mod v1;
 
+pub use generated::ui_blueprint_v1::UiBlueprintDocumentV1;
 pub use v1::{
-    compile_character_manager_v1, materialize_character_manager_scene_v1, BlueprintErrorV1,
-    CaptureBundleV1, UiBlueprintV1, UiSceneV1, ViewportClassV1,
+    compile_character_manager_v1, materialize_character_manager_scene_v1,
+    materialize_character_manager_scene_v1_from_document, materialize_chat_scene_v1_from_document,
+    BlueprintErrorV1, CaptureBundleV1, CharacterManagerStateV1, ChatSurfaceStateV1, UiActionV1,
+    UiBlueprintDocumentResponsiveItemLayoutV1, UiBlueprintV1, UiLabelOverrideV1, UiNodeOverridesV1,
+    UiSceneV1, UiStyleRefV1, ViewportClassV1,
 };

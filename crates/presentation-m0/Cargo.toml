@@ -15,7 +15,7 @@ default = []
 # Compiles the pinned Vello 0.9 renderer against wgpu 29. DX12 is left off so
 # this crate can share the workspace lockfile with Tauri (windows 0.61). The
 # Android production backend is Vulkan/GLES, which is what the probe builds.
-gpu = ["dep:vello", "dep:wgpu", "dep:pollster", "dep:bytemuck"]
+gpu = ["dep:vello", "dep:wgpu", "dep:pollster", "dep:bytemuck", "dep:neotavern-presentation-blueprint", "dep:image", "dep:serde_json"]
 # JNI exports for the debug-only M0D1aActivity. Not linked into production
 # libneotavern_android_jni.so.
 android-jni = ["gpu"]
@@ -25,7 +25,10 @@ renderdoc-capture = ["gpu", "dep:ash"]
 
 [dependencies]
 neotavern-neocompositor = { path = "../neocompositor" }
+neotavern-presentation-blueprint = { path = "../presentation-blueprint", optional = true }
 ash = { version = "0.38", optional = true, default-features = false }
+image = { version = "0.25", optional = true, default-features = false, features = ["png"] }
+serde_json = { version = "1", optional = true }
 bytemuck = { version = "1.25", optional = true, features = ["derive"] }
 pollster = { version = "0.4", optional = true }
 vello = { version = "0.9.0", optional = true, default-features = false, features = ["wgpu"] }
@@ -48,4 +51,9 @@ required-features = ["gpu"]
 [[bin]]
 name = "m0-d1b-probe"
 path = "src/bin/d1b.rs"
+required-features = ["gpu"]
+
+[[bin]]
+name = "cm-raster"
+path = "src/bin/cm-raster.rs"
 required-features = ["gpu"]
