@@ -6,7 +6,7 @@ html, body, #main, #root {
   margin: 0;
   padding: 0;
   height: 100%;
-  background: #151311;
+  background: transparent;
   color: #f3eee8;
   font-family: 'Outfit Variable', sans-serif;
   font-size: 16px;
@@ -925,13 +925,13 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   }
 
   ::selection {
-    background: rgb(83, 55, 41);
+    background: rgba(227, 138, 98, 0.3);
   }
 
   /* Custom Scrollbar System (Themeable via CSS Variables) */
   * {
     scrollbar-width: thin;
-    scrollbar-color: rgb(56, 51, 47) transparent;
+    scrollbar-color: rgba(98, 90, 83, 0.45) transparent;
   }
 
   ::-webkit-scrollbar {
@@ -944,7 +944,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   }
 
   ::-webkit-scrollbar-thumb {
-    background: rgb(56, 51, 47);
+    background: rgba(98, 90, 83, 0.45);
     border-radius: 999px;
     border: 2px solid transparent;
     background-clip: padding-box;
@@ -952,7 +952,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: rgb(155, 96, 70);
+    background: rgba(227, 138, 98, 0.65);
     background-clip: padding-box;
   }
 
@@ -1152,7 +1152,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   [data-component='dialog-overlay'] {
     position: relative;
     inset: 0;
-    background: rgb(21, 19, 17);
+    background: rgba(21, 19, 17, 0.64);
     
     z-index: 1000;
     animation: st-fade-in 320ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -1243,18 +1243,17 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
      bottom at the overlay breakpoint (Sidebar.module.css, 600px). Themes
      override the `order` in the `theme` layer to opt out or to move tab
      lists in other contexts (e.g. dialogs). */
-  
+  :root[data-ui-compact='true'] 
     [data-component='navigation-panel'] [data-component='tabs'] > [data-component='tabs-list'],
     [data-component='navigation-panel']
       [data-component='tabs-scroll-content']
       > [data-component='tabs-list'] {
       order: 2;
-    }
+    }:root[data-ui-compact='true'] 
     [data-component='navigation-panel'] [data-component='tabs-list'][data-variant='underline'] {
       border-bottom: 0;
       border-top: 1px solid #39342f;
     }
-  
   [data-component='tabs-list'][data-layout='equal'] {
     display: grid;
     grid-auto-flow: column;
@@ -1532,10 +1531,10 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
       opacity 320ms cubic-bezier(0.22, 1, 0.36, 1);
   }
   [data-component='scroll-scrollbar'][data-state='visible'] [data-component='scroll-thumb'] {
-    background: rgb(56, 51, 47);
+    background: rgba(98, 90, 83, 0.45);
   }
   [data-component='scroll-scrollbar'][data-state='visible']:hover [data-component='scroll-thumb'] {
-    background: rgb(155, 96, 70);
+    background: rgba(227, 138, 98, 0.65);
   }
 
   /* Tooltip --------------------------------------------------------------- */
@@ -1766,11 +1765,11 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   }
   [data-component='badge'][data-tone='success'] {
     color: #63c98d;
-    background: rgb(30, 41, 32);
+    background: rgba(99, 201, 141, 0.12);
   }
   [data-component='badge'][data-tone='danger'] {
     color: #f0837d;
-    background: rgb(47, 32, 30);
+    background: rgba(240, 131, 125, 0.12);
   }
   [data-component='badge'] [data-part='icon'] {
     display: inline-flex;
@@ -1817,7 +1816,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     font: inherit;
   }
 
-  
+  :root[data-ui-compact='true'] 
     [data-component='dialog-content'] {
       top: auto;
       bottom: 0;
@@ -1828,7 +1827,6 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
       padding: 24px 16px max(24px, var(--nt-inset-bottom));
       transform: none;
     }
-  
 
   /* Shared loading shimmer (DUP-24): single replacement for the per-page
      skeleton keyframes clones. Duration follows the motion tokens, so
@@ -1973,8 +1971,8 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   :root[data-ui-contrast='high'] body {
     --st-color-text-secondary: #f3eee8;
     --st-color-text-muted: #f3eee8;
-    --st-color-border: rgb(143, 139, 135);
-    --st-color-border-strong: rgb(203, 199, 193);
+    --st-color-border: rgba(243, 238, 232, 0.55);
+    --st-color-border-strong: rgba(243, 238, 232, 0.82);
     --st-shadow-focus: 0 0 0 3px #f3eee8;
   }
 
@@ -2173,8 +2171,8 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     padding: 12px 12px;
     border: 1px solid #39342f;
     border-radius: 16px;
-    background: rgb(38, 34, 32);
-    box-shadow: inset 0 1px 0 rgb(22, 19, 17);
+    background: rgba(41, 37, 34, 0.86);
+    box-shadow: inset 0 1px 0 rgba(33, 27, 23, 0.06);
   }
 
   :root[data-chat-style='cards'] [data-component='chat-panel'] {
@@ -2196,8 +2194,8 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     padding: 12px 12px;
     border: 1px solid #39342f;
     border-radius: 16px;
-    background: rgb(38, 34, 31);
-    box-shadow: inset 0 1px 0 rgb(22, 19, 17);
+    background: rgba(41, 37, 34, 0.84);
+    box-shadow: inset 0 1px 0 rgba(33, 27, 23, 0.06);
   }
 
   :root[data-chat-style='bubbles']
@@ -2205,13 +2203,13 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     [data-part='message-body'] {
     margin-left: auto;
     border-color: rgb(105, 76, 61);
-    background: rgb(54, 34, 27);
+    background: rgba(73, 42, 32, 0.64);
   }
 
   /* Document: continuous prose separated by quiet rules. */
   :root[data-chat-style='document'] [data-component='chat-message'] {
     padding-top: 12px; padding-bottom: 12px;
-    border-bottom: 1px solid rgb(36, 33, 30);
+    border-bottom: 1px solid rgba(57, 52, 47, 0.42);
   }
 
   :root[data-chat-style='document'] [data-part='message-content'] {
@@ -2228,9 +2226,9 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     padding: calc(12px * 1.25) calc(12px * 1.25);
     border: 1px solid #39342f;
     border-radius: 28px;
-    background: rgb(38, 34, 32);
+    background: rgba(41, 37, 34, 0.86);
     box-shadow:
-      inset 0 1px 0 rgb(22, 19, 17),
+      inset 0 1px 0 rgba(33, 27, 23, 0.06),
       0 1px 2px rgba(0, 0, 0, 0.35);
   }
 
@@ -2263,8 +2261,8 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     padding: 8px 12px;
     border: 1px solid #39342f;
     border-radius: 16px;
-    background: rgb(38, 34, 31);
-    box-shadow: inset 0 1px 0 rgb(22, 19, 17);
+    background: rgba(41, 37, 34, 0.84);
+    box-shadow: inset 0 1px 0 rgba(33, 27, 23, 0.06);
   }
 
   :root[data-chat-style='paragraphs']
@@ -2275,7 +2273,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     > p {
     margin-left: auto;
     border-color: rgb(105, 76, 61);
-    background: rgb(54, 34, 27);
+    background: rgba(73, 42, 32, 0.64);
   }
 
   /* Generic user & character message body position overrides */
@@ -2354,7 +2352,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     margin-top: 8px;
     border: 1px solid #39342f;
     border-radius: 16px;
-    background: rgb(38, 34, 32);
+    background: rgba(41, 37, 34, 0.86);
   }
 
   :root[data-chat-avatar-style='portrait']
@@ -2407,7 +2405,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     margin-top: 8px;
     border: 1px solid #39342f;
     border-radius: 16px;
-    background: rgb(38, 34, 32);
+    background: rgba(41, 37, 34, 0.86);
     flex-direction: column;
   }
 
@@ -2445,44 +2443,43 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     padding-left: 0;
   }
 
-  
+  :root[data-ui-compact='true'] 
     :root[data-chat-style] [data-component='chat-panel'] {
       --chat-content-inline-inset: 4px;
-    }
+    }:root[data-ui-compact='true'] 
 
     :root[data-chat-style='bubbles'] [data-component='chat-panel'] {
       --st-chat-markdown-column-width: 90%;
-    }
+    }:root[data-ui-compact='true'] 
 
     :root[data-chat-style='cards'] [data-component='chat-message'] {
       padding: 12px 12px;
-    }
+    }:root[data-ui-compact='true'] 
 
     :root[data-chat-avatar-style='portrait']
       [data-component='chat-message'][data-role='assistant']
       [data-part='message-frame'] {
       min-height: calc(52px * 2.6);
-    }
+    }:root[data-ui-compact='true'] 
 
     :root[data-chat-avatar-style='portrait']
       [data-component='chat-message'][data-role='assistant']
       [data-part='message-body'] {
       padding-right: calc(38% + 8px);
-    }
+    }:root[data-ui-compact='true'] 
 
     :root[data-chat-avatar-style='portrait']
       [data-component='chat-message'][data-role='assistant']
       [data-part='message-art'] {
       width: 40%;
       max-height: calc(52px * 4.5);
-    }
+    }:root[data-ui-compact='true'] 
 
     :root[data-chat-avatar-style='banner']
       [data-component='chat-message'][data-role='assistant']
       [data-part='message-art'] {
       height: calc(52px * 2.35);
     }
-  
 
 
 
@@ -2501,7 +2498,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     height: 100%;
     overflow: hidden;
     color: #f3eee8;
-    background: #151311;
+    background: transparent;
   }
 
   .AppShell_skipLink {
@@ -2547,7 +2544,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     border: 1px solid rgb(149, 113, 72);
     border-radius: 10px;
     color: #f3eee8;
-    background: rgb(40, 36, 33);
+    background: rgba(41, 37, 34, 0.94);
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.26);
     
     pointer-events: auto;
@@ -2560,7 +2557,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     min-height: 0;
     overflow: hidden;
     margin-left: 60px;
-    background: rgb(27, 25, 23);
+    background: rgba(27, 25, 23, 0.7);
     transition: margin-inline-start 320ms
       cubic-bezier(0.22, 1, 0.36, 1);
   }
@@ -2573,7 +2570,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     min-height: 0;
     overflow: hidden;
     margin-left: 60px;
-    background: rgb(27, 25, 23);
+    background: rgba(27, 25, 23, 0.7);
     transition: margin-inline-start 320ms
       cubic-bezier(0.22, 1, 0.36, 1);
   
@@ -2619,12 +2616,11 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     pointer-events: auto;
   }
 
-  
+  :root[data-ui-compact='true'] 
     .AppShell_main,
     .AppShell_mainShifted {
       margin-left: 60px;
     }
-  
 
 
 
@@ -2655,7 +2651,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     align-items: center;
     gap: 4px;
     border-right: 1px solid #39342f;
-    background: rgb(21, 19, 17);
+    background: rgba(21, 19, 17, 0.7);
     
     pointer-events: auto;
     transition:
@@ -2696,7 +2692,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   .Sidebar_railBottom > [data-item='menu-toggle']:first-child + [data-part='item'] {
     margin-top: 4px;
     padding-top: 8px;
-    border-top: 1px solid rgb(38, 35, 31);
+    border-top: 1px solid rgba(57, 52, 47, 0.48);
   }
 
   /* Keep the toggle in the title band on desktop (inset is 0). On Android
@@ -2714,7 +2710,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   .Sidebar_rail[data-state='expanded'][data-leading-menu-toggle='true']
     .Sidebar_railMain
     > [data-item='menu-toggle']:first-child {
-    border-bottom: 1px solid rgb(38, 35, 31);
+    border-bottom: 1px solid rgba(57, 52, 47, 0.48);
   }
 
   .Sidebar_rail[data-leading-menu-toggle='true']
@@ -2817,7 +2813,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
 
   .Sidebar_railButtonActive {
     color: #ffc4a8;
-    border-color: rgb(72, 49, 37);
+    border-color: rgba(227, 138, 98, 0.25);
     background: #492a20;
   }
 
@@ -2843,7 +2839,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     flex-direction: column;
     border-right: 1px solid #39342f;
     color: #f3eee8;
-    background: rgb(36, 33, 30);
+    background: rgba(36, 33, 30, 0.7);
     
     pointer-events: auto;
     animation: navigation-panel-enter 320ms
@@ -2963,9 +2959,9 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     z-index: 100;
     inset: auto;
     margin: var(--management-tabs-edge-inset) 16px 8px;
-    border-color: rgb(76, 70, 65);
+    border-color: rgba(98, 90, 83, 0.72);
     border-radius: 16px;
-    background: rgb(38, 34, 32);
+    background: rgba(41, 37, 34, 0.86);
     
   }
 
@@ -3048,7 +3044,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     justify-content: space-between;
     border-color: #39342f;
     color: #c5bbb2;
-    background: rgb(32, 30, 27);
+    background: rgba(48, 44, 40, 0.42);
   }
 
   .Sidebar_settingRow strong {
@@ -3064,7 +3060,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   .Sidebar_openPage {
     justify-content: space-between;
     margin-top: 8px;
-    border-color: rgb(79, 52, 40);
+    border-color: rgba(227, 138, 98, 0.28);
     color: #ffc4a8;
     background: #492a20;
   }
@@ -3278,7 +3274,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     border: 1px solid #39342f;
     border-radius: 10px;
     color: #f3eee8;
-    background: rgb(37, 34, 30);
+    background: rgba(48, 44, 40, 0.58);
   }
 
   .Sidebar_switchRow input {
@@ -3366,7 +3362,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   }
 
   .Sidebar_themeChoice[data-state='active'] {
-    border-color: rgb(103, 67, 49);
+    border-color: rgba(227, 138, 98, 0.4);
     background: #492a20;
   }
 
@@ -3377,15 +3373,15 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
 
   
 
-  
+  :root[data-ui-compact='true'] 
     .Sidebar_sidebar {
       z-index: 1000;
-    }
+    }:root[data-ui-compact='true'] 
 
     .Sidebar_rail {
       background: #151311;
       
-    }
+    }:root[data-ui-compact='true'] 
 
     .Sidebar_backdrop {
       position: relative;
@@ -3393,37 +3389,37 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
       inset: 0;
       display: block;
       border: 0;
-      background: rgb(21, 19, 17);
+      background: rgba(21, 19, 17, 0.52);
       
       pointer-events: auto;
       animation: navigation-backdrop-enter 320ms
         cubic-bezier(0.22, 1, 0.36, 1) both;
-    }
+    }:root[data-ui-compact='true'] 
 
     .Sidebar_backdrop[data-state='closing'] {
       pointer-events: none;
       animation-name: navigation-backdrop-exit;
-    }
+    }:root[data-ui-compact='true'] 
 
     .Sidebar_rail,
     .Sidebar_rail[data-leading-menu-toggle='true'] {
       padding-top: max(32px, var(--nt-inset-top));
       padding-bottom: max(32px, var(--nt-inset-bottom));
-    }
+    }:root[data-ui-compact='true'] 
 
     .Sidebar_panelOpen {
       width: calc(100% - 60px);
       padding-top: 0;
       padding-bottom: max(32px, var(--nt-inset-bottom));
-    }
+    }:root[data-ui-compact='true'] 
 
     .Sidebar_panelBodyContent {
       padding-bottom: max(32px, var(--nt-inset-bottom));
-    }
+    }:root[data-ui-compact='true'] 
 
     [data-role='floating-tab-panel'] [data-component='tabs'] {
       --management-tabs-edge-inset: max(32px, var(--nt-inset-bottom));
-    }
+    }:root[data-ui-compact='true'] 
 
     [data-role='floating-tab-panel'] [data-component='tabs-list'][data-variant='segment'] {
       position: relative;
@@ -3432,18 +3428,17 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
       left: auto; right: auto;
       margin: 8px 16px var(--management-tabs-edge-inset);
       margin-top: auto;
-    }
+    }:root[data-ui-compact='true'] 
 
     [data-role='floating-tab-panel'] [data-part='floating-tab-content']::before {
       flex-basis: 0;
-    }
+    }:root[data-ui-compact='true'] 
 
     [data-role='floating-tab-panel'] [data-part='floating-tab-content']::after {
       display: block;
       flex: 0 0 var(--management-tabs-safe-offset);
       content: '';
     }
-  
 
   @media (prefers-reduced-motion: reduce) {
     .Sidebar_rail,
@@ -3562,7 +3557,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   }
 
   .Sidebar_actionButtonPrimary {
-    border-color: rgb(103, 67, 49);
+    border-color: rgba(227, 138, 98, 0.4);
     color: #ffc4a8;
     background: #492a20;
   }
@@ -3614,7 +3609,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
 
   .Sidebar_caretBtn:hover {
     color: #f3eee8;
-    background: rgb(21, 19, 17);
+    background: rgba(21, 19, 17, 0.5);
   }
 
   .Sidebar_savedKeysDropdownMenu {
@@ -3706,7 +3701,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     gap: 12px;
     padding: var(--nt-inset-top) 16px 8px;
     border-bottom: 0;
-    background: rgb(36, 33, 30);
+    background: rgba(36, 33, 30, 0.7);
     
   }
 
@@ -3787,14 +3782,13 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     transform: scale(0.94);
   }
 
-  
+  :root[data-ui-compact='true'] 
     .SidebarPanelHeader_header {
       min-height: calc(
         52px + max(32px, var(--nt-inset-top))
       );
       padding-top: max(32px, var(--nt-inset-top));
     }
-  
 
   @media (prefers-reduced-motion: reduce) {
     .SidebarPanelHeader_close {
@@ -5958,7 +5952,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   .BackgroundsPanel_skeleton {
     height: 7.5rem;
     border-radius: 28px;
-    background: rgb(22, 19, 17);
+    background: rgba(33, 27, 23, 0.06);
   }
 
 
@@ -6536,7 +6530,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     align-items: center;
     width: fit-content;
     padding: 0 8px;
-    border: 1px solid rgb(93, 61, 45);
+    border: 1px solid rgba(227, 138, 98, 0.35);
     border-radius: 999px;
     color: #e38a62;
     background: #492a20;
@@ -7001,7 +6995,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     padding: 8px;
     border: 1px solid #f0837d;
     color: #f0837d;
-    background: rgb(39, 28, 26);
+    background: rgba(240, 131, 125, 0.08);
     font-size: 0.8125rem;
   }
 
@@ -7383,7 +7377,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   .AiSettings_promptRowControls button:hover,
   .AiSettings_keyboardMoveActions button:hover {
     color: #f3eee8;
-    background: rgb(25, 23, 21);
+    background: rgba(27, 25, 23, 0.72);
   }
 
   .AiSettings_promptToggle:active,
@@ -7693,12 +7687,12 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
 
   .PluginsPage_notice {
     color: #63c98d;
-    background: rgb(29, 37, 29);
+    background: rgba(99, 201, 141, 0.1);
   }
 
   .PluginsPage_error {
     color: #f0837d;
-    background: rgb(43, 30, 28);
+    background: rgba(240, 131, 125, 0.1);
   }
 
   .PluginsPage_runtimeNote {
@@ -7976,7 +7970,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     padding: 4px 8px;
     border-radius: 999px;
     color: #e0a35c;
-    background: rgb(41, 33, 24);
+    background: rgba(224, 163, 92, 0.1);
     font-size: 0.8125rem;
   }
 
@@ -8119,7 +8113,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     padding-left: 12px;
     border-left: 2px solid #e8943a;
     color: #c5bbb2;
-    background: rgb(36, 33, 30);
+    background: rgba(48, 44, 40, 0.55);
   }
 
   /* ST1: "dialogue" → <q>, colored via Quote token (default amber/yellow). */
@@ -8287,7 +8281,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     padding-left: 16px; padding-right: 16px;
     isolation: isolate;
     grid-template-rows: minmax(0, 1fr);
-    background: rgb(36, 33, 30);
+    background: rgba(36, 33, 30, 0.7);
   }
 
   .ChatWorkspace_viewport {
@@ -8371,10 +8365,10 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     align-items: center; justify-content: center;
     width: 56px;
     height: 56px;
-    border: 1px solid rgb(46, 42, 38);
+    border: 1px solid rgba(57, 52, 47, 0.7);
     border-radius: 20px;
     color: #ffc4a8;
-    background: rgb(35, 32, 29);
+    background: rgba(41, 37, 34, 0.7);
     
   }
 
@@ -8408,8 +8402,8 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     gap: 8px;
     padding-top: var(--nt-inset-top);
     padding-left: 8px; padding-right: 8px;
-    border-bottom: 1px solid rgb(38, 35, 31);
-    background: rgb(36, 33, 30);
+    border-bottom: 1px solid rgba(57, 52, 47, 0.48);
+    background: rgba(36, 33, 30, 0.7);
     
   }
 
@@ -8466,7 +8460,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
 
   .ChatWorkspace_headerSearch:hover {
     color: #f3eee8;
-    background: rgb(22, 20, 17);
+    background: rgba(33, 27, 23, 0.07);
   }
 
   .ChatWorkspace_headerSearch:active {
@@ -8507,9 +8501,9 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    border: 1px solid rgb(22, 20, 18);
+    border: 1px solid rgba(33, 27, 23, 0.1);
     border-radius: 28px;
-    background: rgb(21, 19, 17);
+    background: rgba(21, 19, 17, 0.7);
     
   }
 
@@ -8521,14 +8515,14 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     min-height: 42px;
     padding: 0 16px;
     box-sizing: border-box;
-    border-bottom: 1px solid rgb(22, 20, 17);
-    background: rgb(21, 19, 17);
+    border-bottom: 1px solid rgba(33, 27, 23, 0.08);
+    background: rgba(21, 19, 17, 0.7);
   }
 
   .ChatWorkspace_contextPanelSlot {
     overflow: hidden;
     max-height: 0;
-    border-bottom: 1px solid rgb(22, 20, 17);
+    border-bottom: 1px solid rgba(33, 27, 23, 0.08);
     transition: max-height 320ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
@@ -8562,10 +8556,10 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     height: 32px;
     gap: 4px;
     padding: 0 8px;
-    border: 1px solid rgb(22, 20, 18);
+    border: 1px solid rgba(33, 27, 23, 0.1);
     border-radius: 999px;
     color: #c5bbb2;
-    background: rgb(22, 19, 17);
+    background: rgba(33, 27, 23, 0.05);
     transition:
       color 180ms cubic-bezier(0.22, 1, 0.36, 1),
       background 180ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -8588,7 +8582,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   .ChatWorkspace_contextTrigger:hover,
   .ChatWorkspace_iconButton:hover {
     color: #f3eee8;
-    background: rgb(22, 20, 18);
+    background: rgba(33, 27, 23, 0.1);
   }
 
   .ChatWorkspace_menuButton:active,
@@ -8605,7 +8599,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     flex-direction: column;
     padding: 12px 16px 8px;
     box-sizing: border-box;
-    background: rgb(36, 33, 30);
+    background: rgba(36, 33, 30, 0.7);
   }
 
   .ChatWorkspace_composerField [data-component='textarea'] {
@@ -8664,7 +8658,7 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
   .ChatWorkspace_composerUtilities button:hover,
   .ChatWorkspace_extraActions button:hover {
     color: #f3eee8;
-    background: rgb(22, 20, 18);
+    background: rgba(33, 27, 23, 0.1);
   }
 
   .ChatWorkspace_composerUtilities button:active,
@@ -8687,33 +8681,33 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     white-space: nowrap;
   }
 
-  
+  :root[data-ui-compact='true'] 
     .ChatWorkspace_chatHeader {
       border-bottom: 0;
       min-height: calc(
         52px + max(32px, var(--nt-inset-top))
       );
       padding-top: max(32px, var(--nt-inset-top));
-    }
+    }:root[data-ui-compact='true'] 
 
     .ChatWorkspace_chatHeader::after {
       position: absolute;
       bottom: 0;
       left: 4px; right: 4px;
-      border-bottom: 1px solid rgb(38, 35, 31);
+      border-bottom: 1px solid rgba(57, 52, 47, 0.48);
       content: '';
       pointer-events: none;
-    }
+    }:root[data-ui-compact='true'] 
 
     :root[data-navigation-rail-state='collapsed'] .ChatWorkspace_chatHeader {
       padding-left: calc(60px - 8px);
-    }
+    }:root[data-ui-compact='true'] 
 
     .ChatWorkspace_chatPanel {
       padding-left: 8px; padding-right: 8px;
       --chat-composer-edge-inset: max(32px, var(--nt-inset-bottom));
       --chat-content-inline-inset: 12px;
-    }
+    }:root[data-ui-compact='true'] 
 
     .ChatWorkspace_scrollBody {
       padding-top: calc(
@@ -8721,33 +8715,32 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
             8px
         ); padding-bottom: 12px;
       padding-left: var(--chat-content-inline-inset); padding-right: var(--chat-content-inline-inset);
-    }
+    }:root[data-ui-compact='true'] 
 
     .ChatWorkspace_composerWrapper {
       padding-left: var(--chat-content-inline-inset); padding-right: var(--chat-content-inline-inset);
-    }
+    }:root[data-ui-compact='true'] 
 
     .ChatWorkspace_menuButton span,
     .ChatWorkspace_sendSlot [data-component='button'] span {
       display: none;
-    }
+    }:root[data-ui-compact='true'] 
 
     .ChatWorkspace_composerField {
       min-height: 104px;
-    }
+    }:root[data-ui-compact='true'] 
 
     .ChatWorkspace_sendSlot [data-component='button'] {
       width: 52px;
       min-width: 52px;
       padding: 0;
       font-size: 0;
-    }
+    }:root[data-ui-compact='true'] 
 
     .ChatWorkspace_sendSlot [data-component='button'] svg {
       width: 20px;
       height: 20px;
     }
-  
 
   @media (prefers-reduced-motion: reduce) {
     .ChatWorkspace_viewport {
@@ -8883,10 +8876,10 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     min-width: 32px;
     min-height: 32px;
     gap: 4px;
-    border: 1px solid rgb(22, 20, 18);
+    border: 1px solid rgba(33, 27, 23, 0.1);
     border-radius: 999px;
     color: #c5bbb2;
-    background: rgb(30, 28, 25);
+    background: rgba(36, 33, 30, 0.62);
     cursor: pointer;
   }
 
@@ -8960,10 +8953,10 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     min-width: calc(32px + (4px * 2) + 2px);
     height: calc(32px + (4px * 2) + 2px);
     padding: 0;
-    border: 1px solid rgb(22, 20, 18);
+    border: 1px solid rgba(33, 27, 23, 0.1);
     border-radius: 999px;
     color: #c5bbb2;
-    background: rgb(30, 28, 25);
+    background: rgba(36, 33, 30, 0.62);
     cursor: pointer;
   }
 
@@ -8999,10 +8992,10 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     flex-direction: column;
     gap: 8px;
     padding: 12px;
-    border: 1px solid rgb(22, 20, 18);
+    border: 1px solid rgba(33, 27, 23, 0.1);
     border-radius: 16px;
-    background: rgb(32, 29, 26);
-    box-shadow: inset 0 1px 0 rgb(22, 20, 17);
+    background: rgba(36, 33, 30, 0.72);
+    box-shadow: inset 0 1px 0 rgba(33, 27, 23, 0.08);
   }
 
   .MessageBubble_editor textarea {
@@ -9079,22 +9072,21 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
     }
   }
 
-  
+  :root[data-ui-compact='true'] 
     .MessageBubble_rowUser,
     .MessageBubble_rowAssistant {
       padding-top: 8px; padding-bottom: 8px;
-    }
+    }:root[data-ui-compact='true'] 
 
     .MessageBubble_messageHeader {
       gap: 8px;
-    }
+    }:root[data-ui-compact='true'] 
 
     /* Mobile compact header (pencil + ellipsis) meets the 44px touch target. */
     .MessageBubble_actionBar[data-part='message-actions-compact'] .MessageBubble_actionButton {
       min-width: 44px;
       min-height: 44px;
     }
-  
 
   /* Independent message side positions for user and character/assistant. */
   :root[data-user-message-position='left'] .MessageBubble_rowUser .MessageBubble_messageHeader {
@@ -9164,7 +9156,7 @@ html, body, #main, #root {
   margin: 0;
   padding: 0;
   height: 100%;
-  background: #151311;
+  background: transparent;
   color: #f3eee8;
   font-family: 'Outfit Variable', sans-serif;
   font-size: 16px;
@@ -9818,4 +9810,21 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
 }
 .ChatWorkspace_viewport {
   overflow: hidden;
+}
+/* Blitz stacking-context hoisting paints out-of-flow nodes with a stale
+   position: a `position: absolute` node is hoisted to its stacking-context
+   ancestor on the FIRST layout and its paint position is not recomputed on
+   relayout — the chat header kept the 1424-wide coordinates (456/472) after
+   resizing to 1920 while in-flow subtrees relaid out fine (traced via
+   NEOTA_TEXT_TRACE: the header subtree painted with parent_tx=440 vs 640
+   for the viewport). NOTE: in this Blitz build packed class rules beat
+   inline styles, so this late override — not the RSX inline — is what
+   counts. The native chat bands are plain flex rows: `position: relative`
+   keeps the header in-flow (no hoist, fresh layout positions) and
+   `z-index: auto` drops the stacking context entirely. They don't need
+   stacking (no overlap with the viewport bands). */
+.ChatWorkspace_chatHeader,
+.ChatWorkspace_composerWrapper {
+  position: relative;
+  z-index: auto;
 }

@@ -239,6 +239,51 @@ native-дампом, иначе виртуализация сравнивает 
   считает не от того containing block; центрирование >1080px нативно
   сознательно не эмулируется.
 
+### Stacking context (z-index) — хостинг крашит позицию
+
+Blitz хойстит `z-index > 0` узлы в stacking context родителя (`draw_children` →
+`pos_z_hoisted_children`) и рисует их с `parent_style_transform.pre_translate(pos)`,
+где `pos` — поле stacking context, которое **не заполняется**: хостированный узел
+рисуется в (0,0) контекста плюс свой `final_layout.location`. Пока корень
+контекста сидит в (0,0) (например, rail с `z-index: 40` внутри shell) — не
+видно; как только родитель позиционирован (chat-view/page на x=440), хостированные
+дети уезжают: заголовок и композер рисовались на `440 + own_loc` вместо
+`440 + 200 (workspace) + 0 (panel) + own_loc` — композер визуально уезжал влево,
+«изображения (аватары) поверх всего», send не в своей колонке на FullHD. Лечение:
+`LATE_BLITZ_FALLBACKS` обнуляет `z-index` у `.ChatWorkspace_chatHeader` и
+`.ChatWorkspace_composerWrapper` (стек в нативном flex-flow не нужен; проверено
+на 1920×1080, 1560×900, 1424×714, 1100×820 и legacy-пути).
+
+**Обновление (vendor-фикс):** трассировка `NEOTA_TEXT_TRACE` показала, что
+z-index — не единственный источник. Хойстнутые поддеревья (включая
+blueprint-хедер с упакованным `position: absolute`) красятся от позиции,
+**сохранённой при первой раскладке**: после resize 1424→1920 хедер оставался на
+456/472 (parent_tx=440), пока viewport перекладывался на 656/672. Ни `z-index:
+auto`, ни `position: relative` в CSS это не чинят — хойст-структура не
+пере-якорится. Фикс в `crates/vendor/blitz-paint/src/render.rs`
+(`fresh_hoist_offset`): offset хойстнутого ребёнка теперь считается при каждой
+отрисовке как сумма `final_layout.location` layout-предков между hoist-целью и
+ребёнком (сохранённая позиция — только fallback, если цель не найдена). CSS-фоллбек
+(`position: relative; z-index: auto`) оставлен как страховка: нативным бандам
+стек не нужен.
+
+### Центрирование колонки нативно
+
+`min()`/авто-маржины Blitz считает мимо родителя, поэтому геометрия чата
+задаётся inline-пикселями в `product_chat_app` (lib.rs) и `product_shell.rs`:
+
+- `<main>`: класс `AppShell_mainShifted` снят — его `margin-left: calc(60px +
+  min(clamp(...), calc(100% - 60px)))` Blitz резолвит неверно на широких окнах;
+  маржин не нужен (flex-row уже ставит main после rail+panel), фон
+  `rgba(27,25,23,0.7)` инлайнится;
+- workspace: `position:absolute; left:{chat_margin}px; width:{column}px` внутри
+  relative page (margin/auto-centering на capped-колонке Blitz рисует в обход
+  скелета);
+- диагностика: `NEOTA_SCENE_DUMP=1` печатает stream-заливки с bbox
+  (`StreamOp::Draw` теперь несёт `rect`/`fill_rgba`), `NEOTA_LAYOUT_PEEK=1` —
+  абсолютные rect'ы Blitz-дерева перед `paint_scene` (сравнение paint vs
+  skeleton: `--dom-dump`).
+
 Композер: React держит его внутри scroll-viewport через `position: sticky`,
 которого в Blitz нет. Нативный RSX (`product_chat_app`) хойстит
 `composer-sticky` из viewport'а сиблингом-полосой — тем же контрактом, что уже

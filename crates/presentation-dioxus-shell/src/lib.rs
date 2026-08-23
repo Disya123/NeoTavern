@@ -39,7 +39,9 @@ pub use product_shell::{
     AI_SETTINGS_TITLE, BACKGROUNDS_MANAGER_TITLE, CHARACTER_MANAGER_TITLE, CHATS_MANAGER_TITLE,
     LOREBOOK_MANAGER_TITLE, PERSONA_MANAGER_TITLE, PLUGINS_MANAGER_TITLE, SETTINGS_TITLE,
 };
-pub use scene_chat::{set_chat_blueprint_source, ChatBlueprintSource};
+pub use scene_chat::{
+    chat_wallpaper_mode, set_chat_blueprint_source, set_chat_wallpaper_mode, ChatBlueprintSource,
+};
 
 pub const DIOXUS_SHELL_FLAG: &str = "NEOTA_DIOXUS_SHELL";
 pub const CANONICAL_FIXTURE_JSON: &str =
@@ -252,19 +254,19 @@ pub fn expected_projection() -> CanonicalProjection {
 }
 
 pub(crate) fn message_bubble_style(user: bool, compact: bool, font_px: u32) -> String {
-    // React sheet (`data-chat-style='paragraphs'`): assistant bubble
-    // rgb(38,34,31) with border #39342f; user rgb(54,34,27) with border
-    // #694c3d and margin-left auto; radius 16; text primary #f3eee8.
-    let (bg, border) = if user {
-        ("#36221b", "#694c3d")
-    } else {
-        ("#26221f", "#39342f")
-    };
+    // React sheet (MessageBubble.module.css `.bubble`): messages are plain
+    // text over the wallpaper glass — no box, no border. Assistant text uses
+    // text-secondary (#c5bbb2), user text-primary (#f3eee8). The old baked
+    // bubble boxes (bg #26221f/#36221b + borders) predate the translucent
+    // wallpaper design and are gone from the React sheet.
+    let color = if user { "#f3eee8" } else { "#c5bbb2" };
     // `position:relative` anchors the inline message action row (React
     // `MessageBubble` header) at the bubble's top-right.
     if compact {
         format!(
-            "box-sizing:border-box;position:relative;min-height:24px;margin:4px 0;padding:8px 12px;color:#f3eee8;font-size:{font_px}px;white-space:pre-wrap;overflow-wrap:break-word;background:{bg};border:1px solid {border};border-radius:16px;"
+            "box-sizing:border-box;position:relative;min-height:24px;margin:4px 0;padding:8px 12px;color:{color};font-size:{font_px}px;white-space:pre-wrap;overflow-wrap:break-word;border-radius:16px;background:{};border:1px solid {};",
+            if user { "rgba(54,34,27,0.72)" } else { "rgba(38,34,31,0.72)" },
+            if user { "rgba(105,76,61,0.60)" } else { "rgba(57,52,47,0.60)" },
         )
     } else {
         let align = if user {
@@ -273,7 +275,7 @@ pub(crate) fn message_bubble_style(user: bool, compact: bool, font_px: u32) -> S
             "margin-right:auto;"
         };
         format!(
-            "box-sizing:border-box;position:relative;width:fit-content;max-width:78ch;{align}margin-top:8px;margin-bottom:8px;padding:8px 12px;color:#f3eee8;font-size:{font_px}px;white-space:pre-wrap;overflow-wrap:break-word;background:{bg};border:1px solid {border};border-radius:16px;"
+            "box-sizing:border-box;position:relative;width:fit-content;max-width:78ch;{align}margin-top:8px;margin-bottom:8px;padding:8px 12px;color:{color};font-size:{font_px}px;white-space:pre-wrap;overflow-wrap:break-word;"
         )
     }
 }
@@ -336,14 +338,29 @@ pub fn product_chat_app() -> Element {
         view.viewport_width
     };
     let chat_column_w = chat_area_w.min(1080);
+    // The workspace is absolutely positioned inside the relative page with
+    // explicit pixel geometry: this Blitz build mishandles auto margins and
+    // percentage + margin centering once the column hits the 1080 cap (the
+    // render then hugs the main area's left edge while the skeleton still
+    // reports centered positions — visible as a shifted composer at wide
+    // windows). Absolute left/top/width is deterministic at every size.
+    let chat_margin = chat_area_w.saturating_sub(chat_column_w) / 2;
     let workspace_style = format!(
-        "position:relative;box-sizing:border-box;display:flex;flex-direction:column;width:{chat_column_w}px;height:100%;min-width:0;min-height:0;margin-left:auto;margin-right:auto;background:transparent;color:#f3eee8;font-family:sans-serif;"
+        "position:absolute;left:{chat_margin}px;top:0;box-sizing:border-box;display:flex;flex-direction:column;width:{chat_column_w}px;height:100%;min-width:0;min-height:0;background:transparent;color:#f3eee8;font-family:sans-serif;"
     );
+    let page_style = "position:relative;box-sizing:border-box;display:flex;flex-direction:column;width:100%;height:100%;min-width:0;min-height:0;background:transparent;color:#f3eee8;font-family:sans-serif;".to_owned();
     let panel_style = format!(
-        "position:relative;box-sizing:border-box;display:flex;flex-direction:column;width:100%;height:100%;min-width:0;min-height:0;padding:0 {pad}px;background:#24211e;"
+        "position:relative;box-sizing:border-box;display:flex;flex-direction:column;width:100%;height:100%;min-width:0;min-height:0;padding:0 {pad}px;background:rgba(36,33,30,0.70);"
     );
     let header_style = format!(
-        "flex:none;position:relative;z-index:2;width:100%;height:{header_h}px;box-sizing:border-box;padding:0 {pad}px;background:rgba(36,33,30,0.82);color:#f3eee8;border-bottom:1px solid rgba(57,52,47,0.48);display:flex;align-items:center;justify-content:space-between;gap:8px;"
+        // No `z-index`: any non-auto z-index on a positioned node makes Blitz
+        // hoist the subtree to its stacking-context ancestor on the FIRST
+        // layout and never re-anchor it on relayout (the header kept the
+        // 1424-wide coordinates after resizing to 1920 — traced via
+        // NEOTA_TEXT_TRACE: paint parent_tx=440 for the header subtree vs
+        // 640 for the viewport). The bands don't overlap, so stacking is
+        // unnecessary in the native flow.
+        "flex:none;position:relative;width:100%;height:{header_h}px;box-sizing:border-box;padding:0 {pad}px;background:rgba(36,33,30,0.82);color:#f3eee8;border-bottom:1px solid rgba(57,52,47,0.48);display:flex;align-items:center;justify-content:space-between;gap:8px;"
     );
     let viewport_style = format!(
         "flex:1 1 auto;position:relative;width:100%;min-height:0;box-sizing:border-box;overflow:hidden;background:transparent;"
@@ -386,7 +403,7 @@ pub fn product_chat_app() -> Element {
         section {
             class: "ChatWorkspace_page",
             "data-component": "chat-view",
-            style: "{workspace_style}",
+            style: "{page_style}",
             div {
                 class: "ChatWorkspace_wallpaper",
                 "data-part": "chat-wallpaper",
@@ -394,7 +411,10 @@ pub fn product_chat_app() -> Element {
                 style: "position:absolute;left:0;top:0;right:0;bottom:0;z-index:0;pointer-events:none;background:transparent;",
             }
             div {
-                class: "ChatWorkspace_workspace",
+                // No `ChatWorkspace_workspace` class: the packed sheet's
+                // `margin: 0 auto` would override the explicit inline margins
+                // in this Blitz build (class rules beat inline styles), and
+                // the auto margin is exactly what breaks at wide windows.
                 style: "{workspace_style}",
                 div {
                     class: "ChatWorkspace_chatPanel",
@@ -752,7 +772,6 @@ pub fn product_chat_app() -> Element {
                                             "{composer_label}"
                                         }
                                         div {
-                                            class: "ChatWorkspace_composerActions",
                                             "data-part": "composer-actions",
                                             // React `.composerActions` uses
                                             // `justify-content:flex-end`, but
@@ -768,10 +787,25 @@ pub fn product_chat_app() -> Element {
                                             // visual (utils left, Send right);
                                             // probe: presentation-m0-d2
                                             // examples/send_layout_probe.rs.
+                                            // The packed `.composerActions`
+                                            // class is deliberately NOT applied
+                                            // (class rules beat the inline
+                                            // workaround in this Blitz build,
+                                            // and the flex-end re-breaks wide
+                                            // columns) — `data-part` keeps the
+                                            // theme contract.
                                             style: "display:flex;align-items:center;justify-content:flex-start;gap:12px;margin-top:8px;",
                                             div {
-                                                class: "ChatWorkspace_composerUtilities",
-                                                style: "display:flex;align-items:center;gap:4px;",
+                                                "data-part": "composer-utilities",
+                                                // `margin-right:auto` replaces
+                                                // the packed
+                                                // `.ChatWorkspace_composerUtilities`
+                                                // rule for the same reason as
+                                                // above: with the class gone
+                                                // from the row, the auto margin
+                                                // must live inline to push Send
+                                                // to the right edge.
+                                                style: "display:flex;align-items:center;gap:4px;margin-right:auto;",
                                                 button {
                                                     r#type: "button",
                                                     "data-action": "composer-settings",

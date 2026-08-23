@@ -729,7 +729,12 @@ impl PresentSurface {
                 compilation_options: Default::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: config.format,
-                    blend: None,
+                    // Resolve holds premultiplied alpha: the neutralizer root
+                    // is transparent so translucent scene areas (glass panels,
+                    // wallpaper cutouts) keep honest alpha here. The blit must
+                    // composite over the cleared canvas color instead of
+                    // replacing pixels, or transparent regions go black.
+                    blend: Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
@@ -825,8 +830,33 @@ impl PresentSurface {
         );
     }
 
+    /// Draw the wallpaper photo UNDER the rasterized scene (destination-over
+    /// on `resolve`). Call after `render` and before `composite_avatars`:
+    /// translucent scene fills then blend over the photo, opaque areas cover
+    /// it, exactly like CSS glass over a background image.
+    /// The texture must already be uploaded via [`Self::upload_avatar`] under
+    /// the same asset id.
+    pub fn composite_wallpaper_under(&mut self, paint: &neotavern_neocompositor::ImagePaintOp) {
+        let (w, h) = self.size();
+        self.avatars.blit_under(
+            &self.device,
+            &self.queue,
+            &self.targets.resolve_view,
+            w,
+            h,
+            std::slice::from_ref(paint),
+        );
+    }
+
     pub fn size(&self) -> (u32, u32) {
         (self.config.width, self.config.height)
+    }
+
+    /// Diagnostic read-back of the accumulated `resolve` texture. Hidden
+    /// behind an env gate in the host; never on a hot path.
+    #[doc(hidden)]
+    pub fn debug_peek_resolve(&self, x: u32, y: u32) -> [u8; 4] {
+        peek_texture_rgba(&self.device, &self.queue, &self.targets.resolve, x, y)
     }
 
     /// Vello-rasterize `scene` into the storage target then move it into the

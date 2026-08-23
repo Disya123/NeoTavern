@@ -114,6 +114,78 @@ fn premultiply(image: &RgbaImage) -> Vec<u8> {
     out
 }
 
+/// Longest allowed side of a decoded wallpaper raster. A 2048×1280 cover is
+/// ~10 MB premultiplied RGBA — one static GPU upload per load, rebuilt only
+/// when the window size changes.
+pub const WALLPAPER_DISPLAY_MAX_PX: u32 = 2048;
+
+/// Asset id the desktop host uploads the wallpaper cover raster under. The
+/// overlay pipeline draws it with destination-over so it sits beneath the
+/// translucent scene.
+pub const WALLPAPER_ASSET_ID: &str = "neota-wallpaper";
+
+/// Aspect-preserving "cover" raster for the chat wallpaper: center-crops the
+/// source to the target aspect ratio and scales it so neither side exceeds
+/// [`WALLPAPER_DISPLAY_MAX_PX`]. Decode limits are shared with avatars via
+/// [`check_image_limits`] so a hostile file cannot force an unbounded raster.
+pub fn wallpaper_cover_thumbnail(
+    bytes: &[u8],
+    target_w: u32,
+    target_h: u32,
+) -> Option<AvatarThumb> {
+    check_image_limits(bytes)?;
+    let image = ImageReader::new(Cursor::new(bytes))
+        .with_guessed_format()
+        .ok()?
+        .decode()
+        .ok()?;
+    wallpaper_cover_premul(&image, target_w, target_h)
+}
+
+fn wallpaper_cover_premul(
+    image: &DynamicImage,
+    target_w: u32,
+    target_h: u32,
+) -> Option<AvatarThumb> {
+    let tw = target_w.max(1);
+    let th = target_h.max(1);
+    let longest = tw.max(th);
+    let (out_w, out_h) = if longest > WALLPAPER_DISPLAY_MAX_PX {
+        let k = f64::from(WALLPAPER_DISPLAY_MAX_PX) / f64::from(longest);
+        (
+            ((f64::from(tw) * k).round() as u32).max(1),
+            ((f64::from(th) * k).round() as u32).max(1),
+        )
+    } else {
+        (tw, th)
+    };
+    let rgba = image.to_rgba8();
+    let (src_w, src_h) = rgba.dimensions();
+    if src_w == 0 || src_h == 0 {
+        return None;
+    }
+    let out_aspect = f64::from(out_w) / f64::from(out_h);
+    let src_aspect = f64::from(src_w) / f64::from(src_h);
+    let (crop_w, crop_h) = if src_aspect > out_aspect {
+        ((f64::from(src_h) * out_aspect).round() as u32, src_h)
+    } else {
+        (src_w, (f64::from(src_w) / out_aspect).round() as u32)
+    };
+    let crop_w = crop_w.clamp(1, src_w);
+    let crop_h = crop_h.clamp(1, src_h);
+    let x = src_w.saturating_sub(crop_w) / 2;
+    let y = src_h.saturating_sub(crop_h) / 2;
+    let cropped = crop_imm(&rgba, x, y, crop_w, crop_h).to_image();
+    let resized = DynamicImage::ImageRgba8(cropped)
+        .resize_exact(out_w, out_h, FilterType::Triangle)
+        .to_rgba8();
+    Some(AvatarThumb {
+        width: resized.width(),
+        height: resized.height(),
+        premul_rgba: premultiply(&resized),
+    })
+}
+
 /// Test helper only. Production paint never feeds this URI to Blitz/Vello.
 pub fn display_avatar_data_uri(content_base64: &str) -> Option<String> {
     let compact: String = content_base64

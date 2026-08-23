@@ -38,6 +38,9 @@ use winit::window::{Window, WindowAttributes};
 const TITLE: &str = "NeoCompositor вЂ” NeoTavern (Windows)";
 /// Approx CSS-px per wheel notch вЂ” a comfortable desktop scroll step.
 const WHEEL_LINE_CSS: f32 = 40.0;
+/// GPU texture cache key for the `--wallpaper` photo (not an avatar; lives in
+/// the same LRU only so the upload path is shared).
+const WALLPAPER_ASSET_ID: &str = "neota-wallpaper";
 
 /// Auto-dismiss delay for the Phase C status toast.
 const TOAST_MS: std::time::Duration = std::time::Duration::from_millis(3500);
@@ -134,6 +137,11 @@ struct App {
     cursor_icon: Option<winit::window::CursorIcon>,
     /// `--w`/`--h` logical window size (documented defaults 1100Г—760).
     initial_size: (u32, u32),
+    /// Raw wallpaper file bytes from `--wallpaper <path>` (≤16 MiB, same cap
+    /// as the avatar decode preflight). Decoded lazily per window size.
+    wallpaper_bytes: Option<Vec<u8>>,
+    /// Cached cover raster + the physical size it was built for.
+    wallpaper_cache: Option<(u32, u32, neotavern_presentation_chat::AvatarThumb)>,
 }
 
 impl App {
@@ -174,6 +182,8 @@ impl App {
             panel_drag: None,
             cursor_icon: None,
             initial_size: (1100, 760),
+            wallpaper_bytes: None,
+            wallpaper_cache: None,
         })
     }
 
@@ -233,6 +243,31 @@ impl App {
         let list_ops = produced.list.ops.len();
         let scene_paths = scene.encoding().n_paths;
 
+        // Diagnostic: dump the recorded paint stream (fills/strokes with
+        // bounding boxes) so the painted geometry can be compared with the
+        // skeleton (`--dom-dump`). Helps catch paint/layout divergence.
+        if std::env::var("NEOTA_SCENE_DUMP").is_ok() {
+            let mut lines: Vec<String> = produced
+                .stream
+                .iter()
+                .filter_map(|op| match op {
+                    neotavern_presentation_m0_d2::StreamOp::Draw {
+                        kind,
+                        rect: Some(r),
+                        fill_rgba: Some((cr, cg, cb, ca)),
+                    } if *ca > 40 => Some(format!(
+                        "[stream] {kind:?} rect=({:.0},{:.0},{:.0},{:.0}) rgba=({cr},{cg},{cb},{ca})",
+                        r.x, r.y, r.x + r.width, r.y + r.height
+                    )),
+                    _ => None,
+                })
+                .collect();
+            lines.sort();
+            for l in lines {
+                eprintln!("{l}");
+            }
+        }
+
         let heights = self.session.compositor_height_index();
         match self.compositor.as_mut() {
             Some(compositor) => compositor.bind_list(produced.list),
@@ -251,6 +286,48 @@ impl App {
             eprintln!("[neocompositor-desktop] render: {err}");
             self.dirty = true;
             return;
+        }
+        if std::env::var("NEOTA_DEBUG_PEEK").is_ok() {
+            for (px, py) in [(550, 410), (1092, 410), (550, 100), (30, 400)] {
+                let before = present.debug_peek_resolve(px, py);
+                eprintln!("[wall-debug] after render ({px},{py}): {before:?}");
+            }
+        }
+        // Wallpaper photo UNDER the translucent scene (destination-over on
+        // `resolve`): glass fills blend over the photo like CSS glass over a
+        // background image. Rebuilt only when the physical size changes.
+        if let Some(bytes) = &self.wallpaper_bytes {
+            let cached = match &self.wallpaper_cache {
+                Some((w, h, _)) if *w == width && *h == height => None,
+                _ => neotavern_presentation_chat::wallpaper_cover_thumbnail(
+                    bytes,
+                    width.max(1),
+                    height.max(1),
+                ),
+            };
+            if let Some(thumb) = cached {
+                self.wallpaper_cache = Some((width, height, thumb));
+            }
+            if let Some((_, _, thumb)) = &self.wallpaper_cache {
+                present.upload_avatar(WALLPAPER_ASSET_ID, thumb);
+                present.composite_wallpaper_under(&neotavern_neocompositor::ImagePaintOp {
+                    asset_id: WALLPAPER_ASSET_ID.to_string(),
+                    dest: neotavern_neocompositor::Rect::new(
+                        0.0,
+                        0.0,
+                        width.max(1) as f32,
+                        height.max(1) as f32,
+                    ),
+                    clip_radius: 0.0,
+                    ready_token: 0,
+                });
+            }
+            if std::env::var("NEOTA_DEBUG_PEEK").is_ok() {
+                for (px, py) in [(550, 410), (1092, 410), (550, 100), (30, 400)] {
+                    let after = present.debug_peek_resolve(px, py);
+                    eprintln!("[wall-debug] after wallpaper ({px},{py}): {after:?}");
+                }
+            }
         }
         // Avatar GPU overlay (Android parity): upload thumbnails and draw them
         // on `resolve` so the swapchain blit shows the real avatar image.
@@ -685,6 +762,18 @@ impl App {
         if self.present.is_none() {
             return;
         }
+        if std::env::var("NEOTA_DEBUG_PEEK").is_ok() {
+            let inner = self
+                .window
+                .as_ref()
+                .map(|w| format!("{}x{}", w.inner_size().width, w.inner_size().height))
+                .unwrap_or_else(|| "none".into());
+            let surf = self.present.as_ref().map(|p| p.size()).unwrap_or((0, 0));
+            eprintln!(
+                "[wall-debug] window.inner={inner} surface={}x{} self.size={}x{}",
+                surf.0, surf.1, self.size.0, self.size.1
+            );
+        }
         // Phase C toast: auto-dismiss after the configured delay (polled via
         // `about_to_wait` while a toast is live).
         if let Some(at) = self.status_shown_at {
@@ -1024,9 +1113,36 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     app.dom_dump_path = dom_dump;
     app.pointer_taps = probe_ops;
     app.initial_size = (w.max(1), h.max(1));
+    if let Some(path) = args
+        .iter()
+        .position(|a| a == "--wallpaper")
+        .and_then(|i| args.get(i + 1))
+    {
+        match std::fs::read(path) {
+            Ok(bytes) => {
+                if bytes.len() > neotavern_presentation_chat::THUMBNAIL_INPUT_MAX_BYTES {
+                    eprintln!(
+                        "[neocompositor-desktop] wallpaper ignored: file exceeds {} bytes",
+                        neotavern_presentation_chat::THUMBNAIL_INPUT_MAX_BYTES
+                    );
+                } else {
+                    app.wallpaper_bytes = Some(bytes);
+                    // Drops the opaque packed `.AppShell_shell` base so the
+                    // host-composited photo can show through the translucent
+                    // scene (see product_shell.rs wallpaper-mode comment).
+                    neotavern_presentation_dioxus_shell::set_chat_wallpaper_mode(true);
+                }
+            }
+            Err(err) => {
+                eprintln!("[neocompositor-desktop] wallpaper ignored: {err}");
+            }
+        }
+    }
     if let Some(source) = blueprint_source {
-        let legacy =
-            matches!(source, neotavern_presentation_dioxus_shell::ChatBlueprintSource::Disabled);
+        let legacy = matches!(
+            source,
+            neotavern_presentation_dioxus_shell::ChatBlueprintSource::Disabled
+        );
         neotavern_presentation_dioxus_shell::set_chat_blueprint_source(source);
         if legacy {
             eprintln!("[neocompositor-desktop] chrome driven by legacy RSX (safe mode)");

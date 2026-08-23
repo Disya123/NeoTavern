@@ -57,6 +57,13 @@ thread_local! {
         const { RefCell::new(ChatBlueprintSource::Disabled) };
 
     static CACHED_DOCUMENT: RefCell<Option<DocumentCacheEntry>> = const { RefCell::new(None) };
+
+    /// Wallpaper mode: the shell base turns transparent so the host-composited
+    /// photo (destination-over under the scene) shows through the glass
+    /// panels, exactly like React's fixed wallpaper child over an opaque
+    /// shell. Off by default: the packed `.AppShell_shell` canvas keeps the
+    /// scene opaque.
+    static WALLPAPER_MODE: RefCell<bool> = const { RefCell::new(false) };
 }
 
 struct DocumentCacheEntry {
@@ -73,6 +80,16 @@ struct DocumentCacheEntry {
 pub fn set_chat_blueprint_source(source: ChatBlueprintSource) {
     CACHED_DOCUMENT.with(|cell| *cell.borrow_mut() = None);
     BLUEPRINT_SOURCE.with(|cell| *cell.borrow_mut() = source);
+}
+
+/// Enables/disables wallpaper mode for this thread's render tree. The desktop
+/// host calls this once when `--wallpaper` is loaded.
+pub fn set_chat_wallpaper_mode(enabled: bool) {
+    WALLPAPER_MODE.with(|cell| *cell.borrow_mut() = enabled);
+}
+
+pub fn chat_wallpaper_mode() -> bool {
+    WALLPAPER_MODE.with(|cell| *cell.borrow())
 }
 
 fn current_source() -> ChatBlueprintSource {
@@ -811,18 +828,21 @@ fn container_look(id: &str) -> (Option<&'static str>, Option<&'static str>, &'st
             "display:flex;flex-direction:column;flex:1;min-height:0;padding:12px 16px 8px;box-sizing:border-box;background:rgba(36,33,30,0.55);",
         ),
         "composer-actions" => (
-            Some("ChatWorkspace_composerActions"),
+            None,
             Some("composer-actions"),
-            // `flex-start` + the utilities' sheet-driven auto margin: see the
-            // Send-button Taffy note in lib.rs (justify-content combined with
-            // an auto margin double-distributes free space in this Blitz
-            // build).
+            // `flex-start` + the utilities' auto margin: see the Send-button
+            // Taffy note in lib.rs. The packed `.composerActions` class is
+            // deliberately NOT applied (class rules beat the inline workaround
+            // in this Blitz build and the packed flex-end re-breaks wide
+            // columns) — `data-part` keeps the theme contract.
             "display:flex;align-items:center;justify-content:flex-start;gap:12px;margin-top:8px;",
         ),
         "composer-utilities" => (
-            Some("ChatWorkspace_composerUtilities"),
             None,
-            "display:flex;align-items:center;gap:4px;",
+            Some("composer-utilities"),
+            // `margin-right:auto` replaces the packed utilities rule (same
+            // reason as the row above: the auto margin must live inline).
+            "display:flex;align-items:center;gap:4px;margin-right:auto;",
         ),
         _ => (None, None, ""),
     }

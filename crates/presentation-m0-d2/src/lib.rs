@@ -437,6 +437,68 @@ impl ProductVelloSession {
         &mut self,
         filter: vello_sink::VelloFilter,
     ) -> Result<(ProducerOutput, vello::Scene, vello_sink::LayerDiag), String> {
+        if std::env::var("NEOTA_LAYOUT_PEEK").is_ok() {
+            let inner = self.doc.inner.borrow();
+            let mut lines = Vec::new();
+            fn attr_get(data: &blitz_dom::ElementData, name: &str) -> Option<String> {
+                data.attrs.iter().find_map(|attr| {
+                    if *attr.name.local == *name {
+                        Some(attr.value.to_string())
+                    } else {
+                        None
+                    }
+                })
+            }
+            fn walk(
+                doc: &BaseDocument,
+                id: usize,
+                ox: f32,
+                oy: f32,
+                depth: usize,
+                lines: &mut Vec<String>,
+            ) {
+                let Some(node) = doc.get_node(id) else {
+                    return;
+                };
+                let l = node.final_layout;
+                let x = ox + l.location.x;
+                let y = oy + l.location.y;
+                let name = node
+                    .element_data()
+                    .map(|data| {
+                        let tag = data.name.local.to_string();
+                        let part = attr_get(data, "data-part").unwrap_or_default();
+                        let comp = attr_get(data, "data-component").unwrap_or_default();
+                        format!("<{tag} part={part} comp={comp}>")
+                    })
+                    .unwrap_or_else(|| format!("<{:?}>", node.data));
+                let has_hook = node
+                    .element_data()
+                    .map(|data| {
+                        attr_get(data, "data-part").is_some()
+                            || attr_get(data, "data-component").is_some()
+                    })
+                    .unwrap_or(false);
+                if has_hook {
+                    lines.push(format!(
+                        "{:indent$}{name} abs=({x:.0},{y:.0}) size=({:.0},{:.0}) loc=({:.0},{:.0})",
+                        "",
+                        l.size.width,
+                        l.size.height,
+                        l.location.x,
+                        l.location.y,
+                        indent = depth * 2
+                    ));
+                }
+                for child in node.children.clone() {
+                    walk(doc, child, x, y, depth + 1, lines);
+                }
+            }
+            walk(&inner, inner.root_element().id, 0.0, 0.0, 0, &mut lines);
+            for l in lines {
+                eprintln!("[layout-peek] {l}");
+            }
+        }
         let mut sink = ProducerSink {
             max_ops: filter.max_ops,
             ..ProducerSink::default()

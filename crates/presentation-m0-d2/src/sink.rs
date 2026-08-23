@@ -20,10 +20,20 @@ pub enum DrawKind {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum StreamOp {
-    Draw { kind: DrawKind },
-    PushLayer { alpha: f32, clip: bool },
+    Draw {
+        kind: DrawKind,
+        rect: Option<Rect>,
+        fill_rgba: Option<(u8, u8, u8, u8)>,
+    },
+    PushLayer {
+        alpha: f32,
+        clip: bool,
+    },
     PopLayer,
-    Glass { node_id: u64, bounds: Rect },
+    Glass {
+        node_id: u64,
+        bounds: Rect,
+    },
     Text(anyrender::HostTextFragment),
 }
 
@@ -116,6 +126,12 @@ impl PaintScene for ProducerSink {
         }
         self.ops.push(StreamOp::Draw {
             kind: DrawKind::Stroke,
+            rect: Some(rect_of(
+                _transform,
+                _shape.bounding_box(),
+                _style.width as f32,
+            )),
+            fill_rgba: paint_rgba(_brush),
         });
     }
 
@@ -132,6 +148,8 @@ impl PaintScene for ProducerSink {
         }
         self.ops.push(StreamOp::Draw {
             kind: DrawKind::Fill,
+            rect: Some(rect_of(_transform, _shape.bounding_box(), 0.0)),
+            fill_rgba: paint_rgba(_brush),
         });
     }
 
@@ -155,6 +173,8 @@ impl PaintScene for ProducerSink {
         }
         self.ops.push(StreamOp::Draw {
             kind: DrawKind::Glyph,
+            rect: None,
+            fill_rgba: None,
         });
     }
 
@@ -171,6 +191,11 @@ impl PaintScene for ProducerSink {
         }
         self.ops.push(StreamOp::Draw {
             kind: DrawKind::BoxShadow,
+            rect: Some(rect_of(_transform, _rect, _radius.max(0.0) as f32)),
+            fill_rgba: {
+                let rgba = _brush.to_rgba8();
+                Some((rgba.r, rgba.g, rgba.b, rgba.a))
+            },
         });
     }
 
@@ -191,5 +216,48 @@ impl PaintScene for ProducerSink {
 
     fn host_text_fragment(&mut self, fragment: anyrender::HostTextFragment) {
         self.ops.push(StreamOp::Text(fragment));
+    }
+}
+
+/// Bounding box of a shape under a transform, plus half a stroke width so the
+/// recorded rect covers the painted pixels. Diagnostic only.
+fn rect_of(transform: Affine, bbox: kurbo::Rect, stroke_half: f32) -> Rect {
+    let [a, b, c, d, e, f] = transform.as_coeffs();
+    let pts = [
+        (bbox.x0, bbox.y0),
+        (bbox.x1, bbox.y0),
+        (bbox.x0, bbox.y1),
+        (bbox.x1, bbox.y1),
+    ];
+    let (mut min_x, mut min_y, mut max_x, mut max_y) = (
+        f64::INFINITY,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+        f64::NEG_INFINITY,
+    );
+    for (x, y) in pts {
+        let tx = a * x + c * y + e;
+        let ty = b * x + d * y + f;
+        min_x = min_x.min(tx);
+        min_y = min_y.min(ty);
+        max_x = max_x.max(tx);
+        max_y = max_y.max(ty);
+    }
+    Rect::new(
+        (min_x - f64::from(stroke_half)).max(0.0) as f32,
+        (min_y - f64::from(stroke_half)).max(0.0) as f32,
+        (max_x + f64::from(stroke_half)) as f32,
+        (max_y + f64::from(stroke_half)) as f32,
+    )
+}
+
+/// Best-effort RGBA of a brush; gradients/shaders come back as `None`.
+fn paint_rgba<'a>(brush: impl Into<PaintRef<'a>>) -> Option<(u8, u8, u8, u8)> {
+    match brush.into() {
+        PaintRef::Solid(color) => {
+            let rgba = color.to_rgba8();
+            Some((rgba.r, rgba.g, rgba.b, rgba.a))
+        }
+        _ => None,
     }
 }

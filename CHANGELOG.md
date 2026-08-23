@@ -187,6 +187,43 @@
 
 ### Fixed
 
+- **Заголовок чата («Hazel») прилипал к позиции первой раскладки на широких
+  окнах (NeoCompositor desktop host).** Blueprint-хедер с упакованным
+  `position: absolute` хойстится Blitz в stacking-context предка, и его
+  paint-позиция фиксируется на первой раскладке: после цепочки resize
+  1920→1424→1920 заголовок оставался на координатах 1424 (x≈513 вместо 712),
+  тогда как in-flow поддеревья перекладывались нормально. Трассировка
+  (paint `parent_tx=440` для хедера против 640 у viewport) локализовала корень
+  в hoist-структуре paint-дерева. Фикс в `crates/vendor/blitz-paint`
+  (`fresh_hoist_offset`): offset хойстнутого ребёнка вычисляется при каждой
+  отрисовке из свежего `final_layout` (сумма layout-локаций предков между
+  hoist-целью и ребёнком), сохранённая позиция — fallback. CSS-фоллбек в
+  пакере усилен до `position: relative; z-index: auto` (инлайн `z-index: 2`
+  хедера убран). Верификация: 1920×1080 / 1560×900 / 1424×714 / 1100×820 /
+  620×800 (compact — распределение акцентов идентично golden), legacy-путь;
+  cargo-тесты shell/chat, goldens 4 размера 0.0000%, `blueprint:packaged-check`
+  6/6.
+
+- **FullHD-композер: layout-скелет корректен, а paint рисовал строку Send на
+  200px левее (и «изображения поверх всего»).** Причина — Blitz stacking
+  context: узлы с `z-index > 0` хойстятся и рисуются с `pre_translate(pos)`, где
+  `pos` не заполняется; пока родитель в (0,0) это незаметно, а у
+  позиционированного chat-view (x=440) заголовок и композер рисовались на
+  `440 + own_loc` вместо `440 + workspace + panel + own_loc`. Композер
+  визуально уезжал влево на широких окнах (≥1560px, колонна ≥1080), аватары
+  (GPU-оверлей на верных rect'ах) оказывались «поверх всего». Лечение:
+  `LATE_BLITZ_FALLBACKS` обнуляет `z-index` у `.ChatWorkspace_chatHeader` и
+  `.ChatWorkspace_composerWrapper`. Заодно у `<main>` снят класс
+  `AppShell_mainShifted` с неверно резолвимым `margin-left: calc(...)` (маржин
+  не нужен — flex-row уже ставит main после rail+panel), а центрирование
+  колонки задаётся inline-пикселями: `<main>` без маржина, workspace —
+  `position:absolute; left:{margin}px; width:{column}px`. Диагностика:
+  `StreamOp::Draw` несёт `rect`/`fill_rgba` (`NEOTA_SCENE_DUMP=1`),
+  `NEOTA_LAYOUT_PEEK=1` печатает абсолютные rect'ы Blitz-дерева перед
+  `paint_scene`. Верификация: 1920×1080 / 1560×900 / 1424×714 / 1100×820 +
+  legacy-путь (Send на layout-позиции), goldens 4 размера 0.0000%,
+  `blueprint:packaged-check` 6/6, cargo-тесты shell/chat без отказов.
+
 - **Невидимый композер и обрезанные пузыри в NeoCompositor desktop host.**
   Три причины, три фикса: (1) chat-колонка размерялась от ширины всего окна —
   новое поле `ProductChatView.column_width` (окно минус rail/панель,

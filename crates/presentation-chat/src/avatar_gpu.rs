@@ -61,6 +61,7 @@ struct CachedAvatar {
 
 pub struct AvatarGpu {
     pipeline: wgpu::RenderPipeline,
+    pipeline_under: wgpu::RenderPipeline,
     bgl: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
     textures: HashMap<String, CachedAvatar>,
@@ -115,31 +116,57 @@ impl AvatarGpu {
             bind_group_layouts: &[Some(&bgl)],
             immediate_size: 0,
         });
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("avatar-pipe"),
-            layout: Some(&layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs"),
-                compilation_options: Default::default(),
-                buffers: &[],
+        let make_pipeline = |label: &'static str, blend: wgpu::BlendState| {
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some(label),
+                layout: Some(&layout),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: Some("vs"),
+                    compilation_options: Default::default(),
+                    buffers: &[],
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: Some("fs"),
+                    compilation_options: Default::default(),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: target_format,
+                        blend: Some(blend),
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                }),
+                primitive: wgpu::PrimitiveState::default(),
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState::default(),
+                multiview_mask: None,
+                cache: None,
+            })
+        };
+        let pipeline = make_pipeline(
+            "avatar-pipe",
+            wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING,
+        );
+        // Destination-over keyed on the DESTINATION alpha (premultiplied):
+        // out = src·(1−dstα) + dst. The wallpaper composite uses this so the
+        // photo lands UNDER the already rasterized translucent scene — the
+        // scene's own alpha decides how much photo shows through, exactly
+        // like CSS glass over a background image.
+        let pipeline_under = make_pipeline(
+            "avatar-pipe-under",
+            wgpu::BlendState {
+                color: wgpu::BlendComponent {
+                    src_factor: wgpu::BlendFactor::OneMinusDstAlpha,
+                    dst_factor: wgpu::BlendFactor::One,
+                    operation: wgpu::BlendOperation::Add,
+                },
+                alpha: wgpu::BlendComponent {
+                    src_factor: wgpu::BlendFactor::OneMinusDstAlpha,
+                    dst_factor: wgpu::BlendFactor::One,
+                    operation: wgpu::BlendOperation::Add,
+                },
             },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs"),
-                compilation_options: Default::default(),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: target_format,
-                    blend: Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-            }),
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            multiview_mask: None,
-            cache: None,
-        });
+        );
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
@@ -149,6 +176,7 @@ impl AvatarGpu {
         });
         Self {
             pipeline,
+            pipeline_under,
             bgl,
             sampler,
             textures: HashMap::new(),
@@ -326,6 +354,33 @@ impl AvatarGpu {
         surface_h: u32,
         ops: &[ImagePaintOp],
     ) {
+        self.blit_impl(device, queue, target, surface_w, surface_h, ops, false);
+    }
+
+    /// Destination-over composite (see `pipeline_under`): draws the wallpaper
+    /// photo UNDER whatever is already on the target.
+    pub fn blit_under(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        target: &wgpu::TextureView,
+        surface_w: u32,
+        surface_h: u32,
+        ops: &[ImagePaintOp],
+    ) {
+        self.blit_impl(device, queue, target, surface_w, surface_h, ops, true);
+    }
+
+    fn blit_impl(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        target: &wgpu::TextureView,
+        surface_w: u32,
+        surface_h: u32,
+        ops: &[ImagePaintOp],
+        under: bool,
+    ) {
         if ops.is_empty() {
             return;
         }
@@ -406,7 +461,11 @@ impl AvatarGpu {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
-            pass.set_pipeline(&self.pipeline);
+            pass.set_pipeline(if under {
+                &self.pipeline_under
+            } else {
+                &self.pipeline
+            });
             for (bind, _) in &draws {
                 pass.set_bind_group(0, bind, &[]);
                 pass.draw(0..6, 0..1);

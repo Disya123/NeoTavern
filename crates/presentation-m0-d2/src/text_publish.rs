@@ -315,7 +315,7 @@ fn assemble_interaction_list(
     let mut host_i = 0usize;
     for op in out.stream.iter() {
         match op {
-            StreamOp::Draw { kind } => {
+            StreamOp::Draw { kind, .. } => {
                 let payload = match kind {
                     DrawKind::Glyph => StubPayload::TransparentGlyphs,
                     DrawKind::Fill if !background_emitted => {

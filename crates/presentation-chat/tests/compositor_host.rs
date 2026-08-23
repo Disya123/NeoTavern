@@ -685,7 +685,8 @@ fn product_shell_phosphor_svg_emits_path_fills() {
             matches!(
                 op,
                 StreamOp::Draw {
-                    kind: DrawKind::Fill
+                    kind: DrawKind::Fill,
+                    ..
                 }
             )
         })

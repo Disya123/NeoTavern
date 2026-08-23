@@ -93,7 +93,7 @@ html, body, #main, #root {
   margin: 0;
   padding: 0;
   height: 100%;
-  background: #151311;
+  background: transparent;
   color: #f3eee8;
   font-family: 'Outfit Variable', sans-serif;
   font-size: 16px;
@@ -757,6 +757,23 @@ LATE_BLITZ_FALLBACKS = """
 .ChatWorkspace_viewport {
   overflow: hidden;
 }
+/* Blitz stacking-context hoisting paints out-of-flow nodes with a stale
+   position: a `position: absolute` node is hoisted to its stacking-context
+   ancestor on the FIRST layout and its paint position is not recomputed on
+   relayout — the chat header kept the 1424-wide coordinates (456/472) after
+   resizing to 1920 while in-flow subtrees relaid out fine (traced via
+   NEOTA_TEXT_TRACE: the header subtree painted with parent_tx=440 vs 640
+   for the viewport). NOTE: in this Blitz build packed class rules beat
+   inline styles, so this late override — not the RSX inline — is what
+   counts. The native chat bands are plain flex rows: `position: relative`
+   keeps the header in-flow (no hoist, fresh layout positions) and
+   `z-index: auto` drops the stacking context entirely. They don't need
+   stacking (no overlap with the viewport bands). */
+.ChatWorkspace_chatHeader,
+.ChatWorkspace_composerWrapper {
+  position: relative;
+  z-index: auto;
+}
 """
 
 DARK_ROOT = """
@@ -937,12 +954,11 @@ def mix_srgb(color: str, percent: float, into: str = "transparent") -> str:
     r, g, b = hex_to_rgb(color)
     p = percent / 100.0
     if into == "transparent":
-        ir, ig, ib = CANVAS_RGB
-        return (
-            f"rgb({round(r * p + ir * (1 - p))}, "
-            f"{round(g * p + ig * (1 - p))}, "
-            f"{round(b * p + ib * (1 - p))})"
-        )
+        # `color-mix(in srgb, X p%, transparent)` is rgba(X, p) — the RGB
+        # channels stay X's; only alpha drops to p. Baking this as an opaque
+        # mix over the canvas killed every translucent surface (buttons,
+        # bubbles, panels) the moment a wallpaper or glass layer sat beneath.
+        return f"rgba({r}, {g}, {b}, {round(p, 4)})"
     ir, ig, ib = hex_to_rgb(into)
     return (
         f"rgb({round(r * p + ir * (1 - p))}, "
@@ -1072,12 +1088,7 @@ def resolve_color_mix_literals(css: str) -> str:
         p = percent / 100.0
         r, g, b = src
         if into == "transparent":
-            ir, ig, ib = CANVAS_RGB
-            return (
-                f"rgb({round(r * p + ir * (1 - p))}, "
-                f"{round(g * p + ig * (1 - p))}, "
-                f"{round(b * p + ib * (1 - p))})"
-            )
+            return f"rgba({r}, {g}, {b}, {round(p, 4)})"
         other = parse_color_token(into)
         if other is None:
             return match.group(0)
@@ -1233,7 +1244,12 @@ def take_block(css: str, brace_idx: int) -> tuple[str, int]:
 
 
 def apply_compact_media(css: str) -> str:
-    """Android product path is the 600px overlay breakpoint. Unwrap it; drop desktop-only."""
+    """The 600px overlay breakpoint. Blitz @media evaluation is unreliable,
+    so the block is gated on a root attribute instead of the query: the shell
+    sets `data-ui-compact="true"` on the app root whenever its viewport width
+    is <= 600 (desktop host at small sizes, and the Android overlay path,
+    whose product viewport IS the 600px breakpoint). Desktop-only
+    (`min-width: 601px`) rules stay dropped: they were never packed."""
     out: list[str] = []
     pos = 0
     while True:
@@ -1249,13 +1265,36 @@ def apply_compact_media(css: str) -> str:
         query = re.sub(r"\s+", " ", css[idx:brace]).lower()
         body, end = take_block(css, brace)
         if "max-width: 600px" in query:
-            out.append(body)
+            # Re-scope each top-level selector inside the block under the
+            # compact attribute instead of unwrapping unconditionally.
+            for rule in split_top_level_rules(body):
+                if rule.strip():
+                    out.append(":root[data-ui-compact='true'] " + rule)
         elif "min-width: 601px" in query:
             pass
         else:
             out.append(css[idx:end])
         pos = end
     return "".join(out)
+
+
+def split_top_level_rules(block: str) -> list[str]:
+    """Split a CSS block body into top-level rules, keeping nested braces
+    (pseudo-elements, keyframes etc.) intact."""
+    rules: list[str] = []
+    depth = 0
+    start = 0
+    for i, ch in enumerate(block):
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                rules.append(block[start : i + 1])
+                start = i + 1
+    if start < len(block) and block[start:].strip():
+        rules.append(block[start:])
+    return rules
 
 
 def strip_light_root(css: str) -> str:
@@ -1381,12 +1420,31 @@ def build_sheet() -> str:
         parts.append(css)
     sheet = resolve_color_mix("\n\n".join(parts))
     tokens = collect_root_tokens(sheet)
+    # UI opacity knob: the canonical theme contract declares 100%, but the
+    # app ships 70% as its default (`packages/ui/src/styles/tokens.css`
+    # `--ln`, applied at runtime via `apply.ts`). The native shell has no
+    # runtime knob, so the packer bakes the product default. This is what
+    # makes `.chatPanel` / `.composer` translucent over the wallpaper.
+    tokens["--st-custom-ui-opacity"] = "70%"
     sheet = flatten_st_vars(sheet, tokens)
     sheet = resolve_color_mix_literals(sheet)
     sheet = flatten_custom_vars(sheet)
     sheet = strip_light_root(sheet)
     sheet = apply_compact_media(sheet)
     sheet = rewrite_logical_props(sheet)
+    # Native deviation (documented in rust-ui-style-port.md): React paints the
+    # photo wallpaper as a fixed layer above the opaque shell background;
+    # Blitz has no in-scene images, so the host composites the photo UNDER the
+    # scene on the GPU (destination-over by the scene's own alpha). For that
+    # the shell background must be transparent — the final swapchain blit
+    # still provides the opaque canvas, and over a flat canvas the result is
+    # pixel-identical to the opaque #151311.
+    sheet = re.sub(
+        r"(\.AppShell_shell \{\s*[^}]*?background: )#151311;",
+        r"\1transparent;",
+        sheet,
+        count=1,
+    )
     # Last wins over module `position:fixed` / CSS masks. Token vars are already
     # flattened, so the button reset cannot punch out `border-radius: 10px`.
     sheet = rewrite_logical_props(f"{sheet}\n{BLITZ_NEUTRALIZE}")

@@ -51,7 +51,7 @@ pub fn assemble_from_stream_at(
 
     for op in stream {
         match op {
-            StreamOp::Draw { kind } => {
+            StreamOp::Draw { kind, .. } => {
                 let payload = if !emitted_wallpaper && *kind == DrawKind::Fill {
                     emitted_wallpaper = true;
                     StubPayload::Wallpaper

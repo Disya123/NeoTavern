@@ -873,6 +873,44 @@ impl ElementCx<'_, '_> {
         }
     }
 
+    /// Recomputes a hoisted child's offset from its hoist target using the
+    /// CURRENT taffy layout, instead of the position captured when the
+    /// stacking context was first built.
+    ///
+    /// Why: `render_element` translates each element by its own
+    /// `final_layout.location` (relative to its *layout* parent), so the
+    /// correct pre-translate for a hoisted child is the sum of the
+    /// `final_layout.location`s of the layout ancestors strictly between the
+    /// hoist target and the child. The stored `hoisted_child.position` is
+    /// only correct for the layout pass that built the stacking context;
+    /// after a resize it is stale and the whole hoisted subtree paints at
+    /// the previous window's coordinates (observed as a chat header stuck
+    /// 184px left of its layout position after 1424→1920).
+    ///
+    /// Walks the LAYOUT parent chain (`layout_parent`, not the DOM tree —
+    /// `final_layout.location` is relative to the layout parent) from
+    /// `child_id` up to `target_id`. Returns `None` if the target is not
+    /// reached (not a layout ancestor), letting the caller fall back to the
+    /// stored position.
+    fn fresh_hoist_offset(&self, child_id: usize, target_id: usize) -> Option<(f64, f64)> {
+        let tree = self.dom.as_ref().tree();
+        let mut x = 0.0f64;
+        let mut y = 0.0f64;
+        // Walk the LAYOUT hierarchy (not the DOM tree): `final_layout.location`
+        // is relative to `layout_parent`.
+        let mut cursor = tree[child_id].layout_parent.get();
+        while let Some(id) = cursor {
+            if id == target_id {
+                return Some((x, y));
+            }
+            let node = &tree[id];
+            x += node.final_layout.location.x as f64;
+            y += node.final_layout.location.y as f64;
+            cursor = node.layout_parent.get();
+        }
+        None
+    }
+
     fn draw_children(
         &self,
         scene: &mut impl PaintScene,
@@ -883,9 +921,15 @@ impl ElementCx<'_, '_> {
 
         if let Some(hoisted) = &self.node.stacking_context {
             for hoisted_child in hoisted.neg_z_hoisted_children() {
+                let (ox, oy) = self
+                    .fresh_hoist_offset(hoisted_child.node_id, self.node.id)
+                    .unwrap_or((
+                        hoisted_child.position.x as f64,
+                        hoisted_child.position.y as f64,
+                    ));
                 let pos = kurbo::Vec2 {
-                    x: hoisted_child.position.x as f64 * self.scale,
-                    y: hoisted_child.position.y as f64 * self.scale,
+                    x: ox * self.scale,
+                    y: oy * self.scale,
                 };
                 self.render_node(
                     scene,
@@ -906,9 +950,15 @@ impl ElementCx<'_, '_> {
         // Positive z_index hoisted nodes
         if let Some(hoisted) = &self.node.stacking_context {
             for hoisted_child in hoisted.pos_z_hoisted_children() {
+                let (ox, oy) = self
+                    .fresh_hoist_offset(hoisted_child.node_id, self.node.id)
+                    .unwrap_or((
+                        hoisted_child.position.x as f64,
+                        hoisted_child.position.y as f64,
+                    ));
                 let pos = kurbo::Vec2 {
-                    x: hoisted_child.position.x as f64 * self.scale,
-                    y: hoisted_child.position.y as f64 * self.scale,
+                    x: ox * self.scale,
+                    y: oy * self.scale,
                 };
                 self.render_node(
                     scene,

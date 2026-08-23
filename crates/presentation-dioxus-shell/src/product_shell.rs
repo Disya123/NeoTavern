@@ -1654,15 +1654,15 @@ pub fn product_shell_app() -> Element {
         "collapsed"
     };
     let sidebar_state = if view.sidebar_open { "open" } else { "closed" };
-    let main_class = if view.sidebar_open {
-        if is_compact {
-            "AppShell_main"
-        } else {
-            "AppShell_mainShifted"
-        }
-    } else {
-        "AppShell_main"
-    };
+    // The main area's geometry is fully inline: this Blitz build mis-resolves
+    // the packed `margin-left: calc(60px + min(clamp(...), calc(100% - 60px)))`
+    // at wide windows (the chat then shifts right past the sidebar edge, and
+    // the capped 1080 column loses its centering). The flex row already places
+    // the main right after the rail + sidebar, so no margin is needed; the
+    // translucent frame background is inlined as well.
+    let main_style = format!(
+        "flex:1 1 auto;width:auto;height:100%;min-width:0;min-height:0;overflow:hidden;position:relative;z-index:1;margin-left:0;background:rgba(27,25,23,0.7);"
+    );
     let panel_title = RAIL
         .iter()
         .find(|item| item.panel == view.panel)
@@ -1696,6 +1696,21 @@ pub fn product_shell_app() -> Element {
         format!("display:flex;flex-direction:{row_dir};flex-wrap:nowrap;align-items:stretch;height:100%;min-width:0;flex:none;position:relative;z-index:2;")
     };
     let shell_style = format!("display:flex;flex-direction:{row_dir};width:100%;height:100%;background:transparent;color:#f3eee8;position:relative;overflow:hidden;");
+    // Wallpaper mode (host `--wallpaper`): the packed `.AppShell_shell` paints
+    // an OPAQUE `--st-color-surface-canvas` over the whole window, which would
+    // hide the host-composited photo beneath the scene. React keeps the shell
+    // background too, but its wallpaper is a DOM child ABOVE it; the native
+    // equivalent draws the photo at resolve level UNDER the scene, so the
+    // opaque shell base must go. Dropping the class keeps the data-* contract
+    // (and the transparent inline style) while the packed sheet's background
+    // stops applying.
+    let wallpaper_mode = crate::scene_chat::chat_wallpaper_mode();
+    let shell_class = if wallpaper_mode { "" } else { "AppShell_shell" };
+    let shell_css = if wallpaper_mode {
+        format!("display:flex;flex-direction:{row_dir};width:100%;height:100%;background:transparent;color:#f3eee8;position:relative;overflow:hidden;")
+    } else {
+        shell_style
+    };
     let product_css = product_stylesheets_dev(view.insets).join("\n");
     let show_rail = !is_compact || view.rail_expanded || view.sidebar_open;
     let show_panel = view.sidebar_open;
@@ -1729,8 +1744,8 @@ pub fn product_shell_app() -> Element {
     rsx! {
         style { "{product_css}" }
         div {
-            class: "AppShell_shell",
-            style: "{shell_style}",
+            class: "{shell_class}",
+            style: "{shell_css}",
             lang: "{view.language}",
             dir: "{view.dir}",
             "data-component": "app-shell",
@@ -1741,16 +1756,25 @@ pub fn product_shell_app() -> Element {
             "data-sidebar": "{sidebar_state}",
             "data-ui-density": "{view.density}",
             "data-ui-scale": "{view.font_scale}",
+            // Packed 600px-breakpoint rules gate on this attribute (the
+            // packer cannot rely on Blitz @media evaluation): set whenever
+            // the viewport is the mobile/overlay width — the Android product
+            // path always, the desktop host when the window shrinks.
+            "data-ui-compact": if view.chat.viewport_width <= 600 {
+                Some("true")
+            } else {
+                None
+            },
             a { class: "AppShell_skipLink", href: "#chat-workspace", "Skip to chat" }
             div {
                 "data-part": "chat-wallpaper",
                 "aria-hidden": "true",
-                style: "position:absolute;left:-16px;top:-16px;right:-16px;bottom:-16px;z-index:0;pointer-events:none;background:#c5cdd6;",
+                style: "position:absolute;left:-16px;top:-16px;right:-16px;bottom:-16px;z-index:0;pointer-events:none;background:transparent;",
             }
             div {
                 "data-part": "chat-wallpaper-overlay",
                 "aria-hidden": "true",
-                style: "position:absolute;left:0;top:0;right:0;bottom:0;z-index:0;pointer-events:none;background:rgba(21,19,17,0.46);",
+                style: "position:absolute;left:0;top:0;right:0;bottom:-16px;z-index:0;pointer-events:none;background:rgba(18,16,14,0.30);",
             }
             if show_rail || show_panel {
                 aside {
@@ -1836,11 +1860,13 @@ pub fn product_shell_app() -> Element {
             if show_chat {
                 main {
                     id: "chat-workspace",
-                    class: "{main_class}",
+                    // No `AppShell_mainShifted` class: the packed
+                    // margin-left calc mis-resolves at wide windows (see the
+                    // inline `main_style` above).
                     "data-component": "main-area",
                     "data-slot": "chat.viewport",
                     tabindex: "-1",
-                    style: "flex:1 1 auto;width:auto;height:100%;min-width:0;min-height:0;overflow:hidden;position:relative;z-index:1;",
+                    style: "{main_style}",
                     {product_chat_app()}
                 }
             }
