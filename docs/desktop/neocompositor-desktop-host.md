@@ -265,6 +265,29 @@ edit (PencilSimple), delete (Trash).
 несёт позицию/метаданные (kernel-owned), поэтому поля position в форме
 честно нет.
 
+## Настройки → Профили (ProfilesPanel)
+
+Порт React `ProfilesPanel` во вкладке Profiles панели Settings: вместо
+статичной заглушки («Active profile: Built-in») теперь реальный CRUD над
+Product Wire — список грузится через `profiles.list` при открытии панели
+настроек, демо-плоскость `FakeWire` сеет профили «Main» и «Caravan».
+
+Инлайн-форма создания (поле `data-part="profile-create-name"` + кнопка
+Create) уходит в `profiles.create`; строки списка (`data-part="profile-row"`,
+64 px) несут действия в правых 132 px: export (`profile.export`, SEC-02 —
+Kernel строит контейнер и возвращает верифицированный отчёт; тост показывает
+честные счётчики characters/chats/messages), rename (инлайн-режим: поле
+`data-part="profile-rename-input"` + Save/Cancel, `profiles.rename`), delete
+(диалог подтверждения 300×200, `profiles.delete`; персонажи остаются
+непривязанными — ничего не удаляется). Импорт — честная подпись без поля
+пути: пикером владеет упакованный хост.
+
+Геометрия вью-модели зеркалится между `settings_tab.rs::profiles_tab` и
+`shell_hit.rs::profiles_hit` (label 16 + gap 8 → create row 36; import-блок
+104; заголовок списка 40; строки 64 + 4) — как у записей лорбука. Фокус
+клавиатуры: `TextFocus::ProfileCreateName` / `ProfileRename` в desktop-бине
+резолвятся по `data-part` из rects, ввод идёт в сессионные setter'ы.
+
 ## Отправка сообщения (Send)
 
 Композер (`data-part="composer"` в `product_chat_app`) получил кнопку **Send**

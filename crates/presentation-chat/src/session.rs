@@ -10,15 +10,18 @@ use contracts_generated::generated::{
     RequestMessageDraftCommit, RequestMessageDraftDiscard, RequestMessageDraftGet,
     RequestMessageDraftSave, RequestMessageVariantActivate, RequestMessageVariantsList,
     RequestRetryGeneration, RequestSettingsGet, RequestSnapshotsRollback, RequestStartGeneration,
-    RequestUpdateCharacter, RequestUpdateLorebookEntry, ResultAssetsContent,
+    RequestUpdateCharacter, RequestUpdateLorebookEntry, RequestProfileExport, RequestProfilesCreate,
+    RequestProfilesDelete, RequestProfilesRename, ResultAssetsContent,
     ResultListLorebookEntries, ResultListLorebooks, ResultListPersonas, ResultListPresets,
-    ResultListProviders, ResultPluginsList, ResultSettings, SettingsItem, decode_character_dto,
+    ResultListProviders, ResultPluginsList, ResultProfileExport, ResultProfilesCreate,
+    ResultProfilesList, ResultSettings, SettingsItem, decode_character_dto,
     decode_chat_dto, decode_lorebook_dto, decode_lorebook_entry_dto, decode_message_draft_dto,
     decode_message_dto, decode_paged_characters, decode_paged_chats, decode_paged_messages,
     decode_persona_dto, decode_result_assets_content, decode_result_list_lorebook_entries,
     decode_result_list_lorebooks, decode_result_list_personas, decode_result_list_presets,
     decode_result_list_providers, decode_result_message_variant_list, decode_result_plugins_list,
-    decode_result_settings, decode_result_snapshots_rollback,
+    decode_result_profile_export, decode_result_profiles_create, decode_result_profiles_list,
+    decode_result_settings, decode_result_snapshots_rollback, ProfilesItem,
 };
 use neotavern_chat_viewport::{
     GeometrySnapshot, HeightIndex, HeightKind, LogicalItemId, PredictorBudgets, PresentDecision,
@@ -28,6 +31,7 @@ use neotavern_presentation_dioxus_shell::{
     assert_registered_command, chrome_metrics, mount_product_chat, CharacterCardView,
     CharacterDraftView, ChatCardView, ContextUsageBreakdownV1, ContextUsageSummaryV1,
     LorebookCardView, LorebookEntryCardView, PersonaCardView, PluginCardView, PresetCardView,
+    ProfileCardView,
     ProductChatView, ProductChrome, ProductShellView, ProviderCardView, RowKind, SafeAreaInsets,
     VisibleRow, PRODUCT_PATH_VISIBLE,
 };
@@ -139,6 +143,15 @@ pub struct ChatRouteState {
     pub dir: String,
     pub ai_tab: String,
     pub settings_tab: String,
+    /// Configuration profiles (`profiles.list`; React `ProfilesPanel`).
+    pub profiles: Vec<ProfilesItem>,
+    pub profile_create_name: String,
+    /// Profile row currently in inline-rename mode.
+    pub profile_renaming_id: Option<String>,
+    pub profile_rename_name: String,
+    pub profile_delete_open: bool,
+    /// Profile the delete-confirm dialog asks about.
+    pub profile_delete_target_id: Option<String>,
     /// Composer context-meter popover visibility (`chat.composer.context`).
     pub context_panel_open: bool,
     /// Last applied Kernel stream envelope sequence (`EventEnvelope.sequence`).
@@ -1018,6 +1031,22 @@ impl<W: ProductWire> ChatSession<W> {
             entry_selective_draft: self.state.entry_selective_draft,
             entry_delete_target_id: self.state.entry_delete_target_id.clone(),
             entry_content_tokens: estimate_tokens(&self.state.entry_content_draft),
+            profiles: self
+                .state
+                .profiles
+                .iter()
+                .map(|row| ProfileCardView {
+                    id: row.id.clone(),
+                    name: row.name.clone(),
+                    created_at: row.created_at.clone(),
+                    updated_at: row.updated_at.clone(),
+                })
+                .collect(),
+            profile_create_name: self.state.profile_create_name.clone(),
+            profile_renaming_id: self.state.profile_renaming_id.clone(),
+            profile_rename_name: self.state.profile_rename_name.clone(),
+            profile_delete_open: self.state.profile_delete_open,
+            profile_delete_target_id: self.state.profile_delete_target_id.clone(),
             plugins: self
                 .state
                 .plugins
@@ -1428,7 +1457,10 @@ impl<W: ProductWire> ChatSession<W> {
             "lorebooks" => self.load_lorebooks(),
             "plugins" => self.load_plugins(),
             "providers" => self.load_ai_settings(),
-            "settings" => self.load_settings(),
+            "settings" => {
+                self.load_settings();
+                self.load_profiles();
+            }
             // Desktop rail Home opens the chats management panel over the
             // workspace (React `ChatManagementPanel`).
             "home" => self.load_chat_list(),
@@ -1875,6 +1907,26 @@ impl<W: ProductWire> ChatSession<W> {
                 self.state.entry_selective_draft = !self.state.entry_selective_draft;
                 self.bump_scene();
             }
+            ShellAction::CreateProfile => self.create_profile(),
+            ShellAction::StartProfileRename(id) => self.start_profile_rename(&id),
+            ShellAction::SubmitProfileRename => self.submit_profile_rename(),
+            ShellAction::CancelProfileRename => {
+                self.state.profile_renaming_id = None;
+                self.state.profile_rename_name.clear();
+                self.bump_scene();
+            }
+            ShellAction::OpenProfileDelete(id) => {
+                self.state.profile_delete_target_id = Some(id);
+                self.state.profile_delete_open = true;
+                self.bump_scene();
+            }
+            ShellAction::CloseProfileDelete => {
+                self.state.profile_delete_open = false;
+                self.state.profile_delete_target_id = None;
+                self.bump_scene();
+            }
+            ShellAction::ConfirmProfileDelete => self.confirm_delete_profile(),
+            ShellAction::ExportProfile(id) => self.export_profile(&id),
         }
     }
 
@@ -2472,6 +2524,136 @@ impl<W: ProductWire> ChatSession<W> {
             }
             Err(err) => self.record_error(err),
         }
+    }
+
+    /// Load `profiles.list` for the Settings Profiles tab (React
+    /// `useProfiles`; the kernel returns the full list in one page).
+    fn load_profiles(&mut self) {
+        match self.call_decode(
+            "profiles.list",
+            &RequestEmpty {},
+            decode_result_profiles_list,
+        ) {
+            Ok(ResultProfilesList { items }) => self.state.profiles = items,
+            Err(err) => self.record_error(err),
+        }
+    }
+
+    /// Inline create row (`profiles.create`); an empty name stays a local
+    /// status message, exactly like React disabling the submit button.
+    pub fn create_profile(&mut self) {
+        let name = self.state.profile_create_name.trim().to_string();
+        if name.is_empty() {
+            self.state.status_message = Some("Profile needs a name.".into());
+            self.bump_scene();
+            return;
+        }
+        match self.call_decode(
+            "profiles.create",
+            &RequestProfilesCreate { name },
+            decode_result_profiles_create,
+        ) {
+            Ok(_) => {
+                self.state.profile_create_name.clear();
+                self.load_profiles();
+                self.state.status_message = Some("Profile created.".into());
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    /// Enter inline rename mode for a profile row (React `startRename`).
+    pub fn start_profile_rename(&mut self, profile_id: &str) {
+        let Some(profile) = self
+            .state
+            .profiles
+            .iter()
+            .find(|row| row.id == profile_id)
+            .cloned()
+        else {
+            return;
+        };
+        self.state.profile_renaming_id = Some(profile.id);
+        self.state.profile_rename_name = profile.name;
+        self.bump_scene();
+    }
+
+    /// Inline rename submit (`profiles.rename`).
+    pub fn submit_profile_rename(&mut self) {
+        let Some(id) = self.state.profile_renaming_id.clone() else {
+            return;
+        };
+        let name = self.state.profile_rename_name.trim().to_string();
+        if name.is_empty() {
+            self.state.status_message = Some("Profile needs a name.".into());
+            self.bump_scene();
+            return;
+        }
+        match self.call_value("profiles.rename", &RequestProfilesRename { id, name }) {
+            Ok(_) => {
+                self.state.profile_renaming_id = None;
+                self.state.profile_rename_name.clear();
+                self.load_profiles();
+                self.state.status_message = Some("Profile renamed.".into());
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    fn confirm_delete_profile(&mut self) {
+        let Some(id) = self.state.profile_delete_target_id.clone() else {
+            self.state.profile_delete_open = false;
+            return;
+        };
+        match self.call_value("profiles.delete", &RequestProfilesDelete { id }) {
+            Ok(_) => {
+                self.state.profile_delete_open = false;
+                self.state.profile_delete_target_id = None;
+                self.load_profiles();
+                self.state.status_message = Some("Profile deleted.".into());
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    /// Per-profile logical export (`profile.export`): the kernel builds the
+    /// container and returns the verified report — the toast surfaces the
+    /// honest record counts (React `runExport` notice).
+    pub fn export_profile(&mut self, profile_id: &str) {
+        let name = self
+            .state
+            .profiles
+            .iter()
+            .find(|row| row.id == profile_id)
+            .map(|row| row.name.clone())
+            .unwrap_or_default();
+        let req = RequestProfileExport {
+            include_assets: None,
+            profile_id: Some(profile_id.to_string()),
+        };
+        match self.call_decode("profile.export", &req, decode_result_profile_export) {
+            Ok(result) => {
+                self.state.status_message = Some(format!(
+                    "Exported \"{name}\": {} characters, {} chats, {} messages.",
+                    result.records.characters, result.records.chats, result.records.messages
+                ));
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    pub fn set_profile_create_name(&mut self, value: &str) {
+        self.state.profile_create_name = value.to_string();
+        self.bump_scene();
+    }
+
+    pub fn set_profile_rename_name(&mut self, value: &str) {
+        self.state.profile_rename_name = value.to_string();
+        self.bump_scene();
     }
 
     fn refresh_chat(&mut self) -> Result<(), ChatRouteError> {

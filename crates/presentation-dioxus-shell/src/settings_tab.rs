@@ -199,42 +199,152 @@ fn data_tab(_view: &ProductShellView) -> Element {
     }
 }
 
-/// React `ProfilesPanel`: UI profiles (density / text scale presets). The
-/// harness reflects the current view-model values and keeps the profile
-/// switcher honest about what it can change.
+/// React `ProfilesPanel`: list/create/rename/delete of configuration
+/// profiles over Product Wire (`profiles.list` / `create` / `rename` /
+/// `delete`), plus the per-profile logical export (`profile.export`, SEC-02).
+/// The import section stays an honest labeled note: the packaged host owns
+/// the file picker, so there is no path input on this plane.
+/// Geometry mirrors `shell_hit.rs::profiles_hit` (label 16 + gap 8 → create
+/// row 36; import block 108; list heading/hint 48; rows 64 + 4).
 fn profiles_tab(view: &ProductShellView) -> Element {
-    let density_label = match view.density.as_str() {
-        "compact" => "Compact",
-        _ => "Comfortable",
-    };
-    let scale_label = match view.font_scale.as_str() {
-        "small" => "Small",
-        "large" => "Large",
-        _ => "Medium",
+    let create_value = if view.profile_create_name.is_empty() {
+        "New profile name…"
+    } else {
+        view.profile_create_name.as_str()
     };
     rsx! {
         div {
             class: "SettingsPanel_section",
             "data-part": "settings-profiles",
-            style: "padding:12px 16px;display:flex;flex-direction:column;gap:12px;",
+            style: "padding:12px 16px;display:flex;flex-direction:column;gap:8px;",
+            label {
+                class: "SettingsPanel_field",
+                style: "line-height:16px;",
+                span { "Profile name" }
+            }
             div {
-                class: "SettingsPanel_field",
-                span { "Active profile" }
-                strong { "Built-in" }
+                style: "display:flex;gap:8px;align-items:center;",
+                span {
+                    "data-part": "profile-create-name",
+                    style: "flex:1;min-width:0;height:36px;box-sizing:border-box;display:flex;align-items:center;padding:0 12px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;color:#e8eef7;font-size:0.8125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;",
+                    "{create_value}"
+                }
+                button {
+                    class: "st-button",
+                    r#type: "button",
+                    "data-component": "button",
+                    "data-variant": "primary",
+                    "data-size": "sm",
+                    "data-part": "profile-create-submit",
+                    style: "flex:none;width:96px;height:36px;",
+                    span { "data-part": "label", "Create" }
+                }
             }
-            label {
-                class: "SettingsPanel_field",
-                span { "Density" }
-                strong { "{density_label}" }
+            div {
+                style: "margin-top:4px;",
+                h2 { style: "margin:0;height:20px;line-height:20px;font-size:0.9375rem;color:#f3eee8;", "Import profile" }
+                p {
+                    style: "color:#c5bbb2;font-size:0.75rem;margin:8px 0;height:32px;line-height:16px;",
+                    "Container import runs through the packaged host file picker; this surface has no path input."
+                }
+                button {
+                    class: "st-button",
+                    r#type: "button",
+                    "data-component": "button",
+                    "data-variant": "default",
+                    "data-size": "sm",
+                    disabled: true,
+                    style: "height:36px;",
+                    span { "data-part": "label", "Import (.zip)" }
+                }
             }
-            label {
-                class: "SettingsPanel_field",
-                span { "Text size" }
-                strong { "{scale_label}" }
+            div {
+                style: "margin-top:4px;",
+                h2 { style: "margin:0;height:20px;line-height:20px;font-size:0.9375rem;color:#f3eee8;", "Profiles" }
+                p {
+                    style: "color:#998f87;font-size:0.75rem;margin:4px 0 0;height:16px;line-height:16px;",
+                    "Characters bind to a profile; deleting one leaves its characters unassigned."
+                }
             }
-            p {
-                style: "color:#998f87;font-size:0.75rem;",
-                "Custom profiles persist with the user settings store; this harness plane renders the active built-in values."
+            if view.profiles.is_empty() {
+                p { style: "color:#998f87;font-size:0.8125rem;margin:8px 0 0;", "No profiles yet." }
+            } else {
+                ul {
+                    class: "SettingsPanel_profiles",
+                    style: "list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;",
+                    for item in view.profiles.iter() {
+                        li {
+                            class: "SettingsPanel_profileRow",
+                            "data-part": "profile-row",
+                            style: "display:flex;align-items:center;gap:8px;height:64px;box-sizing:border-box;padding:0 8px;border:1px solid #39342f;border-radius:16px;background:#24211e;",
+                            span {
+                                style: "flex:none;width:40px;height:40px;border-radius:20px;display:flex;align-items:center;justify-content:center;background:#39342f;color:#f3eee8;font-weight:600;font-size:0.9375rem;",
+                                {item.name.chars().next().map(|ch| ch.to_uppercase().collect::<String>()).unwrap_or_default()}
+                            }
+                            span {
+                                style: "flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;",
+                                strong { style: "color:#f3eee8;font-size:0.8125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;", "{item.name}" }
+                                small { style: "color:#998f87;font-size:0.6875rem;", "Created {item.created_at}" }
+                            }
+                            if view.profile_renaming_id.as_deref() == Some(item.id.as_str()) {
+                                span {
+                                    "data-part": "profile-rename-input",
+                                    style: "flex:1;min-width:0;height:36px;box-sizing:border-box;display:flex;align-items:center;padding:0 12px;border:1px solid #e38a62;border-radius:10px;background:#1e1b18;color:#e8eef7;font-size:0.8125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;",
+                                    if view.profile_rename_name.is_empty() { "Profile name…" } else { "{view.profile_rename_name}" }
+                                }
+                                button {
+                                    class: "st-button",
+                                    r#type: "button",
+                                    "data-component": "button",
+                                    "data-size": "sm",
+                                    "data-part": "profile-rename-save",
+                                    style: "flex:none;width:88px;height:36px;",
+                                    span { "data-part": "label", "Save" }
+                                }
+                                button {
+                                    class: "st-button",
+                                    r#type: "button",
+                                    "data-component": "button",
+                                    "data-size": "sm",
+                                    "data-part": "profile-rename-cancel",
+                                    style: "flex:none;width:88px;height:36px;",
+                                    span { "data-part": "label", "Cancel" }
+                                }
+                            } else {
+                                div {
+                                    style: "flex:none;display:flex;align-items:center;gap:4px;",
+                                    button {
+                                        class: "SettingsPanel_profileAction",
+                                        r#type: "button",
+                                        "data-part": "profile-export",
+                                        "aria-label": "Export profile",
+                                        title: "Export profile",
+                                        style: "display:grid;width:44px;height:44px;place-items:center;border:1px solid transparent;border-radius:10px;color:#998f87;background:transparent;",
+                                        {icon_fill("DownloadSimple", 16, "#998f87")}
+                                    }
+                                    button {
+                                        class: "SettingsPanel_profileAction",
+                                        r#type: "button",
+                                        "data-part": "profile-rename",
+                                        "aria-label": "Rename profile",
+                                        title: "Rename profile",
+                                        style: "display:grid;width:44px;height:44px;place-items:center;border:1px solid transparent;border-radius:10px;color:#998f87;background:transparent;",
+                                        {icon_fill("PencilSimple", 16, "#998f87")}
+                                    }
+                                    button {
+                                        class: "SettingsPanel_profileActionDanger",
+                                        r#type: "button",
+                                        "data-part": "profile-delete",
+                                        "aria-label": "Delete profile",
+                                        title: "Delete profile",
+                                        style: "display:grid;width:44px;height:44px;place-items:center;border:1px solid transparent;border-radius:10px;color:#998f87;background:transparent;",
+                                        {icon_fill("Trash", 16, "#998f87")}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }

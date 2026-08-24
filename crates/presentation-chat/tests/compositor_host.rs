@@ -789,6 +789,95 @@ fn lorebook_entries_load_toggle_and_crud_over_product_wire() {
 }
 
 #[test]
+fn profiles_load_create_rename_export_delete_over_product_wire() {
+    use neotavern_presentation_chat::ShellAction;
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("settings".into()));
+    session.apply_shell_action(ShellAction::SetTab("profiles".into()));
+    let shell = session.shell_view();
+    assert_eq!(shell.settings_tab, "profiles");
+    assert!(
+        shell.profiles.iter().any(|row| row.name == "Main"),
+        "demo profiles list through profiles.list"
+    );
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "profiles.list")
+    );
+
+    // Create: inline row -> `profiles.create`; the draft clears.
+    session.set_profile_create_name("Longhaul");
+    session.apply_shell_action(ShellAction::CreateProfile);
+    let shell = session.shell_view();
+    assert_eq!(shell.profile_create_name, "");
+    assert!(shell.profiles.iter().any(|row| row.name == "Longhaul"));
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "profiles.create")
+    );
+
+    // Rename: inline row pre-fills the name; submit -> `profiles.rename`.
+    let id = shell
+        .profiles
+        .iter()
+        .find(|row| row.name == "Longhaul")
+        .expect("created profile")
+        .id
+        .clone();
+    session.apply_shell_action(ShellAction::StartProfileRename(id.clone()));
+    let shell = session.shell_view();
+    assert_eq!(shell.profile_renaming_id.as_deref(), Some(id.as_str()));
+    assert_eq!(shell.profile_rename_name, "Longhaul");
+    session.set_profile_rename_name("Longhaul II");
+    session.apply_shell_action(ShellAction::SubmitProfileRename);
+    let shell = session.shell_view();
+    assert_eq!(shell.profile_renaming_id, None);
+    assert!(shell.profiles.iter().any(|row| row.name == "Longhaul II"));
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "profiles.rename")
+    );
+
+    // Export: `profile.export` reports the scoped record counts in a toast.
+    session.apply_shell_action(ShellAction::ExportProfile(id.clone()));
+    let toast = session.shell_view().status_message;
+    assert!(
+        toast.as_deref().unwrap_or("").starts_with("Exported"),
+        "export surfaces the honest counts: {toast:?}"
+    );
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "profile.export")
+    );
+
+    // Delete: confirm dialog -> `profiles.delete`.
+    session.apply_shell_action(ShellAction::OpenProfileDelete(id.clone()));
+    assert!(session.shell_view().profile_delete_open);
+    session.apply_shell_action(ShellAction::ConfirmProfileDelete);
+    let shell = session.shell_view();
+    assert!(!shell.profile_delete_open);
+    assert!(
+        shell.profiles.iter().all(|row| row.id != id),
+        "confirm delete removes the profile"
+    );
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "profiles.delete")
+    );
+}
+
+#[test]
 fn physical_window_insets_become_css_pixels_on_the_shell() {
     let (mut session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");

@@ -1,10 +1,12 @@
 use contracts_generated::generated::{
     CharacterDto, ChatDto, GenerationEvent, LorebookDto, LorebookEntryDto, LorebookEntryInput,
     LorebookEntryPatch, MessageDraftDto, MessageDto, MessageRole, MessageVariantDto,
-    PagedCharacters, PagedChats, PagedMessages, PersonaDto, PluginsItem, ResultListLorebookEntries,
-    ResultListLorebooks, ResultListPersonas, ResultListPresets, ResultListProviders,
-    ResultMessageVariantList, ResultPluginsList, ResultSettings, ResultSnapshotsRollback,
-    SettingsItem,
+    PagedCharacters, PagedChats, PagedMessages, PersonaDto, PluginsItem, ProfileExportCounts,
+    ProfilesItem, RequestProfileExport, RequestProfilesCreate, RequestProfilesDelete,
+    RequestProfilesRename, ResultListLorebookEntries, ResultListLorebooks, ResultListPersonas,
+    ResultListPresets, ResultListProviders, ResultMessageVariantList, ResultPluginsList,
+    ResultProfileExport, ResultProfilesCreate, ResultProfilesList, ResultSettings,
+    ResultSnapshotsRollback, SettingsItem,
 };
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -49,6 +51,9 @@ pub struct FakeWire {
     /// Per-book entries (`lorebooks.entries.*`), keyed by lorebook id. The
     /// wire DTO carries no position/metadata — those are kernel-owned.
     lorebook_entries: HashMap<String, Vec<LorebookEntryDto>>,
+    /// Configuration profiles (`profiles.*`, React `ProfilesPanel`); the
+    /// built-in "Main" profile is always present, exactly like the kernel.
+    profiles: HashMap<String, ProfilesItem>,
     plugins: Vec<PluginsItem>,
     settings: Vec<SettingsItem>,
     streams: HashMap<String, VecDeque<StreamFrame>>,
@@ -68,6 +73,7 @@ impl Default for FakeWire {
             personas: HashMap::new(),
             lorebooks: HashMap::new(),
             lorebook_entries: HashMap::new(),
+            profiles: HashMap::new(),
             plugins: vec![
                 PluginsItem {
                     id: "tavern-speed-dial".into(),
@@ -184,6 +190,17 @@ impl FakeWire {
                 ),
             ],
         );
+        // Demo profiles so the Settings Profiles tab lists real rows (React
+        // `ProfilesPanel`): the kernel always seeds the built-in "Main"
+        // profile; the second one exercises rename/delete.
+        let profile = |id: u64, name: &str| ProfilesItem {
+            id: wire_id(id),
+            name: name.into(),
+            created_at: TS.into(),
+            updated_at: TS.into(),
+        };
+        wire.profiles.insert(wire_id(0x51), profile(0x51, "Main"));
+        wire.profiles.insert(wire_id(0x52), profile(0x52, "Caravan"));
         wire
     }
 
@@ -1103,6 +1120,81 @@ impl ProductWire for FakeWire {
                     items: self.settings.clone(),
                 }),
             ),
+            "profiles.list" => {
+                let mut items: Vec<ProfilesItem> = self.profiles.values().cloned().collect();
+                items.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+                self.wrap_call(operation_id, to_value(&ResultProfilesList { items }))
+            }
+            "profiles.create" => {
+                let name = payload
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| Self::product("PROFILE_NAME_REQUIRED", "name", ""))?;
+                let created = ProfilesItem {
+                    id: self.alloc_id(),
+                    name: name.to_string(),
+                    created_at: TS.into(),
+                    updated_at: TS.into(),
+                };
+                self.profiles.insert(created.id.clone(), created.clone());
+                self.wrap_call(operation_id, to_value(&ResultProfilesCreate { profile: created }))
+            }
+            "profiles.rename" => {
+                let id = payload_str(&payload, "id")?;
+                let name = payload
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| Self::product("PROFILE_NAME_REQUIRED", "name", ""))?;
+                let renamed = {
+                    let Some(profile) = self.profiles.get_mut(&id) else {
+                        return Err(Self::product("PROFILE_NOT_FOUND", "profileId", &id));
+                    };
+                    profile.name = name.to_string();
+                    profile.updated_at = TS.into();
+                    profile.clone()
+                };
+                self.wrap_call(operation_id, to_value(&renamed))
+            }
+            "profiles.delete" => {
+                let id = payload_str(&payload, "id")?;
+                if self.profiles.remove(&id).is_none() {
+                    return Err(Self::product("PROFILE_NOT_FOUND", "profileId", &id));
+                }
+                self.ok_call(operation_id, json!({}))
+            }
+            "profile.export" => {
+                let id = payload_str(&payload, "profileId")?;
+                if self.profiles.get(&id).is_none() {
+                    return Err(Self::product("PROFILE_NOT_FOUND", "profileId", &id));
+                }
+                let characters = i64::try_from(self.characters.len()).unwrap_or(0);
+                let chats = i64::try_from(self.chats.len()).unwrap_or(0);
+                let messages = self
+                    .messages
+                    .values()
+                    .map(Vec::len)
+                    .sum::<usize>()
+                    .try_into()
+                    .unwrap_or(0);
+                let result = ResultProfileExport {
+                    container_path: format!("exports/profile-{id}-{TS}.zip"),
+                    format_version: 2,
+                    created_at: TS.into(),
+                    records: ProfileExportCounts {
+                        characters,
+                        chats,
+                        messages,
+                        lorebooks: 0,
+                        presets: 0,
+                    },
+                    assets: 0,
+                    size_bytes: 0,
+                    manifest_sha256: "0000000000000000000000000000000000000000000000000000000000000000"
+                        .into(),
+                    profile_id: Some(id),
+                };
+                self.wrap_call(operation_id, to_value(&result))
+            }
             other => Err(ChatRouteError::UnknownCommand(other.to_string())),
         }
     }

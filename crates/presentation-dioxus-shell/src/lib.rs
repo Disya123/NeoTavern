@@ -36,10 +36,10 @@ pub use product_shell::{
     AI_SETTINGS_TITLE, BACKGROUNDS_MANAGER_TITLE, CHARACTER_MANAGER_TITLE, CHATS_MANAGER_TITLE,
     CharacterCardView, CharacterDraftView, ChatCardView, LOREBOOK_MANAGER_TITLE, LorebookCardView,
     LorebookEntryCardView, PERSONA_MANAGER_TITLE, PLUGINS_MANAGER_TITLE, PersonaCardView,
-    PluginCardView, PresetCardView, ProductShellView, ProviderCardView, SETTINGS_TITLE,
-    character_card_description, character_manager_title, current_product_shell, ellipsize_css,
-    install_product_shell, lorebook_card_description, panel_header_title, persona_card_description,
-    product_shell_app,
+    PluginCardView, PresetCardView, ProductShellView, ProfileCardView, ProviderCardView,
+    SETTINGS_TITLE, character_card_description, character_manager_title, current_product_shell,
+    ellipsize_css, install_product_shell, lorebook_card_description, panel_header_title,
+    persona_card_description, product_shell_app,
 };
 pub use scene_chat::{
     ChatBlueprintSource, chat_wallpaper_mode, set_chat_blueprint_source, set_chat_wallpaper_mode,

@@ -187,6 +187,15 @@ pub struct PresetCardView {
     pub kind: String,
 }
 
+/// Configuration profile row (`React ProfilesPanel` list; `profiles.list`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProfileCardView {
+    pub id: String,
+    pub name: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
 /// Home/chats panel row (React `ChatManagementPanel_chatRow`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ChatCardView {
@@ -295,6 +304,15 @@ pub struct ProductShellView {
     /// Script-aware token estimate for the entry content draft (React
     /// `EntryDialog` token label; computed in the session view model).
     pub entry_content_tokens: u64,
+    /// Configuration profiles (`profiles.list`; React `ProfilesPanel`).
+    pub profiles: Vec<ProfileCardView>,
+    pub profile_create_name: String,
+    /// Profile row currently in inline-rename mode.
+    pub profile_renaming_id: Option<String>,
+    pub profile_rename_name: String,
+    pub profile_delete_open: bool,
+    /// Profile the delete-confirm dialog asks about.
+    pub profile_delete_target_id: Option<String>,
     pub plugins: Vec<PluginCardView>,
     pub providers: Vec<ProviderCardView>,
     pub presets: Vec<PresetCardView>,
@@ -370,6 +388,12 @@ impl Default for ProductShellView {
             entry_selective_draft: false,
             entry_delete_target_id: None,
             entry_content_tokens: 0,
+            profiles: Vec::new(),
+            profile_create_name: String::new(),
+            profile_renaming_id: None,
+            profile_rename_name: String::new(),
+            profile_delete_open: false,
+            profile_delete_target_id: None,
             plugins: Vec::new(),
             providers: Vec::new(),
             presets: Vec::new(),
@@ -1857,9 +1881,24 @@ pub fn product_shell_app() -> Element {
     let entry_delete_style = format!(
         "position:absolute;left:{xdlg_x}px;top:{xdlg_y}px;width:{xdlg_w}px;height:{xdlg_h}px;box-sizing:border-box;z-index:50;padding:16px;color:#f3eee8;"
     );
-    let entry_delete_book_name = entry_dialog_book_name;
-    let entry_delete_confirm = format!("Delete this entry from \"{entry_delete_book_name}\"?");
+let entry_delete_book_name = entry_dialog_book_name;
+    let entry_delete_confirm =
+        format!("Delete this entry from \"{entry_delete_book_name}\"?");
 
+    // Profile delete confirm (300×200, mirrors `shell_hit::dialog_hit`).
+    let (pdlg_x, pdlg_y, pdlg_w, pdlg_h) = modal_geometry(&view, 300.0, 200.0);
+    let profile_delete_style = format!(
+        "position:absolute;left:{pdlg_x}px;top:{pdlg_y}px;width:{pdlg_w}px;height:{pdlg_h}px;box-sizing:border-box;z-index:50;padding:16px;color:#f3eee8;"
+    );
+    let profile_delete_name = view
+        .profiles
+        .iter()
+        .find(|item| Some(item.id.as_str()) == view.profile_delete_target_id.as_deref())
+        .map(|item| item.name.as_str())
+        .unwrap_or("");
+    let profile_delete_confirm = format!(
+        "Delete \"{profile_delete_name}\"? Its characters stay unassigned; nothing is removed."
+    );
     // Entry dialog switches (track, thumb) — same geometry as row switches.
     let (switch_constant, switch_selective, switch_enabled) = (
         entry_switch_style(view.entry_constant_draft),
@@ -2211,6 +2250,33 @@ pub fn product_shell_app() -> Element {
                     div { "data-component": "dialog-description", "{entry_delete_confirm}" }
                     div {
                         class: "LorebookPanel_dialogActions",
+                        style: "display:flex;gap:8px;justify-content:flex-end;margin-top:12px;",
+                        button {
+                            r#type: "button",
+                            "data-variant": "default",
+                            "data-size": "md",
+                            span { "Cancel" }
+                        }
+                        button {
+                            r#type: "button",
+                            "data-variant": "danger",
+                            "data-size": "md",
+                            span { "Delete" }
+                        }
+                    }
+                }
+            }
+            if view.profile_delete_open {
+                div {
+                    class: "st-card",
+                    style: "{profile_delete_style}",
+                    div {
+                        "data-component": "dialog-title",
+                        "Delete profile"
+                    }
+                    div { "data-component": "dialog-description", "{profile_delete_confirm}" }
+                    div {
+                        class: "CharacterManagementPanel_dialogActions",
                         style: "display:flex;gap:8px;justify-content:flex-end;margin-top:12px;",
                         button {
                             r#type: "button",

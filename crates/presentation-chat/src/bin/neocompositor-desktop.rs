@@ -55,6 +55,8 @@ enum TextFocus {
     CharacterSearch,
     ChatSearch,
     CreateName,
+    ProfileCreateName,
+    ProfileRename,
 }
 
 /// One scripted probe step, replayed in argument order so
@@ -463,6 +465,10 @@ impl App {
             focus = TextFocus::CharacterSearch;
         } else if rects.covers(css_x, css_y, "part:chat-search") {
             focus = TextFocus::ChatSearch;
+        } else if rects.covers(css_x, css_y, "part:profile-create-name") {
+            focus = TextFocus::ProfileCreateName;
+        } else if rects.covers(css_x, css_y, "part:profile-rename-input") {
+            focus = TextFocus::ProfileRename;
         }
         self.focus = focus;
     }
@@ -735,6 +741,18 @@ impl App {
                 self.session.set_create_name(&next);
                 eprintln!("[neocompositor-desktop] typed '{ch}' -> create_name=\"{next}\"");
             }
+            TextFocus::ProfileCreateName => {
+                let current = self.session.shell_view().profile_create_name;
+                let next = format!("{current}{ch}");
+                self.session.set_profile_create_name(&next);
+                eprintln!("[neocompositor-desktop] typed '{ch}' -> profile_create_name=\"{next}\"");
+            }
+            TextFocus::ProfileRename => {
+                let current = self.session.shell_view().profile_rename_name;
+                let next = format!("{current}{ch}");
+                self.session.set_profile_rename_name(&next);
+                eprintln!("[neocompositor-desktop] typed '{ch}' -> profile_rename_name=\"{next}\"");
+            }
             TextFocus::None => return,
         }
         self.dirty = true;
@@ -748,6 +766,8 @@ impl App {
             TextFocus::CharacterSearch => self.session.shell_view().search,
             TextFocus::ChatSearch => self.session.shell_view().chat_search,
             TextFocus::CreateName => self.session.shell_view().create_name,
+            TextFocus::ProfileCreateName => self.session.shell_view().profile_create_name,
+            TextFocus::ProfileRename => self.session.shell_view().profile_rename_name,
             TextFocus::None => return,
         };
         let next: String = current
@@ -761,6 +781,8 @@ impl App {
             TextFocus::CharacterSearch => self.session.set_character_search(&next),
             TextFocus::ChatSearch => self.session.set_chat_search(&next),
             TextFocus::CreateName => self.session.set_create_name(&next),
+            TextFocus::ProfileCreateName => self.session.set_profile_create_name(&next),
+            TextFocus::ProfileRename => self.session.set_profile_rename_name(&next),
             TextFocus::None => {}
         }
         self.dirty = true;

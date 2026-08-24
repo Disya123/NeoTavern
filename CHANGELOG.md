@@ -3,6 +3,19 @@
 ## Unreleased
 ### Added
 
+- **Настройки → Профили (перенос ProfilesPanel).** Вкладка Profiles панели
+  Settings вместо статичной заглушки показывает реальный CRUD конфиг-
+  профилей над Product Wire: список через `profiles.list` (FakeWire сеет
+  «Main» и «Caravan»), инлайн-создание (`profiles.create`), инлайн-rename
+  (`profiles.rename`), экспорт (`profile.export`, SEC-02: Kernel строит
+  контейнер, тост показывает честные счётчики characters/chats/messages) и
+  удаление с диалогом подтверждения (`profiles.delete`; персонажи остаются
+  непривязанными). Импорт — честная подпись без поля пути (пикером владеет
+  упакованный хост). Фокус клавиатуры — `TextFocus::ProfileCreateName` /
+  `ProfileRename` по `data-part` rects. cargo-тесты (включая новый
+  `profiles_load_create_rename_export_delete_over_product_wire`), goldens
+  0.0000% ×4, packaged-check, docs:check.
+
 - **Записи лорбука (перенос LorebookPanel EntriesTab).** У выбранного
   лорбука вкладка Entries показывает реальные записи через
   `lorebooks.entries.list`: тулбар (Back to books / Add entry), подсказка,

@@ -82,6 +82,16 @@ pub enum ShellAction {
     EntryToggleEnabled,
     EntryToggleConstant,
     EntryToggleSelective,
+    /// Settings Profiles tab (`React ProfilesPanel`): inline create row,
+    /// inline rename, delete confirm and the per-profile export.
+    CreateProfile,
+    StartProfileRename(String),
+    SubmitProfileRename,
+    CancelProfileRename,
+    OpenProfileDelete(String),
+    CloseProfileDelete,
+    ConfirmProfileDelete,
+    ExportProfile(String),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -182,6 +192,23 @@ fn header_bottom(view: &ProductShellView) -> f32 {
 fn dialog_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
     let (width, height) = css_size(view);
     let chat_x0 = chat_origin_x(view);
+    if view.profile_delete_open {
+        let dlg_w = 300.0_f32.min(width - 32.0);
+        let dlg_h = 200.0_f32.min(height - 48.0);
+        let x0 = chat_x0 + (width - chat_x0 - dlg_w).max(0.0) * 0.5;
+        let y0 = (height - dlg_h) * 0.5;
+        if !contains(x, y, x0, y0, x0 + dlg_w, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::CloseProfileDelete));
+        }
+        let actions_y = y0 + dlg_h - 56.0;
+        if contains(x, y, x0, actions_y, x0 + dlg_w * 0.5, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::CloseProfileDelete));
+        }
+        if contains(x, y, x0 + dlg_w * 0.5, actions_y, x0 + dlg_w, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::ConfirmProfileDelete));
+        }
+        return Some(ShellHit::Absorb);
+    }
     if view.entry_delete_open {
         let dlg_w = 300.0_f32.min(width - 32.0);
         let dlg_h = 200.0_f32.min(height - 48.0);
@@ -517,16 +544,7 @@ pub fn hit_test(view: &ProductShellView, css_x: f32, css_y: f32) -> Option<Shell
                 );
             }
             "settings" => {
-                return catalog_panel_hit(
-                    view,
-                    x,
-                    y,
-                    &["general", "host"],
-                    view.settings_tab.as_str(),
-                    0.0,
-                    core::iter::empty(),
-                    |_: &str| ShellAction::ClosePanel,
-                );
+                return settings_hit(view, x, y);
             }
             _ => {
                 let header_end = header_bottom(view);
@@ -683,6 +701,102 @@ fn lorebook_entries_hit(view: &ProductShellView, x: f32, y: f32) -> Option<Shell
         }
         if x >= x1 - pad - 44.0 && x < x1 - pad {
             return Some(ShellHit::Action(ShellAction::OpenEntryDelete(id)));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    Some(ShellHit::Absorb)
+}
+
+/// Settings panel: shared tab row (General / Themes / Data / Profiles /
+/// Secrets / Tools), then tab-specific body regions. Only the Profiles tab
+/// is interactive here (create/rename/delete/export); the other tabs are
+/// read-only surfaces (absorb).
+fn settings_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
+    if !view.sidebar_open {
+        return None;
+    }
+    let (panel_x, panel_w) = panel_origin(view);
+    let x1 = panel_x + panel_w;
+    if x < panel_x || x >= x1 {
+        return None;
+    }
+    let header_end = header_bottom(view);
+    if y < header_end {
+        if x >= x1 - CONTROL_SM - SPACE_LG {
+            return Some(ShellHit::Action(ShellAction::ClosePanel));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    let tabs = ["general", "themes", "data", "profiles", "secrets", "tools"];
+    let tabs_top = header_end + SPACE_XS;
+    let tabs_bottom = tabs_top + CONTROL_SM + SPACE_XS;
+    if y >= tabs_top && y < tabs_bottom {
+        let span = (panel_w - SPACE_LG * 2.0).max(1.0);
+        let idx = (((x - (panel_x + SPACE_LG)) / span) * tabs.len() as f32).floor() as usize;
+        return Some(ShellHit::Action(ShellAction::SetTab(
+            tabs[idx.min(tabs.len() - 1)].into(),
+        )));
+    }
+    if view.settings_tab == "profiles" {
+        return profiles_hit(view, x, y, panel_x, x1, tabs_bottom);
+    }
+    Some(ShellHit::Absorb)
+}
+
+/// React `ProfilesPanel` body: inline create row (input + Create button),
+/// an honest import note (the packaged host owns the file picker), then
+/// profile rows carrying export / rename / delete in the right 132 px. An
+/// inline-renaming row swaps the actions for Save / Cancel.
+/// Geometry mirrors `settings_tab.rs::profiles_tab` (label 16 + gap 8 →
+/// create row 36; import block 104; rows 64 + 4).
+fn profiles_hit(
+    view: &ProductShellView,
+    x: f32,
+    y: f32,
+    panel_x: f32,
+    x1: f32,
+    tabs_bottom: f32,
+) -> Option<ShellHit> {
+    let pad = SPACE_LG;
+    let create_row_top = tabs_bottom + SPACE_XS + 12.0 + 16.0 + 8.0;
+    let create_row_bottom = create_row_top + 36.0;
+    if y >= create_row_top && y < create_row_bottom {
+        if x >= x1 - pad - 96.0 {
+            return Some(ShellHit::Action(ShellAction::CreateProfile));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    let import_top = create_row_bottom + SPACE_MD;
+    let import_bottom = import_top + 104.0;
+    if y >= import_top && y < import_bottom {
+        return Some(ShellHit::Absorb);
+    }
+    let rows_start = import_bottom + SPACE_MD + 40.0;
+    let row_h = 64.0;
+    let row_gap = SPACE_XS;
+    for (index, profile) in view.profiles.iter().enumerate() {
+        let y0 = rows_start + index as f32 * (row_h + row_gap);
+        if y < y0 || y >= y0 + row_h {
+            continue;
+        }
+        let id = profile.id.clone();
+        if view.profile_renaming_id.as_deref() == Some(id.as_str()) {
+            if x >= x1 - pad - 176.0 && x < x1 - pad - 88.0 {
+                return Some(ShellHit::Action(ShellAction::SubmitProfileRename));
+            }
+            if x >= x1 - pad - 88.0 && x < x1 - pad {
+                return Some(ShellHit::Action(ShellAction::CancelProfileRename));
+            }
+            return Some(ShellHit::Absorb);
+        }
+        if x >= x1 - pad - 132.0 && x < x1 - pad - 88.0 {
+            return Some(ShellHit::Action(ShellAction::ExportProfile(id)));
+        }
+        if x >= x1 - pad - 88.0 && x < x1 - pad - 44.0 {
+            return Some(ShellHit::Action(ShellAction::StartProfileRename(id)));
+        }
+        if x >= x1 - pad - 44.0 && x < x1 - pad {
+            return Some(ShellHit::Action(ShellAction::OpenProfileDelete(id)));
         }
         return Some(ShellHit::Absorb);
     }
