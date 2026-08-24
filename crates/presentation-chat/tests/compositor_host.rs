@@ -1,6 +1,7 @@
 //! Host compositor bind: Dioxus+Blitz once, then compositor-only ticks.
 
 use neotavern_neocompositor::PresentationTime;
+use contracts_generated::generated::MessageRole;
 use neotavern_presentation_chat::{
     AVATAR_DISPLAY_MAX_PX, ChatCompositor, DEMO_AVATAR_ASSET_ID, FakeWire, start_flagged_session,
 };
@@ -195,6 +196,7 @@ fn markdown_minimal_probe() {
             kind: RowKind::Markdown,
             author: "Hazel".into(),
             timestamp: String::new(),
+            run_id: None,
         }],
         chrome: ProductChrome::HeaderComposer,
         character_avatar_asset: "asset:avatar-hazel".into(),
@@ -1033,6 +1035,74 @@ fn chats_rename_and_delete_over_product_wire() {
             .contains("deleted"),
         "delete surfaces a toast"
     );
+}
+
+#[test]
+fn prompt_plan_over_product_wire() {
+    use neotavern_presentation_chat::ShellAction;
+    let (mut session, _) = start_flagged_session(
+        Some("1"),
+        FakeWire::demo(),
+        Some(neotavern_presentation_chat::DEMO_CHAT_ID),
+        None,
+    )
+    .expect("route");
+    session.set_composer_text("Hello from the prompt plan test").expect("composer");
+    session.send(None).expect("send");
+    session.drain_stream().expect("drain");
+    let run_id = session
+        .shell_view()
+        .chat
+        .visible
+        .iter()
+        .rev()
+        .find_map(|row| row.run_id.clone())
+        .expect("generated row carries a run id");
+
+    // Trigger: the React footer action only exists for rows with a run id,
+    // so the visible row exposes `run_id`; opening the dialog issues
+    // `generation.prompt.plan` and renders the durable plan.
+    session.apply_shell_action(ShellAction::OpenPromptPlan(run_id.clone()));
+    let shell = session.shell_view();
+    assert!(shell.prompt_plan_open);
+    assert_eq!(shell.prompt_plan_run_id.as_deref(), Some(run_id.as_str()));
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "generation.prompt.plan")
+    );
+    let plan = shell.prompt_plan.as_ref().expect("plan loaded");
+    assert_eq!(plan.model, "demo-model");
+    assert_eq!(plan.run_id, run_id);
+    assert!(plan.system_blocks.iter().any(|b| b.source == "character"));
+    assert!(plan.messages.iter().any(|m| m.role == MessageRole::Assistant));
+    assert!(plan.messages.iter().any(|m| m.role == MessageRole::User));
+    assert!(
+        !plan.excluded.is_empty(),
+        "the oldest seeded message is dropped by the token budget"
+    );
+    assert!(
+        plan.excluded
+            .iter()
+            .all(|item| item.reason == "token_budget")
+    );
+
+    // Close resets the dialog state.
+    session.apply_shell_action(ShellAction::ClosePromptPlan);
+    let shell = session.shell_view();
+    assert!(!shell.prompt_plan_open);
+    assert!(shell.prompt_plan.is_none());
+
+    // Unknown run → honest empty state ("This run has no recorded prompt
+    // plan."), mirroring React mapping `PROMPT_PLAN_NOT_FOUND` to null.
+    session.apply_shell_action(ShellAction::OpenPromptPlan(
+        "00000000-0000-4000-8000-000000000000".into(),
+    ));
+    let shell = session.shell_view();
+    assert!(shell.prompt_plan_open);
+    assert!(shell.prompt_plan.is_none());
+    assert!(shell.prompt_plan_not_found);
 }
 
 #[test]

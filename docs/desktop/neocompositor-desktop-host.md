@@ -317,6 +317,24 @@ guard React). Если удалён открытый чат, сессия сбр
 React при этом навигирует прочь. Список перечитывается через `chats.list`,
 тост «Chat renamed.» / «Chat deleted.». Фокус клавиатуры — `TextFocus::ChatRename`.
 
+## Панель плана промпта (PromptPlanPanel)
+
+Триггер — per-message footer-действие «Prompt plan» (TextAlignLeft) на строках,
+чей `generation_run_id` установлен (React `MessageDetailsCardV2` гейтится по
+`meta.generationRunId`); кнопка добавлена в blueprint-документ
+(`message-action-prompt`, action `chat.message.prompt`) и в legacy RSX с тем же
+условием — skeleton-parity сохранён. Диалог 640×560 (`shell_hit::dialog_hit`:
+backdrop/close → `ClosePromptPlan`, тело Absorb) рендерит четыре состояния React
+`PromptPlanPanel`: ошибка (`role=alert`, `isError`), «This run has no recorded
+prompt plan.» (`PROMPT_PLAN_NOT_FOUND` → null, как в React-хуке), и контент плана
+(`generation.prompt.plan` — одноразовый запрос/ответ, без SSE): мета-dl
+(Model/Instruct format/Tokenizer±approximate/Tokens: Input · Response reserve ·
+Context limit), over-budget-алерт, секции System blocks / Selected messages
+(`data-role`), Excluded from context (всегда; пустая → «Nothing was excluded.»,
+`token_budget` → «Removed by token budget»). FakeWire записывает durable-план
+при старте генерации (зеркало kernel `prompt_plans`), `chats.delete` чистит
+планы чата. Тест `prompt_plan_over_product_wire`.
+
 ## Отправка сообщения (Send)
 
 Композер (`data-part="composer"` в `product_chat_app`) получил кнопку **Send**

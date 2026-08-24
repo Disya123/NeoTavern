@@ -13,17 +13,18 @@ use contracts_generated::generated::{
     RequestRetryGeneration, RequestSettingsGet, RequestSnapshotsRollback, RequestStartGeneration,
     RequestUpdateCharacter, RequestUpdateLorebookEntry, RequestProfileExport, RequestProfilesCreate,
     RequestProfilesDelete, RequestProfilesRename, RequestUpdateChat, RequestDeleteChat,
-    ResultAssetsContent,
+    RequestGetPromptPlan, ResultAssetsContent,
     ResultListLorebookEntries, ResultListLorebooks, ResultListPersonas, ResultListPresets,
     ResultListProviders, ResultPluginsList, ResultProfileExport, ResultProfilesCreate,
     ResultProfilesList, ResultSettings, SettingsItem, decode_character_dto,
     decode_chat_dto, decode_lorebook_dto, decode_lorebook_entry_dto, decode_message_draft_dto,
     decode_message_dto, decode_paged_characters, decode_paged_chats, decode_paged_messages,
-    decode_persona_dto, decode_result_assets_content, decode_result_list_lorebook_entries,
+    decode_persona_dto, decode_prompt_plan, decode_result_assets_content,
+    decode_result_list_lorebook_entries,
     decode_result_list_lorebooks, decode_result_list_personas, decode_result_list_presets,
     decode_result_list_providers, decode_result_message_variant_list, decode_result_plugins_list,
     decode_result_profile_export, decode_result_profiles_create, decode_result_profiles_list,
-    decode_result_settings, decode_result_snapshots_rollback, ProfilesItem,
+    decode_result_settings, decode_result_snapshots_rollback, ProfilesItem, PromptPlan,
 };
 use neotavern_chat_viewport::{
     GeometrySnapshot, HeightIndex, HeightKind, LogicalItemId, PredictorBudgets, PresentDecision,
@@ -164,6 +165,14 @@ pub struct ChatRouteState {
     /// Chats panel delete confirm dialog.
     pub chat_delete_open: bool,
     pub chat_delete_target_id: Option<String>,
+    /// Prompt plan dialog (`generation.prompt.plan`; React `PromptPlanPanel`).
+    pub prompt_plan_open: bool,
+    pub prompt_plan_run_id: Option<String>,
+    pub prompt_plan: Option<PromptPlan>,
+    /// `PROMPT_PLAN_NOT_FOUND` → honest empty state (React maps it to null).
+    pub prompt_plan_not_found: bool,
+    /// Any other error renders inside the dialog (React `isError` state).
+    pub prompt_plan_error: Option<String>,
     /// Composer context-meter popover visibility (`chat.composer.context`).
     pub context_panel_open: bool,
     /// Last applied Kernel stream envelope sequence (`EventEnvelope.sequence`).
@@ -769,6 +778,7 @@ impl<W: ProductWire> ChatSession<W> {
             kind: row_kind(&message.content),
             author,
             timestamp: neotavern_presentation_dioxus_shell::format_timestamp(&message.created_at),
+            run_id: message.generation_run_id.clone(),
         }
     }
 
@@ -817,6 +827,7 @@ impl<W: ProductWire> ChatSession<W> {
                 kind: RowKind::Markdown,
                 author: self.assistant_author(),
                 timestamp: String::new(),
+                run_id: None,
             });
         }
         // React chat chrome is header + composer only; the TripleGlass /
@@ -1066,6 +1077,11 @@ impl<W: ProductWire> ChatSession<W> {
             chat_rename_draft: self.state.chat_rename_draft.clone(),
             chat_delete_open: self.state.chat_delete_open,
             chat_delete_target_id: self.state.chat_delete_target_id.clone(),
+            prompt_plan_open: self.state.prompt_plan_open,
+            prompt_plan_run_id: self.state.prompt_plan_run_id.clone(),
+            prompt_plan: self.state.prompt_plan.clone(),
+            prompt_plan_not_found: self.state.prompt_plan_not_found,
+            prompt_plan_error: self.state.prompt_plan_error.clone(),
             plugins: self
                 .state
                 .plugins
@@ -1977,6 +1993,8 @@ impl<W: ProductWire> ChatSession<W> {
                 self.bump_scene();
             }
             ShellAction::ConfirmChatDelete => self.confirm_delete_chat(),
+            ShellAction::OpenPromptPlan(run_id) => self.open_prompt_plan(&run_id),
+            ShellAction::ClosePromptPlan => self.close_prompt_plan(),
         }
     }
 
@@ -2852,6 +2870,41 @@ impl<W: ProductWire> ChatSession<W> {
         self.bump_scene();
     }
 
+    /// Opens the prompt plan dialog for a run and loads the durable plan
+    /// (`generation.prompt.plan`; React `PromptPlanPanel`). `PROMPT_PLAN_NOT_FOUND`
+    /// becomes the honest empty state; any other error renders inside the
+    /// dialog (React `isError`), not as a toast.
+    pub fn open_prompt_plan(&mut self, run_id: &str) {
+        self.state.prompt_plan_run_id = Some(run_id.to_string());
+        self.state.prompt_plan_open = true;
+        self.state.prompt_plan = None;
+        self.state.prompt_plan_not_found = false;
+        self.state.prompt_plan_error = None;
+        match self.call_decode(
+            "generation.prompt.plan",
+            &RequestGetPromptPlan {
+                run_id: run_id.to_string(),
+            },
+            decode_prompt_plan,
+        ) {
+            Ok(plan) => self.state.prompt_plan = Some(plan),
+            Err(ChatRouteError::Product(dto)) if dto.code == "PROMPT_PLAN_NOT_FOUND" => {
+                self.state.prompt_plan_not_found = true;
+            }
+            Err(err) => self.state.prompt_plan_error = Some(err.to_string()),
+        }
+        self.bump_scene();
+    }
+
+    pub fn close_prompt_plan(&mut self) {
+        self.state.prompt_plan_open = false;
+        self.state.prompt_plan_run_id = None;
+        self.state.prompt_plan = None;
+        self.state.prompt_plan_not_found = false;
+        self.state.prompt_plan_error = None;
+        self.bump_scene();
+    }
+
     fn refresh_chat(&mut self) -> Result<(), ChatRouteError> {
         let Some(chat_id) = self.chat_id.clone() else {
             return Ok(());
@@ -3073,6 +3126,7 @@ fn virtualized_window(
                     timestamp: neotavern_presentation_dioxus_shell::format_timestamp(
                         &message.created_at,
                     ),
+                    run_id: message.generation_run_id.clone(),
                 });
             }
         }
@@ -3102,6 +3156,7 @@ fn visible_rows(messages: &[MessageDto], assistant_author: &str) -> Vec<VisibleR
                 assistant_author.to_string()
             },
             timestamp: neotavern_presentation_dioxus_shell::format_timestamp(&row.created_at),
+            run_id: row.generation_run_id.clone(),
         })
         .collect()
 }

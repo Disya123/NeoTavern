@@ -566,6 +566,9 @@ pub fn product_chat_app() -> Element {
                                             {message_action_button("branch", "Branch", "GitBranch", &row.id)}
                                             {message_action_button("delete", "Delete message", "Trash", &row.id)}
                                             {message_action_button("rollback", "Rollback to here", "ArrowUUpLeft", &row.id)}
+                                            if row.run_id.is_some() {
+                                                {message_action_button("prompt", "View prompt plan", "TextAlignLeft", &row.id)}
+                                            }
                                         }
                                     }
                                     div {

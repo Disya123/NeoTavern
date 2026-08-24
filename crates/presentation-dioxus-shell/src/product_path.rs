@@ -33,6 +33,10 @@ pub struct VisibleRow {
     /// Pre-formatted timestamp label (React `message-timestamp`); empty means
     /// no `<time>` element, like React's conditional render.
     pub timestamp: String,
+    /// Source generation run id (`MessageDto.generationRunId`); `Some`
+    /// renders the "Prompt plan" footer action (React `MessageDetailsCardV2`
+    /// gates on `meta.generationRunId`).
+    pub run_id: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -259,6 +263,10 @@ pub fn visible_rows(fixture: &CanonicalFixture, start: usize) -> Vec<VisibleRow>
                     .and_then(Value::as_str)
                     .map(format_timestamp)
                     .unwrap_or_default(),
+                run_id: value
+                    .get("generationRunId")
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
             }
         })
         .collect()

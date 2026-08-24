@@ -173,6 +173,10 @@
                               {
                                 "id": "chat.message.rollback",
                                 "parameter": "messageId"
+                              },
+                              {
+                                "id": "chat.message.prompt",
+                                "parameter": "messageId"
                               }
                             ],
                             "children": [
@@ -269,6 +273,20 @@
                                 "actions": [
                                   {
                                     "id": "chat.message.rollback",
+                                    "parameter": "messageId"
+                                  }
+                                ],
+                                "children": []
+                              },
+                              {
+                                "nodeId": "message-action-prompt",
+                                "component": "MessageActionButton",
+                                "recipe": "icon-button",
+                                "role": "button",
+                                "stateSlots": [],
+                                "actions": [
+                                  {
+                                    "id": "chat.message.prompt",
                                     "parameter": "messageId"
                                   }
                                 ],

@@ -104,6 +104,10 @@ pub enum ShellAction {
     OpenChatDelete(String),
     CloseChatDelete,
     ConfirmChatDelete,
+    /// Prompt plan dialog (`generation.prompt.plan`; React `PromptPlanPanel`,
+    /// triggered from the per-message footer action).
+    OpenPromptPlan(String),
+    ClosePromptPlan,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -239,6 +243,20 @@ fn dialog_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
         }
         if contains(x, y, x0 + dlg_w * 0.5, actions_y, x0 + dlg_w, y0 + dlg_h) {
             return Some(ShellHit::Action(ShellAction::SubmitChatRename));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    if view.prompt_plan_open {
+        let dlg_w = 640.0_f32.min(width - 32.0);
+        let dlg_h = 560.0_f32.min(height - 48.0);
+        let x0 = chat_x0 + (width - chat_x0 - dlg_w).max(0.0) * 0.5;
+        let y0 = (height - dlg_h) * 0.5;
+        if !contains(x, y, x0, y0, x0 + dlg_w, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::ClosePromptPlan));
+        }
+        let close_y = y0 + 16.0;
+        if contains(x, y, x0 + dlg_w - 44.0, close_y, x0 + dlg_w - 4.0, close_y + 40.0) {
+            return Some(ShellHit::Action(ShellAction::ClosePromptPlan));
         }
         return Some(ShellHit::Absorb);
     }

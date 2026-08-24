@@ -6,7 +6,7 @@ use contracts_generated::generated::{
     RequestProfilesRename, ResultListLorebookEntries, ResultListLorebooks, ResultListPersonas,
     ResultListPresets, ResultListProviders, ResultMessageVariantList, ResultPluginsList,
     ResultProfileExport, ResultProfilesCreate, ResultProfilesList, ResultSettings,
-    ResultSnapshotsRollback, SettingsItem,
+    ResultSnapshotsRollback, SettingsItem, PromptBlock, PromptMessage, PromptPlan,
 };
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -57,6 +57,10 @@ pub struct FakeWire {
     plugins: Vec<PluginsItem>,
     settings: Vec<SettingsItem>,
     streams: HashMap<String, VecDeque<StreamFrame>>,
+    /// Durable prompt plans (`generation.prompt.plan`), keyed by run id —
+    /// recorded when a generation starts, mirroring the kernel's
+    /// `prompt_plans` table persistence.
+    plans: HashMap<String, PromptPlan>,
     cursors: HashMap<String, CursorCut>,
     fail_ops: HashSet<String>,
     next: u64,
@@ -115,6 +119,7 @@ impl Default for FakeWire {
                 },
             ],
             streams: HashMap::new(),
+            plans: HashMap::new(),
             cursors: HashMap::new(),
             fail_ops: HashSet::new(),
             next: 0x9000,
@@ -694,7 +699,7 @@ impl FakeWire {
 
     fn start_generation(&mut self, op: &str, payload: &Value) -> Result<String, ChatRouteError> {
         let run_id = self.alloc_id();
-        let (chat_id, reply) = if op == "generation.retry" {
+        let (chat_id, user_text, reply) = if op == "generation.retry" {
             let source = payload_str(payload, "sourceRunId")?;
             let found = self
                 .messages
@@ -708,12 +713,16 @@ impl FakeWire {
                     &source,
                 ));
             };
-            (source_msg.chat_id.clone(), format!("retry of {source}"))
+            (
+                source_msg.chat_id.clone(),
+                None,
+                format!("retry of {source}"),
+            )
         } else {
             let chat_id = payload_str(payload, "chatId")?;
             self.require_chat(&chat_id)?;
             let message = payload_str(payload, "message")?;
-            (chat_id, format!("echo: {message}"))
+            (chat_id, Some(message.to_string()), format!("echo: {message}"))
         };
         let sequence = self
             .messages
@@ -721,6 +730,12 @@ impl FakeWire {
             .and_then(|rows| rows.iter().map(|row| row.sequence).max())
             .unwrap_or(-1)
             + 1;
+        // The durable plan of what entered the provider request is recorded
+        // at generation start (kernel persists it in `prompt_plans`).
+        self.plans.insert(
+            run_id.clone(),
+            self.build_prompt_plan(&chat_id, &run_id, user_text.as_deref(), &reply),
+        );
         let final_message = assistant_message(&chat_id, sequence, &reply, Some(run_id.clone()));
         let first: String = reply.chars().take(6).collect();
         let rest: String = reply.chars().skip(6).collect();
@@ -748,6 +763,68 @@ impl FakeWire {
         self.streams.insert(run_id.clone(), frames);
         Ok(run_id)
     }
+
+    /// Builds the demo prompt plan for a run: the wire shape of the kernel's
+    /// `PromptPlanDto`, with the provider-side metadata, the character and
+    /// instruct system blocks, the generated user/assistant pair, and the
+    /// oldest seeded message dropped by the token budget (if any).
+    fn build_prompt_plan(
+        &self,
+        chat_id: &str,
+        run_id: &str,
+        user_text: Option<&str>,
+        reply: &str,
+    ) -> PromptPlan {
+        let excluded = self
+            .messages
+            .get(chat_id)
+            .and_then(|rows| rows.first())
+            .filter(|row| row.generation_run_id.is_none())
+            .map(|row| contracts_generated::generated::PromptExcluded {
+                message_id: row.id.clone(),
+                reason: "token_budget".into(),
+            });
+        let mut messages = Vec::new();
+        if let Some(text) = user_text {
+            messages.push(PromptMessage {
+                role: MessageRole::User,
+                content: text.to_string(),
+            });
+        }
+        if !reply.is_empty() {
+            messages.push(PromptMessage {
+                role: MessageRole::Assistant,
+                content: reply.to_string(),
+            });
+        }
+        PromptPlan {
+            run_id: run_id.into(),
+            chat_id: chat_id.into(),
+            provider: "fake-provider".into(),
+            model: "demo-model".into(),
+            instruct_format: "ChatML".into(),
+            tokenizer_profile: "gpt-4o".into(),
+            approximate_tokens: false,
+            context_limit: 8192,
+            response_reserved: 1024,
+            input_tokens: 512,
+            over_budget: false,
+            user_name: None,
+            system_blocks: vec![
+                PromptBlock {
+                    source: "character".into(),
+                    text: "Kestrel is a sharp-tongued courier of the Vales who never delivers a straight answer.".into(),
+                },
+                PromptBlock {
+                    source: "instruct".into(),
+                    text: "Continue the roleplay in character. Stay under 300 tokens.".into(),
+                },
+            ],
+            messages,
+            excluded: excluded.into_iter().collect(),
+            created_at: TS.into(),
+        }
+    }
 }
 
 impl ProductWire for FakeWire {
@@ -756,6 +833,13 @@ impl ProductWire for FakeWire {
             return Err(Self::product("WIRE_FAILED", "operationId", operation_id));
         }
         match operation_id {
+            "generation.prompt.plan" => {
+                let run_id = payload_str(&payload, "runId")?;
+                let plan = self.plans.get(&run_id).cloned().ok_or_else(|| {
+                    Self::product("PROMPT_PLAN_NOT_FOUND", "runId", &run_id)
+                })?;
+                self.wrap_call(operation_id, to_value(&plan))
+            }
             "characters.create" => {
                 let created = self.create_character(&payload)?;
                 self.wrap_call(operation_id, to_value(&created))
@@ -843,6 +927,7 @@ impl ProductWire for FakeWire {
                 }
                 self.messages.remove(&chat_id);
                 self.drafts.remove(&chat_id);
+                self.plans.retain(|_, plan| plan.chat_id != chat_id);
                 self.ok_call(operation_id, json!({}))
             }
             "chats.messages.list" => {

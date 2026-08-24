@@ -364,7 +364,7 @@ fn synthesized_messages(view: &ProductChatView) -> Vec<MessageDto> {
             content: row.content.clone(),
             created_at: row.timestamp.clone(),
             sequence: 0,
-            generation_run_id: None,
+            generation_run_id: row.run_id.clone(),
             meta: FreeObject {
                 payload: serde_json::Value::Object(serde_json::Map::new()),
             },
@@ -713,6 +713,11 @@ fn render_row_child(node: &UiNodeV1, ctx: &ChromeCtx, row: &RowView) -> Element 
 /// Native action-bar button (`message_action_button` in lib.rs): v1 style,
 /// icon size 16, carries `data-message-id`, aria-label + title.
 fn message_action_button(kind: &str, row: &RowView) -> Element {
+    // React renders the prompt-plan trigger only for rows whose meta carries
+    // `generationRunId` (MessageDetailsCardV2 footer action).
+    if kind == "prompt" && row.message.generation_run_id.is_none() {
+        return rsx! {};
+    }
     let (label, icon) = match kind {
         "context" => ("Exclude from prompt context", "EyeSlash"),
         "edit" => ("Edit message", "PencilSimple"),
@@ -721,6 +726,7 @@ fn message_action_button(kind: &str, row: &RowView) -> Element {
         "branch" => ("Branch", "GitBranch"),
         "delete" => ("Delete message", "Trash"),
         "rollback" => ("Rollback to here", "ArrowUUpLeft"),
+        "prompt" => ("View prompt plan", "TextAlignLeft"),
         _ => ("", ""),
     };
     let uuid = row.uuid;

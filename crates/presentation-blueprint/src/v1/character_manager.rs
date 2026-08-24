@@ -187,6 +187,12 @@ pub enum UiActionV1 {
     ChatMessageRollback {
         message_id: String,
     },
+    /// View the durable prompt plan of a message's source run
+    /// (`generation.prompt.plan`; React `MessageDetailsCardV2` footer action
+    /// "Prompt plan").
+    ChatMessagePrompt {
+        message_id: String,
+    },
     /// Assistant-row version controls (no message-id parameter).
     ChatMessageHistory,
     ChatMessageRegenerate,
@@ -249,6 +255,7 @@ impl UiActionV1 {
             | Self::ChatMessageCheckpoint { .. }
             | Self::ChatMessageBranch { .. }
             | Self::ChatMessageRollback { .. }
+            | Self::ChatMessagePrompt { .. }
             | Self::ChatMessageHistory
             | Self::ChatMessageRegenerate
             | Self::ChatMessageSwipePrevious

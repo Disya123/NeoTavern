@@ -10,6 +10,7 @@ use std::cell::RefCell;
 
 use dioxus_core::Element;
 use dioxus_core_macro::rsx;
+use contracts_generated::generated::{MessageRole, PromptPlan};
 use neotavern_presentation_design_system::{
     SafeAreaInsets, phosphor_path, product_stylesheets_dev,
 };
@@ -324,6 +325,15 @@ pub struct ProductShellView {
     /// Chats panel delete confirm dialog.
     pub chat_delete_open: bool,
     pub chat_delete_target_id: Option<String>,
+    /// Prompt plan dialog (`generation.prompt.plan`; React `PromptPlanPanel`).
+    pub prompt_plan_open: bool,
+    pub prompt_plan_run_id: Option<String>,
+    pub prompt_plan: Option<PromptPlan>,
+    /// `PROMPT_PLAN_NOT_FOUND` → honest empty state ("This run has no
+    /// recorded prompt plan.").
+    pub prompt_plan_not_found: bool,
+    /// Any other error renders inside the dialog (React `isError` state).
+    pub prompt_plan_error: Option<String>,
     pub plugins: Vec<PluginCardView>,
     pub providers: Vec<ProviderCardView>,
     pub presets: Vec<PresetCardView>,
@@ -412,6 +422,11 @@ impl Default for ProductShellView {
             chat_rename_draft: String::new(),
             chat_delete_open: false,
             chat_delete_target_id: None,
+            prompt_plan_open: false,
+            prompt_plan_run_id: None,
+            prompt_plan: None,
+            prompt_plan_not_found: false,
+            prompt_plan_error: None,
             plugins: Vec::new(),
             providers: Vec::new(),
             presets: Vec::new(),
@@ -499,6 +514,16 @@ const RAIL: &[RailSpec] = &[
 
 pub(crate) fn icon(name: &str, size: u32) -> Element {
     icon_fill(name, size, "#998f87")
+}
+
+/// Wire `MessageRole` → display label (React `messageRole` capitalize).
+pub(crate) fn role_label(role: &MessageRole) -> &'static str {
+    match role {
+        MessageRole::User => "user",
+        MessageRole::Assistant => "assistant",
+        MessageRole::System => "system",
+        MessageRole::Tool => "tool",
+    }
 }
 
 pub(crate) fn icon_fill(name: &str, size: u32, fill: &str) -> Element {
@@ -1957,6 +1982,12 @@ let entry_delete_book_name = entry_dialog_book_name;
         .unwrap_or("");
     let chat_delete_confirm =
         format!("Delete \"{chat_delete_title}\"? Its messages are removed with it.");
+
+    // Prompt plan dialog (640×560, mirrors `shell_hit::dialog_hit`).
+    let (plg_x, plg_y, plg_w, plg_h) = modal_geometry(&view, 640.0, 560.0);
+    let prompt_plan_style = format!(
+        "position:absolute;left:{plg_x}px;top:{plg_y}px;width:{plg_w}px;height:{plg_h}px;box-sizing:border-box;z-index:50;padding:16px;color:#f3eee8;display:flex;flex-direction:column;"
+    );
     // Entry dialog switches (track, thumb) — same geometry as row switches.
     let (switch_constant, switch_selective, switch_enabled) = (
         entry_switch_style(view.entry_constant_draft),
@@ -2438,6 +2469,126 @@ let entry_delete_book_name = entry_dialog_book_name;
                             "data-variant": "danger",
                             "data-size": "md",
                             span { "Delete" }
+                        }
+                    }
+                }
+            }
+            // Prompt plan dialog (`generation.prompt.plan`; React
+            // `PromptPlanPanel`): header + close, then one of the four React
+            // states - error, no recorded plan, or the durable plan content
+            // (meta dl, over-budget alert, system blocks, selected messages,
+            // excluded). The body is a fixed box with `overflow-y:auto`.
+            if view.prompt_plan_open {
+                div {
+                    class: "st-card",
+                    style: "{prompt_plan_style}",
+                    div {
+                        "data-component": "dialog-title",
+                        style: "flex:none;display:flex;align-items:center;justify-content:space-between;gap:8px;",
+                        span { "Prompt plan" }
+                        button {
+                            class: "PromptPlanPanel_close",
+                            r#type: "button",
+                            "data-part": "prompt-plan-close",
+                            "aria-label": "Close",
+                            title: "Close",
+                            style: "display:grid;width:40px;height:40px;place-items:center;border:1px solid rgba(243,238,232,0.10);border-radius:16px;background:rgba(36,33,30,0.62);color:#c5bbb2;cursor:pointer;",
+                            {crate::product_shell::icon("X", 16)}
+                        }
+                    }
+                    div {
+                        "data-part": "prompt-plan-body",
+                        role: "region",
+                        style: "flex:1;min-height:0;margin-top:12px;overflow-y:auto;box-sizing:border-box;display:flex;flex-direction:column;gap:12px;",
+                        if let Some(err) = view.prompt_plan_error.as_deref() {
+                            p { role: "alert", style: "color:#e0716b;font-size:14px;", "{err}" }
+                        } else if view.prompt_plan_not_found {
+                            p { style: "color:#c5bbb2;font-size:14px;", "This run has no recorded prompt plan." }
+                        } else if let Some(plan) = view.prompt_plan.as_ref() {
+                            dl {
+                                "data-part": "prompt-plan-meta",
+                                style: "display:grid;grid-template-columns:110px 1fr;gap:6px 12px;font-size:13px;",
+                                dt { style: "color:#998f87;", "Model" }
+                                dd { style: "color:#f3eee8;margin:0;", "{plan.provider}/{plan.model}" }
+                                dt { style: "color:#998f87;", "Instruct format" }
+                                dd { style: "color:#f3eee8;margin:0;", "{plan.instruct_format}" }
+                                dt { style: "color:#998f87;", "Tokenizer" }
+                                dd { style: "color:#f3eee8;margin:0;",
+                                    span { "{plan.tokenizer_profile}" }
+                                    if plan.approximate_tokens {
+                                        span { style: "color:#998f87;", " · approximate" }
+                                    }
+                                }
+                                dt { style: "color:#998f87;", "Tokens" }
+                                dd { style: "color:#f3eee8;margin:0;",
+                                    span { "Input {plan.input_tokens}" }
+                                    span { style: "color:#998f87;", " · " }
+                                    span { "Response reserve {plan.response_reserved}" }
+                                    span { style: "color:#998f87;", " · " }
+                                    span { "Context limit {plan.context_limit}" }
+                                }
+                            }
+                            if plan.over_budget {
+                                p { role: "alert", style: "color:#e0716b;font-size:13px;", "The plan still exceeds the context window after dropping all unpinned history." }
+                            }
+                            if !plan.system_blocks.is_empty() {
+                                section {
+                                    "data-part": "prompt-plan-blocks",
+                                    h3 { style: "color:#f3eee8;font-size:14px;margin:0 0 6px;", "System blocks ({plan.system_blocks.len()})" }
+                                    ul { style: "display:flex;flex-direction:column;gap:6px;margin:0;padding:0;list-style:none;",
+                                        for block in plan.system_blocks.iter() {
+                                            li {
+                                                class: "block",
+                                                "data-source": "{block.source}",
+                                                style: "display:flex;flex-direction:column;gap:2px;",
+                                                span { class: "blockSource", style: "color:#998f87;font-size:12px;text-transform:capitalize;", "{block.source}" }
+                                                pre { class: "blockText", style: "margin:0;color:#e8eef7;font-size:12px;white-space:pre-wrap;", "{block.text}" }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            if !plan.messages.is_empty() {
+                                section {
+                                    "data-part": "prompt-plan-messages",
+                                    h3 { style: "color:#f3eee8;font-size:14px;margin:0 0 6px;", "Selected messages ({plan.messages.len()})" }
+                                    ul { style: "display:flex;flex-direction:column;gap:6px;margin:0;padding:0;list-style:none;",
+                                        for message in plan.messages.iter() {
+                                            li {
+                                                class: "message",
+                                                "data-role": "{role_label(&message.role)}",
+                                                style: "display:flex;flex-direction:column;gap:2px;",
+                                                span { class: "messageRole", style: "color:#998f87;font-size:12px;text-transform:capitalize;", "{role_label(&message.role)}" }
+                                                pre { class: "messageContent", style: "margin:0;color:#e8eef7;font-size:12px;white-space:pre-wrap;", "{message.content}" }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            section {
+                                "data-part": "prompt-plan-excluded",
+                                h3 { style: "color:#f3eee8;font-size:14px;margin:0 0 6px;", "Excluded from context ({plan.excluded.len()})" }
+                                if plan.excluded.is_empty() {
+                                    p { style: "color:#c5bbb2;font-size:13px;", "Nothing was excluded." }
+                                } else {
+                                    ul { style: "display:flex;flex-direction:column;gap:6px;margin:0;padding:0;list-style:none;",
+                                        for item in plan.excluded.iter() {
+                                            li {
+                                                class: "excluded",
+                                                style: "display:flex;gap:8px;font-size:12px;",
+                                                span { class: "excludedId", style: "color:#998f87;", "{item.message_id}" }
+                                                span { class: "excludedReason", style: "color:#e8eef7;",
+                                                    if item.reason == "token_budget" {
+                                                        "Removed by token budget"
+                                                    } else {
+                                                        "{item.reason}"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }

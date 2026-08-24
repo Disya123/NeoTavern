@@ -3,6 +3,20 @@
 ## Unreleased
 ### Added
 
+- **PromptPlanPanel (перенос): план генерации через `generation.prompt.plan`.**
+  Trigger — per-message footer-действие «Prompt plan» (TextAlignLeft) на строках
+  с `generation_run_id` (React гейтится по `meta.generationRunId`); кнопка
+  добавлена в blueprint-документ (`message-action-prompt`, action
+  `chat.message.prompt`, вариант `UiActionV1::ChatMessagePrompt`) и в legacy RSX
+  с тем же условием — skeleton-parity сохранён. Диалог 640×560: четыре состояния
+  (ошибка в диалоге, `PROMPT_PLAN_NOT_FOUND` → «This run has no recorded prompt
+  plan.», контент плана) — мета-dl (Model / Instruct format / Tokenizer /
+  Tokens), over-budget-алерт, секции System blocks / Selected messages /
+  Excluded from context. FakeWire записывает durable-план при старте генерации
+  (зеркало kernel `prompt_plans`) и чистит его при `chats.delete`. Новый
+  cargo-тест `prompt_plan_over_product_wire`, goldens, packaged-check,
+  docs:check.
+
 - **Чаты: переименование и удаление (перенос ChatManagementPanel).** Строки
   панели Home/Chats получили действия в правых 88 px: rename (диалог 320×220,
   поле `data-part="chat-rename-input"`, `chats.update` с title; пустой
