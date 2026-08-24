@@ -50,7 +50,9 @@ pub use avatar::{
 pub use compositor::ChatCompositor;
 pub use error::ChatRouteError;
 pub mod hit_rects;
-pub use fake_wire::{FakeWire, DEMO_AVATAR_ASSET_ID, DEMO_CHARACTER_ID, DEMO_CHAT_ID};
+pub use fake_wire::{
+    FakeWire, DEMO_AVATAR_ASSET_ID, DEMO_CHARACTER_ID, DEMO_CHAT_ID, DEMO_LOREBOOK_ID,
+};
 pub use hit_rects::{HitRect, HitRects, MessageActionKind, QuickIntent, TapIntent, TOUCH_SLOP_CSS};
 pub use seed::{
     ensure_isolated_10k_workspace, is_isolated_10k_profile, isolated_message_content,

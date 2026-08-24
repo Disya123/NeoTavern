@@ -1,11 +1,12 @@
 use contracts_generated::generated::{
-    CharacterDto, ChatDto, GenerationEvent, LorebookDto, MessageDraftDto, MessageDto, MessageRole,
-    MessageVariantDto, PagedCharacters, PagedChats, PagedMessages, PersonaDto, PluginsItem,
+    CharacterDto, ChatDto, GenerationEvent, LorebookDto, LorebookEntryDto, LorebookEntryInput,
+    LorebookEntryPatch, MessageDraftDto, MessageDto, MessageRole, MessageVariantDto,
+    PagedCharacters, PagedChats, PagedMessages, PersonaDto, PluginsItem, ResultListLorebookEntries,
     ResultListLorebooks, ResultListPersonas, ResultListPresets, ResultListProviders,
     ResultMessageVariantList, ResultPluginsList, ResultSettings, ResultSnapshotsRollback,
     SettingsItem,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use base64::Engine as _;
@@ -24,6 +25,7 @@ pub const DEMO_AVATAR_ASSET_ID: &str = "8a1b2c3d-4e5f-4061-8a9b-0c1d2e3f4a5b";
 pub const DEMO_PERSONA_ID: &str = "0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f";
 pub const DEMO_SERAPHINA_ID: &str = "5c6d7e8f-0a1b-4c2d-8e3f-4a5b6c7d8e9f";
 pub const DEMO_VAYLE_ID: &str = "6d7e8f0a-1b2c-4d3e-8f4a-5b6c7d8e9f0a";
+pub const DEMO_LOREBOOK_ID: &str = "3e9f1a2b-4c5d-4e6f-8a7b-0c1d2e3f4a5b";
 const TS: &str = "2026-08-12T10:00:00Z";
 
 #[derive(Clone, Copy)]
@@ -44,6 +46,9 @@ pub struct FakeWire {
     drafts: HashMap<String, MessageDraftDto>,
     personas: HashMap<String, PersonaDto>,
     lorebooks: HashMap<String, LorebookDto>,
+    /// Per-book entries (`lorebooks.entries.*`), keyed by lorebook id. The
+    /// wire DTO carries no position/metadata — those are kernel-owned.
+    lorebook_entries: HashMap<String, Vec<LorebookEntryDto>>,
     plugins: Vec<PluginsItem>,
     settings: Vec<SettingsItem>,
     streams: HashMap<String, VecDeque<StreamFrame>>,
@@ -62,6 +67,7 @@ impl Default for FakeWire {
             drafts: HashMap::new(),
             personas: HashMap::new(),
             lorebooks: HashMap::new(),
+            lorebook_entries: HashMap::new(),
             plugins: vec![
                 PluginsItem {
                     id: "tavern-speed-dial".into(),
@@ -129,6 +135,55 @@ impl FakeWire {
             "Hi — live Product Wire.",
             Some(wire_id(0x6e7f8091ab2c)),
         ));
+        // Demo lorebook so the Lorebooks panel shows real rows and the
+        // Entries tab has content to port (React `LorebookPanel` EntriesTab).
+        let demo_book_id = DEMO_LOREBOOK_ID.to_string();
+        wire.lorebooks.insert(
+            demo_book_id.clone(),
+            LorebookDto {
+                id: demo_book_id.clone(),
+                name: "Kestrel Vales".into(),
+                description: Some(
+                    "Routes, ruins and rumors of the Kestrel Vales, mapped by the caravans.".into(),
+                ),
+                entry_count: 2,
+                character_id: None,
+                created_at: TS.into(),
+                updated_at: TS.into(),
+            },
+        );
+        let entry = |id_high: u64, keys: &[&str], content: &str, enabled, constant, selective| {
+            LorebookEntryDto {
+                id: wire_id(id_high),
+                keys: keys.iter().map(|key| (*key).to_string()).collect(),
+                secondary_keys: None,
+                content: content.to_string(),
+                enabled,
+                constant,
+                selective,
+            }
+        };
+        wire.lorebook_entries.insert(
+            demo_book_id.clone(),
+            vec![
+                entry(
+                    0x4201,
+                    &["Ashfall Crossing"],
+                    "The ford at Ashfall Crossing floods after the spring melt; caravans wait for the kestrels to call the water down.",
+                    true,
+                    false,
+                    false,
+                ),
+                entry(
+                    0x4202,
+                    &["Salt Wind"],
+                    "A warm salt wind off the Broken Coast: the sailors say it carries the voices of drowned bells.",
+                    true,
+                    true,
+                    false,
+                ),
+            ],
+        );
         wire
     }
 
@@ -292,6 +347,12 @@ impl FakeWire {
         self.chats
             .get(chat_id)
             .ok_or_else(|| Self::product("CHAT_NOT_FOUND", "chatId", chat_id))
+    }
+
+    fn require_lorebook(&self, lorebook_id: &str) -> Result<&LorebookDto, ChatRouteError> {
+        self.lorebooks
+            .get(lorebook_id)
+            .ok_or_else(|| Self::product("LOREBOOK_NOT_FOUND", "lorebookId", lorebook_id))
     }
 
     fn list_characters(&self, limit: i64) -> PagedCharacters {
@@ -861,6 +922,28 @@ impl ProductWire for FakeWire {
                 items.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
                 self.wrap_call(operation_id, to_value(&ResultListLorebooks { items }))
             }
+            "lorebooks.get" => {
+                let lorebook_id = payload_str(&payload, "lorebookId")?;
+                let book = self.lorebooks.get(&lorebook_id).cloned().ok_or_else(|| {
+                    Self::product("LOREBOOK_NOT_FOUND", "lorebookId", &lorebook_id)
+                })?;
+                self.wrap_call(operation_id, to_value(&book))
+            }
+            "lorebooks.update" => {
+                let lorebook_id = payload_str(&payload, "lorebookId")?;
+                let mut book = self.lorebooks.get(&lorebook_id).cloned().ok_or_else(|| {
+                    Self::product("LOREBOOK_NOT_FOUND", "lorebookId", &lorebook_id)
+                })?;
+                if let Some(name) = payload.get("name").and_then(Value::as_str) {
+                    book.name = name.to_string();
+                }
+                if let Some(description) = payload.get("description").and_then(Value::as_str) {
+                    book.description = Some(description.to_string());
+                }
+                book.updated_at = TS.into();
+                self.lorebooks.insert(lorebook_id.clone(), book.clone());
+                self.wrap_call(operation_id, to_value(&book))
+            }
             "lorebooks.create" => {
                 let name = payload
                     .get("name")
@@ -884,6 +967,116 @@ impl ProductWire for FakeWire {
                 };
                 self.lorebooks.insert(created.id.clone(), created.clone());
                 self.wrap_call(operation_id, to_value(&created))
+            }
+            "lorebooks.entries.list" => {
+                let lorebook_id = payload_str(&payload, "lorebookId")?;
+                self.require_lorebook(&lorebook_id)?;
+                let items = self
+                    .lorebook_entries
+                    .get(&lorebook_id)
+                    .cloned()
+                    .unwrap_or_default();
+                self.wrap_call(operation_id, to_value(&ResultListLorebookEntries { items }))
+            }
+            "lorebooks.entries.create" => {
+                let lorebook_id = payload_str(&payload, "lorebookId")?;
+                self.require_lorebook(&lorebook_id)?;
+                let input: LorebookEntryInput =
+                    serde_json::from_value(payload.get("entry").cloned().unwrap_or(Value::Null))?;
+                let created = LorebookEntryDto {
+                    id: self.alloc_id(),
+                    keys: input.keys,
+                    secondary_keys: input.secondary_keys,
+                    content: input.content,
+                    enabled: input.enabled.unwrap_or(true),
+                    constant: input.constant.unwrap_or(false),
+                    selective: input.selective.unwrap_or(false),
+                };
+                self.lorebook_entries
+                    .entry(lorebook_id.clone())
+                    .or_default()
+                    .push(created.clone());
+                if let Some(book) = self.lorebooks.get_mut(&lorebook_id) {
+                    book.entry_count = i64::try_from(
+                        self.lorebook_entries
+                            .get(&lorebook_id)
+                            .map(Vec::len)
+                            .unwrap_or(0),
+                    )
+                    .unwrap_or(0);
+                    book.updated_at = TS.into();
+                }
+                self.wrap_call(operation_id, to_value(&created))
+            }
+            "lorebooks.entries.update" => {
+                let lorebook_id = payload_str(&payload, "lorebookId")?;
+                let entry_id = payload_str(&payload, "entryId")?;
+                let patch: LorebookEntryPatch =
+                    serde_json::from_value(payload.get("patch").cloned().unwrap_or(Value::Null))?;
+                let updated = {
+                    let Some(rows) = self.lorebook_entries.get_mut(&lorebook_id) else {
+                        return Err(Self::product(
+                            "LOREBOOK_NOT_FOUND",
+                            "lorebookId",
+                            &lorebook_id,
+                        ));
+                    };
+                    let Some(entry) = rows.iter_mut().find(|row| row.id == entry_id) else {
+                        return Err(Self::product(
+                            "LOREBOOK_ENTRY_NOT_FOUND",
+                            "entryId",
+                            &entry_id,
+                        ));
+                    };
+                    if let Some(keys) = patch.keys {
+                        entry.keys = keys;
+                    }
+                    if let Some(secondary_keys) = patch.secondary_keys {
+                        entry.secondary_keys = Some(secondary_keys);
+                    }
+                    if let Some(content) = patch.content {
+                        entry.content = content;
+                    }
+                    if let Some(enabled) = patch.enabled {
+                        entry.enabled = enabled;
+                    }
+                    if let Some(constant) = patch.constant {
+                        entry.constant = constant;
+                    }
+                    if let Some(selective) = patch.selective {
+                        entry.selective = selective;
+                    }
+                    entry.clone()
+                };
+                if let Some(book) = self.lorebooks.get_mut(&lorebook_id) {
+                    book.updated_at = TS.into();
+                }
+                self.wrap_call(operation_id, to_value(&updated))
+            }
+            "lorebooks.entries.delete" => {
+                let lorebook_id = payload_str(&payload, "lorebookId")?;
+                let entry_id = payload_str(&payload, "entryId")?;
+                let Some(rows) = self.lorebook_entries.get_mut(&lorebook_id) else {
+                    return Err(Self::product(
+                        "LOREBOOK_NOT_FOUND",
+                        "lorebookId",
+                        &lorebook_id,
+                    ));
+                };
+                let before = rows.len();
+                rows.retain(|row| row.id != entry_id);
+                if rows.len() == before {
+                    return Err(Self::product(
+                        "LOREBOOK_ENTRY_NOT_FOUND",
+                        "entryId",
+                        &entry_id,
+                    ));
+                }
+                if let Some(book) = self.lorebooks.get_mut(&lorebook_id) {
+                    book.entry_count = i64::try_from(rows.len()).unwrap_or(0);
+                    book.updated_at = TS.into();
+                }
+                self.ok_call(operation_id, json!({}))
             }
             "lorebooks.delete" => {
                 let lorebook_id = payload_str(&payload, "lorebookId")?;

@@ -70,6 +70,18 @@ pub enum ShellAction {
     ToggleFavorite,
     BackToCards,
     Import,
+    /// Lorebook entries (`React LorebookPanel` EntriesTab / EntryDialog).
+    OpenEntryDialog,
+    EditLorebookEntry(String),
+    CloseEntryDialog,
+    SaveEntry,
+    ToggleLorebookEntry(String),
+    OpenEntryDelete(String),
+    CloseEntryDelete,
+    ConfirmEntryDelete,
+    EntryToggleEnabled,
+    EntryToggleConstant,
+    EntryToggleSelective,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -170,6 +182,61 @@ fn header_bottom(view: &ProductShellView) -> f32 {
 fn dialog_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
     let (width, height) = css_size(view);
     let chat_x0 = chat_origin_x(view);
+    if view.entry_delete_open {
+        let dlg_w = 300.0_f32.min(width - 32.0);
+        let dlg_h = 200.0_f32.min(height - 48.0);
+        let x0 = chat_x0 + (width - chat_x0 - dlg_w).max(0.0) * 0.5;
+        let y0 = (height - dlg_h) * 0.5;
+        if !contains(x, y, x0, y0, x0 + dlg_w, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::CloseEntryDelete));
+        }
+        let actions_y = y0 + dlg_h - 56.0;
+        if contains(x, y, x0, actions_y, x0 + dlg_w * 0.5, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::CloseEntryDelete));
+        }
+        if contains(x, y, x0 + dlg_w * 0.5, actions_y, x0 + dlg_w, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::ConfirmEntryDelete));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    if view.entry_dialog_open {
+        let dlg_w = 400.0_f32.min(width - 32.0);
+        let dlg_h = 520.0_f32.min(height - 48.0);
+        let x0 = chat_x0 + (width - chat_x0 - dlg_w).max(0.0) * 0.5;
+        let y0 = (height - dlg_h) * 0.5;
+        if !contains(x, y, x0, y0, x0 + dlg_w, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::CloseEntryDialog));
+        }
+        // Switch rows: right-aligned 88px toggle zone per row (React rows
+        // wrap a Radix `Switch`; only the switch itself toggles).
+        let switch_zone = |row_y: f32| {
+            contains(
+                x,
+                y,
+                x0 + dlg_w - 16.0 - 88.0,
+                row_y,
+                x0 + dlg_w - 16.0,
+                row_y + 32.0,
+            )
+        };
+        if switch_zone(y0 + 240.0) {
+            return Some(ShellHit::Action(ShellAction::EntryToggleConstant));
+        }
+        if switch_zone(y0 + 276.0) {
+            return Some(ShellHit::Action(ShellAction::EntryToggleSelective));
+        }
+        if switch_zone(y0 + 312.0) {
+            return Some(ShellHit::Action(ShellAction::EntryToggleEnabled));
+        }
+        let actions_y = y0 + dlg_h - 56.0;
+        if contains(x, y, x0, actions_y, x0 + dlg_w * 0.5, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::CloseEntryDialog));
+        }
+        if contains(x, y, x0 + dlg_w * 0.5, actions_y, x0 + dlg_w, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::SaveEntry));
+        }
+        return Some(ShellHit::Absorb);
+    }
     if view.create_dialog_open {
         let dlg_w = 320.0_f32.min(width - 32.0);
         let dlg_h = 360.0_f32.min(height - 48.0);
@@ -540,6 +607,9 @@ fn personas_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
 }
 
 fn lorebooks_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
+    if view.lorebook_tab == "entries" && view.selected_lorebook_id.is_some() {
+        return lorebook_entries_hit(view, x, y);
+    }
     list_panel_hit(
         view,
         x,
@@ -550,6 +620,73 @@ fn lorebooks_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
         view.lorebooks.iter().map(|item| item.id.as_str()),
         |id| ShellAction::SelectLorebook(id.into()),
     )
+}
+
+/// React `LorebookPanel` EntriesTab: toolbar (Back to books / Add entry),
+/// hint, then entry rows carrying the row actions (toggle / edit / delete).
+fn lorebook_entries_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
+    if !view.sidebar_open {
+        return None;
+    }
+    let (panel_x, panel_w) = panel_origin(view);
+    let x1 = panel_x + panel_w;
+    if x < panel_x || x >= x1 {
+        return None;
+    }
+    let header_end = header_bottom(view);
+    if y < header_end {
+        if x >= x1 - CONTROL_SM - SPACE_LG {
+            return Some(ShellHit::Action(ShellAction::ClosePanel));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    let tabs_top = header_end + SPACE_XS;
+    let tabs_bottom = tabs_top + CONTROL_SM + SPACE_XS;
+    if y >= tabs_top && y < tabs_bottom {
+        let tabs = ["books", "book", "entries"];
+        let span = (panel_w - SPACE_LG * 2.0).max(1.0);
+        let idx = (((x - (panel_x + SPACE_LG)) / span) * tabs.len() as f32).floor() as usize;
+        return Some(ShellHit::Action(ShellAction::SetTab(
+            tabs[idx.min(tabs.len() - 1)].into(),
+        )));
+    }
+    let content_top = tabs_bottom + SPACE_XS;
+    let pad = SPACE_LG;
+    let toolbar_top = content_top + SPACE_SM;
+    let toolbar_bottom = toolbar_top + CONTROL_SM;
+    if y >= toolbar_top && y < toolbar_bottom {
+        if x < panel_x + pad + 140.0 {
+            return Some(ShellHit::Action(ShellAction::SetTab("books".into())));
+        }
+        if x >= x1 - pad - 140.0 {
+            return Some(ShellHit::Action(ShellAction::OpenEntryDialog));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    let list_top = toolbar_bottom + SPACE_SM;
+    if view.lorebook_entries.is_empty() {
+        return Some(ShellHit::Absorb);
+    }
+    let row_h = 64.0;
+    for (index, entry) in view.lorebook_entries.iter().enumerate() {
+        let y0 = list_top + index as f32 * (row_h + SPACE_XS);
+        if y < y0 || y >= y0 + row_h {
+            continue;
+        }
+        let id = entry.id.clone();
+        // Row actions occupy the right 132px: toggle / edit / delete.
+        if x >= x1 - pad - 132.0 && x < x1 - pad - 88.0 {
+            return Some(ShellHit::Action(ShellAction::ToggleLorebookEntry(id)));
+        }
+        if x >= x1 - pad - 88.0 && x < x1 - pad - 44.0 {
+            return Some(ShellHit::Action(ShellAction::EditLorebookEntry(id)));
+        }
+        if x >= x1 - pad - 44.0 && x < x1 - pad {
+            return Some(ShellHit::Action(ShellAction::OpenEntryDelete(id)));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    Some(ShellHit::Absorb)
 }
 
 /// Home/chats panel: the real `chats.list` rows; a tap opens that chat.

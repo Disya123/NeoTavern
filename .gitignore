@@ -77,6 +77,7 @@ apps/desktop/src-tauri/resources/runtime/*
 
 apps/desktop/src-tauri/.release-config.generated.json
 crates/target/
+crates/target2/
 crates/*/target/
 .scratch/
 apps/android/m1-captures/

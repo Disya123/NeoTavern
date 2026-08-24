@@ -151,6 +151,19 @@ pub struct LorebookCardView {
     pub character_id: Option<String>,
 }
 
+/// React `LorebookPanel` `EntriesTab` row: the wire entry subset (the wire
+/// DTO carries no position/metadata — kernel-owned, appended at the end).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LorebookEntryCardView {
+    pub id: String,
+    pub keys: Vec<String>,
+    pub secondary_keys: Option<Vec<String>>,
+    pub content: String,
+    pub enabled: bool,
+    pub constant: bool,
+    pub selective: bool,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PluginCardView {
     pub id: String,
@@ -266,6 +279,22 @@ pub struct ProductShellView {
     pub lorebook_create_name: String,
     pub lorebook_name_draft: String,
     pub lorebook_description_draft: String,
+    /// Entries of the selected lorebook (`lorebooks.entries.list`), mapped
+    /// to the shell card shape (React `LorebookPanel` EntriesTab rows).
+    pub lorebook_entries: Vec<LorebookEntryCardView>,
+    pub editing_lorebook_entry_id: Option<String>,
+    pub entry_dialog_open: bool,
+    pub entry_delete_open: bool,
+    pub entry_keys_draft: String,
+    pub entry_secondary_keys_draft: String,
+    pub entry_content_draft: String,
+    pub entry_enabled_draft: bool,
+    pub entry_constant_draft: bool,
+    pub entry_selective_draft: bool,
+    pub entry_delete_target_id: Option<String>,
+    /// Script-aware token estimate for the entry content draft (React
+    /// `EntryDialog` token label; computed in the session view model).
+    pub entry_content_tokens: u64,
     pub plugins: Vec<PluginCardView>,
     pub providers: Vec<ProviderCardView>,
     pub presets: Vec<PresetCardView>,
@@ -329,6 +358,18 @@ impl Default for ProductShellView {
             lorebook_create_name: String::new(),
             lorebook_name_draft: String::new(),
             lorebook_description_draft: String::new(),
+            lorebook_entries: Vec::new(),
+            editing_lorebook_entry_id: None,
+            entry_dialog_open: false,
+            entry_delete_open: false,
+            entry_keys_draft: String::new(),
+            entry_secondary_keys_draft: String::new(),
+            entry_content_draft: String::new(),
+            entry_enabled_draft: true,
+            entry_constant_draft: false,
+            entry_selective_draft: false,
+            entry_delete_target_id: None,
+            entry_content_tokens: 0,
             plugins: Vec::new(),
             providers: Vec::new(),
             presets: Vec::new(),
@@ -1411,6 +1452,22 @@ fn modal_geometry(view: &ProductShellView, dw: f32, dh: f32) -> (f32, f32, f32, 
     )
 }
 
+/// React `Switch` track + thumb styles for the entry dialog rows — same
+/// geometry as the entries-row switch (36×20 track, 16×16 thumb).
+fn entry_switch_style(on: bool) -> (String, String) {
+    let track = if on {
+        "display:inline-flex;width:36px;height:20px;border-radius:10px;background:#e38a62;position:relative;flex:none;"
+    } else {
+        "display:inline-flex;width:36px;height:20px;border-radius:10px;background:#39342f;position:relative;flex:none;"
+    };
+    let thumb = if on {
+        "position:absolute;top:2px;right:2px;width:16px;height:16px;border-radius:8px;background:#2a130b;"
+    } else {
+        "position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:8px;background:#998f87;"
+    };
+    (track.to_string(), thumb.to_string())
+}
+
 /// Shared React `FloatingTabPanel` chrome: header, divider, body, bottom tabs.
 pub(crate) fn management_shell(
     view: &ProductShellView,
@@ -1784,6 +1841,32 @@ pub fn product_shell_app() -> Element {
         .unwrap_or("");
     let delete_confirm = format!("Delete \"{delete_name}\"? It will move to trash.");
 
+    // Lorebook entry dialog geometry mirrors `shell_hit::dialog_hit`
+    // (400×520; switch rows at y0+240/276/312; actions at y0+dh-56).
+    let (edlg_x, edlg_y, edlg_w, edlg_h) = modal_geometry(&view, 400.0, 520.0);
+    let entry_dialog_style = format!(
+        "position:absolute;left:{edlg_x}px;top:{edlg_y}px;width:{edlg_w}px;height:{edlg_h}px;box-sizing:border-box;z-index:50;padding:16px;color:#f3eee8;"
+    );
+    let entry_dialog_book_name = view
+        .lorebooks
+        .iter()
+        .find(|item| Some(item.id.as_str()) == view.selected_lorebook_id.as_deref())
+        .map(|item| item.name.as_str())
+        .unwrap_or("");
+    let (xdlg_x, xdlg_y, xdlg_w, xdlg_h) = modal_geometry(&view, 300.0, 200.0);
+    let entry_delete_style = format!(
+        "position:absolute;left:{xdlg_x}px;top:{xdlg_y}px;width:{xdlg_w}px;height:{xdlg_h}px;box-sizing:border-box;z-index:50;padding:16px;color:#f3eee8;"
+    );
+    let entry_delete_book_name = entry_dialog_book_name;
+    let entry_delete_confirm = format!("Delete this entry from \"{entry_delete_book_name}\"?");
+
+    // Entry dialog switches (track, thumb) — same geometry as row switches.
+    let (switch_constant, switch_selective, switch_enabled) = (
+        entry_switch_style(view.entry_constant_draft),
+        entry_switch_style(view.entry_selective_draft),
+        entry_switch_style(view.entry_enabled_draft),
+    );
+
     rsx! {
         style { "{product_css}" }
         div {
@@ -2034,6 +2117,112 @@ pub fn product_shell_app() -> Element {
                             "data-variant": "danger",
                             "data-size": "md",
                             span { "Delete character" }
+                        }
+                    }
+                }
+            }
+            // Lorebook entry dialog (`React LorebookPanel` EntryDialog) at the
+            // shell root — same clipping reason as the create/delete dialogs.
+            // Geometry mirrors `shell_hit::dialog_hit` (400×520, switch rows
+            // at y0+240/276/312, actions at y0+dh-56). The wire DTO has no
+            // position/metadata (kernel-owned), so the position field of the
+            // React legacy form is honestly absent here.
+            if view.entry_dialog_open {
+                div {
+                    class: "st-card",
+                    style: "{entry_dialog_style}",
+                    div {
+                        "data-component": "dialog-title",
+                        if view.editing_lorebook_entry_id.is_some() { "Edit entry" } else { "Add entry" }
+                    }
+                    div { "data-component": "dialog-description", "{entry_dialog_book_name}" }
+                    div {
+                        class: "LorebookPanel_dialogField",
+                        "data-part": "entry-keys",
+                        style: "position:absolute;left:16px;top:72px;right:16px;height:48px;display:flex;flex-direction:column;gap:2px;",
+                        span { style: "font-size:0.75rem;color:#998f87;", "Keywords (one per line)" }
+                        span { style: "color:#e8eef7;font-size:0.8125rem;white-space:pre-line;overflow:hidden;", "{view.entry_keys_draft}" }
+                    }
+                    div {
+                        class: "LorebookPanel_dialogField",
+                        "data-part": "entry-secondary-keys",
+                        style: "position:absolute;left:16px;top:124px;right:16px;height:40px;display:flex;flex-direction:column;gap:2px;",
+                        span { style: "font-size:0.75rem;color:#998f87;", "Secondary keywords (one per line)" }
+                        span { style: "color:#c5bbb2;font-size:0.75rem;white-space:pre-line;overflow:hidden;", "{view.entry_secondary_keys_draft}" }
+                    }
+                    div {
+                        class: "LorebookPanel_dialogField LorebookPanel_contentField",
+                        "data-part": "entry-content",
+                        style: "position:absolute;left:16px;top:168px;right:16px;height:64px;display:flex;flex-direction:column;gap:2px;",
+                        div {
+                            style: "display:flex;justify-content:space-between;",
+                            span { style: "font-size:0.75rem;color:#998f87;", "Content" }
+                            span { class: "LorebookPanel_tokenCount", style: "font-size:0.75rem;color:#998f87;", "Tokens: {view.entry_content_tokens}" }
+                        }
+                        span { style: "color:#e8eef7;font-size:0.8125rem;white-space:pre-line;overflow:hidden;", "{view.entry_content_draft}" }
+                    }
+                    div {
+                        class: "LorebookPanel_checkboxRow",
+                        "data-part": "entry-switch-constant",
+                        style: "position:absolute;left:16px;top:240px;right:16px;height:32px;display:flex;align-items:center;justify-content:space-between;",
+                        span { style: "font-size:0.8125rem;color:#f3eee8;", "Always include" }
+                        span { style: "{switch_constant.0}", span { style: "{switch_constant.1}" } }
+                    }
+                    div {
+                        class: "LorebookPanel_checkboxRow",
+                        "data-part": "entry-switch-selective",
+                        style: "position:absolute;left:16px;top:276px;right:16px;height:32px;display:flex;align-items:center;justify-content:space-between;",
+                        span { style: "font-size:0.8125rem;color:#f3eee8;", "Selective (primary + secondary match)" }
+                        span { style: "{switch_selective.0}", span { style: "{switch_selective.1}" } }
+                    }
+                    div {
+                        class: "LorebookPanel_checkboxRow",
+                        "data-part": "entry-switch-enabled",
+                        style: "position:absolute;left:16px;top:312px;right:16px;height:32px;display:flex;align-items:center;justify-content:space-between;",
+                        span { style: "font-size:0.8125rem;color:#f3eee8;", "Enabled" }
+                        span { style: "{switch_enabled.0}", span { style: "{switch_enabled.1}" } }
+                    }
+                    div {
+                        class: "LorebookPanel_dialogActions",
+                        style: "position:absolute;left:16px;right:16px;bottom:12px;display:flex;gap:8px;justify-content:flex-end;",
+                        button {
+                            r#type: "button",
+                            "data-variant": "default",
+                            "data-size": "md",
+                            span { "Cancel" }
+                        }
+                        button {
+                            r#type: "button",
+                            "data-variant": "primary",
+                            "data-size": "md",
+                            span { "Save" }
+                        }
+                    }
+                }
+            }
+            if view.entry_delete_open {
+                div {
+                    class: "st-card",
+                    style: "{entry_delete_style}",
+                    div {
+                        "data-component": "dialog-title",
+                        "Delete entry"
+                    }
+                    div { "data-component": "dialog-description", "{entry_delete_confirm}" }
+                    div {
+                        class: "LorebookPanel_dialogActions",
+                        style: "display:flex;gap:8px;justify-content:flex-end;margin-top:12px;",
+                        button {
+                            r#type: "button",
+                            "data-variant": "default",
+                            "data-size": "md",
+                            span { "Cancel" }
+                        }
+                        button {
+                            r#type: "button",
+                            "data-variant": "danger",
+                            "data-size": "md",
+                            span { "Delete" }
                         }
                     }
                 }

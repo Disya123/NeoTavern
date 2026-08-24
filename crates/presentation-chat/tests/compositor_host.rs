@@ -676,6 +676,119 @@ fn create_character_uses_product_wire_and_opens_edit_tab() {
 }
 
 #[test]
+fn lorebook_entries_load_toggle_and_crud_over_product_wire() {
+    use neotavern_presentation_chat::ShellAction;
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("lorebooks".into()));
+    session.apply_shell_action(ShellAction::SelectLorebook(
+        neotavern_presentation_chat::DEMO_LOREBOOK_ID.into(),
+    ));
+    session.apply_shell_action(ShellAction::SetTab("entries".into()));
+    let shell = session.shell_view();
+    assert_eq!(shell.lorebook_tab, "entries");
+    assert_eq!(shell.lorebook_entries.len(), 2, "demo book lists its entries");
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "lorebooks.entries.list")
+    );
+    let first_id = shell.lorebook_entries[0].id.clone();
+    assert!(shell.lorebook_entries.iter().all(|row| row.enabled));
+
+    // Row switch toggles `enabled` through `lorebooks.entries.update`.
+    session.apply_shell_action(ShellAction::ToggleLorebookEntry(first_id.clone()));
+    let shell = session.shell_view();
+    let first = shell
+        .lorebook_entries
+        .iter()
+        .find(|row| row.id == first_id)
+        .expect("toggled row");
+    assert!(!first.enabled, "row switch flips the enabled flag");
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "lorebooks.entries.update")
+    );
+
+    // Create: EntryDialog -> drafts -> SaveEntry -> `entries.create`.
+    session.apply_shell_action(ShellAction::OpenEntryDialog);
+    session.set_entry_keys_draft("Sunken Road");
+    session.set_entry_secondary_keys_draft("pass\nford");
+    session.set_entry_content_draft("The Sunken Road runs under the ridge; bells warn of the tide.");
+    assert!(
+        session.shell_view().entry_content_tokens > 0,
+        "dialog token label uses the script-aware estimate"
+    );
+    session.apply_shell_action(ShellAction::EntryToggleConstant);
+    session.apply_shell_action(ShellAction::SaveEntry);
+    let shell = session.shell_view();
+    assert!(!shell.entry_dialog_open, "save closes the dialog");
+    let created = shell
+        .lorebook_entries
+        .iter()
+        .find(|row| row.keys.as_slice() == ["Sunken Road"])
+        .expect("created entry");
+    assert!(created.enabled && created.constant && !created.selective);
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "lorebooks.entries.create")
+    );
+
+    // Edit: dialog pre-fills the row values; SaveEntry updates the entry.
+    session.apply_shell_action(ShellAction::EditLorebookEntry(created.id.clone()));
+    let shell = session.shell_view();
+    assert_eq!(shell.entry_keys_draft, "Sunken Road");
+    assert_eq!(shell.entry_secondary_keys_draft, "pass\nford");
+    assert_eq!(shell.entry_constant_draft, true);
+    session.set_entry_content_draft("Rewritten: the ford bells warn before the tide turns.");
+    session.apply_shell_action(ShellAction::SaveEntry);
+    let shell = session.shell_view();
+    let edited = shell
+        .lorebook_entries
+        .iter()
+        .find(|row| row.id == created.id)
+        .expect("edited entry");
+    assert!(edited.content.starts_with("Rewritten"));
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "lorebooks.entries.update")
+    );
+
+    // Delete: confirm dialog -> `entries.delete`; the book count drops.
+    session.apply_shell_action(ShellAction::OpenEntryDelete(created.id.clone()));
+    assert!(session.shell_view().entry_delete_open);
+    session.apply_shell_action(ShellAction::ConfirmEntryDelete);
+    let shell = session.shell_view();
+    assert!(!shell.entry_delete_open);
+    assert!(
+        shell
+            .lorebook_entries
+            .iter()
+            .all(|row| row.id != created.id),
+        "confirm delete removes the entry"
+    );
+    let book = shell
+        .lorebooks
+        .iter()
+        .find(|row| row.id == neotavern_presentation_chat::DEMO_LOREBOOK_ID)
+        .expect("demo book");
+    assert_eq!(book.entry_count, 2, "book count follows the entries");
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "lorebooks.entries.delete")
+    );
+}
+
+#[test]
 fn physical_window_insets_become_css_pixels_on_the_shell() {
     let (mut session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");

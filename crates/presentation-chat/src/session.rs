@@ -1,35 +1,39 @@
 use contracts_generated::generated::{
-    CharacterDto, ChatDto, ErrorDto, GenerationEvent, LorebookDto, MessageDraftDto, MessageDto,
-    MessageRole, PagedCharacters, PagedChats, PagedMessages, PersonaDto, PluginsItem,
-    RequestAssetsContent, RequestCancelGeneration, RequestCreateCharacter, RequestCreateChat,
-    RequestCreateLorebook, RequestCreateMessage, RequestCreatePersona, RequestDeleteCharacter,
-    RequestDeleteLorebook, RequestDeleteMessage, RequestDeletePersona, RequestEmpty,
-    RequestGetCharacter, RequestGetChat, RequestListCharacters, RequestListChats,
-    RequestListLorebooks, RequestListMessages, RequestListPresets, RequestMessageDraftCommit,
-    RequestMessageDraftDiscard, RequestMessageDraftGet, RequestMessageDraftSave,
-    RequestMessageVariantActivate, RequestMessageVariantsList, RequestRetryGeneration,
-    RequestSettingsGet, RequestSnapshotsRollback, RequestStartGeneration, RequestUpdateCharacter,
-    ResultAssetsContent, ResultListLorebooks, ResultListPersonas, ResultListPresets,
+    CharacterDto, ChatDto, ErrorDto, GenerationEvent, LorebookDto, LorebookEntryDto,
+    LorebookEntryInput, LorebookEntryPatch, MessageDraftDto, MessageDto, MessageRole,
+    PagedCharacters, PagedChats, PagedMessages, PersonaDto, PluginsItem, RequestAssetsContent,
+    RequestCancelGeneration, RequestCreateCharacter, RequestCreateChat, RequestCreateLorebook,
+    RequestCreateLorebookEntry, RequestCreateMessage, RequestCreatePersona, RequestDeleteCharacter,
+    RequestDeleteLorebook, RequestDeleteLorebookEntry, RequestDeleteMessage, RequestDeletePersona,
+    RequestEmpty, RequestGetCharacter, RequestGetChat, RequestListCharacters, RequestListChats,
+    RequestListLorebookEntries, RequestListLorebooks, RequestListMessages, RequestListPresets,
+    RequestMessageDraftCommit, RequestMessageDraftDiscard, RequestMessageDraftGet,
+    RequestMessageDraftSave, RequestMessageVariantActivate, RequestMessageVariantsList,
+    RequestRetryGeneration, RequestSettingsGet, RequestSnapshotsRollback, RequestStartGeneration,
+    RequestUpdateCharacter, RequestUpdateLorebookEntry, ResultAssetsContent,
+    ResultListLorebookEntries, ResultListLorebooks, ResultListPersonas, ResultListPresets,
     ResultListProviders, ResultPluginsList, ResultSettings, SettingsItem, decode_character_dto,
-    decode_chat_dto, decode_lorebook_dto, decode_message_draft_dto, decode_message_dto,
-    decode_paged_characters, decode_paged_chats, decode_paged_messages, decode_persona_dto,
-    decode_result_assets_content, decode_result_list_lorebooks, decode_result_list_personas,
-    decode_result_list_presets, decode_result_list_providers, decode_result_message_variant_list,
-    decode_result_plugins_list, decode_result_settings, decode_result_snapshots_rollback,
+    decode_chat_dto, decode_lorebook_dto, decode_lorebook_entry_dto, decode_message_draft_dto,
+    decode_message_dto, decode_paged_characters, decode_paged_chats, decode_paged_messages,
+    decode_persona_dto, decode_result_assets_content, decode_result_list_lorebook_entries,
+    decode_result_list_lorebooks, decode_result_list_personas, decode_result_list_presets,
+    decode_result_list_providers, decode_result_message_variant_list, decode_result_plugins_list,
+    decode_result_settings, decode_result_snapshots_rollback,
 };
 use neotavern_chat_viewport::{
     GeometrySnapshot, HeightIndex, HeightKind, LogicalItemId, PredictorBudgets, PresentDecision,
     PresentOutcome, TileCache, ViewportSession,
 };
 use neotavern_presentation_dioxus_shell::{
-    CharacterCardView, CharacterDraftView, ChatCardView, ContextUsageBreakdownV1,
-    ContextUsageSummaryV1, LorebookCardView, PRODUCT_PATH_VISIBLE, PersonaCardView, PluginCardView,
-    PresetCardView, ProductChatView, ProductChrome, ProductShellView, ProviderCardView, RowKind,
-    SafeAreaInsets, VisibleRow, assert_registered_command, chrome_metrics, mount_product_chat,
+    assert_registered_command, chrome_metrics, mount_product_chat, CharacterCardView,
+    CharacterDraftView, ChatCardView, ContextUsageBreakdownV1, ContextUsageSummaryV1,
+    LorebookCardView, LorebookEntryCardView, PersonaCardView, PluginCardView, PresetCardView,
+    ProductChatView, ProductChrome, ProductShellView, ProviderCardView, RowKind, SafeAreaInsets,
+    VisibleRow, PRODUCT_PATH_VISIBLE,
 };
 
-use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde::Serialize;
 use serde_json::{Value, json};
 use std::collections::{HashMap, VecDeque};
 
@@ -109,6 +113,21 @@ pub struct ChatRouteState {
     pub lorebook_search: String,
     pub lorebook_name_draft: String,
     pub lorebook_description_draft: String,
+    /// Entries of the selected lorebook (`lorebooks.entries.list`).
+    pub lorebook_entries: Vec<LorebookEntryDto>,
+    /// Entry being edited in the entry dialog (`None` = creating a new one).
+    pub editing_lorebook_entry_id: Option<String>,
+    pub entry_dialog_open: bool,
+    pub entry_delete_open: bool,
+    /// Entry dialog drafts (keys are one per line, React `EntryDialog`).
+    pub entry_keys_draft: String,
+    pub entry_secondary_keys_draft: String,
+    pub entry_content_draft: String,
+    pub entry_enabled_draft: bool,
+    pub entry_constant_draft: bool,
+    pub entry_selective_draft: bool,
+    /// Entry the delete-confirm dialog asks about.
+    pub entry_delete_target_id: Option<String>,
     pub plugins: Vec<PluginsItem>,
     pub providers: Vec<ProviderCardView>,
     pub presets: Vec<PresetCardView>,
@@ -974,6 +993,31 @@ impl<W: ProductWire> ChatSession<W> {
             lorebook_create_name: self.state.create_name.clone(),
             lorebook_name_draft: self.state.lorebook_name_draft.clone(),
             lorebook_description_draft: self.state.lorebook_description_draft.clone(),
+            lorebook_entries: self
+                .state
+                .lorebook_entries
+                .iter()
+                .map(|row| LorebookEntryCardView {
+                    id: row.id.clone(),
+                    keys: row.keys.clone(),
+                    secondary_keys: row.secondary_keys.clone(),
+                    content: row.content.clone(),
+                    enabled: row.enabled,
+                    constant: row.constant,
+                    selective: row.selective,
+                })
+                .collect(),
+            editing_lorebook_entry_id: self.state.editing_lorebook_entry_id.clone(),
+            entry_dialog_open: self.state.entry_dialog_open,
+            entry_delete_open: self.state.entry_delete_open,
+            entry_keys_draft: self.state.entry_keys_draft.clone(),
+            entry_secondary_keys_draft: self.state.entry_secondary_keys_draft.clone(),
+            entry_content_draft: self.state.entry_content_draft.clone(),
+            entry_enabled_draft: self.state.entry_enabled_draft,
+            entry_constant_draft: self.state.entry_constant_draft,
+            entry_selective_draft: self.state.entry_selective_draft,
+            entry_delete_target_id: self.state.entry_delete_target_id.clone(),
+            entry_content_tokens: estimate_tokens(&self.state.entry_content_draft),
             plugins: self
                 .state
                 .plugins
@@ -1803,6 +1847,34 @@ impl<W: ProductWire> ChatSession<W> {
                     Some("Import a JSON or PNG character card from this device.".into());
                 self.bump_scene();
             }
+            ShellAction::OpenEntryDialog => self.open_entry_dialog(),
+            ShellAction::EditLorebookEntry(id) => self.open_entry_dialog_for(&id),
+            ShellAction::CloseEntryDialog => self.close_entry_dialog(),
+            ShellAction::SaveEntry => self.save_entry(),
+            ShellAction::ToggleLorebookEntry(id) => self.toggle_lorebook_entry(&id),
+            ShellAction::OpenEntryDelete(id) => {
+                self.state.entry_delete_target_id = Some(id);
+                self.state.entry_delete_open = true;
+                self.bump_scene();
+            }
+            ShellAction::CloseEntryDelete => {
+                self.state.entry_delete_open = false;
+                self.state.entry_delete_target_id = None;
+                self.bump_scene();
+            }
+            ShellAction::ConfirmEntryDelete => self.confirm_delete_entry(),
+            ShellAction::EntryToggleEnabled => {
+                self.state.entry_enabled_draft = !self.state.entry_enabled_draft;
+                self.bump_scene();
+            }
+            ShellAction::EntryToggleConstant => {
+                self.state.entry_constant_draft = !self.state.entry_constant_draft;
+                self.bump_scene();
+            }
+            ShellAction::EntryToggleSelective => {
+                self.state.entry_selective_draft = !self.state.entry_selective_draft;
+                self.bump_scene();
+            }
         }
     }
 
@@ -2035,7 +2107,27 @@ impl<W: ProductWire> ChatSession<W> {
                 if let Some(id) = self.state.selected_lorebook_id.clone() {
                     self.seed_lorebook_draft(&id);
                 }
+                if self.state.lorebook_tab == "entries" {
+                    self.load_lorebook_entries();
+                }
             }
+            Err(err) => self.record_error(err),
+        }
+    }
+
+    /// Load `lorebooks.entries.list` for the selected lorebook (React
+    /// `useLorebookEntries`; kernel returns the full list in one page).
+    fn load_lorebook_entries(&mut self) {
+        let Some(id) = self.state.selected_lorebook_id.clone() else {
+            self.state.lorebook_entries.clear();
+            return;
+        };
+        match self.call_decode(
+            "lorebooks.entries.list",
+            &RequestListLorebookEntries { lorebook_id: id },
+            decode_result_list_lorebook_entries,
+        ) {
+            Ok(ResultListLorebookEntries { items }) => self.state.lorebook_entries = items,
             Err(err) => self.record_error(err),
         }
     }
@@ -2056,6 +2148,203 @@ impl<W: ProductWire> ChatSession<W> {
 
     pub fn set_lorebook_tab(&mut self, tab: &str) {
         self.state.lorebook_tab = tab.to_string();
+        if tab == "entries" {
+            self.load_lorebook_entries();
+        }
+        self.bump_scene();
+    }
+
+    /// Open the entry dialog for a NEW entry (React `EntryDialog` with
+    /// `entry: null`); `enabled` defaults to true like the React form.
+    pub fn open_entry_dialog(&mut self) {
+        self.state.editing_lorebook_entry_id = None;
+        self.state.entry_keys_draft.clear();
+        self.state.entry_secondary_keys_draft.clear();
+        self.state.entry_content_draft.clear();
+        self.state.entry_enabled_draft = true;
+        self.state.entry_constant_draft = false;
+        self.state.entry_selective_draft = false;
+        self.state.entry_dialog_open = true;
+        self.bump_scene();
+    }
+
+    /// Open the entry dialog pre-filled with an existing entry's values.
+    pub fn open_entry_dialog_for(&mut self, entry_id: &str) {
+        let Some(entry) = self
+            .state
+            .lorebook_entries
+            .iter()
+            .find(|row| row.id == entry_id)
+            .cloned()
+        else {
+            return;
+        };
+        self.state.editing_lorebook_entry_id = Some(entry.id);
+        self.state.entry_keys_draft = entry.keys.join("\n");
+        self.state.entry_secondary_keys_draft = entry.secondary_keys.unwrap_or_default().join("\n");
+        self.state.entry_content_draft = entry.content;
+        self.state.entry_enabled_draft = entry.enabled;
+        self.state.entry_constant_draft = entry.constant;
+        self.state.entry_selective_draft = entry.selective;
+        self.state.entry_dialog_open = true;
+        self.bump_scene();
+    }
+
+    pub fn close_entry_dialog(&mut self) {
+        self.state.entry_dialog_open = false;
+        self.state.editing_lorebook_entry_id = None;
+        self.bump_scene();
+    }
+
+    /// Split newline-separated draft keys exactly like React `EntryDialog`
+    /// (`splitKeys`: trim + drop empties).
+    fn split_entry_keys(value: &str) -> Vec<String> {
+        value
+            .split('\n')
+            .map(str::trim)
+            .filter(|key| !key.is_empty())
+            .map(str::to_string)
+            .collect()
+    }
+
+    /// Save the entry dialog: create (`lorebooks.entries.create`) or update
+    /// (`lorebooks.entries.update`) for the edited id. The wire DTO carries
+    /// no position/metadata (kernel-owned), so the dialog honestly has no
+    /// position field.
+    pub fn save_entry(&mut self) {
+        let Some(book_id) = self.state.selected_lorebook_id.clone() else {
+            return;
+        };
+        let keys = Self::split_entry_keys(&self.state.entry_keys_draft);
+        if keys.is_empty() {
+            self.state.status_message = Some("Entry needs at least one key.".into());
+            self.bump_scene();
+            return;
+        }
+        let secondary_keys = Self::split_entry_keys(&self.state.entry_secondary_keys_draft);
+        let content = self.state.entry_content_draft.trim().to_string();
+        let enabled = self.state.entry_enabled_draft;
+        let constant = self.state.entry_constant_draft;
+        let selective = self.state.entry_selective_draft;
+        if let Some(entry_id) = self.state.editing_lorebook_entry_id.clone() {
+            let req = RequestUpdateLorebookEntry {
+                lorebook_id: book_id,
+                entry_id,
+                patch: LorebookEntryPatch {
+                    keys: Some(keys),
+                    secondary_keys: Some(secondary_keys),
+                    content: Some(content),
+                    enabled: Some(enabled),
+                    constant: Some(constant),
+                    selective: Some(selective),
+                },
+            };
+            match self.call_value("lorebooks.entries.update", &req) {
+                Ok(_) => {
+                    self.state.entry_dialog_open = false;
+                    self.state.editing_lorebook_entry_id = None;
+                    self.load_lorebook_entries();
+                    self.state.status_message = Some("Entry updated.".into());
+                }
+                Err(err) => self.record_error(err),
+            }
+        } else {
+            let req = RequestCreateLorebookEntry {
+                lorebook_id: book_id,
+                entry: LorebookEntryInput {
+                    keys,
+                    secondary_keys: Some(secondary_keys),
+                    content,
+                    enabled: Some(enabled),
+                    constant: Some(constant),
+                    selective: Some(selective),
+                },
+            };
+            match self.call_decode("lorebooks.entries.create", &req, decode_lorebook_entry_dto) {
+                Ok(_) => {
+                    self.state.entry_dialog_open = false;
+                    self.load_lorebook_entries();
+                    self.state.status_message = Some("Entry added.".into());
+                }
+                Err(err) => self.record_error(err),
+            }
+        }
+        self.bump_scene();
+    }
+
+    /// Entry-row switch toggle (React `EntryRow` `Switch`): flips `enabled`
+    /// through `lorebooks.entries.update`.
+    pub fn toggle_lorebook_entry(&mut self, entry_id: &str) {
+        let Some(book_id) = self.state.selected_lorebook_id.clone() else {
+            return;
+        };
+        let Some(enabled) = self
+            .state
+            .lorebook_entries
+            .iter()
+            .find(|row| row.id == entry_id)
+            .map(|row| !row.enabled)
+        else {
+            return;
+        };
+        let req = RequestUpdateLorebookEntry {
+            lorebook_id: book_id,
+            entry_id: entry_id.to_string(),
+            patch: LorebookEntryPatch {
+                keys: None,
+                secondary_keys: None,
+                content: None,
+                enabled: Some(enabled),
+                constant: None,
+                selective: None,
+            },
+        };
+        match self.call_value("lorebooks.entries.update", &req) {
+            Ok(_) => self.load_lorebook_entries(),
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    fn confirm_delete_entry(&mut self) {
+        let Some(book_id) = self.state.selected_lorebook_id.clone() else {
+            self.state.entry_delete_open = false;
+            return;
+        };
+        let Some(entry_id) = self.state.entry_delete_target_id.clone() else {
+            self.state.entry_delete_open = false;
+            return;
+        };
+        match self.call_value(
+            "lorebooks.entries.delete",
+            &RequestDeleteLorebookEntry {
+                lorebook_id: book_id,
+                entry_id,
+            },
+        ) {
+            Ok(_) => {
+                self.state.entry_delete_open = false;
+                self.state.entry_delete_target_id = None;
+                self.load_lorebook_entries();
+                self.state.status_message = Some("Entry deleted.".into());
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    pub fn set_entry_keys_draft(&mut self, value: &str) {
+        self.state.entry_keys_draft = value.to_string();
+        self.bump_scene();
+    }
+
+    pub fn set_entry_secondary_keys_draft(&mut self, value: &str) {
+        self.state.entry_secondary_keys_draft = value.to_string();
+        self.bump_scene();
+    }
+
+    pub fn set_entry_content_draft(&mut self, value: &str) {
+        self.state.entry_content_draft = value.to_string();
         self.bump_scene();
     }
 

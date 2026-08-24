@@ -242,6 +242,29 @@ content-driven `min-height` (закрытый держит фиксирован�
 распределяет внутренний flex по-разному между `height`/`min-height`, что
 уводит goldens на несколько px).
 
+## Панель лорбуков: записи (LorebookPanel EntriesTab)
+
+Порт React `LorebookPanel` вкладки Entries: у выбранного лорбука (таб
+`entries` после `SelectLorebook`) вместо пустой заглушки теперь рендерится
+тулбар (Back to books / Add entry), подсказка и список строк
+(`data-part="entry-row"`, высота 64 px, строки: ключ-заголовок, сниппет
+контента до 120 символов, бейджи Constant/Selective) с row-действиями в
+правых 132 px: switch enabled (36×20, тап → `lorebooks.entries.update`),
+edit (PencilSimple), delete (Trash).
+
+Данные — реальный Wire: `lorebooks.entries.list` грузится при входе во
+вкладку; демо-лорбук (`DEMO_LOREBOOK_ID`, «Kestrel Vales») в `FakeWire`
+получил две записи, чтобы панель показывала настоящие строки. EntryDialog
+(Add/Edit entry, 400×520, геометрия зеркалит `shell_hit::dialog_hit`) —
+поля Keywords/Secondary keywords/Content + свитчи Always include
+(constant), Selective (primary + secondary match), Enabled; сохранение —
+`lorebooks.entries.create` / `lorebooks.entries.update`, удаление — диалог
+подтверждения и `lorebooks.entries.delete`; счётчик книги (`entry_count`)
+следует за записями. Счётчик токенов в диалоге — скрипт-осознанный
+`estimate_tokens` (тот же порт, что у контекст-метра). Wire-DTO записи не
+несёт позицию/метаданные (kernel-owned), поэтому поля position в форме
+честно нет.
+
 ## Отправка сообщения (Send)
 
 Композер (`data-part="composer"` в `product_chat_app`) получил кнопку **Send**

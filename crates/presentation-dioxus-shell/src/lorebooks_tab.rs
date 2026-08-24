@@ -233,21 +233,168 @@ fn lorebook_edit_tab(view: &ProductShellView) -> Element {
     }
 }
 
-fn lorebook_entries_tab(_view: &ProductShellView) -> Element {
+fn lorebook_entries_tab(view: &ProductShellView) -> Element {
+    let book = view
+        .lorebooks
+        .iter()
+        .find(|item| Some(item.id.as_str()) == view.selected_lorebook_id.as_deref());
+    let Some(book) = book else {
+        return rsx! {
+            div {
+                class: "LorebookPanel_entriesTab",
+                "data-part": "lorebook-entries",
+                div {
+                    class: "LorebookPanel_emptyState",
+                    {icon("PencilSimple", 32)}
+                    strong { "No entries yet" }
+                    p { "Add entries that activate on names, places, objects or any keywords." }
+                }
+            }
+        };
+    };
+    let _ = book;
+    let entries: Vec<&crate::product_shell::LorebookEntryCardView> =
+        view.lorebook_entries.iter().collect();
+    let empty = entries.is_empty();
+    let hint = if empty {
+        "Add entries that activate on names, places, objects or any keywords."
+    } else {
+        "Entries activate on their keys; constant entries always inject."
+    };
     rsx! {
         div {
             class: "LorebookPanel_entriesTab",
             "data-part": "lorebook-entries",
             div {
-                class: "LorebookPanel_emptyState",
-                {icon("PencilSimple", 32)}
-                strong { "No entries yet" }
-                p { "Add entries that activate on names, places, objects or any keywords." }
+                class: "LorebookPanel_editorActionBar",
+                style: "display:flex;flex:none;flex-direction:row;align-items:center;justify-content:space-between;gap:8px;padding:8px 16px;",
                 button {
                     class: "st-button",
                     r#type: "button",
+                    "data-component": "button",
+                    "data-size": "sm",
+                    span { "data-part": "label", "Back to books" }
+                }
+                button {
+                    class: "st-button",
+                    r#type: "button",
+                    "data-component": "button",
                     "data-variant": "primary",
+                    "data-size": "sm",
+                    span { "data-part": "icon", "aria-hidden": "true", {icon_fill("Plus", 18, "#2a130b")} }
                     span { "data-part": "label", "Add entry" }
+                }
+            }
+            p {
+                class: "LorebookPanel_hint",
+                style: "flex:none;margin:0;padding:0 16px 8px;color:#998f87;font-size:0.75rem;",
+                "{hint}"
+            }
+            if empty {
+                div {
+                    class: "LorebookPanel_emptyState",
+                    style: "display:flex;flex-direction:column;gap:8px;align-items:center;text-align:center;padding:24px 16px;",
+                    {icon("PencilSimple", 32)}
+                    strong { "No entries yet" }
+                    p { "Add entries that activate on names, places, objects or any keywords." }
+                }
+            } else {
+                div {
+                    class: "LorebookPanel_entryList",
+                    style: "display:flex;flex-direction:column;gap:4px;padding:0 16px 16px;overflow:hidden;",
+                    for item in entries.into_iter() {
+                        {
+                            let headline = item
+                                .keys
+                                .first()
+                                .cloned()
+                                .unwrap_or_else(|| {
+                                    if item.constant {
+                                        "Constant".into()
+                                    } else {
+                                        "No description".into()
+                                    }
+                                });
+                            let snippet = item.content.trim();
+                            let snippet = if snippet.is_empty() {
+                                "No description".to_string()
+                            } else {
+                                let chars: Vec<char> = snippet.chars().take(120).collect();
+                                chars.into_iter().collect()
+                            };
+                            let row_style = if item.enabled {
+                                "display:flex;min-width:0;padding:8px;align-items:center;justify-content:space-between;gap:8px;border:1px solid #39342f;border-radius:16px;background:#24211e;"
+                            } else {
+                                "display:flex;min-width:0;padding:8px;align-items:center;justify-content:space-between;gap:8px;border:1px solid #39342f;border-radius:16px;background:#24211e;opacity:0.6;"
+                            };
+                            let track_style = if item.enabled {
+                                "width:36px;height:20px;border-radius:10px;background:#e38a62;position:relative;flex:none;"
+                            } else {
+                                "width:36px;height:20px;border-radius:10px;background:#39342f;position:relative;flex:none;"
+                            };
+                            let thumb_style = if item.enabled {
+                                "position:absolute;top:2px;right:2px;width:16px;height:16px;border-radius:8px;background:#2a130b;"
+                            } else {
+                                "position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:8px;background:#998f87;"
+                            };
+                            rsx! {
+                                div {
+                                    class: "LorebookPanel_entryRow",
+                                    style: "{row_style}",
+                                    "data-part": "entry-row",
+                                    "data-state": if item.enabled { "enabled" } else { "disabled" },
+                                    div {
+                                        class: "LorebookPanel_entryMain",
+                                        style: "display:flex;min-width:0;flex-direction:column;gap:4px;",
+                                        strong { style: "color:#f3eee8;font-size:0.8125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;", "{headline}" }
+                                        span { style: "color:#998f87;font-size:0.8125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;", "{snippet}" }
+                                        if item.constant || item.selective {
+                                            span {
+                                                class: "LorebookPanel_badges",
+                                                if item.constant {
+                                                    span { class: "LorebookPanel_badge", "Constant" }
+                                                }
+                                                if item.selective {
+                                                    span { class: "LorebookPanel_badge", "Selective" }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    div {
+                                        class: "LorebookPanel_entryActions",
+                                        style: "display:flex;flex:none;align-items:center;gap:4px;",
+                                        button {
+                                            r#type: "button",
+                                            "data-part": "entry-toggle",
+                                            "data-state": if item.enabled { "on" } else { "off" },
+                                            "aria-label": "Toggle entry",
+                                            title: "Toggle entry",
+                                            style: "padding:0;border:0;background:transparent;cursor:pointer;",
+                                            span { style: "{track_style}", span { style: "{thumb_style}" } }
+                                        }
+                                        button {
+                                            class: "LorebookPanel_iconButton",
+                                            r#type: "button",
+                                            "data-part": "entry-edit",
+                                            "aria-label": "Edit entry",
+                                            title: "Edit entry",
+                                            style: "display:grid;width:40px;height:40px;place-items:center;border:1px solid transparent;border-radius:10px;color:#998f87;background:transparent;",
+                                            {icon_fill("PencilSimple", 15, "#998f87")}
+                                        }
+                                        button {
+                                            class: "LorebookPanel_iconButtonDanger",
+                                            r#type: "button",
+                                            "data-part": "entry-delete",
+                                            "aria-label": "Delete entry",
+                                            title: "Delete entry",
+                                            style: "display:grid;width:40px;height:40px;place-items:center;border:1px solid transparent;border-radius:10px;color:#998f87;background:transparent;",
+                                            {icon_fill("Trash", 15, "#998f87")}
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

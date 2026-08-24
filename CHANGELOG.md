@@ -3,6 +3,20 @@
 ## Unreleased
 ### Added
 
+- **Записи лорбука (перенос LorebookPanel EntriesTab).** У выбранного
+  лорбука вкладка Entries показывает реальные записи через
+  `lorebooks.entries.list`: тулбар (Back to books / Add entry), подсказка,
+  строки 64 px (ключ, сниппет, бейджи Constant/Selective) с row-действиями —
+  switch enabled (`lorebooks.entries.update`), edit, delete. EntryDialog
+  (Add/Edit, 400×520) с полями ключей/контента и свитчами constant/
+  selective/enabled; сохранение и удаление — `lorebooks.entries.create /
+  update / delete`; `entry_count` книги следует за записями. Wire-DTO записи
+  не несёт позицию (kernel-owned) — поля position в форме нет. Счётчик
+  токенов диалога — тот же скрипт-осознанный `estimate_tokens`. FakeWire
+  получил демо-лорбук с двумя записями; cargo-тесты (включая новый
+  `lorebook_entries_load_toggle_and_crud_over_product_wire`), goldens
+  0.0000% ×4, packaged-check, docs:check.
+
 - **Контекст-метр композера (перенос ContextUsagePanel).** Триггер
   `composer-context` в тулбаре композера теперь открывает popover с паритетом
   React `ContextUsagePanel`: сводка (draft estimate, prompt/limit), метрики 2×2
