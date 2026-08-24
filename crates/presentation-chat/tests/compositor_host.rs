@@ -968,6 +968,74 @@ fn plugins_toggle_and_uninstall_over_product_wire() {
 }
 
 #[test]
+fn chats_rename_and_delete_over_product_wire() {
+    use neotavern_presentation_chat::ShellAction;
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::with_message_count(12), None, None)
+            .expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("home".into()));
+    let shell = session.shell_view();
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "chats.list"),
+        "home panel lists chats"
+    );
+    let first_id = shell.chat_list[0].id.clone();
+    let first_title = shell.chat_list[0].title.clone();
+
+    // Rename: dialog pre-fills the title; submit -> `chats.update`.
+    session.apply_shell_action(ShellAction::StartChatRename(first_id.clone()));
+    let shell = session.shell_view();
+    assert!(shell.chat_rename_open);
+    assert_eq!(shell.chat_rename_draft, first_title);
+    session.set_chat_rename_draft("Renamed route");
+    session.apply_shell_action(ShellAction::SubmitChatRename);
+    let shell = session.shell_view();
+    assert!(!shell.chat_rename_open);
+    assert!(
+        shell
+            .chat_list
+            .iter()
+            .any(|row| row.id == first_id && row.title == "Renamed route"),
+        "rename updates the row title"
+    );
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "chats.update")
+    );
+
+    // Delete: confirm dialog -> `chats.delete`; the row is gone.
+    session.apply_shell_action(ShellAction::OpenChatDelete(first_id.clone()));
+    assert!(session.shell_view().chat_delete_open);
+    session.apply_shell_action(ShellAction::ConfirmChatDelete);
+    let shell = session.shell_view();
+    assert!(!shell.chat_delete_open);
+    assert!(
+        shell.chat_list.iter().all(|row| row.id != first_id),
+        "confirm delete removes the chat row"
+    );
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "chats.delete")
+    );
+    assert!(
+        session
+            .shell_view()
+            .status_message
+            .as_deref()
+            .unwrap_or("")
+            .contains("deleted"),
+        "delete surfaces a toast"
+    );
+}
+
+#[test]
 fn physical_window_insets_become_css_pixels_on_the_shell() {
     let (mut session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");

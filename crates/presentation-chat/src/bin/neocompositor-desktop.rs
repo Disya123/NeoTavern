@@ -57,6 +57,7 @@ enum TextFocus {
     CreateName,
     ProfileCreateName,
     ProfileRename,
+    ChatRename,
 }
 
 /// One scripted probe step, replayed in argument order so
@@ -469,6 +470,8 @@ impl App {
             focus = TextFocus::ProfileCreateName;
         } else if rects.covers(css_x, css_y, "part:profile-rename-input") {
             focus = TextFocus::ProfileRename;
+        } else if rects.covers(css_x, css_y, "part:chat-rename-input") {
+            focus = TextFocus::ChatRename;
         }
         self.focus = focus;
     }
@@ -753,6 +756,12 @@ impl App {
                 self.session.set_profile_rename_name(&next);
                 eprintln!("[neocompositor-desktop] typed '{ch}' -> profile_rename_name=\"{next}\"");
             }
+            TextFocus::ChatRename => {
+                let current = self.session.shell_view().chat_rename_draft;
+                let next = format!("{current}{ch}");
+                self.session.set_chat_rename_draft(&next);
+                eprintln!("[neocompositor-desktop] typed '{ch}' -> chat_rename=\"{next}\"");
+            }
             TextFocus::None => return,
         }
         self.dirty = true;
@@ -768,6 +777,7 @@ impl App {
             TextFocus::CreateName => self.session.shell_view().create_name,
             TextFocus::ProfileCreateName => self.session.shell_view().profile_create_name,
             TextFocus::ProfileRename => self.session.shell_view().profile_rename_name,
+            TextFocus::ChatRename => self.session.shell_view().chat_rename_draft,
             TextFocus::None => return,
         };
         let next: String = current
@@ -783,6 +793,7 @@ impl App {
             TextFocus::CreateName => self.session.set_create_name(&next),
             TextFocus::ProfileCreateName => self.session.set_profile_create_name(&next),
             TextFocus::ProfileRename => self.session.set_profile_rename_name(&next),
+            TextFocus::ChatRename => self.session.set_chat_rename_draft(&next),
             TextFocus::None => {}
         }
         self.dirty = true;

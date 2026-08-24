@@ -115,21 +115,46 @@ fn chat_row(item: &ChatCardView, selected_id: Option<&str>) -> Element {
             class: "ChatManagementPanel_chatRow",
             "data-component": "chat-item",
             "data-state": "{state}",
+            style: "display:flex;align-items:center;gap:4px;",
             span {
                 class: "ChatManagementPanel_chatLink",
                 "data-chat-id": "{item.id}",
+                style: "flex:1;min-width:0;display:flex;align-items:center;gap:8px;",
                 span {
                     class: "ChatManagementPanel_chatAvatar",
                     "aria-hidden": "true",
+                    style: "flex:none;",
                     {icon("ChatsCircle", 20)}
                 }
                 span {
                     class: "ChatManagementPanel_chatCopy",
-                    strong { "{item.title}" }
-                    span { "{item.message_count} messages" }
+                    style: "min-width:0;display:flex;flex-direction:column;gap:1px;",
+                    strong { style: "color:#f3eee8;font-size:0.8125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;", "{item.title}" }
+                    span { style: "color:#998f87;font-size:0.6875rem;", "{item.message_count} messages" }
                     if !item.character_label.is_empty() {
-                        span { class: "ChatManagementPanel_characterLabel", "{item.character_label}" }
+                        span { class: "ChatManagementPanel_characterLabel", style: "color:#998f87;font-size:0.6875rem;", "{item.character_label}" }
                     }
+                }
+            }
+            div {
+                style: "flex:none;display:flex;align-items:center;gap:4px;",
+                button {
+                    class: "ChatManagementPanel_rowAction",
+                    r#type: "button",
+                    "data-part": "chat-rename",
+                    "aria-label": "Rename chat",
+                    title: "Rename chat",
+                    style: "display:grid;width:44px;height:44px;place-items:center;border:1px solid transparent;border-radius:10px;color:#998f87;background:transparent;",
+                    {icon_fill("PencilSimple", 15, "#998f87")}
+                }
+                button {
+                    class: "ChatManagementPanel_rowActionDanger",
+                    r#type: "button",
+                    "data-part": "chat-delete",
+                    "aria-label": "Delete chat",
+                    title: "Delete chat",
+                    style: "display:grid;width:44px;height:44px;place-items:center;border:1px solid transparent;border-radius:10px;color:#998f87;background:transparent;",
+                    {icon_fill("Trash", 15, "#998f87")}
                 }
             }
         }

@@ -3,6 +3,17 @@
 ## Unreleased
 ### Added
 
+- **Чаты: переименование и удаление (перенос ChatManagementPanel).** Строки
+  панели Home/Chats получили действия в правых 88 px: rename (диалог 320×220,
+  поле `data-part="chat-rename-input"`, `chats.update` с title; пустой
+  заголовок — no-op guard без Wire-вызова) и delete (диалог 300×200,
+  `chats.delete`, тост; удаление открытого чата сбрасывает workspace-состояние
+  сессии, чтобы refresh не упёрся в CHAT_NOT_FOUND). Список перечитывается
+  через `chats.list`; фокус — `TextFocus::ChatRename`. FakeWire:
+  chats.update/chats.delete. cargo-тесты (включая новый
+  `chats_rename_and_delete_over_product_wire`), goldens 0.0000% ×4,
+  packaged-check, docs:check.
+
 - **Плагины: жизненный цикл (plugins.enable/disable/uninstall).** Каталог
   плагинов (`plugins.list`) из статичных карточек стал интерактивным:
   карточка 112 px со статусом (Active/Disabled, зелёная рамка), строкой

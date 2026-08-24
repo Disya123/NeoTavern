@@ -304,6 +304,19 @@ React на safe-mode-странице тоже всё блокирует. Уст
 задизейбленным контролом (пикер — упакованный хост); Frontend-слоты плагинов
 по-прежнему CONTAINED в WebSurface (ADR-0054), карточка — только Wire-каталог.
 
+## Чаты: переименование и удаление (ChatManagementPanel)
+
+Панель Home/Chats получила rename/delete (React `ChatManagementPanel`):
+каждая строка чата (76 px, измеренная геометрия, зеркалит
+`shell_hit.rs::chats_hit`) несёт действия в правых 88 px — rename
+(PencilSimple, диалог 320×220 с полем `data-part="chat-rename-input"` +
+Save/Cancel, `chats.update` с `title`) и delete (Trash, диалог 300×200,
+`chats.delete`). Пустой заголовок закрывает диалог без Wire-вызова (no-op
+guard React). Если удалён открытый чат, сессия сбрасывает workspace-состояние
+(chat/messages/draft), чтобы следующий refresh не упёрся в CHAT_NOT_FOUND —
+React при этом навигирует прочь. Список перечитывается через `chats.list`,
+тост «Chat renamed.» / «Chat deleted.». Фокус клавиатуры — `TextFocus::ChatRename`.
+
 ## Отправка сообщения (Send)
 
 Композер (`data-part="composer"` в `product_chat_app`) получил кнопку **Send**

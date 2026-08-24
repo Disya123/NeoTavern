@@ -317,6 +317,13 @@ pub struct ProductShellView {
     /// Plugin uninstall confirm dialog (`plugins.uninstall`).
     pub plugin_uninstall_open: bool,
     pub plugin_uninstall_target_id: Option<String>,
+    /// Chats panel rename dialog (`React ChatManagementPanel` Dialog).
+    pub chat_rename_open: bool,
+    pub chat_renaming_id: Option<String>,
+    pub chat_rename_draft: String,
+    /// Chats panel delete confirm dialog.
+    pub chat_delete_open: bool,
+    pub chat_delete_target_id: Option<String>,
     pub plugins: Vec<PluginCardView>,
     pub providers: Vec<ProviderCardView>,
     pub presets: Vec<PresetCardView>,
@@ -400,6 +407,11 @@ impl Default for ProductShellView {
             profile_delete_target_id: None,
             plugin_uninstall_open: false,
             plugin_uninstall_target_id: None,
+            chat_rename_open: false,
+            chat_renaming_id: None,
+            chat_rename_draft: String::new(),
+            chat_delete_open: false,
+            chat_delete_target_id: None,
             plugins: Vec::new(),
             providers: Vec::new(),
             presets: Vec::new(),
@@ -1920,6 +1932,31 @@ let entry_delete_book_name = entry_dialog_book_name;
     let plugin_uninstall_confirm = format!(
         "Uninstall \"{plugin_uninstall_name}\"? Frontend slots shut down and every handler is removed."
     );
+
+    // Chat rename dialog (320×220, mirrors `shell_hit::dialog_hit`).
+    let (crlg_x, crlg_y, crlg_w, crlg_h) = modal_geometry(&view, 320.0, 220.0);
+    let chat_rename_style = format!(
+        "position:absolute;left:{crlg_x}px;top:{crlg_y}px;width:{crlg_w}px;height:{crlg_h}px;box-sizing:border-box;z-index:50;padding:16px;color:#f3eee8;"
+    );
+    let chat_rename_value = if view.chat_rename_draft.is_empty() {
+        "Chat title…"
+    } else {
+        view.chat_rename_draft.as_str()
+    };
+
+    // Chat delete confirm (300×200, mirrors `shell_hit::dialog_hit`).
+    let (cdlg_x, cdlg_y, cdlg_w, cdlg_h) = modal_geometry(&view, 300.0, 200.0);
+    let chat_delete_style = format!(
+        "position:absolute;left:{cdlg_x}px;top:{cdlg_y}px;width:{cdlg_w}px;height:{cdlg_h}px;box-sizing:border-box;z-index:50;padding:16px;color:#f3eee8;"
+    );
+    let chat_delete_title = view
+        .chat_list
+        .iter()
+        .find(|item| Some(item.id.as_str()) == view.chat_delete_target_id.as_deref())
+        .map(|item| item.title.as_str())
+        .unwrap_or("");
+    let chat_delete_confirm =
+        format!("Delete \"{chat_delete_title}\"? Its messages are removed with it.");
     // Entry dialog switches (track, thumb) — same geometry as row switches.
     let (switch_constant, switch_selective, switch_enabled) = (
         entry_switch_style(view.entry_constant_draft),
@@ -2337,6 +2374,70 @@ let entry_delete_book_name = entry_dialog_book_name;
                             "data-variant": "danger",
                             "data-size": "md",
                             span { "Uninstall" }
+                        }
+                    }
+                }
+            }
+            if view.chat_rename_open {
+                div {
+                    class: "st-card",
+                    style: "{chat_rename_style}",
+                    div {
+                        "data-component": "dialog-title",
+                        "Rename chat"
+                    }
+                    div { "data-component": "dialog-description", "Set a new title for this chat." }
+                    div {
+                        class: "CharacterManagementPanel_editorField",
+                        style: "position:absolute;left:16px;top:72px;right:16px;height:48px;display:flex;flex-direction:column;gap:2px;",
+                        span { class: "CharacterManagementPanel_fieldHeading", strong { "Title" } }
+                        span {
+                            "data-part": "chat-rename-input",
+                            style: "height:32px;line-height:32px;padding:0 12px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;color:#e8eef7;font-size:0.8125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;",
+                            "{chat_rename_value}"
+                        }
+                    }
+                    div {
+                        class: "CharacterManagementPanel_dialogActions",
+                        style: "position:absolute;left:16px;right:16px;bottom:12px;display:flex;gap:8px;justify-content:flex-end;",
+                        button {
+                            r#type: "button",
+                            "data-variant": "default",
+                            "data-size": "md",
+                            span { "Cancel" }
+                        }
+                        button {
+                            r#type: "button",
+                            "data-variant": "primary",
+                            "data-size": "md",
+                            span { "Save" }
+                        }
+                    }
+                }
+            }
+            if view.chat_delete_open {
+                div {
+                    class: "st-card",
+                    style: "{chat_delete_style}",
+                    div {
+                        "data-component": "dialog-title",
+                        "Delete chat"
+                    }
+                    div { "data-component": "dialog-description", "{chat_delete_confirm}" }
+                    div {
+                        class: "CharacterManagementPanel_dialogActions",
+                        style: "display:flex;gap:8px;justify-content:flex-end;margin-top:12px;",
+                        button {
+                            r#type: "button",
+                            "data-variant": "default",
+                            "data-size": "md",
+                            span { "Cancel" }
+                        }
+                        button {
+                            r#type: "button",
+                            "data-variant": "danger",
+                            "data-size": "md",
+                            span { "Delete" }
                         }
                     }
                 }

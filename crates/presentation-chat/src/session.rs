@@ -12,7 +12,8 @@ use contracts_generated::generated::{
     RequestPluginsDisable, RequestPluginsEnable, RequestPluginsUninstall,
     RequestRetryGeneration, RequestSettingsGet, RequestSnapshotsRollback, RequestStartGeneration,
     RequestUpdateCharacter, RequestUpdateLorebookEntry, RequestProfileExport, RequestProfilesCreate,
-    RequestProfilesDelete, RequestProfilesRename, ResultAssetsContent,
+    RequestProfilesDelete, RequestProfilesRename, RequestUpdateChat, RequestDeleteChat,
+    ResultAssetsContent,
     ResultListLorebookEntries, ResultListLorebooks, ResultListPersonas, ResultListPresets,
     ResultListProviders, ResultPluginsList, ResultProfileExport, ResultProfilesCreate,
     ResultProfilesList, ResultSettings, SettingsItem, decode_character_dto,
@@ -156,6 +157,13 @@ pub struct ChatRouteState {
     /// Plugin uninstall confirm dialog.
     pub plugin_uninstall_open: bool,
     pub plugin_uninstall_target_id: Option<String>,
+    /// Chats panel rename dialog (`React ChatManagementPanel` Dialog).
+    pub chat_rename_open: bool,
+    pub chat_renaming_id: Option<String>,
+    pub chat_rename_draft: String,
+    /// Chats panel delete confirm dialog.
+    pub chat_delete_open: bool,
+    pub chat_delete_target_id: Option<String>,
     /// Composer context-meter popover visibility (`chat.composer.context`).
     pub context_panel_open: bool,
     /// Last applied Kernel stream envelope sequence (`EventEnvelope.sequence`).
@@ -1053,6 +1061,11 @@ impl<W: ProductWire> ChatSession<W> {
             profile_delete_target_id: self.state.profile_delete_target_id.clone(),
             plugin_uninstall_open: self.state.plugin_uninstall_open,
             plugin_uninstall_target_id: self.state.plugin_uninstall_target_id.clone(),
+            chat_rename_open: self.state.chat_rename_open,
+            chat_renaming_id: self.state.chat_renaming_id.clone(),
+            chat_rename_draft: self.state.chat_rename_draft.clone(),
+            chat_delete_open: self.state.chat_delete_open,
+            chat_delete_target_id: self.state.chat_delete_target_id.clone(),
             plugins: self
                 .state
                 .plugins
@@ -1946,6 +1959,24 @@ impl<W: ProductWire> ChatSession<W> {
                 self.bump_scene();
             }
             ShellAction::ConfirmPluginUninstall => self.confirm_uninstall_plugin(),
+            ShellAction::StartChatRename(id) => self.start_chat_rename(&id),
+            ShellAction::CloseChatRename => {
+                self.state.chat_rename_open = false;
+                self.state.chat_renaming_id = None;
+                self.bump_scene();
+            }
+            ShellAction::SubmitChatRename => self.submit_chat_rename(),
+            ShellAction::OpenChatDelete(id) => {
+                self.state.chat_delete_target_id = Some(id);
+                self.state.chat_delete_open = true;
+                self.bump_scene();
+            }
+            ShellAction::CloseChatDelete => {
+                self.state.chat_delete_open = false;
+                self.state.chat_delete_target_id = None;
+                self.bump_scene();
+            }
+            ShellAction::ConfirmChatDelete => self.confirm_delete_chat(),
         }
     }
 
@@ -2746,6 +2777,78 @@ impl<W: ProductWire> ChatSession<W> {
             }
             Err(err) => self.record_error(err),
         }
+        self.bump_scene();
+    }
+
+    /// Chats row rename action: opens the rename dialog pre-filled with the
+    /// current title (React `ChatManagementPanel` rename Dialog).
+    pub fn start_chat_rename(&mut self, chat_id: &str) {
+        let Some(chat) = self.state.chat_list.iter().find(|row| row.id == chat_id).cloned() else {
+            return;
+        };
+        self.state.chat_renaming_id = Some(chat.id);
+        self.state.chat_rename_draft = chat.title;
+        self.state.chat_rename_open = true;
+        self.bump_scene();
+    }
+
+    /// Rename submit (`chats.update`); an empty title closes the dialog
+    /// without a wire call, exactly like React's no-op guard.
+    pub fn submit_chat_rename(&mut self) {
+        let Some(id) = self.state.chat_renaming_id.clone() else {
+            return;
+        };
+        let title = self.state.chat_rename_draft.trim().to_string();
+        if title.is_empty() {
+            self.state.chat_rename_open = false;
+            self.state.chat_renaming_id = None;
+            self.bump_scene();
+            return;
+        }
+        let req = RequestUpdateChat {
+            chat_id: id,
+            title: Some(title),
+            persona_id: None,
+        };
+        match self.call_value("chats.update", &req) {
+            Ok(_) => {
+                self.state.chat_rename_open = false;
+                self.state.chat_renaming_id = None;
+                self.load_chat_list();
+                self.state.status_message = Some("Chat renamed.".into());
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    fn confirm_delete_chat(&mut self) {
+        let Some(id) = self.state.chat_delete_target_id.clone() else {
+            self.state.chat_delete_open = false;
+            return;
+        };
+        match self.call_value("chats.delete", &RequestDeleteChat { chat_id: id.clone() }) {
+            Ok(_) => {
+                self.state.chat_delete_open = false;
+                self.state.chat_delete_target_id = None;
+                // The deleted chat was open in the workspace: drop it so the
+                // next refresh cannot hit CHAT_NOT_FOUND (React navigates away).
+                if self.chat_id.as_deref() == Some(id.as_str()) {
+                    self.chat_id = None;
+                    self.state.chat = None;
+                    self.state.messages.clear();
+                    self.state.draft = None;
+                }
+                self.load_chat_list();
+                self.state.status_message = Some("Chat deleted.".into());
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    pub fn set_chat_rename_draft(&mut self, value: &str) {
+        self.state.chat_rename_draft = value.to_string();
         self.bump_scene();
     }
 

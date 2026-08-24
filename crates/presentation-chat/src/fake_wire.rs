@@ -822,6 +822,29 @@ impl ProductWire for FakeWire {
                 let chat = self.require_chat(&chat_id)?.clone();
                 self.wrap_call(operation_id, to_value(&chat))
             }
+            "chats.update" => {
+                let chat_id = payload_str(&payload, "chatId")?;
+                let title = payload.get("title").and_then(Value::as_str);
+                let updated = {
+                    let Some(chat) = self.chats.get_mut(&chat_id) else {
+                        return Err(Self::product("CHAT_NOT_FOUND", "chatId", &chat_id));
+                    };
+                    if let Some(title) = title {
+                        chat.title = title.to_string();
+                    }
+                    chat.clone()
+                };
+                self.wrap_call(operation_id, to_value(&updated))
+            }
+            "chats.delete" => {
+                let chat_id = payload_str(&payload, "chatId")?;
+                if self.chats.remove(&chat_id).is_none() {
+                    return Err(Self::product("CHAT_NOT_FOUND", "chatId", &chat_id));
+                }
+                self.messages.remove(&chat_id);
+                self.drafts.remove(&chat_id);
+                self.ok_call(operation_id, json!({}))
+            }
             "chats.messages.list" => {
                 let chat_id = payload_str(&payload, "chatId")?;
                 let page = self.list_messages(
