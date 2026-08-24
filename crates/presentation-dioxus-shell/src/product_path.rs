@@ -3,7 +3,8 @@
 
 use std::cell::RefCell;
 
-use serde_json::{json, Value};
+use neotavern_presentation_blueprint::v1::ContextUsageSummaryV1;
+use serde_json::{Value, json};
 
 use crate::{CanonicalFixture, FixtureCommand, StreamEvent};
 
@@ -68,6 +69,11 @@ pub struct ProductChatView {
     /// strip when the split shell occupies the left side). `0` = probe
     /// fixture without the shell; consumers fall back to `viewport_width`.
     pub column_width: u32,
+    /// Composer context-meter popover visibility (`chat.composer.context`).
+    pub context_panel_open: bool,
+    /// Local context estimate rendered inside the popover. `None` = the
+    /// panel shell without numbers (React loading state).
+    pub context_summary: Option<ContextUsageSummaryV1>,
 }
 
 impl Default for ProductChatView {
@@ -86,6 +92,8 @@ impl Default for ProductChatView {
             viewport_width: 320,
             viewport_height: 200,
             column_width: 0,
+            context_panel_open: false,
+            context_summary: None,
         }
     }
 }
@@ -324,6 +332,8 @@ pub fn product_chat_from_fixture(fixture: &CanonicalFixture, start: usize) -> Pr
         viewport_width: 320,
         viewport_height: 200,
         column_width: 0,
+        context_panel_open: false,
+        context_summary: None,
     }
 }
 

@@ -3,6 +3,22 @@
 ## Unreleased
 ### Added
 
+- **Контекст-метр композера (перенос ContextUsagePanel).** Триггер
+  `composer-context` в тулбаре композера теперь открывает popover с паритетом
+  React `ContextUsagePanel`: сводка (draft estimate, prompt/limit), метрики 2×2
+  (usage, available, prompt tokens, reserve) и разбивка из пяти категорий с
+  пропорциональными заливками. Узел `composer-context-panel` добавлен в
+  blueprint-документ чата; видимость — display-only состояние сессии
+  (`QuickIntent::ComposerContext` → `toggle_context_panel`, Wire-команд не
+  создаёт); рендер общий для blueprint- и legacy-хрома (скелет-паритет).
+  Числа — честная локальная оценка (скрипт-осознанный `estimate_tokens`, порт
+  общего оценщика; лимит 16 032, резерв 4 000, вся сумма в `chat_history`) —
+  точный аудит остаётся за Kernel `prompt.context.preview` на упакованном
+  хосте. Закрытая панель = `display:none`; открытая переводит композер на
+  content-driven `min-height`. Goldens не изменены (закрытое состояние
+  бит-в-бит); cargo-тесты (включая скелет-паритет), goldens 0.0000% ×4,
+  packaged-check 6/6 + no-clip guard, docs:check.
+
 - **Packaged-check матрица (этап 2 ADR-0056).** `pnpm blueprint:packaged-check`
   верифицирует release-артефакт хоста: дефолтный embedded-рендер, откат через
   `--legacy-chrome` и `NEOTA_LEGACY_CHROME=1`, приоритет источников

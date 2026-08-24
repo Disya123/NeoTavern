@@ -6,8 +6,8 @@
 
 use contracts_generated::generated::{FreeObject, MessageDto, MessageRole};
 use neotavern_presentation_blueprint::{
-    materialize_chat_scene_v1_from_document, ChatSurfaceStateV1, UiActionV1, UiBlueprintDocumentV1,
-    UiSceneV1, ViewportClassV1,
+    ChatSurfaceStateV1, UiActionV1, UiBlueprintDocumentV1, UiSceneV1, ViewportClassV1,
+    materialize_chat_scene_v1_from_document,
 };
 use serde_json::json;
 
@@ -56,6 +56,8 @@ fn state() -> ChatSurfaceStateV1 {
         composer_draft: "draft text".to_owned(),
         character_name: "Hazel".to_owned(),
         streaming: false,
+        context_panel_open: false,
+        context_summary: None,
     }
 }
 
@@ -114,19 +116,25 @@ fn chat_document_parses_and_materializes_the_scene() {
         == UiActionV1::ChatMessageRollback {
             message_id: "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d".to_owned()
         }));
-    assert!(scene
-        .hit_test_tree
-        .iter()
-        .any(|t| t.id.ends_with(".version-regenerate")));
+    assert!(
+        scene
+            .hit_test_tree
+            .iter()
+            .any(|t| t.id.ends_with(".version-regenerate"))
+    );
     assert!(scene.hit_test_tree.iter().any(|t| t.id == "composer-send"));
-    assert!(scene
-        .hit_test_tree
-        .iter()
-        .any(|t| t.id == "composer-settings"));
-    assert!(scene
-        .hit_test_tree
-        .iter()
-        .any(|t| t.id == "utility-scroll-latest"));
+    assert!(
+        scene
+            .hit_test_tree
+            .iter()
+            .any(|t| t.id == "composer-settings")
+    );
+    assert!(
+        scene
+            .hit_test_tree
+            .iter()
+            .any(|t| t.id == "utility-scroll-latest")
+    );
 
     // The composer draft is the single editable text interaction.
     assert_eq!(scene.text_interaction_tree.len(), 1);
@@ -191,14 +199,18 @@ fn document_structure_drives_the_scene() {
     let scene =
         materialize_chat_scene_v1_from_document(&document, &state(), ViewportClassV1::Expanded)
             .expect("scene");
-    assert!(!scene
-        .paint_tree
-        .iter()
-        .any(|node| node.id == "composer-context"));
-    assert!(!scene
-        .hit_test_tree
-        .iter()
-        .any(|t| t.id == "composer-context"));
+    assert!(
+        !scene
+            .paint_tree
+            .iter()
+            .any(|node| node.id == "composer-context")
+    );
+    assert!(
+        !scene
+            .hit_test_tree
+            .iter()
+            .any(|t| t.id == "composer-context")
+    );
 
     // 2. Adding an unknown structural node still flows through as a generic
     // flow node (no action, no label) so structural edits never need a
@@ -238,10 +250,12 @@ fn document_structure_drives_the_scene() {
         .expect("unknown nodes flow through the scene");
     assert_eq!(strip.hook.component, "chat-view");
     // Paint nodes carry no actions; the hit tree must not gain one either.
-    assert!(!scene
-        .hit_test_tree
-        .iter()
-        .any(|t| t.id == "composer-experimental-strip"));
+    assert!(
+        !scene
+            .hit_test_tree
+            .iter()
+            .any(|t| t.id == "composer-experimental-strip")
+    );
 }
 
 #[test]

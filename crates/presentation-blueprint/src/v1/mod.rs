@@ -30,15 +30,18 @@ pub use character_manager::CaptureBundleV1 as CharacterManagerStateBundleV1;
 /// static `UiBlueprintDocumentV1` when materializing a `UiSceneV1`.
 pub use character_manager::CharacterManagerCaptureV1 as CharacterManagerStateV1;
 pub use character_manager::{
-    compile_character_manager_v1, BlueprintErrorV1, CaptureBundleV1, CharacterCatalogViewV1,
-    CharacterManagerActionV1, CharacterManagerBlueprintV1, CharacterManagerCaptureV1,
-    CharacterManagerDialogV1, CharacterManagerTabV1, CharacterSortV1, UiAbiVersionV1, UiActionV1,
-    UiBlueprintV1, UiFeedbackV1, UiLoadStateV1, UiWireEffectV1,
+    BlueprintErrorV1, CaptureBundleV1, CharacterCatalogViewV1, CharacterManagerActionV1,
+    CharacterManagerBlueprintV1, CharacterManagerCaptureV1, CharacterManagerDialogV1,
+    CharacterManagerTabV1, CharacterSortV1, UiAbiVersionV1, UiActionV1, UiBlueprintV1,
+    UiFeedbackV1, UiLoadStateV1, UiWireEffectV1, compile_character_manager_v1,
 };
-pub use chat::{materialize_chat_scene_v1_from_document, ChatSurfaceStateV1};
+pub use chat::{
+    ChatSurfaceStateV1, ContextUsageBreakdownV1, ContextUsageSummaryV1,
+    materialize_chat_scene_v1_from_document,
+};
 pub use scene::{
-    materialize_character_manager_scene_v1, materialize_character_manager_scene_v1_from_document,
     CollectionPresentationV1, UiContentV1, UiLabelOverrideV1, UiLayoutV1, UiNodeOverridesV1,
     UiNodeV1, UiSceneV1, UiSemanticStateV1, UiSemanticV1, UiStyleHookV1, UiStyleRefV1,
-    ViewportClassV1,
+    ViewportClassV1, materialize_character_manager_scene_v1,
+    materialize_character_manager_scene_v1_from_document,
 };

@@ -2,11 +2,11 @@
 
 use neotavern_neocompositor::PresentationTime;
 use neotavern_presentation_chat::{
-    start_flagged_session, ChatCompositor, FakeWire, AVATAR_DISPLAY_MAX_PX, DEMO_AVATAR_ASSET_ID,
+    AVATAR_DISPLAY_MAX_PX, ChatCompositor, DEMO_AVATAR_ASSET_ID, FakeWire, start_flagged_session,
 };
 use neotavern_presentation_dioxus_shell::{product_chat_app, product_shell_app};
 use neotavern_presentation_m0_d2::{
-    inspect_product_layout, produce_app_at, produce_product_app_at, AvatarKind,
+    AvatarKind, inspect_product_layout, produce_app_at, produce_product_app_at,
 };
 
 #[test]
@@ -182,7 +182,7 @@ fn chat_markdown_structure_reaches_the_blitz_dom() {
 #[test]
 fn markdown_minimal_probe() {
     use neotavern_presentation_dioxus_shell::{
-        install_product_chat, product_chat_app, ProductChatView, ProductChrome, RowKind, VisibleRow,
+        ProductChatView, ProductChrome, RowKind, VisibleRow, install_product_chat, product_chat_app,
     };
     use neotavern_presentation_m0_d2::inspect_product_layout;
     install_product_chat(ProductChatView {
@@ -206,6 +206,8 @@ fn markdown_minimal_probe() {
         viewport_width: 1100,
         viewport_height: 760,
         column_width: 0,
+        context_panel_open: false,
+        context_summary: None,
     });
     let layout =
         inspect_product_layout(product_chat_app, 1100, 760, 1.0, Default::default()).expect("l");
@@ -262,7 +264,7 @@ fn chat_slot_skeleton_covers_react_workspace_contract() {
 
 #[test]
 fn hit_rects_resolve_actions_from_layout_not_bands() {
-    use neotavern_presentation_chat::{HitRects, DEMO_CHAT_ID};
+    use neotavern_presentation_chat::{DEMO_CHAT_ID, HitRects};
     use neotavern_presentation_m0_d2::inspect_slot_skeleton;
     let (mut session, _) = start_flagged_session(
         Some("1"),
@@ -448,7 +450,7 @@ fn hazel_card_stays_compact_on_the_phone_viewport() {
 #[test]
 fn header_title_ellipsizes_on_the_phone_viewport() {
     use neotavern_presentation_dioxus_shell::{
-        character_manager_title, ellipsize_css, CHARACTER_MANAGER_TITLE,
+        CHARACTER_MANAGER_TITLE, character_manager_title, ellipsize_css,
     };
     assert_eq!(
         ellipsize_css(CHARACTER_MANAGER_TITLE, 400.0, 20.0),
@@ -478,7 +480,7 @@ fn header_title_ellipsizes_on_the_phone_viewport() {
 
 #[test]
 fn shell_hit_rail_opens_home_and_character_tabs() {
-    use neotavern_presentation_chat::{hit_test, ShellAction, ShellHit};
+    use neotavern_presentation_chat::{ShellAction, ShellHit, hit_test};
     let (mut session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
     session.set_surface_size(1220, 2712, 3.0);
@@ -502,7 +504,7 @@ fn shell_hit_rail_opens_home_and_character_tabs() {
 
 #[test]
 fn chats_panel_lists_wire_chats_and_opens_one() {
-    use neotavern_presentation_chat::{hit_test, ShellAction, ShellHit};
+    use neotavern_presentation_chat::{ShellAction, ShellHit, hit_test};
     let (mut session, _) =
         start_flagged_session(Some("1"), FakeWire::with_message_count(12), None, None)
             .expect("route");
@@ -590,48 +592,62 @@ fn personas_and_lorebooks_load_and_create_over_product_wire() {
         shell.personas.iter().any(|row| row.name == "You"),
         "demo persona must list through personas.list"
     );
-    assert!(session
-        .issued_commands()
-        .iter()
-        .any(|op| op == "personas.list"));
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "personas.list")
+    );
     session.apply_shell_action(ShellAction::OpenCreate);
     session.set_create_name("Traveler");
     session.apply_shell_action(ShellAction::ConfirmCreate);
-    assert!(session
-        .shell_view()
-        .personas
-        .iter()
-        .any(|row| row.name == "Traveler"));
+    assert!(
+        session
+            .shell_view()
+            .personas
+            .iter()
+            .any(|row| row.name == "Traveler")
+    );
 
     session.apply_shell_action(ShellAction::SetPanel("lorebooks".into()));
-    assert!(session
-        .issued_commands()
-        .iter()
-        .any(|op| op == "lorebooks.list"));
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "lorebooks.list")
+    );
     session.apply_shell_action(ShellAction::OpenCreate);
     session.set_create_name("World book");
     session.apply_shell_action(ShellAction::ConfirmCreate);
-    assert!(session
-        .shell_view()
-        .lorebooks
-        .iter()
-        .any(|row| row.name == "World book"));
+    assert!(
+        session
+            .shell_view()
+            .lorebooks
+            .iter()
+            .any(|row| row.name == "World book")
+    );
 
     session.apply_shell_action(ShellAction::SetPanel("plugins".into()));
-    assert!(session
-        .issued_commands()
-        .iter()
-        .any(|op| op == "plugins.list"));
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "plugins.list")
+    );
     session.apply_shell_action(ShellAction::SetPanel("providers".into()));
-    assert!(session
-        .issued_commands()
-        .iter()
-        .any(|op| op == "providers.list"));
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "providers.list")
+    );
     session.apply_shell_action(ShellAction::SetPanel("settings".into()));
-    assert!(session
-        .issued_commands()
-        .iter()
-        .any(|op| op == "settings.get"));
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "settings.get")
+    );
     assert_eq!(session.shell_view().language, "en");
     assert_eq!(session.shell_view().dir, "ltr");
 }
@@ -651,10 +667,12 @@ fn create_character_uses_product_wire_and_opens_edit_tab() {
         shell.selected_draft.as_ref().map(|row| row.name.as_str()),
         Some("Ada")
     );
-    assert!(session
-        .issued_commands()
-        .iter()
-        .any(|op| op == "characters.create"));
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "characters.create")
+    );
 }
 
 #[test]
@@ -699,7 +717,7 @@ fn product_shell_phosphor_svg_emits_path_fills() {
 
 #[test]
 fn shell_hit_new_button_opens_create_dialog() {
-    use neotavern_presentation_chat::{hit_test, ShellAction, ShellHit};
+    use neotavern_presentation_chat::{ShellAction, ShellHit, hit_test};
     let (mut session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
     session.set_surface_size(1220, 2712, 3.0);
@@ -715,7 +733,7 @@ fn shell_hit_new_button_opens_create_dialog() {
 
 #[test]
 fn shell_hit_segment_tabs_sit_above_the_home_indicator() {
-    use neotavern_presentation_chat::{hit_test, ShellAction, ShellHit};
+    use neotavern_presentation_chat::{ShellAction, ShellHit, hit_test};
     let (session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
     let mut view = session.shell_view();
@@ -731,7 +749,7 @@ fn shell_hit_segment_tabs_sit_above_the_home_indicator() {
 
 #[test]
 fn shell_hit_mobile_bottom_navigation_bar() {
-    use neotavern_presentation_chat::{hit_test, ShellAction, ShellHit};
+    use neotavern_presentation_chat::{ShellAction, ShellHit, hit_test};
     let (session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
     let mut view = session.shell_view();
@@ -753,7 +771,7 @@ fn shell_hit_mobile_bottom_navigation_bar() {
 
 #[test]
 fn toggle_rail_collapses_desktop_sidebar_and_keeps_the_rail() {
-    use neotavern_presentation_chat::{chat_origin_x, ShellAction};
+    use neotavern_presentation_chat::{ShellAction, chat_origin_x};
     let (mut session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
     session.set_surface_size(1100, 760, 1.0);
@@ -788,9 +806,9 @@ fn panel_width_clamps_to_react_shell_tokens() {
 #[test]
 fn blueprint_chrome_skeleton_matches_legacy_rsx() {
     use neotavern_presentation_dioxus_shell::{
-        install_product_chat, set_chat_blueprint_source, ChatBlueprintSource,
+        ChatBlueprintSource, install_product_chat, set_chat_blueprint_source,
     };
-    use neotavern_presentation_m0_d2::{inspect_slot_skeleton, SlotNode, SlotSkeleton};
+    use neotavern_presentation_m0_d2::{SlotNode, SlotSkeleton, inspect_slot_skeleton};
 
     let (mut session, _) = start_flagged_session(
         Some("1"),
@@ -933,7 +951,7 @@ fn blueprint_chrome_skeleton_matches_legacy_rsx() {
 #[test]
 fn blueprint_document_edit_changes_the_live_skeleton() {
     use neotavern_presentation_dioxus_shell::{
-        install_product_chat, set_chat_blueprint_source, ChatBlueprintSource,
+        ChatBlueprintSource, install_product_chat, set_chat_blueprint_source,
     };
     use neotavern_presentation_m0_d2::inspect_slot_skeleton;
     use std::time::Duration;

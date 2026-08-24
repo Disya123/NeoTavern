@@ -21,7 +21,7 @@ use std::time::SystemTime;
 use contracts_generated::generated::{FreeObject, MessageDto, MessageRole};
 use dioxus_core::Element;
 use dioxus_core_macro::rsx;
-use neotavern_presentation_blueprint::v1::{UiNodeV1, UiSceneV1};
+use neotavern_presentation_blueprint::v1::{ContextUsageSummaryV1, UiNodeV1, UiSceneV1};
 use neotavern_presentation_blueprint::{
     ChatSurfaceStateV1, UiActionV1, UiBlueprintDocumentV1, ViewportClassV1,
     materialize_chat_scene_v1_from_document,
@@ -185,6 +185,10 @@ struct ChromeCtx {
     streaming: bool,
     compact: bool,
     font_px: u32,
+    /// Composer context-meter popover visibility + the local estimate it
+    /// renders (React `ChatComposer` `contextPanel` slot).
+    context_panel_open: bool,
+    context_summary: Option<ContextUsageSummaryV1>,
 }
 
 /// Values scoped to one instantiated message row.
@@ -287,10 +291,21 @@ pub fn blueprint_chrome(view: &ProductChatView) -> Option<ChromeElements> {
             "position:relative;width:100%;height:{composer_h}px;box-sizing:border-box;padding:{pad}px;background:rgba(36,33,30,0.88);color:{color};font-size:{font_px}px;"
         )
     } else {
+        // Closed composer keeps the exact fixed box (golden geometry); the
+        // context-meter popover switches it to content-driven height so the
+        // popover expands the pill and the viewport flexes. Taffy distributes
+        // the inner flex differently between `height`/`min-height` even at
+        // the same resolved size, which would drift every golden by a few px.
+        let height_rule = if view.context_panel_open {
+            "min-height"
+        } else {
+            "height"
+        };
         format!(
-            "position:relative;width:100%;height:{composer_h}px;box-sizing:border-box;padding:0;overflow:hidden;border:1px solid rgba(243,238,232,0.10);border-radius:28px;background:rgba(21,19,17,0.78);color:{color};font-size:{font_px}px;"
+            "position:relative;width:100%;{height_rule}:{composer_h}px;box-sizing:border-box;padding:0;overflow:hidden;border:1px solid rgba(243,238,232,0.10);border-radius:28px;background:rgba(21,19,17,0.78);color:{color};font-size:{font_px}px;"
         )
     };
+
     let ctx = ChromeCtx {
         header_style: format!(
             "flex:none;position:relative;z-index:2;width:100%;height:{header_h}px;box-sizing:border-box;padding:0 {pad}px;background:rgba(36,33,30,0.82);color:#f3eee8;border-bottom:1px solid rgba(57,52,47,0.48);display:flex;align-items:center;justify-content:space-between;gap:8px;"
@@ -308,6 +323,8 @@ pub fn blueprint_chrome(view: &ProductChatView) -> Option<ChromeElements> {
         streaming: view.streaming,
         compact,
         font_px,
+        context_panel_open: view.context_panel_open,
+        context_summary: view.context_summary.clone(),
     };
 
     let state = ChatSurfaceStateV1 {
@@ -316,6 +333,8 @@ pub fn blueprint_chrome(view: &ProductChatView) -> Option<ChromeElements> {
         composer_draft: view.composer_text.clone(),
         character_name: view.character_name.clone(),
         streaming: view.streaming,
+        context_panel_open: view.context_panel_open,
+        context_summary: view.context_summary.clone(),
     };
     let scene = materialize_scene(&state).ok()?;
     let header_node = find_node(&scene.root, "chat-header")?.clone();
@@ -784,6 +803,8 @@ fn render_composer(node: &UiNodeV1, ctx: &ChromeCtx) -> Element {
         style: ctx.composer_style.clone(),
         color: ctx.composer_color.clone(),
         label: ctx.composer_label.clone(),
+        context_panel_open: ctx.context_panel_open,
+        context_summary: ctx.context_summary.clone(),
     };
     render_node(node, &composer_ctx)
 }
@@ -793,6 +814,8 @@ struct ComposerCtx {
     style: String,
     color: String,
     label: String,
+    context_panel_open: bool,
+    context_summary: Option<ContextUsageSummaryV1>,
 }
 
 fn render_node(node: &UiNodeV1, ctx: &ComposerCtx) -> Element {
@@ -877,6 +900,14 @@ fn render_container(node: &UiNodeV1, ctx: &ComposerCtx) -> Element {
             }
         };
     }
+    if node.id == "composer-context-panel" {
+        // State-conditional structure: the document carries the node, the
+        // renderer mounts it only while the popover is open (React
+        // `{open ? <ContextUsagePanel/> : null}`). Closed = `display:none`,
+        // not an empty node — an empty block still occupies a line box in
+        // this Blitz build and shifts the whole composer ~8px.
+        return render_context_panel_slot(ctx.context_panel_open, ctx.context_summary.as_ref());
+    }
     if node.id == "chat-composer" {
         let style = ctx.style.clone();
         let streaming = node.hook.states.iter().any(|state| state == "streaming");
@@ -902,6 +933,145 @@ fn render_container(node: &UiNodeV1, ctx: &ComposerCtx) -> Element {
             style: "{look_style}{authored_style}",
             for child in node.children.iter() { {render_node(child, ctx)} }
         }
+    }
+}
+
+/// Composer context-meter popover slot shared by the blueprint renderer and
+/// the legacy RSX chrome (the skeleton-parity contract requires both trees to
+/// carry the node). Closed = `display:none` placeholder; open = the full
+/// `ContextUsagePanel` parity render.
+pub(crate) fn render_context_panel_slot(
+    open: bool,
+    summary: Option<&ContextUsageSummaryV1>,
+) -> Element {
+    if !open {
+        return rsx! {
+            div {
+                "data-component": "context-usage-panel",
+                style: "display:none;",
+            }
+        };
+    }
+    let Some(summary) = summary else {
+        return rsx! {};
+    };
+    let b = &summary.breakdown;
+    let usage = format!("{} / {}", summary.prompt_tokens, summary.context_limit);
+    let prompt_budget = summary
+        .context_limit
+        .saturating_sub(summary.reserved_for_reply);
+    let rows = [
+        ("ChatsCircle", "History", b.chat_history),
+        ("BookOpen", "World info", b.world_info),
+        ("Sparkle", "Character", b.character),
+        ("UserCircle", "Persona", b.persona),
+        ("SquaresFour", "Other", b.other),
+    ];
+    rsx! {
+        div {
+            "data-component": "context-usage-panel",
+            "data-state": "estimate",
+            style: "display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;width:100%;box-sizing:border-box;padding:16px 24px;color:#f3eee8;background:rgba(27,25,23,0.92);border-bottom:1px solid rgba(243,238,232,0.08);",
+            // Left column: summary
+            div {
+                "data-part": "summary",
+                style: "display:flex;flex-direction:column;gap:12px;min-width:0;",
+                div {
+                    "data-part": "header",
+                    style: "display:flex;align-items:center;gap:12px;",
+                    div {
+                        "data-part": "icon",
+                        "aria-hidden": "true",
+                        style: "display:flex;align-items:center;justify-content:center;width:35px;height:35px;flex:none;border-radius:8px;background:rgba(48,44,40,0.85);",
+                        {crate::product_shell::icon("Database", 18)}
+                    }
+                    div {
+                        div {
+                            "data-part": "header-title",
+                            style: "color:#c5bbb2;font-size:12px;font-weight:600;line-height:1.2;",
+                            "Draft estimate"
+                        }
+                        div {
+                            "data-part": "usage",
+                            style: "margin-top:2px;font-size:14px;font-weight:700;line-height:1.2;",
+                            "{usage}"
+                        }
+                    }
+                }
+                div {
+                    "data-part": "metrics",
+                    style: "display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;",
+                    div {
+                        "data-part": "metric",
+                        style: "display:grid;gap:2px;padding:8px 12px;border:1px solid rgba(57,52,47,0.7);border-radius:8px;background:rgba(36,33,30,0.4);",
+                        div { style: "color:#998f87;font-size:12px;", "Context usage" }
+                        div { style: "font-weight:700;", "{summary.usage_percent}%" }
+                    }
+                    div {
+                        "data-part": "metric",
+                        style: "display:grid;gap:2px;padding:8px 12px;border:1px solid rgba(57,52,47,0.7);border-radius:8px;background:rgba(36,33,30,0.4);",
+                        div { style: "color:#998f87;font-size:12px;", "Available" }
+                        div { style: "font-weight:700;", "{summary.available_tokens}" }
+                    }
+                    div {
+                        "data-part": "metric",
+                        style: "display:grid;gap:2px;padding:8px 12px;border:1px solid rgba(57,52,47,0.7);border-radius:8px;background:rgba(36,33,30,0.4);",
+                        div { style: "color:#998f87;font-size:12px;", "Prompt tokens" }
+                        div { style: "font-weight:700;", "{summary.prompt_tokens} / {prompt_budget}" }
+                    }
+                    div {
+                        "data-part": "metric",
+                        style: "display:grid;gap:2px;padding:8px 12px;border:1px solid rgba(57,52,47,0.7);border-radius:8px;background:rgba(36,33,30,0.4);",
+                        div { style: "color:#998f87;font-size:12px;", "Reserved for reply" }
+                        div { style: "font-weight:700;", "{summary.reserved_for_reply}" }
+                    }
+                }
+                div {
+                    "data-part": "status",
+                    style: "display:flex;align-items:center;gap:6px;padding-top:8px;border-top:1px dashed rgba(57,52,47,0.9);color:#998f87;font-size:12px;",
+                    {crate::product_shell::icon("Info", 14)}
+                    "Local estimate from chat history and draft. Exact audit comes from the Kernel prompt preview on the packaged host."
+                }
+            }
+            // Right column: breakdown
+            div {
+                "data-part": "details",
+                style: "display:flex;flex-direction:column;justify-content:center;gap:8px;padding-left:16px;border-left:1px solid rgba(57,52,47,0.7);min-width:0;",
+                for row in rows.iter() {
+                    div {
+                        "data-part": "breakdown-row",
+                        style: "display:flex;align-items:center;gap:12px;font-size:12px;",
+                        div {
+                            "data-part": "breakdown-label",
+                            style: "display:flex;align-items:center;gap:6px;flex:0 1 9rem;color:#c5bbb2;",
+                            {crate::product_shell::icon(row.0, 15)}
+                            "{row.1}"
+                        }
+                        div {
+                            "aria-hidden": "true",
+                            style: "height:4px;flex:1;overflow:hidden;border-radius:2px;background:rgba(48,44,40,0.85);",
+                            div {
+                                "data-part": "breakdown-fill",
+                                style: "height:100%;border-radius:2px;background:#998f87;width:{fill_percent(row.2, summary.prompt_tokens)}%;",
+                            }
+                        }
+                        div {
+                            "data-part": "breakdown-count",
+                            style: "width:4.5rem;color:#998f87;text-align:end;",
+                            "{row.2}"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn fill_percent(tokens: u64, prompt_tokens: u64) -> u64 {
+    if prompt_tokens == 0 {
+        0
+    } else {
+        (tokens * 100).min(prompt_tokens * 100) / prompt_tokens
     }
 }
 

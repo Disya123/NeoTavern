@@ -22,12 +22,12 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use neotavern_presentation_chat::{
-    hit_test, ChatCompositor, ChatSession, FakeWire, HitRects, PresentSurface, QuickIntent,
-    ShellAction, ShellHit, TapIntent, DEMO_CHAT_ID, RAIL_WIDTH, TOUCH_SLOP_CSS,
+    ChatCompositor, ChatSession, DEMO_CHAT_ID, FakeWire, HitRects, PresentSurface, QuickIntent,
+    RAIL_WIDTH, ShellAction, ShellHit, TOUCH_SLOP_CSS, TapIntent, hit_test,
 };
 use neotavern_presentation_dioxus_shell::{install_product_shell, product_shell_app};
 use neotavern_presentation_m0_d2::{
-    image_paints_from_layout, write_slot_skeleton, MessageRect, ProductVelloSession, VelloFilter,
+    MessageRect, ProductVelloSession, VelloFilter, image_paints_from_layout, write_slot_skeleton,
 };
 use vello::peniko::color::palette;
 use winit::application::ApplicationHandler;
@@ -88,6 +88,7 @@ enum QuickAction {
     Send,
     ComposerSettings,
     ComposerReset,
+    ComposerContext,
     ScrollLatest,
 }
 
@@ -426,6 +427,7 @@ impl App {
                     QuickIntent::Send => QuickAction::Send,
                     QuickIntent::ComposerSettings => QuickAction::ComposerSettings,
                     QuickIntent::ComposerReset => QuickAction::ComposerReset,
+                    QuickIntent::ComposerContext => QuickAction::ComposerContext,
                     QuickIntent::ScrollLatest => QuickAction::ScrollLatest,
                 };
                 self.pending_quick = Some((quick, css_x, css_y));
@@ -614,6 +616,13 @@ impl App {
                     QuickAction::ComposerReset => {
                         self.pending_ui = None;
                         let _ = self.session.set_composer_text(String::new());
+                        self.dirty = true;
+                        self.window.as_ref().map(|w| w.request_redraw());
+                    }
+                    QuickAction::ComposerContext => {
+                        self.pending_ui = None;
+                        eprintln!("[neocompositor-desktop] tap -> composer context meter");
+                        self.session.toggle_context_panel();
                         self.dirty = true;
                         self.window.as_ref().map(|w| w.request_redraw());
                     }

@@ -126,6 +126,7 @@ pub enum QuickIntent {
     Send,
     ComposerSettings,
     ComposerReset,
+    ComposerContext,
     ScrollLatest,
 }
 
@@ -202,6 +203,7 @@ impl HitRects {
         match (action, key) {
             ("send", _) => TapIntent::Quick(QuickIntent::Send),
             ("composer-settings", _) => TapIntent::Quick(QuickIntent::ComposerSettings),
+            ("composer-context", _) => TapIntent::Quick(QuickIntent::ComposerContext),
             ("composer-reset", _) => TapIntent::Quick(QuickIntent::ComposerReset),
             ("scroll-latest", _) => TapIntent::Quick(QuickIntent::ScrollLatest),
             // Declarative custom intents route by their authored name before

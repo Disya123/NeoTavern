@@ -13,12 +13,12 @@
 //! so structural edits never need a simultaneous code change; interactive
 //! presentation for them lands together with the document change.
 
-use super::scene::{
-    collect_hit_targets, collect_paint_nodes, collect_text_interactions, hook, hook_slotted,
-    semantic, semantic_tree, UiContentV1, UiCustomParamV1, UiLabelOverrideV1, UiLayoutV1,
-    UiNodeOverridesV1, UiNodeV1, UiSceneV1, UiStyleRefV1, ViewportClassV1,
-};
 use super::UiActionV1;
+use super::scene::{
+    UiContentV1, UiCustomParamV1, UiLabelOverrideV1, UiLayoutV1, UiNodeOverridesV1, UiNodeV1,
+    UiSceneV1, UiStyleRefV1, ViewportClassV1, collect_hit_targets, collect_paint_nodes,
+    collect_text_interactions, hook, hook_slotted, semantic, semantic_tree,
+};
 use crate::generated::ui_blueprint_v1::{
     PresentationUiBlueprintNodeV1Document, PresentationUiBlueprintNodeV1DocumentActionsItemV1,
     UiBlueprintDocumentIdV1, UiBlueprintDocumentResponsiveItemLayoutV1,
@@ -37,6 +37,34 @@ pub struct ChatSurfaceStateV1 {
     pub composer_draft: String,
     pub character_name: String,
     pub streaming: bool,
+    /// Composer context-meter popover visibility (`chat.composer.context`).
+    /// Display-only state: the meter never issues a Wire command.
+    pub context_panel_open: bool,
+    /// Local context estimate shown inside the popover. `None` renders the
+    /// panel shell without numbers (the React loading state).
+    pub context_summary: Option<ContextUsageSummaryV1>,
+}
+
+/// Local context estimate mirrored from `apps/web/src/lib/contextUsage.ts`
+/// (`ContextUsageSummary`). The native harness plane has no prompt audit,
+/// so this always materializes in the `estimate` state.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ContextUsageSummaryV1 {
+    pub prompt_tokens: u64,
+    pub context_limit: u64,
+    pub reserved_for_reply: u64,
+    pub available_tokens: u64,
+    pub usage_percent: u64,
+    pub breakdown: ContextUsageBreakdownV1,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct ContextUsageBreakdownV1 {
+    pub chat_history: u64,
+    pub world_info: u64,
+    pub character: u64,
+    pub persona: u64,
+    pub other: u64,
 }
 
 fn validate_document(
@@ -222,6 +250,13 @@ fn presentation(node_id: &str) -> Option<NodePresentation> {
         "swipe-label" => flow(None, "message-swipe-pager", None, "status", None),
         // Composer ----------------------------------------------------------
         "chat-composer" => flow(Some("chat.composer"), "chat-composer", None, "region", None),
+        "composer-context-panel" => flow(
+            None,
+            "context-usage-panel",
+            Some("context-panel"),
+            "region",
+            Some("chat:contextDraftEstimate"),
+        ),
         "composer-toolbar" => flow(None, "chat-composer", Some("toolbar"), "toolbar", None),
         "composer-toolbar-actions" => flow(None, "chat-composer", None, "group", None),
         "composer-settings" | "utility-settings" => {

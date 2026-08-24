@@ -1,40 +1,41 @@
 use contracts_generated::generated::{
-    decode_character_dto, decode_chat_dto, decode_lorebook_dto, decode_message_draft_dto,
-    decode_message_dto, decode_paged_characters, decode_paged_chats, decode_paged_messages,
-    decode_persona_dto, decode_result_assets_content, decode_result_list_lorebooks,
-    decode_result_list_personas, decode_result_list_presets, decode_result_list_providers,
-    decode_result_message_variant_list, decode_result_plugins_list, decode_result_settings,
-    decode_result_snapshots_rollback, CharacterDto, ChatDto, ErrorDto, GenerationEvent,
-    LorebookDto, MessageDraftDto, MessageDto, MessageRole, PagedCharacters, PagedChats,
-    PagedMessages, PersonaDto, PluginsItem, RequestAssetsContent, RequestCancelGeneration,
-    RequestCreateCharacter, RequestCreateChat, RequestCreateLorebook, RequestCreateMessage,
-    RequestCreatePersona, RequestDeleteCharacter, RequestDeleteLorebook, RequestDeleteMessage,
-    RequestDeletePersona, RequestEmpty, RequestGetCharacter, RequestGetChat, RequestListCharacters,
-    RequestListChats, RequestListLorebooks, RequestListMessages, RequestListPresets,
-    RequestMessageDraftCommit, RequestMessageDraftDiscard, RequestMessageDraftGet,
-    RequestMessageDraftSave, RequestMessageVariantActivate, RequestMessageVariantsList,
-    RequestRetryGeneration, RequestSettingsGet, RequestSnapshotsRollback, RequestStartGeneration,
-    RequestUpdateCharacter, ResultAssetsContent, ResultListLorebooks, ResultListPersonas,
-    ResultListPresets, ResultListProviders, ResultPluginsList, ResultSettings, SettingsItem,
+    CharacterDto, ChatDto, ErrorDto, GenerationEvent, LorebookDto, MessageDraftDto, MessageDto,
+    MessageRole, PagedCharacters, PagedChats, PagedMessages, PersonaDto, PluginsItem,
+    RequestAssetsContent, RequestCancelGeneration, RequestCreateCharacter, RequestCreateChat,
+    RequestCreateLorebook, RequestCreateMessage, RequestCreatePersona, RequestDeleteCharacter,
+    RequestDeleteLorebook, RequestDeleteMessage, RequestDeletePersona, RequestEmpty,
+    RequestGetCharacter, RequestGetChat, RequestListCharacters, RequestListChats,
+    RequestListLorebooks, RequestListMessages, RequestListPresets, RequestMessageDraftCommit,
+    RequestMessageDraftDiscard, RequestMessageDraftGet, RequestMessageDraftSave,
+    RequestMessageVariantActivate, RequestMessageVariantsList, RequestRetryGeneration,
+    RequestSettingsGet, RequestSnapshotsRollback, RequestStartGeneration, RequestUpdateCharacter,
+    ResultAssetsContent, ResultListLorebooks, ResultListPersonas, ResultListPresets,
+    ResultListProviders, ResultPluginsList, ResultSettings, SettingsItem, decode_character_dto,
+    decode_chat_dto, decode_lorebook_dto, decode_message_draft_dto, decode_message_dto,
+    decode_paged_characters, decode_paged_chats, decode_paged_messages, decode_persona_dto,
+    decode_result_assets_content, decode_result_list_lorebooks, decode_result_list_personas,
+    decode_result_list_presets, decode_result_list_providers, decode_result_message_variant_list,
+    decode_result_plugins_list, decode_result_settings, decode_result_snapshots_rollback,
 };
 use neotavern_chat_viewport::{
     GeometrySnapshot, HeightIndex, HeightKind, LogicalItemId, PredictorBudgets, PresentDecision,
     PresentOutcome, TileCache, ViewportSession,
 };
 use neotavern_presentation_dioxus_shell::{
-    assert_registered_command, chrome_metrics, mount_product_chat, CharacterCardView,
-    CharacterDraftView, ChatCardView, LorebookCardView, PersonaCardView, PluginCardView,
+    CharacterCardView, CharacterDraftView, ChatCardView, ContextUsageBreakdownV1,
+    ContextUsageSummaryV1, LorebookCardView, PRODUCT_PATH_VISIBLE, PersonaCardView, PluginCardView,
     PresetCardView, ProductChatView, ProductChrome, ProductShellView, ProviderCardView, RowKind,
-    SafeAreaInsets, VisibleRow, PRODUCT_PATH_VISIBLE,
+    SafeAreaInsets, VisibleRow, assert_registered_command, chrome_metrics, mount_product_chat,
 };
-use serde::de::DeserializeOwned;
+
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde::de::DeserializeOwned;
+use serde_json::{Value, json};
 use std::collections::{HashMap, VecDeque};
 
 use crate::error::ChatRouteError;
-use crate::shell_hit::{next_sort, ShellAction};
-use crate::wire::{ProductWire, StreamFrame, PAGE_LIMIT};
+use crate::shell_hit::{ShellAction, next_sort};
+use crate::wire::{PAGE_LIMIT, ProductWire, StreamFrame};
 
 /// Bounded CPU avatar thumbnail cache: one entry per `asset_id` is shared by
 /// header and card, evicted LRU under a byte budget and wired to the same
@@ -119,6 +120,8 @@ pub struct ChatRouteState {
     pub dir: String,
     pub ai_tab: String,
     pub settings_tab: String,
+    /// Composer context-meter popover visibility (`chat.composer.context`).
+    pub context_panel_open: bool,
     /// Last applied Kernel stream envelope sequence (`EventEnvelope.sequence`).
     pub last_applied_stream_sequence: Option<i64>,
     pub last_checkpoint_sequence: Option<i64>,
@@ -231,6 +234,7 @@ impl<W: ProductWire> ChatSession<W> {
         session.state.dir = "ltr".into();
         session.state.ai_tab = "providers".into();
         session.state.settings_tab = "general".into();
+        session.state.context_panel_open = false;
         Ok(session)
     }
 
@@ -816,6 +820,7 @@ impl<W: ProductWire> ChatSession<W> {
                     .and_then(|card| card.avatar_asset_id.clone())
             })
             .unwrap_or_default();
+        let context_summary = Some(self.context_estimate(&visible));
         ProductChatView {
             title,
             message_count: self.kernel_message_count(),
@@ -830,6 +835,41 @@ impl<W: ProductWire> ChatSession<W> {
             viewport_width: self.viewport_width,
             viewport_height: self.viewport_height,
             column_width: self.chat_column_width(),
+            context_panel_open: self.state.context_panel_open,
+            context_summary,
+        }
+    }
+
+    /// Local context estimate for the composer context meter (React
+    /// `useConversationContextPreview` fallback branch: no prompt audit on
+    /// this plane, so the summary is always the draft-estimate state).
+    /// History = the visible rows' script-aware estimate; the draft adds the
+    /// composer text; the whole sum lands in `chat_history` exactly like the
+    /// React fallback breakdown.
+    fn context_estimate(&self, visible: &[VisibleRow]) -> ContextUsageSummaryV1 {
+        const CONTEXT_LIMIT: u64 = 16_032; // contracts CONTEXT_TOKEN_DEFAULT
+        const RESERVED_FOR_REPLY: u64 = 4_000;
+
+        let history: u64 = visible
+            .iter()
+            .map(|row| estimate_tokens(&row.content))
+            .sum();
+        let draft = estimate_tokens(&self.state.composer_text);
+        let prompt_tokens = history + draft;
+        let available = CONTEXT_LIMIT
+            .saturating_sub(RESERVED_FOR_REPLY)
+            .saturating_sub(prompt_tokens);
+        let usage_percent = (((prompt_tokens + RESERVED_FOR_REPLY) * 100) / CONTEXT_LIMIT).min(100);
+        ContextUsageSummaryV1 {
+            prompt_tokens,
+            context_limit: CONTEXT_LIMIT,
+            reserved_for_reply: RESERVED_FOR_REPLY,
+            available_tokens: available,
+            usage_percent,
+            breakdown: ContextUsageBreakdownV1 {
+                chat_history: prompt_tokens,
+                ..ContextUsageBreakdownV1::default()
+            },
         }
     }
 
@@ -1084,8 +1124,16 @@ impl<W: ProductWire> ChatSession<W> {
             .unwrap_or("none");
         format!(
             "chat_send live_wire=true requestId={} operationId={} durableMessageId={} kernelMessageCount={} pageLen={} sceneEpoch={} sendAccepted={} error={} production_cutover=false",
-            self.state.last_send_request_id.as_deref().or(self.state.last_request_id.as_deref()).unwrap_or("-"),
-            self.state.last_send_operation_id.as_deref().or(self.state.last_operation_id.as_deref()).unwrap_or("-"),
+            self.state
+                .last_send_request_id
+                .as_deref()
+                .or(self.state.last_request_id.as_deref())
+                .unwrap_or("-"),
+            self.state
+                .last_send_operation_id
+                .as_deref()
+                .or(self.state.last_operation_id.as_deref())
+                .unwrap_or("-"),
             self.state.last_durable_message_id.as_deref().unwrap_or("-"),
             self.kernel_message_count(),
             self.state.messages.len(),
@@ -1355,6 +1403,13 @@ impl<W: ProductWire> ChatSession<W> {
         // the rail's top button collapses/expands the side panel itself, the
         // 60px icon rail always stays.
         self.state.sidebar_open = !self.state.sidebar_open;
+        self.bump_scene();
+    }
+
+    /// Composer context-meter popover (`chat.composer.context`). Display-only
+    /// state: opening the meter never issues a Wire command.
+    pub fn toggle_context_panel(&mut self) {
+        self.state.context_panel_open = !self.state.context_panel_open;
         self.bump_scene();
     }
 
@@ -2401,4 +2456,51 @@ pub(crate) fn row_kind(content: &str) -> RowKind {
         (true, false) => RowKind::Image,
         _ => RowKind::Markdown,
     }
+}
+
+/// Script-aware token estimation, ported from
+/// `packages/shared/src/estimateTokens.ts` (the shared isomorphic fallback
+/// counter). Measured densities: Latin ~5.1 chars/token, Cyrillic ~4.0,
+/// CJK ~1.7, digits ~2.0, punctuation/space ~3.0, emoji ~1.1. Contributes
+/// `1/rate` per character so mixed text stays within a few percent of the
+/// exact tokenizer.
+fn estimate_tokens(text: &str) -> u64 {
+    const EMOJI_RATE: f64 = 1.1;
+    const CJK_RATE: f64 = 1.7;
+    const CYRILLIC_RATE: f64 = 4.0;
+    const DIGIT_RATE: f64 = 2.0;
+    const LETTER_RATE: f64 = 4.6;
+    const OTHER_RATE: f64 = 3.0;
+    let mut tokens = 0.0f64;
+    for ch in text.chars() {
+        let rate = if is_emoji(ch) {
+            EMOJI_RATE
+        } else if is_cjk(ch) {
+            CJK_RATE
+        } else if ('\u{0400}'..='\u{04FF}').contains(&ch) {
+            CYRILLIC_RATE
+        } else if ch.is_ascii_digit() {
+            DIGIT_RATE
+        } else if ch.is_alphabetic() {
+            LETTER_RATE
+        } else {
+            OTHER_RATE
+        };
+        tokens += 1.0 / rate;
+    }
+    tokens.round() as u64
+}
+
+fn is_emoji(ch: char) -> bool {
+    ('\u{1F000}'..='\u{1FAFF}').contains(&ch)
+        || ('\u{2600}'..='\u{27BF}').contains(&ch)
+        || ('\u{FE00}'..='\u{FE0F}').contains(&ch)
+        || ('\u{1F1E6}'..='\u{1F1FF}').contains(&ch)
+}
+
+fn is_cjk(ch: char) -> bool {
+    ('\u{4E00}'..='\u{9FFF}').contains(&ch)
+        || ('\u{3400}'..='\u{4DBF}').contains(&ch)
+        || ('\u{3040}'..='\u{30FF}').contains(&ch)
+        || ('\u{AC00}'..='\u{D7AF}').contains(&ch)
 }

@@ -4,22 +4,22 @@
 //! This crate never links `runtime-kernel`.
 
 use std::collections::{HashMap, VecDeque};
-use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Mutex;
 
 use contracts_generated::generated::{
-    decode_event_envelope, decode_generation_event, decode_response_envelope, EventEnvelope,
-    GenerationEvent, ResponseEnvelope,
+    EventEnvelope, GenerationEvent, ResponseEnvelope, decode_event_envelope,
+    decode_generation_event, decode_response_envelope,
 };
 use jni::objects::{GlobalRef, JByteArray, JClass, JObject, JString, JValue};
 use jni::sys::{jboolean, jfloat, jint, jlong, jstring};
 use jni::{JNIEnv, JavaVM};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::error::ChatRouteError;
 use crate::session::ChatSession;
 use crate::wire::{ProductWire, StreamFrame, WireCall};
-use crate::{blocked_line, start_flagged_session, LiveChatReport};
+use crate::{LiveChatReport, blocked_line, start_flagged_session};
 
 struct JniProductWire {
     vm: JavaVM,
@@ -601,6 +601,9 @@ pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_presentF
                             crate::hit_rects::QuickIntent::ComposerReset => {
                                 let _ = session.set_composer_text(String::new());
                             }
+                            crate::hit_rects::QuickIntent::ComposerContext => {
+                                session.toggle_context_panel();
+                            }
                             crate::hit_rects::QuickIntent::ScrollLatest => {
                                 session.scroll_chat_by(1.0e6);
                             }
@@ -609,18 +612,14 @@ pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_presentF
                             use crate::hit_rects::MessageActionKind;
                             match kind {
                                 MessageActionKind::Delete => session.delete_message(&row_id),
-                                MessageActionKind::Rollback => {
-                                    session.rollback_to_message(&row_id)
-                                }
+                                MessageActionKind::Rollback => session.rollback_to_message(&row_id),
                                 MessageActionKind::Regenerate => {
                                     session.regenerate_message(&row_id)
                                 }
                                 MessageActionKind::SwipePrevious => {
                                     session.swipe_variant(&row_id, -1)
                                 }
-                                MessageActionKind::SwipeNext => {
-                                    session.swipe_variant(&row_id, 1)
-                                }
+                                MessageActionKind::SwipeNext => session.swipe_variant(&row_id, 1),
                                 // Platform clipboard bridge is not wired yet;
                                 // skip honestly instead of faking a "copied"
                                 // state.

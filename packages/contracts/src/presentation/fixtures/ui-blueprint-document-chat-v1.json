@@ -28,7 +28,10 @@
                 "nodeId": "identity-avatar",
                 "component": "IdentityAvatar",
                 "recipe": "avatar",
-                "stateSlots": ["image", "fallback"],
+                "stateSlots": [
+                  "image",
+                  "fallback"
+                ],
                 "actions": [],
                 "children": []
               },
@@ -57,7 +60,10 @@
         "nodeId": "chat-viewport",
         "component": "ChatViewport",
         "recipe": "chat-canvas",
-        "stateSlots": ["streaming", "idle"],
+        "stateSlots": [
+          "streaming",
+          "idle"
+        ],
         "actions": [],
         "children": [
           {
@@ -80,7 +86,12 @@
                     "component": "ChatMessage",
                     "recipe": "message-row",
                     "role": "listitem",
-                    "stateSlots": ["user", "assistant", "streaming", "done"],
+                    "stateSlots": [
+                      "user",
+                      "assistant",
+                      "streaming",
+                      "done"
+                    ],
                     "actions": [],
                     "children": [
                       {
@@ -94,7 +105,10 @@
                             "nodeId": "message-avatar",
                             "component": "MessageAvatar",
                             "recipe": "avatar",
-                            "stateSlots": ["image", "fallback"],
+                            "stateSlots": [
+                              "image",
+                              "fallback"
+                            ],
                             "actions": [],
                             "children": []
                           },
@@ -128,15 +142,38 @@
                             "component": "message-action-bar",
                             "recipe": "message-actions-inline",
                             "role": "toolbar",
-                            "stateSlots": ["idle"],
+                            "stateSlots": [
+                              "idle"
+                            ],
                             "actions": [
-                              { "id": "chat.message.context", "parameter": "messageId" },
-                              { "id": "chat.message.edit", "parameter": "messageId" },
-                              { "id": "chat.message.copy", "parameter": "messageId" },
-                              { "id": "chat.message.checkpoint", "parameter": "messageId" },
-                              { "id": "chat.message.branch", "parameter": "messageId" },
-                              { "id": "chat.message.delete", "parameter": "messageId" },
-                              { "id": "chat.message.rollback", "parameter": "messageId" }
+                              {
+                                "id": "chat.message.context",
+                                "parameter": "messageId"
+                              },
+                              {
+                                "id": "chat.message.edit",
+                                "parameter": "messageId"
+                              },
+                              {
+                                "id": "chat.message.copy",
+                                "parameter": "messageId"
+                              },
+                              {
+                                "id": "chat.message.checkpoint",
+                                "parameter": "messageId"
+                              },
+                              {
+                                "id": "chat.message.branch",
+                                "parameter": "messageId"
+                              },
+                              {
+                                "id": "chat.message.delete",
+                                "parameter": "messageId"
+                              },
+                              {
+                                "id": "chat.message.rollback",
+                                "parameter": "messageId"
+                              }
                             ],
                             "children": [
                               {
@@ -146,7 +183,10 @@
                                 "role": "button",
                                 "stateSlots": [],
                                 "actions": [
-                                  { "id": "chat.message.context", "parameter": "messageId" }
+                                  {
+                                    "id": "chat.message.context",
+                                    "parameter": "messageId"
+                                  }
                                 ],
                                 "children": []
                               },
@@ -157,7 +197,10 @@
                                 "role": "button",
                                 "stateSlots": [],
                                 "actions": [
-                                  { "id": "chat.message.edit", "parameter": "messageId" }
+                                  {
+                                    "id": "chat.message.edit",
+                                    "parameter": "messageId"
+                                  }
                                 ],
                                 "children": []
                               },
@@ -168,7 +211,10 @@
                                 "role": "button",
                                 "stateSlots": [],
                                 "actions": [
-                                  { "id": "chat.message.copy", "parameter": "messageId" }
+                                  {
+                                    "id": "chat.message.copy",
+                                    "parameter": "messageId"
+                                  }
                                 ],
                                 "children": []
                               },
@@ -179,7 +225,10 @@
                                 "role": "button",
                                 "stateSlots": [],
                                 "actions": [
-                                  { "id": "chat.message.checkpoint", "parameter": "messageId" }
+                                  {
+                                    "id": "chat.message.checkpoint",
+                                    "parameter": "messageId"
+                                  }
                                 ],
                                 "children": []
                               },
@@ -190,7 +239,10 @@
                                 "role": "button",
                                 "stateSlots": [],
                                 "actions": [
-                                  { "id": "chat.message.branch", "parameter": "messageId" }
+                                  {
+                                    "id": "chat.message.branch",
+                                    "parameter": "messageId"
+                                  }
                                 ],
                                 "children": []
                               },
@@ -201,7 +253,10 @@
                                 "role": "button",
                                 "stateSlots": [],
                                 "actions": [
-                                  { "id": "chat.message.delete", "parameter": "messageId" }
+                                  {
+                                    "id": "chat.message.delete",
+                                    "parameter": "messageId"
+                                  }
                                 ],
                                 "children": []
                               },
@@ -212,7 +267,10 @@
                                 "role": "button",
                                 "stateSlots": [],
                                 "actions": [
-                                  { "id": "chat.message.rollback", "parameter": "messageId" }
+                                  {
+                                    "id": "chat.message.rollback",
+                                    "parameter": "messageId"
+                                  }
                                 ],
                                 "children": []
                               }
@@ -274,7 +332,11 @@
                                 "recipe": "pill-button",
                                 "role": "button",
                                 "stateSlots": [],
-                                "actions": [{ "id": "chat.message.history" }],
+                                "actions": [
+                                  {
+                                    "id": "chat.message.history"
+                                  }
+                                ],
                                 "children": []
                               },
                               {
@@ -283,7 +345,11 @@
                                 "recipe": "pill-button",
                                 "role": "button",
                                 "stateSlots": [],
-                                "actions": [{ "id": "chat.message.regenerate" }],
+                                "actions": [
+                                  {
+                                    "id": "chat.message.regenerate"
+                                  }
+                                ],
                                 "children": []
                               }
                             ]
@@ -301,7 +367,11 @@
                                 "recipe": "pill-button",
                                 "role": "button",
                                 "stateSlots": [],
-                                "actions": [{ "id": "chat.message.swipe-previous" }],
+                                "actions": [
+                                  {
+                                    "id": "chat.message.swipe-previous"
+                                  }
+                                ],
                                 "children": []
                               },
                               {
@@ -319,7 +389,11 @@
                                 "recipe": "pill-button",
                                 "role": "button",
                                 "stateSlots": [],
-                                "actions": [{ "id": "chat.message.swipe-next" }],
+                                "actions": [
+                                  {
+                                    "id": "chat.message.swipe-next"
+                                  }
+                                ],
                                 "children": []
                               }
                             ]
@@ -338,7 +412,10 @@
         "nodeId": "chat-composer",
         "component": "ChatComposer",
         "recipe": "chat-composer",
-        "stateSlots": ["streaming", "idle"],
+        "stateSlots": [
+          "streaming",
+          "idle"
+        ],
         "actions": [],
         "children": [
           {
@@ -361,8 +438,15 @@
                     "recipe": "menu-button",
                     "role": "button",
                     "stateSlots": [],
-                    "actions": [{ "id": "chat.composer.settings" }],
-                    "label": { "text": "Settings", "i18nKey": "chat.settings" },
+                    "actions": [
+                      {
+                        "id": "chat.composer.settings"
+                      }
+                    ],
+                    "label": {
+                      "text": "Settings",
+                      "i18nKey": "chat.settings"
+                    },
                     "icon": "GearSix",
                     "children": []
                   },
@@ -372,8 +456,15 @@
                     "recipe": "icon-button",
                     "role": "button",
                     "stateSlots": [],
-                    "actions": [{ "id": "chat.composer.reset" }],
-                    "label": { "text": "Reset", "i18nKey": "chat.reset" },
+                    "actions": [
+                      {
+                        "id": "chat.composer.reset"
+                      }
+                    ],
+                    "label": {
+                      "text": "Reset",
+                      "i18nKey": "chat.reset"
+                    },
                     "icon": "X",
                     "children": []
                   }
@@ -385,10 +476,23 @@
                 "recipe": "context-trigger",
                 "role": "button",
                 "stateSlots": [],
-                "actions": [{ "id": "chat.composer.context" }],
+                "actions": [
+                  {
+                    "id": "chat.composer.context"
+                  }
+                ],
                 "children": []
               }
             ]
+          },
+          {
+            "nodeId": "composer-context-panel",
+            "component": "ContextUsagePanel",
+            "recipe": "composer-context-panel",
+            "role": "region",
+            "stateSlots": [],
+            "actions": [],
+            "children": []
           },
           {
             "nodeId": "composer-field",
@@ -425,8 +529,15 @@
                         "recipe": "icon-button",
                         "role": "button",
                         "stateSlots": [],
-                        "actions": [{ "id": "chat.composer.settings" }],
-                        "label": { "text": "Settings", "i18nKey": "chat.settings" },
+                        "actions": [
+                          {
+                            "id": "chat.composer.settings"
+                          }
+                        ],
+                        "label": {
+                          "text": "Settings",
+                          "i18nKey": "chat.settings"
+                        },
                         "icon": "List",
                         "children": []
                       },
@@ -436,7 +547,11 @@
                         "recipe": "icon-button",
                         "role": "button",
                         "stateSlots": [],
-                        "actions": [{ "id": "chat.scroll-latest" }],
+                        "actions": [
+                          {
+                            "id": "chat.scroll-latest"
+                          }
+                        ],
                         "label": {
                           "text": "Scroll to latest",
                           "i18nKey": "chat.scrollToLatestShort"
@@ -450,8 +565,15 @@
                         "recipe": "icon-button",
                         "role": "button",
                         "stateSlots": [],
-                        "actions": [{ "id": "chat.composer.reset" }],
-                        "label": { "text": "Reset", "i18nKey": "chat.reset" },
+                        "actions": [
+                          {
+                            "id": "chat.composer.reset"
+                          }
+                        ],
+                        "label": {
+                          "text": "Reset",
+                          "i18nKey": "chat.reset"
+                        },
                         "icon": "MagicWand",
                         "children": []
                       }
@@ -463,8 +585,15 @@
                     "recipe": "primary-button",
                     "role": "button",
                     "stateSlots": [],
-                    "actions": [{ "id": "chat.send" }],
-                    "label": { "text": "Send", "i18nKey": "chat.send" },
+                    "actions": [
+                      {
+                        "id": "chat.send"
+                      }
+                    ],
+                    "label": {
+                      "text": "Send",
+                      "i18nKey": "chat.send"
+                    },
                     "icon": "PaperPlaneRight",
                     "children": []
                   }
@@ -477,14 +606,34 @@
     ]
   },
   "responsive": [
-    { "viewportClass": "compact", "layout": "chat-compact-overlay" },
-    { "viewportClass": "medium", "layout": "chat-split-panel" },
-    { "viewportClass": "expanded", "layout": "chat-split-panel" }
+    {
+      "viewportClass": "compact",
+      "layout": "chat-compact-overlay"
+    },
+    {
+      "viewportClass": "medium",
+      "layout": "chat-split-panel"
+    },
+    {
+      "viewportClass": "expanded",
+      "layout": "chat-split-panel"
+    }
   ],
   "bindings": [
-    { "nodeId": "chat-message-list", "expression": "messages.items[*]" },
-    { "nodeId": "chat-message", "expression": "messages.items[*]" },
-    { "nodeId": "composer-textarea", "expression": "chat.draft" }
+    {
+      "nodeId": "chat-message-list",
+      "expression": "messages.items[*]"
+    },
+    {
+      "nodeId": "chat-message",
+      "expression": "messages.items[*]"
+    },
+    {
+      "nodeId": "composer-textarea",
+      "expression": "chat.draft"
+    }
   ],
-  "sourceFixtureIds": ["chat.canonical.expanded"]
+  "sourceFixtureIds": [
+    "chat.canonical.expanded"
+  ]
 }

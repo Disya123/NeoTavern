@@ -214,6 +214,34 @@ ClipboardManager ещё нет; delete/send/settings/reset/scroll работаю
 Панельные списки/табы Character Manager остаются на `shell_hit`-регионах до
 переноса экранов на blueprint (M2).
 
+## Контекст-метр композера (ContextUsagePanel)
+
+Триггер `composer-context` (иконка Database + процент в правой группе
+тулбара) открывает popover `context-usage-panel` — паритет React
+`ContextUsagePanel`: сводка (заголовок «Draft estimate», `prompt / limit`),
+метрики 2×2 (usage %, available, prompt tokens, reserve) и разбивку из пяти
+категорий (history/world info/character/persona/other) с пропорциональными
+заливками.
+
+Плоскость харнесса не имеет prompt-аудита, поэтому панель всегда в состоянии
+черновой оценки (React `isExact: false`): история + draft считаются
+скрипт-осознанным оценщиком (`session.rs::estimate_tokens`, порт
+`packages/shared/src/estimateTokens.ts`), лимит = `CONTEXT_TOKEN_DEFAULT`
+(16 032), резерв = 4 000; вся сумма попадает в `chat_history` — ровно как в
+fallback-ветке `summarizeContextUsage`. Точная аудиторная сводка приходит из
+Kernel `prompt.context.preview` на упакованном хосте.
+
+Механика: узел `composer-context-panel` живёт в blueprint-документе между
+toolbar и field; видимость решает рендерер (`render_context_panel_slot`,
+общий для blueprint- и legacy-хрома — контракт скелет-паритета требует узел в
+обоих деревьях). Закрытая панель = `display:none` (пустой блок занимает
+строчный бокс и сдвигает композер). Тап — `QuickIntent::ComposerContext`
+(hit-rects → `ChatSession::toggle_context_panel`), display-only состояние,
+Wire-команды не создаёт. Композер при открытой панели переключается на
+content-driven `min-height` (закрытый держит фиксированную высоту — taffy
+распределяет внутренний flex по-разному между `height`/`min-height`, что
+уводит goldens на несколько px).
+
 ## Отправка сообщения (Send)
 
 Композер (`data-part="composer"` в `product_chat_app`) получил кнопку **Send**

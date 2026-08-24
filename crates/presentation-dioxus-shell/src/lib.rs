@@ -24,6 +24,7 @@ mod scene_chat;
 mod settings_tab;
 pub use chat_route::{ChatRouteReport, chat_route_line, flagged_chat_route};
 pub use markdown::{Block, Inline, contains_part, message_markdown, parse_document, parse_inline};
+pub use neotavern_presentation_blueprint::v1::{ContextUsageBreakdownV1, ContextUsageSummaryV1};
 pub use neotavern_presentation_design_system::SafeAreaInsets;
 pub use product_path::{
     PRODUCT_PATH_CHAT_ID, PRODUCT_PATH_ITEMS, PRODUCT_PATH_VISIBLE, ProductChatView, ProductChrome,
@@ -770,6 +771,10 @@ pub fn product_chat_app() -> Element {
                                             span { style: "font-size:13px;", "4%" }
                                         }
                                     }
+                                    {crate::scene_chat::render_context_panel_slot(
+                                        view.context_panel_open,
+                                        view.context_summary.as_ref(),
+                                    )}
                                     div {
                                         class: "ChatWorkspace_composerField",
                                         "data-part": "field",
