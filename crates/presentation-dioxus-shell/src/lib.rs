@@ -3,7 +3,7 @@
 //! Not production JNI. Not `MainActivity`. Does not import Kernel, storage,
 //! or network crates.
 
-use contracts_generated::generated::{decode_chat_dto, decode_message_dto, ChatDto, MessageDto};
+use contracts_generated::generated::{ChatDto, MessageDto, decode_chat_dto, decode_message_dto};
 use dioxus_core::{Element, VirtualDom};
 use dioxus_core_macro::rsx;
 use serde::Deserialize;
@@ -22,25 +22,25 @@ mod product_path;
 mod product_shell;
 mod scene_chat;
 mod settings_tab;
-pub use chat_route::{chat_route_line, flagged_chat_route, ChatRouteReport};
-pub use markdown::{contains_part, message_markdown, parse_document, parse_inline, Block, Inline};
+pub use chat_route::{ChatRouteReport, chat_route_line, flagged_chat_route};
+pub use markdown::{Block, Inline, contains_part, message_markdown, parse_document, parse_inline};
 pub use neotavern_presentation_design_system::SafeAreaInsets;
 pub use product_path::{
-    chrome_metrics, current_product_chat, format_timestamp, install_product_chat, message_id,
-    mixed_height, mixed_height_catalog, product_chat_from_fixture, product_chat_with_chrome,
-    streaming_schedule, visible_rows, ProductChatView, ProductChrome, RowKind, VisibleRow,
-    PRODUCT_PATH_CHAT_ID, PRODUCT_PATH_ITEMS, PRODUCT_PATH_VISIBLE,
+    PRODUCT_PATH_CHAT_ID, PRODUCT_PATH_ITEMS, PRODUCT_PATH_VISIBLE, ProductChatView, ProductChrome,
+    RowKind, VisibleRow, chrome_metrics, current_product_chat, format_timestamp,
+    install_product_chat, message_id, mixed_height, mixed_height_catalog,
+    product_chat_from_fixture, product_chat_with_chrome, streaming_schedule, visible_rows,
 };
 pub use product_shell::{
-    character_card_description, character_manager_title, current_product_shell, ellipsize_css,
-    install_product_shell, lorebook_card_description, panel_header_title, persona_card_description,
-    product_shell_app, CharacterCardView, CharacterDraftView, ChatCardView, LorebookCardView,
-    PersonaCardView, PluginCardView, PresetCardView, ProductShellView, ProviderCardView,
     AI_SETTINGS_TITLE, BACKGROUNDS_MANAGER_TITLE, CHARACTER_MANAGER_TITLE, CHATS_MANAGER_TITLE,
-    LOREBOOK_MANAGER_TITLE, PERSONA_MANAGER_TITLE, PLUGINS_MANAGER_TITLE, SETTINGS_TITLE,
+    CharacterCardView, CharacterDraftView, ChatCardView, LOREBOOK_MANAGER_TITLE, LorebookCardView,
+    PERSONA_MANAGER_TITLE, PLUGINS_MANAGER_TITLE, PersonaCardView, PluginCardView, PresetCardView,
+    ProductShellView, ProviderCardView, SETTINGS_TITLE, character_card_description,
+    character_manager_title, current_product_shell, ellipsize_css, install_product_shell,
+    lorebook_card_description, panel_header_title, persona_card_description, product_shell_app,
 };
 pub use scene_chat::{
-    chat_wallpaper_mode, set_chat_blueprint_source, set_chat_wallpaper_mode, ChatBlueprintSource,
+    ChatBlueprintSource, chat_wallpaper_mode, set_chat_blueprint_source, set_chat_wallpaper_mode,
 };
 
 pub const DIOXUS_SHELL_FLAG: &str = "NEOTA_DIOXUS_SHELL";
@@ -265,8 +265,16 @@ pub(crate) fn message_bubble_style(user: bool, compact: bool, font_px: u32) -> S
     if compact {
         format!(
             "box-sizing:border-box;position:relative;min-height:24px;margin:4px 0;padding:8px 12px;color:{color};font-size:{font_px}px;white-space:pre-wrap;overflow-wrap:break-word;border-radius:16px;background:{};border:1px solid {};",
-            if user { "rgba(54,34,27,0.72)" } else { "rgba(38,34,31,0.72)" },
-            if user { "rgba(105,76,61,0.60)" } else { "rgba(57,52,47,0.60)" },
+            if user {
+                "rgba(54,34,27,0.72)"
+            } else {
+                "rgba(38,34,31,0.72)"
+            },
+            if user {
+                "rgba(105,76,61,0.60)"
+            } else {
+                "rgba(57,52,47,0.60)"
+            },
         )
     } else {
         let align = if user {
@@ -837,7 +845,7 @@ pub fn product_chat_app() -> Element {
                                                 "data-action": "send",
                                                 "aria-label": "Send",
                                                 title: "Send",
-                                                style: "display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:44px;min-height:36px;padding:4px 16px;border:none;border-radius:10px;color:#2a130b;background:#e38a62;font-size:13px;font-weight:500;",
+                                                style: "display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:44px;min-height:44px;padding:4px 16px;border:none;border-radius:10px;color:#2a130b;background:#e38a62;font-size:13px;font-weight:500;",
                                                 span { "data-part": "label", "Send" }
                                                 span {
                                                     "data-part": "icon",

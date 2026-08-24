@@ -187,6 +187,20 @@
 
 ### Fixed
 
+- **Панель Settings доведена до паритета вкладок React (6 вкладок вместо 2).**
+  `settings_tab.rs` теперь рендерит General / Themes / Data / Profiles /
+  Secrets / Tools — как `SettingsPanel.tsx` (desktop-only вкладка `remote`
+  остаётся за упакованным Tauri-шеллом так же, как в браузере React). Вкладки
+  Themes (выбор темы + установка пакета), Data (бэкапы), Profiles (плотность/
+  размер текста), Secrets (статус SecretStore без значений) и Tools (реестр
+  инструментов) — честные fixture-plane состояния с объяснением, какой Wire op
+  принадлежит упакованному хосту. В General добавлены Interface scale / Text
+  size из view-model. Переключение вкладок уже было проведено через
+  `ShellAction::SetTab`. Send-кнопка композера выровнена по React-токену
+  `--st-control-height` (min-height 36→44, измерено 691..734 = как в React
+  691..735). Goldens обновлены; cargo-тесты, goldens 0.0000% (4 размера),
+  packaged-check 6/6 + no-clip guard, docs:check.
+
 - **Иконки навигационного рейла были прижаты к правому краю вместо центра.**
   Taffy в этом Blitz-билде кладёт fixed-size span (21×21) внутри fixed-size
   flex-контейнера (кнопка 40×40, `justify-content:center`) в `loc.x = 18`

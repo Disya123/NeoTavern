@@ -23,8 +23,8 @@ use dioxus_core::Element;
 use dioxus_core_macro::rsx;
 use neotavern_presentation_blueprint::v1::{UiNodeV1, UiSceneV1};
 use neotavern_presentation_blueprint::{
-    materialize_chat_scene_v1_from_document, ChatSurfaceStateV1, UiActionV1, UiBlueprintDocumentV1,
-    ViewportClassV1,
+    ChatSurfaceStateV1, UiActionV1, UiBlueprintDocumentV1, ViewportClassV1,
+    materialize_chat_scene_v1_from_document,
 };
 
 use crate::product_path::{ProductChatView, ProductChrome};
@@ -807,11 +807,7 @@ fn render_node(node: &UiNodeV1, ctx: &ComposerCtx) -> Element {
 /// Groups carry classes only, mirroring the packed sheet selectors.
 fn container_look(id: &str) -> (Option<&'static str>, Option<&'static str>, &'static str) {
     match id {
-        "chat-composer" => (
-            Some("ChatWorkspace_composer"),
-            None,
-            "",
-        ),
+        "chat-composer" => (Some("ChatWorkspace_composer"), None, ""),
         "composer-toolbar" => (
             Some("ChatWorkspace_composerToolbar"),
             Some("toolbar"),
@@ -1129,7 +1125,8 @@ fn non_empty(value: &'static str) -> Option<String> {
 
 fn button_style(id: &str, primary: bool) -> String {
     if primary {
-        return "display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:44px;min-height:36px;padding:4px 16px;border:none;border-radius:10px;color:#2a130b;background:#e38a62;font-size:13px;font-weight:500;".to_owned();
+        // React send = the default `st-button` control height (--st-control-height: 44px).
+        return "display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:44px;min-height:44px;padding:4px 16px;border:none;border-radius:10px;color:#2a130b;background:#e38a62;font-size:13px;font-weight:500;".to_owned();
     }
     match id {
         "composer-settings" | "composer-context" => "display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 8px;border:1px solid rgba(243,238,232,0.10);border-radius:16px;color:#c5bbb2;background:rgba(243,238,232,0.05);".to_owned(),
