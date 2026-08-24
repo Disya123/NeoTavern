@@ -171,6 +171,7 @@ pub struct PluginCardView {
     pub version: String,
     pub enabled: bool,
     pub trust_state: String,
+    pub permissions: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -313,6 +314,9 @@ pub struct ProductShellView {
     pub profile_delete_open: bool,
     /// Profile the delete-confirm dialog asks about.
     pub profile_delete_target_id: Option<String>,
+    /// Plugin uninstall confirm dialog (`plugins.uninstall`).
+    pub plugin_uninstall_open: bool,
+    pub plugin_uninstall_target_id: Option<String>,
     pub plugins: Vec<PluginCardView>,
     pub providers: Vec<ProviderCardView>,
     pub presets: Vec<PresetCardView>,
@@ -394,6 +398,8 @@ impl Default for ProductShellView {
             profile_rename_name: String::new(),
             profile_delete_open: false,
             profile_delete_target_id: None,
+            plugin_uninstall_open: false,
+            plugin_uninstall_target_id: None,
             plugins: Vec::new(),
             providers: Vec::new(),
             presets: Vec::new(),
@@ -1899,6 +1905,21 @@ let entry_delete_book_name = entry_dialog_book_name;
     let profile_delete_confirm = format!(
         "Delete \"{profile_delete_name}\"? Its characters stay unassigned; nothing is removed."
     );
+
+    // Plugin uninstall confirm (320×220, mirrors `shell_hit::dialog_hit`).
+    let (uplg_x, uplg_y, uplg_w, uplg_h) = modal_geometry(&view, 320.0, 220.0);
+    let plugin_uninstall_style = format!(
+        "position:absolute;left:{uplg_x}px;top:{uplg_y}px;width:{uplg_w}px;height:{uplg_h}px;box-sizing:border-box;z-index:50;padding:16px;color:#f3eee8;"
+    );
+    let plugin_uninstall_name = view
+        .plugins
+        .iter()
+        .find(|item| Some(item.id.as_str()) == view.plugin_uninstall_target_id.as_deref())
+        .map(|item| item.name.as_str())
+        .unwrap_or("");
+    let plugin_uninstall_confirm = format!(
+        "Uninstall \"{plugin_uninstall_name}\"? Frontend slots shut down and every handler is removed."
+    );
     // Entry dialog switches (track, thumb) — same geometry as row switches.
     let (switch_constant, switch_selective, switch_enabled) = (
         entry_switch_style(view.entry_constant_draft),
@@ -2289,6 +2310,33 @@ let entry_delete_book_name = entry_dialog_book_name;
                             "data-variant": "danger",
                             "data-size": "md",
                             span { "Delete" }
+                        }
+                    }
+                }
+            }
+            if view.plugin_uninstall_open {
+                div {
+                    class: "st-card",
+                    style: "{plugin_uninstall_style}",
+                    div {
+                        "data-component": "dialog-title",
+                        "Uninstall plugin"
+                    }
+                    div { "data-component": "dialog-description", "{plugin_uninstall_confirm}" }
+                    div {
+                        class: "CharacterManagementPanel_dialogActions",
+                        style: "display:flex;gap:8px;justify-content:flex-end;margin-top:12px;",
+                        button {
+                            r#type: "button",
+                            "data-variant": "default",
+                            "data-size": "md",
+                            span { "Cancel" }
+                        }
+                        button {
+                            r#type: "button",
+                            "data-variant": "danger",
+                            "data-size": "md",
+                            span { "Uninstall" }
                         }
                     }
                 }

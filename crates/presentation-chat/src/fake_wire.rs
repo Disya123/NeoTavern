@@ -1106,6 +1106,27 @@ impl ProductWire for FakeWire {
                     items: self.plugins.clone(),
                 }),
             ),
+            "plugins.enable" | "plugins.disable" => {
+                let id = payload_str(&payload, "id")?;
+                let enabled = operation_id == "plugins.enable";
+                let updated = {
+                    let Some(plugin) = self.plugins.iter_mut().find(|row| row.id == id) else {
+                        return Err(Self::product("PLUGIN_NOT_FOUND", "pluginId", &id));
+                    };
+                    plugin.enabled = enabled;
+                    plugin.clone()
+                };
+                self.wrap_call(operation_id, to_value(&updated))
+            }
+            "plugins.uninstall" => {
+                let id = payload_str(&payload, "id")?;
+                let before = self.plugins.len();
+                self.plugins.retain(|row| row.id != id);
+                if self.plugins.len() == before {
+                    return Err(Self::product("PLUGIN_NOT_FOUND", "pluginId", &id));
+                }
+                self.ok_call(operation_id, json!({}))
+            }
             "providers.list" => self.wrap_call(
                 operation_id,
                 to_value(&ResultListProviders { items: Vec::new() }),

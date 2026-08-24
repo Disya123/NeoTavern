@@ -878,6 +878,96 @@ fn profiles_load_create_rename_export_delete_over_product_wire() {
 }
 
 #[test]
+fn plugins_toggle_and_uninstall_over_product_wire() {
+    use neotavern_presentation_chat::ShellAction;
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("plugins".into()));
+    let shell = session.shell_view();
+    assert!(
+        shell.plugins.iter().any(|row| row.id == "tavern-speed-dial"),
+        "demo plugins list through plugins.list"
+    );
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "plugins.list")
+    );
+
+    // Toggle: disabled plugin -> plugins.enable -> plugins.disable.
+    let disabled_id = "lore-almanac".to_string();
+    assert!(
+        !shell
+            .plugins
+            .iter()
+            .find(|row| row.id == disabled_id)
+            .expect("demo plugin")
+            .enabled
+    );
+    session.apply_shell_action(ShellAction::TogglePlugin(disabled_id.clone()));
+    let shell = session.shell_view();
+    assert!(
+        shell
+            .plugins
+            .iter()
+            .find(|row| row.id == disabled_id)
+            .expect("toggled plugin")
+            .enabled,
+        "toggle enables the plugin"
+    );
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "plugins.enable")
+    );
+    session.apply_shell_action(ShellAction::TogglePlugin(disabled_id.clone()));
+    let shell = session.shell_view();
+    assert!(
+        !shell
+            .plugins
+            .iter()
+            .find(|row| row.id == disabled_id)
+            .expect("toggled plugin")
+            .enabled,
+        "second toggle disables the plugin"
+    );
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "plugins.disable")
+    );
+
+    // Uninstall: confirm dialog -> plugins.uninstall removes the row.
+    session.apply_shell_action(ShellAction::OpenPluginUninstall(disabled_id.clone()));
+    assert!(session.shell_view().plugin_uninstall_open);
+    session.apply_shell_action(ShellAction::ConfirmPluginUninstall);
+    let shell = session.shell_view();
+    assert!(!shell.plugin_uninstall_open);
+    assert!(
+        shell.plugins.iter().all(|row| row.id != disabled_id),
+        "confirm uninstall removes the plugin"
+    );
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "plugins.uninstall")
+    );
+    assert!(
+        session
+            .shell_view()
+            .status_message
+            .as_deref()
+            .unwrap_or("")
+            .contains("uninstalled"),
+        "uninstall surfaces a toast"
+    );
+}
+
+#[test]
 fn physical_window_insets_become_css_pixels_on_the_shell() {
     let (mut session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");

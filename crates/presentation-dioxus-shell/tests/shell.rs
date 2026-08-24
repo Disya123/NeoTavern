@@ -151,6 +151,7 @@ fn product_shell_virtualdom_contains_migrated_rail_panels() {
             version: "1.0.0".into(),
             enabled: false,
             trust_state: "unsigned-untrusted".into(),
+            permissions: vec!["ui.quick-actions".into()],
         }];
         view.providers = vec![ProviderCardView {
             id: "openai-compat".into(),

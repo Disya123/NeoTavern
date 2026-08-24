@@ -288,6 +288,22 @@ Kernel строит контейнер и возвращает верифици�
 клавиатуры: `TextFocus::ProfileCreateName` / `ProfileRename` в desktop-бине
 резолвятся по `data-part` из rects, ввод идёт в сессионные setter'ы.
 
+## Плагины: жизненный цикл (plugins.enable / disable / uninstall)
+
+Каталог плагинов (`plugins.list`) получил реальные lifecycle-действия:
+карточка (112 px, фиксированная геометрия, зеркалит `shell_hit.rs::plugins_hit`:
+subtitle 28, contained-заметка 56, install-бар 36, мета 20, карточки 112 + 16)
+показывает статус (Active/Disabled, рамка `#63c98d` у активного), строку
+разрешённых permissions и нижний ряд действий: switch (36×20, тап →
+`plugins.enable` / `plugins.disable` по текущему состоянию, ответ — обновлённый
+ряд) и uninstall (Trash) с диалогом подтверждения 320×220
+(`plugins.uninstall`, тост «uninstalled»).
+
+Safe mode (`error_code == SAFE_MODE`) отключает все lifecycle-действия —
+React на safe-mode-странице тоже всё блокирует. Установка остаётся честным
+задизейбленным контролом (пикер — упакованный хост); Frontend-слоты плагинов
+по-прежнему CONTAINED в WebSurface (ADR-0054), карточка — только Wire-каталог.
+
 ## Отправка сообщения (Send)
 
 Композер (`data-part="composer"` в `product_chat_app`) получил кнопку **Send**

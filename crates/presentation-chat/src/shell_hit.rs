@@ -92,6 +92,11 @@ pub enum ShellAction {
     CloseProfileDelete,
     ConfirmProfileDelete,
     ExportProfile(String),
+    /// Plugins panel lifecycle (`plugins.enable` / `disable` / `uninstall`).
+    TogglePlugin(String),
+    OpenPluginUninstall(String),
+    ClosePluginUninstall,
+    ConfirmPluginUninstall,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -192,6 +197,23 @@ fn header_bottom(view: &ProductShellView) -> f32 {
 fn dialog_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
     let (width, height) = css_size(view);
     let chat_x0 = chat_origin_x(view);
+    if view.plugin_uninstall_open {
+        let dlg_w = 320.0_f32.min(width - 32.0);
+        let dlg_h = 220.0_f32.min(height - 48.0);
+        let x0 = chat_x0 + (width - chat_x0 - dlg_w).max(0.0) * 0.5;
+        let y0 = (height - dlg_h) * 0.5;
+        if !contains(x, y, x0, y0, x0 + dlg_w, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::ClosePluginUninstall));
+        }
+        let actions_y = y0 + dlg_h - 56.0;
+        if contains(x, y, x0, actions_y, x0 + dlg_w * 0.5, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::ClosePluginUninstall));
+        }
+        if contains(x, y, x0 + dlg_w * 0.5, actions_y, x0 + dlg_w, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::ConfirmPluginUninstall));
+        }
+        return Some(ShellHit::Absorb);
+    }
     if view.profile_delete_open {
         let dlg_w = 300.0_f32.min(width - 32.0);
         let dlg_h = 200.0_f32.min(height - 48.0);
@@ -546,6 +568,9 @@ pub fn hit_test(view: &ProductShellView, css_x: f32, css_y: f32) -> Option<Shell
             "settings" => {
                 return settings_hit(view, x, y);
             }
+            "plugins" => {
+                return plugins_hit(view, x, y);
+            }
             _ => {
                 let header_end = header_bottom(view);
                 if y < header_end && x >= panel_x + panel_w - CONTROL_SM - SPACE_LG {
@@ -797,6 +822,62 @@ fn profiles_hit(
         }
         if x >= x1 - pad - 44.0 && x < x1 - pad {
             return Some(ShellHit::Action(ShellAction::OpenProfileDelete(id)));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    Some(ShellHit::Absorb)
+}
+
+/// Plugins panel body: subtitle, contained note, install bar and list meta
+/// form fixed blocks above the cards; each card carries a toggle switch and
+/// an uninstall button in its bottom actions row. Safe mode disables every
+/// lifecycle action (React disables the whole page surface).
+/// Geometry mirrors `plugins_tab.rs::plugins_panel` (subtitle 28, note 56,
+/// install bar 36, meta 20, cards 112 + 16 gap).
+fn plugins_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
+    if !view.sidebar_open {
+        return None;
+    }
+    let (panel_x, panel_w) = panel_origin(view);
+    let x1 = panel_x + panel_w;
+    if x < panel_x || x >= x1 {
+        return None;
+    }
+    let header_end = header_bottom(view);
+    if y < header_end {
+        if x >= x1 - CONTROL_SM - SPACE_LG {
+            return Some(ShellHit::Action(ShellAction::ClosePanel));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    let safe_mode = view.chat.error_code.as_deref() == Some("SAFE_MODE");
+    let pad = SPACE_LG;
+    // Subtitle 20 (padding 8) + note 56 (margin 8) + install bar 36
+    // (padding 8) + meta 20 = 8 + 20 + 8 + 56 + 8 + 36 + 8 + 20.
+    let list_top = header_end + 164.0;
+    if y < list_top {
+        return Some(ShellHit::Absorb);
+    }
+    if safe_mode || view.plugins.is_empty() {
+        return Some(ShellHit::Absorb);
+    }
+    let card_h = 112.0;
+    let card_gap = SPACE_LG;
+    for (index, plugin) in view.plugins.iter().enumerate() {
+        let y0 = list_top + index as f32 * (card_h + card_gap);
+        if y < y0 || y >= y0 + card_h {
+            continue;
+        }
+        let actions_top = y0 + card_h - 36.0;
+        if y < actions_top {
+            return Some(ShellHit::Absorb);
+        }
+        let id = plugin.id.clone();
+        if x >= x1 - pad - 44.0 && x < x1 - pad {
+            return Some(ShellHit::Action(ShellAction::TogglePlugin(id)));
+        }
+        if x >= x1 - pad - 88.0 && x < x1 - pad - 44.0 {
+            return Some(ShellHit::Action(ShellAction::OpenPluginUninstall(id)));
         }
         return Some(ShellHit::Absorb);
     }

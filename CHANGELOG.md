@@ -3,6 +3,18 @@
 ## Unreleased
 ### Added
 
+- **Плагины: жизненный цикл (plugins.enable/disable/uninstall).** Каталог
+  плагинов (`plugins.list`) из статичных карточек стал интерактивным:
+  карточка 112 px со статусом (Active/Disabled, зелёная рамка), строкой
+  permissions и нижним рядом действий — switch (`plugins.enable` /
+  `plugins.disable` по текущему состоянию) и uninstall с диалогом
+  подтверждения (`plugins.uninstall`, тост). Safe mode блокирует все
+  lifecycle-действия; установка остаётся честным задизейбленным контролом
+  (пикер — упакованный хост); Frontend-слоты плагинов по-прежнему CONTAINED
+  в WebSurface (ADR-0054). FakeWire: enable/disable/uninstall. cargo-тесты
+  (включая новый `plugins_toggle_and_uninstall_over_product_wire`), goldens
+  0.0000% ×4, packaged-check, docs:check.
+
 - **Настройки → Профили (перенос ProfilesPanel).** Вкладка Profiles панели
   Settings вместо статичной заглушки показывает реальный CRUD конфиг-
   профилей над Product Wire: список через `profiles.list` (FakeWire сеет

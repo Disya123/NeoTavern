@@ -9,6 +9,7 @@ use contracts_generated::generated::{
     RequestListLorebookEntries, RequestListLorebooks, RequestListMessages, RequestListPresets,
     RequestMessageDraftCommit, RequestMessageDraftDiscard, RequestMessageDraftGet,
     RequestMessageDraftSave, RequestMessageVariantActivate, RequestMessageVariantsList,
+    RequestPluginsDisable, RequestPluginsEnable, RequestPluginsUninstall,
     RequestRetryGeneration, RequestSettingsGet, RequestSnapshotsRollback, RequestStartGeneration,
     RequestUpdateCharacter, RequestUpdateLorebookEntry, RequestProfileExport, RequestProfilesCreate,
     RequestProfilesDelete, RequestProfilesRename, ResultAssetsContent,
@@ -152,6 +153,9 @@ pub struct ChatRouteState {
     pub profile_delete_open: bool,
     /// Profile the delete-confirm dialog asks about.
     pub profile_delete_target_id: Option<String>,
+    /// Plugin uninstall confirm dialog.
+    pub plugin_uninstall_open: bool,
+    pub plugin_uninstall_target_id: Option<String>,
     /// Composer context-meter popover visibility (`chat.composer.context`).
     pub context_panel_open: bool,
     /// Last applied Kernel stream envelope sequence (`EventEnvelope.sequence`).
@@ -1047,6 +1051,8 @@ impl<W: ProductWire> ChatSession<W> {
             profile_rename_name: self.state.profile_rename_name.clone(),
             profile_delete_open: self.state.profile_delete_open,
             profile_delete_target_id: self.state.profile_delete_target_id.clone(),
+            plugin_uninstall_open: self.state.plugin_uninstall_open,
+            plugin_uninstall_target_id: self.state.plugin_uninstall_target_id.clone(),
             plugins: self
                 .state
                 .plugins
@@ -1057,6 +1063,7 @@ impl<W: ProductWire> ChatSession<W> {
                     version: row.version.clone(),
                     enabled: row.enabled,
                     trust_state: row.trust_state.clone(),
+                    permissions: row.permissions.clone(),
                 })
                 .collect(),
             providers: self.state.providers.clone(),
@@ -1927,6 +1934,18 @@ impl<W: ProductWire> ChatSession<W> {
             }
             ShellAction::ConfirmProfileDelete => self.confirm_delete_profile(),
             ShellAction::ExportProfile(id) => self.export_profile(&id),
+            ShellAction::TogglePlugin(id) => self.toggle_plugin(&id),
+            ShellAction::OpenPluginUninstall(id) => {
+                self.state.plugin_uninstall_target_id = Some(id);
+                self.state.plugin_uninstall_open = true;
+                self.bump_scene();
+            }
+            ShellAction::ClosePluginUninstall => {
+                self.state.plugin_uninstall_open = false;
+                self.state.plugin_uninstall_target_id = None;
+                self.bump_scene();
+            }
+            ShellAction::ConfirmPluginUninstall => self.confirm_uninstall_plugin(),
         }
     }
 
@@ -2653,6 +2672,80 @@ impl<W: ProductWire> ChatSession<W> {
 
     pub fn set_profile_rename_name(&mut self, value: &str) {
         self.state.profile_rename_name = value.to_string();
+        self.bump_scene();
+    }
+
+    /// Plugin card switch: `plugins.enable` / `plugins.disable` by current
+    /// state; the wire returns the updated row (React `PluginsPage` toggle).
+    pub fn toggle_plugin(&mut self, plugin_id: &str) {
+        let Some(plugin) = self
+            .state
+            .plugins
+            .iter()
+            .find(|row| row.id == plugin_id)
+            .cloned()
+        else {
+            return;
+        };
+        let (op, enabled, toast) = if plugin.enabled {
+            (
+                "plugins.disable",
+                false,
+                format!("Plugin \"{}\" disabled.", plugin.name),
+            )
+        } else {
+            (
+                "plugins.enable",
+                true,
+                format!("Plugin \"{}\" enabled.", plugin.name),
+            )
+        };
+        let result = if enabled {
+            self.call_value(
+                "plugins.enable",
+                &RequestPluginsEnable {
+                    id: plugin_id.to_string(),
+                },
+            )
+        } else {
+            self.call_value(
+                "plugins.disable",
+                &RequestPluginsDisable {
+                    id: plugin_id.to_string(),
+                },
+            )
+        };
+        match result {
+            Ok(_) => {
+                self.load_plugins();
+                self.state.status_message = Some(toast);
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    fn confirm_uninstall_plugin(&mut self) {
+        let Some(id) = self.state.plugin_uninstall_target_id.clone() else {
+            self.state.plugin_uninstall_open = false;
+            return;
+        };
+        let name = self
+            .state
+            .plugins
+            .iter()
+            .find(|row| row.id == id)
+            .map(|row| row.name.clone())
+            .unwrap_or_default();
+        match self.call_value("plugins.uninstall", &RequestPluginsUninstall { id }) {
+            Ok(_) => {
+                self.state.plugin_uninstall_open = false;
+                self.state.plugin_uninstall_target_id = None;
+                self.load_plugins();
+                self.state.status_message = Some(format!("Plugin \"{name}\" uninstalled."));
+            }
+            Err(err) => self.record_error(err),
+        }
         self.bump_scene();
     }
 
