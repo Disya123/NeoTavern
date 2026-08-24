@@ -11,10 +11,10 @@ use std::cell::RefCell;
 use dioxus_core::Element;
 use dioxus_core_macro::rsx;
 use neotavern_presentation_design_system::{
-    phosphor_path, product_stylesheets_dev, SafeAreaInsets,
+    SafeAreaInsets, phosphor_path, product_stylesheets_dev,
 };
 
-use crate::{product_chat_app, ProductChatView};
+use crate::{ProductChatView, product_chat_app};
 
 /// Full character draft (mirrors React `CharacterDraft`).
 #[derive(Clone, Debug, PartialEq)]
@@ -442,6 +442,36 @@ pub(crate) fn icon_fill(name: &str, size: u32, fill: &str) -> Element {
     }
 }
 
+/// `icon_fill` sized to fill its 40x40 rail button with a static 9.5px
+/// padding, so the 21px glyph needs no flex centering at all — this Blitz
+/// build's taffy mis-centers a fixed-size span inside a fixed-size flex box
+/// (loc x=18 instead of 9.5, traced via NEOTA_TEXT_TRACE elem/svg-trace;
+/// percentage-width containers center fine).
+pub(crate) fn icon_fill_centered(name: &str, size: u32, fill: &str) -> Element {
+    let path = phosphor_path(name).unwrap_or("");
+    let class = format!("nt-icon nt-icon-{name}");
+    let pad = (40.0 - size as f32) / 2.0;
+    rsx! {
+        span {
+            class: "{class}",
+            style: "width:40px;height:40px;padding:{pad}px;box-sizing:border-box;background:transparent;",
+            "aria-hidden": "true",
+            svg {
+                xmlns: "http://www.w3.org/2000/svg",
+                view_box: "0 0 256 256",
+                width: "{size}",
+                height: "{size}",
+                fill: "{fill}",
+                style: "display:block;width:100%;height:100%;",
+                path {
+                    d: "{path}",
+                    fill: "{fill}",
+                }
+            }
+        }
+    }
+}
+
 fn sort_label(sort: &str) -> &'static str {
     match sort {
         "name-desc" => "Z–A",
@@ -505,14 +535,19 @@ fn rail_button(item: &RailSpec, selected: bool) -> Element {
             button {
                 class: "{control}",
                 r#type: "button",
-                style: "display:flex;width:40px;height:40px;padding:0;align-items:center;justify-content:center;",
+                // This Blitz build's taffy mis-resolves justify-content:center
+                // on a fixed-size flex box whose child is a fixed-size span
+                // (the icon lands at the flex-end position, x=18 instead of
+                // 9.5 — traced via NEOTA_TEXT_TRACE elem/svg-trace). Auto
+                // margins center correctly, so the button delegates centering
+                // to the child's margin:auto and sets no justify/align.
+                style: "display:flex;width:40px;height:40px;padding:0;",
                 "data-part": "item-control",
                 "data-state": "{state}",
                 "aria-label": "{item.label}",
                 title: "{item.label}",
                 "aria-expanded": selected,
-                {icon_fill(item.icon, 21, fill)}
-                span { class: "Sidebar_railLabel", "{item.label}" }
+                {icon_fill_centered(item.icon, 21, fill)}
             }
         }
     }
@@ -1176,18 +1211,15 @@ fn character_manager(view: &ProductShellView) -> Element {
     let (pad_top, pad_bottom) = chrome_insets(view);
     let header_min = 52.0_f32;
     let header_title = character_manager_title(view.chat.viewport_width);
-    let root_style =
-        "display:flex;flex-direction:column;height:100%;min-height:0;overflow:hidden;background:rgba(36,33,30,0.72);";
+    let root_style = "display:flex;flex-direction:column;height:100%;min-height:0;overflow:hidden;background:rgba(36,33,30,0.72);";
     let header_style = format!(
         "flex:none;position:relative;z-index:0;display:flex;flex-direction:row;flex-wrap:nowrap;align-items:center;min-width:0;width:100%;overflow:hidden;padding:8px 16px 8px;min-height:{header_min}px;background:transparent;"
     );
     let body_style = format!(
         "flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;position:relative;padding-bottom:{pad_bottom}px;"
     );
-    let tabs_style =
-        "display:flex;flex-direction:row;flex:none;box-sizing:border-box;align-self:stretch;position:static;width:auto;max-width:100%;order:0;z-index:0;margin:8px 16px 8px;padding:4px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;";
-    let tabs_wrap =
-        "flex:none;align-self:stretch;box-sizing:border-box;width:100%;max-width:100%;overflow:visible;order:1;";
+    let tabs_style = "display:flex;flex-direction:row;flex:none;box-sizing:border-box;align-self:stretch;position:static;width:auto;max-width:100%;order:0;z-index:0;margin:8px 16px 8px;padding:4px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;";
+    let tabs_wrap = "flex:none;align-self:stretch;box-sizing:border-box;width:100%;max-width:100%;overflow:visible;order:1;";
     let cards_tab_style = tab_trigger_style(tab == "cards");
     let edit_tab_style = tab_trigger_style(tab == "edit");
     let advanced_tab_style = tab_trigger_style(tab == "advanced");
@@ -1394,18 +1426,15 @@ pub(crate) fn management_shell(
     let (pad_top, pad_bottom) = chrome_insets(view);
     let header_min = 52.0_f32;
     let header_title = panel_header_title(title, view.chat.viewport_width);
-    let root_style =
-        "display:flex;flex-direction:column;height:100%;min-height:0;overflow:hidden;background:rgba(36,33,30,0.72);";
+    let root_style = "display:flex;flex-direction:column;height:100%;min-height:0;overflow:hidden;background:rgba(36,33,30,0.72);";
     let header_style = format!(
         "flex:none;position:relative;z-index:0;display:flex;flex-direction:row;flex-wrap:nowrap;align-items:center;min-width:0;width:100%;overflow:hidden;padding:8px 16px 8px;min-height:{header_min}px;background:transparent;"
     );
     let body_style = format!(
         "flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;position:relative;padding-bottom:{pad_bottom}px;"
     );
-    let tabs_style =
-        "display:flex;flex-direction:row;flex:none;box-sizing:border-box;align-self:stretch;position:static;width:auto;max-width:100%;order:0;z-index:0;margin:8px 16px 8px;padding:4px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;";
-    let tabs_wrap =
-        "flex:none;align-self:stretch;box-sizing:border-box;width:100%;max-width:100%;overflow:visible;order:1;";
+    let tabs_style = "display:flex;flex-direction:row;flex:none;box-sizing:border-box;align-self:stretch;position:static;width:auto;max-width:100%;order:0;z-index:0;margin:8px 16px 8px;padding:4px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;";
+    let tabs_wrap = "flex:none;align-self:stretch;box-sizing:border-box;width:100%;max-width:100%;overflow:visible;order:1;";
     let letter = avatar_letter.unwrap_or("");
     rsx! {
         div {
@@ -1683,19 +1712,31 @@ pub fn product_shell_app() -> Element {
     } else {
         view.panel_width.clamp(260.0, 720.0)
     };
-    let rail_pad = format!("flex:none;width:60px;height:100%;z-index:2;box-sizing:border-box;padding-bottom:{pad_bottom}px;padding-left:calc(4px + {pad_start}px);padding-right:calc(4px + {pad_end}px);background:rgba(21,19,17,0.82);");
+    let rail_pad = format!(
+        "flex:none;width:60px;height:100%;z-index:2;box-sizing:border-box;padding-bottom:{pad_bottom}px;padding-left:calc(4px + {pad_start}px);padding-right:calc(4px + {pad_end}px);background:rgba(21,19,17,0.82);"
+    );
     let panel_pad = if is_compact {
-        format!("display:flex;flex-direction:column;flex:1 1 calc(100% - 60px);min-width:calc(100% - 60px);width:calc(100% - 60px);max-width:calc(100% - 60px);height:100%;margin:0;padding-top:{pad_top}px;padding-bottom:0;box-sizing:border-box;overflow:hidden;background:rgba(36,33,30,0.88);position:relative;")
+        format!(
+            "display:flex;flex-direction:column;flex:1 1 calc(100% - 60px);min-width:calc(100% - 60px);width:calc(100% - 60px);max-width:calc(100% - 60px);height:100%;margin:0;padding-top:{pad_top}px;padding-bottom:0;box-sizing:border-box;overflow:hidden;background:rgba(36,33,30,0.88);position:relative;"
+        )
     } else {
-        format!("display:flex;flex-direction:column;flex:0 0 {panel_w}px;min-width:260px;width:{panel_w}px;max-width:720px;height:100%;margin:0;padding-bottom:0;overflow:hidden;background:rgba(36,33,30,0.88);position:relative;")
+        format!(
+            "display:flex;flex-direction:column;flex:0 0 {panel_w}px;min-width:260px;width:{panel_w}px;max-width:720px;height:100%;margin:0;padding-bottom:0;overflow:hidden;background:rgba(36,33,30,0.88);position:relative;"
+        )
     };
     let row_dir = if rtl { "row-reverse" } else { "row" };
     let sidebar_style = if is_compact {
-        format!("display:flex;flex-direction:{row_dir};flex-wrap:nowrap;align-items:stretch;width:100%;height:100%;min-width:100%;position:absolute;inset:0;z-index:20;padding-top:{pad_top}px;box-sizing:border-box;")
+        format!(
+            "display:flex;flex-direction:{row_dir};flex-wrap:nowrap;align-items:stretch;width:100%;height:100%;min-width:100%;position:absolute;inset:0;z-index:20;padding-top:{pad_top}px;box-sizing:border-box;"
+        )
     } else {
-        format!("display:flex;flex-direction:{row_dir};flex-wrap:nowrap;align-items:stretch;height:100%;min-width:0;flex:none;position:relative;z-index:2;")
+        format!(
+            "display:flex;flex-direction:{row_dir};flex-wrap:nowrap;align-items:stretch;height:100%;min-width:0;flex:none;position:relative;z-index:2;"
+        )
     };
-    let shell_style = format!("display:flex;flex-direction:{row_dir};width:100%;height:100%;background:transparent;color:#f3eee8;position:relative;overflow:hidden;");
+    let shell_style = format!(
+        "display:flex;flex-direction:{row_dir};width:100%;height:100%;background:transparent;color:#f3eee8;position:relative;overflow:hidden;"
+    );
     // Wallpaper mode (host `--wallpaper`): the packed `.AppShell_shell` paints
     // an OPAQUE `--st-color-surface-canvas` over the whole window, which would
     // hide the host-composited photo beneath the scene. React keeps the shell
@@ -1707,7 +1748,9 @@ pub fn product_shell_app() -> Element {
     let wallpaper_mode = crate::scene_chat::chat_wallpaper_mode();
     let shell_class = if wallpaper_mode { "" } else { "AppShell_shell" };
     let shell_css = if wallpaper_mode {
-        format!("display:flex;flex-direction:{row_dir};width:100%;height:100%;background:transparent;color:#f3eee8;position:relative;overflow:hidden;")
+        format!(
+            "display:flex;flex-direction:{row_dir};width:100%;height:100%;background:transparent;color:#f3eee8;position:relative;overflow:hidden;"
+        )
     } else {
         shell_style
     };
@@ -1803,7 +1846,11 @@ pub fn product_shell_app() -> Element {
                                     button {
                                         class: "Sidebar_railButton",
                                         r#type: "button",
-                                        style: "display:flex;width:40px;height:40px;padding:0;align-items:center;justify-content:center;",
+                                        // Centering via the padded full-size icon
+                                        // box (see icon_fill_centered): taffy in
+                                        // this Blitz build mis-centers a
+                                        // fixed-size span in a fixed-size flex box.
+                                        style: "display:flex;width:40px;height:40px;padding:0;",
                                         "data-part": "item-control",
                                         "data-action": "menu-toggle",
                                         "data-state": "{rail_state}",
@@ -1811,8 +1858,7 @@ pub fn product_shell_app() -> Element {
                                         title: "Close menu",
                                         "aria-expanded": view.rail_expanded,
                                         "aria-controls": "primary-navigation",
-                                        {icon("SidebarSimple", 21)}
-                                        span { class: "Sidebar_railLabel", "Close menu" }
+                                        {icon_fill_centered("SidebarSimple", 21, "#998f87")}
                                     }
                                 }
                                 for item in RAIL.iter() {
