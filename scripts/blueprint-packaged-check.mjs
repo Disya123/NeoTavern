@@ -11,6 +11,10 @@
  *   5. NEOTA_CHAT_BLUEPRINT_DOC    — authoring loop override stays available
  *   6. broken env doc              — parse diagnostic printed exactly once,
  *                                    frames still render via the legacy fallback
+ *   7. no-clip guard               — at extreme window sizes the shell keeps
+ *                                    every content pixel inside the window
+ *                                    (regression net for the fixed-width side
+ *                                    panel painting past a narrow window edge)
  *
  * Every case must also reach a produced frame (`produced cmds=`).
  *
@@ -25,6 +29,8 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { decodePng } from './lib/pngcodec.mjs';
 
 const repositoryRoot = resolve(import.meta.dirname, '..');
 const canonicalFixture = resolve(
@@ -194,6 +200,65 @@ async function main() {
     console.log(
       '[blueprint-packaged] matrix ok — flip and rollback behave as documented (ADR-0056).',
     );
+
+    // --- 7. no-clip guard ---------------------------------------------------
+    // The character side panel is a fixed-width sheet; the compact breakpoint
+    // (viewport <= 600) must switch it to full-width so a narrow window never
+    // clips panel content. This is the automated net for that class of
+    // defect: render at extreme sizes and assert no bright content pixel
+    // (text/accent luminance) sits within 2px of the right or bottom edge.
+    // Dark full-bleed backgrounds are expected at the edges and ignored.
+    const clipSizes = [
+      [283, 945], // narrower than the Tauri min window — regression repro size
+      [360, 640], // the Tauri min window size
+      [900, 220], // compact-height document breakpoint
+    ];
+    let clipFailures = 0;
+    for (const [w, h] of clipSizes) {
+      const png = join(scratch, `clip-${w}x${h}.png`);
+      await runHost(['--messages', '12', '--w', String(w), '--h', String(h), '--snapshot', png]);
+      if (!existsSync(png)) {
+        console.log(`[blueprint-packaged] FAIL no-clip ${w}x${h}: snapshot missing`);
+        clipFailures += 1;
+        continue;
+      }
+      const img = decodePng(readFileSync(png));
+      const edge = 2;
+      let clipped = 0;
+      let maxX = -1;
+      for (let y = 0; y < img.height; y++) {
+        for (let x = img.width - edge; x < img.width; x++) {
+          const i = (y * img.width + x) * 4;
+          if (img.data[i] > 120 && img.data[i + 1] > 110) {
+            clipped += 1;
+            if (x > maxX) maxX = x;
+          }
+        }
+      }
+      // Bottom edge: skip the rail column (x < 60). The rail pins its last
+      // icon to the bottom inset, which clips only at sub-minimum heights
+      // (the product min window height is 520); the guard targets content
+      // clipping in the panel/chat area.
+      for (let y = img.height - edge; y < img.height; y++) {
+        for (let x = 60; x < img.width; x++) {
+          const i = (y * img.width + x) * 4;
+          if (img.data[i] > 120 && img.data[i + 1] > 110) {
+            clipped += 1;
+          }
+        }
+      }
+      const ok = clipped === 0;
+      console.log(
+        `[blueprint-packaged] ${ok ? 'ok ' : 'FAIL'} no-clip ${w}x${h}` +
+          (ok ? '' : `: ${clipped} content pixel(s) at the window edge (max x=${maxX})`),
+      );
+      if (!ok) clipFailures += 1;
+    }
+    if (clipFailures > 0) {
+      console.error(`[blueprint-packaged] NO-CLIP GUARD FAILED: ${clipFailures} size(s)`);
+      process.exit(1);
+    }
+    console.log('[blueprint-packaged] no-clip guard ok — shell content stays inside the window.');
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
