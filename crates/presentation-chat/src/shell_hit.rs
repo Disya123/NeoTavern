@@ -123,6 +123,9 @@ pub enum ShellAction {
     OpenThemeDelete(String),
     CloseThemeDelete,
     ConfirmThemeDelete,
+    /// Secrets tab lock button (`secrets.lock`; React `SecretsPanel` "Lock
+    /// now", only for an available portable store).
+    LockSecrets,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -865,6 +868,42 @@ fn settings_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
     }
     if view.settings_tab == "themes" {
         return themes_hit(view, x, y, panel_x, x1, tabs_bottom);
+    }
+    if view.settings_tab == "secrets" {
+        return secrets_hit(view, x, y, panel_x, x1, tabs_bottom);
+    }
+    Some(ShellHit::Absorb)
+}
+
+/// React `SecretsPanel` body: title + hint, the mode card, the flag list
+/// (5 rows + 1 for the portable format version), then the "Lock now" button
+/// — only when the store is a portable and available one (React `canLock`).
+/// Secret values never render; everything but the lock button is Absorb.
+/// Geometry mirrors `settings_tab.rs::secrets_tab` (padding 12 + title 20 +
+/// gap 8 + hint 32 + gap 8 + mode card 64 + gap 8 + flags 20/row).
+fn secrets_hit(
+    view: &ProductShellView,
+    x: f32,
+    y: f32,
+    panel_x: f32,
+    x1: f32,
+    tabs_bottom: f32,
+) -> Option<ShellHit> {
+    let Some(status) = view.secrets_status.as_ref() else {
+        return Some(ShellHit::Absorb);
+    };
+    if !(status.kind == "portable" && status.available) {
+        return Some(ShellHit::Absorb);
+    }
+    let pad = SPACE_LG;
+    let rows = 5.0 + if status.format_version.is_some() { 1.0 } else { 0.0 };
+    let button_top =
+        tabs_bottom + 12.0 + 20.0 + 8.0 + 32.0 + 8.0 + 64.0 + 8.0 + rows * 20.0 + 8.0;
+    if y >= button_top && y < button_top + 36.0 {
+        if x >= panel_x + pad && x < x1 - pad {
+            return Some(ShellHit::Action(ShellAction::LockSecrets));
+        }
+        return Some(ShellHit::Absorb);
     }
     Some(ShellHit::Absorb)
 }

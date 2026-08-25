@@ -3,6 +3,18 @@
 ## Unreleased
 ### Added
 
+- **Секреты (перенос SecretsPanel, secrets.status / secrets.lock).** Вкладка
+  Settings → Secrets читает `secrets.status` при открытии и рендерит карточку
+  режима (portable/env/session/unavailable), флаги Persistent / Writable /
+  Available / Stored records / Portable format, locked-hint, кнопку «Lock now»
+  (только для доступного portable-хранилища) и no-reveal-ноту; значения
+  секретов не рендерятся (DTO value-free). `secrets.lock` перечитывает статус
+  (как React-инвалидация query) — хранилище честно показывает
+  `available=false`; без хранилища — fail-closed `CAPABILITY_UNAVAILABLE`.
+  FakeWire: статус portable (зеркало `SECRETS_STATUS_VALUE`) в demo(),
+  unavailable в default(). Новый cargo-тест
+  `secrets_status_and_lock_over_product_wire`.
+
 - **Темы (перенос Settings ThemesTab, themes.* Wire-операции).** Вкладка
   Settings → Themes грузит `themes.list` при открытии; строки тем (name / id ·
   vversion · trustState, `data-part="theme-row"`) несут Apply

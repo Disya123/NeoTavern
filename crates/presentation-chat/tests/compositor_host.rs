@@ -1218,6 +1218,59 @@ fn themes_catalog_activate_deactivate_uninstall_over_product_wire() {
 }
 
 #[test]
+fn secrets_status_and_lock_over_product_wire() {
+    use neotavern_presentation_chat::ShellAction;
+    let (mut session, _) = start_flagged_session(Some("1"), FakeWire::demo(), None, None)
+        .expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("settings".into()));
+    session.apply_shell_action(ShellAction::SetTab("secrets".into()));
+    let shell = session.shell_view();
+    assert_eq!(shell.settings_tab, "secrets");
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "secrets.status"),
+        "opening the Secrets tab reads the store status"
+    );
+    let status = shell.secrets_status.as_ref().expect("status loaded");
+    assert_eq!(status.kind, "portable");
+    assert!(status.persistent && status.writable && status.available);
+    assert_eq!(status.record_count, 2);
+    assert_eq!(status.format_version, Some(1));
+
+    // Lock -> `secrets.lock`, then the status is re-read: the store reports
+    // itself locked (React invalidates the status query after the mutation).
+    session.apply_shell_action(ShellAction::LockSecrets);
+    let shell = session.shell_view();
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "secrets.lock")
+    );
+    let status = shell.secrets_status.as_ref().expect("status after lock");
+    assert!(!status.available, "locked store reports available=false");
+
+    // No store wired -> honest fail-closed status and a CAPABILITY_UNAVAILABLE
+    // lock (kernel `secrets.rs`), never a value leak.
+    let (mut session, _) = start_flagged_session(Some("1"), FakeWire::default(), None, None)
+        .expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("settings".into()));
+    session.apply_shell_action(ShellAction::SetTab("secrets".into()));
+    let shell = session.shell_view();
+    let status = shell.secrets_status.as_ref().expect("status loaded");
+    assert_eq!(status.kind, "unavailable");
+    assert!(!status.persistent && !status.writable && !status.available);
+    assert_eq!(status.record_count, 0);
+    session.apply_shell_action(ShellAction::LockSecrets);
+    assert_eq!(
+        session.shell_view().error_message.as_deref(),
+        Some("CAPABILITY_UNAVAILABLE")
+    );
+}
+
+#[test]
 fn physical_window_insets_become_css_pixels_on_the_shell() {
     let (mut session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");

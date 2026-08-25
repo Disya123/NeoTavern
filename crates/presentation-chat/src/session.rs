@@ -26,7 +26,8 @@ use contracts_generated::generated::{
     decode_result_profile_export, decode_result_profiles_create, decode_result_profiles_list,
     decode_result_settings, decode_result_snapshots_rollback, ProfilesItem, PromptPlan,
     ResultThemesList, RequestThemesActivate, RequestThemesUninstall, ThemesItem,
-    decode_result_themes_list, decode_themes_item,
+    decode_result_themes_list, decode_themes_item, ResultSecretsLock, ResultSecretsStatus,
+    decode_result_secrets_lock, decode_result_secrets_status,
 };
 use neotavern_chat_viewport::{
     GeometrySnapshot, HeightIndex, HeightKind, LogicalItemId, PredictorBudgets, PresentDecision,
@@ -180,6 +181,9 @@ pub struct ChatRouteState {
     /// Theme the delete-confirm dialog asks about.
     pub theme_delete_open: bool,
     pub theme_delete_target_id: Option<String>,
+    /// Secret-store status (`secrets.status`; React `SecretsPanel`). Values
+    /// never travel this DTO — it is value-free by contract.
+    pub secrets_status: Option<ResultSecretsStatus>,
     /// Composer context-meter popover visibility (`chat.composer.context`).
     pub context_panel_open: bool,
     /// Last applied Kernel stream envelope sequence (`EventEnvelope.sequence`).
@@ -1103,6 +1107,7 @@ impl<W: ProductWire> ChatSession<W> {
                 .collect(),
             theme_delete_open: self.state.theme_delete_open,
             theme_delete_target_id: self.state.theme_delete_target_id.clone(),
+            secrets_status: self.state.secrets_status.clone(),
             plugins: self
                 .state
                 .plugins
@@ -1887,11 +1892,15 @@ impl<W: ProductWire> ChatSession<W> {
                 }
                 "settings" => {
                     let is_themes = tab == "themes";
+                    let is_secrets = tab == "secrets";
                     self.state.settings_tab = tab;
-                    // React `ThemesTab` queries the catalog on mount: load it
-                    // when the tab opens so the list is real, not a stub.
+                    // React `ThemesTab` / `SecretsPanel` query on mount: load
+                    // when the tab opens so the surface is real, not a stub.
                     if is_themes {
                         self.load_themes();
+                    }
+                    if is_secrets {
+                        self.load_secrets_status();
                     }
                     self.bump_scene();
                 }
@@ -2058,6 +2067,7 @@ impl<W: ProductWire> ChatSession<W> {
                 self.bump_scene();
             }
             ShellAction::ConfirmThemeDelete => self.confirm_delete_theme(),
+            ShellAction::LockSecrets => self.lock_secrets(),
         }
     }
 
@@ -3037,6 +3047,29 @@ impl<W: ProductWire> ChatSession<W> {
                 self.load_themes();
                 self.state.status_message = Some(format!("Removed {name}."));
             }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    /// Reads the secret-store status (`secrets.status`; React
+    /// `useSecretsStatus`, `staleTime: 30_000`). The DTO is value-free by
+    /// contract — no secret ever travels it.
+    pub fn load_secrets_status(&mut self) {
+        match self.call_decode("secrets.status", &RequestEmpty {}, decode_result_secrets_status)
+        {
+            Ok(status) => self.state.secrets_status = Some(status),
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    /// Locks the store (`secrets.lock`; React `useLockSecrets` invalidates the
+    /// status query afterwards, so the panel refetches the honest locked
+    /// state).
+    pub fn lock_secrets(&mut self) {
+        match self.call_decode("secrets.lock", &RequestEmpty {}, decode_result_secrets_lock) {
+            Ok(_) => self.load_secrets_status(),
             Err(err) => self.record_error(err),
         }
         self.bump_scene();

@@ -8,6 +8,7 @@ use contracts_generated::generated::{
     ResultProfileExport, ResultProfilesCreate, ResultProfilesList, ResultSettings,
     ResultSnapshotsRollback, SettingsItem, PromptBlock, PromptMessage, PromptPlan,
     ResultThemesList, RequestThemesActivate, RequestThemesUninstall, ThemesItem,
+    ResultSecretsLock, ResultSecretsStatus,
 };
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -65,6 +66,10 @@ pub struct FakeWire {
     /// Theme catalog (`themes.*`; React `ThemesPage` / Settings `ThemesTab`).
     /// The built-in interface is not a row: no row active = built-in.
     themes: Vec<ThemesItem>,
+    /// Secret-store status (`secrets.status` / `secrets.lock`). The DTO is
+    /// value-free by contract; `kind == "unavailable"` mirrors the kernel's
+    /// no-store case where lock fails with `CAPABILITY_UNAVAILABLE`.
+    secrets: ResultSecretsStatus,
     cursors: HashMap<String, CursorCut>,
     fail_ops: HashSet<String>,
     next: u64,
@@ -125,6 +130,14 @@ impl Default for FakeWire {
             streams: HashMap::new(),
             plans: HashMap::new(),
             themes: Vec::new(),
+            secrets: ResultSecretsStatus {
+                kind: "unavailable".into(),
+                persistent: false,
+                writable: false,
+                available: false,
+                record_count: 0,
+                format_version: None,
+            },
             cursors: HashMap::new(),
             fail_ops: HashSet::new(),
             next: 0x9000,
@@ -240,6 +253,16 @@ impl FakeWire {
             "1.4.0",
             "locally-trusted",
         ));
+        // Demo secret store: the portable encrypted file, matching the wire
+        // registry fixture (`SECRETS_STATUS_VALUE`) — two records, format v1.
+        wire.secrets = ResultSecretsStatus {
+            kind: "portable".into(),
+            persistent: true,
+            writable: true,
+            available: true,
+            record_count: 2,
+            format_version: Some(1),
+        };
         wire
     }
 
@@ -908,6 +931,18 @@ impl ProductWire for FakeWire {
                     return Err(Self::product("THEME_NOT_FOUND", "themeId", &req.id));
                 }
                 self.ok_call(operation_id, json!({}))
+            }
+            "secrets.status" => self.wrap_call(operation_id, to_value(&self.secrets)),
+            "secrets.lock" => {
+                if self.secrets.kind == "unavailable" {
+                    return Err(Self::product(
+                        "CAPABILITY_UNAVAILABLE",
+                        "operation",
+                        "secrets.lock",
+                    ));
+                }
+                self.secrets.available = false;
+                self.wrap_call(operation_id, to_value(&ResultSecretsLock { locked: true }))
             }
             "characters.create" => {
                 let created = self.create_character(&payload)?;

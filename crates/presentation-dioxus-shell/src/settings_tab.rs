@@ -417,33 +417,98 @@ fn profiles_tab(view: &ProductShellView) -> Element {
     }
 }
 
-/// React `SecretsPanel` status block. SecretStore values never render here;
-/// the status rows honestly report that the fixture plane cannot observe the
-/// store (the packaged host owns `secrets.status`).
-fn secrets_tab(_view: &ProductShellView) -> Element {
+/// React `SecretsPanel`: the store mode card, the flag list, the lock button
+/// (only for an available portable store) and the no-reveal note. Values
+/// never render — the `secrets.status` DTO is value-free by contract.
+/// Geometry mirrors `shell_hit.rs::secrets_hit` (padding 12 + title 20 +
+/// gap 8 + hint 32 + gap 8 + mode card 64 + gap 8 + flags 20/row + gap 8 →
+/// lock button 36).
+fn secrets_tab(view: &ProductShellView) -> Element {
+    let Some(status) = view.secrets_status.as_ref() else {
+        return rsx! {
+            div {
+                class: "SettingsPanel_section",
+                "data-part": "secrets-settings",
+                style: "padding:12px 16px;display:flex;flex-direction:column;gap:12px;",
+                h2 { style: "margin:0;font-size:1rem;height:20px;", "Secret storage" }
+                p { role: "status", style: "color:#c5bbb2;font-size:0.875rem;margin:0;", "Reading secret-store status…" }
+            }
+        };
+    };
+    let (mode_label, mode_hint, mode_icon) = match status.kind.as_str() {
+        "portable" => (
+            "Portable encrypted",
+            "Secrets are kept in an encrypted portable store (secrets.enc) protected by your master passphrase and travel with the data folder.",
+            "LockKey",
+        ),
+        "env" => (
+            "Machine-bound (environment)",
+            "Secrets come from environment variables configured for this host (NEOTA_SECRET_*). Nothing is written by the app.",
+            "Lock",
+        ),
+        "session" => (
+            "Session-only",
+            "Secrets live in memory for this session only and are gone when the app closes. Re-enter them next launch.",
+            "Lock",
+        ),
+        _ => (
+            "Secret storage unavailable",
+            "No secure secret backend is wired in this configuration. Secret-requiring features fail closed rather than fall back to plaintext.",
+            "Key",
+        ),
+    };
+    let yes_no = |value: bool| if value { "Yes" } else { "No" };
+    let can_lock = status.kind == "portable" && status.available;
+    let show_locked_hint = status.kind == "portable" && !status.available;
     rsx! {
         div {
             class: "SettingsPanel_section",
             "data-part": "secrets-settings",
-            style: "padding:12px 16px;display:flex;flex-direction:column;gap:12px;",
-            h2 { style: "margin:0;font-size:1rem;", "Secrets" }
+            style: "padding:12px 16px;display:flex;flex-direction:column;gap:8px;",
+            h2 { style: "margin:0;font-size:1rem;height:20px;line-height:20px;", "Secret storage" }
             p {
-                style: "color:#c5bbb2;font-size:0.875rem;margin:0;",
-                "Provider keys live in the OS-backed SecretStore. Values are write-only from this surface and never appear in exports or logs."
+                style: "color:#c5bbb2;font-size:0.75rem;margin:0;height:32px;line-height:16px;",
+                "How provider keys and other secrets are kept on this device. Secrets are never stored in the database and never appear in exports or diagnostics."
             }
             div {
-                class: "SettingsPanel_field",
-                span { "Store status" }
-                strong { "Unavailable on this plane" }
+                class: "SettingsPanel_secretsMode",
+                "data-state": "{status.kind}",
+                style: "height:64px;box-sizing:border-box;display:flex;align-items:center;gap:8px;padding:0 12px;border:1px solid #39342f;border-radius:16px;background:#24211e;",
+                {icon(mode_icon, 20)}
+                span {
+                    style: "min-width:0;display:flex;flex-direction:column;gap:2px;",
+                    strong { style: "color:#f3eee8;font-size:0.8125rem;", "{mode_label}" }
+                    small { style: "color:#998f87;font-size:0.6875rem;line-height:14px;", "{mode_hint}" }
+                }
             }
-            div {
-                class: "SettingsPanel_field",
-                span { "Stored records" }
-                strong { "—" }
+            ul {
+                class: "SettingsPanel_secretsFlags",
+                style: "list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;",
+                li { style: "display:flex;align-items:center;justify-content:space-between;height:16px;font-size:0.75rem;", span { style: "color:#998f87;", "Persistent" } span { style: "color:#f3eee8;", "{yes_no(status.persistent)}" } }
+                li { style: "display:flex;align-items:center;justify-content:space-between;height:16px;font-size:0.75rem;", span { style: "color:#998f87;", "Writable" } span { style: "color:#f3eee8;", "{yes_no(status.writable)}" } }
+                li { style: "display:flex;align-items:center;justify-content:space-between;height:16px;font-size:0.75rem;", span { style: "color:#998f87;", "Available" } span { style: "color:#f3eee8;", "{yes_no(status.available)}" } }
+                li { style: "display:flex;align-items:center;justify-content:space-between;height:16px;font-size:0.75rem;", span { style: "color:#998f87;", "Stored records" } span { style: "color:#f3eee8;", "{status.record_count}" } }
+                if let Some(version) = status.format_version {
+                    li { style: "display:flex;align-items:center;justify-content:space-between;height:16px;font-size:0.75rem;", span { style: "color:#998f87;", "Portable format" } span { style: "color:#f3eee8;", "v{version}" } }
+                }
+            }
+            if show_locked_hint {
+                p { role: "status", style: "color:#e38a62;font-size:0.75rem;margin:0;", "The store is locked: derived key material was dropped. Provider-key writes fail until the app is restarted and the store is re-opened with your master passphrase." }
+            }
+            if can_lock {
+                button {
+                    class: "st-button",
+                    r#type: "button",
+                    "data-component": "button",
+                    "data-variant": "primary",
+                    "data-part": "lock-secrets",
+                    style: "height:36px;",
+                    span { "data-part": "label", "Lock now" }
+                }
             }
             p {
-                style: "color:#998f87;font-size:0.75rem;",
-                "Status (persistence, writability, record count) comes from the Kernel `secrets.status` Wire op on the packaged host."
+                style: "color:#998f87;font-size:0.75rem;margin:0;",
+                "There is no reveal operation: values never leave the store, so there is nothing to display here."
             }
         }
     }

@@ -373,6 +373,23 @@ name / id · vversion · trustState и несут Apply (96 px, `themes.activate
 locally-trusted, зеркало `THEME_VALUE`), `THEME_NOT_FOUND` для неизвестных id.
 Тест `themes_catalog_activate_deactivate_uninstall_over_product_wire`.
 
+## Секреты (Settings → SecretsTab)
+
+Вкладка Settings → Secrets читает `secrets.status` при открытии (React
+`useSecretsStatus`, `staleTime: 30_000`) и рендерит React `SecretsPanel`:
+заголовок + hint, карточку режима (`data-state=kind`: Portable encrypted /
+Machine-bound (environment) / Session-only / Secret storage unavailable с
+честными hints), флаги Persistent/Writable/Available/Stored records/Portable
+format (vN), locked-hint при `available=false && kind=portable`, кнопку
+«Lock now» (`data-part="lock-secrets"`) только для доступного portable-хранилища
+(React `canLock`) и no-reveal-ноту. Значения секретов никогда не рендерятся —
+DTO value-free по контракту. Lock (`secrets.lock`) перечитывает статус (React
+инвалидирует query) — хранилище честно показывает `available=false`; без
+подключённого хранилища (`kind == "unavailable"`) lock падает честным
+`CAPABILITY_UNAVAILABLE` (kernel `secrets.rs`), как fail-closed. FakeWire:
+статус portable (зеркало `SECRETS_STATUS_VALUE`) в demo(), unavailable в
+default(). Тест `secrets_status_and_lock_over_product_wire`.
+
 ## Отправка сообщения (Send)
 
 Композер (`data-part="composer"` в `product_chat_app`) получил кнопку **Send**

@@ -10,7 +10,7 @@ use std::cell::RefCell;
 
 use dioxus_core::Element;
 use dioxus_core_macro::rsx;
-use contracts_generated::generated::{MessageRole, PromptPlan};
+use contracts_generated::generated::{MessageRole, PromptPlan, ResultSecretsStatus};
 use neotavern_presentation_design_system::{
     SafeAreaInsets, phosphor_path, product_stylesheets_dev,
 };
@@ -351,6 +351,9 @@ pub struct ProductShellView {
     /// Theme the delete-confirm dialog asks about.
     pub theme_delete_open: bool,
     pub theme_delete_target_id: Option<String>,
+    /// Secret-store status (`secrets.status`; React `SecretsPanel`); `None`
+    /// = React loading state. The DTO is value-free by contract.
+    pub secrets_status: Option<ResultSecretsStatus>,
     pub plugins: Vec<PluginCardView>,
     pub providers: Vec<ProviderCardView>,
     pub presets: Vec<PresetCardView>,
@@ -447,6 +450,7 @@ impl Default for ProductShellView {
             themes: Vec::new(),
             theme_delete_open: false,
             theme_delete_target_id: None,
+            secrets_status: None,
             plugins: Vec::new(),
             providers: Vec::new(),
             presets: Vec::new(),
