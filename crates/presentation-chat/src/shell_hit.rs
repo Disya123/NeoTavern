@@ -113,6 +113,16 @@ pub enum ShellAction {
     /// `UnsupportedError('backgrounds.upload')` — the session mirrors that
     /// honest error instead of inventing a Wire op.
     UploadBackground,
+    /// Themes catalog (`themes.*`; React `ThemesPage` / Settings `ThemesTab`).
+    ActivateTheme(String),
+    UseBuiltInTheme,
+    /// React kernel plane rejects installs with
+    /// `UnsupportedError('themes.install.host-verify')` (host-side package
+    /// verification) — mirrored as an honest error, no invented Wire op.
+    InstallTheme,
+    OpenThemeDelete(String),
+    CloseThemeDelete,
+    ConfirmThemeDelete,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -213,6 +223,23 @@ fn header_bottom(view: &ProductShellView) -> f32 {
 fn dialog_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
     let (width, height) = css_size(view);
     let chat_x0 = chat_origin_x(view);
+    if view.theme_delete_open {
+        let dlg_w = 300.0_f32.min(width - 32.0);
+        let dlg_h = 200.0_f32.min(height - 48.0);
+        let x0 = chat_x0 + (width - chat_x0 - dlg_w).max(0.0) * 0.5;
+        let y0 = (height - dlg_h) * 0.5;
+        if !contains(x, y, x0, y0, x0 + dlg_w, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::CloseThemeDelete));
+        }
+        let actions_y = y0 + dlg_h - 56.0;
+        if contains(x, y, x0, actions_y, x0 + dlg_w * 0.5, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::CloseThemeDelete));
+        }
+        if contains(x, y, x0 + dlg_w * 0.5, actions_y, x0 + dlg_w, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::ConfirmThemeDelete));
+        }
+        return Some(ShellHit::Absorb);
+    }
     if view.chat_delete_open {
         let dlg_w = 300.0_f32.min(width - 32.0);
         let dlg_h = 200.0_f32.min(height - 48.0);
@@ -835,6 +862,67 @@ fn settings_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
     }
     if view.settings_tab == "profiles" {
         return profiles_hit(view, x, y, panel_x, x1, tabs_bottom);
+    }
+    if view.settings_tab == "themes" {
+        return themes_hit(view, x, y, panel_x, x1, tabs_bottom);
+    }
+    Some(ShellHit::Absorb)
+}
+
+/// React `ThemesTab` body: the install row (kernel plane rejects it with
+/// `CAPABILITY_UNAVAILABLE`), the honest host-verify note, the "Use built-in
+/// theme" row while a theme is active, then theme rows carrying
+/// Apply (96 px) / delete (44 px) in the right zone; an active row shows the
+/// badge and is inert.
+/// Geometry mirrors `settings_tab.rs::themes_tab` (label 16 + gap 8 → install
+/// row 36; note 32; built-in row 36; rows 64 + 4).
+fn themes_hit(
+    view: &ProductShellView,
+    x: f32,
+    y: f32,
+    panel_x: f32,
+    x1: f32,
+    tabs_bottom: f32,
+) -> Option<ShellHit> {
+    let pad = SPACE_LG;
+    let install_top = tabs_bottom + SPACE_XS + 12.0 + 16.0 + 8.0;
+    if y >= install_top && y < install_top + 36.0 {
+        if x >= panel_x + pad && x < x1 - pad {
+            return Some(ShellHit::Action(ShellAction::InstallTheme));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    let note_top = install_top + 36.0 + 8.0;
+    if y >= note_top && y < note_top + 32.0 {
+        return Some(ShellHit::Absorb);
+    }
+    let mut rows_top = note_top + 32.0 + 8.0;
+    if view.themes.iter().any(|item| item.active) {
+        let builtin_top = rows_top;
+        if y >= builtin_top && y < builtin_top + 36.0 {
+            if x >= x1 - pad - 168.0 && x < x1 - pad {
+                return Some(ShellHit::Action(ShellAction::UseBuiltInTheme));
+            }
+            return Some(ShellHit::Absorb);
+        }
+        rows_top = builtin_top + 36.0 + 8.0;
+    }
+    for (index, item) in view.themes.iter().enumerate() {
+        let y0 = rows_top + index as f32 * (64.0 + SPACE_XS);
+        if y < y0 || y >= y0 + 64.0 {
+            continue;
+        }
+        if item.active {
+            return Some(ShellHit::Absorb);
+        }
+        let id = item.id.clone();
+        if x >= x1 - pad - 96.0 && x < x1 - pad - 44.0 {
+            return Some(ShellHit::Action(ShellAction::ActivateTheme(id)));
+        }
+        if x >= x1 - pad - 44.0 && x < x1 - pad {
+            return Some(ShellHit::Action(ShellAction::OpenThemeDelete(id)));
+        }
+        return Some(ShellHit::Absorb);
     }
     Some(ShellHit::Absorb)
 }

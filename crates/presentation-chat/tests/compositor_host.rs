@@ -1135,6 +1135,89 @@ fn backgrounds_panel_is_honest_empty_and_upload_reports_capability_unavailable()
 }
 
 #[test]
+fn themes_catalog_activate_deactivate_uninstall_over_product_wire() {
+    use neotavern_presentation_chat::ShellAction;
+    let (mut session, _) = start_flagged_session(Some("1"), FakeWire::demo(), None, None)
+        .expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("settings".into()));
+    session.apply_shell_action(ShellAction::SetTab("themes".into()));
+    let shell = session.shell_view();
+    assert_eq!(shell.settings_tab, "themes");
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "themes.list"),
+        "opening the Themes tab loads the catalog"
+    );
+    assert_eq!(shell.themes.len(), 2);
+    assert!(shell.themes.iter().all(|item| !item.active));
+    let target = shell.themes[0].id.clone();
+    let target_name = shell.themes[0].name.clone();
+
+    // Activate -> wire response marks exactly one active; the shell root
+    // exposes the active id via data-theme-id.
+    session.apply_shell_action(ShellAction::ActivateTheme(target.clone()));
+    let shell = session.shell_view();
+    let active: Vec<_> = shell.themes.iter().filter(|item| item.active).collect();
+    assert_eq!(active.len(), 1);
+    assert_eq!(active[0].id, target);
+    assert!(
+        shell
+            .status_message
+            .as_deref()
+            .unwrap_or("")
+            .contains("Applied"),
+        "activate surfaces a toast"
+    );
+
+    // Built-in restore -> themes.deactivate clears the active flag.
+    session.apply_shell_action(ShellAction::UseBuiltInTheme);
+    let shell = session.shell_view();
+    assert!(shell.themes.iter().all(|item| !item.active));
+
+    // Delete: confirm dialog -> themes.uninstall removes the row.
+    session.apply_shell_action(ShellAction::ActivateTheme(target.clone()));
+    session.apply_shell_action(ShellAction::OpenThemeDelete(target.clone()));
+    assert!(session.shell_view().theme_delete_open);
+    session.apply_shell_action(ShellAction::ConfirmThemeDelete);
+    let shell = session.shell_view();
+    assert!(!shell.theme_delete_open);
+    assert!(
+        shell.themes.iter().all(|item| item.id != target),
+        "confirm delete removes the theme row"
+    );
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "themes.uninstall")
+    );
+    assert!(
+        session
+            .shell_view()
+            .status_message
+            .as_deref()
+            .unwrap_or("")
+            .contains(&target_name)
+    );
+
+    // Install stays a host-side capability: React kernel plane rejects it
+    // with UnsupportedError, so no themes.install wire op is issued.
+    session.apply_shell_action(ShellAction::InstallTheme);
+    assert_eq!(
+        session.shell_view().error_message.as_deref(),
+        Some("CAPABILITY_UNAVAILABLE")
+    );
+    assert!(
+        !session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "themes.install")
+    );
+}
+
+#[test]
 fn physical_window_insets_become_css_pixels_on_the_shell() {
     let (mut session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");

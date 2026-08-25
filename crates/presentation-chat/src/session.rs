@@ -25,6 +25,8 @@ use contracts_generated::generated::{
     decode_result_list_providers, decode_result_message_variant_list, decode_result_plugins_list,
     decode_result_profile_export, decode_result_profiles_create, decode_result_profiles_list,
     decode_result_settings, decode_result_snapshots_rollback, ProfilesItem, PromptPlan,
+    ResultThemesList, RequestThemesActivate, RequestThemesUninstall, ThemesItem,
+    decode_result_themes_list, decode_themes_item,
 };
 use neotavern_chat_viewport::{
     GeometrySnapshot, HeightIndex, HeightKind, LogicalItemId, PredictorBudgets, PresentDecision,
@@ -36,7 +38,7 @@ use neotavern_presentation_dioxus_shell::{
     LorebookCardView, LorebookEntryCardView, PersonaCardView, PluginCardView, PresetCardView,
     ProfileCardView,
     ProductChatView, ProductChrome, ProductShellView, ProviderCardView, RowKind, SafeAreaInsets,
-    VisibleRow, PRODUCT_PATH_VISIBLE,
+    ThemeCardView, VisibleRow, PRODUCT_PATH_VISIBLE,
 };
 
 use serde::de::DeserializeOwned;
@@ -173,6 +175,11 @@ pub struct ChatRouteState {
     pub prompt_plan_not_found: bool,
     /// Any other error renders inside the dialog (React `isError` state).
     pub prompt_plan_error: Option<String>,
+    /// Theme catalog (`themes.list`; React `ThemesPage` / Settings `ThemesTab`).
+    pub themes: Vec<ThemesItem>,
+    /// Theme the delete-confirm dialog asks about.
+    pub theme_delete_open: bool,
+    pub theme_delete_target_id: Option<String>,
     /// Composer context-meter popover visibility (`chat.composer.context`).
     pub context_panel_open: bool,
     /// Last applied Kernel stream envelope sequence (`EventEnvelope.sequence`).
@@ -1082,6 +1089,20 @@ impl<W: ProductWire> ChatSession<W> {
             prompt_plan: self.state.prompt_plan.clone(),
             prompt_plan_not_found: self.state.prompt_plan_not_found,
             prompt_plan_error: self.state.prompt_plan_error.clone(),
+            themes: self
+                .state
+                .themes
+                .iter()
+                .map(|row| ThemeCardView {
+                    id: row.id.clone(),
+                    name: row.name.clone(),
+                    version: row.version.clone(),
+                    active: row.active,
+                    trust_state: row.trust_state.clone(),
+                })
+                .collect(),
+            theme_delete_open: self.state.theme_delete_open,
+            theme_delete_target_id: self.state.theme_delete_target_id.clone(),
             plugins: self
                 .state
                 .plugins
@@ -1865,7 +1886,13 @@ impl<W: ProductWire> ChatSession<W> {
                     self.bump_scene();
                 }
                 "settings" => {
+                    let is_themes = tab == "themes";
                     self.state.settings_tab = tab;
+                    // React `ThemesTab` queries the catalog on mount: load it
+                    // when the tab opens so the list is real, not a stub.
+                    if is_themes {
+                        self.load_themes();
+                    }
                     self.bump_scene();
                 }
                 _ => self.set_character_tab(&tab),
@@ -2006,6 +2033,31 @@ impl<W: ProductWire> ChatSession<W> {
                 }));
                 self.bump_scene();
             }
+            ShellAction::ActivateTheme(id) => self.activate_theme(&id),
+            ShellAction::UseBuiltInTheme => self.use_builtin_theme(),
+            ShellAction::InstallTheme => {
+                // React kernel plane: `installTheme` rejects with
+                // `UnsupportedError('themes.install.host-verify')` — package
+                // verification is host-side, so no Wire op is invented here.
+                self.record_error(ChatRouteError::Product(ErrorDto {
+                    code: "CAPABILITY_UNAVAILABLE".into(),
+                    params: json!({ "operationId": "themes.install.host-verify" }),
+                    trace_id: None,
+                    correlation_id: None,
+                }));
+                self.bump_scene();
+            }
+            ShellAction::OpenThemeDelete(id) => {
+                self.state.theme_delete_target_id = Some(id);
+                self.state.theme_delete_open = true;
+                self.bump_scene();
+            }
+            ShellAction::CloseThemeDelete => {
+                self.state.theme_delete_open = false;
+                self.state.theme_delete_target_id = None;
+                self.bump_scene();
+            }
+            ShellAction::ConfirmThemeDelete => self.confirm_delete_theme(),
         }
     }
 
@@ -2913,6 +2965,80 @@ impl<W: ProductWire> ChatSession<W> {
         self.state.prompt_plan = None;
         self.state.prompt_plan_not_found = false;
         self.state.prompt_plan_error = None;
+        self.bump_scene();
+    }
+
+    /// Loads the theme catalog (`themes.list`; React `useThemes`).
+    pub fn load_themes(&mut self) {
+        match self.call_decode("themes.list", &RequestEmpty {}, decode_result_themes_list) {
+            Ok(result) => self.state.themes = result.items,
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    /// `themes.activate` (React `applyTheme(theme.id, theme.name)`); the wire
+    /// response is the item with `active: true`.
+    pub fn activate_theme(&mut self, id: &str) {
+        let name = self
+            .state
+            .themes
+            .iter()
+            .find(|row| row.id == id)
+            .map(|row| row.name.clone())
+            .unwrap_or_default();
+        match self.call_decode(
+            "themes.activate",
+            &RequestThemesActivate { id: id.to_string() },
+            decode_themes_item,
+        ) {
+            Ok(updated) => {
+                for row in self.state.themes.iter_mut() {
+                    row.active = row.id == updated.id;
+                }
+                self.state.status_message = Some(format!("Applied {name}."));
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    /// `themes.deactivate` — restore the built-in interface (React
+    /// `resetActiveTheme`).
+    pub fn use_builtin_theme(&mut self) {
+        match self.call_value("themes.deactivate", &RequestEmpty {}) {
+            Ok(_) => {
+                for row in self.state.themes.iter_mut() {
+                    row.active = false;
+                }
+                self.state.status_message = Some("Restored the built-in theme.".into());
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    fn confirm_delete_theme(&mut self) {
+        let Some(id) = self.state.theme_delete_target_id.clone() else {
+            self.state.theme_delete_open = false;
+            return;
+        };
+        let name = self
+            .state
+            .themes
+            .iter()
+            .find(|row| row.id == id)
+            .map(|row| row.name.clone())
+            .unwrap_or_default();
+        match self.call_value("themes.uninstall", &RequestThemesUninstall { id }) {
+            Ok(_) => {
+                self.state.theme_delete_open = false;
+                self.state.theme_delete_target_id = None;
+                self.load_themes();
+                self.state.status_message = Some(format!("Removed {name}."));
+            }
+            Err(err) => self.record_error(err),
+        }
         self.bump_scene();
     }
 

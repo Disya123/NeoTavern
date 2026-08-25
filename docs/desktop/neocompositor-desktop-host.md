@@ -351,6 +351,28 @@ Originals stay on this device.», empty state «No backgrounds yet», и **вк�
 недостижимы. Тест
 `backgrounds_panel_is_honest_empty_and_upload_reports_capability_unavailable`.
 
+## Темы (Settings → ThemesTab)
+
+Каталог тем живёт на Product Wire (`themes.list` / `activate` / `deactivate` /
+`uninstall`; React `ThemesPage` + Settings `ThemesTab`). Вкладка Settings →
+Themes теперь реальная: открытие вкладки грузит `themes.list`; строки тем
+(64 px, `data-part="theme-row"`, `data-state=active|inactive`) показывают
+name / id · vversion · trustState и несут Apply (96 px, `themes.activate`,
+ответ = ThemeDto с `active: true`) и delete (диалог 300×200,
+`themes.uninstall`, тост «Removed ….»); активная тема показывает бейдж Active и
+инертна; пока тема активна, над списком есть «Use built-in theme»
+(`themes.deactivate`, «Restored the built-in theme.»). Активный id прокидывается
+на корень шелла как `data-theme-id` (React `applyInstalledTheme` ставит
+`data-theme-id` на `<html>`); токены остаются на упакованной dark-теме — в этом
+порте нет механизма подмены `--st-*` переменных. Установка — host-side
+возможность: React kernel-плоскость отклоняет её `UnsupportedError
+('themes.install.host-verify')`, порт повторяет это честной ошибкой
+`CAPABILITY_UNAVAILABLE` (`ShellAction::InstallTheme`, без выдуманной
+`themes.install`-операции — она есть в реестре, но на этой плоскости не
+достижима). FakeWire: `themes` (wii-u-dark verified-publisher / kde-plasma
+locally-trusted, зеркало `THEME_VALUE`), `THEME_NOT_FOUND` для неизвестных id.
+Тест `themes_catalog_activate_deactivate_uninstall_over_product_wire`.
+
 ## Отправка сообщения (Send)
 
 Композер (`data-part="composer"` в `product_chat_app`) получил кнопку **Send**

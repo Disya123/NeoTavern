@@ -7,6 +7,7 @@ use contracts_generated::generated::{
     ResultListPresets, ResultListProviders, ResultMessageVariantList, ResultPluginsList,
     ResultProfileExport, ResultProfilesCreate, ResultProfilesList, ResultSettings,
     ResultSnapshotsRollback, SettingsItem, PromptBlock, PromptMessage, PromptPlan,
+    ResultThemesList, RequestThemesActivate, RequestThemesUninstall, ThemesItem,
 };
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -61,6 +62,9 @@ pub struct FakeWire {
     /// recorded when a generation starts, mirroring the kernel's
     /// `prompt_plans` table persistence.
     plans: HashMap<String, PromptPlan>,
+    /// Theme catalog (`themes.*`; React `ThemesPage` / Settings `ThemesTab`).
+    /// The built-in interface is not a row: no row active = built-in.
+    themes: Vec<ThemesItem>,
     cursors: HashMap<String, CursorCut>,
     fail_ops: HashSet<String>,
     next: u64,
@@ -120,6 +124,7 @@ impl Default for FakeWire {
             ],
             streams: HashMap::new(),
             plans: HashMap::new(),
+            themes: Vec::new(),
             cursors: HashMap::new(),
             fail_ops: HashSet::new(),
             next: 0x9000,
@@ -206,6 +211,35 @@ impl FakeWire {
         };
         wire.profiles.insert(wire_id(0x51), profile(0x51, "Main"));
         wire.profiles.insert(wire_id(0x52), profile(0x52, "Caravan"));
+        // Demo theme catalog (React `ThemesPage`): two installed themes, none
+        // active — the built-in interface is the no-row state. `wii-u-dark`
+        // mirrors the wire registry fixture (`THEME_VALUE`).
+        let theme = |id_high: u64, id: &str, name: &str, version: &str, trust: &str| ThemesItem {
+            id: id.into(),
+            name: name.into(),
+            version: version.into(),
+            active: false,
+            trust_state: trust.into(),
+            publisher_key_id: None,
+            css_asset_id: Some(wire_id(id_high)),
+            installed_at: TS.into(),
+            updated_at: TS.into(),
+            manifest: None,
+        };
+        wire.themes.push(theme(
+            0x7101,
+            "wii-u-dark",
+            "Wii U Dark",
+            "2.0.1",
+            "verified-publisher",
+        ));
+        wire.themes.push(theme(
+            0x7102,
+            "kde-plasma",
+            "KDE Plasma",
+            "1.4.0",
+            "locally-trusted",
+        ));
         wire
     }
 
@@ -839,6 +873,41 @@ impl ProductWire for FakeWire {
                     Self::product("PROMPT_PLAN_NOT_FOUND", "runId", &run_id)
                 })?;
                 self.wrap_call(operation_id, to_value(&plan))
+            }
+            "themes.list" => {
+                let result = ResultThemesList {
+                    items: self.themes.clone(),
+                };
+                self.wrap_call(operation_id, to_value(&result))
+            }
+            "themes.activate" => {
+                let req: RequestThemesActivate = serde_json::from_value(payload.clone())?;
+                let mut updated = self
+                    .themes
+                    .iter()
+                    .find(|item| item.id == req.id)
+                    .cloned()
+                    .ok_or_else(|| Self::product("THEME_NOT_FOUND", "themeId", &req.id))?;
+                for item in self.themes.iter_mut() {
+                    item.active = item.id == req.id;
+                }
+                updated.active = true;
+                self.wrap_call(operation_id, to_value(&updated))
+            }
+            "themes.deactivate" => {
+                for item in self.themes.iter_mut() {
+                    item.active = false;
+                }
+                self.ok_call(operation_id, json!({}))
+            }
+            "themes.uninstall" => {
+                let req: RequestThemesUninstall = serde_json::from_value(payload.clone())?;
+                let before = self.themes.len();
+                self.themes.retain(|item| item.id != req.id);
+                if self.themes.len() == before {
+                    return Err(Self::product("THEME_NOT_FOUND", "themeId", &req.id));
+                }
+                self.ok_call(operation_id, json!({}))
             }
             "characters.create" => {
                 let created = self.create_character(&payload)?;

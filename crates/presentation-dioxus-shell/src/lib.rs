@@ -37,7 +37,8 @@ pub use product_shell::{
     CharacterCardView, CharacterDraftView, ChatCardView, LOREBOOK_MANAGER_TITLE, LorebookCardView,
     LorebookEntryCardView, PERSONA_MANAGER_TITLE, PLUGINS_MANAGER_TITLE, PersonaCardView,
     PluginCardView, PresetCardView, ProductShellView, ProfileCardView, ProviderCardView,
-    SETTINGS_TITLE, character_card_description, character_manager_title, current_product_shell,
+    SETTINGS_TITLE, ThemeCardView, character_card_description, character_manager_title,
+    current_product_shell,
     ellipsize_css, install_product_shell, lorebook_card_description, panel_header_title,
     persona_card_description, product_shell_app,
 };

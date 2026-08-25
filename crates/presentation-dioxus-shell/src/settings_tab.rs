@@ -124,37 +124,104 @@ fn general_tab(view: &ProductShellView) -> Element {
     }
 }
 
-/// React `ThemesTab`: the theme picker + the package install + the manager
-/// link. The fixture plane has no theme catalog Wire surface, so the select
-/// honestly offers only the built-in theme and install stays a labeled
-/// control without a file dialog (the packaged host owns the picker).
-fn themes_tab(_view: &ProductShellView) -> Element {
+/// React `ThemesTab` / `ThemesPage` catalog over Product Wire
+/// (`themes.list` / `activate` / `deactivate` / `uninstall`). The install row
+/// stays a labeled control without a file dialog — the packaged host owns the
+/// picker and verification, so the kernel plane rejects installs with
+/// `CAPABILITY_UNAVAILABLE` (React `UnsupportedError('themes.install.host-verify')`).
+/// Geometry mirrors `shell_hit.rs::themes_hit` (label 16 + gap 8 → install
+/// row 36; note 32; built-in row 36; rows 64 + 4).
+fn themes_tab(view: &ProductShellView) -> Element {
+    let active = view.themes.iter().find(|item| item.active);
     rsx! {
         div {
             class: "SettingsPanel_section",
             "data-part": "theme-settings",
-            style: "padding:12px 16px;display:flex;flex-direction:column;gap:12px;",
+            style: "padding:12px 16px;display:flex;flex-direction:column;gap:8px;",
             label {
                 class: "SettingsPanel_field",
+                style: "line-height:16px;",
                 span { "Select theme" }
-                strong { "Built-in theme" }
             }
             button {
                 class: "st-button",
                 r#type: "button",
                 "data-component": "button",
                 "data-variant": "primary",
+                "data-part": "themes-install",
+                style: "height:36px;",
                 span { "data-part": "icon", "aria-hidden": "true", {icon_fill("DownloadSimple", 18, "#2a130b")} }
                 span { "data-part": "label", "Install theme package (.zip / .sttheme)" }
             }
             p {
-                style: "color:#998f87;font-size:0.75rem;",
-                "Theme packages install through the packaged desktop host; this surface lists the built-in theme until the theme catalog Wire op is wired."
+                style: "color:#998f87;font-size:0.75rem;margin:0;height:32px;line-height:16px;",
+                "Package verification and CSS publishing run on the packaged desktop host; this plane cannot install a theme package."
             }
-            div {
-                class: "SettingsPanel_field",
-                span { "Theme manager" }
-                strong { "Themes surface opens from the plugins rail entry" }
+            if active.is_some() {
+                button {
+                    class: "st-button",
+                    r#type: "button",
+                    "data-component": "button",
+                    "data-variant": "default",
+                    "data-size": "sm",
+                    "data-part": "themes-use-builtin",
+                    style: "height:36px;",
+                    span { "data-part": "label", "Use built-in theme" }
+                }
+            }
+            if view.themes.is_empty() {
+                p { style: "color:#998f87;font-size:0.8125rem;margin:8px 0 0;", "No custom themes installed." }
+            } else {
+                ul {
+                    class: "SettingsPanel_themes",
+                    style: "list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;",
+                    for item in view.themes.iter() {
+                        li {
+                            class: "SettingsPanel_themeRow",
+                            "data-part": "theme-row",
+                            "data-state": if item.active { "active" } else { "inactive" },
+                            style: "display:flex;align-items:center;gap:8px;height:64px;box-sizing:border-box;padding:0 8px;border:1px solid #39342f;border-radius:16px;background:#24211e;",
+                            span {
+                                style: "flex:none;width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:#39342f;color:#f3eee8;",
+                                {icon("Palette", 20)}
+                            }
+                            span {
+                                style: "flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;",
+                                strong { style: "color:#f3eee8;font-size:0.8125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;", "{item.name}" }
+                                small { style: "color:#998f87;font-size:0.6875rem;", "{item.id} · v{item.version} · {item.trust_state}" }
+                            }
+                            if item.active {
+                                span {
+                                    style: "flex:none;display:flex;align-items:center;gap:4px;color:#e38a62;font-size:0.6875rem;font-weight:600;text-transform:uppercase;",
+                                    {icon_fill("CheckCircle", 14, "#e38a62")}
+                                    "Active"
+                                }
+                            } else {
+                                div {
+                                    style: "flex:none;display:flex;align-items:center;gap:4px;",
+                                    button {
+                                        class: "st-button",
+                                        r#type: "button",
+                                        "data-component": "button",
+                                        "data-size": "sm",
+                                        "data-part": "theme-apply",
+                                        style: "flex:none;width:96px;height:36px;",
+                                        span { "data-part": "label", "Apply" }
+                                    }
+                                    button {
+                                        class: "SettingsPanel_profileActionDanger",
+                                        r#type: "button",
+                                        "data-part": "theme-delete",
+                                        "aria-label": "Delete theme",
+                                        title: "Delete theme",
+                                        style: "display:grid;width:44px;height:44px;place-items:center;border:1px solid transparent;border-radius:10px;color:#998f87;background:transparent;",
+                                        {icon_fill("Trash", 16, "#998f87")}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }

@@ -207,6 +207,18 @@ pub struct ChatCardView {
     pub character_label: String,
 }
 
+/// Installed theme row (React `ThemesPage` theme-card / Settings `ThemesTab`
+/// picker); `themes.list` over the wire, `active` drives the badge and the
+/// Apply / Use-built-in actions.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ThemeCardView {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub active: bool,
+    pub trust_state: String,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct PanelTab {
     pub id: &'static str,
@@ -334,6 +346,11 @@ pub struct ProductShellView {
     pub prompt_plan_not_found: bool,
     /// Any other error renders inside the dialog (React `isError` state).
     pub prompt_plan_error: Option<String>,
+    /// Theme catalog (`themes.list`; React `ThemesPage` / Settings `ThemesTab`).
+    pub themes: Vec<ThemeCardView>,
+    /// Theme the delete-confirm dialog asks about.
+    pub theme_delete_open: bool,
+    pub theme_delete_target_id: Option<String>,
     pub plugins: Vec<PluginCardView>,
     pub providers: Vec<ProviderCardView>,
     pub presets: Vec<PresetCardView>,
@@ -427,6 +444,9 @@ impl Default for ProductShellView {
             prompt_plan: None,
             prompt_plan_not_found: false,
             prompt_plan_error: None,
+            themes: Vec::new(),
+            theme_delete_open: false,
+            theme_delete_target_id: None,
             plugins: Vec::new(),
             providers: Vec::new(),
             presets: Vec::new(),
@@ -1933,6 +1953,14 @@ let entry_delete_book_name = entry_dialog_book_name;
     let profile_delete_style = format!(
         "position:absolute;left:{pdlg_x}px;top:{pdlg_y}px;width:{pdlg_w}px;height:{pdlg_h}px;box-sizing:border-box;z-index:50;padding:16px;color:#f3eee8;"
     );
+    let theme_delete_name = view
+        .themes
+        .iter()
+        .find(|item| Some(item.id.as_str()) == view.theme_delete_target_id.as_deref())
+        .map(|item| item.name.as_str())
+        .unwrap_or("");
+    let theme_delete_confirm =
+        format!("Remove \"{theme_delete_name}\" and its local theme files?");
     let profile_delete_name = view
         .profiles
         .iter()
@@ -2005,6 +2033,11 @@ let entry_delete_book_name = entry_dialog_book_name;
             "data-component": "app-shell",
             "data-slot": "app.shell",
             "data-theme-mode": "dark",
+            "data-theme-id": if let Some(active) = view.themes.iter().find(|item| item.active) {
+                Some(active.id.as_str())
+            } else {
+                None
+            },
             "data-dir": "{view.dir}",
             "data-lang": "{view.language}",
             "data-sidebar": "{sidebar_state}",
@@ -2364,6 +2397,33 @@ let entry_delete_book_name = entry_dialog_book_name;
                         "Delete profile"
                     }
                     div { "data-component": "dialog-description", "{profile_delete_confirm}" }
+                    div {
+                        class: "CharacterManagementPanel_dialogActions",
+                        style: "display:flex;gap:8px;justify-content:flex-end;margin-top:12px;",
+                        button {
+                            r#type: "button",
+                            "data-variant": "default",
+                            "data-size": "md",
+                            span { "Cancel" }
+                        }
+                        button {
+                            r#type: "button",
+                            "data-variant": "danger",
+                            "data-size": "md",
+                            span { "Delete" }
+                        }
+                    }
+                }
+            }
+            if view.theme_delete_open {
+                div {
+                    class: "st-card",
+                    style: "{profile_delete_style}",
+                    div {
+                        "data-component": "dialog-title",
+                        "Remove theme"
+                    }
+                    div { "data-component": "dialog-description", "{theme_delete_confirm}" }
                     div {
                         class: "CharacterManagementPanel_dialogActions",
                         style: "display:flex;gap:8px;justify-content:flex-end;margin-top:12px;",

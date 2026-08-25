@@ -3,6 +3,20 @@
 ## Unreleased
 ### Added
 
+- **Темы (перенос Settings ThemesTab, themes.* Wire-операции).** Вкладка
+  Settings → Themes грузит `themes.list` при открытии; строки тем (name / id ·
+  vversion · trustState, `data-part="theme-row"`) несут Apply
+  (`themes.activate`, ответ ThemeDto с active: true, бейдж Active, тост
+  «Applied ….»), delete (диалог 300×200, `themes.uninstall`, тост «Removed
+  ….», `THEME_NOT_FOUND` для неизвестных id) и «Use built-in theme»
+  (`themes.deactivate`, «Restored the built-in theme.»). Активный id — на
+  корне шелла как `data-theme-id` (как React на `<html>`). Установка —
+  host-side: React kernel-плоскость отклоняет `UnsupportedError
+  ('themes.install.host-verify')`, порт повторяет честной `CAPABILITY_UNAVAILABLE`
+  без выдуманной операции. FakeWire: каталог `themes` (wii-u-dark /
+  kde-plasma). Новый cargo-тест
+  `themes_catalog_activate_deactivate_uninstall_over_product_wire`.
+
 - **Backgrounds (перенос BackgroundsPanel, kernel-плоскость).** У фонов нет
   Product Wire-операций — каталог живёт на legacy-контуре `/api/v2/backgrounds`,
   kernel-плоскость честно пуста (React `useBackgrounds` → `{ items: [] }`).
