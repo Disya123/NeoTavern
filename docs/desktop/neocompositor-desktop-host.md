@@ -335,6 +335,22 @@ Context limit), over-budget-алерт, секции System blocks / Selected me
 при старте генерации (зеркало kernel `prompt_plans`), `chats.delete` чистит
 планы чата. Тест `prompt_plan_over_product_wire`.
 
+## Фоны (BackgroundsPanel)
+
+У фонов нет Product Wire-операций: kernel-плоскость честно пуста (React
+`useBackgrounds` возвращает `{ items: [] }`, upload/delete — `UnsupportedError`),
+а каталог живёт на legacy-контуре `/api/v2/backgrounds` (docs/api/README.md).
+Панель поэтому — честное пустое состояние React: hint «PNG, JPEG, WebP or GIF.
+Originals stay on this device.», empty state «No backgrounds yet», и **включённая**
+кнопка «Upload background» (`data-part="backgrounds-upload"`, variant primary) —
+как в React: нажатие не выдумывает Wire-операцию, а повторяет kernel-plane
+`UnsupportedError('backgrounds.upload')` → `CAPABILITY_UNAVAILABLE`
+(`ShellAction::UploadBackground` + `backgrounds_hit`). Сам wallpaper-слой
+(`data-part="chat-wallpaper"`) уже рендерится в legacy-хроме workspace
+(прозрачный — изображения нет); apply/delete/context menu при пустом каталоге
+недостижимы. Тест
+`backgrounds_panel_is_honest_empty_and_upload_reports_capability_unavailable`.
+
 ## Отправка сообщения (Send)
 
 Композер (`data-part="composer"` в `product_chat_app`) получил кнопку **Send**

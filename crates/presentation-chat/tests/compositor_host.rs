@@ -1106,6 +1106,35 @@ fn prompt_plan_over_product_wire() {
 }
 
 #[test]
+fn backgrounds_panel_is_honest_empty_and_upload_reports_capability_unavailable() {
+    use neotavern_presentation_chat::ShellAction;
+    let (mut session, _) = start_flagged_session(Some("1"), FakeWire::demo(), None, None)
+        .expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("backgrounds".into()));
+    let shell = session.shell_view();
+    assert_eq!(shell.panel, "backgrounds");
+    assert!(shell.sidebar_open);
+    // The kernel plane has no wallpaper catalog: the panel issues no wire op
+    // (React `useBackgrounds` returns an honest empty list).
+    assert!(
+        !session
+            .issued_commands()
+            .iter()
+            .any(|op| op.starts_with("backgrounds")),
+        "no backgrounds wire op exists"
+    );
+    // Upload mirrors the React kernel plane: `UnsupportedError` surfaces as
+    // the CAPABILITY_UNAVAILABLE error code, not a fake dialog or op.
+    session.apply_shell_action(ShellAction::UploadBackground);
+    assert_eq!(
+        session.shell_view().error_message.as_deref(),
+        Some("CAPABILITY_UNAVAILABLE")
+    );
+    session.apply_shell_action(ShellAction::ClosePanel);
+    assert!(!session.shell_view().sidebar_open);
+}
+
+#[test]
 fn physical_window_insets_become_css_pixels_on_the_shell() {
     let (mut session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");

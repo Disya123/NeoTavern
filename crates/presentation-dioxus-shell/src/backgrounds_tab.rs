@@ -2,7 +2,10 @@
 //!
 //! Kernel plane has no wallpaper catalog (React `useBackgrounds` returns an
 //! honest empty list). This surface states that emptiness; it does not call a
-//! non-existent Product Wire op.
+//! non-existent Product Wire op. The upload button stays enabled exactly like
+//! React's kernel-plane button: pressing it surfaces the honest
+//! `UnsupportedError('backgrounds.upload')` → `CAPABILITY_UNAVAILABLE`
+//! (mirrored in `ShellAction::UploadBackground`), instead of a fake dialog.
 
 use dioxus_core::Element;
 use dioxus_core_macro::rsx;
@@ -31,8 +34,8 @@ pub fn backgrounds_panel(view: &ProductShellView) -> Element {
                     class: "st-button",
                     r#type: "button",
                     "data-component": "button",
-                    "data-variant": "default",
-                    disabled: true,
+                    "data-variant": "primary",
+                    "data-part": "backgrounds-upload",
                     span { "data-part": "icon", "aria-hidden": "true", {icon_fill("UploadSimple", 18, "#998f87")} }
                     span { "data-part": "label", "Upload background" }
                 }

@@ -3,6 +3,18 @@
 ## Unreleased
 ### Added
 
+- **Backgrounds (перенос BackgroundsPanel, kernel-плоскость).** У фонов нет
+  Product Wire-операций — каталог живёт на legacy-контуре `/api/v2/backgrounds`,
+  kernel-плоскость честно пуста (React `useBackgrounds` → `{ items: [] }`).
+  Панель повторяет это честное пустое состояние: hint, «No backgrounds yet» и
+  включённая кнопка «Upload background» (`data-part="backgrounds-upload"`,
+  variant primary), нажатие которой повторяет kernel-plane
+  `UnsupportedError('backgrounds.upload')` → `CAPABILITY_UNAVAILABLE`
+  (`ShellAction::UploadBackground`, `backgrounds_hit`), без выдуманной
+  Wire-операции. Wallpaper-слой `data-part="chat-wallpaper"` уже в legacy-хроме.
+  Новый cargo-тест
+  `backgrounds_panel_is_honest_empty_and_upload_reports_capability_unavailable`.
+
 - **PromptPlanPanel (перенос): план генерации через `generation.prompt.plan`.**
   Trigger — per-message footer-действие «Prompt plan» (TextAlignLeft) на строках
   с `generation_run_id` (React гейтится по `meta.generationRunId`); кнопка

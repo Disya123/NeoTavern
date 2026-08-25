@@ -108,6 +108,11 @@ pub enum ShellAction {
     /// triggered from the per-message footer action).
     OpenPromptPlan(String),
     ClosePromptPlan,
+    /// Backgrounds panel upload button: the kernel plane has no wallpaper
+    /// catalog, so React `useUploadBackground` rejects with
+    /// `UnsupportedError('backgrounds.upload')` — the session mirrors that
+    /// honest error instead of inventing a Wire op.
+    UploadBackground,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -634,6 +639,9 @@ pub fn hit_test(view: &ProductShellView, css_x: f32, css_y: f32) -> Option<Shell
             "plugins" => {
                 return plugins_hit(view, x, y);
             }
+            "backgrounds" => {
+                return backgrounds_hit(view, x, y);
+            }
             _ => {
                 let header_end = header_bottom(view);
                 if y < header_end && x >= panel_x + panel_w - CONTROL_SM - SPACE_LG {
@@ -943,6 +951,41 @@ fn plugins_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
             return Some(ShellHit::Action(ShellAction::OpenPluginUninstall(id)));
         }
         return Some(ShellHit::Absorb);
+    }
+    Some(ShellHit::Absorb)
+}
+
+/// Backgrounds panel: header close button plus the upload button in the
+/// empty state. There is no catalog to hit-test: the kernel plane honestly
+/// lists zero wallpapers (React `useBackgrounds`), so the gallery body is
+/// Absorb and the upload button maps to the honest `CAPABILITY_UNAVAILABLE`
+/// error.
+fn backgrounds_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
+    if !view.sidebar_open {
+        return None;
+    }
+    let (panel_x, panel_w) = panel_origin(view);
+    let x1 = panel_x + panel_w;
+    if x < panel_x || x >= x1 {
+        return None;
+    }
+    let header_end = header_bottom(view);
+    if y < header_end {
+        if x >= x1 - CONTROL_SM - SPACE_LG {
+            return Some(ShellHit::Action(ShellAction::ClosePanel));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    // Upload button: centered in the empty-state block under the hint
+    // (hint 8+20+8, empty state starts 16 below, button ~36px tall).
+    let button_top = header_end + 124.0;
+    let button_h = 36.0;
+    if y >= button_top && y < button_top + button_h {
+        let button_w = 168.0;
+        let button_x0 = x1 - SPACE_LG - button_w;
+        if x >= button_x0 && x < x1 - SPACE_LG {
+            return Some(ShellHit::Action(ShellAction::UploadBackground));
+        }
     }
     Some(ShellHit::Absorb)
 }

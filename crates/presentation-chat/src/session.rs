@@ -1995,6 +1995,17 @@ impl<W: ProductWire> ChatSession<W> {
             ShellAction::ConfirmChatDelete => self.confirm_delete_chat(),
             ShellAction::OpenPromptPlan(run_id) => self.open_prompt_plan(&run_id),
             ShellAction::ClosePromptPlan => self.close_prompt_plan(),
+            ShellAction::UploadBackground => {
+                // Kernel plane has no wallpaper catalog: React
+                // `useUploadBackground` rejects with `UnsupportedError`.
+                self.record_error(ChatRouteError::Product(ErrorDto {
+                    code: "CAPABILITY_UNAVAILABLE".into(),
+                    params: json!({ "operationId": "backgrounds.upload" }),
+                    trace_id: None,
+                    correlation_id: None,
+                }));
+                self.bump_scene();
+            }
         }
     }
 
