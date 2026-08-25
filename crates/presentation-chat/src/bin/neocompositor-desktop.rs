@@ -61,6 +61,7 @@ enum TextFocus {
     MemoryContent,
     MemoryKeys,
     PresetName,
+    ProviderName,
 }
 
 /// One scripted probe step, replayed in argument order so
@@ -481,6 +482,8 @@ impl App {
             focus = TextFocus::MemoryKeys;
         } else if rects.covers(css_x, css_y, "part:preset-name-input") {
             focus = TextFocus::PresetName;
+        } else if rects.covers(css_x, css_y, "part:provider-name-input") {
+            focus = TextFocus::ProviderName;
         }
         self.focus = focus;
     }
@@ -789,6 +792,12 @@ impl App {
                 self.session.set_preset_name_draft(&next);
                 eprintln!("[neocompositor-desktop] typed '{ch}' -> preset_name=\"{next}\"");
             }
+            TextFocus::ProviderName => {
+                let current = self.session.shell_view().provider_name_draft.clone();
+                let next = format!("{current}{ch}");
+                self.session.set_provider_name_draft(&next);
+                eprintln!("[neocompositor-desktop] typed '{ch}' -> provider_name=\"{next}\"");
+            }
             TextFocus::None => return,
         }
         self.dirty = true;
@@ -808,6 +817,7 @@ impl App {
             TextFocus::MemoryContent => self.session.shell_view().memory_draft_content.clone(),
             TextFocus::MemoryKeys => self.session.shell_view().memory_draft_keys.clone(),
             TextFocus::PresetName => self.session.shell_view().preset_name_draft.clone(),
+            TextFocus::ProviderName => self.session.shell_view().provider_name_draft.clone(),
             TextFocus::None => return,
         };
         let next: String = current
@@ -827,6 +837,7 @@ impl App {
             TextFocus::MemoryContent => self.session.set_memory_draft_content(&next),
             TextFocus::MemoryKeys => self.session.set_memory_draft_keys(&next),
             TextFocus::PresetName => self.session.set_preset_name_draft(&next),
+            TextFocus::ProviderName => self.session.set_provider_name_draft(&next),
             TextFocus::None => {}
         }
         self.dirty = true;

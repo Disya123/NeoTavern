@@ -5,7 +5,7 @@ use dioxus_core::Element;
 use dioxus_core_macro::rsx;
 
 use crate::product_shell::{
-    icon, management_shell, PanelTab, PresetValueRow, ProductShellView, AI_SETTINGS_TITLE,
+    management_shell, PanelTab, PresetValueRow, ProductShellView, AI_SETTINGS_TITLE,
 };
 
 pub fn ai_settings_panel(view: &ProductShellView) -> Element {
@@ -44,28 +44,69 @@ pub fn ai_settings_panel(view: &ProductShellView) -> Element {
     )
 }
 
+/// React `ProviderProfileEditor` (API tab) over `providers.config.*`:
+/// connection profiles (name, provider, honest "API key saved/not set" — the
+/// key value never leaves SecretStore), a New profile dialog
+/// (`providers.config.set` upsert), per-row delete, then the registered
+/// adapters from `providers.list` as read-only rows. Model discovery stays
+/// UnsupportedError on React's kernel plane and is not ported.
+/// Geometry mirrors `shell_hit.rs::providers_hit`: profiles section (label 20
+/// + new button 36 + rows 64+4), gap 8, adapters section (label 20 + rows
+/// 60+4); body padding 12 + heading 20 + hint 16.
 fn providers_tab(view: &ProductShellView) -> Element {
-    let empty = view.providers.is_empty();
+    let adapter_empty = view.providers.is_empty();
     rsx! {
         div {
             class: "AiSettings_tabBody",
             "data-part": "ai-providers",
-            if empty {
+            style: "padding:12px 16px;display:flex;flex-direction:column;gap:8px;",
+            strong { style: "font-size:0.9375rem;height:20px;", "Provider profiles" }
+            button {
+                class: "st-button", r#type: "button",
+                "data-variant": "primary",
+                "data-part": "provider-new",
+                style: "width:140px;height:36px;",
+                span { "New profile" }
+            }
+            if view.provider_configs.is_empty() {
+                p { style: "margin:0;color:#998f87;font-size:0.75rem;", "No connection profiles yet." }
+            } else {
                 div {
-                    class: "AiSettings_emptyState",
-                    {icon("Globe", 32)}
-                    strong { "No providers configured" }
-                    p { "Provider adapters are listed through Product Wire providers.list. Secrets stay in SecretStore and never enter this surface." }
+                    class: "AiSettings_providerList",
+                    for item in view.provider_configs.iter() {
+                        div {
+                            class: "AiSettings_profileRow",
+                            "data-component": "provider-config-row",
+                            "data-part": "provider-profile-row",
+                            "data-state": if Some(item.id.as_str()) == view.selected_provider_id.as_deref() { "active" } else { "idle" },
+                            style: "display:flex;align-items:center;gap:8px;width:100%;height:64px;box-sizing:border-box;padding:0 12px;border:1px solid #39342f;border-radius:16px;background:#24211e;color:#f3eee8;",
+                            span {
+                                style: "flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;",
+                                strong { style: "font-size:0.8125rem;", "{item.name}" }
+                                span { style: "color:#998f87;font-size:0.6875rem;", "{item.detail}" }
+                            }
+                            button {
+                                class: "st-button", r#type: "button",
+                                "data-variant": "danger",
+                                "data-part": "provider-profile-delete",
+                                style: "width:96px;height:36px;flex:none;",
+                                span { "Delete" }
+                            }
+                        }
+                    }
                 }
+            }
+            strong { style: "font-size:0.9375rem;height:20px;margin-top:8px;", "Adapters" }
+            p { style: "margin:0;color:#998f87;font-size:0.75rem;height:16px;", "Registered provider adapters come from Product Wire providers.list." }
+            if adapter_empty {
+                p { style: "margin:0;color:#998f87;font-size:0.75rem;", "No adapters configured." }
             } else {
                 div {
                     class: "AiSettings_providerList",
                     for item in view.providers.iter() {
-                        button {
+                        div {
                             class: "AiSettings_providerCard",
-                            r#type: "button",
-                            "data-part": "provider-card",
-                            "data-state": if Some(item.id.as_str()) == view.selected_provider_id.as_deref() { "active" } else { "idle" },
+                            "data-part": "adapter-row",
                             style: "display:flex;align-items:center;gap:8px;width:100%;height:60px;box-sizing:border-box;padding:0 12px;border:1px solid #39342f;border-radius:16px;background:#24211e;color:#f3eee8;",
                             span {
                                 style: "flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;",

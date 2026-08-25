@@ -34,6 +34,9 @@ use contracts_generated::generated::{
     MemoryDto, MemoryScope, RequestListMemories, RequestCreateMemory, RequestUpdateMemory,
     RequestDeleteMemory, decode_result_list_memories, decode_memory_dto,
     PresetDto, RequestCreatePreset, RequestUpdatePreset, RequestDeletePreset, decode_preset_dto,
+    ProviderConfigDto, RequestListProviderConfigs, RequestSetProviderConfig,
+    RequestDeleteProviderConfig, decode_result_list_provider_configs,
+    decode_provider_config_dto,
 };
 use neotavern_chat_viewport::{
     GeometrySnapshot, HeightIndex, HeightKind, LogicalItemId, PredictorBudgets, PresentDecision,
@@ -47,6 +50,7 @@ use neotavern_presentation_dioxus_shell::{
     ProductChatView, ProductChrome, ProductShellView, ProviderCardView, RowKind, SafeAreaInsets,
     ThemeCardView, ToolCardView, VisibleRow, PRODUCT_PATH_VISIBLE,
     BackupCardView, MemoryCardView, PresetValueRow,
+    ProviderConfigCardView,
 };
 
 use serde::de::DeserializeOwned;
@@ -186,6 +190,17 @@ pub struct ChatRouteState {
     pub plugins: Vec<PluginsItem>,
     pub providers: Vec<ProviderCardView>,
     pub presets: Vec<PresetDto>,
+    /// Provider connection profiles (`providers.config.list`; React
+    /// `ProviderProfileEditor` on the kernel plane). Keyed by
+    /// `(provider, name)` on the wire.
+    pub provider_configs: Vec<ProviderConfigDto>,
+    /// New-profile dialog state: kind cycle (React uses a `<select>`) and
+    /// the profile name input.
+    pub provider_create_dialog_open: bool,
+    pub provider_kind_index: usize,
+    pub provider_name_draft: String,
+    pub provider_form_error: Option<String>,
+    pub provider_delete_target_id: Option<String>,
     /// Generation draft applied through `settings.update` (React
     /// `GenerationPresetEditor`): context size plus the sampler defaults,
     /// kept as the contract JSON.
@@ -1188,6 +1203,29 @@ impl<W: ProductWire> ChatSession<W> {
             theme_delete_target_id: self.state.theme_delete_target_id.clone(),
             secrets_status: self.state.secrets_status.clone(),
             selected_provider_id: self.state.active_provider_id.clone(),
+            provider_configs: self
+                .state
+                .provider_configs
+                .iter()
+                .map(|item| ProviderConfigCardView {
+                    id: item.id.clone(),
+                    name: item.name.clone(),
+                    detail: format!(
+                        "{} · API key {}",
+                        item.provider,
+                        if item.has_api_key { "saved" } else { "not set" }
+                    ),
+                })
+                .collect(),
+            provider_create_dialog_open: self.state.provider_create_dialog_open,
+            provider_kind_label: self
+                .state
+                .providers
+                .get(self.state.provider_kind_index)
+                .map(|item| item.name.clone()),
+            provider_name_draft: self.state.provider_name_draft.clone(),
+            provider_form_error: self.state.provider_form_error.clone(),
+            provider_delete_target_id: self.state.provider_delete_target_id.clone(),
             selected_preset_id: self.state.active_preset_id.clone(),
             preset_rows: self.preset_value_rows(),
             preset_active_name: self
@@ -1702,7 +1740,10 @@ impl<W: ProductWire> ChatSession<W> {
             "personas" => self.load_personas(),
             "lorebooks" => self.load_lorebooks(),
             "plugins" => self.load_plugins(),
-            "providers" => self.load_ai_settings(),
+            "providers" => {
+                self.load_ai_settings();
+                self.load_provider_configs();
+            }
             "settings" => {
                 self.load_settings();
                 self.load_profiles();
@@ -2290,6 +2331,13 @@ impl<W: ProductWire> ChatSession<W> {
             ShellAction::PresetDeleteOpen => self.open_preset_delete(),
             ShellAction::PresetDeleteClose => self.close_preset_delete(),
             ShellAction::PresetDeleteConfirm => self.confirm_preset_delete(),
+            ShellAction::ProviderCreateOpen => self.open_provider_create(),
+            ShellAction::ProviderCreateClose => self.close_provider_create(),
+            ShellAction::ProviderCycleKind => self.cycle_provider_kind(),
+            ShellAction::ProviderCreateSubmit => self.confirm_provider_create(),
+            ShellAction::ProviderDeleteOpen(id) => self.open_provider_delete(&id),
+            ShellAction::ProviderDeleteClose => self.close_provider_delete(),
+            ShellAction::ProviderDeleteConfirm => self.confirm_provider_delete(),
         }
     }
 
@@ -3608,6 +3656,151 @@ impl<W: ProductWire> ChatSession<W> {
                 self.state.active_preset_id = None;
                 self.state.status_message = Some("Preset deleted.".into());
                 self.load_presets_list();
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    /// Reads provider connection profiles (`providers.config.list`; React
+    /// `useProviders` on the kernel plane).
+    pub fn load_provider_configs(&mut self) {
+        match self.call_decode(
+            "providers.config.list",
+            &RequestListProviderConfigs { provider: None },
+            decode_result_list_provider_configs,
+        ) {
+            Ok(result) => self.state.provider_configs = result.items,
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    fn reload_provider_configs(&mut self) {
+        match self.call_decode(
+            "providers.config.list",
+            &RequestListProviderConfigs { provider: None },
+            decode_result_list_provider_configs,
+        ) {
+            Ok(result) => self.state.provider_configs = result.items,
+            Err(err) => self.record_error(err),
+        }
+    }
+
+    pub fn set_provider_name_draft(&mut self, value: &str) {
+        self.state.provider_name_draft = value.to_string();
+        self.bump_scene();
+    }
+
+    /// Cycles the adapter kind for the new-profile dialog (React uses a
+    /// `<select>` over the catalog; the catalog op is UnsupportedError on the
+    /// kernel plane, so this plane cycles the registered adapters).
+    pub fn cycle_provider_kind(&mut self) {
+        if !self.state.providers.is_empty() {
+            self.state.provider_kind_index =
+                (self.state.provider_kind_index + 1) % self.state.providers.len();
+        }
+        self.bump_scene();
+    }
+
+    pub fn open_provider_create(&mut self) {
+        self.state.provider_create_dialog_open = true;
+        self.state.provider_name_draft.clear();
+        self.state.provider_form_error = None;
+        self.bump_scene();
+    }
+
+    pub fn close_provider_create(&mut self) {
+        self.state.provider_create_dialog_open = false;
+        self.state.provider_name_draft.clear();
+        self.bump_scene();
+    }
+
+    /// Confirms the new-profile dialog (`providers.config.set` upsert keyed
+    /// by provider + name), then selects the profile — React saves and sets
+    /// `activeProviderConfigId`. API keys stay host-side (SecretStore); a
+    /// profile without a key is created without one.
+    pub fn confirm_provider_create(&mut self) {
+        let name = self.state.provider_name_draft.trim().to_string();
+        if name.is_empty() {
+            self.state.provider_form_error = Some("REQUIRED".into());
+            self.bump_scene();
+            return;
+        }
+        let kind = self
+            .state
+            .providers
+            .get(self.state.provider_kind_index)
+            .map(|item| item.id.clone())
+            .unwrap_or_else(|| "fake".into());
+        let req = RequestSetProviderConfig {
+            provider: kind.clone(),
+            name: name.clone(),
+            config: None,
+            api_key: None,
+        };
+        match self.call_decode("providers.config.set", &req, decode_provider_config_dto) {
+            Ok(dto) => {
+                let sel = RequestSettingsUpdate {
+                    settings: vec![RequestSettingsUpdateSettings {
+                        key: "activeProviderConfigId".into(),
+                        value: json!(dto.id.clone()),
+                    }],
+                };
+                let _ = self.call_value("settings.update", &sel);
+                self.state.active_provider_id = Some(dto.id);
+                self.close_provider_create();
+                self.reload_provider_configs();
+                self.state.status_message = Some("Profile saved.".into());
+            }
+            Err(err) => {
+                let code = err.reason_code().to_string();
+                self.state.provider_form_error = Some(code);
+            }
+        }
+        self.bump_scene();
+    }
+
+    pub fn open_provider_delete(&mut self, id: &str) {
+        if self.state.provider_configs.iter().any(|item| item.id == id) {
+            self.state.provider_delete_target_id = Some(id.to_string());
+            self.bump_scene();
+        }
+    }
+
+    pub fn close_provider_delete(&mut self) {
+        self.state.provider_delete_target_id = None;
+        self.bump_scene();
+    }
+
+    /// Deletes a profile (`providers.config.delete`, keyed by provider +
+    /// name). Deleting the active profile clears the selection.
+    pub fn confirm_provider_delete(&mut self) {
+        let Some(id) = self.state.provider_delete_target_id.take() else {
+            return;
+        };
+        let Some(dto) = self.state.provider_configs.iter().find(|item| item.id == id) else {
+            return;
+        };
+        let was_active = self.state.active_provider_id.as_deref() == Some(id.as_str());
+        let req = RequestDeleteProviderConfig {
+            provider: dto.provider.clone(),
+            name: dto.name.clone(),
+        };
+        match self.call_value("providers.config.delete", &req) {
+            Ok(_) => {
+                if was_active {
+                    let clear = RequestSettingsUpdate {
+                        settings: vec![RequestSettingsUpdateSettings {
+                            key: "activeProviderConfigId".into(),
+                            value: Value::Null,
+                        }],
+                    };
+                    let _ = self.call_value("settings.update", &clear);
+                    self.state.active_provider_id = None;
+                }
+                self.reload_provider_configs();
+                self.state.status_message = Some("Profile deleted.".into());
             }
             Err(err) => self.record_error(err),
         }

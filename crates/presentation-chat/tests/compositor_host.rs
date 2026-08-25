@@ -1317,15 +1317,24 @@ fn ai_providers_and_presets_over_product_wire() {
             .any(|op| op == "providers.list"),
         "opening AI Settings lists providers"
     );
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "providers.config.list"),
+        "opening AI Settings lists connection profiles"
+    );
     let provider = shell.providers.iter().find(|item| item.id == "fake");
     let provider = provider.expect("kernel registers the built-in fake provider");
     assert_eq!(provider.name, "Fake Provider");
     assert_eq!(provider.availability, "available");
 
-    // Select -> settings.update activeProviderConfigId + active card state.
-    session.apply_shell_action(ShellAction::SelectProvider("fake".into()));
+    // Select a connection profile -> settings.update activeProviderConfigId.
+    let profile = &shell.provider_configs[0];
+    assert_eq!(profile.detail.contains("not set"), true);
+    session.apply_shell_action(ShellAction::SelectProvider(profile.id.clone()));
     let shell = session.shell_view();
-    assert_eq!(shell.selected_provider_id.as_deref(), Some("fake"));
+    assert_eq!(shell.selected_provider_id.as_deref(), Some(profile.id.as_str()));
     assert!(
         session
             .issued_commands()
@@ -1365,6 +1374,67 @@ fn ai_providers_and_presets_over_product_wire() {
     let shell = session.shell_view();
     assert!(shell.providers.is_empty());
     assert!(shell.error_message.is_none());
+}
+
+#[test]
+fn provider_profiles_crud_over_product_wire() {
+    use neotavern_presentation_chat::ShellAction;
+    let (mut session, _) = start_flagged_session(Some("1"), FakeWire::demo(), None, None)
+        .expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("providers".into()));
+
+    // Create: dialog -> kind cycle -> name -> providers.config.set + select.
+    session.apply_shell_action(ShellAction::ProviderCreateOpen);
+    assert!(session.shell_view().provider_create_dialog_open);
+    session.apply_shell_action(ShellAction::ProviderCycleKind);
+    session.set_provider_name_draft("second-profile");
+    session.apply_shell_action(ShellAction::ProviderCreateSubmit);
+    let shell = session.shell_view();
+    assert!(!shell.provider_create_dialog_open);
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "providers.config.set")
+    );
+    assert_eq!(shell.provider_configs.len(), 2);
+    assert_eq!(shell.selected_provider_id.as_deref(), Some(shell.provider_configs[1].id.as_str()));
+
+    // Empty name stays client-side without a wire call.
+    session.apply_shell_action(ShellAction::ProviderCreateOpen);
+    let set_calls = session
+        .issued_commands()
+        .iter()
+        .filter(|op| **op == "providers.config.set")
+        .count();
+    session.apply_shell_action(ShellAction::ProviderCreateSubmit);
+    assert_eq!(
+        session.shell_view().provider_form_error.as_deref(),
+        Some("REQUIRED")
+    );
+    assert_eq!(
+        session
+            .issued_commands()
+            .iter()
+            .filter(|op| **op == "providers.config.set")
+            .count(),
+        set_calls
+    );
+    session.apply_shell_action(ShellAction::ProviderCreateClose);
+
+    // Delete the active profile -> config.delete + selection cleared.
+    let target = session.shell_view().provider_configs[1].id.clone();
+    session.apply_shell_action(ShellAction::ProviderDeleteOpen(target));
+    session.apply_shell_action(ShellAction::ProviderDeleteConfirm);
+    let shell = session.shell_view();
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "providers.config.delete")
+    );
+    assert_eq!(shell.provider_configs.len(), 1);
+    assert!(shell.selected_provider_id.is_none());
 }
 
 #[test]

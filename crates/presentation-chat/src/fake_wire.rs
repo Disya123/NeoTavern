@@ -14,6 +14,8 @@ use contracts_generated::generated::{
     MemoryDto, MemoryScope, ResultListMemories, RequestListMemories, RequestCreateMemory,
     RequestUpdateMemory, RequestDeleteMemory,
     RequestGetPreset, RequestCreatePreset, RequestUpdatePreset, RequestDeletePreset,
+    ProviderConfigDto, ResultListProviderConfigs, RequestListProviderConfigs,
+    RequestSetProviderConfig, RequestDeleteProviderConfig, RequestGetProviderConfig,
 };
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -81,6 +83,10 @@ pub struct FakeWire {
     /// Provider adapters (`providers.list`). The kernel registers the
     /// deterministic built-in `fake` provider by default (stateless).
     providers: Vec<ProviderDto>,
+    /// Provider connection profiles (`providers.config.*`), keyed by
+    /// `(provider, name)`; API keys live in SecretStore, only the flag
+    /// `hasApiKey` crosses the wire.
+    provider_configs: Vec<ProviderConfigDto>,
     /// Generation presets (`presets.list`, kind `generation`).
     presets: Vec<PresetDto>,
     /// Backup catalog (`backups.list`). Kernel backups are user-initiated;
@@ -159,6 +165,7 @@ impl Default for FakeWire {
             },
             tools: Vec::new(),
             providers: Vec::new(),
+            provider_configs: Vec::new(),
             presets: Vec::new(),
             backups: Vec::new(),
             memories: Vec::new(),
@@ -321,6 +328,18 @@ impl FakeWire {
                 context_limit: None,
                 max_output_tokens: None,
             }],
+        });
+        // Provider connection profiles (`providers.config.list`); the API
+        // key never crosses the wire — only the `hasApiKey` flag.
+        wire.provider_configs.push(ProviderConfigDto {
+            id: wire_id(0x8701),
+            provider: "fake".into(),
+            // Wire schema: lowercase alphanumeric + hyphens.
+            name: "local-fake".into(),
+            config: json!({ "baseUrl": "http://127.0.0.1:9940" }),
+            has_api_key: false,
+            created_at: TS.into(),
+            updated_at: TS.into(),
         });
         // Generation presets (kernel `presets.list` is DB-backed). Data
         // follows the `GenerationPresetData` contract shape.
@@ -1487,6 +1506,75 @@ impl ProductWire for FakeWire {
                     items: self.providers.clone(),
                 }),
             ),
+            "providers.config.list" => self.wrap_call(
+                operation_id,
+                to_value(&ResultListProviderConfigs {
+                    items: self.provider_configs.clone(),
+                }),
+            ),
+            "providers.config.get" => {
+                let req: RequestGetProviderConfig = serde_json::from_value(payload.clone())?;
+                let dto = self
+                    .provider_configs
+                    .iter()
+                    .find(|item| item.provider == req.provider && item.name == req.name)
+                    .cloned()
+                    .ok_or_else(|| {
+                        Self::product(
+                            "PROVIDER_CONFIG_NOT_FOUND",
+                            "name",
+                            &req.name,
+                        )
+                    })?;
+                self.wrap_call(operation_id, to_value(&dto))
+            }
+            "providers.config.set" => {
+                let req: RequestSetProviderConfig = serde_json::from_value(payload.clone())?;
+                let existing = self
+                    .provider_configs
+                    .iter_mut()
+                    .find(|item| item.provider == req.provider && item.name == req.name);
+                match existing {
+                    Some(item) => {
+                        if req.config.is_some() {
+                            item.config = req.config.clone().unwrap();
+                        }
+                        if req.api_key.is_some() {
+                            item.has_api_key = true;
+                        }
+                        item.updated_at = TS.into();
+                        let updated = item.clone();
+                        self.wrap_call(operation_id, to_value(&updated))
+                    }
+                    None => {
+                        let dto = ProviderConfigDto {
+                            id: wire_id(0x8800 + self.provider_configs.len() as u64),
+                            provider: req.provider.clone(),
+                            name: req.name.clone(),
+                            config: req.config.unwrap_or_else(|| json!({})),
+                            has_api_key: req.api_key.is_some(),
+                            created_at: TS.into(),
+                            updated_at: TS.into(),
+                        };
+                        self.provider_configs.push(dto.clone());
+                        self.wrap_call(operation_id, to_value(&dto))
+                    }
+                }
+            }
+            "providers.config.delete" => {
+                let req: RequestDeleteProviderConfig = serde_json::from_value(payload.clone())?;
+                let len = self.provider_configs.len();
+                self.provider_configs
+                    .retain(|item| !(item.provider == req.provider && item.name == req.name));
+                if self.provider_configs.len() == len {
+                    return Err(Self::product(
+                        "PROVIDER_CONFIG_NOT_FOUND",
+                        "name",
+                        &req.name,
+                    ));
+                }
+                self.ok_call(operation_id, json!({}))
+            }
             "presets.list" => {
                 let kind = payload.get("kind").and_then(Value::as_str);
                 let items: Vec<PresetDto> = self

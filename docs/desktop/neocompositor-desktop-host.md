@@ -479,6 +479,24 @@ React (import/export — файловые диалоги хоста). Неизв
 `shell_hit.rs::presets_config_hit`. Тест
 `generation_preset_management_over_product_wire`.
 
+## AI Settings: профили подключений
+
+API-таб перенесён на `providers.config.*` (как React `ProviderProfileEditor`
+на kernel-плоскости): открытие панели грузит `providers.config.list`, строки
+профилей (имя · provider · честное «API key saved/not set» — само значение
+никогда не покидает SecretStore), тап = выбор (`settings.update`
+`activeProviderConfigId` = id конфига, не адаптера). «New profile» → диалог
+320×240 (цикл по зарегистрированным адаптерам вместо `<select>` каталога —
+`providers.catalog` на kernel-плоскости UnsupportedError; инпут имени) →
+`providers.config.set` (upsert по паре provider+name) + автоселект. Delete →
+`providers.config.delete`; удаление активного профиля сбрасывает выбор.
+Имена схемой ограничены lowercase-hyphen. Адаптеры из `providers.list`
+остаются ниже как read-only секция. Model discovery остаётся UnsupportedError
+на React kernel-плоскости и не переносится. FakeWire: профиль local-fake в
+demo(), пусто в default(). Геометрия зеркалится между `providers_tab` и
+новым `providers_hit`. Тесты `provider_profiles_crud_over_product_wire`,
+обновлённый `ai_providers_and_presets_over_product_wire`.
+
 ## Отправка сообщения (Send)
 
 Композер (`data-part="composer"` в `product_chat_app`) получил кнопку **Send**

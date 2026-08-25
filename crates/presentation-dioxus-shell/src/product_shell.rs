@@ -256,6 +256,16 @@ pub struct PresetValueRow {
     pub value: String,
 }
 
+/// One provider connection profile row (API tab): display name plus a
+/// "provider · API key …" detail line. The key value itself never leaves
+/// SecretStore.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ProviderConfigCardView {
+    pub id: String,
+    pub name: String,
+    pub detail: String,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct PanelTab {
     pub id: &'static str,
@@ -421,6 +431,14 @@ pub struct ProductShellView {
     pub preset_name_draft: String,
     pub preset_form_error: Option<String>,
     pub preset_delete_open: bool,
+    /// API tab provider profiles (`providers.config.*`) and the new-profile
+    /// dialog state.
+    pub provider_configs: Vec<ProviderConfigCardView>,
+    pub provider_create_dialog_open: bool,
+    pub provider_kind_label: Option<String>,
+    pub provider_name_draft: String,
+    pub provider_form_error: Option<String>,
+    pub provider_delete_target_id: Option<String>,
     pub plugins: Vec<PluginCardView>,
     pub providers: Vec<ProviderCardView>,
     pub presets: Vec<PresetCardView>,
@@ -539,6 +557,12 @@ impl Default for ProductShellView {
             preset_name_draft: String::new(),
             preset_form_error: None,
             preset_delete_open: false,
+            provider_configs: Vec::new(),
+            provider_create_dialog_open: false,
+            provider_kind_label: None,
+            provider_name_draft: String::new(),
+            provider_form_error: None,
+            provider_delete_target_id: None,
             plugins: Vec::new(),
             providers: Vec::new(),
             presets: Vec::new(),
@@ -2066,6 +2090,15 @@ let entry_delete_book_name = entry_dialog_book_name;
     };
     let preset_name_value = view.preset_name_draft.clone();
     let preset_delete_name = view.preset_active_name.clone().unwrap_or_default();
+    let (pvdlg_x, pvdlg_y, pvdlg_w, pvdlg_h) = modal_geometry(&view, 320.0, 240.0);
+    let provider_dlg_style = format!(
+        "position:absolute;left:{pvdlg_x}px;top:{pvdlg_y}px;width:{pvdlg_w}px;height:{pvdlg_h}px;box-sizing:border-box;z-index:50;padding:16px;color:#f3eee8;"
+    );
+    let provider_kind_label = view
+        .provider_kind_label
+        .clone()
+        .unwrap_or_else(|| "No adapters".to_string());
+    let provider_name_value = view.provider_name_draft.clone();
     let profile_delete_name = view
         .profiles
         .iter()
@@ -2589,6 +2622,48 @@ let entry_delete_book_name = entry_dialog_book_name;
                             "data-part": "preset-name-input",
                             style: "height:32px;line-height:32px;padding:0 12px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;color:#e8eef7;font-size:0.8125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;",
                             "{preset_name_value}"
+                        }
+                    }
+                    div {
+                        class: "CharacterManagementPanel_dialogActions",
+                        style: "position:absolute;left:16px;right:16px;bottom:16px;display:flex;gap:8px;justify-content:flex-end;",
+                        button {
+                            r#type: "button",
+                            "data-variant": "default",
+                            "data-size": "md",
+                            span { "Cancel" }
+                        }
+                        button {
+                            r#type: "button",
+                            "data-variant": "primary",
+                            "data-size": "md",
+                            span { "Save" }
+                        }
+                    }
+                }
+            }
+            if view.provider_create_dialog_open {
+                div {
+                    class: "st-card",
+                    style: "{provider_dlg_style}",
+                    div {
+                        "data-component": "dialog-title",
+                        "New provider profile"
+                    }
+                    button {
+                        r#type: "button",
+                        "data-component": "button",
+                        "data-part": "provider-kind-cycle",
+                        style: "position:absolute;left:16px;top:72px;width:calc(100% - 32px);height:36px;",
+                        span { "{provider_kind_label}" }
+                    }
+                    div {
+                        style: "position:absolute;left:16px;top:116px;right:16px;display:flex;flex-direction:column;gap:2px;",
+                        span { class: "CharacterManagementPanel_fieldHeading", strong { "Profile name" } }
+                        span {
+                            "data-part": "provider-name-input",
+                            style: "height:32px;line-height:32px;padding:0 12px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;color:#e8eef7;font-size:0.8125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;",
+                            "{provider_name_value}"
                         }
                     }
                     div {

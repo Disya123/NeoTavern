@@ -131,6 +131,15 @@ pub enum ShellAction {
     /// `GenerationPresetEditor`).
     SelectProvider(String),
     SelectPreset(String),
+    /// Provider profile management (`providers.config.*`; React
+    /// `ProviderProfileEditor` kernel plane).
+    ProviderCreateOpen,
+    ProviderCreateClose,
+    ProviderCycleKind,
+    ProviderCreateSubmit,
+    ProviderDeleteOpen(String),
+    ProviderDeleteClose,
+    ProviderDeleteConfirm,
     /// Settings Data tab backup actions (`backups.create` / `backups.list`
     /// refresh / `backups.restore`; React DataTab).
     CreateBackup,
@@ -258,6 +267,33 @@ fn header_bottom(view: &ProductShellView) -> f32 {
 fn dialog_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
     let (width, height) = css_size(view);
     let chat_x0 = chat_origin_x(view);
+    if view.provider_create_dialog_open {
+        let dlg_w = 320.0_f32.min(width - 32.0);
+        let dlg_h = 240.0_f32.min(height - 48.0);
+        let x0 = chat_x0 + (width - chat_x0 - dlg_w).max(0.0) * 0.5;
+        let y0 = (height - dlg_h) * 0.5;
+        if !contains(x, y, x0, y0, x0 + dlg_w, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::ProviderCreateClose));
+        }
+        // Kind cycle row.
+        let kind_top = y0 + 72.0;
+        if y >= kind_top && y < kind_top + 36.0 && x >= x0 + 16.0 && x < x0 + dlg_w - 16.0 {
+            return Some(ShellHit::Action(ShellAction::ProviderCycleKind));
+        }
+        // Name input absorbs (focus resolves via the part rect).
+        let field_top = kind_top + 44.0;
+        if y >= field_top && y < field_top + 36.0 {
+            return Some(ShellHit::Absorb);
+        }
+        let actions_y = y0 + dlg_h - 56.0;
+        if contains(x, y, x0, actions_y, x0 + dlg_w * 0.5, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::ProviderCreateClose));
+        }
+        if contains(x, y, x0 + dlg_w * 0.5, actions_y, x0 + dlg_w, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::ProviderCreateSubmit));
+        }
+        return Some(ShellHit::Absorb);
+    }
     if view.preset_name_dialog_open {
         let dlg_w = 320.0_f32.min(width - 32.0);
         let dlg_h = 220.0_f32.min(height - 48.0);
@@ -745,16 +781,7 @@ pub fn hit_test(view: &ProductShellView, css_x: f32, css_y: f32) -> Option<Shell
                 if view.ai_tab == "presets" {
                     return presets_config_hit(view, x, y, panel_x, panel_x + panel_w);
                 }
-                return catalog_panel_hit(
-                    view,
-                    x,
-                    y,
-                    &["providers", "presets", "memories"],
-                    view.ai_tab.as_str(),
-                    52.0,
-                    view.providers.iter().map(|item| item.id.as_str()),
-                    |id: &str| ShellAction::SelectProvider(id.into()),
-                );
+                return providers_hit(view, x, y, panel_x, panel_x + panel_w);
             }
             "settings" => {
                 return settings_hit(view, x, y);
@@ -1181,6 +1208,81 @@ fn presets_config_hit(
         }
         cursor = bottom;
     }
+    Some(ShellHit::Absorb)
+}
+
+/// React `ProviderProfileEditor` body (API tab): the "New profile" button,
+/// connection-profile rows carrying Delete in the right zone (tap elsewhere
+/// on a row = select via `settings.update` `activeProviderConfigId`), then
+/// read-only adapter rows from `providers.list`. Geometry mirrors
+/// `ai_settings_tab.rs::providers_tab`: padding 12 + heading 20 + gap 8 +
+/// button 36 + gap 8; profile rows 64 + 4; adapters label 20 + note 16 +
+/// rows 60 + 4.
+fn providers_hit(
+    view: &ProductShellView,
+    x: f32,
+    y: f32,
+    panel_x: f32,
+    x1: f32,
+) -> Option<ShellHit> {
+    if !view.sidebar_open {
+        return None;
+    }
+    let (_, panel_w) = panel_origin(view);
+    let header_end = header_bottom(view);
+    if y < header_end {
+        if x >= x1 - CONTROL_SM - SPACE_LG {
+            return Some(ShellHit::Action(ShellAction::ClosePanel));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    let pad = SPACE_LG;
+    let tabs = ["providers", "presets", "memories"];
+    let tabs_top = header_end + SPACE_XS;
+    let tabs_bottom = tabs_top + CONTROL_SM + SPACE_XS;
+    if y >= tabs_top && y < tabs_bottom {
+        let tabs_x0 = panel_x + SPACE_LG;
+        let span = (panel_w - SPACE_LG * 2.0).max(1.0);
+        let idx = (((x - tabs_x0) / span) * tabs.len() as f32).floor() as usize;
+        return Some(ShellHit::Action(ShellAction::SetTab(
+            tabs[idx.min(tabs.len() - 1)].into(),
+        )));
+    }
+    let inner_r = x1 - pad;
+    let mut cursor = tabs_bottom + 12.0 + 20.0 + 8.0;
+    // "New profile" button.
+    if y >= cursor && y < cursor + 36.0 {
+        if x >= panel_x + pad && x < panel_x + pad + 140.0 {
+            return Some(ShellHit::Action(ShellAction::ProviderCreateOpen));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    cursor += 36.0 + 8.0;
+    // Empty note line when no profiles.
+    if view.provider_configs.is_empty() {
+        if y >= cursor && y < cursor + 16.0 {
+            return Some(ShellHit::Absorb);
+        }
+        cursor += 16.0 + 8.0;
+    }
+    // Profile rows: tap = select, right zone = delete.
+    for item in view.provider_configs.iter() {
+        let bottom = cursor + 64.0 + 4.0;
+        if y >= cursor && y < bottom - 4.0 && x >= panel_x + pad && x < inner_r {
+            if x >= inner_r - 12.0 - 96.0 && x < inner_r - 12.0 {
+                return Some(ShellHit::Action(ShellAction::ProviderDeleteOpen(item.id.clone())));
+            }
+            return Some(ShellHit::Action(ShellAction::SelectProvider(item.id.clone())));
+        }
+        cursor = bottom;
+    }
+    // Adapters section label + hint.
+    cursor += 8.0; // margin-top on the label
+    if y >= cursor && y < cursor + 20.0 + 8.0 + 16.0 {
+        return Some(ShellHit::Absorb);
+    }
+    cursor += 20.0 + 8.0 + 16.0 + 8.0;
+    // Adapter rows are informational only.
     Some(ShellHit::Absorb)
 }
 

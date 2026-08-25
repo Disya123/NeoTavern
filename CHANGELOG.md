@@ -3,6 +3,15 @@
 ## Unreleased
 ### Added
 
+- **AI Settings: профили подключений (providers.config.list / set / delete).**
+  API-таб: строки профилей (имя · provider · флаг ключа без значения), выбор
+  профиля = `activeProviderConfigId`, «New profile» через диалог +
+  `providers.config.set` (upsert по provider+name) с автоселектом, удаление с
+  подтверждением; удаление активного сбрасывает выбор. Адаптеры
+  (`providers.list`) — read-only секция. Ключи API остаются в SecretStore.
+  Новые cargo-тесты `provider_profiles_crud_over_product_wire` и обновлённый
+  `ai_providers_and_presets_over_product_wire`.
+
 - **AI Settings: управление пресетами (presets.create / update / delete +
   settings).** Config-таб: выбор пресета применяет его значения
   (`maxContextTokens` + `generationDefaults`) одним `settings.update`; тулбар
