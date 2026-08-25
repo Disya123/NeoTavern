@@ -3,6 +3,13 @@
 ## Unreleased
 ### Added
 
+- **AI Settings: память (memories.list / create / update / delete).** Третий
+  таб Memories в панели AI Settings — полный CRUD: карточки со scope+ключами и
+  переключателем Enabled, inline-редактирование (Edit → Save/Cancel), форма
+  создания с scope Global/Character, удаление через диалог подтверждения.
+  Клиентские валидации React воспроизведены без wire-вызова; неизвестный id →
+  `MEMORY_NOT_FOUND`. Новый cargo-тест `memories_crud_over_product_wire`.
+
 - **Data: резервные копии (backups.list / create / restore).** Вкладка Data
   в Settings показывает реальный каталог: открытие грузит `backups.list`,
   «Create backup» → `backups.create` + обновление списка, каждая строка несёт

@@ -11,6 +11,8 @@ use contracts_generated::generated::{
     ResultSecretsLock, ResultSecretsStatus, ResultListTools, ToolSpec, ProviderAvailability,
     ProviderCapabilities, ProviderDto, ProviderModel, PresetDto, RequestSettingsUpdate,
     RequestSettingsUpdateSettings, BackupDto, ResultListBackups, RequestBackupsRestore,
+    MemoryDto, MemoryScope, ResultListMemories, RequestListMemories, RequestCreateMemory,
+    RequestUpdateMemory, RequestDeleteMemory,
 };
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -83,6 +85,9 @@ pub struct FakeWire {
     /// Backup catalog (`backups.list`). Kernel backups are user-initiated;
     /// `backups.create` appends, `backups.restore` validates the id.
     backups: Vec<BackupDto>,
+    /// Memory store (`memories.*`; ТЗ §4.4 keyword retrieval). The kernel
+    /// validates character scope against the character table.
+    memories: Vec<MemoryDto>,
     cursors: HashMap<String, CursorCut>,
     fail_ops: HashSet<String>,
     next: u64,
@@ -155,6 +160,7 @@ impl Default for FakeWire {
             providers: Vec::new(),
             presets: Vec::new(),
             backups: Vec::new(),
+            memories: Vec::new(),
             cursors: HashMap::new(),
             fail_ops: HashSet::new(),
             next: 0x9000,
@@ -339,6 +345,33 @@ impl FakeWire {
         };
         wire.backups.push(backup(0x8201, 1_572_864));
         wire.backups.push(backup(0x8202, 2_097_152));
+        // Memory store (kernel `memories.list` is DB-backed; character scope
+        // references the demo character).
+        wire.memories.push(MemoryDto {
+            id: wire_id(0x8401),
+            scope: MemoryScope::Global,
+            character_id: None,
+            keys: vec!["mask".into(), "night".into()],
+            content: "The city sleeps under a permanent curfew; the vigilantes own the dark."
+                .into(),
+            enabled: true,
+            position: 0,
+            metadata: json!({}),
+            created_at: TS.into(),
+            updated_at: TS.into(),
+        });
+        wire.memories.push(MemoryDto {
+            id: wire_id(0x8402),
+            scope: MemoryScope::Character,
+            character_id: Some(DEMO_CHARACTER_ID.into()),
+            keys: vec!["seraphina".into()],
+            content: "Seraphina never speaks her true name aloud to mortals.".into(),
+            enabled: false,
+            position: 1,
+            metadata: json!({}),
+            created_at: TS.into(),
+            updated_at: TS.into(),
+        });
         wire
     }
 
@@ -1481,6 +1514,82 @@ impl ProductWire for FakeWire {
                 } else {
                     Err(Self::product("NOT_FOUND", "backupId", &req.backup_id))
                 }
+            }
+            "memories.list" => {
+                let req: RequestListMemories = serde_json::from_value(payload.clone())?;
+                let items: Vec<MemoryDto> = self
+                    .memories
+                    .iter()
+                    .filter(|item| {
+                        req.scope.as_ref().is_none_or(|scope| item.scope == *scope)
+                            && req
+                                .character_id
+                                .as_ref()
+                                .is_none_or(|id| item.character_id.as_deref() == Some(id))
+                            && req.enabled.is_none_or(|enabled| item.enabled == enabled)
+                    })
+                    .cloned()
+                    .collect();
+                self.wrap_call(operation_id, to_value(&ResultListMemories { items }))
+            }
+            "memories.create" => {
+                let req: RequestCreateMemory = serde_json::from_value(payload.clone())?;
+                let dto = MemoryDto {
+                    id: wire_id(0x8500 + self.memories.len() as u64),
+                    scope: req.scope.unwrap_or(MemoryScope::Global),
+                    character_id: req.character_id,
+                    keys: req.keys.unwrap_or_default(),
+                    content: req.content,
+                    enabled: req.enabled.unwrap_or(true),
+                    position: self.memories.len() as i64,
+                    metadata: req.metadata.unwrap_or_else(|| json!({})),
+                    created_at: TS.into(),
+                    updated_at: TS.into(),
+                };
+                self.memories.push(dto.clone());
+                self.wrap_call(operation_id, to_value(&dto))
+            }
+            "memories.update" => {
+                let req: RequestUpdateMemory = serde_json::from_value(payload.clone())?;
+                let item = self
+                    .memories
+                    .iter_mut()
+                    .find(|item| item.id == req.memory_id)
+                    .ok_or_else(|| Self::product("MEMORY_NOT_FOUND", "memoryId", &req.memory_id))?;
+                if let Some(scope) = req.scope {
+                    item.scope = scope;
+                }
+                if req.character_id.is_some() {
+                    item.character_id = req.character_id;
+                }
+                if let Some(keys) = req.keys {
+                    item.keys = keys;
+                }
+                if let Some(content) = req.content {
+                    item.content = content;
+                }
+                if let Some(enabled) = req.enabled {
+                    item.enabled = enabled;
+                }
+                if let Some(position) = req.position {
+                    item.position = position;
+                }
+                if req.metadata.is_some() {
+                    item.metadata = req.metadata.unwrap();
+                }
+                item.updated_at = TS.into();
+                let updated = item.clone();
+                self.wrap_call(operation_id, to_value(&updated))
+            }
+            "memories.delete" => {
+                let req: RequestDeleteMemory = serde_json::from_value(payload.clone())?;
+                let len = self.memories.len();
+                self.memories
+                    .retain(|item| item.id != req.memory_id);
+                if self.memories.len() == len {
+                    return Err(Self::product("MEMORY_NOT_FOUND", "memoryId", &req.memory_id));
+                }
+                self.ok_call(operation_id, json!({}))
             }
             "settings.get" => self.wrap_call(
                 operation_id,

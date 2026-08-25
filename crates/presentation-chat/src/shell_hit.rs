@@ -136,6 +136,17 @@ pub enum ShellAction {
     CreateBackup,
     RefreshBackups,
     RestoreBackup(String),
+    /// AI Settings Memories tab (React `MemoryEditor` over `memories.*`).
+    MemoryToggle(String),
+    MemoryEditOpen(String),
+    MemoryEditCancel,
+    MemorySave,
+    MemoryDeleteOpen(String),
+    MemoryDeleteClose,
+    MemoryDeleteConfirm,
+    MemoryDraftToggleScope,
+    MemoryCycleCharacter,
+    MemoryDraftToggleEnabled,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -236,6 +247,23 @@ fn header_bottom(view: &ProductShellView) -> f32 {
 fn dialog_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
     let (width, height) = css_size(view);
     let chat_x0 = chat_origin_x(view);
+    if view.memory_delete_open {
+        let dlg_w = 300.0_f32.min(width - 32.0);
+        let dlg_h = 200.0_f32.min(height - 48.0);
+        let x0 = chat_x0 + (width - chat_x0 - dlg_w).max(0.0) * 0.5;
+        let y0 = (height - dlg_h) * 0.5;
+        if !contains(x, y, x0, y0, x0 + dlg_w, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::MemoryDeleteClose));
+        }
+        let actions_y = y0 + dlg_h - 56.0;
+        if contains(x, y, x0, actions_y, x0 + dlg_w * 0.5, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::MemoryDeleteClose));
+        }
+        if contains(x, y, x0 + dlg_w * 0.5, actions_y, x0 + dlg_w, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::MemoryDeleteConfirm));
+        }
+        return Some(ShellHit::Absorb);
+    }
     if view.theme_delete_open {
         let dlg_w = 300.0_f32.min(width - 32.0);
         let dlg_h = 200.0_f32.min(height - 48.0);
@@ -662,6 +690,9 @@ pub fn hit_test(view: &ProductShellView, css_x: f32, css_y: f32) -> Option<Shell
         }
         match view.panel.as_str() {
             "providers" => {
+                if view.ai_tab == "memories" {
+                    return memories_hit(view, x, y, panel_x, panel_x + panel_w);
+                }
                 let (ids, select): (
                     Box<dyn Iterator<Item = &str>>,
                     fn(&str) -> ShellAction,
@@ -680,7 +711,7 @@ pub fn hit_test(view: &ProductShellView, css_x: f32, css_y: f32) -> Option<Shell
                     view,
                     x,
                     y,
-                    &["providers", "presets"],
+                    &["providers", "presets", "memories"],
                     view.ai_tab.as_str(),
                     52.0,
                     ids,
@@ -933,6 +964,106 @@ fn data_hit(
             return Some(ShellHit::Action(ShellAction::RestoreBackup(item.id.clone())));
         }
         cursor = bottom;
+    }
+    Some(ShellHit::Absorb)
+}
+
+/// React `MemoryEditor` body over `memories.*`. Owns the 3-tab band
+/// (API / Config / Memories), then heading 20 + hint 16 (outer gaps 8),
+/// memory cards 112 (normal) / 172 (editing) separated by gap 8, an optional
+/// empty note / error line, and the create form (156) while not editing.
+/// Text inputs resolve keyboard focus via their `data-part` rects in the
+/// desktop host, so they Absorb here. Mirrors
+/// `ai_settings_tab.rs::memories_tab`.
+fn memories_hit(view: &ProductShellView, x: f32, y: f32, panel_x: f32, x1: f32) -> Option<ShellHit> {
+    if !view.sidebar_open {
+        return None;
+    }
+    let (_, panel_w) = panel_origin(view);
+    let header_end = header_bottom(view);
+    if y < header_end {
+        if x >= x1 - CONTROL_SM - SPACE_LG {
+            return Some(ShellHit::Action(ShellAction::ClosePanel));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    let pad = SPACE_LG;
+    let tabs = ["providers", "presets", "memories"];
+    let tabs_top = header_end + SPACE_XS;
+    let tabs_bottom = tabs_top + CONTROL_SM + SPACE_XS;
+    if y >= tabs_top && y < tabs_bottom {
+        let tabs_x0 = panel_x + SPACE_LG;
+        let span = (panel_w - SPACE_LG * 2.0).max(1.0);
+        let idx = (((x - tabs_x0) / span) * tabs.len() as f32).floor() as usize;
+        return Some(ShellHit::Action(ShellAction::SetTab(
+            tabs[idx.min(tabs.len() - 1)].into(),
+        )));
+    }
+    let inner_l = panel_x + pad + 8.0;
+    let inner_r = x1 - pad - 8.0;
+    // Body: padding 12 + heading 20 + gap 8 + hint 16 + gap 8.
+    let mut cursor = tabs_bottom + 12.0 + 20.0 + 8.0 + 16.0 + 8.0;
+    for item in view.memories.iter() {
+        let editing = view.memory_edit_id.as_deref() == Some(item.id.as_str());
+        let h = if editing { 172.0 } else { 112.0 };
+        let top = cursor;
+        let act_top = top + h - 8.0 - 36.0;
+        if y >= top && y < top + h {
+            if y >= act_top && y < act_top + 36.0 {
+                if x >= inner_l && x < inner_l + 96.0 {
+                    return Some(ShellHit::Action(if editing {
+                        ShellAction::MemorySave
+                    } else {
+                        ShellAction::MemoryEditOpen(item.id.clone())
+                    }));
+                }
+                if editing && x >= inner_l + 104.0 && x < inner_l + 192.0 {
+                    return Some(ShellHit::Action(ShellAction::MemoryEditCancel));
+                }
+                if x >= inner_r - 96.0 && x < inner_r {
+                    return Some(ShellHit::Action(ShellAction::MemoryDeleteOpen(item.id.clone())));
+                }
+                return Some(ShellHit::Absorb);
+            }
+            if !editing && y >= top + 8.0 && y < top + 28.0 && x >= inner_r - 88.0 && x < inner_r {
+                return Some(ShellHit::Action(ShellAction::MemoryToggle(item.id.clone())));
+            }
+            return Some(ShellHit::Absorb);
+        }
+        cursor = top + h + 8.0;
+    }
+    if view.memories.is_empty() && view.memory_edit_id.is_none() {
+        cursor += 16.0 + 8.0; // empty note line
+    }
+    if view.memory_form_error.is_some() {
+        cursor += 16.0 + 8.0; // form error line
+    }
+    if view.memory_edit_id.is_none() {
+        // Create form: content 36, keys 36, scope row 36, add button 36 with
+        // inner gaps of 4 → total 156.
+        let scope_top = cursor + 36.0 + 4.0 + 36.0 + 4.0;
+        let add_top = scope_top + 36.0 + 4.0;
+        if y >= scope_top && y < scope_top + 36.0 {
+            if x >= inner_l && x < inner_l + 96.0 {
+                return Some(ShellHit::Action(ShellAction::MemoryDraftToggleScope));
+            }
+            if x >= inner_l + 104.0 && x < inner_l + 200.0 {
+                return Some(ShellHit::Action(ShellAction::MemoryDraftToggleScope));
+            }
+            if view.memory_draft_scope_character
+                && x >= inner_l + 208.0
+                && x < inner_r - 88.0 - 8.0
+            {
+                return Some(ShellHit::Action(ShellAction::MemoryCycleCharacter));
+            }
+            if x >= inner_r - 88.0 && x < inner_r {
+                return Some(ShellHit::Action(ShellAction::MemoryDraftToggleEnabled));
+            }
+            return Some(ShellHit::Absorb);
+        }
+        if y >= add_top && y < add_top + 36.0 && x >= inner_l && x < inner_l + 140.0 {
+            return Some(ShellHit::Action(ShellAction::MemorySave));
+        }
     }
     Some(ShellHit::Absorb)
 }

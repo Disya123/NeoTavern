@@ -439,6 +439,27 @@ default(); restore неизвестного id → `NOT_FOUND`. Геометри
 gap 8 + hint 32 + gap 8 + actions 36 + gap 8; rows 64 + 4). Тест
 `backups_list_create_restore_over_product_wire`.
 
+## AI Settings: память (Memories)
+
+Третий таб панели AI Settings переносит React `MemoryEditor` на `memories.*`:
+открытие таба грузит `memories.list`, карточки показывают scope+ключи
+(Global / имя персонажа — key1, key2), содержимое и переключатель Enabled
+(частичный `memories.update` только с `enabled`). Inline-редактирование
+(кнопка Edit → черновик в карточке, Save/Cancel) и форма создания
+(Content, Keys через запятую, scope Global/Character с циклическим выбором
+персонажа вместо `<select>`, Add memory) идут через `memories.create` /
+`memories.update`. Валидации React воспроизведены клиентски без wire-вызова:
+«Memory content is required.» и «A character is required…»
+(`memory_form_error`). Удаление — диалог 300×200 → `memories.delete`
+(неизвестный id → `MEMORY_NOT_FOUND`, как kernel product.rs). Текстовые поля
+получают клавиатуру через `TextFocus::MemoryContent/MemoryKeys`
+(`data-part="memory-content-input"` / `"memory-keys-input"`). Геометрия
+зеркалится между `ai_settings_tab.rs::memories_tab` и
+`shell_hit.rs::memories_hit` (heading 20 + hint 16, gaps 8; карточки 112 /
+172 в редактировании; форма создания 156). FakeWire: 2 памяти (global +
+character-scoped к демо-персонажу) в demo(), пусто в default(). Тест
+`memories_crud_over_product_wire`.
+
 ## Отправка сообщения (Send)
 
 Композер (`data-part="composer"` в `product_chat_app`) получил кнопку **Send**

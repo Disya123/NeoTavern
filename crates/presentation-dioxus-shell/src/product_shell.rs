@@ -239,6 +239,16 @@ pub struct BackupCardView {
     pub detail: String,
 }
 
+/// One memory card (React `MemoryEditor` list item): scope label + activation
+/// keys as the meta line, the durable content, and the enabled flag.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MemoryCardView {
+    pub id: String,
+    pub meta: String,
+    pub content: String,
+    pub enabled: bool,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct PanelTab {
     pub id: &'static str,
@@ -382,6 +392,18 @@ pub struct ProductShellView {
     pub selected_preset_id: Option<String>,
     /// Backup catalog (`backups.list`; React SettingsPanel DataTab).
     pub backups: Vec<BackupCardView>,
+    /// Memory editor state (React `MemoryEditor`): the card list plus the
+    /// inline create/edit draft. `memory_edit_id == None` means create mode.
+    pub memories: Vec<MemoryCardView>,
+    pub memory_edit_id: Option<String>,
+    pub memory_draft_content: String,
+    pub memory_draft_keys: String,
+    pub memory_draft_scope_character: bool,
+    pub memory_draft_character_label: Option<String>,
+    pub memory_draft_enabled: bool,
+    pub memory_form_error: Option<String>,
+    pub memory_delete_open: bool,
+    pub memory_delete_target_id: Option<String>,
     pub plugins: Vec<PluginCardView>,
     pub providers: Vec<ProviderCardView>,
     pub presets: Vec<PresetCardView>,
@@ -483,6 +505,16 @@ impl Default for ProductShellView {
             selected_provider_id: None,
             selected_preset_id: None,
             backups: Vec::new(),
+            memories: Vec::new(),
+            memory_edit_id: None,
+            memory_draft_content: String::new(),
+            memory_draft_keys: String::new(),
+            memory_draft_scope_character: false,
+            memory_draft_character_label: None,
+            memory_draft_enabled: true,
+            memory_form_error: None,
+            memory_delete_open: false,
+            memory_delete_target_id: None,
             plugins: Vec::new(),
             providers: Vec::new(),
             presets: Vec::new(),
@@ -1997,6 +2029,8 @@ let entry_delete_book_name = entry_dialog_book_name;
         .unwrap_or("");
     let theme_delete_confirm =
         format!("Remove \"{theme_delete_name}\" and its local theme files?");
+    let memory_delete_confirm =
+        "Delete this memory? It will no longer be injected into prompts.";
     let profile_delete_name = view
         .profiles
         .iter()
@@ -2460,6 +2494,33 @@ let entry_delete_book_name = entry_dialog_book_name;
                         "Remove theme"
                     }
                     div { "data-component": "dialog-description", "{theme_delete_confirm}" }
+                    div {
+                        class: "CharacterManagementPanel_dialogActions",
+                        style: "display:flex;gap:8px;justify-content:flex-end;margin-top:12px;",
+                        button {
+                            r#type: "button",
+                            "data-variant": "default",
+                            "data-size": "md",
+                            span { "Cancel" }
+                        }
+                        button {
+                            r#type: "button",
+                            "data-variant": "danger",
+                            "data-size": "md",
+                            span { "Delete" }
+                        }
+                    }
+                }
+            }
+            if view.memory_delete_open {
+                div {
+                    class: "st-card",
+                    style: "{profile_delete_style}",
+                    div {
+                        "data-component": "dialog-title",
+                        "Delete memory"
+                    }
+                    div { "data-component": "dialog-description", "{memory_delete_confirm}" }
                     div {
                         class: "CharacterManagementPanel_dialogActions",
                         style: "display:flex;gap:8px;justify-content:flex-end;margin-top:12px;",

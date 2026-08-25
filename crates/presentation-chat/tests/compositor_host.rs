@@ -1438,6 +1438,104 @@ fn backups_list_create_restore_over_product_wire() {
 }
 
 #[test]
+fn memories_crud_over_product_wire() {
+    use neotavern_presentation_chat::ShellAction;
+    let (mut session, _) = start_flagged_session(Some("1"), FakeWire::demo(), None, None)
+        .expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("providers".into()));
+    session.apply_shell_action(ShellAction::SetTab("memories".into()));
+    let shell = session.shell_view();
+    assert_eq!(shell.ai_tab, "memories");
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "memories.list"),
+        "opening the Memories tab loads the list"
+    );
+    assert_eq!(shell.memories.len(), 2);
+    assert!(shell.memories[0].meta.starts_with("Global"));
+    assert!(!shell.memories[1].enabled);
+
+    // Toggle -> partial update with only `enabled`.
+    let toggle_id = shell.memories[1].id.clone();
+    session.apply_shell_action(ShellAction::MemoryToggle(toggle_id));
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "memories.update")
+    );
+    assert!(session.shell_view().memories[1].enabled);
+
+    // Create form: type content, add -> memories.create + refreshed list.
+    session.set_memory_draft_content("The docks flood at high tide.");
+    session.apply_shell_action(ShellAction::MemorySave);
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "memories.create")
+    );
+    let shell = session.shell_view();
+    assert_eq!(shell.memories.len(), 3);
+    assert!(shell.memory_edit_id.is_none());
+    assert!(shell.memories[2].content.contains("docks"));
+
+    // Empty content is rejected client-side without a wire call.
+    let create_calls = session
+        .issued_commands()
+        .iter()
+        .filter(|op| **op == "memories.create")
+        .count();
+    session.apply_shell_action(ShellAction::MemorySave);
+    assert_eq!(
+        session.shell_view().memory_form_error.as_deref(),
+        Some("Memory content is required.")
+    );
+    assert_eq!(
+        session
+            .issued_commands()
+            .iter()
+            .filter(|op| **op == "memories.create")
+            .count(),
+        create_calls,
+        "validation failure must not reach the wire"
+    );
+
+    // Edit flow: prefill from the card, save via the wire.
+    let edit_target = shell.memories[0].id.clone();
+    session.apply_shell_action(ShellAction::MemoryEditOpen(edit_target.clone()));
+    let shell = session.shell_view();
+    assert_eq!(
+        shell.memory_draft_content,
+        "The city sleeps under a permanent curfew; the vigilantes own the dark."
+    );
+    session.apply_shell_action(ShellAction::MemoryEditCancel);
+    assert!(session.shell_view().memory_edit_id.is_none());
+
+    // Delete: confirm dialog -> memories.delete removes the row.
+    session.apply_shell_action(ShellAction::MemoryDeleteOpen(edit_target.clone()));
+    assert!(session.shell_view().memory_delete_open);
+    session.apply_shell_action(ShellAction::MemoryDeleteConfirm);
+    let shell = session.shell_view();
+    assert!(!shell.memory_delete_open);
+    assert!(
+        shell
+            .memories
+            .iter()
+            .all(|item| item.id != edit_target),
+        "confirm delete removes the memory"
+    );
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "memories.delete")
+    );
+}
+
+#[test]
 fn physical_window_insets_become_css_pixels_on_the_shell() {
     let (mut session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
