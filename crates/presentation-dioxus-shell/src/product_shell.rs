@@ -249,6 +249,13 @@ pub struct MemoryCardView {
     pub enabled: bool,
 }
 
+/// One read-only sampler row on the Config tab (label + formatted value).
+#[derive(Clone, Debug, PartialEq)]
+pub struct PresetValueRow {
+    pub label: String,
+    pub value: String,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct PanelTab {
     pub id: &'static str,
@@ -404,6 +411,16 @@ pub struct ProductShellView {
     pub memory_form_error: Option<String>,
     pub memory_delete_open: bool,
     pub memory_delete_target_id: Option<String>,
+    /// Config tab preset editor state (React `GenerationPresetEditor`):
+    /// read-only sampler rows of the active preset, its name, the rename /
+    /// save-as dialog and delete confirmation.
+    pub preset_rows: Vec<PresetValueRow>,
+    pub preset_active_name: Option<String>,
+    pub preset_name_dialog_open: bool,
+    pub preset_name_mode: Option<String>,
+    pub preset_name_draft: String,
+    pub preset_form_error: Option<String>,
+    pub preset_delete_open: bool,
     pub plugins: Vec<PluginCardView>,
     pub providers: Vec<ProviderCardView>,
     pub presets: Vec<PresetCardView>,
@@ -515,6 +532,13 @@ impl Default for ProductShellView {
             memory_form_error: None,
             memory_delete_open: false,
             memory_delete_target_id: None,
+            preset_rows: Vec::new(),
+            preset_active_name: None,
+            preset_name_dialog_open: false,
+            preset_name_mode: None,
+            preset_name_draft: String::new(),
+            preset_form_error: None,
+            preset_delete_open: false,
             plugins: Vec::new(),
             providers: Vec::new(),
             presets: Vec::new(),
@@ -2031,6 +2055,17 @@ let entry_delete_book_name = entry_dialog_book_name;
         format!("Remove \"{theme_delete_name}\" and its local theme files?");
     let memory_delete_confirm =
         "Delete this memory? It will no longer be injected into prompts.";
+    let (ndlg_x, ndlg_y, ndlg_w, ndlg_h) = modal_geometry(&view, 320.0, 220.0);
+    let preset_name_style = format!(
+        "position:absolute;left:{ndlg_x}px;top:{ndlg_y}px;width:{ndlg_w}px;height:{ndlg_h}px;box-sizing:border-box;z-index:50;padding:16px;color:#f3eee8;"
+    );
+    let preset_name_title = if view.preset_name_mode.as_deref() == Some("rename") {
+        "Rename preset"
+    } else {
+        "Save as new preset"
+    };
+    let preset_name_value = view.preset_name_draft.clone();
+    let preset_delete_name = view.preset_active_name.clone().unwrap_or_default();
     let profile_delete_name = view
         .profiles
         .iter()
@@ -2521,6 +2556,71 @@ let entry_delete_book_name = entry_dialog_book_name;
                         "Delete memory"
                     }
                     div { "data-component": "dialog-description", "{memory_delete_confirm}" }
+                    div {
+                        class: "CharacterManagementPanel_dialogActions",
+                        style: "display:flex;gap:8px;justify-content:flex-end;margin-top:12px;",
+                        button {
+                            r#type: "button",
+                            "data-variant": "default",
+                            "data-size": "md",
+                            span { "Cancel" }
+                        }
+                        button {
+                            r#type: "button",
+                            "data-variant": "danger",
+                            "data-size": "md",
+                            span { "Delete" }
+                        }
+                    }
+                }
+            }
+            if view.preset_name_dialog_open {
+                div {
+                    class: "st-card",
+                    style: "{preset_name_style}",
+                    div {
+                        "data-component": "dialog-title",
+                        "{preset_name_title}"
+                    }
+                    div {
+                        style: "position:absolute;left:16px;top:72px;right:16px;height:48px;display:flex;flex-direction:column;gap:2px;",
+                        span { class: "CharacterManagementPanel_fieldHeading", strong { "Name" } }
+                        span {
+                            "data-part": "preset-name-input",
+                            style: "height:32px;line-height:32px;padding:0 12px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;color:#e8eef7;font-size:0.8125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;",
+                            "{preset_name_value}"
+                        }
+                    }
+                    div {
+                        class: "CharacterManagementPanel_dialogActions",
+                        style: "position:absolute;left:16px;right:16px;bottom:16px;display:flex;gap:8px;justify-content:flex-end;",
+                        button {
+                            r#type: "button",
+                            "data-variant": "default",
+                            "data-size": "md",
+                            span { "Cancel" }
+                        }
+                        button {
+                            r#type: "button",
+                            "data-variant": "primary",
+                            "data-size": "md",
+                            span { "Save" }
+                        }
+                    }
+                }
+            }
+            if view.preset_delete_open {
+                div {
+                    class: "st-card",
+                    style: "{profile_delete_style}",
+                    div {
+                        "data-component": "dialog-title",
+                        "Delete preset"
+                    }
+                    div {
+                        "data-component": "dialog-description",
+                        "Delete \"{preset_delete_name}\"? The selection returns to unsaved generation settings."
+                    }
                     div {
                         class: "CharacterManagementPanel_dialogActions",
                         style: "display:flex;gap:8px;justify-content:flex-end;margin-top:12px;",

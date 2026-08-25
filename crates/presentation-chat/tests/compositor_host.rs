@@ -1536,6 +1536,94 @@ fn memories_crud_over_product_wire() {
 }
 
 #[test]
+fn generation_preset_management_over_product_wire() {
+    use neotavern_presentation_chat::ShellAction;
+    let (mut session, _) = start_flagged_session(Some("1"), FakeWire::demo(), None, None)
+        .expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("providers".into()));
+    session.apply_shell_action(ShellAction::SetTab("presets".into()));
+    let shell = session.shell_view();
+    assert_eq!(shell.ai_tab, "presets");
+    assert_eq!(shell.presets.len(), 2);
+    assert!(shell.preset_active_name.is_none());
+    assert_eq!(shell.preset_rows.len(), 13);
+
+    // Select -> settings.update carries the id AND the preset values
+    // (maxContextTokens + generationDefaults), like React selectPreset.
+    let balanced = shell.presets.iter().find(|item| item.name == "Balanced");
+    let balanced_id = balanced.expect("Balanced seeded").id.clone();
+    session.apply_shell_action(ShellAction::SelectPreset(balanced_id.clone()));
+    let shell = session.shell_view();
+    assert_eq!(shell.selected_preset_id.as_deref(), Some(balanced_id.as_str()));
+    assert_eq!(shell.preset_active_name.as_deref(), Some("Balanced"));
+    assert_eq!(
+        shell
+            .preset_rows
+            .iter()
+            .find(|row| row.label == "Temperature")
+            .map(|row| row.value.as_str()),
+        Some("0.80")
+    );
+    assert_eq!(
+        shell
+            .preset_rows
+            .iter()
+            .find(|row| row.label == "Context size")
+            .map(|row| row.value.as_str()),
+        Some("8192")
+    );
+
+    // Duplicate -> presets.create with " (copy)" + becomes active.
+    session.apply_shell_action(ShellAction::PresetDuplicate);
+    let shell = session.shell_view();
+    assert_eq!(shell.presets.len(), 3);
+    assert_eq!(shell.preset_active_name.as_deref(), Some("Balanced (copy)"));
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "presets.create")
+    );
+
+    // Rename via the name dialog.
+    session.apply_shell_action(ShellAction::PresetRenameOpen);
+    assert!(session.shell_view().preset_name_dialog_open);
+    session.set_preset_name_draft("Renamed copy");
+    session.apply_shell_action(ShellAction::PresetNameSubmit);
+    let shell = session.shell_view();
+    assert!(!shell.preset_name_dialog_open);
+    assert_eq!(shell.preset_active_name.as_deref(), Some("Renamed copy"));
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "presets.update")
+    );
+
+    // Apply writes the draft values through settings.update.
+    session.apply_shell_action(ShellAction::PresetApply);
+    assert_eq!(
+        session.shell_view().status_message.as_deref(),
+        Some("Generation settings applied.")
+    );
+
+    // Delete confirm -> presets.delete + selection cleared.
+    session.apply_shell_action(ShellAction::PresetDeleteOpen);
+    assert!(session.shell_view().preset_delete_open);
+    session.apply_shell_action(ShellAction::PresetDeleteConfirm);
+    let shell = session.shell_view();
+    assert!(!shell.preset_delete_open);
+    assert!(shell.selected_preset_id.is_none());
+    assert_eq!(shell.presets.len(), 2);
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "presets.delete")
+    );
+}
+
+#[test]
 fn physical_window_insets_become_css_pixels_on_the_shell() {
     let (mut session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");

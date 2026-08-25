@@ -4,7 +4,9 @@
 use dioxus_core::Element;
 use dioxus_core_macro::rsx;
 
-use crate::product_shell::{icon, management_shell, PanelTab, ProductShellView, AI_SETTINGS_TITLE};
+use crate::product_shell::{
+    icon, management_shell, PanelTab, PresetValueRow, ProductShellView, AI_SETTINGS_TITLE,
+};
 
 pub fn ai_settings_panel(view: &ProductShellView) -> Element {
     let tabs = [
@@ -78,19 +80,81 @@ fn providers_tab(view: &ProductShellView) -> Element {
     }
 }
 
+/// React `GenerationPresetEditor` (Config tab): the preset selector cards
+/// (tap = select, applies values through `settings.update`), a management
+/// toolbar (save-as / rename / duplicate / delete), read-only sampler rows of
+/// the active preset and Apply. Per-sampler range editing stays on React for
+/// now; import/export are host-owned file dialogs.
+/// Geometry mirrors `shell_hit.rs::presets_config_hit`: body padding 12 +
+/// heading 20 + gap 8 + hint 16 + gap 8 + toolbar 36 + gap 8 + values card
+/// (8*2 + rows*20) + gap 8; selector cards 60 + 4.
 fn presets_tab(view: &ProductShellView) -> Element {
     let empty = view.presets.is_empty();
+    let active_label = view
+        .preset_active_name
+        .clone()
+        .unwrap_or_else(|| "Unsaved generation settings".to_string());
+    let rows: Vec<PresetValueRow> = view.preset_rows.clone();
     rsx! {
         div {
             class: "AiSettings_tabBody",
             "data-part": "ai-presets",
-            if empty {
-                div {
-                    class: "AiSettings_emptyState",
-                    {icon("SlidersHorizontal", 32)}
-                    strong { "No generation presets" }
-                    p { "Reusable sampler settings come from Product Wire presets.list." }
+            style: "padding:12px 16px;display:flex;flex-direction:column;gap:8px;",
+            strong { style: "font-size:0.9375rem;height:20px;", "Generation presets" }
+            p { style: "margin:0;color:#998f87;font-size:0.75rem;height:16px;", "Reusable sampler settings come from Product Wire presets.list." }
+            div {
+                style: "display:flex;align-items:center;gap:8px;height:20px;",
+                span { style: "flex:1;min-width:0;color:#998f87;font-size:0.75rem;", "{active_label}" }
+            }
+            div {
+                style: "display:flex;align-items:center;gap:8px;height:36px;",
+                button {
+                    class: "st-button", r#type: "button",
+                    "data-part": "preset-save-as",
+                    style: "width:96px;height:36px;",
+                    span { "Save as" }
                 }
+                button {
+                    class: "st-button", r#type: "button",
+                    "data-part": "preset-rename",
+                    style: "width:96px;height:36px;",
+                    span { "Rename" }
+                }
+                button {
+                    class: "st-button", r#type: "button",
+                    "data-part": "preset-duplicate",
+                    style: "width:96px;height:36px;",
+                    span { "Duplicate" }
+                }
+                button {
+                    class: "st-button", r#type: "button",
+                    "data-variant": "danger",
+                    "data-part": "preset-delete",
+                    style: "width:96px;height:36px;margin-left:auto;",
+                    span { "Delete" }
+                }
+            }
+            div {
+                "data-part": "preset-values",
+                style: "display:flex;flex-direction:column;gap:4px;width:100%;box-sizing:border-box;padding:8px;border:1px solid #39342f;border-radius:16px;background:#24211e;color:#f3eee8;",
+                for row in rows.iter() {
+                    div {
+                        key: "{row.label}",
+                        style: "display:flex;align-items:center;height:20px;",
+                        span { style: "flex:1;color:#998f87;font-size:0.75rem;", "{row.label}" }
+                        strong { style: "font-size:0.75rem;", "{row.value}" }
+                    }
+                }
+            }
+            button {
+                class: "st-button", r#type: "button",
+                "data-variant": "primary",
+                "data-part": "preset-apply",
+                style: "width:160px;height:36px;",
+                span { "Apply settings" }
+            }
+            if empty {
+                p { style: "margin:0;color:#998f87;font-size:0.75rem;", "No saved presets yet." }
             } else {
                 div {
                     class: "AiSettings_presetList",

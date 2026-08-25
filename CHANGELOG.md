@@ -3,6 +3,15 @@
 ## Unreleased
 ### Added
 
+- **AI Settings: управление пресетами (presets.create / update / delete +
+  settings).** Config-таб: выбор пресета применяет его значения
+  (`maxContextTokens` + `generationDefaults`) одним `settings.update`; тулбар
+  Save as / Rename (диалог с инпутом), Duplicate («<name> (copy)» с
+  автоселектом), Delete (подтверждение + сброс выбора); read-only строки
+  самплеров активного пресета и Apply. Слайдер-редактирование параметров и
+  import/export остаются на React. Неизвестный id → `PRESET_NOT_FOUND`.
+  Новый cargo-тест `generation_preset_management_over_product_wire`.
+
 - **AI Settings: память (memories.list / create / update / delete).** Третий
   таб Memories в панели AI Settings — полный CRUD: карточки со scope+ключами и
   переключателем Enabled, inline-редактирование (Edit → Save/Cancel), форма

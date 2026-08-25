@@ -13,6 +13,7 @@ use contracts_generated::generated::{
     RequestSettingsUpdateSettings, BackupDto, ResultListBackups, RequestBackupsRestore,
     MemoryDto, MemoryScope, ResultListMemories, RequestListMemories, RequestCreateMemory,
     RequestUpdateMemory, RequestDeleteMemory,
+    RequestGetPreset, RequestCreatePreset, RequestUpdatePreset, RequestDeletePreset,
 };
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -321,17 +322,43 @@ impl FakeWire {
                 max_output_tokens: None,
             }],
         });
-        // Generation presets (kernel `presets.list` is DB-backed).
-        let preset = |id_high: u64, name: &str| PresetDto {
-            id: wire_id(id_high),
+        // Generation presets (kernel `presets.list` is DB-backed). Data
+        // follows the `GenerationPresetData` contract shape.
+        let preset_data = |max_context: i64, temperature: f64| {
+            json!({
+                "maxContextTokens": max_context,
+                "generationDefaults": {
+                    "maxTokens": 2048,
+                    "temperature": temperature,
+                    "topP": 1,
+                    "topK": 0,
+                    "minP": 0,
+                    "topA": 0,
+                    "repetitionPenalty": 1,
+                    "frequencyPenalty": 0,
+                    "presencePenalty": 0,
+                    "seed": -1,
+                    "reasoning": false,
+                    "stream": true
+                }
+            })
+        };
+        wire.presets.push(PresetDto {
+            id: wire_id(0x8101),
             kind: "generation".into(),
-            name: name.into(),
-            data: json!({}),
+            name: "Balanced".into(),
+            data: preset_data(8192, 0.8),
             created_at: TS.into(),
             updated_at: TS.into(),
-        };
-        wire.presets.push(preset(0x8101, "Balanced"));
-        wire.presets.push(preset(0x8102, "Creative"));
+        });
+        wire.presets.push(PresetDto {
+            id: wire_id(0x8102),
+            kind: "generation".into(),
+            name: "Creative".into(),
+            data: preset_data(16384, 1.1),
+            created_at: TS.into(),
+            updated_at: TS.into(),
+        });
         // Backup catalog (kernel `backups.list`; status "completed" per the
         // kernel backup module).
         let backup = |id_high: u64, size_bytes: i64| BackupDto {
@@ -1469,6 +1496,57 @@ impl ProductWire for FakeWire {
                     .cloned()
                     .collect();
                 self.wrap_call(operation_id, to_value(&ResultListPresets { items }))
+            }
+            "presets.get" => {
+                let req: RequestGetPreset = serde_json::from_value(payload.clone())?;
+                let dto = self
+                    .presets
+                    .iter()
+                    .find(|item| item.id == req.preset_id)
+                    .cloned()
+                    .ok_or_else(|| Self::product("PRESET_NOT_FOUND", "presetId", &req.preset_id))?;
+                self.wrap_call(operation_id, to_value(&dto))
+            }
+            "presets.create" => {
+                let req: RequestCreatePreset = serde_json::from_value(payload.clone())?;
+                let dto = PresetDto {
+                    id: wire_id(0x8600 + self.presets.len() as u64),
+                    kind: req.kind,
+                    name: req.name,
+                    data: req.data.unwrap_or_else(|| json!({})),
+                    created_at: TS.into(),
+                    updated_at: TS.into(),
+                };
+                self.presets.push(dto.clone());
+                self.wrap_call(operation_id, to_value(&dto))
+            }
+            "presets.update" => {
+                let req: RequestUpdatePreset = serde_json::from_value(payload.clone())?;
+                let item = self
+                    .presets
+                    .iter_mut()
+                    .find(|item| item.id == req.preset_id)
+                    .ok_or_else(|| {
+                        Self::product("PRESET_NOT_FOUND", "presetId", &req.preset_id)
+                    })?;
+                if let Some(name) = req.name {
+                    item.name = name;
+                }
+                if req.data.is_some() {
+                    item.data = req.data.unwrap();
+                }
+                item.updated_at = TS.into();
+                let updated = item.clone();
+                self.wrap_call(operation_id, to_value(&updated))
+            }
+            "presets.delete" => {
+                let req: RequestDeletePreset = serde_json::from_value(payload.clone())?;
+                let len = self.presets.len();
+                self.presets.retain(|item| item.id != req.preset_id);
+                if self.presets.len() == len {
+                    return Err(Self::product("PRESET_NOT_FOUND", "presetId", &req.preset_id));
+                }
+                self.ok_call(operation_id, json!({}))
             }
             "settings.update" => {
                 let req: RequestSettingsUpdate = serde_json::from_value(payload.clone())?;

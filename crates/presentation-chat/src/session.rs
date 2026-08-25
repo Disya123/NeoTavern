@@ -33,6 +33,7 @@ use contracts_generated::generated::{
     decode_result_list_backups, decode_result_backups_restore,
     MemoryDto, MemoryScope, RequestListMemories, RequestCreateMemory, RequestUpdateMemory,
     RequestDeleteMemory, decode_result_list_memories, decode_memory_dto,
+    PresetDto, RequestCreatePreset, RequestUpdatePreset, RequestDeletePreset, decode_preset_dto,
 };
 use neotavern_chat_viewport::{
     GeometrySnapshot, HeightIndex, HeightKind, LogicalItemId, PredictorBudgets, PresentDecision,
@@ -45,7 +46,7 @@ use neotavern_presentation_dioxus_shell::{
     ProfileCardView,
     ProductChatView, ProductChrome, ProductShellView, ProviderCardView, RowKind, SafeAreaInsets,
     ThemeCardView, ToolCardView, VisibleRow, PRODUCT_PATH_VISIBLE,
-    BackupCardView, MemoryCardView,
+    BackupCardView, MemoryCardView, PresetValueRow,
 };
 
 use serde::de::DeserializeOwned;
@@ -62,6 +63,44 @@ use crate::wire::{PAGE_LIMIT, ProductWire, StreamFrame};
 /// pressure signal as the GPU cache.
 pub const AVATAR_CPU_MAX_ENTRIES: usize = 64;
 pub const AVATAR_CPU_MAX_BYTES: usize = 8 * 1024 * 1024;
+
+/// Parsed `GenerationPresetData` contract subset used for the Config tab
+/// draft display and settings persistence (React `GenerationPresetEditor`).
+#[derive(serde::Serialize, serde::Deserialize, Default)]
+struct PresetGenerationData {
+    #[serde(rename = "maxContextTokens", default)]
+    max_context_tokens: i64,
+    #[serde(rename = "generationDefaults", default)]
+    generation_defaults: PresetGenerationDefaults,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Default)]
+struct PresetGenerationDefaults {
+    #[serde(rename = "maxTokens", default)]
+    max_tokens: f64,
+    #[serde(default)]
+    temperature: f64,
+    #[serde(rename = "topP", default)]
+    top_p: f64,
+    #[serde(rename = "topK", default)]
+    top_k: f64,
+    #[serde(rename = "minP", default)]
+    min_p: f64,
+    #[serde(rename = "topA", default)]
+    top_a: f64,
+    #[serde(rename = "repetitionPenalty", default)]
+    repetition_penalty: f64,
+    #[serde(rename = "frequencyPenalty", default)]
+    frequency_penalty: f64,
+    #[serde(rename = "presencePenalty", default)]
+    presence_penalty: f64,
+    #[serde(default)]
+    seed: f64,
+    #[serde(default)]
+    reasoning: bool,
+    #[serde(default)]
+    stream: bool,
+}
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ChatRouteState {
@@ -146,7 +185,18 @@ pub struct ChatRouteState {
     pub entry_delete_target_id: Option<String>,
     pub plugins: Vec<PluginsItem>,
     pub providers: Vec<ProviderCardView>,
-    pub presets: Vec<PresetCardView>,
+    pub presets: Vec<PresetDto>,
+    /// Generation draft applied through `settings.update` (React
+    /// `GenerationPresetEditor`): context size plus the sampler defaults,
+    /// kept as the contract JSON.
+    pub preset_draft_max_context: i64,
+    pub preset_draft_defaults: Value,
+    /// Preset name dialog state ("create" / "rename" mode) and its input.
+    pub preset_name_dialog_open: bool,
+    pub preset_name_mode: Option<String>,
+    pub preset_name_draft: String,
+    pub preset_form_error: Option<String>,
+    pub preset_delete_open: bool,
     /// Home/chats panel rows (`chats.list`).
     pub chat_list: Vec<ChatDto>,
     /// Home/chats panel search query (client-side title filter).
@@ -1139,6 +1189,18 @@ impl<W: ProductWire> ChatSession<W> {
             secrets_status: self.state.secrets_status.clone(),
             selected_provider_id: self.state.active_provider_id.clone(),
             selected_preset_id: self.state.active_preset_id.clone(),
+            preset_rows: self.preset_value_rows(),
+            preset_active_name: self
+                .state
+                .presets
+                .iter()
+                .find(|item| Some(item.id.as_str()) == self.state.active_preset_id.as_deref())
+                .map(|item| item.name.clone()),
+            preset_name_dialog_open: self.state.preset_name_dialog_open,
+            preset_name_mode: self.state.preset_name_mode.clone(),
+            preset_name_draft: self.state.preset_name_draft.clone(),
+            preset_form_error: self.state.preset_form_error.clone(),
+            preset_delete_open: self.state.preset_delete_open,
             backups: self
                 .state
                 .backups
@@ -1235,7 +1297,16 @@ impl<W: ProductWire> ChatSession<W> {
                 })
                 .collect(),
             providers: self.state.providers.clone(),
-            presets: self.state.presets.clone(),
+            presets: self
+                .state
+                .presets
+                .iter()
+                .map(|item| PresetCardView {
+                    id: item.id.clone(),
+                    name: item.name.clone(),
+                    kind: item.kind.clone(),
+                })
+                .collect(),
             chat_list: {
                 let query = self.state.chat_search.trim().to_lowercase();
                 self.state
@@ -2210,6 +2281,15 @@ impl<W: ProductWire> ChatSession<W> {
             ShellAction::MemoryDraftToggleScope => self.toggle_memory_draft_scope(),
             ShellAction::MemoryCycleCharacter => self.cycle_memory_character(),
             ShellAction::MemoryDraftToggleEnabled => self.toggle_memory_draft_enabled(),
+            ShellAction::PresetApply => self.apply_preset_draft(),
+            ShellAction::PresetSaveAsOpen => self.open_preset_create(),
+            ShellAction::PresetRenameOpen => self.open_preset_rename(),
+            ShellAction::PresetNameCancel => self.close_preset_name(),
+            ShellAction::PresetNameSubmit => self.confirm_preset_name(),
+            ShellAction::PresetDuplicate => self.duplicate_preset(),
+            ShellAction::PresetDeleteOpen => self.open_preset_delete(),
+            ShellAction::PresetDeleteClose => self.close_preset_delete(),
+            ShellAction::PresetDeleteConfirm => self.confirm_preset_delete(),
         }
     }
 
@@ -2773,18 +2853,42 @@ impl<W: ProductWire> ChatSession<W> {
             },
             decode_result_list_presets,
         ) {
-            Ok(ResultListPresets { items }) => {
-                self.state.presets = items
-                    .into_iter()
-                    .map(|row| PresetCardView {
-                        id: row.id,
-                        name: row.name,
-                        kind: row.kind,
-                    })
-                    .collect();
-            }
+            Ok(ResultListPresets { items }) => self.state.presets = items,
             Err(err) => self.record_error(err),
         }
+    }
+
+    /// Read-only sampler rows for the Config tab, parsed from the active
+    /// preset's `GenerationPresetData` (React renders them as range fields;
+    /// per-sampler editing is not ported to this plane yet).
+    fn preset_value_rows(&self) -> Vec<PresetValueRow> {
+        let parsed: PresetGenerationData = match self.active_preset() {
+            Some(preset) => serde_json::from_value(preset.data.clone()).unwrap_or_default(),
+            None => PresetGenerationData::default(),
+        };
+        let d = &parsed.generation_defaults;
+        let fmt = |v: f64| {
+            if v.fract() == 0.0 {
+                format!("{}", v as i64)
+            } else {
+                format!("{v:.2}")
+            }
+        };
+        vec![
+            PresetValueRow { label: "Context size".into(), value: parsed.max_context_tokens.to_string() },
+            PresetValueRow { label: "Max tokens".into(), value: fmt(d.max_tokens) },
+            PresetValueRow { label: "Temperature".into(), value: fmt(d.temperature) },
+            PresetValueRow { label: "Top P".into(), value: fmt(d.top_p) },
+            PresetValueRow { label: "Top K".into(), value: fmt(d.top_k) },
+            PresetValueRow { label: "Min P".into(), value: fmt(d.min_p) },
+            PresetValueRow { label: "Top A".into(), value: fmt(d.top_a) },
+            PresetValueRow { label: "Repetition penalty".into(), value: fmt(d.repetition_penalty) },
+            PresetValueRow { label: "Frequency penalty".into(), value: fmt(d.frequency_penalty) },
+            PresetValueRow { label: "Presence penalty".into(), value: fmt(d.presence_penalty) },
+            PresetValueRow { label: "Seed".into(), value: fmt(d.seed) },
+            PresetValueRow { label: "Reasoning".into(), value: d.reasoning.to_string() },
+            PresetValueRow { label: "Streaming".into(), value: d.stream.to_string() },
+        ]
     }
 
     fn load_settings(&mut self) {
@@ -3249,18 +3353,261 @@ impl<W: ProductWire> ChatSession<W> {
     }
 
     /// Selects a generation preset card (`settings.update` key
-    /// `activeGenerationPresetId`, React `GenerationPresetEditor`).
+    /// `activeGenerationPresetId`, React `GenerationPresetEditor`). Like
+    /// React `selectPreset`, the preset values are applied too:
+    /// maxContextTokens + generationDefaults ride the same settings.update.
     pub fn select_preset(&mut self, id: &str) {
         self.state.active_preset_id = Some(id.to_string());
+        if let Some(preset) = self.state.presets.iter().find(|item| item.id == id) {
+            let parsed: PresetGenerationData =
+                serde_json::from_value(preset.data.clone()).unwrap_or_default();
+            self.state.preset_draft_max_context = parsed.max_context_tokens;
+            self.state.preset_draft_defaults =
+                serde_json::to_value(&parsed.generation_defaults).unwrap_or_else(|_| json!({}));
+            let req = RequestSettingsUpdate {
+                settings: vec![
+                    RequestSettingsUpdateSettings {
+                        key: "activeGenerationPresetId".into(),
+                        value: json!(id),
+                    },
+                    RequestSettingsUpdateSettings {
+                        key: "maxContextTokens".into(),
+                        value: json!(parsed.max_context_tokens),
+                    },
+                    RequestSettingsUpdateSettings {
+                        key: "generationDefaults".into(),
+                        value: serde_json::to_value(&parsed.generation_defaults)
+                            .unwrap_or_else(|_| json!({})),
+                    },
+                ],
+            };
+            match self.call_value("settings.update", &req) {
+                Ok(_) => {
+                    self.state.status_message = Some("Preset selected.".into());
+                }
+                Err(err) => self.record_error(err),
+            }
+        } else {
+            self.state.status_message = Some("Preset selected.".into());
+        }
+        self.bump_scene();
+    }
+
+    /// Applies the current draft (`settings.update` maxContextTokens +
+    /// generationDefaults; React `applyDraft`).
+    pub fn apply_preset_draft(&mut self) {
+        let defaults = self.state.preset_draft_defaults.clone();
         let req = RequestSettingsUpdate {
-            settings: vec![RequestSettingsUpdateSettings {
-                key: "activeGenerationPresetId".into(),
-                value: json!(id),
-            }],
+            settings: vec![
+                RequestSettingsUpdateSettings {
+                    key: "maxContextTokens".into(),
+                    value: json!(self.state.preset_draft_max_context),
+                },
+                RequestSettingsUpdateSettings {
+                    key: "generationDefaults".into(),
+                    value: defaults,
+                },
+            ],
         };
         match self.call_value("settings.update", &req) {
             Ok(_) => {
-                self.state.status_message = Some("Preset selected.".into());
+                self.state.status_message = Some("Generation settings applied.".into());
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    pub fn set_preset_name_draft(&mut self, value: &str) {
+        self.state.preset_name_draft = value.to_string();
+        self.bump_scene();
+    }
+
+    /// Opens the name dialog in create mode ("Save as new").
+    pub fn open_preset_create(&mut self) {
+        self.state.preset_name_dialog_open = true;
+        self.state.preset_name_mode = Some("create".into());
+        self.state.preset_name_draft.clear();
+        self.state.preset_form_error = None;
+        self.bump_scene();
+    }
+
+    /// Opens the name dialog in rename mode prefilled with the active name.
+    pub fn open_preset_rename(&mut self) {
+        let active_name = self.active_preset().map(|item| item.name.clone());
+        let Some(active_name) = active_name else {
+            return;
+        };
+        self.state.preset_name_dialog_open = true;
+        self.state.preset_name_mode = Some("rename".into());
+        self.state.preset_name_draft = active_name;
+        self.state.preset_form_error = None;
+        self.bump_scene();
+    }
+
+    pub fn close_preset_name(&mut self) {
+        self.state.preset_name_dialog_open = false;
+        self.state.preset_name_mode = None;
+        self.state.preset_name_draft.clear();
+        self.bump_scene();
+    }
+
+    pub fn close_preset_delete(&mut self) {
+        self.state.preset_delete_open = false;
+        self.bump_scene();
+    }
+
+    fn active_preset(&self) -> Option<&PresetDto> {
+        let id = self.state.active_preset_id.as_deref()?;
+        self.state.presets.iter().find(|item| item.id == id)
+    }
+
+    fn preset_data_json(&self) -> Value {
+        match self.active_preset() {
+            Some(preset) => preset.data.clone(),
+            None => serde_json::to_value(PresetGenerationData::default())
+                .unwrap_or_else(|_| json!({})),
+        }
+    }
+
+    fn load_presets_list(&mut self) {
+        match self.call_decode(
+            "presets.list",
+            &RequestListPresets {
+                kind: Some("generation".into()),
+            },
+            decode_result_list_presets,
+        ) {
+            Ok(ResultListPresets { items }) => self.state.presets = items,
+            Err(err) => self.record_error(err),
+        }
+    }
+
+    /// Confirms the name dialog: create ("Save as new") or rename, mirroring
+    /// React `submitNameAction`. An empty name stays client-side.
+    pub fn confirm_preset_name(&mut self) {
+        let name = self.state.preset_name_draft.trim().to_string();
+        if name.is_empty() || self.state.preset_name_mode.is_none() {
+            self.state.preset_form_error = Some("REQUIRED".into());
+            self.bump_scene();
+            return;
+        }
+        let mode = self.state.preset_name_mode.clone().unwrap_or_default();
+        let outcome = if mode == "rename" {
+            match self.active_preset().cloned() {
+                Some(active) => {
+                    let req = RequestUpdatePreset {
+                        preset_id: active.id,
+                        name: Some(name),
+                        data: None,
+                    };
+                    self.call_decode("presets.update", &req, decode_preset_dto)
+                        .map(|_| ())
+                }
+                None => Ok(()),
+            }
+        } else {
+            let req = RequestCreatePreset {
+                kind: "generation".into(),
+                name,
+                data: Some(self.preset_data_json()),
+            };
+            self.call_decode("presets.create", &req, decode_preset_dto)
+                .map(|dto| dto.id)
+                .and_then(|id| {
+                    // A created preset becomes the active one, exactly like
+                    // React `submitNameAction`.
+                    let req = RequestSettingsUpdate {
+                        settings: vec![RequestSettingsUpdateSettings {
+                            key: "activeGenerationPresetId".into(),
+                            value: json!(id.clone()),
+                        }],
+                    };
+                    self.state.active_preset_id = Some(id);
+                    self.call_value("settings.update", &req).map(|_| ())
+                })
+        };
+        match outcome {
+            Ok(_) => {
+                let was_create = mode != "rename";
+                self.close_preset_name();
+                self.load_presets_list();
+                if was_create {
+                    self.state.status_message = Some("Preset created.".into());
+                } else {
+                    self.state.status_message = Some("Preset renamed.".into());
+                }
+            }
+            Err(err) => {
+                let code = err.reason_code().to_string();
+                self.state.preset_form_error = Some(code);
+            }
+        }
+        self.bump_scene();
+    }
+
+    /// Duplicates the active preset as "<name> (copy)" and selects it
+    /// (React duplicate flow).
+    pub fn duplicate_preset(&mut self) {
+        let (name, data) = match self.active_preset() {
+            Some(active) => (format!("{} (copy)", active.name), active.data.clone()),
+            None => (
+                "generation (copy)".to_string(),
+                serde_json::to_value(PresetGenerationData::default()).unwrap_or_else(|_| json!({})),
+            ),
+        };
+        let req = RequestCreatePreset {
+            kind: "generation".into(),
+            name,
+            data: Some(data),
+        };
+        match self.call_decode("presets.create", &req, decode_preset_dto) {
+            Ok(dto) => {
+                let sel = RequestSettingsUpdate {
+                    settings: vec![RequestSettingsUpdateSettings {
+                        key: "activeGenerationPresetId".into(),
+                        value: json!(dto.id.clone()),
+                    }],
+                };
+                let _ = self.call_value("settings.update", &sel);
+                self.state.active_preset_id = Some(dto.id);
+                self.state.status_message = Some("Preset duplicated.".into());
+                self.load_presets_list();
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    pub fn open_preset_delete(&mut self) {
+        if self.active_preset().is_some() {
+            self.state.preset_delete_open = true;
+            self.bump_scene();
+        }
+    }
+
+    /// Deletes the active preset and clears the selection
+    /// (React `confirmDelete`).
+    pub fn confirm_preset_delete(&mut self) {
+        let Some(active) = self.active_preset().cloned() else {
+            return;
+        };
+        self.state.preset_delete_open = false;
+        let req = RequestDeletePreset {
+            preset_id: active.id,
+        };
+        match self.call_value("presets.delete", &req) {
+            Ok(_) => {
+                let clear = RequestSettingsUpdate {
+                    settings: vec![RequestSettingsUpdateSettings {
+                        key: "activeGenerationPresetId".into(),
+                        value: Value::Null,
+                    }],
+                };
+                let _ = self.call_value("settings.update", &clear);
+                self.state.active_preset_id = None;
+                self.state.status_message = Some("Preset deleted.".into());
+                self.load_presets_list();
             }
             Err(err) => self.record_error(err),
         }

@@ -147,6 +147,17 @@ pub enum ShellAction {
     MemoryDraftToggleScope,
     MemoryCycleCharacter,
     MemoryDraftToggleEnabled,
+    /// Config tab preset management (React `GenerationPresetEditor`):
+    /// apply draft, save-as / rename dialog, duplicate, delete confirm.
+    PresetApply,
+    PresetSaveAsOpen,
+    PresetRenameOpen,
+    PresetNameCancel,
+    PresetNameSubmit,
+    PresetDuplicate,
+    PresetDeleteOpen,
+    PresetDeleteClose,
+    PresetDeleteConfirm,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -247,6 +258,44 @@ fn header_bottom(view: &ProductShellView) -> f32 {
 fn dialog_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
     let (width, height) = css_size(view);
     let chat_x0 = chat_origin_x(view);
+    if view.preset_name_dialog_open {
+        let dlg_w = 320.0_f32.min(width - 32.0);
+        let dlg_h = 220.0_f32.min(height - 48.0);
+        let x0 = chat_x0 + (width - chat_x0 - dlg_w).max(0.0) * 0.5;
+        let y0 = (height - dlg_h) * 0.5;
+        if !contains(x, y, x0, y0, x0 + dlg_w, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::PresetNameCancel));
+        }
+        let field_top = y0 + 72.0;
+        if y >= field_top && y < field_top + 48.0 {
+            return Some(ShellHit::Absorb);
+        }
+        let actions_y = y0 + dlg_h - 56.0;
+        if contains(x, y, x0, actions_y, x0 + dlg_w * 0.5, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::PresetNameCancel));
+        }
+        if contains(x, y, x0 + dlg_w * 0.5, actions_y, x0 + dlg_w, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::PresetNameSubmit));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    if view.preset_delete_open {
+        let dlg_w = 300.0_f32.min(width - 32.0);
+        let dlg_h = 200.0_f32.min(height - 48.0);
+        let x0 = chat_x0 + (width - chat_x0 - dlg_w).max(0.0) * 0.5;
+        let y0 = (height - dlg_h) * 0.5;
+        if !contains(x, y, x0, y0, x0 + dlg_w, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::PresetDeleteClose));
+        }
+        let actions_y = y0 + dlg_h - 56.0;
+        if contains(x, y, x0, actions_y, x0 + dlg_w * 0.5, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::PresetDeleteClose));
+        }
+        if contains(x, y, x0 + dlg_w * 0.5, actions_y, x0 + dlg_w, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::PresetDeleteConfirm));
+        }
+        return Some(ShellHit::Absorb);
+    }
     if view.memory_delete_open {
         let dlg_w = 300.0_f32.min(width - 32.0);
         let dlg_h = 200.0_f32.min(height - 48.0);
@@ -693,20 +742,9 @@ pub fn hit_test(view: &ProductShellView, css_x: f32, css_y: f32) -> Option<Shell
                 if view.ai_tab == "memories" {
                     return memories_hit(view, x, y, panel_x, panel_x + panel_w);
                 }
-                let (ids, select): (
-                    Box<dyn Iterator<Item = &str>>,
-                    fn(&str) -> ShellAction,
-                ) = if view.ai_tab == "presets" {
-                    (
-                        Box::new(view.presets.iter().map(|item| item.id.as_str())),
-                        |id: &str| ShellAction::SelectPreset(id.into()),
-                    )
-                } else {
-                    (
-                        Box::new(view.providers.iter().map(|item| item.id.as_str())),
-                        |id: &str| ShellAction::SelectProvider(id.into()),
-                    )
-                };
+                if view.ai_tab == "presets" {
+                    return presets_config_hit(view, x, y, panel_x, panel_x + panel_w);
+                }
                 return catalog_panel_hit(
                     view,
                     x,
@@ -714,8 +752,8 @@ pub fn hit_test(view: &ProductShellView, css_x: f32, css_y: f32) -> Option<Shell
                     &["providers", "presets", "memories"],
                     view.ai_tab.as_str(),
                     52.0,
-                    ids,
-                    select,
+                    view.providers.iter().map(|item| item.id.as_str()),
+                    |id: &str| ShellAction::SelectProvider(id.into()),
                 );
             }
             "settings" => {
@@ -1064,6 +1102,84 @@ fn memories_hit(view: &ProductShellView, x: f32, y: f32, panel_x: f32, x1: f32) 
         if y >= add_top && y < add_top + 36.0 && x >= inner_l && x < inner_l + 140.0 {
             return Some(ShellHit::Action(ShellAction::MemorySave));
         }
+    }
+    Some(ShellHit::Absorb)
+}
+
+/// React `GenerationPresetEditor` body (Config tab): the management toolbar,
+/// read-only sampler rows of the active preset, Apply, then the selector
+/// cards (tap = select). Geometry mirrors `ai_settings_tab.rs::presets_tab`:
+/// padding 12 + heading 20 + gap 8 + hint 16 + gap 8 + toolbar 36 + gap 8 +
+/// values card (16 + rows*20) + gap 8; cards 60 + 4.
+fn presets_config_hit(
+    view: &ProductShellView,
+    x: f32,
+    y: f32,
+    panel_x: f32,
+    x1: f32,
+) -> Option<ShellHit> {
+    if !view.sidebar_open {
+        return None;
+    }
+    let (_, panel_w) = panel_origin(view);
+    let header_end = header_bottom(view);
+    if y < header_end {
+        if x >= x1 - CONTROL_SM - SPACE_LG {
+            return Some(ShellHit::Action(ShellAction::ClosePanel));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    let pad = SPACE_LG;
+    let tabs = ["providers", "presets", "memories"];
+    let tabs_top = header_end + SPACE_XS;
+    let tabs_bottom = tabs_top + CONTROL_SM + SPACE_XS;
+    if y >= tabs_top && y < tabs_bottom {
+        let tabs_x0 = panel_x + SPACE_LG;
+        let span = (panel_w - SPACE_LG * 2.0).max(1.0);
+        let idx = (((x - tabs_x0) / span) * tabs.len() as f32).floor() as usize;
+        return Some(ShellHit::Action(ShellAction::SetTab(
+            tabs[idx.min(tabs.len() - 1)].into(),
+        )));
+    }
+    let inner_r = x1 - pad;
+    // Body top after heading + hint.
+    let mut cursor = tabs_bottom + 12.0 + 20.0 + 8.0 + 16.0 + 8.0;
+    // Toolbar: Save as / Rename / Duplicate left, Delete right.
+    if y >= cursor && y < cursor + 36.0 {
+        if x >= panel_x + pad && x < panel_x + pad + 96.0 {
+            return Some(ShellHit::Action(ShellAction::PresetSaveAsOpen));
+        }
+        if x >= panel_x + pad + 104.0 && x < panel_x + pad + 200.0 {
+            return Some(ShellHit::Action(ShellAction::PresetRenameOpen));
+        }
+        if x >= panel_x + pad + 208.0 && x < panel_x + pad + 304.0 {
+            return Some(ShellHit::Action(ShellAction::PresetDuplicate));
+        }
+        if x >= inner_r - 96.0 && x < inner_r {
+            return Some(ShellHit::Action(ShellAction::PresetDeleteOpen));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    cursor += 36.0 + 8.0;
+    // Values card: read-only rows of 20 px with 4 px gaps inside 8 px padding.
+    let n = view.preset_rows.len() as f32;
+    let values_h = 16.0 + if n > 0.0 { n * 24.0 - 4.0 } else { 0.0 };
+    cursor += values_h + 8.0;
+    // Apply row.
+    if y >= cursor && y < cursor + 36.0 {
+        if x >= panel_x + pad && x < panel_x + pad + 160.0 {
+            return Some(ShellHit::Action(ShellAction::PresetApply));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    cursor += 36.0 + 8.0;
+    // Selector cards: tap selects the preset.
+    for item in view.presets.iter() {
+        let bottom = cursor + 60.0 + 4.0;
+        if y >= cursor && y < bottom - 4.0 && x >= panel_x + pad && x < inner_r {
+            return Some(ShellHit::Action(ShellAction::SelectPreset(item.id.clone())));
+        }
+        cursor = bottom;
     }
     Some(ShellHit::Absorb)
 }

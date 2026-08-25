@@ -460,6 +460,25 @@ gap 8 + hint 32 + gap 8 + actions 36 + gap 8; rows 64 + 4). Тест
 character-scoped к демо-персонажу) в demo(), пусто в default(). Тест
 `memories_crud_over_product_wire`.
 
+## AI Settings: управление пресетами
+
+Config-таб вырос из списка карточек в редактор React
+`GenerationPresetEditor`: выбор карточки (`presets.list`, kind generation)
+применяет значения пресета через один `settings.update`
+(`activeGenerationPresetId` + `maxContextTokens` + `generationDefaults` — как
+React `selectPreset`). Тулбар управления: Save as / Rename (диалог 320×220 с
+инпутом имени, `TextFocus::PresetName`) → `presets.create` / `presets.update`,
+Duplicate → `presets.create` «<name> (copy)» с автоселектом, Delete → диалог
+300×200 → `presets.delete` + сброс активного id. Read-only строки самплеров
+(13 параметров контракта `GenerationPresetData`) парсятся из data активного
+пресета; поэлементное редактирование слайдеров и import/export остаются на
+React (import/export — файловые диалоги хоста). Неизвестный id →
+`PRESET_NOT_FOUND` (как kernel product.rs). FakeWire: пресеты Balanced
+(8192/0.8) и Creative (16384/1.1) с реальными данными в demo(). Геометрия
+зеркалится между `ai_settings_tab.rs::presets_tab` и
+`shell_hit.rs::presets_config_hit`. Тест
+`generation_preset_management_over_product_wire`.
+
 ## Отправка сообщения (Send)
 
 Композер (`data-part="composer"` в `product_chat_app`) получил кнопку **Send**
