@@ -126,6 +126,11 @@ pub enum ShellAction {
     /// Secrets tab lock button (`secrets.lock`; React `SecretsPanel` "Lock
     /// now", only for an available portable store).
     LockSecrets,
+    /// AI settings card selection (`settings.update` `activeProviderConfigId`
+    /// / `activeGenerationPresetId`; React `ProviderProfileEditor` /
+    /// `GenerationPresetEditor`).
+    SelectProvider(String),
+    SelectPreset(String),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -652,15 +657,29 @@ pub fn hit_test(view: &ProductShellView, css_x: f32, css_y: f32) -> Option<Shell
         }
         match view.panel.as_str() {
             "providers" => {
+                let (ids, select): (
+                    Box<dyn Iterator<Item = &str>>,
+                    fn(&str) -> ShellAction,
+                ) = if view.ai_tab == "presets" {
+                    (
+                        Box::new(view.presets.iter().map(|item| item.id.as_str())),
+                        |id: &str| ShellAction::SelectPreset(id.into()),
+                    )
+                } else {
+                    (
+                        Box::new(view.providers.iter().map(|item| item.id.as_str())),
+                        |id: &str| ShellAction::SelectProvider(id.into()),
+                    )
+                };
                 return catalog_panel_hit(
                     view,
                     x,
                     y,
                     &["providers", "presets"],
                     view.ai_tab.as_str(),
-                    0.0,
-                    core::iter::empty(),
-                    |_: &str| ShellAction::ClosePanel,
+                    52.0,
+                    ids,
+                    select,
                 );
             }
             "settings" => {

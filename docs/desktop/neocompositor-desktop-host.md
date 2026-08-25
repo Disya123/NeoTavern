@@ -405,6 +405,24 @@ tools-операций в UI нет (`generation.tool.result` — Этап 4). F
 с фикстурой `TOOL_SPEC_VALUE` (lookup-weather) в demo(), пустой в default().
 Тест `tools_registry_list_over_product_wire`.
 
+## AI Settings: провайдеры и пресеты
+
+Панель AI Settings (API / Config) теперь с реальными данными: `providers.list`
+возвращает адаптеры (kernel статeless-реестр по умолчанию регистрирует
+детерминированный built-in `fake` — id "fake", name "Fake Provider", модель
+fake-1, capabilities tools/streaming), `presets.list` — пресеты kind
+`generation` (DB-контур kernel). Карточки (`data-part="provider-card"` /
+`preset-card`, 60 px, геометрия `catalog_panel_hit` с rows_top 52) выбираются:
+`SelectProvider` / `SelectPreset` персистят выбор через `settings.update`
+(ключи `activeProviderConfigId` / `activeGenerationPresetId` — как React
+kernel-мост `updateSettings`), активная карточка получает `data-state="active"`.
+Wire-side выбор провайдера на запрос остаётся в `generation.start` (отдельной
+операции «select provider» нет). Полный редактор профиля (config CRUD,
+discovery моделей, ключи) — legacy-контур; на kernel-плоскости React его
+части гейтятся UnsupportedError и в этот порт не переносятся. FakeWire:
+провайдер fake + пресеты Balanced/Creative в demo(), пустые в default().
+Тест `ai_providers_and_presets_over_product_wire`.
+
 ## Отправка сообщения (Send)
 
 Композер (`data-part="composer"` в `product_chat_app`) получил кнопку **Send**

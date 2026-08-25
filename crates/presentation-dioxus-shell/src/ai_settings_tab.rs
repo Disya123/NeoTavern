@@ -57,9 +57,12 @@ fn providers_tab(view: &ProductShellView) -> Element {
                             class: "AiSettings_providerCard",
                             r#type: "button",
                             "data-part": "provider-card",
+                            "data-state": if Some(item.id.as_str()) == view.selected_provider_id.as_deref() { "active" } else { "idle" },
+                            style: "display:flex;align-items:center;gap:8px;width:100%;height:60px;box-sizing:border-box;padding:0 12px;border:1px solid #39342f;border-radius:16px;background:#24211e;color:#f3eee8;",
                             span {
-                                strong { "{item.name}" }
-                                span { "{item.availability}" }
+                                style: "flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;",
+                                strong { style: "font-size:0.8125rem;", "{item.name}" }
+                                span { style: "color:#998f87;font-size:0.6875rem;", "{item.availability}" }
                             }
                         }
                     }
@@ -90,9 +93,12 @@ fn presets_tab(view: &ProductShellView) -> Element {
                             class: "AiSettings_presetCard",
                             r#type: "button",
                             "data-part": "preset-card",
+                            "data-state": if Some(item.id.as_str()) == view.selected_preset_id.as_deref() { "active" } else { "idle" },
+                            style: "display:flex;align-items:center;gap:8px;width:100%;height:60px;box-sizing:border-box;padding:0 12px;border:1px solid #39342f;border-radius:16px;background:#24211e;color:#f3eee8;",
                             span {
-                                strong { "{item.name}" }
-                                span { "{item.kind}" }
+                                style: "flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;",
+                                strong { style: "font-size:0.8125rem;", "{item.name}" }
+                                span { style: "color:#998f87;font-size:0.6875rem;", "{item.kind}" }
                             }
                         }
                     }

@@ -28,7 +28,7 @@ use contracts_generated::generated::{
     ResultThemesList, RequestThemesActivate, RequestThemesUninstall, ThemesItem,
     decode_result_themes_list, decode_themes_item, ResultSecretsLock, ResultSecretsStatus,
     decode_result_secrets_lock, decode_result_secrets_status, ResultListTools, ToolSpec,
-    decode_result_list_tools,
+    decode_result_list_tools, RequestSettingsUpdate, RequestSettingsUpdateSettings,
 };
 use neotavern_chat_viewport::{
     GeometrySnapshot, HeightIndex, HeightKind, LogicalItemId, PredictorBudgets, PresentDecision,
@@ -188,6 +188,11 @@ pub struct ChatRouteState {
     /// Host tool registry (`generation.tools.list`; React `ToolsPanel`). The
     /// kernel validates calls against it but never executes tools itself.
     pub tools: Vec<ToolSpec>,
+    /// Selected provider / preset ids (React `settings.update`
+    /// `activeProviderConfigId` / `activeGenerationPresetId`). The wire-side
+    /// provider choice per request lives in `generation.start`.
+    pub active_provider_id: Option<String>,
+    pub active_preset_id: Option<String>,
     /// Composer context-meter popover visibility (`chat.composer.context`).
     pub context_panel_open: bool,
     /// Last applied Kernel stream envelope sequence (`EventEnvelope.sequence`).
@@ -1112,6 +1117,8 @@ impl<W: ProductWire> ChatSession<W> {
             theme_delete_open: self.state.theme_delete_open,
             theme_delete_target_id: self.state.theme_delete_target_id.clone(),
             secrets_status: self.state.secrets_status.clone(),
+            selected_provider_id: self.state.active_provider_id.clone(),
+            selected_preset_id: self.state.active_preset_id.clone(),
             tools: self
                 .state
                 .tools
@@ -2098,6 +2105,8 @@ impl<W: ProductWire> ChatSession<W> {
             }
             ShellAction::ConfirmThemeDelete => self.confirm_delete_theme(),
             ShellAction::LockSecrets => self.lock_secrets(),
+            ShellAction::SelectProvider(id) => self.select_provider(&id),
+            ShellAction::SelectPreset(id) => self.select_preset(&id),
         }
     }
 
@@ -3112,6 +3121,44 @@ impl<W: ProductWire> ChatSession<W> {
         match self.call_decode("generation.tools.list", &RequestEmpty {}, decode_result_list_tools)
         {
             Ok(result) => self.state.tools = result.items,
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    /// Selects a provider card (`settings.update` key `activeProviderConfigId`,
+    /// React `ProviderProfileEditor` Connect flow persistence).
+    pub fn select_provider(&mut self, id: &str) {
+        self.state.active_provider_id = Some(id.to_string());
+        let req = RequestSettingsUpdate {
+            settings: vec![RequestSettingsUpdateSettings {
+                key: "activeProviderConfigId".into(),
+                value: json!(id),
+            }],
+        };
+        match self.call_value("settings.update", &req) {
+            Ok(_) => {
+                self.state.status_message = Some("Provider selected.".into());
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    /// Selects a generation preset card (`settings.update` key
+    /// `activeGenerationPresetId`, React `GenerationPresetEditor`).
+    pub fn select_preset(&mut self, id: &str) {
+        self.state.active_preset_id = Some(id.to_string());
+        let req = RequestSettingsUpdate {
+            settings: vec![RequestSettingsUpdateSettings {
+                key: "activeGenerationPresetId".into(),
+                value: json!(id),
+            }],
+        };
+        match self.call_value("settings.update", &req) {
+            Ok(_) => {
+                self.state.status_message = Some("Preset selected.".into());
+            }
             Err(err) => self.record_error(err),
         }
         self.bump_scene();

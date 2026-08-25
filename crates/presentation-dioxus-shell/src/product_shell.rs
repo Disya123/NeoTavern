@@ -367,6 +367,10 @@ pub struct ProductShellView {
     pub secrets_status: Option<ResultSecretsStatus>,
     /// Host tool registry (`generation.tools.list`; React `ToolsPanel`).
     pub tools: Vec<ToolCardView>,
+    /// Selected AI provider / preset card ids (React `settings.update`
+    /// `activeProviderConfigId` / `activeGenerationPresetId`).
+    pub selected_provider_id: Option<String>,
+    pub selected_preset_id: Option<String>,
     pub plugins: Vec<PluginCardView>,
     pub providers: Vec<ProviderCardView>,
     pub presets: Vec<PresetCardView>,
@@ -465,6 +469,8 @@ impl Default for ProductShellView {
             theme_delete_target_id: None,
             secrets_status: None,
             tools: Vec::new(),
+            selected_provider_id: None,
+            selected_preset_id: None,
             plugins: Vec::new(),
             providers: Vec::new(),
             presets: Vec::new(),

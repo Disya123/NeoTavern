@@ -8,7 +8,9 @@ use contracts_generated::generated::{
     ResultProfileExport, ResultProfilesCreate, ResultProfilesList, ResultSettings,
     ResultSnapshotsRollback, SettingsItem, PromptBlock, PromptMessage, PromptPlan,
     ResultThemesList, RequestThemesActivate, RequestThemesUninstall, ThemesItem,
-    ResultSecretsLock, ResultSecretsStatus, ResultListTools, ToolSpec,
+    ResultSecretsLock, ResultSecretsStatus, ResultListTools, ToolSpec, ProviderAvailability,
+    ProviderCapabilities, ProviderDto, ProviderModel, PresetDto, RequestSettingsUpdate,
+    RequestSettingsUpdateSettings,
 };
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -73,6 +75,11 @@ pub struct FakeWire {
     /// Host tool registry (`generation.tools.list`); the kernel validates
     /// calls against it but never executes tools itself. Empty = success.
     tools: Vec<ToolSpec>,
+    /// Provider adapters (`providers.list`). The kernel registers the
+    /// deterministic built-in `fake` provider by default (stateless).
+    providers: Vec<ProviderDto>,
+    /// Generation presets (`presets.list`, kind `generation`).
+    presets: Vec<PresetDto>,
     cursors: HashMap<String, CursorCut>,
     fail_ops: HashSet<String>,
     next: u64,
@@ -142,6 +149,8 @@ impl Default for FakeWire {
                 format_version: None,
             },
             tools: Vec::new(),
+            providers: Vec::new(),
+            presets: Vec::new(),
             cursors: HashMap::new(),
             fail_ops: HashSet::new(),
             next: 0x9000,
@@ -280,6 +289,39 @@ impl FakeWire {
                 "additionalProperties": false,
             }),
         });
+        // Provider catalog: the kernel registers the deterministic built-in
+        // `fake` provider by default (id "fake", name "Fake Provider", model
+        // fake-1) — mirror `built_in_providers::FakeProvider`.
+        wire.providers.push(ProviderDto {
+            id: "fake".into(),
+            name: "Fake Provider".into(),
+            builtin: true,
+            availability: ProviderAvailability::Available,
+            capabilities: ProviderCapabilities {
+                tools: true,
+                vision: false,
+                thinking: false,
+                json_mode: false,
+                streaming: true,
+            },
+            models: vec![ProviderModel {
+                id: "fake-1".into(),
+                name: "Fake 1".into(),
+                context_limit: None,
+                max_output_tokens: None,
+            }],
+        });
+        // Generation presets (kernel `presets.list` is DB-backed).
+        let preset = |id_high: u64, name: &str| PresetDto {
+            id: wire_id(id_high),
+            kind: "generation".into(),
+            name: name.into(),
+            data: json!({}),
+            created_at: TS.into(),
+            updated_at: TS.into(),
+        };
+        wire.presets.push(preset(0x8101, "Balanced"));
+        wire.presets.push(preset(0x8102, "Creative"));
         wire
     }
 
@@ -1364,12 +1406,37 @@ impl ProductWire for FakeWire {
             }
             "providers.list" => self.wrap_call(
                 operation_id,
-                to_value(&ResultListProviders { items: Vec::new() }),
+                to_value(&ResultListProviders {
+                    items: self.providers.clone(),
+                }),
             ),
-            "presets.list" => self.wrap_call(
-                operation_id,
-                to_value(&ResultListPresets { items: Vec::new() }),
-            ),
+            "presets.list" => {
+                let kind = payload.get("kind").and_then(Value::as_str);
+                let items: Vec<PresetDto> = self
+                    .presets
+                    .iter()
+                    .filter(|item| kind.is_none_or(|k| item.kind == k))
+                    .cloned()
+                    .collect();
+                self.wrap_call(operation_id, to_value(&ResultListPresets { items }))
+            }
+            "settings.update" => {
+                let req: RequestSettingsUpdate = serde_json::from_value(payload.clone())?;
+                for entry in &req.settings {
+                    let key = &entry.key;
+                    if let Some(item) = self.settings.iter_mut().find(|item| &item.key == key) {
+                        item.value = entry.value.clone();
+                        item.updated_at = TS.into();
+                    } else {
+                        self.settings.push(SettingsItem {
+                            key: key.clone(),
+                            value: entry.value.clone(),
+                            updated_at: TS.into(),
+                        });
+                    }
+                }
+                self.ok_call(operation_id, json!({}))
+            }
             "settings.get" => self.wrap_call(
                 operation_id,
                 to_value(&ResultSettings {

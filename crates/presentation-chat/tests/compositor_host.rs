@@ -1304,6 +1304,70 @@ fn tools_registry_list_over_product_wire() {
 }
 
 #[test]
+fn ai_providers_and_presets_over_product_wire() {
+    use neotavern_presentation_chat::ShellAction;
+    let (mut session, _) = start_flagged_session(Some("1"), FakeWire::demo(), None, None)
+        .expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("providers".into()));
+    let shell = session.shell_view();
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "providers.list"),
+        "opening AI Settings lists providers"
+    );
+    let provider = shell.providers.iter().find(|item| item.id == "fake");
+    let provider = provider.expect("kernel registers the built-in fake provider");
+    assert_eq!(provider.name, "Fake Provider");
+    assert_eq!(provider.availability, "available");
+
+    // Select -> settings.update activeProviderConfigId + active card state.
+    session.apply_shell_action(ShellAction::SelectProvider("fake".into()));
+    let shell = session.shell_view();
+    assert_eq!(shell.selected_provider_id.as_deref(), Some("fake"));
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "settings.update")
+    );
+
+    // Presets tab: list (kind generation), then select -> settings.update
+    // activeGenerationPresetId.
+    session.apply_shell_action(ShellAction::SetTab("presets".into()));
+    let shell = session.shell_view();
+    assert_eq!(shell.ai_tab, "presets");
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "presets.list")
+    );
+    assert_eq!(shell.presets.len(), 2);
+    let preset_id = shell.presets[0].id.clone();
+    session.apply_shell_action(ShellAction::SelectPreset(preset_id.clone()));
+    let shell = session.shell_view();
+    assert_eq!(shell.selected_preset_id.as_deref(), Some(preset_id.as_str()));
+    assert!(
+        session
+            .shell_view()
+            .status_message
+            .as_deref()
+            .unwrap_or("")
+            .contains("selected")
+    );
+
+    // Default wire has no providers/presets -> honest empty states, no error.
+    let (mut session, _) = start_flagged_session(Some("1"), FakeWire::default(), None, None)
+        .expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("providers".into()));
+    let shell = session.shell_view();
+    assert!(shell.providers.is_empty());
+    assert!(shell.error_message.is_none());
+}
+
+#[test]
 fn physical_window_insets_become_css_pixels_on_the_shell() {
     let (mut session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");

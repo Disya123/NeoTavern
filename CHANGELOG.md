@@ -3,6 +3,17 @@
 ## Unreleased
 ### Added
 
+- **AI Settings: провайдеры и пресеты (providers.list / presets.list +
+  выбор).** Панель API/Config показывает реальный каталог: `providers.list`
+  отдаёт built-in `fake` (id/name «Fake Provider», модель fake-1 — зеркало
+  kernel-реестра), `presets.list` — пресеты kind `generation` (Balanced /
+  Creative). Карточки выбираются: `SelectProvider` / `SelectPreset` персистят
+  выбор через `settings.update` (`activeProviderConfigId` /
+  `activeGenerationPresetId`, как React kernel-мост), активная карточка —
+  `data-state="active"`. Полный редактор профиля (config CRUD, discovery,
+  ключи) на kernel-плоскости React гейтится UnsupportedError и не переносится.
+  Новый cargo-тест `ai_providers_and_presets_over_product_wire`.
+
 - **Инструменты (перенос ToolsPanel, generation.tools.list).** Вкладка
   Settings → Tools читает реестр хоста при открытии и рендерит контракты
   (`data-component="tool-entry"`): name, description (или «No description
