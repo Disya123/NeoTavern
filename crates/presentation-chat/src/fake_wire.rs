@@ -8,7 +8,7 @@ use contracts_generated::generated::{
     ResultProfileExport, ResultProfilesCreate, ResultProfilesList, ResultSettings,
     ResultSnapshotsRollback, SettingsItem, PromptBlock, PromptMessage, PromptPlan,
     ResultThemesList, RequestThemesActivate, RequestThemesUninstall, ThemesItem,
-    ResultSecretsLock, ResultSecretsStatus,
+    ResultSecretsLock, ResultSecretsStatus, ResultListTools, ToolSpec,
 };
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -70,6 +70,9 @@ pub struct FakeWire {
     /// value-free by contract; `kind == "unavailable"` mirrors the kernel's
     /// no-store case where lock fails with `CAPABILITY_UNAVAILABLE`.
     secrets: ResultSecretsStatus,
+    /// Host tool registry (`generation.tools.list`); the kernel validates
+    /// calls against it but never executes tools itself. Empty = success.
+    tools: Vec<ToolSpec>,
     cursors: HashMap<String, CursorCut>,
     fail_ops: HashSet<String>,
     next: u64,
@@ -138,6 +141,7 @@ impl Default for FakeWire {
                 record_count: 0,
                 format_version: None,
             },
+            tools: Vec::new(),
             cursors: HashMap::new(),
             fail_ops: HashSet::new(),
             next: 0x9000,
@@ -263,6 +267,19 @@ impl FakeWire {
             record_count: 2,
             format_version: Some(1),
         };
+        // Demo host tool registry, mirroring the wire registry fixture
+        // (`TOOL_SPEC_VALUE`: lookup-weather / lookup_weather).
+        wire.tools.push(ToolSpec {
+            id: "lookup-weather".into(),
+            name: "lookup_weather".into(),
+            description: "Look up current weather for a city".into(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": { "city": { "type": "string" } },
+                "required": ["city"],
+                "additionalProperties": false,
+            }),
+        });
         wire
     }
 
@@ -943,6 +960,12 @@ impl ProductWire for FakeWire {
                 }
                 self.secrets.available = false;
                 self.wrap_call(operation_id, to_value(&ResultSecretsLock { locked: true }))
+            }
+            "generation.tools.list" => {
+                let result = ResultListTools {
+                    items: self.tools.clone(),
+                };
+                self.wrap_call(operation_id, to_value(&result))
             }
             "characters.create" => {
                 let created = self.create_character(&payload)?;

@@ -514,21 +514,51 @@ fn secrets_tab(view: &ProductShellView) -> Element {
     }
 }
 
-/// React `ToolsPanel`: the registered tool/MCP entries. The fixture plane has
-/// no tool registry Wire surface, so the list is an honest empty state.
-fn tools_tab(_view: &ProductShellView) -> Element {
+/// React `ToolsPanel` over `generation.tools.list`: the declarative tool
+/// contracts this host registered with the kernel. Read-only surface —
+/// arguments and results never reach this panel; the kernel validates
+/// provider tool calls against the registry but never executes tools.
+fn tools_tab(view: &ProductShellView) -> Element {
     rsx! {
         div {
             class: "SettingsPanel_section",
             "data-part": "settings-tools",
-            style: "padding:12px 16px;display:flex;flex-direction:column;gap:12px;align-items:flex-start;",
-            div {
-                style: "display:flex;flex-direction:column;gap:8px;align-items:center;text-align:center;width:100%;padding:16px 0;",
-                {icon("Wrench", 34)}
-                strong { "No tools registered" }
-                p {
-                    style: "color:#c5bbb2;font-size:0.875rem;margin:0;",
-                    "Tools and MCP servers register through the Plugin SDK on the packaged host."
+            style: "padding:12px 16px;display:flex;flex-direction:column;gap:12px;",
+            h2 { style: "margin:0;font-size:1rem;", "Tool registry" }
+            p {
+                style: "color:#c5bbb2;font-size:0.75rem;margin:0;",
+                "The declarative tool contracts this host registered with the kernel. The kernel validates provider tool calls against them but never executes tools itself — the host performs the effect. Arguments and results never reach this panel."
+            }
+            if view.tools.is_empty() {
+                p { style: "color:#998f87;font-size:0.8125rem;margin:0;", "No tools registered by this host." }
+            } else {
+                ul {
+                    class: "SettingsPanel_tools",
+                    style: "list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;",
+                    for tool in view.tools.iter() {
+                        li {
+                            "data-component": "tool-entry",
+                            style: "display:flex;flex-direction:column;gap:4px;padding:10px 12px;border:1px solid #39342f;border-radius:16px;background:#24211e;",
+                            span {
+                                style: "display:flex;align-items:center;gap:8px;",
+                                {icon("Wrench", 16)}
+                                strong { style: "color:#f3eee8;font-size:0.8125rem;", "{tool.name}" }
+                            }
+                            p {
+                                style: "color:#c5bbb2;font-size:0.75rem;margin:0;",
+                                if tool.description.is_empty() { "No description provided." } else { "{tool.description}" }
+                            }
+                            p {
+                                "data-part": "tool-required",
+                                style: "color:#998f87;font-size:0.6875rem;margin:0;",
+                                if tool.required.is_empty() {
+                                    "No required arguments."
+                                } else {
+                                    {format!("Requires: {}", tool.required.join(", "))}
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

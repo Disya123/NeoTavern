@@ -390,6 +390,21 @@ DTO value-free по контракту. Lock (`secrets.lock`) перечитыв
 статус portable (зеркало `SECRETS_STATUS_VALUE`) в demo(), unavailable в
 default(). Тест `secrets_status_and_lock_over_product_wire`.
 
+## Инструменты (Settings → ToolsTab)
+
+Вкладка Settings → Tools читает `generation.tools.list` при открытии (React
+`useGenerationTools`) и рендерит `ToolsPanel`: заголовок «Tool registry» + hint
+(«The kernel validates provider tool calls against them but never executes tools
+itself…»), затем строки `data-component="tool-entry"` — Wrench + name,
+description (или «No description provided.») и `data-part="tool-required"` с
+обязательными аргументами из `inputSchema.required` («Requires: city») либо
+«No required arguments.». Аргументы и результаты никогда не попадают на эту
+поверхность; пустой реестр — успех, не ошибка (kernel `generation_tools_list`):
+честное «No tools registered by this host.». Поверхность read-only — других
+tools-операций в UI нет (`generation.tool.result` — Этап 4). FakeWire: реестр
+с фикстурой `TOOL_SPEC_VALUE` (lookup-weather) в demo(), пустой в default().
+Тест `tools_registry_list_over_product_wire`.
+
 ## Отправка сообщения (Send)
 
 Композер (`data-part="composer"` в `product_chat_app`) получил кнопку **Send**

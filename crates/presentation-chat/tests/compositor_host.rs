@@ -1271,6 +1271,39 @@ fn secrets_status_and_lock_over_product_wire() {
 }
 
 #[test]
+fn tools_registry_list_over_product_wire() {
+    use neotavern_presentation_chat::ShellAction;
+    let (mut session, _) = start_flagged_session(Some("1"), FakeWire::demo(), None, None)
+        .expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("settings".into()));
+    session.apply_shell_action(ShellAction::SetTab("tools".into()));
+    let shell = session.shell_view();
+    assert_eq!(shell.settings_tab, "tools");
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "generation.tools.list"),
+        "opening the Tools tab reads the registry"
+    );
+    let tool = shell.tools.iter().find(|item| item.id == "lookup-weather");
+    let tool = tool.expect("demo registry carries the fixture tool");
+    assert_eq!(tool.name, "lookup_weather");
+    assert_eq!(tool.description, "Look up current weather for a city");
+    assert_eq!(tool.required, vec!["city".to_string()]);
+
+    // Empty registry is a success, never an error (kernel
+    // `generation_tools_list`), and the panel shows the honest empty state.
+    let (mut session, _) = start_flagged_session(Some("1"), FakeWire::default(), None, None)
+        .expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("settings".into()));
+    session.apply_shell_action(ShellAction::SetTab("tools".into()));
+    let shell = session.shell_view();
+    assert!(shell.tools.is_empty());
+    assert!(shell.error_message.is_none());
+}
+
+#[test]
 fn physical_window_insets_become_css_pixels_on_the_shell() {
     let (mut session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");

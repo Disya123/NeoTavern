@@ -219,6 +219,17 @@ pub struct ThemeCardView {
     pub trust_state: String,
 }
 
+/// Host tool registry row (React `ToolsPanel`); `generation.tools.list` over
+/// the wire. `required` is the `inputSchema.required` array of the declarative
+/// contract — arguments and results never reach this panel.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ToolCardView {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub required: Vec<String>,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct PanelTab {
     pub id: &'static str,
@@ -354,6 +365,8 @@ pub struct ProductShellView {
     /// Secret-store status (`secrets.status`; React `SecretsPanel`); `None`
     /// = React loading state. The DTO is value-free by contract.
     pub secrets_status: Option<ResultSecretsStatus>,
+    /// Host tool registry (`generation.tools.list`; React `ToolsPanel`).
+    pub tools: Vec<ToolCardView>,
     pub plugins: Vec<PluginCardView>,
     pub providers: Vec<ProviderCardView>,
     pub presets: Vec<PresetCardView>,
@@ -451,6 +464,7 @@ impl Default for ProductShellView {
             theme_delete_open: false,
             theme_delete_target_id: None,
             secrets_status: None,
+            tools: Vec::new(),
             plugins: Vec::new(),
             providers: Vec::new(),
             presets: Vec::new(),

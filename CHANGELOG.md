@@ -3,6 +3,16 @@
 ## Unreleased
 ### Added
 
+- **Инструменты (перенос ToolsPanel, generation.tools.list).** Вкладка
+  Settings → Tools читает реестр хоста при открытии и рендерит контракты
+  (`data-component="tool-entry"`): name, description (или «No description
+  provided.») и обязательные аргументы из `inputSchema.required` («Requires:
+  city» / «No required arguments.»); пустой реестр — успех (честное «No tools
+  registered by this host.»), поверхность read-only, аргументы/результаты не
+  отображаются. FakeWire: реестр с фикстурой `TOOL_SPEC_VALUE` в demo(),
+  пустой в default(). Новый cargo-тест
+  `tools_registry_list_over_product_wire`.
+
 - **Секреты (перенос SecretsPanel, secrets.status / secrets.lock).** Вкладка
   Settings → Secrets читает `secrets.status` при открытии и рендерит карточку
   режима (portable/env/session/unavailable), флаги Persistent / Writable /

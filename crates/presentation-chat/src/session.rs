@@ -27,7 +27,8 @@ use contracts_generated::generated::{
     decode_result_settings, decode_result_snapshots_rollback, ProfilesItem, PromptPlan,
     ResultThemesList, RequestThemesActivate, RequestThemesUninstall, ThemesItem,
     decode_result_themes_list, decode_themes_item, ResultSecretsLock, ResultSecretsStatus,
-    decode_result_secrets_lock, decode_result_secrets_status,
+    decode_result_secrets_lock, decode_result_secrets_status, ResultListTools, ToolSpec,
+    decode_result_list_tools,
 };
 use neotavern_chat_viewport::{
     GeometrySnapshot, HeightIndex, HeightKind, LogicalItemId, PredictorBudgets, PresentDecision,
@@ -39,7 +40,7 @@ use neotavern_presentation_dioxus_shell::{
     LorebookCardView, LorebookEntryCardView, PersonaCardView, PluginCardView, PresetCardView,
     ProfileCardView,
     ProductChatView, ProductChrome, ProductShellView, ProviderCardView, RowKind, SafeAreaInsets,
-    ThemeCardView, VisibleRow, PRODUCT_PATH_VISIBLE,
+    ThemeCardView, ToolCardView, VisibleRow, PRODUCT_PATH_VISIBLE,
 };
 
 use serde::de::DeserializeOwned;
@@ -184,6 +185,9 @@ pub struct ChatRouteState {
     /// Secret-store status (`secrets.status`; React `SecretsPanel`). Values
     /// never travel this DTO — it is value-free by contract.
     pub secrets_status: Option<ResultSecretsStatus>,
+    /// Host tool registry (`generation.tools.list`; React `ToolsPanel`). The
+    /// kernel validates calls against it but never executes tools itself.
+    pub tools: Vec<ToolSpec>,
     /// Composer context-meter popover visibility (`chat.composer.context`).
     pub context_panel_open: bool,
     /// Last applied Kernel stream envelope sequence (`EventEnvelope.sequence`).
@@ -1108,6 +1112,27 @@ impl<W: ProductWire> ChatSession<W> {
             theme_delete_open: self.state.theme_delete_open,
             theme_delete_target_id: self.state.theme_delete_target_id.clone(),
             secrets_status: self.state.secrets_status.clone(),
+            tools: self
+                .state
+                .tools
+                .iter()
+                .map(|row| ToolCardView {
+                    id: row.id.clone(),
+                    name: row.name.clone(),
+                    description: row.description.clone(),
+                    required: row
+                        .input_schema
+                        .get("required")
+                        .and_then(Value::as_array)
+                        .map(|items| {
+                            items
+                                .iter()
+                                .filter_map(|value| value.as_str().map(str::to_string))
+                                .collect()
+                        })
+                        .unwrap_or_default(),
+                })
+                .collect(),
             plugins: self
                 .state
                 .plugins
@@ -1893,14 +1918,19 @@ impl<W: ProductWire> ChatSession<W> {
                 "settings" => {
                     let is_themes = tab == "themes";
                     let is_secrets = tab == "secrets";
+                    let is_tools = tab == "tools";
                     self.state.settings_tab = tab;
-                    // React `ThemesTab` / `SecretsPanel` query on mount: load
-                    // when the tab opens so the surface is real, not a stub.
+                    // React `ThemesTab` / `SecretsPanel` / `ToolsPanel` query
+                    // on mount: load when the tab opens so the surface is
+                    // real, not a stub.
                     if is_themes {
                         self.load_themes();
                     }
                     if is_secrets {
                         self.load_secrets_status();
+                    }
+                    if is_tools {
+                        self.load_tools();
                     }
                     self.bump_scene();
                 }
@@ -3070,6 +3100,18 @@ impl<W: ProductWire> ChatSession<W> {
     pub fn lock_secrets(&mut self) {
         match self.call_decode("secrets.lock", &RequestEmpty {}, decode_result_secrets_lock) {
             Ok(_) => self.load_secrets_status(),
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    /// Reads the host tool registry (`generation.tools.list`; React
+    /// `useGenerationTools`). An empty registry is a success, never an error
+    /// (kernel `generation_tools_list`).
+    pub fn load_tools(&mut self) {
+        match self.call_decode("generation.tools.list", &RequestEmpty {}, decode_result_list_tools)
+        {
+            Ok(result) => self.state.tools = result.items,
             Err(err) => self.record_error(err),
         }
         self.bump_scene();
