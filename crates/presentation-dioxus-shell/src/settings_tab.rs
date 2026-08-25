@@ -227,40 +227,70 @@ fn themes_tab(view: &ProductShellView) -> Element {
     }
 }
 
-/// React `DataTab`: backups (create / restore) and migration entry points.
-/// The fixture plane has no backup Wire surface, so the section states that
-/// honestly instead of inventing rows.
-fn data_tab(_view: &ProductShellView) -> Element {
+/// React `SettingsPanel` DataTab over Product Wire: the section header, the
+/// Create/Refresh action row (`backups.create` / `backups.list`), then backup
+/// rows carrying Restore (`backups.restore`) in the right zone. The kernel
+/// models no auto/manual split — every row is an honest "Manual backup".
+/// Geometry mirrors `shell_hit.rs::data_hit` (padding 12 + title 20 + gap 8 +
+/// hint 32 + gap 8 + actions 36 + gap 8; rows 64 + 4).
+fn data_tab(view: &ProductShellView) -> Element {
     rsx! {
         div {
             class: "SettingsPanel_section",
             "data-part": "settings-data",
-            style: "padding:12px 16px;display:flex;flex-direction:column;gap:12px;",
+            style: "padding:12px 16px;display:flex;flex-direction:column;gap:8px;",
+            h2 { style: "margin:0;font-size:0.9375rem;", "Data & backups" }
+            p { style: "margin:0;color:#998f87;font-size:0.75rem;", "Backups contain your local library and settings." }
             div {
-                class: "SettingsPanel_field",
-                span { "Backups" }
-                strong { "No backups yet" }
-            }
-            div {
-                style: "display:flex;gap:8px;flex-wrap:wrap;",
+                style: "display:flex;gap:8px;height:36px;",
                 button {
                     class: "st-button",
                     r#type: "button",
                     "data-component": "button",
                     "data-variant": "primary",
+                    "data-part": "create-backup",
+                    style: "height:36px;",
                     span { "data-part": "label", "Create backup" }
                 }
                 button {
                     class: "st-button",
                     r#type: "button",
                     "data-component": "button",
-                    disabled: true,
-                    span { "data-part": "label", "Restore" }
+                    "data-variant": "ghost",
+                    "data-part": "refresh-backups",
+                    style: "height:36px;",
+                    span { "data-part": "label", "Refresh backups" }
                 }
             }
-            p {
-                style: "color:#998f87;font-size:0.75rem;",
-                "Backups and restore run through the Kernel `data.backups.*` Wire ops on the packaged host; this harness plane has no backup catalog yet."
+            if view.backups.is_empty() {
+                p {
+                    style: "color:#998f87;font-size:0.75rem;",
+                    "Refresh the list or create your first backup."
+                }
+            } else {
+                div {
+                    class: "SettingsPanel_backupList",
+                    for item in view.backups.iter() {
+                        div {
+                            class: "SettingsPanel_backupItem",
+                            "data-component": "backup-entry",
+                            style: "display:flex;align-items:center;gap:8px;width:100%;height:64px;box-sizing:border-box;padding:0 12px;border:1px solid #39342f;border-radius:16px;background:#24211e;color:#f3eee8;",
+                            span {
+                                style: "flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;",
+                                strong { style: "font-size:0.8125rem;", "{item.title}" }
+                                span { style: "color:#998f87;font-size:0.6875rem;", "{item.detail}" }
+                            }
+                            button {
+                                class: "st-button",
+                                r#type: "button",
+                                "data-component": "button",
+                                "data-part": "restore-backup",
+                                style: "flex:none;width:96px;height:36px;",
+                                span { "data-part": "label", "Restore" }
+                            }
+                        }
+                    }
+                }
             }
         }
     }

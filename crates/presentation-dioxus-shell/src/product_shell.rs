@@ -230,6 +230,15 @@ pub struct ToolCardView {
     pub required: Vec<String>,
 }
 
+/// One backup row (React DataTab list item): creation timestamp as the title
+/// and the honest "Manual backup · N MB" detail line.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BackupCardView {
+    pub id: String,
+    pub title: String,
+    pub detail: String,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct PanelTab {
     pub id: &'static str,
@@ -371,6 +380,8 @@ pub struct ProductShellView {
     /// `activeProviderConfigId` / `activeGenerationPresetId`).
     pub selected_provider_id: Option<String>,
     pub selected_preset_id: Option<String>,
+    /// Backup catalog (`backups.list`; React SettingsPanel DataTab).
+    pub backups: Vec<BackupCardView>,
     pub plugins: Vec<PluginCardView>,
     pub providers: Vec<ProviderCardView>,
     pub presets: Vec<PresetCardView>,
@@ -471,6 +482,7 @@ impl Default for ProductShellView {
             tools: Vec::new(),
             selected_provider_id: None,
             selected_preset_id: None,
+            backups: Vec::new(),
             plugins: Vec::new(),
             providers: Vec::new(),
             presets: Vec::new(),

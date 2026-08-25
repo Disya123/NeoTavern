@@ -423,6 +423,22 @@ discovery моделей, ключи) — legacy-контур; на kernel-пл�
 провайдер fake + пресеты Balanced/Creative в demo(), пустые в default().
 Тест `ai_providers_and_presets_over_product_wire`.
 
+## Data: резервные копии
+
+Вкладка Data (Settings) перенесена с заглушки на Product Wire: открытие
+вкладки грузит `backups.list`, «Create backup» вызывает `backups.create`
+(kernel моделирует все копии как user-initiated/manual) и обновляет каталог,
+строки (`data-component="backup-entry"`, 64 px + 4) несут Restore
+(`backups.restore`; kernel делает staged restore + activation вокруг
+переоткрытия БД). `activation_pending` маппится в подсказку перезапуска — как
+React `useRestoreBackup.restartRequired`. Схема ответа требует hex-SHA256
+контрольную сумму (64 lowercase hex) — fake-фикстуры соблюдают её. FakeWire:
+2 копии (status completed) в demo(), пустой каталог (честное «no backups») в
+default(); restore неизвестного id → `NOT_FOUND`. Геометрия зеркалится между
+`settings_tab.rs::data_tab` и `shell_hit.rs::data_hit` (padding 12 + title 20 +
+gap 8 + hint 32 + gap 8 + actions 36 + gap 8; rows 64 + 4). Тест
+`backups_list_create_restore_over_product_wire`.
+
 ## Отправка сообщения (Send)
 
 Композер (`data-part="composer"` в `product_chat_app`) получил кнопку **Send**

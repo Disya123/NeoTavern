@@ -1368,6 +1368,76 @@ fn ai_providers_and_presets_over_product_wire() {
 }
 
 #[test]
+fn backups_list_create_restore_over_product_wire() {
+    use neotavern_presentation_chat::ShellAction;
+    let (mut session, _) = start_flagged_session(Some("1"), FakeWire::demo(), None, None)
+        .expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("settings".into()));
+    session.apply_shell_action(ShellAction::SetTab("data".into()));
+    let shell = session.shell_view();
+    assert_eq!(shell.settings_tab, "data");
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "backups.list"),
+        "opening the Data tab loads the backup catalog"
+    );
+    assert_eq!(shell.backups.len(), 2);
+    assert!(
+        shell
+            .backups
+            .iter()
+            .all(|item| item.detail.contains("Manual backup"))
+    );
+
+    // Create -> backups.create appends and refreshes the catalog.
+    session.apply_shell_action(ShellAction::CreateBackup);
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "backups.create")
+    );
+    assert_eq!(session.shell_view().backups.len(), 3);
+
+    // Refresh re-issues backups.list.
+    session.apply_shell_action(ShellAction::RefreshBackups);
+    assert_eq!(session.shell_view().backups.len(), 3);
+
+    // Restore an existing backup: committed outcome refreshes silently.
+    let target = session.shell_view().backups[0].id.clone();
+    session.apply_shell_action(ShellAction::RestoreBackup(target));
+    let shell = session.shell_view();
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "backups.restore")
+    );
+    assert!(!shell.status_message.as_deref().unwrap_or("").contains("Reload"));
+    assert!(shell.error_message.is_none());
+
+    // Unknown id -> NOT_FOUND surfaced as the machine-readable code.
+    session.apply_shell_action(ShellAction::RestoreBackup(
+        "00000000-0000-1000-8000-000000000000".into(),
+    ));
+    assert_eq!(
+        session.shell_view().error_message.as_deref(),
+        Some("NOT_FOUND")
+    );
+
+    // Default wire has no backups -> honest empty state, no error.
+    let (mut session, _) = start_flagged_session(Some("1"), FakeWire::default(), None, None)
+        .expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("settings".into()));
+    session.apply_shell_action(ShellAction::SetTab("data".into()));
+    let shell = session.shell_view();
+    assert!(shell.backups.is_empty());
+    assert!(shell.error_message.is_none());
+}
+
+#[test]
 fn physical_window_insets_become_css_pixels_on_the_shell() {
     let (mut session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");

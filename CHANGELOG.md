@@ -3,6 +3,14 @@
 ## Unreleased
 ### Added
 
+- **Data: резервные копии (backups.list / create / restore).** Вкладка Data
+  в Settings показывает реальный каталог: открытие грузит `backups.list`,
+  «Create backup» → `backups.create` + обновление списка, каждая строка несёт
+  Restore (`backups.restore`, `activation_pending` → подсказка перезапуска,
+  неизвестный id → `NOT_FOUND`). Все копии честно помечены «Manual backup»
+  (kernel не моделирует auto/manual split). Геометрия зеркалится между рендером
+  и hit-тестом. Новый cargo-тест `backups_list_create_restore_over_product_wire`.
+
 - **AI Settings: провайдеры и пресеты (providers.list / presets.list +
   выбор).** Панель API/Config показывает реальный каталог: `providers.list`
   отдаёт built-in `fake` (id/name «Fake Provider», модель fake-1 — зеркало

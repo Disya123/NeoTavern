@@ -131,6 +131,11 @@ pub enum ShellAction {
     /// `GenerationPresetEditor`).
     SelectProvider(String),
     SelectPreset(String),
+    /// Settings Data tab backup actions (`backups.create` / `backups.list`
+    /// refresh / `backups.restore`; React DataTab).
+    CreateBackup,
+    RefreshBackups,
+    RestoreBackup(String),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -890,6 +895,44 @@ fn settings_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
     }
     if view.settings_tab == "secrets" {
         return secrets_hit(view, x, y, panel_x, x1, tabs_bottom);
+    }
+    if view.settings_tab == "data" {
+        return data_hit(view, x, y, panel_x, x1, tabs_bottom);
+    }
+    Some(ShellHit::Absorb)
+}
+
+/// React `SettingsPanel` DataTab body: the Create/Refresh action row, then
+/// backup rows carrying Restore in the right zone. Geometry mirrors
+/// `settings_tab.rs::data_tab` (padding 12 + title 20 + gap 8 + hint 32 +
+/// gap 8 + actions 36 + gap 8; rows 64 + 4).
+fn data_hit(
+    view: &ProductShellView,
+    x: f32,
+    y: f32,
+    panel_x: f32,
+    x1: f32,
+    tabs_bottom: f32,
+) -> Option<ShellHit> {
+    let pad = SPACE_LG;
+    let actions_top = tabs_bottom + 12.0 + 20.0 + 8.0 + 32.0 + 8.0;
+    if y >= actions_top && y < actions_top + 36.0 {
+        // Primary "Create backup" first half, ghost "Refresh backups" second.
+        if x >= panel_x + pad && x < panel_x + pad + 140.0 {
+            return Some(ShellHit::Action(ShellAction::CreateBackup));
+        }
+        if x >= panel_x + pad + 148.0 && x < panel_x + pad + 288.0 {
+            return Some(ShellHit::Action(ShellAction::RefreshBackups));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    let mut cursor = actions_top + 36.0 + 8.0;
+    for item in view.backups.iter() {
+        let bottom = cursor + 64.0 + 4.0;
+        if y >= cursor && y < bottom - 4.0 && x >= x1 - pad - 96.0 && x < x1 - pad {
+            return Some(ShellHit::Action(ShellAction::RestoreBackup(item.id.clone())));
+        }
+        cursor = bottom;
     }
     Some(ShellHit::Absorb)
 }

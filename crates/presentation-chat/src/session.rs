@@ -29,6 +29,8 @@ use contracts_generated::generated::{
     decode_result_themes_list, decode_themes_item, ResultSecretsLock, ResultSecretsStatus,
     decode_result_secrets_lock, decode_result_secrets_status, ResultListTools, ToolSpec,
     decode_result_list_tools, RequestSettingsUpdate, RequestSettingsUpdateSettings,
+    BackupDto, ResultBackupsRestore, RequestBackupsRestore, decode_backup_dto,
+    decode_result_list_backups, decode_result_backups_restore,
 };
 use neotavern_chat_viewport::{
     GeometrySnapshot, HeightIndex, HeightKind, LogicalItemId, PredictorBudgets, PresentDecision,
@@ -41,6 +43,7 @@ use neotavern_presentation_dioxus_shell::{
     ProfileCardView,
     ProductChatView, ProductChrome, ProductShellView, ProviderCardView, RowKind, SafeAreaInsets,
     ThemeCardView, ToolCardView, VisibleRow, PRODUCT_PATH_VISIBLE,
+    BackupCardView,
 };
 
 use serde::de::DeserializeOwned;
@@ -193,6 +196,9 @@ pub struct ChatRouteState {
     /// provider choice per request lives in `generation.start`.
     pub active_provider_id: Option<String>,
     pub active_preset_id: Option<String>,
+    /// Backup catalog (`backups.list`; React `SettingsPanel` DataTab). The
+    /// kernel models no auto/manual split — every entry is user-initiated.
+    pub backups: Vec<BackupDto>,
     /// Composer context-meter popover visibility (`chat.composer.context`).
     pub context_panel_open: bool,
     /// Last applied Kernel stream envelope sequence (`EventEnvelope.sequence`).
@@ -1119,6 +1125,16 @@ impl<W: ProductWire> ChatSession<W> {
             secrets_status: self.state.secrets_status.clone(),
             selected_provider_id: self.state.active_provider_id.clone(),
             selected_preset_id: self.state.active_preset_id.clone(),
+            backups: self
+                .state
+                .backups
+                .iter()
+                .map(|item| BackupCardView {
+                    id: item.id.clone(),
+                    title: item.created_at.clone(),
+                    detail: format!("Manual backup · {:.1} MB", item.size_bytes as f64 / 1024.0 / 1024.0),
+                })
+                .collect(),
             tools: self
                 .state
                 .tools
@@ -1926,10 +1942,11 @@ impl<W: ProductWire> ChatSession<W> {
                     let is_themes = tab == "themes";
                     let is_secrets = tab == "secrets";
                     let is_tools = tab == "tools";
+                    let is_data = tab == "data";
                     self.state.settings_tab = tab;
-                    // React `ThemesTab` / `SecretsPanel` / `ToolsPanel` query
-                    // on mount: load when the tab opens so the surface is
-                    // real, not a stub.
+                    // React `ThemesTab` / `SecretsPanel` / `ToolsPanel` /
+                    // DataTab query on mount: load when the tab opens so the
+                    // surface is real, not a stub.
                     if is_themes {
                         self.load_themes();
                     }
@@ -1938,6 +1955,9 @@ impl<W: ProductWire> ChatSession<W> {
                     }
                     if is_tools {
                         self.load_tools();
+                    }
+                    if is_data {
+                        self.load_backups();
                     }
                     self.bump_scene();
                 }
@@ -2107,6 +2127,9 @@ impl<W: ProductWire> ChatSession<W> {
             ShellAction::LockSecrets => self.lock_secrets(),
             ShellAction::SelectProvider(id) => self.select_provider(&id),
             ShellAction::SelectPreset(id) => self.select_preset(&id),
+            ShellAction::CreateBackup => self.create_backup(),
+            ShellAction::RefreshBackups => self.load_backups(),
+            ShellAction::RestoreBackup(id) => self.restore_backup(&id),
         }
     }
 
@@ -3158,6 +3181,45 @@ impl<W: ProductWire> ChatSession<W> {
         match self.call_value("settings.update", &req) {
             Ok(_) => {
                 self.state.status_message = Some("Preset selected.".into());
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    /// Reads the backup catalog (`backups.list`; React DataTab `useBackups`).
+    pub fn load_backups(&mut self) {
+        match self.call_decode("backups.list", &RequestEmpty {}, decode_result_list_backups) {
+            Ok(result) => self.state.backups = result.items,
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    /// Creates a user-initiated backup (`backups.create`, kernel models every
+    /// backup as manual) and refreshes the catalog.
+    pub fn create_backup(&mut self) {
+        match self.call_decode("backups.create", &RequestEmpty {}, decode_backup_dto) {
+            Ok(_) => self.load_backups(),
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    /// Restores a backup (`backups.restore`; the kernel stages + activates
+    /// around a database reopen). `activation_pending` maps to the reload
+    /// hint, exactly like React `useRestoreBackup.restartRequired`.
+    pub fn restore_backup(&mut self, id: &str) {
+        let req = RequestBackupsRestore {
+            backup_id: id.to_string(),
+        };
+        match self.call_decode("backups.restore", &req, decode_result_backups_restore) {
+            Ok(result) => {
+                if result.status == "activation_pending" {
+                    self.state.status_message =
+                        Some("Backup restored. Reload the app to apply it.".into());
+                }
+                self.load_backups();
             }
             Err(err) => self.record_error(err),
         }

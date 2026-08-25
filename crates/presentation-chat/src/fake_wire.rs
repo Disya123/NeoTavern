@@ -10,7 +10,7 @@ use contracts_generated::generated::{
     ResultThemesList, RequestThemesActivate, RequestThemesUninstall, ThemesItem,
     ResultSecretsLock, ResultSecretsStatus, ResultListTools, ToolSpec, ProviderAvailability,
     ProviderCapabilities, ProviderDto, ProviderModel, PresetDto, RequestSettingsUpdate,
-    RequestSettingsUpdateSettings,
+    RequestSettingsUpdateSettings, BackupDto, ResultListBackups, RequestBackupsRestore,
 };
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -80,6 +80,9 @@ pub struct FakeWire {
     providers: Vec<ProviderDto>,
     /// Generation presets (`presets.list`, kind `generation`).
     presets: Vec<PresetDto>,
+    /// Backup catalog (`backups.list`). Kernel backups are user-initiated;
+    /// `backups.create` appends, `backups.restore` validates the id.
+    backups: Vec<BackupDto>,
     cursors: HashMap<String, CursorCut>,
     fail_ops: HashSet<String>,
     next: u64,
@@ -151,6 +154,7 @@ impl Default for FakeWire {
             tools: Vec::new(),
             providers: Vec::new(),
             presets: Vec::new(),
+            backups: Vec::new(),
             cursors: HashMap::new(),
             fail_ops: HashSet::new(),
             next: 0x9000,
@@ -322,6 +326,19 @@ impl FakeWire {
         };
         wire.presets.push(preset(0x8101, "Balanced"));
         wire.presets.push(preset(0x8102, "Creative"));
+        // Backup catalog (kernel `backups.list`; status "completed" per the
+        // kernel backup module).
+        let backup = |id_high: u64, size_bytes: i64| BackupDto {
+            id: wire_id(id_high),
+            created_at: TS.into(),
+            format_version: 1.0,
+            size_bytes,
+            // Wire schema: lowercase hex SHA-256 (64 chars).
+            checksum_sha256: format!("{:064x}", id_high),
+            status: "completed".into(),
+        };
+        wire.backups.push(backup(0x8201, 1_572_864));
+        wire.backups.push(backup(0x8202, 2_097_152));
         wire
     }
 
@@ -1436,6 +1453,34 @@ impl ProductWire for FakeWire {
                     }
                 }
                 self.ok_call(operation_id, json!({}))
+            }
+            "backups.list" => self.wrap_call(
+                operation_id,
+                to_value(&ResultListBackups {
+                    items: self.backups.clone(),
+                }),
+            ),
+            "backups.create" => {
+                let dto = BackupDto {
+                    id: wire_id(0x8300 + self.backups.len() as u64),
+                    created_at: TS.into(),
+                    format_version: 1.0,
+                    size_bytes: 1_048_576,
+                    checksum_sha256: format!("{:064x}", 0xdead + self.backups.len() as u64),
+                    status: "completed".into(),
+                };
+                self.backups.push(dto.clone());
+                self.wrap_call(operation_id, to_value(&dto))
+            }
+            "backups.restore" => {
+                let req: RequestBackupsRestore = serde_json::from_value(payload.clone())?;
+                if self.backups.iter().any(|item| item.id == req.backup_id) {
+                    // Kernel outcome: staged restore + activation committed
+                    // around the database reopen.
+                    self.ok_call(operation_id, json!({ "status": "committed" }))
+                } else {
+                    Err(Self::product("NOT_FOUND", "backupId", &req.backup_id))
+                }
             }
             "settings.get" => self.wrap_call(
                 operation_id,
