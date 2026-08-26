@@ -561,6 +561,18 @@ autosave; в хосте обе правки сведены в явную кно�
 Геометрия — новый `lorebook_book_hit` (bar: Back слева 140px, Delete+Save
 справа). Тест `lorebook_meta_update_over_product_wire`.
 
+## Персона: редактор
+
+Edit-таб панели Personas сохраняет имя и описание через `personas.update`
+(React сохраняет имя по blur и описание с debounce; в хосте — явная кнопка
+Save, поля получают фокус клавиатуры `TextFocus::PersonaName/
+PersonaDescription`). Семантика зеркальна редактору книги: на провод идут
+только изменённые поля, пустое обрезанное имя хранит старое, no-op — без
+wire-вызова («No changes.»), успех обновляет карточку и пересеивает
+черновики со статусом «Persona updated.». Геометрия — новый
+`persona_edit_hit` (bar: Back слева 160px, Duplicate absorb, Delete+Save
+справа). Тест `persona_meta_update_over_product_wire`.
+
 ## Отправка сообщения (Send)
 
 Композер (`data-part="composer"` в `product_chat_app`) получил кнопку **Send**

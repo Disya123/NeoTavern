@@ -179,6 +179,9 @@ pub enum ShellAction {
     /// Book editor save (React `BookTab` name/description fields over
     /// `lorebooks.update`; only changed fields cross the wire).
     LorebookSaveMeta,
+    /// Persona editor save (React `PersonasPanel` edit tab over
+    /// `personas.update`; only changed fields cross the wire).
+    PersonaSaveMeta,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -863,6 +866,9 @@ fn snapshots_menu_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHi
 /// Hit-test a managed catalog panel: optional tab row (AI providers/presets,
 /// Settings general/host) plus a vertical selectable card list under it.
 fn personas_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
+    if view.persona_tab == "edit" && view.selected_persona_id.is_some() {
+        return persona_edit_hit(view, x, y);
+    }
     list_panel_hit(
         view,
         x,
@@ -873,6 +879,56 @@ fn personas_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
         view.personas.iter().map(|item| item.id.as_str()),
         |id| ShellAction::SelectPersona(id.into()),
     )
+}
+
+/// React `PersonasPanel` edit tab: action bar (Back to personas / Duplicate /
+/// Delete / Save) over the name input + description textarea; typing focus
+/// resolves via `part:persona-name-input` / `part:persona-description-input`.
+fn persona_edit_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
+    if !view.sidebar_open {
+        return None;
+    }
+    let (panel_x, panel_w) = panel_origin(view);
+    let x1 = panel_x + panel_w;
+    if x < panel_x || x >= x1 {
+        return None;
+    }
+    let header_end = header_bottom(view);
+    if y < header_end {
+        if x >= x1 - CONTROL_SM - SPACE_LG {
+            return Some(ShellHit::Action(ShellAction::ClosePanel));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    let tabs_top = header_end + SPACE_XS;
+    let tabs_bottom = tabs_top + CONTROL_SM + SPACE_XS;
+    if y >= tabs_top && y < tabs_bottom {
+        let tabs = ["cards", "edit"];
+        let span = (panel_w - SPACE_LG * 2.0).max(1.0);
+        let idx = (((x - (panel_x + SPACE_LG)) / span) * tabs.len() as f32).floor() as usize;
+        return Some(ShellHit::Action(ShellAction::SetTab(
+            tabs[idx.min(tabs.len() - 1)].into(),
+        )));
+    }
+    let pad = SPACE_LG;
+    // Action bar: Back (left), Duplicate / Delete / Save (right).
+    let bar_top = tabs_bottom + SPACE_SM;
+    let bar_bottom = bar_top + CONTROL_SM;
+    if y >= bar_top && y < bar_bottom {
+        if x < panel_x + pad + 160.0 {
+            return Some(ShellHit::Action(ShellAction::SetTab("cards".into())));
+        }
+        if x >= x1 - pad - 200.0 && x < x1 - pad - 100.0 {
+            return Some(ShellHit::Action(ShellAction::OpenDelete));
+        }
+        if x >= x1 - pad - 96.0 {
+            return Some(ShellHit::Action(ShellAction::PersonaSaveMeta));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    // Name field + description textarea absorb taps; typing focus is
+    // bin-local via the part rects.
+    Some(ShellHit::Absorb)
 }
 
 fn lorebooks_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {

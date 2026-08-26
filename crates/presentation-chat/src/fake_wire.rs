@@ -1466,6 +1466,24 @@ impl ProductWire for FakeWire {
                 self.personas.remove(&persona_id);
                 self.ok_call(operation_id, json!({}))
             }
+            "personas.update" => {
+                // Kernel semantics: only the fields present change;
+                // avatar/isDefault stay untouched when omitted.
+                let persona_id = payload_str(&payload, "personaId")?;
+                let name = payload.get("name").and_then(Value::as_str);
+                let description = payload.get("description").and_then(Value::as_str);
+                let Some(persona) = self.personas.get_mut(&persona_id) else {
+                    return Err(Self::product("PERSONA_NOT_FOUND", "personaId", &persona_id));
+                };
+                if let Some(name) = name {
+                    persona.name = name.to_string();
+                }
+                if let Some(description) = description {
+                    persona.description = Some(description.to_string());
+                }
+                let updated = persona.clone();
+                self.wrap_call(operation_id, to_value(&updated))
+            }
             "lorebooks.list" => {
                 let mut items: Vec<LorebookDto> = self.lorebooks.values().cloned().collect();
                 items.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));

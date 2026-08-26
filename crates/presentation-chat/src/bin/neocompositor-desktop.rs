@@ -82,6 +82,10 @@ enum TextFocus {
     /// `part:lorebook-description-input`).
     LorebookName,
     LorebookDescription,
+    /// Persona editor fields (`part:persona-name-input` /
+    /// `part:persona-description-input`).
+    PersonaName,
+    PersonaDescription,
 }
 
 /// One scripted probe step, replayed in argument order so
@@ -515,6 +519,10 @@ impl App {
             focus = TextFocus::LorebookName;
         } else if rects.covers(css_x, css_y, "part:lorebook-description-input") {
             focus = TextFocus::LorebookDescription;
+        } else if rects.covers(css_x, css_y, "part:persona-name-input") {
+            focus = TextFocus::PersonaName;
+        } else if rects.covers(css_x, css_y, "part:persona-description-input") {
+            focus = TextFocus::PersonaDescription;
         }
         self.focus = focus;
     }
@@ -913,6 +921,18 @@ impl App {
                 self.session.set_lorebook_description_draft(&next);
                 eprintln!("[neocompositor-desktop] typed '{ch}' -> lorebook_desc+{ch}");
             }
+            TextFocus::PersonaName => {
+                let current = self.session.shell_view().persona_name_draft.clone();
+                let next = format!("{current}{ch}");
+                self.session.set_persona_name_draft(&next);
+                eprintln!("[neocompositor-desktop] typed '{ch}' -> persona_name=\"{next}\"");
+            }
+            TextFocus::PersonaDescription => {
+                let current = self.session.shell_view().persona_description_draft.clone();
+                let next = format!("{current}{ch}");
+                self.session.set_persona_description_draft(&next);
+                eprintln!("[neocompositor-desktop] typed '{ch}' -> persona_desc+{ch}");
+            }
             TextFocus::None => return,
         }
         self.dirty = true;
@@ -938,6 +958,10 @@ impl App {
             TextFocus::LorebookDescription => {
                 self.session.shell_view().lorebook_description_draft.clone()
             }
+            TextFocus::PersonaName => self.session.shell_view().persona_name_draft.clone(),
+            TextFocus::PersonaDescription => {
+                self.session.shell_view().persona_description_draft.clone()
+            }
             TextFocus::None => return,
         };
         let next: String = current
@@ -961,6 +985,8 @@ impl App {
             TextFocus::MessageEdit => self.session.set_message_edit_draft(&next),
             TextFocus::LorebookName => self.session.set_lorebook_name_draft(&next),
             TextFocus::LorebookDescription => self.session.set_lorebook_description_draft(&next),
+            TextFocus::PersonaName => self.session.set_persona_name_draft(&next),
+            TextFocus::PersonaDescription => self.session.set_persona_description_draft(&next),
             TextFocus::None => {}
         }
         self.dirty = true;

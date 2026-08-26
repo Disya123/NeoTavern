@@ -17,6 +17,7 @@ use contracts_generated::generated::{
     RequestPluginsDisable, RequestPluginsEnable, RequestPluginsUninstall,
     RequestRetryGeneration, RequestSettingsGet, RequestSnapshotsRollback, RequestStartGeneration,
     RequestUpdateCharacter, RequestUpdateLorebook, RequestUpdateLorebookEntry, RequestProfileExport, RequestProfilesCreate,
+    RequestUpdatePersona,
     RequestProfilesDelete, RequestProfilesRename, RequestUpdateChat, RequestDeleteChat,
     RequestGetPromptPlan, ResultAssetsContent,
     ResultListLorebookEntries, ResultListLorebooks, ResultListPersonas, ResultListPresets,
@@ -2655,6 +2656,7 @@ impl<W: ProductWire> ChatSession<W> {
             ShellAction::OpenSnapshot(id) => self.open_snapshot(&id),
             ShellAction::ExportChat(id) => self.export_chat(&id),
             ShellAction::LorebookSaveMeta => self.save_lorebook_meta(),
+            ShellAction::PersonaSaveMeta => self.save_persona_meta(),
         }
     }
 
@@ -2795,6 +2797,76 @@ impl<W: ProductWire> ChatSession<W> {
             self.state.persona_name_draft = row.name.clone();
             self.state.persona_description_draft = row.description.clone().unwrap_or_default();
         }
+    }
+
+    pub fn set_persona_name_draft(&mut self, draft: &str) {
+        self.state.persona_name_draft = draft.to_string();
+        self.bump_scene();
+    }
+
+    pub fn set_persona_description_draft(&mut self, draft: &str) {
+        self.state.persona_description_draft = draft.to_string();
+        self.bump_scene();
+    }
+
+    /// Save the persona editor (React `PersonasPanel` edit tab): only
+    /// changed fields cross the wire; an empty trimmed name keeps the stored
+    /// one; a no-op save skips the wire call.
+    pub fn save_persona_meta(&mut self) {
+        let Some(id) = self.state.selected_persona_id.clone() else {
+            return;
+        };
+        let Some(current) = self
+            .state
+            .personas
+            .iter()
+            .find(|item| item.id == id)
+            .map(|item| (item.name.clone(), item.description.clone()))
+        else {
+            return;
+        };
+        let (current_name, current_description) = current;
+        let next_name = self.state.persona_name_draft.trim().to_string();
+        let next_description = self.state.persona_description_draft.clone();
+        let name_change = !next_name.is_empty() && next_name != current_name;
+        let description_change = Some(next_description.clone()) != current_description
+            && !(next_description.is_empty() && current_description.is_none());
+        if !name_change && !description_change {
+            self.state.status_message = Some("No changes.".into());
+            self.bump_scene();
+            return;
+        }
+        match self.call_decode(
+            "personas.update",
+            &RequestUpdatePersona {
+                persona_id: id,
+                name: if name_change { Some(next_name) } else { None },
+                description: if description_change {
+                    Some(next_description)
+                } else {
+                    None
+                },
+                avatar: None,
+                is_default: None,
+            },
+            decode_persona_dto,
+        ) {
+            Ok(updated) => {
+                if let Some(row) = self
+                    .state
+                    .personas
+                    .iter_mut()
+                    .find(|item| item.id == updated.id)
+                {
+                    row.name = updated.name.clone();
+                    row.description = updated.description.clone();
+                }
+                self.seed_persona_draft(&updated.id);
+                self.state.status_message = Some("Persona updated.".into());
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
     }
 
     pub fn select_persona(&mut self, id: &str) {

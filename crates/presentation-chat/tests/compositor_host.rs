@@ -2442,6 +2442,66 @@ fn lorebook_meta_update_over_product_wire() {
     );
 }
 
+/// Persona editor (React `PersonasPanel` edit tab) over `personas.update`:
+/// only changed fields cross the wire, an empty trimmed name keeps the
+/// stored one, a no-op save skips the wire call.
+#[test]
+fn persona_meta_update_over_product_wire() {
+    use neotavern_presentation_chat::ShellAction;
+    let (mut session, _) = start_flagged_session(
+        Some("1"),
+        FakeWire::demo(),
+        Some(neotavern_presentation_chat::DEMO_CHAT_ID),
+        None,
+    )
+    .expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("personas".into()));
+    assert!(!session.shell_view().personas.is_empty());
+    let persona = session.shell_view().personas[0].clone();
+    session.select_persona(&persona.id);
+    assert_eq!(session.shell_view().persona_tab, "edit");
+    assert_eq!(session.shell_view().persona_name_draft, persona.name);
+
+    // Change name + description -> one wire call with both fields.
+    session.set_persona_name_draft(&format!("{} v2", persona.name));
+    session.set_persona_description_draft("A weathered caravan mapmaker.");
+    session.apply_shell_action(ShellAction::PersonaSaveMeta);
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "personas.update")
+    );
+    let shell = session.shell_view();
+    let card = shell
+        .personas
+        .iter()
+        .find(|item| item.id == persona.id)
+        .expect("card");
+    assert_eq!(card.name, format!("{} v2", persona.name));
+    assert_eq!(
+        shell.persona_description_draft,
+        "A weathered caravan mapmaker."
+    );
+    assert_eq!(
+        shell.status_message.as_deref(),
+        Some("Persona updated.")
+    );
+
+    // No-op save: drafts match the store -> no second wire call.
+    session.set_persona_name_draft(&format!("{} v2", persona.name));
+    session.set_persona_description_draft("A weathered caravan mapmaker.");
+    session.apply_shell_action(ShellAction::PersonaSaveMeta);
+    assert_eq!(
+        session
+            .issued_commands()
+            .iter()
+            .filter(|op| **op == "personas.update")
+            .count(),
+        1
+    );
+}
+
 /// Version-controls "Regenerate": retries the tapped row's OWN source run
 /// (`generation.retry{sourceRunId}`), not just the latest one. A row without
 /// a stored run surfaces GENERATION_RUN_NOT_FOUND.

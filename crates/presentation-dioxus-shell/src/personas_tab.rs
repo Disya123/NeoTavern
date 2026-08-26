@@ -288,12 +288,25 @@ fn persona_edit_tab(view: &ProductShellView) -> Element {
                         {icon("Trash", 16)}
                         span { "data-part": "label", "Delete" }
                     }
+                    button {
+                        class: "st-button",
+                        r#type: "button",
+                        // React saves name on blur and description debounced;
+                        // the host collapses both into one explicit action.
+                        "data-part": "persona-save",
+                        "data-variant": "primary",
+                        span { "data-part": "label", "Save" }
+                    }
                 }
             }
             label {
                 class: "PersonasPanel_editorField",
                 span { "Persona name" }
-                input { r#type: "text", value: "{view.persona_name_draft}" }
+                input {
+                    r#type: "text",
+                    value: "{view.persona_name_draft}",
+                    "data-part": "persona-name-input",
+                }
             }
             div {
                 class: "PersonasPanel_editorField",
@@ -305,6 +318,7 @@ fn persona_edit_tab(view: &ProductShellView) -> Element {
                 textarea {
                     value: "{view.persona_description_draft}",
                     placeholder: "Example:\n[{{{{user}}}} is a 28-year-old traveler who maps forgotten routes.]",
+                    "data-part": "persona-description-input",
                 }
             }
             div {
