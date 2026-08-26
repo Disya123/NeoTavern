@@ -214,6 +214,8 @@ fn markdown_minimal_probe() {
         editing_draft: String::new(),
         history_open_for: None,
         revision_history: Vec::new(),
+        snapshots_menu_open: false,
+        snapshot_items: Vec::new(),
     });
     let layout =
         inspect_product_layout(product_chat_app, 1100, 760, 1.0, Default::default()).expect("l");
@@ -2214,6 +2216,103 @@ fn message_edit_records_revisions_over_product_wire() {
         session.view().error_code.as_deref(),
         Some("MESSAGE_NOT_FOUND")
     );
+}
+
+/// Chat snapshots (React `ChatSnapshotsMenu` + builtin checkpoint/branch
+/// actions) over `chats.snapshots.create/list`: a checkpoint/branch freezes
+/// the prefix into a real child chat (visible in the chats list and the
+/// snapshots menu), opening a row switches to that chat, a tap outside the
+/// menu closes it. A foreign id surfaces MESSAGE_NOT_FOUND.
+#[test]
+fn chat_snapshots_checkpoint_branch_over_product_wire() {
+    use neotavern_presentation_chat::{ShellAction, ShellHit, hit_test};
+    let (mut session, _) = start_flagged_session(
+        Some("1"),
+        FakeWire::with_message_count(6),
+        Some(neotavern_presentation_chat::DEMO_CHAT_ID),
+        None,
+    )
+    .expect("route");
+    session.set_surface_size(1100, 760, 1.0);
+    assert_eq!(session.kernel_message_count(), 6);
+    let visible = session.view().visible;
+    let branch_target = visible[0].id.clone();
+    let checkpoint_target = visible[2].id.clone();
+    let chats_before = session.shell_view().chat_list.len();
+
+    // Checkpoint on visible[2]: prefix of 3 messages copied into a child.
+    session.create_message_snapshot(&checkpoint_target, true);
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "chats.snapshots.create")
+    );
+    assert!(
+        session
+            .shell_view()
+            .status_message
+            .as_deref()
+            .unwrap_or("")
+            .contains("Checkpoint created")
+    );
+    assert_eq!(session.kernel_message_count(), 6);
+    let shell = session.shell_view();
+    assert_eq!(shell.chat_list.len(), chats_before + 1);
+
+    // Branch on visible[0]: single-message child.
+    session.create_message_snapshot(&branch_target, false);
+    assert!(
+        session
+            .shell_view()
+            .status_message
+            .as_deref()
+            .unwrap_or("")
+            .contains("Branch created")
+    );
+
+    // Menu: two children, newest first (branch was created last).
+    session.toggle_snapshots_menu();
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "chats.snapshots.list")
+    );
+    let view = session.view();
+    assert!(view.snapshots_menu_open);
+    assert_eq!(view.snapshot_items.len(), 2);
+    assert_eq!(view.snapshot_items[0].origin_label, "Branch");
+    assert_eq!(view.snapshot_items[1].origin_label, "Checkpoint");
+    assert_eq!(view.snapshot_items[1].message_count, 3);
+
+    // Open the checkpoint child through its menu action.
+    let child_id = view.snapshot_items[1].id.clone();
+    session.apply_shell_action(ShellAction::OpenSnapshot(child_id.clone()));
+    assert!(!session.view().snapshots_menu_open);
+    assert_eq!(session.kernel_message_count(), 3);
+
+    // Outside tap closes the reopened menu.
+    session.toggle_snapshots_menu();
+    let shell = session.shell_view();
+    match hit_test(&shell, 800.0, 400.0) {
+        Some(ShellHit::Action(ShellAction::SnapshotsClose)) => {}
+        other => panic!("expected outside-close hit, got {other:?}"),
+    }
+    session.apply_shell_action(ShellAction::SnapshotsClose);
+    assert!(!session.view().snapshots_menu_open);
+
+    // Foreign ids surface honest wire errors.
+    session.create_message_snapshot("00000000-0000-4000-8000-000000000009", true);
+    assert_eq!(
+        session.view().error_code.as_deref(),
+        Some("MESSAGE_NOT_FOUND")
+    );
+
+    // A chat without snapshots lists an honest empty page.
+    session.apply_shell_action(ShellAction::OpenSnapshot(child_id));
+    session.toggle_snapshots_menu();
+    assert!(session.view().snapshot_items.is_empty());
 }
 
 /// Version-controls "Regenerate": retries the tapped row's OWN source run

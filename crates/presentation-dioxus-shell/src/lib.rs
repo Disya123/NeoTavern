@@ -28,7 +28,7 @@ pub use neotavern_presentation_blueprint::v1::{ContextUsageBreakdownV1, ContextU
 pub use neotavern_presentation_design_system::SafeAreaInsets;
 pub use product_path::{
     PRODUCT_PATH_CHAT_ID, PRODUCT_PATH_ITEMS, PRODUCT_PATH_VISIBLE, ProductChatView, ProductChrome,
-    RevisionRow,
+    RevisionRow, SnapshotItemView,
     RowKind, VisibleRow, chrome_metrics, current_product_chat, format_timestamp,
     install_product_chat, message_id, mixed_height, mixed_height_catalog,
     product_chat_from_fixture, product_chat_with_chrome, streaming_schedule, visible_rows,
@@ -411,6 +411,54 @@ fn revision_history_card(view: &ProductChatView) -> Option<Element> {
     })
 }
 
+/// Snapshots menu panel overlay (React `ChatSnapshotsMenu` panel): child
+/// chats of the active chat, newest first. Rows carry
+/// `data-part="snapshot-row-{id}"` — the desktop bin resolves them by
+/// identity (`covers`) because custom intents carry no key payload.
+fn snapshots_menu_panel(view: &ProductChatView) -> Element {
+    let items = view.snapshot_items.clone();
+    rsx! {
+        div {
+            class: "ChatSnapshotsMenu_panel",
+            "data-component": "chat-snapshots-menu",
+            "data-part": "snapshots-panel",
+            style: "position:absolute;left:16px;right:16px;top:12px;z-index:30;box-sizing:border-box;display:flex;flex-direction:column;gap:8px;max-height:60%;padding:12px;border:1px solid rgba(243,238,232,0.14);border-radius:16px;background:rgba(21,19,17,0.94);color:#f3eee8;overflow:hidden;",
+            div {
+                style: "display:flex;align-items:center;gap:8px;",
+                strong { style: "font-size:13px;", "Chat snapshots" }
+                button {
+                    class: "MessageBubble_actionButton",
+                    r#type: "button",
+                    "data-part": "snapshots-close",
+                    "aria-label": "Close snapshots",
+                    style: "margin-left:auto;width:28px;height:28px;border-radius:14px;",
+                    {crate::product_shell::icon("X", 14)}
+                }
+            }
+            if items.is_empty() {
+                p { style: "margin:0;color:#998f87;font-size:12px;", "No checkpoints or branches yet." }
+            } else {
+                div {
+                    style: "display:flex;flex-direction:column;gap:6px;overflow:hidden;",
+                    for item in items.iter() {
+                        button {
+                            class: "MessageBubble_actionButton",
+                            r#type: "button",
+                            "data-part": "snapshot-row-{item.id}",
+                            style: "display:flex;align-items:center;gap:8px;width:100%;height:48px;border-radius:12px;padding:0 10px;text-align:left;",
+                            span {
+                                style: "flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;",
+                                strong { style: "font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;", "{item.title}" }
+                                span { style: "color:#998f87;font-size:11px;", "{item.origin_label} · {item.message_count} messages" }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// Flagged Product Wire chat workspace: header glass, visible Markdown/image
 /// rows, composer glass. Blitz consumes this tree; callers must not inject a
 /// hand-built `NeoDisplayList`.
@@ -569,6 +617,19 @@ pub fn product_chat_app() -> Element {
                             style: "flex:none;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:none;border-radius:20px;background:transparent;color:#c5bbb2;",
                             {crate::product_shell::icon("MagnifyingGlass", 17)}
                         }
+                        button {
+                            class: "ChatWorkspace_headerSearch",
+                            r#type: "button",
+                            // Custom intents render verbatim through the
+                            // shared hit table; the desktop bin routes this
+                            // one to `toggle_snapshots_menu`.
+                            "data-action": "custom.chat.snapshots-menu",
+                            "data-part": "snapshots-trigger",
+                            "aria-label": "Chat snapshots",
+                            title: "Chat snapshots",
+                            style: "flex:none;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:none;border-radius:20px;background:transparent;color:#c5bbb2;",
+                            {crate::product_shell::icon("GitBranch", 17)}
+                        }
                         if nested {
                             div {
                                 class: "neoui-glass",
@@ -588,6 +649,9 @@ pub fn product_chat_app() -> Element {
                         if view.history_open_for.is_some() {
                             {revision_history_card(&view)}
                         }
+                        if view.snapshots_menu_open {
+                            {snapshots_menu_panel(&view)}
+                        }
                     } else {
                     div {
                         class: "ChatWorkspace_viewport",
@@ -600,6 +664,9 @@ pub fn product_chat_app() -> Element {
                         style: "{viewport_style}",
                         if view.history_open_for.is_some() {
                             {revision_history_card(&view)}
+                        },
+                        if view.snapshots_menu_open {
+                            {snapshots_menu_panel(&view)}
                         },
                         div {
                             class: "ChatWorkspace_scrollBody",

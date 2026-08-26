@@ -53,6 +53,19 @@
             "stateSlots": [],
             "actions": [],
             "children": []
+          },
+          {
+            "nodeId": "snapshots-trigger",
+            "component": "SnapshotsTrigger",
+            "recipe": "icon-button",
+            "role": "button",
+            "stateSlots": [],
+            "actions": [
+              {
+                "id": "custom.chat.snapshots-menu"
+              }
+            ],
+            "children": []
           }
         ]
       },

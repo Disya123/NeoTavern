@@ -517,6 +517,26 @@ Blueprint-chrome пока не покрывает эти интерактивн�
 уходит в legacy-RSX (`warn_uncovered_variant("interactive-edit")`). Тест
 `message_edit_records_revisions_over_product_wire`.
 
+## Снапшоты чата: checkpoint / branch и меню
+
+Кнопки Checkpoint / Branch в инлайн-ряде сообщения теперь реальны:
+`chats.snapshots.create` замораживает префикс чата до сообщения включительно
+в новый дочерний чат (`parentChatId`/`origin`/`sourceMessageId`; для
+checkpoint источник дополнительно линкуется `checkpointChatId`). Пользователь
+остаётся в текущем чате (паритет React: тост с действием перехода), статус
+«Checkpoint/Branch created (N messages copied).», дочерний чат появляется в
+списке чатов. Триггер меню снапшотов — новая кнопка GitBranch в хедере
+(и в каноническом документе `ui-blueprint-document-chat-v1.json` как
+`custom.chat.snapshots-menu`): открытие грузит `chats.snapshots.list`
+(дочерние чаты, новые сверху), строки «title · origin · N messages» открывают
+чат, тап вне панели закрывает меню (паритет outside-click React), пустой
+список честно пишет «No checkpoints or branches yet.» Геометрия панели
+зеркалится между `snapshots_menu_panel` и новым `snapshots_menu_hit`.
+Blueprint-chrome при открытом меню уходит в legacy-RSX
+(`warn_uncovered_variant("interactive-edit")`). Чужой id даёт честный
+`MESSAGE_NOT_FOUND`, чужой родитель при list — `CHAT_NOT_FOUND`. При смене
+чата меню закрывается. Тест `chat_snapshots_checkpoint_branch_over_product_wire`.
+
 ## Отправка сообщения (Send)
 
 Композер (`data-part="composer"` в `product_chat_app`) получил кнопку **Send**
@@ -735,11 +755,10 @@ copy, delete, rollback, regenerate и swipes. Edit / snapshots / history
 - Drag-скролл инерцией и мультитач: десктоп использует колёсико +
   `scroll_offset_css` (без физ.инерции); пёрышко-инерция Android — через
   `ChatCompositor::compositor_tick`, не перенесено.
-- Из builtin-действий сообщения портированы copy (реальный клипборд хоста),
-  delete (durable `chats.messages.delete`), edit (`chats.messages.update` +
-  immutable-ревизии) и history (`chats.messages.revisions.list`). Checkpoint /
-  branch рисуются в инлайн-ряде для визуального паритета с React
-  `messageActions.ts`, но пока не меняют Kernel-состояние.
+- Все builtin-действия сообщения реальны: copy (клипборд хоста), delete
+  (`chats.messages.delete`), edit (`chats.messages.update` + ревизии),
+  history (`chats.messages.revisions.list`), checkpoint/branch
+  (`chats.snapshots.create`) и rollback (`chats.snapshots.rollback`).
 - Wallpaper — светлая плоскость фасада + тёмный overlay, не фото React
   golden (фото-ассет в хост не бандлится). `backdrop-filter` Blitz не
   умеет; панели полупрозрачные через `rgba`, не live glass.

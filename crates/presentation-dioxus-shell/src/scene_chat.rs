@@ -239,9 +239,12 @@ pub fn blueprint_chrome(view: &ProductChatView) -> Option<ChromeElements> {
         view.chrome,
         ProductChrome::NestedDialog | ProductChrome::PaintOrder
     );
-    // Interactive session states (inline editor, revision-history card) are
-    // not covered by authored documents yet — the legacy RSX renders them.
-    let interactive = view.editing_message_id.is_some() || view.history_open_for.is_some();
+    // Interactive session states (inline editor, revision-history card,
+    // snapshots menu) are not covered by authored documents yet — the legacy
+    // RSX renders them.
+    let interactive = view.editing_message_id.is_some()
+        || view.history_open_for.is_some()
+        || view.snapshots_menu_open;
     if overlay || nested || interactive {
         if current_source() != ChatBlueprintSource::Disabled {
             let reason = if interactive {
@@ -399,7 +402,25 @@ fn render_header_child(node: &UiNodeV1, ctx: &ChromeCtx) -> Element {
     match node.id.as_str() {
         "chat-identity" => render_identity(node, ctx),
         "header-search" => render_search_button(),
+        "snapshots-trigger" => render_snapshots_trigger(),
         _ => render_plain_container(node, ctx, None),
+    }
+}
+
+/// Native snapshots-menu trigger (`snapshots-trigger` in lib.rs): same
+/// markup; the `custom.*` action rides the shared hit table verbatim.
+fn render_snapshots_trigger() -> Element {
+    rsx! {
+        button {
+            class: "ChatWorkspace_headerSearch",
+            r#type: "button",
+            "data-action": "custom.chat.snapshots-menu",
+            "data-part": "snapshots-trigger",
+            "aria-label": "Chat snapshots",
+            title: "Chat snapshots",
+            style: "flex:none;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:none;border-radius:20px;background:transparent;color:#c5bbb2;",
+            {crate::product_shell::icon("GitBranch", 17)}
+        }
     }
 }
 

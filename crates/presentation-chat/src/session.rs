@@ -11,6 +11,8 @@ use contracts_generated::generated::{
     RequestMessageDraftSave, RequestMessageVariantActivate, RequestMessageVariantsList,
     RequestMessageRevisionsList, RequestUpdateMessage, MessageRevisionDto,
     ResultMessageRevisionList, decode_result_message_revision_list,
+    RequestCreateChatSnapshot, RequestSnapshotsList, SnapshotOrigin,
+    ResultChatSnapshot, decode_result_chat_snapshot, decode_result_snapshots_list,
     RequestPluginsDisable, RequestPluginsEnable, RequestPluginsUninstall,
     RequestRetryGeneration, RequestSettingsGet, RequestSnapshotsRollback, RequestStartGeneration,
     RequestUpdateCharacter, RequestUpdateLorebookEntry, RequestProfileExport, RequestProfilesCreate,
@@ -52,7 +54,7 @@ use neotavern_presentation_dioxus_shell::{
     ProductChatView, ProductChrome, ProductShellView, ProviderCardView, RowKind, SafeAreaInsets,
     ThemeCardView, ToolCardView, VisibleRow, PRODUCT_PATH_VISIBLE,
     BackupCardView, MemoryCardView, PresetValueRow,
-    ProviderConfigCardView, RevisionRow,
+    ProviderConfigCardView, RevisionRow, SnapshotItemView,
 };
 
 use serde::de::DeserializeOwned;
@@ -290,6 +292,10 @@ pub struct ChatRouteState {
     /// contents from `chats.messages.revisions.list`.
     pub history_message_id: Option<String>,
     pub message_revisions: Vec<RevisionRow>,
+    /// Snapshots menu (React `ChatSnapshotsMenu`): panel visibility plus the
+    /// child chats (checkpoints/branches) of the active chat.
+    pub snapshots_menu_open: bool,
+    pub snapshot_items: Vec<ChatDto>,
     /// Last applied Kernel stream envelope sequence (`EventEnvelope.sequence`).
     pub last_applied_stream_sequence: Option<i64>,
     pub last_checkpoint_sequence: Option<i64>,
@@ -1013,6 +1019,21 @@ impl<W: ProductWire> ChatSession<W> {
             editing_draft: self.state.message_edit_draft.clone(),
             history_open_for: self.state.history_message_id.clone(),
             revision_history: self.state.message_revisions.clone(),
+            snapshots_menu_open: self.state.snapshots_menu_open,
+            snapshot_items: self
+                .state
+                .snapshot_items
+                .iter()
+                .map(|chat| SnapshotItemView {
+                    id: chat.id.clone(),
+                    title: chat.title.clone(),
+                    origin_label: match chat.origin.as_ref() {
+                        Some(SnapshotOrigin::Branch) => "Branch".to_string(),
+                        _ => "Checkpoint".to_string(),
+                    },
+                    message_count: chat.message_count,
+                })
+                .collect(),
         }
     }
 
@@ -1599,6 +1620,8 @@ impl<W: ProductWire> ChatSession<W> {
                 self.state.message_edit_draft.clear();
                 self.state.history_message_id = None;
                 self.state.message_revisions.clear();
+                self.state.snapshots_menu_open = false;
+                self.state.snapshot_items.clear();
                 match self.list_messages(chat_id, None) {
                     Ok(page) => self.absorb_latest_page(page),
                     Err(err) => self.record_error(err),
@@ -2005,6 +2028,92 @@ impl<W: ProductWire> ChatSession<W> {
     pub fn close_message_history(&mut self) {
         self.state.history_message_id = None;
         self.state.message_revisions.clear();
+        self.bump_scene();
+    }
+
+    /// Toggle the snapshots menu (React `ChatSnapshotsMenu` header trigger).
+    /// Opening loads the child chats of the active chat via
+    /// `chats.snapshots.list`; a chat without snapshots shows the honest
+    /// empty state, exactly like React.
+    pub fn toggle_snapshots_menu(&mut self) {
+        if self.state.snapshots_menu_open {
+            self.close_snapshots_menu();
+            return;
+        }
+        let Some(chat_id) = self.chat_id().map(str::to_string) else {
+            return;
+        };
+        match self.call_decode(
+            "chats.snapshots.list",
+            &RequestSnapshotsList {
+                chat_id,
+                cursor: None,
+                limit: None,
+            },
+            decode_result_snapshots_list,
+        ) {
+            Ok(result) => {
+                self.state.snapshot_items = result.items;
+                self.state.snapshots_menu_open = true;
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    pub fn close_snapshots_menu(&mut self) {
+        self.state.snapshots_menu_open = false;
+        self.state.snapshot_items.clear();
+        self.bump_scene();
+    }
+
+    /// Open a snapshot row (React navigates to the child chat's own route):
+    /// closes the menu and switches to that chat.
+    pub fn open_snapshot(&mut self, chat_id: &str) {
+        self.close_snapshots_menu();
+        self.open_chat(chat_id);
+    }
+
+    /// Freeze the prefix up to and including this message into a fresh child
+    /// chat via `chats.snapshots.create` (React builtin actions
+    /// `data-action="checkpoint"` / `"branch"`). The user stays in the
+    /// current chat; the child appears in the chats list and the snapshots
+    /// menu (React parity: a notification offers the jump instead).
+    pub fn create_message_snapshot(&mut self, row_id: &str, checkpoint: bool) {
+        if row_id == "streaming" {
+            return;
+        }
+        let Some(chat_id) = self.chat_id().map(str::to_string) else {
+            return;
+        };
+        match self.call_decode(
+            "chats.snapshots.create",
+            &RequestCreateChatSnapshot {
+                chat_id,
+                message_id: row_id.to_string(),
+                kind: if checkpoint {
+                    SnapshotOrigin::Checkpoint
+                } else {
+                    SnapshotOrigin::Branch
+                },
+                title: None,
+            },
+            decode_result_chat_snapshot,
+        ) {
+            Ok(ResultChatSnapshot {
+                chat: _child,
+                copied_messages,
+            }) => {
+                // The child chat is a real chat: keep the sidebar list honest.
+                self.load_chat_list();
+                self.state.status_message = Some(if checkpoint {
+                    format!("Checkpoint created ({copied_messages} messages copied).")
+                } else {
+                    format!("Branch created ({copied_messages} messages copied).")
+                });
+            }
+            Err(err) => self.record_error(err),
+        }
         self.bump_scene();
     }
 
@@ -2482,6 +2591,8 @@ impl<W: ProductWire> ChatSession<W> {
             ShellAction::ProviderDeleteOpen(id) => self.open_provider_delete(&id),
             ShellAction::ProviderDeleteClose => self.close_provider_delete(),
             ShellAction::ProviderDeleteConfirm => self.confirm_provider_delete(),
+            ShellAction::SnapshotsClose => self.close_snapshots_menu(),
+            ShellAction::OpenSnapshot(id) => self.open_snapshot(&id),
         }
     }
 

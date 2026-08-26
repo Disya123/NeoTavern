@@ -181,6 +181,13 @@ fn presentation(node_id: &str) -> Option<NodePresentation> {
             "button",
             Some("chat:searchInChat"),
         ),
+        "snapshots-trigger" => flow(
+            None,
+            "chat-header",
+            Some("snapshots-trigger"),
+            "button",
+            Some("chat:snapshotsList"),
+        ),
         // Viewport ----------------------------------------------------------
         "chat-viewport" => scroll(
             Some("chat.viewport"),

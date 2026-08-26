@@ -89,6 +89,23 @@ pub struct ProductChatView {
     /// Immutable previous contents (`message_content_revisions`), oldest
     /// first — exactly what the kernel records on a content change.
     pub revision_history: Vec<RevisionRow>,
+    /// Snapshots menu panel visibility (React `ChatSnapshotsMenu` trigger).
+    pub snapshots_menu_open: bool,
+    /// Child chats (checkpoints/branches) listed inside the menu, newest
+    /// first — straight from `chats.snapshots.list`.
+    pub snapshot_items: Vec<SnapshotItemView>,
+}
+
+/// One row of the snapshots menu (React `ChatSnapshotsMenu` item): the child
+/// chat's title plus its origin badge and message count.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SnapshotItemView {
+    pub id: String,
+    pub title: String,
+    /// "Checkpoint" or "Branch" (React `chat:checkpointBadge` /
+    /// `chat:branchBadge`).
+    pub origin_label: String,
+    pub message_count: i64,
 }
 
 /// One row of the revision-history card (React `MessageRevisionHistoryCard`
@@ -121,6 +138,8 @@ impl Default for ProductChatView {
             editing_draft: String::new(),
             history_open_for: None,
             revision_history: Vec::new(),
+            snapshots_menu_open: false,
+            snapshot_items: Vec::new(),
         }
     }
 }
@@ -369,6 +388,8 @@ pub fn product_chat_from_fixture(fixture: &CanonicalFixture, start: usize) -> Pr
         editing_draft: String::new(),
         history_open_for: None,
         revision_history: Vec::new(),
+        snapshots_menu_open: false,
+        snapshot_items: Vec::new(),
     }
 }
 

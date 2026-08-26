@@ -3,6 +3,15 @@
 ## Unreleased
 ### Added
 
+- **Чат: снапшоты — checkpoint/branch и меню снапшотов
+  (chats.snapshots.create / list).** Кнопки Checkpoint/Branch в бабле
+  замораживают префикс чата в дочерний чат; новая кнопка в хедере
+  (и в blueprint-документе, `custom.chat.snapshots-menu`) открывает меню
+  дочерних чатов с origin-бейджем и счётчиком сообщений, тап вне панели
+  закрывает. Дочерние чаты открываются как обычные чаты. Тесты
+  `chat_snapshots_checkpoint_branch_over_product_wire`; все builtin-действия
+  сообщения теперь меняют Kernel-состояние.
+
 - **Чат: инлайн-редактирование сообщения и история правок
   (chats.messages.update / revisions.list).** Кнопка Edit открывает редактор в
   пузыре (Save/Cancel, фокус клавиатуры); пустой/неизменённый черновик

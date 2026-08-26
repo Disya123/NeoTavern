@@ -6,7 +6,7 @@
 //! a DOM hit tree, so geometry is reconstructed from the same tokens the
 //! RSX uses.
 
-use neotavern_presentation_dioxus_shell::ProductShellView;
+use neotavern_presentation_dioxus_shell::{ProductShellView, chrome_metrics};
 
 pub const RAIL_WIDTH: f32 = 60.0;
 pub const PANEL_WIDTH_DEFAULT: f32 = 380.0;
@@ -167,6 +167,12 @@ pub enum ShellAction {
     PresetDeleteOpen,
     PresetDeleteClose,
     PresetDeleteConfirm,
+    /// Snapshots menu overlay in the chat viewport (React
+    /// `ChatSnapshotsMenu`): close (also via outside click) and open a child
+    /// chat row (`chats.snapshots.list` items). The header trigger rides the
+    /// shared hit table as `custom.chat.snapshots-menu`.
+    SnapshotsClose,
+    OpenSnapshot(String),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -801,62 +807,55 @@ pub fn hit_test(view: &ProductShellView, css_x: f32, css_y: f32) -> Option<Shell
             }
         }
     }
+    if view.chat.snapshots_menu_open {
+        if let Some(hit) = snapshots_menu_hit(view, x, y) {
+            return Some(hit);
+        }
+    }
     None
 }
 
-/// Hit-test a managed catalog panel: optional tab row (AI providers/presets,
-/// Settings general/host) plus a vertical selectable card list under it.
-fn catalog_panel_hit<'a, I, F>(
-    view: &ProductShellView,
-    x: f32,
-    y: f32,
-    tabs: &[&str],
-    _active_tab: &str,
-    rows_top_relative: f32,
-    ids: I,
-    select: F,
-) -> Option<ShellHit>
-where
-    I: IntoIterator<Item = &'a str>,
-    F: Fn(&str) -> ShellAction,
-{
-    if !view.sidebar_open {
-        return None;
+/// Snapshots menu overlay (React `ChatSnapshotsMenu` panel): mirrors the
+/// DOM geometry of `snapshots_menu_panel` in the dioxus shell — viewport
+/// coordinates `left:16px; right:16px; top:12px`, padding 12, title row 28,
+/// rows 48 + gap 6; a tap outside closes the menu like React's outside-click
+/// handler.
+fn snapshots_menu_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
+    let (width, height) = css_size(view);
+    let chat_x0 = chat_origin_x(view);
+    let (_, header_h, _, composer_h) = chrome_metrics(width as u32, height as u32);
+    let composer_bottom = height - composer_h as f32 - chrome_bottom(view);
+    let viewport_top = chrome_top(view) + header_h as f32;
+    let items = &view.chat.snapshot_items;
+    let list_h = if items.is_empty() {
+        16.0
+    } else {
+        items.len() as f32 * 48.0 - 6.0
+    };
+    let panel_h = (12.0 + 28.0 + 8.0 + list_h + 12.0).min((composer_bottom - viewport_top) * 0.6);
+    let px0 = chat_x0 + 16.0;
+    let px1 = width - 16.0;
+    let py0 = header_bottom(view) + SPACE_SM;
+    let py1 = py0 + panel_h;
+    if !contains(x, y, px0, py0, px1, py1) {
+        return Some(ShellHit::Action(ShellAction::SnapshotsClose));
     }
-    let (panel_x, panel_w) = panel_origin(view);
-    let x1 = panel_x + panel_w;
-    let header_end = header_bottom(view);
-    if y < header_end {
-        if x >= x1 - CONTROL_SM - SPACE_LG {
-            return Some(ShellHit::Action(ShellAction::ClosePanel));
-        }
-        return Some(ShellHit::Absorb);
+    // Close button rides the title row's right edge.
+    if contains(x, y, px1 - 40.0, py0 + 12.0, px1 - 12.0, py0 + 40.0) {
+        return Some(ShellHit::Action(ShellAction::SnapshotsClose));
     }
-    if !tabs.is_empty() {
-        let tabs_top = header_end + SPACE_XS;
-        let tabs_bottom = tabs_top + CONTROL_SM + SPACE_XS;
-        let tabs_x0 = panel_x + SPACE_LG;
-        let tabs_x1 = x1 - SPACE_LG;
-        if y >= tabs_top && y < tabs_bottom && x >= tabs_x0 && x < tabs_x1 {
-            let span = (tabs_x1 - tabs_x0).max(1.0);
-            let idx = (((x - tabs_x0) / span) * tabs.len() as f32).floor() as usize;
-            return Some(ShellHit::Action(ShellAction::SetTab(
-                tabs[idx.min(tabs.len() - 1)].into(),
-            )));
+    let mut cursor = py0 + 48.0;
+    for item in items.iter() {
+        if contains(x, y, px0 + 12.0, cursor, px1 - 12.0, cursor + 48.0) {
+            return Some(ShellHit::Action(ShellAction::OpenSnapshot(item.id.clone())));
         }
-    }
-    // Selectable card list below the tab row / chrome.
-    let mut cursor = header_end + rows_top_relative;
-    for id in ids {
-        let bottom = cursor + CONTROL_LG + SPACE_MD;
-        if y >= cursor && y < bottom {
-            return Some(ShellHit::Action(select(id)));
-        }
-        cursor = bottom;
+        cursor += 48.0 + 6.0;
     }
     Some(ShellHit::Absorb)
 }
 
+/// Hit-test a managed catalog panel: optional tab row (AI providers/presets,
+/// Settings general/host) plus a vertical selectable card list under it.
 fn personas_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
     list_panel_hit(
         view,

@@ -453,8 +453,13 @@ impl App {
             // default is the session trace toast (a future registry attaches
             // real handlers without touching this call site).
             TapIntent::Custom { name } => {
-                eprintln!("[neocompositor-desktop] custom intent tapped: {name}");
-                self.session.custom_intent(&name);
+                if name == "custom.chat.snapshots-menu" {
+                    eprintln!("[neocompositor-desktop] snapshots menu toggled");
+                    self.session.toggle_snapshots_menu();
+                } else {
+                    eprintln!("[neocompositor-desktop] custom intent tapped: {name}");
+                    self.session.custom_intent(&name);
+                }
             }
             TapIntent::None => {}
         }
@@ -727,6 +732,18 @@ impl App {
                     neotavern_presentation_chat::MessageActionKind::HistoryClose => {
                         eprintln!("[neocompositor-desktop] history close tapped");
                         self.session.close_message_history();
+                        self.dirty = true;
+                        self.window.as_ref().map(|w| w.request_redraw());
+                    }
+                    neotavern_presentation_chat::MessageActionKind::Checkpoint => {
+                        eprintln!("[neocompositor-desktop] checkpoint tapped: {}", pending.row_id);
+                        self.session.create_message_snapshot(&pending.row_id, true);
+                        self.dirty = true;
+                        self.window.as_ref().map(|w| w.request_redraw());
+                    }
+                    neotavern_presentation_chat::MessageActionKind::Branch => {
+                        eprintln!("[neocompositor-desktop] branch tapped: {}", pending.row_id);
+                        self.session.create_message_snapshot(&pending.row_id, false);
                         self.dirty = true;
                         self.window.as_ref().map(|w| w.request_redraw());
                     }

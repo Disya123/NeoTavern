@@ -18,6 +18,8 @@ use contracts_generated::generated::{
     RequestSetProviderConfig, RequestDeleteProviderConfig, RequestGetProviderConfig,
     MessageRevisionDto, RequestUpdateMessage, RequestMessageRevisionsList,
     ResultMessageRevisionList,
+    RequestCreateChatSnapshot, RequestSnapshotsList, SnapshotOrigin,
+    ResultChatSnapshot, ResultSnapshotsList,
 };
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -1290,6 +1292,68 @@ impl ProductWire for FakeWire {
                     .cloned()
                     .collect();
                 let result = ResultMessageRevisionList { items };
+                self.wrap_call(operation_id, to_value(&result))
+            }
+            "chats.snapshots.create" => {
+                let req: RequestCreateChatSnapshot = serde_json::from_value(payload.clone())?;
+                let parent = self.require_chat(&req.chat_id)?.clone();
+                let rows = self
+                    .messages
+                    .get(&req.chat_id)
+                    .ok_or_else(|| Self::product("MESSAGE_NOT_FOUND", "messageId", &req.message_id))?;
+                let cut = rows
+                    .iter()
+                    .position(|row| row.id == req.message_id)
+                    .ok_or_else(|| Self::product("MESSAGE_NOT_FOUND", "messageId", &req.message_id))?;
+                // Kernel semantics: a fresh child chat receives the prefix up
+                // to and including the source message; `kind = checkpoint`
+                // additionally links the source message to its snapshot.
+                let prefix: Vec<MessageDto> = rows[..=cut].to_vec();
+                let child = ChatDto {
+                    id: self.alloc_id(),
+                    title: req.title.clone().unwrap_or_else(|| parent.title.clone()),
+                    character_id: parent.character_id.clone(),
+                    persona_id: parent.persona_id.clone(),
+                    message_count: prefix.len() as i64,
+                    created_at: TS.into(),
+                    updated_at: TS.into(),
+                    parent_chat_id: Some(parent.id.clone()),
+                    origin: Some(req.kind.clone()),
+                    source_message_id: Some(req.message_id.clone()),
+                };
+                let copied = prefix.len() as i64;
+                self.messages.insert(child.id.clone(), prefix);
+                if req.kind == SnapshotOrigin::Checkpoint {
+                    if let Some(parent_rows) = self.messages.get_mut(&req.chat_id) {
+                        if let Some(source) =
+                            parent_rows.iter_mut().find(|row| row.id == req.message_id)
+                        {
+                            source.checkpoint_chat_id = Some(child.id.clone());
+                        }
+                    }
+                }
+                self.chats.insert(child.id.clone(), child.clone());
+                let result = ResultChatSnapshot {
+                    chat: child,
+                    copied_messages: copied,
+                };
+                self.wrap_call(operation_id, to_value(&result))
+            }
+            "chats.snapshots.list" => {
+                let req: RequestSnapshotsList = serde_json::from_value(payload.clone())?;
+                self.require_chat(&req.chat_id)?;
+                let mut items: Vec<ChatDto> = self
+                    .chats
+                    .values()
+                    .filter(|chat| chat.parent_chat_id.as_deref() == Some(req.chat_id.as_str()))
+                    .cloned()
+                    .collect();
+                // Kernel orders children newest first (created_at DESC).
+                items.sort_by(|a, b| b.created_at.cmp(&a.created_at).then(b.id.cmp(&a.id)));
+                let result = ResultSnapshotsList {
+                    items,
+                    next_cursor: None,
+                };
                 self.wrap_call(operation_id, to_value(&result))
             }
             "chats.snapshots.rollback" => {
