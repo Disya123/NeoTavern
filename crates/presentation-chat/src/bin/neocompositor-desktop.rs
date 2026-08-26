@@ -78,6 +78,10 @@ enum TextFocus {
     ProviderName,
     /// Inline message editor body (`part:message-edit-input`).
     MessageEdit,
+    /// Book editor fields (`part:lorebook-name-input` /
+    /// `part:lorebook-description-input`).
+    LorebookName,
+    LorebookDescription,
 }
 
 /// One scripted probe step, replayed in argument order so
@@ -507,6 +511,10 @@ impl App {
             focus = TextFocus::ProviderName;
         } else if rects.covers(css_x, css_y, "part:message-edit-input") {
             focus = TextFocus::MessageEdit;
+        } else if rects.covers(css_x, css_y, "part:lorebook-name-input") {
+            focus = TextFocus::LorebookName;
+        } else if rects.covers(css_x, css_y, "part:lorebook-description-input") {
+            focus = TextFocus::LorebookDescription;
         }
         self.focus = focus;
     }
@@ -893,6 +901,18 @@ impl App {
                 self.session.set_message_edit_draft(&next);
                 eprintln!("[neocompositor-desktop] typed '{ch}' -> edit_draft=\"{next}\"");
             }
+            TextFocus::LorebookName => {
+                let current = self.session.shell_view().lorebook_name_draft.clone();
+                let next = format!("{current}{ch}");
+                self.session.set_lorebook_name_draft(&next);
+                eprintln!("[neocompositor-desktop] typed '{ch}' -> lorebook_name=\"{next}\"");
+            }
+            TextFocus::LorebookDescription => {
+                let current = self.session.shell_view().lorebook_description_draft.clone();
+                let next = format!("{current}{ch}");
+                self.session.set_lorebook_description_draft(&next);
+                eprintln!("[neocompositor-desktop] typed '{ch}' -> lorebook_desc+{ch}");
+            }
             TextFocus::None => return,
         }
         self.dirty = true;
@@ -914,6 +934,10 @@ impl App {
             TextFocus::PresetName => self.session.shell_view().preset_name_draft.clone(),
             TextFocus::ProviderName => self.session.shell_view().provider_name_draft.clone(),
             TextFocus::MessageEdit => self.session.view().editing_draft.clone(),
+            TextFocus::LorebookName => self.session.shell_view().lorebook_name_draft.clone(),
+            TextFocus::LorebookDescription => {
+                self.session.shell_view().lorebook_description_draft.clone()
+            }
             TextFocus::None => return,
         };
         let next: String = current
@@ -935,6 +959,8 @@ impl App {
             TextFocus::PresetName => self.session.set_preset_name_draft(&next),
             TextFocus::ProviderName => self.session.set_provider_name_draft(&next),
             TextFocus::MessageEdit => self.session.set_message_edit_draft(&next),
+            TextFocus::LorebookName => self.session.set_lorebook_name_draft(&next),
+            TextFocus::LorebookDescription => self.session.set_lorebook_description_draft(&next),
             TextFocus::None => {}
         }
         self.dirty = true;

@@ -213,13 +213,33 @@ fn lorebook_edit_tab(view: &ProductShellView) -> Element {
             "data-part": "lorebook-editor",
             div {
                 class: "LorebookPanel_editorActionBar",
+                style: "display:flex;align-items:center;justify-content:space-between;gap:8px;",
                 button { class: "st-button", r#type: "button", span { "data-part": "label", "Back to books" } }
-                button { class: "st-button", r#type: "button", {icon("Trash", 16)} span { "data-part": "label", "Delete" } }
+                div {
+                    style: "display:flex;align-items:center;gap:4px;",
+                    button {
+                        class: "st-button", r#type: "button",
+                        "data-part": "lorebook-editor-delete",
+                        span { "data-part": "icon", "aria-hidden": "true", {icon("Trash", 16)} }
+                        span { "data-part": "label", "Delete" }
+                    }
+                    button {
+                        class: "st-button", r#type: "button",
+                        // React `BookTab` name-on-blur + description
+                        // autosave, collapsed into one explicit action.
+                        "data-part": "lorebook-save",
+                        "data-variant": "primary",
+                        span { "data-part": "label", "Save" }
+                    }
+                }
             }
             label {
                 class: "LorebookPanel_editorField",
                 span { "Book name" }
-                input { value: "{view.lorebook_name_draft}" }
+                input {
+                    value: "{view.lorebook_name_draft}",
+                    "data-part": "lorebook-name-input",
+                }
             }
             label {
                 class: "LorebookPanel_editorField",
@@ -227,6 +247,7 @@ fn lorebook_edit_tab(view: &ProductShellView) -> Element {
                 textarea {
                     placeholder: "Describe what this book covers…",
                     value: "{view.lorebook_description_draft}",
+                    "data-part": "lorebook-description-input",
                 }
             }
         }

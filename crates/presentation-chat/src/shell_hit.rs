@@ -176,6 +176,9 @@ pub enum ShellAction {
     /// Chats panel row action (`chats.export`; React `ChatManagementPanel`
     /// "Export" item). The desktop host parks `last_export` and writes it.
     ExportChat(String),
+    /// Book editor save (React `BookTab` name/description fields over
+    /// `lorebooks.update`; only changed fields cross the wire).
+    LorebookSaveMeta,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -876,6 +879,9 @@ fn lorebooks_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
     if view.lorebook_tab == "entries" && view.selected_lorebook_id.is_some() {
         return lorebook_entries_hit(view, x, y);
     }
+    if view.lorebook_tab == "book" && view.selected_lorebook_id.is_some() {
+        return lorebook_book_hit(view, x, y);
+    }
     list_panel_hit(
         view,
         x,
@@ -886,6 +892,56 @@ fn lorebooks_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
         view.lorebooks.iter().map(|item| item.id.as_str()),
         |id| ShellAction::SelectLorebook(id.into()),
     )
+}
+
+/// React `LorebookPanel` BookTab: action bar (Back to books / Delete / Save)
+/// over the name input + description textarea (typing focus resolves via
+/// `part:lorebook-name-input` / `part:lorebook-description-input`).
+fn lorebook_book_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
+    if !view.sidebar_open {
+        return None;
+    }
+    let (panel_x, panel_w) = panel_origin(view);
+    let x1 = panel_x + panel_w;
+    if x < panel_x || x >= x1 {
+        return None;
+    }
+    let header_end = header_bottom(view);
+    if y < header_end {
+        if x >= x1 - CONTROL_SM - SPACE_LG {
+            return Some(ShellHit::Action(ShellAction::ClosePanel));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    let tabs_top = header_end + SPACE_XS;
+    let tabs_bottom = tabs_top + CONTROL_SM + SPACE_XS;
+    if y >= tabs_top && y < tabs_bottom {
+        let tabs = ["books", "book", "entries"];
+        let span = (panel_w - SPACE_LG * 2.0).max(1.0);
+        let idx = (((x - (panel_x + SPACE_LG)) / span) * tabs.len() as f32).floor() as usize;
+        return Some(ShellHit::Action(ShellAction::SetTab(
+            tabs[idx.min(tabs.len() - 1)].into(),
+        )));
+    }
+    let pad = SPACE_LG;
+    // Action bar: Back (left), Delete + Save (right).
+    let bar_top = tabs_bottom + SPACE_SM;
+    let bar_bottom = bar_top + CONTROL_SM;
+    if y >= bar_top && y < bar_bottom {
+        if x < panel_x + pad + 140.0 {
+            return Some(ShellHit::Action(ShellAction::SetTab("books".into())));
+        }
+        if x >= x1 - pad - 44.0 - 4.0 && x < x1 - pad - 48.0 {
+            return Some(ShellHit::Action(ShellAction::OpenDelete));
+        }
+        if x >= x1 - pad - 92.0 {
+            return Some(ShellHit::Action(ShellAction::LorebookSaveMeta));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    // Name field + description textarea absorb taps; typing focus is
+    // bin-local via the part rects.
+    return Some(ShellHit::Absorb);
 }
 
 /// React `LorebookPanel` EntriesTab: toolbar (Back to books / Add entry),

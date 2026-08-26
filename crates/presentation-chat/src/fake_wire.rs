@@ -1632,6 +1632,34 @@ impl ProductWire for FakeWire {
                 self.lorebooks.remove(&lorebook_id);
                 self.ok_call(operation_id, json!({}))
             }
+            "lorebooks.get" => {
+                let lorebook_id = payload_str(&payload, "lorebookId")?;
+                let dto = self
+                    .lorebooks
+                    .get(&lorebook_id)
+                    .ok_or_else(|| Self::product("LOREBOOK_NOT_FOUND", "lorebookId", &lorebook_id))?
+                    .clone();
+                self.wrap_call(operation_id, to_value(&dto))
+            }
+            "lorebooks.update" => {
+                // Kernel semantics: only the fields present in the request
+                // change; `entries`/`characterId` stay untouched when
+                // omitted (the entry list has its own ops).
+                let lorebook_id = payload_str(&payload, "lorebookId")?;
+                let name = payload.get("name").and_then(Value::as_str);
+                let description = payload.get("description").and_then(Value::as_str);
+                let Some(book) = self.lorebooks.get_mut(&lorebook_id) else {
+                    return Err(Self::product("LOREBOOK_NOT_FOUND", "lorebookId", &lorebook_id));
+                };
+                if let Some(name) = name {
+                    book.name = name.to_string();
+                }
+                if let Some(description) = description {
+                    book.description = Some(description.to_string());
+                }
+                let updated = book.clone();
+                self.wrap_call(operation_id, to_value(&updated))
+            }
             "plugins.list" => self.wrap_call(
                 operation_id,
                 to_value(&ResultPluginsList {

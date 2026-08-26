@@ -2366,6 +2366,82 @@ fn chat_export_over_product_wire() {
     assert!(session.state().last_export.is_none());
 }
 
+/// Book editor (React `LorebookPanel` BookTab) over `lorebooks.update`:
+/// only changed fields cross the wire, an empty trimmed name keeps the
+/// stored one, a no-op save skips the wire call entirely.
+#[test]
+fn lorebook_meta_update_over_product_wire() {
+    use neotavern_presentation_chat::ShellAction;
+    let (mut session, _) = start_flagged_session(
+        Some("1"),
+        FakeWire::demo(),
+        Some(neotavern_presentation_chat::DEMO_CHAT_ID),
+        None,
+    )
+    .expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("lorebooks".into()));
+    assert!(!session.shell_view().lorebooks.is_empty());
+    let book = session.shell_view().lorebooks[0].clone();
+    session.select_lorebook(&book.id);
+    assert_eq!(session.shell_view().lorebook_tab, "book");
+    assert_eq!(session.shell_view().lorebook_name_draft, book.name);
+
+    // Change name + description -> one wire call with both fields.
+    session.set_lorebook_name_draft(&format!("{} v2", book.name));
+    session.set_lorebook_description_draft("Updated description");
+    session.apply_shell_action(ShellAction::LorebookSaveMeta);
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "lorebooks.update")
+    );
+    let shell = session.shell_view();
+    let card = shell
+        .lorebooks
+        .iter()
+        .find(|item| item.id == book.id)
+        .expect("card");
+    assert_eq!(card.name, format!("{} v2", book.name));
+    assert_eq!(
+        shell.lorebook_description_draft,
+        "Updated description"
+    );
+    assert_eq!(
+        shell.status_message.as_deref(),
+        Some("Book updated.")
+    );
+
+    // No-op save: drafts match the store -> no second wire call.
+    session.set_lorebook_name_draft(&format!("{} v2", book.name));
+    session.set_lorebook_description_draft("Updated description");
+    session.apply_shell_action(ShellAction::LorebookSaveMeta);
+    assert_eq!(
+        session
+            .issued_commands()
+            .iter()
+            .filter(|op| **op == "lorebooks.update")
+            .count(),
+        1
+    );
+
+    // Empty trimmed name keeps the stored one; description-only update.
+    session.set_lorebook_name_draft("   ");
+    session.set_lorebook_description_draft("Rewritten again");
+    session.apply_shell_action(ShellAction::LorebookSaveMeta);
+    let shell = session.shell_view();
+    let card = shell
+        .lorebooks
+        .iter()
+        .find(|item| item.id == book.id)
+        .expect("card");
+    assert_eq!(card.name, format!("{} v2", book.name));
+    assert_eq!(
+        shell.status_message.as_deref(),
+        Some("Book updated.")
+    );
+}
+
 /// Version-controls "Regenerate": retries the tapped row's OWN source run
 /// (`generation.retry{sourceRunId}`), not just the latest one. A row without
 /// a stored run surfaces GENERATION_RUN_NOT_FOUND.

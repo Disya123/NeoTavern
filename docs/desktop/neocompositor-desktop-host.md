@@ -548,6 +548,19 @@ base64; сессия декодирует его и паркует в `last_expo
 `<cwd>/exports/<filename>`) и отражает путь в статусе. Чужой chatId даёт
 честный `CHAT_NOT_FOUND`. Тест `chat_export_over_product_wire`.
 
+## Лорбук: редактор книги
+
+Book-таб панели Lorebooks теперь сохраняет метаданные через
+`lorebooks.update` (React `BookTab`: имя — save-on-blur, описание — debounced
+autosave; в хосте обе правки сведены в явную кнопку Save, поля получают
+фокус клавиатуры `TextFocus::LorebookName/LorebookDescription`). На провод
+идут только реально изменившиеся поля; пустое обрезанное имя хранит старое
+(React никогда не пишет пустые имена), no-op сохранение не вызывает wire
+(«No changes.»). Успех обновляет карточку в списке и сеет черновики заново,
+статус «Book updated.». Delete в action bar ведёт к общему диалогу удаления.
+Геометрия — новый `lorebook_book_hit` (bar: Back слева 140px, Delete+Save
+справа). Тест `lorebook_meta_update_over_product_wire`.
+
 ## Отправка сообщения (Send)
 
 Композер (`data-part="composer"` в `product_chat_app`) получил кнопку **Send**

@@ -16,7 +16,7 @@ use contracts_generated::generated::{
     ResultChatsExport, RequestChatsExport, decode_result_chats_export,
     RequestPluginsDisable, RequestPluginsEnable, RequestPluginsUninstall,
     RequestRetryGeneration, RequestSettingsGet, RequestSnapshotsRollback, RequestStartGeneration,
-    RequestUpdateCharacter, RequestUpdateLorebookEntry, RequestProfileExport, RequestProfilesCreate,
+    RequestUpdateCharacter, RequestUpdateLorebook, RequestUpdateLorebookEntry, RequestProfileExport, RequestProfilesCreate,
     RequestProfilesDelete, RequestProfilesRename, RequestUpdateChat, RequestDeleteChat,
     RequestGetPromptPlan, ResultAssetsContent,
     ResultListLorebookEntries, ResultListLorebooks, ResultListPersonas, ResultListPresets,
@@ -2654,6 +2654,7 @@ impl<W: ProductWire> ChatSession<W> {
             ShellAction::SnapshotsClose => self.close_snapshots_menu(),
             ShellAction::OpenSnapshot(id) => self.open_snapshot(&id),
             ShellAction::ExportChat(id) => self.export_chat(&id),
+            ShellAction::LorebookSaveMeta => self.save_lorebook_meta(),
         }
     }
 
@@ -2916,6 +2917,77 @@ impl<W: ProductWire> ChatSession<W> {
             self.state.lorebook_name_draft = row.name.clone();
             self.state.lorebook_description_draft = row.description.clone().unwrap_or_default();
         }
+    }
+
+    pub fn set_lorebook_name_draft(&mut self, draft: &str) {
+        self.state.lorebook_name_draft = draft.to_string();
+        self.bump_scene();
+    }
+
+    pub fn set_lorebook_description_draft(&mut self, draft: &str) {
+        self.state.lorebook_description_draft = draft.to_string();
+        self.bump_scene();
+    }
+
+    /// Save the book editor (React `BookTab` name-on-blur + debounced
+    /// description autosave, collapsed into one explicit action): only the
+    /// fields that actually changed cross the wire; an empty trimmed name
+    /// keeps the stored one (React never persists empty names).
+    pub fn save_lorebook_meta(&mut self) {
+        let Some(id) = self.state.selected_lorebook_id.clone() else {
+            return;
+        };
+        let Some(card) = self
+            .state
+            .lorebooks
+            .iter()
+            .find(|item| item.id == id)
+            .map(|item| (item.name.clone(), item.description.clone()))
+        else {
+            return;
+        };
+        let (current_name, current_description) = card;
+        let next_name = self.state.lorebook_name_draft.trim().to_string();
+        let next_description = self.state.lorebook_description_draft.clone();
+        let name_change = !next_name.is_empty() && next_name != current_name;
+        let description_change =
+            Some(next_description.clone()) != current_description && !(next_description.is_empty() && current_description.is_none());
+        if !name_change && !description_change {
+            self.state.status_message = Some("No changes.".into());
+            self.bump_scene();
+            return;
+        }
+        match self.call_decode(
+            "lorebooks.update",
+            &RequestUpdateLorebook {
+                lorebook_id: id,
+                name: if name_change { Some(next_name) } else { None },
+                description: if description_change {
+                    Some(next_description)
+                } else {
+                    None
+                },
+                entries: None,
+                character_id: None,
+            },
+            decode_lorebook_dto,
+        ) {
+            Ok(updated) => {
+                if let Some(row) = self
+                    .state
+                    .lorebooks
+                    .iter_mut()
+                    .find(|item| item.id == updated.id)
+                {
+                    row.name = updated.name;
+                    row.description = updated.description.clone();
+                }
+                self.seed_lorebook_draft(&updated.id);
+                self.state.status_message = Some("Book updated.".into());
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
     }
 
     pub fn select_lorebook(&mut self, id: &str) {
