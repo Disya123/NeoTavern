@@ -182,6 +182,13 @@ pub enum ShellAction {
     /// Persona editor save (React `PersonasPanel` edit tab over
     /// `personas.update`; only changed fields cross the wire).
     PersonaSaveMeta,
+    /// Character-card import dialog (React hidden file input): path prompt
+    /// staging `assets.put` → `imports.character.card`.
+    ImportClose,
+    ConfirmCardImport,
+    /// Editor-bar action (`characters.export.card`, JSON format); the
+    /// desktop host parks `last_export` and writes the file.
+    ExportCharacterCard(String),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -282,6 +289,28 @@ fn header_bottom(view: &ProductShellView) -> f32 {
 fn dialog_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
     let (width, height) = css_size(view);
     let chat_x0 = chat_origin_x(view);
+    if view.card_import_dialog_open {
+        let dlg_w = 320.0_f32.min(width - 32.0);
+        let dlg_h = 240.0_f32.min(height - 48.0);
+        let x0 = chat_x0 + (width - chat_x0 - dlg_w).max(0.0) * 0.5;
+        let y0 = (height - dlg_h) * 0.5;
+        if !contains(x, y, x0, y0, x0 + dlg_w, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::ImportClose));
+        }
+        // Path input absorbs (focus resolves via the part rect).
+        let field_top = y0 + 72.0;
+        if y >= field_top && y < field_top + 48.0 {
+            return Some(ShellHit::Absorb);
+        }
+        let actions_y = y0 + dlg_h - 56.0;
+        if contains(x, y, x0, actions_y, x0 + dlg_w * 0.5, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::ImportClose));
+        }
+        if contains(x, y, x0 + dlg_w * 0.5, actions_y, x0 + dlg_w, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::ConfirmCardImport));
+        }
+        return Some(ShellHit::Absorb);
+    }
     if view.provider_create_dialog_open {
         let dlg_w = 320.0_f32.min(width - 32.0);
         let dlg_h = 240.0_f32.min(height - 48.0);
@@ -740,7 +769,14 @@ fn editor_hit(
         if x >= right - CONTROL_SM {
             return Some(ShellHit::Action(ShellAction::OpenDelete));
         }
+        // Duplicate button absorbs (not wired).
+        if x >= right - CONTROL_SM * 2.0 {
+            return Some(ShellHit::Absorb);
+        }
         if x >= right - CONTROL_SM * 3.0 {
+            if let Some(id) = view.selected_character_id.as_deref() {
+                return Some(ShellHit::Action(ShellAction::ExportCharacterCard(id.into())));
+            }
             return Some(ShellHit::Absorb);
         }
         if x >= right - CONTROL_SM * 4.0 {

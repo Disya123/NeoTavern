@@ -2502,6 +2502,114 @@ fn persona_meta_update_over_product_wire() {
     );
 }
 
+/// Character-card import/export over Product Wire: `assets.put` (kind
+/// `card`) stages the file, `imports.character.card` parses + dedupes by
+/// content sha256 (re-import reports `created == false`), and
+/// `characters.export.card` returns the SillyTavern container that parks in
+/// `last_export` for the host's file sink.
+#[test]
+fn character_card_import_export_over_product_wire() {
+    use neotavern_presentation_chat::ShellAction;
+    let (mut session, _) = start_flagged_session(
+        Some("1"),
+        FakeWire::demo(),
+        Some(neotavern_presentation_chat::DEMO_CHAT_ID),
+        None,
+    )
+    .expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("characters".into()));
+    let count_before = session.shell_view().characters.len();
+
+    // Stage a V2 JSON card on disk and import it through the dialog flow.
+    let card_path = std::env::temp_dir().join(format!(
+        "neota-test-card-{}.json",
+        std::process::id()
+    ));
+    std::fs::write(
+        &card_path,
+        serde_json::json!({
+            "spec": "chara_card_v2",
+            "spec_version": "2.0",
+            "data": {
+                "name": "Imported Wanderer",
+                "description": "A road-worn cartographer.",
+                "tags": ["test"]
+            }
+        })
+        .to_string(),
+    )
+    .expect("write card");
+
+    session.open_card_import();
+    assert!(session.shell_view().card_import_dialog_open);
+    session.apply_shell_action(ShellAction::ConfirmCardImport);
+    assert!(session.view().error_code.is_none());
+    session.set_card_path_draft(&card_path.to_string_lossy());
+    session.apply_shell_action(ShellAction::ConfirmCardImport);
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "assets.put")
+    );
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "imports.character.card")
+    );
+    let shell = session.shell_view();
+    assert!(!shell.card_import_dialog_open);
+    assert_eq!(
+        shell.status_message.as_deref(),
+        Some("Imported Imported Wanderer.")
+    );
+    assert_eq!(shell.characters.len(), count_before + 1);
+    let imported = shell
+        .characters
+        .iter()
+        .find(|item| item.name == "Imported Wanderer")
+        .expect("imported card");
+    let imported_id = imported.id.clone();
+
+    // Re-import the same content: kernel dedupe -> created == false.
+    session.open_card_import();
+    session.set_card_path_draft(&card_path.to_string_lossy());
+    session.apply_shell_action(ShellAction::ConfirmCardImport);
+    assert_eq!(
+        session.shell_view().status_message.as_deref(),
+        Some("Already imported (Imported Wanderer).")
+    );
+    assert_eq!(session.shell_view().characters.len(), count_before + 1);
+    let _ = std::fs::remove_file(&card_path);
+
+    // Export the imported card back out as JSON.
+    session.apply_shell_action(ShellAction::ExportCharacterCard(imported_id.clone()));
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "characters.export.card")
+    );
+    let export = session.take_last_export().expect("parked export");
+    assert_eq!(export.filename, format!("card-{imported_id}.json"));
+    let doc: serde_json::Value =
+        serde_json::from_slice(&export.bytes).expect("valid export document");
+    assert_eq!(
+        doc.pointer("/data/name").and_then(serde_json::Value::as_str),
+        Some("Imported Wanderer")
+    );
+
+    // Foreign ids surface honest wire errors.
+    session.apply_shell_action(ShellAction::ExportCharacterCard(
+        "00000000-0000-4000-8000-000000000009".into(),
+    ));
+    assert_eq!(
+        session.view().error_code.as_deref(),
+        Some("CHARACTER_NOT_FOUND")
+    );
+}
+
 /// Version-controls "Regenerate": retries the tapped row's OWN source run
 /// (`generation.retry{sourceRunId}`), not just the latest one. A row without
 /// a stored run surfaces GENERATION_RUN_NOT_FOUND.

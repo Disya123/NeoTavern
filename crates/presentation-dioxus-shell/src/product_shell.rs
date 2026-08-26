@@ -439,6 +439,9 @@ pub struct ProductShellView {
     pub provider_name_draft: String,
     pub provider_form_error: Option<String>,
     pub provider_delete_target_id: Option<String>,
+    /// Character-card import dialog (React hidden file input): path prompt.
+    pub card_import_dialog_open: bool,
+    pub card_path_draft: String,
     pub plugins: Vec<PluginCardView>,
     pub providers: Vec<ProviderCardView>,
     pub presets: Vec<PresetCardView>,
@@ -563,6 +566,8 @@ impl Default for ProductShellView {
             provider_name_draft: String::new(),
             provider_form_error: None,
             provider_delete_target_id: None,
+            card_import_dialog_open: false,
+            card_path_draft: String::new(),
             plugins: Vec::new(),
             providers: Vec::new(),
             presets: Vec::new(),
@@ -2603,6 +2608,45 @@ let entry_delete_book_name = entry_dialog_book_name;
                             "data-variant": "danger",
                             "data-size": "md",
                             span { "Delete" }
+                        }
+                    }
+                }
+            }
+            if view.card_import_dialog_open {
+                div {
+                    class: "st-card",
+                    style: "{provider_dlg_style}",
+                    div {
+                        "data-component": "dialog-title",
+                        "Import character card"
+                    }
+                    p {
+                        style: "position:absolute;left:16px;top:44px;right:16px;margin:0;color:#998f87;font-size:0.75rem;",
+                        "Path to a SillyTavern card (V2 JSON or PNG) on this device."
+                    }
+                    span {
+                        "data-part": "card-path-input",
+                        style: "position:absolute;left:16px;top:72px;right:16px;height:36px;line-height:36px;padding:0 12px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;color:#e8eef7;font-size:0.8125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;",
+                        if view.card_path_draft.is_empty() {
+                            span { style: "color:#998f87;", "\u{00a0}" }
+                        } else {
+                            "{view.card_path_draft}"
+                        }
+                    }
+                    div {
+                        class: "CharacterManagementPanel_dialogActions",
+                        style: "position:absolute;left:16px;right:16px;bottom:16px;display:flex;gap:8px;justify-content:flex-end;",
+                        button {
+                            r#type: "button",
+                            "data-variant": "default",
+                            "data-size": "md",
+                            span { "Cancel" }
+                        }
+                        button {
+                            r#type: "button",
+                            "data-variant": "primary",
+                            "data-size": "md",
+                            span { "Import" }
                         }
                     }
                 }

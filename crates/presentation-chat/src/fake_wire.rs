@@ -20,6 +20,9 @@ use contracts_generated::generated::{
     ResultMessageRevisionList,
     RequestCreateChatSnapshot, RequestSnapshotsList, SnapshotOrigin,
     ResultChatSnapshot, ResultSnapshotsList, ResultChatsExport,
+    RequestAssetsPut, AssetsItem, ResultAssetsPut, RequestImportsCharacterCard,
+    RequestCharactersExportCard, CardExportFormat, ResultCharactersExportCard,
+    ResultImportsCharacterCard,
 };
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -96,6 +99,11 @@ pub struct FakeWire {
     /// Backup catalog (`backups.list`). Kernel backups are user-initiated;
     /// `backups.create` appends, `backups.restore` validates the id.
     backups: Vec<BackupDto>,
+    /// Staged card assets (`assets.put` kind `card`) — id → (dto, bytes).
+    assets: HashMap<String, (AssetsItem, Vec<u8>)>,
+    /// Character-card deduplication (`imports.character.card` re-import):
+    /// content sha256 → existing character id.
+    card_imports: HashMap<String, String>,
     /// Memory store (`memories.*`; ТЗ §4.4 keyword retrieval). The kernel
     /// validates character scope against the character table.
     memories: Vec<MemoryDto>,
@@ -177,6 +185,8 @@ impl Default for FakeWire {
             provider_configs: Vec::new(),
             presets: Vec::new(),
             backups: Vec::new(),
+            assets: HashMap::new(),
+            card_imports: HashMap::new(),
             memories: Vec::new(),
             cursors: HashMap::new(),
             fail_ops: HashSet::new(),
@@ -1711,6 +1721,156 @@ impl ProductWire for FakeWire {
                     items: self.providers.clone(),
                 }),
             ),
+            "assets.put" => {
+                let req: RequestAssetsPut = serde_json::from_value(payload.clone())?;
+                if req.kind.is_empty() || req.filename.is_empty() {
+                    return Err(Self::product("VALIDATION", "filename", &req.filename));
+                }
+                let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(&req.content_base64)
+                else {
+                    return Err(Self::product("VALIDATION", "contentBase64", ""));
+                };
+                use sha2::Digest as _;
+                let checksum = format!("{:x}", sha2::Sha256::digest(&bytes));
+                // Content-addressed dedup inside the kind (kernel semantics).
+                if let Some(existing) = self
+                    .assets
+                    .values()
+                    .find(|(asset, _)| asset.kind == req.kind && asset.checksum_sha256 == checksum)
+                {
+                    return self.wrap_call(
+                        operation_id,
+                        to_value(&ResultAssetsPut {
+                            asset: existing.0.clone(),
+                            deduplicated: true,
+                            deduplicated_from_id: Some(existing.0.id.clone()),
+                        }),
+                    );
+                }
+                let id = self.alloc_id();
+                let asset = AssetsItem {
+                    id: id.clone(),
+                    kind: req.kind.clone(),
+                    relative_key: format!("{}/{}", req.kind, req.filename),
+                    checksum_sha256: checksum,
+                    size_bytes: bytes.len() as i64,
+                    created_at: TS.into(),
+                };
+                self.assets.insert(id, (asset.clone(), bytes));
+                self.wrap_call(
+                    operation_id,
+                    to_value(&ResultAssetsPut {
+                        asset,
+                        deduplicated: false,
+                        deduplicated_from_id: None,
+                    }),
+                )
+            }
+            "imports.character.card" => {
+                let req: RequestImportsCharacterCard =
+                    serde_json::from_value(payload.clone())?;
+                let Some((_, bytes)) = self.assets.get(&req.asset_id) else {
+                    return Err(Self::product("ASSET_NOT_FOUND", "assetId", &req.asset_id));
+                };
+                use sha2::Digest as _;
+                let source_hash = format!("{:x}", sha2::Sha256::digest(bytes));
+                if let Some(existing_id) = self.card_imports.get(&source_hash) {
+                    let character = self.characters.get(existing_id).cloned().ok_or_else(|| {
+                        Self::product("CHARACTER_NOT_FOUND", "characterId", existing_id)
+                    })?;
+                    return self.wrap_call(
+                        operation_id,
+                        to_value(&ResultImportsCharacterCard {
+                            character,
+                            created: false,
+                            source_hash,
+                            warnings: Vec::new(),
+                        }),
+                    );
+                }
+                // FakeWire parses SillyTavern V2 JSON cards (and flat V1
+                // objects); PNG `chara` chunks stay kernel-only (an honest
+                // VALIDATION error instead of a fake parse).
+                let doc: Value = serde_json::from_slice(bytes).map_err(|_| {
+                    Self::product("VALIDATION", "assetId", &req.asset_id)
+                })?;
+                let empty = Value::Object(Default::default());
+                let data = doc.get("data").filter(|d| d.is_object()).unwrap_or(&empty);
+                let Some(name) = data.get("name").and_then(Value::as_str) else {
+                    return Err(Self::product("VALIDATION", "assetId", &req.asset_id));
+                };
+                if name.trim().is_empty() {
+                    return Err(Self::product("VALIDATION", "assetId", &req.asset_id));
+                }
+                let description = data
+                    .get("description")
+                    .and_then(Value::as_str)
+                    .map(str::to_string);
+                let tags = data
+                    .get("tags")
+                    .and_then(Value::as_array)
+                    .map(|items| {
+                        items
+                            .iter()
+                            .filter_map(Value::as_str)
+                            .map(str::to_string)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let character = CharacterDto {
+                    id: self.alloc_id(),
+                    name: name.to_string(),
+                    description,
+                    avatar_asset_id: None,
+                    tags,
+                    profile_id: None,
+                    created_at: TS.into(),
+                    updated_at: TS.into(),
+                };
+                self.characters.insert(character.id.clone(), character.clone());
+                self.card_imports.insert(source_hash.clone(), character.id.clone());
+                self.wrap_call(
+                    operation_id,
+                    to_value(&ResultImportsCharacterCard {
+                        character,
+                        created: true,
+                        source_hash,
+                        warnings: Vec::new(),
+                    }),
+                )
+            }
+            "characters.export.card" => {
+                let req: RequestCharactersExportCard =
+                    serde_json::from_value(payload.clone())?;
+                let character = self
+                    .characters
+                    .get(&req.character_id)
+                    .cloned()
+                    .ok_or_else(|| {
+                        Self::product("CHARACTER_NOT_FOUND", "characterId", &req.character_id)
+                    })?;
+                // The host surface exports JSON; FakeWire honestly refuses
+                // PNG (it cannot synthesize an image container).
+                if req.format != CardExportFormat::Json {
+                    return Err(Self::product("VALIDATION", "format", "png"));
+                }
+                let card = json!({
+                    "spec": "character_card_v2",
+                    "data": {
+                        "name": character.name,
+                        "description": character.description,
+                        "tags": character.tags,
+                    },
+                });
+                let payload = ResultCharactersExportCard {
+                    filename: format!("card-{}.json", character.id),
+                    content_type: "application/json".into(),
+                    content_base64: base64::engine::general_purpose::STANDARD
+                        .encode(card.to_string().as_bytes()),
+                    warnings: Vec::new(),
+                };
+                self.wrap_call(operation_id, to_value(&payload))
+            }
             "providers.config.list" => self.wrap_call(
                 operation_id,
                 to_value(&ResultListProviderConfigs {

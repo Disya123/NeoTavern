@@ -18,6 +18,10 @@ use contracts_generated::generated::{
     RequestRetryGeneration, RequestSettingsGet, RequestSnapshotsRollback, RequestStartGeneration,
     RequestUpdateCharacter, RequestUpdateLorebook, RequestUpdateLorebookEntry, RequestProfileExport, RequestProfilesCreate,
     RequestUpdatePersona,
+    RequestAssetsPut, AssetsItem, ResultAssetsPut, RequestImportsCharacterCard,
+    RequestCharactersExportCard, CardExportFormat, ResultCharactersExportCard,
+    ResultImportsCharacterCard, decode_result_assets_put, decode_result_imports_character_card,
+    decode_result_characters_export_card,
     RequestProfilesDelete, RequestProfilesRename, RequestUpdateChat, RequestDeleteChat,
     RequestGetPromptPlan, ResultAssetsContent,
     ResultListLorebookEntries, ResultListLorebooks, ResultListPersonas, ResultListPresets,
@@ -309,6 +313,10 @@ pub struct ChatRouteState {
     /// Completed `chats.export` payload awaiting the host's file sink
     /// (React downloads the file; the desktop host writes it to disk).
     pub last_export: Option<LastExport>,
+    /// Character-card import dialog (React hidden `<input type=file>`):
+    /// a native path prompt + staged `assets.put` → `imports.character.card`.
+    pub card_import_dialog_open: bool,
+    pub card_path_draft: String,
     /// Last applied Kernel stream envelope sequence (`EventEnvelope.sequence`).
     pub last_applied_stream_sequence: Option<i64>,
     pub last_checkpoint_sequence: Option<i64>,
@@ -1276,6 +1284,8 @@ impl<W: ProductWire> ChatSession<W> {
             provider_name_draft: self.state.provider_name_draft.clone(),
             provider_form_error: self.state.provider_form_error.clone(),
             provider_delete_target_id: self.state.provider_delete_target_id.clone(),
+            card_import_dialog_open: self.state.card_import_dialog_open,
+            card_path_draft: self.state.card_path_draft.clone(),
             selected_preset_id: self.state.active_preset_id.clone(),
             preset_rows: self.preset_value_rows(),
             preset_active_name: self
@@ -2135,6 +2145,131 @@ impl<W: ProductWire> ChatSession<W> {
         }
     }
 
+    /// Open the card-import dialog (React `CharacterManagementPanel` hidden
+    /// file input; the native host prompts for a path instead).
+    pub fn open_card_import(&mut self) {
+        if self.state.card_import_dialog_open {
+            return;
+        }
+        self.state.card_path_draft.clear();
+        self.state.card_import_dialog_open = true;
+        self.bump_scene();
+    }
+
+    pub fn close_card_import(&mut self) {
+        self.state.card_import_dialog_open = false;
+        self.state.card_path_draft.clear();
+        self.bump_scene();
+    }
+
+    pub fn set_card_path_draft(&mut self, draft: &str) {
+        if self.state.card_import_dialog_open {
+            self.state.card_path_draft = draft.to_string();
+            self.bump_scene();
+        }
+    }
+
+    /// Stage the file via `assets.put` (kind `card`) and import it through
+    /// `imports.character.card` — kernel dedupes by content sha256, so a
+    /// re-import reports the existing character (`created == false`). The
+    /// imported character becomes the selected one, like React.
+    pub fn confirm_card_import(&mut self) {
+        let path = self.state.card_path_draft.trim().to_string();
+        if path.is_empty() {
+            self.state.status_message =
+                Some("Provide a JSON or PNG character card from this device.".into());
+            self.bump_scene();
+            return;
+        }
+        let bytes = match std::fs::read(&path) {
+            Ok(bytes) => bytes,
+            Err(err) => {
+                self.state.status_message = Some(format!("Cannot read {path}: {err}"));
+                self.bump_scene();
+                return;
+            }
+        };
+        let filename = std::path::Path::new(&path)
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "card.json".into());
+        let content_type = if filename.to_lowercase().ends_with(".png") {
+            "image/png"
+        } else {
+            "application/json"
+        };
+        use base64::Engine as _;
+        let staged = self.call_decode(
+            "assets.put",
+            &RequestAssetsPut {
+                kind: "card".into(),
+                filename: filename.clone(),
+                content_type: Some(content_type.into()),
+                content_base64: base64::engine::general_purpose::STANDARD.encode(&bytes),
+            },
+            decode_result_assets_put,
+        );
+        let asset_id = match staged {            Ok(result) => result.asset.id,
+            Err(err) => {
+                self.record_error(err);
+                self.bump_scene();
+                return;
+            }
+        };
+        match self.call_decode(
+            "imports.character.card",
+            &RequestImportsCharacterCard { asset_id },
+            decode_result_imports_character_card,
+        ) {
+            Ok(result) => {
+                self.refresh_characters();
+                self.select_character(&result.character.id);
+                self.close_card_import();
+                self.state.status_message = Some(if result.created {
+                    format!("Imported {}.", result.character.name)
+                } else {
+                    format!("Already imported ({}).", result.character.name)
+                });
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    /// Export the selected character's card via `characters.export.card`
+    /// (JSON format): the SillyTavern container comes back base64-encoded
+    /// and parks in `last_export` for the host's file sink.
+    pub fn export_character_card(&mut self, character_id: &str) {
+        match self.call_decode(
+            "characters.export.card",
+            &RequestCharactersExportCard {
+                character_id: character_id.to_string(),
+                format: CardExportFormat::Json,
+            },
+            decode_result_characters_export_card,
+        ) {
+            Ok(result) => {
+                use base64::Engine as _;
+                match base64::engine::general_purpose::STANDARD.decode(&result.content_base64) {
+                    Ok(bytes) => {
+                        self.state.last_export = Some(LastExport {
+                            filename: result.filename.clone(),
+                            bytes,
+                        });
+                        self.state.status_message =
+                            Some(format!("Export ready: {}.", result.filename));
+                    }
+                    Err(_) => self.record_error(ChatRouteError::product(
+                        "CONTRACT_VIOLATION",
+                        serde_json::json!({ "field": "contentBase64" }),
+                    )),
+                }
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
     /// Freeze the prefix up to and including this message into a fresh child
     /// chat via `chats.snapshots.create` (React builtin actions
     /// `data-action="checkpoint"` / `"branch"`). The user stays in the
@@ -2499,11 +2634,6 @@ impl<W: ProductWire> ChatSession<W> {
                 "lorebooks" => self.set_lorebook_tab("books"),
                 _ => self.set_character_tab("cards"),
             },
-            ShellAction::Import => {
-                self.state.status_message =
-                    Some("Import a JSON or PNG character card from this device.".into());
-                self.bump_scene();
-            }
             ShellAction::OpenEntryDialog => self.open_entry_dialog(),
             ShellAction::EditLorebookEntry(id) => self.open_entry_dialog_for(&id),
             ShellAction::CloseEntryDialog => self.close_entry_dialog(),
@@ -2657,6 +2787,10 @@ impl<W: ProductWire> ChatSession<W> {
             ShellAction::ExportChat(id) => self.export_chat(&id),
             ShellAction::LorebookSaveMeta => self.save_lorebook_meta(),
             ShellAction::PersonaSaveMeta => self.save_persona_meta(),
+            ShellAction::Import => self.open_card_import(),
+            ShellAction::ImportClose => self.close_card_import(),
+            ShellAction::ConfirmCardImport => self.confirm_card_import(),
+            ShellAction::ExportCharacterCard(id) => self.export_character_card(&id),
         }
     }
 

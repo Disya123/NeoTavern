@@ -573,6 +573,23 @@ wire-вызова («No changes.»), успех обновляет карточ�
 `persona_edit_hit` (bar: Back слева 160px, Duplicate absorb, Delete+Save
 справа). Тест `persona_meta_update_over_product_wire`.
 
+## Карточки персонажей: импорт и экспорт
+
+Кнопка Import в тулбаре карточек теперь открывает диалог (React использует
+скрытый `<input type=file>`; нативный хост честно спрашивает путь к файлу,
+`TextFocus::CardPath`). Подтверждение делает двухшаговый провод: `assets.put`
+(kind `card`, base64) → `imports.character.card`; ядро парсит
+SillyTavern-карточку и дедуплицирует по sha256 контента — повторный импорт
+того же файла возвращает существующего персонажа (`created == false`,
+статус «Already imported (…)»), первый — «Imported …» с автоселектом.
+Экспорт — кнопка DownloadSimple в action bar редактора:
+`characters.export.card` (JSON) паркует SillyTavern-контейнер в
+`last_export`, bin пишет файл в `exports/` (тот же синк, что у чатов).
+FakeWire парсит V2/flat JSON; PNG-чанк `chara` — kernel-only (честный
+`VALIDATION` вместо фейкового парса), png-экспорт тоже не синтезируется.
+Чужой id → `CHARACTER_NOT_FOUND`. Тест
+`character_card_import_export_over_product_wire`.
+
 ## Отправка сообщения (Send)
 
 Композер (`data-part="composer"` в `product_chat_app`) получил кнопку **Send**

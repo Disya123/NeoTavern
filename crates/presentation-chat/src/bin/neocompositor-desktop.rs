@@ -86,6 +86,8 @@ enum TextFocus {
     /// `part:persona-description-input`).
     PersonaName,
     PersonaDescription,
+    /// Card-import dialog path prompt (`part:card-path-input`).
+    CardPath,
 }
 
 /// One scripted probe step, replayed in argument order so
@@ -487,7 +489,11 @@ impl App {
         }
         // Bin-local keyboard focus вЂ” targets resolved from the same snapshot.
         let mut focus = TextFocus::None;
-        if view.create_dialog_open {
+        if view.card_import_dialog_open {
+            if rects.covers(css_x, css_y, "part:card-path-input") {
+                focus = TextFocus::CardPath;
+            }
+        } else if view.create_dialog_open {
             if rects.covers(css_x, css_y, "part:create-name") {
                 focus = TextFocus::CreateName;
             }
@@ -933,6 +939,12 @@ impl App {
                 self.session.set_persona_description_draft(&next);
                 eprintln!("[neocompositor-desktop] typed '{ch}' -> persona_desc+{ch}");
             }
+            TextFocus::CardPath => {
+                let current = self.session.shell_view().card_path_draft.clone();
+                let next = format!("{current}{ch}");
+                self.session.set_card_path_draft(&next);
+                eprintln!("[neocompositor-desktop] typed '{ch}' -> card_path+{ch}");
+            }
             TextFocus::None => return,
         }
         self.dirty = true;
@@ -962,6 +974,7 @@ impl App {
             TextFocus::PersonaDescription => {
                 self.session.shell_view().persona_description_draft.clone()
             }
+            TextFocus::CardPath => self.session.shell_view().card_path_draft.clone(),
             TextFocus::None => return,
         };
         let next: String = current
@@ -987,6 +1000,7 @@ impl App {
             TextFocus::LorebookDescription => self.session.set_lorebook_description_draft(&next),
             TextFocus::PersonaName => self.session.set_persona_name_draft(&next),
             TextFocus::PersonaDescription => self.session.set_persona_description_draft(&next),
+            TextFocus::CardPath => self.session.set_card_path_draft(&next),
             TextFocus::None => {}
         }
         self.dirty = true;

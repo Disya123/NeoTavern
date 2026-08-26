@@ -3,6 +3,13 @@
 ## Unreleased
 ### Added
 
+- **Персонажи: импорт/экспорт карточек (assets.put + imports.character.card /
+  characters.export.card).** Import открывает диалог пути к файлу; ядро
+  дедуплицирует по sha256 (повторный импорт — «Already imported»), импортированный
+  персонаж автоселектится. Export в редакторе пишет SillyTavern-контейнер
+  через общий файловый синк. Тест
+  `character_card_import_export_over_product_wire`.
+
 - **Персона: редактор (personas.update).** Edit-таб: имя и описание с фокусом
   клавиатуры, кнопка Save; на провод идут только изменённые поля, пустое имя
   хранит старое, no-op — без wire-вызова. Тест
