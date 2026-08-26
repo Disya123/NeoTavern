@@ -22,6 +22,8 @@ use contracts_generated::generated::{
     RequestCharactersExportCard, CardExportFormat, ResultCharactersExportCard,
     ResultImportsCharacterCard, decode_result_assets_put, decode_result_imports_character_card,
     decode_result_characters_export_card,
+    RequestProfileImport, RequestProfileImportPolicy, ResultProfileImport,
+    decode_result_profile_import,
     RequestProfilesDelete, RequestProfilesRename, RequestUpdateChat, RequestDeleteChat,
     RequestGetPromptPlan, ResultAssetsContent,
     ResultListLorebookEntries, ResultListLorebooks, ResultListPersonas, ResultListPresets,
@@ -317,6 +319,11 @@ pub struct ChatRouteState {
     /// a native path prompt + staged `assets.put` → `imports.character.card`.
     pub card_import_dialog_open: bool,
     pub card_path_draft: String,
+    /// Profile container import (React `ProfilesPanel` import form):
+    /// relative container path + duplicate policy.
+    pub profile_import_path: String,
+    /// Index into [Reject, Replace, Remap].
+    pub profile_import_policy_index: usize,
     /// Last applied Kernel stream envelope sequence (`EventEnvelope.sequence`).
     pub last_applied_stream_sequence: Option<i64>,
     pub last_checkpoint_sequence: Option<i64>,
@@ -1286,6 +1293,12 @@ impl<W: ProductWire> ChatSession<W> {
             provider_delete_target_id: self.state.provider_delete_target_id.clone(),
             card_import_dialog_open: self.state.card_import_dialog_open,
             card_path_draft: self.state.card_path_draft.clone(),
+            profile_import_path: self.state.profile_import_path.clone(),
+            profile_import_policy_label: match self.state.profile_import_policy_index {
+                1 => "Replace".to_string(),
+                2 => "Remap".to_string(),
+                _ => "Reject".to_string(),
+            },
             selected_preset_id: self.state.active_preset_id.clone(),
             preset_rows: self.preset_value_rows(),
             preset_active_name: self
@@ -2270,6 +2283,71 @@ impl<W: ProductWire> ChatSession<W> {
         self.bump_scene();
     }
 
+    const PROFILE_IMPORT_POLICIES: [RequestProfileImportPolicy; 3] = [
+        RequestProfileImportPolicy::Reject,
+        RequestProfileImportPolicy::Replace,
+        RequestProfileImportPolicy::Remap,
+    ];
+
+    pub fn set_profile_import_path(&mut self, path: &str) {
+        self.state.profile_import_path = path.to_string();
+        self.bump_scene();
+    }
+
+    /// Cycle the duplicate policy (React `<select>`: reject / replace /
+    /// remap); the host renders it as a cycling button.
+    pub fn cycle_profile_import_policy(&mut self) {
+        let next = (self.state.profile_import_policy_index + 1)
+            % Self::PROFILE_IMPORT_POLICIES.len();
+        self.state.profile_import_policy_index = next;
+        self.bump_scene();
+    }
+
+    /// Import a verified profile container via `profile.import` (React
+    /// `ProfilesPanel` import form): the relative `containerPath` plus the
+    /// duplicate policy; success refreshes the library surfaces React
+    /// invalidates (characters / chats / lorebooks / presets).
+    pub fn submit_profile_import(&mut self) {
+        let container_path = self.state.profile_import_path.trim().to_string();
+        if container_path.is_empty() {
+            self.state.status_message =
+                Some("Provide the container path staged under the data root.".into());
+            self.bump_scene();
+            return;
+        }
+        let policy =
+            Self::PROFILE_IMPORT_POLICIES[self.state.profile_import_policy_index].clone();
+        match self.call_decode(
+            "profile.import",
+            &RequestProfileImport {
+                container_path,
+                policy,
+            },
+            decode_result_profile_import,
+        ) {
+            Ok(result) => {
+                self.refresh_characters();
+                self.load_chat_list();
+                self.load_lorebooks();
+                self.load_presets_list();
+                let orphans_note = if result.orphans.is_empty() {
+                    String::new()
+                } else {
+                    format!(" ({} orphans)", result.orphans.len())
+                };
+                self.state.status_message = Some(format!(
+                    "Imported: {inserted} inserted, {updated} updated, {skipped} skipped.{orphans_note}",
+                    inserted = result.inserted,
+                    updated = result.updated,
+                    skipped = result.skipped
+                ));
+                self.state.profile_import_path.clear();
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
     /// Freeze the prefix up to and including this message into a fresh child
     /// chat via `chats.snapshots.create` (React builtin actions
     /// `data-action="checkpoint"` / `"branch"`). The user stays in the
@@ -2791,6 +2869,8 @@ impl<W: ProductWire> ChatSession<W> {
             ShellAction::ImportClose => self.close_card_import(),
             ShellAction::ConfirmCardImport => self.confirm_card_import(),
             ShellAction::ExportCharacterCard(id) => self.export_character_card(&id),
+            ShellAction::ProfileImportPolicyCycle => self.cycle_profile_import_policy(),
+            ShellAction::ProfileImportSubmit => self.submit_profile_import(),
         }
     }
 

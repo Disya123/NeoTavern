@@ -23,6 +23,7 @@ use contracts_generated::generated::{
     RequestAssetsPut, AssetsItem, ResultAssetsPut, RequestImportsCharacterCard,
     RequestCharactersExportCard, CardExportFormat, ResultCharactersExportCard,
     ResultImportsCharacterCard,
+    RequestProfileImport, RequestProfileImportPolicy, ResultProfileImport,
 };
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -2169,6 +2170,25 @@ impl ProductWire for FakeWire {
                     return Err(Self::product("PROFILE_NOT_FOUND", "profileId", &id));
                 }
                 self.ok_call(operation_id, json!({}))
+            }
+            "profile.import" => {
+                let req: RequestProfileImport = serde_json::from_value(payload.clone())?;
+                if req.container_path.trim().is_empty() {
+                    return Err(Self::product("VALIDATION", "containerPath", ""));
+                }
+                // Kernel parses a real export container staged under the
+                // data root; FakeWire has no container store, so an honest
+                // empty pass is returned (nothing inserted/updated).
+                let _ = req.policy;
+                let result = ResultProfileImport {
+                    inserted: 0,
+                    updated: 0,
+                    skipped: 0,
+                    format_version: 1,
+                    applied_at: TS.into(),
+                    orphans: Vec::new(),
+                };
+                self.wrap_call(operation_id, to_value(&result))
             }
             "profile.export" => {
                 let id = payload_str(&payload, "profileId")?;

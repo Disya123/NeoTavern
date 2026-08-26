@@ -88,6 +88,8 @@ enum TextFocus {
     PersonaDescription,
     /// Card-import dialog path prompt (`part:card-path-input`).
     CardPath,
+    /// Profile container import path (`part:profile-import-path`).
+    ProfileImportPath,
 }
 
 /// One scripted probe step, replayed in argument order so
@@ -529,6 +531,8 @@ impl App {
             focus = TextFocus::PersonaName;
         } else if rects.covers(css_x, css_y, "part:persona-description-input") {
             focus = TextFocus::PersonaDescription;
+        } else if rects.covers(css_x, css_y, "part:profile-import-path") {
+            focus = TextFocus::ProfileImportPath;
         }
         self.focus = focus;
     }
@@ -945,6 +949,12 @@ impl App {
                 self.session.set_card_path_draft(&next);
                 eprintln!("[neocompositor-desktop] typed '{ch}' -> card_path+{ch}");
             }
+            TextFocus::ProfileImportPath => {
+                let current = self.session.shell_view().profile_import_path.clone();
+                let next = format!("{current}{ch}");
+                self.session.set_profile_import_path(&next);
+                eprintln!("[neocompositor-desktop] typed '{ch}' -> import_path+{ch}");
+            }
             TextFocus::None => return,
         }
         self.dirty = true;
@@ -975,6 +985,7 @@ impl App {
                 self.session.shell_view().persona_description_draft.clone()
             }
             TextFocus::CardPath => self.session.shell_view().card_path_draft.clone(),
+            TextFocus::ProfileImportPath => self.session.shell_view().profile_import_path.clone(),
             TextFocus::None => return,
         };
         let next: String = current
@@ -1001,6 +1012,7 @@ impl App {
             TextFocus::PersonaName => self.session.set_persona_name_draft(&next),
             TextFocus::PersonaDescription => self.session.set_persona_description_draft(&next),
             TextFocus::CardPath => self.session.set_card_path_draft(&next),
+            TextFocus::ProfileImportPath => self.session.set_profile_import_path(&next),
             TextFocus::None => {}
         }
         self.dirty = true;

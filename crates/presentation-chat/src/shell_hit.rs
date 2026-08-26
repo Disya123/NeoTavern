@@ -189,6 +189,10 @@ pub enum ShellAction {
     /// Editor-bar action (`characters.export.card`, JSON format); the
     /// desktop host parks `last_export` and writes the file.
     ExportCharacterCard(String),
+    /// Profile container import (React `ProfilesPanel` import form over
+    /// `profile.import`): policy cycle + submit.
+    ProfileImportPolicyCycle,
+    ProfileImportSubmit,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1551,8 +1555,19 @@ fn profiles_hit(
         return Some(ShellHit::Absorb);
     }
     let import_top = create_row_bottom + SPACE_MD;
-    let import_bottom = import_top + 104.0;
+    // Heading 20 + gap 8 + hint 16, then the input row (path absorb /
+    // policy cycle / Import submit).
+    let row_top = import_top + 44.0;
+    let import_bottom = row_top + 36.0;
     if y >= import_top && y < import_bottom {
+        if y >= row_top {
+            if x >= x1 - pad - 96.0 {
+                return Some(ShellHit::Action(ShellAction::ProfileImportSubmit));
+            }
+            if x >= x1 - pad - 96.0 - SPACE_SM - 96.0 && x < x1 - pad - 96.0 {
+                return Some(ShellHit::Action(ShellAction::ProfileImportPolicyCycle));
+            }
+        }
         return Some(ShellHit::Absorb);
     }
     let rows_start = import_bottom + SPACE_MD + 40.0;

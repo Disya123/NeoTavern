@@ -341,18 +341,38 @@ fn profiles_tab(view: &ProductShellView) -> Element {
                 style: "margin-top:4px;",
                 h2 { style: "margin:0;height:20px;line-height:20px;font-size:0.9375rem;color:#f3eee8;", "Import profile" }
                 p {
-                    style: "color:#c5bbb2;font-size:0.75rem;margin:8px 0;height:32px;line-height:16px;",
-                    "Container import runs through the packaged host file picker; this surface has no path input."
+                    style: "color:#c5bbb2;font-size:0.75rem;margin:8px 0;height:16px;line-height:16px;",
+                    "Relative container path staged under the data root."
                 }
-                button {
-                    class: "st-button",
-                    r#type: "button",
-                    "data-component": "button",
-                    "data-variant": "default",
-                    "data-size": "sm",
-                    disabled: true,
-                    style: "height:36px;",
-                    span { "data-part": "label", "Import (.zip)" }
+                div {
+                    style: "display:flex;gap:8px;align-items:center;",
+                    span {
+                        "data-part": "profile-import-path",
+                        style: "flex:1;min-width:0;height:36px;box-sizing:border-box;display:flex;align-items:center;padding:0 12px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;color:#e8eef7;font-size:0.8125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;",
+                        if view.profile_import_path.is_empty() {
+                            span { style: "color:#998f87;", "imports/profile-…/" }
+                        } else {
+                            "{view.profile_import_path}"
+                        }
+                    }
+                    button {
+                        class: "st-button",
+                        r#type: "button",
+                        "data-component": "button",
+                        "data-part": "profile-import-policy",
+                        style: "flex:none;width:96px;height:36px;",
+                        span { "data-part": "label", "{view.profile_import_policy_label}" }
+                    }
+                    button {
+                        class: "st-button",
+                        r#type: "button",
+                        "data-component": "button",
+                        "data-variant": "primary",
+                        "data-size": "sm",
+                        "data-part": "profile-import-submit",
+                        style: "flex:none;width:96px;height:36px;",
+                        span { "data-part": "label", "Import" }
+                    }
                 }
             }
             div {

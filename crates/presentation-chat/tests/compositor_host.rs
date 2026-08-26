@@ -2610,6 +2610,68 @@ fn character_card_import_export_over_product_wire() {
     );
 }
 
+/// Profile container import (React `ProfilesPanel` import form) over
+/// `profile.import`: path + duplicate policy, honest empty pass on the fake,
+/// status notice with counters; an empty path stays client-side.
+#[test]
+fn profile_import_over_product_wire() {
+    use neotavern_presentation_chat::ShellAction;
+    let (mut session, _) = start_flagged_session(
+        Some("1"),
+        FakeWire::demo(),
+        Some(neotavern_presentation_chat::DEMO_CHAT_ID),
+        None,
+    )
+    .expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("settings".into()));
+    session.apply_shell_action(ShellAction::SetTab("profiles".into()));
+
+    // Empty path: client-side hint, no wire call.
+    session.apply_shell_action(ShellAction::ProfileImportSubmit);
+    assert_eq!(
+        session.shell_view().status_message.as_deref(),
+        Some("Provide the container path staged under the data root.")
+    );
+    let imports_before = session
+        .issued_commands()
+        .iter()
+        .filter(|op| **op == "profile.import")
+        .count();
+
+    // Path + policy cycle -> wire op with counters in the notice.
+    session.set_profile_import_path("imports/profile-2c2c/");
+    assert_eq!(
+        session.shell_view().profile_import_policy_label,
+        "Reject"
+    );
+    session.apply_shell_action(ShellAction::ProfileImportPolicyCycle);
+    assert_eq!(
+        session.shell_view().profile_import_policy_label,
+        "Replace"
+    );
+    session.apply_shell_action(ShellAction::ProfileImportSubmit);
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "profile.import")
+    );
+    assert_eq!(
+        session
+            .issued_commands()
+            .iter()
+            .filter(|op| **op == "profile.import")
+            .count(),
+        imports_before + 1
+    );
+    assert_eq!(
+        session.shell_view().status_message.as_deref(),
+        Some("Imported: 0 inserted, 0 updated, 0 skipped.")
+    );
+    // The path clears after a successful import, like React.
+    assert!(session.shell_view().profile_import_path.is_empty());
+}
+
 /// Version-controls "Regenerate": retries the tapped row's OWN source run
 /// (`generation.retry{sourceRunId}`), not just the latest one. A row without
 /// a stored run surfaces GENERATION_RUN_NOT_FOUND.

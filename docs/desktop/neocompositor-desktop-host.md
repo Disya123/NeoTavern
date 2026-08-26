@@ -590,6 +590,28 @@ FakeWire парсит V2/flat JSON; PNG-чанк `chara` — kernel-only (чес
 Чужой id → `CHARACTER_NOT_FOUND`. Тест
 `character_card_import_export_over_product_wire`.
 
+## Профили: импорт контейнера
+
+Settings → Profiles: вместо честной заглушки — реальная форма импорта
+(паритет React `ProfilesPanel`): относительный путь контейнера
+(`TextFocus::ProfileImportPath`), циклическая кнопка политики дубликатов
+Reject/Replace/Remap, кнопка Import. `profile.import` возвращает счётчики
+inserted/updated/skipped + orphans; статус «Imported: N inserted, …», путь
+очищается как в React. Успех обновляет characters/chats/lorebooks/presets
+(React инвалидирует те же библиотечные запросы). Пустой путь отклоняется
+клиентски без wire-вызова. FakeWire не парсит реальные контейнеры —
+возвращает честный пустой проход (0/0/0). Тест
+`profile_import_over_product_wire`.
+
+### plugins.install — вне скоупа переноса
+
+`plugins.install` на kernel-плоскости принимает уже верифицированные
+метаданные пакета: сам staging (ZIP с проверкой путей / Git) выполняет хост
+— React в браузере честно бросает `UnsupportedError('…host-verify')`.
+Перенос потребовал бы реализовать подсистему верификации пакетов (AGENTS
+§19), поэтому нативный хост зеркалит React-поведение: установка плагинов
+через этот экран недоступна, список/enable/disable/uninstall работают.
+
 ## Отправка сообщения (Send)
 
 Композер (`data-part="composer"` в `product_chat_app`) получил кнопку **Send**

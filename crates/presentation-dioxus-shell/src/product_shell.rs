@@ -442,6 +442,9 @@ pub struct ProductShellView {
     /// Character-card import dialog (React hidden file input): path prompt.
     pub card_import_dialog_open: bool,
     pub card_path_draft: String,
+    /// Profile container import (React `ProfilesPanel` import form).
+    pub profile_import_path: String,
+    pub profile_import_policy_label: String,
     pub plugins: Vec<PluginCardView>,
     pub providers: Vec<ProviderCardView>,
     pub presets: Vec<PresetCardView>,
@@ -568,6 +571,8 @@ impl Default for ProductShellView {
             provider_delete_target_id: None,
             card_import_dialog_open: false,
             card_path_draft: String::new(),
+            profile_import_path: String::new(),
+            profile_import_policy_label: "Reject".into(),
             plugins: Vec::new(),
             providers: Vec::new(),
             presets: Vec::new(),

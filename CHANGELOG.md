@@ -3,6 +3,12 @@
 ## Unreleased
 ### Added
 
+- **Профили: импорт контейнера (profile.import).** Форма пути + политика
+  дубликатов (Reject/Replace/Remap) в Settings → Profiles; статус со
+  счётчиками inserted/updated/skipped и orphans; успех обновляет библиотеку.
+  Тест `profile_import_over_product_wire`. `plugins.install` зафиксирован как
+  вне скоупа переноса (host-side верификация пакетов).
+
 - **Персонажи: импорт/экспорт карточек (assets.put + imports.character.card /
   characters.export.card).** Import открывает диалог пути к файлу; ядро
   дедуплицирует по sha256 (повторный импорт — «Already imported»), импортированный
