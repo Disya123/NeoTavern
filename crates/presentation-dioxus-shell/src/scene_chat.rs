@@ -239,9 +239,14 @@ pub fn blueprint_chrome(view: &ProductChatView) -> Option<ChromeElements> {
         view.chrome,
         ProductChrome::NestedDialog | ProductChrome::PaintOrder
     );
-    if overlay || nested {
+    // Interactive session states (inline editor, revision-history card) are
+    // not covered by authored documents yet — the legacy RSX renders them.
+    let interactive = view.editing_message_id.is_some() || view.history_open_for.is_some();
+    if overlay || nested || interactive {
         if current_source() != ChatBlueprintSource::Disabled {
-            let reason = if compact {
+            let reason = if interactive {
+                "interactive-edit"
+            } else if compact {
                 "compact"
             } else if overlay && nested {
                 "overlay+nested"
@@ -726,6 +731,7 @@ fn message_action_button(kind: &str, row: &RowView) -> Element {
         "branch" => ("Branch", "GitBranch"),
         "delete" => ("Delete message", "Trash"),
         "rollback" => ("Rollback to here", "ArrowUUpLeft"),
+        "history" => ("Edit history", "ClockCounterClockwise"),
         "prompt" => ("View prompt plan", "TextAlignLeft"),
         _ => ("", ""),
     };

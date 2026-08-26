@@ -210,6 +210,10 @@ fn markdown_minimal_probe() {
         column_width: 0,
         context_panel_open: false,
         context_summary: None,
+        editing_message_id: None,
+        editing_draft: String::new(),
+        history_open_for: None,
+        revision_history: Vec::new(),
     });
     let layout =
         inspect_product_layout(product_chat_app, 1100, 760, 1.0, Default::default()).expect("l");
@@ -2099,6 +2103,113 @@ fn rollback_removes_the_suffix_and_keeps_the_target() {
 
     // Unknown target: honest wire error, no silent success.
     session.rollback_to_message("00000000-0000-4000-8000-000000000009");
+    assert_eq!(
+        session.view().error_code.as_deref(),
+        Some("MESSAGE_NOT_FOUND")
+    );
+}
+
+/// Inline message edit (React `MessageBubble` editing branch) over
+/// `chats.messages.update`: a changed draft updates the stored content and
+/// records the previous text as a revision; empty/unchanged drafts close the
+/// editor without a wire call. `chats.messages.revisions.list` reads the
+/// immutable history back; a foreign id surfaces MESSAGE_NOT_FOUND.
+#[test]
+fn message_edit_records_revisions_over_product_wire() {
+    let (mut session, _) = start_flagged_session(
+        Some("1"),
+        FakeWire::with_message_count(6),
+        Some(neotavern_presentation_chat::DEMO_CHAT_ID),
+        None,
+    )
+    .expect("route");
+    assert_eq!(session.kernel_message_count(), 6);
+    let target = session.view().visible[0].id.clone();
+    let original = session
+        .view()
+        .visible
+        .iter()
+        .find(|row| row.id == target)
+        .expect("row")
+        .content
+        .clone();
+
+    // Edit: seed -> type -> save. The visible content changes.
+    session.start_message_edit(&target);
+    assert_eq!(
+        session.view().editing_message_id.as_deref(),
+        Some(target.as_str())
+    );
+    assert_eq!(session.view().editing_draft, original);
+    session.set_message_edit_draft(&format!("{original} (edited)"));
+    session.submit_message_edit();
+    assert!(session.view().editing_message_id.is_none());
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "chats.messages.update")
+    );
+    let edited = session
+        .view()
+        .visible
+        .iter()
+        .find(|row| row.id == target)
+        .expect("row")
+        .content
+        .clone();
+    assert_eq!(edited, format!("{original} (edited)"));
+    assert_eq!(
+        session.shell_view().status_message.as_deref(),
+        Some("Message updated.")
+    );
+
+    // Unchanged submit: editor closes WITHOUT another wire call.
+    session.start_message_edit(&target);
+    session.submit_message_edit();
+    assert!(session.view().editing_message_id.is_none());
+    let update_calls = session
+        .issued_commands()
+        .iter()
+        .filter(|op| **op == "chats.messages.update")
+        .count();
+    assert_eq!(update_calls, 1);
+
+    // Empty draft behaves like cancel (React parity).
+    session.start_message_edit(&target);
+    session.set_message_edit_draft("");
+    session.submit_message_edit();
+    assert!(session.view().editing_message_id.is_none());
+    assert_eq!(
+        session
+            .issued_commands()
+            .iter()
+            .filter(|op| **op == "chats.messages.update")
+            .count(),
+        1
+    );
+
+    // History: exactly one revision (the original text), oldest first.
+    session.open_message_history(&target);
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "chats.messages.revisions.list")
+    );
+    assert_eq!(
+        session.view().history_open_for.as_deref(),
+        Some(target.as_str())
+    );
+    let history = session.view().revision_history.clone();
+    assert_eq!(history.len(), 1);
+    assert_eq!(history[0].content, original);
+    session.close_message_history();
+    assert!(session.view().history_open_for.is_none());
+    assert!(session.view().revision_history.is_empty());
+
+    // Foreign ids surface honest wire errors.
+    session.open_message_history("00000000-0000-4000-8000-000000000009");
     assert_eq!(
         session.view().error_code.as_deref(),
         Some("MESSAGE_NOT_FOUND")

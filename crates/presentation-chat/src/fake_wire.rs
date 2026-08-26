@@ -16,6 +16,8 @@ use contracts_generated::generated::{
     RequestGetPreset, RequestCreatePreset, RequestUpdatePreset, RequestDeletePreset,
     ProviderConfigDto, ResultListProviderConfigs, RequestListProviderConfigs,
     RequestSetProviderConfig, RequestDeleteProviderConfig, RequestGetProviderConfig,
+    MessageRevisionDto, RequestUpdateMessage, RequestMessageRevisionsList,
+    ResultMessageRevisionList,
 };
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -95,6 +97,10 @@ pub struct FakeWire {
     /// Memory store (`memories.*`; ТЗ §4.4 keyword retrieval). The kernel
     /// validates character scope against the character table.
     memories: Vec<MemoryDto>,
+    /// Immutable previous message contents (`chats.messages.update` records
+    /// the superseded text; `chats.messages.revisions.list` reads it back),
+    /// mirroring the kernel's `message_content_revisions` table.
+    message_revisions: Vec<MessageRevisionDto>,
     cursors: HashMap<String, CursorCut>,
     fail_ops: HashSet<String>,
     next: u64,
@@ -154,6 +160,7 @@ impl Default for FakeWire {
             ],
             streams: HashMap::new(),
             plans: HashMap::new(),
+            message_revisions: Vec::new(),
             themes: Vec::new(),
             secrets: ResultSecretsStatus {
                 kind: "unavailable".into(),
@@ -1214,6 +1221,76 @@ impl ProductWire for FakeWire {
                 let message_id = payload_str(&payload, "messageId")?;
                 self.delete_message(&chat_id, &message_id)?;
                 self.ok_call(operation_id, json!({}))
+            }
+            "chats.messages.update" => {
+                let req: RequestUpdateMessage = serde_json::from_value(payload.clone())?;
+                // Kernel semantics: a content change records the previous
+                // text as an immutable revision; an identical no-op edit is
+                // idempotent (no new revision).
+                let previous = self
+                    .messages
+                    .get(&req.chat_id)
+                    .and_then(|rows| rows.iter().find(|row| row.id == req.message_id))
+                    .map(|row| row.content.clone())
+                    .ok_or_else(|| Self::product("MESSAGE_NOT_FOUND", "messageId", &req.message_id))?;
+                if let Some(content) = req.content.as_deref() {
+                    if content != previous {
+                        let position = self
+                            .message_revisions
+                            .iter()
+                            .filter(|rev| rev.message_id == req.message_id)
+                            .count() as i64;
+                        let revision_id = self.alloc_id();
+                        self.message_revisions.push(MessageRevisionDto {
+                            id: revision_id,
+                            message_id: req.message_id.clone(),
+                            content: previous,
+                            position,
+                            created_at: TS.into(),
+                        });
+                        let rows = self
+                            .messages
+                            .get_mut(&req.chat_id)
+                            .ok_or_else(|| {
+                                Self::product("MESSAGE_NOT_FOUND", "messageId", &req.message_id)
+                            })?;
+                        let row = rows
+                            .iter_mut()
+                            .find(|row| row.id == req.message_id)
+                            .ok_or_else(|| {
+                                Self::product("MESSAGE_NOT_FOUND", "messageId", &req.message_id)
+                            })?;
+                        row.content = content.to_string();
+                    }
+                }
+                if let Some(chat) = self.chats.get_mut(&req.chat_id) {
+                    chat.updated_at = TS.into();
+                }
+                let updated = self
+                    .messages
+                    .get(&req.chat_id)
+                    .and_then(|rows| rows.iter().find(|row| row.id == req.message_id))
+                    .cloned()
+                    .ok_or_else(|| Self::product("MESSAGE_NOT_FOUND", "messageId", &req.message_id))?;
+                self.wrap_call(operation_id, to_value(&updated))
+            }
+            "chats.messages.revisions.list" => {
+                let req: RequestMessageRevisionsList = serde_json::from_value(payload.clone())?;
+                let exists = self
+                    .messages
+                    .get(&req.chat_id)
+                    .is_some_and(|rows| rows.iter().any(|row| row.id == req.message_id));
+                if !exists {
+                    return Err(Self::product("MESSAGE_NOT_FOUND", "messageId", &req.message_id).into());
+                }
+                let items: Vec<MessageRevisionDto> = self
+                    .message_revisions
+                    .iter()
+                    .filter(|rev| rev.message_id == req.message_id)
+                    .cloned()
+                    .collect();
+                let result = ResultMessageRevisionList { items };
+                self.wrap_call(operation_id, to_value(&result))
             }
             "chats.snapshots.rollback" => {
                 let chat_id = payload_str(&payload, "chatId")?;

@@ -279,6 +279,20 @@
                                 "children": []
                               },
                               {
+                                "nodeId": "message-action-history",
+                                "component": "MessageActionButton",
+                                "recipe": "icon-button",
+                                "role": "button",
+                                "stateSlots": [],
+                                "actions": [
+                                  {
+                                    "id": "chat.message.history",
+                                    "parameter": "messageId"
+                                  }
+                                ],
+                                "children": []
+                              },
+                              {
                                 "nodeId": "message-action-prompt",
                                 "component": "MessageActionButton",
                                 "recipe": "icon-button",

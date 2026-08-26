@@ -78,6 +78,25 @@ pub struct ProductChatView {
     /// Local context estimate rendered inside the popover. `None` = the
     /// panel shell without numbers (React loading state).
     pub context_summary: Option<ContextUsageSummaryV1>,
+    /// Message currently edited inline (React `MessageBubble` editing
+    /// state, `chats.messages.update`); `None` = no editor open.
+    pub editing_message_id: Option<String>,
+    /// Live draft text of the inline editor (seeded from the message).
+    pub editing_draft: String,
+    /// Message whose revision-history card is open (React
+    /// `MessageRevisionHistoryCard`, `chats.messages.revisions.list`).
+    pub history_open_for: Option<String>,
+    /// Immutable previous contents (`message_content_revisions`), oldest
+    /// first — exactly what the kernel records on a content change.
+    pub revision_history: Vec<RevisionRow>,
+}
+
+/// One row of the revision-history card (React `MessageRevisionHistoryCard`
+/// list item): the superseded text plus its wire timestamp.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RevisionRow {
+    pub content: String,
+    pub created_at: String,
 }
 
 impl Default for ProductChatView {
@@ -98,6 +117,10 @@ impl Default for ProductChatView {
             column_width: 0,
             context_panel_open: false,
             context_summary: None,
+            editing_message_id: None,
+            editing_draft: String::new(),
+            history_open_for: None,
+            revision_history: Vec::new(),
         }
     }
 }
@@ -342,6 +365,10 @@ pub fn product_chat_from_fixture(fixture: &CanonicalFixture, start: usize) -> Pr
         column_width: 0,
         context_panel_open: false,
         context_summary: None,
+        editing_message_id: None,
+        editing_draft: String::new(),
+        history_open_for: None,
+        revision_history: Vec::new(),
     }
 }
 

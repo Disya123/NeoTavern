@@ -3,6 +3,15 @@
 ## Unreleased
 ### Added
 
+- **Чат: инлайн-редактирование сообщения и история правок
+  (chats.messages.update / revisions.list).** Кнопка Edit открывает редактор в
+  пузыре (Save/Cancel, фокус клавиатуры); пустой/неизменённый черновик
+  закрывает редактор без wire-вызова; изменение контента ядро записывает как
+  immutable-ревизию. Новая кнопка History (добавлена и в канонический
+  blueprint-документ чата) открывает оверлей с предыдущими версиями сообщения.
+  Чужой id — честный `MESSAGE_NOT_FOUND`. Тест
+  `message_edit_records_revisions_over_product_wire`.
+
 - **AI Settings: профили подключений (providers.config.list / set / delete).**
   API-таб: строки профилей (имя · provider · флаг ключа без значения), выбор
   профиля = `activeProviderConfigId`, «New profile» через диалог +

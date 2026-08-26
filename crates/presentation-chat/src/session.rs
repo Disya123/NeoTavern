@@ -9,6 +9,8 @@ use contracts_generated::generated::{
     RequestListLorebookEntries, RequestListLorebooks, RequestListMessages, RequestListPresets,
     RequestMessageDraftCommit, RequestMessageDraftDiscard, RequestMessageDraftGet,
     RequestMessageDraftSave, RequestMessageVariantActivate, RequestMessageVariantsList,
+    RequestMessageRevisionsList, RequestUpdateMessage, MessageRevisionDto,
+    ResultMessageRevisionList, decode_result_message_revision_list,
     RequestPluginsDisable, RequestPluginsEnable, RequestPluginsUninstall,
     RequestRetryGeneration, RequestSettingsGet, RequestSnapshotsRollback, RequestStartGeneration,
     RequestUpdateCharacter, RequestUpdateLorebookEntry, RequestProfileExport, RequestProfilesCreate,
@@ -50,7 +52,7 @@ use neotavern_presentation_dioxus_shell::{
     ProductChatView, ProductChrome, ProductShellView, ProviderCardView, RowKind, SafeAreaInsets,
     ThemeCardView, ToolCardView, VisibleRow, PRODUCT_PATH_VISIBLE,
     BackupCardView, MemoryCardView, PresetValueRow,
-    ProviderConfigCardView,
+    ProviderConfigCardView, RevisionRow,
 };
 
 use serde::de::DeserializeOwned;
@@ -280,6 +282,14 @@ pub struct ChatRouteState {
     pub memory_delete_target_id: Option<String>,
     /// Composer context-meter popover visibility (`chat.composer.context`).
     pub context_panel_open: bool,
+    /// Inline message editor (React `MessageBubble` editing state):
+    /// target row + live draft (`chats.messages.update` on save).
+    pub message_edit_id: Option<String>,
+    pub message_edit_draft: String,
+    /// Open revision-history card: owning message + immutable previous
+    /// contents from `chats.messages.revisions.list`.
+    pub history_message_id: Option<String>,
+    pub message_revisions: Vec<RevisionRow>,
     /// Last applied Kernel stream envelope sequence (`EventEnvelope.sequence`).
     pub last_applied_stream_sequence: Option<i64>,
     pub last_checkpoint_sequence: Option<i64>,
@@ -393,6 +403,8 @@ impl<W: ProductWire> ChatSession<W> {
         session.state.ai_tab = "providers".into();
         session.state.settings_tab = "general".into();
         session.state.context_panel_open = false;
+        session.state.message_edit_id = None;
+        session.state.history_message_id = None;
         Ok(session)
     }
 
@@ -997,6 +1009,10 @@ impl<W: ProductWire> ChatSession<W> {
             column_width: self.chat_column_width(),
             context_panel_open: self.state.context_panel_open,
             context_summary,
+            editing_message_id: self.state.message_edit_id.clone(),
+            editing_draft: self.state.message_edit_draft.clone(),
+            history_open_for: self.state.history_message_id.clone(),
+            revision_history: self.state.message_revisions.clone(),
         }
     }
 
@@ -1578,6 +1594,11 @@ impl<W: ProductWire> ChatSession<W> {
                 self.state.chat = Some(chat);
                 self.state.messages.clear();
                 self.state.scroll_offset_css = 0.0;
+                // Interactive overlays never outlive their chat.
+                self.state.message_edit_id = None;
+                self.state.message_edit_draft.clear();
+                self.state.history_message_id = None;
+                self.state.message_revisions.clear();
                 match self.list_messages(chat_id, None) {
                     Ok(page) => self.absorb_latest_page(page),
                     Err(err) => self.record_error(err),
@@ -1861,6 +1882,129 @@ impl<W: ProductWire> ChatSession<W> {
             }
             Err(err) => self.record_error(err),
         }
+        self.bump_scene();
+    }
+
+    /// Open the inline message editor (React `MessageBubble` edit state,
+    /// `data-action="edit"`): seeds the draft from the stored content. The
+    /// streaming row and an already-open editor are honest no-ops.
+    pub fn start_message_edit(&mut self, row_id: &str) {
+        if row_id == "streaming" {
+            return;
+        }
+        if self.state.message_edit_id.as_deref() == Some(row_id) {
+            return;
+        }
+        let Some(message) = self.state.messages.iter().find(|row| row.id == row_id) else {
+            return;
+        };
+        self.state.message_edit_id = Some(row_id.to_string());
+        self.state.message_edit_draft = message.content.clone();
+        self.state.history_message_id = None;
+        self.bump_scene();
+    }
+
+    pub fn set_message_edit_draft(&mut self, draft: &str) {
+        if self.state.message_edit_id.is_some() {
+            self.state.message_edit_draft = draft.to_string();
+            self.bump_scene();
+        }
+    }
+
+    /// Close the editor without touching the wire (React Cancel / Escape).
+    pub fn cancel_message_edit(&mut self) {
+        self.state.message_edit_id = None;
+        self.state.message_edit_draft.clear();
+        self.bump_scene();
+    }
+
+    /// Save the inline editor via `chats.messages.update`. React parity: an
+    /// empty or unchanged draft just closes the editor without a wire call;
+    /// a failed update keeps the draft open (the error surfaces via
+    /// `record_error`).
+    pub fn submit_message_edit(&mut self) {
+        let Some(row_id) = self.state.message_edit_id.clone() else {
+            return;
+        };
+        let next = self.state.message_edit_draft.trim().to_string();
+        let Some(current) = self
+            .state
+            .messages
+            .iter()
+            .find(|row| row.id == row_id)
+            .map(|row| row.content.clone())
+        else {
+            self.cancel_message_edit();
+            return;
+        };
+        if next.is_empty() || next == current {
+            self.cancel_message_edit();
+            return;
+        }
+        let Some(chat_id) = self.chat_id().map(str::to_string) else {
+            return;
+        };
+        match self.call_decode(
+            "chats.messages.update",
+            &RequestUpdateMessage {
+                chat_id,
+                message_id: row_id.clone(),
+                content: Some(next),
+                meta: None,
+                clear_checkpoint_chat_id: None,
+            },
+            decode_message_dto,
+        ) {
+            Ok(updated) => {
+                if let Some(row) = self.state.messages.iter_mut().find(|row| row.id == row_id) {
+                    row.content = updated.content;
+                }
+                self.state.message_edit_id = None;
+                self.state.message_edit_draft.clear();
+                self.state.status_message = Some("Message updated.".into());
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    /// Open the revision-history card (React `MessageRevisionHistoryCard`,
+    /// `data-action="history"`): loads the immutable previous contents of one
+    /// message via `chats.messages.revisions.list`.
+    pub fn open_message_history(&mut self, row_id: &str) {
+        if row_id == "streaming" {
+            return;
+        }
+        let Some(chat_id) = self.chat_id().map(str::to_string) else {
+            return;
+        };
+        match self.call_decode(
+            "chats.messages.revisions.list",
+            &RequestMessageRevisionsList {
+                chat_id,
+                message_id: row_id.to_string(),
+            },
+            decode_result_message_revision_list,
+        ) {
+            Ok(result) => {
+                self.state.history_message_id = Some(row_id.to_string());
+                self.state.message_revisions = result
+                    .items
+                    .iter()
+                    .map(|rev: &MessageRevisionDto| RevisionRow {
+                        content: rev.content.clone(),
+                        created_at: rev.created_at.clone(),
+                    })
+                    .collect();
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    pub fn close_message_history(&mut self) {
+        self.state.history_message_id = None;
+        self.state.message_revisions.clear();
         self.bump_scene();
     }
 

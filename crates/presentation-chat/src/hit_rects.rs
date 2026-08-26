@@ -147,6 +147,14 @@ pub enum MessageActionKind {
     Regenerate,
     SwipePrevious,
     SwipeNext,
+    /// Save button of the inline editor (`data-action="message-edit-save"`).
+    EditSave,
+    /// Cancel button of the inline editor
+    /// (`data-action="message-edit-cancel"`).
+    EditCancel,
+    /// Close button of the revision-history card
+    /// (`data-action="message-history-close"`).
+    HistoryClose,
 }
 
 impl MessageActionKind {
@@ -163,6 +171,9 @@ impl MessageActionKind {
             "regenerate" => Self::Regenerate,
             "swipe-previous" => Self::SwipePrevious,
             "swipe-next" => Self::SwipeNext,
+            "message-edit-save" => Self::EditSave,
+            "message-edit-cancel" => Self::EditCancel,
+            "message-history-close" => Self::HistoryClose,
             _ => return None,
         })
     }

@@ -62,6 +62,8 @@ enum TextFocus {
     MemoryKeys,
     PresetName,
     ProviderName,
+    /// Inline message editor body (`part:message-edit-input`).
+    MessageEdit,
 }
 
 /// One scripted probe step, replayed in argument order so
@@ -484,6 +486,8 @@ impl App {
             focus = TextFocus::PresetName;
         } else if rects.covers(css_x, css_y, "part:provider-name-input") {
             focus = TextFocus::ProviderName;
+        } else if rects.covers(css_x, css_y, "part:message-edit-input") {
+            focus = TextFocus::MessageEdit;
         }
         self.focus = focus;
     }
@@ -693,6 +697,39 @@ impl App {
                         self.dirty = true;
                         self.window.as_ref().map(|w| w.request_redraw());
                     }
+                    neotavern_presentation_chat::MessageActionKind::Edit => {
+                        eprintln!("[neocompositor-desktop] edit tapped: {}", pending.row_id);
+                        self.session.start_message_edit(&pending.row_id);
+                        self.focus = TextFocus::MessageEdit;
+                        self.dirty = true;
+                        self.window.as_ref().map(|w| w.request_redraw());
+                    }
+                    neotavern_presentation_chat::MessageActionKind::EditSave => {
+                        eprintln!("[neocompositor-desktop] edit save tapped");
+                        self.session.submit_message_edit();
+                        self.focus = TextFocus::None;
+                        self.dirty = true;
+                        self.window.as_ref().map(|w| w.request_redraw());
+                    }
+                    neotavern_presentation_chat::MessageActionKind::EditCancel => {
+                        eprintln!("[neocompositor-desktop] edit cancel tapped");
+                        self.session.cancel_message_edit();
+                        self.focus = TextFocus::None;
+                        self.dirty = true;
+                        self.window.as_ref().map(|w| w.request_redraw());
+                    }
+                    neotavern_presentation_chat::MessageActionKind::History => {
+                        eprintln!("[neocompositor-desktop] history tapped: {}", pending.row_id);
+                        self.session.open_message_history(&pending.row_id);
+                        self.dirty = true;
+                        self.window.as_ref().map(|w| w.request_redraw());
+                    }
+                    neotavern_presentation_chat::MessageActionKind::HistoryClose => {
+                        eprintln!("[neocompositor-desktop] history close tapped");
+                        self.session.close_message_history();
+                        self.dirty = true;
+                        self.window.as_ref().map(|w| w.request_redraw());
+                    }
                     other => eprintln!(
                         "[neocompositor-desktop] tap -> message:{other:?} on {} not wired yet",
                         pending.row_id
@@ -798,6 +835,12 @@ impl App {
                 self.session.set_provider_name_draft(&next);
                 eprintln!("[neocompositor-desktop] typed '{ch}' -> provider_name=\"{next}\"");
             }
+            TextFocus::MessageEdit => {
+                let current = self.session.view().editing_draft.clone();
+                let next = format!("{current}{ch}");
+                self.session.set_message_edit_draft(&next);
+                eprintln!("[neocompositor-desktop] typed '{ch}' -> edit_draft=\"{next}\"");
+            }
             TextFocus::None => return,
         }
         self.dirty = true;
@@ -818,6 +861,7 @@ impl App {
             TextFocus::MemoryKeys => self.session.shell_view().memory_draft_keys.clone(),
             TextFocus::PresetName => self.session.shell_view().preset_name_draft.clone(),
             TextFocus::ProviderName => self.session.shell_view().provider_name_draft.clone(),
+            TextFocus::MessageEdit => self.session.view().editing_draft.clone(),
             TextFocus::None => return,
         };
         let next: String = current
@@ -838,6 +882,7 @@ impl App {
             TextFocus::MemoryKeys => self.session.set_memory_draft_keys(&next),
             TextFocus::PresetName => self.session.set_preset_name_draft(&next),
             TextFocus::ProviderName => self.session.set_provider_name_draft(&next),
+            TextFocus::MessageEdit => self.session.set_message_edit_draft(&next),
             TextFocus::None => {}
         }
         self.dirty = true;

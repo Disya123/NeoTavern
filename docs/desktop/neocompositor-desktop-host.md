@@ -497,6 +497,26 @@ demo(), пусто в default(). Геометрия зеркалится меж�
 новым `providers_hit`. Тесты `provider_profiles_crud_over_product_wire`,
 обновлённый `ai_providers_and_presets_over_product_wire`.
 
+## Редактирование сообщения и история правок
+
+Инлайн-редактор и карточка истории перенесены с React `MessageBubble` /
+`MessageRevisionHistoryCard`. `data-action="edit"` открывает редактор прямо в
+пузыре: текст-плейсхолдер `part:message-edit-input` (фокус клавиатуры через
+`TextFocus::MessageEdit`) + Save/Cancel (`message-edit-save` /
+`message-edit-cancel`, ключуются `data-message-id` строки). Save вызывает
+`chats.messages.update`: пустой или неизменённый черновик просто закрывает
+редактор без wire-вызова (паритет React), успешное обновление пишет статус
+«Message updated.», ошибка оставляет черновик открытым. Ядро при изменении
+контента записывает предыдущий текст как immutable-ревизию;
+`data-action="history"` (кнопка добавлена и в канонический документ чата
+`ui-blueprint-document-chat-v1.json` после rollback) открывает оверлей-карту
+с историей из `chats.messages.revisions.list` («No previous versions.» для
+чистых строк), Close — `message-history-close`. Чужой id даёт честный
+`MESSAGE_NOT_FOUND`. При открытии другого чата редактор/история закрываются.
+Blueprint-chrome пока не покрывает эти интерактивные состояния — кадр честно
+уходит в legacy-RSX (`warn_uncovered_variant("interactive-edit")`). Тест
+`message_edit_records_revisions_over_product_wire`.
+
 ## Отправка сообщения (Send)
 
 Композер (`data-part="composer"` в `product_chat_app`) получил кнопку **Send**
@@ -715,10 +735,11 @@ copy, delete, rollback, regenerate и swipes. Edit / snapshots / history
 - Drag-скролл инерцией и мультитач: десктоп использует колёсико +
   `scroll_offset_css` (без физ.инерции); пёрышко-инерция Android — через
   `ChatCompositor::compositor_tick`, не перенесено.
-- Из builtin-действий сообщения портированы copy (реальный клипборд хоста) и
-  delete (durable `chats.messages.delete`). Edit / checkpoint / rollback
-  рисуются в инлайн-ряде для визуального паритета с React `messageActions.ts`,
-  но пока не меняют Kernel-состояние (нет inline-editor / snapshots).
+- Из builtin-действий сообщения портированы copy (реальный клипборд хоста),
+  delete (durable `chats.messages.delete`), edit (`chats.messages.update` +
+  immutable-ревизии) и history (`chats.messages.revisions.list`). Checkpoint /
+  branch рисуются в инлайн-ряде для визуального паритета с React
+  `messageActions.ts`, но пока не меняют Kernel-состояние.
 - Wallpaper — светлая плоскость фасада + тёмный overlay, не фото React
   golden (фото-ассет в хост не бандлится). `backdrop-filter` Blitz не
   умеет; панели полупрозрачные через `rgba`, не live glass.

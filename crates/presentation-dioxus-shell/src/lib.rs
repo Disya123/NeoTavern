@@ -28,6 +28,7 @@ pub use neotavern_presentation_blueprint::v1::{ContextUsageBreakdownV1, ContextU
 pub use neotavern_presentation_design_system::SafeAreaInsets;
 pub use product_path::{
     PRODUCT_PATH_CHAT_ID, PRODUCT_PATH_ITEMS, PRODUCT_PATH_VISIBLE, ProductChatView, ProductChrome,
+    RevisionRow,
     RowKind, VisibleRow, chrome_metrics, current_product_chat, format_timestamp,
     install_product_chat, message_id, mixed_height, mixed_height_catalog,
     product_chat_from_fixture, product_chat_with_chrome, streaming_schedule, visible_rows,
@@ -315,6 +316,101 @@ fn message_action_button(
     }
 }
 
+/// Inline editor body for the row being edited (React `MessageBubble`
+/// editing branch): a plain-text area plus Save/Cancel. The input carries
+/// `data-part="message-edit-input"` so hosts route typing into
+/// `set_message_edit_draft`; the buttons are keyed message actions
+/// (`message-edit-save` / `message-edit-cancel`) so the shared hit table
+/// resolves their owning row.
+fn message_edit_editor(view: &ProductChatView, row_id: &str) -> Element {
+    let draft = view.editing_draft.clone();
+    rsx! {
+        div {
+            style: "display:flex;flex-direction:column;gap:8px;width:100%;",
+            div {
+                "data-part": "message-edit-input",
+                style: "box-sizing:border-box;width:100%;min-height:72px;padding:8px 10px;border:1px solid rgba(243,238,232,0.16);border-radius:10px;background:#1e1b18;color:#f3eee8;font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere;",
+                if draft.is_empty() {
+                    span { style: "color:#998f87;", "\u{00a0}" }
+                } else {
+                    "{draft}"
+                }
+            }
+            div {
+                style: "display:flex;gap:8px;justify-content:flex-end;",
+                button {
+                    class: "MessageBubble_actionButton",
+                    r#type: "button",
+                    "data-action": "message-edit-cancel",
+                    "data-message-id": "{row_id}",
+                    "aria-label": "Cancel edit",
+                    style: "width:auto;padding:0 12px;height:32px;border-radius:16px;font-size:12px;color:#c5bbb2;",
+                    span { "Cancel" }
+                }
+                button {
+                    class: "MessageBubble_actionButton",
+                    r#type: "button",
+                    "data-action": "message-edit-save",
+                    "data-message-id": "{row_id}",
+                    "aria-label": "Save edit",
+                    style: "width:auto;padding:0 12px;height:32px;border-radius:16px;font-size:12px;color:#f3eee8;background:#5a3b2e;",
+                    span { "Save" }
+                }
+            }
+        }
+    }
+}
+
+/// Revision-history card overlay (React `MessageRevisionHistoryCard`):
+/// immutable previous contents of one message, oldest first, with a Close
+/// action (`message-history-close`, keyed like a message action).
+fn revision_history_card(view: &ProductChatView) -> Option<Element> {
+    let owner = view.history_open_for.as_deref()?;
+    let items = view.revision_history.clone();
+    Some(rsx! {
+        div {
+            class: "MessageRevisionHistoryCard_card",
+            "data-component": "revision-history-card",
+            "data-part": "revision-history-card",
+            style: "position:absolute;left:16px;right:16px;top:12px;z-index:30;box-sizing:border-box;display:flex;flex-direction:column;gap:8px;max-height:60%;padding:12px;border:1px solid rgba(243,238,232,0.14);border-radius:16px;background:rgba(21,19,17,0.94);color:#f3eee8;overflow:hidden;",
+            div {
+                style: "display:flex;align-items:center;gap:8px;",
+                strong { style: "font-size:13px;", "Edit history" }
+                button {
+                    class: "MessageBubble_actionButton",
+                    r#type: "button",
+                    "data-action": "message-history-close",
+                    "data-message-id": "{owner}",
+                    "aria-label": "Close history",
+                    style: "margin-left:auto;width:28px;height:28px;border-radius:14px;",
+                    {crate::product_shell::icon("X", 14)}
+                }
+            }
+            if items.is_empty() {
+                p { style: "margin:0;color:#998f87;font-size:12px;", "No previous versions." }
+            } else {
+                div {
+                    style: "display:flex;flex-direction:column;gap:6px;overflow:hidden;",
+                    for item in items.iter() {
+                        div {
+                            "data-part": "revision-row",
+                            style: "padding:8px 10px;border:1px solid rgba(243,238,232,0.10);border-radius:10px;background:rgba(36,33,30,0.62);",
+                            div {
+                                style: "font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:64px;overflow:hidden;",
+                                "{item.content}"
+                            }
+                            div {
+                                style: "margin-top:4px;color:#998f87;font-size:11px;",
+                                {crate::product_path::format_timestamp(&item.created_at)}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    })
+}
+
 /// Flagged Product Wire chat workspace: header glass, visible Markdown/image
 /// rows, composer glass. Blitz consumes this tree; callers must not inject a
 /// hand-built `NeoDisplayList`.
@@ -485,6 +581,13 @@ pub fn product_chat_app() -> Element {
                     }
                     if let Some(parts) = &chrome_parts {
                         {parts.viewport.clone()}
+                        // Interactive overlays are session-state driven and
+                        // not covered by authored documents yet: the card
+                        // renders above the blueprint viewport (same contract
+                        // as the legacy path).
+                        if view.history_open_for.is_some() {
+                            {revision_history_card(&view)}
+                        }
                     } else {
                     div {
                         class: "ChatWorkspace_viewport",
@@ -495,6 +598,9 @@ pub fn product_chat_app() -> Element {
                         "aria-label": "Chat messages",
                         "data-state": if view.streaming { "streaming" } else { "idle" },
                         style: "{viewport_style}",
+                        if view.history_open_for.is_some() {
+                            {revision_history_card(&view)}
+                        },
                         div {
                             class: "ChatWorkspace_scrollBody",
                             "data-part": "chat-scroll",
@@ -569,6 +675,7 @@ pub fn product_chat_app() -> Element {
                                             {message_action_button("branch", "Branch", "GitBranch", &row.id)}
                                             {message_action_button("delete", "Delete message", "Trash", &row.id)}
                                             {message_action_button("rollback", "Rollback to here", "ArrowUUpLeft", &row.id)}
+                                            {message_action_button("history", "Edit history", "ClockCounterClockwise", &row.id)}
                                             if row.run_id.is_some() {
                                                 {message_action_button("prompt", "View prompt plan", "TextAlignLeft", &row.id)}
                                             }
@@ -587,12 +694,16 @@ pub fn product_chat_app() -> Element {
                                             // containing block and collapses
                                             // the body to a sliver on user
                                             // rows.
-                                            div {
-                                                class: "MessageBubble_bubble",
-                                                "data-part": "message-body",
-                                                style: "position:relative;width:100%;box-sizing:border-box;",
-                                                {crate::markdown::message_markdown(&row.content, view.streaming && row.id == "streaming")}
-                                            }
+                                                div {
+                                                    class: "MessageBubble_bubble",
+                                                    "data-part": "message-body",
+                                                    style: "position:relative;width:100%;box-sizing:border-box;",
+                                                    if Some(row.id.as_str()) == view.editing_message_id.as_deref() {
+                                                        {message_edit_editor(&view, &row.id)}
+                                                    } else {
+                                                        {crate::markdown::message_markdown(&row.content, view.streaming && row.id == "streaming")}
+                                                    }
+                                                }
                                             // Assistant avatar art (React
                                             // `.messageArt`); hidden on the
                                             // desktop sheet, present for themes.
