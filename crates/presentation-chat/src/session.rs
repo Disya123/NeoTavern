@@ -13,6 +13,7 @@ use contracts_generated::generated::{
     ResultMessageRevisionList, decode_result_message_revision_list,
     RequestCreateChatSnapshot, RequestSnapshotsList, SnapshotOrigin,
     ResultChatSnapshot, decode_result_chat_snapshot, decode_result_snapshots_list,
+    ResultChatsExport, RequestChatsExport, decode_result_chats_export,
     RequestPluginsDisable, RequestPluginsEnable, RequestPluginsUninstall,
     RequestRetryGeneration, RequestSettingsGet, RequestSnapshotsRollback, RequestStartGeneration,
     RequestUpdateCharacter, RequestUpdateLorebookEntry, RequestProfileExport, RequestProfilesCreate,
@@ -108,6 +109,14 @@ struct PresetGenerationDefaults {
     reasoning: bool,
     #[serde(default)]
     stream: bool,
+}
+
+/// One completed chat export (`chats.export`): the wire filename plus the
+/// already-decoded document bytes, ready for the host's file sink.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LastExport {
+    pub filename: String,
+    pub bytes: Vec<u8>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -296,6 +305,9 @@ pub struct ChatRouteState {
     /// child chats (checkpoints/branches) of the active chat.
     pub snapshots_menu_open: bool,
     pub snapshot_items: Vec<ChatDto>,
+    /// Completed `chats.export` payload awaiting the host's file sink
+    /// (React downloads the file; the desktop host writes it to disk).
+    pub last_export: Option<LastExport>,
     /// Last applied Kernel stream envelope sequence (`EventEnvelope.sequence`).
     pub last_applied_stream_sequence: Option<i64>,
     pub last_checkpoint_sequence: Option<i64>,
@@ -2074,6 +2086,54 @@ impl<W: ProductWire> ChatSession<W> {
         self.open_chat(chat_id);
     }
 
+    /// Export one chat via `chats.export` (React `ChatManagementPanel`
+    /// "Export" item): the wire returns a kind-tagged JSON document as
+    /// base64; the session decodes it and parks it in `last_export` for the
+    /// host's file sink (React downloads to the browser, the desktop host
+    /// writes a file).
+    pub fn export_chat(&mut self, chat_id: &str) {
+        match self.call_decode(
+            "chats.export",
+            &RequestChatsExport {
+                chat_id: chat_id.to_string(),
+            },
+            decode_result_chats_export,
+        ) {
+            Ok(result) => {
+                use base64::Engine as _;
+                match base64::engine::general_purpose::STANDARD.decode(&result.content_base64) {
+                    Ok(bytes) => {
+                        self.state.last_export = Some(LastExport {
+                            filename: result.filename.clone(),
+                            bytes,
+                        });
+                        self.state.status_message =
+                            Some(format!("Export ready: {}.", result.filename));
+                    }
+                    Err(_) => self.record_error(ChatRouteError::product(
+                        "CONTRACT_VIOLATION",
+                        serde_json::json!({ "field": "contentBase64" }),
+                    )),
+                }
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    /// Host-side sink handoff: consume the parked export after writing it.
+    pub fn take_last_export(&mut self) -> Option<LastExport> {
+        self.state.last_export.take()
+    }
+
+    /// Host confirms where the export landed; the status reflects it.
+    pub fn note_export_path(&mut self, path: &str) {
+        if self.state.last_export.is_none() {
+            self.state.status_message = Some(format!("Exported to {path}"));
+            self.bump_scene();
+        }
+    }
+
     /// Freeze the prefix up to and including this message into a fresh child
     /// chat via `chats.snapshots.create` (React builtin actions
     /// `data-action="checkpoint"` / `"branch"`). The user stays in the
@@ -2593,6 +2653,7 @@ impl<W: ProductWire> ChatSession<W> {
             ShellAction::ProviderDeleteConfirm => self.confirm_provider_delete(),
             ShellAction::SnapshotsClose => self.close_snapshots_menu(),
             ShellAction::OpenSnapshot(id) => self.open_snapshot(&id),
+            ShellAction::ExportChat(id) => self.export_chat(&id),
         }
     }
 

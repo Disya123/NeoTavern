@@ -2315,6 +2315,57 @@ fn chat_snapshots_checkpoint_branch_over_product_wire() {
     assert!(session.view().snapshot_items.is_empty());
 }
 
+/// `chats.export` (React `ChatManagementPanel` "Export"): the wire returns a
+/// kind-tagged JSON document as base64; the session decodes it into
+/// `last_export`, the chats-panel row action drives it, and a foreign id
+/// surfaces CHAT_NOT_FOUND.
+#[test]
+fn chat_export_over_product_wire() {
+    use base64::Engine as _;
+    use neotavern_presentation_chat::ShellAction;
+    let (mut session, _) = start_flagged_session(
+        Some("1"),
+        FakeWire::with_message_count(6),
+        Some(neotavern_presentation_chat::DEMO_CHAT_ID),
+        None,
+    )
+    .expect("route");
+    let chat_id = neotavern_presentation_chat::DEMO_CHAT_ID.to_string();
+
+    session.apply_shell_action(ShellAction::ExportChat(chat_id.clone()));
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "chats.export")
+    );
+    let shell = session.shell_view();
+    assert!(
+        shell
+            .status_message
+            .as_deref()
+            .unwrap_or("")
+            .starts_with("Export ready:")
+    );
+    let export = session.take_last_export().expect("parked export");
+    assert_eq!(export.filename, format!("chat-{chat_id}.json"));
+    let doc: serde_json::Value =
+        serde_json::from_slice(&export.bytes).expect("valid export document");
+    assert_eq!(
+        doc.get("kind").and_then(serde_json::Value::as_str),
+        Some("neotavern-chat-export")
+    );
+    // The sink handoff consumed the parked payload.
+    assert!(session.state().last_export.is_none());
+
+    // Foreign chat: honest wire error, nothing parked.
+    session.apply_shell_action(ShellAction::ExportChat(
+        "00000000-0000-4000-8000-000000000009".into(),
+    ));
+    assert_eq!(session.view().error_code.as_deref(), Some("CHAT_NOT_FOUND"));
+    assert!(session.state().last_export.is_none());
+}
+
 /// Version-controls "Regenerate": retries the tapped row's OWN source run
 /// (`generation.retry{sourceRunId}`), not just the latest one. A row without
 /// a stored run surfaces GENERATION_RUN_NOT_FOUND.

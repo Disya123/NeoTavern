@@ -3,6 +3,12 @@
 ## Unreleased
 ### Added
 
+- **Чат: экспорт чата (chats.export).** Третья зона Export в строках панели
+  Chats: kind-тегированный JSON-документ декодируется из base64 и пишется
+  хостом на диск (`NEOTA_EXPORT_DIR` или `exports/`), статус показывает путь.
+  Чужой chatId — честный `CHAT_NOT_FOUND`. Тест
+  `chat_export_over_product_wire`.
+
 - **Чат: снапшоты — checkpoint/branch и меню снапшотов
   (chats.snapshots.create / list).** Кнопки Checkpoint/Branch в бабле
   замораживают префикс чата в дочерний чат; новая кнопка в хедере

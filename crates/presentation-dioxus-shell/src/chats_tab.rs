@@ -148,6 +148,17 @@ fn chat_row(item: &ChatCardView, selected_id: Option<&str>) -> Element {
                     {icon_fill("PencilSimple", 15, "#998f87")}
                 }
                 button {
+                    class: "ChatManagementPanel_rowAction",
+                    r#type: "button",
+                    // React `ChatManagementPanel` dropdown "Export"
+                    // (`chats.export`); the desktop host writes the file.
+                    "data-part": "chat-export",
+                    "aria-label": "Export chat",
+                    title: "Export chat",
+                    style: "display:grid;width:44px;height:44px;place-items:center;border:1px solid transparent;border-radius:10px;color:#998f87;background:transparent;",
+                    {icon_fill("DownloadSimple", 15, "#998f87")}
+                }
+                button {
                     class: "ChatManagementPanel_rowActionDanger",
                     r#type: "button",
                     "data-part": "chat-delete",

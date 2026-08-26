@@ -537,6 +537,17 @@ Blueprint-chrome при открытом меню уходит в legacy-RSX
 `MESSAGE_NOT_FOUND`, чужой родитель при list — `CHAT_NOT_FOUND`. При смене
 чата меню закрывается. Тест `chat_snapshots_checkpoint_branch_over_product_wire`.
 
+## Экспорт чата
+
+Строка чата в панели Chats получила третью зону Export (rename / export /
+delete, 44px каждая — `chats_hit` расширен до 132px): `chats.export`
+возвращает kind-тегированный JSON-документ (`neotavern-chat-export`) в
+base64; сессия декодирует его и паркует в `last_export` со статусом
+«Export ready: …». Хост-синка платформенна: React скачивает файл в браузер,
+десктопный bin пишет его на диск (`NEOTA_EXPORT_DIR` или
+`<cwd>/exports/<filename>`) и отражает путь в статусе. Чужой chatId даёт
+честный `CHAT_NOT_FOUND`. Тест `chat_export_over_product_wire`.
+
 ## Отправка сообщения (Send)
 
 Композер (`data-part="composer"` в `product_chat_app`) получил кнопку **Send**

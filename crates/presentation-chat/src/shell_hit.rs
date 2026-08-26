@@ -173,6 +173,9 @@ pub enum ShellAction {
     /// shared hit table as `custom.chat.snapshots-menu`.
     SnapshotsClose,
     OpenSnapshot(String),
+    /// Chats panel row action (`chats.export`; React `ChatManagementPanel`
+    /// "Export" item). The desktop host parks `last_export` and writes it.
+    ExportChat(String),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1575,9 +1578,12 @@ fn chats_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
         let bottom = cursor + 76.0;
         if y >= cursor && y < bottom {
             let id = item.id.clone();
-            // Row actions in the right 88 px (rename / delete) — same
-            // compact equivalent as the entries/profile rows; the rest of
-            // the row opens the chat.
+            // Row actions in the right 132 px (rename / export / delete) —
+            // same compact equivalent as the entries/profile rows; the rest
+            // of the row opens the chat.
+            if x >= x1 - pad - 132.0 && x < x1 - pad - 88.0 {
+                return Some(ShellHit::Action(ShellAction::ExportChat(id)));
+            }
             if x >= x1 - pad - 88.0 && x < x1 - pad - 44.0 {
                 return Some(ShellHit::Action(ShellAction::StartChatRename(id)));
             }

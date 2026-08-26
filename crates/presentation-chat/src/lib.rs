@@ -59,7 +59,7 @@ pub use seed::{
     seed_trace_line, IsolatedSeedReport, ISOLATED_10K_COUNT, ISOLATED_10K_PROFILE,
     ISOLATED_10K_TITLE,
 };
-pub use session::{ChatRouteState, ChatSession};
+pub use session::{ChatRouteState, ChatSession, LastExport};
 pub use shell_hit::{
     chat_origin_x, hit_test, is_compact, next_sort, panel_css_width, sidebar_occupied_css,
     ShellAction, ShellHit, PANEL_WIDTH_DEFAULT, PANEL_WIDTH_MAX, PANEL_WIDTH_MIN, RAIL_PANELS,

@@ -45,6 +45,20 @@ const WALLPAPER_ASSET_ID: &str = "neota-wallpaper";
 /// Auto-dismiss delay for the Phase C status toast.
 const TOAST_MS: std::time::Duration = std::time::Duration::from_millis(3500);
 
+/// Write one decoded chat-export document (`chats.export` host sink).
+/// Returns the path the file landed at.
+fn write_export_file(
+    export: &neotavern_presentation_chat::LastExport,
+) -> std::io::Result<String> {
+    let dir = std::env::var_os("NEOTA_EXPORT_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default().join("exports"));
+    std::fs::create_dir_all(&dir)?;
+    let path = dir.join(&export.filename);
+    std::fs::write(&path, &export.bytes)?;
+    Ok(path.to_string_lossy().into_owned())
+}
+
 /// Text field currently receiving keyboard input (bin-local focus; the shared
 /// view model already owns the strings via `set_composer_text` /
 /// `set_character_search`).
@@ -765,7 +779,28 @@ impl App {
         }
         if let ShellHit::Action(action) = pending.hit {
             eprintln!("[neocompositor-desktop] tap -> {action:?}");
+            let export_id = match &action {
+                ShellAction::ExportChat(id) => Some(id.clone()),
+                _ => None,
+            };
             self.session.apply_shell_action(action);
+            // Host-side file sink for `chats.export` (React downloads to the
+            // browser; the desktop host writes under exports/, overridable
+            // via NEOTA_EXPORT_DIR).
+            if export_id.is_some() {
+                if let Some(export) = self.session.take_last_export() {
+                    match write_export_file(&export) {
+                        Ok(path) => {
+                            eprintln!("[neocompositor-desktop] export written: {path}");
+                            self.session.note_export_path(&path);
+                        }
+                        Err(err) => {
+                            eprintln!("[neocompositor-desktop] export write failed: {err}");
+                        }
+                    }
+                    self.dirty = true;
+                }
+            }
             self.dirty = true;
             self.window.as_ref().map(|w| w.request_redraw());
         }

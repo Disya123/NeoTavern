@@ -19,7 +19,7 @@ use contracts_generated::generated::{
     MessageRevisionDto, RequestUpdateMessage, RequestMessageRevisionsList,
     ResultMessageRevisionList,
     RequestCreateChatSnapshot, RequestSnapshotsList, SnapshotOrigin,
-    ResultChatSnapshot, ResultSnapshotsList,
+    ResultChatSnapshot, ResultSnapshotsList, ResultChatsExport,
 };
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -1292,6 +1292,24 @@ impl ProductWire for FakeWire {
                     .cloned()
                     .collect();
                 let result = ResultMessageRevisionList { items };
+                self.wrap_call(operation_id, to_value(&result))
+            }
+            "chats.export" => {
+                let chat_id = payload_str(&payload, "chatId")?;
+                let chat = self.require_chat(&chat_id)?.clone();
+                // Kernel export document shape (kind-tagged JSON envelope).
+                let doc = json!({
+                    "kind": "neotavern-chat-export",
+                    "version": 1,
+                    "chat": chat,
+                });
+                let result = ResultChatsExport {
+                    filename: format!("chat-{chat_id}.json"),
+                    content_type: "application/json".into(),
+                    content_base64: base64::engine::general_purpose::STANDARD
+                        .encode(doc.to_string().as_bytes()),
+                    warnings: Vec::new(),
+                };
                 self.wrap_call(operation_id, to_value(&result))
             }
             "chats.snapshots.create" => {
