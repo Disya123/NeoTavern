@@ -1327,6 +1327,147 @@ fn duplicate_character_creates_a_named_copy() {
 }
 
 #[test]
+fn character_editor_name_description_tags_over_product_wire() {
+    use neotavern_presentation_chat::ShellAction;
+    use neotavern_presentation_m0_d2::inspect_slot_skeleton;
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("characters".into()));
+    session.select_character(neotavern_presentation_chat::DEMO_CHARACTER_ID);
+    session.apply_shell_action(ShellAction::SetTab("edit".into()));
+    let draft = session
+        .shell_view()
+        .selected_draft
+        .clone()
+        .expect("hazel draft");
+    assert_eq!(draft.name, "Hazel");
+    assert!(draft.tags.iter().any(|tag| tag == "sharp"));
+    assert_eq!(draft.tags.len(), 5);
+
+    let before = session
+        .issued_commands()
+        .iter()
+        .filter(|op| *op == "characters.update")
+        .count();
+    session.set_tag_input("oc");
+    session.apply_shell_action(ShellAction::AddCharacterTag);
+    let after_add = session
+        .issued_commands()
+        .iter()
+        .filter(|op| *op == "characters.update")
+        .count();
+    assert!(after_add > before, "add tag persists tags");
+    let draft = session
+        .shell_view()
+        .selected_draft
+        .clone()
+        .expect("draft after add");
+    assert!(draft.tags.iter().any(|tag| tag == "oc"));
+    assert!(session.shell_view().tag_input.is_empty());
+
+    session.set_tag_input("");
+    session.apply_shell_action(ShellAction::AddCharacterTag);
+    assert_eq!(
+        session
+            .issued_commands()
+            .iter()
+            .filter(|op| *op == "characters.update")
+            .count(),
+        after_add,
+        "empty tag is a no-op"
+    );
+
+    session.set_tag_input("SHARP");
+    session.apply_shell_action(ShellAction::AddCharacterTag);
+    assert_eq!(
+        session
+            .issued_commands()
+            .iter()
+            .filter(|op| *op == "characters.update")
+            .count(),
+        after_add,
+        "duplicate tags are case-insensitive no-ops"
+    );
+
+    session.apply_shell_action(ShellAction::RemoveCharacterTag("oc".into()));
+    let draft = session
+        .shell_view()
+        .selected_draft
+        .clone()
+        .expect("draft after remove");
+    assert!(!draft.tags.iter().any(|tag| tag == "oc"));
+    session.apply_shell_action(ShellAction::RemoveCharacterTag("no-such-tag".into()));
+
+    session.set_character_name_draft("Hazel Wren");
+    session.set_character_description_draft("A tinkerer with a stubborn streak.");
+    session.apply_shell_action(ShellAction::CharacterSaveMeta);
+    let shell = session.shell_view();
+    let card = shell
+        .characters
+        .iter()
+        .find(|item| item.id == neotavern_presentation_chat::DEMO_CHARACTER_ID)
+        .expect("card");
+    assert_eq!(card.name, "Hazel Wren");
+    assert_eq!(card.description, "A tinkerer with a stubborn streak.");
+    assert_eq!(shell.status_message.as_deref(), Some("Saved Hazel Wren."));
+
+    let updates = session
+        .issued_commands()
+        .iter()
+        .filter(|op| *op == "characters.update")
+        .count();
+    session.apply_shell_action(ShellAction::CharacterSaveMeta);
+    assert_eq!(
+        session
+            .issued_commands()
+            .iter()
+            .filter(|op| *op == "characters.update")
+            .count(),
+        updates,
+        "no-op save skips the wire"
+    );
+    assert_eq!(
+        session.shell_view().status_message.as_deref(),
+        Some("No changes.")
+    );
+
+    session.set_character_name_draft("");
+    session.apply_shell_action(ShellAction::CharacterSaveMeta);
+    let shell = session.shell_view();
+    let card = shell
+        .characters
+        .iter()
+        .find(|item| item.id == neotavern_presentation_chat::DEMO_CHARACTER_ID)
+        .expect("card");
+    assert_eq!(card.name, "Hazel Wren", "empty name keeps the stored one");
+
+    session.set_surface_size(1100, 760, 1.0);
+    neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
+    let skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
+        .expect("slot skeleton");
+    assert!(
+        skeleton.has_identity("character-name-input"),
+        "missing character-name-input; identities={:?}",
+        skeleton.identities()
+    );
+    assert!(
+        skeleton.has_identity("character-save"),
+        "missing character-save; identities={:?}",
+        skeleton.identities()
+    );
+    assert!(
+        skeleton.has_identity("character-tag-input"),
+        "missing character-tag-input; identities={:?}",
+        skeleton.identities()
+    );
+    assert!(
+        skeleton.has_identity("character-tag-add"),
+        "missing character-tag-add; identities={:?}",
+        skeleton.identities()
+    );
+}
+
+#[test]
 fn header_search_counts_matches_without_filtering_rows() {
     let (mut session, _) = start_flagged_session(
         Some("1"),
@@ -1544,6 +1685,1092 @@ fn chat_template_editor_native_custom_over_product_wire() {
 
     session.apply_shell_action(ShellAction::CyclePromptMode);
     assert_eq!(session.shell_view().prompt_template_mode, "text");
+}
+
+#[test]
+fn custom_instruct_fields_edit_and_save_over_product_wire() {
+    use neotavern_presentation_chat::ShellAction;
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("providers".into()));
+    session.apply_shell_action(ShellAction::SetTab("advanced".into()));
+    session.apply_shell_action(ShellAction::CycleInstructSelection);
+    let shell = session.shell_view();
+    assert_eq!(shell.instruct_selection, "custom");
+    assert!(
+        shell.instruct_system.contains("{{{content}}}"),
+        "custom seeds the ChatML system template"
+    );
+    assert_eq!(shell.instruct_stop_strings, "<|im_end|>");
+
+    session.set_instruct_role("system", "<SYS>{{{content}}}</SYS>\n");
+    session.set_instruct_role("stopStrings", "<STOP>\n<END>");
+    assert_eq!(
+        session.shell_view().instruct_system,
+        "<SYS>{{{content}}}</SYS>\n"
+    );
+    assert_eq!(session.shell_view().instruct_stop_strings, "<STOP>\n<END>");
+    session.set_instruct_role("unknown", "nope");
+    assert_eq!(
+        session.shell_view().instruct_system,
+        "<SYS>{{{content}}}</SYS>\n",
+        "unknown role keys are ignored"
+    );
+
+    let before = session
+        .issued_commands()
+        .iter()
+        .filter(|op| *op == "settings.update")
+        .count();
+    session.apply_shell_action(ShellAction::SaveInstructTemplate);
+    let after = session
+        .issued_commands()
+        .iter()
+        .filter(|op| *op == "settings.update")
+        .count();
+    assert!(after > before, "save writes the edited instruct-format");
+    let shell = session.shell_view();
+    assert_eq!(shell.instruct_system, "<SYS>{{{content}}}</SYS>\n");
+    assert_eq!(shell.instruct_stop_strings, "<STOP>\n<END>");
+    assert!(shell.instruct_user.contains("<|im_start|>user"));
+}
+
+#[test]
+fn prompt_template_blocks_toggle_over_product_wire() {
+    use neotavern_presentation_chat::ShellAction;
+    use neotavern_presentation_m0_d2::inspect_slot_skeleton;
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("providers".into()));
+    session.apply_shell_action(ShellAction::SetTab("advanced".into()));
+    assert!(
+        session.shell_view().prompt_blocks.is_empty(),
+        "chat mode starts without a hydrated block list"
+    );
+
+    session.apply_shell_action(ShellAction::CyclePromptMode);
+    let shell = session.shell_view();
+    assert_eq!(shell.prompt_template_mode, "text");
+    assert_eq!(shell.prompt_blocks.len(), 12);
+    assert_eq!(shell.prompt_blocks[0].id, "main-prompt");
+    assert_eq!(shell.prompt_blocks[0].name, "Main Prompt");
+    assert!(shell.prompt_blocks.iter().all(|block| block.enabled));
+    assert_eq!(
+        shell.prompt_blocks.last().map(|block| block.id.as_str()),
+        Some("post-history-instructions")
+    );
+    let memory = shell
+        .prompt_blocks
+        .iter()
+        .find(|block| block.id == "memory")
+        .expect("memory block");
+    assert_eq!(memory.name, "Memory");
+    assert!(!memory.custom);
+
+    let before = session
+        .issued_commands()
+        .iter()
+        .filter(|op| *op == "settings.update")
+        .count();
+    session.apply_shell_action(ShellAction::TogglePromptBlock("memory".into()));
+    let after = session
+        .issued_commands()
+        .iter()
+        .filter(|op| *op == "settings.update")
+        .count();
+    assert!(after > before, "toggle persists prompt-template");
+    let shell = session.shell_view();
+    let memory = shell
+        .prompt_blocks
+        .iter()
+        .find(|block| block.id == "memory")
+        .expect("memory block");
+    assert!(!memory.enabled);
+
+    session.apply_shell_action(ShellAction::TogglePromptBlock("no-such-block".into()));
+    assert_eq!(
+        session
+            .issued_commands()
+            .iter()
+            .filter(|op| *op == "settings.update")
+            .count(),
+        after,
+        "unknown block ids are a no-op"
+    );
+
+    session.apply_shell_action(ShellAction::SetTab("memories".into()));
+    session.apply_shell_action(ShellAction::SetTab("advanced".into()));
+    let shell = session.shell_view();
+    let memory = shell
+        .prompt_blocks
+        .iter()
+        .find(|block| block.id == "memory")
+        .expect("hydrated memory block");
+    assert!(
+        !memory.enabled,
+        "settings.get round-trip keeps the disabled flag"
+    );
+
+    session.set_surface_size(1100, 760, 1.0);
+    neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
+    let skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
+        .expect("slot skeleton");
+    assert!(
+        skeleton.has_identity("prompt-template-editor"),
+        "missing prompt-template-editor; identities={:?}",
+        skeleton.identities()
+    );
+    assert!(
+        skeleton.has_identity("prompt-block-list"),
+        "missing prompt-block-list; identities={:?}",
+        skeleton.identities()
+    );
+    assert!(
+        skeleton.has_identity("prompt-block"),
+        "missing prompt-block; identities={:?}",
+        skeleton.identities()
+    );
+}
+
+#[test]
+fn prompt_template_presets_over_product_wire() {
+    use neotavern_presentation_chat::ShellAction;
+    use neotavern_presentation_m0_d2::inspect_slot_skeleton;
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("providers".into()));
+    session.apply_shell_action(ShellAction::SetTab("advanced".into()));
+    session.apply_shell_action(ShellAction::CyclePromptMode);
+    let shell = session.shell_view();
+    assert_eq!(shell.prompt_template_mode, "text");
+    assert_eq!(shell.prompt_presets.len(), 1);
+    assert_eq!(shell.prompt_presets[0].name, "Roleplay");
+    assert!(shell.active_prompt_preset_id.is_none());
+    assert_eq!(shell.prompt_preset_active_name, None);
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .filter(|op| *op == "presets.list")
+            .count()
+            >= 2,
+        "generation list on panel open plus prompt-template list on Advanced"
+    );
+
+    session.apply_shell_action(ShellAction::CyclePromptPreset);
+    let shell = session.shell_view();
+    assert_eq!(shell.prompt_preset_active_name.as_deref(), Some("Roleplay"));
+    assert_eq!(shell.prompt_blocks.len(), 12);
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| *op == "settings.update"));
+
+    session.apply_shell_action(ShellAction::TogglePromptBlock("memory".into()));
+    let before_save = session
+        .issued_commands()
+        .iter()
+        .filter(|op| *op == "presets.update")
+        .count();
+    session.apply_shell_action(ShellAction::PromptPresetSave);
+    let after_save = session
+        .issued_commands()
+        .iter()
+        .filter(|op| *op == "presets.update")
+        .count();
+    assert!(
+        after_save > before_save,
+        "Save writes the active preset data"
+    );
+    let shell = session.shell_view();
+    let memory = shell
+        .prompt_blocks
+        .iter()
+        .find(|block| block.id == "memory")
+        .expect("memory");
+    assert!(!memory.enabled);
+
+    session.apply_shell_action(ShellAction::PromptPresetDuplicate);
+    assert!(session.shell_view().preset_name_dialog_open);
+    assert_eq!(session.shell_view().preset_name_draft, "Roleplay copy");
+    session.apply_shell_action(ShellAction::PresetNameSubmit);
+    let shell = session.shell_view();
+    assert!(!shell.preset_name_dialog_open);
+    assert_eq!(shell.prompt_presets.len(), 2);
+    assert_eq!(
+        shell.prompt_preset_active_name.as_deref(),
+        Some("Roleplay copy")
+    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| *op == "presets.create"));
+
+    session.apply_shell_action(ShellAction::PromptPresetRename);
+    session.set_preset_name_draft("Story");
+    session.apply_shell_action(ShellAction::PresetNameSubmit);
+    assert_eq!(
+        session.shell_view().prompt_preset_active_name.as_deref(),
+        Some("Story")
+    );
+
+    session.apply_shell_action(ShellAction::PromptPresetDelete);
+    assert!(session.shell_view().preset_delete_open);
+    session.apply_shell_action(ShellAction::PresetDeleteConfirm);
+    let shell = session.shell_view();
+    assert!(!shell.preset_delete_open);
+    assert!(shell.active_prompt_preset_id.is_none());
+    assert_eq!(shell.prompt_presets.len(), 1);
+    assert_eq!(shell.prompt_presets[0].name, "Roleplay");
+
+    session.apply_shell_action(ShellAction::PromptPresetSave);
+    assert!(session.shell_view().preset_name_dialog_open);
+    session.set_preset_name_draft("Custom");
+    session.apply_shell_action(ShellAction::PresetNameSubmit);
+    assert_eq!(
+        session.shell_view().prompt_preset_active_name.as_deref(),
+        Some("Custom")
+    );
+    assert_eq!(session.shell_view().prompt_presets.len(), 2);
+
+    session.apply_shell_action(ShellAction::CycleMotion);
+    assert_eq!(session.shell_view().ui_motion, "reduced");
+
+    session.set_surface_size(1100, 760, 1.0);
+    neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
+    let skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
+        .expect("slot skeleton");
+    assert!(
+        skeleton.has_identity("prompt-preset-cycle"),
+        "missing prompt-preset-cycle; identities={:?}",
+        skeleton.identities()
+    );
+    assert!(
+        skeleton.has_identity("prompt-preset-actions"),
+        "missing prompt-preset-actions; identities={:?}",
+        skeleton.identities()
+    );
+}
+
+#[test]
+fn prompt_template_custom_blocks_over_product_wire() {
+    use neotavern_presentation_chat::ShellAction;
+    use neotavern_presentation_m0_d2::inspect_slot_skeleton;
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("providers".into()));
+    session.apply_shell_action(ShellAction::SetTab("advanced".into()));
+    session.apply_shell_action(ShellAction::CyclePromptMode);
+    assert_eq!(session.shell_view().prompt_blocks.len(), 12);
+
+    let before = session
+        .issued_commands()
+        .iter()
+        .filter(|op| *op == "settings.update")
+        .count();
+    session.apply_shell_action(ShellAction::AddPromptBlock);
+    let after_add = session
+        .issued_commands()
+        .iter()
+        .filter(|op| *op == "settings.update")
+        .count();
+    assert!(after_add > before, "add persists prompt-template");
+    let shell = session.shell_view();
+    assert_eq!(shell.prompt_blocks.len(), 13);
+    let custom = shell
+        .prompt_blocks
+        .iter()
+        .find(|block| block.id == "custom-1")
+        .expect("custom-1");
+    assert!(custom.custom);
+    assert!(custom.enabled);
+    assert_eq!(custom.name, "New Prompt");
+    assert_eq!(
+        shell
+            .prompt_blocks
+            .iter()
+            .position(|block| block.id == "custom-1"),
+        Some(10),
+        "custom block sits before the terminal anchors"
+    );
+    assert_eq!(
+        shell.prompt_blocks[11].id, "chat-history",
+        "chat-history stays penultimate"
+    );
+    assert_eq!(shell.prompt_blocks[12].id, "post-history-instructions");
+    assert!(shell.prompt_block_edit_open);
+    assert_eq!(shell.prompt_block_name_draft, "New Prompt");
+    assert!(shell.prompt_block_content_editable);
+
+    session.set_prompt_block_name_draft("Greeting");
+    session.set_prompt_block_content_draft("Hello {{user}}.");
+    session.apply_shell_action(ShellAction::PromptBlockEditSave);
+    let shell = session.shell_view();
+    assert!(!shell.prompt_block_edit_open);
+    let custom = shell
+        .prompt_blocks
+        .iter()
+        .find(|block| block.id == "custom-1")
+        .expect("saved custom-1");
+    assert_eq!(custom.name, "Greeting");
+
+    session.apply_shell_action(ShellAction::EditPromptBlock("custom-1".into()));
+    assert_eq!(
+        session.shell_view().prompt_block_content_draft,
+        "Hello {{user}}."
+    );
+    session.apply_shell_action(ShellAction::PromptBlockEditCancel);
+    assert!(!session.shell_view().prompt_block_edit_open);
+
+    session.apply_shell_action(ShellAction::EditPromptBlock("main-prompt".into()));
+    assert!(session.shell_view().prompt_block_content_editable);
+    session.set_prompt_block_content_draft("Stay in character.");
+    session.apply_shell_action(ShellAction::PromptBlockEditSave);
+
+    session.apply_shell_action(ShellAction::EditPromptBlock(
+        "post-history-instructions".into(),
+    ));
+    assert!(session.shell_view().prompt_block_content_editable);
+    session.set_prompt_block_content_draft("Drive the scene.");
+    session.apply_shell_action(ShellAction::PromptBlockEditSave);
+    session.apply_shell_action(ShellAction::EditPromptBlock(
+        "post-history-instructions".into(),
+    ));
+    assert_eq!(
+        session.shell_view().prompt_block_content_draft,
+        "Drive the scene."
+    );
+    session.apply_shell_action(ShellAction::PromptBlockEditCancel);
+
+    session.apply_shell_action(ShellAction::EditPromptBlock("memory".into()));
+    assert!(!session.shell_view().prompt_block_content_editable);
+    session.apply_shell_action(ShellAction::PromptBlockEditCancel);
+
+    session.apply_shell_action(ShellAction::RemovePromptBlock("memory".into()));
+    assert_eq!(
+        session.shell_view().prompt_blocks.len(),
+        13,
+        "core ids cannot be removed"
+    );
+    session.apply_shell_action(ShellAction::RemovePromptBlock("no-such-block".into()));
+    assert_eq!(session.shell_view().prompt_blocks.len(), 13);
+
+    session.apply_shell_action(ShellAction::AddPromptBlock);
+    session.set_prompt_block_name_draft("");
+    session.apply_shell_action(ShellAction::PromptBlockEditSave);
+    assert!(
+        session.shell_view().prompt_block_edit_open,
+        "empty name is a no-op like React submit"
+    );
+    session.apply_shell_action(ShellAction::PromptBlockEditCancel);
+
+    session.apply_shell_action(ShellAction::RemovePromptBlock("custom-1".into()));
+    session.apply_shell_action(ShellAction::RemovePromptBlock("custom-2".into()));
+    assert_eq!(session.shell_view().prompt_blocks.len(), 12);
+    assert!(session
+        .shell_view()
+        .prompt_blocks
+        .iter()
+        .all(|block| !block.custom));
+
+    session.apply_shell_action(ShellAction::SetTab("memories".into()));
+    session.apply_shell_action(ShellAction::SetTab("advanced".into()));
+    session.apply_shell_action(ShellAction::AddPromptBlock);
+    session.apply_shell_action(ShellAction::SetTab("memories".into()));
+    session.apply_shell_action(ShellAction::SetTab("advanced".into()));
+    assert!(
+        session
+            .shell_view()
+            .prompt_blocks
+            .iter()
+            .any(|block| block.id == "custom-1"),
+        "settings.get round-trip keeps the custom block"
+    );
+
+    session.set_surface_size(1100, 760, 1.0);
+    neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
+    let skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
+        .expect("slot skeleton");
+    assert!(
+        skeleton.has_identity("prompt-block-add"),
+        "missing prompt-block-add; identities={:?}",
+        skeleton.identities()
+    );
+    assert!(
+        skeleton.has_identity("prompt-block-editor"),
+        "missing prompt-block-editor; identities={:?}",
+        skeleton.identities()
+    );
+    assert!(
+        skeleton.has_identity("prompt-block-name-input"),
+        "missing prompt-block-name-input; identities={:?}",
+        skeleton.identities()
+    );
+}
+
+#[test]
+fn prompt_template_reorder_blocks_over_product_wire() {
+    use neotavern_presentation_chat::{hit_test, ShellAction, ShellHit};
+    use neotavern_presentation_m0_d2::inspect_slot_skeleton;
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("providers".into()));
+    session.apply_shell_action(ShellAction::SetTab("advanced".into()));
+    session.apply_shell_action(ShellAction::CyclePromptMode);
+    session.apply_shell_action(ShellAction::AddPromptBlock);
+    session.set_prompt_block_name_draft("Greeting");
+    session.apply_shell_action(ShellAction::PromptBlockEditSave);
+
+    let shell = session.shell_view();
+    let custom = shell
+        .prompt_blocks
+        .iter()
+        .find(|block| block.id == "custom-1")
+        .expect("custom-1");
+    assert_eq!(custom.name, "Greeting");
+    assert!(custom.can_move_up);
+    assert!(
+        !custom.can_move_down,
+        "custom sits immediately before the terminal anchors"
+    );
+    assert_eq!(
+        shell
+            .prompt_blocks
+            .iter()
+            .position(|block| block.id == "custom-1"),
+        Some(10)
+    );
+    let main = shell
+        .prompt_blocks
+        .iter()
+        .find(|block| block.id == "main-prompt")
+        .expect("main-prompt");
+    assert!(!main.can_move_up);
+    assert!(main.can_move_down);
+    let history = shell
+        .prompt_blocks
+        .iter()
+        .find(|block| block.id == "chat-history")
+        .expect("chat-history");
+    assert!(!history.can_move_up);
+    assert!(!history.can_move_down);
+
+    let before = session
+        .issued_commands()
+        .iter()
+        .filter(|op| *op == "settings.update")
+        .count();
+    session.apply_shell_action(ShellAction::MovePromptBlockUp("custom-1".into()));
+    let after_up = session
+        .issued_commands()
+        .iter()
+        .filter(|op| *op == "settings.update")
+        .count();
+    assert!(after_up > before, "move up persists prompt-template");
+    let shell = session.shell_view();
+    assert_eq!(
+        shell
+            .prompt_blocks
+            .iter()
+            .position(|block| block.id == "custom-1"),
+        Some(9)
+    );
+    assert_eq!(
+        shell.status_message.as_deref(),
+        Some("Greeting moved to position 10.")
+    );
+    let custom = shell
+        .prompt_blocks
+        .iter()
+        .find(|block| block.id == "custom-1")
+        .expect("custom-1 after up");
+    assert!(custom.can_move_up);
+    assert!(custom.can_move_down);
+
+    session.apply_shell_action(ShellAction::MovePromptBlockDown("custom-1".into()));
+    let after_down = session
+        .issued_commands()
+        .iter()
+        .filter(|op| *op == "settings.update")
+        .count();
+    assert!(after_down > after_up, "move down persists prompt-template");
+    let shell = session.shell_view();
+    assert_eq!(
+        shell
+            .prompt_blocks
+            .iter()
+            .position(|block| block.id == "custom-1"),
+        Some(10)
+    );
+    assert_eq!(
+        shell.status_message.as_deref(),
+        Some("Greeting moved to position 11.")
+    );
+
+    session.apply_shell_action(ShellAction::MovePromptBlockDown("custom-1".into()));
+    session.apply_shell_action(ShellAction::MovePromptBlockUp("chat-history".into()));
+    session.apply_shell_action(ShellAction::MovePromptBlockDown("chat-history".into()));
+    session.apply_shell_action(ShellAction::MovePromptBlockUp("main-prompt".into()));
+    session.apply_shell_action(ShellAction::MovePromptBlockUp("no-such-block".into()));
+    assert_eq!(
+        session
+            .issued_commands()
+            .iter()
+            .filter(|op| *op == "settings.update")
+            .count(),
+        after_down,
+        "terminals, first-row up, and unknown ids are no-ops"
+    );
+    assert_eq!(
+        session
+            .shell_view()
+            .prompt_blocks
+            .iter()
+            .position(|block| block.id == "custom-1"),
+        Some(10)
+    );
+
+    session.set_surface_size(1100, 760, 1.0);
+    let shell = session.shell_view();
+    // First row: toggle 48 | name | Up 32 (disabled) | Down 32. Panel 60+380.
+    match hit_test(&shell, 368.0, 410.0) {
+        Some(ShellHit::Absorb) => {}
+        other => panic!("expected Absorb on disabled main-prompt Up, got {other:?}"),
+    }
+    match hit_test(&shell, 400.0, 410.0) {
+        Some(ShellHit::Action(ShellAction::MovePromptBlockDown(id))) => {
+            assert_eq!(id, "main-prompt");
+        }
+        other => panic!("expected MovePromptBlockDown main-prompt, got {other:?}"),
+    }
+
+    neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
+    let skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
+        .expect("slot skeleton");
+    assert!(
+        skeleton.has_identity("prompt-block-move-up"),
+        "missing prompt-block-move-up; identities={:?}",
+        skeleton.identities()
+    );
+    assert!(
+        skeleton.has_identity("prompt-block-move-down"),
+        "missing prompt-block-move-down; identities={:?}",
+        skeleton.identities()
+    );
+}
+
+#[test]
+fn prompt_template_block_placement_over_product_wire() {
+    use neotavern_presentation_chat::{hit_test, ShellAction, ShellHit};
+    use neotavern_presentation_m0_d2::inspect_slot_skeleton;
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    session.set_surface_size(1100, 760, 1.0);
+    session.apply_shell_action(ShellAction::SetPanel("providers".into()));
+    session.apply_shell_action(ShellAction::SetTab("advanced".into()));
+    session.apply_shell_action(ShellAction::CyclePromptMode);
+    session.apply_shell_action(ShellAction::AddPromptBlock);
+    session.set_prompt_block_name_draft("Greeting");
+    let shell = session.shell_view();
+    assert!(shell.prompt_block_edit_open);
+    assert_eq!(shell.prompt_block_injection_position, "relative");
+    assert_eq!(shell.prompt_block_depth_draft, "4");
+    assert_eq!(shell.prompt_block_order_draft, "100");
+
+    match hit_test(&shell, 770.0, 308.0) {
+        Some(ShellHit::Action(ShellAction::CyclePromptBlockPosition)) => {}
+        other => panic!("expected CyclePromptBlockPosition on Position, got {other:?}"),
+    }
+
+    let before_cycle = session
+        .issued_commands()
+        .iter()
+        .filter(|op| *op == "settings.update")
+        .count();
+    session.apply_shell_action(ShellAction::CyclePromptBlockPosition);
+    assert_eq!(
+        session.shell_view().prompt_block_injection_position,
+        "in-chat"
+    );
+    assert_eq!(
+        session
+            .issued_commands()
+            .iter()
+            .filter(|op| *op == "settings.update")
+            .count(),
+        before_cycle,
+        "position cycle is a local draft until Save"
+    );
+
+    session.set_prompt_block_depth_draft("2");
+    session.set_prompt_block_order_draft("50");
+    session.set_prompt_block_depth_draft("99999");
+    assert_eq!(
+        session.shell_view().prompt_block_depth_draft,
+        "9999",
+        "depth draft keeps at most 4 digits"
+    );
+    session.set_prompt_block_depth_draft("2");
+    session.apply_shell_action(ShellAction::PromptBlockEditSave);
+    let after_save = session
+        .issued_commands()
+        .iter()
+        .filter(|op| *op == "settings.update")
+        .count();
+    assert!(after_save > before_cycle, "Save persists placement");
+    let shell = session.shell_view();
+    let custom = shell
+        .prompt_blocks
+        .iter()
+        .find(|block| block.id == "custom-1")
+        .expect("custom-1");
+    assert!(custom.injection_in_chat);
+    assert_eq!(custom.injection_depth, 2);
+
+    session.apply_shell_action(ShellAction::CyclePromptBlockPosition);
+    assert!(
+        !session.shell_view().prompt_block_edit_open,
+        "cycle is a no-op when the editor is closed"
+    );
+
+    session.apply_shell_action(ShellAction::EditPromptBlock("custom-1".into()));
+    let shell = session.shell_view();
+    assert_eq!(shell.prompt_block_injection_position, "in-chat");
+    assert_eq!(shell.prompt_block_depth_draft, "2");
+    assert_eq!(shell.prompt_block_order_draft, "50");
+
+    session.apply_shell_action(ShellAction::CyclePromptBlockPosition);
+    assert_eq!(
+        session.shell_view().prompt_block_injection_position,
+        "relative"
+    );
+    session.apply_shell_action(ShellAction::PromptBlockEditSave);
+    session.apply_shell_action(ShellAction::EditPromptBlock("custom-1".into()));
+    let shell = session.shell_view();
+    assert_eq!(shell.prompt_block_injection_position, "relative");
+    assert_eq!(shell.prompt_block_depth_draft, "2");
+    let custom = shell
+        .prompt_blocks
+        .iter()
+        .find(|block| block.id == "custom-1")
+        .expect("custom-1");
+    assert!(!custom.injection_in_chat);
+
+    session.apply_shell_action(ShellAction::CyclePromptBlockPosition);
+    neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
+    let skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
+        .expect("slot skeleton");
+    assert!(
+        skeleton.has_identity("prompt-block-position-cycle"),
+        "missing prompt-block-position-cycle; identities={:?}",
+        skeleton.identities()
+    );
+    assert!(
+        skeleton.has_identity("prompt-block-depth-input"),
+        "missing prompt-block-depth-input; identities={:?}",
+        skeleton.identities()
+    );
+    assert!(
+        skeleton.has_identity("prompt-block-order-input"),
+        "missing prompt-block-order-input; identities={:?}",
+        skeleton.identities()
+    );
+}
+
+#[test]
+fn prompt_template_block_role_over_product_wire() {
+    use neotavern_presentation_chat::{hit_test, ShellAction, ShellHit};
+    use neotavern_presentation_m0_d2::inspect_slot_skeleton;
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    session.set_surface_size(1100, 760, 1.0);
+    session.apply_shell_action(ShellAction::SetPanel("providers".into()));
+    session.apply_shell_action(ShellAction::SetTab("advanced".into()));
+    session.apply_shell_action(ShellAction::CyclePromptMode);
+    session.apply_shell_action(ShellAction::AddPromptBlock);
+    session.set_prompt_block_name_draft("Greeting");
+    let shell = session.shell_view();
+    assert_eq!(shell.prompt_block_role, "system");
+
+    match hit_test(&shell, 770.0, 264.0) {
+        Some(ShellHit::Action(ShellAction::CyclePromptBlockRole)) => {}
+        other => panic!("expected CyclePromptBlockRole on Role, got {other:?}"),
+    }
+
+    let before_cycle = session
+        .issued_commands()
+        .iter()
+        .filter(|op| *op == "settings.update")
+        .count();
+    session.apply_shell_action(ShellAction::CyclePromptBlockRole);
+    assert_eq!(session.shell_view().prompt_block_role, "user");
+    session.apply_shell_action(ShellAction::CyclePromptBlockRole);
+    assert_eq!(session.shell_view().prompt_block_role, "assistant");
+    session.apply_shell_action(ShellAction::CyclePromptBlockRole);
+    assert_eq!(session.shell_view().prompt_block_role, "system");
+    session.apply_shell_action(ShellAction::CyclePromptBlockRole);
+    assert_eq!(session.shell_view().prompt_block_role, "user");
+    assert_eq!(
+        session
+            .issued_commands()
+            .iter()
+            .filter(|op| *op == "settings.update")
+            .count(),
+        before_cycle,
+        "role cycle is a local draft until Save"
+    );
+
+    session.apply_shell_action(ShellAction::PromptBlockEditSave);
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .filter(|op| *op == "settings.update")
+            .count()
+            > before_cycle,
+        "Save persists role"
+    );
+
+    session.apply_shell_action(ShellAction::CyclePromptBlockRole);
+    assert!(
+        !session.shell_view().prompt_block_edit_open,
+        "cycle is a no-op when the editor is closed"
+    );
+
+    session.apply_shell_action(ShellAction::EditPromptBlock("custom-1".into()));
+    assert_eq!(session.shell_view().prompt_block_role, "user");
+    session.apply_shell_action(ShellAction::EditPromptBlock("main-prompt".into()));
+    assert_eq!(session.shell_view().prompt_block_role, "system");
+
+    neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
+    let skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
+        .expect("slot skeleton");
+    assert!(
+        skeleton.has_identity("prompt-block-role-cycle"),
+        "missing prompt-block-role-cycle; identities={:?}",
+        skeleton.identities()
+    );
+}
+
+#[test]
+fn prompt_template_block_triggers_over_product_wire() {
+    use neotavern_presentation_chat::{hit_test, ShellAction, ShellHit};
+    use neotavern_presentation_m0_d2::inspect_slot_skeleton;
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    session.set_surface_size(1100, 760, 1.0);
+    session.apply_shell_action(ShellAction::SetPanel("providers".into()));
+    session.apply_shell_action(ShellAction::SetTab("advanced".into()));
+    session.apply_shell_action(ShellAction::CyclePromptMode);
+    session.apply_shell_action(ShellAction::AddPromptBlock);
+    session.set_prompt_block_name_draft("Greeting");
+    let shell = session.shell_view();
+    assert_eq!(
+        shell.prompt_block_triggers,
+        vec![
+            "normal",
+            "continue",
+            "impersonate",
+            "swipe",
+            "regenerate",
+            "quiet"
+        ]
+    );
+
+    match hit_test(&shell, 895.0, 396.0) {
+        Some(ShellHit::Action(ShellAction::TogglePromptBlockTrigger(id))) => {
+            assert_eq!(id, "quiet");
+        }
+        other => panic!("expected TogglePromptBlockTrigger quiet, got {other:?}"),
+    }
+
+    let before_toggle = session
+        .issued_commands()
+        .iter()
+        .filter(|op| *op == "settings.update")
+        .count();
+    session.apply_shell_action(ShellAction::TogglePromptBlockTrigger("quiet".into()));
+    assert_eq!(
+        session.shell_view().prompt_block_triggers,
+        vec!["normal", "continue", "impersonate", "swipe", "regenerate"]
+    );
+    assert_eq!(
+        session
+            .issued_commands()
+            .iter()
+            .filter(|op| *op == "settings.update")
+            .count(),
+        before_toggle,
+        "trigger toggle is a local draft until Save"
+    );
+
+    session.apply_shell_action(ShellAction::PromptBlockEditSave);
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .filter(|op| *op == "settings.update")
+            .count()
+            > before_toggle,
+        "Save persists triggers"
+    );
+
+    session.apply_shell_action(ShellAction::TogglePromptBlockTrigger("quiet".into()));
+    assert!(
+        !session.shell_view().prompt_block_edit_open,
+        "toggle is a no-op when the editor is closed"
+    );
+
+    session.apply_shell_action(ShellAction::EditPromptBlock("custom-1".into()));
+    assert_eq!(
+        session.shell_view().prompt_block_triggers,
+        vec!["normal", "continue", "impersonate", "swipe", "regenerate"]
+    );
+
+    for id in ["normal", "continue", "impersonate", "swipe"] {
+        session.apply_shell_action(ShellAction::TogglePromptBlockTrigger(id.into()));
+    }
+    assert_eq!(
+        session.shell_view().prompt_block_triggers,
+        vec!["regenerate"]
+    );
+    session.apply_shell_action(ShellAction::TogglePromptBlockTrigger("regenerate".into()));
+    assert_eq!(
+        session.shell_view().prompt_block_triggers,
+        vec![
+            "normal",
+            "continue",
+            "impersonate",
+            "swipe",
+            "regenerate",
+            "quiet"
+        ],
+        "clearing the last chip restores every kind, like React"
+    );
+    session.apply_shell_action(ShellAction::TogglePromptBlockTrigger("bogus".into()));
+    assert_eq!(
+        session.shell_view().prompt_block_triggers.len(),
+        6,
+        "unknown trigger ids are a no-op"
+    );
+
+    session.apply_shell_action(ShellAction::PromptBlockEditSave);
+    session.apply_shell_action(ShellAction::EditPromptBlock("custom-1".into()));
+    assert_eq!(session.shell_view().prompt_block_triggers.len(), 6);
+
+    session.apply_shell_action(ShellAction::EditPromptBlock("memory".into()));
+    assert_eq!(
+        session.shell_view().prompt_block_triggers.len(),
+        6,
+        "omitted host-block triggers hydrate as every kind"
+    );
+
+    neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
+    let skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
+        .expect("slot skeleton");
+    assert!(
+        skeleton.has_identity("prompt-block-trigger"),
+        "missing prompt-block-trigger; identities={:?}",
+        skeleton.identities()
+    );
+}
+
+#[test]
+fn prompt_template_block_forbid_overrides_over_product_wire() {
+    use neotavern_presentation_chat::{hit_test, ShellAction, ShellHit};
+    use neotavern_presentation_m0_d2::inspect_slot_skeleton;
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    session.set_surface_size(1100, 760, 1.0);
+    session.apply_shell_action(ShellAction::SetPanel("providers".into()));
+    session.apply_shell_action(ShellAction::SetTab("advanced".into()));
+    session.apply_shell_action(ShellAction::CyclePromptMode);
+    session.apply_shell_action(ShellAction::AddPromptBlock);
+    session.set_prompt_block_name_draft("Greeting");
+    let shell = session.shell_view();
+    assert!(shell.prompt_block_content_editable);
+    assert_eq!(shell.prompt_block_role, "system");
+    assert!(!shell.prompt_block_forbid_overrides);
+
+    match hit_test(&shell, 770.0, 440.0) {
+        Some(ShellHit::Action(ShellAction::TogglePromptBlockForbidOverrides)) => {}
+        other => panic!("expected TogglePromptBlockForbidOverrides, got {other:?}"),
+    }
+
+    let before_toggle = session
+        .issued_commands()
+        .iter()
+        .filter(|op| *op == "settings.update")
+        .count();
+    session.apply_shell_action(ShellAction::TogglePromptBlockForbidOverrides);
+    assert!(session.shell_view().prompt_block_forbid_overrides);
+    assert_eq!(
+        session
+            .issued_commands()
+            .iter()
+            .filter(|op| *op == "settings.update")
+            .count(),
+        before_toggle,
+        "forbidOverrides toggle is a local draft until Save"
+    );
+
+    session.apply_shell_action(ShellAction::PromptBlockEditSave);
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .filter(|op| *op == "settings.update")
+            .count()
+            > before_toggle,
+        "Save persists forbidOverrides"
+    );
+
+    session.apply_shell_action(ShellAction::TogglePromptBlockForbidOverrides);
+    assert!(
+        !session.shell_view().prompt_block_edit_open,
+        "toggle is a no-op when the editor is closed"
+    );
+
+    session.apply_shell_action(ShellAction::EditPromptBlock("custom-1".into()));
+    assert!(session.shell_view().prompt_block_forbid_overrides);
+
+    session.apply_shell_action(ShellAction::CyclePromptBlockRole);
+    assert_eq!(session.shell_view().prompt_block_role, "user");
+    match hit_test(&session.shell_view(), 770.0, 440.0) {
+        Some(ShellHit::Absorb) => {}
+        other => panic!("expected Absorb when role is user, got {other:?}"),
+    }
+    session.apply_shell_action(ShellAction::TogglePromptBlockForbidOverrides);
+    assert!(
+        session.shell_view().prompt_block_forbid_overrides,
+        "toggle is a no-op when role is not system"
+    );
+    session.apply_shell_action(ShellAction::CyclePromptBlockRole);
+    session.apply_shell_action(ShellAction::CyclePromptBlockRole);
+    assert_eq!(session.shell_view().prompt_block_role, "system");
+    assert!(session.shell_view().prompt_block_forbid_overrides);
+
+    session.apply_shell_action(ShellAction::PromptBlockEditCancel);
+    session.apply_shell_action(ShellAction::EditPromptBlock("memory".into()));
+    assert!(!session.shell_view().prompt_block_content_editable);
+    session.apply_shell_action(ShellAction::TogglePromptBlockForbidOverrides);
+    assert!(
+        !session.shell_view().prompt_block_forbid_overrides,
+        "toggle is a no-op when content is not editable"
+    );
+
+    session.apply_shell_action(ShellAction::EditPromptBlock("custom-1".into()));
+    neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
+    let skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
+        .expect("slot skeleton");
+    assert!(
+        skeleton.has_identity("prompt-block-forbid-overrides"),
+        "missing prompt-block-forbid-overrides; identities={:?}",
+        skeleton.identities()
+    );
+}
+
+#[test]
+fn prompt_template_block_model_binding_over_product_wire() {
+    use neotavern_presentation_chat::{hit_test, ShellAction, ShellHit};
+    use neotavern_presentation_m0_d2::inspect_slot_skeleton;
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    session.set_surface_size(1100, 760, 1.0);
+    session.apply_shell_action(ShellAction::SetPanel("providers".into()));
+    session.apply_shell_action(ShellAction::SetTab("advanced".into()));
+    session.apply_shell_action(ShellAction::CyclePromptMode);
+    session.apply_shell_action(ShellAction::AddPromptBlock);
+    session.set_prompt_block_name_draft("Greeting");
+    let shell = session.shell_view();
+    assert!(shell.prompt_block_model_draft.is_empty());
+    assert!(shell.selected_provider_id.is_none());
+
+    session.set_prompt_block_model_draft("gpt-test");
+    assert!(
+        session.shell_view().prompt_block_model_draft.is_empty(),
+        "model draft is disabled without an active provider"
+    );
+
+    match hit_test(&shell, 910.0, 520.0) {
+        Some(ShellHit::Action(ShellAction::LoadPromptBlockModels)) => {}
+        other => panic!("expected LoadPromptBlockModels, got {other:?}"),
+    }
+    session.apply_shell_action(ShellAction::LoadPromptBlockModels);
+    assert!(
+        session.shell_view().error_message.is_none(),
+        "Load is a no-op without an active provider"
+    );
+
+    let provider_id = session.shell_view().provider_configs[0].id.clone();
+    session.apply_shell_action(ShellAction::SelectProvider(provider_id));
+    session.apply_shell_action(ShellAction::LoadPromptBlockModels);
+    assert_eq!(
+        session.shell_view().error_message.as_deref(),
+        Some("CAPABILITY_UNAVAILABLE")
+    );
+    assert!(
+        !session
+            .issued_commands()
+            .iter()
+            .any(|op| op.starts_with("providers.models")),
+        "no providers.models wire op exists"
+    );
+
+    let before_save = session
+        .issued_commands()
+        .iter()
+        .filter(|op| *op == "settings.update")
+        .count();
+    session.set_prompt_block_model_draft("gpt-test");
+    assert_eq!(session.shell_view().prompt_block_model_draft, "gpt-test");
+    session.set_prompt_block_model_draft(&"m".repeat(300));
+    assert_eq!(
+        session.shell_view().prompt_block_model_draft.len(),
+        256,
+        "model draft keeps at most 256 chars"
+    );
+    session.set_prompt_block_model_draft("gpt-test");
+    session.apply_shell_action(ShellAction::PromptBlockEditSave);
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .filter(|op| *op == "settings.update")
+            .count()
+            > before_save,
+        "Save persists model binding"
+    );
+
+    session.apply_shell_action(ShellAction::LoadPromptBlockModels);
+    assert!(
+        !session.shell_view().prompt_block_edit_open,
+        "Load is a no-op when the editor is closed"
+    );
+
+    session.apply_shell_action(ShellAction::EditPromptBlock("custom-1".into()));
+    assert_eq!(session.shell_view().prompt_block_model_draft, "gpt-test");
+    session.set_prompt_block_model_draft("");
+    session.apply_shell_action(ShellAction::PromptBlockEditSave);
+    session.apply_shell_action(ShellAction::EditPromptBlock("custom-1".into()));
+    assert!(
+        session.shell_view().prompt_block_model_draft.is_empty(),
+        "empty draft omits the model key, like React undefined"
+    );
+
+    neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
+    let skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
+        .expect("slot skeleton");
+    assert!(
+        skeleton.has_identity("prompt-block-model-input"),
+        "missing prompt-block-model-input; identities={:?}",
+        skeleton.identities()
+    );
+    assert!(
+        skeleton.has_identity("prompt-block-model-load"),
+        "missing prompt-block-model-load; identities={:?}",
+        skeleton.identities()
+    );
 }
 
 #[test]

@@ -380,6 +380,20 @@ avatar. Автоселект + pin + вкладка Edit, тост «Created {na
 вне native create-контракта (галерея, extra spec) не копируются. Тест
 `duplicate_character_creates_a_named_copy`.
 
+## Редактор персонажа (name / description / tags)
+
+Kernel `characters.update` принимает только `name`, `description`, `tags`,
+`avatarAssetId`, `profileId`. Native Edit-таб поднимает эти поля наверх
+(без скролла панели) и пишет их в провод: Save — изменённые name+description
+(`TextFocus::CharacterName/Description`, `data-part="character-name-input"` /
+`"character-description-input"`), пустое имя хранит текущее, no-op — «No
+changes.» без вызова. Теги — Add/Remove сразу (`character-tag-input` /
+`character-tag-add` / chip = remove), дубликаты case-insensitive, лимит 32 /
+64 символа. React автосейвит весь draft (600 ms), в том числе first message
+и greetings; native честно оставляет их на React-плоскости. Тост Save —
+`Saved {name}.` (`characters:saveSuccess`). Тест
+`character_editor_name_description_tags_over_product_wire`.
+
 ## Галерея персонажа (GalleryTab)
 
 У галереи нет Product Wire-операций: kernel-плоскость честно пуста (React
@@ -630,10 +644,51 @@ character-scoped к демо-персонажу) в demo(), пусто в defaul
 wire-операцию. Выбор native ↔ custom: native пишет `instruct-format` и
 `instruct-format-id` как `{ value: null }`; custom сначала локальный (как
 React `if (value === 'custom') return`), Save — объект ChatML-шаблона в
-`instruct-format`. Prompt mode chat ↔ text пишет `prompt-template.mode`;
-text-completion `PromptTemplateEditor` (блоки, пресеты, import) не портирован —
-честная заметка, mode всё равно уходит в Wire. Тест
-`chat_template_editor_native_custom_over_product_wire`.
+`instruct-format`. Поля custom-шаблона (system / user / assistant / tool /
+suffix / stopping strings) правятся локально, как React-textarea, и уходят
+на провод только по Save (`data-part="instruct-*-input"`, клавиатура
+`TextFocus::Instruct*`). Prompt mode chat ↔ text пишет `prompt-template.mode`.
+В text-режиме native показывает список блоков (`DEFAULT_PROMPT_TEMPLATE`,
+12 host-owned ids) и toggle `enabled` — сразу `settings.update`, без
+debounce React (250 ms). Пресеты `presets.list` kind `prompt-template`:
+цикл Unsaved ↔ сохранённые (как React `<select>`), Save обновляет
+активный `presets.update` или открывает диалог имени (`presets.create`),
+Rename / Duplicate / Delete через те же модалки, что и generation Config.
+Активный id — kebab `active-prompt-template-preset-id`. Custom-блоки:
+Add prompt (`custom-N`, детерминированный id без `uuid`) вставляет блок
+перед `chat-history` / `post-history-instructions` и открывает компактный
+редактор name+content (`data-component="prompt-block-editor"`,
+`TextFocus::PromptBlockName/Content`). Remove только на `data-kind=custom`.
+Save синкает `postHistoryInstructions`, если редактируется терминальный
+контентный блок. Up/Down на ряду (текст «Up»/«Down» — CaretUp нет в
+packed set) переставляют movable-блоки сразу через `settings.update`;
+терминалы и шаг вниз на якорь — no-op, как React `moveBlock`. Placement
+в редакторе: цикл Relative ↔ In-chat (локальный draft до Save), Depth и
+Order (`TextFocus::PromptBlockDepth/Order`, 0–9999) только при in-chat;
+ряд показывает `@ {depth}`. Role: цикл System → User → AI Assistant
+(локальный draft до Save). Triggers: шесть чипов Normal / Continue /
+Impersonate / Swipe / Regenerate / Quiet (локальный draft до Save;
+опущенный список = все виды, снятие последнего чипа возвращает полный
+набор). Forbid Overrides: Switch только при editable content и role
+System (локальный draft до Save). Model: свободный id (React `ModelMenu`,
+`TextFocus::PromptBlockModel`, max 256) и кнопка Load; без активного
+провайдера поле не правится, Load на kernel-плоскости честно даёт
+`CAPABILITY_UNAVAILABLE` (`providers.models.discovery`). Drag, import/export и
+token audit остаются на React. Кнопка Add стоит над списком (без
+скролла панели 12+ рядов уводили бы её за край). Motion
+`data-ui-motion=reduced` ещё и ставит `--st-motion-duration-*` на шелл
+(Blitz не матчит `:root[data-ui-motion]`). Тесты
+`chat_template_editor_native_custom_over_product_wire`,
+`custom_instruct_fields_edit_and_save_over_product_wire`,
+`prompt_template_blocks_toggle_over_product_wire`,
+`prompt_template_presets_over_product_wire`,
+`prompt_template_custom_blocks_over_product_wire`,
+`prompt_template_reorder_blocks_over_product_wire`,
+`prompt_template_block_placement_over_product_wire`,
+`prompt_template_block_role_over_product_wire`,
+`prompt_template_block_triggers_over_product_wire`,
+`prompt_template_block_forbid_overrides_over_product_wire`,
+`prompt_template_block_model_binding_over_product_wire`.
 
 ## AI Settings: управление пресетами
 

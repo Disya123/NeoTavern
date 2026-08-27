@@ -167,6 +167,45 @@ pub enum ShellAction {
     CyclePromptMode,
     CycleInstructSelection,
     SaveInstructTemplate,
+    /// React `PromptTemplateEditor.toggleBlock` — persist `enabled` via
+    /// `settings.update` (`prompt-template`).
+    TogglePromptBlock(String),
+    /// React `PromptTemplateEditor.addPrompt` / `removePrompt` /
+    /// `PromptBlockEditorDialog` (name + content + placement + role +
+    /// triggers + forbidOverrides + model) / `moveBlock`. Drag and
+    /// import stay on the React plane.
+    AddPromptBlock,
+    RemovePromptBlock(String),
+    EditPromptBlock(String),
+    PromptBlockEditCancel,
+    PromptBlockEditSave,
+    /// React `injectionPosition` select — local draft until Save.
+    CyclePromptBlockPosition,
+    /// React `role` select (`system` / `user` / `assistant`) — local draft
+    /// until Save. `tool` / `plugin` are not in the React authoring menu.
+    CyclePromptBlockRole,
+    /// React `toggleTrigger` chip — local draft until Save. Omitted list
+    /// means every kind; clearing the last chip restores the full set.
+    TogglePromptBlockTrigger(String),
+    /// React `forbidOverrides` Switch — local draft until Save. Visible
+    /// only when content is editable and role is `system`.
+    TogglePromptBlockForbidOverrides,
+    /// React `ModelMenu` Load models — kernel plane has no wire discovery
+    /// (`UnsupportedError('providers.models.discovery')`). No-op without an
+    /// active provider, matching React `loadModels`.
+    LoadPromptBlockModels,
+    /// React `moveBlock(index, index ± 1)` — persist order via
+    /// `settings.update`. Terminals and the last movable (next is a
+    /// terminal) are no-ops.
+    MovePromptBlockUp(String),
+    MovePromptBlockDown(String),
+    /// React `PromptTemplateEditor` preset toolbar (`presets.*` kind
+    /// `prompt-template`, `active-prompt-template-preset-id`).
+    CyclePromptPreset,
+    PromptPresetSave,
+    PromptPresetRename,
+    PromptPresetDuplicate,
+    PromptPresetDelete,
     /// Backgrounds panel upload button: the kernel plane has no wallpaper
     /// catalog, so React `useUploadBackground` rejects with
     /// `UnsupportedError('backgrounds.upload')` — the session mirrors that
@@ -241,6 +280,12 @@ pub enum ShellAction {
     /// Persona editor save (React `PersonasPanel` edit tab over
     /// `personas.update`; only changed fields cross the wire).
     PersonaSaveMeta,
+    /// Character editor kernel fields (`characters.update`: name /
+    /// description / tags). React autosaves the draft (600 ms); native
+    /// Save is explicit for name+description, tags persist on add/remove.
+    CharacterSaveMeta,
+    AddCharacterTag,
+    RemoveCharacterTag(String),
     /// Character-card import dialog (React hidden file input): path prompt
     /// staging `assets.put` → `imports.character.card`.
     ImportClose,
@@ -406,6 +451,47 @@ fn header_bottom(view: &ProductShellView) -> f32 {
     CONTROL_LG + chrome_top(view)
 }
 
+/// React `PromptTriggerIds` chips in `PromptBlockEditorDialog`. Two rows of
+/// three; omitted list hydrates as every kind in the session, not here.
+const PROMPT_BLOCK_TRIGGER_IDS: &[&str] = &[
+    "normal",
+    "continue",
+    "impersonate",
+    "swipe",
+    "regenerate",
+    "quiet",
+];
+
+fn prompt_block_trigger_hit(
+    x: f32,
+    y: f32,
+    x0: f32,
+    y0: f32,
+    dlg_w: f32,
+    in_chat: bool,
+) -> Option<ShellHit> {
+    let row0 = if in_chat { 264.0 } else { 204.0 };
+    let band_top = y0 + row0;
+    let band_h = 80.0;
+    if y < band_top || y >= band_top + band_h {
+        return None;
+    }
+    let gap = 8.0;
+    let chip_w = (dlg_w - 32.0 - 16.0) / 3.0;
+    for (i, id) in PROMPT_BLOCK_TRIGGER_IDS.iter().enumerate() {
+        let col = (i % 3) as f32;
+        let row = (i / 3) as f32;
+        let cx = x0 + 16.0 + col * (chip_w + gap);
+        let cy = band_top + row * 44.0;
+        if contains(x, y, cx, cy, cx + chip_w, cy + 36.0) {
+            return Some(ShellHit::Action(ShellAction::TogglePromptBlockTrigger(
+                (*id).to_string(),
+            )));
+        }
+    }
+    Some(ShellHit::Absorb)
+}
+
 fn dialog_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
     let (width, height) = css_size(view);
     let chat_x0 = chat_origin_x(view);
@@ -476,6 +562,74 @@ fn dialog_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
         }
         if contains(x, y, x0 + dlg_w * 0.5, actions_y, x0 + dlg_w, y0 + dlg_h) {
             return Some(ShellHit::Action(ShellAction::PresetNameSubmit));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    if view.prompt_block_edit_open {
+        let in_chat = view.prompt_block_injection_position == "in-chat";
+        let dlg_w = 400.0_f32.min(width - 32.0);
+        let dlg_h = if in_chat {
+            584.0_f32.min(height - 48.0)
+        } else {
+            500.0_f32.min(height - 48.0)
+        };
+        let x0 = chat_x0 + (width - chat_x0 - dlg_w).max(0.0) * 0.5;
+        let y0 = (height - dlg_h) * 0.5;
+        if !contains(x, y, x0, y0, x0 + dlg_w, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::PromptBlockEditCancel));
+        }
+        let name_top = y0 + 72.0;
+        if y >= name_top && y < name_top + 36.0 {
+            return Some(ShellHit::Absorb);
+        }
+        let role_top = y0 + 116.0;
+        if y >= role_top && y < role_top + 36.0 {
+            return Some(ShellHit::Action(ShellAction::CyclePromptBlockRole));
+        }
+        let position_top = y0 + 160.0;
+        if y >= position_top && y < position_top + 36.0 {
+            return Some(ShellHit::Action(ShellAction::CyclePromptBlockPosition));
+        }
+        if in_chat {
+            let extras_top = y0 + 204.0;
+            if y >= extras_top && y < extras_top + 52.0 {
+                return Some(ShellHit::Absorb);
+            }
+        }
+        if let Some(hit) = prompt_block_trigger_hit(x, y, x0, y0, dlg_w, in_chat) {
+            return Some(hit);
+        }
+        let content_top = if in_chat { y0 + 352.0 } else { y0 + 292.0 };
+        let role_system = !matches!(view.prompt_block_role.as_str(), "user" | "assistant");
+        let forbid_visible = view.prompt_block_content_editable && role_system;
+        if forbid_visible && y >= content_top && y < content_top + 36.0 {
+            return Some(ShellHit::Action(
+                ShellAction::TogglePromptBlockForbidOverrides,
+            ));
+        }
+        let field_top = if forbid_visible {
+            content_top + 36.0
+        } else {
+            content_top
+        };
+        let field_h = if forbid_visible { 36.0 } else { 72.0 };
+        if y >= field_top && y < field_top + field_h {
+            return Some(ShellHit::Absorb);
+        }
+        let model_top = if in_chat { y0 + 432.0 } else { y0 + 372.0 };
+        if y >= model_top && y < model_top + 36.0 {
+            let load_x0 = x0 + dlg_w - 16.0 - 96.0;
+            if x >= load_x0 && x < x0 + dlg_w - 16.0 {
+                return Some(ShellHit::Action(ShellAction::LoadPromptBlockModels));
+            }
+            return Some(ShellHit::Absorb);
+        }
+        let actions_y = y0 + dlg_h - 56.0;
+        if contains(x, y, x0, actions_y, x0 + dlg_w * 0.5, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::PromptBlockEditCancel));
+        }
+        if contains(x, y, x0 + dlg_w * 0.5, actions_y, x0 + dlg_w, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::PromptBlockEditSave));
         }
         return Some(ShellHit::Absorb);
     }
@@ -953,7 +1107,41 @@ fn editor_hit(
         }
         return Some(ShellHit::Absorb);
     }
-    let _ = view;
+    let pad = SPACE_LG;
+    let mut cursor = bar_bottom + SPACE_SM;
+    // Identity row (avatar + title).
+    cursor += 64.0 + SPACE_SM;
+    if y >= cursor && y < cursor + 56.0 {
+        return Some(ShellHit::Absorb);
+    }
+    cursor += 56.0 + SPACE_SM;
+    if y >= cursor && y < cursor + 88.0 {
+        return Some(ShellHit::Absorb);
+    }
+    cursor += 88.0 + SPACE_SM;
+    if y >= cursor && y < cursor + 36.0 && x >= panel_x + pad && x < panel_x + pad + 96.0 {
+        return Some(ShellHit::Action(ShellAction::CharacterSaveMeta));
+    }
+    cursor += 36.0 + SPACE_SM;
+    // Tags heading 20 + gap 8.
+    cursor += 20.0 + SPACE_SM;
+    if y >= cursor && y < cursor + 36.0 && x >= panel_x + pad && x < x1 - pad {
+        if x >= x1 - pad - 96.0 {
+            return Some(ShellHit::Action(ShellAction::AddCharacterTag));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    cursor += 36.0 + SPACE_SM;
+    if let Some(draft) = view.selected_draft.as_ref() {
+        for tag in draft.tags.iter() {
+            if y >= cursor && y < cursor + 28.0 && x >= panel_x + pad && x < x1 - pad {
+                return Some(ShellHit::Action(ShellAction::RemoveCharacterTag(
+                    tag.clone(),
+                )));
+            }
+            cursor += 28.0 + 4.0;
+        }
+    }
     Some(ShellHit::Absorb)
 }
 
@@ -1487,8 +1675,9 @@ fn general_hit(
     Some(ShellHit::Absorb)
 }
 
-/// React `AdvancedPromptSettings` body: mode switch, serialization cycle,
-/// optional Save. Shares the 4-tab band with API/Config/Memories.
+/// React `AdvancedPromptSettings` body: mode switch, then either Chat
+/// template (serialization + optional Save) or Prompt template (block
+/// enabled toggles). Shares the 4-tab band with API/Config/Memories.
 fn advanced_hit(
     view: &ProductShellView,
     x: f32,
@@ -1522,19 +1711,94 @@ fn advanced_hit(
     if y >= cursor && y < cursor + 40.0 {
         return Some(ShellHit::Action(ShellAction::CyclePromptMode));
     }
-    cursor += 40.0 + 8.0 + 20.0 + 8.0 + 16.0 + 8.0;
+    cursor += 40.0 + 8.0;
     if view.prompt_template_mode != "text" {
+        // Chat template heading 20 + hint 16.
+        cursor += 20.0 + 8.0 + 16.0 + 8.0;
         if y >= cursor && y < cursor + 36.0 && x >= panel_x + pad && x < x1 - pad {
             return Some(ShellHit::Action(ShellAction::CycleInstructSelection));
         }
         cursor += 36.0 + 8.0 + 16.0 + 8.0;
-        if view.instruct_selection == "custom"
-            && y >= cursor
-            && y < cursor + 36.0
-            && x >= panel_x + pad
-            && x < panel_x + pad + 140.0
-        {
-            return Some(ShellHit::Action(ShellAction::SaveInstructTemplate));
+        if view.instruct_selection == "custom" {
+            // Five role rows (56) + stopping-strings (72); `gap:8` between
+            // each sibling inside the template editor.
+            cursor += 5.0 * (56.0 + 8.0) + 72.0 + 8.0;
+            if y >= cursor && y < cursor + 36.0 && x >= panel_x + pad && x < panel_x + pad + 140.0 {
+                return Some(ShellHit::Action(ShellAction::SaveInstructTemplate));
+            }
+        }
+    } else {
+        // Title 20 + hint 32 + honesty 16 + preset cycle 36 + toolbar 36,
+        // then 36px block rows.
+        cursor += 20.0 + 8.0 + 32.0 + 8.0 + 16.0 + 8.0;
+        if y >= cursor && y < cursor + 36.0 && x >= panel_x + pad && x < x1 - pad {
+            return Some(ShellHit::Action(ShellAction::CyclePromptPreset));
+        }
+        cursor += 36.0 + 8.0;
+        if y >= cursor && y < cursor + 36.0 {
+            if x >= panel_x + pad && x < panel_x + pad + 96.0 {
+                return Some(ShellHit::Action(ShellAction::PromptPresetSave));
+            }
+            if x >= panel_x + pad + 104.0 && x < panel_x + pad + 200.0 {
+                return Some(ShellHit::Action(ShellAction::PromptPresetRename));
+            }
+            if x >= panel_x + pad + 208.0 && x < panel_x + pad + 304.0 {
+                return Some(ShellHit::Action(ShellAction::PromptPresetDuplicate));
+            }
+            if x >= x1 - pad - 96.0 && x < x1 - pad {
+                return Some(ShellHit::Action(ShellAction::PromptPresetDelete));
+            }
+            return Some(ShellHit::Absorb);
+        }
+        cursor += 36.0 + 8.0;
+        // Add sits above the list so it stays hittable without panel scroll
+        // (React puts the footer after 12+ rows).
+        if y >= cursor && y < cursor + 36.0 && x >= panel_x + pad && x < panel_x + pad + 140.0 {
+            return Some(ShellHit::Action(ShellAction::AddPromptBlock));
+        }
+        cursor += 36.0 + 8.0;
+        // Row: toggle 48 | name flex | Up 32 | Down 32 | [remove 36].
+        // Hit from the right so remove / move zones do not overlap Edit.
+        const MOVE: f32 = 32.0;
+        const REMOVE: f32 = 36.0;
+        for block in view.prompt_blocks.iter() {
+            if y >= cursor && y < cursor + 36.0 && x >= panel_x + pad && x < x1 - pad {
+                let mut edge = x1 - pad;
+                if block.custom {
+                    if x >= edge - REMOVE {
+                        return Some(ShellHit::Action(ShellAction::RemovePromptBlock(
+                            block.id.clone(),
+                        )));
+                    }
+                    edge -= REMOVE + SPACE_SM;
+                }
+                if x >= edge - MOVE && x < edge {
+                    if block.can_move_down {
+                        return Some(ShellHit::Action(ShellAction::MovePromptBlockDown(
+                            block.id.clone(),
+                        )));
+                    }
+                    return Some(ShellHit::Absorb);
+                }
+                edge -= MOVE + SPACE_SM;
+                if x >= edge - MOVE && x < edge {
+                    if block.can_move_up {
+                        return Some(ShellHit::Action(ShellAction::MovePromptBlockUp(
+                            block.id.clone(),
+                        )));
+                    }
+                    return Some(ShellHit::Absorb);
+                }
+                if x < panel_x + pad + 48.0 {
+                    return Some(ShellHit::Action(ShellAction::TogglePromptBlock(
+                        block.id.clone(),
+                    )));
+                }
+                return Some(ShellHit::Action(ShellAction::EditPromptBlock(
+                    block.id.clone(),
+                )));
+            }
+            cursor += 36.0 + 8.0;
         }
     }
     Some(ShellHit::Absorb)

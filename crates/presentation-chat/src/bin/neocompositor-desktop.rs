@@ -90,6 +90,35 @@ enum TextFocus {
     ProfileImportPath,
     /// Header message-search field (`part:header-search-input`).
     HeaderSearch,
+    /// Custom ChatML role templates (`part:instruct-*-input`).
+    InstructSystem,
+    InstructUser,
+    InstructAssistant,
+    InstructTool,
+    InstructSuffix,
+    InstructStops,
+    /// Compact prompt-block editor (`part:prompt-block-*-input`).
+    PromptBlockName,
+    PromptBlockContent,
+    PromptBlockDepth,
+    PromptBlockOrder,
+    PromptBlockModel,
+    /// Character editor kernel fields (`part:character-*-input`).
+    CharacterName,
+    CharacterDescription,
+    CharacterTag,
+}
+
+fn instruct_focus_role(focus: TextFocus) -> Option<&'static str> {
+    match focus {
+        TextFocus::InstructSystem => Some("system"),
+        TextFocus::InstructUser => Some("user"),
+        TextFocus::InstructAssistant => Some("assistant"),
+        TextFocus::InstructTool => Some("tool"),
+        TextFocus::InstructSuffix => Some("promptSuffix"),
+        TextFocus::InstructStops => Some("stopStrings"),
+        _ => None,
+    }
 }
 
 /// One scripted probe step, replayed in argument order so
@@ -501,6 +530,20 @@ impl App {
             if rects.covers(css_x, css_y, "part:create-name") {
                 focus = TextFocus::CreateName;
             }
+        } else if view.prompt_block_edit_open {
+            if rects.covers(css_x, css_y, "part:prompt-block-name-input") {
+                focus = TextFocus::PromptBlockName;
+            } else if rects.covers(css_x, css_y, "part:prompt-block-depth-input") {
+                focus = TextFocus::PromptBlockDepth;
+            } else if rects.covers(css_x, css_y, "part:prompt-block-order-input") {
+                focus = TextFocus::PromptBlockOrder;
+            } else if rects.covers(css_x, css_y, "part:prompt-block-content-input") {
+                focus = TextFocus::PromptBlockContent;
+            } else if rects.covers(css_x, css_y, "part:prompt-block-model-input")
+                && view.selected_provider_id.is_some()
+            {
+                focus = TextFocus::PromptBlockModel;
+            }
         } else if rects.covers(css_x, css_y, "slot:chat.composer")
             || rects.covers(css_x, css_y, "component:textarea")
         {
@@ -537,6 +580,24 @@ impl App {
             focus = TextFocus::ProfileImportPath;
         } else if rects.covers(css_x, css_y, "part:header-search-input") {
             focus = TextFocus::HeaderSearch;
+        } else if rects.covers(css_x, css_y, "part:instruct-system-input") {
+            focus = TextFocus::InstructSystem;
+        } else if rects.covers(css_x, css_y, "part:instruct-user-input") {
+            focus = TextFocus::InstructUser;
+        } else if rects.covers(css_x, css_y, "part:instruct-assistant-input") {
+            focus = TextFocus::InstructAssistant;
+        } else if rects.covers(css_x, css_y, "part:instruct-tool-input") {
+            focus = TextFocus::InstructTool;
+        } else if rects.covers(css_x, css_y, "part:instruct-suffix-input") {
+            focus = TextFocus::InstructSuffix;
+        } else if rects.covers(css_x, css_y, "part:instruct-stops-input") {
+            focus = TextFocus::InstructStops;
+        } else if rects.covers(css_x, css_y, "part:character-name-input") {
+            focus = TextFocus::CharacterName;
+        } else if rects.covers(css_x, css_y, "part:character-description-input") {
+            focus = TextFocus::CharacterDescription;
+        } else if rects.covers(css_x, css_y, "part:character-tag-input") {
+            focus = TextFocus::CharacterTag;
         }
         self.focus = focus;
     }
@@ -885,6 +946,19 @@ impl App {
         }
     }
 
+    fn instruct_field_text(&self, role: &str) -> String {
+        let shell = self.session.shell_view();
+        match role {
+            "system" => shell.instruct_system,
+            "user" => shell.instruct_user,
+            "assistant" => shell.instruct_assistant,
+            "tool" => shell.instruct_tool,
+            "promptSuffix" => shell.instruct_prompt_suffix,
+            "stopStrings" => shell.instruct_stop_strings,
+            _ => String::new(),
+        }
+    }
+
     /// Type one character into the focused text field (keyboard or `--type`).
     fn type_char(&mut self, ch: char) {
         match self.focus {
@@ -1004,6 +1078,78 @@ impl App {
                 self.session.set_header_search_query(&next);
                 eprintln!("[neocompositor-desktop] typed '{ch}' -> header_search=\"{next}\"");
             }
+            TextFocus::InstructSystem
+            | TextFocus::InstructUser
+            | TextFocus::InstructAssistant
+            | TextFocus::InstructTool
+            | TextFocus::InstructSuffix
+            | TextFocus::InstructStops => {
+                let role = instruct_focus_role(self.focus).expect("instruct focus");
+                let current = self.instruct_field_text(role);
+                let next = format!("{current}{ch}");
+                self.session.set_instruct_role(role, &next);
+                eprintln!("[neocompositor-desktop] typed '{ch}' -> instruct.{role}");
+            }
+            TextFocus::PromptBlockName => {
+                let current = self.session.shell_view().prompt_block_name_draft.clone();
+                let next = format!("{current}{ch}");
+                self.session.set_prompt_block_name_draft(&next);
+                eprintln!("[neocompositor-desktop] typed '{ch}' -> prompt_block_name=\"{next}\"");
+            }
+            TextFocus::PromptBlockContent => {
+                let current = self.session.shell_view().prompt_block_content_draft.clone();
+                let next = format!("{current}{ch}");
+                self.session.set_prompt_block_content_draft(&next);
+                eprintln!("[neocompositor-desktop] typed '{ch}' -> prompt_block_content+{ch}");
+            }
+            TextFocus::PromptBlockDepth => {
+                let current = self.session.shell_view().prompt_block_depth_draft.clone();
+                let next = format!("{current}{ch}");
+                self.session.set_prompt_block_depth_draft(&next);
+                eprintln!("[neocompositor-desktop] typed '{ch}' -> prompt_block_depth=\"{next}\"");
+            }
+            TextFocus::PromptBlockOrder => {
+                let current = self.session.shell_view().prompt_block_order_draft.clone();
+                let next = format!("{current}{ch}");
+                self.session.set_prompt_block_order_draft(&next);
+                eprintln!("[neocompositor-desktop] typed '{ch}' -> prompt_block_order=\"{next}\"");
+            }
+            TextFocus::PromptBlockModel => {
+                let current = self.session.shell_view().prompt_block_model_draft.clone();
+                let next = format!("{current}{ch}");
+                self.session.set_prompt_block_model_draft(&next);
+                eprintln!("[neocompositor-desktop] typed '{ch}' -> prompt_block_model=\"{next}\"");
+            }
+            TextFocus::CharacterName => {
+                let current = self
+                    .session
+                    .shell_view()
+                    .selected_draft
+                    .as_ref()
+                    .map(|draft| draft.name.clone())
+                    .unwrap_or_default();
+                let next = format!("{current}{ch}");
+                self.session.set_character_name_draft(&next);
+                eprintln!("[neocompositor-desktop] typed '{ch}' -> character_name=\"{next}\"");
+            }
+            TextFocus::CharacterDescription => {
+                let current = self
+                    .session
+                    .shell_view()
+                    .selected_draft
+                    .as_ref()
+                    .map(|draft| draft.description.clone())
+                    .unwrap_or_default();
+                let next = format!("{current}{ch}");
+                self.session.set_character_description_draft(&next);
+                eprintln!("[neocompositor-desktop] typed '{ch}' -> character_desc+{ch}");
+            }
+            TextFocus::CharacterTag => {
+                let current = self.session.shell_view().tag_input.clone();
+                let next = format!("{current}{ch}");
+                self.session.set_tag_input(&next);
+                eprintln!("[neocompositor-desktop] typed '{ch}' -> tag_input=\"{next}\"");
+            }
             TextFocus::None => return,
         }
         self.dirty = true;
@@ -1036,6 +1182,43 @@ impl App {
             TextFocus::CardPath => self.session.shell_view().card_path_draft.clone(),
             TextFocus::ProfileImportPath => self.session.shell_view().profile_import_path.clone(),
             TextFocus::HeaderSearch => self.session.view().header_search_query,
+            TextFocus::InstructSystem
+            | TextFocus::InstructUser
+            | TextFocus::InstructAssistant
+            | TextFocus::InstructTool
+            | TextFocus::InstructSuffix
+            | TextFocus::InstructStops => {
+                let role = instruct_focus_role(self.focus).expect("instruct focus");
+                self.instruct_field_text(role)
+            }
+            TextFocus::PromptBlockName => self.session.shell_view().prompt_block_name_draft.clone(),
+            TextFocus::PromptBlockContent => {
+                self.session.shell_view().prompt_block_content_draft.clone()
+            }
+            TextFocus::PromptBlockDepth => {
+                self.session.shell_view().prompt_block_depth_draft.clone()
+            }
+            TextFocus::PromptBlockOrder => {
+                self.session.shell_view().prompt_block_order_draft.clone()
+            }
+            TextFocus::PromptBlockModel => {
+                self.session.shell_view().prompt_block_model_draft.clone()
+            }
+            TextFocus::CharacterName => self
+                .session
+                .shell_view()
+                .selected_draft
+                .as_ref()
+                .map(|draft| draft.name.clone())
+                .unwrap_or_default(),
+            TextFocus::CharacterDescription => self
+                .session
+                .shell_view()
+                .selected_draft
+                .as_ref()
+                .map(|draft| draft.description.clone())
+                .unwrap_or_default(),
+            TextFocus::CharacterTag => self.session.shell_view().tag_input.clone(),
             TextFocus::None => return,
         };
         let next: String = current
@@ -1064,6 +1247,23 @@ impl App {
             TextFocus::CardPath => self.session.set_card_path_draft(&next),
             TextFocus::ProfileImportPath => self.session.set_profile_import_path(&next),
             TextFocus::HeaderSearch => self.session.set_header_search_query(&next),
+            TextFocus::InstructSystem
+            | TextFocus::InstructUser
+            | TextFocus::InstructAssistant
+            | TextFocus::InstructTool
+            | TextFocus::InstructSuffix
+            | TextFocus::InstructStops => {
+                let role = instruct_focus_role(self.focus).expect("instruct focus");
+                self.session.set_instruct_role(role, &next);
+            }
+            TextFocus::PromptBlockName => self.session.set_prompt_block_name_draft(&next),
+            TextFocus::PromptBlockContent => self.session.set_prompt_block_content_draft(&next),
+            TextFocus::PromptBlockDepth => self.session.set_prompt_block_depth_draft(&next),
+            TextFocus::PromptBlockOrder => self.session.set_prompt_block_order_draft(&next),
+            TextFocus::PromptBlockModel => self.session.set_prompt_block_model_draft(&next),
+            TextFocus::CharacterName => self.session.set_character_name_draft(&next),
+            TextFocus::CharacterDescription => self.session.set_character_description_draft(&next),
+            TextFocus::CharacterTag => self.session.set_tag_input(&next),
             TextFocus::None => {}
         }
         self.dirty = true;

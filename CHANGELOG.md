@@ -56,6 +56,70 @@
   Тесты `general_settings_language_and_appearance_over_product_wire`,
   `chat_template_editor_native_custom_over_product_wire`.
 
+- **Нативный шелл: custom instruct fields.** Textarea-поля ChatML
+  (system/user/assistant/tool/suffix/stops) правятся локально и Save пишет
+  `settings.update`. Тест
+  `custom_instruct_fields_edit_and_save_over_product_wire`.
+
+- **Нативный шелл: prompt-template blocks.** AI Settings → Advanced, mode
+  `text`: список 12 host-owned блоков (`DEFAULT_PROMPT_TEMPLATE`) и toggle
+  `enabled` через `settings.update`. Тест
+  `prompt_template_blocks_toggle_over_product_wire`.
+
+- **Нативный шелл: prompt-template presets.** Выбор/Save/Rename/Duplicate/
+  Delete через `presets.*` kind `prompt-template` и
+  `active-prompt-template-preset-id`. Motion `reduced` гасит
+  `--st-motion-duration-*` на шелле (карточки пресетов и toggle блоков
+  используют эти токены). Тест `prompt_template_presets_over_product_wire`.
+
+- **Нативный шелл: custom prompt blocks.** Add prompt создаёт `custom-N`
+  перед терминальными якорями; Remove только для custom; компактный
+  редактор name+content (`PromptBlockEditorDialog`) пишет
+  `settings.update`. Role/placement/triggers и import/export остаются
+  на React. Тест `prompt_template_custom_blocks_over_product_wire`.
+
+- **Нативный шелл: character editor (name / description / tags).**
+  `characters.update` принимает только эти поля: Save пишет изменённые
+  name+description (пустое имя хранит старое, no-op без wire-вызова);
+  теги Add/Remove сразу. First message / greetings / creator notes
+  остаются на React. Тест
+  `character_editor_name_description_tags_over_product_wire`.
+
+- **Нативный шелл: reorder prompt blocks.** Up/Down на ряду (текст, без
+  CaretUp в packed set) двигают movable-блок через `settings.update`;
+  терминалы `chat-history` / `post-history-instructions` и шаг вниз на
+  якорь — no-op. Drag, import/export и token audit остаются на React.
+  Тест `prompt_template_reorder_blocks_over_product_wire`.
+
+- **Нативный шелл: prompt-block placement.** Компактный редактор циклит
+  Relative ↔ In-chat (локальный draft); Depth/Order (0–9999) через
+  `TextFocus` видны только в in-chat. Save пишет `injectionPosition` /
+  `injectionDepth` / `injectionOrder`. Triggers и model binding остаются
+  на React. Тест `prompt_template_block_placement_over_product_wire`.
+
+- **Нативный шелл: prompt-block role.** Цикл System → User → AI Assistant
+  (локальный draft до Save, как React `<select>`). `tool` / `plugin` не
+  в меню авторинга. Тест `prompt_template_block_role_over_product_wire`.
+
+- **Нативный шелл: prompt-block triggers.** Шесть чипов Normal / Continue /
+  Impersonate / Swipe / Regenerate / Quiet (локальный draft до Save).
+  Опущенный список = все виды; снятие последнего чипа возвращает полный
+  набор, как React `toggleTrigger`. Model binding остаётся на React.
+  Тест `prompt_template_block_triggers_over_product_wire`.
+
+- **Нативный шелл: prompt-block forbidOverrides.** Switch «Forbid Overrides»
+  (локальный draft до Save) только при editable content и role System —
+  как React. Смена роли на User скрывает Switch, значение draft
+  сохраняется. Тест
+  `prompt_template_block_forbid_overrides_over_product_wire`.
+
+- **Нативный шелл: prompt-block model binding.** Компактный ряд Model
+  (свободный id, как React `ModelMenu`) + Load. Пустое поле = Every model
+  (no binding). Без активного провайдера поле не правится. Load на
+  kernel-плоскости — `CAPABILITY_UNAVAILABLE`
+  (`providers.models.discovery`, без выдуманной wire-операции). Тест
+  `prompt_template_block_model_binding_over_product_wire`.
+
 - **Профили: импорт контейнера (profile.import).** Форма пути + политика
   дубликатов (Reject/Replace/Remap) в Settings → Profiles; статус со
   счётчиками inserted/updated/skipped и orphans; успех обновляет библиотеку.

@@ -57,9 +57,9 @@ use neotavern_presentation_dioxus_shell::{
     CharacterCardView, CharacterDraftView, ChatCardView, ContextUsageBreakdownV1,
     ContextUsageSummaryV1, LorebookCardView, LorebookEntryCardView, MemoryCardView,
     PersonaCardView, PluginCardView, PresetCardView, PresetValueRow, ProductChatView,
-    ProductChrome, ProductShellView, ProfileCardView, ProviderCardView, ProviderConfigCardView,
-    RevisionRow, RowKind, RunStepView, SafeAreaInsets, SnapshotItemView, ThemeCardView,
-    ToolCardView, VisibleRow, PRODUCT_PATH_VISIBLE,
+    ProductChrome, ProductShellView, ProfileCardView, PromptBlockView, ProviderCardView,
+    ProviderConfigCardView, RevisionRow, RowKind, RunStepView, SafeAreaInsets, SnapshotItemView,
+    ThemeCardView, ToolCardView, VisibleRow, PRODUCT_PATH_VISIBLE,
 };
 
 use serde::de::DeserializeOwned;
@@ -171,6 +171,8 @@ pub struct ChatRouteState {
     pub insets: SafeAreaInsets,
     /// Full draft for the selected character (Edit / Advanced / Gallery tabs).
     pub character_draft: Option<CharacterDraftView>,
+    /// Tag chip composer (React `EditTab` `tagInput`).
+    pub tag_input: String,
     /// Cached cover-cropped premultiplied thumbnails keyed by avatar asset id.
     pub avatar_thumbs: HashMap<String, crate::avatar::AvatarThumb>,
     pub(crate) avatar_order: VecDeque<String>,
@@ -330,6 +332,25 @@ pub struct ChatRouteState {
     /// provider choice per request lives in `generation.start`.
     pub active_provider_id: Option<String>,
     pub active_preset_id: Option<String>,
+    /// Prompt-template presets (`presets.list` kind `prompt-template`) and
+    /// the active id (`active-prompt-template-preset-id`).
+    pub prompt_presets: Vec<PresetDto>,
+    pub active_prompt_preset_id: Option<String>,
+    /// Which preset family the shared name/delete dialogs currently edit
+    /// (`generation` or `prompt-template`).
+    pub preset_dialog_kind: String,
+    /// Compact prompt-block editor (React `PromptBlockEditorDialog` name +
+    /// content + placement + role + triggers + forbidOverrides + model).
+    pub prompt_block_edit_id: Option<String>,
+    pub prompt_block_name_draft: String,
+    pub prompt_block_content_draft: String,
+    pub prompt_block_injection_position: String,
+    pub prompt_block_depth_draft: String,
+    pub prompt_block_order_draft: String,
+    pub prompt_block_role: String,
+    pub prompt_block_triggers: Vec<String>,
+    pub prompt_block_forbid_overrides: bool,
+    pub prompt_block_model_draft: String,
     /// Backup catalog (`backups.list`; React `SettingsPanel` DataTab). The
     /// kernel models no auto/manual split — every entry is user-initiated.
     pub backups: Vec<BackupDto>,
@@ -1303,7 +1324,7 @@ impl<W: ProductWire> ChatSession<W> {
                 "oldest".into()
             },
             expanded_greeting: None,
-            tag_input: String::new(),
+            tag_input: self.state.tag_input.clone(),
             personas: self.persona_cards(),
             selected_persona_id: self.state.selected_persona_id.clone(),
             persona_tab: self.state.persona_tab.clone(),
@@ -1447,6 +1468,30 @@ impl<W: ProductWire> ChatSession<W> {
             preset_name_draft: self.state.preset_name_draft.clone(),
             preset_form_error: self.state.preset_form_error.clone(),
             preset_delete_open: self.state.preset_delete_open,
+            preset_dialog_kind: if self.state.preset_dialog_kind.is_empty() {
+                "generation".into()
+            } else {
+                self.state.preset_dialog_kind.clone()
+            },
+            prompt_presets: self
+                .state
+                .prompt_presets
+                .iter()
+                .map(|item| PresetCardView {
+                    id: item.id.clone(),
+                    name: item.name.clone(),
+                    kind: item.kind.clone(),
+                })
+                .collect(),
+            active_prompt_preset_id: self.state.active_prompt_preset_id.clone(),
+            prompt_preset_active_name: self
+                .state
+                .prompt_presets
+                .iter()
+                .find(|item| {
+                    Some(item.id.as_str()) == self.state.active_prompt_preset_id.as_deref()
+                })
+                .map(|item| item.name.clone()),
             backups: self
                 .state
                 .backups
@@ -1621,6 +1666,28 @@ impl<W: ProductWire> ChatSession<W> {
                 self.state.instruct_selection.clone()
             },
             instruct_form_error: self.state.instruct_form_error.clone(),
+            prompt_blocks: prompt_block_views(&self.state.prompt_template),
+            prompt_block_edit_open: self.state.prompt_block_edit_id.is_some(),
+            prompt_block_name_draft: self.state.prompt_block_name_draft.clone(),
+            prompt_block_content_draft: self.state.prompt_block_content_draft.clone(),
+            prompt_block_content_editable: self
+                .state
+                .prompt_block_edit_id
+                .as_deref()
+                .is_some_and(prompt_block_content_editable),
+            prompt_block_injection_position: self.state.prompt_block_injection_position.clone(),
+            prompt_block_depth_draft: self.state.prompt_block_depth_draft.clone(),
+            prompt_block_order_draft: self.state.prompt_block_order_draft.clone(),
+            prompt_block_role: self.state.prompt_block_role.clone(),
+            prompt_block_triggers: self.state.prompt_block_triggers.clone(),
+            prompt_block_forbid_overrides: self.state.prompt_block_forbid_overrides,
+            prompt_block_model_draft: self.state.prompt_block_model_draft.clone(),
+            instruct_system: instruct_role_text(&self.state.instruct_format, "system"),
+            instruct_user: instruct_role_text(&self.state.instruct_format, "user"),
+            instruct_assistant: instruct_role_text(&self.state.instruct_format, "assistant"),
+            instruct_tool: instruct_role_text(&self.state.instruct_format, "tool"),
+            instruct_prompt_suffix: instruct_role_text(&self.state.instruct_format, "promptSuffix"),
+            instruct_stop_strings: instruct_stop_text(&self.state.instruct_format),
         }
     }
 
@@ -2501,6 +2568,7 @@ impl<W: ProductWire> ChatSession<W> {
                 self.load_chat_list();
                 self.load_lorebooks();
                 self.load_presets_list();
+                self.load_prompt_presets_list();
                 let orphans_note = if result.orphans.is_empty() {
                     String::new()
                 } else {
@@ -2898,6 +2966,7 @@ impl<W: ProductWire> ChatSession<W> {
                     // React `AdvancedPromptSettings` reads settings on mount.
                     if is_advanced {
                         self.load_settings();
+                        self.load_prompt_presets_list();
                     }
                     self.bump_scene();
                 }
@@ -3161,6 +3230,26 @@ impl<W: ProductWire> ChatSession<W> {
             ShellAction::CyclePromptMode => self.cycle_prompt_mode(),
             ShellAction::CycleInstructSelection => self.cycle_instruct_selection(),
             ShellAction::SaveInstructTemplate => self.save_instruct_template(),
+            ShellAction::TogglePromptBlock(id) => self.toggle_prompt_block(&id),
+            ShellAction::AddPromptBlock => self.add_prompt_block(),
+            ShellAction::RemovePromptBlock(id) => self.remove_prompt_block(&id),
+            ShellAction::MovePromptBlockUp(id) => self.move_prompt_block(&id, -1),
+            ShellAction::MovePromptBlockDown(id) => self.move_prompt_block(&id, 1),
+            ShellAction::EditPromptBlock(id) => self.edit_prompt_block(&id),
+            ShellAction::PromptBlockEditCancel => self.close_prompt_block_editor(),
+            ShellAction::PromptBlockEditSave => self.save_prompt_block_editor(),
+            ShellAction::CyclePromptBlockPosition => self.cycle_prompt_block_position(),
+            ShellAction::CyclePromptBlockRole => self.cycle_prompt_block_role(),
+            ShellAction::TogglePromptBlockTrigger(id) => self.toggle_prompt_block_trigger(&id),
+            ShellAction::TogglePromptBlockForbidOverrides => {
+                self.toggle_prompt_block_forbid_overrides()
+            }
+            ShellAction::LoadPromptBlockModels => self.load_prompt_block_models(),
+            ShellAction::CyclePromptPreset => self.cycle_prompt_preset(),
+            ShellAction::PromptPresetSave => self.save_prompt_preset(),
+            ShellAction::PromptPresetRename => self.open_prompt_preset_rename(),
+            ShellAction::PromptPresetDuplicate => self.open_prompt_preset_duplicate(),
+            ShellAction::PromptPresetDelete => self.open_prompt_preset_delete(),
             ShellAction::UploadBackground => {
                 // Kernel plane has no wallpaper catalog: React
                 // `useUploadBackground` rejects with `UnsupportedError`.
@@ -3234,6 +3323,9 @@ impl<W: ProductWire> ChatSession<W> {
             ShellAction::ExportChat(id) => self.export_chat(&id),
             ShellAction::LorebookSaveMeta => self.save_lorebook_meta(),
             ShellAction::PersonaSaveMeta => self.save_persona_meta(),
+            ShellAction::CharacterSaveMeta => self.save_character_meta(),
+            ShellAction::AddCharacterTag => self.add_character_tag(),
+            ShellAction::RemoveCharacterTag(tag) => self.remove_character_tag(&tag),
             ShellAction::Import => self.open_card_import(),
             ShellAction::ImportClose => self.close_card_import(),
             ShellAction::ConfirmCardImport => self.confirm_card_import(),
@@ -3243,22 +3335,155 @@ impl<W: ProductWire> ChatSession<W> {
         }
     }
 
-    pub fn save_selected_character(&mut self) {
+    pub fn save_character_meta(&mut self) {
         let Some(draft) = self.state.character_draft.clone() else {
             return;
         };
+        let Some(stored) = self
+            .state
+            .characters
+            .iter()
+            .find(|row| row.id == draft.id)
+            .cloned()
+        else {
+            return;
+        };
+        let next_name = draft.name.trim().to_string();
+        let name_change = !next_name.is_empty() && next_name != stored.name;
+        let next_description = draft.description.clone();
+        let stored_description = stored.description.clone().unwrap_or_default();
+        let description_change = next_description != stored_description;
+        if !name_change && !description_change {
+            self.state.status_message = Some("No changes.".into());
+            self.bump_scene();
+            return;
+        }
         let req = RequestUpdateCharacter {
-            character_id: draft.id,
-            name: Some(draft.name),
-            description: Some(draft.description),
-            tags: Some(draft.tags),
-            avatar_asset_id: draft.avatar_asset_id,
+            character_id: draft.id.clone(),
+            name: if name_change {
+                Some(next_name.clone())
+            } else {
+                None
+            },
+            description: if description_change {
+                Some(next_description.clone())
+            } else {
+                None
+            },
+            tags: None,
+            avatar_asset_id: None,
             profile_id: None,
         };
         match self.call_decode("characters.update", &req, decode_character_dto) {
-            Ok(_) => {
-                self.refresh_characters();
-                self.state.status_message = Some("Saved.".into());
+            Ok(updated) => {
+                if let Some(row) = self
+                    .state
+                    .characters
+                    .iter_mut()
+                    .find(|row| row.id == updated.id)
+                {
+                    row.name = updated.name.clone();
+                    row.description = updated.description.clone();
+                }
+                if let Some(local) = self.state.character_draft.as_mut() {
+                    if local.id == updated.id {
+                        local.name = updated.name.clone();
+                        local.description = updated.description.unwrap_or_default();
+                    }
+                }
+                self.state.status_message = Some(format!("Saved {}.", updated.name));
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    pub fn set_character_name_draft(&mut self, value: &str) {
+        if let Some(draft) = self.state.character_draft.as_mut() {
+            draft.name = value.to_string();
+        }
+        self.bump_scene();
+    }
+
+    pub fn set_character_description_draft(&mut self, value: &str) {
+        if let Some(draft) = self.state.character_draft.as_mut() {
+            draft.description = value.to_string();
+        }
+        self.bump_scene();
+    }
+
+    pub fn set_tag_input(&mut self, value: &str) {
+        self.state.tag_input = value.to_string();
+        self.bump_scene();
+    }
+
+    /// React `EditTab.addTag`: trim, skip duplicates case-insensitively,
+    /// cap at 32 tags / 64 chars, persist `tags` immediately.
+    fn add_character_tag(&mut self) {
+        let value = self.state.tag_input.trim().to_string();
+        self.state.tag_input.clear();
+        if value.is_empty() {
+            self.bump_scene();
+            return;
+        }
+        let value: String = value.chars().take(64).collect();
+        let Some(draft) = self.state.character_draft.as_mut() else {
+            self.bump_scene();
+            return;
+        };
+        if draft.tags.len() >= 32 {
+            self.bump_scene();
+            return;
+        }
+        let lower = value.to_lowercase();
+        if draft.tags.iter().any(|tag| tag.to_lowercase() == lower) {
+            self.bump_scene();
+            return;
+        }
+        draft.tags.push(value);
+        self.persist_character_tags();
+    }
+
+    /// React `EditTab` chip remove. Unknown tags are a no-op.
+    fn remove_character_tag(&mut self, tag: &str) {
+        let Some(draft) = self.state.character_draft.as_mut() else {
+            return;
+        };
+        let before = draft.tags.len();
+        draft.tags.retain(|item| item != tag);
+        if draft.tags.len() == before {
+            return;
+        }
+        self.persist_character_tags();
+    }
+
+    fn persist_character_tags(&mut self) {
+        let Some(draft) = self.state.character_draft.as_ref() else {
+            return;
+        };
+        let req = RequestUpdateCharacter {
+            character_id: draft.id.clone(),
+            name: None,
+            description: None,
+            tags: Some(draft.tags.clone()),
+            avatar_asset_id: None,
+            profile_id: None,
+        };
+        match self.call_decode("characters.update", &req, decode_character_dto) {
+            Ok(updated) => {
+                if let Some(row) = self
+                    .state
+                    .characters
+                    .iter_mut()
+                    .find(|row| row.id == updated.id)
+                {
+                    row.tags = updated.tags.clone();
+                }
+                if let Some(local) = self.state.character_draft.as_mut() {
+                    if local.id == updated.id {
+                        local.tags = updated.tags;
+                    }
+                }
             }
             Err(err) => self.record_error(err),
         }
@@ -3270,6 +3495,7 @@ impl<W: ProductWire> ChatSession<W> {
         let Some(id) = self.state.selected_character_id.clone() else {
             self.state.character_draft = None;
             self.state.avatar_data_uri = None;
+            self.state.tag_input.clear();
             return;
         };
         match self.call_decode(
@@ -3295,6 +3521,7 @@ impl<W: ProductWire> ChatSession<W> {
                 self.state.avatar_data_uri = None;
             }
         }
+        self.state.tag_input.clear();
     }
 
     /// Resolve avatars for every listed character via Product Wire `assets.content`.
@@ -4051,6 +4278,15 @@ impl<W: ProductWire> ChatSession<W> {
                 self.state.prompt_template = value.clone();
             }
         }
+        if let Some(value) = settings_unwrapped(items, "active-prompt-template-preset-id") {
+            if value.is_null() {
+                self.state.active_prompt_preset_id = None;
+            } else if let Some(id) = value.as_str() {
+                if !id.is_empty() {
+                    self.state.active_prompt_preset_id = Some(id.to_string());
+                }
+            }
+        }
         if let Some(value) = settings_unwrapped(items, "instruct-format") {
             if value.is_null() {
                 self.state.instruct_format = None;
@@ -4086,7 +4322,8 @@ impl<W: ProductWire> ChatSession<W> {
         self.bump_scene();
     }
 
-    /// React `AdvancedPromptSettings.changeMode`.
+    /// React `AdvancedPromptSettings.changeMode`. Switching to text seeds the
+    /// default block list (`DEFAULT_PROMPT_TEMPLATE`) when none is stored.
     pub fn cycle_prompt_mode(&mut self) {
         let current = self
             .state
@@ -4100,6 +4337,477 @@ impl<W: ProductWire> ChatSession<W> {
         } else {
             self.state.prompt_template = json!({ "mode": next });
         }
+        if next == "text" {
+            self.ensure_prompt_template_blocks();
+            self.load_prompt_presets_list();
+        }
+        self.persist_prompt_template();
+        self.bump_scene();
+    }
+
+    /// React `PromptTemplateEditor.addPrompt`. Inserts a `custom-*` block
+    /// before the terminal anchors, persists immediately, and opens the
+    /// compact name/content editor.
+    fn add_prompt_block(&mut self) {
+        self.ensure_prompt_template_blocks();
+        let existing = self
+            .state
+            .prompt_template
+            .get("blocks")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let id = next_custom_prompt_id(&existing);
+        let new_block = json!({
+            "id": id,
+            "enabled": true,
+            "name": "New Prompt",
+            "role": "system",
+            "content": "",
+            "injectionPosition": "relative",
+            "injectionDepth": 4,
+            "injectionOrder": 100,
+            "triggers": PROMPT_TRIGGER_IDS,
+            "forbidOverrides": false,
+        });
+        let Some(blocks) = self
+            .state
+            .prompt_template
+            .get_mut("blocks")
+            .and_then(Value::as_array_mut)
+        else {
+            return;
+        };
+        blocks.push(new_block);
+        let ordered = normalize_prompt_block_order(std::mem::take(blocks));
+        *blocks = ordered;
+        self.state.prompt_block_edit_id = Some(id);
+        self.state.prompt_block_name_draft = "New Prompt".into();
+        self.state.prompt_block_content_draft.clear();
+        self.state.prompt_block_injection_position = "relative".into();
+        self.state.prompt_block_depth_draft = "4".into();
+        self.state.prompt_block_order_draft = "100".into();
+        self.state.prompt_block_role = "system".into();
+        self.state.prompt_block_triggers = default_prompt_block_triggers();
+        self.state.prompt_block_forbid_overrides = false;
+        self.state.prompt_block_model_draft.clear();
+        self.persist_prompt_template();
+        self.bump_scene();
+    }
+
+    /// React `PromptTemplateEditor.removePrompt`. Core (host-owned) ids are
+    /// a no-op; unknown custom ids also do not persist.
+    fn remove_prompt_block(&mut self, block_id: &str) {
+        if PROMPT_BLOCK_IDS.contains(&block_id) {
+            return;
+        }
+        self.ensure_prompt_template_blocks();
+        let Some(blocks) = self
+            .state
+            .prompt_template
+            .get_mut("blocks")
+            .and_then(Value::as_array_mut)
+        else {
+            return;
+        };
+        let before = blocks.len();
+        blocks.retain(|block| block.get("id").and_then(Value::as_str) != Some(block_id));
+        if blocks.len() == before {
+            return;
+        }
+        let close_editor = self.state.prompt_block_edit_id.as_deref() == Some(block_id);
+        if close_editor {
+            self.clear_prompt_block_editor_drafts();
+        }
+        self.persist_prompt_template();
+        self.bump_scene();
+    }
+
+    /// React `setEditingBlockId` — compact name + content drafts. Unknown
+    /// ids are a no-op.
+    fn edit_prompt_block(&mut self, block_id: &str) {
+        self.ensure_prompt_template_blocks();
+        let post_history = self
+            .state
+            .prompt_template
+            .get("postHistoryInstructions")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        let Some(block) = self
+            .state
+            .prompt_template
+            .get("blocks")
+            .and_then(Value::as_array)
+            .and_then(|blocks| {
+                blocks
+                    .iter()
+                    .find(|block| block.get("id").and_then(Value::as_str) == Some(block_id))
+            })
+        else {
+            return;
+        };
+        let name = block
+            .get("name")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| prompt_block_label(block_id));
+        let content = if block_id == "post-history-instructions" {
+            post_history
+        } else {
+            block
+                .get("content")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string()
+        };
+        self.state.prompt_block_edit_id = Some(block_id.to_string());
+        self.state.prompt_block_name_draft = name;
+        self.state.prompt_block_content_draft = content;
+        self.state.prompt_block_injection_position =
+            prompt_block_injection_position(block).to_string();
+        self.state.prompt_block_depth_draft =
+            prompt_block_u32(block, "injectionDepth", 4).to_string();
+        self.state.prompt_block_order_draft =
+            prompt_block_u32(block, "injectionOrder", 100).to_string();
+        self.state.prompt_block_role = prompt_block_role(block).to_string();
+        self.state.prompt_block_triggers = prompt_block_triggers(block);
+        self.state.prompt_block_forbid_overrides = prompt_block_forbid_overrides(block);
+        self.state.prompt_block_model_draft = prompt_block_model(block);
+        self.bump_scene();
+    }
+
+    fn close_prompt_block_editor(&mut self) {
+        self.clear_prompt_block_editor_drafts();
+        self.bump_scene();
+    }
+
+    fn clear_prompt_block_editor_drafts(&mut self) {
+        self.state.prompt_block_edit_id = None;
+        self.state.prompt_block_name_draft.clear();
+        self.state.prompt_block_content_draft.clear();
+        self.state.prompt_block_injection_position.clear();
+        self.state.prompt_block_depth_draft.clear();
+        self.state.prompt_block_order_draft.clear();
+        self.state.prompt_block_role.clear();
+        self.state.prompt_block_triggers.clear();
+        self.state.prompt_block_forbid_overrides = false;
+        self.state.prompt_block_model_draft.clear();
+    }
+
+    /// React `injectionPosition` select. Local draft until Save.
+    fn cycle_prompt_block_position(&mut self) {
+        if self.state.prompt_block_edit_id.is_none() {
+            return;
+        }
+        self.state.prompt_block_injection_position =
+            if self.state.prompt_block_injection_position == "in-chat" {
+                "relative".into()
+            } else {
+                "in-chat".into()
+            };
+        self.bump_scene();
+    }
+
+    /// React `role` select. Local draft until Save. Unknown stored roles
+    /// (`tool` / `plugin`) snap to `system`, matching the authoring menu.
+    fn cycle_prompt_block_role(&mut self) {
+        if self.state.prompt_block_edit_id.is_none() {
+            return;
+        }
+        self.state.prompt_block_role =
+            next_choice(PROMPT_BLOCK_ROLES, &self.state.prompt_block_role).to_string();
+        self.bump_scene();
+    }
+
+    /// React `toggleTrigger`. Local draft until Save. Unknown ids are a
+    /// no-op; clearing the last selected chip restores every kind.
+    fn toggle_prompt_block_trigger(&mut self, trigger: &str) {
+        if self.state.prompt_block_edit_id.is_none() {
+            return;
+        }
+        if !PROMPT_TRIGGER_IDS.contains(&trigger) {
+            return;
+        }
+        let mut next = self.state.prompt_block_triggers.clone();
+        if next.iter().any(|id| id == trigger) {
+            next.retain(|id| id != trigger);
+        } else {
+            next.push(trigger.to_string());
+        }
+        if next.is_empty() {
+            next = default_prompt_block_triggers();
+        }
+        self.state.prompt_block_triggers = next;
+        self.bump_scene();
+    }
+
+    /// React `forbidOverrides` Switch. Local draft until Save. Hidden
+    /// unless content is editable and role is `system`.
+    fn toggle_prompt_block_forbid_overrides(&mut self) {
+        let Some(id) = self.state.prompt_block_edit_id.clone() else {
+            return;
+        };
+        if !prompt_block_content_editable(&id) {
+            return;
+        }
+        if prompt_block_role_draft(&self.state.prompt_block_role) != "system" {
+            return;
+        }
+        self.state.prompt_block_forbid_overrides = !self.state.prompt_block_forbid_overrides;
+        self.bump_scene();
+    }
+
+    /// React `ModelMenu.onLoadModels`. Kernel plane has no wire discovery.
+    fn load_prompt_block_models(&mut self) {
+        if self.state.prompt_block_edit_id.is_none() {
+            return;
+        }
+        if self.state.active_provider_id.is_none() {
+            return;
+        }
+        self.record_error(ChatRouteError::Product(ErrorDto {
+            code: "CAPABILITY_UNAVAILABLE".into(),
+            params: json!({ "operationId": "providers.models.discovery" }),
+            trace_id: None,
+            correlation_id: None,
+        }));
+        self.bump_scene();
+    }
+
+    /// React `PromptBlockEditorDialog` submit: name is required; content is
+    /// written only for custom / main-prompt / post-history-instructions.
+    fn save_prompt_block_editor(&mut self) {
+        let Some(id) = self.state.prompt_block_edit_id.clone() else {
+            return;
+        };
+        let name = self.state.prompt_block_name_draft.trim().to_string();
+        if name.is_empty() {
+            return;
+        }
+        let content = self.state.prompt_block_content_draft.clone();
+        let editable = prompt_block_content_editable(&id);
+        let position = if self.state.prompt_block_injection_position == "in-chat" {
+            "in-chat"
+        } else {
+            "relative"
+        };
+        let depth = parse_prompt_injection_u32(&self.state.prompt_block_depth_draft, 4);
+        let order = parse_prompt_injection_u32(&self.state.prompt_block_order_draft, 100);
+        let role = prompt_block_role_draft(&self.state.prompt_block_role);
+        let triggers = self
+            .state
+            .prompt_block_triggers
+            .iter()
+            .filter(|id| PROMPT_TRIGGER_IDS.contains(&id.as_str()))
+            .cloned()
+            .collect::<Vec<_>>();
+        let forbid_overrides = self.state.prompt_block_forbid_overrides;
+        let model = clamp_prompt_block_model(self.state.prompt_block_model_draft.trim());
+        {
+            let Some(block) = self
+                .state
+                .prompt_template
+                .get_mut("blocks")
+                .and_then(Value::as_array_mut)
+                .and_then(|blocks| {
+                    blocks
+                        .iter_mut()
+                        .find(|block| block.get("id").and_then(Value::as_str) == Some(id.as_str()))
+                })
+            else {
+                return;
+            };
+            let Some(obj) = block.as_object_mut() else {
+                return;
+            };
+            obj.insert("name".into(), json!(name));
+            if editable {
+                obj.insert("content".into(), json!(content));
+            }
+            obj.insert("injectionPosition".into(), json!(position));
+            obj.insert("injectionDepth".into(), json!(depth));
+            obj.insert("injectionOrder".into(), json!(order));
+            obj.insert("role".into(), json!(role));
+            obj.insert("triggers".into(), json!(triggers));
+            obj.insert("forbidOverrides".into(), json!(forbid_overrides));
+            if model.is_empty() {
+                obj.remove("model");
+            } else {
+                obj.insert("model".into(), json!(model));
+            }
+        }
+        if id == "post-history-instructions" {
+            if let Some(obj) = self.state.prompt_template.as_object_mut() {
+                obj.insert("postHistoryInstructions".into(), json!(content));
+            }
+        }
+        self.clear_prompt_block_editor_drafts();
+        self.persist_prompt_template();
+        self.bump_scene();
+    }
+
+    pub fn set_prompt_block_name_draft(&mut self, value: &str) {
+        self.state.prompt_block_name_draft = value.to_string();
+        self.bump_scene();
+    }
+
+    pub fn set_prompt_block_content_draft(&mut self, value: &str) {
+        self.state.prompt_block_content_draft = value.to_string();
+        self.bump_scene();
+    }
+
+    pub fn set_prompt_block_depth_draft(&mut self, value: &str) {
+        self.state.prompt_block_depth_draft = sanitize_prompt_int_draft(value);
+        self.bump_scene();
+    }
+
+    pub fn set_prompt_block_order_draft(&mut self, value: &str) {
+        self.state.prompt_block_order_draft = sanitize_prompt_int_draft(value);
+        self.bump_scene();
+    }
+
+    /// React `ModelMenu` free-text id. Disabled without an active provider.
+    /// Contract maxLength 256.
+    pub fn set_prompt_block_model_draft(&mut self, value: &str) {
+        if self.state.prompt_block_edit_id.is_none() {
+            return;
+        }
+        if self.state.active_provider_id.is_none() {
+            return;
+        }
+        self.state.prompt_block_model_draft = clamp_prompt_block_model(value);
+        self.bump_scene();
+    }
+
+    /// React `PromptTemplateEditor.moveBlock(from, from ± 1)`. Terminals,
+    /// index 0 going up, and a movable whose next neighbour is a terminal
+    /// going down are no-ops (no persist).
+    fn move_prompt_block(&mut self, block_id: &str, delta: isize) {
+        self.ensure_prompt_template_blocks();
+        let Some(blocks) = self
+            .state
+            .prompt_template
+            .get("blocks")
+            .and_then(Value::as_array)
+            .cloned()
+        else {
+            return;
+        };
+        let Some(from) = blocks
+            .iter()
+            .position(|block| block.get("id").and_then(Value::as_str) == Some(block_id))
+        else {
+            return;
+        };
+        if is_terminal_prompt_block_id(block_id) {
+            return;
+        }
+        if delta < 0 && from == 0 {
+            return;
+        }
+        let to = from as isize + delta;
+        if to < 0 || to >= blocks.len() as isize {
+            return;
+        }
+        let to = to as usize;
+        if delta > 0 {
+            if let Some(next_id) = blocks
+                .get(to)
+                .and_then(|block| block.get("id").and_then(Value::as_str))
+            {
+                if is_terminal_prompt_block_id(next_id) {
+                    return;
+                }
+            }
+        }
+        let reordered = reorder_prompt_blocks(blocks, from, to);
+        let Some(actual) = reordered
+            .iter()
+            .position(|block| block.get("id").and_then(Value::as_str) == Some(block_id))
+        else {
+            return;
+        };
+        if actual == from {
+            return;
+        }
+        let name = reordered
+            .get(actual)
+            .and_then(|block| block.get("name").and_then(Value::as_str))
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(|| prompt_block_label(block_id));
+        let Some(slots) = self
+            .state
+            .prompt_template
+            .get_mut("blocks")
+            .and_then(Value::as_array_mut)
+        else {
+            return;
+        };
+        *slots = reordered;
+        self.state.status_message = Some(format!("{name} moved to position {}.", actual + 1));
+        self.persist_prompt_template();
+        self.bump_scene();
+    }
+
+    /// React `PromptTemplateEditor.toggleBlock`. Unknown ids are a no-op.
+    fn toggle_prompt_block(&mut self, block_id: &str) {
+        self.ensure_prompt_template_blocks();
+        {
+            let Some(blocks) = self
+                .state
+                .prompt_template
+                .get_mut("blocks")
+                .and_then(Value::as_array_mut)
+            else {
+                return;
+            };
+            let Some(block) = blocks
+                .iter_mut()
+                .find(|block| block.get("id").and_then(Value::as_str) == Some(block_id))
+            else {
+                return;
+            };
+            let enabled = block
+                .get("enabled")
+                .and_then(Value::as_bool)
+                .unwrap_or(true);
+            let Some(obj) = block.as_object_mut() else {
+                return;
+            };
+            obj.insert("enabled".into(), json!(!enabled));
+        }
+        self.persist_prompt_template();
+        self.bump_scene();
+    }
+
+    fn ensure_prompt_template_blocks(&mut self) {
+        let has_blocks = self
+            .state
+            .prompt_template
+            .get("blocks")
+            .and_then(Value::as_array)
+            .is_some_and(|blocks| !blocks.is_empty());
+        if has_blocks {
+            return;
+        }
+        let mode = self
+            .state
+            .prompt_template
+            .get("mode")
+            .cloned()
+            .unwrap_or_else(|| json!("chat"));
+        let mut template = default_prompt_template();
+        if let Some(obj) = template.as_object_mut() {
+            obj.insert("mode".into(), mode);
+        }
+        self.state.prompt_template = template;
+    }
+
+    fn persist_prompt_template(&mut self) {
         let req = RequestSettingsUpdate {
             settings: vec![RequestSettingsUpdateSettings {
                 key: "prompt-template".into(),
@@ -4117,6 +4825,236 @@ impl<W: ProductWire> ChatSession<W> {
             );
         } else {
             self.state.instruct_form_error = None;
+        }
+    }
+
+    fn load_prompt_presets_list(&mut self) {
+        match self.call_decode(
+            "presets.list",
+            &RequestListPresets {
+                kind: Some("prompt-template".into()),
+            },
+            decode_result_list_presets,
+        ) {
+            Ok(ResultListPresets { items }) => self.state.prompt_presets = items,
+            Err(err) => self.record_error(err),
+        }
+    }
+
+    fn active_prompt_preset(&self) -> Option<&PresetDto> {
+        let id = self.state.active_prompt_preset_id.as_deref()?;
+        self.state.prompt_presets.iter().find(|item| item.id == id)
+    }
+
+    fn persist_prompt_template_and_active(&mut self, active_id: Option<String>) {
+        self.state.active_prompt_preset_id = active_id.clone();
+        let req = RequestSettingsUpdate {
+            settings: vec![
+                RequestSettingsUpdateSettings {
+                    key: "prompt-template".into(),
+                    value: self.state.prompt_template.clone(),
+                },
+                RequestSettingsUpdateSettings {
+                    key: "active-prompt-template-preset-id".into(),
+                    value: json!({ "value": active_id }),
+                },
+            ],
+        };
+        if let Err(err) = self.call_value("settings.update", &req) {
+            self.record_error(err);
+            self.state.instruct_form_error = Some(
+                self.state
+                    .last_error
+                    .as_ref()
+                    .map(|e| e.code.clone())
+                    .unwrap_or_else(|| "SETTINGS_UPDATE_FAILED".into()),
+            );
+        } else {
+            self.state.instruct_form_error = None;
+        }
+    }
+
+    /// React `PromptTemplateEditor.selectPreset` (native cycle through
+    /// Unsaved → each `presets.list` row).
+    fn cycle_prompt_preset(&mut self) {
+        self.ensure_prompt_template_blocks();
+        let mut ids: Vec<Option<String>> = vec![None];
+        ids.extend(
+            self.state
+                .prompt_presets
+                .iter()
+                .map(|item| Some(item.id.clone())),
+        );
+        if ids.len() == 1 {
+            return;
+        }
+        let current = self.state.active_prompt_preset_id.clone();
+        let idx = ids.iter().position(|id| *id == current).unwrap_or(0);
+        let next = ids[(idx + 1) % ids.len()].clone();
+        match next {
+            None => self.persist_prompt_template_and_active(None),
+            Some(id) => self.apply_prompt_preset(&id),
+        }
+        self.bump_scene();
+    }
+
+    fn apply_prompt_preset(&mut self, preset_id: &str) {
+        let Some(preset) = self
+            .state
+            .prompt_presets
+            .iter()
+            .find(|item| item.id == preset_id)
+            .cloned()
+        else {
+            self.record_error(ChatRouteError::Product(ErrorDto {
+                code: "PRESET_NOT_FOUND".into(),
+                params: json!({ "presetId": preset_id }),
+                trace_id: None,
+                correlation_id: None,
+            }));
+            return;
+        };
+        if !prompt_template_is_complete(&preset.data) {
+            self.state.instruct_form_error =
+                Some("This file is not a valid prompt template preset.".into());
+            return;
+        }
+        let mut next = preset.data.clone();
+        if let Some(obj) = next.as_object_mut() {
+            obj.insert("mode".into(), json!("text"));
+        }
+        self.state.prompt_template = next;
+        self.persist_prompt_template_and_active(Some(preset.id));
+    }
+
+    /// React `PromptTemplateEditor.savePreset`: update the active record, or
+    /// open the name dialog to create one.
+    fn save_prompt_preset(&mut self) {
+        self.ensure_prompt_template_blocks();
+        let Some(active) = self.active_prompt_preset().cloned() else {
+            self.begin_preset_dialog("prompt-template", "create", String::new());
+            return;
+        };
+        let req = RequestUpdatePreset {
+            preset_id: active.id.clone(),
+            name: None,
+            data: Some(self.state.prompt_template.clone()),
+        };
+        match self.call_decode("presets.update", &req, decode_preset_dto) {
+            Ok(_) => {
+                self.persist_prompt_template_and_active(Some(active.id));
+                self.load_prompt_presets_list();
+                self.state.status_message = Some("Preset saved.".into());
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    fn open_prompt_preset_rename(&mut self) {
+        let Some(name) = self.active_prompt_preset().map(|item| item.name.clone()) else {
+            return;
+        };
+        self.begin_preset_dialog("prompt-template", "rename", name);
+    }
+
+    fn open_prompt_preset_duplicate(&mut self) {
+        self.ensure_prompt_template_blocks();
+        let base = self
+            .active_prompt_preset()
+            .map(|item| item.name.as_str())
+            .unwrap_or("Prompt template preset");
+        self.begin_preset_dialog("prompt-template", "duplicate", format!("{base} copy"));
+    }
+
+    fn open_prompt_preset_delete(&mut self) {
+        if self.active_prompt_preset().is_none() {
+            return;
+        }
+        self.state.preset_dialog_kind = "prompt-template".into();
+        self.state.preset_delete_open = true;
+        self.bump_scene();
+    }
+
+    fn begin_preset_dialog(&mut self, kind: &str, mode: &str, draft: String) {
+        self.state.preset_dialog_kind = kind.to_string();
+        self.state.preset_name_dialog_open = true;
+        self.state.preset_name_mode = Some(mode.to_string());
+        self.state.preset_name_draft = draft;
+        self.state.preset_form_error = None;
+        self.bump_scene();
+    }
+
+    fn confirm_prompt_preset_name(&mut self, name: String, mode: &str) {
+        let outcome = if mode == "rename" {
+            match self.active_prompt_preset().cloned() {
+                Some(active) => {
+                    let req = RequestUpdatePreset {
+                        preset_id: active.id,
+                        name: Some(name),
+                        data: None,
+                    };
+                    self.call_decode("presets.update", &req, decode_preset_dto)
+                        .map(|_| ())
+                }
+                None => Ok(()),
+            }
+        } else {
+            self.ensure_prompt_template_blocks();
+            let req = RequestCreatePreset {
+                kind: "prompt-template".into(),
+                name,
+                data: Some(self.state.prompt_template.clone()),
+            };
+            self.call_decode("presets.create", &req, decode_preset_dto)
+                .map(|dto| {
+                    self.persist_prompt_template_and_active(Some(dto.id));
+                })
+        };
+        match outcome {
+            Ok(_) => {
+                self.close_preset_name();
+                self.load_prompt_presets_list();
+                self.state.status_message = Some(if mode == "rename" {
+                    "Preset renamed.".into()
+                } else if mode == "duplicate" {
+                    "Preset duplicated.".into()
+                } else {
+                    "Preset created.".into()
+                });
+            }
+            Err(err) => {
+                let code = err.reason_code().to_string();
+                self.state.preset_form_error = Some(code);
+            }
+        }
+        self.bump_scene();
+    }
+
+    fn confirm_prompt_preset_delete(&mut self) {
+        let Some(active) = self.active_prompt_preset().cloned() else {
+            return;
+        };
+        self.state.preset_delete_open = false;
+        let req = RequestDeletePreset {
+            preset_id: active.id,
+        };
+        match self.call_value("presets.delete", &req) {
+            Ok(_) => {
+                self.state.active_prompt_preset_id = None;
+                let clear = RequestSettingsUpdate {
+                    settings: vec![RequestSettingsUpdateSettings {
+                        key: "active-prompt-template-preset-id".into(),
+                        value: json!({ "value": null }),
+                    }],
+                };
+                if let Err(err) = self.call_value("settings.update", &clear) {
+                    self.record_error(err);
+                }
+                self.state.status_message = Some("Preset deleted.".into());
+                self.load_prompt_presets_list();
+            }
+            Err(err) => self.record_error(err),
         }
         self.bump_scene();
     }
@@ -4195,6 +5133,39 @@ impl<W: ProductWire> ChatSession<W> {
                 self.record_error(err);
             }
         }
+        self.bump_scene();
+    }
+
+    /// React `ChatTemplateEditor` textarea onChange. Local until Save.
+    /// `role` is a ChatML key (`system` / `user` / `assistant` / `tool` /
+    /// `promptSuffix` / `stopStrings`).
+    pub fn set_instruct_role(&mut self, role: &str, value: &str) {
+        let mut draft = self
+            .state
+            .instruct_format
+            .clone()
+            .unwrap_or_else(default_custom_instruct);
+        match role {
+            "stopStrings" => {
+                let stops: Vec<Value> = value
+                    .split('\n')
+                    .map(str::trim)
+                    .filter(|line| !line.is_empty())
+                    .map(Value::from)
+                    .collect();
+                if let Some(obj) = draft.as_object_mut() {
+                    obj.insert("stopStrings".into(), Value::Array(stops));
+                }
+            }
+            "system" | "user" | "assistant" | "tool" | "promptSuffix" => {
+                if let Some(obj) = draft.as_object_mut() {
+                    obj.insert(role.to_string(), Value::from(value));
+                }
+            }
+            _ => return,
+        }
+        self.state.instruct_format = Some(draft);
+        self.state.instruct_form_error = None;
         self.bump_scene();
     }
 
@@ -4966,11 +5937,7 @@ impl<W: ProductWire> ChatSession<W> {
 
     /// Opens the name dialog in create mode ("Save as new").
     pub fn open_preset_create(&mut self) {
-        self.state.preset_name_dialog_open = true;
-        self.state.preset_name_mode = Some("create".into());
-        self.state.preset_name_draft.clear();
-        self.state.preset_form_error = None;
-        self.bump_scene();
+        self.begin_preset_dialog("generation", "create", String::new());
     }
 
     /// Opens the name dialog in rename mode prefilled with the active name.
@@ -4979,11 +5946,7 @@ impl<W: ProductWire> ChatSession<W> {
         let Some(active_name) = active_name else {
             return;
         };
-        self.state.preset_name_dialog_open = true;
-        self.state.preset_name_mode = Some("rename".into());
-        self.state.preset_name_draft = active_name;
-        self.state.preset_form_error = None;
-        self.bump_scene();
+        self.begin_preset_dialog("generation", "rename", active_name);
     }
 
     pub fn close_preset_name(&mut self) {
@@ -5035,6 +5998,10 @@ impl<W: ProductWire> ChatSession<W> {
             return;
         }
         let mode = self.state.preset_name_mode.clone().unwrap_or_default();
+        if self.state.preset_dialog_kind == "prompt-template" {
+            self.confirm_prompt_preset_name(name, &mode);
+            return;
+        }
         let outcome = if mode == "rename" {
             match self.active_preset().cloned() {
                 Some(active) => {
@@ -5123,6 +6090,7 @@ impl<W: ProductWire> ChatSession<W> {
 
     pub fn open_preset_delete(&mut self) {
         if self.active_preset().is_some() {
+            self.state.preset_dialog_kind = "generation".into();
             self.state.preset_delete_open = true;
             self.bump_scene();
         }
@@ -5131,6 +6099,10 @@ impl<W: ProductWire> ChatSession<W> {
     /// Deletes the active preset and clears the selection
     /// (React `confirmDelete`).
     pub fn confirm_preset_delete(&mut self) {
+        if self.state.preset_dialog_kind == "prompt-template" {
+            self.confirm_prompt_preset_delete();
+            return;
+        }
         let Some(active) = self.active_preset().cloned() else {
             return;
         };
@@ -5799,6 +6771,330 @@ fn settings_unwrapped<'a>(items: &'a [SettingsItem], key: &str) -> Option<&'a Va
     Some(value)
 }
 
+/// Host-owned text-completion block ids (`PromptBlockIds` in contracts).
+const PROMPT_BLOCK_IDS: &[&str] = &[
+    "main-prompt",
+    "world-info-before",
+    "persona",
+    "character-description",
+    "character-personality",
+    "scenario",
+    "world-info-after",
+    "dialogue-examples",
+    "memory",
+    "authors-note",
+    "chat-history",
+    "post-history-instructions",
+];
+
+/// React `PromptBlockEditorDialog` role `<select>` — not the full
+/// `MessageRole` union (`tool` / `plugin` stay off the authoring menu).
+const PROMPT_BLOCK_ROLES: &[&str] = &["system", "user", "assistant"];
+
+const PROMPT_TRIGGER_IDS: &[&str] = &[
+    "normal",
+    "continue",
+    "impersonate",
+    "swipe",
+    "regenerate",
+    "quiet",
+];
+
+/// Mirrors `DEFAULT_PROMPT_TEMPLATE` in `packages/contracts/src/promptTemplate.ts`.
+fn default_prompt_template() -> Value {
+    let blocks: Vec<Value> = PROMPT_BLOCK_IDS
+        .iter()
+        .map(|id| {
+            if *id == "main-prompt" {
+                json!({
+                    "id": id,
+                    "enabled": true,
+                    "role": "system",
+                    "content": "Write {{char}}'s next reply in a fictional chat between {{char}} and {{user}}.",
+                    "injectionPosition": "relative",
+                    "triggers": PROMPT_TRIGGER_IDS,
+                    "forbidOverrides": false,
+                })
+            } else {
+                json!({ "id": id, "enabled": true })
+            }
+        })
+        .collect();
+    json!({
+        "mode": "chat",
+        "blocks": blocks,
+        "postHistoryInstructions": "Keep the roleplay engaging. Drive the story forward proactively while staying in character.",
+    })
+}
+
+fn prompt_block_label(id: &str) -> String {
+    match id {
+        "main-prompt" => "Main Prompt",
+        "world-info-before" => "World Info (before)",
+        "persona" => "Persona",
+        "character-description" => "Character Description",
+        "character-personality" => "Character Personality",
+        "scenario" => "Scenario",
+        "world-info-after" => "World Info (after)",
+        "dialogue-examples" => "Dialogue Examples",
+        "memory" => "Memory",
+        "authors-note" => "Author\u{2019}s Note",
+        "chat-history" => "Chat History",
+        "post-history-instructions" => "Post-History Instructions",
+        _ => "Custom Prompt",
+    }
+    .into()
+}
+
+fn prompt_block_content_editable(id: &str) -> bool {
+    !PROMPT_BLOCK_IDS.contains(&id) || matches!(id, "main-prompt" | "post-history-instructions")
+}
+
+fn prompt_block_injection_position(block: &Value) -> &'static str {
+    match block.get("injectionPosition").and_then(Value::as_str) {
+        Some("in-chat") => "in-chat",
+        _ => "relative",
+    }
+}
+
+fn prompt_block_role(block: &Value) -> &'static str {
+    prompt_block_role_draft(block.get("role").and_then(Value::as_str).unwrap_or(""))
+}
+
+fn prompt_block_role_draft(role: &str) -> &'static str {
+    match role {
+        "user" => "user",
+        "assistant" => "assistant",
+        _ => "system",
+    }
+}
+
+fn default_prompt_block_triggers() -> Vec<String> {
+    PROMPT_TRIGGER_IDS
+        .iter()
+        .map(|id| (*id).to_string())
+        .collect()
+}
+
+fn prompt_block_triggers(block: &Value) -> Vec<String> {
+    match block.get("triggers").and_then(Value::as_array) {
+        Some(items) => items
+            .iter()
+            .filter_map(Value::as_str)
+            .filter(|id| PROMPT_TRIGGER_IDS.contains(id))
+            .map(str::to_string)
+            .collect(),
+        None => default_prompt_block_triggers(),
+    }
+}
+
+fn prompt_block_forbid_overrides(block: &Value) -> bool {
+    block
+        .get("forbidOverrides")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+}
+
+fn prompt_block_model(block: &Value) -> String {
+    clamp_prompt_block_model(block.get("model").and_then(Value::as_str).unwrap_or(""))
+}
+
+fn clamp_prompt_block_model(value: &str) -> String {
+    value.chars().take(256).collect()
+}
+
+fn prompt_block_u32(block: &Value, key: &str, default: u32) -> u32 {
+    block
+        .get(key)
+        .and_then(Value::as_u64)
+        .map(|n| n.min(9999) as u32)
+        .unwrap_or(default)
+}
+
+fn parse_prompt_injection_u32(raw: &str, default: u32) -> u32 {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return default;
+    }
+    trimmed
+        .parse::<u32>()
+        .ok()
+        .map(|n| n.min(9999))
+        .unwrap_or(default)
+}
+
+fn sanitize_prompt_int_draft(value: &str) -> String {
+    value
+        .chars()
+        .filter(|c| c.is_ascii_digit())
+        .take(4)
+        .collect()
+}
+
+/// Sequential `custom-N` ids that satisfy `CustomPromptBlockIdSchema`
+/// (`^custom-[A-Za-z0-9][A-Za-z0-9._-]*$`, minLength 8). React uses UUID;
+/// the native host stays deterministic without a `uuid` crate.
+fn next_custom_prompt_id(blocks: &[Value]) -> String {
+    let mut n = 1u32;
+    loop {
+        let candidate = format!("custom-{n}");
+        let taken = blocks
+            .iter()
+            .any(|block| block.get("id").and_then(Value::as_str) == Some(candidate.as_str()));
+        if !taken {
+            return candidate;
+        }
+        n = n.saturating_add(1);
+        if n == u32::MAX {
+            return "custom-overflow".into();
+        }
+    }
+}
+
+fn is_terminal_prompt_block_id(id: &str) -> bool {
+    matches!(id, "chat-history" | "post-history-instructions")
+}
+
+fn prompt_block_json_id(block: &Value) -> Option<&str> {
+    block.get("id").and_then(Value::as_str)
+}
+
+/// React `normalizePromptBlockOrder`: movable blocks first, then the two
+/// terminal anchors in semantic order.
+fn normalize_prompt_block_order(blocks: Vec<Value>) -> Vec<Value> {
+    let mut movable = Vec::new();
+    let mut chat_history = None;
+    let mut post_history = None;
+    for block in blocks {
+        match block.get("id").and_then(Value::as_str) {
+            Some("chat-history") if chat_history.is_none() => chat_history = Some(block),
+            Some("post-history-instructions") if post_history.is_none() => {
+                post_history = Some(block)
+            }
+            _ => movable.push(block),
+        }
+    }
+    movable.extend(chat_history);
+    movable.extend(post_history);
+    movable
+}
+
+/// React `PromptTemplateEditor.reorderBlocks`. `from`/`to` index the
+/// normalized full list; terminals stay pinned after the movable prefix.
+fn reorder_prompt_blocks(blocks: Vec<Value>, from: usize, to: usize) -> Vec<Value> {
+    let normalized = normalize_prompt_block_order(blocks);
+    let Some(moved_id) = normalized
+        .get(from)
+        .and_then(prompt_block_json_id)
+        .map(str::to_string)
+    else {
+        return normalized;
+    };
+    if is_terminal_prompt_block_id(&moved_id) {
+        return normalized;
+    }
+    let target_id = normalized
+        .get(to)
+        .and_then(prompt_block_json_id)
+        .map(str::to_string);
+    let mut movable: Vec<Value> = normalized
+        .iter()
+        .filter(|block| {
+            prompt_block_json_id(block).is_some_and(|id| !is_terminal_prompt_block_id(id))
+        })
+        .cloned()
+        .collect();
+    let Some(from_movable) = movable
+        .iter()
+        .position(|block| prompt_block_json_id(block) == Some(moved_id.as_str()))
+    else {
+        return normalized;
+    };
+    let Some(target_movable) = (match target_id.as_deref() {
+        Some(id) if is_terminal_prompt_block_id(id) => Some(movable.len().saturating_sub(1)),
+        Some(id) => movable
+            .iter()
+            .position(|block| prompt_block_json_id(block) == Some(id)),
+        None => Some(from_movable),
+    }) else {
+        return normalized;
+    };
+    let removed = movable.remove(from_movable);
+    let insert_at = target_movable.min(movable.len());
+    movable.insert(insert_at, removed);
+    let terminals: Vec<Value> = normalized
+        .iter()
+        .filter(|block| prompt_block_json_id(block).is_some_and(is_terminal_prompt_block_id))
+        .cloned()
+        .collect();
+    normalize_prompt_block_order(movable.into_iter().chain(terminals).collect())
+}
+
+fn prompt_block_views(template: &Value) -> Vec<PromptBlockView> {
+    let Some(blocks) = template.get("blocks").and_then(Value::as_array) else {
+        return Vec::new();
+    };
+    let mut views: Vec<PromptBlockView> = blocks
+        .iter()
+        .filter_map(|block| {
+            let id = block.get("id")?.as_str()?.to_string();
+            let enabled = block
+                .get("enabled")
+                .and_then(Value::as_bool)
+                .unwrap_or(true);
+            let name = block
+                .get("name")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+                .unwrap_or_else(|| prompt_block_label(&id));
+            let custom = !PROMPT_BLOCK_IDS.contains(&id.as_str());
+            let injection_in_chat = prompt_block_injection_position(block) == "in-chat";
+            let injection_depth = prompt_block_u32(block, "injectionDepth", 4);
+            Some(PromptBlockView {
+                id,
+                name,
+                enabled,
+                custom,
+                can_move_up: false,
+                can_move_down: false,
+                injection_in_chat,
+                injection_depth,
+            })
+        })
+        .collect();
+    let n = views.len();
+    for i in 0..n {
+        let terminal = is_terminal_prompt_block_id(&views[i].id);
+        let next_terminal = views
+            .get(i + 1)
+            .is_some_and(|next| is_terminal_prompt_block_id(&next.id));
+        views[i].can_move_up = !terminal && i > 0;
+        views[i].can_move_down = !terminal && i + 1 < n && !next_terminal;
+    }
+    views
+}
+
+fn prompt_template_is_complete(template: &Value) -> bool {
+    let Some(blocks) = template.get("blocks").and_then(Value::as_array) else {
+        return false;
+    };
+    if blocks.len() < PROMPT_BLOCK_IDS.len() {
+        return false;
+    }
+    let ids: Vec<&str> = blocks
+        .iter()
+        .filter_map(|block| block.get("id").and_then(Value::as_str))
+        .collect();
+    if ids.len() != blocks.len() {
+        return false;
+    }
+    if !PROMPT_BLOCK_IDS.iter().all(|id| ids.contains(id)) {
+        return false;
+    }
+    let n = ids.len();
+    ids[n - 2] == "chat-history" && ids[n - 1] == "post-history-instructions"
+}
+
 fn default_custom_instruct() -> Value {
     json!({
         "id": "custom-chatml",
@@ -5810,6 +7106,30 @@ fn default_custom_instruct() -> Value {
         "promptSuffix": "<|im_start|>assistant\n",
         "stopStrings": ["<|im_end|>"],
     })
+}
+
+fn instruct_role_text(format: &Option<Value>, key: &str) -> String {
+    format
+        .as_ref()
+        .and_then(|value| value.get(key))
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string()
+}
+
+fn instruct_stop_text(format: &Option<Value>) -> String {
+    format
+        .as_ref()
+        .and_then(|value| value.get("stopStrings"))
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .collect::<Vec<_>>()
+                .join("\n")
+        })
+        .unwrap_or_default()
 }
 
 fn virtualized_window(

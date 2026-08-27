@@ -1,7 +1,11 @@
 //! AI Settings rail panel. Mirrors `apps/web/src/components/ai-settings/AiSettingsPanel.tsx`
 //! as a providers/presets catalog, the memories editor, and the Advanced
-//! chat-template editor over Product Wire. The kernel plane has no
-//! instruct-format catalog (`useInstructFormats` → `{ formats: [] }`).
+//! chat-template editor over Product Wire. Custom ChatML role templates are
+//! edited locally and saved through `settings.update`. Text-completion
+//! prompt blocks list, toggle `enabled`, custom add/remove, compact
+//! editor (name / content / placement / role / triggers / forbidOverrides /
+//! model), and `prompt-template` presets (`presets.*`) over the same settings keys.
+//! The kernel plane has no instruct-format catalog (`useInstructFormats` → `{ formats: [] }`).
 
 use dioxus_core::Element;
 use dioxus_core_macro::rsx;
@@ -213,7 +217,7 @@ fn presets_tab(view: &ProductShellView) -> Element {
                             r#type: "button",
                             "data-part": "preset-card",
                             "data-state": if Some(item.id.as_str()) == view.selected_preset_id.as_deref() { "active" } else { "idle" },
-                            style: "display:flex;align-items:center;gap:8px;width:100%;height:60px;box-sizing:border-box;padding:0 12px;border:1px solid #39342f;border-radius:16px;background:#24211e;color:#f3eee8;",
+                            style: "display:flex;align-items:center;gap:8px;width:100%;height:60px;box-sizing:border-box;padding:0 12px;border:1px solid #39342f;border-radius:16px;background:#24211e;color:#f3eee8;transition:border-color var(--st-motion-duration-fast, 180ms) var(--st-motion-easing-standard, cubic-bezier(0.22, 1, 0.36, 1)),background-color var(--st-motion-duration-fast, 180ms) var(--st-motion-easing-standard, cubic-bezier(0.22, 1, 0.36, 1));",
                             span {
                                 style: "flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;",
                                 strong { style: "font-size:0.8125rem;", "{item.name}" }
@@ -425,10 +429,11 @@ fn memory_card(
     }
 }
 
-/// React `AdvancedPromptSettings` + `ChatTemplateEditor`. Built-in instruct
+/// React `AdvancedPromptSettings` + `ChatTemplateEditor` /
+/// `PromptTemplateEditor` (block list + enabled toggle). Built-in instruct
 /// formats are a legacy sidecar catalog — this plane lists native + custom
-/// only. Text-completion `PromptTemplateEditor` (block reorder / presets) is
-/// not ported; switching mode still persists `prompt-template` via Wire.
+/// only. Prompt-template presets, custom blocks, reorder, and import/export
+/// stay on the React plane; mode and `enabled` still persist through Wire.
 fn advanced_tab(view: &ProductShellView) -> Element {
     let chat_mode = view.prompt_template_mode != "text";
     let custom = view.instruct_selection == "custom";
@@ -442,6 +447,10 @@ fn advanced_tab(view: &ProductShellView) -> Element {
     } else {
         "Recommended for chat APIs. Roles are sent as structured provider messages."
     };
+    let prompt_preset_label = view
+        .prompt_preset_active_name
+        .clone()
+        .unwrap_or_else(|| "Unsaved current template".to_string());
     rsx! {
         div {
             class: "AiSettings_tabBody",
@@ -467,6 +476,7 @@ fn advanced_tab(view: &ProductShellView) -> Element {
                 section {
                     class: "AiSettings_templateEditor",
                     "data-component": "chat-template-editor",
+                    style: "display:flex;flex-direction:column;gap:8px;",
                     strong { style: "font-size:0.9375rem;height:20px;", "Chat template" }
                     p { style: "margin:0;color:#c5bbb2;font-size:0.75rem;", "Create the instruct format used to serialize system, user, assistant, and tool messages." }
                     label {
@@ -485,6 +495,42 @@ fn advanced_tab(view: &ProductShellView) -> Element {
                         small { style: "color:#998f87;", "{hint}" }
                     }
                     if custom {
+                        {instruct_role_field(
+                            "System message template",
+                            "instruct-system-input",
+                            &view.instruct_system,
+                            None,
+                        )}
+                        {instruct_role_field(
+                            "User message template",
+                            "instruct-user-input",
+                            &view.instruct_user,
+                            None,
+                        )}
+                        {instruct_role_field(
+                            "Assistant message template",
+                            "instruct-assistant-input",
+                            &view.instruct_assistant,
+                            None,
+                        )}
+                        {instruct_role_field(
+                            "Tool message template",
+                            "instruct-tool-input",
+                            &view.instruct_tool,
+                            None,
+                        )}
+                        {instruct_role_field(
+                            "Assistant prompt suffix",
+                            "instruct-suffix-input",
+                            &view.instruct_prompt_suffix,
+                            None,
+                        )}
+                        {instruct_role_field(
+                            "Stopping strings",
+                            "instruct-stops-input",
+                            &view.instruct_stop_strings,
+                            Some("One stopping string per line."),
+                        )}
                         button {
                             class: "st-button",
                             r#type: "button",
@@ -496,9 +542,166 @@ fn advanced_tab(view: &ProductShellView) -> Element {
                     }
                 }
             } else {
-                p {
-                    style: "margin:0;color:#998f87;font-size:0.75rem;",
-                    "The text-completion prompt template editor is not on this plane. Mode still persists through settings.update."
+                section {
+                    class: "AiSettings_templateEditor",
+                    "data-component": "prompt-template-editor",
+                    style: "display:flex;flex-direction:column;gap:8px;",
+                    strong { style: "font-size:0.9375rem;height:20px;", "Text-completion prompt template" }
+                    p {
+                        style: "margin:0;color:#c5bbb2;font-size:0.75rem;height:32px;line-height:16px;overflow:hidden;",
+                        "Arrange host context and custom prompts, control when they run, and save reusable presets."
+                    }
+                    p {
+                        style: "margin:0;color:#998f87;font-size:0.75rem;height:16px;line-height:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
+                        "Drag, import/export, and token audit stay on the React plane."
+                    }
+                    button {
+                        class: "st-button",
+                        r#type: "button",
+                        "data-part": "prompt-preset-cycle",
+                        "data-state": if view.active_prompt_preset_id.is_some() { "saved" } else { "unsaved" },
+                        "aria-label": "Prompt template preset",
+                        style: "height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;width:100%;box-sizing:border-box;transition:background-color var(--st-motion-duration-fast, 180ms) var(--st-motion-easing-standard, cubic-bezier(0.22, 1, 0.36, 1));",
+                        span {
+                            style: "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
+                            "{prompt_preset_label}"
+                        }
+                    }
+                    div {
+                        "data-part": "prompt-preset-actions",
+                        style: "display:flex;align-items:center;gap:8px;height:36px;",
+                        button {
+                            class: "st-button", r#type: "button",
+                            "data-part": "prompt-preset-save",
+                            style: "width:96px;height:36px;",
+                            span { "Save" }
+                        }
+                        button {
+                            class: "st-button", r#type: "button",
+                            "data-part": "prompt-preset-rename",
+                            style: "width:96px;height:36px;",
+                            span { "Rename" }
+                        }
+                        button {
+                            class: "st-button", r#type: "button",
+                            "data-part": "prompt-preset-duplicate",
+                            style: "width:96px;height:36px;",
+                            span { "Duplicate" }
+                        }
+                        button {
+                            class: "st-button", r#type: "button",
+                            "data-variant": "danger",
+                            "data-part": "prompt-preset-delete",
+                            style: "width:96px;height:36px;margin-left:auto;",
+                            span { "Delete" }
+                        }
+                    }
+                    button {
+                        class: "st-button",
+                        r#type: "button",
+                        "data-part": "prompt-block-add",
+                        "aria-label": "Add prompt",
+                        style: "width:140px;height:36px;",
+                        span { "Add prompt" }
+                    }
+                    div {
+                        "data-part": "prompt-block-list",
+                        style: "display:flex;flex-direction:column;gap:8px;",
+                        for block in view.prompt_blocks.iter() {
+                            {
+                                let id = block.id.clone();
+                                let name = block.name.clone();
+                                let enabled = block.enabled;
+                                let custom = block.custom;
+                                let can_move_up = block.can_move_up;
+                                let can_move_down = block.can_move_down;
+                                let injection_in_chat = block.injection_in_chat;
+                                let injection_depth = block.injection_depth;
+                                let kind = if custom { "custom" } else { "marker" };
+                                let state = if enabled { "enabled" } else { "disabled" };
+                                let toggle = if enabled { "On" } else { "Off" };
+                                let aria = if enabled {
+                                    format!("Disable {name}")
+                                } else {
+                                    format!("Enable {name}")
+                                };
+                                let edit_aria = format!("Edit {name}");
+                                let remove_aria = format!("Remove {name} from this template");
+                                let up_aria = format!("Move {name} up");
+                                let down_aria = format!("Move {name} down");
+                                let display_name = if injection_in_chat {
+                                    format!("{name} @ {injection_depth}")
+                                } else {
+                                    name.clone()
+                                };
+                                let up_state = if can_move_up { "enabled" } else { "disabled" };
+                                let down_state = if can_move_down { "enabled" } else { "disabled" };
+                                let up_color = if can_move_up { "#e8eef7" } else { "#998f87" };
+                                let down_color = if can_move_down { "#e8eef7" } else { "#998f87" };
+                                rsx! {
+                                    div {
+                                        key: "{id}",
+                                        "data-part": "prompt-block",
+                                        "data-block-id": "{id}",
+                                        "data-kind": "{kind}",
+                                        "data-state": "{state}",
+                                        style: "height:36px;display:flex;align-items:center;gap:8px;width:100%;box-sizing:border-box;",
+                                        button {
+                                            class: "st-button",
+                                            r#type: "button",
+                                            "data-part": "prompt-block-toggle",
+                                            "aria-pressed": enabled,
+                                            "aria-label": "{aria}",
+                                            style: "width:48px;height:36px;flex:none;transition:background-color var(--st-motion-duration-fast, 180ms) var(--st-motion-easing-standard, cubic-bezier(0.22, 1, 0.36, 1));",
+                                            span { "{toggle}" }
+                                        }
+                                        button {
+                                            class: "st-button",
+                                            r#type: "button",
+                                            "data-part": "prompt-block-name",
+                                            "aria-label": "{edit_aria}",
+                                            style: "flex:1;height:36px;min-width:0;display:flex;align-items:center;padding:0 12px;overflow:hidden;transition:background-color var(--st-motion-duration-fast, 180ms) var(--st-motion-easing-standard, cubic-bezier(0.22, 1, 0.36, 1));",
+                                            span {
+                                                style: "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
+                                                "{display_name}"
+                                            }
+                                        }
+                                        button {
+                                            class: "st-button",
+                                            r#type: "button",
+                                            "data-part": "prompt-block-move-up",
+                                            "data-state": "{up_state}",
+                                            "aria-label": "{up_aria}",
+                                            "aria-disabled": !can_move_up,
+                                            style: "width:32px;height:36px;flex:none;color:{up_color};",
+                                            span { "Up" }
+                                        }
+                                        button {
+                                            class: "st-button",
+                                            r#type: "button",
+                                            "data-part": "prompt-block-move-down",
+                                            "data-state": "{down_state}",
+                                            "aria-label": "{down_aria}",
+                                            "aria-disabled": !can_move_down,
+                                            style: "width:32px;height:36px;flex:none;color:{down_color};",
+                                            span { "Down" }
+                                        }
+                                        if custom {
+                                            button {
+                                                class: "st-button",
+                                                r#type: "button",
+                                                "data-variant": "danger",
+                                                "data-part": "prompt-block-remove",
+                                                "aria-label": "{remove_aria}",
+                                                style: "width:36px;height:36px;flex:none;",
+                                                span { "\u{00d7}" }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
             if let Some(error) = view.instruct_form_error.as_deref() {
@@ -508,6 +711,25 @@ fn advanced_tab(view: &ProductShellView) -> Element {
                     style: "margin:0;color:#f2b8b5;font-size:0.75rem;",
                     "{error}"
                 }
+            }
+        }
+    }
+}
+
+fn instruct_role_field(label: &str, part: &str, value: &str, hint: Option<&str>) -> Element {
+    let height = if hint.is_some() { 72 } else { 56 };
+    rsx! {
+        label {
+            class: "AiSettings_field",
+            style: "display:flex;flex-direction:column;gap:4px;height:{height}px;box-sizing:border-box;",
+            span { style: "flex:none;height:16px;font-size:0.75rem;color:#c5bbb2;", "{label}" }
+            span {
+                "data-part": "{part}",
+                style: "display:block;width:100%;height:36px;line-height:36px;padding:0 12px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;color:#e8eef7;font-size:0.8125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;",
+                "{value}"
+            }
+            if let Some(hint) = hint {
+                small { style: "flex:none;height:16px;color:#998f87;font-size:0.75rem;", "{hint}" }
             }
         }
     }

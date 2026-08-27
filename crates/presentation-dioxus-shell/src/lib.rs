@@ -37,9 +37,9 @@ pub use product_shell::{
     install_product_shell, lorebook_card_description, panel_header_title, persona_card_description,
     product_shell_app, BackupCardView, CharacterCardView, CharacterDraftView, ChatCardView,
     LorebookCardView, LorebookEntryCardView, MemoryCardView, PersonaCardView, PluginCardView,
-    PresetCardView, PresetValueRow, ProductShellView, ProfileCardView, ProviderCardView,
-    ProviderConfigCardView, RunStepView, ThemeCardView, ToolCardView, AI_SETTINGS_TITLE,
-    BACKGROUNDS_MANAGER_TITLE, CHARACTER_MANAGER_TITLE, CHATS_MANAGER_TITLE,
+    PresetCardView, PresetValueRow, ProductShellView, ProfileCardView, PromptBlockView,
+    ProviderCardView, ProviderConfigCardView, RunStepView, ThemeCardView, ToolCardView,
+    AI_SETTINGS_TITLE, BACKGROUNDS_MANAGER_TITLE, CHARACTER_MANAGER_TITLE, CHATS_MANAGER_TITLE,
     LOREBOOK_MANAGER_TITLE, PERSONA_MANAGER_TITLE, PLUGINS_MANAGER_TITLE, SETTINGS_TITLE,
 };
 pub use scene_chat::{

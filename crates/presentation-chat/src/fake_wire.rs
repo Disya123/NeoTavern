@@ -429,6 +429,15 @@ impl FakeWire {
             created_at: TS.into(),
             updated_at: TS.into(),
         });
+        // Prompt-template presets (`presets.list` kind `prompt-template`).
+        wire.presets.push(PresetDto {
+            id: wire_id(0x8103),
+            kind: "prompt-template".into(),
+            name: "Roleplay".into(),
+            data: demo_prompt_template(),
+            created_at: TS.into(),
+            updated_at: TS.into(),
+        });
         // Backup catalog (kernel `backups.list`; status "completed" per the
         // kernel backup module).
         let backup = |id_high: u64, size_bytes: i64| BackupDto {
@@ -2498,6 +2507,46 @@ fn role_str(role: &MessageRole) -> &'static str {
 
 fn wire_id(n: u64) -> String {
     format!("00000000-0000-4000-8000-{n:012x}")
+}
+
+fn demo_prompt_template() -> Value {
+    let ids = [
+        "main-prompt",
+        "world-info-before",
+        "persona",
+        "character-description",
+        "character-personality",
+        "scenario",
+        "world-info-after",
+        "dialogue-examples",
+        "memory",
+        "authors-note",
+        "chat-history",
+        "post-history-instructions",
+    ];
+    let blocks: Vec<Value> = ids
+        .iter()
+        .map(|id| {
+            if *id == "main-prompt" {
+                json!({
+                    "id": id,
+                    "enabled": true,
+                    "role": "system",
+                    "content": "Write {{char}}'s next reply in a fictional chat between {{char}} and {{user}}.",
+                    "injectionPosition": "relative",
+                    "triggers": ["normal", "continue", "impersonate", "swipe", "regenerate", "quiet"],
+                    "forbidOverrides": false,
+                })
+            } else {
+                json!({ "id": id, "enabled": true })
+            }
+        })
+        .collect();
+    json!({
+        "mode": "text",
+        "blocks": blocks,
+        "postHistoryInstructions": "Keep the roleplay engaging. Drive the story forward proactively while staying in character.",
+    })
 }
 
 fn demo_character() -> CharacterDto {

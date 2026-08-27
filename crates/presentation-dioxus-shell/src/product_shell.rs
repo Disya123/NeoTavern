@@ -252,6 +252,23 @@ pub struct MemoryCardView {
     pub enabled: bool,
 }
 
+/// One text-completion prompt block (React `PromptTemplateEditor` row).
+#[derive(Clone, Debug, PartialEq)]
+pub struct PromptBlockView {
+    pub id: String,
+    pub name: String,
+    pub enabled: bool,
+    pub custom: bool,
+    /// React `movePromptBlockUp` — false for terminals and index 0.
+    pub can_move_up: bool,
+    /// React `canMoveDown` — false for terminals and when the next row is
+    /// a terminal anchor.
+    pub can_move_down: bool,
+    /// `injectionPosition === "in-chat"` (React `@ {depth}` on the row).
+    pub injection_in_chat: bool,
+    pub injection_depth: u32,
+}
+
 /// One read-only sampler row on the Config tab (label + formatted value).
 #[derive(Clone, Debug, PartialEq)]
 pub struct PresetValueRow {
@@ -456,6 +473,12 @@ pub struct ProductShellView {
     pub preset_name_draft: String,
     pub preset_form_error: Option<String>,
     pub preset_delete_open: bool,
+    /// Shared name/delete dialog family (`generation` / `prompt-template`).
+    pub preset_dialog_kind: String,
+    /// Advanced tab prompt-template presets (React `PromptTemplateEditor`).
+    pub prompt_presets: Vec<PresetCardView>,
+    pub active_prompt_preset_id: Option<String>,
+    pub prompt_preset_active_name: Option<String>,
     /// API tab provider profiles (`providers.config.*`) and the new-profile
     /// dialog state.
     pub provider_configs: Vec<ProviderConfigCardView>,
@@ -503,6 +526,36 @@ pub struct ProductShellView {
     pub prompt_template_mode: String,
     pub instruct_selection: String,
     pub instruct_form_error: Option<String>,
+    /// Text-completion prompt blocks (React `PromptTemplateEditor` list).
+    /// Empty until the template is hydrated (mode `text` seeds the default).
+    pub prompt_blocks: Vec<PromptBlockView>,
+    /// Compact prompt-block editor (React `PromptBlockEditorDialog`).
+    pub prompt_block_edit_open: bool,
+    pub prompt_block_name_draft: String,
+    pub prompt_block_content_draft: String,
+    pub prompt_block_content_editable: bool,
+    /// React `injectionPosition` draft (`relative` / `in-chat`).
+    pub prompt_block_injection_position: String,
+    pub prompt_block_depth_draft: String,
+    pub prompt_block_order_draft: String,
+    /// React `role` draft (`system` / `user` / `assistant`).
+    pub prompt_block_role: String,
+    /// React `triggers` draft. Omitted stored list hydrates as every kind.
+    pub prompt_block_triggers: Vec<String>,
+    /// React `forbidOverrides` draft. Switch is visible only for editable
+    /// `system` blocks.
+    pub prompt_block_forbid_overrides: bool,
+    /// React `model` draft. Empty = every model (no binding).
+    pub prompt_block_model_draft: String,
+    /// Custom ChatML role templates (React `ChatTemplateEditor` textareas).
+    /// Empty when serialization is native.
+    pub instruct_system: String,
+    pub instruct_user: String,
+    pub instruct_assistant: String,
+    pub instruct_tool: String,
+    pub instruct_prompt_suffix: String,
+    /// Newline-joined stopping strings (React `stopStrings.join('\n')`).
+    pub instruct_stop_strings: String,
 }
 
 impl Default for ProductShellView {
@@ -617,6 +670,10 @@ impl Default for ProductShellView {
             preset_name_draft: String::new(),
             preset_form_error: None,
             preset_delete_open: false,
+            preset_dialog_kind: "generation".into(),
+            prompt_presets: Vec::new(),
+            active_prompt_preset_id: None,
+            prompt_preset_active_name: None,
             provider_configs: Vec::new(),
             provider_create_dialog_open: false,
             provider_kind_label: None,
@@ -652,6 +709,24 @@ impl Default for ProductShellView {
             prompt_template_mode: "chat".into(),
             instruct_selection: "native".into(),
             instruct_form_error: None,
+            prompt_blocks: Vec::new(),
+            prompt_block_edit_open: false,
+            prompt_block_name_draft: String::new(),
+            prompt_block_content_draft: String::new(),
+            prompt_block_content_editable: false,
+            prompt_block_injection_position: String::new(),
+            prompt_block_depth_draft: String::new(),
+            prompt_block_order_draft: String::new(),
+            prompt_block_role: String::new(),
+            prompt_block_triggers: Vec::new(),
+            prompt_block_forbid_overrides: false,
+            prompt_block_model_draft: String::new(),
+            instruct_system: String::new(),
+            instruct_user: String::new(),
+            instruct_assistant: String::new(),
+            instruct_tool: String::new(),
+            instruct_prompt_suffix: String::new(),
+            instruct_stop_strings: String::new(),
         }
     }
 }
@@ -1204,7 +1279,7 @@ fn cards_tab(view: &ProductShellView) -> Element {
     }
 }
 
-fn edit_tab(draft: &CharacterDraftView) -> Element {
+fn edit_tab(view: &ProductShellView, draft: &CharacterDraftView) -> Element {
     rsx! {
         div {
             class: "CharacterManagementPanel_editor",
@@ -1261,9 +1336,106 @@ fn edit_tab(draft: &CharacterDraftView) -> Element {
                     p { "Identity, greeting, attribution, and tags." }
                 }
             }
-            {editor_field("Name", &draft.name, None, false, false, true)}
+            label {
+                class: "CharacterManagementPanel_editorField",
+                style: "display:flex;flex-direction:column;gap:4px;height:56px;box-sizing:border-box;",
+                span { class: "CharacterManagementPanel_fieldHeading", strong { "Name" } }
+                span {
+                    "data-part": "character-name-input",
+                    style: "display:block;width:100%;height:36px;line-height:36px;padding:0 12px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;color:#e8eef7;font-size:0.8125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;",
+                    "{draft.name}"
+                }
+            }
+            label {
+                class: "CharacterManagementPanel_editorField",
+                style: "display:flex;flex-direction:column;gap:4px;height:88px;box-sizing:border-box;",
+                span { class: "CharacterManagementPanel_fieldHeading", strong { "Description" } }
+                span {
+                    "data-part": "character-description-input",
+                    style: "display:block;width:100%;height:64px;line-height:20px;padding:8px 12px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;color:#e8eef7;font-size:0.8125rem;overflow:hidden;box-sizing:border-box;",
+                    if draft.description.is_empty() {
+                        span { style: "color:#998f87;", "No character description yet." }
+                    } else {
+                        "{draft.description}"
+                    }
+                }
+            }
+            button {
+                class: "st-button",
+                r#type: "button",
+                "data-part": "character-save",
+                "data-variant": "primary",
+                style: "width:96px;height:36px;",
+                span { "data-part": "label", "Save" }
+            }
+            section {
+                class: "CharacterManagementPanel_tagEditor",
+                "data-part": "character-tag-editor",
+                style: "display:flex;flex-direction:column;gap:8px;",
+                strong { style: "height:20px;font-size:0.875rem;", "Tags" }
+                div {
+                    class: "CharacterManagementPanel_tagInputRow",
+                    style: "display:flex;align-items:center;gap:8px;height:36px;",
+                    span {
+                        "data-part": "character-tag-input",
+                        "aria-label": "New tag",
+                        style: "flex:1;min-width:0;height:36px;line-height:36px;padding:0 12px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;color:#e8eef7;font-size:0.8125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;",
+                        if view.tag_input.is_empty() {
+                            span { style: "color:#998f87;", "Type one tag" }
+                        } else {
+                            "{view.tag_input}"
+                        }
+                    }
+                    button {
+                        class: "st-button",
+                        r#type: "button",
+                        "data-component": "button",
+                        "data-variant": "default",
+                        "data-size": "sm",
+                        "data-part": "character-tag-add",
+                        "aria-label": "Add tag",
+                        style: "width:96px;height:36px;flex:none;",
+                        span { "data-part": "icon", "aria-hidden": "true", {icon("Plus", 15)} }
+                        span { "data-part": "label", "Add tag" }
+                    }
+                }
+                if draft.tags.is_empty() {
+                    small { class: "CharacterManagementPanel_inlineEmpty", "No tags assigned." }
+                } else {
+                    div {
+                        class: "CharacterManagementPanel_tagChips",
+                        "data-part": "character-tag-chips",
+                        "aria-label": "Assigned tags",
+                        style: "display:flex;flex-direction:column;gap:4px;",
+                        for tag in draft.tags.iter() {
+                            {
+                                let tag = tag.clone();
+                                let remove_aria = format!("Remove tag {tag}");
+                                rsx! {
+                                    button {
+                                        class: "st-button",
+                                        r#type: "button",
+                                        key: "{tag}",
+                                        "data-part": "character-tag-chip",
+                                        "aria-label": "{remove_aria}",
+                                        style: "height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;width:100%;box-sizing:border-box;",
+                                        span {
+                                            style: "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
+                                            "{tag}"
+                                        }
+                                        span { "aria-hidden": "true", {icon("X", 13)} }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            p {
+                style: "margin:0;color:#998f87;font-size:0.75rem;height:16px;line-height:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
+                "First message, greetings, and creator notes stay on the React plane."
+            }
             {editor_field("Creator's notes", &draft.creator_notes, None, true, false, false)}
-            {editor_field("Description", &draft.description, None, true, true, false)}
             {editor_field("First message", &draft.first_message, None, true, true, false)}
             section {
                 class: "CharacterManagementPanel_greetings",
@@ -1314,46 +1486,6 @@ fn edit_tab(draft: &CharacterDraftView) -> Element {
                                             {icon("Trash", 15)}
                                         }
                                     }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            section {
-                class: "CharacterManagementPanel_tagEditor",
-                strong { "Tags" }
-                div {
-                    class: "CharacterManagementPanel_tagInputRow",
-                    input {
-                        r#type: "text",
-                        placeholder: "Type one tag",
-                        "aria-label": "New tag",
-                    }
-                    button {
-                        class: "st-button",
-                        r#type: "button",
-                        "data-component": "button",
-                        "data-variant": "default",
-                        "data-size": "sm",
-                        span { "data-part": "icon", "aria-hidden": "true", {icon("Plus", 15)} }
-                        span { "data-part": "label", "Add tag" }
-                    }
-                }
-                if draft.tags.is_empty() {
-                    small { class: "CharacterManagementPanel_inlineEmpty", "No tags assigned." }
-                } else {
-                    div {
-                        class: "CharacterManagementPanel_tagChips",
-                        "aria-label": "Assigned tags",
-                        for tag in draft.tags.iter() {
-                            span {
-                                key: "{tag}",
-                                "{tag}"
-                                button {
-                                    r#type: "button",
-                                    "aria-label": "Remove tag {tag}",
-                                    {icon("X", 13)}
                                 }
                             }
                         }
@@ -1782,7 +1914,7 @@ fn character_manager(view: &ProductShellView) -> Element {
                                 "cards" => {cards_tab(view)},
                                 "edit" => {
                                     if let Some(draft) = &view.selected_draft {
-                                        {edit_tab(draft)}
+                                        {edit_tab(view, draft)}
                                     } else {
                                         {cards_tab(view)}
                                     }
@@ -2191,12 +2323,19 @@ pub fn product_shell_app() -> Element {
     let wallpaper_mode = crate::scene_chat::chat_wallpaper_mode();
     let shell_class = if wallpaper_mode { "" } else { "AppShell_shell" };
     let overlay_alpha = (view.ui_opacity.min(100) as f32 / 100.0) * 0.45;
-    let pref_vars = format!(
-        "--st-custom-ui-opacity:{}%;--st-custom-glass-blur:{}px;--st-effect-glass-blur:{}px;--st-custom-wallpaper-overlay-alpha:{overlay_alpha:.2};",
-        view.ui_opacity.min(100),
-        view.ui_glass_blur.min(40),
-        view.ui_glass_blur.min(40),
-    );
+    let pref_vars = {
+        let motion = if view.ui_motion == "reduced" {
+            "--st-motion-duration-fast:1ms;--st-motion-duration-normal:1ms;--st-motion-duration-slow:1ms;"
+        } else {
+            ""
+        };
+        format!(
+            "--st-custom-ui-opacity:{}%;--st-custom-glass-blur:{}px;--st-effect-glass-blur:{}px;--st-custom-wallpaper-overlay-alpha:{overlay_alpha:.2};{motion}",
+            view.ui_opacity.min(100),
+            view.ui_glass_blur.min(40),
+            view.ui_glass_blur.min(40),
+        )
+    };
     let shell_css = if wallpaper_mode {
         format!(
             "display:flex;flex-direction:{row_dir};width:100%;height:100%;background:transparent;color:#f3eee8;position:relative;overflow:hidden;{pref_vars}"
@@ -2270,13 +2409,115 @@ pub fn product_shell_app() -> Element {
     let preset_name_style = format!(
         "position:absolute;left:{ndlg_x}px;top:{ndlg_y}px;width:{ndlg_w}px;height:{ndlg_h}px;box-sizing:border-box;z-index:50;padding:16px;color:#f3eee8;"
     );
-    let preset_name_title = if view.preset_name_mode.as_deref() == Some("rename") {
-        "Rename preset"
-    } else {
-        "Save as new preset"
+    let preset_name_title = match view.preset_name_mode.as_deref() {
+        Some("rename") => "Rename preset",
+        Some("duplicate") => "Duplicate preset as",
+        _ => "New preset name",
     };
     let preset_name_value = view.preset_name_draft.clone();
-    let preset_delete_name = view.preset_active_name.clone().unwrap_or_default();
+    let prompt_block_in_chat = view.prompt_block_injection_position == "in-chat";
+    let (pb_x, pb_y, pb_w, pb_h) = modal_geometry(
+        &view,
+        400.0,
+        if prompt_block_in_chat { 584.0 } else { 500.0 },
+    );
+    let prompt_block_editor_style = format!(
+        "position:absolute;left:{pb_x}px;top:{pb_y}px;width:{pb_w}px;height:{pb_h}px;box-sizing:border-box;z-index:50;padding:16px;color:#f3eee8;"
+    );
+    let prompt_block_name_value = view.prompt_block_name_draft.clone();
+    let prompt_block_content_value = view.prompt_block_content_draft.clone();
+    let prompt_block_content_editable = view.prompt_block_content_editable;
+    let prompt_block_position_label = if prompt_block_in_chat {
+        "In-chat"
+    } else {
+        "Relative"
+    };
+    let prompt_block_position_state = if prompt_block_in_chat {
+        "in-chat"
+    } else {
+        "relative"
+    };
+    let prompt_block_depth_value = view.prompt_block_depth_draft.clone();
+    let prompt_block_order_value = view.prompt_block_order_draft.clone();
+    let prompt_block_role_state = match view.prompt_block_role.as_str() {
+        "user" => "user",
+        "assistant" => "assistant",
+        _ => "system",
+    };
+    let prompt_block_role_label = match prompt_block_role_state {
+        "user" => "User",
+        "assistant" => "AI Assistant",
+        _ => "System",
+    };
+    let prompt_block_trigger_row0 = if prompt_block_in_chat { 264.0 } else { 204.0 };
+    let prompt_block_trigger_chip_w = (pb_w - 32.0 - 16.0) / 3.0;
+    let prompt_block_trigger_chips: Vec<(String, String, bool, f32, f32)> = [
+        ("normal", "Normal"),
+        ("continue", "Continue"),
+        ("impersonate", "Impersonate"),
+        ("swipe", "Swipe"),
+        ("regenerate", "Regenerate"),
+        ("quiet", "Quiet"),
+    ]
+    .iter()
+    .enumerate()
+    .map(|(i, (id, label))| {
+        let pressed = view.prompt_block_triggers.iter().any(|item| item == id);
+        let col = (i % 3) as f32;
+        let row = (i / 3) as f32;
+        let left = 16.0 + col * (prompt_block_trigger_chip_w + 8.0);
+        let top = prompt_block_trigger_row0 + row * 44.0;
+        (id.to_string(), label.to_string(), pressed, left, top)
+    })
+    .collect();
+    let prompt_block_content_top = if prompt_block_in_chat { 352 } else { 292 };
+    let prompt_block_forbid_visible =
+        prompt_block_content_editable && prompt_block_role_state == "system";
+    let prompt_block_forbid_on = view.prompt_block_forbid_overrides;
+    let prompt_block_forbid_state = if prompt_block_forbid_on { "on" } else { "off" };
+    let (prompt_block_forbid_track, prompt_block_forbid_thumb) =
+        entry_switch_style(prompt_block_forbid_on);
+    let prompt_block_field_top = if prompt_block_forbid_visible {
+        prompt_block_content_top + 36
+    } else {
+        prompt_block_content_top
+    };
+    let prompt_block_content_box_h = if prompt_block_forbid_visible { 36 } else { 72 };
+    let prompt_block_content_field_h = if prompt_block_forbid_visible { 32 } else { 56 };
+    let prompt_block_model_top = if prompt_block_in_chat { 432 } else { 372 };
+    let prompt_block_model_hint_top = prompt_block_model_top + 40;
+    let prompt_block_model_value = view.prompt_block_model_draft.clone();
+    let prompt_block_model_empty = prompt_block_model_value.is_empty();
+    let prompt_block_model_display = if prompt_block_model_empty {
+        "Every model (no binding)".to_string()
+    } else {
+        prompt_block_model_value
+    };
+    let prompt_block_has_provider = view.selected_provider_id.is_some();
+    let prompt_block_model_hint = if prompt_block_has_provider {
+        "Bind this prompt to one model of the active provider."
+    } else {
+        "No active provider — pick a model first in the API tab."
+    };
+    let prompt_block_model_color = if !prompt_block_has_provider || prompt_block_model_empty {
+        "#998f87"
+    } else {
+        "#e8eef7"
+    };
+    let preset_delete_name = if view.preset_dialog_kind == "prompt-template" {
+        view.prompt_preset_active_name.clone().unwrap_or_default()
+    } else {
+        view.preset_active_name.clone().unwrap_or_default()
+    };
+    let preset_delete_copy = if view.preset_dialog_kind == "prompt-template" {
+        format!(
+            "Delete \"{preset_delete_name}\"? The selection returns to Unsaved current template."
+        )
+    } else {
+        format!(
+            "Delete \"{preset_delete_name}\"? The selection returns to unsaved generation settings."
+        )
+    };
     let (pvdlg_x, pvdlg_y, pvdlg_w, pvdlg_h) = modal_geometry(&view, 320.0, 240.0);
     let provider_dlg_style = format!(
         "position:absolute;left:{pvdlg_x}px;top:{pvdlg_y}px;width:{pvdlg_w}px;height:{pvdlg_h}px;box-sizing:border-box;z-index:50;padding:16px;color:#f3eee8;"
@@ -2880,6 +3121,166 @@ pub fn product_shell_app() -> Element {
                     }
                 }
             }
+            if view.prompt_block_edit_open {
+                div {
+                    class: "st-card",
+                    "data-component": "prompt-block-editor",
+                    style: "{prompt_block_editor_style}",
+                    div {
+                        "data-component": "dialog-title",
+                        "Edit prompt"
+                    }
+                    div {
+                        style: "position:absolute;left:16px;top:56px;right:16px;height:52px;display:flex;flex-direction:column;gap:2px;",
+                        span { class: "CharacterManagementPanel_fieldHeading", strong { "Name" } }
+                        span {
+                            "data-part": "prompt-block-name-input",
+                            style: "height:32px;line-height:32px;padding:0 12px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;color:#e8eef7;font-size:0.8125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;",
+                            "{prompt_block_name_value}"
+                        }
+                    }
+                    button {
+                        class: "st-button",
+                        r#type: "button",
+                        "data-part": "prompt-block-role-cycle",
+                        "data-state": "{prompt_block_role_state}",
+                        "aria-label": "Role",
+                        style: "position:absolute;left:16px;right:16px;top:116px;height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;",
+                        span { "Role" }
+                        span { "{prompt_block_role_label}" }
+                    }
+                    button {
+                        class: "st-button",
+                        r#type: "button",
+                        "data-part": "prompt-block-position-cycle",
+                        "data-state": "{prompt_block_position_state}",
+                        "aria-label": "Position",
+                        style: "position:absolute;left:16px;right:16px;top:160px;height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;",
+                        span { "Position" }
+                        span { "{prompt_block_position_label}" }
+                    }
+                    if prompt_block_in_chat {
+                        div {
+                            style: "position:absolute;left:16px;top:204px;width:calc(50% - 20px);height:52px;display:flex;flex-direction:column;gap:2px;",
+                            span { class: "CharacterManagementPanel_fieldHeading", strong { "Depth" } }
+                            span {
+                                "data-part": "prompt-block-depth-input",
+                                style: "height:32px;line-height:32px;padding:0 12px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;color:#e8eef7;font-size:0.8125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;",
+                                "{prompt_block_depth_value}"
+                            }
+                        }
+                        div {
+                            style: "position:absolute;right:16px;top:204px;width:calc(50% - 20px);height:52px;display:flex;flex-direction:column;gap:2px;",
+                            span { class: "CharacterManagementPanel_fieldHeading", strong { "Order" } }
+                            span {
+                                "data-part": "prompt-block-order-input",
+                                style: "height:32px;line-height:32px;padding:0 12px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;color:#e8eef7;font-size:0.8125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;",
+                                "{prompt_block_order_value}"
+                            }
+                        }
+                    }
+                    for (id, label, pressed, left, top) in prompt_block_trigger_chips.iter() {
+                        {
+                            let id = id.clone();
+                            let label = label.clone();
+                            let pressed = *pressed;
+                            let left = *left;
+                            let top = *top;
+                            let chip_w = prompt_block_trigger_chip_w;
+                            let state = if pressed { "on" } else { "off" };
+                            let bg = if pressed { "#3d342e" } else { "#1e1b18" };
+                            let color = if pressed { "#f3eee8" } else { "#c5bbb2" };
+                            let border = if pressed { "#e38a62" } else { "#39342f" };
+                            rsx! {
+                                button {
+                                    class: "st-button",
+                                    r#type: "button",
+                                    "data-part": "prompt-block-trigger",
+                                    "data-trigger": "{id}",
+                                    "data-state": "{state}",
+                                    "aria-pressed": pressed,
+                                    "aria-label": "{label}",
+                                    style: "position:absolute;left:{left}px;top:{top}px;width:{chip_w}px;height:36px;padding:0 4px;border:1px solid {border};background:{bg};color:{color};font-size:0.75rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
+                                    span { "{label}" }
+                                }
+                            }
+                        }
+                    }
+                    if prompt_block_forbid_visible {
+                        button {
+                            r#type: "button",
+                            "data-part": "prompt-block-forbid-overrides",
+                            "data-state": "{prompt_block_forbid_state}",
+                            "aria-pressed": prompt_block_forbid_on,
+                            "aria-label": "Forbid Overrides",
+                            style: "position:absolute;left:16px;top:{prompt_block_content_top}px;right:16px;height:36px;display:flex;align-items:center;justify-content:space-between;padding:0;border:0;background:transparent;color:#f3eee8;",
+                            span { style: "font-size:0.8125rem;", "Forbid Overrides" }
+                            span { style: "{prompt_block_forbid_track}", span { style: "{prompt_block_forbid_thumb}" } }
+                        }
+                    }
+                    if prompt_block_content_editable {
+                        div {
+                            style: "position:absolute;left:16px;top:{prompt_block_field_top}px;right:16px;height:{prompt_block_content_box_h}px;display:flex;flex-direction:column;gap:2px;",
+                            if !prompt_block_forbid_visible {
+                                span { class: "CharacterManagementPanel_fieldHeading", strong { "Prompt" } }
+                            }
+                            span {
+                                "data-part": "prompt-block-content-input",
+                                style: "height:{prompt_block_content_field_h}px;line-height:20px;padding:8px 12px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;color:#e8eef7;font-size:0.8125rem;overflow:hidden;",
+                                if prompt_block_content_value.is_empty() {
+                                    span { style: "color:#998f87;", "The prompt to be sent." }
+                                } else {
+                                    "{prompt_block_content_value}"
+                                }
+                            }
+                        }
+                    } else {
+                        p {
+                            "data-part": "external-prompt-source",
+                            style: "position:absolute;left:16px;top:{prompt_block_field_top}px;right:16px;margin:0;color:#c5bbb2;font-size:0.75rem;height:{prompt_block_content_field_h}px;line-height:16px;overflow:hidden;",
+                            "The content of this prompt is pulled from elsewhere and cannot be edited here."
+                        }
+                    }
+                    div {
+                        "data-part": "prompt-block-model-binding",
+                        style: "position:absolute;left:16px;top:{prompt_block_model_top}px;right:16px;height:36px;display:flex;align-items:center;gap:8px;",
+                        span {
+                            "data-part": "prompt-block-model-input",
+                            style: "flex:1;min-width:0;height:32px;line-height:32px;padding:0 12px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;color:{prompt_block_model_color};font-size:0.8125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;",
+                            "{prompt_block_model_display}"
+                        }
+                        button {
+                            class: "st-button",
+                            r#type: "button",
+                            "data-part": "prompt-block-model-load",
+                            "aria-label": "Load models",
+                            style: "width:96px;height:36px;flex:none;",
+                            span { "Load" }
+                        }
+                    }
+                    p {
+                        "data-part": "prompt-block-model-hint",
+                        style: "position:absolute;left:16px;right:16px;top:{prompt_block_model_hint_top}px;margin:0;color:#998f87;font-size:0.75rem;height:16px;line-height:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
+                        "{prompt_block_model_hint}"
+                    }
+                    div {
+                        class: "CharacterManagementPanel_dialogActions",
+                        style: "position:absolute;left:16px;right:16px;bottom:16px;display:flex;gap:8px;justify-content:flex-end;",
+                        button {
+                            r#type: "button",
+                            "data-variant": "default",
+                            "data-size": "md",
+                            span { "Cancel" }
+                        }
+                        button {
+                            r#type: "button",
+                            "data-variant": "primary",
+                            "data-size": "md",
+                            span { "Save" }
+                        }
+                    }
+                }
+            }
             if view.provider_create_dialog_open {
                 div {
                     class: "st-card",
@@ -2932,7 +3333,7 @@ pub fn product_shell_app() -> Element {
                     }
                     div {
                         "data-component": "dialog-description",
-                        "Delete \"{preset_delete_name}\"? The selection returns to unsaved generation settings."
+                        "{preset_delete_copy}"
                     }
                     div {
                         class: "CharacterManagementPanel_dialogActions",
