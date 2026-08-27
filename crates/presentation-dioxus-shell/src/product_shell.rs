@@ -269,11 +269,18 @@ pub struct PromptBlockView {
     pub injection_depth: u32,
 }
 
-/// One read-only sampler row on the Config tab (label + formatted value).
+/// One generation-preset control on the Config tab (React `RangeField` /
+/// Switch). Native uses a compact numeric field or toggle instead of a
+/// range slider; `id` is the contract key (`maxContextTokens`, `temperature`,
+/// `stream`, …).
 #[derive(Clone, Debug, PartialEq)]
 pub struct PresetValueRow {
+    pub id: String,
     pub label: String,
     pub value: String,
+    /// `"number"` or `"toggle"`.
+    pub kind: String,
+    pub focused: bool,
 }
 
 /// One provider connection profile row (API tab): display name plus a
@@ -464,9 +471,10 @@ pub struct ProductShellView {
     pub memory_delete_open: bool,
     pub memory_delete_target_id: Option<String>,
     /// Config tab preset editor state (React `GenerationPresetEditor`):
-    /// read-only sampler rows of the active preset, its name, the rename /
-    /// save-as dialog and delete confirmation.
+    /// live sampler draft (numeric fields + toggles), unlock-context switch,
+    /// its name, the rename / save-as dialog and delete confirmation.
     pub preset_rows: Vec<PresetValueRow>,
+    pub preset_unlocked_context: bool,
     pub preset_active_name: Option<String>,
     pub preset_name_dialog_open: bool,
     pub preset_name_mode: Option<String>,
@@ -670,6 +678,7 @@ impl Default for ProductShellView {
             memory_delete_open: false,
             memory_delete_target_id: None,
             preset_rows: Vec::new(),
+            preset_unlocked_context: false,
             preset_active_name: None,
             preset_name_dialog_open: false,
             preset_name_mode: None,

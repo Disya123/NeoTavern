@@ -3834,7 +3834,7 @@ fn generation_preset_management_over_product_wire() {
         shell
             .preset_rows
             .iter()
-            .find(|row| row.label == "Context size")
+            .find(|row| row.label == "Context size (tokens)")
             .map(|row| row.value.as_str()),
         Some("8192")
     );
@@ -3994,7 +3994,7 @@ fn generation_preset_import_export_over_product_wire() {
         shell
             .preset_rows
             .iter()
-            .find(|row| row.label == "Context size")
+            .find(|row| row.label == "Context size (tokens)")
             .map(|row| row.value.as_str()),
         Some("8192")
     );
@@ -4078,6 +4078,128 @@ fn generation_preset_import_export_over_product_wire() {
     assert!(
         skeleton.has_identity("generation-preset-path-input"),
         "missing generation-preset-path-input; identities={:?}",
+        skeleton.identities()
+    );
+}
+
+#[test]
+fn generation_preset_sampler_editing_over_product_wire() {
+    use neotavern_presentation_chat::{hit_test, ShellAction, ShellHit};
+    use neotavern_presentation_m0_d2::inspect_slot_skeleton;
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    session.set_surface_size(1100, 760, 1.0);
+    session.apply_shell_action(ShellAction::SetPanel("providers".into()));
+    session.apply_shell_action(ShellAction::SetTab("presets".into()));
+    let balanced_id = session
+        .shell_view()
+        .presets
+        .iter()
+        .find(|item| item.name == "Balanced")
+        .expect("Balanced")
+        .id
+        .clone();
+    session.apply_shell_action(ShellAction::SelectPreset(balanced_id));
+
+    let shell = session.shell_view();
+    assert!(!shell.preset_unlocked_context);
+    match hit_test(&shell, 124.0, 306.0) {
+        Some(ShellHit::Action(ShellAction::PresetToggleUnlock)) => {}
+        other => panic!("expected PresetToggleUnlock, got {other:?}"),
+    }
+    match hit_test(&shell, 300.0, 410.0) {
+        Some(ShellHit::Action(ShellAction::PresetFocusValue(id))) if id == "temperature" => {}
+        other => panic!("expected PresetFocusValue(temperature), got {other:?}"),
+    }
+    match hit_test(&shell, 124.0, 262.0) {
+        Some(ShellHit::Action(ShellAction::PresetImportOpen)) => {}
+        other => panic!("import row must stay at y=262, got {other:?}"),
+    }
+
+    session.apply_shell_action(ShellAction::PresetFocusValue("temperature".into()));
+    session.set_preset_value_draft("1.5");
+    assert_eq!(
+        session
+            .shell_view()
+            .preset_rows
+            .iter()
+            .find(|row| row.id == "temperature")
+            .map(|row| row.value.as_str()),
+        Some("1.5")
+    );
+    session.apply_shell_action(ShellAction::PresetApply);
+    assert_eq!(
+        session.shell_view().status_message.as_deref(),
+        Some("Generation settings applied.")
+    );
+    assert_eq!(
+        session
+            .shell_view()
+            .preset_rows
+            .iter()
+            .find(|row| row.id == "temperature")
+            .map(|row| row.value.as_str()),
+        Some("1.50")
+    );
+
+    session.apply_shell_action(ShellAction::PresetToggleUnlock);
+    assert!(session.shell_view().preset_unlocked_context);
+    session.apply_shell_action(ShellAction::PresetFocusValue("maxContextTokens".into()));
+    session.set_preset_value_draft("250000");
+    session.apply_shell_action(ShellAction::PresetApply);
+    assert_eq!(
+        session
+            .shell_view()
+            .preset_rows
+            .iter()
+            .find(|row| row.id == "maxContextTokens")
+            .map(|row| row.value.as_str()),
+        Some("250000")
+    );
+    session.apply_shell_action(ShellAction::PresetToggleUnlock);
+    assert!(!session.shell_view().preset_unlocked_context);
+    assert_eq!(
+        session
+            .shell_view()
+            .preset_rows
+            .iter()
+            .find(|row| row.id == "maxContextTokens")
+            .map(|row| row.value.as_str()),
+        Some("200000")
+    );
+
+    session.apply_shell_action(ShellAction::PresetToggleFlag("stream".into()));
+    assert_eq!(
+        session
+            .shell_view()
+            .preset_rows
+            .iter()
+            .find(|row| row.id == "stream")
+            .map(|row| row.value.as_str()),
+        Some("false")
+    );
+    session.apply_shell_action(ShellAction::PresetApply);
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "settings.update"));
+
+    neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
+    let skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
+        .expect("slot skeleton");
+    assert!(
+        skeleton.has_identity("unlock-context"),
+        "missing unlock-context; identities={:?}",
+        skeleton.identities()
+    );
+    assert!(
+        skeleton.has_identity("preset-value-input"),
+        "missing preset-value-input; identities={:?}",
+        skeleton.identities()
+    );
+    assert!(
+        skeleton.has_identity("preset-flag"),
+        "missing preset-flag; identities={:?}",
         skeleton.identities()
     );
 }

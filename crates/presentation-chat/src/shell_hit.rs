@@ -6,7 +6,7 @@
 //! a DOM hit tree, so geometry is reconstructed from the same tokens the
 //! RSX uses.
 
-use neotavern_presentation_dioxus_shell::{chrome_metrics, ProductShellView};
+use neotavern_presentation_dioxus_shell::{chrome_metrics, PresetValueRow, ProductShellView};
 
 pub const RAIL_WIDTH: f32 = 60.0;
 pub const PANEL_WIDTH_DEFAULT: f32 = 380.0;
@@ -264,8 +264,12 @@ pub enum ShellAction {
     /// Config tab preset management (React `GenerationPresetEditor`):
     /// apply draft, save-as / rename dialog, duplicate, delete confirm.
     /// Import/export: host-owned JSON envelope; import then `presets.create`
-    /// + `settings.update` like React `importPreset`.
+    /// + `settings.update` like React `importPreset`. Sampler fields and
+    /// unlock-context edit the live draft until Apply.
     PresetApply,
+    PresetToggleUnlock,
+    PresetFocusValue(String),
+    PresetToggleFlag(String),
     PresetSaveAsOpen,
     PresetRenameOpen,
     PresetNameCancel,
@@ -2041,10 +2045,12 @@ fn memories_hit(
 }
 
 /// React `GenerationPresetEditor` body (Config tab): the management toolbar,
-/// read-only sampler rows of the active preset, Apply, then the selector
-/// cards (tap = select). Geometry mirrors `ai_settings_tab.rs::presets_tab`:
-/// padding 12 + heading 20 + gap 8 + hint 16 + gap 8 + toolbar 36 + gap 8 +
-/// values card (16 + rows*20) + gap 8; cards 60 + 4.
+/// unlock-context, compact numeric sampler fields + reasoning/stream
+/// switches, Apply, then the selector cards (tap = select). Geometry mirrors
+/// `ai_settings_tab.rs::presets_tab`: padding 12 + heading 20 + gap 8 + hint
+/// 16 + gap 8 + active label 20 + gap 8 + toolbar 36 + gap 8 + files 36 +
+/// gap 8 + unlock 36 + gap 8 + hint 16 + gap 8 + values card + gap 8;
+/// cards 60 + 4.
 fn presets_config_hit(
     view: &ProductShellView,
     x: f32,
@@ -2105,13 +2111,70 @@ fn presets_config_hit(
         return Some(ShellHit::Absorb);
     }
     cursor += 36.0 + 8.0;
-    // Values card: read-only rows of 20 px with 4 px gaps inside 8 px padding.
-    let n = view.preset_rows.len() as f32;
-    let values_h = 16.0 + if n > 0.0 { n * 24.0 - 4.0 } else { 0.0 };
-    cursor += values_h + 8.0;
+    if y >= cursor && y < cursor + 36.0 {
+        if x >= panel_x + pad && x < inner_r {
+            return Some(ShellHit::Action(ShellAction::PresetToggleUnlock));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    cursor += 36.0 + 8.0;
+    if y >= cursor && y < cursor + 16.0 {
+        return Some(ShellHit::Absorb);
+    }
+    cursor += 16.0 + 8.0;
+    // Values card: 8 px padding, 4 px gaps; context full-width, then 2-col
+    // numeric pairs, then toggle rows.
+    let card_top = cursor;
+    let content_l = panel_x + pad + 8.0;
+    let content_r = inner_r - 8.0;
+    let mut inner = card_top + 8.0;
+    if let Some(row) = view
+        .preset_rows
+        .iter()
+        .find(|row| row.id == "maxContextTokens")
+    {
+        if y >= inner && y < inner + 28.0 && x >= content_l && x < content_r {
+            return Some(ShellHit::Action(ShellAction::PresetFocusValue(
+                row.id.clone(),
+            )));
+        }
+        inner += 28.0 + 4.0;
+    }
+    let numeric: Vec<&PresetValueRow> = view
+        .preset_rows
+        .iter()
+        .filter(|row| row.kind == "number" && row.id != "maxContextTokens")
+        .collect();
+    let col_w = ((content_r - content_l - 8.0) / 2.0).max(1.0);
+    for chunk in numeric.chunks(2) {
+        if y >= inner && y < inner + 28.0 {
+            if x >= content_l && x < content_l + col_w {
+                return Some(ShellHit::Action(ShellAction::PresetFocusValue(
+                    chunk[0].id.clone(),
+                )));
+            }
+            if chunk.len() > 1 && x >= content_l + col_w + 8.0 && x < content_r {
+                return Some(ShellHit::Action(ShellAction::PresetFocusValue(
+                    chunk[1].id.clone(),
+                )));
+            }
+            return Some(ShellHit::Absorb);
+        }
+        inner += 28.0 + 4.0;
+    }
+    for row in view.preset_rows.iter().filter(|row| row.kind == "toggle") {
+        if y >= inner && y < inner + 28.0 && x >= content_l && x < content_r {
+            return Some(ShellHit::Action(ShellAction::PresetToggleFlag(
+                row.id.clone(),
+            )));
+        }
+        inner += 28.0 + 4.0;
+    }
+    let values_bottom = inner - 4.0 + 8.0;
+    cursor = values_bottom.max(card_top) + 8.0;
     // Apply row.
     if y >= cursor && y < cursor + 36.0 {
-        if x >= panel_x + pad && x < panel_x + pad + 160.0 {
+        if x >= panel_x + pad && x < inner_r {
             return Some(ShellHit::Action(ShellAction::PresetApply));
         }
         return Some(ShellHit::Absorb);

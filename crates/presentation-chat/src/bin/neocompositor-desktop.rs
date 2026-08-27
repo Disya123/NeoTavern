@@ -111,6 +111,8 @@ enum TextFocus {
     CharacterName,
     CharacterDescription,
     CharacterTag,
+    /// Generation-preset sampler number (`part:preset-value-input`).
+    PresetSampler,
 }
 
 fn instruct_focus_role(focus: TextFocus) -> Option<&'static str> {
@@ -123,6 +125,14 @@ fn instruct_focus_role(focus: TextFocus) -> Option<&'static str> {
         TextFocus::InstructStops => Some("stopStrings"),
         _ => None,
     }
+}
+
+fn preset_sampler_text(view: &neotavern_presentation_dioxus_shell::ProductShellView) -> String {
+    view.preset_rows
+        .iter()
+        .find(|row| row.focused)
+        .map(|row| row.value.clone())
+        .unwrap_or_default()
 }
 
 /// One scripted probe step, replayed in argument order so
@@ -610,6 +620,8 @@ impl App {
             focus = TextFocus::CharacterDescription;
         } else if rects.covers(css_x, css_y, "part:character-tag-input") {
             focus = TextFocus::CharacterTag;
+        } else if rects.covers(css_x, css_y, "part:preset-value-input") {
+            focus = TextFocus::PresetSampler;
         }
         self.focus = focus;
     }
@@ -1173,6 +1185,12 @@ impl App {
                 self.session.set_tag_input(&next);
                 eprintln!("[neocompositor-desktop] typed '{ch}' -> tag_input=\"{next}\"");
             }
+            TextFocus::PresetSampler => {
+                let current = preset_sampler_text(&self.session.shell_view());
+                let next = format!("{current}{ch}");
+                self.session.set_preset_value_draft(&next);
+                eprintln!("[neocompositor-desktop] typed '{ch}' -> preset_sampler=\"{next}\"");
+            }
             TextFocus::None => return,
         }
         self.dirty = true;
@@ -1250,6 +1268,7 @@ impl App {
                 .map(|draft| draft.description.clone())
                 .unwrap_or_default(),
             TextFocus::CharacterTag => self.session.shell_view().tag_input.clone(),
+            TextFocus::PresetSampler => preset_sampler_text(&self.session.shell_view()),
             TextFocus::None => return,
         };
         let next: String = current
@@ -1297,6 +1316,7 @@ impl App {
             TextFocus::CharacterName => self.session.set_character_name_draft(&next),
             TextFocus::CharacterDescription => self.session.set_character_description_draft(&next),
             TextFocus::CharacterTag => self.session.set_tag_input(&next),
+            TextFocus::PresetSampler => self.session.set_preset_value_draft(&next),
             TextFocus::None => {}
         }
         self.dirty = true;

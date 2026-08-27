@@ -137,12 +137,14 @@ fn providers_tab(view: &ProductShellView) -> Element {
 /// React `GenerationPresetEditor` (Config tab): the preset selector cards
 /// (tap = select, applies values through `settings.update`), a management
 /// toolbar (save-as / rename / duplicate / delete), host-owned import/export,
-/// and read-only sampler rows of the active preset plus Apply. Per-sampler
-/// range editing stays on React.
+/// unlock-context, compact numeric sampler fields + reasoning/stream
+/// switches, and Apply. Range sliders stay on React (Blitz has no range
+/// input); native fields write the same draft that Apply persists.
 /// Geometry mirrors `shell_hit.rs::presets_config_hit`: body padding 12 +
 /// heading 20 + gap 8 + hint 16 + gap 8 + active label 20 + gap 8 + toolbar
-/// 36 + gap 8 + import/export 36 + gap 8 + values card
-/// (8*2 + rows*20) + gap 8; selector cards 60 + 4.
+/// 36 + gap 8 + import/export 36 + gap 8 + unlock 36 + gap 8 + hint 16 +
+/// gap 8 + values card (8*2 + context 28 + 5*32 + flags 28) + gap 8;
+/// selector cards 60 + 4.
 fn presets_tab(view: &ProductShellView) -> Element {
     let empty = view.presets.is_empty();
     let active_label = view
@@ -150,6 +152,28 @@ fn presets_tab(view: &ProductShellView) -> Element {
         .clone()
         .unwrap_or_else(|| "Unsaved generation settings".to_string());
     let rows: Vec<PresetValueRow> = view.preset_rows.clone();
+    let context_row = rows
+        .iter()
+        .find(|row| row.id == "maxContextTokens")
+        .cloned();
+    let numeric_pairs: Vec<(PresetValueRow, Option<PresetValueRow>)> = {
+        let numeric: Vec<PresetValueRow> = rows
+            .iter()
+            .filter(|row| row.kind == "number" && row.id != "maxContextTokens")
+            .cloned()
+            .collect();
+        numeric
+            .chunks(2)
+            .map(|chunk| (chunk[0].clone(), chunk.get(1).cloned()))
+            .collect()
+    };
+    let flag_rows: Vec<PresetValueRow> = rows
+        .iter()
+        .filter(|row| row.kind == "toggle")
+        .cloned()
+        .collect();
+    let unlocked = view.preset_unlocked_context;
+    let (unlock_track, unlock_thumb) = sampler_switch_style(unlocked);
     rsx! {
         div {
             class: "AiSettings_tabBody",
@@ -208,24 +232,51 @@ fn presets_tab(view: &ProductShellView) -> Element {
                     span { "Export" }
                 }
             }
+            button {
+                r#type: "button",
+                "data-part": "unlock-context",
+                "data-state": if unlocked { "on" } else { "off" },
+                "aria-pressed": unlocked,
+                "aria-label": "Unlocked context size",
+                style: "height:36px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0;border:0;background:transparent;color:#f3eee8;width:100%;",
+                span { style: "font-size:0.8125rem;text-align:left;", "Unlocked context size" }
+                span { style: "{unlock_track}", span { style: "{unlock_thumb}" } }
+            }
+            p {
+                style: "margin:0;color:#998f87;font-size:0.75rem;height:16px;",
+                "Removes the default ceiling on the context-size slider. Enable only if your model truly supports a larger window."
+            }
             div {
-                "data-part": "preset-values",
+                "data-part": "generation-controls",
                 style: "display:flex;flex-direction:column;gap:4px;width:100%;box-sizing:border-box;padding:8px;border:1px solid #39342f;border-radius:16px;background:#24211e;color:#f3eee8;",
-                for row in rows.iter() {
-                    div {
-                        key: "{row.label}",
-                        style: "display:flex;align-items:center;height:20px;",
-                        span { style: "flex:1;color:#998f87;font-size:0.75rem;", "{row.label}" }
-                        strong { style: "font-size:0.75rem;", "{row.value}" }
+                if let Some(row) = context_row.as_ref() {
+                    { preset_number_row(row, true) }
+                }
+                for (left, right) in numeric_pairs.iter() {
+                    {
+                        let left = left.clone();
+                        let right = right.clone();
+                        rsx! {
+                            div {
+                                style: "display:flex;align-items:center;gap:8px;height:28px;",
+                                { preset_number_row(&left, false) }
+                                if let Some(right) = right.as_ref() {
+                                    { preset_number_row(right, false) }
+                                }
+                            }
+                        }
                     }
+                }
+                for row in flag_rows.iter() {
+                    { preset_flag_row(row) }
                 }
             }
             button {
                 class: "st-button", r#type: "button",
                 "data-variant": "primary",
                 "data-part": "preset-apply",
-                style: "width:160px;height:36px;",
-                span { "Apply settings" }
+                style: "width:100%;height:36px;",
+                span { "Apply generation settings" }
             }
             if empty {
                 p { style: "margin:0;color:#998f87;font-size:0.75rem;", "No saved presets yet." }
@@ -257,6 +308,69 @@ fn presets_tab(view: &ProductShellView) -> Element {
                     "{error}"
                 }
             }
+        }
+    }
+}
+
+fn sampler_switch_style(on: bool) -> (&'static str, &'static str) {
+    if on {
+        (
+            "display:inline-flex;width:36px;height:20px;border-radius:10px;background:#e38a62;position:relative;flex:none;",
+            "position:absolute;top:2px;right:2px;width:16px;height:16px;border-radius:8px;background:#2a130b;",
+        )
+    } else {
+        (
+            "display:inline-flex;width:36px;height:20px;border-radius:10px;background:#39342f;position:relative;flex:none;",
+            "position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:8px;background:#998f87;",
+        )
+    }
+}
+
+fn preset_number_row(row: &PresetValueRow, full_width: bool) -> Element {
+    let id = row.id.clone();
+    let label = row.label.clone();
+    let value = row.value.clone();
+    let border = if row.focused { "#e38a62" } else { "#39342f" };
+    let width = if full_width {
+        "display:flex;align-items:center;gap:8px;height:28px;width:100%;"
+    } else {
+        "display:flex;align-items:center;gap:8px;height:28px;flex:1;min-width:0;"
+    };
+    rsx! {
+        div {
+            style: "{width}",
+            span {
+                style: "flex:1;min-width:0;color:#998f87;font-size:0.75rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
+                "{label}"
+            }
+            span {
+                "data-part": "preset-value-input",
+                "data-ui-key": "{id}",
+                "aria-label": "{label}",
+                style: "width:72px;flex:none;height:28px;line-height:28px;padding:0 8px;border:1px solid {border};border-radius:10px;background:#1e1b18;color:#e8eef7;font-size:0.75rem;text-align:right;overflow:hidden;white-space:nowrap;",
+                "{value}"
+            }
+        }
+    }
+}
+
+fn preset_flag_row(row: &PresetValueRow) -> Element {
+    let id = row.id.clone();
+    let label = row.label.clone();
+    let on = row.value == "true";
+    let (track, thumb) = sampler_switch_style(on);
+    let state = if on { "on" } else { "off" };
+    rsx! {
+        button {
+            r#type: "button",
+            "data-part": "preset-flag",
+            "data-ui-key": "{id}",
+            "data-state": "{state}",
+            "aria-pressed": on,
+            "aria-label": "{label}",
+            style: "height:28px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0;border:0;background:transparent;color:#f3eee8;width:100%;",
+            span { style: "font-size:0.75rem;text-align:left;", "{label}" }
+            span { style: "{track}", span { style: "{thumb}" } }
         }
     }
 }

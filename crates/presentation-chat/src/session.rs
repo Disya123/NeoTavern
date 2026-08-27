@@ -83,7 +83,7 @@ pub const AVATAR_CPU_MAX_BYTES: usize = 8 * 1024 * 1024;
 
 /// Parsed `GenerationPresetData` contract subset used for the Config tab
 /// draft display and settings persistence (React `GenerationPresetEditor`).
-#[derive(serde::Serialize, serde::Deserialize, Default)]
+#[derive(serde::Serialize, serde::Deserialize)]
 struct PresetGenerationData {
     #[serde(rename = "maxContextTokens", default)]
     max_context_tokens: i64,
@@ -91,7 +91,7 @@ struct PresetGenerationData {
     generation_defaults: PresetGenerationDefaults,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Default)]
+#[derive(serde::Serialize, serde::Deserialize)]
 struct PresetGenerationDefaults {
     #[serde(rename = "maxTokens", default)]
     max_tokens: f64,
@@ -117,6 +117,34 @@ struct PresetGenerationDefaults {
     reasoning: bool,
     #[serde(default)]
     stream: bool,
+}
+
+impl Default for PresetGenerationData {
+    fn default() -> Self {
+        Self {
+            max_context_tokens: CONTEXT_TOKEN_DEFAULT,
+            generation_defaults: PresetGenerationDefaults::default(),
+        }
+    }
+}
+
+impl Default for PresetGenerationDefaults {
+    fn default() -> Self {
+        Self {
+            max_tokens: 2048.0,
+            temperature: 0.8,
+            top_p: 1.0,
+            top_k: 0.0,
+            min_p: 0.0,
+            top_a: 0.0,
+            repetition_penalty: 1.0,
+            frequency_penalty: 0.0,
+            presence_penalty: 0.0,
+            seed: -1.0,
+            reasoning: false,
+            stream: true,
+        }
+    }
 }
 
 /// One completed export (`chats.export`, `characters.export.card`, or a
@@ -239,6 +267,15 @@ pub struct ChatRouteState {
     /// kept as the contract JSON.
     pub preset_draft_max_context: i64,
     pub preset_draft_defaults: Value,
+    /// React `unlockedContext` local switch; clamps the context slider max.
+    pub preset_unlocked_context: bool,
+    /// Focused sampler key (`maxContextTokens`, `temperature`, …) and the
+    /// in-progress text (React `RangeField` number input).
+    pub preset_edit_key: Option<String>,
+    pub preset_edit_text: String,
+    /// Skip re-hydrating the draft from `settings.get` while the user has
+    /// unapplied edits.
+    pub preset_draft_dirty: bool,
     /// Preset name dialog state ("create" / "rename" mode) and its input.
     pub preset_name_dialog_open: bool,
     pub preset_name_mode: Option<String>,
@@ -1472,6 +1509,7 @@ impl<W: ProductWire> ChatSession<W> {
             },
             selected_preset_id: self.state.active_preset_id.clone(),
             preset_rows: self.preset_value_rows(),
+            preset_unlocked_context: self.state.preset_unlocked_context,
             preset_active_name: self
                 .state
                 .presets
@@ -3322,6 +3360,9 @@ impl<W: ProductWire> ChatSession<W> {
             ShellAction::MemoryCycleCharacter => self.cycle_memory_character(),
             ShellAction::MemoryDraftToggleEnabled => self.toggle_memory_draft_enabled(),
             ShellAction::PresetApply => self.apply_preset_draft(),
+            ShellAction::PresetToggleUnlock => self.toggle_preset_unlock(),
+            ShellAction::PresetFocusValue(id) => self.focus_preset_value(&id),
+            ShellAction::PresetToggleFlag(id) => self.toggle_preset_flag(&id),
             ShellAction::PresetSaveAsOpen => self.open_preset_create(),
             ShellAction::PresetRenameOpen => self.open_preset_rename(),
             ShellAction::PresetNameCancel => self.close_preset_name(),
@@ -4199,76 +4240,134 @@ impl<W: ProductWire> ChatSession<W> {
         }
     }
 
-    /// Read-only sampler rows for the Config tab, parsed from the active
-    /// preset's `GenerationPresetData` (React renders them as range fields;
-    /// per-sampler editing is not ported to this plane yet).
+    /// Live sampler rows for the Config tab from the generation draft
+    /// (React `GenerationPresetEditor` RangeField / Switch). Range sliders
+    /// stay on React; native uses compact numeric fields.
     fn preset_value_rows(&self) -> Vec<PresetValueRow> {
-        let parsed: PresetGenerationData = match self.active_preset() {
-            Some(preset) => serde_json::from_value(preset.data.clone()).unwrap_or_default(),
-            None => PresetGenerationData::default(),
-        };
-        let d = &parsed.generation_defaults;
-        let fmt = |v: f64| {
-            if v.fract() == 0.0 {
-                format!("{}", v as i64)
+        let defaults = self.parsed_preset_defaults();
+        let focused = self.state.preset_edit_key.as_deref();
+        let display = |id: &str, formatted: String| {
+            if focused == Some(id) {
+                self.state.preset_edit_text.clone()
             } else {
-                format!("{v:.2}")
+                formatted
             }
         };
         vec![
             PresetValueRow {
-                label: "Context size".into(),
-                value: parsed.max_context_tokens.to_string(),
+                id: "maxContextTokens".into(),
+                label: "Context size (tokens)".into(),
+                value: display(
+                    "maxContextTokens",
+                    self.state.preset_draft_max_context.to_string(),
+                ),
+                kind: "number".into(),
+                focused: focused == Some("maxContextTokens"),
             },
             PresetValueRow {
+                id: "maxTokens".into(),
                 label: "Max tokens".into(),
-                value: fmt(d.max_tokens),
+                value: display(
+                    "maxTokens",
+                    format_sampler_number(defaults.max_tokens, true),
+                ),
+                kind: "number".into(),
+                focused: focused == Some("maxTokens"),
             },
             PresetValueRow {
+                id: "temperature".into(),
                 label: "Temperature".into(),
-                value: fmt(d.temperature),
+                value: display(
+                    "temperature",
+                    format_sampler_number(defaults.temperature, false),
+                ),
+                kind: "number".into(),
+                focused: focused == Some("temperature"),
             },
             PresetValueRow {
+                id: "topP".into(),
                 label: "Top P".into(),
-                value: fmt(d.top_p),
+                value: display("topP", format_sampler_number(defaults.top_p, false)),
+                kind: "number".into(),
+                focused: focused == Some("topP"),
             },
             PresetValueRow {
+                id: "topK".into(),
                 label: "Top K".into(),
-                value: fmt(d.top_k),
+                value: display("topK", format_sampler_number(defaults.top_k, true)),
+                kind: "number".into(),
+                focused: focused == Some("topK"),
             },
             PresetValueRow {
+                id: "minP".into(),
                 label: "Min P".into(),
-                value: fmt(d.min_p),
+                value: display("minP", format_sampler_number(defaults.min_p, false)),
+                kind: "number".into(),
+                focused: focused == Some("minP"),
             },
             PresetValueRow {
+                id: "topA".into(),
                 label: "Top A".into(),
-                value: fmt(d.top_a),
+                value: display("topA", format_sampler_number(defaults.top_a, false)),
+                kind: "number".into(),
+                focused: focused == Some("topA"),
             },
             PresetValueRow {
+                id: "repetitionPenalty".into(),
                 label: "Repetition penalty".into(),
-                value: fmt(d.repetition_penalty),
+                value: display(
+                    "repetitionPenalty",
+                    format_sampler_number(defaults.repetition_penalty, false),
+                ),
+                kind: "number".into(),
+                focused: focused == Some("repetitionPenalty"),
             },
             PresetValueRow {
+                id: "frequencyPenalty".into(),
                 label: "Frequency penalty".into(),
-                value: fmt(d.frequency_penalty),
+                value: display(
+                    "frequencyPenalty",
+                    format_sampler_number(defaults.frequency_penalty, false),
+                ),
+                kind: "number".into(),
+                focused: focused == Some("frequencyPenalty"),
             },
             PresetValueRow {
+                id: "presencePenalty".into(),
                 label: "Presence penalty".into(),
-                value: fmt(d.presence_penalty),
+                value: display(
+                    "presencePenalty",
+                    format_sampler_number(defaults.presence_penalty, false),
+                ),
+                kind: "number".into(),
+                focused: focused == Some("presencePenalty"),
             },
             PresetValueRow {
+                id: "seed".into(),
                 label: "Seed".into(),
-                value: fmt(d.seed),
+                value: display("seed", format_sampler_number(defaults.seed, true)),
+                kind: "number".into(),
+                focused: focused == Some("seed"),
             },
             PresetValueRow {
-                label: "Reasoning".into(),
-                value: d.reasoning.to_string(),
+                id: "reasoning".into(),
+                label: "Request model reasoning".into(),
+                value: defaults.reasoning.to_string(),
+                kind: "toggle".into(),
+                focused: false,
             },
             PresetValueRow {
+                id: "stream".into(),
                 label: "Streaming".into(),
-                value: d.stream.to_string(),
+                value: defaults.stream.to_string(),
+                kind: "toggle".into(),
+                focused: false,
             },
         ]
+    }
+
+    fn parsed_preset_defaults(&self) -> PresetGenerationDefaults {
+        merge_preset_defaults(&self.state.preset_draft_defaults)
     }
 
     fn load_settings(&mut self) {
@@ -4290,6 +4389,7 @@ impl<W: ProductWire> ChatSession<W> {
                 }
                 self.state.macro_variables = settings_macro_variables(&items);
                 self.hydrate_instruct_settings(&items);
+                self.hydrate_generation_settings(&items);
             }
             Err(err) => self.record_error(err),
         }
@@ -4323,6 +4423,34 @@ impl<W: ProductWire> ChatSession<W> {
         // is treated as native (React would still list only native + custom).
         self.state.instruct_selection = "native".into();
         self.state.instruct_format_id = settings_string(items, "instruct-format-id");
+    }
+
+    fn hydrate_generation_settings(&mut self, items: &[SettingsItem]) {
+        if self.state.preset_draft_dirty {
+            return;
+        }
+        let fallback = PresetGenerationData::default();
+        let tokens = settings_unwrapped(items, "maxContextTokens")
+            .and_then(Value::as_i64)
+            .unwrap_or(fallback.max_context_tokens);
+        let defaults = settings_unwrapped(items, "generationDefaults")
+            .map(merge_preset_defaults_value)
+            .unwrap_or_else(|| {
+                serde_json::to_value(&fallback.generation_defaults).unwrap_or_else(|_| json!({}))
+            });
+        self.state.preset_draft_max_context = tokens;
+        self.state.preset_draft_defaults = defaults;
+        self.state.preset_unlocked_context = tokens > CONTEXT_TOKEN_DEFAULT_MAX;
+        self.clear_preset_value_edit();
+        if let Some(value) = settings_unwrapped(items, "activeGenerationPresetId") {
+            if value.is_null() {
+                self.state.active_preset_id = None;
+            } else if let Some(id) = value.as_str() {
+                if !id.is_empty() {
+                    self.state.active_preset_id = Some(id.to_string());
+                }
+            }
+        }
     }
 
     /// React `GeneralTab.changeLanguage`: Zustand + `settings.update` language.
@@ -6008,6 +6136,10 @@ impl<W: ProductWire> ChatSession<W> {
             self.state.preset_draft_max_context = parsed.max_context_tokens;
             self.state.preset_draft_defaults =
                 serde_json::to_value(&parsed.generation_defaults).unwrap_or_else(|_| json!({}));
+            self.state.preset_unlocked_context =
+                parsed.max_context_tokens > CONTEXT_TOKEN_DEFAULT_MAX;
+            self.state.preset_draft_dirty = false;
+            self.clear_preset_value_edit();
             let req = RequestSettingsUpdate {
                 settings: vec![
                     RequestSettingsUpdateSettings {
@@ -6038,8 +6170,9 @@ impl<W: ProductWire> ChatSession<W> {
     }
 
     /// Applies the current draft (`settings.update` maxContextTokens +
-    /// generationDefaults; React `applyDraft`).
+    /// generationDefaults + activeGenerationPresetId; React `applyDraft`).
     pub fn apply_preset_draft(&mut self) {
+        self.commit_preset_value_edit();
         let defaults = self.state.preset_draft_defaults.clone();
         let req = RequestSettingsUpdate {
             settings: vec![
@@ -6051,10 +6184,15 @@ impl<W: ProductWire> ChatSession<W> {
                     key: "generationDefaults".into(),
                     value: defaults,
                 },
+                RequestSettingsUpdateSettings {
+                    key: "activeGenerationPresetId".into(),
+                    value: json!(self.state.active_preset_id.clone()),
+                },
             ],
         };
         match self.call_value("settings.update", &req) {
             Ok(_) => {
+                self.state.preset_draft_dirty = false;
                 self.state.status_message = Some("Generation settings applied.".into());
             }
             Err(err) => self.record_error(err),
@@ -6155,6 +6293,10 @@ impl<W: ProductWire> ChatSession<W> {
                 self.state.preset_draft_max_context = parsed.max_context_tokens;
                 self.state.preset_draft_defaults =
                     serde_json::to_value(&parsed.generation_defaults).unwrap_or_else(|_| json!({}));
+                self.state.preset_unlocked_context =
+                    parsed.max_context_tokens > CONTEXT_TOKEN_DEFAULT_MAX;
+                self.state.preset_draft_dirty = false;
+                self.clear_preset_value_edit();
                 let apply = RequestSettingsUpdate {
                     settings: vec![
                         RequestSettingsUpdateSettings {
@@ -6198,6 +6340,123 @@ impl<W: ProductWire> ChatSession<W> {
         })
     }
 
+    fn clear_preset_value_edit(&mut self) {
+        self.state.preset_edit_key = None;
+        self.state.preset_edit_text.clear();
+    }
+
+    fn toggle_preset_unlock(&mut self) {
+        self.commit_preset_value_edit();
+        let next = !self.state.preset_unlocked_context;
+        self.state.preset_unlocked_context = next;
+        if !next && self.state.preset_draft_max_context > CONTEXT_TOKEN_DEFAULT_MAX {
+            self.state.preset_draft_max_context = CONTEXT_TOKEN_DEFAULT_MAX;
+        }
+        self.state.preset_draft_dirty = true;
+        self.bump_scene();
+    }
+
+    fn focus_preset_value(&mut self, id: &str) {
+        if self.state.preset_edit_key.as_deref() == Some(id) {
+            return;
+        }
+        self.commit_preset_value_edit();
+        let formatted = self.formatted_preset_value(id);
+        self.state.preset_edit_key = Some(id.to_string());
+        self.state.preset_edit_text = formatted;
+        self.bump_scene();
+    }
+
+    fn toggle_preset_flag(&mut self, id: &str) {
+        self.commit_preset_value_edit();
+        let parsed = self.parsed_preset_defaults();
+        let current = match id {
+            "reasoning" => parsed.reasoning,
+            "stream" => parsed.stream,
+            _ => return,
+        };
+        self.ensure_preset_defaults_object()
+            .insert(id.to_string(), json!(!current));
+        self.state.preset_draft_dirty = true;
+        self.bump_scene();
+    }
+
+    /// Keyboard input into the focused sampler number field.
+    pub fn set_preset_value_draft(&mut self, value: &str) {
+        let Some(id) = self.state.preset_edit_key.clone() else {
+            return;
+        };
+        self.state.preset_edit_text = value.to_string();
+        if let Some(parsed) = parse_sampler_number(value) {
+            self.assign_preset_number(&id, parsed);
+            self.state.preset_draft_dirty = true;
+        }
+        self.bump_scene();
+    }
+
+    fn commit_preset_value_edit(&mut self) {
+        let Some(id) = self.state.preset_edit_key.clone() else {
+            return;
+        };
+        let text = self.state.preset_edit_text.clone();
+        if let Some(parsed) = parse_sampler_number(&text) {
+            self.assign_preset_number(&id, parsed);
+            self.state.preset_draft_dirty = true;
+        }
+        self.clear_preset_value_edit();
+    }
+
+    fn formatted_preset_value(&self, id: &str) -> String {
+        if id == "maxContextTokens" {
+            return self.state.preset_draft_max_context.to_string();
+        }
+        let defaults = self.parsed_preset_defaults();
+        let (value, integer) = match id {
+            "maxTokens" => (defaults.max_tokens, true),
+            "temperature" => (defaults.temperature, false),
+            "topP" => (defaults.top_p, false),
+            "topK" => (defaults.top_k, true),
+            "minP" => (defaults.min_p, false),
+            "topA" => (defaults.top_a, false),
+            "repetitionPenalty" => (defaults.repetition_penalty, false),
+            "frequencyPenalty" => (defaults.frequency_penalty, false),
+            "presencePenalty" => (defaults.presence_penalty, false),
+            "seed" => (defaults.seed, true),
+            _ => return String::new(),
+        };
+        format_sampler_number(value, integer)
+    }
+
+    fn assign_preset_number(&mut self, id: &str, raw: f64) {
+        let clamped = clamp_sampler_number(id, raw, self.state.preset_unlocked_context);
+        if id == "maxContextTokens" {
+            self.state.preset_draft_max_context = clamped.round() as i64;
+            return;
+        }
+        let integer = sampler_bound(id)
+            .map(|bound| bound.integer)
+            .unwrap_or(false);
+        let stored = if integer {
+            json!(clamped.round() as i64)
+        } else {
+            json!(clamped)
+        };
+        self.ensure_preset_defaults_object()
+            .insert(id.to_string(), stored);
+    }
+
+    fn ensure_preset_defaults_object(&mut self) -> &mut serde_json::Map<String, Value> {
+        if !self.state.preset_draft_defaults.is_object() {
+            self.state.preset_draft_defaults =
+                serde_json::to_value(PresetGenerationDefaults::default())
+                    .unwrap_or_else(|_| json!({}));
+        }
+        self.state
+            .preset_draft_defaults
+            .as_object_mut()
+            .expect("generationDefaults object")
+    }
+
     pub fn set_preset_name_draft(&mut self, value: &str) {
         self.state.preset_name_draft = value.to_string();
         self.bump_scene();
@@ -6232,15 +6491,6 @@ impl<W: ProductWire> ChatSession<W> {
     fn active_preset(&self) -> Option<&PresetDto> {
         let id = self.state.active_preset_id.as_deref()?;
         self.state.presets.iter().find(|item| item.id == id)
-    }
-
-    fn preset_data_json(&self) -> Value {
-        match self.active_preset() {
-            Some(preset) => preset.data.clone(),
-            None => {
-                serde_json::to_value(PresetGenerationData::default()).unwrap_or_else(|_| json!({}))
-            }
-        }
     }
 
     fn load_presets_list(&mut self) {
@@ -6287,7 +6537,7 @@ impl<W: ProductWire> ChatSession<W> {
             let req = RequestCreatePreset {
                 kind: "generation".into(),
                 name,
-                data: Some(self.preset_data_json()),
+                data: Some(self.generation_preset_draft_json()),
             };
             self.call_decode("presets.create", &req, decode_preset_dto)
                 .map(|dto| dto.id)
@@ -6327,10 +6577,13 @@ impl<W: ProductWire> ChatSession<W> {
     /// (React duplicate flow).
     pub fn duplicate_preset(&mut self) {
         let (name, data) = match self.active_preset() {
-            Some(active) => (format!("{} (copy)", active.name), active.data.clone()),
+            Some(active) => (
+                format!("{} (copy)", active.name),
+                self.generation_preset_draft_json(),
+            ),
             None => (
                 "generation (copy)".to_string(),
-                serde_json::to_value(PresetGenerationData::default()).unwrap_or_else(|_| json!({})),
+                self.generation_preset_draft_json(),
             ),
         };
         let req = RequestCreatePreset {
@@ -7073,7 +7326,181 @@ const INVALID_PROMPT_TEMPLATE_PRESET: &str = "This file is not a valid prompt te
 /// English golden copy (`settings:invalidGenerationPreset`).
 const INVALID_GENERATION_PRESET: &str = "This file is not a valid generation preset.";
 const CONTEXT_TOKEN_MIN: i64 = 256;
+const CONTEXT_TOKEN_DEFAULT: i64 = 16_032;
+const CONTEXT_TOKEN_DEFAULT_MAX: i64 = 200_000;
 const CONTEXT_TOKEN_UNLOCKED_MAX: i64 = 10_000_000;
+
+struct SamplerBound {
+    id: &'static str,
+    min: f64,
+    max: f64,
+    step: f64,
+    integer: bool,
+}
+
+/// Mirrors `GENERATION_PARAMETER_BOUNDS` in `packages/contracts/src/provider.ts`.
+const SAMPLER_BOUNDS: &[SamplerBound] = &[
+    SamplerBound {
+        id: "maxTokens",
+        min: 1.0,
+        max: 200_000.0,
+        step: 1.0,
+        integer: true,
+    },
+    SamplerBound {
+        id: "temperature",
+        min: 0.0,
+        max: 2.0,
+        step: 0.01,
+        integer: false,
+    },
+    SamplerBound {
+        id: "topP",
+        min: 0.0,
+        max: 1.0,
+        step: 0.01,
+        integer: false,
+    },
+    SamplerBound {
+        id: "topK",
+        min: 0.0,
+        max: 100_000.0,
+        step: 1.0,
+        integer: true,
+    },
+    SamplerBound {
+        id: "minP",
+        min: 0.0,
+        max: 1.0,
+        step: 0.01,
+        integer: false,
+    },
+    SamplerBound {
+        id: "topA",
+        min: 0.0,
+        max: 1.0,
+        step: 0.01,
+        integer: false,
+    },
+    SamplerBound {
+        id: "repetitionPenalty",
+        min: 0.0,
+        max: 2.0,
+        step: 0.01,
+        integer: false,
+    },
+    SamplerBound {
+        id: "frequencyPenalty",
+        min: -2.0,
+        max: 2.0,
+        step: 0.01,
+        integer: false,
+    },
+    SamplerBound {
+        id: "presencePenalty",
+        min: -2.0,
+        max: 2.0,
+        step: 0.01,
+        integer: false,
+    },
+    SamplerBound {
+        id: "seed",
+        min: -1.0,
+        max: 2_147_483_647.0,
+        step: 1.0,
+        integer: true,
+    },
+];
+
+fn sampler_bound(id: &str) -> Option<&'static SamplerBound> {
+    SAMPLER_BOUNDS.iter().find(|bound| bound.id == id)
+}
+
+fn parse_sampler_number(text: &str) -> Option<f64> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() || trimmed == "-" || trimmed == "." || trimmed == "-." {
+        return None;
+    }
+    trimmed
+        .parse::<f64>()
+        .ok()
+        .filter(|value| value.is_finite())
+}
+
+fn clamp_sampler_number(id: &str, raw: f64, unlocked: bool) -> f64 {
+    if id == "maxContextTokens" {
+        let max = if unlocked {
+            CONTEXT_TOKEN_UNLOCKED_MAX
+        } else {
+            CONTEXT_TOKEN_DEFAULT_MAX
+        };
+        return raw.round().clamp(CONTEXT_TOKEN_MIN as f64, max as f64);
+    }
+    let Some(bound) = sampler_bound(id) else {
+        return raw;
+    };
+    let stepped = ((raw - bound.min) / bound.step).round() * bound.step + bound.min;
+    let clamped = stepped.clamp(bound.min, bound.max);
+    (clamped * 1e10).round() / 1e10
+}
+
+fn format_sampler_number(value: f64, integer: bool) -> String {
+    if integer || value.fract() == 0.0 {
+        format!("{}", value as i64)
+    } else {
+        format!("{value:.2}")
+    }
+}
+
+fn merge_preset_defaults(value: &Value) -> PresetGenerationDefaults {
+    let mut merged = PresetGenerationDefaults::default();
+    let Ok(incoming) = serde_json::from_value::<PresetGenerationDefaults>(value.clone()) else {
+        return merged;
+    };
+    if let Some(obj) = value.as_object() {
+        if obj.contains_key("maxTokens") {
+            merged.max_tokens = incoming.max_tokens;
+        }
+        if obj.contains_key("temperature") {
+            merged.temperature = incoming.temperature;
+        }
+        if obj.contains_key("topP") {
+            merged.top_p = incoming.top_p;
+        }
+        if obj.contains_key("topK") {
+            merged.top_k = incoming.top_k;
+        }
+        if obj.contains_key("minP") {
+            merged.min_p = incoming.min_p;
+        }
+        if obj.contains_key("topA") {
+            merged.top_a = incoming.top_a;
+        }
+        if obj.contains_key("repetitionPenalty") {
+            merged.repetition_penalty = incoming.repetition_penalty;
+        }
+        if obj.contains_key("frequencyPenalty") {
+            merged.frequency_penalty = incoming.frequency_penalty;
+        }
+        if obj.contains_key("presencePenalty") {
+            merged.presence_penalty = incoming.presence_penalty;
+        }
+        if obj.contains_key("seed") {
+            merged.seed = incoming.seed;
+        }
+        if obj.contains_key("reasoning") {
+            merged.reasoning = incoming.reasoning;
+        }
+        if obj.contains_key("stream") {
+            merged.stream = incoming.stream;
+        }
+    }
+    merged
+}
+
+fn merge_preset_defaults_value(value: &Value) -> Value {
+    serde_json::to_value(merge_preset_defaults(value)).unwrap_or_else(|_| json!({}))
+}
 
 /// Mirrors `DEFAULT_PROMPT_TEMPLATE` in `packages/contracts/src/promptTemplate.ts`.
 fn default_prompt_template() -> Value {

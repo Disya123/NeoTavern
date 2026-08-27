@@ -706,9 +706,12 @@ Config-таб вырос из списка карточек в редактор 
 React `selectPreset`). Тулбар управления: Save as / Rename (диалог 320×220 с
 инпутом имени, `TextFocus::PresetName`) → `presets.create` / `presets.update`,
 Duplicate → `presets.create` «<name> (copy)» с автоселектом, Delete → диалог
-300×200 → `presets.delete` + сброс активного id. Read-only строки самплеров
-(13 параметров контракта `GenerationPresetData`) парсятся из data активного
-пресета; поэлементное редактирование слайдеров остаётся на React.
+300×200 → `presets.delete` + сброс активного id. Unlock-context (локальный
+Switch, clamp `maxContextTokens` к 200_000 при выключении) и компактные
+числовые поля самплеров (11 параметров + reasoning/stream Switch) правят
+живой draft; Apply пишет `settings.update` (`maxContextTokens` +
+`generationDefaults` + `activeGenerationPresetId`). Range-слайдеры React
+остаются на React-плоскости (Blitz не умеет `<input type=range>`).
 Import/export: host-owned JSON-конверт `{ version: 1, kind: "generation",
 name, data }` (как React download / `<input type=file>`). Export паркует
 `last_export`; import читает путь и пишет `presets.create` +
@@ -720,7 +723,8 @@ name, data }` (как React download / `<input type=file>`). Export паркуе
 зеркалится между `ai_settings_tab.rs::presets_tab` и
 `shell_hit.rs::presets_config_hit`. Тесты
 `generation_preset_management_over_product_wire`,
-`generation_preset_import_export_over_product_wire`.
+`generation_preset_import_export_over_product_wire`,
+`generation_preset_sampler_editing_over_product_wire`.
 
 ## AI Settings: профили подключений
 

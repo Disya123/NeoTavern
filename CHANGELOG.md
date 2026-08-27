@@ -137,6 +137,14 @@
   `settings:invalidGenerationPreset`. Слайдеры самплеров остаются на React.
   Тест `generation_preset_import_export_over_product_wire`.
 
+- **Нативный шелл: generation-preset sampler editing.** Config-таб: Switch
+  Unlocked context size (clamp к 200_000 при выключении) и компактные
+  числовые поля (контракт `GENERATION_PARAMETER_BOUNDS`) плюс reasoning/stream.
+  Правки копят локальный draft; Apply — `settings.update`
+  (`maxContextTokens` + `generationDefaults` + `activeGenerationPresetId`).
+  Range-слайдеры остаются на React. Тест
+  `generation_preset_sampler_editing_over_product_wire`.
+
 - **Профили: импорт контейнера (profile.import).** Форма пути + политика
   дубликатов (Reject/Replace/Remap) в Settings → Profiles; статус со
   счётчиками inserted/updated/skipped и orphans; успех обновляет библиотеку.
