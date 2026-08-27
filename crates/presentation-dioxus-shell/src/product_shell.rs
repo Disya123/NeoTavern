@@ -490,6 +490,12 @@ pub struct ProductShellView {
     /// Character-card import dialog (React hidden file input): path prompt.
     pub card_import_dialog_open: bool,
     pub card_path_draft: String,
+    /// Prompt-template import dialog (React hidden file input): path prompt.
+    pub prompt_template_import_open: bool,
+    pub prompt_template_path_draft: String,
+    /// Generation-preset import dialog (React hidden file input): path prompt.
+    pub generation_preset_import_open: bool,
+    pub generation_preset_path_draft: String,
     /// Profile container import (React `ProfilesPanel` import form).
     pub profile_import_path: String,
     pub profile_import_policy_label: String,
@@ -682,6 +688,10 @@ impl Default for ProductShellView {
             provider_delete_target_id: None,
             card_import_dialog_open: false,
             card_path_draft: String::new(),
+            prompt_template_import_open: false,
+            prompt_template_path_draft: String::new(),
+            generation_preset_import_open: false,
+            generation_preset_path_draft: String::new(),
             profile_import_path: String::new(),
             profile_import_policy_label: "Reject".into(),
             plugins: Vec::new(),
@@ -3066,6 +3076,86 @@ pub fn product_shell_app() -> Element {
                             span { style: "color:#998f87;", "\u{00a0}" }
                         } else {
                             "{view.card_path_draft}"
+                        }
+                    }
+                    div {
+                        class: "CharacterManagementPanel_dialogActions",
+                        style: "position:absolute;left:16px;right:16px;bottom:16px;display:flex;gap:8px;justify-content:flex-end;",
+                        button {
+                            r#type: "button",
+                            "data-variant": "default",
+                            "data-size": "md",
+                            span { "Cancel" }
+                        }
+                        button {
+                            r#type: "button",
+                            "data-variant": "primary",
+                            "data-size": "md",
+                            span { "Import" }
+                        }
+                    }
+                }
+            }
+            if view.prompt_template_import_open {
+                div {
+                    class: "st-card",
+                    "data-part": "prompt-template-import",
+                    style: "{provider_dlg_style}",
+                    div {
+                        "data-component": "dialog-title",
+                        "Import prompt template preset"
+                    }
+                    p {
+                        style: "position:absolute;left:16px;top:44px;right:16px;margin:0;color:#998f87;font-size:0.75rem;",
+                        "Path to a prompt template JSON file on this device."
+                    }
+                    span {
+                        "data-part": "prompt-template-path-input",
+                        style: "position:absolute;left:16px;top:72px;right:16px;height:36px;line-height:36px;padding:0 12px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;color:#e8eef7;font-size:0.8125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;",
+                        if view.prompt_template_path_draft.is_empty() {
+                            span { style: "color:#998f87;", "\u{00a0}" }
+                        } else {
+                            "{view.prompt_template_path_draft}"
+                        }
+                    }
+                    div {
+                        class: "CharacterManagementPanel_dialogActions",
+                        style: "position:absolute;left:16px;right:16px;bottom:16px;display:flex;gap:8px;justify-content:flex-end;",
+                        button {
+                            r#type: "button",
+                            "data-variant": "default",
+                            "data-size": "md",
+                            span { "Cancel" }
+                        }
+                        button {
+                            r#type: "button",
+                            "data-variant": "primary",
+                            "data-size": "md",
+                            span { "Import" }
+                        }
+                    }
+                }
+            }
+            if view.generation_preset_import_open {
+                div {
+                    class: "st-card",
+                    "data-part": "generation-preset-import",
+                    style: "{provider_dlg_style}",
+                    div {
+                        "data-component": "dialog-title",
+                        "Import generation preset"
+                    }
+                    p {
+                        style: "position:absolute;left:16px;top:44px;right:16px;margin:0;color:#998f87;font-size:0.75rem;",
+                        "Path to a generation preset JSON file on this device."
+                    }
+                    span {
+                        "data-part": "generation-preset-path-input",
+                        style: "position:absolute;left:16px;top:72px;right:16px;height:36px;line-height:36px;padding:0 12px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;color:#e8eef7;font-size:0.8125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;",
+                        if view.generation_preset_path_draft.is_empty() {
+                            span { style: "color:#998f87;", "\u{00a0}" }
+                        } else {
+                            "{view.generation_preset_path_draft}"
                         }
                     }
                     div {

@@ -45,7 +45,7 @@ const WALLPAPER_ASSET_ID: &str = "neota-wallpaper";
 /// Auto-dismiss delay for the Phase C status toast.
 const TOAST_MS: std::time::Duration = std::time::Duration::from_millis(3500);
 
-/// Write one decoded chat-export document (`chats.export` host sink).
+/// Write one parked export document (chat / character card / prompt template).
 /// Returns the path the file landed at.
 fn write_export_file(export: &neotavern_presentation_chat::LastExport) -> std::io::Result<String> {
     let dir = std::env::var_os("NEOTA_EXPORT_DIR")
@@ -86,6 +86,10 @@ enum TextFocus {
     PersonaDescription,
     /// Card-import dialog path prompt (`part:card-path-input`).
     CardPath,
+    /// Prompt-template import dialog path (`part:prompt-template-path-input`).
+    PromptTemplatePath,
+    /// Generation-preset import dialog path (`part:generation-preset-path-input`).
+    PresetImportPath,
     /// Profile container import path (`part:profile-import-path`).
     ProfileImportPath,
     /// Header message-search field (`part:header-search-input`).
@@ -526,6 +530,14 @@ impl App {
             if rects.covers(css_x, css_y, "part:card-path-input") {
                 focus = TextFocus::CardPath;
             }
+        } else if view.prompt_template_import_open {
+            if rects.covers(css_x, css_y, "part:prompt-template-path-input") {
+                focus = TextFocus::PromptTemplatePath;
+            }
+        } else if view.generation_preset_import_open {
+            if rects.covers(css_x, css_y, "part:generation-preset-path-input") {
+                focus = TextFocus::PresetImportPath;
+            }
         } else if view.create_dialog_open {
             if rects.covers(css_x, css_y, "part:create-name") {
                 focus = TextFocus::CreateName;
@@ -909,27 +921,22 @@ impl App {
         }
         if let ShellHit::Action(action) = pending.hit {
             eprintln!("[neocompositor-desktop] tap -> {action:?}");
-            let export_id = match &action {
-                ShellAction::ExportChat(id) => Some(id.clone()),
-                _ => None,
-            };
             self.session.apply_shell_action(action);
-            // Host-side file sink for `chats.export` (React downloads to the
-            // browser; the desktop host writes under exports/, overridable
-            // via NEOTA_EXPORT_DIR).
-            if export_id.is_some() {
-                if let Some(export) = self.session.take_last_export() {
-                    match write_export_file(&export) {
-                        Ok(path) => {
-                            eprintln!("[neocompositor-desktop] export written: {path}");
-                            self.session.note_export_path(&path);
-                        }
-                        Err(err) => {
-                            eprintln!("[neocompositor-desktop] export write failed: {err}");
-                        }
+            // Host-side file sink for parked exports (`chats.export`,
+            // `characters.export.card`, prompt-template JSON). React
+            // downloads to the browser; the desktop host writes under
+            // exports/, overridable via NEOTA_EXPORT_DIR.
+            if let Some(export) = self.session.take_last_export() {
+                match write_export_file(&export) {
+                    Ok(path) => {
+                        eprintln!("[neocompositor-desktop] export written: {path}");
+                        self.session.note_export_path(&path);
                     }
-                    self.dirty = true;
+                    Err(err) => {
+                        eprintln!("[neocompositor-desktop] export write failed: {err}");
+                    }
                 }
+                self.dirty = true;
             }
             self.dirty = true;
             self.window.as_ref().map(|w| w.request_redraw());
@@ -1066,6 +1073,22 @@ impl App {
                 self.session.set_card_path_draft(&next);
                 eprintln!("[neocompositor-desktop] typed '{ch}' -> card_path+{ch}");
             }
+            TextFocus::PromptTemplatePath => {
+                let current = self.session.shell_view().prompt_template_path_draft.clone();
+                let next = format!("{current}{ch}");
+                self.session.set_prompt_template_path_draft(&next);
+                eprintln!("[neocompositor-desktop] typed '{ch}' -> prompt_template_path+{ch}");
+            }
+            TextFocus::PresetImportPath => {
+                let current = self
+                    .session
+                    .shell_view()
+                    .generation_preset_path_draft
+                    .clone();
+                let next = format!("{current}{ch}");
+                self.session.set_generation_preset_path_draft(&next);
+                eprintln!("[neocompositor-desktop] typed '{ch}' -> generation_preset_path+{ch}");
+            }
             TextFocus::ProfileImportPath => {
                 let current = self.session.shell_view().profile_import_path.clone();
                 let next = format!("{current}{ch}");
@@ -1180,6 +1203,14 @@ impl App {
                 self.session.shell_view().persona_description_draft.clone()
             }
             TextFocus::CardPath => self.session.shell_view().card_path_draft.clone(),
+            TextFocus::PromptTemplatePath => {
+                self.session.shell_view().prompt_template_path_draft.clone()
+            }
+            TextFocus::PresetImportPath => self
+                .session
+                .shell_view()
+                .generation_preset_path_draft
+                .clone(),
             TextFocus::ProfileImportPath => self.session.shell_view().profile_import_path.clone(),
             TextFocus::HeaderSearch => self.session.view().header_search_query,
             TextFocus::InstructSystem
@@ -1245,6 +1276,8 @@ impl App {
             TextFocus::PersonaName => self.session.set_persona_name_draft(&next),
             TextFocus::PersonaDescription => self.session.set_persona_description_draft(&next),
             TextFocus::CardPath => self.session.set_card_path_draft(&next),
+            TextFocus::PromptTemplatePath => self.session.set_prompt_template_path_draft(&next),
+            TextFocus::PresetImportPath => self.session.set_generation_preset_path_draft(&next),
             TextFocus::ProfileImportPath => self.session.set_profile_import_path(&next),
             TextFocus::HeaderSearch => self.session.set_header_search_query(&next),
             TextFocus::InstructSystem

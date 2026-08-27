@@ -119,8 +119,9 @@ struct PresetGenerationDefaults {
     stream: bool,
 }
 
-/// One completed chat export (`chats.export`): the wire filename plus the
-/// already-decoded document bytes, ready for the host's file sink.
+/// One completed export (`chats.export`, `characters.export.card`, or a
+/// host-owned prompt-template JSON envelope): filename plus bytes, ready
+/// for the host's file sink.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LastExport {
     pub filename: String,
@@ -380,13 +381,23 @@ pub struct ChatRouteState {
     /// child chats (checkpoints/branches) of the active chat.
     pub snapshots_menu_open: bool,
     pub snapshot_items: Vec<ChatDto>,
-    /// Completed `chats.export` payload awaiting the host's file sink
-    /// (React downloads the file; the desktop host writes it to disk).
+    /// Completed export payload awaiting the host's file sink (React
+    /// downloads the file; the desktop host writes it to disk):
+    /// `chats.export`, `characters.export.card`, and the host-owned
+    /// prompt-template JSON envelope.
     pub last_export: Option<LastExport>,
     /// Character-card import dialog (React hidden `<input type=file>`):
     /// a native path prompt + staged `assets.put` → `imports.character.card`.
     pub card_import_dialog_open: bool,
     pub card_path_draft: String,
+    /// Prompt-template import dialog (React hidden `<input type=file>`):
+    /// a native path prompt, then `presets.create` + `settings.update`.
+    pub prompt_template_import_open: bool,
+    pub prompt_template_path_draft: String,
+    /// Generation-preset import dialog (React hidden `<input type=file>`):
+    /// a native path prompt, then `presets.create` + `settings.update`.
+    pub generation_preset_import_open: bool,
+    pub generation_preset_path_draft: String,
     /// Profile container import (React `ProfilesPanel` import form):
     /// relative container path + duplicate policy.
     pub profile_import_path: String,
@@ -1449,6 +1460,10 @@ impl<W: ProductWire> ChatSession<W> {
             provider_delete_target_id: self.state.provider_delete_target_id.clone(),
             card_import_dialog_open: self.state.card_import_dialog_open,
             card_path_draft: self.state.card_path_draft.clone(),
+            prompt_template_import_open: self.state.prompt_template_import_open,
+            prompt_template_path_draft: self.state.prompt_template_path_draft.clone(),
+            generation_preset_import_open: self.state.generation_preset_import_open,
+            generation_preset_path_draft: self.state.generation_preset_path_draft.clone(),
             profile_import_path: self.state.profile_import_path.clone(),
             profile_import_policy_label: match self.state.profile_import_policy_index {
                 1 => "Replace".to_string(),
@@ -3250,6 +3265,10 @@ impl<W: ProductWire> ChatSession<W> {
             ShellAction::PromptPresetRename => self.open_prompt_preset_rename(),
             ShellAction::PromptPresetDuplicate => self.open_prompt_preset_duplicate(),
             ShellAction::PromptPresetDelete => self.open_prompt_preset_delete(),
+            ShellAction::PromptTemplateImportOpen => self.open_prompt_template_import(),
+            ShellAction::PromptTemplateImportClose => self.close_prompt_template_import(),
+            ShellAction::PromptTemplateImportConfirm => self.confirm_prompt_template_import(),
+            ShellAction::ExportPromptTemplate => self.export_prompt_template(),
             ShellAction::UploadBackground => {
                 // Kernel plane has no wallpaper catalog: React
                 // `useUploadBackground` rejects with `UnsupportedError`.
@@ -3311,6 +3330,10 @@ impl<W: ProductWire> ChatSession<W> {
             ShellAction::PresetDeleteOpen => self.open_preset_delete(),
             ShellAction::PresetDeleteClose => self.close_preset_delete(),
             ShellAction::PresetDeleteConfirm => self.confirm_preset_delete(),
+            ShellAction::PresetImportOpen => self.open_generation_preset_import(),
+            ShellAction::PresetImportClose => self.close_generation_preset_import(),
+            ShellAction::PresetImportConfirm => self.confirm_generation_preset_import(),
+            ShellAction::PresetExport => self.export_generation_preset(),
             ShellAction::ProviderCreateOpen => self.open_provider_create(),
             ShellAction::ProviderCreateClose => self.close_provider_create(),
             ShellAction::ProviderCycleKind => self.cycle_provider_kind(),
@@ -4915,8 +4938,7 @@ impl<W: ProductWire> ChatSession<W> {
             return;
         };
         if !prompt_template_is_complete(&preset.data) {
-            self.state.instruct_form_error =
-                Some("This file is not a valid prompt template preset.".into());
+            self.state.instruct_form_error = Some(INVALID_PROMPT_TEMPLATE_PRESET.to_string());
             return;
         }
         let mut next = preset.data.clone();
@@ -4947,6 +4969,116 @@ impl<W: ProductWire> ChatSession<W> {
                 self.state.status_message = Some("Preset saved.".into());
             }
             Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    /// React `PromptTemplateEditor.exportPreset`: host-owned JSON envelope
+    /// (no wire op). Parks in `last_export` for the desktop file sink.
+    fn export_prompt_template(&mut self) {
+        self.ensure_prompt_template_blocks();
+        let name = self
+            .active_prompt_preset()
+            .map(|item| item.name.as_str())
+            .unwrap_or("prompt");
+        let filename = json_export_filename(
+            self.active_prompt_preset()
+                .map(|item| item.name.as_str())
+                .unwrap_or("prompt-template"),
+            "prompt-template",
+        );
+        let payload = json!({
+            "version": 1,
+            "kind": "prompt-template",
+            "name": name,
+            "data": self.state.prompt_template.clone(),
+        });
+        match serde_json::to_vec_pretty(&payload) {
+            Ok(bytes) => {
+                self.state.last_export = Some(LastExport {
+                    filename: filename.clone(),
+                    bytes,
+                });
+                self.state.status_message = Some(format!("Export ready: {filename}."));
+                self.state.instruct_form_error = None;
+            }
+            Err(_) => {
+                self.state.instruct_form_error = Some(INVALID_PROMPT_TEMPLATE_PRESET.to_string());
+            }
+        }
+        self.bump_scene();
+    }
+
+    fn open_prompt_template_import(&mut self) {
+        if self.state.prompt_template_import_open {
+            return;
+        }
+        self.state.card_import_dialog_open = false;
+        self.state.generation_preset_import_open = false;
+        self.state.prompt_template_path_draft.clear();
+        self.state.prompt_template_import_open = true;
+        self.bump_scene();
+    }
+
+    fn close_prompt_template_import(&mut self) {
+        self.state.prompt_template_import_open = false;
+        self.state.prompt_template_path_draft.clear();
+        self.bump_scene();
+    }
+
+    pub fn set_prompt_template_path_draft(&mut self, draft: &str) {
+        if self.state.prompt_template_import_open {
+            self.state.prompt_template_path_draft = draft.to_string();
+            self.bump_scene();
+        }
+    }
+
+    /// React `PromptTemplateEditor.importPreset`: read JSON from a host path,
+    /// validate the 12 host-owned ids, then `presets.create` +
+    /// `settings.update` (`prompt-template` + active id).
+    fn confirm_prompt_template_import(&mut self) {
+        let path = self.state.prompt_template_path_draft.trim().to_string();
+        if path.is_empty() {
+            self.state.status_message =
+                Some("Provide a prompt template JSON file from this device.".into());
+            self.bump_scene();
+            return;
+        }
+        let bytes = match std::fs::read(&path) {
+            Ok(bytes) => bytes,
+            Err(err) => {
+                self.state.status_message = Some(format!("Cannot read {path}: {err}"));
+                self.bump_scene();
+                return;
+            }
+        };
+        let fallback_name = std::path::Path::new(&path)
+            .file_stem()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "prompt-template".into());
+        let Some((name, next)) = parse_prompt_template_import(&bytes, &fallback_name) else {
+            self.state.instruct_form_error = Some(INVALID_PROMPT_TEMPLATE_PRESET.to_string());
+            self.bump_scene();
+            return;
+        };
+        let req = RequestCreatePreset {
+            kind: "prompt-template".into(),
+            name: name.clone(),
+            data: Some(next.clone()),
+        };
+        match self.call_decode("presets.create", &req, decode_preset_dto) {
+            Ok(dto) => {
+                self.state.prompt_template = next;
+                self.persist_prompt_template_and_active(Some(dto.id));
+                self.load_prompt_presets_list();
+                self.close_prompt_template_import();
+                self.state.instruct_form_error = None;
+                self.state.status_message = Some(format!("Imported {name}."));
+            }
+            Err(err) => {
+                let code = err.reason_code().to_string();
+                self.state.instruct_form_error = Some(code);
+            }
         }
         self.bump_scene();
     }
@@ -5930,6 +6062,142 @@ impl<W: ProductWire> ChatSession<W> {
         self.bump_scene();
     }
 
+    /// React `GenerationPresetEditor.exportPreset`: host-owned JSON envelope
+    /// (no wire op). Parks the live draft in `last_export`.
+    fn export_generation_preset(&mut self) {
+        let name = self
+            .active_preset()
+            .map(|item| item.name.as_str())
+            .unwrap_or("generation");
+        let filename = json_export_filename(name, "generation");
+        let payload = json!({
+            "version": 1,
+            "kind": "generation",
+            "name": name,
+            "data": self.generation_preset_draft_json(),
+        });
+        match serde_json::to_vec_pretty(&payload) {
+            Ok(bytes) => {
+                self.state.last_export = Some(LastExport {
+                    filename: filename.clone(),
+                    bytes,
+                });
+                self.state.status_message = Some(format!("Export ready: {filename}."));
+                self.state.preset_form_error = None;
+            }
+            Err(_) => {
+                self.state.preset_form_error = Some(INVALID_GENERATION_PRESET.to_string());
+            }
+        }
+        self.bump_scene();
+    }
+
+    fn open_generation_preset_import(&mut self) {
+        if self.state.generation_preset_import_open {
+            return;
+        }
+        self.state.card_import_dialog_open = false;
+        self.state.prompt_template_import_open = false;
+        self.state.generation_preset_path_draft.clear();
+        self.state.generation_preset_import_open = true;
+        self.bump_scene();
+    }
+
+    fn close_generation_preset_import(&mut self) {
+        self.state.generation_preset_import_open = false;
+        self.state.generation_preset_path_draft.clear();
+        self.bump_scene();
+    }
+
+    pub fn set_generation_preset_path_draft(&mut self, draft: &str) {
+        if self.state.generation_preset_import_open {
+            self.state.generation_preset_path_draft = draft.to_string();
+            self.bump_scene();
+        }
+    }
+
+    /// React `GenerationPresetEditor.importPreset`: read JSON from a host
+    /// path, validate `GenerationPresetData`, then `presets.create` +
+    /// `settings.update` (`activeGenerationPresetId` + sampler keys).
+    fn confirm_generation_preset_import(&mut self) {
+        let path = self.state.generation_preset_path_draft.trim().to_string();
+        if path.is_empty() {
+            self.state.status_message =
+                Some("Provide a generation preset JSON file from this device.".into());
+            self.bump_scene();
+            return;
+        }
+        let bytes = match std::fs::read(&path) {
+            Ok(bytes) => bytes,
+            Err(err) => {
+                self.state.status_message = Some(format!("Cannot read {path}: {err}"));
+                self.bump_scene();
+                return;
+            }
+        };
+        let fallback_name = std::path::Path::new(&path)
+            .file_stem()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "generation".into());
+        let Some((name, data)) = parse_generation_preset_import(&bytes, &fallback_name) else {
+            self.state.preset_form_error = Some(INVALID_GENERATION_PRESET.to_string());
+            self.bump_scene();
+            return;
+        };
+        let parsed: PresetGenerationData = serde_json::from_value(data.clone()).unwrap_or_default();
+        let req = RequestCreatePreset {
+            kind: "generation".into(),
+            name: name.clone(),
+            data: Some(data),
+        };
+        match self.call_decode("presets.create", &req, decode_preset_dto) {
+            Ok(dto) => {
+                self.state.preset_draft_max_context = parsed.max_context_tokens;
+                self.state.preset_draft_defaults =
+                    serde_json::to_value(&parsed.generation_defaults).unwrap_or_else(|_| json!({}));
+                let apply = RequestSettingsUpdate {
+                    settings: vec![
+                        RequestSettingsUpdateSettings {
+                            key: "activeGenerationPresetId".into(),
+                            value: json!(dto.id.clone()),
+                        },
+                        RequestSettingsUpdateSettings {
+                            key: "maxContextTokens".into(),
+                            value: json!(parsed.max_context_tokens),
+                        },
+                        RequestSettingsUpdateSettings {
+                            key: "generationDefaults".into(),
+                            value: serde_json::to_value(&parsed.generation_defaults)
+                                .unwrap_or_else(|_| json!({})),
+                        },
+                    ],
+                };
+                if let Err(err) = self.call_value("settings.update", &apply) {
+                    self.record_error(err);
+                    self.bump_scene();
+                    return;
+                }
+                self.state.active_preset_id = Some(dto.id);
+                self.load_presets_list();
+                self.close_generation_preset_import();
+                self.state.preset_form_error = None;
+                self.state.status_message = Some(format!("Imported {name}."));
+            }
+            Err(err) => {
+                let code = err.reason_code().to_string();
+                self.state.preset_form_error = Some(code);
+            }
+        }
+        self.bump_scene();
+    }
+
+    fn generation_preset_draft_json(&self) -> Value {
+        json!({
+            "maxContextTokens": self.state.preset_draft_max_context,
+            "generationDefaults": self.state.preset_draft_defaults,
+        })
+    }
+
     pub fn set_preset_name_draft(&mut self, value: &str) {
         self.state.preset_name_draft = value.to_string();
         self.bump_scene();
@@ -6800,6 +7068,13 @@ const PROMPT_TRIGGER_IDS: &[&str] = &[
     "quiet",
 ];
 
+/// English golden copy (`settings:invalidPromptTemplatePreset`).
+const INVALID_PROMPT_TEMPLATE_PRESET: &str = "This file is not a valid prompt template preset.";
+/// English golden copy (`settings:invalidGenerationPreset`).
+const INVALID_GENERATION_PRESET: &str = "This file is not a valid generation preset.";
+const CONTEXT_TOKEN_MIN: i64 = 256;
+const CONTEXT_TOKEN_UNLOCKED_MAX: i64 = 10_000_000;
+
 /// Mirrors `DEFAULT_PROMPT_TEMPLATE` in `packages/contracts/src/promptTemplate.ts`.
 fn default_prompt_template() -> Value {
     let blocks: Vec<Value> = PROMPT_BLOCK_IDS
@@ -7093,6 +7368,137 @@ fn prompt_template_is_complete(template: &Value) -> bool {
     }
     let n = ids.len();
     ids[n - 2] == "chat-history" && ids[n - 1] == "post-history-instructions"
+}
+
+/// React `PromptTemplateEditor.importPreset`: envelope `{ data, name }` or a
+/// bare template object. Forces `mode: "text"` and requires the 12 host-owned
+/// ids with terminal anchors last.
+fn parse_prompt_template_import(bytes: &[u8], fallback_name: &str) -> Option<(String, Value)> {
+    let raw: Value = serde_json::from_slice(bytes).ok()?;
+    let (imported_name, mut candidate) = if let Some(obj) = raw.as_object() {
+        if obj.contains_key("data") {
+            let name = obj
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or(fallback_name);
+            (name.to_string(), obj.get("data")?.clone())
+        } else {
+            (fallback_name.to_string(), raw)
+        }
+    } else {
+        return None;
+    };
+    if !candidate.is_object() {
+        return None;
+    }
+    if let Some(obj) = candidate.as_object_mut() {
+        obj.insert("mode".into(), json!("text"));
+    }
+    if !prompt_template_is_complete(&candidate) {
+        return None;
+    }
+    let trimmed = imported_name.trim();
+    let name = if trimmed.is_empty() {
+        "prompt-template".to_string()
+    } else {
+        trimmed.chars().take(500).collect()
+    };
+    Some((name, candidate))
+}
+
+fn json_export_filename(name: &str, fallback: &str) -> String {
+    let trimmed = name.trim();
+    let base = if trimmed.is_empty() {
+        fallback
+    } else {
+        trimmed
+    };
+    let mut safe = String::new();
+    for ch in base.chars() {
+        if safe.len() >= 80 {
+            break;
+        }
+        if matches!(ch, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') {
+            safe.push('-');
+        } else if !ch.is_control() {
+            safe.push(ch);
+        }
+    }
+    if safe.is_empty() {
+        format!("{fallback}.json")
+    } else {
+        format!("{safe}.json")
+    }
+}
+
+/// React `GenerationPresetEditor.importPreset`: envelope `{ data, name }` or a
+/// bare `GenerationPresetData` object. `maxContextTokens` must sit in the
+/// contract range; `generationDefaults` is a required object.
+fn parse_generation_preset_import(bytes: &[u8], fallback_name: &str) -> Option<(String, Value)> {
+    let raw: Value = serde_json::from_slice(bytes).ok()?;
+    let (imported_name, candidate) = if let Some(obj) = raw.as_object() {
+        if obj.contains_key("data") {
+            let name = obj
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or(fallback_name);
+            (name.to_string(), obj.get("data")?.clone())
+        } else {
+            (fallback_name.to_string(), raw)
+        }
+    } else {
+        return None;
+    };
+    if !generation_preset_data_is_valid(&candidate) {
+        return None;
+    }
+    let trimmed = imported_name.trim();
+    let name = if trimmed.is_empty() {
+        "generation".to_string()
+    } else {
+        trimmed.chars().take(500).collect()
+    };
+    Some((name, candidate))
+}
+
+fn generation_preset_data_is_valid(value: &Value) -> bool {
+    let Some(obj) = value.as_object() else {
+        return false;
+    };
+    if obj
+        .keys()
+        .any(|key| key != "maxContextTokens" && key != "generationDefaults")
+    {
+        return false;
+    }
+    let Some(tokens) = obj.get("maxContextTokens").and_then(Value::as_i64) else {
+        return false;
+    };
+    if !(CONTEXT_TOKEN_MIN..=CONTEXT_TOKEN_UNLOCKED_MAX).contains(&tokens) {
+        return false;
+    }
+    match obj.get("generationDefaults") {
+        Some(Value::Object(defaults)) => {
+            const ALLOWED: &[&str] = &[
+                "maxTokens",
+                "temperature",
+                "topP",
+                "topK",
+                "minP",
+                "topA",
+                "repetitionPenalty",
+                "frequencyPenalty",
+                "presencePenalty",
+                "seed",
+                "reasoning",
+                "reasoningEffort",
+                "stop",
+                "stream",
+            ];
+            defaults.keys().all(|key| ALLOWED.contains(&key.as_str()))
+        }
+        _ => false,
+    }
 }
 
 fn default_custom_instruct() -> Value {

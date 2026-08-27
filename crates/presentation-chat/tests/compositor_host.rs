@@ -2233,11 +2233,12 @@ fn prompt_template_reorder_blocks_over_product_wire() {
     session.set_surface_size(1100, 760, 1.0);
     let shell = session.shell_view();
     // First row: toggle 48 | name | Up 32 (disabled) | Down 32. Panel 60+380.
-    match hit_test(&shell, 368.0, 410.0) {
+    // Import/export sits above Add (+44px vs the pre-import layout).
+    match hit_test(&shell, 368.0, 454.0) {
         Some(ShellHit::Absorb) => {}
         other => panic!("expected Absorb on disabled main-prompt Up, got {other:?}"),
     }
-    match hit_test(&shell, 400.0, 410.0) {
+    match hit_test(&shell, 400.0, 454.0) {
         Some(ShellHit::Action(ShellAction::MovePromptBlockDown(id))) => {
             assert_eq!(id, "main-prompt");
         }
@@ -2769,6 +2770,200 @@ fn prompt_template_block_model_binding_over_product_wire() {
     assert!(
         skeleton.has_identity("prompt-block-model-load"),
         "missing prompt-block-model-load; identities={:?}",
+        skeleton.identities()
+    );
+}
+
+#[test]
+fn prompt_template_import_export_over_product_wire() {
+    use neotavern_presentation_chat::{hit_test, ShellAction, ShellHit};
+    use neotavern_presentation_m0_d2::inspect_slot_skeleton;
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    session.set_surface_size(1100, 760, 1.0);
+    session.apply_shell_action(ShellAction::SetPanel("providers".into()));
+    session.apply_shell_action(ShellAction::SetTab("advanced".into()));
+    session.apply_shell_action(ShellAction::CyclePromptMode);
+    session.apply_shell_action(ShellAction::CyclePromptPreset);
+    assert_eq!(
+        session.shell_view().prompt_preset_active_name.as_deref(),
+        Some("Roleplay")
+    );
+
+    let shell = session.shell_view();
+    match hit_test(&shell, 124.0, 366.0) {
+        Some(ShellHit::Action(ShellAction::PromptTemplateImportOpen)) => {}
+        other => panic!("expected PromptTemplateImportOpen, got {other:?}"),
+    }
+    match hit_test(&shell, 228.0, 366.0) {
+        Some(ShellHit::Action(ShellAction::ExportPromptTemplate)) => {}
+        other => panic!("expected ExportPromptTemplate, got {other:?}"),
+    }
+
+    let before_create = session
+        .issued_commands()
+        .iter()
+        .filter(|op| *op == "presets.create")
+        .count();
+    session.apply_shell_action(ShellAction::ExportPromptTemplate);
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .filter(|op| *op == "presets.create")
+            .count()
+            == before_create,
+        "export is host-owned JSON, not a wire op"
+    );
+    let export = session.take_last_export().expect("parked export");
+    assert_eq!(export.filename, "Roleplay.json");
+    let doc: serde_json::Value =
+        serde_json::from_slice(&export.bytes).expect("valid export document");
+    assert_eq!(
+        doc.get("version").and_then(serde_json::Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        doc.get("kind").and_then(serde_json::Value::as_str),
+        Some("prompt-template")
+    );
+    assert_eq!(
+        doc.get("name").and_then(serde_json::Value::as_str),
+        Some("Roleplay")
+    );
+    assert!(
+        doc.get("data")
+            .and_then(|value| value.get("blocks"))
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|blocks| blocks.len() >= 12),
+        "envelope carries the 12 host-owned blocks"
+    );
+    assert_eq!(
+        session.shell_view().status_message.as_deref(),
+        Some("Export ready: Roleplay.json.")
+    );
+
+    session.apply_shell_action(ShellAction::PromptTemplateImportOpen);
+    assert!(session.shell_view().prompt_template_import_open);
+    session.apply_shell_action(ShellAction::PromptTemplateImportConfirm);
+    assert_eq!(
+        session.shell_view().status_message.as_deref(),
+        Some("Provide a prompt template JSON file from this device.")
+    );
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .filter(|op| *op == "presets.create")
+            .count()
+            == before_create,
+        "empty path does not create a preset"
+    );
+
+    let import_path = std::env::temp_dir().join(format!(
+        "neota-test-prompt-template-{}.json",
+        std::process::id()
+    ));
+    std::fs::write(&import_path, &export.bytes).expect("write export");
+    session.set_prompt_template_path_draft(&import_path.to_string_lossy());
+    session.apply_shell_action(ShellAction::PromptTemplateImportConfirm);
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "presets.create"));
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "settings.update"));
+    let shell = session.shell_view();
+    assert!(!shell.prompt_template_import_open);
+    assert_eq!(shell.prompt_presets.len(), 2);
+    assert_eq!(shell.prompt_preset_active_name.as_deref(), Some("Roleplay"));
+    assert_eq!(shell.status_message.as_deref(), Some("Imported Roleplay."));
+    assert_eq!(shell.prompt_blocks.len(), 12);
+
+    session.apply_shell_action(ShellAction::PromptTemplateImportOpen);
+    let bad_path = std::env::temp_dir().join(format!(
+        "neota-test-prompt-template-bad-{}.json",
+        std::process::id()
+    ));
+    std::fs::write(&bad_path, "{not json").expect("write invalid");
+    session.set_prompt_template_path_draft(&bad_path.to_string_lossy());
+    session.apply_shell_action(ShellAction::PromptTemplateImportConfirm);
+    assert_eq!(
+        session.shell_view().instruct_form_error.as_deref(),
+        Some("This file is not a valid prompt template preset.")
+    );
+    assert!(
+        session.shell_view().prompt_template_import_open,
+        "invalid JSON keeps the dialog open"
+    );
+
+    let incomplete_path = std::env::temp_dir().join(format!(
+        "neota-test-prompt-template-incomplete-{}.json",
+        std::process::id()
+    ));
+    std::fs::write(
+        &incomplete_path,
+        serde_json::json!({
+            "version": 1,
+            "kind": "prompt-template",
+            "name": "Broken",
+            "data": { "mode": "text", "blocks": [] }
+        })
+        .to_string(),
+    )
+    .expect("write incomplete");
+    session.set_prompt_template_path_draft(&incomplete_path.to_string_lossy());
+    session.apply_shell_action(ShellAction::PromptTemplateImportConfirm);
+    assert_eq!(
+        session.shell_view().instruct_form_error.as_deref(),
+        Some("This file is not a valid prompt template preset.")
+    );
+
+    let raw_path = std::env::temp_dir().join(format!(
+        "neota-test-prompt-template-raw-{}.json",
+        std::process::id()
+    ));
+    let data = doc.get("data").cloned().expect("export data");
+    std::fs::write(&raw_path, data.to_string()).expect("write raw template");
+    session.set_prompt_template_path_draft(&raw_path.to_string_lossy());
+    session.apply_shell_action(ShellAction::PromptTemplateImportConfirm);
+    assert!(!session.shell_view().prompt_template_import_open);
+    assert_eq!(session.shell_view().prompt_presets.len(), 3);
+    let raw_name = raw_path.file_stem().unwrap().to_string_lossy().into_owned();
+    assert_eq!(
+        session.shell_view().prompt_preset_active_name.as_deref(),
+        Some(raw_name.as_str())
+    );
+
+    let _ = std::fs::remove_file(&import_path);
+    let _ = std::fs::remove_file(&bad_path);
+    let _ = std::fs::remove_file(&incomplete_path);
+    let _ = std::fs::remove_file(&raw_path);
+
+    session.apply_shell_action(ShellAction::PromptTemplateImportOpen);
+    neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
+    let skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
+        .expect("slot skeleton");
+    assert!(
+        skeleton.has_identity("prompt-preset-import"),
+        "missing prompt-preset-import; identities={:?}",
+        skeleton.identities()
+    );
+    assert!(
+        skeleton.has_identity("prompt-preset-export"),
+        "missing prompt-preset-export; identities={:?}",
+        skeleton.identities()
+    );
+    assert!(
+        skeleton.has_identity("prompt-template-import"),
+        "missing prompt-template-import; identities={:?}",
+        skeleton.identities()
+    );
+    assert!(
+        skeleton.has_identity("prompt-template-path-input"),
+        "missing prompt-template-path-input; identities={:?}",
         skeleton.identities()
     );
 }
@@ -3686,6 +3881,205 @@ fn generation_preset_management_over_product_wire() {
         .issued_commands()
         .iter()
         .any(|op| op == "presets.delete"));
+}
+
+#[test]
+fn generation_preset_import_export_over_product_wire() {
+    use neotavern_presentation_chat::{hit_test, ShellAction, ShellHit};
+    use neotavern_presentation_m0_d2::inspect_slot_skeleton;
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    session.set_surface_size(1100, 760, 1.0);
+    session.apply_shell_action(ShellAction::SetPanel("providers".into()));
+    session.apply_shell_action(ShellAction::SetTab("presets".into()));
+    let balanced_id = session
+        .shell_view()
+        .presets
+        .iter()
+        .find(|item| item.name == "Balanced")
+        .expect("Balanced")
+        .id
+        .clone();
+    session.apply_shell_action(ShellAction::SelectPreset(balanced_id));
+
+    let shell = session.shell_view();
+    match hit_test(&shell, 124.0, 262.0) {
+        Some(ShellHit::Action(ShellAction::PresetImportOpen)) => {}
+        other => panic!("expected PresetImportOpen, got {other:?}"),
+    }
+    match hit_test(&shell, 228.0, 262.0) {
+        Some(ShellHit::Action(ShellAction::PresetExport)) => {}
+        other => panic!("expected PresetExport, got {other:?}"),
+    }
+
+    let before_create = session
+        .issued_commands()
+        .iter()
+        .filter(|op| *op == "presets.create")
+        .count();
+    session.apply_shell_action(ShellAction::PresetExport);
+    assert_eq!(
+        session
+            .issued_commands()
+            .iter()
+            .filter(|op| *op == "presets.create")
+            .count(),
+        before_create,
+        "export is host-owned JSON, not a wire op"
+    );
+    let export = session.take_last_export().expect("parked export");
+    assert_eq!(export.filename, "Balanced.json");
+    let doc: serde_json::Value =
+        serde_json::from_slice(&export.bytes).expect("valid export document");
+    assert_eq!(
+        doc.get("version").and_then(serde_json::Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        doc.get("kind").and_then(serde_json::Value::as_str),
+        Some("generation")
+    );
+    assert_eq!(
+        doc.get("name").and_then(serde_json::Value::as_str),
+        Some("Balanced")
+    );
+    assert_eq!(
+        doc.pointer("/data/maxContextTokens")
+            .and_then(serde_json::Value::as_i64),
+        Some(8192)
+    );
+    assert_eq!(
+        session.shell_view().status_message.as_deref(),
+        Some("Export ready: Balanced.json.")
+    );
+
+    session.apply_shell_action(ShellAction::PresetImportOpen);
+    assert!(session.shell_view().generation_preset_import_open);
+    session.apply_shell_action(ShellAction::PresetImportConfirm);
+    assert_eq!(
+        session.shell_view().status_message.as_deref(),
+        Some("Provide a generation preset JSON file from this device.")
+    );
+    assert_eq!(
+        session
+            .issued_commands()
+            .iter()
+            .filter(|op| *op == "presets.create")
+            .count(),
+        before_create,
+        "empty path does not create a preset"
+    );
+
+    let import_path = std::env::temp_dir().join(format!(
+        "neota-test-generation-preset-{}.json",
+        std::process::id()
+    ));
+    std::fs::write(&import_path, &export.bytes).expect("write export");
+    session.set_generation_preset_path_draft(&import_path.to_string_lossy());
+    session.apply_shell_action(ShellAction::PresetImportConfirm);
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "presets.create"));
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "settings.update"));
+    let shell = session.shell_view();
+    assert!(!shell.generation_preset_import_open);
+    assert_eq!(shell.presets.len(), 3);
+    assert_eq!(shell.preset_active_name.as_deref(), Some("Balanced"));
+    assert_eq!(shell.status_message.as_deref(), Some("Imported Balanced."));
+    assert_eq!(
+        shell
+            .preset_rows
+            .iter()
+            .find(|row| row.label == "Context size")
+            .map(|row| row.value.as_str()),
+        Some("8192")
+    );
+
+    session.apply_shell_action(ShellAction::PresetImportOpen);
+    let bad_path = std::env::temp_dir().join(format!(
+        "neota-test-generation-preset-bad-{}.json",
+        std::process::id()
+    ));
+    std::fs::write(&bad_path, "{not json").expect("write invalid");
+    session.set_generation_preset_path_draft(&bad_path.to_string_lossy());
+    session.apply_shell_action(ShellAction::PresetImportConfirm);
+    assert_eq!(
+        session.shell_view().preset_form_error.as_deref(),
+        Some("This file is not a valid generation preset.")
+    );
+    assert!(session.shell_view().generation_preset_import_open);
+
+    let incomplete_path = std::env::temp_dir().join(format!(
+        "neota-test-generation-preset-incomplete-{}.json",
+        std::process::id()
+    ));
+    std::fs::write(
+        &incomplete_path,
+        serde_json::json!({
+            "version": 1,
+            "kind": "generation",
+            "name": "Broken",
+            "data": { "maxContextTokens": 8192 }
+        })
+        .to_string(),
+    )
+    .expect("write incomplete");
+    session.set_generation_preset_path_draft(&incomplete_path.to_string_lossy());
+    session.apply_shell_action(ShellAction::PresetImportConfirm);
+    assert_eq!(
+        session.shell_view().preset_form_error.as_deref(),
+        Some("This file is not a valid generation preset.")
+    );
+
+    let raw_path = std::env::temp_dir().join(format!(
+        "neota-test-generation-preset-raw-{}.json",
+        std::process::id()
+    ));
+    let data = doc.get("data").cloned().expect("export data");
+    std::fs::write(&raw_path, data.to_string()).expect("write raw");
+    session.set_generation_preset_path_draft(&raw_path.to_string_lossy());
+    session.apply_shell_action(ShellAction::PresetImportConfirm);
+    assert!(!session.shell_view().generation_preset_import_open);
+    assert_eq!(session.shell_view().presets.len(), 4);
+    let raw_name = raw_path.file_stem().unwrap().to_string_lossy().into_owned();
+    assert_eq!(
+        session.shell_view().preset_active_name.as_deref(),
+        Some(raw_name.as_str())
+    );
+
+    let _ = std::fs::remove_file(&import_path);
+    let _ = std::fs::remove_file(&bad_path);
+    let _ = std::fs::remove_file(&incomplete_path);
+    let _ = std::fs::remove_file(&raw_path);
+
+    session.apply_shell_action(ShellAction::PresetImportOpen);
+    neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
+    let skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
+        .expect("slot skeleton");
+    assert!(
+        skeleton.has_identity("preset-import"),
+        "missing preset-import; identities={:?}",
+        skeleton.identities()
+    );
+    assert!(
+        skeleton.has_identity("preset-export"),
+        "missing preset-export; identities={:?}",
+        skeleton.identities()
+    );
+    assert!(
+        skeleton.has_identity("generation-preset-import"),
+        "missing generation-preset-import; identities={:?}",
+        skeleton.identities()
+    );
+    assert!(
+        skeleton.has_identity("generation-preset-path-input"),
+        "missing generation-preset-path-input; identities={:?}",
+        skeleton.identities()
+    );
 }
 
 #[test]

@@ -120,6 +120,23 @@
   (`providers.models.discovery`, без выдуманной wire-операции). Тест
   `prompt_template_block_model_binding_over_product_wire`.
 
+- **Нативный шелл: prompt-template import/export.** Export пишет host-owned
+  JSON-конверт `{ version: 1, kind: "prompt-template", name, data }` в
+  `last_export` (как React download, без wire-операции). Import — диалог
+  пути, затем `presets.create` + `settings.update`. Невалидный JSON или
+  неполный набор 12 host-owned id — copy
+  `settings:invalidPromptTemplatePreset`. Drag и token audit остаются на
+  React (`prompt.context-audit` на kernel-плоскости — UnsupportedError).
+  Тест `prompt_template_import_export_over_product_wire`.
+
+- **Нативный шелл: generation-preset import/export.** Config-таб: Export
+  пишет host-owned JSON-конверт `{ version: 1, kind: "generation", name, data }`
+  в `last_export` (как React download). Import — диалог пути, затем
+  `presets.create` + `settings.update` (`activeGenerationPresetId` +
+  `maxContextTokens` + `generationDefaults`). Невалидный файл — copy
+  `settings:invalidGenerationPreset`. Слайдеры самплеров остаются на React.
+  Тест `generation_preset_import_export_over_product_wire`.
+
 - **Профили: импорт контейнера (profile.import).** Форма пути + политика
   дубликатов (Reject/Replace/Remap) в Settings → Profiles; статус со
   счётчиками inserted/updated/skipped и orphans; успех обновляет библиотеку.

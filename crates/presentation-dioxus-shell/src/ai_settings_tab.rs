@@ -4,7 +4,8 @@
 //! edited locally and saved through `settings.update`. Text-completion
 //! prompt blocks list, toggle `enabled`, custom add/remove, compact
 //! editor (name / content / placement / role / triggers / forbidOverrides /
-//! model), and `prompt-template` presets (`presets.*`) over the same settings keys.
+//! model), prompt-template presets (`presets.*`), and host-owned
+//! import/export over the same settings keys.
 //! The kernel plane has no instruct-format catalog (`useInstructFormats` → `{ formats: [] }`).
 
 use dioxus_core::Element;
@@ -135,11 +136,12 @@ fn providers_tab(view: &ProductShellView) -> Element {
 
 /// React `GenerationPresetEditor` (Config tab): the preset selector cards
 /// (tap = select, applies values through `settings.update`), a management
-/// toolbar (save-as / rename / duplicate / delete), read-only sampler rows of
-/// the active preset and Apply. Per-sampler range editing stays on React for
-/// now; import/export are host-owned file dialogs.
+/// toolbar (save-as / rename / duplicate / delete), host-owned import/export,
+/// and read-only sampler rows of the active preset plus Apply. Per-sampler
+/// range editing stays on React.
 /// Geometry mirrors `shell_hit.rs::presets_config_hit`: body padding 12 +
-/// heading 20 + gap 8 + hint 16 + gap 8 + toolbar 36 + gap 8 + values card
+/// heading 20 + gap 8 + hint 16 + gap 8 + active label 20 + gap 8 + toolbar
+/// 36 + gap 8 + import/export 36 + gap 8 + values card
 /// (8*2 + rows*20) + gap 8; selector cards 60 + 4.
 fn presets_tab(view: &ProductShellView) -> Element {
     let empty = view.presets.is_empty();
@@ -152,6 +154,7 @@ fn presets_tab(view: &ProductShellView) -> Element {
         div {
             class: "AiSettings_tabBody",
             "data-part": "ai-presets",
+            "data-component": "generation-preset-editor",
             style: "padding:12px 16px;display:flex;flex-direction:column;gap:8px;",
             strong { style: "font-size:0.9375rem;height:20px;", "Generation presets" }
             p { style: "margin:0;color:#998f87;font-size:0.75rem;height:16px;", "Reusable sampler settings come from Product Wire presets.list." }
@@ -185,6 +188,24 @@ fn presets_tab(view: &ProductShellView) -> Element {
                     "data-part": "preset-delete",
                     style: "width:96px;height:36px;margin-left:auto;",
                     span { "Delete" }
+                }
+            }
+            div {
+                "data-part": "preset-files",
+                style: "display:flex;align-items:center;gap:8px;height:36px;",
+                button {
+                    class: "st-button", r#type: "button",
+                    "data-part": "preset-import",
+                    "aria-label": "Import generation preset",
+                    style: "width:96px;height:36px;",
+                    span { "Import" }
+                }
+                button {
+                    class: "st-button", r#type: "button",
+                    "data-part": "preset-export",
+                    "aria-label": "Export",
+                    style: "width:96px;height:36px;",
+                    span { "Export" }
                 }
             }
             div {
@@ -225,6 +246,15 @@ fn presets_tab(view: &ProductShellView) -> Element {
                             }
                         }
                     }
+                }
+            }
+            if let Some(error) = view.preset_form_error.as_deref() {
+                p {
+                    class: "AiSettings_inlineError",
+                    role: "alert",
+                    "data-part": "preset-form-error",
+                    style: "margin:0;color:#f2b8b5;font-size:0.75rem;",
+                    "{error}"
                 }
             }
         }
@@ -432,8 +462,8 @@ fn memory_card(
 /// React `AdvancedPromptSettings` + `ChatTemplateEditor` /
 /// `PromptTemplateEditor` (block list + enabled toggle). Built-in instruct
 /// formats are a legacy sidecar catalog — this plane lists native + custom
-/// only. Prompt-template presets, custom blocks, reorder, and import/export
-/// stay on the React plane; mode and `enabled` still persist through Wire.
+/// only. Prompt-template presets, custom blocks, reorder, import/export persist
+/// through Wire / the host file sink; drag and token audit stay on React.
 fn advanced_tab(view: &ProductShellView) -> Element {
     let chat_mode = view.prompt_template_mode != "text";
     let custom = view.instruct_selection == "custom";
@@ -553,7 +583,7 @@ fn advanced_tab(view: &ProductShellView) -> Element {
                     }
                     p {
                         style: "margin:0;color:#998f87;font-size:0.75rem;height:16px;line-height:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
-                        "Drag, import/export, and token audit stay on the React plane."
+                        "Drag and token audit stay on the React plane."
                     }
                     button {
                         class: "st-button",
@@ -594,6 +624,24 @@ fn advanced_tab(view: &ProductShellView) -> Element {
                             "data-part": "prompt-preset-delete",
                             style: "width:96px;height:36px;margin-left:auto;",
                             span { "Delete" }
+                        }
+                    }
+                    div {
+                        "data-part": "prompt-preset-files",
+                        style: "display:flex;align-items:center;gap:8px;height:36px;",
+                        button {
+                            class: "st-button", r#type: "button",
+                            "data-part": "prompt-preset-import",
+                            "aria-label": "Import prompt template preset",
+                            style: "width:96px;height:36px;",
+                            span { "Import" }
+                        }
+                        button {
+                            class: "st-button", r#type: "button",
+                            "data-part": "prompt-preset-export",
+                            "aria-label": "Export",
+                            style: "width:96px;height:36px;",
+                            span { "Export" }
                         }
                     }
                     button {

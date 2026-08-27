@@ -173,7 +173,7 @@ pub enum ShellAction {
     /// React `PromptTemplateEditor.addPrompt` / `removePrompt` /
     /// `PromptBlockEditorDialog` (name + content + placement + role +
     /// triggers + forbidOverrides + model) / `moveBlock`. Drag and
-    /// import stay on the React plane.
+    /// token audit stay on the React plane.
     AddPromptBlock,
     RemovePromptBlock(String),
     EditPromptBlock(String),
@@ -206,6 +206,13 @@ pub enum ShellAction {
     PromptPresetRename,
     PromptPresetDuplicate,
     PromptPresetDelete,
+    /// React `PromptTemplateEditor` import/export. Export is a host-owned
+    /// JSON download (no wire op); import reads a path, then
+    /// `presets.create` + `settings.update` like React `importPreset`.
+    PromptTemplateImportOpen,
+    PromptTemplateImportClose,
+    PromptTemplateImportConfirm,
+    ExportPromptTemplate,
     /// Backgrounds panel upload button: the kernel plane has no wallpaper
     /// catalog, so React `useUploadBackground` rejects with
     /// `UnsupportedError('backgrounds.upload')` — the session mirrors that
@@ -256,6 +263,8 @@ pub enum ShellAction {
     MemoryDraftToggleEnabled,
     /// Config tab preset management (React `GenerationPresetEditor`):
     /// apply draft, save-as / rename dialog, duplicate, delete confirm.
+    /// Import/export: host-owned JSON envelope; import then `presets.create`
+    /// + `settings.update` like React `importPreset`.
     PresetApply,
     PresetSaveAsOpen,
     PresetRenameOpen,
@@ -265,6 +274,10 @@ pub enum ShellAction {
     PresetDeleteOpen,
     PresetDeleteClose,
     PresetDeleteConfirm,
+    PresetImportOpen,
+    PresetImportClose,
+    PresetImportConfirm,
+    PresetExport,
     /// Snapshots menu overlay in the chat viewport (React
     /// `ChatSnapshotsMenu`): close (also via outside click) and open a child
     /// chat row (`chats.snapshots.list` items). The header trigger rides the
@@ -514,6 +527,48 @@ fn dialog_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
         }
         if contains(x, y, x0 + dlg_w * 0.5, actions_y, x0 + dlg_w, y0 + dlg_h) {
             return Some(ShellHit::Action(ShellAction::ConfirmCardImport));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    if view.prompt_template_import_open {
+        let dlg_w = 320.0_f32.min(width - 32.0);
+        let dlg_h = 240.0_f32.min(height - 48.0);
+        let x0 = chat_x0 + (width - chat_x0 - dlg_w).max(0.0) * 0.5;
+        let y0 = (height - dlg_h) * 0.5;
+        if !contains(x, y, x0, y0, x0 + dlg_w, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::PromptTemplateImportClose));
+        }
+        let field_top = y0 + 72.0;
+        if y >= field_top && y < field_top + 48.0 {
+            return Some(ShellHit::Absorb);
+        }
+        let actions_y = y0 + dlg_h - 56.0;
+        if contains(x, y, x0, actions_y, x0 + dlg_w * 0.5, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::PromptTemplateImportClose));
+        }
+        if contains(x, y, x0 + dlg_w * 0.5, actions_y, x0 + dlg_w, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::PromptTemplateImportConfirm));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    if view.generation_preset_import_open {
+        let dlg_w = 320.0_f32.min(width - 32.0);
+        let dlg_h = 240.0_f32.min(height - 48.0);
+        let x0 = chat_x0 + (width - chat_x0 - dlg_w).max(0.0) * 0.5;
+        let y0 = (height - dlg_h) * 0.5;
+        if !contains(x, y, x0, y0, x0 + dlg_w, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::PresetImportClose));
+        }
+        let field_top = y0 + 72.0;
+        if y >= field_top && y < field_top + 48.0 {
+            return Some(ShellHit::Absorb);
+        }
+        let actions_y = y0 + dlg_h - 56.0;
+        if contains(x, y, x0, actions_y, x0 + dlg_w * 0.5, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::PresetImportClose));
+        }
+        if contains(x, y, x0 + dlg_w * 0.5, actions_y, x0 + dlg_w, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::PresetImportConfirm));
         }
         return Some(ShellHit::Absorb);
     }
@@ -1728,8 +1783,8 @@ fn advanced_hit(
             }
         }
     } else {
-        // Title 20 + hint 32 + honesty 16 + preset cycle 36 + toolbar 36,
-        // then 36px block rows.
+        // Title 20 + hint 32 + honesty 16 + preset cycle 36 + toolbar 36 +
+        // import/export 36, then Add + 36px block rows.
         cursor += 20.0 + 8.0 + 32.0 + 8.0 + 16.0 + 8.0;
         if y >= cursor && y < cursor + 36.0 && x >= panel_x + pad && x < x1 - pad {
             return Some(ShellHit::Action(ShellAction::CyclePromptPreset));
@@ -1747,6 +1802,16 @@ fn advanced_hit(
             }
             if x >= x1 - pad - 96.0 && x < x1 - pad {
                 return Some(ShellHit::Action(ShellAction::PromptPresetDelete));
+            }
+            return Some(ShellHit::Absorb);
+        }
+        cursor += 36.0 + 8.0;
+        if y >= cursor && y < cursor + 36.0 {
+            if x >= panel_x + pad && x < panel_x + pad + 96.0 {
+                return Some(ShellHit::Action(ShellAction::PromptTemplateImportOpen));
+            }
+            if x >= panel_x + pad + 104.0 && x < panel_x + pad + 200.0 {
+                return Some(ShellHit::Action(ShellAction::ExportPromptTemplate));
             }
             return Some(ShellHit::Absorb);
         }
@@ -2011,8 +2076,8 @@ fn presets_config_hit(
         )));
     }
     let inner_r = x1 - pad;
-    // Body top after heading + hint.
-    let mut cursor = tabs_bottom + 12.0 + 20.0 + 8.0 + 16.0 + 8.0;
+    // Body: heading 20 + hint 16 + active label 20 + toolbar 36 + files 36.
+    let mut cursor = tabs_bottom + 12.0 + 20.0 + 8.0 + 16.0 + 8.0 + 20.0 + 8.0;
     // Toolbar: Save as / Rename / Duplicate left, Delete right.
     if y >= cursor && y < cursor + 36.0 {
         if x >= panel_x + pad && x < panel_x + pad + 96.0 {
@@ -2026,6 +2091,16 @@ fn presets_config_hit(
         }
         if x >= inner_r - 96.0 && x < inner_r {
             return Some(ShellHit::Action(ShellAction::PresetDeleteOpen));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    cursor += 36.0 + 8.0;
+    if y >= cursor && y < cursor + 36.0 {
+        if x >= panel_x + pad && x < panel_x + pad + 96.0 {
+            return Some(ShellHit::Action(ShellAction::PresetImportOpen));
+        }
+        if x >= panel_x + pad + 104.0 && x < panel_x + pad + 200.0 {
+            return Some(ShellHit::Action(ShellAction::PresetExport));
         }
         return Some(ShellHit::Absorb);
     }

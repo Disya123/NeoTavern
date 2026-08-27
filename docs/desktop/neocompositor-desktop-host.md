@@ -673,8 +673,14 @@ Impersonate / Swipe / Regenerate / Quiet (локальный draft до Save;
 System (локальный draft до Save). Model: свободный id (React `ModelMenu`,
 `TextFocus::PromptBlockModel`, max 256) и кнопка Load; без активного
 провайдера поле не правится, Load на kernel-плоскости честно даёт
-`CAPABILITY_UNAVAILABLE` (`providers.models.discovery`). Drag, import/export и
-token audit остаются на React. Кнопка Add стоит над списком (без
+`CAPABILITY_UNAVAILABLE` (`providers.models.discovery`). Import/export:
+host-owned JSON-конверт `{ version: 1, kind: "prompt-template", name, data }`
+(как React download / `<input type=file>`). Export паркует `last_export`
+для файлового синка десктопа; import читает путь и пишет `presets.create` +
+`settings.update` (`prompt-template` + `active-prompt-template-preset-id`).
+Невалидный файл — copy `settings:invalidPromptTemplatePreset`. Drag и
+token audit остаются на React (`usePromptContextAudit` на kernel даёт
+`UnsupportedError('prompt.context-audit')`). Кнопка Add стоит над списком (без
 скролла панели 12+ рядов уводили бы её за край). Motion
 `data-ui-motion=reduced` ещё и ставит `--st-motion-duration-*` на шелл
 (Blitz не матчит `:root[data-ui-motion]`). Тесты
@@ -688,7 +694,8 @@ token audit остаются на React. Кнопка Add стоит над сп
 `prompt_template_block_role_over_product_wire`,
 `prompt_template_block_triggers_over_product_wire`,
 `prompt_template_block_forbid_overrides_over_product_wire`,
-`prompt_template_block_model_binding_over_product_wire`.
+`prompt_template_block_model_binding_over_product_wire`,
+`prompt_template_import_export_over_product_wire`.
 
 ## AI Settings: управление пресетами
 
@@ -701,13 +708,19 @@ React `selectPreset`). Тулбар управления: Save as / Rename (ди
 Duplicate → `presets.create` «<name> (copy)» с автоселектом, Delete → диалог
 300×200 → `presets.delete` + сброс активного id. Read-only строки самплеров
 (13 параметров контракта `GenerationPresetData`) парсятся из data активного
-пресета; поэлементное редактирование слайдеров и import/export остаются на
-React (import/export — файловые диалоги хоста). Неизвестный id →
+пресета; поэлементное редактирование слайдеров остаётся на React.
+Import/export: host-owned JSON-конверт `{ version: 1, kind: "generation",
+name, data }` (как React download / `<input type=file>`). Export паркует
+`last_export`; import читает путь и пишет `presets.create` +
+`settings.update` (`activeGenerationPresetId` + `maxContextTokens` +
+`generationDefaults`). Невалидный файл — copy
+`settings:invalidGenerationPreset`. Неизвестный id →
 `PRESET_NOT_FOUND` (как kernel product.rs). FakeWire: пресеты Balanced
 (8192/0.8) и Creative (16384/1.1) с реальными данными в demo(). Геометрия
 зеркалится между `ai_settings_tab.rs::presets_tab` и
-`shell_hit.rs::presets_config_hit`. Тест
-`generation_preset_management_over_product_wire`.
+`shell_hit.rs::presets_config_hit`. Тесты
+`generation_preset_management_over_product_wire`,
+`generation_preset_import_export_over_product_wire`.
 
 ## AI Settings: профили подключений
 
@@ -774,9 +787,10 @@ delete, 44px каждая — `chats_hit` расширен до 132px): `chats.e
 возвращает kind-тегированный JSON-документ (`neotavern-chat-export`) в
 base64; сессия декодирует его и паркует в `last_export` со статусом
 «Export ready: …». Хост-синка платформенна: React скачивает файл в браузер,
-десктопный bin пишет его на диск (`NEOTA_EXPORT_DIR` или
-`<cwd>/exports/<filename>`) и отражает путь в статусе. Чужой chatId даёт
-честный `CHAT_NOT_FOUND`. Тест `chat_export_over_product_wire`.
+десктопный bin пишет любой припаркованный `last_export` на диск
+(`NEOTA_EXPORT_DIR` или `<cwd>/exports/<filename>`) и отражает путь в
+статусе — тот же синк для карточек персонажа и JSON prompt-template.
+Чужой chatId даёт честный `CHAT_NOT_FOUND`. Тест `chat_export_over_product_wire`.
 
 ## Лорбук: редактор книги
 
