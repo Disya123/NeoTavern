@@ -1,31 +1,32 @@
 use contracts_generated::generated::{
-    CharacterDto, ChatDto, GenerationEvent, LorebookDto, LorebookEntryDto, LorebookEntryInput,
-    LorebookEntryPatch, MessageDraftDto, MessageDto, MessageRole, MessageVariantDto,
-    PagedCharacters, PagedChats, PagedMessages, PersonaDto, PluginsItem, ProfileExportCounts,
-    ProfilesItem, RequestProfileExport, RequestProfilesCreate, RequestProfilesDelete,
-    RequestProfilesRename, ResultListLorebookEntries, ResultListLorebooks, ResultListPersonas,
-    ResultListPresets, ResultListProviders, ResultMessageVariantList, ResultPluginsList,
-    ResultProfileExport, ResultProfilesCreate, ResultProfilesList, ResultSettings,
-    ResultSnapshotsRollback, SettingsItem, PromptBlock, PromptMessage, PromptPlan,
-    ResultThemesList, RequestThemesActivate, RequestThemesUninstall, ThemesItem,
-    ResultSecretsLock, ResultSecretsStatus, ResultListTools, ToolSpec, ProviderAvailability,
-    ProviderCapabilities, ProviderDto, ProviderModel, PresetDto, RequestSettingsUpdate,
-    RequestSettingsUpdateSettings, BackupDto, ResultListBackups, RequestBackupsRestore,
-    MemoryDto, MemoryScope, ResultListMemories, RequestListMemories, RequestCreateMemory,
-    RequestUpdateMemory, RequestDeleteMemory,
-    RequestGetPreset, RequestCreatePreset, RequestUpdatePreset, RequestDeletePreset,
-    ProviderConfigDto, ResultListProviderConfigs, RequestListProviderConfigs,
-    RequestSetProviderConfig, RequestDeleteProviderConfig, RequestGetProviderConfig,
-    MessageRevisionDto, RequestUpdateMessage, RequestMessageRevisionsList,
-    ResultMessageRevisionList,
-    RequestCreateChatSnapshot, RequestSnapshotsList, SnapshotOrigin,
-    ResultChatSnapshot, ResultSnapshotsList, ResultChatsExport,
-    RequestAssetsPut, AssetsItem, ResultAssetsPut, RequestImportsCharacterCard,
-    RequestCharactersExportCard, CardExportFormat, ResultCharactersExportCard,
-    ResultImportsCharacterCard,
-    RequestProfileImport, RequestProfileImportPolicy, ResultProfileImport,
+    AssetsItem, BackupDto, CardExportFormat, CharacterDto, ChatDto, DataActivationEntry,
+    EventEnvelope, GenerationEvent, GenerationStep, GenerationStepStatus, GenerationStepType,
+    LorebookDto, LorebookEntryDto, LorebookEntryInput, LorebookEntryPatch, MemoryDto, MemoryScope,
+    MessageDraftDto, MessageDto, MessageRevisionDto, MessageRole, MessageVariantDto,
+    PagedCharacters, PagedChats, PagedGenerationEvents, PagedMessages, PersonaDto, PluginsItem,
+    PresetDto, ProfileExportCounts, ProfilesItem, PromptBlock, PromptMessage, PromptPlan,
+    ProviderAvailability, ProviderCapabilities, ProviderConfigDto, ProviderDto, ProviderModel,
+    RequestAssetsPut, RequestBackupsRestore, RequestCharactersExportCard,
+    RequestCreateChatSnapshot, RequestCreateMemory, RequestCreatePreset, RequestDeleteMemory,
+    RequestDeletePreset, RequestDeleteProviderConfig, RequestGetPreset, RequestGetProviderConfig,
+    RequestImportsCharacterCard, RequestListGenerationEvents, RequestListMemories,
+    RequestListProviderConfigs, RequestMessageRevisionsList, RequestProfileExport,
+    RequestProfileImport, RequestProfileImportPolicy, RequestProfilesCreate, RequestProfilesDelete,
+    RequestProfilesRename, RequestSetProviderConfig, RequestSettingsUpdate,
+    RequestSettingsUpdateSettings, RequestSnapshotsList, RequestThemesActivate,
+    RequestThemesUninstall, RequestUpdateMemory, RequestUpdateMessage, RequestUpdatePreset,
+    ResultAssetsPut, ResultCharactersExportCard, ResultChatSnapshot, ResultChatsExport,
+    ResultDataActivationStatus, ResultDiagnosticsExport, ResultDiagnosticsExportGenerationRuns,
+    ResultDiagnosticsExportSettings, ResultDiagnosticsExportWireVersion,
+    ResultImportsCharacterCard, ResultListBackups, ResultListLorebookEntries, ResultListLorebooks,
+    ResultListMemories, ResultListPersonas, ResultListPresets, ResultListProviderConfigs,
+    ResultListProviders, ResultListTools, ResultMessageRevisionList, ResultMessageVariantList,
+    ResultPluginsList, ResultProfileExport, ResultProfileImport, ResultProfilesCreate,
+    ResultProfilesList, ResultSecretsLock, ResultSecretsStatus, ResultSettings,
+    ResultSnapshotsList, ResultSnapshotsRollback, ResultThemesList, SettingsItem, SnapshotOrigin,
+    ThemesItem, ToolSpec,
 };
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use base64::Engine as _;
@@ -78,6 +79,10 @@ pub struct FakeWire {
     /// recorded when a generation starts, mirroring the kernel's
     /// `prompt_plans` table persistence.
     plans: HashMap<String, PromptPlan>,
+    /// Durable run-step journal (`generation.events`), keyed by run id.
+    /// Payloads are `generation.step` envelopes without tool input/output
+    /// (SEC-07 — the UI shape never carries arguments/results).
+    generation_events: HashMap<String, Vec<EventEnvelope>>,
     /// Theme catalog (`themes.*`; React `ThemesPage` / Settings `ThemesTab`).
     /// The built-in interface is not a row: no row active = built-in.
     themes: Vec<ThemesItem>,
@@ -100,6 +105,8 @@ pub struct FakeWire {
     /// Backup catalog (`backups.list`). Kernel backups are user-initiated;
     /// `backups.create` appends, `backups.restore` validates the id.
     backups: Vec<BackupDto>,
+    /// Durable data-root activation (`data.activation.status`).
+    activation: ResultDataActivationStatus,
     /// Staged card assets (`assets.put` kind `card`) — id → (dto, bytes).
     assets: HashMap<String, (AssetsItem, Vec<u8>)>,
     /// Character-card deduplication (`imports.character.card` re-import):
@@ -171,6 +178,7 @@ impl Default for FakeWire {
             ],
             streams: HashMap::new(),
             plans: HashMap::new(),
+            generation_events: HashMap::new(),
             message_revisions: Vec::new(),
             themes: Vec::new(),
             secrets: ResultSecretsStatus {
@@ -186,6 +194,15 @@ impl Default for FakeWire {
             provider_configs: Vec::new(),
             presets: Vec::new(),
             backups: Vec::new(),
+            activation: ResultDataActivationStatus {
+                layout_version: 2,
+                active_root_id: None,
+                active_root: "/data/neotavern/roots/root-default".into(),
+                journal_format: "neotavern-activation-journal".into(),
+                journal_format_version: 2,
+                entries: Vec::new(),
+                pending: None,
+            },
             assets: HashMap::new(),
             card_imports: HashMap::new(),
             memories: Vec::new(),
@@ -209,12 +226,25 @@ impl FakeWire {
         wire.insert_persona(demo_persona());
         wire.insert_chat(demo_chat(2));
         wire.push_message(user_message(DEMO_CHAT_ID, 0, "Hello there"));
+        let demo_run = wire_id(0x6e7f8091ab2c);
         wire.push_message(assistant_message(
             DEMO_CHAT_ID,
             1,
             "Hi — live Product Wire.",
-            Some(wire_id(0x6e7f8091ab2c)),
+            Some(demo_run.clone()),
         ));
+        // Prompt/Steps on the seeded assistant must hit a real journal, the
+        // same way `generation.start` records a plan + step pair.
+        wire.plans.insert(
+            demo_run.clone(),
+            wire.build_prompt_plan(
+                DEMO_CHAT_ID,
+                &demo_run,
+                Some("Hello there"),
+                "Hi — live Product Wire.",
+            ),
+        );
+        wire.record_run_steps(&demo_run);
         // Demo lorebook so the Lorebooks panel shows real rows and the
         // Entries tab has content to port (React `LorebookPanel` EntriesTab).
         let demo_book_id = DEMO_LOREBOOK_ID.to_string();
@@ -274,7 +304,8 @@ impl FakeWire {
             updated_at: TS.into(),
         };
         wire.profiles.insert(wire_id(0x51), profile(0x51, "Main"));
-        wire.profiles.insert(wire_id(0x52), profile(0x52, "Caravan"));
+        wire.profiles
+            .insert(wire_id(0x52), profile(0x52, "Caravan"));
         // Demo theme catalog (React `ThemesPage`): two installed themes, none
         // active — the built-in interface is the no-row state. `wii-u-dark`
         // mirrors the wire registry fixture (`THEME_VALUE`).
@@ -411,6 +442,27 @@ impl FakeWire {
         };
         wire.backups.push(backup(0x8201, 1_572_864));
         wire.backups.push(backup(0x8202, 2_097_152));
+        // Activation journal (wire `data.activation.status`, ТЗ §10.2–§10.3).
+        // Demo matches the registry fixture without a pending swap so the
+        // panel shows a committed restore row, not the restart banner.
+        wire.activation = ResultDataActivationStatus {
+            layout_version: 2,
+            active_root_id: Some("a1b2c3d4".into()),
+            active_root: "/data/neotavern/roots/root-a1b2c3d4".into(),
+            journal_format: "neotavern-activation-journal".into(),
+            journal_format_version: 2,
+            entries: vec![DataActivationEntry {
+                id: "1f2e3d4c-5b6a-4a98-8765-4321fedcba98".into(),
+                kind: "restore".into(),
+                status: "committed".into(),
+                from_root: "/data/neotavern/roots/root-old".into(),
+                to_root: "/data/neotavern/roots/root-a1b2c3d4".into(),
+                created_at: TS.into(),
+                updated_at: TS.into(),
+                error: None,
+            }],
+            pending: None,
+        };
         // Memory store (kernel `memories.list` is DB-backed; character scope
         // references the demo character).
         wire.memories.push(MemoryDto {
@@ -585,6 +637,36 @@ impl FakeWire {
         result: Result<Value, ChatRouteError>,
     ) -> Result<WireCall, ChatRouteError> {
         self.ok_call(operation_id, result?)
+    }
+
+    fn diagnostics_bundle(&self) -> ResultDiagnosticsExport {
+        let total = i64::try_from(self.plans.len()).unwrap_or(0);
+        ResultDiagnosticsExport {
+            generated_at: TS.into(),
+            trace_id: wire_id(0xd1a9),
+            schema_hash: "a".repeat(64),
+            schema_revision: 12,
+            storage_format: Some(1),
+            sqlite_version: "3.49.0".into(),
+            app_version: "0.1.0".into(),
+            wire_version: ResultDiagnosticsExportWireVersion { major: 1, minor: 0 },
+            redaction: "allowlist".into(),
+            sections: vec![
+                "meta".into(),
+                "storage".into(),
+                "settings".into(),
+                "generation".into(),
+            ],
+            settings: ResultDiagnosticsExportSettings {
+                count: i64::try_from(self.settings.len()).unwrap_or(0),
+            },
+            generation_runs: ResultDiagnosticsExportGenerationRuns {
+                total,
+                completed: total,
+                failed: 0,
+                waiting: 0,
+            },
+        }
     }
 
     fn product(code: &str, key: &str, value: &str) -> ChatRouteError {
@@ -820,7 +902,10 @@ impl FakeWire {
                 .get("description")
                 .and_then(Value::as_str)
                 .map(str::to_string),
-            avatar_asset_id: None,
+            avatar_asset_id: payload
+                .get("avatarAssetId")
+                .and_then(Value::as_str)
+                .map(str::to_string),
             tags,
             profile_id: None,
             created_at: TS.into(),
@@ -954,7 +1039,11 @@ impl FakeWire {
             let chat_id = payload_str(payload, "chatId")?;
             self.require_chat(&chat_id)?;
             let message = payload_str(payload, "message")?;
-            (chat_id, Some(message.to_string()), format!("echo: {message}"))
+            (
+                chat_id,
+                Some(message.to_string()),
+                format!("echo: {message}"),
+            )
         };
         let sequence = self
             .messages
@@ -968,6 +1057,7 @@ impl FakeWire {
             run_id.clone(),
             self.build_prompt_plan(&chat_id, &run_id, user_text.as_deref(), &reply),
         );
+        self.record_run_steps(&run_id);
         let final_message = assistant_message(&chat_id, sequence, &reply, Some(run_id.clone()));
         let first: String = reply.chars().take(6).collect();
         let rest: String = reply.chars().skip(6).collect();
@@ -1057,6 +1147,50 @@ impl FakeWire {
             created_at: TS.into(),
         }
     }
+
+    /// Journals a provider-turn + final-commit pair without tool
+    /// arguments/results (SEC-07).
+    fn record_run_steps(&mut self, run_id: &str) {
+        let step_a = self.alloc_id();
+        let key_a = self.alloc_id();
+        let step_b = self.alloc_id();
+        let key_b = self.alloc_id();
+        let envelopes = vec![
+            Self::step_envelope(run_id, 0, step_a, key_a, GenerationStepType::ProviderTurn),
+            Self::step_envelope(run_id, 1, step_b, key_b, GenerationStepType::FinalCommit),
+        ];
+        self.generation_events.insert(run_id.to_string(), envelopes);
+    }
+
+    fn step_envelope(
+        run_id: &str,
+        sequence: i64,
+        step_id: String,
+        idempotency_key: String,
+        r#type: GenerationStepType,
+    ) -> EventEnvelope {
+        let step = GenerationStep {
+            step_id,
+            run_id: run_id.to_string(),
+            sequence,
+            r#type,
+            status: GenerationStepStatus::Completed,
+            attempt: 1,
+            idempotency_key,
+            input: None,
+            output: None,
+            error: None,
+            created_at: TS.into(),
+            updated_at: TS.into(),
+        };
+        let event = GenerationEvent::GenerationStep { step };
+        EventEnvelope {
+            stream_id: run_id.to_string(),
+            sequence,
+            r#type: "generation.step".into(),
+            payload: serde_json::to_value(&event).unwrap_or_else(|_| json!({})),
+        }
+    }
 }
 
 impl ProductWire for FakeWire {
@@ -1067,10 +1201,39 @@ impl ProductWire for FakeWire {
         match operation_id {
             "generation.prompt.plan" => {
                 let run_id = payload_str(&payload, "runId")?;
-                let plan = self.plans.get(&run_id).cloned().ok_or_else(|| {
-                    Self::product("PROMPT_PLAN_NOT_FOUND", "runId", &run_id)
-                })?;
+                let plan = self
+                    .plans
+                    .get(&run_id)
+                    .cloned()
+                    .ok_or_else(|| Self::product("PROMPT_PLAN_NOT_FOUND", "runId", &run_id))?;
                 self.wrap_call(operation_id, to_value(&plan))
+            }
+            "generation.events" => {
+                let req: RequestListGenerationEvents = serde_json::from_value(payload.clone())?;
+                let known = self.plans.contains_key(&req.workflow_id)
+                    || self.generation_events.contains_key(&req.workflow_id);
+                if !known {
+                    return Err(Self::product(
+                        "GENERATION_RUN_NOT_FOUND",
+                        "runId",
+                        &req.workflow_id,
+                    ));
+                }
+                let after = req.after_sequence.unwrap_or(-1);
+                let limit = req.limit.unwrap_or(50).clamp(1, 200) as usize;
+                let all = self
+                    .generation_events
+                    .get(&req.workflow_id)
+                    .cloned()
+                    .unwrap_or_default();
+                let filtered: Vec<EventEnvelope> = all
+                    .into_iter()
+                    .filter(|event| event.sequence > after)
+                    .collect();
+                let has_more = filtered.len() > limit;
+                let items = filtered.into_iter().take(limit).collect();
+                let page = PagedGenerationEvents { items, has_more };
+                self.wrap_call(operation_id, to_value(&page))
             }
             "themes.list" => {
                 let result = ResultThemesList {
@@ -1212,7 +1375,16 @@ impl ProductWire for FakeWire {
                 }
                 self.messages.remove(&chat_id);
                 self.drafts.remove(&chat_id);
-                self.plans.retain(|_, plan| plan.chat_id != chat_id);
+                let drop_runs: Vec<String> = self
+                    .plans
+                    .iter()
+                    .filter(|(_, plan)| plan.chat_id == chat_id)
+                    .map(|(id, _)| id.clone())
+                    .collect();
+                for run_id in drop_runs {
+                    self.plans.remove(&run_id);
+                    self.generation_events.remove(&run_id);
+                }
                 self.ok_call(operation_id, json!({}))
             }
             "chats.messages.list" => {
@@ -1237,15 +1409,14 @@ impl ProductWire for FakeWire {
             }
             "chats.messages.update" => {
                 let req: RequestUpdateMessage = serde_json::from_value(payload.clone())?;
-                // Kernel semantics: a content change records the previous
-                // text as an immutable revision; an identical no-op edit is
-                // idempotent (no new revision).
                 let previous = self
                     .messages
                     .get(&req.chat_id)
                     .and_then(|rows| rows.iter().find(|row| row.id == req.message_id))
                     .map(|row| row.content.clone())
-                    .ok_or_else(|| Self::product("MESSAGE_NOT_FOUND", "messageId", &req.message_id))?;
+                    .ok_or_else(|| {
+                        Self::product("MESSAGE_NOT_FOUND", "messageId", &req.message_id)
+                    })?;
                 if let Some(content) = req.content.as_deref() {
                     if content != previous {
                         let position = self
@@ -1261,20 +1432,28 @@ impl ProductWire for FakeWire {
                             position,
                             created_at: TS.into(),
                         });
-                        let rows = self
-                            .messages
-                            .get_mut(&req.chat_id)
-                            .ok_or_else(|| {
-                                Self::product("MESSAGE_NOT_FOUND", "messageId", &req.message_id)
-                            })?;
-                        let row = rows
-                            .iter_mut()
-                            .find(|row| row.id == req.message_id)
-                            .ok_or_else(|| {
-                                Self::product("MESSAGE_NOT_FOUND", "messageId", &req.message_id)
-                            })?;
-                        row.content = content.to_string();
                     }
+                }
+                let rows = self.messages.get_mut(&req.chat_id).ok_or_else(|| {
+                    Self::product("MESSAGE_NOT_FOUND", "messageId", &req.message_id)
+                })?;
+                let row = rows
+                    .iter_mut()
+                    .find(|row| row.id == req.message_id)
+                    .ok_or_else(|| {
+                        Self::product("MESSAGE_NOT_FOUND", "messageId", &req.message_id)
+                    })?;
+                if let Some(content) = req.content.as_deref() {
+                    row.content = content.to_string();
+                }
+                // Kernel semantics: `meta` replaces the whole object when
+                // present (Этап 4 slice 11); omitted leaves it untouched.
+                if let Some(meta) = req.meta {
+                    row.meta = meta;
+                }
+                // Slice 14: the wire has no nullable checkpoint field.
+                if req.clear_checkpoint_chat_id == Some(true) {
+                    row.checkpoint_chat_id = None;
                 }
                 if let Some(chat) = self.chats.get_mut(&req.chat_id) {
                     chat.updated_at = TS.into();
@@ -1284,7 +1463,9 @@ impl ProductWire for FakeWire {
                     .get(&req.chat_id)
                     .and_then(|rows| rows.iter().find(|row| row.id == req.message_id))
                     .cloned()
-                    .ok_or_else(|| Self::product("MESSAGE_NOT_FOUND", "messageId", &req.message_id))?;
+                    .ok_or_else(|| {
+                        Self::product("MESSAGE_NOT_FOUND", "messageId", &req.message_id)
+                    })?;
                 self.wrap_call(operation_id, to_value(&updated))
             }
             "chats.messages.revisions.list" => {
@@ -1294,7 +1475,9 @@ impl ProductWire for FakeWire {
                     .get(&req.chat_id)
                     .is_some_and(|rows| rows.iter().any(|row| row.id == req.message_id));
                 if !exists {
-                    return Err(Self::product("MESSAGE_NOT_FOUND", "messageId", &req.message_id).into());
+                    return Err(
+                        Self::product("MESSAGE_NOT_FOUND", "messageId", &req.message_id).into(),
+                    );
                 }
                 let items: Vec<MessageRevisionDto> = self
                     .message_revisions
@@ -1326,14 +1509,15 @@ impl ProductWire for FakeWire {
             "chats.snapshots.create" => {
                 let req: RequestCreateChatSnapshot = serde_json::from_value(payload.clone())?;
                 let parent = self.require_chat(&req.chat_id)?.clone();
-                let rows = self
-                    .messages
-                    .get(&req.chat_id)
-                    .ok_or_else(|| Self::product("MESSAGE_NOT_FOUND", "messageId", &req.message_id))?;
+                let rows = self.messages.get(&req.chat_id).ok_or_else(|| {
+                    Self::product("MESSAGE_NOT_FOUND", "messageId", &req.message_id)
+                })?;
                 let cut = rows
                     .iter()
                     .position(|row| row.id == req.message_id)
-                    .ok_or_else(|| Self::product("MESSAGE_NOT_FOUND", "messageId", &req.message_id))?;
+                    .ok_or_else(|| {
+                        Self::product("MESSAGE_NOT_FOUND", "messageId", &req.message_id)
+                    })?;
                 // Kernel semantics: a fresh child chat receives the prefix up
                 // to and including the source message; `kind = checkpoint`
                 // additionally links the source message to its snapshot.
@@ -1496,7 +1680,14 @@ impl ProductWire for FakeWire {
                 self.wrap_call(operation_id, to_value(&updated))
             }
             "lorebooks.list" => {
+                let character_id = payload
+                    .get("characterId")
+                    .and_then(Value::as_str)
+                    .map(str::to_string);
                 let mut items: Vec<LorebookDto> = self.lorebooks.values().cloned().collect();
+                if let Some(character_id) = character_id.as_deref() {
+                    items.retain(|book| book.character_id.as_deref() == Some(character_id));
+                }
                 items.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
                 self.wrap_call(operation_id, to_value(&ResultListLorebooks { items }))
             }
@@ -1517,6 +1708,9 @@ impl ProductWire for FakeWire {
                 }
                 if let Some(description) = payload.get("description").and_then(Value::as_str) {
                     book.description = Some(description.to_string());
+                }
+                if let Some(character_id) = payload.get("characterId").and_then(Value::as_str) {
+                    book.character_id = Some(character_id.to_string());
                 }
                 book.updated_at = TS.into();
                 self.lorebooks.insert(lorebook_id.clone(), book.clone());
@@ -1670,25 +1864,6 @@ impl ProductWire for FakeWire {
                     .clone();
                 self.wrap_call(operation_id, to_value(&dto))
             }
-            "lorebooks.update" => {
-                // Kernel semantics: only the fields present in the request
-                // change; `entries`/`characterId` stay untouched when
-                // omitted (the entry list has its own ops).
-                let lorebook_id = payload_str(&payload, "lorebookId")?;
-                let name = payload.get("name").and_then(Value::as_str);
-                let description = payload.get("description").and_then(Value::as_str);
-                let Some(book) = self.lorebooks.get_mut(&lorebook_id) else {
-                    return Err(Self::product("LOREBOOK_NOT_FOUND", "lorebookId", &lorebook_id));
-                };
-                if let Some(name) = name {
-                    book.name = name.to_string();
-                }
-                if let Some(description) = description {
-                    book.description = Some(description.to_string());
-                }
-                let updated = book.clone();
-                self.wrap_call(operation_id, to_value(&updated))
-            }
             "plugins.list" => self.wrap_call(
                 operation_id,
                 to_value(&ResultPluginsList {
@@ -1727,7 +1902,8 @@ impl ProductWire for FakeWire {
                 if req.kind.is_empty() || req.filename.is_empty() {
                     return Err(Self::product("VALIDATION", "filename", &req.filename));
                 }
-                let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(&req.content_base64)
+                let Ok(bytes) =
+                    base64::engine::general_purpose::STANDARD.decode(&req.content_base64)
                 else {
                     return Err(Self::product("VALIDATION", "contentBase64", ""));
                 };
@@ -1768,8 +1944,7 @@ impl ProductWire for FakeWire {
                 )
             }
             "imports.character.card" => {
-                let req: RequestImportsCharacterCard =
-                    serde_json::from_value(payload.clone())?;
+                let req: RequestImportsCharacterCard = serde_json::from_value(payload.clone())?;
                 let Some((_, bytes)) = self.assets.get(&req.asset_id) else {
                     return Err(Self::product("ASSET_NOT_FOUND", "assetId", &req.asset_id));
                 };
@@ -1792,9 +1967,8 @@ impl ProductWire for FakeWire {
                 // FakeWire parses SillyTavern V2 JSON cards (and flat V1
                 // objects); PNG `chara` chunks stay kernel-only (an honest
                 // VALIDATION error instead of a fake parse).
-                let doc: Value = serde_json::from_slice(bytes).map_err(|_| {
-                    Self::product("VALIDATION", "assetId", &req.asset_id)
-                })?;
+                let doc: Value = serde_json::from_slice(bytes)
+                    .map_err(|_| Self::product("VALIDATION", "assetId", &req.asset_id))?;
                 let empty = Value::Object(Default::default());
                 let data = doc.get("data").filter(|d| d.is_object()).unwrap_or(&empty);
                 let Some(name) = data.get("name").and_then(Value::as_str) else {
@@ -1828,8 +2002,10 @@ impl ProductWire for FakeWire {
                     created_at: TS.into(),
                     updated_at: TS.into(),
                 };
-                self.characters.insert(character.id.clone(), character.clone());
-                self.card_imports.insert(source_hash.clone(), character.id.clone());
+                self.characters
+                    .insert(character.id.clone(), character.clone());
+                self.card_imports
+                    .insert(source_hash.clone(), character.id.clone());
                 self.wrap_call(
                     operation_id,
                     to_value(&ResultImportsCharacterCard {
@@ -1841,15 +2017,14 @@ impl ProductWire for FakeWire {
                 )
             }
             "characters.export.card" => {
-                let req: RequestCharactersExportCard =
-                    serde_json::from_value(payload.clone())?;
-                let character = self
-                    .characters
-                    .get(&req.character_id)
-                    .cloned()
-                    .ok_or_else(|| {
-                        Self::product("CHARACTER_NOT_FOUND", "characterId", &req.character_id)
-                    })?;
+                let req: RequestCharactersExportCard = serde_json::from_value(payload.clone())?;
+                let character =
+                    self.characters
+                        .get(&req.character_id)
+                        .cloned()
+                        .ok_or_else(|| {
+                            Self::product("CHARACTER_NOT_FOUND", "characterId", &req.character_id)
+                        })?;
                 // The host surface exports JSON; FakeWire honestly refuses
                 // PNG (it cannot synthesize an image container).
                 if req.format != CardExportFormat::Json {
@@ -1885,13 +2060,7 @@ impl ProductWire for FakeWire {
                     .iter()
                     .find(|item| item.provider == req.provider && item.name == req.name)
                     .cloned()
-                    .ok_or_else(|| {
-                        Self::product(
-                            "PROVIDER_CONFIG_NOT_FOUND",
-                            "name",
-                            &req.name,
-                        )
-                    })?;
+                    .ok_or_else(|| Self::product("PROVIDER_CONFIG_NOT_FOUND", "name", &req.name))?;
                 self.wrap_call(operation_id, to_value(&dto))
             }
             "providers.config.set" => {
@@ -1980,9 +2149,7 @@ impl ProductWire for FakeWire {
                     .presets
                     .iter_mut()
                     .find(|item| item.id == req.preset_id)
-                    .ok_or_else(|| {
-                        Self::product("PRESET_NOT_FOUND", "presetId", &req.preset_id)
-                    })?;
+                    .ok_or_else(|| Self::product("PRESET_NOT_FOUND", "presetId", &req.preset_id))?;
                 if let Some(name) = req.name {
                     item.name = name;
                 }
@@ -1998,7 +2165,11 @@ impl ProductWire for FakeWire {
                 let len = self.presets.len();
                 self.presets.retain(|item| item.id != req.preset_id);
                 if self.presets.len() == len {
-                    return Err(Self::product("PRESET_NOT_FOUND", "presetId", &req.preset_id));
+                    return Err(Self::product(
+                        "PRESET_NOT_FOUND",
+                        "presetId",
+                        &req.preset_id,
+                    ));
                 }
                 self.ok_call(operation_id, json!({}))
             }
@@ -2047,6 +2218,10 @@ impl ProductWire for FakeWire {
                     Err(Self::product("NOT_FOUND", "backupId", &req.backup_id))
                 }
             }
+            "diagnostics.export" => {
+                self.wrap_call(operation_id, to_value(&self.diagnostics_bundle()))
+            }
+            "data.activation.status" => self.wrap_call(operation_id, to_value(&self.activation)),
             "memories.list" => {
                 let req: RequestListMemories = serde_json::from_value(payload.clone())?;
                 let items: Vec<MemoryDto> = self
@@ -2116,10 +2291,13 @@ impl ProductWire for FakeWire {
             "memories.delete" => {
                 let req: RequestDeleteMemory = serde_json::from_value(payload.clone())?;
                 let len = self.memories.len();
-                self.memories
-                    .retain(|item| item.id != req.memory_id);
+                self.memories.retain(|item| item.id != req.memory_id);
                 if self.memories.len() == len {
-                    return Err(Self::product("MEMORY_NOT_FOUND", "memoryId", &req.memory_id));
+                    return Err(Self::product(
+                        "MEMORY_NOT_FOUND",
+                        "memoryId",
+                        &req.memory_id,
+                    ));
                 }
                 self.ok_call(operation_id, json!({}))
             }
@@ -2146,7 +2324,10 @@ impl ProductWire for FakeWire {
                     updated_at: TS.into(),
                 };
                 self.profiles.insert(created.id.clone(), created.clone());
-                self.wrap_call(operation_id, to_value(&ResultProfilesCreate { profile: created }))
+                self.wrap_call(
+                    operation_id,
+                    to_value(&ResultProfilesCreate { profile: created }),
+                )
             }
             "profiles.rename" => {
                 let id = payload_str(&payload, "id")?;
@@ -2217,8 +2398,8 @@ impl ProductWire for FakeWire {
                     },
                     assets: 0,
                     size_bytes: 0,
-                    manifest_sha256: "0000000000000000000000000000000000000000000000000000000000000000"
-                        .into(),
+                    manifest_sha256:
+                        "0000000000000000000000000000000000000000000000000000000000000000".into(),
                     profile_id: Some(id),
                 };
                 self.wrap_call(operation_id, to_value(&result))

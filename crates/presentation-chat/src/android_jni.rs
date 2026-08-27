@@ -4,22 +4,22 @@
 //! This crate never links `runtime-kernel`.
 
 use std::collections::{HashMap, VecDeque};
-use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::Mutex;
 
 use contracts_generated::generated::{
-    EventEnvelope, GenerationEvent, ResponseEnvelope, decode_event_envelope,
-    decode_generation_event, decode_response_envelope,
+    decode_event_envelope, decode_generation_event, decode_response_envelope, EventEnvelope,
+    GenerationEvent, ResponseEnvelope,
 };
 use jni::objects::{GlobalRef, JByteArray, JClass, JObject, JString, JValue};
 use jni::sys::{jboolean, jfloat, jint, jlong, jstring};
 use jni::{JNIEnv, JavaVM};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 use crate::error::ChatRouteError;
 use crate::session::ChatSession;
 use crate::wire::{ProductWire, StreamFrame, WireCall};
-use crate::{LiveChatReport, blocked_line, start_flagged_session};
+use crate::{blocked_line, start_flagged_session, LiveChatReport};
 
 struct JniProductWire {
     vm: JavaVM,
@@ -607,6 +607,9 @@ pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_presentF
                             crate::hit_rects::QuickIntent::ScrollLatest => {
                                 session.scroll_chat_by(1.0e6);
                             }
+                            crate::hit_rects::QuickIntent::HeaderSearch => {
+                                session.toggle_header_search();
+                            }
                         },
                         crate::hit_rects::TapIntent::MessageAction { kind, row_id } => {
                             use crate::hit_rects::MessageActionKind;
@@ -628,9 +631,29 @@ pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_presentF
                                         "[jni] copy skipped reason=clipboard_bridge_pending row={row_id}"
                                     );
                                 }
-                                other => eprintln!(
-                                    "[jni] message:{other:?} skipped reason=not_wired_yet row={row_id}"
-                                ),
+                                MessageActionKind::Edit => session.start_message_edit(&row_id),
+                                MessageActionKind::EditSave => session.submit_message_edit(),
+                                MessageActionKind::EditCancel => session.cancel_message_edit(),
+                                MessageActionKind::History => session.open_message_history(&row_id),
+                                MessageActionKind::HistoryClose => session.close_message_history(),
+                                MessageActionKind::Checkpoint => {
+                                    session.create_message_snapshot(&row_id, true)
+                                }
+                                MessageActionKind::Branch => {
+                                    session.create_message_snapshot(&row_id, false)
+                                }
+                                MessageActionKind::Context => {
+                                    session.toggle_message_context(&row_id)
+                                }
+                                MessageActionKind::Prompt => {
+                                    session.open_prompt_plan_for_message(&row_id)
+                                }
+                                MessageActionKind::Steps => {
+                                    session.open_run_transcript_for_message(&row_id)
+                                }
+                                MessageActionKind::DeleteCheckpoint => {
+                                    session.open_checkpoint_delete(&row_id)
+                                }
                             }
                         }
                         // Declarative custom intents: same authority-free

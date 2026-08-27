@@ -107,6 +107,9 @@ const UiActionIdSchema = Type.Union([
   Type.Literal('chat.message.checkpoint'),
   Type.Literal('chat.message.branch'),
   Type.Literal('chat.message.rollback'),
+  Type.Literal('chat.message.prompt'),
+  Type.Literal('chat.message.steps'),
+  Type.Literal('chat.message.delete-checkpoint'),
   // Version controls inside an assistant row (no message-id parameter):
   // history / regenerate / swipe pager.
   Type.Literal('chat.message.history'),
@@ -677,6 +680,14 @@ function actionParameter(action: UiActionId): string | undefined {
       return 'tab';
     case 'chat.message.copy':
     case 'chat.message.delete':
+    case 'chat.message.context':
+    case 'chat.message.edit':
+    case 'chat.message.checkpoint':
+    case 'chat.message.branch':
+    case 'chat.message.rollback':
+    case 'chat.message.prompt':
+    case 'chat.message.steps':
+    case 'chat.message.delete-checkpoint':
       return 'messageId';
     default:
       return undefined;

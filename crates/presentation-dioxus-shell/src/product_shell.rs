@@ -8,14 +8,17 @@
 
 use std::cell::RefCell;
 
+use contracts_generated::generated::{
+    MessageRole, PromptPlan, ResultDataActivationStatus, ResultDiagnosticsExport,
+    ResultSecretsStatus,
+};
 use dioxus_core::Element;
 use dioxus_core_macro::rsx;
-use contracts_generated::generated::{MessageRole, PromptPlan, ResultSecretsStatus};
 use neotavern_presentation_design_system::{
-    SafeAreaInsets, phosphor_path, product_stylesheets_dev,
+    phosphor_path, product_stylesheets_dev, SafeAreaInsets,
 };
 
-use crate::{ProductChatView, product_chat_app};
+use crate::{product_chat_app, ProductChatView};
 
 /// Full character draft (mirrors React `CharacterDraft`).
 #[derive(Clone, Debug, PartialEq)]
@@ -297,6 +300,18 @@ pub fn character_manager_title(viewport_css_width: u32) -> String {
     ellipsize_css(CHARACTER_MANAGER_TITLE, avail, 18.0)
 }
 
+/// One durable generation step in the run-transcript dialog (React
+/// `RunTranscriptPanel` row). Tool `input`/`output` never travel this
+/// view — SEC-07: the wireBridge keeps them out of the UI shape.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RunStepView {
+    pub sequence: i64,
+    pub step_type: String,
+    pub status: String,
+    pub attempt: i64,
+    pub created_at: String,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct ProductShellView {
     pub chat: ProductChatView,
@@ -393,6 +408,16 @@ pub struct ProductShellView {
     pub prompt_plan_not_found: bool,
     /// Any other error renders inside the dialog (React `isError` state).
     pub prompt_plan_error: Option<String>,
+    /// Run-step transcript dialog (`generation.events`; React
+    /// `RunTranscriptPanel`). Mutually exclusive with the prompt-plan
+    /// dialog: opening one closes the other.
+    pub run_transcript_open: bool,
+    pub run_transcript_run_id: Option<String>,
+    pub run_transcript_steps: Vec<RunStepView>,
+    pub run_transcript_error: Option<String>,
+    /// Delete-checkpoint confirm (React `deleteCheckpointConfirm`, 300×200).
+    pub checkpoint_delete_open: bool,
+    pub checkpoint_delete_message_id: Option<String>,
     /// Theme catalog (`themes.list`; React `ThemesPage` / Settings `ThemesTab`).
     pub themes: Vec<ThemeCardView>,
     /// Theme the delete-confirm dialog asks about.
@@ -455,6 +480,29 @@ pub struct ProductShellView {
     pub dir: String,
     pub ai_tab: String,
     pub settings_tab: String,
+    /// React `useUiStore` appearance (General tab). `font_scale` is the
+    /// interface scale (`small`/`medium`/`large`); density stays comfortable
+    /// until a density control is ported.
+    pub ui_contrast: String,
+    pub ui_font_profile: String,
+    pub ui_motion: String,
+    pub open_home_on_load: bool,
+    pub chat_style: String,
+    pub chat_avatar_style: String,
+    pub user_message_position: String,
+    pub character_message_position: String,
+    /// React `useUiStore` sliders (General tab).
+    pub ui_opacity: u32,
+    pub ui_glass_blur: u32,
+    /// Kernel diagnostics bundle (`diagnostics.export`).
+    pub diagnostics: Option<ResultDiagnosticsExport>,
+    /// Data-root activation (`data.activation.status`).
+    pub data_activation: Option<ResultDataActivationStatus>,
+    /// AI Advanced tab (React `AdvancedPromptSettings` / `ChatTemplateEditor`).
+    /// Kernel plane has no instruct-format catalog (`useInstructFormats` → `[]`).
+    pub prompt_template_mode: String,
+    pub instruct_selection: String,
+    pub instruct_form_error: Option<String>,
 }
 
 impl Default for ProductShellView {
@@ -538,6 +586,12 @@ impl Default for ProductShellView {
             prompt_plan: None,
             prompt_plan_not_found: false,
             prompt_plan_error: None,
+            run_transcript_open: false,
+            run_transcript_run_id: None,
+            run_transcript_steps: Vec::new(),
+            run_transcript_error: None,
+            checkpoint_delete_open: false,
+            checkpoint_delete_message_id: None,
             themes: Vec::new(),
             theme_delete_open: false,
             theme_delete_target_id: None,
@@ -583,6 +637,21 @@ impl Default for ProductShellView {
             dir: "ltr".into(),
             ai_tab: "providers".into(),
             settings_tab: "general".into(),
+            ui_contrast: "normal".into(),
+            ui_font_profile: "default".into(),
+            ui_motion: "system".into(),
+            open_home_on_load: true,
+            chat_style: "clean".into(),
+            chat_avatar_style: "round".into(),
+            user_message_position: "right".into(),
+            character_message_position: "left".into(),
+            ui_opacity: 70,
+            ui_glass_blur: 16,
+            diagnostics: None,
+            data_activation: None,
+            prompt_template_mode: "chat".into(),
+            instruct_selection: "native".into(),
+            instruct_form_error: None,
         }
     }
 }
@@ -669,6 +738,26 @@ pub(crate) fn role_label(role: &MessageRole) -> &'static str {
         MessageRole::Assistant => "assistant",
         MessageRole::System => "system",
         MessageRole::Tool => "tool",
+    }
+}
+
+fn step_type_label(step_type: &str) -> &'static str {
+    match step_type {
+        "provider_turn" => "Provider turn",
+        "tool_call" => "Tool call",
+        "tool_result" => "Tool result",
+        "final_commit" => "Final commit",
+        _ => "Step",
+    }
+}
+
+fn step_status_label(status: &str) -> &'static str {
+    match status {
+        "running" => "Running",
+        "waiting" => "Waiting",
+        "completed" => "Completed",
+        "failed" => "Failed",
+        _ => "Unknown",
     }
 }
 
@@ -818,6 +907,8 @@ fn character_avatar(name: &str, class: &'static str, asset_id: Option<&str>) -> 
         "width:44px;height:44px;max-width:44px;max-height:44px;flex:none;align-self:center;overflow:hidden;"
     } else if class.contains("editorAvatar") {
         "width:64px;height:64px;max-width:64px;max-height:64px;flex:none;align-self:start;overflow:hidden;"
+    } else if class.contains("galleryAvatar") {
+        "width:100%;max-width:100%;aspect-ratio:4/5;flex:none;align-self:stretch;overflow:hidden;"
     } else {
         // React parity: cardAvatar is var(--st-control-height-large) = 48px, not 52px.
         "width:48px;height:48px;max-width:48px;max-height:48px;flex:none;align-self:start;overflow:hidden;"
@@ -1273,14 +1364,73 @@ fn edit_tab(draft: &CharacterDraftView) -> Element {
     }
 }
 
-fn advanced_tab(draft: &CharacterDraftView) -> Element {
+fn advanced_tab(view: &ProductShellView, draft: &CharacterDraftView) -> Element {
     let advanced_title = format!("{} — advanced definitions", draft.name);
     let talk_pct = (draft.talkativeness * 100.0).round() as i32;
     let talk_pct_label = format!("{talk_pct}%");
+    let character_id = view.selected_character_id.clone().unwrap_or_default();
+    let linked: Vec<LorebookCardView> = view
+        .lorebooks
+        .iter()
+        .filter(|book| book.character_id.as_deref() == Some(character_id.as_str()))
+        .cloned()
+        .collect();
+    let linked_empty = linked.is_empty();
     rsx! {
         div {
             class: "CharacterManagementPanel_editor",
             "data-part": "character-advanced",
+            details {
+                class: "CharacterManagementPanel_advancedSection",
+                open: "",
+                summary { "Lorebooks" }
+                div {
+                    class: "CharacterManagementPanel_advancedSectionBody",
+                    "data-component": "character-lorebooks",
+                    p { class: "CharacterManagementPanel_lorebookHint", "Books linked to this character are injected into its chats. Global books apply everywhere." }
+                    div {
+                        class: "CharacterManagementPanel_lorebookActions",
+                        button {
+                            class: "st-button",
+                            r#type: "button",
+                            "data-component": "button",
+                            "data-variant": "default",
+                            "data-size": "sm",
+                            span { "data-part": "icon", "aria-hidden": "true", {icon("Plus", 18)} }
+                            span { "data-part": "label", "New book for {draft.name}" }
+                        }
+                        button {
+                            class: "st-button",
+                            r#type: "button",
+                            "data-component": "button",
+                            "data-variant": "default",
+                            "data-size": "sm",
+                            span { "data-part": "label", "Open lorebooks" }
+                        }
+                    }
+                    if linked_empty {
+                        p { class: "CharacterManagementPanel_lorebookHint", "No books linked to this character yet." }
+                    } else {
+                        ul {
+                            class: "CharacterManagementPanel_lorebookList",
+                            for book in linked.iter() {
+                                li {
+                                    class: "CharacterManagementPanel_lorebookRow",
+                                    span { class: "CharacterManagementPanel_lorebookName", "{book.name}" }
+                                    button {
+                                        class: "st-button",
+                                        r#type: "button",
+                                        "data-component": "button",
+                                        "data-variant": "ghost",
+                                        "data-size": "sm",
+                                        span { "data-part": "label", "Unlink" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             div {
                 class: "CharacterManagementPanel_sectionHeading",
                 h3 { "{advanced_title}" }
@@ -1357,41 +1507,29 @@ fn advanced_tab(draft: &CharacterDraftView) -> Element {
                 }
             }
             {editor_field("Example dialogues", &draft.example_dialogues, Some("Begin each example with <START> on a new line."), true, true, false)}
-            details {
-                class: "CharacterManagementPanel_advancedSection",
-                open: "",
-                summary { "Lorebooks" }
-                div {
-                    class: "CharacterManagementPanel_advancedSectionBody",
-                    p { class: "CharacterManagementPanel_lorebookHint", "Books linked to this character are injected into its chats. Global books apply everywhere." }
-                    div {
-                        class: "CharacterManagementPanel_lorebookActions",
-                        button {
-                            class: "st-button",
-                            r#type: "button",
-                            "data-component": "button",
-                            "data-variant": "default",
-                            "data-size": "sm",
-                            span { "data-part": "icon", "aria-hidden": "true", {icon("Plus", 18)} }
-                            span { "data-part": "label", "New book for {draft.name}" }
-                        }
-                        button {
-                            class: "st-button",
-                            r#type: "button",
-                            "data-component": "button",
-                            "data-variant": "default",
-                            "data-size": "sm",
-                            span { "data-part": "label", "Open lorebooks" }
-                        }
-                    }
-                    p { class: "CharacterManagementPanel_lorebookHint", "No books linked to this character yet." }
-                }
-            }
         }
     }
 }
 
-fn gallery_tab(_draft: &CharacterDraftView) -> Element {
+/// Character gallery (React `GalleryTab`). Kernel plane has no gallery
+/// catalog (`useCharacterGallery` → `[]`; upload/delete → `UnsupportedError`).
+/// When the character has an avatar that is not a gallery item (always, on
+/// this plane), the grid shows it as the primary figure — never a `data:` URI.
+fn gallery_tab(view: &ProductShellView, draft: &CharacterDraftView) -> Element {
+    let columns = if (1..=4).contains(&view.gallery_columns) {
+        view.gallery_columns
+    } else {
+        3
+    };
+    let columns_s = columns.to_string();
+    let sort_newest = view.gallery_sort == "newest";
+    let has_avatar = draft.avatar_asset_id.is_some();
+    let name = if draft.name.is_empty() {
+        "Unnamed character".to_string()
+    } else {
+        draft.name.clone()
+    };
+    let asset_id = draft.avatar_asset_id.clone();
     rsx! {
         div {
             class: "CharacterManagementPanel_gallery",
@@ -1409,20 +1547,24 @@ fn gallery_tab(_draft: &CharacterDraftView) -> Element {
                     "data-part": "gallery-controls",
                     label {
                         class: "CharacterManagementPanel_sortControl",
+                        "data-part": "gallery-columns",
                         span { class: "CharacterManagementPanel_srOnly", "Gallery columns" }
                         select {
-                            option { value: "1", "1 column" }
-                            option { value: "2", "2 columns" }
-                            option { value: "3", "3 columns" }
-                            option { value: "4", "4 columns" }
+                            value: "{columns_s}",
+                            option { value: "1", selected: columns == 1, "1 column" }
+                            option { value: "2", selected: columns == 2, "2 columns" }
+                            option { value: "3", selected: columns == 3, "3 columns" }
+                            option { value: "4", selected: columns == 4, "4 columns" }
                         }
                     }
                     label {
                         class: "CharacterManagementPanel_sortControl",
+                        "data-part": "gallery-sort",
                         span { class: "CharacterManagementPanel_srOnly", "Sort gallery images" }
                         select {
-                            option { value: "oldest", "Oldest" }
-                            option { value: "newest", "Newest" }
+                            value: if sort_newest { "newest" } else { "oldest" },
+                            option { value: "oldest", selected: !sort_newest, "Oldest" }
+                            option { value: "newest", selected: sort_newest, "Newest" }
                         }
                     }
                     button {
@@ -1431,24 +1573,55 @@ fn gallery_tab(_draft: &CharacterDraftView) -> Element {
                         "data-component": "button",
                         "data-variant": "default",
                         "data-size": "sm",
+                        "data-part": "gallery-add",
                         span { "data-part": "icon", "aria-hidden": "true", {icon("Plus", 18)} }
                         span { "data-part": "label", "Add image" }
                     }
                 }
             }
-            div {
-                class: "CharacterManagementPanel_emptyState",
-                {icon("Image", 34)}
-                strong { "No gallery images" }
-                p { "Add PNG, JPEG, WebP, or GIF images from this device." }
-                button {
-                    class: "st-button",
-                    r#type: "button",
-                    "data-component": "button",
-                    "data-variant": "default",
-                    "data-size": "md",
-                    span { "data-part": "icon", "aria-hidden": "true", {icon("Plus", 18)} }
-                    span { "data-part": "label", "Add image" }
+            if has_avatar {
+                div {
+                    class: "CharacterManagementPanel_galleryGrid",
+                    "data-part": "gallery-grid",
+                    "data-columns": "{columns_s}",
+                    figure {
+                        class: "CharacterManagementPanel_galleryItem",
+                        "data-part": "gallery-figure",
+                        "data-state": "primary",
+                        {character_avatar_with_asset(
+                            &name,
+                            asset_id.as_deref(),
+                            "CharacterManagementPanel_galleryAvatar",
+                        )}
+                        figcaption {
+                            span {
+                                strong { "{name}" }
+                                small { "Primary avatar" }
+                            }
+                            span {
+                                class: "CharacterManagementPanel_galleryActions",
+                                {icon("Check", 17)}
+                            }
+                        }
+                    }
+                }
+            } else {
+                div {
+                    class: "CharacterManagementPanel_emptyState",
+                    "data-part": "gallery-empty",
+                    {icon("Image", 34)}
+                    strong { "No gallery images" }
+                    p { "Add PNG, JPEG, WebP, or GIF images from this device." }
+                    button {
+                        class: "st-button",
+                        r#type: "button",
+                        "data-component": "button",
+                        "data-variant": "default",
+                        "data-size": "md",
+                        "data-part": "gallery-add",
+                        span { "data-part": "icon", "aria-hidden": "true", {icon("Plus", 18)} }
+                        span { "data-part": "label", "Add image" }
+                    }
                 }
             }
         }
@@ -1616,14 +1789,14 @@ fn character_manager(view: &ProductShellView) -> Element {
                                 }
                                 "advanced" => {
                                     if let Some(draft) = &view.selected_draft {
-                                        {advanced_tab(draft)}
+                                        {advanced_tab(view, draft)}
                                     } else {
                                         {cards_tab(view)}
                                     }
                                 }
                                 "gallery" => {
                                     if let Some(draft) = &view.selected_draft {
-                                        {gallery_tab(draft)}
+                                        {gallery_tab(view, draft)}
                                     } else {
                                         {cards_tab(view)}
                                     }
@@ -2017,12 +2190,19 @@ pub fn product_shell_app() -> Element {
     // stops applying.
     let wallpaper_mode = crate::scene_chat::chat_wallpaper_mode();
     let shell_class = if wallpaper_mode { "" } else { "AppShell_shell" };
+    let overlay_alpha = (view.ui_opacity.min(100) as f32 / 100.0) * 0.45;
+    let pref_vars = format!(
+        "--st-custom-ui-opacity:{}%;--st-custom-glass-blur:{}px;--st-effect-glass-blur:{}px;--st-custom-wallpaper-overlay-alpha:{overlay_alpha:.2};",
+        view.ui_opacity.min(100),
+        view.ui_glass_blur.min(40),
+        view.ui_glass_blur.min(40),
+    );
     let shell_css = if wallpaper_mode {
         format!(
-            "display:flex;flex-direction:{row_dir};width:100%;height:100%;background:transparent;color:#f3eee8;position:relative;overflow:hidden;"
+            "display:flex;flex-direction:{row_dir};width:100%;height:100%;background:transparent;color:#f3eee8;position:relative;overflow:hidden;{pref_vars}"
         )
     } else {
-        shell_style
+        format!("{shell_style}{pref_vars}")
     };
     let product_css = product_stylesheets_dev(view.insets).join("\n");
     let show_rail = !is_compact || view.rail_expanded || view.sidebar_open;
@@ -2070,9 +2250,8 @@ pub fn product_shell_app() -> Element {
     let entry_delete_style = format!(
         "position:absolute;left:{xdlg_x}px;top:{xdlg_y}px;width:{xdlg_w}px;height:{xdlg_h}px;box-sizing:border-box;z-index:50;padding:16px;color:#f3eee8;"
     );
-let entry_delete_book_name = entry_dialog_book_name;
-    let entry_delete_confirm =
-        format!("Delete this entry from \"{entry_delete_book_name}\"?");
+    let entry_delete_book_name = entry_dialog_book_name;
+    let entry_delete_confirm = format!("Delete this entry from \"{entry_delete_book_name}\"?");
 
     // Profile delete confirm (300×200, mirrors `shell_hit::dialog_hit`).
     let (pdlg_x, pdlg_y, pdlg_w, pdlg_h) = modal_geometry(&view, 300.0, 200.0);
@@ -2085,10 +2264,8 @@ let entry_delete_book_name = entry_dialog_book_name;
         .find(|item| Some(item.id.as_str()) == view.theme_delete_target_id.as_deref())
         .map(|item| item.name.as_str())
         .unwrap_or("");
-    let theme_delete_confirm =
-        format!("Remove \"{theme_delete_name}\" and its local theme files?");
-    let memory_delete_confirm =
-        "Delete this memory? It will no longer be injected into prompts.";
+    let theme_delete_confirm = format!("Remove \"{theme_delete_name}\" and its local theme files?");
+    let memory_delete_confirm = "Delete this memory? It will no longer be injected into prompts.";
     let (ndlg_x, ndlg_y, ndlg_w, ndlg_h) = modal_geometry(&view, 320.0, 220.0);
     let preset_name_style = format!(
         "position:absolute;left:{ndlg_x}px;top:{ndlg_y}px;width:{ndlg_w}px;height:{ndlg_h}px;box-sizing:border-box;z-index:50;padding:16px;color:#f3eee8;"
@@ -2164,6 +2341,11 @@ let entry_delete_book_name = entry_dialog_book_name;
     let prompt_plan_style = format!(
         "position:absolute;left:{plg_x}px;top:{plg_y}px;width:{plg_w}px;height:{plg_h}px;box-sizing:border-box;z-index:50;padding:16px;color:#f3eee8;display:flex;flex-direction:column;"
     );
+    let run_transcript_style = prompt_plan_style.clone();
+    let (cptd_x, cptd_y, cptd_w, cptd_h) = modal_geometry(&view, 300.0, 200.0);
+    let checkpoint_delete_style = format!(
+        "position:absolute;left:{cptd_x}px;top:{cptd_y}px;width:{cptd_w}px;height:{cptd_h}px;box-sizing:border-box;z-index:50;padding:16px;color:#f3eee8;"
+    );
     // Entry dialog switches (track, thumb) — same geometry as row switches.
     let (switch_constant, switch_selective, switch_enabled) = (
         entry_switch_style(view.entry_constant_draft),
@@ -2191,6 +2373,13 @@ let entry_delete_book_name = entry_dialog_book_name;
             "data-sidebar": "{sidebar_state}",
             "data-ui-density": "{view.density}",
             "data-ui-scale": "{view.font_scale}",
+            "data-ui-contrast": "{view.ui_contrast}",
+            "data-ui-font": "{view.ui_font_profile}",
+            "data-ui-motion": "{view.ui_motion}",
+            "data-chat-style": "{view.chat_style}",
+            "data-chat-avatar-style": "{view.chat_avatar_style}",
+            "data-user-message-position": "{view.user_message_position}",
+            "data-character-message-position": "{view.character_message_position}",
             // Packed 600px-breakpoint rules gate on this attribute (the
             // packer cannot rely on Blitz @media evaluation): set whenever
             // the viewport is the mobile/overlay width — the Android product
@@ -2209,7 +2398,7 @@ let entry_delete_book_name = entry_dialog_book_name;
             div {
                 "data-part": "chat-wallpaper-overlay",
                 "aria-hidden": "true",
-                style: "position:absolute;left:0;top:0;right:0;bottom:-16px;z-index:0;pointer-events:none;background:rgba(18,16,14,0.30);",
+                style: "position:absolute;left:0;top:0;right:0;bottom:-16px;z-index:0;pointer-events:none;background:rgba(18,16,14,{overlay_alpha});",
             }
             if show_rail || show_panel {
                 aside {
@@ -2966,6 +3155,104 @@ let entry_delete_book_name = entry_dialog_book_name;
                                                     }
                                                 }
                                             }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if view.checkpoint_delete_open {
+                div {
+                    class: "st-card",
+                    style: "{checkpoint_delete_style}",
+                    div {
+                        "data-component": "dialog-title",
+                        "Remove checkpoint"
+                    }
+                    div {
+                        "data-component": "dialog-description",
+                        "Remove the checkpoint link from this message? The snapshot chat stays in your chat list."
+                    }
+                    div {
+                        class: "CharacterManagementPanel_dialogActions",
+                        style: "display:flex;gap:8px;justify-content:flex-end;margin-top:12px;",
+                        button {
+                            r#type: "button",
+                            "data-variant": "default",
+                            "data-size": "md",
+                            span { "Cancel" }
+                        }
+                        button {
+                            r#type: "button",
+                            "data-variant": "danger",
+                            "data-size": "md",
+                            span { "Remove" }
+                        }
+                    }
+                }
+            }
+            if view.run_transcript_open {
+                div {
+                    class: "st-card",
+                    style: "{run_transcript_style}",
+                    div {
+                        "data-component": "dialog-title",
+                        style: "flex:none;display:flex;align-items:center;justify-content:space-between;gap:8px;",
+                        span { "Run steps" }
+                        button {
+                            class: "PromptPlanPanel_close",
+                            r#type: "button",
+                            "data-part": "run-transcript-close",
+                            "aria-label": "Close",
+                            title: "Close",
+                            style: "display:grid;width:40px;height:40px;place-items:center;border:1px solid rgba(243,238,232,0.10);border-radius:16px;background:rgba(36,33,30,0.62);color:#c5bbb2;cursor:pointer;",
+                            {crate::product_shell::icon("X", 16)}
+                        }
+                    }
+                    div {
+                        "data-part": "run-transcript-body",
+                        role: "region",
+                        style: "flex:1;min-height:0;margin-top:12px;overflow-y:auto;box-sizing:border-box;display:flex;flex-direction:column;gap:12px;",
+                        if let Some(err) = view.run_transcript_error.as_deref() {
+                            p { role: "alert", style: "color:#e0716b;font-size:14px;", "{err}" }
+                        } else if view.run_transcript_steps.is_empty() {
+                            p { style: "color:#c5bbb2;font-size:14px;", "No durable run steps recorded for this run." }
+                        } else {
+                            ol {
+                                "data-part": "run-transcript-steps",
+                                style: "margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px;",
+                                for step in view.run_transcript_steps.iter() {
+                                    li {
+                                        class: "step",
+                                        "data-step-type": "{step.step_type}",
+                                        "data-step-status": "{step.status}",
+                                        style: "display:flex;align-items:baseline;gap:8px;font-size:13px;",
+                                        span {
+                                            "data-part": "step-sequence",
+                                            style: "flex:none;color:#998f87;min-width:1.5em;",
+                                            "{step.sequence}"
+                                        }
+                                        span {
+                                            style: "flex:1;color:#f3eee8;",
+                                            strong { "{step_type_label(&step.step_type)}" }
+                                            span {
+                                                "data-part": "step-status",
+                                                style: "margin-left:8px;color:#c5bbb2;",
+                                                "{step_status_label(&step.status)}"
+                                            }
+                                            if step.attempt > 1 {
+                                                span {
+                                                    "data-part": "step-attempt",
+                                                    style: "margin-left:8px;color:#998f87;",
+                                                    "attempt {step.attempt}"
+                                                }
+                                            }
+                                        }
+                                        span {
+                                            style: "flex:none;color:#998f87;font-size:12px;",
+                                            "{step.created_at}"
                                         }
                                     }
                                 }

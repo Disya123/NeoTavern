@@ -319,11 +319,14 @@ React при этом навигирует прочь. Список перечи
 
 ## Панель плана промпта (PromptPlanPanel)
 
-Триггер — per-message footer-действие «Prompt plan» (TextAlignLeft) на строках,
-чей `generation_run_id` установлен (React `MessageDetailsCardV2` гейтится по
-`meta.generationRunId`); кнопка добавлена в blueprint-документ
-(`message-action-prompt`, action `chat.message.prompt`) и в legacy RSX с тем же
-условием — skeleton-parity сохранён. Диалог 640×560 (`shell_hit::dialog_hit`:
+Триггер — per-message footer-действие «Prompt plan» (иконка `BookOpenText`:
+канонический React `TextAlignLeft` нет в native Phosphor-паке, путь тот же
+`data-action="prompt"`) на строках, чей `generation_run_id` установлен (React
+`MessageDetailsCardV2` гейтится по `meta.generationRunId`). Тап резолвит run id
+строки (`open_prompt_plan_for_message`) и открывает диалог; строка без run и
+streaming-ряд — честный no-op / `GENERATION_RUN_NOT_FOUND`. Кнопка есть в
+blueprint-документе (`message-action-prompt`, action `chat.message.prompt`) и
+в legacy RSX с тем же условием. Диалог 640×560 (`shell_hit::dialog_hit`:
 backdrop/close → `ClosePromptPlan`, тело Absorb) рендерит четыре состояния React
 `PromptPlanPanel`: ошибка (`role=alert`, `isError`), «This run has no recorded
 prompt plan.» (`PROMPT_PLAN_NOT_FOUND` → null, как в React-хуке), и контент плана
@@ -333,7 +336,120 @@ Context limit), over-budget-алерт, секции System blocks / Selected me
 (`data-role`), Excluded from context (всегда; пустая → «Nothing was excluded.»,
 `token_budget` → «Removed by token budget»). FakeWire записывает durable-план
 при старте генерации (зеркало kernel `prompt_plans`), `chats.delete` чистит
-планы чата. Тест `prompt_plan_over_product_wire`.
+планы чата. Тесты `prompt_plan_over_product_wire`,
+`tap_prompt_on_row_opens_prompt_plan`.
+
+## Транскрипт шагов прогона (RunTranscriptPanel)
+
+Footer-действие «Steps» (`data-action="steps"`, иконка `List` — native-пакет
+не несёт React `ListChecks`) на строках с `generation_run_id` открывает диалог
+640×560 (`OpenRunTranscript` / `CloseRunTranscript`). Запрос —
+`generation.events` (`workflowId` = run id, `limit` 50); UI показывает только
+конверты `generation.step` (sequence / type / status / attempt / createdAt).
+Tool `input`/`output` в view не попадают (SEC-07). Неизвестный run → ошибка
+внутри диалога (`GENERATION_RUN_NOT_FOUND`), пустой журнал → «No durable run
+steps recorded for this run.». План промпта и транскрипт взаимоисключающие.
+FakeWire пишет пару `provider_turn` + `final_commit` при `generation.start` /
+`retry` (без tool payload) и сидирует журнал демо-ответа. Тест
+`run_transcript_lists_generation_steps_without_tool_payloads`.
+
+## Исключение из контекста (toggleMessageContext)
+
+`data-action="context"`: `chats.messages.update` с `meta.manualExcluded`
+(kernel заменяет весь объект meta; сессия мержит флаг на клон текущего
+payload). Первое исключение — тост «Excluded from prompt context.», возврат —
+«Included in prompt context.». Строка несёт `data-excluded` и иконку Eye /
+EyeSlash. Оценка контекста не считает `manualExcluded`. Streaming-ряд — no-op;
+чужой id — `MESSAGE_NOT_FOUND`. FakeWire заменяет meta целиком. Тест
+`toggle_message_context_flips_manual_excluded`.
+
+## Снятие checkpoint-связи (deleteCheckpoint)
+
+`data-action="delete-checkpoint"` рисуется только при `checkpointChatId`.
+Confirm-диалог 300×200 (Cancel / Remove): `chats.messages.update` с
+`clearCheckpointChatId: true` обнуляет связь; snapshot-чат остаётся в списке.
+Тост «Checkpoint link removed.». `chats.snapshots.create` (checkpoint) локально
+выставляет `checkpoint_chat_id` на исходном сообщении. Тест
+`delete_checkpoint_clears_the_snapshot_link`.
+
+## Дубликат персонажа (duplicateSelectedCharacter)
+
+Кнопка Duplicate в editor-баре (`ShellAction::DuplicateCharacter`) зовёт
+`characters.create` с именем `"{name} copy"` и копией description / tags /
+avatar. Автоселект + pin + вкладка Edit, тост «Created {name}.». Поля
+вне native create-контракта (галерея, extra spec) не копируются. Тест
+`duplicate_character_creates_a_named_copy`.
+
+## Галерея персонажа (GalleryTab)
+
+У галереи нет Product Wire-операций: kernel-плоскость честно пуста (React
+`useCharacterGallery` возвращает `{ items: [] }`, upload/delete —
+`UnsupportedError('characters.gallery.upload'|'.delete')`), а каталог живёт
+на legacy-контуре `/api/v2/characters/:id/gallery`. Native не выдумывает
+`characters.gallery.*`. Если у персонажа есть аватар (Hazel), сетка показывает
+его как primary-figure (`data-state="primary"`, `data-part="gallery-figure"`,
+через `character_avatar_with_asset` — без `data:` URI); без аватара — empty
+state «No gallery images». «Add image» (`data-part="gallery-add"`) остаётся
+включённой, как в React: нажатие → `CAPABILITY_UNAVAILABLE` с
+`params.operationId = "characters.gallery.upload"`
+(`ShellAction::UploadGalleryImage` + `gallery_hit`). Колонки `1→2→3→4→1` и
+сортировка `oldest↔newest` живут в состоянии сессии (Blitz `<select>` не
+интерактивен; `CycleGalleryColumns` / `CycleGallerySort`). Тест
+`character_gallery_is_honest_empty_or_primary_and_upload_reports_capability_unavailable`.
+
+## Поиск в шапке чата (ChatHeader search)
+
+`data-action="header-search"` открывает оверлей вместо identity: поле запроса
+(до 500 символов), счётчик совпадений по **всем** сообщениям чата (не только
+видимому окну, React `searchMatchCount`), закрытие сбрасывает query. Ряды с
+совпадением получают `data-state="match"`; видимое окно **не фильтруется**.
+Подсчёт — case-insensitive `indexOf`-цикл, как React `countTextMatches`.
+Пока оверлей открыт, blueprint-chrome честно падает в legacy RSX. Тест
+`header_search_counts_matches_without_filtering_rows`.
+
+## Slash-команды (честный not-found)
+
+React `ChatPage.send` не отправляет текст, начинающийся с `/`, в generation:
+сначала plugin/legacy slash, иначе ошибка `plugins:slashNotFound`
+(«Unknown slash command: /{{command}}»), composer **не** чистится. Native
+шелл не несёт plugin/legacy runtime, поэтому любой `/cmd` —
+`SLASH_COMMAND_NOT_FOUND` (`params.command` = имя команды) **до**
+`chats.messages.create` / `generation.start`; composer остаётся. Тест
+`slash_command_not_found_does_not_send_over_the_wire`.
+
+## Settings → General
+
+React `GeneralTab`: язык пишется в `settings.update` (`language`, `{ value }`),
+остальная appearance — Zustand. Native повторяет это: `CycleLanguage`
+`en → ru → pseudo` (English / Русский / Pseudo (debug); copy шелла остаётся
+English golden), `dir` из кода языка. Scale / font / contrast / motion /
+chat style / avatar style / позиции сообщений / «Open Home when the app
+starts» живут в сессии и выставляют `data-ui-scale`, `data-ui-contrast`,
+`data-ui-font`, `data-ui-motion`, `data-chat-style`, `data-chat-avatar-style`,
+`data-user-message-position`, `data-character-message-position` на корне
+(React `setInterfacePreferences`). Opacity / glass blur — циклы шагом
+`+5` (0–100, старт 70) и `+4` (0–40, старт 16), потому что Blitz range
+не интерактивен; на корень пишутся `--st-custom-ui-opacity`,
+`--st-custom-glass-blur` / `--st-effect-glass-blur` и
+`--st-custom-wallpaper-overlay-alpha` (как React `setInterfacePreferences`).
+Blitz `<select>` не интерактивен — цикл как у gallery. Host-переключатель
+(только packaged Tauri), Kernel Preview / updater (`backend.meta()`,
+desktop update channel) и plugin settings в этом срезе нет. Тест
+`general_settings_language_and_appearance_over_product_wire`.
+
+## Diagnostics (Settings → General)
+
+React `DiagnosticsPanel` на kernel-плоскости читает `diagnostics.export`
+(SEC-07 allowlist: versions/counts, без секретов, путей и пользовательского
+контента) и **не** legacy `DiagnosticsSnapshot` (`useDiagnostics` → `null`).
+Native повторяет это: открытие General / «Run diagnostics» зовёт
+`diagnostics.export`. Метрики: Local kernel (`appVersion`), Product wire,
+Schema (`rev N (hash…)`), Storage format, SQLite, Settings, Generation runs.
+Legacy JSON-download, Kernel Preview badge и desktop updater — Tauri-only,
+их нет. Rebuild search / Clear thumbnail cache остаются включёнными, как
+React browser kernel: нажатие → `CAPABILITY_UNAVAILABLE`
+(`search.rebuild` / `diagnostics.cache`), без выдуманной wire-операции.
+Тест `diagnostics_export_and_legacy_maintenance_over_product_wire`.
 
 ## Фоны (BackgroundsPanel)
 
@@ -435,9 +551,55 @@ React `useRestoreBackup.restartRequired`. Схема ответа требует
 контрольную сумму (64 lowercase hex) — fake-фикстуры соблюдают её. FakeWire:
 2 копии (status completed) в demo(), пустой каталог (честное «no backups») в
 default(); restore неизвестного id → `NOT_FOUND`. Геометрия зеркалится между
-`settings_tab.rs::data_tab` и `shell_hit.rs::data_hit` (padding 12 + title 20 +
-gap 8 + hint 32 + gap 8 + actions 36 + gap 8; rows 64 + 4). Тест
+`settings_tab.rs::data_tab` и `shell_hit.rs::data_hit` (migration + activation
+блоки сверху, затем padding 12 + title 20 + gap 8 + hint 32 + gap 8 +
+actions 36 + gap 8; rows 64 + 4). Тест
 `backups_list_create_restore_over_product_wire`.
+
+Над бэкапами — React `DataMigrationPanel` и `ActivationStatusPanel`.
+SillyTavern ZIP-import на kernel-плоскости нет (`UnsupportedError
+('imports.sillytavern.analyze')`); native не выдумывает wire-операцию:
+кнопка «Analyze archive» → `CAPABILITY_UNAVAILABLE`. Активация data-root
+(`data.activation.status`) read-only: layout v1/v2, active root / id,
+журнал, баннер pending. Demo — committed restore без pending; default —
+пустой журнал. Тест
+`data_activation_status_and_sillytavern_import_honesty_over_product_wire`.
+
+## Character Advanced: lorebooks
+
+React `CharacterLorebooks` на вкладке Advanced: открытие грузит
+`lorebooks.list`, список фильтруется по `characterId` выбранного персонажа.
+«New book for {name}» → `lorebooks.create` с `characterId` и переходом в
+панель lorebooks (имя `New lorebook`). «Open lorebooks» открывает ту же
+панель без create. Unlink в React шлёт `{ characterId: null }`, но wire DTO
+это ещё не выражает (`null is not expressible yet`); native не делает
+тихий no-op, а отдаёт `CAPABILITY_UNAVAILABLE`
+(`lorebooks.update.unlink`). Demo-книга «Kestrel Vales» глобальная
+(`characterId` отсутствует). Секция lorebooks стоит сверху Advanced, чтобы
+hit-test в Blitz не требовал скролла через prompt-поля. Тест
+`character_lorebooks_create_open_and_unlink_honesty_over_product_wire`.
+
+## Display macros (`{{user}}` / `{{char}}`)
+
+Committed-пузыри раскрывают display-макросы как React `expandDisplayMacros`
+(`packages/shared/src/macros.ts`): `{{user}}` — активная персона (chat →
+app → default, fallback `User`), `{{char}}` — имя персонажа (fallback
+`Assistant`); time/date/random и `macro-variables` тоже портированы.
+Unknown macros не трогаются. Streaming-ряд остаётся сырым. Тест
+`display_macros_expand_user_and_char_on_committed_rows`.
+
+## Tool activity badge
+
+React `ToolActivityBadge` (`data-component="tool-activity"`, `role="status"`)
+показывается над streaming-пузырём, пока run ждёт durable `tool_call`
+(`GenerationEvent::GenerationStep`, status `waiting`). Native читает только
+`step.input.toolCall.name` (fallback `"tool"`); arguments/output в
+`ProductChatView` не попадают (SEC-07). Любой другой step type, completed /
+failed / cancelled и новый `generation.start` снимают бейдж. Иконка Phosphor
+`Lightning` в packed native set нет — бейдж текстовый (`Running tool: {name}…`).
+Дефолтный FakeWire `generation.start` по-прежнему стримит только delta +
+completed; шаг инжектируется через `apply_stream_frame`. Тест
+`tool_activity_badge_from_waiting_tool_call_step`.
 
 ## AI Settings: память (Memories)
 
@@ -459,6 +621,19 @@ gap 8 + hint 32 + gap 8 + actions 36 + gap 8; rows 64 + 4). Тест
 172 в редактировании; форма создания 156). FakeWire: 2 памяти (global +
 character-scoped к демо-персонажу) в demo(), пусто в default(). Тест
 `memories_crud_over_product_wire`.
+
+## AI Settings: Advanced (Chat template)
+
+Четвёртый таб — React `AdvancedPromptSettings` + `ChatTemplateEditor`.
+Каталога instruct-форматов на kernel-плоскости нет (`useInstructFormats` →
+`{ formats: [] }`, legacy `/settings/instruct-formats`); native не выдумывает
+wire-операцию. Выбор native ↔ custom: native пишет `instruct-format` и
+`instruct-format-id` как `{ value: null }`; custom сначала локальный (как
+React `if (value === 'custom') return`), Save — объект ChatML-шаблона в
+`instruct-format`. Prompt mode chat ↔ text пишет `prompt-template.mode`;
+text-completion `PromptTemplateEditor` (блоки, пресеты, import) не портирован —
+честная заметка, mode всё равно уходит в Wire. Тест
+`chat_template_editor_native_custom_over_product_wire`.
 
 ## AI Settings: управление пресетами
 
@@ -795,27 +970,28 @@ ConfirmCreate → `characters=2` (durable через wire), тост «Character
    становится контентом сообщения (kernel-семантика), видимое окно
    перестраивается из авторитетного стора; тост «Variant N of M.», на краях —
    «No more variants.» без смены контента. Позиция выводится из совпадения
-   контента строки с вариантами (позиция 0 = оригинал). FakeWire сидирует 3
+   контента строки с вариантами (позиция 0 = оригинал).    FakeWire сидирует 3
    варианта у хвостового ответа демо-чата; `variants.create/delete` в
    FakeWire пока не реализованы (свайпам не нужны). Тест:
    `swipes_cycle_variants_and_stop_at_edges`; e2e: тап → paths растут,
-   `kernel_messages` неизменен. History (revisions) остаётся honest-skip —
-   у нэйтива пока нет поверхности для списка ревизий.
-
-Остальные builtin-действия (edit/checkpoint) теперь рисуются в
-инлайн-ряде для визуального паритета с React; подключённые к поведению —
-copy, delete, rollback, regenerate и swipes. Edit / snapshots / history
-остаются waiver.
+   `kernel_messages` неизменен.
+7. **Context / Prompt / Steps / delete-checkpoint — подключены.**
+   `data-action="context"` → `chats.messages.update` (`meta.manualExcluded`);
+   `prompt` → `generation.prompt.plan` по `generationRunId` строки;
+   `steps` → `generation.events` (только `generation.step`, без tool payload);
+   `delete-checkpoint` → confirm + `clearCheckpointChatId`. Edit / history /
+   checkpoint / branch уже были подключены ранее (см. CHANGELOG).
 
 **Распознавание (M1/M2):** общая таблица решений `hit_rects::resolve_tap`
 классифицирует ВСЕ задокументированные действия строки —
-`context/edit/copy/checkpoint/branch/delete/rollback` + version controls
-`history/regenerate/swipe-previous/swipe-next`. Кнопки version controls не
-несут собственного `data-message-id`; их владельцем становится ближайший
-ключевой предок из skeleton-цепочки (`effective_key`), поэтому тап по
-регенерации всегда знает свою строку. Не подключённые к поведению виды
-логируются честно (`not wired yet` / `not_wired_yet`) и никогда не
-срабатывают вслепую; un-keyed действие без ключевого предка отбрасывается.
+`context/edit/copy/checkpoint/branch/delete/rollback/prompt/steps/delete-checkpoint`
++ version controls `history/regenerate/swipe-previous/swipe-next`. Кнопки
+version controls не несут собственного `data-message-id`; их владельцем
+становится ближайший ключевой предок из skeleton-цепочки (`effective_key`),
+поэтому тап по регенерации всегда знает свою строку. Un-keyed действие без
+ключевого предка отбрасывается. Android copy остаётся честным skip
+(`clipboard_bridge_pending`); остальные kind исполняются в JNI так же, как
+на десктопе.
 
 Верификация end-to-end (снапшот + реальный клипборд ОС):
 `--pointer 1032,100` (copy первого сообщения) → в логе
@@ -830,10 +1006,13 @@ copy, delete, rollback, regenerate и swipes. Edit / snapshots / history
 - Drag-скролл инерцией и мультитач: десктоп использует колёсико +
   `scroll_offset_css` (без физ.инерции); пёрышко-инерция Android — через
   `ChatCompositor::compositor_tick`, не перенесено.
-- Все builtin-действия сообщения реальны: copy (клипборд хоста), delete
-  (`chats.messages.delete`), edit (`chats.messages.update` + ревизии),
-  history (`chats.messages.revisions.list`), checkpoint/branch
-  (`chats.snapshots.create`) и rollback (`chats.snapshots.rollback`).
+- Все builtin-действия сообщения реальны: copy (клипборд хоста; Android —
+  честный skip), delete (`chats.messages.delete`), edit
+  (`chats.messages.update` + ревизии), history (`chats.messages.revisions.list`),
+  context (`meta.manualExcluded`), prompt (`generation.prompt.plan`), steps
+  (`generation.events`), checkpoint/branch (`chats.snapshots.create`),
+  delete-checkpoint (`clearCheckpointChatId`) и rollback
+  (`chats.snapshots.rollback`).
 - Wallpaper — светлая плоскость фасада + тёмный overlay, не фото React
   golden (фото-ассет в хост не бандлится). `backdrop-filter` Blitz не
   умеет; панели полупрозрачные через `rgba`, не live glass.

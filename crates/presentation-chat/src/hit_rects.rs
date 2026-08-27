@@ -128,6 +128,8 @@ pub enum QuickIntent {
     ComposerReset,
     ComposerContext,
     ScrollLatest,
+    /// Chat-header message search (React `ChatHeader` magnifying-glass).
+    HeaderSearch,
 }
 
 /// Per-row message operations shared by both hosts. The kind names the
@@ -155,6 +157,12 @@ pub enum MessageActionKind {
     /// Close button of the revision-history card
     /// (`data-action="message-history-close"`).
     HistoryClose,
+    /// View the durable prompt plan (`data-action="prompt"`).
+    Prompt,
+    /// View the run-step transcript (`data-action="steps"`).
+    Steps,
+    /// Remove the checkpoint link (`data-action="delete-checkpoint"`).
+    DeleteCheckpoint,
 }
 
 impl MessageActionKind {
@@ -174,6 +182,9 @@ impl MessageActionKind {
             "message-edit-save" => Self::EditSave,
             "message-edit-cancel" => Self::EditCancel,
             "message-history-close" => Self::HistoryClose,
+            "prompt" => Self::Prompt,
+            "steps" => Self::Steps,
+            "delete-checkpoint" => Self::DeleteCheckpoint,
             _ => return None,
         })
     }
@@ -217,6 +228,7 @@ impl HitRects {
             ("composer-context", _) => TapIntent::Quick(QuickIntent::ComposerContext),
             ("composer-reset", _) => TapIntent::Quick(QuickIntent::ComposerReset),
             ("scroll-latest", _) => TapIntent::Quick(QuickIntent::ScrollLatest),
+            ("header-search", _) => TapIntent::Quick(QuickIntent::HeaderSearch),
             // Declarative custom intents route by their authored name before
             // the builtin kind table — they never masquerade as row actions.
             (action, _) if action.starts_with("custom.") => TapIntent::Custom {

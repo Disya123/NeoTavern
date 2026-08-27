@@ -1,5 +1,7 @@
 //! AI Settings rail panel. Mirrors `apps/web/src/components/ai-settings/AiSettingsPanel.tsx`
-//! as a providers/presets catalog plus the memories editor over Product Wire.
+//! as a providers/presets catalog, the memories editor, and the Advanced
+//! chat-template editor over Product Wire. The kernel plane has no
+//! instruct-format catalog (`useInstructFormats` → `{ formats: [] }`).
 
 use dioxus_core::Element;
 use dioxus_core_macro::rsx;
@@ -25,10 +27,16 @@ pub fn ai_settings_panel(view: &ProductShellView) -> Element {
             label: "Memories",
             disabled: false,
         },
+        PanelTab {
+            id: "advanced",
+            label: "Advanced",
+            disabled: false,
+        },
     ];
     let body = match view.ai_tab.as_str() {
         "presets" => presets_tab(view),
         "memories" => memories_tab(view),
+        "advanced" => advanced_tab(view),
         _ => providers_tab(view),
     };
     management_shell(
@@ -411,6 +419,94 @@ fn memory_card(
                     "data-part": "memory-delete",
                     style: "width:96px;height:36px;margin-left:auto;",
                     span { "Delete" }
+                }
+            }
+        }
+    }
+}
+
+/// React `AdvancedPromptSettings` + `ChatTemplateEditor`. Built-in instruct
+/// formats are a legacy sidecar catalog — this plane lists native + custom
+/// only. Text-completion `PromptTemplateEditor` (block reorder / presets) is
+/// not ported; switching mode still persists `prompt-template` via Wire.
+fn advanced_tab(view: &ProductShellView) -> Element {
+    let chat_mode = view.prompt_template_mode != "text";
+    let custom = view.instruct_selection == "custom";
+    let selection_label = if custom {
+        "Custom role template"
+    } else {
+        "Native provider messages"
+    };
+    let hint = if custom {
+        "Roles are rendered into one text prompt before the provider request."
+    } else {
+        "Recommended for chat APIs. Roles are sent as structured provider messages."
+    };
+    rsx! {
+        div {
+            class: "AiSettings_tabBody",
+            "data-part": "advanced-prompt-settings",
+            "data-component": "advanced-prompt-settings",
+            style: "padding:12px 16px;display:flex;flex-direction:column;gap:8px;",
+            div {
+                class: "AiSettings_modeSwitch",
+                role: "radiogroup",
+                "aria-label": "Prompt mode",
+                "data-part": "prompt-mode",
+                style: "display:flex;align-items:center;gap:8px;height:40px;",
+                span { style: "font-size:0.75rem;color:#c5bbb2;", "Prompt mode" }
+                button {
+                    class: "st-button",
+                    r#type: "button",
+                    "data-state": if chat_mode { "active" } else { "inactive" },
+                    style: "height:36px;",
+                    span { if chat_mode { "Chat Template" } else { "Prompt Template" } }
+                }
+            }
+            if chat_mode {
+                section {
+                    class: "AiSettings_templateEditor",
+                    "data-component": "chat-template-editor",
+                    strong { style: "font-size:0.9375rem;height:20px;", "Chat template" }
+                    p { style: "margin:0;color:#c5bbb2;font-size:0.75rem;", "Create the instruct format used to serialize system, user, assistant, and tool messages." }
+                    label {
+                        class: "AiSettings_field",
+                        "data-part": "instruct-selection",
+                        style: "display:flex;flex-direction:column;gap:4px;",
+                        span { "Chat serialization" }
+                        button {
+                            class: "st-button",
+                            r#type: "button",
+                            "data-component": "button",
+                            "data-variant": "default",
+                            style: "height:36px;align-self:flex-start;",
+                            span { "data-part": "label", "{selection_label}" }
+                        }
+                        small { style: "color:#998f87;", "{hint}" }
+                    }
+                    if custom {
+                        button {
+                            class: "st-button",
+                            r#type: "button",
+                            "data-variant": "primary",
+                            "data-part": "instruct-save",
+                            style: "width:140px;height:36px;",
+                            span { "Save template" }
+                        }
+                    }
+                }
+            } else {
+                p {
+                    style: "margin:0;color:#998f87;font-size:0.75rem;",
+                    "The text-completion prompt template editor is not on this plane. Mode still persists through settings.update."
+                }
+            }
+            if let Some(error) = view.instruct_form_error.as_deref() {
+                p {
+                    class: "AiSettings_inlineError",
+                    role: "alert",
+                    style: "margin:0;color:#f2b8b5;font-size:0.75rem;",
+                    "{error}"
                 }
             }
         }

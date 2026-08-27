@@ -3,6 +3,59 @@
 ## Unreleased
 ### Added
 
+- **Нативный шелл: exclude / checkpoint-link / run transcript / duplicate /
+  header search.** `chats.messages.update` принимает `meta.manualExcluded`
+  (replace всего meta) и `clearCheckpointChatId`; `generation.events` отдаёт
+  шаги без tool payload (SEC-07); duplicate персонажа — `characters.create`
+  с `"{name} copy"`; поиск в шапке считает совпадения, не фильтруя ряды.
+  Тесты `toggle_message_context_flips_manual_excluded`,
+  `delete_checkpoint_clears_the_snapshot_link`,
+  `run_transcript_lists_generation_steps_without_tool_payloads`,
+  `tap_prompt_on_row_opens_prompt_plan`,
+  `duplicate_character_creates_a_named_copy`,
+  `header_search_counts_matches_without_filtering_rows`. DiagnosticsPanel
+  и слайдеры opacity/blur в General, а также полный PromptTemplateEditor
+  (text mode) в этом срезе не переносились.
+
+- **Нативный шелл: gallery honesty + slash not-found.** Галерея персонажа —
+  честная kernel-плоскость без `characters.gallery.*`: аватар персонажа
+  рисуется как primary-figure, пустой персонаж — empty state, «Add image» →
+  `CAPABILITY_UNAVAILABLE` (`characters.gallery.upload`). Текст с `/` не
+  уходит в `chats.messages.create` / `generation.start` (`SLASH_COMMAND_NOT_FOUND`,
+  composer не чистится). Тесты
+  `character_gallery_is_honest_empty_or_primary_and_upload_reports_capability_unavailable`,
+  `slash_command_not_found_does_not_send_over_the_wire`.
+
+- **Нативный шелл: Diagnostics + Data activation.** General: `diagnostics.export`
+  (SEC-07 allowlist) и циклы opacity/blur (`--st-custom-ui-opacity` /
+  `--st-custom-glass-blur`); rebuild/cache → `CAPABILITY_UNAVAILABLE`. Data:
+  `data.activation.status` (журнал v2) и честный отказ SillyTavern ZIP
+  (`imports.sillytavern.analyze`). Тесты
+  `diagnostics_export_and_legacy_maintenance_over_product_wire`,
+  `data_activation_status_and_sillytavern_import_honesty_over_product_wire`.
+
+- **Нативный шелл: lorebooks персонажа + display-макросы.** Advanced:
+  `lorebooks.list` / `lorebooks.create` с `characterId`; Unlink честно
+  `CAPABILITY_UNAVAILABLE` (`lorebooks.update.unlink` — wire ещё не
+  выражает `characterId: null`). Пузыри раскрывают `{{user}}`/`{{char}}`
+  на committed-рядах (streaming сырой). Тесты
+  `character_lorebooks_create_open_and_unlink_honesty_over_product_wire`,
+  `display_macros_expand_user_and_char_on_committed_rows`.
+
+- **Нативный шелл: ToolActivityBadge.** Waiting `tool_call` step показывает
+  `data-component="tool-activity"` с именем инструмента (copy
+  `Running tool: {name}…`); arguments/results не попадают в view (SEC-07).
+  Иконка Lightning не портирована (нет в packed set). Тест
+  `tool_activity_badge_from_waiting_tool_call_step`.
+
+- **Нативный шелл: Settings General + Chat template.** General: язык через
+  `settings.update` (`en→ru→pseudo`), appearance как React `useUiStore`
+  (scale/contrast/font/motion/chat style/позиции) с `data-ui-*` на корне.
+  AI Settings → Advanced: native/custom instruct без каталога форматов;
+  custom save пишет `instruct-format`; mode chat/text — `prompt-template`.
+  Тесты `general_settings_language_and_appearance_over_product_wire`,
+  `chat_template_editor_native_custom_over_product_wire`.
+
 - **Профили: импорт контейнера (profile.import).** Форма пути + политика
   дубликатов (Reject/Replace/Remap) в Settings → Profiles; статус со
   счётчиками inserted/updated/skipped и orphans; успех обновляет библиотеку.

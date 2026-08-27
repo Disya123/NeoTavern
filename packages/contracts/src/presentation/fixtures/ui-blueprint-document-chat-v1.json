@@ -180,6 +180,10 @@
                                 "parameter": "messageId"
                               },
                               {
+                                "id": "chat.message.delete-checkpoint",
+                                "parameter": "messageId"
+                              },
+                              {
                                 "id": "chat.message.delete",
                                 "parameter": "messageId"
                               },
@@ -189,6 +193,10 @@
                               },
                               {
                                 "id": "chat.message.prompt",
+                                "parameter": "messageId"
+                              },
+                              {
+                                "id": "chat.message.steps",
                                 "parameter": "messageId"
                               }
                             ],
@@ -264,6 +272,20 @@
                                 "children": []
                               },
                               {
+                                "nodeId": "message-action-delete-checkpoint",
+                                "component": "MessageActionButton",
+                                "recipe": "icon-button",
+                                "role": "button",
+                                "stateSlots": [],
+                                "actions": [
+                                  {
+                                    "id": "chat.message.delete-checkpoint",
+                                    "parameter": "messageId"
+                                  }
+                                ],
+                                "children": []
+                              },
+                              {
                                 "nodeId": "message-action-delete",
                                 "component": "MessageActionButton",
                                 "recipe": "icon-button",
@@ -314,6 +336,20 @@
                                 "actions": [
                                   {
                                     "id": "chat.message.prompt",
+                                    "parameter": "messageId"
+                                  }
+                                ],
+                                "children": []
+                              },
+                              {
+                                "nodeId": "message-action-steps",
+                                "component": "MessageActionButton",
+                                "recipe": "icon-button",
+                                "role": "button",
+                                "stateSlots": [],
+                                "actions": [
+                                  {
+                                    "id": "chat.message.steps",
                                     "parameter": "messageId"
                                   }
                                 ],

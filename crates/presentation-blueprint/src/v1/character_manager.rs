@@ -193,6 +193,16 @@ pub enum UiActionV1 {
     ChatMessagePrompt {
         message_id: String,
     },
+    /// View the durable run-step transcript (`generation.events`; React
+    /// `RunTranscriptPanel` footer action "Steps").
+    ChatMessageSteps {
+        message_id: String,
+    },
+    /// Remove the checkpoint link (`clearCheckpointChatId`; React
+    /// `delete-checkpoint`).
+    ChatMessageDeleteCheckpoint {
+        message_id: String,
+    },
     /// Assistant-row version controls (no message-id parameter).
     ChatMessageHistory,
     ChatMessageRegenerate,
@@ -256,6 +266,8 @@ impl UiActionV1 {
             | Self::ChatMessageBranch { .. }
             | Self::ChatMessageRollback { .. }
             | Self::ChatMessagePrompt { .. }
+            | Self::ChatMessageSteps { .. }
+            | Self::ChatMessageDeleteCheckpoint { .. }
             | Self::ChatMessageHistory
             | Self::ChatMessageRegenerate
             | Self::ChatMessageSwipePrevious

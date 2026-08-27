@@ -4,7 +4,7 @@
 use std::cell::RefCell;
 
 use neotavern_presentation_blueprint::v1::ContextUsageSummaryV1;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 use crate::{CanonicalFixture, FixtureCommand, StreamEvent};
 
@@ -14,14 +14,15 @@ pub const PRODUCT_PATH_CHAT_ID: &str = "7f3a2b4c-1d2e-4f5a-8b9c-0d1e2f3a4b5c";
 pub const PRODUCT_PATH_CHARACTER_ID: &str = "4f2f0a1e-9b3c-4d5e-8f6a-7b8c9d0e1f2a";
 pub const PRODUCT_PATH_PERSONA_ID: &str = "0d1e2f3a-4b5c-4d6e-8f90-1a2b3c4d5e6f";
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub enum RowKind {
+    #[default]
     Markdown,
     Image,
     Mixed,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct VisibleRow {
     pub id: String,
     pub role: String,
@@ -34,9 +35,15 @@ pub struct VisibleRow {
     /// no `<time>` element, like React's conditional render.
     pub timestamp: String,
     /// Source generation run id (`MessageDto.generationRunId`); `Some`
-    /// renders the "Prompt plan" footer action (React `MessageDetailsCardV2`
-    /// gates on `meta.generationRunId`).
+    /// renders the "Prompt plan" / "Steps" footer actions (React
+    /// `MessageDetailsCardV2` gates on `meta.generationRunId`).
     pub run_id: Option<String>,
+    /// `message.meta.manualExcluded` — the row is left out of the prompt
+    /// context (React `toggleMessageContext`).
+    pub manual_excluded: bool,
+    /// Linked checkpoint child chat (`MessageDto.checkpointChatId`); `Some`
+    /// shows the delete-checkpoint action (React `deleteCheckpoint`).
+    pub checkpoint_chat_id: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -67,6 +74,10 @@ pub struct ProductChatView {
     pub character_name: String,
     pub error_code: Option<String>,
     pub streaming: bool,
+    /// Waiting `tool_call` step name (React `ToolActivityBadge`). `None`
+    /// when the run is not waiting on a tool. Arguments and results never
+    /// land here (SEC-07).
+    pub tool_activity_name: Option<String>,
     pub viewport_width: u32,
     pub viewport_height: u32,
     /// Width of the chat main area in CSS px (surface minus the rail/panel
@@ -94,6 +105,14 @@ pub struct ProductChatView {
     /// Child chats (checkpoints/branches) listed inside the menu, newest
     /// first — straight from `chats.snapshots.list`.
     pub snapshot_items: Vec<SnapshotItemView>,
+    /// Header message-search overlay (React `ChatHeader` search). Open
+    /// switches the chrome to the search field; the query highlights rows
+    /// (`data-state="match"`) without filtering the transcript.
+    pub header_search_open: bool,
+    pub header_search_query: String,
+    /// Match count across the whole chat (React `searchMatchCount`), not
+    /// just the visible window.
+    pub header_search_match_count: u64,
 }
 
 /// One row of the snapshots menu (React `ChatSnapshotsMenu` item): the child
@@ -129,6 +148,7 @@ impl Default for ProductChatView {
             character_name: String::new(),
             error_code: None,
             streaming: false,
+            tool_activity_name: None,
             viewport_width: 320,
             viewport_height: 200,
             column_width: 0,
@@ -140,6 +160,9 @@ impl Default for ProductChatView {
             revision_history: Vec::new(),
             snapshots_menu_open: false,
             snapshot_items: Vec::new(),
+            header_search_open: false,
+            header_search_query: String::new(),
+            header_search_match_count: 0,
         }
     }
 }
@@ -309,6 +332,15 @@ pub fn visible_rows(fixture: &CanonicalFixture, start: usize) -> Vec<VisibleRow>
                     .get("generationRunId")
                     .and_then(Value::as_str)
                     .map(str::to_string),
+                manual_excluded: value
+                    .get("meta")
+                    .and_then(|meta| meta.get("manualExcluded"))
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
+                checkpoint_chat_id: value
+                    .get("checkpointChatId")
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
             }
         })
         .collect()
@@ -379,6 +411,7 @@ pub fn product_chat_from_fixture(fixture: &CanonicalFixture, start: usize) -> Pr
         character_name: "Hazel".into(),
         error_code: None,
         streaming: false,
+        tool_activity_name: None,
         viewport_width: 320,
         viewport_height: 200,
         column_width: 0,
@@ -390,6 +423,9 @@ pub fn product_chat_from_fixture(fixture: &CanonicalFixture, start: usize) -> Pr
         revision_history: Vec::new(),
         snapshots_menu_open: false,
         snapshot_items: Vec::new(),
+        header_search_open: false,
+        header_search_query: String::new(),
+        header_search_match_count: 0,
     }
 }
 

@@ -1,13 +1,13 @@
 //! Host compositor bind: Dioxus+Blitz once, then compositor-only ticks.
 
-use neotavern_neocompositor::PresentationTime;
 use contracts_generated::generated::MessageRole;
+use neotavern_neocompositor::PresentationTime;
 use neotavern_presentation_chat::{
-    AVATAR_DISPLAY_MAX_PX, ChatCompositor, DEMO_AVATAR_ASSET_ID, FakeWire, start_flagged_session,
+    start_flagged_session, ChatCompositor, FakeWire, AVATAR_DISPLAY_MAX_PX, DEMO_AVATAR_ASSET_ID,
 };
 use neotavern_presentation_dioxus_shell::{product_chat_app, product_shell_app};
 use neotavern_presentation_m0_d2::{
-    AvatarKind, inspect_product_layout, produce_app_at, produce_product_app_at,
+    inspect_product_layout, produce_app_at, produce_product_app_at, AvatarKind,
 };
 
 #[test]
@@ -183,7 +183,7 @@ fn chat_markdown_structure_reaches_the_blitz_dom() {
 #[test]
 fn markdown_minimal_probe() {
     use neotavern_presentation_dioxus_shell::{
-        ProductChatView, ProductChrome, RowKind, VisibleRow, install_product_chat, product_chat_app,
+        install_product_chat, product_chat_app, ProductChatView, ProductChrome, RowKind, VisibleRow,
     };
     use neotavern_presentation_m0_d2::inspect_product_layout;
     install_product_chat(ProductChatView {
@@ -197,6 +197,8 @@ fn markdown_minimal_probe() {
             author: "Hazel".into(),
             timestamp: String::new(),
             run_id: None,
+            manual_excluded: false,
+            checkpoint_chat_id: None,
         }],
         chrome: ProductChrome::HeaderComposer,
         character_avatar_asset: "asset:avatar-hazel".into(),
@@ -205,6 +207,7 @@ fn markdown_minimal_probe() {
         composer_placeholder: String::new(),
         error_code: None,
         streaming: false,
+        tool_activity_name: None,
         viewport_width: 1100,
         viewport_height: 760,
         column_width: 0,
@@ -216,6 +219,9 @@ fn markdown_minimal_probe() {
         revision_history: Vec::new(),
         snapshots_menu_open: false,
         snapshot_items: Vec::new(),
+        header_search_open: false,
+        header_search_query: String::new(),
+        header_search_match_count: 0,
     });
     let layout =
         inspect_product_layout(product_chat_app, 1100, 760, 1.0, Default::default()).expect("l");
@@ -272,7 +278,7 @@ fn chat_slot_skeleton_covers_react_workspace_contract() {
 
 #[test]
 fn hit_rects_resolve_actions_from_layout_not_bands() {
-    use neotavern_presentation_chat::{DEMO_CHAT_ID, HitRects};
+    use neotavern_presentation_chat::{HitRects, DEMO_CHAT_ID};
     use neotavern_presentation_m0_d2::inspect_slot_skeleton;
     let (mut session, _) = start_flagged_session(
         Some("1"),
@@ -324,6 +330,34 @@ fn hit_rects_resolve_actions_from_layout_not_bands() {
             .iter()
             .any(|rect| rect.action.as_deref() == Some("delete") && rect.key.is_some()),
         "delete button must carry its message id"
+    );
+    assert!(
+        rects
+            .rects
+            .iter()
+            .any(|rect| rect.action.as_deref() == Some("header-search")),
+        "header search control must be hittable"
+    );
+    assert!(
+        rects
+            .rects
+            .iter()
+            .any(|rect| rect.action.as_deref() == Some("context") && rect.key.is_some()),
+        "context button must carry its message id"
+    );
+    assert!(
+        rects
+            .rects
+            .iter()
+            .any(|rect| rect.action.as_deref() == Some("prompt") && rect.key.is_some()),
+        "prompt button must carry its message id"
+    );
+    assert!(
+        rects
+            .rects
+            .iter()
+            .any(|rect| rect.action.as_deref() == Some("steps") && rect.key.is_some()),
+        "steps button must carry its message id"
     );
 
     // Focusable text fields publish Theme SDK hooks (no pixel bands).
@@ -458,7 +492,7 @@ fn hazel_card_stays_compact_on_the_phone_viewport() {
 #[test]
 fn header_title_ellipsizes_on_the_phone_viewport() {
     use neotavern_presentation_dioxus_shell::{
-        CHARACTER_MANAGER_TITLE, character_manager_title, ellipsize_css,
+        character_manager_title, ellipsize_css, CHARACTER_MANAGER_TITLE,
     };
     assert_eq!(
         ellipsize_css(CHARACTER_MANAGER_TITLE, 400.0, 20.0),
@@ -488,7 +522,7 @@ fn header_title_ellipsizes_on_the_phone_viewport() {
 
 #[test]
 fn shell_hit_rail_opens_home_and_character_tabs() {
-    use neotavern_presentation_chat::{ShellAction, ShellHit, hit_test};
+    use neotavern_presentation_chat::{hit_test, ShellAction, ShellHit};
     let (mut session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
     session.set_surface_size(1220, 2712, 3.0);
@@ -512,7 +546,7 @@ fn shell_hit_rail_opens_home_and_character_tabs() {
 
 #[test]
 fn chats_panel_lists_wire_chats_and_opens_one() {
-    use neotavern_presentation_chat::{ShellAction, ShellHit, hit_test};
+    use neotavern_presentation_chat::{hit_test, ShellAction, ShellHit};
     let (mut session, _) =
         start_flagged_session(Some("1"), FakeWire::with_message_count(12), None, None)
             .expect("route");
@@ -600,62 +634,48 @@ fn personas_and_lorebooks_load_and_create_over_product_wire() {
         shell.personas.iter().any(|row| row.name == "You"),
         "demo persona must list through personas.list"
     );
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "personas.list")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "personas.list"));
     session.apply_shell_action(ShellAction::OpenCreate);
     session.set_create_name("Traveler");
     session.apply_shell_action(ShellAction::ConfirmCreate);
-    assert!(
-        session
-            .shell_view()
-            .personas
-            .iter()
-            .any(|row| row.name == "Traveler")
-    );
+    assert!(session
+        .shell_view()
+        .personas
+        .iter()
+        .any(|row| row.name == "Traveler"));
 
     session.apply_shell_action(ShellAction::SetPanel("lorebooks".into()));
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "lorebooks.list")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "lorebooks.list"));
     session.apply_shell_action(ShellAction::OpenCreate);
     session.set_create_name("World book");
     session.apply_shell_action(ShellAction::ConfirmCreate);
-    assert!(
-        session
-            .shell_view()
-            .lorebooks
-            .iter()
-            .any(|row| row.name == "World book")
-    );
+    assert!(session
+        .shell_view()
+        .lorebooks
+        .iter()
+        .any(|row| row.name == "World book"));
 
     session.apply_shell_action(ShellAction::SetPanel("plugins".into()));
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "plugins.list")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "plugins.list"));
     session.apply_shell_action(ShellAction::SetPanel("providers".into()));
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "providers.list")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "providers.list"));
     session.apply_shell_action(ShellAction::SetPanel("settings".into()));
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "settings.get")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "settings.get"));
     assert_eq!(session.shell_view().language, "en");
     assert_eq!(session.shell_view().dir, "ltr");
 }
@@ -675,12 +695,10 @@ fn create_character_uses_product_wire_and_opens_edit_tab() {
         shell.selected_draft.as_ref().map(|row| row.name.as_str()),
         Some("Ada")
     );
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "characters.create")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "characters.create"));
 }
 
 #[test]
@@ -695,13 +713,15 @@ fn lorebook_entries_load_toggle_and_crud_over_product_wire() {
     session.apply_shell_action(ShellAction::SetTab("entries".into()));
     let shell = session.shell_view();
     assert_eq!(shell.lorebook_tab, "entries");
-    assert_eq!(shell.lorebook_entries.len(), 2, "demo book lists its entries");
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "lorebooks.entries.list")
+    assert_eq!(
+        shell.lorebook_entries.len(),
+        2,
+        "demo book lists its entries"
     );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "lorebooks.entries.list"));
     let first_id = shell.lorebook_entries[0].id.clone();
     assert!(shell.lorebook_entries.iter().all(|row| row.enabled));
 
@@ -714,18 +734,17 @@ fn lorebook_entries_load_toggle_and_crud_over_product_wire() {
         .find(|row| row.id == first_id)
         .expect("toggled row");
     assert!(!first.enabled, "row switch flips the enabled flag");
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "lorebooks.entries.update")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "lorebooks.entries.update"));
 
     // Create: EntryDialog -> drafts -> SaveEntry -> `entries.create`.
     session.apply_shell_action(ShellAction::OpenEntryDialog);
     session.set_entry_keys_draft("Sunken Road");
     session.set_entry_secondary_keys_draft("pass\nford");
-    session.set_entry_content_draft("The Sunken Road runs under the ridge; bells warn of the tide.");
+    session
+        .set_entry_content_draft("The Sunken Road runs under the ridge; bells warn of the tide.");
     assert!(
         session.shell_view().entry_content_tokens > 0,
         "dialog token label uses the script-aware estimate"
@@ -740,12 +759,10 @@ fn lorebook_entries_load_toggle_and_crud_over_product_wire() {
         .find(|row| row.keys.as_slice() == ["Sunken Road"])
         .expect("created entry");
     assert!(created.enabled && created.constant && !created.selective);
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "lorebooks.entries.create")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "lorebooks.entries.create"));
 
     // Edit: dialog pre-fills the row values; SaveEntry updates the entry.
     session.apply_shell_action(ShellAction::EditLorebookEntry(created.id.clone()));
@@ -762,12 +779,10 @@ fn lorebook_entries_load_toggle_and_crud_over_product_wire() {
         .find(|row| row.id == created.id)
         .expect("edited entry");
     assert!(edited.content.starts_with("Rewritten"));
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "lorebooks.entries.update")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "lorebooks.entries.update"));
 
     // Delete: confirm dialog -> `entries.delete`; the book count drops.
     session.apply_shell_action(ShellAction::OpenEntryDelete(created.id.clone()));
@@ -788,12 +803,10 @@ fn lorebook_entries_load_toggle_and_crud_over_product_wire() {
         .find(|row| row.id == neotavern_presentation_chat::DEMO_LOREBOOK_ID)
         .expect("demo book");
     assert_eq!(book.entry_count, 2, "book count follows the entries");
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "lorebooks.entries.delete")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "lorebooks.entries.delete"));
 }
 
 #[test]
@@ -809,12 +822,10 @@ fn profiles_load_create_rename_export_delete_over_product_wire() {
         shell.profiles.iter().any(|row| row.name == "Main"),
         "demo profiles list through profiles.list"
     );
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "profiles.list")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "profiles.list"));
 
     // Create: inline row -> `profiles.create`; the draft clears.
     session.set_profile_create_name("Longhaul");
@@ -822,12 +833,10 @@ fn profiles_load_create_rename_export_delete_over_product_wire() {
     let shell = session.shell_view();
     assert_eq!(shell.profile_create_name, "");
     assert!(shell.profiles.iter().any(|row| row.name == "Longhaul"));
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "profiles.create")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "profiles.create"));
 
     // Rename: inline row pre-fills the name; submit -> `profiles.rename`.
     let id = shell
@@ -846,12 +855,10 @@ fn profiles_load_create_rename_export_delete_over_product_wire() {
     let shell = session.shell_view();
     assert_eq!(shell.profile_renaming_id, None);
     assert!(shell.profiles.iter().any(|row| row.name == "Longhaul II"));
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "profiles.rename")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "profiles.rename"));
 
     // Export: `profile.export` reports the scoped record counts in a toast.
     session.apply_shell_action(ShellAction::ExportProfile(id.clone()));
@@ -860,12 +867,10 @@ fn profiles_load_create_rename_export_delete_over_product_wire() {
         toast.as_deref().unwrap_or("").starts_with("Exported"),
         "export surfaces the honest counts: {toast:?}"
     );
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "profile.export")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "profile.export"));
 
     // Delete: confirm dialog -> `profiles.delete`.
     session.apply_shell_action(ShellAction::OpenProfileDelete(id.clone()));
@@ -877,12 +882,10 @@ fn profiles_load_create_rename_export_delete_over_product_wire() {
         shell.profiles.iter().all(|row| row.id != id),
         "confirm delete removes the profile"
     );
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "profiles.delete")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "profiles.delete"));
 }
 
 #[test]
@@ -893,15 +896,16 @@ fn plugins_toggle_and_uninstall_over_product_wire() {
     session.apply_shell_action(ShellAction::SetPanel("plugins".into()));
     let shell = session.shell_view();
     assert!(
-        shell.plugins.iter().any(|row| row.id == "tavern-speed-dial"),
+        shell
+            .plugins
+            .iter()
+            .any(|row| row.id == "tavern-speed-dial"),
         "demo plugins list through plugins.list"
     );
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "plugins.list")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "plugins.list"));
 
     // Toggle: disabled plugin -> plugins.enable -> plugins.disable.
     let disabled_id = "lore-almanac".to_string();
@@ -924,12 +928,10 @@ fn plugins_toggle_and_uninstall_over_product_wire() {
             .enabled,
         "toggle enables the plugin"
     );
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "plugins.enable")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "plugins.enable"));
     session.apply_shell_action(ShellAction::TogglePlugin(disabled_id.clone()));
     let shell = session.shell_view();
     assert!(
@@ -941,12 +943,10 @@ fn plugins_toggle_and_uninstall_over_product_wire() {
             .enabled,
         "second toggle disables the plugin"
     );
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "plugins.disable")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "plugins.disable"));
 
     // Uninstall: confirm dialog -> plugins.uninstall removes the row.
     session.apply_shell_action(ShellAction::OpenPluginUninstall(disabled_id.clone()));
@@ -958,12 +958,10 @@ fn plugins_toggle_and_uninstall_over_product_wire() {
         shell.plugins.iter().all(|row| row.id != disabled_id),
         "confirm uninstall removes the plugin"
     );
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "plugins.uninstall")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "plugins.uninstall"));
     assert!(
         session
             .shell_view()
@@ -1009,12 +1007,10 @@ fn chats_rename_and_delete_over_product_wire() {
             .any(|row| row.id == first_id && row.title == "Renamed route"),
         "rename updates the row title"
     );
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "chats.update")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "chats.update"));
 
     // Delete: confirm dialog -> `chats.delete`; the row is gone.
     session.apply_shell_action(ShellAction::OpenChatDelete(first_id.clone()));
@@ -1026,12 +1022,10 @@ fn chats_rename_and_delete_over_product_wire() {
         shell.chat_list.iter().all(|row| row.id != first_id),
         "confirm delete removes the chat row"
     );
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "chats.delete")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "chats.delete"));
     assert!(
         session
             .shell_view()
@@ -1053,7 +1047,9 @@ fn prompt_plan_over_product_wire() {
         None,
     )
     .expect("route");
-    session.set_composer_text("Hello from the prompt plan test").expect("composer");
+    session
+        .set_composer_text("Hello from the prompt plan test")
+        .expect("composer");
     session.send(None).expect("send");
     session.drain_stream().expect("drain");
     let run_id = session
@@ -1072,27 +1068,27 @@ fn prompt_plan_over_product_wire() {
     let shell = session.shell_view();
     assert!(shell.prompt_plan_open);
     assert_eq!(shell.prompt_plan_run_id.as_deref(), Some(run_id.as_str()));
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "generation.prompt.plan")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "generation.prompt.plan"));
     let plan = shell.prompt_plan.as_ref().expect("plan loaded");
     assert_eq!(plan.model, "demo-model");
     assert_eq!(plan.run_id, run_id);
     assert!(plan.system_blocks.iter().any(|b| b.source == "character"));
-    assert!(plan.messages.iter().any(|m| m.role == MessageRole::Assistant));
+    assert!(plan
+        .messages
+        .iter()
+        .any(|m| m.role == MessageRole::Assistant));
     assert!(plan.messages.iter().any(|m| m.role == MessageRole::User));
     assert!(
         !plan.excluded.is_empty(),
         "the oldest seeded message is dropped by the token budget"
     );
-    assert!(
-        plan.excluded
-            .iter()
-            .all(|item| item.reason == "token_budget")
-    );
+    assert!(plan
+        .excluded
+        .iter()
+        .all(|item| item.reason == "token_budget"));
 
     // Close resets the dialog state.
     session.apply_shell_action(ShellAction::ClosePromptPlan);
@@ -1112,10 +1108,799 @@ fn prompt_plan_over_product_wire() {
 }
 
 #[test]
+fn tap_prompt_on_row_opens_prompt_plan() {
+    use neotavern_presentation_chat::ShellAction;
+    let (mut session, _) = start_flagged_session(
+        Some("1"),
+        FakeWire::demo(),
+        Some(neotavern_presentation_chat::DEMO_CHAT_ID),
+        None,
+    )
+    .expect("route");
+    session
+        .set_composer_text("Hello from the prompt tap test")
+        .expect("composer");
+    session.send(None).expect("send");
+    session.drain_stream().expect("drain");
+    let row_id = session
+        .shell_view()
+        .chat
+        .visible
+        .iter()
+        .rev()
+        .find(|row| row.run_id.is_some())
+        .map(|row| row.id.clone())
+        .expect("generated row");
+    session.open_prompt_plan_for_message(&row_id);
+    let shell = session.shell_view();
+    assert!(shell.prompt_plan_open);
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "generation.prompt.plan"));
+    session.apply_shell_action(ShellAction::ClosePromptPlan);
+    assert!(!session.shell_view().prompt_plan_open);
+}
+
+#[test]
+fn toggle_message_context_flips_manual_excluded() {
+    let (mut session, _) = start_flagged_session(
+        Some("1"),
+        FakeWire::demo(),
+        Some(neotavern_presentation_chat::DEMO_CHAT_ID),
+        None,
+    )
+    .expect("route");
+    let row_id = session
+        .view()
+        .visible
+        .iter()
+        .find(|row| row.id != "streaming")
+        .map(|row| row.id.clone())
+        .expect("a durable row");
+    assert!(
+        !session
+            .view()
+            .visible
+            .iter()
+            .find(|row| row.id == row_id)
+            .expect("row")
+            .manual_excluded
+    );
+    session.toggle_message_context(&row_id);
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "chats.messages.update"));
+    let excluded = session
+        .view()
+        .visible
+        .iter()
+        .find(|r| r.id == row_id)
+        .expect("row after exclude")
+        .manual_excluded;
+    assert!(excluded, "first toggle excludes the row");
+    assert!(session
+        .shell_view()
+        .status_message
+        .as_deref()
+        .unwrap_or("")
+        .contains("Excluded"));
+    session.toggle_message_context(&row_id);
+    let included = session
+        .view()
+        .visible
+        .iter()
+        .find(|r| r.id == row_id)
+        .expect("row after include")
+        .manual_excluded;
+    assert!(!included, "second toggle includes the row");
+    session.toggle_message_context("00000000-0000-4000-8000-000000000009");
+    assert_eq!(
+        session.view().error_code.as_deref(),
+        Some("MESSAGE_NOT_FOUND")
+    );
+}
+
+#[test]
+fn delete_checkpoint_clears_the_snapshot_link() {
+    use neotavern_presentation_chat::ShellAction;
+    let (mut session, _) = start_flagged_session(
+        Some("1"),
+        FakeWire::demo(),
+        Some(neotavern_presentation_chat::DEMO_CHAT_ID),
+        None,
+    )
+    .expect("route");
+    let row_id = session
+        .view()
+        .visible
+        .iter()
+        .find(|row| row.id != "streaming")
+        .map(|row| row.id.clone())
+        .expect("a durable row");
+    session.create_message_snapshot(&row_id, true);
+    let linked = session
+        .view()
+        .visible
+        .iter()
+        .find(|row| row.id == row_id)
+        .and_then(|row| row.checkpoint_chat_id.clone());
+    assert!(linked.is_some(), "checkpoint links the source message");
+    session.apply_shell_action(ShellAction::OpenCheckpointDelete(row_id.clone()));
+    assert!(session.shell_view().checkpoint_delete_open);
+    session.apply_shell_action(ShellAction::ConfirmCheckpointDelete);
+    let cleared = session
+        .view()
+        .visible
+        .iter()
+        .find(|r| r.id == row_id)
+        .and_then(|r| r.checkpoint_chat_id.clone());
+    assert!(cleared.is_none());
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "chats.messages.update"));
+}
+
+#[test]
+fn run_transcript_lists_generation_steps_without_tool_payloads() {
+    use neotavern_presentation_chat::ShellAction;
+    let (mut session, _) = start_flagged_session(
+        Some("1"),
+        FakeWire::demo(),
+        Some(neotavern_presentation_chat::DEMO_CHAT_ID),
+        None,
+    )
+    .expect("route");
+    session
+        .set_composer_text("Hello from the transcript test")
+        .expect("composer");
+    session.send(None).expect("send");
+    session.drain_stream().expect("drain");
+    let row = session
+        .shell_view()
+        .chat
+        .visible
+        .iter()
+        .rev()
+        .find(|row| row.run_id.is_some())
+        .cloned()
+        .expect("generated row");
+    session.open_run_transcript_for_message(&row.id);
+    let shell = session.shell_view();
+    assert!(shell.run_transcript_open);
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "generation.events"));
+    assert!(
+        shell.run_transcript_steps.len() >= 2,
+        "provider_turn + final_commit"
+    );
+    assert!(shell
+        .run_transcript_steps
+        .iter()
+        .any(|step| step.step_type == "provider_turn"));
+    assert!(shell
+        .run_transcript_steps
+        .iter()
+        .any(|step| step.step_type == "final_commit"));
+    assert!(shell.prompt_plan_open == false);
+    session.apply_shell_action(ShellAction::CloseRunTranscript);
+    assert!(!session.shell_view().run_transcript_open);
+
+    session.apply_shell_action(ShellAction::OpenRunTranscript(
+        "00000000-0000-4000-8000-000000000000".into(),
+    ));
+    let shell = session.shell_view();
+    assert!(shell.run_transcript_open);
+    assert_eq!(
+        shell.run_transcript_error.as_deref(),
+        Some("GENERATION_RUN_NOT_FOUND")
+    );
+}
+
+#[test]
+fn duplicate_character_creates_a_named_copy() {
+    use neotavern_presentation_chat::ShellAction;
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("characters".into()));
+    session.select_character(neotavern_presentation_chat::DEMO_CHARACTER_ID);
+    let before = session.shell_view().characters.len();
+    session.apply_shell_action(ShellAction::DuplicateCharacter);
+    let shell = session.shell_view();
+    assert_eq!(shell.characters.len(), before + 1);
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "characters.create"));
+    let selected = shell.selected_character_id.clone().expect("selected copy");
+    let copy = shell
+        .characters
+        .iter()
+        .find(|card| card.id == selected)
+        .expect("copy card");
+    assert_eq!(copy.name, "Hazel copy");
+    assert_eq!(shell.tab, "edit");
+}
+
+#[test]
+fn header_search_counts_matches_without_filtering_rows() {
+    let (mut session, _) = start_flagged_session(
+        Some("1"),
+        FakeWire::demo(),
+        Some(neotavern_presentation_chat::DEMO_CHAT_ID),
+        None,
+    )
+    .expect("route");
+    let before = session.view().visible.len();
+    session.toggle_header_search();
+    assert!(session.view().header_search_open);
+    session.set_header_search_query("Hello");
+    let view = session.view();
+    assert!(view.header_search_match_count > 0);
+    assert_eq!(
+        view.visible.len(),
+        before,
+        "search highlights, it does not filter"
+    );
+    session.toggle_header_search();
+    assert!(!session.view().header_search_open);
+    assert_eq!(session.view().header_search_match_count, 0);
+}
+
+#[test]
+fn character_gallery_is_honest_empty_or_primary_and_upload_reports_capability_unavailable() {
+    use neotavern_presentation_chat::{hit_test, ShellAction, ShellHit};
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("characters".into()));
+    session.select_character(neotavern_presentation_chat::DEMO_CHARACTER_ID);
+    session.apply_shell_action(ShellAction::SetTab("gallery".into()));
+    let shell = session.shell_view();
+    assert_eq!(shell.tab, "gallery");
+    assert_eq!(shell.gallery_columns, 3);
+    assert_eq!(shell.gallery_sort, "oldest");
+    assert!(
+        shell
+            .selected_draft
+            .as_ref()
+            .and_then(|draft| draft.avatar_asset_id.as_deref())
+            == Some(DEMO_AVATAR_ASSET_ID),
+        "Hazel keeps the avatar as the primary gallery figure"
+    );
+    assert!(
+        !session
+            .issued_commands()
+            .iter()
+            .any(|op| op.starts_with("characters.gallery")),
+        "no characters.gallery wire op exists"
+    );
+
+    session.apply_shell_action(ShellAction::CycleGalleryColumns);
+    assert_eq!(session.shell_view().gallery_columns, 4);
+    session.apply_shell_action(ShellAction::CycleGallerySort);
+    assert_eq!(session.shell_view().gallery_sort, "newest");
+
+    session.set_surface_size(800, 904, 1.0);
+    let shell = session.shell_view();
+    match hit_test(&shell, 380.0, 140.0) {
+        Some(ShellHit::Action(ShellAction::UploadGalleryImage)) => {}
+        other => panic!("expected UploadGalleryImage on gallery Add, got {other:?}"),
+    }
+
+    session.apply_shell_action(ShellAction::UploadGalleryImage);
+    assert_eq!(
+        session.shell_view().error_message.as_deref(),
+        Some("CAPABILITY_UNAVAILABLE")
+    );
+
+    session.apply_shell_action(ShellAction::OpenCreate);
+    session.set_create_name("Ada");
+    session.apply_shell_action(ShellAction::ConfirmCreate);
+    session.apply_shell_action(ShellAction::SetTab("gallery".into()));
+    let shell = session.shell_view();
+    assert!(
+        shell
+            .selected_draft
+            .as_ref()
+            .and_then(|draft| draft.avatar_asset_id.as_ref())
+            .is_none(),
+        "a character without an avatar shows the honest empty gallery"
+    );
+}
+
+#[test]
+fn slash_command_not_found_does_not_send_over_the_wire() {
+    let (mut session, _) = start_flagged_session(
+        Some("1"),
+        FakeWire::demo(),
+        Some(neotavern_presentation_chat::DEMO_CHAT_ID),
+        None,
+    )
+    .expect("route");
+    session.send(Some("/foo")).expect("send");
+    assert_eq!(
+        session.view().error_code.as_deref(),
+        Some("SLASH_COMMAND_NOT_FOUND")
+    );
+    assert_eq!(session.view().composer_text, "/foo");
+    assert!(
+        !session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "chats.messages.create" || op == "generation.start"),
+        "slash not-found must not create a message or start generation"
+    );
+    assert!(!session.send_accepted());
+}
+
+#[test]
+fn general_settings_language_and_appearance_over_product_wire() {
+    use neotavern_presentation_chat::ShellAction;
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("settings".into()));
+    let shell = session.shell_view();
+    assert_eq!(shell.settings_tab, "general");
+    assert_eq!(shell.language, "en");
+    assert_eq!(shell.font_scale, "medium");
+    assert_eq!(shell.ui_contrast, "normal");
+    assert!(shell.open_home_on_load);
+
+    session.apply_shell_action(ShellAction::CycleLanguage);
+    let shell = session.shell_view();
+    assert_eq!(shell.language, "ru");
+    assert_eq!(shell.dir, "ltr");
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "settings.update"),
+        "language persists through settings.update"
+    );
+
+    session.apply_shell_action(ShellAction::CycleUiScale);
+    session.apply_shell_action(ShellAction::CycleContrast);
+    session.apply_shell_action(ShellAction::CycleFontProfile);
+    session.apply_shell_action(ShellAction::CycleMotion);
+    session.apply_shell_action(ShellAction::ToggleOpenHomeOnLoad);
+    session.apply_shell_action(ShellAction::CycleChatStyle);
+    session.apply_shell_action(ShellAction::CycleUserMessagePosition);
+    session.apply_shell_action(ShellAction::CycleUiOpacity);
+    session.apply_shell_action(ShellAction::CycleUiGlassBlur);
+    let shell = session.shell_view();
+    assert_eq!(shell.font_scale, "large");
+    assert_eq!(shell.ui_contrast, "high");
+    assert_eq!(shell.ui_font_profile, "dyslexia");
+    assert_eq!(shell.ui_motion, "reduced");
+    assert!(!shell.open_home_on_load);
+    assert_eq!(shell.chat_style, "classic");
+    assert_eq!(shell.user_message_position, "left");
+    assert_eq!(shell.ui_opacity, 75);
+    assert_eq!(shell.ui_glass_blur, 20);
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "diagnostics.export"),
+        "opening General loads diagnostics.export"
+    );
+    let bundle = shell.diagnostics.expect("kernel diagnostics bundle");
+    assert_eq!(bundle.redaction, "allowlist");
+    assert_eq!(bundle.app_version, "0.1.0");
+    assert_eq!(bundle.generation_runs.total, 1);
+
+    session.apply_shell_action(ShellAction::RebuildSearch);
+    assert_eq!(
+        session.shell_view().error_message.as_deref(),
+        Some("CAPABILITY_UNAVAILABLE")
+    );
+    assert!(!session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "search.rebuild"));
+}
+
+#[test]
+fn chat_template_editor_native_custom_over_product_wire() {
+    use neotavern_presentation_chat::ShellAction;
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("providers".into()));
+    session.apply_shell_action(ShellAction::SetTab("advanced".into()));
+    let shell = session.shell_view();
+    assert_eq!(shell.ai_tab, "advanced");
+    assert_eq!(shell.prompt_template_mode, "chat");
+    assert_eq!(shell.instruct_selection, "native");
+    assert!(
+        !session
+            .issued_commands()
+            .iter()
+            .any(|op| op.contains("instruct-format")),
+        "no instruct-formats catalog wire op exists on the kernel plane"
+    );
+
+    session.apply_shell_action(ShellAction::CycleInstructSelection);
+    assert_eq!(session.shell_view().instruct_selection, "custom");
+    let before_save = session
+        .issued_commands()
+        .iter()
+        .filter(|op| *op == "settings.update")
+        .count();
+    session.apply_shell_action(ShellAction::SaveInstructTemplate);
+    let after_save = session
+        .issued_commands()
+        .iter()
+        .filter(|op| *op == "settings.update")
+        .count();
+    assert!(after_save > before_save, "save writes instruct-format");
+    assert_eq!(session.shell_view().instruct_selection, "custom");
+
+    session.apply_shell_action(ShellAction::CycleInstructSelection);
+    assert_eq!(session.shell_view().instruct_selection, "native");
+
+    session.apply_shell_action(ShellAction::CyclePromptMode);
+    assert_eq!(session.shell_view().prompt_template_mode, "text");
+}
+
+#[test]
+fn diagnostics_export_and_legacy_maintenance_over_product_wire() {
+    use neotavern_presentation_chat::ShellAction;
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("settings".into()));
+    let before = session
+        .issued_commands()
+        .iter()
+        .filter(|op| *op == "diagnostics.export")
+        .count();
+    assert!(before >= 1, "General tab loads diagnostics.export on open");
+    session.apply_shell_action(ShellAction::RunDiagnostics);
+    let after = session
+        .issued_commands()
+        .iter()
+        .filter(|op| *op == "diagnostics.export")
+        .count();
+    assert!(
+        after > before,
+        "Run diagnostics re-exports the allowlist bundle"
+    );
+    let bundle = session
+        .shell_view()
+        .diagnostics
+        .expect("bundle after refresh");
+    assert_eq!(bundle.redaction, "allowlist");
+    assert_eq!(bundle.schema_hash.len(), 64);
+    assert!(bundle.sections.iter().any(|section| section == "settings"));
+
+    session.apply_shell_action(ShellAction::ClearDiagnosticCache);
+    assert_eq!(
+        session.shell_view().error_message.as_deref(),
+        Some("CAPABILITY_UNAVAILABLE")
+    );
+    assert!(!session
+        .issued_commands()
+        .iter()
+        .any(|op| op.contains("diagnostics.cache") || op == "search.rebuild"));
+}
+
+#[test]
+fn data_activation_status_and_sillytavern_import_honesty_over_product_wire() {
+    use neotavern_presentation_chat::ShellAction;
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("settings".into()));
+    session.apply_shell_action(ShellAction::SetTab("data".into()));
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "data.activation.status"),
+        "opening Data loads data.activation.status"
+    );
+    let status = session
+        .shell_view()
+        .data_activation
+        .expect("activation status");
+    assert_eq!(status.layout_version, 2);
+    assert_eq!(status.active_root_id.as_deref(), Some("a1b2c3d4"));
+    assert_eq!(status.entries.len(), 1);
+    assert_eq!(status.entries[0].kind, "restore");
+    assert_eq!(status.entries[0].status, "committed");
+    assert!(status.pending.is_none());
+
+    session.apply_shell_action(ShellAction::AnalyzeSillyTavern);
+    assert_eq!(
+        session.shell_view().error_message.as_deref(),
+        Some("CAPABILITY_UNAVAILABLE")
+    );
+    assert!(!session
+        .issued_commands()
+        .iter()
+        .any(|op| op.starts_with("imports.sillytavern")));
+
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::default(), None, None).expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("settings".into()));
+    session.apply_shell_action(ShellAction::SetTab("data".into()));
+    let status = session
+        .shell_view()
+        .data_activation
+        .expect("empty journal still a status");
+    assert!(status.entries.is_empty());
+    assert!(status.pending.is_none());
+}
+
+#[test]
+fn character_lorebooks_create_open_and_unlink_honesty_over_product_wire() {
+    use neotavern_presentation_chat::{hit_test, ShellAction, ShellHit};
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("characters".into()));
+    session.select_character(neotavern_presentation_chat::DEMO_CHARACTER_ID);
+    session.apply_shell_action(ShellAction::SetTab("advanced".into()));
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "lorebooks.list"),
+        "opening Advanced loads lorebooks.list"
+    );
+    let shell = session.shell_view();
+    assert_eq!(shell.tab, "advanced");
+    assert!(
+        !shell
+            .lorebooks
+            .iter()
+            .any(|book| book.character_id.as_deref()
+                == Some(neotavern_presentation_chat::DEMO_CHARACTER_ID)),
+        "demo Kestrel Vales is global, not linked to Hazel"
+    );
+
+    session.set_surface_size(800, 904, 1.0);
+    let shell = session.shell_view();
+    match hit_test(&shell, 160.0, 178.0) {
+        Some(ShellHit::Action(ShellAction::CreateCharacterLorebook)) => {}
+        other => panic!("expected CreateCharacterLorebook on New book, got {other:?}"),
+    }
+    match hit_test(&shell, 340.0, 178.0) {
+        Some(ShellHit::Action(ShellAction::SetPanel(panel))) if panel == "lorebooks" => {}
+        other => panic!("expected Open lorebooks, got {other:?}"),
+    }
+
+    session.apply_shell_action(ShellAction::CreateCharacterLorebook);
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "lorebooks.create"),
+        "New book for character calls lorebooks.create"
+    );
+    let shell = session.shell_view();
+    assert_eq!(shell.panel, "lorebooks");
+    let created = shell
+        .lorebooks
+        .iter()
+        .find(|book| book.name == "New lorebook")
+        .expect("created book");
+    assert_eq!(
+        created.character_id.as_deref(),
+        Some(neotavern_presentation_chat::DEMO_CHARACTER_ID)
+    );
+    let created_id = created.id.clone();
+
+    session.apply_shell_action(ShellAction::SetPanel("characters".into()));
+    session.select_character(neotavern_presentation_chat::DEMO_CHARACTER_ID);
+    session.apply_shell_action(ShellAction::SetTab("advanced".into()));
+    let shell = session.shell_view();
+    assert!(shell.lorebooks.iter().any(|book| book.id == created_id
+        && book.character_id.as_deref() == Some(neotavern_presentation_chat::DEMO_CHARACTER_ID)));
+
+    session.set_surface_size(800, 904, 1.0);
+    let shell = session.shell_view();
+    match hit_test(&shell, 400.0, 224.0) {
+        Some(ShellHit::Action(ShellAction::UnlinkCharacterLorebook(id))) if id == created_id => {}
+        other => panic!("expected UnlinkCharacterLorebook, got {other:?}"),
+    }
+    let updates_before = session
+        .issued_commands()
+        .iter()
+        .filter(|op| *op == "lorebooks.update")
+        .count();
+    session.apply_shell_action(ShellAction::UnlinkCharacterLorebook(created_id.clone()));
+    assert_eq!(
+        session.shell_view().error_message.as_deref(),
+        Some("CAPABILITY_UNAVAILABLE")
+    );
+    assert_eq!(
+        session
+            .issued_commands()
+            .iter()
+            .filter(|op| *op == "lorebooks.update")
+            .count(),
+        updates_before,
+        "unlink is not expressible on the wire (characterId null)"
+    );
+}
+
+#[test]
+fn display_macros_expand_user_and_char_on_committed_rows() {
+    let (mut session, _) = start_flagged_session(
+        Some("1"),
+        FakeWire::demo(),
+        Some(neotavern_presentation_chat::DEMO_CHAT_ID),
+        None,
+    )
+    .expect("route");
+    let first_id = session.view().visible[0].id.clone();
+    session.start_message_edit(&first_id);
+    session.set_message_edit_draft("{{user}} meets {{char}} and {{unknown}}");
+    session.submit_message_edit();
+    let view = session.view();
+    let row = view
+        .visible
+        .iter()
+        .find(|row| row.id == first_id)
+        .expect("edited row");
+    assert_eq!(
+        row.content, "You meets Hazel and {{unknown}}",
+        "committed bubbles expand {{{{user}}}}/{{{{char}}}}; unknown macros stay"
+    );
+    drop(view);
+    session.start_message_edit(&first_id);
+    assert_eq!(
+        session.view().editing_draft,
+        "{{user}} meets {{char}} and {{unknown}}",
+        "stored content stays raw"
+    );
+}
+
+#[test]
+fn tool_activity_badge_from_waiting_tool_call_step() {
+    use contracts_generated::generated::{
+        GenerationEvent, GenerationStep, GenerationStepStatus, GenerationStepType,
+    };
+    use neotavern_presentation_chat::StreamFrame;
+    use neotavern_presentation_dioxus_shell::{
+        install_product_chat, set_chat_blueprint_source, ChatBlueprintSource,
+    };
+    use neotavern_presentation_m0_d2::inspect_slot_skeleton;
+    use serde_json::json;
+
+    let (mut session, _) = start_flagged_session(
+        Some("1"),
+        FakeWire::demo(),
+        Some(neotavern_presentation_chat::DEMO_CHAT_ID),
+        None,
+    )
+    .expect("route");
+    session.set_surface_size(1100, 760, 1.0);
+
+    session.apply_stream_frame(&StreamFrame::from_sequenced(
+        0,
+        GenerationEvent::GenerationDelta { text: "hi".into() },
+    ));
+    session.apply_stream_frame(&StreamFrame::from_sequenced(
+        1,
+        GenerationEvent::GenerationStep {
+            step: GenerationStep {
+                step_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa".into(),
+                run_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb".into(),
+                sequence: 1,
+                r#type: GenerationStepType::ToolCall,
+                status: GenerationStepStatus::Waiting,
+                attempt: 1,
+                idempotency_key: "cccccccc-cccc-4ccc-8ccc-cccccccccccc".into(),
+                input: Some(json!({
+                    "toolCall": {
+                        "id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                        "name": "lookup-weather",
+                        "arguments": { "secret": "SECRET_TOOL_ARG_PAYLOAD" }
+                    }
+                })),
+                output: Some(json!({ "leaked": "SECRET_TOOL_RESULT_PAYLOAD" })),
+                error: None,
+                created_at: "2026-08-12T10:00:00Z".into(),
+                updated_at: "2026-08-12T10:00:00Z".into(),
+            },
+        },
+    ));
+
+    let view = session.view();
+    assert_eq!(view.tool_activity_name.as_deref(), Some("lookup-weather"));
+    assert!(view.streaming);
+    let dump = format!("{view:?}");
+    assert!(
+        !dump.contains("SECRET_TOOL_ARG_PAYLOAD"),
+        "tool arguments must not reach ProductChatView"
+    );
+    assert!(
+        !dump.contains("SECRET_TOOL_RESULT_PAYLOAD"),
+        "tool results must not reach ProductChatView"
+    );
+    drop(view);
+
+    let assert_badge = |source: ChatBlueprintSource| {
+        set_chat_blueprint_source(source.clone());
+        install_product_chat(session.view());
+        let skeleton = inspect_slot_skeleton(product_chat_app, 1100, 760, 1.0, session.insets())
+            .unwrap_or_else(|err| panic!("skeleton for {source:?}: {err}"));
+        assert!(
+            skeleton.has_identity("tool-activity"),
+            "tool-activity missing for {source:?}"
+        );
+        // HTML `role="status"` matches React; SlotSkeleton.role is `data-role`.
+        let dump = format!("{skeleton:?}");
+        assert!(!dump.contains("SECRET_TOOL_ARG_PAYLOAD"));
+        assert!(!dump.contains("SECRET_TOOL_RESULT_PAYLOAD"));
+    };
+    assert_badge(ChatBlueprintSource::Disabled);
+    assert_badge(ChatBlueprintSource::Embedded);
+    set_chat_blueprint_source(ChatBlueprintSource::Disabled);
+
+    session.apply_stream_frame(&StreamFrame::from_sequenced(
+        2,
+        GenerationEvent::GenerationStep {
+            step: GenerationStep {
+                step_id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee".into(),
+                run_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb".into(),
+                sequence: 2,
+                r#type: GenerationStepType::ProviderTurn,
+                status: GenerationStepStatus::Completed,
+                attempt: 1,
+                idempotency_key: "ffffffff-ffff-4fff-8fff-ffffffffffff".into(),
+                input: None,
+                output: None,
+                error: None,
+                created_at: "2026-08-12T10:00:00Z".into(),
+                updated_at: "2026-08-12T10:00:00Z".into(),
+            },
+        },
+    ));
+    assert_eq!(session.view().tool_activity_name, None);
+
+    session.apply_stream_frame(&StreamFrame::from_sequenced(
+        3,
+        GenerationEvent::GenerationDelta {
+            text: " again".into(),
+        },
+    ));
+    session.apply_stream_frame(&StreamFrame::from_sequenced(
+        4,
+        GenerationEvent::GenerationStep {
+            step: GenerationStep {
+                step_id: "11111111-1111-4111-8111-111111111111".into(),
+                run_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb".into(),
+                sequence: 4,
+                r#type: GenerationStepType::ToolCall,
+                status: GenerationStepStatus::Waiting,
+                attempt: 1,
+                idempotency_key: "22222222-2222-4222-8222-222222222222".into(),
+                input: Some(json!({ "toolCall": { "name": "lookup-weather" } })),
+                output: None,
+                error: None,
+                created_at: "2026-08-12T10:00:00Z".into(),
+                updated_at: "2026-08-12T10:00:00Z".into(),
+            },
+        },
+    ));
+    assert_eq!(
+        session.view().tool_activity_name.as_deref(),
+        Some("lookup-weather")
+    );
+    session.apply_stream_frame(&StreamFrame::Terminal);
+    assert_eq!(session.view().tool_activity_name, None);
+    assert!(!session.view().streaming);
+}
+
+#[test]
 fn backgrounds_panel_is_honest_empty_and_upload_reports_capability_unavailable() {
     use neotavern_presentation_chat::ShellAction;
-    let (mut session, _) = start_flagged_session(Some("1"), FakeWire::demo(), None, None)
-        .expect("route");
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
     session.apply_shell_action(ShellAction::SetPanel("backgrounds".into()));
     let shell = session.shell_view();
     assert_eq!(shell.panel, "backgrounds");
@@ -1143,8 +1928,8 @@ fn backgrounds_panel_is_honest_empty_and_upload_reports_capability_unavailable()
 #[test]
 fn themes_catalog_activate_deactivate_uninstall_over_product_wire() {
     use neotavern_presentation_chat::ShellAction;
-    let (mut session, _) = start_flagged_session(Some("1"), FakeWire::demo(), None, None)
-        .expect("route");
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
     session.apply_shell_action(ShellAction::SetPanel("settings".into()));
     session.apply_shell_action(ShellAction::SetTab("themes".into()));
     let shell = session.shell_view();
@@ -1193,20 +1978,16 @@ fn themes_catalog_activate_deactivate_uninstall_over_product_wire() {
         shell.themes.iter().all(|item| item.id != target),
         "confirm delete removes the theme row"
     );
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "themes.uninstall")
-    );
-    assert!(
-        session
-            .shell_view()
-            .status_message
-            .as_deref()
-            .unwrap_or("")
-            .contains(&target_name)
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "themes.uninstall"));
+    assert!(session
+        .shell_view()
+        .status_message
+        .as_deref()
+        .unwrap_or("")
+        .contains(&target_name));
 
     // Install stays a host-side capability: React kernel plane rejects it
     // with UnsupportedError, so no themes.install wire op is issued.
@@ -1215,19 +1996,17 @@ fn themes_catalog_activate_deactivate_uninstall_over_product_wire() {
         session.shell_view().error_message.as_deref(),
         Some("CAPABILITY_UNAVAILABLE")
     );
-    assert!(
-        !session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "themes.install")
-    );
+    assert!(!session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "themes.install"));
 }
 
 #[test]
 fn secrets_status_and_lock_over_product_wire() {
     use neotavern_presentation_chat::ShellAction;
-    let (mut session, _) = start_flagged_session(Some("1"), FakeWire::demo(), None, None)
-        .expect("route");
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
     session.apply_shell_action(ShellAction::SetPanel("settings".into()));
     session.apply_shell_action(ShellAction::SetTab("secrets".into()));
     let shell = session.shell_view();
@@ -1249,19 +2028,17 @@ fn secrets_status_and_lock_over_product_wire() {
     // itself locked (React invalidates the status query after the mutation).
     session.apply_shell_action(ShellAction::LockSecrets);
     let shell = session.shell_view();
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "secrets.lock")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "secrets.lock"));
     let status = shell.secrets_status.as_ref().expect("status after lock");
     assert!(!status.available, "locked store reports available=false");
 
     // No store wired -> honest fail-closed status and a CAPABILITY_UNAVAILABLE
     // lock (kernel `secrets.rs`), never a value leak.
-    let (mut session, _) = start_flagged_session(Some("1"), FakeWire::default(), None, None)
-        .expect("route");
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::default(), None, None).expect("route");
     session.apply_shell_action(ShellAction::SetPanel("settings".into()));
     session.apply_shell_action(ShellAction::SetTab("secrets".into()));
     let shell = session.shell_view();
@@ -1279,8 +2056,8 @@ fn secrets_status_and_lock_over_product_wire() {
 #[test]
 fn tools_registry_list_over_product_wire() {
     use neotavern_presentation_chat::ShellAction;
-    let (mut session, _) = start_flagged_session(Some("1"), FakeWire::demo(), None, None)
-        .expect("route");
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
     session.apply_shell_action(ShellAction::SetPanel("settings".into()));
     session.apply_shell_action(ShellAction::SetTab("tools".into()));
     let shell = session.shell_view();
@@ -1300,8 +2077,8 @@ fn tools_registry_list_over_product_wire() {
 
     // Empty registry is a success, never an error (kernel
     // `generation_tools_list`), and the panel shows the honest empty state.
-    let (mut session, _) = start_flagged_session(Some("1"), FakeWire::default(), None, None)
-        .expect("route");
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::default(), None, None).expect("route");
     session.apply_shell_action(ShellAction::SetPanel("settings".into()));
     session.apply_shell_action(ShellAction::SetTab("tools".into()));
     let shell = session.shell_view();
@@ -1312,8 +2089,8 @@ fn tools_registry_list_over_product_wire() {
 #[test]
 fn ai_providers_and_presets_over_product_wire() {
     use neotavern_presentation_chat::ShellAction;
-    let (mut session, _) = start_flagged_session(Some("1"), FakeWire::demo(), None, None)
-        .expect("route");
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
     session.apply_shell_action(ShellAction::SetPanel("providers".into()));
     let shell = session.shell_view();
     assert!(
@@ -1340,42 +2117,42 @@ fn ai_providers_and_presets_over_product_wire() {
     assert_eq!(profile.detail.contains("not set"), true);
     session.apply_shell_action(ShellAction::SelectProvider(profile.id.clone()));
     let shell = session.shell_view();
-    assert_eq!(shell.selected_provider_id.as_deref(), Some(profile.id.as_str()));
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "settings.update")
+    assert_eq!(
+        shell.selected_provider_id.as_deref(),
+        Some(profile.id.as_str())
     );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "settings.update"));
 
     // Presets tab: list (kind generation), then select -> settings.update
     // activeGenerationPresetId.
     session.apply_shell_action(ShellAction::SetTab("presets".into()));
     let shell = session.shell_view();
     assert_eq!(shell.ai_tab, "presets");
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "presets.list")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "presets.list"));
     assert_eq!(shell.presets.len(), 2);
     let preset_id = shell.presets[0].id.clone();
     session.apply_shell_action(ShellAction::SelectPreset(preset_id.clone()));
     let shell = session.shell_view();
-    assert_eq!(shell.selected_preset_id.as_deref(), Some(preset_id.as_str()));
-    assert!(
-        session
-            .shell_view()
-            .status_message
-            .as_deref()
-            .unwrap_or("")
-            .contains("selected")
+    assert_eq!(
+        shell.selected_preset_id.as_deref(),
+        Some(preset_id.as_str())
     );
+    assert!(session
+        .shell_view()
+        .status_message
+        .as_deref()
+        .unwrap_or("")
+        .contains("selected"));
 
     // Default wire has no providers/presets -> honest empty states, no error.
-    let (mut session, _) = start_flagged_session(Some("1"), FakeWire::default(), None, None)
-        .expect("route");
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::default(), None, None).expect("route");
     session.apply_shell_action(ShellAction::SetPanel("providers".into()));
     let shell = session.shell_view();
     assert!(shell.providers.is_empty());
@@ -1385,8 +2162,8 @@ fn ai_providers_and_presets_over_product_wire() {
 #[test]
 fn provider_profiles_crud_over_product_wire() {
     use neotavern_presentation_chat::ShellAction;
-    let (mut session, _) = start_flagged_session(Some("1"), FakeWire::demo(), None, None)
-        .expect("route");
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
     session.apply_shell_action(ShellAction::SetPanel("providers".into()));
 
     // Create: dialog -> kind cycle -> name -> providers.config.set + select.
@@ -1397,14 +2174,15 @@ fn provider_profiles_crud_over_product_wire() {
     session.apply_shell_action(ShellAction::ProviderCreateSubmit);
     let shell = session.shell_view();
     assert!(!shell.provider_create_dialog_open);
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "providers.config.set")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "providers.config.set"));
     assert_eq!(shell.provider_configs.len(), 2);
-    assert_eq!(shell.selected_provider_id.as_deref(), Some(shell.provider_configs[1].id.as_str()));
+    assert_eq!(
+        shell.selected_provider_id.as_deref(),
+        Some(shell.provider_configs[1].id.as_str())
+    );
 
     // Empty name stays client-side without a wire call.
     session.apply_shell_action(ShellAction::ProviderCreateOpen);
@@ -1433,12 +2211,10 @@ fn provider_profiles_crud_over_product_wire() {
     session.apply_shell_action(ShellAction::ProviderDeleteOpen(target));
     session.apply_shell_action(ShellAction::ProviderDeleteConfirm);
     let shell = session.shell_view();
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "providers.config.delete")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "providers.config.delete"));
     assert_eq!(shell.provider_configs.len(), 1);
     assert!(shell.selected_provider_id.is_none());
 }
@@ -1446,8 +2222,8 @@ fn provider_profiles_crud_over_product_wire() {
 #[test]
 fn backups_list_create_restore_over_product_wire() {
     use neotavern_presentation_chat::ShellAction;
-    let (mut session, _) = start_flagged_session(Some("1"), FakeWire::demo(), None, None)
-        .expect("route");
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
     session.apply_shell_action(ShellAction::SetPanel("settings".into()));
     session.apply_shell_action(ShellAction::SetTab("data".into()));
     let shell = session.shell_view();
@@ -1460,21 +2236,17 @@ fn backups_list_create_restore_over_product_wire() {
         "opening the Data tab loads the backup catalog"
     );
     assert_eq!(shell.backups.len(), 2);
-    assert!(
-        shell
-            .backups
-            .iter()
-            .all(|item| item.detail.contains("Manual backup"))
-    );
+    assert!(shell
+        .backups
+        .iter()
+        .all(|item| item.detail.contains("Manual backup")));
 
     // Create -> backups.create appends and refreshes the catalog.
     session.apply_shell_action(ShellAction::CreateBackup);
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "backups.create")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "backups.create"));
     assert_eq!(session.shell_view().backups.len(), 3);
 
     // Refresh re-issues backups.list.
@@ -1485,13 +2257,15 @@ fn backups_list_create_restore_over_product_wire() {
     let target = session.shell_view().backups[0].id.clone();
     session.apply_shell_action(ShellAction::RestoreBackup(target));
     let shell = session.shell_view();
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "backups.restore")
-    );
-    assert!(!shell.status_message.as_deref().unwrap_or("").contains("Reload"));
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "backups.restore"));
+    assert!(!shell
+        .status_message
+        .as_deref()
+        .unwrap_or("")
+        .contains("Reload"));
     assert!(shell.error_message.is_none());
 
     // Unknown id -> NOT_FOUND surfaced as the machine-readable code.
@@ -1504,8 +2278,8 @@ fn backups_list_create_restore_over_product_wire() {
     );
 
     // Default wire has no backups -> honest empty state, no error.
-    let (mut session, _) = start_flagged_session(Some("1"), FakeWire::default(), None, None)
-        .expect("route");
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::default(), None, None).expect("route");
     session.apply_shell_action(ShellAction::SetPanel("settings".into()));
     session.apply_shell_action(ShellAction::SetTab("data".into()));
     let shell = session.shell_view();
@@ -1516,8 +2290,8 @@ fn backups_list_create_restore_over_product_wire() {
 #[test]
 fn memories_crud_over_product_wire() {
     use neotavern_presentation_chat::ShellAction;
-    let (mut session, _) = start_flagged_session(Some("1"), FakeWire::demo(), None, None)
-        .expect("route");
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
     session.apply_shell_action(ShellAction::SetPanel("providers".into()));
     session.apply_shell_action(ShellAction::SetTab("memories".into()));
     let shell = session.shell_view();
@@ -1536,23 +2310,19 @@ fn memories_crud_over_product_wire() {
     // Toggle -> partial update with only `enabled`.
     let toggle_id = shell.memories[1].id.clone();
     session.apply_shell_action(ShellAction::MemoryToggle(toggle_id));
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "memories.update")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "memories.update"));
     assert!(session.shell_view().memories[1].enabled);
 
     // Create form: type content, add -> memories.create + refreshed list.
     session.set_memory_draft_content("The docks flood at high tide.");
     session.apply_shell_action(ShellAction::MemorySave);
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "memories.create")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "memories.create"));
     let shell = session.shell_view();
     assert_eq!(shell.memories.len(), 3);
     assert!(shell.memory_edit_id.is_none());
@@ -1597,25 +2367,20 @@ fn memories_crud_over_product_wire() {
     let shell = session.shell_view();
     assert!(!shell.memory_delete_open);
     assert!(
-        shell
-            .memories
-            .iter()
-            .all(|item| item.id != edit_target),
+        shell.memories.iter().all(|item| item.id != edit_target),
         "confirm delete removes the memory"
     );
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "memories.delete")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "memories.delete"));
 }
 
 #[test]
 fn generation_preset_management_over_product_wire() {
     use neotavern_presentation_chat::ShellAction;
-    let (mut session, _) = start_flagged_session(Some("1"), FakeWire::demo(), None, None)
-        .expect("route");
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
     session.apply_shell_action(ShellAction::SetPanel("providers".into()));
     session.apply_shell_action(ShellAction::SetTab("presets".into()));
     let shell = session.shell_view();
@@ -1630,7 +2395,10 @@ fn generation_preset_management_over_product_wire() {
     let balanced_id = balanced.expect("Balanced seeded").id.clone();
     session.apply_shell_action(ShellAction::SelectPreset(balanced_id.clone()));
     let shell = session.shell_view();
-    assert_eq!(shell.selected_preset_id.as_deref(), Some(balanced_id.as_str()));
+    assert_eq!(
+        shell.selected_preset_id.as_deref(),
+        Some(balanced_id.as_str())
+    );
     assert_eq!(shell.preset_active_name.as_deref(), Some("Balanced"));
     assert_eq!(
         shell
@@ -1654,12 +2422,10 @@ fn generation_preset_management_over_product_wire() {
     let shell = session.shell_view();
     assert_eq!(shell.presets.len(), 3);
     assert_eq!(shell.preset_active_name.as_deref(), Some("Balanced (copy)"));
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "presets.create")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "presets.create"));
 
     // Rename via the name dialog.
     session.apply_shell_action(ShellAction::PresetRenameOpen);
@@ -1669,12 +2435,10 @@ fn generation_preset_management_over_product_wire() {
     let shell = session.shell_view();
     assert!(!shell.preset_name_dialog_open);
     assert_eq!(shell.preset_active_name.as_deref(), Some("Renamed copy"));
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "presets.update")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "presets.update"));
 
     // Apply writes the draft values through settings.update.
     session.apply_shell_action(ShellAction::PresetApply);
@@ -1691,12 +2455,10 @@ fn generation_preset_management_over_product_wire() {
     assert!(!shell.preset_delete_open);
     assert!(shell.selected_preset_id.is_none());
     assert_eq!(shell.presets.len(), 2);
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "presets.delete")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "presets.delete"));
 }
 
 #[test]
@@ -1741,7 +2503,7 @@ fn product_shell_phosphor_svg_emits_path_fills() {
 
 #[test]
 fn shell_hit_new_button_opens_create_dialog() {
-    use neotavern_presentation_chat::{ShellAction, ShellHit, hit_test};
+    use neotavern_presentation_chat::{hit_test, ShellAction, ShellHit};
     let (mut session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
     session.set_surface_size(1220, 2712, 3.0);
@@ -1757,7 +2519,7 @@ fn shell_hit_new_button_opens_create_dialog() {
 
 #[test]
 fn shell_hit_segment_tabs_sit_above_the_home_indicator() {
-    use neotavern_presentation_chat::{ShellAction, ShellHit, hit_test};
+    use neotavern_presentation_chat::{hit_test, ShellAction, ShellHit};
     let (session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
     let mut view = session.shell_view();
@@ -1773,7 +2535,7 @@ fn shell_hit_segment_tabs_sit_above_the_home_indicator() {
 
 #[test]
 fn shell_hit_mobile_bottom_navigation_bar() {
-    use neotavern_presentation_chat::{ShellAction, ShellHit, hit_test};
+    use neotavern_presentation_chat::{hit_test, ShellAction, ShellHit};
     let (session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
     let mut view = session.shell_view();
@@ -1795,7 +2557,7 @@ fn shell_hit_mobile_bottom_navigation_bar() {
 
 #[test]
 fn toggle_rail_collapses_desktop_sidebar_and_keeps_the_rail() {
-    use neotavern_presentation_chat::{ShellAction, chat_origin_x};
+    use neotavern_presentation_chat::{chat_origin_x, ShellAction};
     let (mut session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
     session.set_surface_size(1100, 760, 1.0);
@@ -1830,9 +2592,9 @@ fn panel_width_clamps_to_react_shell_tokens() {
 #[test]
 fn blueprint_chrome_skeleton_matches_legacy_rsx() {
     use neotavern_presentation_dioxus_shell::{
-        ChatBlueprintSource, install_product_chat, set_chat_blueprint_source,
+        install_product_chat, set_chat_blueprint_source, ChatBlueprintSource,
     };
-    use neotavern_presentation_m0_d2::{SlotNode, SlotSkeleton, inspect_slot_skeleton};
+    use neotavern_presentation_m0_d2::{inspect_slot_skeleton, SlotNode, SlotSkeleton};
 
     let (mut session, _) = start_flagged_session(
         Some("1"),
@@ -1975,7 +2737,7 @@ fn blueprint_chrome_skeleton_matches_legacy_rsx() {
 #[test]
 fn blueprint_document_edit_changes_the_live_skeleton() {
     use neotavern_presentation_dioxus_shell::{
-        ChatBlueprintSource, install_product_chat, set_chat_blueprint_source,
+        install_product_chat, set_chat_blueprint_source, ChatBlueprintSource,
     };
     use neotavern_presentation_m0_d2::inspect_slot_skeleton;
     use std::time::Duration;
@@ -2146,12 +2908,10 @@ fn message_edit_records_revisions_over_product_wire() {
     session.set_message_edit_draft(&format!("{original} (edited)"));
     session.submit_message_edit();
     assert!(session.view().editing_message_id.is_none());
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "chats.messages.update")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "chats.messages.update"));
     let edited = session
         .view()
         .visible
@@ -2193,12 +2953,10 @@ fn message_edit_records_revisions_over_product_wire() {
 
     // History: exactly one revision (the original text), oldest first.
     session.open_message_history(&target);
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "chats.messages.revisions.list")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "chats.messages.revisions.list"));
     assert_eq!(
         session.view().history_open_for.as_deref(),
         Some(target.as_str())
@@ -2225,7 +2983,7 @@ fn message_edit_records_revisions_over_product_wire() {
 /// menu closes it. A foreign id surfaces MESSAGE_NOT_FOUND.
 #[test]
 fn chat_snapshots_checkpoint_branch_over_product_wire() {
-    use neotavern_presentation_chat::{ShellAction, ShellHit, hit_test};
+    use neotavern_presentation_chat::{hit_test, ShellAction, ShellHit};
     let (mut session, _) = start_flagged_session(
         Some("1"),
         FakeWire::with_message_count(6),
@@ -2242,43 +3000,35 @@ fn chat_snapshots_checkpoint_branch_over_product_wire() {
 
     // Checkpoint on visible[2]: prefix of 3 messages copied into a child.
     session.create_message_snapshot(&checkpoint_target, true);
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "chats.snapshots.create")
-    );
-    assert!(
-        session
-            .shell_view()
-            .status_message
-            .as_deref()
-            .unwrap_or("")
-            .contains("Checkpoint created")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "chats.snapshots.create"));
+    assert!(session
+        .shell_view()
+        .status_message
+        .as_deref()
+        .unwrap_or("")
+        .contains("Checkpoint created"));
     assert_eq!(session.kernel_message_count(), 6);
     let shell = session.shell_view();
     assert_eq!(shell.chat_list.len(), chats_before + 1);
 
     // Branch on visible[0]: single-message child.
     session.create_message_snapshot(&branch_target, false);
-    assert!(
-        session
-            .shell_view()
-            .status_message
-            .as_deref()
-            .unwrap_or("")
-            .contains("Branch created")
-    );
+    assert!(session
+        .shell_view()
+        .status_message
+        .as_deref()
+        .unwrap_or("")
+        .contains("Branch created"));
 
     // Menu: two children, newest first (branch was created last).
     session.toggle_snapshots_menu();
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "chats.snapshots.list")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "chats.snapshots.list"));
     let view = session.view();
     assert!(view.snapshots_menu_open);
     assert_eq!(view.snapshot_items.len(), 2);
@@ -2333,20 +3083,16 @@ fn chat_export_over_product_wire() {
     let chat_id = neotavern_presentation_chat::DEMO_CHAT_ID.to_string();
 
     session.apply_shell_action(ShellAction::ExportChat(chat_id.clone()));
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "chats.export")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "chats.export"));
     let shell = session.shell_view();
-    assert!(
-        shell
-            .status_message
-            .as_deref()
-            .unwrap_or("")
-            .starts_with("Export ready:")
-    );
+    assert!(shell
+        .status_message
+        .as_deref()
+        .unwrap_or("")
+        .starts_with("Export ready:"));
     let export = session.take_last_export().expect("parked export");
     assert_eq!(export.filename, format!("chat-{chat_id}.json"));
     let doc: serde_json::Value =
@@ -2390,12 +3136,10 @@ fn lorebook_meta_update_over_product_wire() {
     session.set_lorebook_name_draft(&format!("{} v2", book.name));
     session.set_lorebook_description_draft("Updated description");
     session.apply_shell_action(ShellAction::LorebookSaveMeta);
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "lorebooks.update")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "lorebooks.update"));
     let shell = session.shell_view();
     let card = shell
         .lorebooks
@@ -2403,14 +3147,8 @@ fn lorebook_meta_update_over_product_wire() {
         .find(|item| item.id == book.id)
         .expect("card");
     assert_eq!(card.name, format!("{} v2", book.name));
-    assert_eq!(
-        shell.lorebook_description_draft,
-        "Updated description"
-    );
-    assert_eq!(
-        shell.status_message.as_deref(),
-        Some("Book updated.")
-    );
+    assert_eq!(shell.lorebook_description_draft, "Updated description");
+    assert_eq!(shell.status_message.as_deref(), Some("Book updated."));
 
     // No-op save: drafts match the store -> no second wire call.
     session.set_lorebook_name_draft(&format!("{} v2", book.name));
@@ -2436,10 +3174,7 @@ fn lorebook_meta_update_over_product_wire() {
         .find(|item| item.id == book.id)
         .expect("card");
     assert_eq!(card.name, format!("{} v2", book.name));
-    assert_eq!(
-        shell.status_message.as_deref(),
-        Some("Book updated.")
-    );
+    assert_eq!(shell.status_message.as_deref(), Some("Book updated."));
 }
 
 /// Persona editor (React `PersonasPanel` edit tab) over `personas.update`:
@@ -2466,12 +3201,10 @@ fn persona_meta_update_over_product_wire() {
     session.set_persona_name_draft(&format!("{} v2", persona.name));
     session.set_persona_description_draft("A weathered caravan mapmaker.");
     session.apply_shell_action(ShellAction::PersonaSaveMeta);
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "personas.update")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "personas.update"));
     let shell = session.shell_view();
     let card = shell
         .personas
@@ -2483,10 +3216,7 @@ fn persona_meta_update_over_product_wire() {
         shell.persona_description_draft,
         "A weathered caravan mapmaker."
     );
-    assert_eq!(
-        shell.status_message.as_deref(),
-        Some("Persona updated.")
-    );
+    assert_eq!(shell.status_message.as_deref(), Some("Persona updated."));
 
     // No-op save: drafts match the store -> no second wire call.
     session.set_persona_name_draft(&format!("{} v2", persona.name));
@@ -2521,10 +3251,8 @@ fn character_card_import_export_over_product_wire() {
     let count_before = session.shell_view().characters.len();
 
     // Stage a V2 JSON card on disk and import it through the dialog flow.
-    let card_path = std::env::temp_dir().join(format!(
-        "neota-test-card-{}.json",
-        std::process::id()
-    ));
+    let card_path =
+        std::env::temp_dir().join(format!("neota-test-card-{}.json", std::process::id()));
     std::fs::write(
         &card_path,
         serde_json::json!({
@@ -2546,18 +3274,14 @@ fn character_card_import_export_over_product_wire() {
     assert!(session.view().error_code.is_none());
     session.set_card_path_draft(&card_path.to_string_lossy());
     session.apply_shell_action(ShellAction::ConfirmCardImport);
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "assets.put")
-    );
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "imports.character.card")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "assets.put"));
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "imports.character.card"));
     let shell = session.shell_view();
     assert!(!shell.card_import_dialog_open);
     assert_eq!(
@@ -2585,18 +3309,17 @@ fn character_card_import_export_over_product_wire() {
 
     // Export the imported card back out as JSON.
     session.apply_shell_action(ShellAction::ExportCharacterCard(imported_id.clone()));
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "characters.export.card")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "characters.export.card"));
     let export = session.take_last_export().expect("parked export");
     assert_eq!(export.filename, format!("card-{imported_id}.json"));
     let doc: serde_json::Value =
         serde_json::from_slice(&export.bytes).expect("valid export document");
     assert_eq!(
-        doc.pointer("/data/name").and_then(serde_json::Value::as_str),
+        doc.pointer("/data/name")
+            .and_then(serde_json::Value::as_str),
         Some("Imported Wanderer")
     );
 
@@ -2640,22 +3363,14 @@ fn profile_import_over_product_wire() {
 
     // Path + policy cycle -> wire op with counters in the notice.
     session.set_profile_import_path("imports/profile-2c2c/");
-    assert_eq!(
-        session.shell_view().profile_import_policy_label,
-        "Reject"
-    );
+    assert_eq!(session.shell_view().profile_import_policy_label, "Reject");
     session.apply_shell_action(ShellAction::ProfileImportPolicyCycle);
-    assert_eq!(
-        session.shell_view().profile_import_policy_label,
-        "Replace"
-    );
+    assert_eq!(session.shell_view().profile_import_policy_label, "Replace");
     session.apply_shell_action(ShellAction::ProfileImportSubmit);
-    assert!(
-        session
-            .issued_commands()
-            .iter()
-            .any(|op| op == "profile.import")
-    );
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "profile.import"));
     assert_eq!(
         session
             .issued_commands()

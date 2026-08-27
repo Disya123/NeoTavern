@@ -3,7 +3,7 @@
 //! Not production JNI. Not `MainActivity`. Does not import Kernel, storage,
 //! or network crates.
 
-use contracts_generated::generated::{ChatDto, MessageDto, decode_chat_dto, decode_message_dto};
+use contracts_generated::generated::{decode_chat_dto, decode_message_dto, ChatDto, MessageDto};
 use dioxus_core::{Element, VirtualDom};
 use dioxus_core_macro::rsx;
 use serde::Deserialize;
@@ -22,31 +22,28 @@ mod product_path;
 mod product_shell;
 mod scene_chat;
 mod settings_tab;
-pub use chat_route::{ChatRouteReport, chat_route_line, flagged_chat_route};
-pub use markdown::{Block, Inline, contains_part, message_markdown, parse_document, parse_inline};
+pub use chat_route::{chat_route_line, flagged_chat_route, ChatRouteReport};
+pub use markdown::{contains_part, message_markdown, parse_document, parse_inline, Block, Inline};
 pub use neotavern_presentation_blueprint::v1::{ContextUsageBreakdownV1, ContextUsageSummaryV1};
 pub use neotavern_presentation_design_system::SafeAreaInsets;
 pub use product_path::{
-    PRODUCT_PATH_CHAT_ID, PRODUCT_PATH_ITEMS, PRODUCT_PATH_VISIBLE, ProductChatView, ProductChrome,
-    RevisionRow, SnapshotItemView,
-    RowKind, VisibleRow, chrome_metrics, current_product_chat, format_timestamp,
-    install_product_chat, message_id, mixed_height, mixed_height_catalog,
-    product_chat_from_fixture, product_chat_with_chrome, streaming_schedule, visible_rows,
+    chrome_metrics, current_product_chat, format_timestamp, install_product_chat, message_id,
+    mixed_height, mixed_height_catalog, product_chat_from_fixture, product_chat_with_chrome,
+    streaming_schedule, visible_rows, ProductChatView, ProductChrome, RevisionRow, RowKind,
+    SnapshotItemView, VisibleRow, PRODUCT_PATH_CHAT_ID, PRODUCT_PATH_ITEMS, PRODUCT_PATH_VISIBLE,
 };
 pub use product_shell::{
-    AI_SETTINGS_TITLE, BACKGROUNDS_MANAGER_TITLE, CHARACTER_MANAGER_TITLE, CHATS_MANAGER_TITLE,
-    CharacterCardView, CharacterDraftView, ChatCardView, LOREBOOK_MANAGER_TITLE, LorebookCardView,
-    LorebookEntryCardView, PERSONA_MANAGER_TITLE, PLUGINS_MANAGER_TITLE, PersonaCardView,
-    PluginCardView, PresetCardView, ProductShellView, ProfileCardView, ProviderCardView,
-    SETTINGS_TITLE, ThemeCardView, ToolCardView, BackupCardView, MemoryCardView, PresetValueRow,
-    ProviderConfigCardView,
-    character_card_description,
-    character_manager_title, current_product_shell,
-    ellipsize_css, install_product_shell, lorebook_card_description, panel_header_title,
-    persona_card_description, product_shell_app,
+    character_card_description, character_manager_title, current_product_shell, ellipsize_css,
+    install_product_shell, lorebook_card_description, panel_header_title, persona_card_description,
+    product_shell_app, BackupCardView, CharacterCardView, CharacterDraftView, ChatCardView,
+    LorebookCardView, LorebookEntryCardView, MemoryCardView, PersonaCardView, PluginCardView,
+    PresetCardView, PresetValueRow, ProductShellView, ProfileCardView, ProviderCardView,
+    ProviderConfigCardView, RunStepView, ThemeCardView, ToolCardView, AI_SETTINGS_TITLE,
+    BACKGROUNDS_MANAGER_TITLE, CHARACTER_MANAGER_TITLE, CHATS_MANAGER_TITLE,
+    LOREBOOK_MANAGER_TITLE, PERSONA_MANAGER_TITLE, PLUGINS_MANAGER_TITLE, SETTINGS_TITLE,
 };
 pub use scene_chat::{
-    ChatBlueprintSource, chat_wallpaper_mode, set_chat_blueprint_source, set_chat_wallpaper_mode,
+    chat_wallpaper_mode, set_chat_blueprint_source, set_chat_wallpaper_mode, ChatBlueprintSource,
 };
 
 pub const DIOXUS_SHELL_FLAG: &str = "NEOTA_DIOXUS_SHELL";
@@ -312,6 +309,92 @@ fn message_action_button(
             title: "{label}",
             style: "width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(243,238,232,0.10);border-radius:16px;background:rgba(36,33,30,0.62);color:#c5bbb2;cursor:pointer;",
             {crate::product_shell::icon(icon_name, 16)}
+        }
+    }
+}
+
+/// React `ToolActivityBadge`: status copy only, no Phosphor Lightning
+/// (the icon is not in the packed native set). Arguments/results never
+/// reach this node.
+pub(crate) fn tool_activity_badge(name: &str) -> Element {
+    let label = format!("Running tool: {name}…");
+    rsx! {
+        div {
+            class: "ToolActivityBadge_toolActivity",
+            "data-component": "tool-activity",
+            role: "status",
+            style: "display:flex;align-items:center;gap:8px;margin:0 auto;width:100%;max-width:820px;padding:8px 0;color:#998f87;font-size:13px;",
+            span { "{label}" }
+        }
+    }
+}
+
+fn message_row_state(view: &ProductChatView, row: &VisibleRow) -> &'static str {
+    if view.streaming && row.id == "streaming" {
+        "streaming"
+    } else if header_row_matches(view, &row.content) {
+        "match"
+    } else {
+        "done"
+    }
+}
+
+fn header_row_matches(view: &ProductChatView, content: &str) -> bool {
+    let query = view.header_search_query.trim();
+    !query.is_empty() && content.to_lowercase().contains(&query.to_lowercase())
+}
+
+fn search_match_label(count: u64) -> String {
+    if count == 1 {
+        "1 match".into()
+    } else {
+        format!("{count} matches")
+    }
+}
+
+fn header_search_overlay(view: &ProductChatView) -> Element {
+    let query = if view.header_search_query.is_empty() {
+        String::new()
+    } else {
+        view.header_search_query.clone()
+    };
+    let show_count = !view.header_search_query.trim().is_empty();
+    let count_label = search_match_label(view.header_search_match_count);
+    rsx! {
+        div {
+            class: "ChatWorkspace_chatSearch",
+            "data-part": "header-search-overlay",
+            style: "display:flex;align-items:center;gap:8px;min-width:0;flex:1;",
+            {crate::product_shell::icon("MagnifyingGlass", 17)}
+            div {
+                "data-part": "header-search-input",
+                "aria-label": "Search messages",
+                style: "flex:1;min-width:0;height:32px;padding:0 8px;border:1px solid rgba(243,238,232,0.16);border-radius:10px;background:#1e1b18;color:#f3eee8;font-size:13px;display:flex;align-items:center;overflow:hidden;white-space:nowrap;",
+                if query.is_empty() {
+                    span { style: "color:#998f87;", "Search messages…" }
+                } else {
+                    span { "{query}" }
+                }
+            }
+            if show_count {
+                span {
+                    class: "ChatWorkspace_searchMatchCount",
+                    role: "status",
+                    "aria-live": "polite",
+                    style: "flex:none;color:#c5bbb2;font-size:12px;white-space:nowrap;",
+                    "{count_label}"
+                }
+            }
+            button {
+                class: "ChatWorkspace_headerSearch",
+                r#type: "button",
+                "data-action": "header-search",
+                "data-part": "header-search-close",
+                "aria-label": "Close search",
+                title: "Close search",
+                style: "flex:none;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:none;border-radius:20px;background:transparent;color:#c5bbb2;",
+                {crate::product_shell::icon("X", 18)}
+            }
         }
     }
 }
@@ -586,56 +669,62 @@ pub fn product_chat_app() -> Element {
                         "data-slot": "chat.header",
                         role: "banner",
                         style: "{header_style}",
-                        div {
-                            class: "ChatWorkspace_chatIdentity",
-                            "data-part": "character-identity",
-                            style: "display:flex;align-items:center;gap:8px;min-width:0;flex:1;",
-                            if !view.character_avatar_asset.is_empty() {
-                                span {
-                                    class: "ChatWorkspace_headerAvatar",
-                                    "data-part": "character-avatar",
-                                    "aria-hidden": "true",
-                                    style: "flex:none;width:32px;height:32px;border-radius:16px;overflow:hidden;background:#302c28;",
+                        if view.header_search_open {
+                            {header_search_overlay(&view)}
+                        } else {
+                            div {
+                                class: "ChatWorkspace_chatIdentity",
+                                "data-part": "character-identity",
+                                style: "display:flex;align-items:center;gap:8px;min-width:0;flex:1;",
+                                if !view.character_avatar_asset.is_empty() {
                                     span {
-                                        "data-part": "avatar-fallback",
-                                        "data-avatar-asset": "{view.character_avatar_asset}",
-                                        class: "headerAvatar",
-                                        style: "display:block;width:32px;height:32px;border-radius:16px;background:#302c28;",
+                                        class: "ChatWorkspace_headerAvatar",
+                                        "data-part": "character-avatar",
+                                        "aria-hidden": "true",
+                                        style: "flex:none;width:32px;height:32px;border-radius:16px;overflow:hidden;background:#302c28;",
+                                        span {
+                                            "data-part": "avatar-fallback",
+                                            "data-avatar-asset": "{view.character_avatar_asset}",
+                                            class: "headerAvatar",
+                                            style: "display:block;width:32px;height:32px;border-radius:16px;background:#302c28;",
+                                        }
                                     }
                                 }
+                                h1 {
+                                    style: "margin:0;overflow:hidden;min-width:0;font-size:13px;font-weight:600;text-overflow:ellipsis;white-space:nowrap;color:#f3eee8;",
+                                    "{header_title}"
+                                }
                             }
-                            h1 {
-                                style: "margin:0;overflow:hidden;min-width:0;font-size:13px;font-weight:600;text-overflow:ellipsis;white-space:nowrap;color:#f3eee8;",
-                                "{header_title}"
+                            button {
+                                class: "ChatWorkspace_headerSearch",
+                                r#type: "button",
+                                "data-action": "header-search",
+                                "data-part": "header-search",
+                                "aria-label": "Search messages",
+                                title: "Search messages",
+                                style: "flex:none;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:none;border-radius:20px;background:transparent;color:#c5bbb2;",
+                                {crate::product_shell::icon("MagnifyingGlass", 17)}
                             }
-                        }
-                        button {
-                            class: "ChatWorkspace_headerSearch",
-                            r#type: "button",
-                            "data-part": "header-search",
-                            "aria-label": "Search messages",
-                            style: "flex:none;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:none;border-radius:20px;background:transparent;color:#c5bbb2;",
-                            {crate::product_shell::icon("MagnifyingGlass", 17)}
-                        }
-                        button {
-                            class: "ChatWorkspace_headerSearch",
-                            r#type: "button",
-                            // Custom intents render verbatim through the
-                            // shared hit table; the desktop bin routes this
-                            // one to `toggle_snapshots_menu`.
-                            "data-action": "custom.chat.snapshots-menu",
-                            "data-part": "snapshots-trigger",
-                            "aria-label": "Chat snapshots",
-                            title: "Chat snapshots",
-                            style: "flex:none;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:none;border-radius:20px;background:transparent;color:#c5bbb2;",
-                            {crate::product_shell::icon("GitBranch", 17)}
-                        }
-                        if nested {
-                            div {
-                                class: "neoui-glass",
-                                "data-neoui": "glass",
-                                "data-part": "dialog",
-                                style: "position:absolute;left:48px;top:4px;width:160px;height:28px;background:#302c28;"
+                            button {
+                                class: "ChatWorkspace_headerSearch",
+                                r#type: "button",
+                                // Custom intents render verbatim through the
+                                // shared hit table; the desktop bin routes this
+                                // one to `toggle_snapshots_menu`.
+                                "data-action": "custom.chat.snapshots-menu",
+                                "data-part": "snapshots-trigger",
+                                "aria-label": "Chat snapshots",
+                                title: "Chat snapshots",
+                                style: "flex:none;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:none;border-radius:20px;background:transparent;color:#c5bbb2;",
+                                {crate::product_shell::icon("GitBranch", 17)}
+                            }
+                            if nested {
+                                div {
+                                    class: "neoui-glass",
+                                    "data-neoui": "glass",
+                                    "data-part": "dialog",
+                                    style: "position:absolute;left:48px;top:4px;width:160px;height:28px;background:#302c28;"
+                                }
                             }
                         }
                     }
@@ -681,11 +770,18 @@ pub fn product_chat_app() -> Element {
                                 "data-component": "chat-message-list",
                                 style: "display:flex;flex-direction:column;gap:24px;min-height:0;",
                             for row in view.visible.iter() {
+                                { rsx! {
+                                if row.id == "streaming" {
+                                    if let Some(name) = view.tool_activity_name.as_deref() {
+                                        {tool_activity_badge(name)}
+                                    }
+                                }
                                 article {
                                     class: if row.role == "user" { "MessageBubble_rowUser" } else { "MessageBubble_rowAssistant" },
                                     "data-component": "chat-message",
                                     "data-role": "{row.role}",
-                                    "data-state": if view.streaming && row.id == "streaming" { "streaming" } else { "done" },
+                                    "data-state": message_row_state(&view, row),
+                                    "data-excluded": if row.manual_excluded { "true" } else { "false" },
                                     "data-format": "markdown",
                                     "data-message-id": "{row.id}",
                                     role: "listitem",
@@ -735,16 +831,24 @@ pub fn product_chat_app() -> Element {
                                             "data-part": "message-actions-inline",
                                             "data-state": "idle",
                                             style: "display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-left:auto;",
-                                            {message_action_button("context", "Exclude from prompt context", "EyeSlash", &row.id)}
+                                            {if row.manual_excluded {
+                                                message_action_button("context", "Include in prompt context", "Eye", &row.id)
+                                            } else {
+                                                message_action_button("context", "Exclude from prompt context", "EyeSlash", &row.id)
+                                            }}
                                             {message_action_button("edit", "Edit message", "PencilSimple", &row.id)}
                                             {message_action_button("copy", "Copy", "Copy", &row.id)}
                                             {message_action_button("checkpoint", "Checkpoint", "Flag", &row.id)}
                                             {message_action_button("branch", "Branch", "GitBranch", &row.id)}
+                                            if row.checkpoint_chat_id.is_some() {
+                                                {message_action_button("delete-checkpoint", "Remove checkpoint", "Flag", &row.id)}
+                                            }
                                             {message_action_button("delete", "Delete message", "Trash", &row.id)}
                                             {message_action_button("rollback", "Rollback to here", "ArrowUUpLeft", &row.id)}
                                             {message_action_button("history", "Edit history", "ClockCounterClockwise", &row.id)}
                                             if row.run_id.is_some() {
-                                                {message_action_button("prompt", "View prompt plan", "TextAlignLeft", &row.id)}
+                                                {message_action_button("prompt", "View prompt plan", "BookOpenText", &row.id)}
+                                                {message_action_button("steps", "View run steps", "List", &row.id)}
                                             }
                                         }
                                     }
@@ -861,6 +965,12 @@ pub fn product_chat_app() -> Element {
                                         }
                                     }
                                 }
+                                } }
+                            }
+                            if view.tool_activity_name.is_some()
+                                && !view.visible.iter().any(|row| row.id == "streaming")
+                            {
+                                {tool_activity_badge(view.tool_activity_name.as_deref().unwrap_or("tool"))}
                             }
                             }
                         }

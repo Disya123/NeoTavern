@@ -6,7 +6,7 @@
 //! a DOM hit tree, so geometry is reconstructed from the same tokens the
 //! RSX uses.
 
-use neotavern_presentation_dioxus_shell::{ProductShellView, chrome_metrics};
+use neotavern_presentation_dioxus_shell::{chrome_metrics, ProductShellView};
 
 pub const RAIL_WIDTH: f32 = 60.0;
 pub const PANEL_WIDTH_DEFAULT: f32 = 380.0;
@@ -108,6 +108,65 @@ pub enum ShellAction {
     /// triggered from the per-message footer action).
     OpenPromptPlan(String),
     ClosePromptPlan,
+    /// Run-step transcript (`generation.events`; React `RunTranscriptPanel`).
+    OpenRunTranscript(String),
+    CloseRunTranscript,
+    /// Delete-checkpoint confirm (React `deleteCheckpoint` + ConfirmActionDialog).
+    OpenCheckpointDelete(String),
+    CloseCheckpointDelete,
+    ConfirmCheckpointDelete,
+    /// Duplicate the selected character (`characters.create` with
+    /// `"{name} copy"`; React `duplicateSelectedCharacter`).
+    DuplicateCharacter,
+    /// Character Advanced lorebooks (React `CharacterLorebooks`): create a
+    /// book bound to the selected character (`lorebooks.create` + open the
+    /// lorebooks panel). Unlink is not expressible on the wire
+    /// (`characterId: null` is a follow-up extension) — tap reports
+    /// `CAPABILITY_UNAVAILABLE`.
+    CreateCharacterLorebook,
+    UnlinkCharacterLorebook(String),
+    /// Character gallery upload: the kernel plane has no gallery catalog
+    /// (legacy `/characters/:id/gallery`), so React `useUploadCharacterImage`
+    /// rejects with `UnsupportedError('characters.gallery.upload')` — the
+    /// session mirrors that honest error instead of inventing a Wire op.
+    UploadGalleryImage,
+    /// Cycle gallery column count `1 → 2 → 3 → 4 → 1` (Blitz `<select>` is
+    /// not interactive; same pattern as `CycleSort`).
+    CycleGalleryColumns,
+    /// Toggle gallery sort `oldest ↔ newest`.
+    CycleGallerySort,
+    /// Settings → General appearance (React `GeneralTab` / `useUiStore`).
+    /// Language is the only field that crosses Product Wire (`settings.update`).
+    CycleLanguage,
+    ToggleOpenHomeOnLoad,
+    CycleUiScale,
+    CycleContrast,
+    CycleFontProfile,
+    CycleMotion,
+    CycleChatStyle,
+    CycleChatAvatarStyle,
+    CycleUserMessagePosition,
+    CycleCharacterMessagePosition,
+    /// React `useUiStore` sliders (Blitz range inputs are not interactive).
+    /// Opacity steps 0→100 by 5; glass blur 0→40 by 4. Applied as CSS vars
+    /// on the shell root (`setInterfacePreferences`).
+    CycleUiOpacity,
+    CycleUiGlassBlur,
+    /// Settings → General `DiagnosticsPanel` (wire `diagnostics.export`).
+    RunDiagnostics,
+    /// Legacy sidecar maintenance: React kernel plane rejects with
+    /// `UnsupportedError('search.rebuild')` / `('diagnostics.cache')`.
+    RebuildSearch,
+    ClearDiagnosticCache,
+    /// Settings → Data `DataMigrationPanel`: kernel plane has no
+    /// `imports.sillytavern.*` (legacy `/imports/sillytavern/analyze`).
+    AnalyzeSillyTavern,
+    /// AI Settings Advanced tab (React `AdvancedPromptSettings` /
+    /// `ChatTemplateEditor`). Catalog of built-in instruct formats is empty
+    /// on the kernel plane; persist via `settings.update`.
+    CyclePromptMode,
+    CycleInstructSelection,
+    SaveInstructTemplate,
     /// Backgrounds panel upload button: the kernel plane has no wallpaper
     /// catalog, so React `useUploadBackground` rejects with
     /// `UnsupportedError('backgrounds.upload')` — the session mirrors that
@@ -204,6 +263,63 @@ pub enum ShellHit {
 pub fn next_sort(current: &str) -> &'static str {
     let idx = SORTS.iter().position(|item| *item == current).unwrap_or(0);
     SORTS[(idx + 1) % SORTS.len()]
+}
+
+pub fn next_gallery_columns(current: u32) -> u32 {
+    match current {
+        1 => 2,
+        2 => 3,
+        3 => 4,
+        _ => 1,
+    }
+}
+
+pub fn next_gallery_sort(current: &str) -> &'static str {
+    if current == "newest" {
+        "oldest"
+    } else {
+        "newest"
+    }
+}
+
+pub const LANGUAGES: &[&str] = &["en", "ru", "pseudo"];
+pub const UI_SCALES: &[&str] = &["small", "medium", "large"];
+pub const UI_CONTRASTS: &[&str] = &["normal", "high"];
+pub const UI_FONT_PROFILES: &[&str] = &["default", "dyslexia"];
+pub const UI_MOTIONS: &[&str] = &["system", "reduced"];
+pub const CHAT_STYLES: &[&str] = &[
+    "clean",
+    "classic",
+    "bubbles",
+    "document",
+    "cards",
+    "paragraphs",
+];
+pub const CHAT_AVATAR_STYLES: &[&str] = &["round", "square", "portrait", "banner", "hidden"];
+pub const MESSAGE_POSITIONS: &[&str] = &["left", "right"];
+pub const AI_TABS: &[&str] = &["providers", "presets", "memories", "advanced"];
+
+pub fn next_choice<'a>(options: &'a [&'a str], current: &str) -> &'a str {
+    let idx = options
+        .iter()
+        .position(|item| *item == current)
+        .unwrap_or(0);
+    options[(idx + 1) % options.len()]
+}
+
+/// Cycle a stepped numeric control (React `<input type=range>`). Wraps to
+/// `min` after `max`. Values that are not on the step grid snap down first.
+pub fn next_step(current: u32, min: u32, max: u32, step: u32) -> u32 {
+    if step == 0 || max < min {
+        return current.clamp(min, max);
+    }
+    let aligned = ((current.saturating_sub(min)) / step) * step + min;
+    let next = aligned.saturating_add(step);
+    if next > max {
+        min
+    } else {
+        next
+    }
 }
 
 fn contains(x: f32, y: f32, x0: f32, y0: f32, x1: f32, y1: f32) -> bool {
@@ -452,6 +568,44 @@ fn dialog_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
         }
         return Some(ShellHit::Absorb);
     }
+    if view.checkpoint_delete_open {
+        let dlg_w = 300.0_f32.min(width - 32.0);
+        let dlg_h = 200.0_f32.min(height - 48.0);
+        let x0 = chat_x0 + (width - chat_x0 - dlg_w).max(0.0) * 0.5;
+        let y0 = (height - dlg_h) * 0.5;
+        if !contains(x, y, x0, y0, x0 + dlg_w, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::CloseCheckpointDelete));
+        }
+        let actions_y = y0 + dlg_h - 56.0;
+        if contains(x, y, x0, actions_y, x0 + dlg_w * 0.5, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::CloseCheckpointDelete));
+        }
+        if contains(x, y, x0 + dlg_w * 0.5, actions_y, x0 + dlg_w, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::ConfirmCheckpointDelete));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    if view.run_transcript_open {
+        let dlg_w = 640.0_f32.min(width - 32.0);
+        let dlg_h = 560.0_f32.min(height - 48.0);
+        let x0 = chat_x0 + (width - chat_x0 - dlg_w).max(0.0) * 0.5;
+        let y0 = (height - dlg_h) * 0.5;
+        if !contains(x, y, x0, y0, x0 + dlg_w, y0 + dlg_h) {
+            return Some(ShellHit::Action(ShellAction::CloseRunTranscript));
+        }
+        let close_y = y0 + 16.0;
+        if contains(
+            x,
+            y,
+            x0 + dlg_w - 44.0,
+            close_y,
+            x0 + dlg_w - 4.0,
+            close_y + 40.0,
+        ) {
+            return Some(ShellHit::Action(ShellAction::CloseRunTranscript));
+        }
+        return Some(ShellHit::Absorb);
+    }
     if view.prompt_plan_open {
         let dlg_w = 640.0_f32.min(width - 32.0);
         let dlg_h = 560.0_f32.min(height - 48.0);
@@ -461,7 +615,14 @@ fn dialog_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
             return Some(ShellHit::Action(ShellAction::ClosePromptPlan));
         }
         let close_y = y0 + 16.0;
-        if contains(x, y, x0 + dlg_w - 44.0, close_y, x0 + dlg_w - 4.0, close_y + 40.0) {
+        if contains(
+            x,
+            y,
+            x0 + dlg_w - 44.0,
+            close_y,
+            x0 + dlg_w - 4.0,
+            close_y + 40.0,
+        ) {
             return Some(ShellHit::Action(ShellAction::ClosePromptPlan));
         }
         return Some(ShellHit::Absorb);
@@ -662,7 +823,9 @@ fn character_manager_hit(view: &ProductShellView, x: f32, y: f32) -> Option<Shel
     let content_top = tabs_bottom + SPACE_XS;
     match view.tab.as_str() {
         "cards" => cards_hit(view, panel_x, panel_w, x1, content_top, x, y),
-        "edit" | "advanced" | "gallery" => editor_hit(view, panel_x, x1, content_top, x, y),
+        "edit" => editor_hit(view, panel_x, x1, content_top, x, y),
+        "advanced" => character_advanced_hit(view, panel_x, x1, content_top, x, y),
+        "gallery" => gallery_hit(view, panel_x, x1, content_top, x, y),
         _ => Some(ShellHit::Absorb),
     }
 }
@@ -773,13 +936,15 @@ fn editor_hit(
         if x >= right - CONTROL_SM {
             return Some(ShellHit::Action(ShellAction::OpenDelete));
         }
-        // Duplicate button absorbs (not wired).
+        // Duplicate button (`characters.create` with "{name} copy").
         if x >= right - CONTROL_SM * 2.0 {
-            return Some(ShellHit::Absorb);
+            return Some(ShellHit::Action(ShellAction::DuplicateCharacter));
         }
         if x >= right - CONTROL_SM * 3.0 {
             if let Some(id) = view.selected_character_id.as_deref() {
-                return Some(ShellHit::Action(ShellAction::ExportCharacterCard(id.into())));
+                return Some(ShellHit::Action(ShellAction::ExportCharacterCard(
+                    id.into(),
+                )));
             }
             return Some(ShellHit::Absorb);
         }
@@ -789,6 +954,100 @@ fn editor_hit(
         return Some(ShellHit::Absorb);
     }
     let _ = view;
+    Some(ShellHit::Absorb)
+}
+
+/// Character Advanced lorebooks strip (React `CharacterLorebooks`). Native
+/// puts the linked-books chrome at the top of Advanced so Blitz hit-testing
+/// does not need to scroll past the prompt fields. No editor action bar —
+/// React keeps that bar on Edit only.
+fn character_advanced_hit(
+    view: &ProductShellView,
+    panel_x: f32,
+    x1: f32,
+    content_top: f32,
+    x: f32,
+    y: f32,
+) -> Option<ShellHit> {
+    let pad = SPACE_LG;
+    let hint_top = content_top + SPACE_SM;
+    let hint_h = 32.0;
+    let actions_top = hint_top + hint_h + SPACE_SM;
+    let actions_h = 36.0;
+    if y >= actions_top && y < actions_top + actions_h && x >= panel_x + pad && x < x1 - pad {
+        let mid = panel_x + (x1 - panel_x) * 0.5;
+        if x < mid {
+            return Some(ShellHit::Action(ShellAction::CreateCharacterLorebook));
+        }
+        return Some(ShellHit::Action(ShellAction::SetPanel("lorebooks".into())));
+    }
+    let mut row_top = actions_top + actions_h + SPACE_SM;
+    let character_id = view.selected_character_id.as_deref();
+    for book in view
+        .lorebooks
+        .iter()
+        .filter(|book| character_id.is_some() && book.character_id.as_deref() == character_id)
+    {
+        let row_h = 40.0;
+        if y >= row_top && y < row_top + row_h && x >= panel_x + pad && x < x1 - pad {
+            if x >= x1 - pad - CONTROL_SM {
+                return Some(ShellHit::Action(ShellAction::UnlinkCharacterLorebook(
+                    book.id.clone(),
+                )));
+            }
+            return Some(ShellHit::Absorb);
+        }
+        row_top += row_h + SPACE_XS;
+    }
+    Some(ShellHit::Absorb)
+}
+
+/// Gallery tab (React `GalleryTab`): toolbar selects + Add image. Kernel
+/// plane has no gallery catalog, so upload maps to the honest
+/// `CAPABILITY_UNAVAILABLE` error (no invented `characters.gallery.*` op).
+/// The action bar lives on Edit only; gallery content starts at `content_top`.
+fn gallery_hit(
+    view: &ProductShellView,
+    panel_x: f32,
+    x1: f32,
+    content_top: f32,
+    x: f32,
+    y: f32,
+) -> Option<ShellHit> {
+    let pad = SPACE_LG;
+    let tool_top = content_top + SPACE_SM;
+    let tool_bottom = tool_top + CONTROL_SM;
+    if y >= tool_top && y < tool_bottom {
+        let add_w = 120.0;
+        let sort_w = 88.0;
+        let cols_w = 88.0;
+        if x >= x1 - pad - add_w {
+            return Some(ShellHit::Action(ShellAction::UploadGalleryImage));
+        }
+        if x >= x1 - pad - add_w - sort_w {
+            return Some(ShellHit::Action(ShellAction::CycleGallerySort));
+        }
+        if x >= x1 - pad - add_w - sort_w - cols_w {
+            return Some(ShellHit::Action(ShellAction::CycleGalleryColumns));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    let has_avatar = view
+        .selected_draft
+        .as_ref()
+        .and_then(|draft| draft.avatar_asset_id.as_ref())
+        .is_some();
+    if !has_avatar {
+        let empty_btn_top = tool_bottom + 96.0;
+        let empty_btn_h = 36.0;
+        if y >= empty_btn_top
+            && y < empty_btn_top + empty_btn_h
+            && x >= panel_x + pad
+            && x < x1 - pad
+        {
+            return Some(ShellHit::Action(ShellAction::UploadGalleryImage));
+        }
+    }
     Some(ShellHit::Absorb)
 }
 
@@ -835,6 +1094,9 @@ pub fn hit_test(view: &ProductShellView, css_x: f32, css_y: f32) -> Option<Shell
                 }
                 if view.ai_tab == "presets" {
                     return presets_config_hit(view, x, y, panel_x, panel_x + panel_w);
+                }
+                if view.ai_tab == "advanced" {
+                    return advanced_hit(view, x, y, panel_x, panel_x + panel_w);
                 }
                 return providers_hit(view, x, y, panel_x, panel_x + panel_w);
             }
@@ -1108,9 +1370,7 @@ fn lorebook_entries_hit(view: &ProductShellView, x: f32, y: f32) -> Option<Shell
 }
 
 /// Settings panel: shared tab row (General / Themes / Data / Profiles /
-/// Secrets / Tools), then tab-specific body regions. Only the Profiles tab
-/// is interactive here (create/rename/delete/export); the other tabs are
-/// read-only surfaces (absorb).
+/// Secrets / Tools), then tab-specific body regions.
 fn settings_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
     if !view.sidebar_open {
         return None;
@@ -1149,14 +1409,12 @@ fn settings_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
     if view.settings_tab == "data" {
         return data_hit(view, x, y, panel_x, x1, tabs_bottom);
     }
-    Some(ShellHit::Absorb)
+    general_hit(view, x, y, panel_x, x1, tabs_bottom)
 }
 
-/// React `SettingsPanel` DataTab body: the Create/Refresh action row, then
-/// backup rows carrying Restore in the right zone. Geometry mirrors
-/// `settings_tab.rs::data_tab` (padding 12 + title 20 + gap 8 + hint 32 +
-/// gap 8 + actions 36 + gap 8; rows 64 + 4).
-fn data_hit(
+/// React `GeneralTab` cycle rows. Geometry: padding 12 + Startup header
+/// (20+12+16+12) + row 40+12 + Appearance header + language/dir/scale… rows.
+fn general_hit(
     view: &ProductShellView,
     x: f32,
     y: f32,
@@ -1165,36 +1423,79 @@ fn data_hit(
     tabs_bottom: f32,
 ) -> Option<ShellHit> {
     let pad = SPACE_LG;
-    let actions_top = tabs_bottom + 12.0 + 20.0 + 8.0 + 32.0 + 8.0;
-    if y >= actions_top && y < actions_top + 36.0 {
-        // Primary "Create backup" first half, ghost "Refresh backups" second.
-        if x >= panel_x + pad && x < panel_x + pad + 140.0 {
-            return Some(ShellHit::Action(ShellAction::CreateBackup));
-        }
-        if x >= panel_x + pad + 148.0 && x < panel_x + pad + 288.0 {
-            return Some(ShellHit::Action(ShellAction::RefreshBackups));
-        }
+    if x < panel_x + pad || x >= x1 - pad {
         return Some(ShellHit::Absorb);
     }
-    let mut cursor = actions_top + 36.0 + 8.0;
-    for item in view.backups.iter() {
-        let bottom = cursor + 64.0 + 4.0;
-        if y >= cursor && y < bottom - 4.0 && x >= x1 - pad - 96.0 && x < x1 - pad {
-            return Some(ShellHit::Action(ShellAction::RestoreBackup(item.id.clone())));
+    let header = 20.0 + 12.0 + 16.0 + 12.0;
+    let row = CONTROL_SM + 12.0;
+    let mut cursor = tabs_bottom + 12.0 + header;
+    // Startup row.
+    if y >= cursor && y < cursor + CONTROL_SM {
+        return Some(ShellHit::Action(ShellAction::ToggleOpenHomeOnLoad));
+    }
+    cursor += row + header;
+    let appearance = [
+        ShellAction::CycleLanguage,
+        ShellAction::CycleLanguage, // placeholder; index 1 is direction (Absorb)
+        ShellAction::CycleUiScale,
+        ShellAction::CycleFontProfile,
+        ShellAction::CycleContrast,
+        ShellAction::CycleMotion,
+        ShellAction::CycleUserMessagePosition,
+        ShellAction::CycleCharacterMessagePosition,
+        ShellAction::CycleChatStyle,
+        ShellAction::CycleChatAvatarStyle,
+    ];
+    // Index 1 is the read-only direction row.
+    for (i, action) in appearance.iter().enumerate() {
+        if y >= cursor && y < cursor + CONTROL_SM {
+            if i == 1 {
+                return Some(ShellHit::Absorb);
+            }
+            return Some(ShellHit::Action(action.clone()));
         }
-        cursor = bottom;
+        cursor += row;
+    }
+    // Opacity / glass-blur cycles (React range sliders).
+    if y >= cursor && y < cursor + CONTROL_SM {
+        return Some(ShellHit::Action(ShellAction::CycleUiOpacity));
+    }
+    cursor += row;
+    if y >= cursor && y < cursor + CONTROL_SM {
+        return Some(ShellHit::Action(ShellAction::CycleUiGlassBlur));
+    }
+    cursor += row;
+    // Safe-mode field (20) + hint (16) + section gap, then Diagnostics
+    // header (title 20 + hint 16) matching `general_tab`.
+    cursor += CONTROL_SM + 12.0 + 16.0 + 12.0 + 20.0 + 12.0 + 16.0 + 12.0;
+    if y >= cursor && y < cursor + 36.0 {
+        return Some(ShellHit::Action(ShellAction::RunDiagnostics));
+    }
+    cursor += 36.0 + 12.0;
+    if view.diagnostics.is_some() {
+        cursor += 7.0 * 20.0 + 12.0;
+    } else {
+        cursor += 16.0 + 12.0;
+    }
+    cursor += 16.0 + 12.0; // privacy / kernel-maintenance note
+    if y >= cursor && y < cursor + 36.0 {
+        if x < panel_x + pad + 180.0 {
+            return Some(ShellHit::Action(ShellAction::RebuildSearch));
+        }
+        return Some(ShellHit::Action(ShellAction::ClearDiagnosticCache));
     }
     Some(ShellHit::Absorb)
 }
 
-/// React `MemoryEditor` body over `memories.*`. Owns the 3-tab band
-/// (API / Config / Memories), then heading 20 + hint 16 (outer gaps 8),
-/// memory cards 112 (normal) / 172 (editing) separated by gap 8, an optional
-/// empty note / error line, and the create form (156) while not editing.
-/// Text inputs resolve keyboard focus via their `data-part` rects in the
-/// desktop host, so they Absorb here. Mirrors
-/// `ai_settings_tab.rs::memories_tab`.
-fn memories_hit(view: &ProductShellView, x: f32, y: f32, panel_x: f32, x1: f32) -> Option<ShellHit> {
+/// React `AdvancedPromptSettings` body: mode switch, serialization cycle,
+/// optional Save. Shares the 4-tab band with API/Config/Memories.
+fn advanced_hit(
+    view: &ProductShellView,
+    x: f32,
+    y: f32,
+    panel_x: f32,
+    x1: f32,
+) -> Option<ShellHit> {
     if !view.sidebar_open {
         return None;
     }
@@ -1207,7 +1508,130 @@ fn memories_hit(view: &ProductShellView, x: f32, y: f32, panel_x: f32, x1: f32) 
         return Some(ShellHit::Absorb);
     }
     let pad = SPACE_LG;
-    let tabs = ["providers", "presets", "memories"];
+    let tabs_top = header_end + SPACE_XS;
+    let tabs_bottom = tabs_top + CONTROL_SM + SPACE_XS;
+    if y >= tabs_top && y < tabs_bottom {
+        let tabs_x0 = panel_x + SPACE_LG;
+        let span = (panel_w - SPACE_LG * 2.0).max(1.0);
+        let idx = (((x - tabs_x0) / span) * AI_TABS.len() as f32).floor() as usize;
+        return Some(ShellHit::Action(ShellAction::SetTab(
+            AI_TABS[idx.min(AI_TABS.len() - 1)].into(),
+        )));
+    }
+    let mut cursor = tabs_bottom + 12.0;
+    if y >= cursor && y < cursor + 40.0 {
+        return Some(ShellHit::Action(ShellAction::CyclePromptMode));
+    }
+    cursor += 40.0 + 8.0 + 20.0 + 8.0 + 16.0 + 8.0;
+    if view.prompt_template_mode != "text" {
+        if y >= cursor && y < cursor + 36.0 && x >= panel_x + pad && x < x1 - pad {
+            return Some(ShellHit::Action(ShellAction::CycleInstructSelection));
+        }
+        cursor += 36.0 + 8.0 + 16.0 + 8.0;
+        if view.instruct_selection == "custom"
+            && y >= cursor
+            && y < cursor + 36.0
+            && x >= panel_x + pad
+            && x < panel_x + pad + 140.0
+        {
+            return Some(ShellHit::Action(ShellAction::SaveInstructTemplate));
+        }
+    }
+    Some(ShellHit::Absorb)
+}
+
+/// React `SettingsPanel` DataTab body: SillyTavern migration honesty,
+/// activation status, then the Create/Refresh action row and backup rows.
+/// Geometry mirrors `settings_tab.rs::data_tab`.
+fn data_hit(
+    view: &ProductShellView,
+    x: f32,
+    y: f32,
+    panel_x: f32,
+    x1: f32,
+    tabs_bottom: f32,
+) -> Option<ShellHit> {
+    let pad = SPACE_LG;
+    let mut cursor = tabs_bottom + 12.0;
+    // Migration: title 20 + gap 8 + hint 32 + gap 8 + analyze 36.
+    cursor += 20.0 + 8.0 + 32.0 + 8.0;
+    if y >= cursor && y < cursor + 36.0 && x >= panel_x + pad && x < x1 - pad {
+        return Some(ShellHit::Action(ShellAction::AnalyzeSillyTavern));
+    }
+    cursor += 36.0 + 8.0 + 32.0 + 8.0; // button + safety note
+                                       // Activation status is read-only.
+    cursor += 20.0 + 8.0 + 32.0 + 8.0; // title + hint
+    if let Some(status) = view.data_activation.as_ref() {
+        cursor += 20.0 + 8.0; // layout
+        cursor += 20.0 + 8.0; // active root
+        if status.active_root_id.is_some() {
+            cursor += 20.0 + 8.0;
+        }
+        if status.pending.is_some() {
+            cursor += 32.0 + 8.0;
+        }
+        cursor += 16.0 + 8.0; // journal heading
+        if status.entries.is_empty() {
+            cursor += 16.0 + 8.0;
+        } else {
+            cursor += status.entries.len() as f32 * (20.0 + 8.0);
+        }
+    } else {
+        cursor += 16.0 + 8.0; // unavailable
+    }
+    // Backups: title 20 + gap 8 + hint 32 + gap 8 + actions 36.
+    cursor += 20.0 + 8.0 + 32.0 + 8.0;
+    let actions_top = cursor;
+    if y >= actions_top && y < actions_top + 36.0 {
+        // Primary "Create backup" first half, ghost "Refresh backups" second.
+        if x >= panel_x + pad && x < panel_x + pad + 140.0 {
+            return Some(ShellHit::Action(ShellAction::CreateBackup));
+        }
+        if x >= panel_x + pad + 148.0 && x < panel_x + pad + 288.0 {
+            return Some(ShellHit::Action(ShellAction::RefreshBackups));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    cursor = actions_top + 36.0 + 8.0;
+    for item in view.backups.iter() {
+        let bottom = cursor + 64.0 + 4.0;
+        if y >= cursor && y < bottom - 4.0 && x >= x1 - pad - 96.0 && x < x1 - pad {
+            return Some(ShellHit::Action(ShellAction::RestoreBackup(
+                item.id.clone(),
+            )));
+        }
+        cursor = bottom;
+    }
+    Some(ShellHit::Absorb)
+}
+
+/// React `MemoryEditor` body over `memories.*`. Owns the 4-tab band
+/// (API / Config / Memories / Advanced), then heading 20 + hint 16 (outer gaps 8),
+/// memory cards 112 (normal) / 172 (editing) separated by gap 8, an optional
+/// empty note / error line, and the create form (156) while not editing.
+/// Text inputs resolve keyboard focus via their `data-part` rects in the
+/// desktop host, so they Absorb here. Mirrors
+/// `ai_settings_tab.rs::memories_tab`.
+fn memories_hit(
+    view: &ProductShellView,
+    x: f32,
+    y: f32,
+    panel_x: f32,
+    x1: f32,
+) -> Option<ShellHit> {
+    if !view.sidebar_open {
+        return None;
+    }
+    let (_, panel_w) = panel_origin(view);
+    let header_end = header_bottom(view);
+    if y < header_end {
+        if x >= x1 - CONTROL_SM - SPACE_LG {
+            return Some(ShellHit::Action(ShellAction::ClosePanel));
+        }
+        return Some(ShellHit::Absorb);
+    }
+    let pad = SPACE_LG;
+    let tabs = AI_TABS;
     let tabs_top = header_end + SPACE_XS;
     let tabs_bottom = tabs_top + CONTROL_SM + SPACE_XS;
     if y >= tabs_top && y < tabs_bottom {
@@ -1240,7 +1664,9 @@ fn memories_hit(view: &ProductShellView, x: f32, y: f32, panel_x: f32, x1: f32) 
                     return Some(ShellHit::Action(ShellAction::MemoryEditCancel));
                 }
                 if x >= inner_r - 96.0 && x < inner_r {
-                    return Some(ShellHit::Action(ShellAction::MemoryDeleteOpen(item.id.clone())));
+                    return Some(ShellHit::Action(ShellAction::MemoryDeleteOpen(
+                        item.id.clone(),
+                    )));
                 }
                 return Some(ShellHit::Absorb);
             }
@@ -1269,9 +1695,7 @@ fn memories_hit(view: &ProductShellView, x: f32, y: f32, panel_x: f32, x1: f32) 
             if x >= inner_l + 104.0 && x < inner_l + 200.0 {
                 return Some(ShellHit::Action(ShellAction::MemoryDraftToggleScope));
             }
-            if view.memory_draft_scope_character
-                && x >= inner_l + 208.0
-                && x < inner_r - 88.0 - 8.0
+            if view.memory_draft_scope_character && x >= inner_l + 208.0 && x < inner_r - 88.0 - 8.0
             {
                 return Some(ShellHit::Action(ShellAction::MemoryCycleCharacter));
             }
@@ -1311,7 +1735,7 @@ fn presets_config_hit(
         return Some(ShellHit::Absorb);
     }
     let pad = SPACE_LG;
-    let tabs = ["providers", "presets", "memories"];
+    let tabs = AI_TABS;
     let tabs_top = header_end + SPACE_XS;
     let tabs_bottom = tabs_top + CONTROL_SM + SPACE_XS;
     if y >= tabs_top && y < tabs_bottom {
@@ -1391,7 +1815,7 @@ fn providers_hit(
         return Some(ShellHit::Absorb);
     }
     let pad = SPACE_LG;
-    let tabs = ["providers", "presets", "memories"];
+    let tabs = AI_TABS;
     let tabs_top = header_end + SPACE_XS;
     let tabs_bottom = tabs_top + CONTROL_SM + SPACE_XS;
     if y >= tabs_top && y < tabs_bottom {
@@ -1424,9 +1848,13 @@ fn providers_hit(
         let bottom = cursor + 64.0 + 4.0;
         if y >= cursor && y < bottom - 4.0 && x >= panel_x + pad && x < inner_r {
             if x >= inner_r - 12.0 - 96.0 && x < inner_r - 12.0 {
-                return Some(ShellHit::Action(ShellAction::ProviderDeleteOpen(item.id.clone())));
+                return Some(ShellHit::Action(ShellAction::ProviderDeleteOpen(
+                    item.id.clone(),
+                )));
             }
-            return Some(ShellHit::Action(ShellAction::SelectProvider(item.id.clone())));
+            return Some(ShellHit::Action(ShellAction::SelectProvider(
+                item.id.clone(),
+            )));
         }
         cursor = bottom;
     }
@@ -1461,9 +1889,13 @@ fn secrets_hit(
         return Some(ShellHit::Absorb);
     }
     let pad = SPACE_LG;
-    let rows = 5.0 + if status.format_version.is_some() { 1.0 } else { 0.0 };
-    let button_top =
-        tabs_bottom + 12.0 + 20.0 + 8.0 + 32.0 + 8.0 + 64.0 + 8.0 + rows * 20.0 + 8.0;
+    let rows = 5.0
+        + if status.format_version.is_some() {
+            1.0
+        } else {
+            0.0
+        };
+    let button_top = tabs_bottom + 12.0 + 20.0 + 8.0 + 32.0 + 8.0 + 64.0 + 8.0 + rows * 20.0 + 8.0;
     if y >= button_top && y < button_top + 36.0 {
         if x >= panel_x + pad && x < x1 - pad {
             return Some(ShellHit::Action(ShellAction::LockSecrets));

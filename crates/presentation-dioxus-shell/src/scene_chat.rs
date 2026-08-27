@@ -23,8 +23,8 @@ use dioxus_core::Element;
 use dioxus_core_macro::rsx;
 use neotavern_presentation_blueprint::v1::{ContextUsageSummaryV1, UiNodeV1, UiSceneV1};
 use neotavern_presentation_blueprint::{
-    ChatSurfaceStateV1, UiActionV1, UiBlueprintDocumentV1, ViewportClassV1,
-    materialize_chat_scene_v1_from_document,
+    materialize_chat_scene_v1_from_document, ChatSurfaceStateV1, UiActionV1, UiBlueprintDocumentV1,
+    ViewportClassV1,
 };
 
 use crate::product_path::{ProductChatView, ProductChrome};
@@ -189,6 +189,9 @@ struct ChromeCtx {
     /// renders (React `ChatComposer` `contextPanel` slot).
     context_panel_open: bool,
     context_summary: Option<ContextUsageSummaryV1>,
+    /// Waiting `tool_call` name (React `ToolActivityBadge`). `None` hides
+    /// the badge. Arguments/results never travel here.
+    tool_activity_name: Option<String>,
 }
 
 /// Values scoped to one instantiated message row.
@@ -244,7 +247,8 @@ pub fn blueprint_chrome(view: &ProductChatView) -> Option<ChromeElements> {
     // RSX renders them.
     let interactive = view.editing_message_id.is_some()
         || view.history_open_for.is_some()
-        || view.snapshots_menu_open;
+        || view.snapshots_menu_open
+        || view.header_search_open;
     if overlay || nested || interactive {
         if current_source() != ChatBlueprintSource::Disabled {
             let reason = if interactive {
@@ -333,6 +337,7 @@ pub fn blueprint_chrome(view: &ProductChatView) -> Option<ChromeElements> {
         font_px,
         context_panel_open: view.context_panel_open,
         context_summary: view.context_summary.clone(),
+        tool_activity_name: view.tool_activity_name.clone(),
     };
 
     let state = ChatSurfaceStateV1 {
@@ -374,9 +379,13 @@ fn synthesized_messages(view: &ProductChatView) -> Vec<MessageDto> {
             sequence: 0,
             generation_run_id: row.run_id.clone(),
             meta: FreeObject {
-                payload: serde_json::Value::Object(serde_json::Map::new()),
+                payload: if row.manual_excluded {
+                    serde_json::json!({ "manualExcluded": true })
+                } else {
+                    serde_json::json!({ "manualExcluded": false })
+                },
             },
-            checkpoint_chat_id: None,
+            checkpoint_chat_id: row.checkpoint_chat_id.clone(),
         })
         .collect()
 }
@@ -474,8 +483,10 @@ fn render_search_button() -> Element {
         button {
             class: "ChatWorkspace_headerSearch",
             r#type: "button",
+            "data-action": "header-search",
             "data-part": "header-search",
             "aria-label": "Search messages",
+            title: "Search messages",
             style: "flex:none;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:none;border-radius:20px;background:transparent;color:#c5bbb2;",
             {crate::product_shell::icon("MagnifyingGlass", 17)}
         }
@@ -517,7 +528,21 @@ fn render_viewport_root(node: &UiNodeV1, ctx: &ChromeCtx) -> Element {
                 class: "ChatPage_messageCanvas",
                 "data-component": "chat-message-list",
                 style: "display:flex;flex-direction:column;gap:24px;min-height:0;",
-                for child in node.children.iter() { {render_viewport_root(child, ctx)} }
+                for child in node.children.iter() {
+                    { rsx! {
+                        if is_streaming_message_node(child) {
+                            if let Some(name) = ctx.tool_activity_name.as_deref() {
+                                {crate::tool_activity_badge(name)}
+                            }
+                        }
+                        {render_viewport_root(child, ctx)}
+                    } }
+                }
+                if ctx.tool_activity_name.is_some()
+                    && !node.children.iter().any(is_streaming_message_node)
+                {
+                    {crate::tool_activity_badge(ctx.tool_activity_name.as_deref().unwrap_or("tool"))}
+                }
             }
         },
         _ => match row_of(node) {
@@ -525,6 +550,10 @@ fn render_viewport_root(node: &UiNodeV1, ctx: &ChromeCtx) -> Element {
             None => render_plain_container(node, ctx, None),
         },
     }
+}
+
+fn is_streaming_message_node(node: &UiNodeV1) -> bool {
+    node.id.rsplit(':').next() == Some("streaming")
 }
 
 /// Extracts the row's message from its scene content (`ChatMessage`).
@@ -739,21 +768,29 @@ fn render_row_child(node: &UiNodeV1, ctx: &ChromeCtx, row: &RowView) -> Element 
 /// Native action-bar button (`message_action_button` in lib.rs): v1 style,
 /// icon size 16, carries `data-message-id`, aria-label + title.
 fn message_action_button(kind: &str, row: &RowView) -> Element {
-    // React renders the prompt-plan trigger only for rows whose meta carries
-    // `generationRunId` (MessageDetailsCardV2 footer action).
-    if kind == "prompt" && row.message.generation_run_id.is_none() {
+    // React renders the prompt-plan / steps triggers only for rows whose
+    // meta carries `generationRunId` (MessageDetailsCardV2 footer actions).
+    if (kind == "prompt" || kind == "steps") && row.message.generation_run_id.is_none() {
         return rsx! {};
     }
+    if kind == "delete-checkpoint" && row.message.checkpoint_chat_id.is_none() {
+        return rsx! {};
+    }
+    let excluded =
+        row.message.meta.payload.get("manualExcluded") == Some(&serde_json::Value::Bool(true));
     let (label, icon) = match kind {
+        "context" if excluded => ("Include in prompt context", "Eye"),
         "context" => ("Exclude from prompt context", "EyeSlash"),
         "edit" => ("Edit message", "PencilSimple"),
         "copy" => ("Copy", "Copy"),
         "checkpoint" => ("Checkpoint", "Flag"),
         "branch" => ("Branch", "GitBranch"),
+        "delete-checkpoint" => ("Remove checkpoint", "Flag"),
         "delete" => ("Delete message", "Trash"),
         "rollback" => ("Rollback to here", "ArrowUUpLeft"),
         "history" => ("Edit history", "ClockCounterClockwise"),
-        "prompt" => ("View prompt plan", "TextAlignLeft"),
+        "prompt" => ("View prompt plan", "BookOpenText"),
+        "steps" => ("View run steps", "List"),
         _ => ("", ""),
     };
     let uuid = row.uuid;
@@ -1310,6 +1347,9 @@ fn data_action_attr(action: &UiActionV1) -> Option<String> {
         UiActionV1::ChatMessageRegenerate => "regenerate",
         UiActionV1::ChatMessageSwipePrevious => "swipe-previous",
         UiActionV1::ChatMessageSwipeNext => "swipe-next",
+        UiActionV1::ChatMessagePrompt { .. } => "prompt",
+        UiActionV1::ChatMessageSteps { .. } => "steps",
+        UiActionV1::ChatMessageDeleteCheckpoint { .. } => "delete-checkpoint",
         // Declarative custom intents publish their full authored name so the
         // hit table can route them without a kernel round-trip.
         UiActionV1::Custom { name, .. } => return Some(name.clone()),

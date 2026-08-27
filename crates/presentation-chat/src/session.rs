@@ -1,78 +1,79 @@
 use contracts_generated::generated::{
-    CharacterDto, ChatDto, ErrorDto, GenerationEvent, LorebookDto, LorebookEntryDto,
-    LorebookEntryInput, LorebookEntryPatch, MessageDraftDto, MessageDto, MessageRole,
-    PagedCharacters, PagedChats, PagedMessages, PersonaDto, PluginsItem, RequestAssetsContent,
-    RequestCancelGeneration, RequestCreateCharacter, RequestCreateChat, RequestCreateLorebook,
-    RequestCreateLorebookEntry, RequestCreateMessage, RequestCreatePersona, RequestDeleteCharacter,
-    RequestDeleteLorebook, RequestDeleteLorebookEntry, RequestDeleteMessage, RequestDeletePersona,
-    RequestEmpty, RequestGetCharacter, RequestGetChat, RequestListCharacters, RequestListChats,
-    RequestListLorebookEntries, RequestListLorebooks, RequestListMessages, RequestListPresets,
+    decode_backup_dto, decode_character_dto, decode_chat_dto, decode_lorebook_dto,
+    decode_lorebook_entry_dto, decode_memory_dto, decode_message_draft_dto, decode_message_dto,
+    decode_paged_characters, decode_paged_chats, decode_paged_generation_events,
+    decode_paged_messages, decode_persona_dto, decode_preset_dto, decode_prompt_plan,
+    decode_provider_config_dto, decode_result_assets_content, decode_result_assets_put,
+    decode_result_backups_restore, decode_result_characters_export_card,
+    decode_result_chat_snapshot, decode_result_chats_export, decode_result_data_activation_status,
+    decode_result_diagnostics_export, decode_result_imports_character_card,
+    decode_result_list_backups, decode_result_list_lorebook_entries, decode_result_list_lorebooks,
+    decode_result_list_memories, decode_result_list_personas, decode_result_list_presets,
+    decode_result_list_provider_configs, decode_result_list_providers, decode_result_list_tools,
+    decode_result_message_revision_list, decode_result_message_variant_list,
+    decode_result_plugins_list, decode_result_profile_export, decode_result_profile_import,
+    decode_result_profiles_create, decode_result_profiles_list, decode_result_secrets_lock,
+    decode_result_secrets_status, decode_result_settings, decode_result_snapshots_list,
+    decode_result_snapshots_rollback, decode_result_themes_list, decode_themes_item, AssetsItem,
+    BackupDto, CardExportFormat, CharacterDto, ChatDto, ErrorDto, FreeObject, GenerationEvent,
+    LorebookDto, LorebookEntryDto, LorebookEntryInput, LorebookEntryPatch, MemoryDto, MemoryScope,
+    MessageDraftDto, MessageDto, MessageRevisionDto, MessageRole, PagedCharacters, PagedChats,
+    PagedMessages, PersonaDto, PluginsItem, PresetDto, ProfilesItem, PromptPlan, ProviderConfigDto,
+    RequestAssetsContent, RequestAssetsPut, RequestBackupsRestore, RequestCancelGeneration,
+    RequestCharactersExportCard, RequestChatsExport, RequestCreateCharacter, RequestCreateChat,
+    RequestCreateChatSnapshot, RequestCreateLorebook, RequestCreateLorebookEntry,
+    RequestCreateMemory, RequestCreateMessage, RequestCreatePersona, RequestCreatePreset,
+    RequestDeleteCharacter, RequestDeleteChat, RequestDeleteLorebook, RequestDeleteLorebookEntry,
+    RequestDeleteMemory, RequestDeleteMessage, RequestDeletePersona, RequestDeletePreset,
+    RequestDeleteProviderConfig, RequestEmpty, RequestGetCharacter, RequestGetChat,
+    RequestGetPromptPlan, RequestImportsCharacterCard, RequestListCharacters, RequestListChats,
+    RequestListGenerationEvents, RequestListLorebookEntries, RequestListLorebooks,
+    RequestListMemories, RequestListMessages, RequestListPresets, RequestListProviderConfigs,
     RequestMessageDraftCommit, RequestMessageDraftDiscard, RequestMessageDraftGet,
-    RequestMessageDraftSave, RequestMessageVariantActivate, RequestMessageVariantsList,
-    RequestMessageRevisionsList, RequestUpdateMessage, MessageRevisionDto,
-    ResultMessageRevisionList, decode_result_message_revision_list,
-    RequestCreateChatSnapshot, RequestSnapshotsList, SnapshotOrigin,
-    ResultChatSnapshot, decode_result_chat_snapshot, decode_result_snapshots_list,
-    ResultChatsExport, RequestChatsExport, decode_result_chats_export,
-    RequestPluginsDisable, RequestPluginsEnable, RequestPluginsUninstall,
-    RequestRetryGeneration, RequestSettingsGet, RequestSnapshotsRollback, RequestStartGeneration,
-    RequestUpdateCharacter, RequestUpdateLorebook, RequestUpdateLorebookEntry, RequestProfileExport, RequestProfilesCreate,
-    RequestUpdatePersona,
-    RequestAssetsPut, AssetsItem, ResultAssetsPut, RequestImportsCharacterCard,
-    RequestCharactersExportCard, CardExportFormat, ResultCharactersExportCard,
-    ResultImportsCharacterCard, decode_result_assets_put, decode_result_imports_character_card,
-    decode_result_characters_export_card,
-    RequestProfileImport, RequestProfileImportPolicy, ResultProfileImport,
-    decode_result_profile_import,
-    RequestProfilesDelete, RequestProfilesRename, RequestUpdateChat, RequestDeleteChat,
-    RequestGetPromptPlan, ResultAssetsContent,
-    ResultListLorebookEntries, ResultListLorebooks, ResultListPersonas, ResultListPresets,
-    ResultListProviders, ResultPluginsList, ResultProfileExport, ResultProfilesCreate,
-    ResultProfilesList, ResultSettings, SettingsItem, decode_character_dto,
-    decode_chat_dto, decode_lorebook_dto, decode_lorebook_entry_dto, decode_message_draft_dto,
-    decode_message_dto, decode_paged_characters, decode_paged_chats, decode_paged_messages,
-    decode_persona_dto, decode_prompt_plan, decode_result_assets_content,
-    decode_result_list_lorebook_entries,
-    decode_result_list_lorebooks, decode_result_list_personas, decode_result_list_presets,
-    decode_result_list_providers, decode_result_message_variant_list, decode_result_plugins_list,
-    decode_result_profile_export, decode_result_profiles_create, decode_result_profiles_list,
-    decode_result_settings, decode_result_snapshots_rollback, ProfilesItem, PromptPlan,
-    ResultThemesList, RequestThemesActivate, RequestThemesUninstall, ThemesItem,
-    decode_result_themes_list, decode_themes_item, ResultSecretsLock, ResultSecretsStatus,
-    decode_result_secrets_lock, decode_result_secrets_status, ResultListTools, ToolSpec,
-    decode_result_list_tools, RequestSettingsUpdate, RequestSettingsUpdateSettings,
-    BackupDto, ResultBackupsRestore, RequestBackupsRestore, decode_backup_dto,
-    decode_result_list_backups, decode_result_backups_restore,
-    MemoryDto, MemoryScope, RequestListMemories, RequestCreateMemory, RequestUpdateMemory,
-    RequestDeleteMemory, decode_result_list_memories, decode_memory_dto,
-    PresetDto, RequestCreatePreset, RequestUpdatePreset, RequestDeletePreset, decode_preset_dto,
-    ProviderConfigDto, RequestListProviderConfigs, RequestSetProviderConfig,
-    RequestDeleteProviderConfig, decode_result_list_provider_configs,
-    decode_provider_config_dto,
+    RequestMessageDraftSave, RequestMessageRevisionsList, RequestMessageVariantActivate,
+    RequestMessageVariantsList, RequestPluginsDisable, RequestPluginsEnable,
+    RequestPluginsUninstall, RequestProfileExport, RequestProfileImport,
+    RequestProfileImportPolicy, RequestProfilesCreate, RequestProfilesDelete,
+    RequestProfilesRename, RequestRetryGeneration, RequestSetProviderConfig, RequestSettingsGet,
+    RequestSettingsUpdate, RequestSettingsUpdateSettings, RequestSnapshotsList,
+    RequestSnapshotsRollback, RequestStartGeneration, RequestThemesActivate,
+    RequestThemesUninstall, RequestUpdateCharacter, RequestUpdateChat, RequestUpdateLorebook,
+    RequestUpdateLorebookEntry, RequestUpdateMemory, RequestUpdateMessage, RequestUpdatePersona,
+    RequestUpdatePreset, ResultAssetsContent, ResultAssetsPut, ResultBackupsRestore,
+    ResultCharactersExportCard, ResultChatSnapshot, ResultChatsExport, ResultDataActivationStatus,
+    ResultDiagnosticsExport, ResultImportsCharacterCard, ResultListLorebookEntries,
+    ResultListLorebooks, ResultListPersonas, ResultListPresets, ResultListProviders,
+    ResultListTools, ResultMessageRevisionList, ResultPluginsList, ResultProfileExport,
+    ResultProfileImport, ResultProfilesCreate, ResultProfilesList, ResultSecretsLock,
+    ResultSecretsStatus, ResultSettings, ResultThemesList, SettingsItem, SnapshotOrigin,
+    ThemesItem, ToolSpec,
 };
 use neotavern_chat_viewport::{
     GeometrySnapshot, HeightIndex, HeightKind, LogicalItemId, PredictorBudgets, PresentDecision,
     PresentOutcome, TileCache, ViewportSession,
 };
 use neotavern_presentation_dioxus_shell::{
-    assert_registered_command, chrome_metrics, mount_product_chat, CharacterCardView,
-    CharacterDraftView, ChatCardView, ContextUsageBreakdownV1, ContextUsageSummaryV1,
-    LorebookCardView, LorebookEntryCardView, PersonaCardView, PluginCardView, PresetCardView,
-    ProfileCardView,
-    ProductChatView, ProductChrome, ProductShellView, ProviderCardView, RowKind, SafeAreaInsets,
-    ThemeCardView, ToolCardView, VisibleRow, PRODUCT_PATH_VISIBLE,
-    BackupCardView, MemoryCardView, PresetValueRow,
-    ProviderConfigCardView, RevisionRow, SnapshotItemView,
+    assert_registered_command, chrome_metrics, mount_product_chat, BackupCardView,
+    CharacterCardView, CharacterDraftView, ChatCardView, ContextUsageBreakdownV1,
+    ContextUsageSummaryV1, LorebookCardView, LorebookEntryCardView, MemoryCardView,
+    PersonaCardView, PluginCardView, PresetCardView, PresetValueRow, ProductChatView,
+    ProductChrome, ProductShellView, ProfileCardView, ProviderCardView, ProviderConfigCardView,
+    RevisionRow, RowKind, RunStepView, SafeAreaInsets, SnapshotItemView, ThemeCardView,
+    ToolCardView, VisibleRow, PRODUCT_PATH_VISIBLE,
 };
 
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::collections::{HashMap, VecDeque};
 
 use crate::error::ChatRouteError;
-use crate::shell_hit::{ShellAction, next_sort};
-use crate::wire::{PAGE_LIMIT, ProductWire, StreamFrame};
+use crate::shell_hit::{
+    next_choice, next_gallery_columns, next_gallery_sort, next_sort, next_step, ShellAction,
+    CHAT_AVATAR_STYLES, CHAT_STYLES, LANGUAGES, MESSAGE_POSITIONS, UI_CONTRASTS, UI_FONT_PROFILES,
+    UI_MOTIONS, UI_SCALES,
+};
+use crate::wire::{ProductWire, StreamFrame, PAGE_LIMIT};
 
 /// Bounded CPU avatar thumbnail cache: one entry per `asset_id` is shared by
 /// header and card, evicted LRU under a byte budget and wired to the same
@@ -134,6 +135,10 @@ pub struct ChatRouteState {
     pub draft: Option<MessageDraftDto>,
     pub composer_text: String,
     pub streaming_text: String,
+    /// Display name of the durable `tool_call` the run is waiting on
+    /// (React `ToolActivityBadge`). Cleared on any other step type, a
+    /// completed/failed/cancelled run, or a new `generation.start`.
+    pub tool_activity_name: Option<String>,
     pub active_run_id: Option<String>,
     pub last_error: Option<ErrorDto>,
     pub stream_handle: Option<String>,
@@ -151,6 +156,9 @@ pub struct ChatRouteState {
     pub character_sort: String,
     pub character_view: String,
     pub character_tab: String,
+    /// Gallery toolbar (React `GalleryTab` local state, not persisted).
+    pub gallery_columns: u32,
+    pub gallery_sort: String,
     pub sidebar_panel: String,
     pub sidebar_open: bool,
     pub rail_expanded: bool,
@@ -186,6 +194,8 @@ pub struct ChatRouteState {
     pub persona_name_draft: String,
     pub persona_description_draft: String,
     pub active_persona_id: Option<String>,
+    /// User-defined `{{name}}` variables (`settings` key `macro-variables`).
+    pub macro_variables: HashMap<String, String>,
     pub lorebooks: Vec<LorebookDto>,
     pub selected_lorebook_id: Option<String>,
     pub lorebook_tab: String,
@@ -240,6 +250,31 @@ pub struct ChatRouteState {
     pub dir: String,
     pub ai_tab: String,
     pub settings_tab: String,
+    /// React `useUiStore` General-tab appearance (local, not Product Wire).
+    pub ui_scale: String,
+    pub ui_contrast: String,
+    pub ui_font_profile: String,
+    pub ui_motion: String,
+    pub open_home_on_load: bool,
+    pub chat_style: String,
+    pub chat_avatar_style: String,
+    pub user_message_position: String,
+    pub character_message_position: String,
+    /// React `useUiStore` sliders (local, 0–100 / 0–40).
+    pub ui_opacity: u32,
+    pub ui_glass_blur: u32,
+    /// Kernel diagnostics bundle (`diagnostics.export`; React
+    /// `useKernelDiagnostics`). `None` = not loaded yet.
+    pub diagnostics: Option<ResultDiagnosticsExport>,
+    /// Data-root activation (`data.activation.status`; React
+    /// `ActivationStatusPanel`). `None` = not loaded / error.
+    pub data_activation: Option<ResultDataActivationStatus>,
+    /// AI Advanced (`prompt-template` / `instruct-format` / `instruct-format-id`).
+    pub prompt_template: Value,
+    pub instruct_format: Option<Value>,
+    pub instruct_format_id: Option<String>,
+    pub instruct_selection: String,
+    pub instruct_form_error: Option<String>,
     /// Configuration profiles (`profiles.list`; React `ProfilesPanel`).
     pub profiles: Vec<ProfilesItem>,
     pub profile_create_name: String,
@@ -267,6 +302,18 @@ pub struct ChatRouteState {
     pub prompt_plan_not_found: bool,
     /// Any other error renders inside the dialog (React `isError` state).
     pub prompt_plan_error: Option<String>,
+    /// Run-step transcript (`generation.events`; React `RunTranscriptPanel`).
+    pub run_transcript_open: bool,
+    pub run_transcript_run_id: Option<String>,
+    pub run_transcript_steps: Vec<RunStepView>,
+    pub run_transcript_error: Option<String>,
+    /// Delete-checkpoint confirm dialog.
+    pub checkpoint_delete_open: bool,
+    pub checkpoint_delete_message_id: Option<String>,
+    /// Header message-search overlay (React `ChatHeader`).
+    pub header_search_open: bool,
+    pub header_search_query: String,
+    pub header_search_match_count: u64,
     /// Theme catalog (`themes.list`; React `ThemesPage` / Settings `ThemesTab`).
     pub themes: Vec<ThemesItem>,
     /// Theme the delete-confirm dialog asks about.
@@ -429,6 +476,8 @@ impl<W: ProductWire> ChatSession<W> {
         session.state.character_sort = "name".into();
         session.state.character_view = "list".into();
         session.state.character_tab = "cards".into();
+        session.state.gallery_columns = 3;
+        session.state.gallery_sort = "oldest".into();
         session.state.persona_tab = "cards".into();
         session.state.persona_sort = "asc".into();
         session.state.lorebook_tab = "books".into();
@@ -436,6 +485,19 @@ impl<W: ProductWire> ChatSession<W> {
         session.state.dir = "ltr".into();
         session.state.ai_tab = "providers".into();
         session.state.settings_tab = "general".into();
+        session.state.ui_scale = "medium".into();
+        session.state.ui_contrast = "normal".into();
+        session.state.ui_font_profile = "default".into();
+        session.state.ui_motion = "system".into();
+        session.state.open_home_on_load = true;
+        session.state.chat_style = "clean".into();
+        session.state.chat_avatar_style = "round".into();
+        session.state.user_message_position = "right".into();
+        session.state.character_message_position = "left".into();
+        session.state.ui_opacity = 70;
+        session.state.ui_glass_blur = 16;
+        session.state.prompt_template = json!({ "mode": "chat" });
+        session.state.instruct_selection = "native".into();
         session.state.context_panel_open = false;
         session.state.message_edit_id = None;
         session.state.history_message_id = None;
@@ -704,6 +766,18 @@ impl<W: ProductWire> ChatSession<W> {
             ));
             return Ok(());
         }
+        // React `ChatPage.send`: text starting with `/` is a slash command,
+        // never a user message. Native has no plugin/legacy slash runtime, so
+        // every `/cmd` is `SLASH_COMMAND_NOT_FOUND` — composer stays, no wire.
+        if message.starts_with('/') {
+            let command = slash_command_name(&message);
+            self.record_error(ChatRouteError::product(
+                "SLASH_COMMAND_NOT_FOUND",
+                json!({ "command": command }),
+            ));
+            self.bump_scene();
+            return Ok(());
+        }
         let _ = self.save_draft();
         let created = match self.call_decode(
             "chats.messages.create",
@@ -821,8 +895,10 @@ impl<W: ProductWire> ChatSession<W> {
                     GenerationEvent::GenerationCancelled => {
                         self.clear_stream_progress();
                     }
-                    GenerationEvent::GenerationStep { .. }
-                    | GenerationEvent::ConsumerLagged { .. } => {}
+                    GenerationEvent::GenerationStep { step } => {
+                        apply_generation_step(&mut self.state, step);
+                    }
+                    GenerationEvent::ConsumerLagged { .. } => {}
                 }
             }
             StreamFrame::Error(error) => {
@@ -856,6 +932,7 @@ impl<W: ProductWire> ChatSession<W> {
     fn clear_stream_progress(&mut self) {
         self.state.streaming_text.clear();
         self.state.last_checkpoint_sequence = None;
+        self.state.tool_activity_name = None;
     }
 
     pub fn drain_stream(&mut self) -> Result<(), ChatRouteError> {
@@ -915,22 +992,49 @@ impl<W: ProductWire> ChatSession<W> {
     }
 
     /// Message header data (React `MessageBubble` header): author name per
-    /// role plus an en-US `Intl`-style timestamp label.
-    fn build_row(&self, message: &MessageDto) -> VisibleRow {
-        let author = if message.role == MessageRole::User {
-            "You".into()
-        } else {
-            self.assistant_author()
-        };
-        VisibleRow {
-            id: message.id.clone(),
-            role: role_name(&message.role).into(),
-            content: message.content.clone(),
-            kind: row_kind(&message.content),
-            author,
-            timestamp: neotavern_presentation_dioxus_shell::format_timestamp(&message.created_at),
-            run_id: message.generation_run_id.clone(),
-        }
+    /// role plus an en-US `Intl`-style timestamp label. Display macros are
+    /// expanded on committed rows (not while streaming).
+    fn macro_context(&self) -> crate::macros::MacroContext {
+        crate::macros::build_macro_context(
+            self.user_display_name(),
+            self.char_display_name(),
+            self.state.macro_variables.clone(),
+            None,
+        )
+    }
+
+    fn user_display_name(&self) -> String {
+        let chat_persona = self
+            .state
+            .chat
+            .as_ref()
+            .and_then(|chat| chat.persona_id.as_deref());
+        let app = self.state.active_persona_id.as_deref();
+        pick_active_persona(&self.state.personas, chat_persona, app)
+            .map(|row| row.name.clone())
+            .filter(|name| !name.trim().is_empty())
+            .unwrap_or_else(|| "User".into())
+    }
+
+    fn char_display_name(&self) -> String {
+        self.state
+            .pinned_character_id
+            .as_deref()
+            .or(self.state.selected_character_id.as_deref())
+            .or(self
+                .state
+                .chat
+                .as_ref()
+                .map(|chat| chat.character_id.as_str()))
+            .and_then(|id| {
+                self.state
+                    .characters
+                    .iter()
+                    .find(|card| card.id == id)
+                    .map(|card| card.name.clone())
+            })
+            .filter(|name| !name.trim().is_empty())
+            .unwrap_or_else(|| "Assistant".into())
     }
 
     fn assistant_author(&self) -> String {
@@ -979,6 +1083,8 @@ impl<W: ProductWire> ChatSession<W> {
                 author: self.assistant_author(),
                 timestamp: String::new(),
                 run_id: None,
+                manual_excluded: false,
+                checkpoint_chat_id: None,
             });
         }
         // React chat chrome is header + composer only; the TripleGlass /
@@ -1038,6 +1144,13 @@ impl<W: ProductWire> ChatSession<W> {
             character_name,
             error_code: self.state.last_error.as_ref().map(|err| err.code.clone()),
             streaming: !self.state.streaming_text.is_empty() || self.state.stream_handle.is_some(),
+            tool_activity_name: if !self.state.streaming_text.is_empty()
+                || self.state.stream_handle.is_some()
+            {
+                self.state.tool_activity_name.clone()
+            } else {
+                None
+            },
             viewport_width: self.viewport_width,
             viewport_height: self.viewport_height,
             column_width: self.chat_column_width(),
@@ -1062,6 +1175,9 @@ impl<W: ProductWire> ChatSession<W> {
                     message_count: chat.message_count,
                 })
                 .collect(),
+            header_search_open: self.state.header_search_open,
+            header_search_query: self.state.header_search_query.clone(),
+            header_search_match_count: self.state.header_search_match_count,
         }
     }
 
@@ -1077,6 +1193,7 @@ impl<W: ProductWire> ChatSession<W> {
 
         let history: u64 = visible
             .iter()
+            .filter(|row| !row.manual_excluded)
             .map(|row| estimate_tokens(&row.content))
             .sum();
         let draft = estimate_tokens(&self.state.composer_text);
@@ -1161,7 +1278,11 @@ impl<W: ProductWire> ChatSession<W> {
             rail_expanded: self.state.rail_expanded,
             panel_width: self.panel_width(),
             density: "comfortable".into(),
-            font_scale: "medium".into(),
+            font_scale: if matches!(self.state.ui_scale.as_str(), "small" | "medium" | "large") {
+                self.state.ui_scale.clone()
+            } else {
+                "medium".into()
+            },
             insets: self.state.insets,
             editor_mode: "view".into(),
             create_dialog_open: self.state.create_dialog_open,
@@ -1171,8 +1292,16 @@ impl<W: ProductWire> ChatSession<W> {
             create_first_message: self.state.create_first_message.clone(),
             status_message: self.state.status_message.clone(),
             error_message: self.state.last_error.as_ref().map(|err| err.code.clone()),
-            gallery_columns: 3,
-            gallery_sort: "oldest".into(),
+            gallery_columns: if (1..=4).contains(&self.state.gallery_columns) {
+                self.state.gallery_columns
+            } else {
+                3
+            },
+            gallery_sort: if self.state.gallery_sort == "newest" {
+                "newest".into()
+            } else {
+                "oldest".into()
+            },
             expanded_greeting: None,
             tag_input: String::new(),
             personas: self.persona_cards(),
@@ -1252,6 +1381,12 @@ impl<W: ProductWire> ChatSession<W> {
             prompt_plan: self.state.prompt_plan.clone(),
             prompt_plan_not_found: self.state.prompt_plan_not_found,
             prompt_plan_error: self.state.prompt_plan_error.clone(),
+            run_transcript_open: self.state.run_transcript_open,
+            run_transcript_run_id: self.state.run_transcript_run_id.clone(),
+            run_transcript_steps: self.state.run_transcript_steps.clone(),
+            run_transcript_error: self.state.run_transcript_error.clone(),
+            checkpoint_delete_open: self.state.checkpoint_delete_open,
+            checkpoint_delete_message_id: self.state.checkpoint_delete_message_id.clone(),
             themes: self
                 .state
                 .themes
@@ -1319,7 +1454,10 @@ impl<W: ProductWire> ChatSession<W> {
                 .map(|item| BackupCardView {
                     id: item.id.clone(),
                     title: item.created_at.clone(),
-                    detail: format!("Manual backup · {:.1} MB", item.size_bytes as f64 / 1024.0 / 1024.0),
+                    detail: format!(
+                        "Manual backup · {:.1} MB",
+                        item.size_bytes as f64 / 1024.0 / 1024.0
+                    ),
                 })
                 .collect(),
             memories: self
@@ -1458,6 +1596,31 @@ impl<W: ProductWire> ChatSession<W> {
             },
             ai_tab: self.state.ai_tab.clone(),
             settings_tab: self.state.settings_tab.clone(),
+            ui_contrast: self.state.ui_contrast.clone(),
+            ui_font_profile: self.state.ui_font_profile.clone(),
+            ui_motion: self.state.ui_motion.clone(),
+            open_home_on_load: self.state.open_home_on_load,
+            chat_style: self.state.chat_style.clone(),
+            chat_avatar_style: self.state.chat_avatar_style.clone(),
+            user_message_position: self.state.user_message_position.clone(),
+            character_message_position: self.state.character_message_position.clone(),
+            ui_opacity: self.state.ui_opacity.min(100),
+            ui_glass_blur: self.state.ui_glass_blur.min(40),
+            diagnostics: self.state.diagnostics.clone(),
+            data_activation: self.state.data_activation.clone(),
+            prompt_template_mode: self
+                .state
+                .prompt_template
+                .get("mode")
+                .and_then(Value::as_str)
+                .unwrap_or("chat")
+                .to_string(),
+            instruct_selection: if self.state.instruct_selection.is_empty() {
+                "native".into()
+            } else {
+                self.state.instruct_selection.clone()
+            },
+            instruct_form_error: self.state.instruct_form_error.clone(),
         }
     }
 
@@ -1504,6 +1667,7 @@ impl<W: ProductWire> ChatSession<W> {
             f64::from(viewport_h),
             f64::from(self.state.scroll_offset_css),
             &self.assistant_author(),
+            &self.macro_context(),
         )
     }
 
@@ -1577,6 +1741,8 @@ impl<W: ProductWire> ChatSession<W> {
         let chat_result = self.load_open_chat();
         self.load_characters();
         self.load_chat_list();
+        // Personas + settings feed display macros (`{{user}}` / custom vars).
+        self.load_personas();
         chat_result
     }
 
@@ -1801,6 +1967,10 @@ impl<W: ProductWire> ChatSession<W> {
 
     pub fn set_character_tab(&mut self, tab: &str) {
         self.state.character_tab = tab.to_string();
+        if tab == "advanced" {
+            // React `CharacterLorebooks` queries `lorebooks.list` on mount.
+            self.load_lorebooks();
+        }
         self.bump_scene();
     }
 
@@ -1827,6 +1997,7 @@ impl<W: ProductWire> ChatSession<W> {
             "settings" => {
                 self.load_settings();
                 self.load_profiles();
+                self.load_diagnostics();
             }
             // Desktop rail Home opens the chats management panel over the
             // workspace (React `ChatManagementPanel`).
@@ -2222,7 +2393,8 @@ impl<W: ProductWire> ChatSession<W> {
             },
             decode_result_assets_put,
         );
-        let asset_id = match staged {            Ok(result) => result.asset.id,
+        let asset_id = match staged {
+            Ok(result) => result.asset.id,
             Err(err) => {
                 self.record_error(err);
                 self.bump_scene();
@@ -2297,8 +2469,8 @@ impl<W: ProductWire> ChatSession<W> {
     /// Cycle the duplicate policy (React `<select>`: reject / replace /
     /// remap); the host renders it as a cycling button.
     pub fn cycle_profile_import_policy(&mut self) {
-        let next = (self.state.profile_import_policy_index + 1)
-            % Self::PROFILE_IMPORT_POLICIES.len();
+        let next =
+            (self.state.profile_import_policy_index + 1) % Self::PROFILE_IMPORT_POLICIES.len();
         self.state.profile_import_policy_index = next;
         self.bump_scene();
     }
@@ -2315,8 +2487,7 @@ impl<W: ProductWire> ChatSession<W> {
             self.bump_scene();
             return;
         }
-        let policy =
-            Self::PROFILE_IMPORT_POLICIES[self.state.profile_import_policy_index].clone();
+        let policy = Self::PROFILE_IMPORT_POLICIES[self.state.profile_import_policy_index].clone();
         match self.call_decode(
             "profile.import",
             &RequestProfileImport {
@@ -2375,9 +2546,14 @@ impl<W: ProductWire> ChatSession<W> {
             decode_result_chat_snapshot,
         ) {
             Ok(ResultChatSnapshot {
-                chat: _child,
+                chat: child,
                 copied_messages,
             }) => {
+                if checkpoint {
+                    if let Some(row) = self.state.messages.iter_mut().find(|row| row.id == row_id) {
+                        row.checkpoint_chat_id = Some(child.id.clone());
+                    }
+                }
                 // The child chat is a real chat: keep the sidebar list honest.
                 self.load_chat_list();
                 self.state.status_message = Some(if checkpoint {
@@ -2577,6 +2753,79 @@ impl<W: ProductWire> ChatSession<W> {
         self.bump_scene();
     }
 
+    /// Duplicate the selected character (`characters.create` with
+    /// `"{name} copy"`; React `duplicateSelectedCharacter`). Only the fields
+    /// the native create contract carries (name / description / tags /
+    /// avatar) are copied.
+    pub fn duplicate_selected_character(&mut self) {
+        let Some(source) = self.state.selected_character_id.as_deref().and_then(|id| {
+            self.state
+                .characters
+                .iter()
+                .find(|row| row.id == id)
+                .cloned()
+        }) else {
+            return;
+        };
+        let req = RequestCreateCharacter {
+            name: format!("{} copy", source.name),
+            description: source.description.clone(),
+            tags: Some(source.tags.clone()),
+            avatar_asset_id: source.avatar_asset_id.clone(),
+            profile_id: None,
+        };
+        match self.call_decode("characters.create", &req, decode_character_dto) {
+            Ok(created) => {
+                self.state.selected_character_id = Some(created.id.clone());
+                self.state.pinned_character_id = Some(created.id.clone());
+                self.state.character_tab = "edit".into();
+                self.refresh_characters();
+                self.state.status_message = Some(format!("Created {}.", created.name));
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    /// React `CharacterLorebooks.createForCharacter`: `lorebooks.create` with
+    /// `characterId` + open the lorebooks manager.
+    fn create_character_lorebook(&mut self) {
+        let Some(character_id) = self.state.selected_character_id.clone() else {
+            return;
+        };
+        let req = RequestCreateLorebook {
+            name: "New lorebook".into(),
+            description: None,
+            entries: None,
+            character_id: Some(character_id),
+        };
+        match self.call_decode("lorebooks.create", &req, decode_lorebook_dto) {
+            Ok(created) => {
+                self.state.selected_lorebook_id = Some(created.id);
+                self.state.lorebook_tab = "book".into();
+                self.state.status_message = Some("Lorebook created.".into());
+                self.set_panel("lorebooks");
+            }
+            Err(err) => {
+                self.record_error(err);
+                self.bump_scene();
+            }
+        }
+    }
+
+    /// Wire DTO cannot express `characterId: null` (dto.ts: "null is not
+    /// expressible yet"). React kernel-plane silently omits the field;
+    /// native reports the honest capability gap instead of a no-op update.
+    fn unlink_character_lorebook(&mut self) {
+        self.record_error(ChatRouteError::Product(ErrorDto {
+            code: "CAPABILITY_UNAVAILABLE".into(),
+            params: json!({ "operationId": "lorebooks.update.unlink" }),
+            trace_id: None,
+            correlation_id: None,
+        }));
+        self.bump_scene();
+    }
+
     pub fn open_delete_dialog(&mut self) {
         let can_delete = match self.state.sidebar_panel.as_str() {
             "personas" => self.state.selected_persona_id.is_some(),
@@ -2640,10 +2889,15 @@ impl<W: ProductWire> ChatSession<W> {
                 "lorebooks" => self.set_lorebook_tab(&tab),
                 "providers" => {
                     let is_memories = tab == "memories";
+                    let is_advanced = tab == "advanced";
                     self.state.ai_tab = tab;
                     // React `MemoryEditor` queries on mount.
                     if is_memories {
                         self.load_memories();
+                    }
+                    // React `AdvancedPromptSettings` reads settings on mount.
+                    if is_advanced {
+                        self.load_settings();
                     }
                     self.bump_scene();
                 }
@@ -2652,10 +2906,11 @@ impl<W: ProductWire> ChatSession<W> {
                     let is_secrets = tab == "secrets";
                     let is_tools = tab == "tools";
                     let is_data = tab == "data";
+                    let is_general = tab == "general";
                     self.state.settings_tab = tab;
                     // React `ThemesTab` / `SecretsPanel` / `ToolsPanel` /
-                    // DataTab query on mount: load when the tab opens so the
-                    // surface is real, not a stub.
+                    // DataTab / GeneralTab query on mount: load when the tab
+                    // opens so the surface is real, not a stub.
                     if is_themes {
                         self.load_themes();
                     }
@@ -2667,6 +2922,10 @@ impl<W: ProductWire> ChatSession<W> {
                     }
                     if is_data {
                         self.load_backups();
+                        self.load_data_activation();
+                    }
+                    if is_general {
+                        self.load_diagnostics();
                     }
                     self.bump_scene();
                 }
@@ -2792,6 +3051,116 @@ impl<W: ProductWire> ChatSession<W> {
             ShellAction::ConfirmChatDelete => self.confirm_delete_chat(),
             ShellAction::OpenPromptPlan(run_id) => self.open_prompt_plan(&run_id),
             ShellAction::ClosePromptPlan => self.close_prompt_plan(),
+            ShellAction::OpenRunTranscript(run_id) => self.open_run_transcript(&run_id),
+            ShellAction::CloseRunTranscript => self.close_run_transcript(),
+            ShellAction::OpenCheckpointDelete(id) => self.open_checkpoint_delete(&id),
+            ShellAction::CloseCheckpointDelete => self.close_checkpoint_delete(),
+            ShellAction::ConfirmCheckpointDelete => self.confirm_checkpoint_delete(),
+            ShellAction::DuplicateCharacter => self.duplicate_selected_character(),
+            ShellAction::CreateCharacterLorebook => self.create_character_lorebook(),
+            ShellAction::UnlinkCharacterLorebook(_) => self.unlink_character_lorebook(),
+            ShellAction::UploadGalleryImage => {
+                // Kernel plane has no character gallery: React
+                // `useUploadCharacterImage` rejects with `UnsupportedError`.
+                self.record_error(ChatRouteError::Product(ErrorDto {
+                    code: "CAPABILITY_UNAVAILABLE".into(),
+                    params: json!({ "operationId": "characters.gallery.upload" }),
+                    trace_id: None,
+                    correlation_id: None,
+                }));
+                self.bump_scene();
+            }
+            ShellAction::CycleGalleryColumns => {
+                self.state.gallery_columns = next_gallery_columns(self.state.gallery_columns);
+                self.bump_scene();
+            }
+            ShellAction::CycleGallerySort => {
+                self.state.gallery_sort = next_gallery_sort(&self.state.gallery_sort).to_string();
+                self.bump_scene();
+            }
+            ShellAction::CycleLanguage => self.cycle_language(),
+            ShellAction::ToggleOpenHomeOnLoad => {
+                self.state.open_home_on_load = !self.state.open_home_on_load;
+                self.bump_scene();
+            }
+            ShellAction::CycleUiScale => {
+                self.state.ui_scale = next_choice(UI_SCALES, &self.state.ui_scale).to_string();
+                self.bump_scene();
+            }
+            ShellAction::CycleContrast => {
+                self.state.ui_contrast =
+                    next_choice(UI_CONTRASTS, &self.state.ui_contrast).to_string();
+                self.bump_scene();
+            }
+            ShellAction::CycleFontProfile => {
+                self.state.ui_font_profile =
+                    next_choice(UI_FONT_PROFILES, &self.state.ui_font_profile).to_string();
+                self.bump_scene();
+            }
+            ShellAction::CycleMotion => {
+                self.state.ui_motion = next_choice(UI_MOTIONS, &self.state.ui_motion).to_string();
+                self.bump_scene();
+            }
+            ShellAction::CycleChatStyle => {
+                self.state.chat_style =
+                    next_choice(CHAT_STYLES, &self.state.chat_style).to_string();
+                self.bump_scene();
+            }
+            ShellAction::CycleChatAvatarStyle => {
+                self.state.chat_avatar_style =
+                    next_choice(CHAT_AVATAR_STYLES, &self.state.chat_avatar_style).to_string();
+                self.bump_scene();
+            }
+            ShellAction::CycleUserMessagePosition => {
+                self.state.user_message_position =
+                    next_choice(MESSAGE_POSITIONS, &self.state.user_message_position).to_string();
+                self.bump_scene();
+            }
+            ShellAction::CycleCharacterMessagePosition => {
+                self.state.character_message_position =
+                    next_choice(MESSAGE_POSITIONS, &self.state.character_message_position)
+                        .to_string();
+                self.bump_scene();
+            }
+            ShellAction::CycleUiOpacity => {
+                self.state.ui_opacity = next_step(self.state.ui_opacity, 0, 100, 5);
+                self.bump_scene();
+            }
+            ShellAction::CycleUiGlassBlur => {
+                self.state.ui_glass_blur = next_step(self.state.ui_glass_blur, 0, 40, 4);
+                self.bump_scene();
+            }
+            ShellAction::RunDiagnostics => self.load_diagnostics(),
+            ShellAction::RebuildSearch => {
+                self.record_error(ChatRouteError::Product(ErrorDto {
+                    code: "CAPABILITY_UNAVAILABLE".into(),
+                    params: json!({ "operationId": "search.rebuild" }),
+                    trace_id: None,
+                    correlation_id: None,
+                }));
+                self.bump_scene();
+            }
+            ShellAction::ClearDiagnosticCache => {
+                self.record_error(ChatRouteError::Product(ErrorDto {
+                    code: "CAPABILITY_UNAVAILABLE".into(),
+                    params: json!({ "operationId": "diagnostics.cache" }),
+                    trace_id: None,
+                    correlation_id: None,
+                }));
+                self.bump_scene();
+            }
+            ShellAction::AnalyzeSillyTavern => {
+                self.record_error(ChatRouteError::Product(ErrorDto {
+                    code: "CAPABILITY_UNAVAILABLE".into(),
+                    params: json!({ "operationId": "imports.sillytavern.analyze" }),
+                    trace_id: None,
+                    correlation_id: None,
+                }));
+                self.bump_scene();
+            }
+            ShellAction::CyclePromptMode => self.cycle_prompt_mode(),
+            ShellAction::CycleInstructSelection => self.cycle_instruct_selection(),
+            ShellAction::SaveInstructTemplate => self.save_instruct_template(),
             ShellAction::UploadBackground => {
                 // Kernel plane has no wallpaper catalog: React
                 // `useUploadBackground` rejects with `UnsupportedError`.
@@ -3236,8 +3605,8 @@ impl<W: ProductWire> ChatSession<W> {
         let next_name = self.state.lorebook_name_draft.trim().to_string();
         let next_description = self.state.lorebook_description_draft.clone();
         let name_change = !next_name.is_empty() && next_name != current_name;
-        let description_change =
-            Some(next_description.clone()) != current_description && !(next_description.is_empty() && current_description.is_none());
+        let description_change = Some(next_description.clone()) != current_description
+            && !(next_description.is_empty() && current_description.is_none());
         if !name_change && !description_change {
             self.state.status_message = Some("No changes.".into());
             self.bump_scene();
@@ -3597,19 +3966,58 @@ impl<W: ProductWire> ChatSession<W> {
             }
         };
         vec![
-            PresetValueRow { label: "Context size".into(), value: parsed.max_context_tokens.to_string() },
-            PresetValueRow { label: "Max tokens".into(), value: fmt(d.max_tokens) },
-            PresetValueRow { label: "Temperature".into(), value: fmt(d.temperature) },
-            PresetValueRow { label: "Top P".into(), value: fmt(d.top_p) },
-            PresetValueRow { label: "Top K".into(), value: fmt(d.top_k) },
-            PresetValueRow { label: "Min P".into(), value: fmt(d.min_p) },
-            PresetValueRow { label: "Top A".into(), value: fmt(d.top_a) },
-            PresetValueRow { label: "Repetition penalty".into(), value: fmt(d.repetition_penalty) },
-            PresetValueRow { label: "Frequency penalty".into(), value: fmt(d.frequency_penalty) },
-            PresetValueRow { label: "Presence penalty".into(), value: fmt(d.presence_penalty) },
-            PresetValueRow { label: "Seed".into(), value: fmt(d.seed) },
-            PresetValueRow { label: "Reasoning".into(), value: d.reasoning.to_string() },
-            PresetValueRow { label: "Streaming".into(), value: d.stream.to_string() },
+            PresetValueRow {
+                label: "Context size".into(),
+                value: parsed.max_context_tokens.to_string(),
+            },
+            PresetValueRow {
+                label: "Max tokens".into(),
+                value: fmt(d.max_tokens),
+            },
+            PresetValueRow {
+                label: "Temperature".into(),
+                value: fmt(d.temperature),
+            },
+            PresetValueRow {
+                label: "Top P".into(),
+                value: fmt(d.top_p),
+            },
+            PresetValueRow {
+                label: "Top K".into(),
+                value: fmt(d.top_k),
+            },
+            PresetValueRow {
+                label: "Min P".into(),
+                value: fmt(d.min_p),
+            },
+            PresetValueRow {
+                label: "Top A".into(),
+                value: fmt(d.top_a),
+            },
+            PresetValueRow {
+                label: "Repetition penalty".into(),
+                value: fmt(d.repetition_penalty),
+            },
+            PresetValueRow {
+                label: "Frequency penalty".into(),
+                value: fmt(d.frequency_penalty),
+            },
+            PresetValueRow {
+                label: "Presence penalty".into(),
+                value: fmt(d.presence_penalty),
+            },
+            PresetValueRow {
+                label: "Seed".into(),
+                value: fmt(d.seed),
+            },
+            PresetValueRow {
+                label: "Reasoning".into(),
+                value: d.reasoning.to_string(),
+            },
+            PresetValueRow {
+                label: "Streaming".into(),
+                value: d.stream.to_string(),
+            },
         ]
     }
 
@@ -3630,9 +4038,164 @@ impl<W: ProductWire> ChatSession<W> {
                 if let Some(id) = settings_string(&items, "active-persona-id") {
                     self.state.active_persona_id = Some(id);
                 }
+                self.state.macro_variables = settings_macro_variables(&items);
+                self.hydrate_instruct_settings(&items);
             }
             Err(err) => self.record_error(err),
         }
+    }
+
+    fn hydrate_instruct_settings(&mut self, items: &[SettingsItem]) {
+        if let Some(value) = settings_unwrapped(items, "prompt-template") {
+            if value.is_object() {
+                self.state.prompt_template = value.clone();
+            }
+        }
+        if let Some(value) = settings_unwrapped(items, "instruct-format") {
+            if value.is_null() {
+                self.state.instruct_format = None;
+            } else if value.is_object() {
+                self.state.instruct_format = Some(value.clone());
+                self.state.instruct_selection = "custom".into();
+                return;
+            }
+        }
+        // Kernel plane has no instruct-format catalog, so a stored catalog id
+        // is treated as native (React would still list only native + custom).
+        self.state.instruct_selection = "native".into();
+        self.state.instruct_format_id = settings_string(items, "instruct-format-id");
+    }
+
+    /// React `GeneralTab.changeLanguage`: Zustand + `settings.update` language.
+    pub fn cycle_language(&mut self) {
+        let next = next_choice(LANGUAGES, &self.state.language);
+        self.state.language = next.to_string();
+        self.state.dir = match next {
+            "ar" | "he" | "fa" | "ur" => "rtl".into(),
+            _ => "ltr".into(),
+        };
+        let req = RequestSettingsUpdate {
+            settings: vec![RequestSettingsUpdateSettings {
+                key: "language".into(),
+                value: json!({ "value": next }),
+            }],
+        };
+        if let Err(err) = self.call_value("settings.update", &req) {
+            self.record_error(err);
+        }
+        self.bump_scene();
+    }
+
+    /// React `AdvancedPromptSettings.changeMode`.
+    pub fn cycle_prompt_mode(&mut self) {
+        let current = self
+            .state
+            .prompt_template
+            .get("mode")
+            .and_then(Value::as_str)
+            .unwrap_or("chat");
+        let next = if current == "text" { "chat" } else { "text" };
+        if let Some(obj) = self.state.prompt_template.as_object_mut() {
+            obj.insert("mode".into(), json!(next));
+        } else {
+            self.state.prompt_template = json!({ "mode": next });
+        }
+        let req = RequestSettingsUpdate {
+            settings: vec![RequestSettingsUpdateSettings {
+                key: "prompt-template".into(),
+                value: self.state.prompt_template.clone(),
+            }],
+        };
+        if let Err(err) = self.call_value("settings.update", &req) {
+            self.record_error(err);
+            self.state.instruct_form_error = Some(
+                self.state
+                    .last_error
+                    .as_ref()
+                    .map(|e| e.code.clone())
+                    .unwrap_or_else(|| "SETTINGS_UPDATE_FAILED".into()),
+            );
+        } else {
+            self.state.instruct_form_error = None;
+        }
+        self.bump_scene();
+    }
+
+    /// React `ChatTemplateEditor.changeSelection`. Custom is local until save;
+    /// native writes `instruct-format` / `instruct-format-id` null.
+    pub fn cycle_instruct_selection(&mut self) {
+        if self.state.instruct_selection == "custom" {
+            self.apply_instruct_native();
+            return;
+        }
+        self.state.instruct_selection = "custom".into();
+        if self.state.instruct_format.is_none() {
+            self.state.instruct_format = Some(default_custom_instruct());
+        }
+        self.state.instruct_form_error = None;
+        self.bump_scene();
+    }
+
+    fn apply_instruct_native(&mut self) {
+        let req = RequestSettingsUpdate {
+            settings: vec![
+                RequestSettingsUpdateSettings {
+                    key: "instruct-format".into(),
+                    value: json!({ "value": Value::Null }),
+                },
+                RequestSettingsUpdateSettings {
+                    key: "instruct-format-id".into(),
+                    value: json!({ "value": Value::Null }),
+                },
+            ],
+        };
+        match self.call_value("settings.update", &req) {
+            Ok(_) => {
+                self.state.instruct_selection = "native".into();
+                self.state.instruct_format = None;
+                self.state.instruct_format_id = None;
+                self.state.instruct_form_error = None;
+            }
+            Err(err) => {
+                self.state.instruct_form_error = Some(err.reason_code());
+                self.record_error(err);
+            }
+        }
+        self.bump_scene();
+    }
+
+    /// React `ChatTemplateEditor.save`.
+    pub fn save_instruct_template(&mut self) {
+        let draft = self
+            .state
+            .instruct_format
+            .clone()
+            .unwrap_or_else(default_custom_instruct);
+        let req = RequestSettingsUpdate {
+            settings: vec![
+                RequestSettingsUpdateSettings {
+                    key: "instruct-format".into(),
+                    value: draft.clone(),
+                },
+                RequestSettingsUpdateSettings {
+                    key: "instruct-format-id".into(),
+                    value: json!({ "value": Value::Null }),
+                },
+            ],
+        };
+        match self.call_value("settings.update", &req) {
+            Ok(_) => {
+                self.state.instruct_format = Some(draft);
+                self.state.instruct_selection = "custom".into();
+                self.state.instruct_format_id = None;
+                self.state.instruct_form_error = None;
+            }
+            Err(err) => {
+                self.state.instruct_form_error = Some(err.reason_code());
+                self.record_error(err);
+            }
+        }
+        self.bump_scene();
     }
 
     /// Load `profiles.list` for the Settings Profiles tab (React
@@ -3842,7 +4405,13 @@ impl<W: ProductWire> ChatSession<W> {
     /// Chats row rename action: opens the rename dialog pre-filled with the
     /// current title (React `ChatManagementPanel` rename Dialog).
     pub fn start_chat_rename(&mut self, chat_id: &str) {
-        let Some(chat) = self.state.chat_list.iter().find(|row| row.id == chat_id).cloned() else {
+        let Some(chat) = self
+            .state
+            .chat_list
+            .iter()
+            .find(|row| row.id == chat_id)
+            .cloned()
+        else {
             return;
         };
         self.state.chat_renaming_id = Some(chat.id);
@@ -3886,7 +4455,12 @@ impl<W: ProductWire> ChatSession<W> {
             self.state.chat_delete_open = false;
             return;
         };
-        match self.call_value("chats.delete", &RequestDeleteChat { chat_id: id.clone() }) {
+        match self.call_value(
+            "chats.delete",
+            &RequestDeleteChat {
+                chat_id: id.clone(),
+            },
+        ) {
             Ok(_) => {
                 self.state.chat_delete_open = false;
                 self.state.chat_delete_target_id = None;
@@ -3916,6 +4490,7 @@ impl<W: ProductWire> ChatSession<W> {
     /// becomes the honest empty state; any other error renders inside the
     /// dialog (React `isError`), not as a toast.
     pub fn open_prompt_plan(&mut self, run_id: &str) {
+        self.close_run_transcript_state();
         self.state.prompt_plan_run_id = Some(run_id.to_string());
         self.state.prompt_plan_open = true;
         self.state.prompt_plan = None;
@@ -3937,6 +4512,30 @@ impl<W: ProductWire> ChatSession<W> {
         self.bump_scene();
     }
 
+    /// Open the prompt plan for a message row (React footer "Prompt plan"
+    /// tap). Looks up `MessageDto.generation_run_id`; streaming / unknown
+    /// rows are honest no-ops.
+    pub fn open_prompt_plan_for_message(&mut self, row_id: &str) {
+        if row_id == "streaming" {
+            return;
+        }
+        let Some(run_id) = self
+            .state
+            .messages
+            .iter()
+            .find(|row| row.id == row_id)
+            .and_then(|row| row.generation_run_id.clone())
+        else {
+            self.record_error(ChatRouteError::product(
+                "GENERATION_RUN_NOT_FOUND",
+                json!({ "messageId": row_id }),
+            ));
+            self.bump_scene();
+            return;
+        };
+        self.open_prompt_plan(&run_id);
+    }
+
     pub fn close_prompt_plan(&mut self) {
         self.state.prompt_plan_open = false;
         self.state.prompt_plan_run_id = None;
@@ -3944,6 +4543,220 @@ impl<W: ProductWire> ChatSession<W> {
         self.state.prompt_plan_not_found = false;
         self.state.prompt_plan_error = None;
         self.bump_scene();
+    }
+
+    fn close_prompt_plan_state(&mut self) {
+        self.state.prompt_plan_open = false;
+        self.state.prompt_plan_run_id = None;
+        self.state.prompt_plan = None;
+        self.state.prompt_plan_not_found = false;
+        self.state.prompt_plan_error = None;
+    }
+
+    fn close_run_transcript_state(&mut self) {
+        self.state.run_transcript_open = false;
+        self.state.run_transcript_run_id = None;
+        self.state.run_transcript_steps.clear();
+        self.state.run_transcript_error = None;
+    }
+
+    /// Opens the run-step transcript (`generation.events`; React
+    /// `RunTranscriptPanel`). Unknown run → error inside the dialog (React
+    /// `isError`); empty journal → honest empty state.
+    pub fn open_run_transcript(&mut self, run_id: &str) {
+        self.close_prompt_plan_state();
+        self.state.run_transcript_run_id = Some(run_id.to_string());
+        self.state.run_transcript_open = true;
+        self.state.run_transcript_steps.clear();
+        self.state.run_transcript_error = None;
+        match self.call_decode(
+            "generation.events",
+            &RequestListGenerationEvents {
+                workflow_id: run_id.to_string(),
+                after_sequence: None,
+                limit: Some(50),
+            },
+            decode_paged_generation_events,
+        ) {
+            Ok(page) => {
+                self.state.run_transcript_steps = page
+                    .items
+                    .into_iter()
+                    .filter_map(run_step_from_envelope)
+                    .collect();
+            }
+            Err(ChatRouteError::Product(dto)) => {
+                self.state.run_transcript_error = Some(dto.code);
+            }
+            Err(err) => self.state.run_transcript_error = Some(err.to_string()),
+        }
+        self.bump_scene();
+    }
+
+    pub fn open_run_transcript_for_message(&mut self, row_id: &str) {
+        if row_id == "streaming" {
+            return;
+        }
+        let Some(run_id) = self
+            .state
+            .messages
+            .iter()
+            .find(|row| row.id == row_id)
+            .and_then(|row| row.generation_run_id.clone())
+        else {
+            self.record_error(ChatRouteError::product(
+                "GENERATION_RUN_NOT_FOUND",
+                json!({ "messageId": row_id }),
+            ));
+            self.bump_scene();
+            return;
+        };
+        self.open_run_transcript(&run_id);
+    }
+
+    pub fn close_run_transcript(&mut self) {
+        self.close_run_transcript_state();
+        self.bump_scene();
+    }
+
+    /// Toggle `message.meta.manualExcluded` via `chats.messages.update`
+    /// (React `toggleMessageContext`). The kernel replaces the whole meta
+    /// object; we merge the flag onto a clone of the current payload.
+    pub fn toggle_message_context(&mut self, row_id: &str) {
+        if row_id == "streaming" {
+            return;
+        }
+        let Some(chat_id) = self.chat_id().map(str::to_string) else {
+            return;
+        };
+        let Some(message) = self
+            .state
+            .messages
+            .iter()
+            .find(|row| row.id == row_id)
+            .cloned()
+        else {
+            self.record_error(ChatRouteError::product(
+                "MESSAGE_NOT_FOUND",
+                json!({ "messageId": row_id }),
+            ));
+            self.bump_scene();
+            return;
+        };
+        let excluded = manual_excluded(&message.meta);
+        let meta = with_manual_excluded(&message.meta, !excluded);
+        match self.call_decode(
+            "chats.messages.update",
+            &RequestUpdateMessage {
+                chat_id,
+                message_id: row_id.to_string(),
+                content: None,
+                meta: Some(meta),
+                clear_checkpoint_chat_id: None,
+            },
+            decode_message_dto,
+        ) {
+            Ok(updated) => {
+                if let Some(row) = self.state.messages.iter_mut().find(|row| row.id == row_id) {
+                    *row = updated;
+                }
+                self.state.status_message = Some(if excluded {
+                    "Included in prompt context.".into()
+                } else {
+                    "Excluded from prompt context.".into()
+                });
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    pub fn open_checkpoint_delete(&mut self, row_id: &str) {
+        if row_id == "streaming" {
+            return;
+        }
+        let has_checkpoint = self
+            .state
+            .messages
+            .iter()
+            .find(|row| row.id == row_id)
+            .and_then(|row| row.checkpoint_chat_id.as_ref())
+            .is_some();
+        if !has_checkpoint {
+            return;
+        }
+        self.state.checkpoint_delete_message_id = Some(row_id.to_string());
+        self.state.checkpoint_delete_open = true;
+        self.bump_scene();
+    }
+
+    pub fn close_checkpoint_delete(&mut self) {
+        self.state.checkpoint_delete_open = false;
+        self.state.checkpoint_delete_message_id = None;
+        self.bump_scene();
+    }
+
+    pub fn confirm_checkpoint_delete(&mut self) {
+        let Some(row_id) = self.state.checkpoint_delete_message_id.clone() else {
+            self.close_checkpoint_delete();
+            return;
+        };
+        let Some(chat_id) = self.chat_id().map(str::to_string) else {
+            self.close_checkpoint_delete();
+            return;
+        };
+        match self.call_decode(
+            "chats.messages.update",
+            &RequestUpdateMessage {
+                chat_id,
+                message_id: row_id.clone(),
+                content: None,
+                meta: None,
+                clear_checkpoint_chat_id: Some(true),
+            },
+            decode_message_dto,
+        ) {
+            Ok(updated) => {
+                if let Some(row) = self.state.messages.iter_mut().find(|row| row.id == row_id) {
+                    *row = updated;
+                }
+                self.state.status_message = Some("Checkpoint link removed.".into());
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.state.checkpoint_delete_open = false;
+        self.state.checkpoint_delete_message_id = None;
+        self.bump_scene();
+    }
+
+    pub fn toggle_header_search(&mut self) {
+        if self.state.header_search_open {
+            self.state.header_search_open = false;
+            self.state.header_search_query.clear();
+            self.state.header_search_match_count = 0;
+        } else {
+            self.state.header_search_open = true;
+        }
+        self.bump_scene();
+    }
+
+    pub fn set_header_search_query(&mut self, value: &str) {
+        if !self.state.header_search_open {
+            return;
+        }
+        let query: String = value.chars().take(500).collect();
+        self.state.header_search_query = query;
+        self.recompute_header_search_matches();
+        self.bump_scene();
+    }
+
+    fn recompute_header_search_matches(&mut self) {
+        self.state.header_search_match_count = self
+            .state
+            .messages
+            .iter()
+            .map(|row| count_text_matches(&row.content, &self.state.header_search_query))
+            .sum();
     }
 
     /// Loads the theme catalog (`themes.list`; React `useThemes`).
@@ -4024,8 +4837,11 @@ impl<W: ProductWire> ChatSession<W> {
     /// `useSecretsStatus`, `staleTime: 30_000`). The DTO is value-free by
     /// contract — no secret ever travels it.
     pub fn load_secrets_status(&mut self) {
-        match self.call_decode("secrets.status", &RequestEmpty {}, decode_result_secrets_status)
-        {
+        match self.call_decode(
+            "secrets.status",
+            &RequestEmpty {},
+            decode_result_secrets_status,
+        ) {
             Ok(status) => self.state.secrets_status = Some(status),
             Err(err) => self.record_error(err),
         }
@@ -4047,8 +4863,11 @@ impl<W: ProductWire> ChatSession<W> {
     /// `useGenerationTools`). An empty registry is a success, never an error
     /// (kernel `generation_tools_list`).
     pub fn load_tools(&mut self) {
-        match self.call_decode("generation.tools.list", &RequestEmpty {}, decode_result_list_tools)
-        {
+        match self.call_decode(
+            "generation.tools.list",
+            &RequestEmpty {},
+            decode_result_list_tools,
+        ) {
             Ok(result) => self.state.tools = result.items,
             Err(err) => self.record_error(err),
         }
@@ -4187,8 +5006,9 @@ impl<W: ProductWire> ChatSession<W> {
     fn preset_data_json(&self) -> Value {
         match self.active_preset() {
             Some(preset) => preset.data.clone(),
-            None => serde_json::to_value(PresetGenerationData::default())
-                .unwrap_or_else(|_| json!({})),
+            None => {
+                serde_json::to_value(PresetGenerationData::default()).unwrap_or_else(|_| json!({}))
+            }
         }
     }
 
@@ -4453,7 +5273,12 @@ impl<W: ProductWire> ChatSession<W> {
         let Some(id) = self.state.provider_delete_target_id.take() else {
             return;
         };
-        let Some(dto) = self.state.provider_configs.iter().find(|item| item.id == id) else {
+        let Some(dto) = self
+            .state
+            .provider_configs
+            .iter()
+            .find(|item| item.id == id)
+        else {
             return;
         };
         let was_active = self.state.active_provider_id.as_deref() == Some(id.as_str());
@@ -4477,6 +5302,40 @@ impl<W: ProductWire> ChatSession<W> {
                 self.state.status_message = Some("Profile deleted.".into());
             }
             Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    /// Reads the SEC-07 allowlist diagnostics bundle (`diagnostics.export`;
+    /// React `useKernelDiagnostics`).
+    pub fn load_diagnostics(&mut self) {
+        match self.call_decode(
+            "diagnostics.export",
+            &RequestEmpty {},
+            decode_result_diagnostics_export,
+        ) {
+            Ok(bundle) => self.state.diagnostics = Some(bundle),
+            Err(err) => {
+                self.state.diagnostics = None;
+                self.record_error(err);
+            }
+        }
+        self.bump_scene();
+    }
+
+    /// Reads data-root activation (`data.activation.status`; React
+    /// `ActivationStatusPanel` / `useDataActivationStatus`).
+    pub fn load_data_activation(&mut self) {
+        match self.call_decode(
+            "data.activation.status",
+            &RequestEmpty {},
+            decode_result_data_activation_status,
+        ) {
+            Ok(status) => self.state.data_activation = Some(status),
+            Err(err) => {
+                self.state.data_activation = None;
+                self.record_error(err);
+            }
         }
         self.bump_scene();
     }
@@ -4585,11 +5444,10 @@ impl<W: ProductWire> ChatSession<W> {
         self.state.memory_draft_scope_character = item.scope == MemoryScope::Character;
         self.state.memory_draft_enabled = item.enabled;
         if item.scope == MemoryScope::Character {
-            if let Some(pos) = self
-                .state
-                .characters
-                .iter()
-                .position(|character| Some(character.id.as_str()) == item.character_id.as_deref())
+            if let Some(pos) =
+                self.state.characters.iter().position(|character| {
+                    Some(character.id.as_str()) == item.character_id.as_deref()
+                })
             {
                 self.state.memory_draft_character_index = pos;
             }
@@ -4744,9 +5602,7 @@ impl<W: ProductWire> ChatSession<W> {
         let was_editing = self.state.memory_edit_id.as_deref() == Some(id.as_str());
         self.state.memory_delete_open = false;
         self.state.memory_delete_target_id = None;
-        let req = RequestDeleteMemory {
-            memory_id: id,
-        };
+        let req = RequestDeleteMemory { memory_id: id };
         match self.call_value("memories.delete", &req) {
             Ok(_) => {
                 if was_editing {
@@ -4824,6 +5680,7 @@ impl<W: ProductWire> ChatSession<W> {
                 self.state.stream_handle = Some(handle.clone());
                 self.state.active_run_id = Some(handle);
                 self.state.streaming_text.clear();
+                self.state.tool_activity_name = None;
                 self.state.last_applied_stream_sequence = None;
                 self.state.last_checkpoint_sequence = None;
                 self.state.last_error = None;
@@ -4907,6 +5764,18 @@ impl<W: ProductWire> ChatSession<W> {
     }
 }
 
+/// React `ChatPage.send` `/^\/([^\s]+)(?:\s+(.*))?$/`: first token after `/`,
+/// or the whole text when the command name is empty (`/`).
+fn slash_command_name(message: &str) -> String {
+    let rest = message.strip_prefix('/').unwrap_or(message);
+    let name = rest.split_whitespace().next().unwrap_or("");
+    if name.is_empty() {
+        message.to_string()
+    } else {
+        name.to_string()
+    }
+}
+
 fn settings_string(items: &[SettingsItem], key: &str) -> Option<String> {
     let item = items.iter().find(|row| row.key == key)?;
     if let Some(text) = item.value.as_str() {
@@ -4919,11 +5788,36 @@ fn settings_string(items: &[SettingsItem], key: &str) -> Option<String> {
         .map(str::to_string)
 }
 
+fn settings_unwrapped<'a>(items: &'a [SettingsItem], key: &str) -> Option<&'a Value> {
+    let item = items.iter().find(|row| row.key == key)?;
+    let value = &item.value;
+    if let Some(obj) = value.as_object() {
+        if obj.len() == 1 && obj.contains_key("value") {
+            return obj.get("value");
+        }
+    }
+    Some(value)
+}
+
+fn default_custom_instruct() -> Value {
+    json!({
+        "id": "custom-chatml",
+        "version": 1,
+        "system": "<|im_start|>system\n{{{content}}}<|im_end|>\n",
+        "user": "<|im_start|>user\n{{{content}}}<|im_end|>\n",
+        "assistant": "<|im_start|>assistant\n{{{content}}}<|im_end|>\n",
+        "tool": "<|im_start|>tool\n{{{content}}}<|im_end|>\n",
+        "promptSuffix": "<|im_start|>assistant\n",
+        "stopStrings": ["<|im_end|>"],
+    })
+}
+
 fn virtualized_window(
     messages: &[MessageDto],
     viewport_height: f64,
     scroll_from_bottom_css: f64,
     assistant_author: &str,
+    macros: &crate::macros::MacroContext,
 ) -> (Vec<VisibleRow>, PresentOutcome) {
     let mut index = HeightIndex::new();
     for message in messages {
@@ -4937,7 +5831,7 @@ fn virtualized_window(
     let extent = index.extent();
     if messages.is_empty() || extent <= viewport_height {
         return (
-            visible_rows(messages, assistant_author),
+            visible_rows(messages, assistant_author, macros),
             PresentOutcome {
                 decision: PresentDecision::Prepared,
                 blank_px: 0.0,
@@ -4966,27 +5860,12 @@ fn virtualized_window(
     for i in span.start..span.end {
         if let Some((id, _, _)) = viewport.index().height_at(i) {
             if let Some(message) = messages.iter().find(|row| row.sequence as u64 == id.0) {
-                let author = if message.role == MessageRole::User {
-                    "You".to_string()
-                } else {
-                    assistant_author.to_string()
-                };
-                visible.push(VisibleRow {
-                    id: message.id.clone(),
-                    role: role_name(&message.role).into(),
-                    content: message.content.clone(),
-                    kind: row_kind(&message.content),
-                    author,
-                    timestamp: neotavern_presentation_dioxus_shell::format_timestamp(
-                        &message.created_at,
-                    ),
-                    run_id: message.generation_run_id.clone(),
-                });
+                visible.push(message_visible_row(message, assistant_author, macros));
             }
         }
     }
     if visible.is_empty() {
-        visible = visible_rows(messages, assistant_author);
+        visible = visible_rows(messages, assistant_author, macros);
     }
     (visible, outcome)
 }
@@ -4995,23 +5874,68 @@ fn estimate_height(message: &MessageDto) -> f64 {
     48.0 + (message.content.len() as f64 / 8.0).min(160.0)
 }
 
-fn visible_rows(messages: &[MessageDto], assistant_author: &str) -> Vec<VisibleRow> {
+fn visible_rows(
+    messages: &[MessageDto],
+    assistant_author: &str,
+    macros: &crate::macros::MacroContext,
+) -> Vec<VisibleRow> {
     let start = messages.len().saturating_sub(PRODUCT_PATH_VISIBLE);
     messages[start..]
         .iter()
-        .map(|row| VisibleRow {
-            id: row.id.clone(),
-            role: role_name(&row.role).into(),
-            content: row.content.clone(),
-            kind: row_kind(&row.content),
-            author: if row.role == MessageRole::User {
-                "You".into()
-            } else {
-                assistant_author.to_string()
-            },
-            timestamp: neotavern_presentation_dioxus_shell::format_timestamp(&row.created_at),
-            run_id: row.generation_run_id.clone(),
-        })
+        .map(|row| message_visible_row(row, assistant_author, macros))
+        .collect()
+}
+
+fn message_visible_row(
+    message: &MessageDto,
+    assistant_author: &str,
+    macros: &crate::macros::MacroContext,
+) -> VisibleRow {
+    let content = crate::macros::replace_macros(&message.content, macros);
+    VisibleRow {
+        id: message.id.clone(),
+        role: role_name(&message.role).into(),
+        content: content.clone(),
+        kind: row_kind(&content),
+        author: if message.role == MessageRole::User {
+            "You".into()
+        } else {
+            assistant_author.to_string()
+        },
+        timestamp: neotavern_presentation_dioxus_shell::format_timestamp(&message.created_at),
+        run_id: message.generation_run_id.clone(),
+        manual_excluded: manual_excluded(&message.meta),
+        checkpoint_chat_id: message.checkpoint_chat_id.clone(),
+    }
+}
+
+fn pick_active_persona<'a>(
+    personas: &'a [PersonaDto],
+    chat_persona_id: Option<&str>,
+    app_persona_id: Option<&str>,
+) -> Option<&'a PersonaDto> {
+    if let Some(id) = chat_persona_id {
+        if let Some(row) = personas.iter().find(|item| item.id == id) {
+            return Some(row);
+        }
+    }
+    if let Some(id) = app_persona_id {
+        if let Some(row) = personas.iter().find(|item| item.id == id) {
+            return Some(row);
+        }
+    }
+    personas.iter().find(|item| item.is_default)
+}
+
+fn settings_macro_variables(items: &[SettingsItem]) -> HashMap<String, String> {
+    let Some(value) = settings_unwrapped(items, "macro-variables") else {
+        return HashMap::new();
+    };
+    let Some(obj) = value.as_object() else {
+        return HashMap::new();
+    };
+    obj.iter()
+        .filter_map(|(key, item)| item.as_str().map(|text| (key.clone(), text.to_string())))
         .collect()
 }
 
@@ -5079,4 +6003,106 @@ fn is_cjk(ch: char) -> bool {
         || ('\u{3400}'..='\u{4DBF}').contains(&ch)
         || ('\u{3040}'..='\u{30FF}').contains(&ch)
         || ('\u{AC00}'..='\u{D7AF}').contains(&ch)
+}
+
+fn manual_excluded(meta: &FreeObject) -> bool {
+    meta.payload.get("manualExcluded") == Some(&Value::Bool(true))
+}
+
+fn with_manual_excluded(meta: &FreeObject, excluded: bool) -> FreeObject {
+    let mut payload = meta.payload.clone();
+    match &mut payload {
+        Value::Object(map) => {
+            map.insert("manualExcluded".into(), json!(excluded));
+        }
+        _ => {
+            payload = json!({ "manualExcluded": excluded });
+        }
+    }
+    FreeObject { payload }
+}
+
+/// Non-overlapping case-insensitive count, matching React `ChatHeader`
+/// `countTextMatches` (`indexOf` loop).
+fn count_text_matches(text: &str, query: &str) -> u64 {
+    let needle = query.trim().to_lowercase();
+    if needle.is_empty() {
+        return 0;
+    }
+    let haystack = text.to_lowercase();
+    let mut count = 0u64;
+    let mut offset = 0usize;
+    while offset < haystack.len() {
+        let Some(found) = haystack[offset..].find(&needle) else {
+            break;
+        };
+        count += 1;
+        offset += found + needle.len();
+        if needle.is_empty() {
+            break;
+        }
+    }
+    count
+}
+
+fn run_step_from_envelope(
+    envelope: contracts_generated::generated::EventEnvelope,
+) -> Option<RunStepView> {
+    if envelope.r#type != "generation.step" {
+        return None;
+    }
+    let event: GenerationEvent = serde_json::from_value(envelope.payload).ok()?;
+    let GenerationEvent::GenerationStep { step } = event else {
+        return None;
+    };
+    let step_type = match step.r#type {
+        contracts_generated::generated::GenerationStepType::ProviderTurn => "provider_turn",
+        contracts_generated::generated::GenerationStepType::ToolCall => "tool_call",
+        contracts_generated::generated::GenerationStepType::ToolResult => "tool_result",
+        contracts_generated::generated::GenerationStepType::FinalCommit => "final_commit",
+    };
+    let status = match step.status {
+        contracts_generated::generated::GenerationStepStatus::Running => "running",
+        contracts_generated::generated::GenerationStepStatus::Waiting => "waiting",
+        contracts_generated::generated::GenerationStepStatus::Completed => "completed",
+        contracts_generated::generated::GenerationStepStatus::Failed => "failed",
+    };
+    Some(RunStepView {
+        sequence: step.sequence,
+        step_type: step_type.into(),
+        status: status.into(),
+        attempt: step.attempt,
+        created_at: step.created_at,
+    })
+}
+
+/// React `ChatPage.onStep`: a waiting `tool_call` stores only
+/// `step.input.toolCall.name` (fallback `"tool"`). Any other step type, or a
+/// non-waiting tool_call, clears the badge. Arguments and results are never
+/// copied into session state (SEC-07).
+fn apply_generation_step(
+    state: &mut ChatRouteState,
+    step: &contracts_generated::generated::GenerationStep,
+) {
+    use contracts_generated::generated::{GenerationStepStatus, GenerationStepType};
+    match step.r#type {
+        GenerationStepType::ToolCall if matches!(step.status, GenerationStepStatus::Waiting) => {
+            state.tool_activity_name = Some(tool_call_display_name(&step.input));
+        }
+        _ => {
+            state.tool_activity_name = None;
+        }
+    }
+}
+
+fn tool_call_display_name(input: &Option<Value>) -> String {
+    input
+        .as_ref()
+        .and_then(|value| value.get("toolCall"))
+        .and_then(|value| value.get("name"))
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .unwrap_or("tool")
+        .to_string()
 }

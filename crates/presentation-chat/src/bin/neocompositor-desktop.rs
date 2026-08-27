@@ -22,12 +22,12 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use neotavern_presentation_chat::{
-    ChatCompositor, ChatSession, DEMO_CHAT_ID, FakeWire, HitRects, PresentSurface, QuickIntent,
-    RAIL_WIDTH, ShellAction, ShellHit, TOUCH_SLOP_CSS, TapIntent, hit_test,
+    hit_test, ChatCompositor, ChatSession, FakeWire, HitRects, PresentSurface, QuickIntent,
+    ShellAction, ShellHit, TapIntent, DEMO_CHAT_ID, RAIL_WIDTH, TOUCH_SLOP_CSS,
 };
 use neotavern_presentation_dioxus_shell::{install_product_shell, product_shell_app};
 use neotavern_presentation_m0_d2::{
-    MessageRect, ProductVelloSession, VelloFilter, image_paints_from_layout, write_slot_skeleton,
+    image_paints_from_layout, write_slot_skeleton, MessageRect, ProductVelloSession, VelloFilter,
 };
 use vello::peniko::color::palette;
 use winit::application::ApplicationHandler;
@@ -47,9 +47,7 @@ const TOAST_MS: std::time::Duration = std::time::Duration::from_millis(3500);
 
 /// Write one decoded chat-export document (`chats.export` host sink).
 /// Returns the path the file landed at.
-fn write_export_file(
-    export: &neotavern_presentation_chat::LastExport,
-) -> std::io::Result<String> {
+fn write_export_file(export: &neotavern_presentation_chat::LastExport) -> std::io::Result<String> {
     let dir = std::env::var_os("NEOTA_EXPORT_DIR")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_default().join("exports"));
@@ -90,6 +88,8 @@ enum TextFocus {
     CardPath,
     /// Profile container import path (`part:profile-import-path`).
     ProfileImportPath,
+    /// Header message-search field (`part:header-search-input`).
+    HeaderSearch,
 }
 
 /// One scripted probe step, replayed in argument order so
@@ -125,6 +125,7 @@ enum QuickAction {
     ComposerReset,
     ComposerContext,
     ScrollLatest,
+    HeaderSearch,
 }
 
 /// A native-control tap captured at `Down`; released at `Up` if the pointer
@@ -464,6 +465,7 @@ impl App {
                     QuickIntent::ComposerReset => QuickAction::ComposerReset,
                     QuickIntent::ComposerContext => QuickAction::ComposerContext,
                     QuickIntent::ScrollLatest => QuickAction::ScrollLatest,
+                    QuickIntent::HeaderSearch => QuickAction::HeaderSearch,
                 };
                 self.pending_quick = Some((quick, css_x, css_y));
             }
@@ -533,6 +535,8 @@ impl App {
             focus = TextFocus::PersonaDescription;
         } else if rects.covers(css_x, css_y, "part:profile-import-path") {
             focus = TextFocus::ProfileImportPath;
+        } else if rects.covers(css_x, css_y, "part:header-search-input") {
+            focus = TextFocus::HeaderSearch;
         }
         self.focus = focus;
     }
@@ -703,6 +707,18 @@ impl App {
                         self.dirty = true;
                         self.window.as_ref().map(|w| w.request_redraw());
                     }
+                    QuickAction::HeaderSearch => {
+                        self.pending_ui = None;
+                        eprintln!("[neocompositor-desktop] header search toggled");
+                        self.session.toggle_header_search();
+                        self.focus = if self.session.view().header_search_open {
+                            TextFocus::HeaderSearch
+                        } else {
+                            TextFocus::None
+                        };
+                        self.dirty = true;
+                        self.window.as_ref().map(|w| w.request_redraw());
+                    }
                 }
                 return;
             }
@@ -776,7 +792,10 @@ impl App {
                         self.window.as_ref().map(|w| w.request_redraw());
                     }
                     neotavern_presentation_chat::MessageActionKind::Checkpoint => {
-                        eprintln!("[neocompositor-desktop] checkpoint tapped: {}", pending.row_id);
+                        eprintln!(
+                            "[neocompositor-desktop] checkpoint tapped: {}",
+                            pending.row_id
+                        );
                         self.session.create_message_snapshot(&pending.row_id, true);
                         self.dirty = true;
                         self.window.as_ref().map(|w| w.request_redraw());
@@ -787,10 +806,34 @@ impl App {
                         self.dirty = true;
                         self.window.as_ref().map(|w| w.request_redraw());
                     }
-                    other => eprintln!(
-                        "[neocompositor-desktop] tap -> message:{other:?} on {} not wired yet",
-                        pending.row_id
-                    ),
+                    neotavern_presentation_chat::MessageActionKind::Context => {
+                        eprintln!("[neocompositor-desktop] context tapped: {}", pending.row_id);
+                        self.session.toggle_message_context(&pending.row_id);
+                        self.dirty = true;
+                        self.window.as_ref().map(|w| w.request_redraw());
+                    }
+                    neotavern_presentation_chat::MessageActionKind::Prompt => {
+                        eprintln!("[neocompositor-desktop] prompt tapped: {}", pending.row_id);
+                        self.session.open_prompt_plan_for_message(&pending.row_id);
+                        self.dirty = true;
+                        self.window.as_ref().map(|w| w.request_redraw());
+                    }
+                    neotavern_presentation_chat::MessageActionKind::Steps => {
+                        eprintln!("[neocompositor-desktop] steps tapped: {}", pending.row_id);
+                        self.session
+                            .open_run_transcript_for_message(&pending.row_id);
+                        self.dirty = true;
+                        self.window.as_ref().map(|w| w.request_redraw());
+                    }
+                    neotavern_presentation_chat::MessageActionKind::DeleteCheckpoint => {
+                        eprintln!(
+                            "[neocompositor-desktop] delete-checkpoint tapped: {}",
+                            pending.row_id
+                        );
+                        self.session.open_checkpoint_delete(&pending.row_id);
+                        self.dirty = true;
+                        self.window.as_ref().map(|w| w.request_redraw());
+                    }
                 }
                 return;
             }
@@ -955,6 +998,12 @@ impl App {
                 self.session.set_profile_import_path(&next);
                 eprintln!("[neocompositor-desktop] typed '{ch}' -> import_path+{ch}");
             }
+            TextFocus::HeaderSearch => {
+                let current = self.session.view().header_search_query;
+                let next = format!("{current}{ch}");
+                self.session.set_header_search_query(&next);
+                eprintln!("[neocompositor-desktop] typed '{ch}' -> header_search=\"{next}\"");
+            }
             TextFocus::None => return,
         }
         self.dirty = true;
@@ -986,6 +1035,7 @@ impl App {
             }
             TextFocus::CardPath => self.session.shell_view().card_path_draft.clone(),
             TextFocus::ProfileImportPath => self.session.shell_view().profile_import_path.clone(),
+            TextFocus::HeaderSearch => self.session.view().header_search_query,
             TextFocus::None => return,
         };
         let next: String = current
@@ -1013,6 +1063,7 @@ impl App {
             TextFocus::PersonaDescription => self.session.set_persona_description_draft(&next),
             TextFocus::CardPath => self.session.set_card_path_draft(&next),
             TextFocus::ProfileImportPath => self.session.set_profile_import_path(&next),
+            TextFocus::HeaderSearch => self.session.set_header_search_query(&next),
             TextFocus::None => {}
         }
         self.dirty = true;

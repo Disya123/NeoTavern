@@ -2,14 +2,16 @@
 //! tab set: General / Themes / Data / Profiles / Secrets / Tools. The React
 //! panel adds a desktop-shell-only `remote` tab (`isTauriRuntime()`); the
 //! native compositor harness is not the packaged Tauri shell, so — same as
-//! React in a browser — that tab is absent here. Secrets stay SecretStore
-//! refs only: no secret value is ever read or rendered on this surface.
+//! React in a browser — that tab is absent here. General hosts the kernel
+//! `diagnostics.export` panel; Data hosts `data.activation.status` plus an
+//! honest SillyTavern-import skip. Secrets stay SecretStore refs only: no
+//! secret value is ever read or rendered on this surface.
 
 use dioxus_core::Element;
 use dioxus_core_macro::rsx;
 
 use crate::product_shell::{
-    PanelTab, ProductShellView, SETTINGS_TITLE, icon, icon_fill, management_shell,
+    icon, icon_fill, management_shell, PanelTab, ProductShellView, SETTINGS_TITLE,
 };
 
 pub fn settings_panel(view: &ProductShellView) -> Element {
@@ -73,53 +75,232 @@ fn general_tab(view: &ProductShellView) -> Element {
     } else {
         "Off"
     };
-    let density_label = match view.density.as_str() {
-        "compact" => "Compact",
-        _ => "Comfortable",
+    let language_name = match view.language.as_str() {
+        "ru" => "Русский",
+        "pseudo" => "Pseudo (debug)",
+        _ => "English",
     };
     let scale_label = match view.font_scale.as_str() {
         "small" => "Small",
         "large" => "Large",
-        _ => "Medium",
+        _ => "Default",
+    };
+    let font_label = if view.ui_font_profile == "dyslexia" {
+        "Dyslexia-friendly"
+    } else {
+        "Default"
+    };
+    let contrast_label = if view.ui_contrast == "high" {
+        "High"
+    } else {
+        "Standard"
+    };
+    let motion_label = if view.ui_motion == "reduced" {
+        "Reduce"
+    } else {
+        "Follow device"
+    };
+    let startup_label = if view.open_home_on_load {
+        "Home"
+    } else {
+        "Current screen"
+    };
+    let user_pos = if view.user_message_position == "left" {
+        "Left"
+    } else {
+        "Right"
+    };
+    let char_pos = if view.character_message_position == "right" {
+        "Right"
+    } else {
+        "Left"
+    };
+    let chat_style = match view.chat_style.as_str() {
+        "classic" => "Classic",
+        "bubbles" => "Bubbles",
+        "document" => "Document",
+        "cards" => "Cards",
+        "paragraphs" => "Paragraphs",
+        _ => "Clean",
+    };
+    let avatar_style = match view.chat_avatar_style.as_str() {
+        "square" => "Square",
+        "portrait" => "Portrait",
+        "banner" => "Banner",
+        "hidden" => "Hidden",
+        _ => "Round",
     };
     rsx! {
         div {
             class: "SettingsPanel_section",
-            "data-part": "settings-general",
+            "data-part": "general-settings",
             style: "padding:12px 16px;display:flex;flex-direction:column;gap:12px;",
-            label {
-                class: "SettingsPanel_field",
-                span { "Language" }
-                strong { "{view.language}" }
-            }
+            strong { style: "font-size:0.9375rem;line-height:20px;", "Startup" }
+            p { style: "margin:0;color:#c5bbb2;font-size:0.75rem;", "Choose which workspace opens when the app starts." }
+            {general_cycle_row("Open Home when the app starts", startup_label, "general-startup")}
+            strong { style: "font-size:0.9375rem;line-height:20px;", "Appearance" }
+            p { style: "margin:0;color:#c5bbb2;font-size:0.75rem;", "Language and appearance follow you throughout the app." }
+            {general_cycle_row("Language", language_name, "general-language")}
             label {
                 class: "SettingsPanel_field",
                 span { "Text direction" }
                 strong { "{dir_label}" }
             }
-            p {
-                style: "color:#c5bbb2;font-size:0.875rem;",
-                "Catalogs come from packages/i18n. Rust loads the same language id; copy on this surface is the English React golden until the isolated namespace is wired."
-            }
-            label {
-                class: "SettingsPanel_field",
-                span { "Interface scale" }
-                strong { "{density_label}" }
-            }
-            label {
-                class: "SettingsPanel_field",
-                span { "Text size" }
-                strong { "{scale_label}" }
-            }
+            {general_cycle_row("Text and controls", scale_label, "general-scale")}
+            {general_cycle_row("Font", font_label, "general-font")}
+            {general_cycle_row("Contrast", contrast_label, "general-contrast")}
+            {general_cycle_row("Motion", motion_label, "general-motion")}
+            {general_cycle_row("User message position", user_pos, "general-user-position")}
+            {general_cycle_row("Character message position", char_pos, "general-character-position")}
+            {general_cycle_row("Chat style", chat_style, "general-chat-style")}
+            {general_cycle_row("Message avatar", avatar_style, "general-avatar-style")}
+            {general_cycle_row(
+                "UI Opacity",
+                &format!("{}%", view.ui_opacity.min(100)),
+                "general-opacity",
+            )}
+            {general_cycle_row(
+                "Glass Blur",
+                &format!("{}px", view.ui_glass_blur.min(40)),
+                "general-blur",
+            )}
             div {
                 class: "SettingsPanel_field",
+                style: "display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:40px;",
                 span { "Safe mode" }
                 strong { "{safe}" }
             }
             p {
-                style: "color:#998f87;font-size:0.75rem;",
+                style: "color:#998f87;font-size:0.75rem;margin:0;line-height:16px;",
                 "NEOTA_SAFE_MODE disables third-party themes and plugins. SecretStore values never appear here."
             }
+            {diagnostics_section(view)}
+        }
+    }
+}
+
+fn general_cycle_row(label: &'static str, value: &str, part: &'static str) -> Element {
+    let shown = value.to_string();
+    rsx! {
+        div {
+            class: "SettingsPanel_field",
+            "data-part": "{part}",
+            style: "display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:40px;",
+            span { "{label}" }
+            button {
+                class: "st-button",
+                r#type: "button",
+                "data-component": "button",
+                "data-variant": "default",
+                "data-size": "sm",
+                style: "height:36px;min-width:96px;",
+                span { "data-part": "label", "{shown}" }
+            }
+        }
+    }
+}
+
+/// React `DiagnosticsPanel` on the kernel plane: `diagnostics.export`
+/// (SEC-07 allowlist) plus honest `CAPABILITY_UNAVAILABLE` for the legacy
+/// sidecar rebuild/cache actions. Host-only Kernel Preview / updater /
+/// `backend.meta()` are not this compositor.
+fn diagnostics_section(view: &ProductShellView) -> Element {
+    let body = if let Some(bundle) = view.diagnostics.as_ref() {
+        let hash: String = bundle.schema_hash.chars().take(12).collect();
+        let schema = format!("rev {} ({hash}…)", bundle.schema_revision);
+        let storage = bundle
+            .storage_format
+            .map(|format| format!("v{format}"))
+            .unwrap_or_else(|| "—".into());
+        let settings = format!("{} stored", bundle.settings.count);
+        let runs = format!(
+            "{} total · {} completed · {} failed · {} waiting",
+            bundle.generation_runs.total,
+            bundle.generation_runs.completed,
+            bundle.generation_runs.failed,
+            bundle.generation_runs.waiting
+        );
+        let wire = format!(
+            "{}.{}",
+            bundle.wire_version.major, bundle.wire_version.minor
+        );
+        let app = bundle.app_version.clone();
+        let sqlite = bundle.sqlite_version.clone();
+        rsx! {
+            div {
+                style: "display:flex;flex-direction:column;gap:0;",
+                {diagnostic_metric("Local kernel", &app)}
+                {diagnostic_metric("Product wire", &wire)}
+                {diagnostic_metric("Schema", &schema)}
+                {diagnostic_metric("Storage format", &storage)}
+                {diagnostic_metric("SQLite", &sqlite)}
+                {diagnostic_metric("Settings", &settings)}
+                {diagnostic_metric("Generation runs", &runs)}
+            }
+        }
+    } else {
+        rsx! {
+            p {
+                style: "margin:0;color:#998f87;font-size:0.75rem;line-height:16px;",
+                "No report has been created yet. The check reads aggregate local state only."
+            }
+        }
+    };
+    rsx! {
+        div {
+            class: "SettingsPanel_section",
+            "data-component": "diagnostics-panel",
+            style: "display:flex;flex-direction:column;gap:12px;",
+            strong { style: "font-size:0.9375rem;line-height:20px;", "Diagnostics and recovery" }
+            p { style: "margin:0;color:#c5bbb2;font-size:0.75rem;line-height:16px;", "Check local health, export a redacted report, rebuild search or clear regenerable cache." }
+            button {
+                class: "st-button",
+                r#type: "button",
+                "data-component": "button",
+                "data-variant": "primary",
+                "data-part": "run-diagnostics",
+                style: "height:36px;align-self:flex-start;",
+                span { "data-part": "label", "Run diagnostics" }
+            }
+            {body}
+            p {
+                style: "margin:0;color:#998f87;font-size:0.75rem;line-height:16px;",
+                "The report excludes secrets, logs, absolute paths and user-authored content."
+            }
+            div {
+                style: "display:flex;gap:8px;height:36px;",
+                "data-part": "maintenance-actions",
+                button {
+                    class: "st-button",
+                    r#type: "button",
+                    "data-component": "button",
+                    "data-variant": "ghost",
+                    "data-part": "rebuild-search",
+                    style: "height:36px;",
+                    span { "data-part": "label", "Rebuild search index" }
+                }
+                button {
+                    class: "st-button",
+                    r#type: "button",
+                    "data-component": "button",
+                    "data-variant": "ghost",
+                    "data-part": "clear-cache",
+                    style: "height:36px;",
+                    span { "data-part": "label", "Clear thumbnail cache" }
+                }
+            }
+        }
+    }
+}
+
+fn diagnostic_metric(label: &'static str, value: &str) -> Element {
+    let shown = value.to_string();
+    rsx! {
+        div {
+            class: "SettingsPanel_field",
+            style: "display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:20px;font-size:0.75rem;",
+            span { "{label}" }
+            strong { "{shown}" }
         }
     }
 }
@@ -234,13 +415,111 @@ fn themes_tab(view: &ProductShellView) -> Element {
 /// Geometry mirrors `shell_hit.rs::data_hit` (padding 12 + title 20 + gap 8 +
 /// hint 32 + gap 8 + actions 36 + gap 8; rows 64 + 4).
 fn data_tab(view: &ProductShellView) -> Element {
+    let layout_label = view
+        .data_activation
+        .as_ref()
+        .map(|status| {
+            if status.layout_version == 2 {
+                "v2 versioned roots"
+            } else {
+                "v1 flat root"
+            }
+        })
+        .unwrap_or("");
+    let active_root = view
+        .data_activation
+        .as_ref()
+        .map(|status| status.active_root.as_str())
+        .unwrap_or("");
+    let active_root_id = view
+        .data_activation
+        .as_ref()
+        .and_then(|status| status.active_root_id.as_deref());
+    let pending = view
+        .data_activation
+        .as_ref()
+        .and_then(|status| status.pending.as_ref());
+    let layout_attr = view
+        .data_activation
+        .as_ref()
+        .map(|status| status.layout_version.to_string());
+    let entries = view
+        .data_activation
+        .as_ref()
+        .map(|status| status.entries.as_slice())
+        .unwrap_or(&[]);
     rsx! {
         div {
             class: "SettingsPanel_section",
             "data-part": "settings-data",
             style: "padding:12px 16px;display:flex;flex-direction:column;gap:8px;",
-            h2 { style: "margin:0;font-size:0.9375rem;", "Data & backups" }
-            p { style: "margin:0;color:#998f87;font-size:0.75rem;", "Backups contain your local library and settings." }
+            div {
+                "data-part": "data-migration",
+                style: "display:flex;flex-direction:column;gap:8px;",
+                h2 { style: "margin:0;font-size:0.9375rem;line-height:20px;", "Move data from SillyTavern" }
+                p { style: "margin:0;color:#998f87;font-size:0.75rem;line-height:16px;min-height:32px;", "Import characters, solo chats, personas, Worlds and JSON presets from a SillyTavern full-data ZIP." }
+                button {
+                    class: "st-button",
+                    r#type: "button",
+                    "data-component": "button",
+                    "data-variant": "primary",
+                    "data-part": "analyze-sillytavern",
+                    style: "height:36px;align-self:flex-start;",
+                    span { "data-part": "label", "Analyze archive" }
+                }
+                p { style: "margin:0;color:#998f87;font-size:0.75rem;line-height:16px;min-height:32px;", "Analysis is read-only. The kernel plane has no SillyTavern ZIP import; the archive picker lives on the legacy sidecar." }
+            }
+            div {
+                "data-part": "data-activation",
+                "data-layout": layout_attr.as_deref(),
+                style: "display:flex;flex-direction:column;gap:8px;",
+                h2 { style: "margin:0;font-size:0.9375rem;line-height:20px;", "Data root activation" }
+                p { style: "margin:0;color:#998f87;font-size:0.75rem;line-height:16px;min-height:32px;", "The versioned data root keeps the activation journal and the active-root pointer; an interrupted activation is recovered on restart." }
+                if view.data_activation.is_some() {
+                    div { style: "display:flex;justify-content:space-between;gap:8px;min-height:20px;font-size:0.75rem;",
+                        span { "Layout" }
+                        strong { "{layout_label}" }
+                    }
+                    div { style: "display:flex;justify-content:space-between;gap:8px;min-height:20px;font-size:0.75rem;",
+                        span { "Active root" }
+                        strong { style: "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;", "{active_root}" }
+                    }
+                    if let Some(id) = active_root_id {
+                        div { style: "display:flex;justify-content:space-between;gap:8px;min-height:20px;font-size:0.75rem;",
+                            span { "Root id" }
+                            strong { "{id}" }
+                        }
+                    }
+                    if pending.is_some() {
+                        p {
+                            role: "alert",
+                            "data-part": "data-activation-pending",
+                            style: "margin:0;color:#f3eee8;font-size:0.75rem;line-height:16px;min-height:32px;",
+                            "Activation pending — restart the app to finish it. Your previous data stays intact."
+                        }
+                    }
+                    h3 { style: "margin:0;font-size:0.8125rem;line-height:16px;", "Activation journal" }
+                    if entries.is_empty() {
+                        p { style: "margin:0;color:#998f87;font-size:0.75rem;line-height:16px;", "No activations recorded yet." }
+                    } else {
+                        div {
+                            "data-part": "data-activation-journal",
+                            style: "display:flex;flex-direction:column;gap:8px;",
+                            for entry in entries.iter() {
+                                div {
+                                    "data-status": "{entry.status}",
+                                    style: "min-height:20px;font-size:0.75rem;color:#c5bbb2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
+                                    "{entry.kind} · {entry.status}"
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    p { style: "margin:0;color:#998f87;font-size:0.75rem;line-height:16px;", "The activation journal is not available on this plane." }
+                }
+            }
+            h2 { style: "margin:0;font-size:0.9375rem;line-height:20px;", "Data & backups" }
+            p { style: "margin:0;color:#998f87;font-size:0.75rem;line-height:16px;min-height:32px;", "Backups contain your local library and settings." }
             div {
                 style: "display:flex;gap:8px;height:36px;",
                 button {

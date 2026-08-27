@@ -369,6 +369,12 @@ fn wire_action(
         "chat.message.prompt" => UiActionV1::ChatMessagePrompt {
             message_id: bound(),
         },
+        "chat.message.steps" => UiActionV1::ChatMessageSteps {
+            message_id: bound(),
+        },
+        "chat.message.delete-checkpoint" => UiActionV1::ChatMessageDeleteCheckpoint {
+            message_id: bound(),
+        },
         "chat.message.history" => UiActionV1::ChatMessageHistory,
         "chat.message.regenerate" => UiActionV1::ChatMessageRegenerate,
         "chat.message.swipe-previous" => UiActionV1::ChatMessageSwipePrevious,
