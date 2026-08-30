@@ -3,6 +3,21 @@
 ## Unreleased
 ### Added
 
+- **Нативный шелл: свайпы — счётчик вариантов и пикер.** `MessageSwipePager`
+  получил hydrated-счётчик "N/M" (`data-part="swipe-counter"`; React
+  `chat:swipeCounter`) и trigger `MessageVariantPicker` между стрелками
+  (`data-action="swipe-picker"`). Kernel-плоскость выводит позицию из кэша
+  `chats.messages.variants.list` (позиция по контенту, иначе неявная
+  последняя строка); тап по триггеру открывает поповер со списком stored
+  вариантов, выбор вызывает `variants.activate`, тап вне поповера закрывает
+  (паритет React outside-click). В канонический документ чата добавлен узел
+  `swipe-picker` (`chat.message.swipe-picker` — новый литерал
+  `UiActionIdSchema` и вариант `UiActionV1::ChatMessageSwipePicker`),
+  blueprint-parity test обновлён. Фикстура `FakeWire::with_message_count`
+  сеяла несовпадающий «оригинал» хвостового сообщения — позиция 0 теперь
+  берёт фактический контент хвоста. Тест
+  `variant_picker_and_swipe_counter_over_product_wire`.
+
 - **Нативный шелл: exclude / checkpoint-link / run transcript / duplicate /
   header search.** `chats.messages.update` принимает `meta.manualExcluded`
   (replace всего meta) и `clearCheckpointChatId`; `generation.events` отдаёт

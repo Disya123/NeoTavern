@@ -149,6 +149,11 @@ pub enum MessageActionKind {
     Regenerate,
     SwipePrevious,
     SwipeNext,
+    /// Open/toggle the variant picker popover (`data-action="swipe-picker"`).
+    SwipePicker,
+    /// Close button inside the picker popover
+    /// (`data-action="swipe-picker-close"`); carries the owner row.
+    SwipePickerClose,
     /// Save button of the inline editor (`data-action="message-edit-save"`).
     EditSave,
     /// Cancel button of the inline editor
@@ -179,6 +184,8 @@ impl MessageActionKind {
             "regenerate" => Self::Regenerate,
             "swipe-previous" => Self::SwipePrevious,
             "swipe-next" => Self::SwipeNext,
+            "swipe-picker" => Self::SwipePicker,
+            "swipe-picker-close" => Self::SwipePickerClose,
             "message-edit-save" => Self::EditSave,
             "message-edit-cancel" => Self::EditCancel,
             "message-history-close" => Self::HistoryClose,

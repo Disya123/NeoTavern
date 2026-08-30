@@ -30,7 +30,8 @@ pub use product_path::{
     chrome_metrics, current_product_chat, format_timestamp, install_product_chat, message_id,
     mixed_height, mixed_height_catalog, product_chat_from_fixture, product_chat_with_chrome,
     streaming_schedule, visible_rows, ProductChatView, ProductChrome, RevisionRow, RowKind,
-    SnapshotItemView, VisibleRow, PRODUCT_PATH_CHAT_ID, PRODUCT_PATH_ITEMS, PRODUCT_PATH_VISIBLE,
+    SnapshotItemView, VariantRowView, VisibleRow, PRODUCT_PATH_CHAT_ID, PRODUCT_PATH_ITEMS,
+    PRODUCT_PATH_VISIBLE,
 };
 pub use product_shell::{
     character_card_description, character_manager_title, current_product_shell, ellipsize_css,
@@ -542,6 +543,67 @@ fn snapshots_menu_panel(view: &ProductChatView) -> Element {
     }
 }
 
+/// Variant picker popover overlay (React `MessageVariantPicker` listbox):
+/// the lazily fetched stored variants plus the active content row. Rows carry
+/// `data-part="swipe-row-{id}"`; the desktop bin resolves taps by identity
+/// (`covers`), and the trigger row carries the owning message id through the
+/// hit-rects ancestor chain. Loading state (query disabled) renders nothing,
+/// like the React popover before the query resolves.
+fn variant_picker_popover(view: &ProductChatView) -> Option<Element> {
+    let owner = view.variant_picker_for.as_deref()?;
+    let rows = view.variant_picker_rows.clone();
+    Some(rsx! {
+        div {
+            class: "MessageVariantPicker_popover",
+            "data-component": "message-variant-picker",
+            "data-part": "swipe-picker-popover",
+            role: "listbox",
+            "aria-label": "Variants",
+            style: "position:absolute;left:16px;right:16px;top:12px;z-index:30;box-sizing:border-box;display:flex;flex-direction:column;gap:6px;max-height:60%;padding:12px;border:1px solid rgba(243,238,232,0.14);border-radius:16px;background:rgba(21,19,17,0.94);color:#f3eee8;overflow:hidden;",
+            div {
+                style: "display:flex;align-items:center;gap:8px;",
+                strong { style: "font-size:13px;", "Variants" }
+                button {
+                    class: "MessageBubble_actionButton",
+                    r#type: "button",
+                    "data-action": "swipe-picker-close",
+                    "data-message-id": "{owner}",
+                    "aria-label": "Close variants",
+                    style: "margin-left:auto;width:28px;height:28px;border-radius:14px;",
+                    {crate::product_shell::icon("X", 14)}
+                }
+            }
+            if rows.is_empty() && view.variant_picker_empty {
+                p { style: "margin:0;color:#998f87;font-size:12px;", "No other variants" }
+            } else {
+                div {
+                    role: "listbox",
+                    style: "display:flex;flex-direction:column;gap:6px;overflow:hidden;",
+                    for item in rows.iter() {
+                        button {
+                            class: "MessageBubble_actionButton",
+                            r#type: "button",
+                            role: "option",
+                            "data-part": "swipe-row-{item.id}",
+                            "data-state": if item.active { "active" } else { "idle" },
+                            "aria-selected": "{item.active}",
+                            style: "display:flex;align-items:flex-start;gap:8px;width:100%;min-height:40px;border-radius:12px;padding:8px 10px;text-align:left;",
+                            span {
+                                style: "flex:none;color:#998f87;font-size:11px;font-variant-numeric:tabular-nums;",
+                                "{item.index_label}"
+                            }
+                            span {
+                                style: "flex:1;min-width:0;font-size:12px;overflow:hidden;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;max-height:36px;",
+                                "{item.preview}"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    })
+}
+
 /// Flagged Product Wire chat workspace: header glass, visible Markdown/image
 /// rows, composer glass. Blitz consumes this tree; callers must not inject a
 /// hand-built `NeoDisplayList`.
@@ -741,6 +803,9 @@ pub fn product_chat_app() -> Element {
                         if view.snapshots_menu_open {
                             {snapshots_menu_panel(&view)}
                         }
+                        if view.variant_picker_for.is_some() {
+                            {variant_picker_popover(&view)}
+                        }
                     } else {
                     div {
                         class: "ChatWorkspace_viewport",
@@ -756,6 +821,9 @@ pub fn product_chat_app() -> Element {
                         },
                         if view.snapshots_menu_open {
                             {snapshots_menu_panel(&view)}
+                        },
+                        if view.variant_picker_for.is_some() {
+                            {variant_picker_popover(&view)}
                         },
                         div {
                             class: "ChatWorkspace_scrollBody",
@@ -949,9 +1017,29 @@ pub fn product_chat_app() -> Element {
                                                     style: "width:32px;height:32px;border-radius:16px;border:1px solid rgba(57,52,47,0.70);background:rgba(36,33,30,0.70);color:#998f87;display:flex;align-items:center;justify-content:center;",
                                                     {crate::product_shell::icon("CaretLeft", 14)}
                                                 }
-                                                span {
-                                                    "aria-live": "polite",
-                                                    style: "color:#998f87;font-size:12px;",
+                                                if !row.swipe_label.is_empty() {
+                                                    span {
+                                                        class: "MessageSwipePager_counter",
+                                                        "aria-live": "polite",
+                                                        "data-part": "swipe-counter",
+                                                        style: "color:#998f87;font-size:12px;",
+                                                        "{row.swipe_label}"
+                                                    }
+                                                }
+                                                // React `MessageVariantPicker`
+                                                // trigger (`chat:swipePicker`
+                                                // = "Variants") — opens the
+                                                // variant listbox popover.
+                                                button {
+                                                    class: "MessageBubble_actionButton",
+                                                    r#type: "button",
+                                                    "data-action": "swipe-picker",
+                                                    "aria-label": "Variants",
+                                                    title: "Variants",
+                                                    "aria-expanded": view.variant_picker_for.as_deref() == Some(row.id.as_str()),
+                                                    "aria-haspopup": "listbox",
+                                                    style: "display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:16px;border:1px solid rgba(57,52,47,0.70);background:rgba(36,33,30,0.70);color:#998f87;",
+                                                    {crate::product_shell::icon("CaretDown", 14)}
                                                 }
                                                 button {
                                                     class: "MessageBubble_actionButton",

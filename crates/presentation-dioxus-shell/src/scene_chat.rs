@@ -15,6 +15,7 @@
 //! drifts from the legacy RSX.
 
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
@@ -192,15 +193,22 @@ struct ChromeCtx {
     /// Waiting `tool_call` name (React `ToolActivityBadge`). `None` hides
     /// the badge. Arguments/results never travel here.
     tool_activity_name: Option<String>,
+    /// Hydrated swipe counters by row id (`VisibleRow.swipe_label` from the
+    /// session view): the blueprint `swipe-label` node renders the same
+    /// "N/M" string the legacy pager does.
+    swipe_labels: HashMap<String, String>,
 }
 
-/// Values scoped to one instantiated message row.
+/// One values scoped to one instantiated message row.
 struct RowView<'a> {
     uuid: &'a str,
     message: &'a MessageDto,
     user: bool,
     author: &'a str,
     streaming_state: bool,
+    /// Pre-formatted swipe counter (React `MessageSwipePager` "N/M"); empty
+    /// hides the label, exactly like the legacy path.
+    swipe_label: &'a str,
 }
 
 /// Pre-rendered chat chrome fragments for one frame. `Element` clones are
@@ -243,11 +251,12 @@ pub fn blueprint_chrome(view: &ProductChatView) -> Option<ChromeElements> {
         ProductChrome::NestedDialog | ProductChrome::PaintOrder
     );
     // Interactive session states (inline editor, revision-history card,
-    // snapshots menu) are not covered by authored documents yet — the legacy
-    // RSX renders them.
+    // snapshots menu, variant picker) are not covered by authored documents
+    // yet — the legacy RSX renders them.
     let interactive = view.editing_message_id.is_some()
         || view.history_open_for.is_some()
         || view.snapshots_menu_open
+        || view.variant_picker_for.is_some()
         || view.header_search_open;
     if overlay || nested || interactive {
         if current_source() != ChatBlueprintSource::Disabled {
@@ -338,6 +347,12 @@ pub fn blueprint_chrome(view: &ProductChatView) -> Option<ChromeElements> {
         context_panel_open: view.context_panel_open,
         context_summary: view.context_summary.clone(),
         tool_activity_name: view.tool_activity_name.clone(),
+        swipe_labels: view
+            .visible
+            .iter()
+            .filter(|row| !row.swipe_label.is_empty())
+            .map(|row| (row.id.clone(), row.swipe_label.clone()))
+            .collect(),
     };
 
     let state = ChatSurfaceStateV1 {
@@ -569,6 +584,9 @@ fn row_of(node: &UiNodeV1) -> Option<MessageDto> {
 fn render_row(node: &UiNodeV1, ctx: &ChromeCtx, message: &MessageDto) -> Element {
     let uuid = node.id.split_once(':').map(|(_, id)| id).unwrap_or("");
     let user = message.role == MessageRole::User;
+    // The hydrated swipe counter rides the same `VisibleRow` map the legacy
+    // pager renders: empty = hidden (React total <= 1).
+    let swipe_label = ctx.swipe_labels.get(uuid).map(String::as_str).unwrap_or("");
     let row = RowView {
         uuid,
         message,
@@ -579,6 +597,7 @@ fn render_row(node: &UiNodeV1, ctx: &ChromeCtx, message: &MessageDto) -> Element
             ctx.assistant_author.as_str()
         },
         streaming_state: ctx.streaming && uuid == "streaming",
+        swipe_label,
     };
     let role_name = if user { "user" } else { "assistant" };
     let style = crate::message_bubble_style(user, ctx.compact, ctx.font_px);
@@ -742,12 +761,24 @@ fn render_row_child(node: &UiNodeV1, ctx: &ChromeCtx, row: &RowView) -> Element 
                 for child in node.children.iter() { {render_row_child(child, ctx, row)} }
             }
         },
-        "swipe-label" => rsx! {
-            span {
-                "aria-live": "polite",
-                style: "color:#998f87;font-size:12px;",
+        // Hydrated swipe counter (`chat:swipeCounter` in React); a kernel
+        // message starts empty and variants.list fills it in — the empty
+        // span is skipped entirely, matching the legacy conditional (an
+        // empty span still eats its flex gap in this Blitz build).
+        "swipe-label" => {
+            let label = row.swipe_label;
+            if label.is_empty() {
+                rsx! {}
+            } else {
+                rsx! {
+                    span {
+                        "aria-live": "polite",
+                        style: "color:#998f87;font-size:12px;",
+                        "{label}"
+                    }
+                }
             }
-        },
+        }
         kind if kind.starts_with("message-action-") => {
             message_action_button(&kind["message-action-".len()..], row)
         }
@@ -760,6 +791,8 @@ fn render_row_child(node: &UiNodeV1, ctx: &ChromeCtx, row: &RowView) -> Element 
         "swipe-previous" => {
             version_button("swipe-previous", "Previous variant", "CaretLeft", false)
         }
+        // React `MessageVariantPicker` trigger between the pager arrows.
+        "swipe-picker" => version_button("swipe-picker", "Variants", "CaretDown", false),
         "swipe-next" => version_button("swipe-next", "Next variant", "CaretRight", false),
         _ => render_plain_container(node, ctx, None),
     }
@@ -1347,6 +1380,7 @@ fn data_action_attr(action: &UiActionV1) -> Option<String> {
         UiActionV1::ChatMessageRegenerate => "regenerate",
         UiActionV1::ChatMessageSwipePrevious => "swipe-previous",
         UiActionV1::ChatMessageSwipeNext => "swipe-next",
+        UiActionV1::ChatMessageSwipePicker => "swipe-picker",
         UiActionV1::ChatMessagePrompt { .. } => "prompt",
         UiActionV1::ChatMessageSteps { .. } => "steps",
         UiActionV1::ChatMessageDeleteCheckpoint { .. } => "delete-checkpoint",

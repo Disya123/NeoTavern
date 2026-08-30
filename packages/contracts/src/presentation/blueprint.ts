@@ -116,6 +116,7 @@ const UiActionIdSchema = Type.Union([
   Type.Literal('chat.message.regenerate'),
   Type.Literal('chat.message.swipe-previous'),
   Type.Literal('chat.message.swipe-next'),
+  Type.Literal('chat.message.swipe-picker'),
 ]);
 export type UiActionId = Static<typeof UiActionIdSchema>;
 

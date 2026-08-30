@@ -44,6 +44,10 @@ pub struct VisibleRow {
     /// Linked checkpoint child chat (`MessageDto.checkpointChatId`); `Some`
     /// shows the delete-checkpoint action (React `deleteCheckpoint`).
     pub checkpoint_chat_id: Option<String>,
+    /// Pre-formatted swipe counter (React `chat:swipeCounter` "N/M", 1-based);
+    /// empty hides the pager label (React `MessageSwipePager` renders `null`
+    /// when `total <= 1`).
+    pub swipe_label: String,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -113,6 +117,14 @@ pub struct ProductChatView {
     /// Match count across the whole chat (React `searchMatchCount`), not
     /// just the visible window.
     pub header_search_match_count: u64,
+    /// Variant picker popover (React `MessageVariantPicker`): the owning
+    /// message id, its trigger visibility state and the lazy
+    /// `chats.messages.variants.list` rows.
+    pub variant_picker_for: Option<String>,
+    pub variant_picker_rows: Vec<VariantRowView>,
+    /// React picker empty state (`chat:swipePickerEmpty`): `true` after a
+    /// successful list with no rows; `false` = loading.
+    pub variant_picker_empty: bool,
 }
 
 /// One row of the snapshots menu (React `ChatSnapshotsMenu` item): the child
@@ -133,6 +145,19 @@ pub struct SnapshotItemView {
 pub struct RevisionRow {
     pub content: String,
     pub created_at: String,
+}
+
+/// One row of the variant picker popover (React `MessageVariantPicker`
+/// listbox option): the 1-based "position/total" index label, a content
+/// preview and the active flag (`aria-selected`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct VariantRowView {
+    pub id: String,
+    /// React `styles.index`: `{position + 1}/{total}`.
+    pub index_label: String,
+    /// Preview text, `content.slice(0, 140)` (React `PREVIEW_MAX_LENGTH`).
+    pub preview: String,
+    pub active: bool,
 }
 
 impl Default for ProductChatView {
@@ -163,6 +188,9 @@ impl Default for ProductChatView {
             header_search_open: false,
             header_search_query: String::new(),
             header_search_match_count: 0,
+            variant_picker_for: None,
+            variant_picker_rows: Vec::new(),
+            variant_picker_empty: false,
         }
     }
 }
@@ -341,6 +369,7 @@ pub fn visible_rows(fixture: &CanonicalFixture, start: usize) -> Vec<VisibleRow>
                     .get("checkpointChatId")
                     .and_then(Value::as_str)
                     .map(str::to_string),
+                swipe_label: String::new(),
             }
         })
         .collect()
@@ -426,6 +455,9 @@ pub fn product_chat_from_fixture(fixture: &CanonicalFixture, start: usize) -> Pr
         header_search_open: false,
         header_search_query: String::new(),
         header_search_match_count: 0,
+        variant_picker_for: None,
+        variant_picker_rows: Vec::new(),
+        variant_picker_empty: false,
     }
 }
 

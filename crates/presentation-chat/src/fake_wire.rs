@@ -517,6 +517,7 @@ impl FakeWire {
         wire.insert_character(demo_vayle());
         wire.insert_persona(demo_persona());
         wire.insert_chat(demo_chat(i64::from(count)));
+        let mut tail_content = String::new();
         for index in 0..count {
             let content = if index.is_multiple_of(5) {
                 format!("![photo {index}](asset:thumb-{index})")
@@ -527,6 +528,9 @@ impl FakeWire {
                     "**msg {index}**\n\n\"Stay close.\" *the kestrel clicks her tongue.*\n\n- item one\n- `code`"
                 )
             };
+            if index == count - 1 {
+                tail_content = content.clone();
+            }
             if index.is_multiple_of(2) {
                 wire.push_message(user_message(DEMO_CHAT_ID, i64::from(index), &content));
             } else {
@@ -542,10 +546,6 @@ impl FakeWire {
         // the original content so the active-variant cursor starts there.
         // React `MessageSwipePager` (swipe previous/next) navigates these.
         let tail_id = wire_id((u64::from(count - 1)) + 0x2000);
-        let tail_content = format!(
-            "**msg {}**\n\n\"Stay close.\" *the kestrel clicks her tongue.*\n\n- item one\n- `code`",
-            count - 1
-        );
         if count >= 2 {
             let variant = |position, id_high, content: String| MessageVariantDto {
                 id: wire_id(id_high),

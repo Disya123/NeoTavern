@@ -843,6 +843,21 @@ impl App {
                         self.dirty = true;
                         self.window.as_ref().map(|w| w.request_redraw());
                     }
+                    neotavern_presentation_chat::MessageActionKind::SwipePicker => {
+                        eprintln!(
+                            "[neocompositor-desktop] swipe-picker tapped: {}",
+                            pending.row_id
+                        );
+                        self.session.open_variant_picker(&pending.row_id);
+                        self.dirty = true;
+                        self.window.as_ref().map(|w| w.request_redraw());
+                    }
+                    neotavern_presentation_chat::MessageActionKind::SwipePickerClose => {
+                        eprintln!("[neocompositor-desktop] swipe-picker-close tapped");
+                        self.session.close_variant_picker();
+                        self.dirty = true;
+                        self.window.as_ref().map(|w| w.request_redraw());
+                    }
                     neotavern_presentation_chat::MessageActionKind::Edit => {
                         eprintln!("[neocompositor-desktop] edit tapped: {}", pending.row_id);
                         self.session.start_message_edit(&pending.row_id);

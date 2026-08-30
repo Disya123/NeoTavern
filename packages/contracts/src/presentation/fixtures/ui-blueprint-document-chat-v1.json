@@ -465,6 +465,19 @@
                                 "children": []
                               },
                               {
+                                "nodeId": "swipe-picker",
+                                "component": "MessageActionButton",
+                                "recipe": "pill-button",
+                                "role": "button",
+                                "stateSlots": [],
+                                "actions": [
+                                  {
+                                    "id": "chat.message.swipe-picker"
+                                  }
+                                ],
+                                "children": []
+                              },
+                              {
                                 "nodeId": "swipe-next",
                                 "component": "MessageActionButton",
                                 "recipe": "pill-button",

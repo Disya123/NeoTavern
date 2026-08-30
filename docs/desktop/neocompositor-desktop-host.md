@@ -784,6 +784,32 @@ Blueprint-chrome при открытом меню уходит в legacy-RSX
 `MESSAGE_NOT_FOUND`, чужой родитель при list — `CHAT_NOT_FOUND`. При смене
 чата меню закрывается. Тест `chat_snapshots_checkpoint_branch_over_product_wire`.
 
+## Свайпы: счётчик вариантов и пикер
+
+`MessageSwipePager` получил недостающие части React-эталона: hydrated-счётчик
+"current/total" (`data-part="swipe-counter"`, `aria-live="polite"` — React
+`chat:swipeCounter`) и trigger пикера вариантов
+(`data-action="swipe-picker"`, caret-down) между кнопками previous/next; в
+канонический документ чата добавлен узел `swipe-picker` с действием
+`chat.message.swipe-picker` (новый литерал в `UiActionIdSchema` и вариант
+`UiActionV1::ChatMessageSwipePicker`). Kernel-plane сообщения не несут
+перестановочных полей, поэтому счётчик гидратируется из кэша
+`chats.messages.variants.list` (позиция по совпадению контента, иначе
+неявная последняя строка = total; скрывается при пустом, как React `total <= 1`).
+Тап по триггеру открывает поповер `MessageVariantPicker` (список stored
+вариантов + активного контента, `data-part="swipe-row-{id}"`, индекс
+"N/M" tabular-nums, preview 140 символов, пустой список — честное
+"No other variants" при загруженном результате; blueprint-chrome при этом
+честно уходит в legacy-RSX). Выбор строки вызывает `variants.activate`,
+пересчитывает сообщения и счётчик, закрывает поповер; тап вне поповера
+закрывает его (паритет React outside-click; геометрия зеркалится между
+`variant_picker_popover` и `variant_picker_hit`, попаер-лейбл рендерится
+только непустым в обеих ветках). Фикстура `FakeWire::with_message_count`
+сеяла «оригинал» с хардкод-контентом, не совпадавшим с реальным текстом
+хвостового сообщения (например `![photo 5]` при count кратном 5) — теперь
+позиция 0 берёт фактический контент хвоста. Тест
+`variant_picker_and_swipe_counter_over_product_wire`.
+
 ## Экспорт чата
 
 Строка чата в панели Chats получила третью зону Export (rename / export /

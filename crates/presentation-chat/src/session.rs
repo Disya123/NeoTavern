@@ -17,22 +17,22 @@ use contracts_generated::generated::{
     decode_result_snapshots_rollback, decode_result_themes_list, decode_themes_item, AssetsItem,
     BackupDto, CardExportFormat, CharacterDto, ChatDto, ErrorDto, FreeObject, GenerationEvent,
     LorebookDto, LorebookEntryDto, LorebookEntryInput, LorebookEntryPatch, MemoryDto, MemoryScope,
-    MessageDraftDto, MessageDto, MessageRevisionDto, MessageRole, PagedCharacters, PagedChats,
-    PagedMessages, PersonaDto, PluginsItem, PresetDto, ProfilesItem, PromptPlan, ProviderConfigDto,
-    RequestAssetsContent, RequestAssetsPut, RequestBackupsRestore, RequestCancelGeneration,
-    RequestCharactersExportCard, RequestChatsExport, RequestCreateCharacter, RequestCreateChat,
-    RequestCreateChatSnapshot, RequestCreateLorebook, RequestCreateLorebookEntry,
-    RequestCreateMemory, RequestCreateMessage, RequestCreatePersona, RequestCreatePreset,
-    RequestDeleteCharacter, RequestDeleteChat, RequestDeleteLorebook, RequestDeleteLorebookEntry,
-    RequestDeleteMemory, RequestDeleteMessage, RequestDeletePersona, RequestDeletePreset,
-    RequestDeleteProviderConfig, RequestEmpty, RequestGetCharacter, RequestGetChat,
-    RequestGetPromptPlan, RequestImportsCharacterCard, RequestListCharacters, RequestListChats,
-    RequestListGenerationEvents, RequestListLorebookEntries, RequestListLorebooks,
-    RequestListMemories, RequestListMessages, RequestListPresets, RequestListProviderConfigs,
-    RequestMessageDraftCommit, RequestMessageDraftDiscard, RequestMessageDraftGet,
-    RequestMessageDraftSave, RequestMessageRevisionsList, RequestMessageVariantActivate,
-    RequestMessageVariantsList, RequestPluginsDisable, RequestPluginsEnable,
-    RequestPluginsUninstall, RequestProfileExport, RequestProfileImport,
+    MessageDraftDto, MessageDto, MessageRevisionDto, MessageRole, MessageVariantDto,
+    PagedCharacters, PagedChats, PagedMessages, PersonaDto, PluginsItem, PresetDto, ProfilesItem,
+    PromptPlan, ProviderConfigDto, RequestAssetsContent, RequestAssetsPut, RequestBackupsRestore,
+    RequestCancelGeneration, RequestCharactersExportCard, RequestChatsExport,
+    RequestCreateCharacter, RequestCreateChat, RequestCreateChatSnapshot, RequestCreateLorebook,
+    RequestCreateLorebookEntry, RequestCreateMemory, RequestCreateMessage, RequestCreatePersona,
+    RequestCreatePreset, RequestDeleteCharacter, RequestDeleteChat, RequestDeleteLorebook,
+    RequestDeleteLorebookEntry, RequestDeleteMemory, RequestDeleteMessage, RequestDeletePersona,
+    RequestDeletePreset, RequestDeleteProviderConfig, RequestEmpty, RequestGetCharacter,
+    RequestGetChat, RequestGetPromptPlan, RequestImportsCharacterCard, RequestListCharacters,
+    RequestListChats, RequestListGenerationEvents, RequestListLorebookEntries,
+    RequestListLorebooks, RequestListMemories, RequestListMessages, RequestListPresets,
+    RequestListProviderConfigs, RequestMessageDraftCommit, RequestMessageDraftDiscard,
+    RequestMessageDraftGet, RequestMessageDraftSave, RequestMessageRevisionsList,
+    RequestMessageVariantActivate, RequestMessageVariantsList, RequestPluginsDisable,
+    RequestPluginsEnable, RequestPluginsUninstall, RequestProfileExport, RequestProfileImport,
     RequestProfileImportPolicy, RequestProfilesCreate, RequestProfilesDelete,
     RequestProfilesRename, RequestRetryGeneration, RequestSetProviderConfig, RequestSettingsGet,
     RequestSettingsUpdate, RequestSettingsUpdateSettings, RequestSnapshotsList,
@@ -404,6 +404,20 @@ pub struct ChatRouteState {
     pub memory_form_error: Option<String>,
     pub memory_delete_open: bool,
     pub memory_delete_target_id: Option<String>,
+    /// Snapshots menu (React `ChatSnapshotsMenu`): panel visibility plus the
+    /// child chats (checkpoints/branches) of the active chat.
+    pub snapshots_menu_open: bool,
+    pub snapshot_items: Vec<ChatDto>,
+    /// Variant picker popover (React `MessageVariantPicker`): the message it
+    /// is open for plus the lazily fetched `chats.messages.variants.list`
+    /// rows (`None` = loading, matches the React disabled query).
+    pub variant_picker_for: Option<String>,
+    pub variant_picker_variants: Vec<MessageVariantDto>,
+    /// Swipe counter state (React `ChatPage` `currentSwipe`/`totalSwipes`
+    /// derived from the variants query): `(label, message_id)` of the last
+    /// successful `chats.messages.variants.list` for the tail row.
+    pub swipe_label_for: Option<String>,
+    pub swipe_label: String,
     /// Composer context-meter popover visibility (`chat.composer.context`).
     pub context_panel_open: bool,
     /// Inline message editor (React `MessageBubble` editing state):
@@ -414,10 +428,6 @@ pub struct ChatRouteState {
     /// contents from `chats.messages.revisions.list`.
     pub history_message_id: Option<String>,
     pub message_revisions: Vec<RevisionRow>,
-    /// Snapshots menu (React `ChatSnapshotsMenu`): panel visibility plus the
-    /// child chats (checkpoints/branches) of the active chat.
-    pub snapshots_menu_open: bool,
-    pub snapshot_items: Vec<ChatDto>,
     /// Completed export payload awaiting the host's file sink (React
     /// downloads the file; the desktop host writes it to disk):
     /// `chats.export`, `characters.export.card`, and the host-owned
@@ -570,6 +580,8 @@ impl<W: ProductWire> ChatSession<W> {
         session.state.context_panel_open = false;
         session.state.message_edit_id = None;
         session.state.history_message_id = None;
+        session.state.variant_picker_for = None;
+        session.state.swipe_label_for = None;
         Ok(session)
     }
 
@@ -1154,7 +1166,16 @@ impl<W: ProductWire> ChatSession<W> {
                 run_id: None,
                 manual_excluded: false,
                 checkpoint_chat_id: None,
+                swipe_label: String::new(),
             });
+        }
+        // Hydrate the pager counter onto its row: `hydrate_swipe_label` filled
+        // the cache after `variants.list`/`.activate`; empty = hidden
+        // (React renders the counter only when `total > 1`).
+        if let Some(label_row) = self.state.swipe_label_for.as_deref() {
+            if let Some(row) = visible.iter_mut().find(|row| row.id == label_row) {
+                row.swipe_label = self.state.swipe_label.clone();
+            }
         }
         // React chat chrome is header + composer only; the TripleGlass /
         // PaintOrder variants are M0 glass-layering probes (perf-probe
@@ -1202,6 +1223,12 @@ impl<W: ProductWire> ChatSession<W> {
             })
             .unwrap_or_default();
         let context_summary = Some(self.context_estimate(&visible));
+        // Variant picker popover (React `MessageVariantPicker`): rows derive
+        // from the last successful `chats.messages.variants.list` — stored
+        // variants plus the active content row (kernel mode carries no
+        // permutation fields on the message, so the active text joins as the
+        // implicit last item and the list sorts by position).
+        let variant_picker_rows = self.variant_picker_row_views();
         ProductChatView {
             title,
             message_count: self.kernel_message_count(),
@@ -1247,7 +1274,63 @@ impl<W: ProductWire> ChatSession<W> {
             header_search_open: self.state.header_search_open,
             header_search_query: self.state.header_search_query.clone(),
             header_search_match_count: self.state.header_search_match_count,
+            variant_picker_for: self.state.variant_picker_for.clone(),
+            variant_picker_rows,
+            // `None` variants = the lazy list query still loading (React
+            // `variants.isLoading`); a fetched-but-empty list shows the
+            // honest empty copy.
+            variant_picker_empty: self.state.variant_picker_for.is_some()
+                && self.state.variant_picker_variants.is_empty(),
         }
+    }
+
+    /// React `MessageVariantPicker` rows (kernel mode: the message carries
+    /// no permutation fields, so the picker always takes the second branch).
+    /// Stored variants keep their wire positions; the active message text
+    /// appends as the implicit last item when it is not a stored row; the
+    /// stored row matching the active content is marked active. Sorted by
+    /// position — the React listbox order.
+    fn variant_picker_row_views(&self) -> Vec<neotavern_presentation_dioxus_shell::VariantRowView> {
+        let Some(message_id) = self.state.variant_picker_for.as_deref() else {
+            return Vec::new();
+        };
+        let Some(row) = self.state.messages.iter().find(|row| row.id == message_id) else {
+            return Vec::new();
+        };
+        let stored = &self.state.variant_picker_variants;
+        let content_index = stored
+            .iter()
+            .position(|variant| variant.content == row.content);
+        let total = stored.len().saturating_add(1);
+        let mut rows: Vec<neotavern_presentation_dioxus_shell::VariantRowView> = stored
+            .iter()
+            .enumerate()
+            .map(
+                |(index, variant)| neotavern_presentation_dioxus_shell::VariantRowView {
+                    id: variant.id.clone(),
+                    index_label: format!("{}/{}", variant.position + 1, total),
+                    preview: preview_text(&variant.content),
+                    active: Some(index) == content_index,
+                },
+            )
+            .collect();
+        if content_index.is_none() {
+            // The active text is not a stored variant: React appends it
+            // (id `active-<messageId>`, position = stored length).
+            rows.push(neotavern_presentation_dioxus_shell::VariantRowView {
+                id: format!("active-{message_id}"),
+                index_label: format!("{total}/{total}"),
+                preview: preview_text(&row.content),
+                active: true,
+            });
+        }
+        rows.sort_by_key(|row| {
+            row.index_label
+                .split_once('/')
+                .and_then(|(current, _)| current.parse::<u64>().ok())
+                .unwrap_or(u64::MAX)
+        });
+        rows
     }
 
     /// Local context estimate for the composer context meter (React
@@ -1944,6 +2027,10 @@ impl<W: ProductWire> ChatSession<W> {
                 self.state.message_revisions.clear();
                 self.state.snapshots_menu_open = false;
                 self.state.snapshot_items.clear();
+                self.state.variant_picker_for = None;
+                self.state.variant_picker_variants.clear();
+                self.state.swipe_label_for = None;
+                self.state.swipe_label.clear();
                 match self.list_messages(chat_id, None) {
                     Ok(page) => self.absorb_latest_page(page),
                     Err(err) => self.record_error(err),
@@ -2822,7 +2909,130 @@ impl<W: ProductWire> ChatSession<W> {
             current = target_index + 1,
             total = items.len()
         ));
+        // The pager counter follows the activation (React invalidates the
+        // variants query and re-derives `currentSwipe`).
+        self.hydrate_swipe_label(row_id, &items);
         self.bump_scene();
+    }
+    pub fn open_variant_picker(&mut self, row_id: &str) {
+        if self.state.variant_picker_for.as_deref() == Some(row_id) {
+            self.state.variant_picker_for = None;
+            self.bump_scene();
+            return;
+        }
+        let Some(chat_id) = self.chat_id().map(str::to_string) else {
+            return;
+        };
+        match self.call_decode(
+            "chats.messages.variants.list",
+            &RequestMessageVariantsList {
+                chat_id: chat_id.clone(),
+                message_id: row_id.to_string(),
+            },
+            decode_result_message_variant_list,
+        ) {
+            Ok(result) => {
+                self.state.variant_picker_for = Some(row_id.to_string());
+                self.state.variant_picker_variants = result.items.clone();
+                self.hydrate_swipe_label(row_id, &result.items);
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
+    }
+
+    pub fn close_variant_picker(&mut self) {
+        self.state.variant_picker_for = None;
+        self.state.variant_picker_variants.clear();
+        self.bump_scene();
+    }
+
+    /// Pick a row inside the picker popover: the active row is a no-op
+    /// (React `if (!row.active)`), otherwise `variants.activate` by the
+    /// variant id (the synthesized `active-` row never crosses the wire).
+    pub fn pick_variant(&mut self, row_id: &str, variant_id: &str) {
+        if variant_id.starts_with("active-") {
+            // React closes the popover on the active row without mutating.
+            self.close_variant_picker();
+            return;
+        }
+        let Some(chat_id) = self.chat_id().map(str::to_string) else {
+            return;
+        };
+        if let Err(err) = self.call_value(
+            "chats.messages.variants.activate",
+            &RequestMessageVariantActivate {
+                chat_id: chat_id.clone(),
+                message_id: row_id.to_string(),
+                variant_id: variant_id.to_string(),
+            },
+        ) {
+            self.record_error(err);
+            return;
+        }
+        match self.list_messages(&chat_id, None) {
+            Ok(page) => {
+                self.state.messages.clear();
+                self.absorb_latest_page(page);
+            }
+            Err(err) => self.record_error(err),
+        }
+        // Re-list the variants so the picker rows and the swipe counter
+        // reflect the activation (React invalidates the variants query).
+        match self.list_variants(&chat_id, row_id) {
+            Ok(items) => {
+                self.state.variant_picker_variants = items.clone();
+                self.hydrate_swipe_label(row_id, &items);
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.state.variant_picker_for = None;
+        self.bump_scene();
+    }
+
+    fn list_variants(
+        &mut self,
+        chat_id: &str,
+        message_id: &str,
+    ) -> Result<Vec<MessageVariantDto>, ChatRouteError> {
+        let result = self.call_decode(
+            "chats.messages.variants.list",
+            &RequestMessageVariantsList {
+                chat_id: chat_id.to_string(),
+                message_id: message_id.to_string(),
+            },
+            decode_result_message_variant_list,
+        )?;
+        Ok(result.items)
+    }
+
+    /// React `ChatPage` counter derivation over the fetched variant list:
+    /// the active content matches a stored variant (1-based `position + 1`)
+    /// or is the implicit last row (= total = stored count + 1); fewer than
+    /// two rows hide the pager (React renders `null` when `total <= 1`).
+    fn hydrate_swipe_label(&mut self, row_id: &str, items: &[MessageVariantDto]) {
+        let mut items: Vec<&MessageVariantDto> = items.iter().collect();
+        items.sort_by_key(|variant| variant.position);
+        if items.is_empty() {
+            self.state.swipe_label_for = None;
+            self.state.swipe_label = String::new();
+            return;
+        }
+        let total = items.len() + 1;
+        let current = self
+            .state
+            .messages
+            .iter()
+            .find(|row| row.id == row_id)
+            .and_then(|row| {
+                items
+                    .iter()
+                    .position(|variant| variant.content == row.content)
+            })
+            .map(|index| items[index].position + 1)
+            .unwrap_or(total as i64);
+        self.state.swipe_label_for = Some(row_id.to_string());
+        self.state.swipe_label = format!("{current}/{total}");
     }
 
     pub fn set_create_description(&mut self, value: &str) {
@@ -3384,6 +3594,10 @@ impl<W: ProductWire> ChatSession<W> {
             ShellAction::ProviderDeleteConfirm => self.confirm_provider_delete(),
             ShellAction::SnapshotsClose => self.close_snapshots_menu(),
             ShellAction::OpenSnapshot(id) => self.open_snapshot(&id),
+            ShellAction::VariantPickerClose => self.close_variant_picker(),
+            ShellAction::PickVariant(message_id, variant_id) => {
+                self.pick_variant(&message_id, &variant_id)
+            }
             ShellAction::ExportChat(id) => self.export_chat(&id),
             ShellAction::LorebookSaveMeta => self.save_lorebook_meta(),
             ShellAction::PersonaSaveMeta => self.save_persona_meta(),
@@ -8059,6 +8273,11 @@ fn message_visible_row(
         run_id: message.generation_run_id.clone(),
         manual_excluded: manual_excluded(&message.meta),
         checkpoint_chat_id: message.checkpoint_chat_id.clone(),
+        // React `MessageSwipePager` counter ("N/M"). Kernel-plane messages do
+        // not carry the legacy permutation fields (translateMessage reports
+        // 0/null) — the label hydrates from the variants cache in `view()`,
+        // exactly like the React query-derived `currentSwipe`.
+        swipe_label: String::new(),
     }
 }
 
@@ -8160,6 +8379,12 @@ fn is_cjk(ch: char) -> bool {
 
 fn manual_excluded(meta: &FreeObject) -> bool {
     meta.payload.get("manualExcluded") == Some(&Value::Bool(true))
+}
+
+/// Variant picker row preview (React `PREVIEW_MAX_LENGTH = 140`): the first
+/// 140 characters of the variant content — a byte-safe char-bounded slice.
+fn preview_text(content: &str) -> String {
+    content.chars().take(140).collect()
 }
 
 fn with_manual_excluded(meta: &FreeObject, excluded: bool) -> FreeObject {

@@ -199,6 +199,7 @@ fn markdown_minimal_probe() {
             run_id: None,
             manual_excluded: false,
             checkpoint_chat_id: None,
+            swipe_label: String::new(),
         }],
         chrome: ProductChrome::HeaderComposer,
         character_avatar_asset: "asset:avatar-hazel".into(),
@@ -222,6 +223,9 @@ fn markdown_minimal_probe() {
         header_search_open: false,
         header_search_query: String::new(),
         header_search_match_count: 0,
+        variant_picker_for: None,
+        variant_picker_rows: Vec::new(),
+        variant_picker_empty: false,
     });
     let layout =
         inspect_product_layout(product_chat_app, 1100, 760, 1.0, Default::default()).expect("l");
@@ -5267,4 +5271,98 @@ fn custom_intents_surface_an_honest_trace_toast() {
         session.shell_view().status_message.as_deref(),
         Some("[custom] custom.demo.pin-chat — no handler attached.")
     );
+}
+
+/// Variant picker (`MessageVariantPicker` popover) + hydrated swipe counter
+/// over `chats.messages.variants.list`/`.activate`: the pager label starts
+/// hidden (kernel messages carry no permutation fields), the trigger opens
+/// the popover with stored variants + the active row, picking a row
+/// activates the variant and closes the popover, and the pager shows the
+/// React-derived "N/M" counter. Outside taps close the popover like React's
+/// outside-click handler.
+#[test]
+fn variant_picker_and_swipe_counter_over_product_wire() {
+    use neotavern_presentation_chat::{hit_test, ShellAction, ShellHit};
+    let (mut session, _) = start_flagged_session(
+        Some("1"),
+        FakeWire::with_message_count(6),
+        Some(neotavern_presentation_chat::DEMO_CHAT_ID),
+        None,
+    )
+    .expect("route");
+    let tail = session.view().visible.last().expect("tail").id.clone();
+
+    // Kernel messages carry no permutation fields: the pager label starts
+    // hidden, exactly like React before a variants query resolves.
+    let view = session.view();
+    assert!(view.variant_picker_for.is_none());
+    assert!(view.visible.iter().all(|row| row.swipe_label.is_empty()));
+
+    // Opening the picker lists the stored variants (3 rows: positions 1..3
+    // plus the active original content row).
+    session.open_variant_picker(&tail);
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "chats.messages.variants.list"));
+    let view = session.view();
+    assert_eq!(view.variant_picker_for.as_deref(), Some(tail.as_str()));
+    assert!(!view.variant_picker_rows.is_empty());
+    // Stored variants keep their wire positions as "N/M" index labels; the
+    // active original content is position 0 (1/4 in React's 1-based labels).
+    assert!(view.variant_picker_rows.len() >= 3);
+    let picked = view
+        .variant_picker_rows
+        .iter()
+        .find(|row| !row.active)
+        .expect("an inactive stored variant row")
+        .clone();
+    assert!(picked.preview.starts_with("*variant"),);
+    // The hydrated counter is now "1/4": 3 stored + active original.
+    assert_eq!(
+        view.visible
+            .iter()
+            .find(|row| row.id == tail)
+            .expect("tail row")
+            .swipe_label,
+        "1/4"
+    );
+    drop(view);
+
+    // Picking a stored variant swaps the tail content, closes the popover,
+    // and refreshes the counter to the activated position.
+    session.apply_shell_action(ShellAction::PickVariant(tail.clone(), picked.id.clone()));
+    assert!(session
+        .issued_commands()
+        .iter()
+        .any(|op| op == "chats.messages.variants.activate"));
+    let view = session.view();
+    assert!(view.variant_picker_for.is_none(), "pick closes the popover");
+    assert!(view
+        .visible
+        .last()
+        .expect("tail")
+        .content
+        .starts_with("*variant"));
+    assert_eq!(
+        view.visible
+            .iter()
+            .find(|row| row.id == tail)
+            .expect("tail row")
+            .swipe_label,
+        picked.index_label,
+        "counter follows the activated position"
+    );
+    drop(view);
+
+    // Outside tap closes the reopened popover (React outside-click).
+    session.open_variant_picker(&tail);
+    assert!(session.view().variant_picker_for.is_some());
+    let shell = session.shell_view();
+    match hit_test(&shell, 800.0, 400.0) {
+        Some(ShellHit::Action(ShellAction::VariantPickerClose)) => {}
+        other => panic!("expected outside-close hit, got {other:?}"),
+    }
+    session.apply_shell_action(ShellAction::VariantPickerClose);
+    assert!(session.view().variant_picker_for.is_none());
 }

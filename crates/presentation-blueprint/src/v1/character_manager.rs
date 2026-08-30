@@ -208,6 +208,9 @@ pub enum UiActionV1 {
     ChatMessageRegenerate,
     ChatMessageSwipePrevious,
     ChatMessageSwipeNext,
+    /// Open/toggle the variant picker popover
+    /// (`data-action="swipe-picker"`; React `MessageVariantPicker` trigger).
+    ChatMessageSwipePicker,
     /// Declarative `custom.<owner>.<name>` intent authored straight in a
     /// document. It carries NO Product Wire authority: hosts resolve the name
     /// through their own registry and default to an observable no-op trace.
@@ -272,6 +275,7 @@ impl UiActionV1 {
             | Self::ChatMessageRegenerate
             | Self::ChatMessageSwipePrevious
             | Self::ChatMessageSwipeNext
+            | Self::ChatMessageSwipePicker
             // Custom intents are authority-free by contract.
             | Self::Custom { .. } => return None,
         };

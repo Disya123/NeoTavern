@@ -288,6 +288,14 @@ pub enum ShellAction {
     /// shared hit table as `custom.chat.snapshots-menu`.
     SnapshotsClose,
     OpenSnapshot(String),
+    /// Variant picker popover (React `MessageVariantPicker`): outside tap and
+    /// the ✕ button close it; a row tap activates the variant
+    /// (`chats.messages.variants.activate`). The trigger and close buttons
+    /// themselves ride the shared hit table via `data-action`.
+    VariantPickerClose,
+    /// Pick a row in the variant picker popover: message id + variant id
+    /// (the synthesized `active-{id}` row closes without mutating).
+    PickVariant(String, String),
     /// Chats panel row action (`chats.export`; React `ChatManagementPanel`
     /// "Export" item). The desktop host parks `last_export` and writes it.
     ExportChat(String),
@@ -1370,6 +1378,11 @@ pub fn hit_test(view: &ProductShellView, css_x: f32, css_y: f32) -> Option<Shell
             return Some(hit);
         }
     }
+    if view.chat.variant_picker_for.is_some() {
+        if let Some(hit) = variant_picker_hit(view, x, y) {
+            return Some(hit);
+        }
+    }
     None
 }
 
@@ -1408,6 +1421,52 @@ fn snapshots_menu_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHi
             return Some(ShellHit::Action(ShellAction::OpenSnapshot(item.id.clone())));
         }
         cursor += 48.0 + 6.0;
+    }
+    Some(ShellHit::Absorb)
+}
+
+/// Variant picker popover (React `MessageVariantPicker` listbox): mirrors the
+/// DOM geometry of `variant_picker_popover` in the dioxus shell — same panel
+/// scaffold as the snapshots menu (left/right 16, top 12, padding 12, header
+/// 28) with 40px-min rows + 6 gap; the ✕ is a `data-action` button that the
+/// hit-rect table resolves first, so only rows and outside lands here. A tap
+/// outside closes the popover like React's outside-click handler.
+fn variant_picker_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
+    let picker = view.chat.variant_picker_for.as_deref()?;
+    let (width, height) = css_size(view);
+    let chat_x0 = chat_origin_x(view);
+    let (_, header_h, _, composer_h) = chrome_metrics(width as u32, height as u32);
+    let composer_bottom = height - composer_h as f32 - chrome_bottom(view);
+    let viewport_top = chrome_top(view) + header_h as f32;
+    let items = &view.chat.variant_picker_rows;
+    let list_h = if items.is_empty() {
+        16.0
+    } else {
+        items.len() as f32 * 40.0 + (items.len().saturating_sub(1)) as f32 * 6.0
+    };
+    let panel_h = (12.0 + 28.0 + 6.0 + list_h + 12.0).min((composer_bottom - viewport_top) * 0.6);
+    let px0 = chat_x0 + 16.0;
+    let px1 = width - 16.0;
+    let py0 = header_bottom(view) + SPACE_SM;
+    let py1 = py0 + panel_h;
+    if !contains(x, y, px0, py0, px1, py1) {
+        return Some(ShellHit::Action(ShellAction::VariantPickerClose));
+    }
+    // Close button rides the title row's right edge (the hit-rect table
+    // resolves it too — keep both honest).
+    if contains(x, y, px1 - 40.0, py0 + 12.0, px1 - 12.0, py0 + 40.0) {
+        return Some(ShellHit::Action(ShellAction::VariantPickerClose));
+    }
+    let mut cursor = py0 + 48.0;
+    for item in view.chat.variant_picker_rows.iter() {
+        let row_h = 40.0;
+        if contains(x, y, px0 + 12.0, cursor, px1 - 12.0, cursor + row_h) {
+            return Some(ShellHit::Action(ShellAction::PickVariant(
+                picker.to_string(),
+                item.id.clone(),
+            )));
+        }
+        cursor += row_h + 6.0;
     }
     Some(ShellHit::Absorb)
 }

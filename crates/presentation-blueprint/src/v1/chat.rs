@@ -379,6 +379,7 @@ fn wire_action(
         "chat.message.regenerate" => UiActionV1::ChatMessageRegenerate,
         "chat.message.swipe-previous" => UiActionV1::ChatMessageSwipePrevious,
         "chat.message.swipe-next" => UiActionV1::ChatMessageSwipeNext,
+        "chat.message.swipe-picker" => UiActionV1::ChatMessageSwipePicker,
         // Unreachable for well-formed documents: `validate_action_ids`
         // rejects unknown builtin ids before materialization.
         _ => return None,
