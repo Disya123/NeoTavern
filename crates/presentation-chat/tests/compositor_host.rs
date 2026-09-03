@@ -5478,3 +5478,87 @@ fn composer_shows_stop_button_during_streaming_and_cancels_generation() {
     );
 }
 
+#[test]
+fn character_manager_alternate_greetings_add_toggle_and_remove() {
+    use neotavern_presentation_chat::ShellAction;
+    use neotavern_presentation_m0_d2::inspect_slot_skeleton;
+
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("characters".into()));
+    session.select_character(neotavern_presentation_chat::DEMO_CHARACTER_ID);
+    session.apply_shell_action(ShellAction::SetTab("edit".into()));
+
+    let draft = session
+        .shell_view()
+        .selected_draft
+        .clone()
+        .expect("hazel draft");
+    assert_eq!(draft.name, "Hazel");
+    assert!(!draft.first_message.is_empty(), "initial first_message populated");
+    assert!(!draft.creator_notes.is_empty(), "initial creator_notes populated");
+    assert_eq!(draft.alternate_greetings.len(), 1, "initial greeting present");
+    assert_eq!(session.shell_view().expanded_greeting, None, "initially collapsed");
+
+    session.set_surface_size(1100, 760, 1.0);
+    neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
+    let skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
+        .expect("slot skeleton");
+
+    assert!(
+        skeleton.has_identity("character-first-message-input"),
+        "skeleton should expose character-first-message-input; identities={:?}",
+        skeleton.identities()
+    );
+    assert!(
+        skeleton.has_identity("character-creator-notes-input"),
+        "skeleton should expose character-creator-notes-input; identities={:?}",
+        skeleton.identities()
+    );
+    assert!(
+        skeleton.has_identity("character-greeting-add"),
+        "skeleton should expose character-greeting-add button; identities={:?}",
+        skeleton.identities()
+    );
+
+    // Toggle greeting 0 open
+    session.apply_shell_action(ShellAction::ToggleAlternateGreeting(0));
+    assert_eq!(session.shell_view().expanded_greeting, Some(0));
+
+    // When open, the skeleton exposes the greeting text input
+    neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
+    let skeleton_open = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
+        .expect("open slot skeleton");
+    assert!(
+        skeleton_open.has_identity("character-greeting-input"),
+        "expanded greeting renders character-greeting-input; identities={:?}",
+        skeleton_open.identities()
+    );
+
+    // Typing into fields
+    session.set_character_first_message("Hello from test.");
+    session.set_character_creator_notes("Test notes.");
+    session.set_alternate_greeting(0, "Greetings traveller.");
+    let draft_edited = session.shell_view().selected_draft.expect("edited draft");
+    assert_eq!(draft_edited.first_message, "Hello from test.");
+    assert_eq!(draft_edited.creator_notes, "Test notes.");
+    assert_eq!(draft_edited.alternate_greetings[0], "Greetings traveller.");
+
+    // Add another greeting
+    session.apply_shell_action(ShellAction::AddAlternateGreeting);
+    let draft_after_add = session.shell_view().selected_draft.expect("draft after add");
+    assert_eq!(draft_after_add.alternate_greetings.len(), 2);
+    assert_eq!(session.shell_view().expanded_greeting, Some(1), "new greeting expanded");
+
+    // Remove greeting 0
+    session.apply_shell_action(ShellAction::RemoveAlternateGreeting(0));
+    let draft_after_remove = session.shell_view().selected_draft.expect("draft after remove");
+    assert_eq!(draft_after_remove.alternate_greetings.len(), 1);
+    assert_eq!(draft_after_remove.alternate_greetings[0], "");
+    assert_eq!(session.shell_view().expanded_greeting, Some(0), "expansion adjusted");
+
+    // Toggle closed
+    session.apply_shell_action(ShellAction::ToggleAlternateGreeting(0));
+    assert_eq!(session.shell_view().expanded_greeting, None);
+}
+

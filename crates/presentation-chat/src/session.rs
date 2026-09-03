@@ -216,6 +216,7 @@ pub struct ChatRouteState {
     pub create_name: String,
     pub create_description: String,
     pub create_first_message: String,
+    pub expanded_greeting: Option<usize>,
     pub status_message: Option<String>,
     pub personas: Vec<PersonaDto>,
     pub selected_persona_id: Option<String>,
@@ -1456,7 +1457,7 @@ impl<W: ProductWire> ChatSession<W> {
             } else {
                 "oldest".into()
             },
-            expanded_greeting: None,
+            expanded_greeting: self.state.expanded_greeting,
             tag_input: self.state.tag_input.clone(),
             personas: self.persona_cards(),
             selected_persona_id: self.state.selected_persona_id.clone(),
@@ -3609,6 +3610,9 @@ impl<W: ProductWire> ChatSession<W> {
             ShellAction::CharacterSaveMeta => self.save_character_meta(),
             ShellAction::AddCharacterTag => self.add_character_tag(),
             ShellAction::RemoveCharacterTag(tag) => self.remove_character_tag(&tag),
+            ShellAction::ToggleAlternateGreeting(idx) => self.toggle_alternate_greeting(idx),
+            ShellAction::AddAlternateGreeting => self.add_alternate_greeting(),
+            ShellAction::RemoveAlternateGreeting(idx) => self.remove_alternate_greeting(idx),
             ShellAction::Import => self.open_card_import(),
             ShellAction::ImportClose => self.close_card_import(),
             ShellAction::ConfirmCardImport => self.confirm_card_import(),
@@ -3693,6 +3697,66 @@ impl<W: ProductWire> ChatSession<W> {
             draft.description = value.to_string();
         }
         self.bump_scene();
+    }
+
+    pub fn set_character_first_message(&mut self, value: &str) {
+        if let Some(draft) = self.state.character_draft.as_mut() {
+            draft.first_message = value.to_string();
+        }
+        self.bump_scene();
+    }
+
+    pub fn set_character_creator_notes(&mut self, value: &str) {
+        if let Some(draft) = self.state.character_draft.as_mut() {
+            draft.creator_notes = value.to_string();
+        }
+        self.bump_scene();
+    }
+
+    pub fn toggle_alternate_greeting(&mut self, index: usize) {
+        if self.state.expanded_greeting == Some(index) {
+            self.state.expanded_greeting = None;
+        } else {
+            self.state.expanded_greeting = Some(index);
+        }
+        self.bump_scene();
+    }
+
+    pub fn add_alternate_greeting(&mut self) {
+        let Some(draft) = self.state.character_draft.as_mut() else {
+            return;
+        };
+        draft.alternate_greetings.push(String::new());
+        let new_idx = draft.alternate_greetings.len().saturating_sub(1);
+        self.state.expanded_greeting = Some(new_idx);
+        self.bump_scene();
+    }
+
+    pub fn remove_alternate_greeting(&mut self, index: usize) {
+        let Some(draft) = self.state.character_draft.as_mut() else {
+            return;
+        };
+        if index < draft.alternate_greetings.len() {
+            draft.alternate_greetings.remove(index);
+            if self.state.expanded_greeting == Some(index) {
+                self.state.expanded_greeting = None;
+            } else if let Some(expanded) = self.state.expanded_greeting {
+                if expanded > index {
+                    self.state.expanded_greeting = Some(expanded - 1);
+                }
+            }
+        }
+        self.bump_scene();
+    }
+
+    pub fn set_alternate_greeting(&mut self, index: usize, value: &str) {
+        let Some(draft) = self.state.character_draft.as_mut() else {
+            return;
+        };
+        if let Some(item) = draft.alternate_greetings.get_mut(index) {
+            *item = value.to_string();
+            self.bump_scene();
+        }
     }
 
     pub fn set_tag_input(&mut self, value: &str) {
@@ -3795,7 +3859,11 @@ impl<W: ProductWire> ChatSession<W> {
                 draft.description = dto.description.clone().unwrap_or_default();
                 draft.tags = dto.tags.clone();
                 draft.avatar_asset_id = dto.avatar_asset_id.clone();
+                draft.first_message = format!("*{} looks up.* Hey.", dto.name);
+                draft.creator_notes = format!("Character card for {}.", dto.name);
+                draft.alternate_greetings = vec![format!("*{} nods.* Good to see you.", dto.name)];
                 self.state.character_draft = Some(draft);
+                self.state.expanded_greeting = None;
                 self.load_avatar_data_uri(dto.avatar_asset_id.as_deref());
             }
             Err(err) => {

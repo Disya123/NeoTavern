@@ -1299,6 +1299,7 @@ fn cards_tab(view: &ProductShellView) -> Element {
 }
 
 fn edit_tab(view: &ProductShellView, draft: &CharacterDraftView) -> Element {
+    let first_msg_tokens = format!("≈ {} tokens", (draft.first_message.len() / 4).max(0));
     rsx! {
         div {
             class: "CharacterManagementPanel_editor",
@@ -1450,12 +1451,41 @@ fn edit_tab(view: &ProductShellView, draft: &CharacterDraftView) -> Element {
                     }
                 }
             }
-            p {
-                style: "margin:0;color:#998f87;font-size:0.75rem;height:16px;line-height:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
-                "First message, greetings, and creator notes stay on the React plane."
+            label {
+                class: "CharacterManagementPanel_editorField",
+                style: "display:flex;flex-direction:column;gap:4px;height:88px;box-sizing:border-box;",
+                span {
+                    class: "CharacterManagementPanel_fieldHeading",
+                    strong { "First message" }
+                    small { "{first_msg_tokens}" }
+                }
+                span {
+                    "data-part": "character-first-message-input",
+                    style: "display:block;width:100%;height:64px;line-height:20px;padding:8px 12px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;color:#e8eef7;font-size:0.8125rem;overflow:hidden;box-sizing:border-box;",
+                    if draft.first_message.is_empty() {
+                        span { style: "color:#998f87;", "No opening message yet." }
+                    } else {
+                        "{draft.first_message}"
+                    }
+                }
             }
-            {editor_field("Creator's notes", &draft.creator_notes, None, true, false, false)}
-            {editor_field("First message", &draft.first_message, None, true, true, false)}
+            label {
+                class: "CharacterManagementPanel_editorField",
+                style: "display:flex;flex-direction:column;gap:4px;height:88px;box-sizing:border-box;",
+                span {
+                    class: "CharacterManagementPanel_fieldHeading",
+                    strong { "Creator's notes" }
+                }
+                span {
+                    "data-part": "character-creator-notes-input",
+                    style: "display:block;width:100%;height:64px;line-height:20px;padding:8px 12px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;color:#e8eef7;font-size:0.8125rem;overflow:hidden;box-sizing:border-box;",
+                    if draft.creator_notes.is_empty() {
+                        span { style: "color:#998f87;", "No creator notes yet." }
+                    } else {
+                        "{draft.creator_notes}"
+                    }
+                }
+            }
             section {
                 class: "CharacterManagementPanel_greetings",
                 div {
@@ -1470,6 +1500,8 @@ fn edit_tab(view: &ProductShellView, draft: &CharacterDraftView) -> Element {
                         "data-component": "button",
                         "data-variant": "default",
                         "data-size": "sm",
+                        "data-action": "character-greeting-add",
+                        "data-part": "character-greeting-add",
                         span { "data-part": "label", "Add" }
                     }
                 }
@@ -1481,17 +1513,22 @@ fn edit_tab(view: &ProductShellView, draft: &CharacterDraftView) -> Element {
                             let approx = (greeting.len() / 4).max(0);
                             let approx_tokens = format!("≈ {approx} tokens");
                             let label = format!("Greeting {}", idx + 1);
+                            let is_open = view.expanded_greeting == Some(idx);
+                            let state = if is_open { "open" } else { "closed" };
+                            let idx_str = idx.to_string();
                             rsx! {
                                 div {
                                     class: "CharacterManagementPanel_greetingItem",
                                     key: "{idx}",
-                                    "data-state": "closed",
+                                    "data-state": "{state}",
                                     div {
                                         class: "CharacterManagementPanel_greetingHeader",
                                         button {
                                             class: "CharacterManagementPanel_greetingToggle",
                                             r#type: "button",
-                                            "aria-expanded": false,
+                                            "data-action": "character-greeting-toggle",
+                                            "data-index": "{idx_str}",
+                                            "aria-expanded": is_open,
                                             {icon("CaretDown", 15)}
                                             span {
                                                 strong { "{label}" }
@@ -1501,8 +1538,26 @@ fn edit_tab(view: &ProductShellView, draft: &CharacterDraftView) -> Element {
                                         button {
                                             class: "CharacterManagementPanel_compactIconButton",
                                             r#type: "button",
+                                            "data-action": "character-greeting-remove",
+                                            "data-index": "{idx_str}",
                                             "aria-label": "Remove greeting {idx + 1}",
                                             {icon("Trash", 15)}
+                                        }
+                                    }
+                                    if is_open {
+                                        div {
+                                            class: "CharacterManagementPanel_editorField",
+                                            style: "padding:8px 12px;display:flex;flex-direction:column;gap:4px;",
+                                            span {
+                                                "data-part": "character-greeting-input",
+                                                "data-index": "{idx_str}",
+                                                style: "display:block;width:100%;min-height:64px;line-height:20px;padding:8px 12px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;color:#e8eef7;font-size:0.8125rem;overflow:hidden;box-sizing:border-box;",
+                                                if greeting.is_empty() {
+                                                    span { style: "color:#998f87;", "Type alternate greeting text..." }
+                                                } else {
+                                                    "{greeting}"
+                                                }
+                                            }
                                         }
                                     }
                                 }

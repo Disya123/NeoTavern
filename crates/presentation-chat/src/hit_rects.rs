@@ -112,6 +112,14 @@ impl HitRects {
             .iter()
             .any(|rect| rect.identity.contains(needle) && rect.contains(x, y))
     }
+
+    /// Topmost rect containing `(x, y)` whose identity contains `needle`.
+    pub fn top_matching(&self, x: f32, y: f32, needle: &str) -> Option<&HitRect> {
+        self.rects
+            .iter()
+            .rev()
+            .find(|rect| rect.identity.contains(needle) && rect.contains(x, y))
+    }
 }
 
 /// Shared press-slop (CSS px): a move beyond this cancels the tap. Mirrors the

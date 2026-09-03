@@ -107,10 +107,13 @@ enum TextFocus {
     PromptBlockDepth,
     PromptBlockOrder,
     PromptBlockModel,
-    /// Character editor kernel fields (`part:character-*-input`).
+    /// Character editor fields (`part:character-*-input`).
     CharacterName,
     CharacterDescription,
     CharacterTag,
+    CharacterFirstMessage,
+    CharacterCreatorNotes,
+    CharacterGreeting(usize),
     /// Generation-preset sampler number (`part:preset-value-input`).
     PresetSampler,
 }
@@ -622,6 +625,14 @@ impl App {
             focus = TextFocus::CharacterDescription;
         } else if rects.covers(css_x, css_y, "part:character-tag-input") {
             focus = TextFocus::CharacterTag;
+        } else if rects.covers(css_x, css_y, "part:character-first-message-input") {
+            focus = TextFocus::CharacterFirstMessage;
+        } else if rects.covers(css_x, css_y, "part:character-creator-notes-input") {
+            focus = TextFocus::CharacterCreatorNotes;
+        } else if let Some(rect) = rects.top_matching(css_x, css_y, "part:character-greeting-input") {
+            if let Some(idx) = rect.key.as_deref().and_then(|k| k.parse::<usize>().ok()) {
+                focus = TextFocus::CharacterGreeting(idx);
+            }
         } else if rects.covers(css_x, css_y, "part:preset-value-input") {
             focus = TextFocus::PresetSampler;
         }
@@ -1209,6 +1220,42 @@ impl App {
                 self.session.set_tag_input(&next);
                 eprintln!("[neocompositor-desktop] typed '{ch}' -> tag_input=\"{next}\"");
             }
+            TextFocus::CharacterFirstMessage => {
+                let current = self
+                    .session
+                    .shell_view()
+                    .selected_draft
+                    .as_ref()
+                    .map(|draft| draft.first_message.clone())
+                    .unwrap_or_default();
+                let next = format!("{current}{ch}");
+                self.session.set_character_first_message(&next);
+                eprintln!("[neocompositor-desktop] typed '{ch}' -> character_first_msg+{ch}");
+            }
+            TextFocus::CharacterCreatorNotes => {
+                let current = self
+                    .session
+                    .shell_view()
+                    .selected_draft
+                    .as_ref()
+                    .map(|draft| draft.creator_notes.clone())
+                    .unwrap_or_default();
+                let next = format!("{current}{ch}");
+                self.session.set_character_creator_notes(&next);
+                eprintln!("[neocompositor-desktop] typed '{ch}' -> character_creator_notes+{ch}");
+            }
+            TextFocus::CharacterGreeting(idx) => {
+                let current = self
+                    .session
+                    .shell_view()
+                    .selected_draft
+                    .as_ref()
+                    .and_then(|draft| draft.alternate_greetings.get(idx).cloned())
+                    .unwrap_or_default();
+                let next = format!("{current}{ch}");
+                self.session.set_alternate_greeting(idx, &next);
+                eprintln!("[neocompositor-desktop] typed '{ch}' -> greeting[{idx}]+{ch}");
+            }
             TextFocus::PresetSampler => {
                 let current = preset_sampler_text(&self.session.shell_view());
                 let next = format!("{current}{ch}");
@@ -1292,6 +1339,27 @@ impl App {
                 .map(|draft| draft.description.clone())
                 .unwrap_or_default(),
             TextFocus::CharacterTag => self.session.shell_view().tag_input.clone(),
+            TextFocus::CharacterFirstMessage => self
+                .session
+                .shell_view()
+                .selected_draft
+                .as_ref()
+                .map(|draft| draft.first_message.clone())
+                .unwrap_or_default(),
+            TextFocus::CharacterCreatorNotes => self
+                .session
+                .shell_view()
+                .selected_draft
+                .as_ref()
+                .map(|draft| draft.creator_notes.clone())
+                .unwrap_or_default(),
+            TextFocus::CharacterGreeting(idx) => self
+                .session
+                .shell_view()
+                .selected_draft
+                .as_ref()
+                .and_then(|draft| draft.alternate_greetings.get(idx).cloned())
+                .unwrap_or_default(),
             TextFocus::PresetSampler => preset_sampler_text(&self.session.shell_view()),
             TextFocus::None => return,
         };
@@ -1340,6 +1408,9 @@ impl App {
             TextFocus::CharacterName => self.session.set_character_name_draft(&next),
             TextFocus::CharacterDescription => self.session.set_character_description_draft(&next),
             TextFocus::CharacterTag => self.session.set_tag_input(&next),
+            TextFocus::CharacterFirstMessage => self.session.set_character_first_message(&next),
+            TextFocus::CharacterCreatorNotes => self.session.set_character_creator_notes(&next),
+            TextFocus::CharacterGreeting(idx) => self.session.set_alternate_greeting(idx, &next),
             TextFocus::PresetSampler => self.session.set_preset_value_draft(&next),
             TextFocus::None => {}
         }

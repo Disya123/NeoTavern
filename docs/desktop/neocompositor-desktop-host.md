@@ -380,7 +380,7 @@ avatar. Автоселект + pin + вкладка Edit, тост «Created {na
 вне native create-контракта (галерея, extra spec) не копируются. Тест
 `duplicate_character_creates_a_named_copy`.
 
-## Редактор персонажа (name / description / tags)
+## Редактор персонажа (name / description / tags / greetings)
 
 Kernel `characters.update` принимает только `name`, `description`, `tags`,
 `avatarAssetId`, `profileId`. Native Edit-таб поднимает эти поля наверх
@@ -389,10 +389,22 @@ Kernel `characters.update` принимает только `name`, `description`
 `"character-description-input"`), пустое имя хранит текущее, no-op — «No
 changes.» без вызова. Теги — Add/Remove сразу (`character-tag-input` /
 `character-tag-add` / chip = remove), дубликаты case-insensitive, лимит 32 /
-64 символа. React автосейвит весь draft (600 ms), в том числе first message
-и greetings; native честно оставляет их на React-плоскости. Тост Save —
-`Saved {name}.` (`characters:saveSuccess`). Тест
-`character_editor_name_description_tags_over_product_wire`.
+64 символа.
+
+Для полей `first_message`, `creator_notes` и `alternate_greetings` native shell
+предоставляет интерактивный черновик:
+- `data-part="character-first-message-input"` (`TextFocus::CharacterFirstMessage`)
+  и `"character-creator-notes-input"` (`TextFocus::CharacterCreatorNotes`) с оценкой
+  числа токенов `≈ N tokens`;
+- Секция Alternate Greetings с аккордеоном (`data-state="open|closed"`, `aria-expanded`),
+  кнопками добавления (`ShellAction::AddAlternateGreeting`, `data-action="character-greeting-add"`),
+  раскрытия (`ShellAction::ToggleAlternateGreeting(idx)`, `data-action="character-greeting-toggle"`),
+  удаления (`ShellAction::RemoveAlternateGreeting(idx)`, `data-action="character-greeting-remove"`),
+  и многострочным полем ввода `character-greeting-input` (`TextFocus::CharacterGreeting(idx)`);
+- Полноценный ввод с клавиатуры и стирание через Backspace в десктопном композиторе.
+Тост Save — `Saved {name}.` (`characters:saveSuccess`). Тесты:
+`character_editor_name_description_tags_over_product_wire`,
+`character_manager_alternate_greetings_add_toggle_and_remove`.
 
 ## Галерея персонажа (GalleryTab)
 

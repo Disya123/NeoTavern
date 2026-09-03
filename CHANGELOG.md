@@ -3,6 +3,27 @@
 ## Unreleased
 ### Added
 
+- **Нативный шелл: интерактивные Alternate Greetings и черновик полей персонажа.**
+  В панели управления персонажами (`presentation-dioxus-shell`, `presentation-chat`,
+  `neocompositor-desktop`) перенесены интерактивные дополнительные приветствия
+  (Alternate Greetings) и черновик полей первого сообщения (`first_message`) и
+  заметок создателя (`creator_notes`) в точном соответствии с React-оракулом
+  (`CharacterManagementPanel.tsx`). Реализовано:
+  - Список приветствий с аккордеоном (`data-state="open"` / `"closed"`, `aria-expanded`),
+    подсчётом токенов (`≈ N tokens`), кнопками добавления (`character-greeting-add`),
+    удаления (`character-greeting-remove`, иконка `Trash`) и раскрытия
+    (`character-greeting-toggle`).
+  - Многострочное поле ввода текста приветствия (`character-greeting-input`) при
+    раскрытом элементе.
+  - Поддержка фокуса ввода (`TextFocus::CharacterFirstMessage`,
+    `TextFocus::CharacterCreatorNotes`, `TextFocus::CharacterGreeting(idx)`) с
+    посимвольным набором и удалением через Backspace в десктопном хосте.
+  - Действия `ShellAction::ToggleAlternateGreeting(usize)`,
+    `ShellAction::AddAlternateGreeting`, `ShellAction::RemoveAlternateGreeting(usize)`
+    и методы сессии `toggle_alternate_greeting`, `add_alternate_greeting`,
+    `remove_alternate_greeting`, `set_alternate_greeting`.
+  - Интеграционный тест: `character_manager_alternate_greetings_add_toggle_and_remove`.
+
 - **Нативный шелл: кнопка Stop и отмена активной генерации в композере.**
   В нативном композиторе (`presentation-chat`, `presentation-dioxus-shell`,
   `neocompositor-desktop`) реализована динамическая кнопка Stop

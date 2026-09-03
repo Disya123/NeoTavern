@@ -137,6 +137,10 @@ pub enum ShellAction {
     CycleGallerySort,
     /// Stop/cancel an active generation stream (`generation.cancel`; React `ChatComposer` data-action="stop").
     StopGeneration,
+    /// Character Management: alternate greetings interaction (React `CharacterManagementPanel.tsx`).
+    ToggleAlternateGreeting(usize),
+    AddAlternateGreeting,
+    RemoveAlternateGreeting(usize),
     /// Settings → General appearance (React `GeneralTab` / `useUiStore`).
     /// Language is the only field that crosses Product Wire (`settings.update`).
     CycleLanguage,
@@ -1209,6 +1213,33 @@ fn editor_hit(
                 )));
             }
             cursor += 28.0 + 4.0;
+        }
+        // First message (88px) + Creator notes (88px)
+        cursor += 88.0 + SPACE_SM;
+        cursor += 88.0 + SPACE_SM;
+        // Greetings subsection header (title + Add button)
+        let header_h = 36.0;
+        if y >= cursor && y < cursor + header_h && x >= panel_x + pad && x < x1 - pad {
+            if x >= x1 - pad - 96.0 {
+                return Some(ShellHit::Action(ShellAction::AddAlternateGreeting));
+            }
+            return Some(ShellHit::Absorb);
+        }
+        cursor += header_h + SPACE_SM;
+        for (idx, _greeting) in draft.alternate_greetings.iter().enumerate() {
+            let row_h = 36.0;
+            if y >= cursor && y < cursor + row_h && x >= panel_x + pad && x < x1 - pad {
+                if x >= x1 - pad - CONTROL_SM {
+                    return Some(ShellHit::Action(ShellAction::RemoveAlternateGreeting(idx)));
+                } else {
+                    return Some(ShellHit::Action(ShellAction::ToggleAlternateGreeting(idx)));
+                }
+            }
+            cursor += row_h + 4.0;
+            if view.expanded_greeting == Some(idx) {
+                let edit_h = 88.0;
+                cursor += edit_h + 4.0;
+            }
         }
     }
     Some(ShellHit::Absorb)
