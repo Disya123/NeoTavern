@@ -65,6 +65,7 @@ ICONS = [
     "CaretLeft",
     "CaretRight",
     "ArrowClockwise",
+    "StopCircle",
 ]
 
 # (directory under apps/web/src, module filename)

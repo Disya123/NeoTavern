@@ -164,6 +164,7 @@ struct PanelDrag {
 #[derive(Clone, Copy, Debug)]
 enum QuickAction {
     Send,
+    Stop,
     ComposerSettings,
     ComposerReset,
     ComposerContext,
@@ -504,6 +505,7 @@ impl App {
             TapIntent::Quick(quick) => {
                 let quick = match quick {
                     QuickIntent::Send => QuickAction::Send,
+                    QuickIntent::Stop => QuickAction::Stop,
                     QuickIntent::ComposerSettings => QuickAction::ComposerSettings,
                     QuickIntent::ComposerReset => QuickAction::ComposerReset,
                     QuickIntent::ComposerContext => QuickAction::ComposerContext,
@@ -763,6 +765,13 @@ impl App {
                     QuickAction::Send => {
                         self.pending_ui = None;
                         self.send_composer();
+                    }
+                    QuickAction::Stop => {
+                        self.pending_ui = None;
+                        eprintln!("[neocompositor-desktop] composer stop tapped");
+                        let _ = self.session.cancel_generation();
+                        self.dirty = true;
+                        self.window.as_ref().map(|w| w.request_redraw());
                     }
                     QuickAction::ComposerSettings => {
                         self.pending_ui = None;

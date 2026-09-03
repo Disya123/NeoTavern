@@ -135,6 +135,8 @@ pub enum ShellAction {
     CycleGalleryColumns,
     /// Toggle gallery sort `oldest ↔ newest`.
     CycleGallerySort,
+    /// Stop/cancel an active generation stream (`generation.cancel`; React `ChatComposer` data-action="stop").
+    StopGeneration,
     /// Settings → General appearance (React `GeneralTab` / `useUiStore`).
     /// Language is the only field that crosses Product Wire (`settings.update`).
     CycleLanguage,

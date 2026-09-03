@@ -200,7 +200,7 @@ Winit-клавиатура подключена (бинарь): тап по ко
 кнопок сообщений, координатные бэнды обоих поисков.
 
 **Единая таблица решений для всех хостов:** `hit_rects::resolve_tap()` →
-`TapIntent::{Quick(Send|ComposerSettings|ComposerReset|ScrollLatest),
+`TapIntent::{Quick(Send|Stop|ComposerSettings|ComposerReset|ScrollLatest),
 MessageCopy{row_id}, MessageDelete{row_id}, None}` — десктоп-бин и Android
 (`try_push`/`presentFrame`) исполняют одни и те же интенты против одной и той
 же `ChatSession`, поэтому поведение идентично ПК-версии. Общий press-slop —
@@ -886,14 +886,21 @@ inserted/updated/skipped + orphans; статус «Imported: N inserted, …», 
 §19), поэтому нативный хост зеркалит React-поведение: установка плагинов
 через этот экран недоступна, список/enable/disable/uninstall работают.
 
-## Отправка сообщения (Send)
+## Отправка сообщения (Send) и кнопка Stop
 
 Композер (`data-part="composer"` в `product_chat_app`) получил кнопку **Send**
-(`st-button`, реальный класс React-шита) у правого края бар. Десктоп-хост при
-этом отдаёт сессии **честную ширину чат-вьюпорта**: с открытым сайдбаром на
-некомпактном окне это `window - rail(60) - panel(380)` (раньше передавалась
-вся ширина окна, и чат-workspace 1100px уезжал за экран — композер/заголовок
-клипались). `ChatSession::sidebar_open()` — новый геттер для этого решения.
+(`st-button`, реальный класс React-шита) у правого края бар. Во время активного
+потока генерации (`ctx.streaming == true`) кнопка Send динамически заменяется
+на кнопку **Stop** (`data-action="stop"`, `data-variant="danger"`, иконка
+`StopCircle`, лейбл "Stop", фон `#b91c1c` / текст `#fee2e2`), как и в React
+`ChatComposer.tsx`. Тап по ней (`QuickIntent::Stop` / `QuickAction::Stop` /
+`ShellAction::StopGeneration`) вызывает `session.cancel_generation()`,
+отправляя команду `generation.cancel` по Product Wire и останавливая стрим.
+Десктоп-хост при этом отдаёт сессии **честную ширину чат-вьюпорта**: с открытым
+сайдбаром на некомпактном окне это `window - rail(60) - panel(380)` (раньше
+передавалась вся ширина окна, и чат-workspace 1100px уезжал за экран —
+композер/заголовок клипались). `ChatSession::sidebar_open()` — новый геттер для
+этого решения.
 
 Полный сценарий «фокус → ввод → Send» проверяется харнессом (опы тапы/ввод
 идут в порядке аргументов):

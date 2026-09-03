@@ -5366,3 +5366,115 @@ fn variant_picker_and_swipe_counter_over_product_wire() {
     session.apply_shell_action(ShellAction::VariantPickerClose);
     assert!(session.view().variant_picker_for.is_none());
 }
+
+#[test]
+fn composer_shows_stop_button_during_streaming_and_cancels_generation() {
+    use contracts_generated::generated::GenerationEvent;
+    use neotavern_presentation_chat::{
+        HitRects, QuickIntent, ShellAction, StreamFrame, TapIntent,
+    };
+    use neotavern_presentation_dioxus_shell::{
+        install_product_chat, set_chat_blueprint_source, ChatBlueprintSource,
+    };
+    use neotavern_presentation_m0_d2::inspect_slot_skeleton;
+
+    let (mut session, _) = start_flagged_session(
+        Some("1"),
+        FakeWire::demo(),
+        Some(neotavern_presentation_chat::DEMO_CHAT_ID),
+        None,
+    )
+    .expect("route");
+    session.set_surface_size(1100, 760, 1.0);
+
+    // Initial state: idle composer renders "send" action.
+    assert!(!session.view().streaming);
+    install_product_chat(session.view());
+    let skel_idle = inspect_slot_skeleton(
+        product_chat_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+    )
+    .expect("idle skeleton");
+    assert!(
+        skel_idle
+            .nodes
+            .iter()
+            .any(|n| n.action.as_deref() == Some("send")),
+        "idle composer must have send button"
+    );
+
+    // Enter streaming state via an active delta frame.
+    session.apply_stream_frame(&StreamFrame::from_sequenced(
+        0,
+        GenerationEvent::GenerationDelta {
+            text: "Streaming assistant response...".into(),
+        },
+    ));
+    assert!(session.view().streaming);
+
+    // Both legacy and blueprint must transform composer-send to "stop" action.
+    for source in [ChatBlueprintSource::Disabled, ChatBlueprintSource::Embedded] {
+        set_chat_blueprint_source(source.clone());
+        install_product_chat(session.view());
+        let skel_stream = inspect_slot_skeleton(
+            product_chat_app,
+            1100,
+            760,
+            1.0,
+            session.insets(),
+        )
+        .unwrap_or_else(|err| panic!("skeleton for {source:?}: {err}"));
+
+        let stop_node = skel_stream
+            .nodes
+            .iter()
+            .find(|n| n.action.as_deref() == Some("stop"))
+            .unwrap_or_else(|| panic!("stop button missing during streaming for {source:?}"));
+
+        // HitRects hit-testing resolves the tap directly to QuickIntent::Stop.
+        let rects = HitRects::from_skeleton(&skel_stream);
+        let tap = rects.resolve_tap(
+            stop_node.css_x + stop_node.css_width * 0.5,
+            stop_node.css_y + stop_node.css_height * 0.5,
+        );
+        assert_eq!(
+            tap,
+            TapIntent::Quick(QuickIntent::Stop),
+            "tap on stop button must resolve to QuickIntent::Stop for {source:?}"
+        );
+    }
+    set_chat_blueprint_source(ChatBlueprintSource::Disabled);
+
+    // Simulating tap on stop via ShellAction::StopGeneration cancels generation.
+    session.apply_shell_action(ShellAction::StopGeneration);
+    assert!(!session.view().streaming, "streaming must stop after cancel");
+
+    // Idle state restored: composer returns to send.
+    install_product_chat(session.view());
+    let skel_after = inspect_slot_skeleton(
+        product_chat_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+    )
+    .expect("after skeleton");
+    assert!(
+        skel_after
+            .nodes
+            .iter()
+            .any(|n| n.action.as_deref() == Some("send")),
+        "composer must return to send after stop"
+    );
+    assert!(
+        !skel_after
+            .nodes
+            .iter()
+            .any(|n| n.action.as_deref() == Some("stop")),
+        "stop button must disappear after cancel"
+    );
+}
+

@@ -124,6 +124,7 @@ pub const TOUCH_SLOP_CSS: f32 = 16.0;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum QuickIntent {
     Send,
+    Stop,
     ComposerSettings,
     ComposerReset,
     ComposerContext,
@@ -231,6 +232,7 @@ impl HitRects {
         };
         match (action, key) {
             ("send", _) => TapIntent::Quick(QuickIntent::Send),
+            ("stop", _) => TapIntent::Quick(QuickIntent::Stop),
             ("composer-settings", _) => TapIntent::Quick(QuickIntent::ComposerSettings),
             ("composer-context", _) => TapIntent::Quick(QuickIntent::ComposerContext),
             ("composer-reset", _) => TapIntent::Quick(QuickIntent::ComposerReset),

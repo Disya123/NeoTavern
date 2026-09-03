@@ -3,6 +3,20 @@
 ## Unreleased
 ### Added
 
+- **Нативный шелл: кнопка Stop и отмена активной генерации в композере.**
+  В нативном композиторе (`presentation-chat`, `presentation-dioxus-shell`,
+  `neocompositor-desktop`) реализована динамическая кнопка Stop
+  (`data-action="stop"`, `data-variant="danger"`, иконка `StopCircle`, лейбл
+  "Stop") при активном потоке генерации (`ctx.streaming == true`) в точном
+  соответствии с поведением React-композера (`ChatComposer.tsx`). При тапе по
+  кнопке Stop генерируется `QuickIntent::Stop` / `QuickAction::Stop` /
+  `ShellAction::StopGeneration`, вызывающий `session.cancel_generation()`,
+  который отправляет команду `generation.cancel` по Product Wire, отменяет
+  активный stream handle, сбрасывает streaming-прогресс и возвращает композер в
+  состояние Send. В генератор Phosphor-иконок (`pack_design_system.py`)
+  добавлена иконка `StopCircle`. Интеграционный тест:
+  `composer_shows_stop_button_during_streaming_and_cancels_generation`.
+
 - **Нативный шелл: свайпы — счётчик вариантов и пикер.** `MessageSwipePager`
   получил hydrated-счётчик "N/M" (`data-part="swipe-counter"`; React
   `chat:swipeCounter`) и trigger `MessageVariantPicker` между стрелками

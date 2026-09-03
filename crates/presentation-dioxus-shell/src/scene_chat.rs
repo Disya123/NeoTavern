@@ -883,20 +883,39 @@ fn render_composer(node: &UiNodeV1, ctx: &ChromeCtx) -> Element {
                 "data-slot": "chat.composer",
                 style: "{style}",
                 "{label}"
-                button {
-                    class: "st-button",
-                    r#type: "button",
-                    "data-component": "button",
-                    "data-variant": "primary",
-                    "data-size": "md",
-                    "data-action": "send",
-                    style: "position:absolute;right:12px;top:50%;transform:translateY(-50%);display:flex;align-items:center;justify-content:center;min-width:44px;min-height:36px;padding:4px 16px;border:none;border-radius:10px;color:#2a130b;background:#e38a62;font-size:13px;font-weight:500;",
-                    span { "data-part": "label", "Send" }
-                    span {
-                        "data-part": "icon",
-                        "data-position": "end",
-                        "aria-hidden": "true",
-                        {crate::product_shell::icon_fill("PaperPlaneRight", 16, "#2a130b")}
+                if ctx.streaming {
+                    button {
+                        class: "st-button",
+                        r#type: "button",
+                        "data-component": "button",
+                        "data-variant": "danger",
+                        "data-size": "md",
+                        "data-action": "stop",
+                        style: "position:absolute;right:12px;top:50%;transform:translateY(-50%);display:flex;align-items:center;justify-content:center;min-width:44px;min-height:36px;padding:4px 16px;border:none;border-radius:10px;color:#fee2e2;background:#b91c1c;font-size:13px;font-weight:500;",
+                        span { "data-part": "label", "Stop" }
+                        span {
+                            "data-part": "icon",
+                            "data-position": "end",
+                            "aria-hidden": "true",
+                            {crate::product_shell::icon("StopCircle", 16)}
+                        }
+                    }
+                } else {
+                    button {
+                        class: "st-button",
+                        r#type: "button",
+                        "data-component": "button",
+                        "data-variant": "primary",
+                        "data-size": "md",
+                        "data-action": "send",
+                        style: "position:absolute;right:12px;top:50%;transform:translateY(-50%);display:flex;align-items:center;justify-content:center;min-width:44px;min-height:36px;padding:4px 16px;border:none;border-radius:10px;color:#2a130b;background:#e38a62;font-size:13px;font-weight:500;",
+                        span { "data-part": "label", "Send" }
+                        span {
+                            "data-part": "icon",
+                            "data-position": "end",
+                            "aria-hidden": "true",
+                            {crate::product_shell::icon_fill("PaperPlaneRight", 16, "#2a130b")}
+                        }
                     }
                 }
             }
@@ -908,6 +927,7 @@ fn render_composer(node: &UiNodeV1, ctx: &ChromeCtx) -> Element {
         label: ctx.composer_label.clone(),
         context_panel_open: ctx.context_panel_open,
         context_summary: ctx.context_summary.clone(),
+        streaming: ctx.streaming,
     };
     render_node(node, &composer_ctx)
 }
@@ -919,11 +939,12 @@ struct ComposerCtx {
     label: String,
     context_panel_open: bool,
     context_summary: Option<ContextUsageSummaryV1>,
+    streaming: bool,
 }
 
 fn render_node(node: &UiNodeV1, ctx: &ComposerCtx) -> Element {
     if node.semantic.role == "button" {
-        render_button(node)
+        render_button(node, ctx.streaming)
     } else {
         render_container(node, ctx)
     }
@@ -1195,9 +1216,10 @@ struct ButtonLook {
     /// Leading `data-part="label"` span (Send button).
     lead_label: bool,
     primary: bool,
+    danger: bool,
 }
 
-fn button_look(id: &str) -> ButtonLook {
+fn button_look(id: &str, streaming: bool) -> ButtonLook {
     match id {
         "composer-settings" => ButtonLook {
             class: Some("ChatWorkspace_menuButton"),
@@ -1246,18 +1268,37 @@ fn button_look(id: &str) -> ButtonLook {
             icon: "MagicWand",
             ..BUTTON_GEOMETRY
         },
-        "composer-send" => ButtonLook {
-            class: Some("st-button"),
-            action: "send",
-            aria: "Send",
-            title: Some("Send"),
-            icon: "PaperPlaneRight",
-            icon_size: 16,
-            icon_fill_color: Some("#2a130b"),
-            trailing_label: Some("Send"),
-            lead_label: true,
-            primary: true,
-        },
+        "composer-send" => {
+            if streaming {
+                ButtonLook {
+                    class: Some("st-button"),
+                    action: "stop",
+                    aria: "Stop",
+                    title: Some("Stop"),
+                    icon: "StopCircle",
+                    icon_size: 16,
+                    icon_fill_color: None,
+                    trailing_label: Some("Stop"),
+                    lead_label: true,
+                    primary: true,
+                    danger: true,
+                }
+            } else {
+                ButtonLook {
+                    class: Some("st-button"),
+                    action: "send",
+                    aria: "Send",
+                    title: Some("Send"),
+                    icon: "PaperPlaneRight",
+                    icon_size: 16,
+                    icon_fill_color: Some("#2a130b"),
+                    trailing_label: Some("Send"),
+                    lead_label: true,
+                    primary: true,
+                    danger: false,
+                }
+            }
+        }
         _ => BUTTON_GEOMETRY,
     }
 }
@@ -1276,25 +1317,37 @@ const BUTTON_GEOMETRY: ButtonLook = ButtonLook {
     trailing_label: None,
     lead_label: false,
     primary: false,
+    danger: false,
 };
 
-fn render_button(node: &UiNodeV1) -> Element {
-    let look = button_look(&node.id);
+fn render_button(node: &UiNodeV1, streaming: bool) -> Element {
+    let look = button_look(&node.id, streaming);
     // Authored document overrides win over the built-in table: label text
     // replaces aria/title/visible spans, icon name and token-backed style
     // declarations come straight from the document.
     // Authored label text replaces existing text surfaces (aria/title and a
     // visible span only where the built-in look already renders one); it
     // never adds a visible span to an icon-only button.
+    let is_streaming_send = streaming && node.id == "composer-send";
     let authored_label = node.overrides.label.as_ref();
-    let aria: String = authored_label
-        .map(|label| label.text.clone())
-        .unwrap_or_else(|| look.aria.to_owned());
-    let title: Option<String> = authored_label
-        .map(|label| Some(label.text.clone()))
-        .unwrap_or_else(|| look.title.map(str::to_owned));
+    let aria: String = if is_streaming_send {
+        "Stop".to_owned()
+    } else {
+        authored_label
+            .map(|label| label.text.clone())
+            .unwrap_or_else(|| look.aria.to_owned())
+    };
+    let title: Option<String> = if is_streaming_send {
+        Some("Stop".to_owned())
+    } else {
+        authored_label
+            .map(|label| Some(label.text.clone()))
+            .unwrap_or_else(|| look.title.map(str::to_owned))
+    };
     let renders_text = look.trailing_label.is_some() || look.lead_label;
-    let trailing_label: Option<String> = if renders_text {
+    let trailing_label: Option<String> = if is_streaming_send {
+        Some("Stop".to_owned())
+    } else if renders_text {
         Some(
             authored_label
                 .map(|label| label.text.clone())
@@ -1303,20 +1356,28 @@ fn render_button(node: &UiNodeV1) -> Element {
     } else {
         None
     };
-    let icon_name: String = node
-        .overrides
-        .icon
-        .clone()
-        .unwrap_or_else(|| look.icon.to_owned());
-    let action_attr: Option<String> = node
-        .action
-        .as_ref()
-        .and_then(|action| data_action_attr(action).or_else(|| non_empty(look.action)));
-    let mut style = button_style(&node.id, look.primary);
+    let icon_name: String = if is_streaming_send {
+        "StopCircle".to_owned()
+    } else {
+        node.overrides
+            .icon
+            .clone()
+            .unwrap_or_else(|| look.icon.to_owned())
+    };
+    let action_attr: Option<String> = if is_streaming_send {
+        Some("stop".to_owned())
+    } else {
+        node.action
+            .as_ref()
+            .and_then(|action| data_action_attr(action).or_else(|| non_empty(look.action)))
+    };
+    let mut style = button_style(&node.id, look.primary, look.danger);
     style.push_str(&overrides_style(node));
     let icon_element = match look.icon_fill_color {
-        Some(fill) => crate::product_shell::icon_fill(&icon_name, look.icon_size, fill),
-        None => crate::product_shell::icon(&icon_name, look.icon_size),
+        Some(fill) if !look.danger => {
+            crate::product_shell::icon_fill(&icon_name, look.icon_size, fill)
+        }
+        _ => crate::product_shell::icon(&icon_name, look.icon_size),
     };
     let icon_child = if look.primary {
         rsx! {
@@ -1330,12 +1391,19 @@ fn render_button(node: &UiNodeV1) -> Element {
     } else {
         icon_element
     };
+    let variant = if look.danger {
+        Some("danger".to_owned())
+    } else if look.primary {
+        Some("primary".to_owned())
+    } else {
+        None
+    };
     rsx! {
         button {
             class: look.class.map(|value| value.to_string()),
             r#type: "button",
             "data-component": if look.primary { Some("button".to_owned()) } else { None },
-            "data-variant": if look.primary { Some("primary".to_owned()) } else { None },
+            "data-variant": variant,
             "data-size": if look.primary { Some("md".to_owned()) } else { None },
             "data-action": action_attr,
             "aria-label": "{aria}",
@@ -1400,7 +1468,10 @@ fn non_empty(value: &'static str) -> Option<String> {
     }
 }
 
-fn button_style(id: &str, primary: bool) -> String {
+fn button_style(id: &str, primary: bool, danger: bool) -> String {
+    if danger {
+        return "display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:44px;min-height:44px;padding:4px 16px;border:none;border-radius:10px;color:#fee2e2;background:#b91c1c;font-size:13px;font-weight:500;".to_owned();
+    }
     if primary {
         // React send = the default `st-button` control height (--st-control-height: 44px).
         return "display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:44px;min-height:44px;padding:4px 16px;border:none;border-radius:10px;color:#2a130b;background:#e38a62;font-size:13px;font-weight:500;".to_owned();

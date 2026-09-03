@@ -1099,20 +1099,39 @@ pub fn product_chat_app() -> Element {
                                 style: "{composer_style}",
                                 if compact {
                                     "{composer_label}"
-                                    button {
-                                        class: "st-button",
-                                        r#type: "button",
-                                        "data-component": "button",
-                                        "data-variant": "primary",
-                                        "data-size": "md",
-                                        "data-action": "send",
-                                        style: "position:absolute;right:12px;top:50%;transform:translateY(-50%);display:flex;align-items:center;justify-content:center;min-width:44px;min-height:36px;padding:4px 16px;border:none;border-radius:10px;color:#2a130b;background:#e38a62;font-size:13px;font-weight:500;",
-                                        span { "data-part": "label", "Send" }
-                                        span {
-                                            "data-part": "icon",
-                                            "data-position": "end",
-                                            "aria-hidden": "true",
-                                            {crate::product_shell::icon_fill("PaperPlaneRight", 16, "#2a130b")}
+                                    if view.streaming {
+                                        button {
+                                            class: "st-button",
+                                            r#type: "button",
+                                            "data-component": "button",
+                                            "data-variant": "danger",
+                                            "data-size": "md",
+                                            "data-action": "stop",
+                                            style: "position:absolute;right:12px;top:50%;transform:translateY(-50%);display:flex;align-items:center;justify-content:center;min-width:44px;min-height:36px;padding:4px 16px;border:none;border-radius:10px;color:#fee2e2;background:#b91c1c;font-size:13px;font-weight:500;",
+                                            span { "data-part": "label", "Stop" }
+                                            span {
+                                                "data-part": "icon",
+                                                "data-position": "end",
+                                                "aria-hidden": "true",
+                                                {crate::product_shell::icon("StopCircle", 16)}
+                                            }
+                                        }
+                                    } else {
+                                        button {
+                                            class: "st-button",
+                                            r#type: "button",
+                                            "data-component": "button",
+                                            "data-variant": "primary",
+                                            "data-size": "md",
+                                            "data-action": "send",
+                                            style: "position:absolute;right:12px;top:50%;transform:translateY(-50%);display:flex;align-items:center;justify-content:center;min-width:44px;min-height:36px;padding:4px 16px;border:none;border-radius:10px;color:#2a130b;background:#e38a62;font-size:13px;font-weight:500;",
+                                            span { "data-part": "label", "Send" }
+                                            span {
+                                                "data-part": "icon",
+                                                "data-position": "end",
+                                                "aria-hidden": "true",
+                                                {crate::product_shell::icon_fill("PaperPlaneRight", 16, "#2a130b")}
+                                            }
                                         }
                                     }
                                 } else {
@@ -1224,22 +1243,43 @@ pub fn product_chat_app() -> Element {
                                                     {crate::product_shell::icon("MagicWand", 19)}
                                                 }
                                             }
-                                            button {
-                                                class: "st-button",
-                                                r#type: "button",
-                                                "data-component": "button",
-                                                "data-variant": "primary",
-                                                "data-size": "md",
-                                                "data-action": "send",
-                                                "aria-label": "Send",
-                                                title: "Send",
-                                                style: "display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:44px;min-height:44px;padding:4px 16px;border:none;border-radius:10px;color:#2a130b;background:#e38a62;font-size:13px;font-weight:500;",
-                                                span { "data-part": "label", "Send" }
-                                                span {
-                                                    "data-part": "icon",
-                                                    "data-position": "end",
-                                                    "aria-hidden": "true",
-                                                    {crate::product_shell::icon_fill("PaperPlaneRight", 16, "#2a130b")}
+                                            if view.streaming {
+                                                button {
+                                                    class: "st-button",
+                                                    r#type: "button",
+                                                    "data-component": "button",
+                                                    "data-variant": "danger",
+                                                    "data-size": "md",
+                                                    "data-action": "stop",
+                                                    "aria-label": "Stop",
+                                                    title: "Stop",
+                                                    style: "display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:44px;min-height:44px;padding:4px 16px;border:none;border-radius:10px;color:#fee2e2;background:#b91c1c;font-size:13px;font-weight:500;",
+                                                    span { "data-part": "label", "Stop" }
+                                                    span {
+                                                        "data-part": "icon",
+                                                        "data-position": "end",
+                                                        "aria-hidden": "true",
+                                                        {crate::product_shell::icon("StopCircle", 16)}
+                                                    }
+                                                }
+                                            } else {
+                                                button {
+                                                    class: "st-button",
+                                                    r#type: "button",
+                                                    "data-component": "button",
+                                                    "data-variant": "primary",
+                                                    "data-size": "md",
+                                                    "data-action": "send",
+                                                    "aria-label": "Send",
+                                                    title: "Send",
+                                                    style: "display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:44px;min-height:44px;padding:4px 16px;border:none;border-radius:10px;color:#2a130b;background:#e38a62;font-size:13px;font-weight:500;",
+                                                    span { "data-part": "label", "Send" }
+                                                    span {
+                                                        "data-part": "icon",
+                                                        "data-position": "end",
+                                                        "aria-hidden": "true",
+                                                        {crate::product_shell::icon_fill("PaperPlaneRight", 16, "#2a130b")}
+                                                    }
                                                 }
                                             }
                                         }

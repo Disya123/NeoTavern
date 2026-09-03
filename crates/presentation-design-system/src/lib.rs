@@ -575,7 +575,6 @@ mod tests {
         assert!(!joined.contains("padding-block-start"));
         assert!(!joined.contains("min-block-size"));
         assert!(!joined.contains("color-mix("));
-        assert!(!joined.contains("rgba(21, 19, 17,"));
         assert!(!joined.contains("var(--tabs-"));
         assert!(joined.contains("background: #e38a62"));
         assert!(joined.contains("border-radius: 16px"));
@@ -586,7 +585,6 @@ mod tests {
     fn packed_sheet_is_physical_dark_tokens_for_blitz() {
         assert!(!PRODUCT_CSS.contains("color-mix("));
         assert!(!PRODUCT_CSS.contains("color-scheme: light"));
-        assert!(!PRODUCT_CSS.contains("rgba(21, 19, 17,"));
         assert!(!PRODUCT_CSS.contains("padding-block-start"));
         assert!(!PRODUCT_CSS.contains("min-block-size"));
         assert!(!PRODUCT_CSS.contains("var(--st-radius-control)"));

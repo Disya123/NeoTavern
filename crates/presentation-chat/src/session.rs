@@ -1038,16 +1038,18 @@ impl<W: ProductWire> ChatSession<W> {
     }
 
     pub fn cancel_generation(&mut self) -> Result<(), ChatRouteError> {
-        if let Some(workflow_id) = self.state.active_run_id.clone() {
+        if let Some(workflow_id) = self.state.active_run_id.take() {
             let _ = self.call_value(
                 "generation.cancel",
                 &RequestCancelGeneration { workflow_id },
             );
         }
-        if let Some(handle) = self.state.stream_handle.clone() {
+        if let Some(handle) = self.state.stream_handle.take() {
             let _ = self.wire.cancel_stream(&handle);
             let _ = self.drain_stream();
         }
+        self.clear_stream_progress();
+        self.bump_scene();
         Ok(())
     }
 
@@ -3517,6 +3519,9 @@ impl<W: ProductWire> ChatSession<W> {
             ShellAction::PromptTemplateImportClose => self.close_prompt_template_import(),
             ShellAction::PromptTemplateImportConfirm => self.confirm_prompt_template_import(),
             ShellAction::ExportPromptTemplate => self.export_prompt_template(),
+            ShellAction::StopGeneration => {
+                let _ = self.cancel_generation();
+            }
             ShellAction::UploadBackground => {
                 // Kernel plane has no wallpaper catalog: React
                 // `useUploadBackground` rejects with `UnsupportedError`.
