@@ -3,6 +3,27 @@
 ## Unreleased
 ### Added
 
+- **Нативный шелл: карточка деталей сообщения MessageDetailsCardV2.**
+  В нативном композиторе (`presentation-dioxus-shell`, `presentation-chat`,
+  `presentation-design-system`, `neocompositor-desktop`) реализована карточка
+  деталей сообщения (`MessageDetailsCardV2`), соответствующая React-модели
+  (`MessageDetailsCardV2.tsx`, `MessageBubble.tsx:473`):
+  - Кнопка вызова деталей на строке сообщения (`data-action="details"`, иконка
+    `TextAlignLeft`).
+  - Модальное окно деталей (`data-component="dialog"`, `data-part="details-card"`)
+    с заголовком (`details-header`), аватаром автора, бейджами подсчёта токенов
+    (`Lightning`) и счётчика вариантов (`ChatCircleDots`), и кнопкой закрытия
+    (`data-action="details-close"`, иконка `X`).
+  - Секция метаданных (`details-meta`): время отправки сообщения (`CalendarBlank`),
+    имя использованной модели (`Robot`), длительность генерации (`Timer`).
+  - Просмотр содержимого сообщения (`details-content`).
+  - Панель действий (`details-footer`): копирование сообщения (`data-action="copy"`),
+    переключение контекста (`data-action="context"`), просмотр плана промпта
+    (`data-action="prompt"`) и шагов генерации (`data-action="steps"`).
+  - В пакер иконок добавлены Phosphor-иконки: `TextAlignLeft`, `CalendarBlank`,
+    `ChatCircleDots`, `Lightning`, `Robot`, `Timer`.
+  - Интеграционный тест: `message_details_card_open_inspect_and_close`.
+
 - **Нативный шелл: интерактивные Alternate Greetings и черновик полей персонажа.**
   В панели управления персонажами (`presentation-dioxus-shell`, `presentation-chat`,
   `neocompositor-desktop`) перенесены интерактивные дополнительные приветствия

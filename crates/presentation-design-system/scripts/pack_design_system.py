@@ -66,6 +66,12 @@ ICONS = [
     "CaretRight",
     "ArrowClockwise",
     "StopCircle",
+    "TextAlignLeft",
+    "CalendarBlank",
+    "ChatCircleDots",
+    "Lightning",
+    "Robot",
+    "Timer",
 ]
 
 # (directory under apps/web/src, module filename)
@@ -86,6 +92,7 @@ MODULES = (
     ("components", "MessageMarkdown.module.css"),
     ("components", "ChatWorkspace.module.css"),
     ("components", "MessageBubble.module.css"),
+    ("components", "MessageDetailsCardV2.module.css"),
 )
 
 BLITZ_NEUTRALIZE = """

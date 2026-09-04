@@ -255,6 +255,7 @@ pub fn blueprint_chrome(view: &ProductChatView) -> Option<ChromeElements> {
     // yet — the legacy RSX renders them.
     let interactive = view.editing_message_id.is_some()
         || view.history_open_for.is_some()
+        || view.details_message_id.is_some()
         || view.snapshots_menu_open
         || view.variant_picker_for.is_some()
         || view.header_search_open;
@@ -691,6 +692,7 @@ fn render_row_child(node: &UiNodeV1, ctx: &ChromeCtx, row: &RowView) -> Element 
                 "data-part": "message-actions-inline",
                 "data-state": "idle",
                 style: "display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-left:auto;",
+                {message_action_button("details", row)}
                 for child in node.children.iter() { {render_row_child(child, ctx, row)} }
             }
         },
@@ -812,6 +814,7 @@ fn message_action_button(kind: &str, row: &RowView) -> Element {
     let excluded =
         row.message.meta.payload.get("manualExcluded") == Some(&serde_json::Value::Bool(true));
     let (label, icon) = match kind {
+        "details" => ("Message details", "TextAlignLeft"),
         "context" if excluded => ("Include in prompt context", "Eye"),
         "context" => ("Exclude from prompt context", "EyeSlash"),
         "edit" => ("Edit message", "PencilSimple"),

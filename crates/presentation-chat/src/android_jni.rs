@@ -654,6 +654,12 @@ pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_presentF
                                 MessageActionKind::DeleteCheckpoint => {
                                     session.open_checkpoint_delete(&row_id)
                                 }
+                                MessageActionKind::Details => {
+                                    session.open_message_details(&row_id)
+                                }
+                                MessageActionKind::DetailsClose => {
+                                    session.close_message_details()
+                                }
                             }
                         }
                         // Declarative custom intents: same authority-free

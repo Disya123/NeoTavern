@@ -428,6 +428,7 @@ pub struct ChatRouteState {
     /// Open revision-history card: owning message + immutable previous
     /// contents from `chats.messages.revisions.list`.
     pub history_message_id: Option<String>,
+    pub details_message_id: Option<String>,
     pub message_revisions: Vec<RevisionRow>,
     /// Completed export payload awaiting the host's file sink (React
     /// downloads the file; the desktop host writes it to disk):
@@ -582,6 +583,7 @@ impl<W: ProductWire> ChatSession<W> {
         session.state.message_edit_id = None;
         session.state.history_message_id = None;
         session.state.variant_picker_for = None;
+        session.state.details_message_id = None;
         session.state.swipe_label_for = None;
         Ok(session)
     }
@@ -1170,6 +1172,9 @@ impl<W: ProductWire> ChatSession<W> {
                 manual_excluded: false,
                 checkpoint_chat_id: None,
                 swipe_label: String::new(),
+                model: None,
+                generation_time: None,
+                token_count: None,
             });
         }
         // Hydrate the pager counter onto its row: `hydrate_swipe_label` filled
@@ -1258,6 +1263,7 @@ impl<W: ProductWire> ChatSession<W> {
             editing_message_id: self.state.message_edit_id.clone(),
             editing_draft: self.state.message_edit_draft.clone(),
             history_open_for: self.state.history_message_id.clone(),
+            details_message_id: self.state.details_message_id.clone(),
             revision_history: self.state.message_revisions.clone(),
             snapshots_menu_open: self.state.snapshots_menu_open,
             snapshot_items: self
@@ -2448,6 +2454,24 @@ impl<W: ProductWire> ChatSession<W> {
         self.bump_scene();
     }
 
+    /// Toggle or open the message details card (`data-action="details"`).
+    pub fn open_message_details(&mut self, row_id: &str) {
+        if self.state.details_message_id.as_deref() == Some(row_id) {
+            self.state.details_message_id = None;
+        } else {
+            self.state.details_message_id = Some(row_id.to_string());
+        }
+        self.bump_scene();
+    }
+
+    /// Close the message details card (`data-action="details-close"`).
+    pub fn close_message_details(&mut self) {
+        if self.state.details_message_id.is_some() {
+            self.state.details_message_id = None;
+            self.bump_scene();
+        }
+    }
+
     /// Toggle the snapshots menu (React `ChatSnapshotsMenu` header trigger).
     /// Opening loads the child chats of the active chat via
     /// `chats.snapshots.list`; a chat without snapshots shows the honest
@@ -3613,6 +3637,8 @@ impl<W: ProductWire> ChatSession<W> {
             ShellAction::ToggleAlternateGreeting(idx) => self.toggle_alternate_greeting(idx),
             ShellAction::AddAlternateGreeting => self.add_alternate_greeting(),
             ShellAction::RemoveAlternateGreeting(idx) => self.remove_alternate_greeting(idx),
+            ShellAction::OpenMessageDetails(id) => self.open_message_details(&id),
+            ShellAction::CloseMessageDetails => self.close_message_details(),
             ShellAction::Import => self.open_card_import(),
             ShellAction::ImportClose => self.close_card_import(),
             ShellAction::ConfirmCardImport => self.confirm_card_import(),
@@ -8332,6 +8358,30 @@ fn message_visible_row(
     macros: &crate::macros::MacroContext,
 ) -> VisibleRow {
     let content = crate::macros::replace_macros(&message.content, macros);
+    let model = message
+        .meta
+        .payload
+        .get("generation")
+        .and_then(|g| g.get("model"))
+        .and_then(|m| m.as_str())
+        .or_else(|| message.meta.payload.get("model").and_then(|m| m.as_str()))
+        .map(|s| s.to_string());
+    let generation_time = message
+        .meta
+        .payload
+        .get("generation")
+        .and_then(|g| g.get("durationMs"))
+        .and_then(|d| d.as_u64())
+        .map(|ms| format!("{:.1}s", ms as f64 / 1000.0));
+    let token_count = message
+        .meta
+        .payload
+        .get("generation")
+        .and_then(|g| g.get("usage"))
+        .and_then(|u| u.get("totalTokens"))
+        .and_then(|t| t.as_i64())
+        .or_else(|| message.meta.payload.get("tokenCount").and_then(|t| t.as_i64()))
+        .or_else(|| message.meta.payload.get("tokens").and_then(|t| t.as_i64()));
     VisibleRow {
         id: message.id.clone(),
         role: role_name(&message.role).into(),
@@ -8351,6 +8401,9 @@ fn message_visible_row(
         // 0/null) — the label hydrates from the variants cache in `view()`,
         // exactly like the React query-derived `currentSwipe`.
         swipe_label: String::new(),
+        model,
+        generation_time,
+        token_count,
     }
 }
 

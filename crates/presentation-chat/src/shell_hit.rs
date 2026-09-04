@@ -141,6 +141,9 @@ pub enum ShellAction {
     ToggleAlternateGreeting(usize),
     AddAlternateGreeting,
     RemoveAlternateGreeting(usize),
+    /// Message details modal (React `MessageDetailsCardV2.tsx`).
+    OpenMessageDetails(String),
+    CloseMessageDetails,
     /// Settings → General appearance (React `GeneralTab` / `useUiStore`).
     /// Language is the only field that crosses Product Wire (`settings.update`).
     CycleLanguage,

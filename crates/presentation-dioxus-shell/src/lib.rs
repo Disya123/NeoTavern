@@ -607,6 +607,167 @@ fn variant_picker_popover(view: &ProductChatView) -> Option<Element> {
 /// Flagged Product Wire chat workspace: header glass, visible Markdown/image
 /// rows, composer glass. Blitz consumes this tree; callers must not inject a
 /// hand-built `NeoDisplayList`.
+/// Message details card modal overlay (React `MessageDetailsCardV2`):
+/// displays message metadata (sent time, model name, generation duration,
+/// token count), content preview, and action triggers (copy, context,
+/// prompt plan, run steps) with Close action (`details-close`).
+fn message_details_card(view: &ProductChatView) -> Option<Element> {
+    let owner = view.details_message_id.as_deref()?;
+    let row = view.visible.iter().find(|r| r.id == owner)?;
+    let author = row.author.clone();
+    let is_user = row.role == "user";
+    let token_label = row.token_count.map(|c| format!("{c}t"));
+    let timestamp = if row.timestamp.is_empty() { None } else { Some(row.timestamp.clone()) };
+    let model = row.model.clone();
+    let duration = row.generation_time.clone();
+    let content = row.content.clone();
+    let run_id = row.run_id.clone();
+    let excluded = row.manual_excluded;
+
+    Some(rsx! {
+        div {
+            class: "MessageDetailsCardV2_root",
+            "data-component": "dialog",
+            "data-part": "details-card",
+            role: "dialog",
+            "aria-label": "Message details",
+            style: "position:absolute;left:16px;right:16px;top:12px;z-index:35;box-sizing:border-box;display:flex;flex-direction:column;gap:10px;max-height:75%;padding:14px;border:1px solid rgba(243,238,232,0.14);border-radius:16px;background:rgba(21,19,17,0.96);color:#f3eee8;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.5);",
+            // Header: Identity & Badges
+            div {
+                class: "MessageDetailsCardV2_header",
+                "data-part": "details-header",
+                style: "display:flex;align-items:center;gap:10px;",
+                div {
+                    style: "display:flex;align-items:center;gap:8px;flex:1;min-width:0;",
+                    span {
+                        style: "width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:12px;background:rgba(243,238,232,0.1);color:#c5bbb2;",
+                        if is_user {
+                            {crate::product_shell::icon("User", 14)}
+                        } else {
+                            {crate::product_shell::icon("Robot", 14)}
+                        }
+                    }
+                    strong {
+                        style: "font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;",
+                        "{author}"
+                    }
+                }
+                div {
+                    class: "MessageDetailsCardV2_badges",
+                    "data-part": "details-badges",
+                    style: "display:flex;align-items:center;gap:6px;",
+                    if let Some(tok) = token_label {
+                        span {
+                            style: "display:flex;align-items:center;gap:3px;padding:2px 6px;border-radius:10px;background:rgba(243,238,232,0.08);color:#d08770;font-size:11px;",
+                            {crate::product_shell::icon("Lightning", 12)}
+                            "{tok}"
+                        }
+                    }
+                    button {
+                        class: "MessageBubble_actionButton",
+                        r#type: "button",
+                        "data-action": "details-close",
+                        "data-message-id": "{owner}",
+                        "aria-label": "Close details",
+                        style: "width:28px;height:28px;border-radius:14px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;cursor:pointer;",
+                        {crate::product_shell::icon("X", 14)}
+                    }
+                }
+            }
+            // Meta definition list (Sent at, Model, Generation Time)
+            div {
+                class: "MessageDetailsCardV2_meta",
+                "data-part": "details-meta",
+                style: "display:flex;flex-direction:column;gap:4px;padding:8px 10px;border-radius:10px;background:rgba(36,33,30,0.5);font-size:11px;color:#c5bbb2;",
+                if let Some(time) = timestamp {
+                    div {
+                        style: "display:flex;align-items:center;gap:6px;",
+                        {crate::product_shell::icon("CalendarBlank", 13)}
+                        span { style: "color:#998f87;", "Sent: " }
+                        span { "{time}" }
+                    }
+                }
+                if let Some(mdl) = model {
+                    div {
+                        style: "display:flex;align-items:center;gap:6px;",
+                        {crate::product_shell::icon("Robot", 13)}
+                        span { style: "color:#998f87;", "Model: " }
+                        span { "{mdl}" }
+                    }
+                }
+                if let Some(dur) = duration {
+                    div {
+                        style: "display:flex;align-items:center;gap:6px;",
+                        {crate::product_shell::icon("Timer", 13)}
+                        span { style: "color:#998f87;", "Time: " }
+                        span { "{dur}" }
+                    }
+                }
+            }
+            // Message content preview
+            div {
+                class: "MessageDetailsCardV2_content",
+                "data-part": "details-content",
+                style: "flex:1;min-height:48px;max-height:160px;overflow-y:auto;padding:8px 10px;border-radius:10px;background:rgba(36,33,30,0.3);font-size:12px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere;",
+                "{content}"
+            }
+            // Actions / footer
+            div {
+                class: "MessageDetailsCardV2_footer",
+                "data-part": "details-footer",
+                style: "display:flex;align-items:center;gap:8px;padding-top:4px;border-top:1px solid rgba(243,238,232,0.08);",
+                button {
+                    class: "MessageBubble_actionButton",
+                    r#type: "button",
+                    "data-action": "copy",
+                    "data-message-id": "{owner}",
+                    "aria-label": "Copy message",
+                    style: "display:flex;align-items:center;gap:4px;padding:4px 10px;border-radius:12px;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;font-size:11px;cursor:pointer;",
+                    {crate::product_shell::icon("Copy", 13)}
+                    span { "Copy" }
+                }
+                button {
+                    class: "MessageBubble_actionButton",
+                    r#type: "button",
+                    "data-action": "context",
+                    "data-message-id": "{owner}",
+                    "aria-label": "Toggle context",
+                    style: "display:flex;align-items:center;gap:4px;padding:4px 10px;border-radius:12px;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;font-size:11px;cursor:pointer;",
+                    if excluded {
+                        {crate::product_shell::icon("Eye", 13)}
+                        span { "Include" }
+                    } else {
+                        {crate::product_shell::icon("EyeSlash", 13)}
+                        span { "Exclude" }
+                    }
+                }
+                if run_id.is_some() {
+                    button {
+                        class: "MessageBubble_actionButton",
+                        r#type: "button",
+                        "data-action": "prompt",
+                        "data-message-id": "{owner}",
+                        "aria-label": "Prompt plan",
+                        style: "display:flex;align-items:center;gap:4px;padding:4px 10px;border-radius:12px;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;font-size:11px;cursor:pointer;",
+                        {crate::product_shell::icon("BookOpenText", 13)}
+                        span { "Prompt" }
+                    }
+                    button {
+                        class: "MessageBubble_actionButton",
+                        r#type: "button",
+                        "data-action": "steps",
+                        "data-message-id": "{owner}",
+                        "aria-label": "Run steps",
+                        style: "display:flex;align-items:center;gap:4px;padding:4px 10px;border-radius:12px;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;font-size:11px;cursor:pointer;",
+                        {crate::product_shell::icon("List", 13)}
+                        span { "Steps" }
+                    }
+                }
+            }
+        }
+    })
+}
+
 ///
 /// The `data-*` hooks and CSS module class names match React
 /// `ChatWorkspace` / `ChatHeader` / `ChatComposer` / `MessageBubble` so packed
@@ -800,6 +961,9 @@ pub fn product_chat_app() -> Element {
                         if view.history_open_for.is_some() {
                             {revision_history_card(&view)}
                         }
+                        if view.details_message_id.is_some() {
+                            {message_details_card(&view)}
+                        }
                         if view.snapshots_menu_open {
                             {snapshots_menu_panel(&view)}
                         }
@@ -818,6 +982,9 @@ pub fn product_chat_app() -> Element {
                         style: "{viewport_style}",
                         if view.history_open_for.is_some() {
                             {revision_history_card(&view)}
+                        },
+                        if view.details_message_id.is_some() {
+                            {message_details_card(&view)}
                         },
                         if view.snapshots_menu_open {
                             {snapshots_menu_panel(&view)}
@@ -899,6 +1066,7 @@ pub fn product_chat_app() -> Element {
                                             "data-part": "message-actions-inline",
                                             "data-state": "idle",
                                             style: "display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-left:auto;",
+                                            {message_action_button("details", "Message details", "TextAlignLeft", &row.id)}
                                             {if row.manual_excluded {
                                                 message_action_button("context", "Include in prompt context", "Eye", &row.id)
                                             } else {

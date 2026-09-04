@@ -177,6 +177,10 @@ pub enum MessageActionKind {
     Steps,
     /// Remove the checkpoint link (`data-action="delete-checkpoint"`).
     DeleteCheckpoint,
+    /// Open the message details card (`data-action="details"`).
+    Details,
+    /// Close the message details card (`data-action="details-close"`).
+    DetailsClose,
 }
 
 impl MessageActionKind {
@@ -201,6 +205,8 @@ impl MessageActionKind {
             "prompt" => Self::Prompt,
             "steps" => Self::Steps,
             "delete-checkpoint" => Self::DeleteCheckpoint,
+            "details" => Self::Details,
+            "details-close" => Self::DetailsClose,
             _ => return None,
         })
     }

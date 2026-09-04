@@ -48,6 +48,12 @@ pub struct VisibleRow {
     /// empty hides the pager label (React `MessageSwipePager` renders `null`
     /// when `total <= 1`).
     pub swipe_label: String,
+    /// Generation model name from metadata (React `MessageDetailsCardV2`).
+    pub model: Option<String>,
+    /// Generation time label, e.g. "1.2s" (React `MessageDetailsCardV2`).
+    pub generation_time: Option<String>,
+    /// Token count from metadata or budget (React `MessageDetailsCardV2`).
+    pub token_count: Option<i64>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -125,6 +131,8 @@ pub struct ProductChatView {
     /// React picker empty state (`chat:swipePickerEmpty`): `true` after a
     /// successful list with no rows; `false` = loading.
     pub variant_picker_empty: bool,
+    /// Message whose details card is open (React `MessageDetailsCardV2`).
+    pub details_message_id: Option<String>,
 }
 
 /// One row of the snapshots menu (React `ChatSnapshotsMenu` item): the child
@@ -191,6 +199,7 @@ impl Default for ProductChatView {
             variant_picker_for: None,
             variant_picker_rows: Vec::new(),
             variant_picker_empty: false,
+            details_message_id: None,
         }
     }
 }
@@ -370,6 +379,9 @@ pub fn visible_rows(fixture: &CanonicalFixture, start: usize) -> Vec<VisibleRow>
                     .and_then(Value::as_str)
                     .map(str::to_string),
                 swipe_label: String::new(),
+                model: None,
+                generation_time: None,
+                token_count: None,
             }
         })
         .collect()
@@ -458,6 +470,7 @@ pub fn product_chat_from_fixture(fixture: &CanonicalFixture, start: usize) -> Pr
         variant_picker_for: None,
         variant_picker_rows: Vec::new(),
         variant_picker_empty: false,
+        details_message_id: None,
     }
 }
 

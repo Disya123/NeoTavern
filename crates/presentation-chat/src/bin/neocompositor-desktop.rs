@@ -954,6 +954,18 @@ impl App {
                         self.dirty = true;
                         self.window.as_ref().map(|w| w.request_redraw());
                     }
+                    neotavern_presentation_chat::MessageActionKind::Details => {
+                        eprintln!("[neocompositor-desktop] details tapped: {}", pending.row_id);
+                        self.session.open_message_details(&pending.row_id);
+                        self.dirty = true;
+                        self.window.as_ref().map(|w| w.request_redraw());
+                    }
+                    neotavern_presentation_chat::MessageActionKind::DetailsClose => {
+                        eprintln!("[neocompositor-desktop] details-close tapped");
+                        self.session.close_message_details();
+                        self.dirty = true;
+                        self.window.as_ref().map(|w| w.request_redraw());
+                    }
                 }
                 return;
             }

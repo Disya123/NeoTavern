@@ -353,6 +353,26 @@ FakeWire пишет пару `provider_turn` + `final_commit` при `generation
 `retry` (без tool payload) и сидирует журнал демо-ответа. Тест
 `run_transcript_lists_generation_steps_without_tool_payloads`.
 
+## Детали сообщения (MessageDetailsCardV2)
+
+Действие в строке действий сообщения `data-action="details"` (иконка `TextAlignLeft`,
+title="Message details") открывает модальную карточку с расширенными метаданными генерации
+(`OpenMessageDetails` / `CloseMessageDetails`, закрытие по клику на оверлей, крестику
+`data-action="details-close"` или клавише Esc).
+
+Карточка (`data-component="MessageDetailsCard"`, CSS `MessageDetailsCardV2.module.css`):
+- **Header**: имя автора, аватар / `Robot`-иконка, бейджи (`Lightning` со счётчиком токенов,
+  `ChatCircleDots` с числом вариантов ответа), кнопка закрытия `X`.
+- **Metadata list**: `Sent at` (`CalendarBlank`), `Model` (`Robot`), `Generation time` (`Timer`).
+  Метаданные извлекаются из `message.meta.payload` (`model`, `durationMs`,
+  `totalTokens`/`tokens`/`tokenCount`).
+- **Content preview**: блок предпросмотра текста сообщения (`data-part="details-content"`).
+- **Footer actions**: кнопки `Copy`, `Context` (toggle excluded), `Prompt` (план промпта),
+  `Steps` (транскрипт шагов).
+
+Интеграционный тест: `message_details_card_open_inspect_and_close` в
+`crates/presentation-chat/tests/compositor_host.rs`.
+
 ## Исключение из контекста (toggleMessageContext)
 
 `data-action="context"`: `chats.messages.update` с `meta.manualExcluded`
@@ -1093,16 +1113,17 @@ ConfirmCreate → `characters=2` (durable через wire), тост «Character
    FakeWire пока не реализованы (свайпам не нужны). Тест:
    `swipes_cycle_variants_and_stop_at_edges`; e2e: тап → paths растут,
    `kernel_messages` неизменен.
-7. **Context / Prompt / Steps / delete-checkpoint — подключены.**
+7. **Context / Prompt / Steps / Details / delete-checkpoint — подключены.**
    `data-action="context"` → `chats.messages.update` (`meta.manualExcluded`);
    `prompt` → `generation.prompt.plan` по `generationRunId` строки;
    `steps` → `generation.events` (только `generation.step`, без tool payload);
+   `details` → `MessageDetailsCardV2` (метаданные генерации, токены, время);
    `delete-checkpoint` → confirm + `clearCheckpointChatId`. Edit / history /
    checkpoint / branch уже были подключены ранее (см. CHANGELOG).
 
 **Распознавание (M1/M2):** общая таблица решений `hit_rects::resolve_tap`
 классифицирует ВСЕ задокументированные действия строки —
-`context/edit/copy/checkpoint/branch/delete/rollback/prompt/steps/delete-checkpoint`
+`context/edit/copy/checkpoint/branch/delete/rollback/prompt/steps/details/delete-checkpoint`
 + version controls `history/regenerate/swipe-previous/swipe-next`. Кнопки
 version controls не несут собственного `data-message-id`; их владельцем
 становится ближайший ключевой предок из skeleton-цепочки (`effective_key`),
@@ -1128,7 +1149,8 @@ version controls не несут собственного `data-message-id`; и�
   честный skip), delete (`chats.messages.delete`), edit
   (`chats.messages.update` + ревизии), history (`chats.messages.revisions.list`),
   context (`meta.manualExcluded`), prompt (`generation.prompt.plan`), steps
-  (`generation.events`), checkpoint/branch (`chats.snapshots.create`),
+  (`generation.events`), details (`MessageDetailsCardV2`),
+  checkpoint/branch (`chats.snapshots.create`),
   delete-checkpoint (`clearCheckpointChatId`) и rollback
   (`chats.snapshots.rollback`).
 - Wallpaper — светлая плоскость фасада + тёмный overlay, не фото React

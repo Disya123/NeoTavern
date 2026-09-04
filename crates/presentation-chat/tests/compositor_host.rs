@@ -200,6 +200,9 @@ fn markdown_minimal_probe() {
             manual_excluded: false,
             checkpoint_chat_id: None,
             swipe_label: String::new(),
+            model: None,
+            generation_time: None,
+            token_count: None,
         }],
         chrome: ProductChrome::HeaderComposer,
         character_avatar_asset: "asset:avatar-hazel".into(),
@@ -226,6 +229,7 @@ fn markdown_minimal_probe() {
         variant_picker_for: None,
         variant_picker_rows: Vec::new(),
         variant_picker_empty: false,
+        details_message_id: None,
     });
     let layout =
         inspect_product_layout(product_chat_app, 1100, 760, 1.0, Default::default()).expect("l");
@@ -5561,4 +5565,81 @@ fn character_manager_alternate_greetings_add_toggle_and_remove() {
     session.apply_shell_action(ShellAction::ToggleAlternateGreeting(0));
     assert_eq!(session.shell_view().expanded_greeting, None);
 }
+
+#[test]
+fn message_details_card_open_inspect_and_close() {
+    use neotavern_presentation_chat::{FakeWire, ShellAction};
+    use neotavern_presentation_dioxus_shell::product_shell_app;
+    use neotavern_presentation_m0_d2::inspect_slot_skeleton;
+
+    let (mut session, _) = start_flagged_session(
+        Some("1"),
+        FakeWire::with_message_count(12),
+        Some(neotavern_presentation_chat::DEMO_CHAT_ID),
+        None,
+    )
+    .expect("route");
+    session.set_surface_size(1100, 760, 1.0);
+
+    let target = session
+        .view()
+        .visible
+        .iter()
+        .find(|r| r.role == "assistant")
+        .map(|r| r.id.clone())
+        .expect("visible assistant message");
+
+    // Initially details card is closed
+    assert!(session.view().details_message_id.is_none());
+
+    // Open message details card
+    session.apply_shell_action(ShellAction::OpenMessageDetails(target.clone()));
+    assert_eq!(
+        session.view().details_message_id.as_deref(),
+        Some(target.as_str())
+    );
+
+    // Install shell view and verify slot skeleton contains details card components
+    neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
+    let skeleton_open = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
+        .expect("open details skeleton");
+    assert!(
+        skeleton_open.has_identity("details-card"),
+        "details-card rendered; identities={:?}",
+        skeleton_open.identities()
+    );
+    assert!(
+        skeleton_open.has_identity("details-header"),
+        "details-header rendered"
+    );
+    assert!(
+        skeleton_open.has_identity("details-badges"),
+        "details-badges rendered"
+    );
+    assert!(
+        skeleton_open.has_identity("details-meta"),
+        "details-meta rendered"
+    );
+    assert!(
+        skeleton_open.has_identity("details-content"),
+        "details-content rendered"
+    );
+    assert!(
+        skeleton_open.has_identity("details-footer"),
+        "details-footer rendered"
+    );
+
+    // Close details card
+    session.apply_shell_action(ShellAction::CloseMessageDetails);
+    assert!(session.view().details_message_id.is_none());
+
+    neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
+    let skeleton_closed = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
+        .expect("closed details skeleton");
+    assert!(
+        !skeleton_closed.has_identity("details-card"),
+        "details-card removed on close"
+    );
+}
+
 

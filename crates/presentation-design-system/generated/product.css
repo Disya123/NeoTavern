@@ -9151,6 +9151,423 @@ h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote {
 
 
 
+/* components/MessageDetailsCardV2.module.css -> MessageDetailsCardV2_* */
+
+
+  .MessageDetailsCardV2_st-dialog.dialog {
+    display: flex;
+    padding: 0;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .MessageDetailsCardV2_st-dialog.dialog [data-component='dialog-title'] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
+  .MessageDetailsCardV2_card {
+    display: flex;
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    padding-left: 16px; padding-right: 16px;
+    padding-top: 8px; padding-bottom: max(12px, var(--nt-inset-bottom));
+  }
+
+  .MessageDetailsCardV2_details,
+  .MessageDetailsCardV2_actionMode,
+  .MessageDetailsCardV2_editor {
+    display: flex;
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+  }
+
+  .MessageDetailsCardV2_dragHandle {
+    position: relative;
+    width: 100%;
+    min-height: 44px;
+    margin: 0;
+    padding: 0;
+    flex: none;
+    border: 0;
+    background: transparent;
+    cursor: grab;
+    touch-action: none;
+  }
+
+  .MessageDetailsCardV2_dragHandle::before {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    width: 36px;
+    height: 2px;
+    border-radius: 999px;
+    background: #39342f;
+    content: '';
+    transform: translateX(-50%);
+  }
+
+  .MessageDetailsCardV2_dragHandle:active {
+    cursor: grabbing;
+  }
+
+  .MessageDetailsCardV2_header,
+  .MessageDetailsCardV2_actionHeader,
+  .MessageDetailsCardV2_identity,
+  .MessageDetailsCardV2_badges,
+  .MessageDetailsCardV2_quickActions,
+  .MessageDetailsCardV2_footer,
+  .MessageDetailsCardV2_metaRow,
+  .MessageDetailsCardV2_metaRow dt,
+  .MessageDetailsCardV2_listAction,
+  .MessageDetailsCardV2_dangerAction,
+  .MessageDetailsCardV2_editorActions {
+    display: flex;
+    align-items: center;
+  }
+
+  .MessageDetailsCardV2_header,
+  .MessageDetailsCardV2_actionHeader {
+    min-width: 0;
+    justify-content: space-between;
+    gap: 8px;
+    padding-bottom: 8px;
+    flex: none;
+  }
+
+  .MessageDetailsCardV2_identity {
+    min-width: 0;
+    gap: 8px;
+  }
+
+  .MessageDetailsCardV2_avatar {
+    display: grid;
+    width: 40px;
+    height: 40px;
+    flex: none;
+    overflow: hidden;
+    border-radius: 999px;
+    color: #ffc4a8;
+    background: #492a20;
+    align-items: center; justify-content: center;
+  }
+
+  .MessageDetailsCardV2_card[data-role='user'] .MessageDetailsCardV2_avatar {
+    color: #c5bbb2;
+    background: #302c28;
+  }
+
+  .MessageDetailsCardV2_avatarImage {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .MessageDetailsCardV2_avatarInitial {
+    font-size: 1rem;
+    font-weight: 700;
+  }
+
+  .MessageDetailsCardV2_author {
+    min-width: 0;
+    overflow: hidden;
+    color: #f3eee8;
+    font-size: 1rem;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .MessageDetailsCardV2_badges {
+    justify-content: flex-end;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+
+  .MessageDetailsCardV2_badges span {
+    display: inline-flex;
+    min-height: 32px;
+    align-items: center;
+    gap: 2px;
+    padding-left: 8px; padding-right: 8px;
+    border: 1px solid #39342f;
+    border-radius: 999px;
+    color: #c5bbb2;
+    background: #24211e;
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .MessageDetailsCardV2_meta {
+    display: flex;
+    margin: 0;
+    flex: none;
+    flex-direction: column;
+  }
+
+  .MessageDetailsCardV2_metaRow {
+    min-height: 44px;
+    justify-content: space-between;
+    gap: 8px;
+    border-bottom: 1px solid #39342f;
+    font-size: 0.8125rem;
+  }
+
+  .MessageDetailsCardV2_metaRow dt {
+    gap: 8px;
+    color: #998f87;
+  }
+
+  .MessageDetailsCardV2_metaRow dd {
+    min-width: 0;
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: #f3eee8;
+    font-weight: 650;
+    text-align: end;
+  }
+
+  .MessageDetailsCardV2_quickActions {
+    flex: none;
+    gap: 8px;
+    padding-top: 12px; padding-bottom: 12px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid #39342f;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+  }
+
+  .MessageDetailsCardV2_circleAction,
+  .MessageDetailsCardV2_plusAction,
+  .MessageDetailsCardV2_closeActions {
+    display: inline-grid;
+    min-width: 44px;
+    min-height: 44px;
+    flex: none;
+    border: 1px solid #39342f;
+    border-radius: 999px;
+    background: #24211e;
+    color: #c5bbb2;
+    cursor: pointer;
+    align-items: center; justify-content: center;
+  }
+
+  .MessageDetailsCardV2_circleAction[data-action='delete'],
+  .MessageDetailsCardV2_circleAction[data-action='delete-checkpoint'] {
+    border-color: rgb(139, 88, 82);
+    color: #f0837d;
+  }
+
+  .MessageDetailsCardV2_content {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    margin-bottom: 12px;
+    padding: 12px 12px 16px;
+    border: 1px solid #39342f;
+    border-radius: 16px;
+    background: #24211e;
+    color: #c5bbb2;
+    overflow-wrap: anywhere;
+  }
+
+  .MessageDetailsCardV2_footer {
+    flex: none;
+    justify-content: space-around;
+    gap: 2px;
+    padding-top: 8px;
+    border-top: 1px solid #39342f;
+  }
+
+  .MessageDetailsCardV2_footerAction {
+    display: inline-flex;
+    min-width: 0;
+    min-height: 44px;
+    flex: 1 1 0;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 2px;
+    padding-left: 2px; padding-right: 2px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: #c5bbb2;
+    font-size: 0.75rem;
+    cursor: pointer;
+  }
+
+  .MessageDetailsCardV2_footerAction span {
+    width: 100%;
+    overflow: hidden;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .MessageDetailsCardV2_plusAction {
+    color: #2a130b;
+    background: #e38a62;
+  }
+
+  .MessageDetailsCardV2_circleAction:hover:not(:disabled),
+  .MessageDetailsCardV2_closeActions:hover:not(:disabled),
+  .MessageDetailsCardV2_footerAction:hover:not(:disabled),
+  .MessageDetailsCardV2_listAction:hover:not(:disabled) {
+    color: #f3eee8;
+    background: #302c28;
+  }
+
+  .MessageDetailsCardV2_plusAction:hover:not(:disabled) {
+    background: #f09a73;
+  }
+
+  .MessageDetailsCardV2_circleAction:focus-visible,
+  .MessageDetailsCardV2_plusAction:focus-visible,
+  .MessageDetailsCardV2_closeActions:focus-visible,
+  .MessageDetailsCardV2_footerAction:focus-visible,
+  .MessageDetailsCardV2_listAction:focus-visible,
+  .MessageDetailsCardV2_dangerAction:focus-visible,
+  .MessageDetailsCardV2_editorActions button:focus-visible,
+  .MessageDetailsCardV2_editor textarea:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(227, 138, 98, 0.2);
+  }
+
+  .MessageDetailsCardV2_circleAction:disabled,
+  .MessageDetailsCardV2_plusAction:disabled,
+  .MessageDetailsCardV2_closeActions:disabled,
+  .MessageDetailsCardV2_footerAction:disabled,
+  .MessageDetailsCardV2_listAction:disabled,
+  .MessageDetailsCardV2_dangerAction:disabled,
+  .MessageDetailsCardV2_editorActions button:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  .MessageDetailsCardV2_preview {
+    flex: none;
+    display: -webkit-box;
+    margin-top: 4px; margin-bottom: 8px;
+    padding: 12px;
+    overflow: hidden;
+    border-radius: 16px;
+    background: #24211e;
+    color: #c5bbb2;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+
+  .MessageDetailsCardV2_actionScroll {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .MessageDetailsCardV2_actionGroup {
+    margin: 0;
+    padding-bottom: 12px;
+  }
+
+  .MessageDetailsCardV2_actionGroup h3 {
+    margin: 0;
+    padding-top: 8px; padding-bottom: 8px;
+    color: #998f87;
+    font-size: 0.75rem;
+    font-weight: 650;
+    text-transform: uppercase;
+  }
+
+  .MessageDetailsCardV2_listAction,
+  .MessageDetailsCardV2_dangerAction {
+    width: 100%;
+    min-height: 44px;
+    justify-content: flex-start;
+    gap: 8px;
+    padding-left: 8px; padding-right: 8px;
+    border: 0;
+    border-bottom: 1px solid #39342f;
+    border-radius: 0;
+    background: transparent;
+    color: #f3eee8;
+    font-size: 1rem;
+    font-weight: 650;
+    text-align: start;
+    cursor: pointer;
+  }
+
+  .MessageDetailsCardV2_dangerAction {
+    color: #f0837d;
+  }
+
+  .MessageDetailsCardV2_editor {
+    gap: 8px;
+  }
+
+  .MessageDetailsCardV2_editor textarea {
+    width: 100%;
+    min-height: 96px;
+    flex: 1 1 auto;
+    padding: 8px 12px;
+    border: 1px solid #39342f;
+    border-radius: 10px;
+    background: #24211e;
+    color: #f3eee8;
+    font-family: 'Outfit Variable', 'Segoe UI Variable', sans-serif;
+    font-size: 1rem;
+    line-height: 1.45;
+    overflow-y: hidden;
+    resize: none;
+  }
+
+  .MessageDetailsCardV2_editorError {
+    margin: 0;
+    color: #f0837d;
+    font-size: 0.8125rem;
+  }
+
+  .MessageDetailsCardV2_editorActions {
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .MessageDetailsCardV2_editorActions button {
+    min-height: 44px;
+    padding-left: 16px; padding-right: 16px;
+    border: 1px solid #39342f;
+    border-radius: 10px;
+    background: #24211e;
+    color: #f3eee8;
+    cursor: pointer;
+  }
+
+  .MessageDetailsCardV2_editorActions button:last-child {
+    border-color: transparent;
+    background: #e38a62;
+    color: #2a130b;
+  }
+
+  .MessageDetailsCardV2_srOnly {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
+
+
 /* Beat Blitz DEFAULT_CSS (body margin, grey buttons, white inputs, hidden options). */
 html, body, #main, #root {
   margin: 0;
