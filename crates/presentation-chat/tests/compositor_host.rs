@@ -5889,6 +5889,107 @@ fn general_settings_steppers_and_range_sliders_interactive() {
     );
 }
 
+#[test]
+fn character_card_viewer_mode_toggle_and_rendering() {
+    use neotavern_presentation_chat::ShellAction;
+    use neotavern_presentation_m0_d2::inspect_slot_skeleton;
+
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    session.apply_shell_action(ShellAction::SetPanel("characters".into()));
+    session.select_character(neotavern_presentation_chat::DEMO_CHARACTER_ID);
+    session.apply_shell_action(ShellAction::SetTab("edit".into()));
+
+    // Initial state is edit mode
+    assert_eq!(session.shell_view().editor_mode, "edit");
+    neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
+    let edit_skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
+        .expect("edit skeleton");
+    assert!(
+        edit_skeleton.has_identity("character-editor"),
+        "edit mode renders character-editor"
+    );
+    assert!(
+        edit_skeleton.has_identity("character-name-input"),
+        "edit mode renders character-name-input"
+    );
+    assert!(
+        edit_skeleton.has_identity("character-save"),
+        "edit mode renders character-save button"
+    );
+
+    // Toggle to view mode
+    session.apply_shell_action(ShellAction::ToggleCharacterEditorMode);
+    assert_eq!(session.shell_view().editor_mode, "view");
+
+    // Inspect Dioxus slot skeleton in view mode
+    neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
+    let view_skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
+        .expect("view skeleton");
+
+    assert!(
+        view_skeleton.has_identity("character-viewer"),
+        "view mode renders character-viewer; identities={:?}",
+        view_skeleton.identities()
+    );
+    assert!(
+        view_skeleton.has_identity("character-viewer-identity"),
+        "view mode renders character-viewer-identity"
+    );
+    assert!(
+        view_skeleton.has_identity("character-viewer-tags"),
+        "view mode renders character-viewer-tags"
+    );
+    assert!(
+        view_skeleton.has_identity("character-viewer-details"),
+        "view mode renders character-viewer-details"
+    );
+    assert!(
+        view_skeleton.has_identity("character-viewer-description"),
+        "view mode renders character-viewer-description"
+    );
+    assert!(
+        view_skeleton.has_identity("character-viewer-greetings"),
+        "view mode renders character-viewer-greetings"
+    );
+    assert!(
+        view_skeleton.has_identity("character-viewer-greeting"),
+        "view mode renders character-viewer-greeting"
+    );
+    // In view mode, editable form inputs should not be present
+    assert!(
+        !view_skeleton.has_identity("character-name-input"),
+        "character-name-input is absent in view mode"
+    );
+    assert!(
+        !view_skeleton.has_identity("character-save"),
+        "character-save is absent in view mode"
+    );
+
+    // Toggle back to edit mode
+    session.apply_shell_action(ShellAction::ToggleCharacterEditorMode);
+    assert_eq!(session.shell_view().editor_mode, "edit");
+
+    neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
+    let back_skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
+        .expect("back skeleton");
+    assert!(
+        back_skeleton.has_identity("character-editor"),
+        "returns to character-editor in edit mode"
+    );
+    assert!(
+        back_skeleton.has_identity("character-name-input"),
+        "character-name-input returns in edit mode"
+    );
+
+    // Test toggle from another tab (e.g. cards) switches to edit tab in view mode
+    session.apply_shell_action(ShellAction::SetTab("cards".into()));
+    assert_eq!(session.shell_view().tab, "cards");
+    session.apply_shell_action(ShellAction::ToggleCharacterEditorMode);
+    assert_eq!(session.shell_view().tab, "edit");
+    assert_eq!(session.shell_view().editor_mode, "view");
+}
+
 
 
 

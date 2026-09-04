@@ -185,6 +185,7 @@ pub struct ChatRouteState {
     pub character_sort: String,
     pub character_view: String,
     pub character_tab: String,
+    pub character_editor_mode: String,
     /// Gallery toolbar (React `GalleryTab` local state, not persisted).
     pub gallery_columns: u32,
     pub gallery_sort: String,
@@ -558,6 +559,7 @@ impl<W: ProductWire> ChatSession<W> {
         session.state.character_sort = "name".into();
         session.state.character_view = "list".into();
         session.state.character_tab = "cards".into();
+        session.state.character_editor_mode = "edit".into();
         session.state.gallery_columns = 3;
         session.state.gallery_sort = "oldest".into();
         session.state.persona_tab = "cards".into();
@@ -1452,7 +1454,11 @@ impl<W: ProductWire> ChatSession<W> {
                 "medium".into()
             },
             insets: self.state.insets,
-            editor_mode: "view".into(),
+            editor_mode: if self.state.character_editor_mode.is_empty() {
+                "edit".into()
+            } else {
+                self.state.character_editor_mode.clone()
+            },
             create_dialog_open: self.state.create_dialog_open,
             delete_dialog_open: self.state.delete_dialog_open,
             create_name: self.state.create_name.clone(),
@@ -2194,6 +2200,26 @@ impl<W: ProductWire> ChatSession<W> {
             // React `CharacterLorebooks` queries `lorebooks.list` on mount.
             self.load_lorebooks();
         }
+        self.bump_scene();
+    }
+
+    pub fn toggle_character_editor_mode(&mut self) {
+        if self.state.sidebar_panel != "characters" || self.state.selected_character_id.is_none() {
+            return;
+        }
+        if self.state.character_tab != "edit" {
+            self.state.character_tab = "edit".into();
+            self.state.character_editor_mode = "view".into();
+        } else if self.state.character_editor_mode == "view" {
+            self.state.character_editor_mode = "edit".into();
+        } else {
+            self.state.character_editor_mode = "view".into();
+        }
+        self.bump_scene();
+    }
+
+    pub fn set_character_editor_mode(&mut self, mode: &str) {
+        self.state.character_editor_mode = mode.to_string();
         self.bump_scene();
     }
 
@@ -3510,6 +3536,8 @@ impl<W: ProductWire> ChatSession<W> {
             ShellAction::CloseCheckpointDelete => self.close_checkpoint_delete(),
             ShellAction::ConfirmCheckpointDelete => self.confirm_checkpoint_delete(),
             ShellAction::DuplicateCharacter => self.duplicate_selected_character(),
+            ShellAction::ToggleCharacterEditorMode => self.toggle_character_editor_mode(),
+            ShellAction::SetCharacterEditorMode(mode) => self.set_character_editor_mode(&mode),
             ShellAction::CreateCharacterLorebook => self.create_character_lorebook(),
             ShellAction::UnlinkCharacterLorebook(_) => self.unlink_character_lorebook(),
             ShellAction::UploadGalleryImage => {

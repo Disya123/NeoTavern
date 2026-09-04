@@ -422,16 +422,31 @@ avatar. Автоселект + pin + вкладка Edit, тост «Created {na
 вне native create-контракта (галерея, extra spec) не копируются. Тест
 `duplicate_character_creates_a_named_copy`.
 
-## Редактор персонажа (name / description / tags / greetings)
+## Редактор и просмотр карточки персонажа (Character Card Viewer & Edit mode)
 
 Kernel `characters.update` принимает только `name`, `description`, `tags`,
-`avatarAssetId`, `profileId`. Native Edit-таб поднимает эти поля наверх
-(без скролла панели) и пишет их в провод: Save — изменённые name+description
-(`TextFocus::CharacterName/Description`, `data-part="character-name-input"` /
-`"character-description-input"`), пустое имя хранит текущее, no-op — «No
-changes.» без вызова. Теги — Add/Remove сразу (`character-tag-input` /
-`character-tag-add` / chip = remove), дубликаты case-insensitive, лимит 32 /
-64 символа.
+`avatarAssetId`, `profileId`. Панель управления персонажем поддерживает два режима
+(`editor_mode: "view"` vs `"edit"`):
+- **Переключение режима**: в шапке панели (`SidebarPanelHeader_actions`) кнопка
+  `ToggleCharacterEditorMode`: в режиме просмотра отображает `<Pencil>` («Edit card»,
+  `data-action="character-edit-mode"`), в режиме редактирования — `<Eye>`
+  («View character card», `data-action="character-view-mode"`). При нахождении на других
+  вкладках нажатие кнопки `Eye` переключает на вкладку `edit` в режиме просмотра (`view`).
+- **Режим просмотра карточки (CharacterCardViewer)**: нередактируемый фасад
+  (`data-component="character-card-viewer"`, `data-part="character-viewer"`,
+  `data-state="read-only"`, стилизованный классами `.CharacterManagementPanel_viewer*`):
+  - Аватар с thumbnail asset, заголовок с именем персонажа (`<h2>`) и чипы тегов
+    (`data-part="character-viewer-identity"`, `data-part="character-viewer-tags"`);
+  - Заметки создателя (`data-part="character-viewer-creator-notes"`);
+  - Раскрывающиеся секции деталей (`data-part="character-viewer-details"`):
+    описание (`data-part="character-viewer-description"`) и список приветствий
+    (`data-part="character-viewer-greetings"`, первое сообщение и альтернативные
+    варианты `data-part="character-viewer-greeting"`).
+- **Режим редактирования (EditTab)**: поднимает поля наверх (без скролла панели)
+  и пишет их в провод: Save — изменённые name+description (`TextFocus::CharacterName/Description`,
+  `data-part="character-name-input"` / `"character-description-input"`), пустое имя хранит
+  текущее, no-op — «No changes.» без вызова. Теги — Add/Remove сразу (`character-tag-input` /
+  `character-tag-add` / chip = remove), дубликаты case-insensitive, лимит 32 / 64 символа.
 
 Для полей `first_message`, `creator_notes` и `alternate_greetings` native shell
 предоставляет интерактивный черновик:
@@ -446,7 +461,8 @@ changes.» без вызова. Теги — Add/Remove сразу (`character-t
 - Полноценный ввод с клавиатуры и стирание через Backspace в десктопном композиторе.
 Тост Save — `Saved {name}.` (`characters:saveSuccess`). Тесты:
 `character_editor_name_description_tags_over_product_wire`,
-`character_manager_alternate_greetings_add_toggle_and_remove`.
+`character_manager_alternate_greetings_add_toggle_and_remove`,
+`character_card_viewer_mode_toggle_and_rendering`.
 
 ## Галерея персонажа (GalleryTab)
 

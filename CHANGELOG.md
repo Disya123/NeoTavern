@@ -3,6 +3,29 @@
 ## Unreleased
 ### Added
 
+- **Нативный шелл: режим просмотра карточки персонажа (Character Card Viewer mode) в CharacterManagementPanel.**
+  В панели управления персонажем (`CharacterManagementPanel`, `presentation-dioxus-shell`,
+  `presentation-chat`, `neocompositor-desktop`) реализован режим просмотра карточки
+  (`editor_mode: "view"` vs `"edit"`), соответствующий модели React (`CharacterManagementPanel.tsx:460-484, 887-889, 1148-1230`):
+  - Кнопка переключения режима в шапке панели (`SidebarPanelHeader_actions`):
+    - В режиме просмотра карточки (`tab == "edit"` и `editor_mode == "view"`): кнопка
+      «Edit card» (`data-action="character-edit-mode"`, иконка `Pencil`, title «Edit card»).
+    - В режиме редактирования формы: кнопка «View character card» (`data-action="character-view-mode"`,
+      иконка `Eye`, title «View character card»).
+    - На других вкладках (`cards`, `advanced`, `gallery`) при выбранном персонаже кнопка `Eye`
+      переключает на вкладку `edit` в режиме просмотра (`view`).
+  - Экран просмотра карточки (`data-component="character-card-viewer"`, `data-part="character-viewer"`,
+    `data-state="read-only"`, CSS-классы `CharacterManagementPanel_viewer*`):
+    - Секция идентификации (`data-part="character-viewer-identity"`): аватар с thumbnail asset,
+      имя персонажа (`<h2>`), список тегов (`data-part="character-viewer-tags"`).
+    - Заметки создателя (`data-part="character-viewer-creator-notes"`, если заполнены).
+    - Блоки деталей (`data-part="character-viewer-details"`): раскрывающееся описание
+      (`data-part="character-viewer-description"`) и список приветствий
+      (`data-part="character-viewer-greetings"`, первое сообщение и альтернативные приветствия
+      `data-part="character-viewer-greeting"`).
+  - Действие `ShellAction::ToggleCharacterEditorMode` и `ShellAction::SetCharacterEditorMode(String)`.
+  - Интеграционный тест: `character_card_viewer_mode_toggle_and_rendering`.
+
 - **Нативный шелл: слайдеры и степперы UI Opacity и Glass Blur в настройках.**
   В панели настроек (`SettingsPanel` → General, `presentation-dioxus-shell`,
   `presentation-chat`, `neocompositor-desktop`) параметры прозрачности (`UI Opacity`)

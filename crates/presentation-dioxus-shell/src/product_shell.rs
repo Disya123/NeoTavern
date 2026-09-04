@@ -1298,6 +1298,124 @@ fn cards_tab(view: &ProductShellView) -> Element {
     }
 }
 
+fn character_card_viewer(_view: &ProductShellView, draft: &CharacterDraftView) -> Element {
+    let character_name = if draft.name.is_empty() {
+        "Unnamed character"
+    } else {
+        draft.name.as_str()
+    };
+    rsx! {
+        div {
+            class: "CharacterManagementPanel_viewer",
+            "data-component": "character-card-viewer",
+            "data-part": "character-viewer",
+            "data-state": "read-only",
+            style: "padding:16px;display:flex;flex-direction:column;gap:16px;overflow-y:auto;flex:1;min-height:0;box-sizing:border-box;",
+            section {
+                class: "CharacterManagementPanel_viewerIdentity",
+                "data-part": "character-viewer-identity",
+                style: "display:flex;align-items:center;gap:12px;",
+                {character_avatar_with_asset(&draft.name, draft.avatar_asset_id.as_deref(), "CharacterManagementPanel_viewerAvatar")}
+                div {
+                    class: "CharacterManagementPanel_viewerIdentityCopy",
+                    style: "display:flex;flex-direction:column;gap:4px;min-width:0;flex:1;",
+                    h2 {
+                        style: "margin:0;font-size:1.125rem;font-weight:600;color:#f3eee8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
+                        "{character_name}"
+                    }
+                    div {
+                        class: "CharacterManagementPanel_viewerTags",
+                        "data-part": "character-viewer-tags",
+                        style: "display:flex;flex-wrap:wrap;gap:4px;",
+                        if draft.tags.is_empty() {
+                            small { style: "color:#998f87;font-size:0.75rem;", "No tags" }
+                        } else {
+                            for tag in draft.tags.iter() {
+                                span {
+                                    key: "{tag}",
+                                    style: "display:inline-flex;align-items:center;padding:2px 8px;border-radius:6px;background:#2a2622;color:#c5bbb2;font-size:0.75rem;",
+                                    "{tag}"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if !draft.creator_notes.trim().is_empty() {
+                div {
+                    class: "CharacterManagementPanel_viewerDisclosures",
+                    "data-part": "character-viewer-creator-notes",
+                    style: "padding:12px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;display:flex;flex-direction:column;gap:6px;",
+                    strong { style: "color:#f3eee8;font-size:0.8125rem;", "Creator's notes" }
+                    p { style: "margin:0;color:#c5bbb2;font-size:0.8125rem;line-height:1.4;white-space:pre-wrap;", "{draft.creator_notes}" }
+                }
+            }
+            div {
+                class: "CharacterManagementPanel_viewerDisclosures",
+                "data-part": "character-viewer-details",
+                style: "display:flex;flex-direction:column;gap:8px;",
+                if !draft.description.trim().is_empty() {
+                    details {
+                        class: "CharacterManagementPanel_viewerDisclosure",
+                        "data-part": "character-viewer-description",
+                        open: true,
+                        style: "border:1px solid #39342f;border-radius:10px;background:#1e1b18;padding:8px 12px;",
+                        summary {
+                            style: "cursor:pointer;font-weight:600;font-size:0.8125rem;color:#f3eee8;padding:4px 0;",
+                            "Description"
+                        }
+                        div {
+                            class: "CharacterManagementPanel_viewerMarkdown",
+                            style: "padding:8px 0 4px;color:#c5bbb2;font-size:0.8125rem;line-height:1.4;white-space:pre-wrap;",
+                            p { style: "margin:0;", "{draft.description}" }
+                        }
+                    }
+                }
+                if !draft.first_message.trim().is_empty() || !draft.alternate_greetings.is_empty() {
+                    details {
+                        class: "CharacterManagementPanel_viewerDisclosure",
+                        "data-part": "character-viewer-greetings",
+                        open: true,
+                        style: "border:1px solid #39342f;border-radius:10px;background:#1e1b18;padding:8px 12px;",
+                        summary {
+                            style: "cursor:pointer;font-weight:600;font-size:0.8125rem;color:#f3eee8;padding:4px 0;",
+                            "Greetings"
+                        }
+                        div {
+                            class: "CharacterManagementPanel_viewerGreetingList",
+                            style: "display:flex;flex-direction:column;gap:8px;padding:8px 0 4px;",
+                            if !draft.first_message.trim().is_empty() {
+                                div {
+                                    class: "CharacterManagementPanel_viewerDisclosure",
+                                    "data-part": "character-viewer-greeting",
+                                    style: "padding:8px;border-radius:8px;background:#24211e;",
+                                    strong { style: "display:block;margin-bottom:4px;color:#f3eee8;font-size:0.75rem;", "First message" }
+                                    p { style: "margin:0;color:#c5bbb2;font-size:0.8125rem;line-height:1.4;white-space:pre-wrap;", "{draft.first_message}" }
+                                }
+                            }
+                            for (index, greeting) in draft.alternate_greetings.iter().enumerate() {
+                                {
+                                    let label = format!("Alternate greeting #{}", index + 1);
+                                    rsx! {
+                                        div {
+                                            class: "CharacterManagementPanel_viewerDisclosure",
+                                            key: "{index}",
+                                            "data-part": "character-viewer-greeting",
+                                            style: "padding:8px;border-radius:8px;background:#24211e;",
+                                            strong { style: "display:block;margin-bottom:4px;color:#f3eee8;font-size:0.75rem;", "{label}" }
+                                            p { style: "margin:0;color:#c5bbb2;font-size:0.8125rem;line-height:1.4;white-space:pre-wrap;", "{greeting}" }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn edit_tab(view: &ProductShellView, draft: &CharacterDraftView) -> Element {
     let first_msg_tokens = format!("≈ {} tokens", (draft.first_message.len() / 4).max(0));
     rsx! {
@@ -1841,7 +1959,7 @@ fn character_manager(view: &ProductShellView) -> Element {
         .iter()
         .find(|item| Some(item.id.as_str()) == view.selected_character_id.as_deref());
     let tab = view.tab.as_str();
-    let (pad_top, pad_bottom) = chrome_insets(view);
+    let (_pad_top, pad_bottom) = chrome_insets(view);
     let header_min = 52.0_f32;
     let header_title = character_manager_title(view.chat.viewport_width);
     let root_style = "display:flex;flex-direction:column;height:100%;min-height:0;overflow:hidden;background:rgba(36,33,30,0.72);";
@@ -1852,7 +1970,6 @@ fn character_manager(view: &ProductShellView) -> Element {
         "flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;position:relative;padding-bottom:{pad_bottom}px;"
     );
     let tabs_style = "display:flex;flex-direction:row;flex:none;box-sizing:border-box;align-self:stretch;position:static;width:auto;max-width:100%;order:0;z-index:0;margin:8px 16px 8px;padding:4px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;";
-    let tabs_wrap = "flex:none;align-self:stretch;box-sizing:border-box;width:100%;max-width:100%;overflow:visible;order:1;";
     let cards_tab_style = tab_trigger_style(tab == "cards");
     let edit_tab_style = tab_trigger_style(tab == "edit");
     let advanced_tab_style = tab_trigger_style(tab == "advanced");
@@ -1897,17 +2014,34 @@ fn character_manager(view: &ProductShellView) -> Element {
                     class: "SidebarPanelHeader_actions",
                     "data-part": "actions",
                     style: "display:flex;flex:none;align-items:center;",
-                    button {
-                        class: "st-button st-icon-button CharacterManagementPanel_iconButton",
-                        r#type: "button",
-                        "data-component": "button",
-                        "data-variant": "ghost",
-                        "data-icon": "",
-                        style: "min-width:40px;min-height:40px;width:40px;height:40px;padding:0;flex:none;background:transparent;",
-                        disabled: !can_edit,
-                        "aria-label": "View character card",
-                        title: "View character card",
-                        {icon("Eye", 19)}
+                    if view.tab == "edit" && view.editor_mode == "view" {
+                        button {
+                            class: "st-button st-icon-button CharacterManagementPanel_iconButton",
+                            r#type: "button",
+                            "data-component": "button",
+                            "data-variant": "ghost",
+                            "data-icon": "",
+                            "data-action": "character-edit-mode",
+                            style: "min-width:40px;min-height:40px;width:40px;height:40px;padding:0;flex:none;background:transparent;",
+                            disabled: !can_edit,
+                            "aria-label": "Edit card",
+                            title: "Edit card",
+                            {icon("Pencil", 19)}
+                        }
+                    } else {
+                        button {
+                            class: "st-button st-icon-button CharacterManagementPanel_iconButton",
+                            r#type: "button",
+                            "data-component": "button",
+                            "data-variant": "ghost",
+                            "data-icon": "",
+                            "data-action": "character-view-mode",
+                            style: "min-width:40px;min-height:40px;width:40px;height:40px;padding:0;flex:none;background:transparent;",
+                            disabled: !can_edit,
+                            "aria-label": "View character card",
+                            title: "View character card",
+                            {icon("Eye", 19)}
+                        }
                     }
                 }
                 button {
@@ -1988,9 +2122,13 @@ fn character_manager(view: &ProductShellView) -> Element {
                                 "cards" => {cards_tab(view)},
                                 "edit" => {
                                     if let Some(draft) = &view.selected_draft {
-                                        {edit_tab(view, draft)}
+                                        if view.editor_mode == "view" {
+                                            character_card_viewer(view, draft)
+                                        } else {
+                                            edit_tab(view, draft)
+                                        }
                                     } else {
-                                        {cards_tab(view)}
+                                        cards_tab(view)
                                     }
                                 }
                                 "advanced" => {
@@ -2072,7 +2210,7 @@ pub(crate) fn management_shell(
     active_tab: &str,
     body: Element,
 ) -> Element {
-    let (pad_top, pad_bottom) = chrome_insets(view);
+    let (_pad_top, pad_bottom) = chrome_insets(view);
     let header_min = 52.0_f32;
     let header_title = panel_header_title(title, view.chat.viewport_width);
     let root_style = "display:flex;flex-direction:column;height:100%;min-height:0;overflow:hidden;background:rgba(36,33,30,0.72);";
@@ -2083,7 +2221,6 @@ pub(crate) fn management_shell(
         "flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;position:relative;padding-bottom:{pad_bottom}px;"
     );
     let tabs_style = "display:flex;flex-direction:row;flex:none;box-sizing:border-box;align-self:stretch;position:static;width:auto;max-width:100%;order:0;z-index:0;margin:8px 16px 8px;padding:4px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;";
-    let tabs_wrap = "flex:none;align-self:stretch;box-sizing:border-box;width:100%;max-width:100%;overflow:visible;order:1;";
     let letter = avatar_letter.unwrap_or("");
     rsx! {
         div {

@@ -118,6 +118,9 @@ pub enum ShellAction {
     /// Duplicate the selected character (`characters.create` with
     /// `"{name} copy"`; React `duplicateSelectedCharacter`).
     DuplicateCharacter,
+    /// Toggle character editor mode (View <-> Edit mode; React `CharacterManagementPanel`).
+    ToggleCharacterEditorMode,
+    SetCharacterEditorMode(String),
     /// Character Advanced lorebooks (React `CharacterLorebooks`): create a
     /// book bound to the selected character (`lorebooks.create` + open the
     /// lorebooks panel). Unlink is not expressible on the wire
@@ -1039,6 +1042,9 @@ fn character_manager_hit(view: &ProductShellView, x: f32, y: f32) -> Option<Shel
         if x >= x1 - CONTROL_SM - SPACE_LG {
             return Some(ShellHit::Action(ShellAction::ClosePanel));
         }
+        if x >= x1 - CONTROL_SM * 2.0 - SPACE_LG && view.selected_character_id.is_some() {
+            return Some(ShellHit::Action(ShellAction::ToggleCharacterEditorMode));
+        }
         return Some(ShellHit::Absorb);
     }
     let tabs_top = header_end + SPACE_XS;
@@ -1160,6 +1166,9 @@ fn editor_hit(
     x: f32,
     y: f32,
 ) -> Option<ShellHit> {
+    if view.editor_mode == "view" {
+        return Some(ShellHit::Absorb);
+    }
     let bar_top = content_top + SPACE_SM;
     let bar_bottom = bar_top + CONTROL_SM;
     if y >= bar_top && y < bar_bottom {
