@@ -5723,4 +5723,104 @@ fn message_details_card_actions_mode_navigation_and_execution() {
     );
 }
 
+#[test]
+fn message_details_card_edit_mode_navigation_and_saving() {
+    use neotavern_presentation_chat::{FakeWire, ShellAction};
+    use neotavern_presentation_dioxus_shell::product_shell_app;
+    use neotavern_presentation_m0_d2::inspect_slot_skeleton;
+
+    let (mut session, _) = start_flagged_session(
+        Some("1"),
+        FakeWire::demo(),
+        None,
+        None,
+    )
+    .expect("route");
+    session.set_surface_size(1100, 760, 1.0);
+
+    let target = session
+        .view()
+        .visible
+        .iter()
+        .find(|r| r.role == "assistant")
+        .map(|r| r.id.clone())
+        .expect("visible assistant message");
+
+    let original_content = session
+        .view()
+        .visible
+        .iter()
+        .find(|r| r.id == target)
+        .map(|r| r.content.clone())
+        .expect("original content");
+
+    // Open message details card -> default mode is "details"
+    session.apply_shell_action(ShellAction::OpenMessageDetails(target.clone()));
+    assert_eq!(session.view().details_mode, "details");
+
+    // Switch to "edit" mode
+    session.apply_shell_action(ShellAction::SetMessageDetailsMode("edit".into()));
+    assert_eq!(session.view().details_mode, "edit");
+    assert_eq!(session.view().editing_draft, original_content);
+
+    // Inspect Dioxus slot skeleton in "edit" mode
+    neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
+    let skeleton_edit = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
+        .expect("edit mode skeleton");
+
+    assert!(
+        skeleton_edit.has_identity("details-editor"),
+        "details-editor rendered in edit mode"
+    );
+    assert!(
+        skeleton_edit.has_identity("details-editor-input"),
+        "details-editor-input rendered in edit mode"
+    );
+    assert!(
+        skeleton_edit.has_identity("details-editor-actions"),
+        "details-editor-actions rendered in edit mode"
+    );
+    assert!(
+        skeleton_edit.has_identity("details-save-edit"),
+        "details-save-edit action button rendered"
+    );
+    assert!(
+        !skeleton_edit.has_identity("details-danger-zone"),
+        "details-danger-zone absent in edit mode"
+    );
+    assert!(
+        !skeleton_edit.has_identity("details-meta"),
+        "details-meta absent in edit mode"
+    );
+
+    // Edit message content
+    session.set_message_edit_draft("Polished content via native details modal.");
+
+    // Submit edit
+    session.apply_shell_action(ShellAction::SubmitMessageDetailsEdit);
+
+    // Verify wire update was sent
+    assert!(
+        session
+            .issued_commands()
+            .iter()
+            .any(|op| op == "chats.messages.update"),
+        "chats.messages.update was called on details submit"
+    );
+
+    // Verify content updated on visible row
+    let view = session.view();
+    let updated_row = view
+        .visible
+        .iter()
+        .find(|r| r.id == target)
+        .expect("updated row");
+    assert_eq!(updated_row.content, "Polished content via native details modal.");
+
+    // Verify details card closed
+    assert_eq!(session.view().details_message_id, None);
+    assert_eq!(session.view().details_mode, "details");
+}
+
+
 

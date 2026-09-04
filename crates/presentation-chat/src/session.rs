@@ -2478,16 +2478,78 @@ impl<W: ProductWire> ChatSession<W> {
         if self.state.details_message_id.is_some() {
             self.state.details_message_id = None;
             self.state.details_mode = "details".into();
+            self.state.message_edit_id = None;
+            self.state.message_edit_draft.clear();
             self.bump_scene();
         }
     }
 
-    /// Set message details mode (`"details"` or `"actions"`).
+    /// Set message details mode (`"details"`, `"actions"`, or `"edit"`).
     pub fn set_message_details_mode(&mut self, mode: &str) {
         if self.state.details_mode != mode {
             self.state.details_mode = mode.to_string();
+            if mode == "edit" {
+                if let Some(msg_id) = self.state.details_message_id.clone() {
+                    self.state.message_edit_id = Some(msg_id.clone());
+                    if let Some(msg) = self.state.messages.iter().find(|m| m.id == msg_id) {
+                        self.state.message_edit_draft = msg.content.clone();
+                    }
+                }
+            } else if mode == "details" || mode == "actions" {
+                self.state.message_edit_id = None;
+                self.state.message_edit_draft.clear();
+            }
             self.bump_scene();
         }
+    }
+
+    /// Submit the message details editor (React `MessageDetailsCardV2` save).
+    pub fn submit_message_details_edit(&mut self) {
+        let Some(row_id) = self.state.details_message_id.clone() else {
+            return;
+        };
+        let next = self.state.message_edit_draft.trim().to_string();
+        let Some(current) = self
+            .state
+            .messages
+            .iter()
+            .find(|row| row.id == row_id)
+            .map(|row| row.content.clone())
+        else {
+            self.close_message_details();
+            return;
+        };
+        if next.is_empty() || next == current {
+            self.close_message_details();
+            return;
+        }
+        let Some(chat_id) = self.chat_id().map(str::to_string) else {
+            return;
+        };
+        match self.call_decode(
+            "chats.messages.update",
+            &RequestUpdateMessage {
+                chat_id,
+                message_id: row_id.clone(),
+                content: Some(next),
+                meta: None,
+                clear_checkpoint_chat_id: None,
+            },
+            decode_message_dto,
+        ) {
+            Ok(updated) => {
+                if let Some(row) = self.state.messages.iter_mut().find(|row| row.id == row_id) {
+                    row.content = updated.content;
+                }
+                self.state.message_edit_id = None;
+                self.state.message_edit_draft.clear();
+                self.state.details_message_id = None;
+                self.state.details_mode = "details".into();
+                self.state.status_message = Some("Message updated.".into());
+            }
+            Err(err) => self.record_error(err),
+        }
+        self.bump_scene();
     }
 
     /// Toggle the snapshots menu (React `ChatSnapshotsMenu` header trigger).
@@ -3658,6 +3720,7 @@ impl<W: ProductWire> ChatSession<W> {
             ShellAction::OpenMessageDetails(id) => self.open_message_details(&id),
             ShellAction::CloseMessageDetails => self.close_message_details(),
             ShellAction::SetMessageDetailsMode(mode) => self.set_message_details_mode(&mode),
+            ShellAction::SubmitMessageDetailsEdit => self.submit_message_details_edit(),
             ShellAction::Import => self.open_card_import(),
             ShellAction::ImportClose => self.close_card_import(),
             ShellAction::ConfirmCardImport => self.confirm_card_import(),

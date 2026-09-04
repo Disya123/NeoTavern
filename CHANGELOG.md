@@ -3,6 +3,28 @@
 ## Unreleased
 ### Added
 
+- **Нативный шелл: режим редактирования (edit mode) в MessageDetailsCardV2.**
+  В карточке деталей сообщения (`MessageDetailsCardV2`, `presentation-dioxus-shell`,
+  `presentation-chat`, `neocompositor-desktop`) реализован полнофункциональный режим
+  редактирования (`details_mode: "edit"`), соответствующий React-модели
+  (`MessageDetailsCardV2.tsx:250-280`):
+  - Переход в режим редактирования из меню действий по кнопке `edit`
+    (`data-action="edit"` / `data-action="details-mode-edit"`).
+  - Экран редактора деталей (`data-part="details-editor"`):
+    - Шапка с заголовком «Edit message», иконкой `PencilSimple` и кнопкой отмены
+      (`data-action="details-mode-details"`, иконка `X`, `aria-label="Cancel edit"`).
+    - Область ввода черновика сообщения (`data-part="details-editor-input"`),
+      синхронизированная с `message_edit_draft`.
+    - Панель действий (`data-part="details-editor-actions"`): кнопка отмены
+      (`data-action="details-mode-details"`, «Cancel») и кнопка сохранения
+      (`data-action="details-save-edit"`, иконка `Check`, «Save»).
+  - Отправка `chats.messages.update` по Product Wire при сохранении, обновление
+    содержимого строки сообщения в сессии, сброс черновика и закрытие модального
+    окна деталей.
+  - Поддержка клавиатурного фокуса `TextFocus::MessageEdit` для посимвольного
+    ввода в десктопном хосте (`neocompositor-desktop`).
+  - Интеграционный тест: `message_details_card_edit_mode_navigation_and_saving`.
+
 - **Нативный шелл: режим расширенных действий (actions mode) в MessageDetailsCardV2.**
   В карточке деталей сообщения (`MessageDetailsCardV2`, `presentation-dioxus-shell`,
   `presentation-chat`, `neocompositor-desktop`) реализован режим расширенных

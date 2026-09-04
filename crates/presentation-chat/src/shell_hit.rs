@@ -145,6 +145,7 @@ pub enum ShellAction {
     OpenMessageDetails(String),
     CloseMessageDetails,
     SetMessageDetailsMode(String),
+    SubmitMessageDetailsEdit,
     /// Settings → General appearance (React `GeneralTab` / `useUiStore`).
     /// Language is the only field that crosses Product Wire (`settings.update`).
     CycleLanguage,

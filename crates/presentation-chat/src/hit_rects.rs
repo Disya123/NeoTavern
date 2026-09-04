@@ -185,6 +185,10 @@ pub enum MessageActionKind {
     DetailsModeActions,
     /// Switch message details card back to details mode (`data-action="details-mode-details"` / `"details-back"`).
     DetailsModeDetails,
+    /// Switch message details card to inline editor mode (`data-action="details-mode-edit"`).
+    DetailsModeEdit,
+    /// Save button inside message details editor mode (`data-action="details-save-edit"`).
+    DetailsSaveEdit,
 }
 
 impl MessageActionKind {
@@ -213,6 +217,8 @@ impl MessageActionKind {
             "details-close" => Self::DetailsClose,
             "actions" | "details-mode-actions" => Self::DetailsModeActions,
             "details-mode-details" | "details-back" => Self::DetailsModeDetails,
+            "details-mode-edit" => Self::DetailsModeEdit,
+            "details-save-edit" => Self::DetailsSaveEdit,
             _ => return None,
         })
     }

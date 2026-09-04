@@ -880,7 +880,11 @@ impl App {
                     }
                     neotavern_presentation_chat::MessageActionKind::Edit => {
                         eprintln!("[neocompositor-desktop] edit tapped: {}", pending.row_id);
-                        self.session.start_message_edit(&pending.row_id);
+                        if self.session.view().details_message_id.as_deref() == Some(&pending.row_id) {
+                            self.session.set_message_details_mode("edit");
+                        } else {
+                            self.session.start_message_edit(&pending.row_id);
+                        }
                         self.focus = TextFocus::MessageEdit;
                         self.dirty = true;
                         self.window.as_ref().map(|w| w.request_redraw());
@@ -975,6 +979,20 @@ impl App {
                     neotavern_presentation_chat::MessageActionKind::DetailsModeDetails => {
                         eprintln!("[neocompositor-desktop] details-mode-details tapped");
                         self.session.set_message_details_mode("details");
+                        self.dirty = true;
+                        self.window.as_ref().map(|w| w.request_redraw());
+                    }
+                    neotavern_presentation_chat::MessageActionKind::DetailsModeEdit => {
+                        eprintln!("[neocompositor-desktop] details-mode-edit tapped");
+                        self.session.set_message_details_mode("edit");
+                        self.focus = TextFocus::MessageEdit;
+                        self.dirty = true;
+                        self.window.as_ref().map(|w| w.request_redraw());
+                    }
+                    neotavern_presentation_chat::MessageActionKind::DetailsSaveEdit => {
+                        eprintln!("[neocompositor-desktop] details-save-edit tapped");
+                        self.session.submit_message_details_edit();
+                        self.focus = TextFocus::None;
                         self.dirty = true;
                         self.window.as_ref().map(|w| w.request_redraw());
                     }

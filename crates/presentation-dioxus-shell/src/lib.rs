@@ -625,6 +625,93 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
     let excluded = row.manual_excluded;
 
     let is_actions_mode = view.details_mode == "actions";
+    let is_edit_mode = view.details_mode == "edit";
+
+    if is_edit_mode {
+        let draft = if !view.editing_draft.is_empty() {
+            view.editing_draft.clone()
+        } else {
+            content.clone()
+        };
+        return Some(rsx! {
+            div {
+                class: "MessageDetailsCardV2_root",
+                "data-component": "dialog",
+                "data-part": "details-card",
+                "data-state": "edit",
+                role: "dialog",
+                "aria-label": "Edit message",
+                style: "position:absolute;left:16px;right:16px;top:12px;z-index:35;box-sizing:border-box;display:flex;flex-direction:column;gap:10px;max-height:85%;padding:14px;border:1px solid rgba(243,238,232,0.14);border-radius:16px;background:rgba(21,19,17,0.96);color:#f3eee8;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.5);",
+                div {
+                    class: "MessageDetailsCardV2_editor",
+                    "data-part": "details-editor",
+                    style: "display:flex;flex-direction:column;gap:10px;",
+                    // Header: Identity & Back/Cancel button
+                    div {
+                        class: "MessageDetailsCardV2_actionHeader",
+                        "data-part": "details-header",
+                        style: "display:flex;align-items:center;justify-content:space-between;gap:8px;",
+                        div {
+                            style: "display:flex;align-items:center;gap:8px;flex:1;min-width:0;",
+                            span {
+                                style: "width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:12px;background:rgba(243,238,232,0.1);color:#c5bbb2;",
+                                {crate::product_shell::icon("PencilSimple", 14)}
+                            }
+                            strong {
+                                style: "font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;",
+                                "Edit message"
+                            }
+                        }
+                        button {
+                            class: "MessageBubble_actionButton",
+                            r#type: "button",
+                            "data-action": "details-mode-details",
+                            "data-message-id": "{owner}",
+                            "aria-label": "Cancel edit",
+                            style: "width:28px;height:28px;border-radius:14px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;cursor:pointer;",
+                            {crate::product_shell::icon("X", 14)}
+                        }
+                    }
+                    // Editor input area
+                    div {
+                        class: "MessageDetailsCardV2_textareaWrap",
+                        "data-part": "details-editor-input",
+                        style: "min-height:100px;max-height:220px;overflow-y:auto;padding:10px 12px;border-radius:10px;background:rgba(36,33,30,0.62);border:1px solid rgba(243,238,232,0.14);font-size:13px;line-height:1.45;color:#f3eee8;white-space:pre-wrap;overflow-wrap:anywhere;",
+                        "{draft}"
+                    }
+                    // Editor action buttons (Cancel / Save)
+                    div {
+                        class: "MessageDetailsCardV2_editorActions",
+                        "data-part": "details-editor-actions",
+                        style: "display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:4px;",
+                        button {
+                            class: "st-button",
+                            r#type: "button",
+                            "data-component": "button",
+                            "data-variant": "ghost",
+                            "data-action": "details-mode-details",
+                            "data-message-id": "{owner}",
+                            "aria-label": "Cancel",
+                            style: "display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:8px;border:1px solid rgba(243,238,232,0.1);background:transparent;color:#c5bbb2;font-size:12px;cursor:pointer;",
+                            span { "data-part": "label", "Cancel" }
+                        }
+                        button {
+                            class: "st-button",
+                            r#type: "button",
+                            "data-component": "button",
+                            "data-variant": "primary",
+                            "data-action": "details-save-edit",
+                            "data-message-id": "{owner}",
+                            "aria-label": "Save message",
+                            style: "display:flex;align-items:center;gap:6px;padding:6px 16px;border-radius:8px;border:none;background:#e38a62;color:#2a130b;font-size:12px;font-weight:600;cursor:pointer;",
+                            {crate::product_shell::icon("Check", 14)}
+                            span { "data-part": "label", "Save" }
+                        }
+                    }
+                }
+            }
+        });
+    }
 
     if is_actions_mode {
         return Some(rsx! {

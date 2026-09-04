@@ -379,9 +379,20 @@ title="Message details") открывает модальную карточку 
   - Секция основных действий (`details-core-actions`) со списком действий с подписями: `copy`,
     `context`, `edit`, `history`, `regenerate`, `rollback`, `checkpoint`, `branch`, `prompt`, `steps`.
   - Возврат по стрелке `details-mode-details` возвращает карточку в режим просмотра метаданных `details`.
+- **Edit mode (`details_mode: "edit"`)**:
+  - Переход по кнопке `edit` (`data-action="edit"` или `data-action="details-mode-edit"`).
+  - Редактор сообщения (`data-part="details-editor"`): заголовок «Edit message», иконка `PencilSimple`,
+    кнопка отмены `details-mode-details` (`X`).
+  - Область ввода (`data-part="details-editor-input"`), отображающая `message_edit_draft` (с поддержкой
+    ввода в десктопном хосте через `TextFocus::MessageEdit`).
+  - Панель кнопок (`details-editor-actions`): Cancel (`details-mode-details`) и Save (`details-save-edit`,
+    иконка `Check`, «Save»).
+  - Сохранение отправляет `chats.messages.update` по Product Wire, обновляет текст сообщения в сессии,
+    сбрасывает черновик и закрывает карточку деталей.
 
 Интеграционные тесты: `message_details_card_open_inspect_and_close`,
-`message_details_card_actions_mode_navigation_and_execution` в
+`message_details_card_actions_mode_navigation_and_execution`,
+`message_details_card_edit_mode_navigation_and_saving` в
 `crates/presentation-chat/tests/compositor_host.rs`.
 
 ## Исключение из контекста (toggleMessageContext)

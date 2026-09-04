@@ -631,7 +631,13 @@ pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_presentF
                                         "[jni] copy skipped reason=clipboard_bridge_pending row={row_id}"
                                     );
                                 }
-                                MessageActionKind::Edit => session.start_message_edit(&row_id),
+                                MessageActionKind::Edit => {
+                                    if session.view().details_message_id.as_deref() == Some(&row_id) {
+                                        session.set_message_details_mode("edit");
+                                    } else {
+                                        session.start_message_edit(&row_id);
+                                    }
+                                }
                                 MessageActionKind::EditSave => session.submit_message_edit(),
                                 MessageActionKind::EditCancel => session.cancel_message_edit(),
                                 MessageActionKind::History => session.open_message_history(&row_id),
@@ -665,6 +671,12 @@ pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_presentF
                                 }
                                 MessageActionKind::DetailsModeDetails => {
                                     session.set_message_details_mode("details")
+                                }
+                                MessageActionKind::DetailsModeEdit => {
+                                    session.set_message_details_mode("edit")
+                                }
+                                MessageActionKind::DetailsSaveEdit => {
+                                    session.submit_message_details_edit()
                                 }
                             }
                         }
