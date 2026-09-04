@@ -258,7 +258,8 @@ pub fn blueprint_chrome(view: &ProductChatView) -> Option<ChromeElements> {
         || view.details_message_id.is_some()
         || view.snapshots_menu_open
         || view.variant_picker_for.is_some()
-        || view.header_search_open;
+        || view.header_search_open
+        || view.parent_chat_id.is_some();
     if overlay || nested || interactive {
         if current_source() != ChatBlueprintSource::Disabled {
             let reason = if interactive {

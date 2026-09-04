@@ -139,6 +139,8 @@ pub enum QuickIntent {
     ScrollLatest,
     /// Chat-header message search (React `ChatHeader` magnifying-glass).
     HeaderSearch,
+    /// Back to parent chat (React `ChatHeader` `backToParentChatId`).
+    BackToParentChat,
 }
 
 /// Per-row message operations shared by both hosts. The kind names the
@@ -264,6 +266,7 @@ impl HitRects {
             ("composer-reset", _) => TapIntent::Quick(QuickIntent::ComposerReset),
             ("scroll-latest", _) => TapIntent::Quick(QuickIntent::ScrollLatest),
             ("header-search", _) => TapIntent::Quick(QuickIntent::HeaderSearch),
+            ("back-to-parent", _) => TapIntent::Quick(QuickIntent::BackToParentChat),
             // Declarative custom intents route by their authored name before
             // the builtin kind table — they never masquerade as row actions.
             (action, _) if action.starts_with("custom.") => TapIntent::Custom {

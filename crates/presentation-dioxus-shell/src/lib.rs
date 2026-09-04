@@ -1238,6 +1238,19 @@ pub fn product_chat_app() -> Element {
                                 style: "flex:none;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:none;border-radius:20px;background:transparent;color:#c5bbb2;",
                                 {crate::product_shell::icon("GitBranch", 17)}
                             }
+                            if let Some(ref parent_id) = view.parent_chat_id {
+                                button {
+                                    class: "ChatWorkspace_headerSearch",
+                                    r#type: "button",
+                                    "data-component": "back-to-parent",
+                                    "data-action": "back-to-parent",
+                                    "data-parent-chat-id": "{parent_id}",
+                                    "aria-label": "Back to parent chat",
+                                    title: "Back to parent chat",
+                                    style: "flex:none;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:none;border-radius:20px;background:transparent;color:#c5bbb2;",
+                                    {crate::product_shell::icon("ArrowLeft", 17)}
+                                }
+                            }
                             if nested {
                                 div {
                                     class: "neoui-glass",

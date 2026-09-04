@@ -231,6 +231,7 @@ fn markdown_minimal_probe() {
         variant_picker_empty: false,
         details_message_id: None,
         details_mode: "details".to_string(),
+        parent_chat_id: None,
     });
     let layout =
         inspect_product_layout(product_chat_app, 1100, 760, 1.0, Default::default()).expect("l");
@@ -5989,6 +5990,88 @@ fn character_card_viewer_mode_toggle_and_rendering() {
     assert_eq!(session.shell_view().tab, "edit");
     assert_eq!(session.shell_view().editor_mode, "view");
 }
+
+#[test]
+fn chat_header_back_to_parent_button_navigates_to_parent_chat() {
+    use neotavern_presentation_chat::{hit_rects::QuickIntent, ShellAction};
+    use neotavern_presentation_dioxus_shell::product_shell_app;
+    use neotavern_presentation_m0_d2::inspect_slot_skeleton;
+
+    let (mut session, _) = start_flagged_session(
+        Some("1"),
+        FakeWire::with_message_count(6),
+        Some(neotavern_presentation_chat::DEMO_CHAT_ID),
+        None,
+    )
+    .expect("route");
+    session.set_surface_size(1100, 760, 1.0);
+    let parent_id = session.chat_id().expect("parent chat id").to_string();
+    assert_eq!(session.kernel_message_count(), 6);
+    assert_eq!(session.view().parent_chat_id, None);
+
+    // Initial root chat has no parent: back-to-parent button must be absent.
+    neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
+    let initial_skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
+        .expect("initial skeleton");
+    assert!(
+        !initial_skeleton.has_identity("back-to-parent"),
+        "initial chat without parent must not render back-to-parent button"
+    );
+
+    // Create a checkpoint snapshot of the chat.
+    let visible = session.view().visible;
+    let checkpoint_target = visible[2].id.clone();
+    session.create_message_snapshot(&checkpoint_target, true);
+
+    // Open the snapshots menu to discover the created child chat.
+    session.toggle_snapshots_menu();
+    let view = session.view();
+    assert_eq!(view.snapshot_items.len(), 1);
+    let child_id = view.snapshot_items[0].id.clone();
+
+    // Navigate to the child chat.
+    session.apply_shell_action(ShellAction::OpenSnapshot(child_id.clone()));
+    assert_eq!(session.chat_id().as_deref(), Some(child_id.as_str()));
+    assert_eq!(session.kernel_message_count(), 3);
+    assert_eq!(session.view().parent_chat_id.as_deref(), Some(parent_id.as_str()));
+
+    // Child chat has a parent: verify the back-to-parent button is rendered and has action/component hooks.
+    neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
+    let child_skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
+        .expect("child skeleton");
+    assert!(
+        child_skeleton.has_identity("back-to-parent"),
+        "child chat must render back-to-parent button in header"
+    );
+
+    // Verify HitRects recognizes the action as QuickIntent::BackToParentChat.
+    let rects = neotavern_presentation_chat::hit_rects::HitRects::from_skeleton(&child_skeleton);
+    let back_rect = rects
+        .rects
+        .iter()
+        .find(|r| r.action.as_deref() == Some("back-to-parent"))
+        .expect("back-to-parent hit rect");
+    assert_eq!(
+        rects.resolve_tap(back_rect.x + back_rect.w / 2.0, back_rect.y + back_rect.h / 2.0),
+        neotavern_presentation_chat::hit_rects::TapIntent::Quick(QuickIntent::BackToParentChat)
+    );
+
+    // Tap back-to-parent: navigates back to the parent chat.
+    session.open_parent_chat();
+    assert_eq!(session.chat_id().as_deref(), Some(parent_id.as_str()));
+    assert_eq!(session.kernel_message_count(), 6);
+    assert_eq!(session.view().parent_chat_id, None);
+
+    // Returned to parent: back-to-parent button disappears.
+    neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
+    let parent_restored_skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
+        .expect("parent restored skeleton");
+    assert!(
+        !parent_restored_skeleton.has_identity("back-to-parent"),
+        "back-to-parent button disappears once restored to parent chat"
+    );
+}
+
 
 
 

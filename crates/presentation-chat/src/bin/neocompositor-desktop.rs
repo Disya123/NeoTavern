@@ -173,6 +173,7 @@ enum QuickAction {
     ComposerContext,
     ScrollLatest,
     HeaderSearch,
+    BackToParentChat,
 }
 
 /// A native-control tap captured at `Down`; released at `Up` if the pointer
@@ -514,6 +515,7 @@ impl App {
                     QuickIntent::ComposerContext => QuickAction::ComposerContext,
                     QuickIntent::ScrollLatest => QuickAction::ScrollLatest,
                     QuickIntent::HeaderSearch => QuickAction::HeaderSearch,
+                    QuickIntent::BackToParentChat => QuickAction::BackToParentChat,
                 };
                 self.pending_quick = Some((quick, css_x, css_y));
             }
@@ -821,6 +823,13 @@ impl App {
                         } else {
                             TextFocus::None
                         };
+                        self.dirty = true;
+                        self.window.as_ref().map(|w| w.request_redraw());
+                    }
+                    QuickAction::BackToParentChat => {
+                        self.pending_ui = None;
+                        eprintln!("[neocompositor-desktop] back to parent chat tapped");
+                        self.session.open_parent_chat();
                         self.dirty = true;
                         self.window.as_ref().map(|w| w.request_redraw());
                     }

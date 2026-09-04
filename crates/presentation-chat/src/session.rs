@@ -1299,6 +1299,11 @@ impl<W: ProductWire> ChatSession<W> {
             // honest empty copy.
             variant_picker_empty: self.state.variant_picker_for.is_some()
                 && self.state.variant_picker_variants.is_empty(),
+            parent_chat_id: self
+                .state
+                .chat
+                .as_ref()
+                .and_then(|chat| chat.parent_chat_id.clone()),
         }
     }
 
@@ -2061,6 +2066,14 @@ impl<W: ProductWire> ChatSession<W> {
                 self.bump_scene();
             }
             Err(err) => self.record_error(err),
+        }
+    }
+
+    /// Jump back to the parent chat of this branch/checkpoint (React
+    /// `ChatHeader` `backToParentChatId` -> `data-component="back-to-parent"`).
+    pub fn open_parent_chat(&mut self) {
+        if let Some(parent_id) = self.state.chat.as_ref().and_then(|c| c.parent_chat_id.clone()) {
+            self.open_chat(&parent_id);
         }
     }
 
@@ -3429,6 +3442,7 @@ impl<W: ProductWire> ChatSession<W> {
             ShellAction::SelectPersona(id) => self.select_persona(&id),
             ShellAction::SelectLorebook(id) => self.select_lorebook(&id),
             ShellAction::SelectChat(id) => self.open_chat(&id),
+            ShellAction::BackToParentChat => self.open_parent_chat(),
             ShellAction::CreateChat => self.create_chat(),
             ShellAction::OpenCreate => self.open_create_dialog(),
             ShellAction::CloseCreate => self.close_create_dialog(),

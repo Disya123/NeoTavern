@@ -491,6 +491,20 @@ state «No gallery images». «Add image» (`data-part="gallery-add"`) оста�
 Пока оверлей открыт, blueprint-chrome честно падает в legacy RSX. Тест
 `header_search_counts_matches_without_filtering_rows`.
 
+## Возврат в родительский чат (ChatHeader back-to-parent)
+
+Когда активный чат является дочерней веткой или чекпоинтом (`parent_chat_id != None`),
+в шапке чата рядом с кнопками поиска и меню снапшотов отображается кнопка
+`data-component="back-to-parent"` с иконкой `ArrowLeft` (17px) и
+`aria-label="Back to parent chat"` (паритет с React `ChatHeader.tsx:132-143`,
+`ChatPage.tsx:759` `backToParentChatId={chat.data?.parentChatId ?? null}`).
+Тап по кнопке классифицируется как `QuickIntent::BackToParentChat` через
+`HitRects::resolve_tap` и выполняет `ChatSession::open_parent_chat()`
+(`ShellAction::BackToParentChat`), открывая родительский чат в рабочем пространстве.
+После перехода в родительский чат (`parent_chat_id == None`) кнопка автоматически
+исчезает из разметки и хит-теста. Тест
+`chat_header_back_to_parent_button_navigates_to_parent_chat`.
+
 ## Slash-команды (честный not-found)
 
 React `ChatPage.send` не отправляет текст, начинающийся с `/`, в generation:

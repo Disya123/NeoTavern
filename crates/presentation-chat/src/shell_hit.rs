@@ -60,6 +60,7 @@ pub enum ShellAction {
     SelectPersona(String),
     SelectLorebook(String),
     SelectChat(String),
+    BackToParentChat,
     CreateChat,
     OpenCreate,
     CloseCreate,

@@ -135,6 +135,9 @@ pub struct ProductChatView {
     pub details_message_id: Option<String>,
     /// Active mode of the message details card: `"details"` or `"actions"`.
     pub details_mode: String,
+    /// Parent chat id when this chat is a branch or checkpoint (React `ChatHeader`
+    /// `backToParentChatId` -> `data-component="back-to-parent"` button).
+    pub parent_chat_id: Option<String>,
 }
 
 /// One row of the snapshots menu (React `ChatSnapshotsMenu` item): the child
@@ -203,6 +206,7 @@ impl Default for ProductChatView {
             variant_picker_empty: false,
             details_message_id: None,
             details_mode: "details".to_string(),
+            parent_chat_id: None,
         }
     }
 }
@@ -475,6 +479,7 @@ pub fn product_chat_from_fixture(fixture: &CanonicalFixture, start: usize) -> Pr
         variant_picker_empty: false,
         details_message_id: None,
         details_mode: "details".to_string(),
+        parent_chat_id: None,
     }
 }
 

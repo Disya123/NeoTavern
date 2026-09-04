@@ -3,6 +3,23 @@
 ## Unreleased
 ### Added
 
+- **Нативный шелл: кнопка возврата в родительский чат (Back to parent chat) в ChatHeader.**
+  В шапке чата (`ChatHeader`, `presentation-dioxus-shell`, `presentation-chat`,
+  `neocompositor-desktop`, `android_jni`) реализована навигация к родительскому чату
+  (`data-component="back-to-parent"`, `data-action="back-to-parent"`), соответствующая
+  поведению React (`ChatHeader.tsx:132-143`, `ChatPage.tsx:759`):
+  - Поле `parent_chat_id: Option<String>` в `ProductChatView`, гидратируемое из
+    `ChatDto.parent_chat_id` активного чата.
+  - Условный рендеринг кнопки с иконкой `ArrowLeft` (17px) и атрибутами
+    `data-component="back-to-parent"`, `data-action="back-to-parent"`,
+    `data-parent-chat-id="{parent_id}"`, `aria-label="Back to parent chat"`.
+  - Распознавание действия в таблице решений `HitRects::resolve_tap` как
+    `TapIntent::Quick(QuickIntent::BackToParentChat)`.
+  - Действие `ShellAction::BackToParentChat` и метод `ChatSession::open_parent_chat()`,
+    вызывающий `open_chat` на родительский чат и восстанавливающий родительский контекст.
+  - Исчезновение кнопки после возврата в родительский чат (где `parent_chat_id == None`).
+  - Интеграционный тест: `chat_header_back_to_parent_button_navigates_to_parent_chat`.
+
 - **Нативный шелл: режим просмотра карточки персонажа (Character Card Viewer mode) в CharacterManagementPanel.**
   В панели управления персонажем (`CharacterManagementPanel`, `presentation-dioxus-shell`,
   `presentation-chat`, `neocompositor-desktop`) реализован режим просмотра карточки

@@ -610,6 +610,9 @@ pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_presentF
                             crate::hit_rects::QuickIntent::HeaderSearch => {
                                 session.toggle_header_search();
                             }
+                            crate::hit_rects::QuickIntent::BackToParentChat => {
+                                session.open_parent_chat();
+                            }
                         },
                         crate::hit_rects::TapIntent::MessageAction { kind, row_id } => {
                             use crate::hit_rects::MessageActionKind;
