@@ -447,6 +447,10 @@ pub struct ProductShellView {
     /// Theme the delete-confirm dialog asks about.
     pub theme_delete_open: bool,
     pub theme_delete_target_id: Option<String>,
+    /// Active theme resolved design tokens (Theme SDK Level 1).
+    pub active_theme_tokens: Option<neotavern_presentation_design_system::ThemeTokens>,
+    /// Active theme generated stylesheet for Blitz injection.
+    pub active_theme_css: Option<String>,
     /// Secret-store status (`secrets.status`; React `SecretsPanel`); `None`
     /// = React loading state. The DTO is value-free by contract.
     pub secrets_status: Option<ResultSecretsStatus>,
@@ -662,6 +666,8 @@ impl Default for ProductShellView {
             themes: Vec::new(),
             theme_delete_open: false,
             theme_delete_target_id: None,
+            active_theme_tokens: None,
+            active_theme_css: None,
             secrets_status: None,
             tools: Vec::new(),
             selected_provider_id: None,
@@ -2498,16 +2504,20 @@ pub fn product_shell_app() -> Element {
     } else {
         view.panel_width.clamp(260.0, 720.0)
     };
+    let default_dark = neotavern_presentation_design_system::ThemeTokens::default_dark();
+    let active_tokens = view.active_theme_tokens.as_ref().unwrap_or(&default_dark);
+    let rail_bg = active_tokens.rail_background(0.82);
+    let panel_bg = active_tokens.panel_background(0.88);
     let rail_pad = format!(
-        "flex:none;width:60px;height:100%;z-index:2;box-sizing:border-box;padding-bottom:{pad_bottom}px;padding-left:calc(4px + {pad_start}px);padding-right:calc(4px + {pad_end}px);background:rgba(21,19,17,0.82);"
+        "flex:none;width:60px;height:100%;z-index:2;box-sizing:border-box;padding-bottom:{pad_bottom}px;padding-left:calc(4px + {pad_start}px);padding-right:calc(4px + {pad_end}px);background:{rail_bg};"
     );
     let panel_pad = if is_compact {
         format!(
-            "display:flex;flex-direction:column;flex:1 1 calc(100% - 60px);min-width:calc(100% - 60px);width:calc(100% - 60px);max-width:calc(100% - 60px);height:100%;margin:0;padding-top:{pad_top}px;padding-bottom:0;box-sizing:border-box;overflow:hidden;background:rgba(36,33,30,0.88);position:relative;"
+            "display:flex;flex-direction:column;flex:1 1 calc(100% - 60px);min-width:calc(100% - 60px);width:calc(100% - 60px);max-width:calc(100% - 60px);height:100%;margin:0;padding-top:{pad_top}px;padding-bottom:0;box-sizing:border-box;overflow:hidden;background:{panel_bg};position:relative;"
         )
     } else {
         format!(
-            "display:flex;flex-direction:column;flex:0 0 {panel_w}px;min-width:260px;width:{panel_w}px;max-width:720px;height:100%;margin:0;padding-bottom:0;overflow:hidden;background:rgba(36,33,30,0.88);position:relative;"
+            "display:flex;flex-direction:column;flex:0 0 {panel_w}px;min-width:260px;width:{panel_w}px;max-width:720px;height:100%;margin:0;padding-bottom:0;overflow:hidden;background:{panel_bg};position:relative;"
         )
     };
     let row_dir = if rtl { "row-reverse" } else { "row" };
@@ -2807,6 +2817,9 @@ pub fn product_shell_app() -> Element {
 
     rsx! {
         style { "{product_css}" }
+        if let Some(active_css) = &view.active_theme_css {
+            style { "{active_css}" }
+        }
         div {
             class: "{shell_class}",
             style: "{shell_css}",

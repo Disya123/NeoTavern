@@ -26,6 +26,7 @@ desktop-host = ["gpu", "dep:winit", "dep:arboard"]
 [dependencies]
 contracts-generated = { path = "../contracts-generated" }
 neotavern-presentation-dioxus-shell = { path = "../presentation-dioxus-shell" }
+neotavern-presentation-design-system = { path = "../presentation-design-system" }
 neotavern-chat-viewport = { path = "../chat-viewport" }
 neotavern-neocompositor = { path = "../neocompositor" }
 neotavern-presentation-session = { path = "../presentation-session" }

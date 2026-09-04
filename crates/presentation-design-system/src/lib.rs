@@ -11,6 +11,12 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::SystemTime;
 
+pub mod theme_engine;
+pub use theme_engine::{
+    builtin_theme_tokens, parse_theme_tokens_from_manifest, render_theme_stylesheet,
+    resolve_theme_tokens, ThemeTokens,
+};
+
 include!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/generated/phosphor.rs"

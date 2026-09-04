@@ -361,6 +361,10 @@ pub struct ChatRouteState {
     /// Theme the delete-confirm dialog asks about.
     pub theme_delete_open: bool,
     pub theme_delete_target_id: Option<String>,
+    /// Active theme resolved design tokens (Theme SDK Level 1).
+    pub active_theme_tokens: Option<neotavern_presentation_design_system::ThemeTokens>,
+    /// Active theme generated stylesheet for Blitz injection.
+    pub active_theme_css: Option<String>,
     /// Secret-store status (`secrets.status`; React `SecretsPanel`). Values
     /// never travel this DTO — it is value-free by contract.
     pub secrets_status: Option<ResultSecretsStatus>,
@@ -1580,6 +1584,8 @@ impl<W: ProductWire> ChatSession<W> {
                 .collect(),
             theme_delete_open: self.state.theme_delete_open,
             theme_delete_target_id: self.state.theme_delete_target_id.clone(),
+            active_theme_tokens: self.state.active_theme_tokens.clone(),
+            active_theme_css: self.state.active_theme_css.clone(),
             secrets_status: self.state.secrets_status.clone(),
             selected_provider_id: self.state.active_provider_id.clone(),
             provider_configs: self
@@ -6024,7 +6030,7 @@ impl<W: ProductWire> ChatSession<W> {
         else {
             return;
         };
-        let (op, enabled, toast) = if plugin.enabled {
+        let (_op, enabled, toast) = if plugin.enabled {
             (
                 "plugins.disable",
                 false,
@@ -6443,10 +6449,34 @@ impl<W: ProductWire> ChatSession<W> {
             .sum();
     }
 
+    /// Synchronize the active theme's tokens and generated stylesheet for
+    /// runtime injection into Blitz and NeoCompositor (Live Theme Engine).
+    pub fn apply_active_theme_styling(&mut self) {
+        if let Some(active) = self.state.themes.iter().find(|item| item.active).cloned() {
+            let tokens = neotavern_presentation_design_system::resolve_theme_tokens(
+                &active.id,
+                active.manifest.as_ref(),
+            );
+            let css = neotavern_presentation_design_system::render_theme_stylesheet(
+                &active.id,
+                &tokens,
+                None,
+            );
+            self.state.active_theme_tokens = Some(tokens);
+            self.state.active_theme_css = Some(css);
+        } else {
+            self.state.active_theme_tokens = None;
+            self.state.active_theme_css = None;
+        }
+    }
+
     /// Loads the theme catalog (`themes.list`; React `useThemes`).
     pub fn load_themes(&mut self) {
         match self.call_decode("themes.list", &RequestEmpty {}, decode_result_themes_list) {
-            Ok(result) => self.state.themes = result.items,
+            Ok(result) => {
+                self.state.themes = result.items;
+                self.apply_active_theme_styling();
+            }
             Err(err) => self.record_error(err),
         }
         self.bump_scene();
@@ -6471,6 +6501,7 @@ impl<W: ProductWire> ChatSession<W> {
                 for row in self.state.themes.iter_mut() {
                     row.active = row.id == updated.id;
                 }
+                self.apply_active_theme_styling();
                 self.state.status_message = Some(format!("Applied {name}."));
             }
             Err(err) => self.record_error(err),
@@ -6486,6 +6517,7 @@ impl<W: ProductWire> ChatSession<W> {
                 for row in self.state.themes.iter_mut() {
                     row.active = false;
                 }
+                self.apply_active_theme_styling();
                 self.state.status_message = Some("Restored the built-in theme.".into());
             }
             Err(err) => self.record_error(err),

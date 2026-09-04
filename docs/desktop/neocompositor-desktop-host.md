@@ -570,27 +570,49 @@ Originals stay on this device.», empty state «No backgrounds yet», и **вк�
 недостижимы. Тест
 `backgrounds_panel_is_honest_empty_and_upload_reports_capability_unavailable`.
 
-## Темы (Settings → ThemesTab)
+## Темы (Settings → ThemesTab) и Live Theme Engine
 
 Каталог тем живёт на Product Wire (`themes.list` / `activate` / `deactivate` /
 `uninstall`; React `ThemesPage` + Settings `ThemesTab`). Вкладка Settings →
-Themes теперь реальная: открытие вкладки грузит `themes.list`; строки тем
+Themes: открытие вкладки грузит `themes.list`; строки тем
 (64 px, `data-part="theme-row"`, `data-state=active|inactive`) показывают
 name / id · vversion · trustState и несут Apply (96 px, `themes.activate`,
 ответ = ThemeDto с `active: true`) и delete (диалог 300×200,
 `themes.uninstall`, тост «Removed ….»); активная тема показывает бейдж Active и
 инертна; пока тема активна, над списком есть «Use built-in theme»
-(`themes.deactivate`, «Restored the built-in theme.»). Активный id прокидывается
-на корень шелла как `data-theme-id` (React `applyInstalledTheme` ставит
-`data-theme-id` на `<html>`); токены остаются на упакованной dark-теме — в этом
-порте нет механизма подмены `--st-*` переменных. Установка — host-side
-возможность: React kernel-плоскость отклоняет её `UnsupportedError
-('themes.install.host-verify')`, порт повторяет это честной ошибкой
+(`themes.deactivate`, «Restored the built-in theme.»).
+
+### Live Theme Engine (Динамический движок тем в нативном рендере)
+
+В отличие от ранних прототипов с зафиксированными токенами, в нативном рендере
+(`neotavern-presentation-design-system`, `neotavern-presentation-dioxus-shell`,
+`neotavern-presentation-chat`, `neocompositor-desktop`) реализован полнофункциональный
+динамический движок тем **Live Theme Engine**:
+- **Разрешение токенов Theme SDK Level 1**: Структура `ThemeTokens` и парсер
+  `parse_theme_tokens_from_manifest` извлекают дизайн-токены из манифеста темы
+  (`manifest.tokens.dark`: поверхности, границы, акценты, текст, радиусы) с
+  поддержкой встроенных пресетов (`wii-u-dark`, `kde-plasma`, `amoled`, `dracula`).
+- **Генерация скоупированных стилей**: Функция `render_theme_stylesheet` генерирует
+  валидный Blitz CSS с селектором `[data-theme-id="{theme_id}"]`, переопределяющий
+  CSS Custom Properties (`--st-color-surface-app`, `--st-color-accent-primary`,
+  `--st-color-text-primary` и др.), а также стили рейла навигации, боковых панелей,
+  пузырей сообщений, кнопок и полей ввода.
+- **Динамическая инъекция в Dioxus RSX**: Стили активной темы инжектируются через
+  `<style>{active_theme_css}</style>` непосредственно в DOM документа перед отрисовкой
+  в Blitz. Цвета заливки рейла (`rail_bg`) и плавающей панели (`panel_bg`) рассчитываются
+  динамически на основе `active_theme_tokens`.
+- **Мгновенное переключение без перезапуска**: При вызове `themes.activate` или
+  «Use built-in theme» сессия пересчитывает токены и CSS в рантайме без перезапуска
+  процесса и без перекомпиляции.
+- **Интеграционные тесты**: `themes_catalog_activate_deactivate_uninstall_over_product_wire`
+  и `live_theme_engine_dynamic_token_switching_and_reset`.
+
+Установка тем из ZIP — host-side возможность: React kernel-плоскость отклоняет её
+`UnsupportedError ('themes.install.host-verify')`, порт повторяет это честной ошибкой
 `CAPABILITY_UNAVAILABLE` (`ShellAction::InstallTheme`, без выдуманной
 `themes.install`-операции — она есть в реестре, но на этой плоскости не
 достижима). FakeWire: `themes` (wii-u-dark verified-publisher / kde-plasma
 locally-trusted, зеркало `THEME_VALUE`), `THEME_NOT_FOUND` для неизвестных id.
-Тест `themes_catalog_activate_deactivate_uninstall_over_product_wire`.
 
 ## Секреты (Settings → SecretsTab)
 

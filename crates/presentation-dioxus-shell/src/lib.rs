@@ -43,6 +43,10 @@ pub use product_shell::{
     AI_SETTINGS_TITLE, BACKGROUNDS_MANAGER_TITLE, CHARACTER_MANAGER_TITLE, CHATS_MANAGER_TITLE,
     LOREBOOK_MANAGER_TITLE, PERSONA_MANAGER_TITLE, PLUGINS_MANAGER_TITLE, SETTINGS_TITLE,
 };
+pub use neotavern_presentation_design_system::{
+    builtin_theme_tokens, parse_theme_tokens_from_manifest, render_theme_stylesheet,
+    resolve_theme_tokens, ThemeTokens,
+};
 pub use scene_chat::{
     chat_wallpaper_mode, set_chat_blueprint_source, set_chat_wallpaper_mode, ChatBlueprintSource,
 };

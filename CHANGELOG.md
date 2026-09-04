@@ -3,6 +3,28 @@
 ## Unreleased
 ### Added
 
+- **Нативный рендер: динамический движок тем (Live Theme Engine) в презентационном контуре.**
+  В презентационных пакетах нативного шелла (`presentation-design-system`,
+  `presentation-dioxus-shell`, `presentation-chat`, `neocompositor-desktop`)
+  реализована полнофункциональная динамическая подмена токенов и стилей тем
+  (Theme SDK Level 1) без перезапуска приложения и без перекомпиляции Rust:
+  - Модуль `theme_engine` (`crates/presentation-design-system/src/theme_engine.rs`):
+    структура `ThemeTokens`, парсинг hex-цветов, встроенные палитры (`wii-u-dark`,
+    `kde-plasma`, `amoled`, `dracula`), извлечение токенов из манифеста темы
+    (`manifest.tokens.dark`) и генерация скоупированных стилей для Blitz CSS
+    (`render_theme_stylesheet`).
+  - Поля `active_theme_tokens` и `active_theme_css` в `ProductShellView`
+    (`presentation-dioxus-shell`), инъекция `<style>{active_theme_css}</style>`
+    в Dioxus RSX и динамический расчёт цветов фона для рейла навигации и плавающей
+    панели.
+  - Интеграция в сессию чата (`presentation-chat`): метод
+    `apply_active_theme_styling()`, вызываемый при загрузке тем (`load_themes`),
+    активации темы (`activate_theme`) и сбросе к встроенной теме (`use_builtin_theme`).
+  - Поддержка токенов в фикстурах `FakeWire` (`wii-u-dark` и `kde-plasma`).
+  - Комплексные интеграционные тесты:
+    `live_theme_engine_dynamic_token_switching_and_reset` (проверка динамической
+    смены стилей и DOM Blitz) и `themes_catalog_activate_deactivate_uninstall_over_product_wire`.
+
 - **Нативный шелл: кнопка возврата в родительский чат (Back to parent chat) в ChatHeader.**
   В шапке чата (`ChatHeader`, `presentation-dioxus-shell`, `presentation-chat`,
   `neocompositor-desktop`, `android_jni`) реализована навигация к родительскому чату

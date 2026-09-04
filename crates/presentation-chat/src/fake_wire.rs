@@ -309,7 +309,7 @@ impl FakeWire {
         // Demo theme catalog (React `ThemesPage`): two installed themes, none
         // active — the built-in interface is the no-row state. `wii-u-dark`
         // mirrors the wire registry fixture (`THEME_VALUE`).
-        let theme = |id_high: u64, id: &str, name: &str, version: &str, trust: &str| ThemesItem {
+        let theme = |id_high: u64, id: &str, name: &str, version: &str, trust: &str, manifest: Option<Value>| ThemesItem {
             id: id.into(),
             name: name.into(),
             version: version.into(),
@@ -319,7 +319,7 @@ impl FakeWire {
             css_asset_id: Some(wire_id(id_high)),
             installed_at: TS.into(),
             updated_at: TS.into(),
-            manifest: None,
+            manifest,
         };
         wire.themes.push(theme(
             0x7101,
@@ -327,6 +327,32 @@ impl FakeWire {
             "Wii U Dark",
             "2.0.1",
             "verified-publisher",
+            Some(serde_json::json!({
+                "id": "wii-u-dark",
+                "name": "Wii U Dark",
+                "version": "2.0.1",
+                "tokens": {
+                    "dark": {
+                        "color-accent": "#00a0e9",
+                        "color-accent-hover": "#33b3ed",
+                        "color-accent-text": "#ffffff",
+                        "color-accent-soft": "#0d354a",
+                        "color-accent-soft-text": "#7fd5f6",
+                        "color-surface-canvas": "#0b1015",
+                        "color-surface-primary": "#121820",
+                        "color-surface-secondary": "#19212c",
+                        "color-surface-tertiary": "#222d3b",
+                        "color-surface-overlay": "#1c2532",
+                        "color-surface-elevated": "#1c2532",
+                        "color-border": "#273545",
+                        "color-border-subtle": "#1a2430",
+                        "color-border-strong": "#3b4f66",
+                        "color-text-primary": "#eef5fb",
+                        "color-text-secondary": "#b8cad8",
+                        "color-text-muted": "#7d93a6"
+                    }
+                }
+            })),
         ));
         wire.themes.push(theme(
             0x7102,
@@ -334,6 +360,32 @@ impl FakeWire {
             "KDE Plasma",
             "1.4.0",
             "locally-trusted",
+            Some(serde_json::json!({
+                "id": "kde-plasma",
+                "name": "KDE Plasma",
+                "version": "1.4.0",
+                "tokens": {
+                    "dark": {
+                        "color-accent": "#3daee9",
+                        "color-accent-hover": "#56bcf2",
+                        "color-accent-text": "#ffffff",
+                        "color-accent-soft": "#1b3b4f",
+                        "color-accent-soft-text": "#9ad6f6",
+                        "color-surface-canvas": "#1b1e20",
+                        "color-surface-primary": "#232629",
+                        "color-surface-secondary": "#2a2e32",
+                        "color-surface-tertiary": "#31363b",
+                        "color-surface-overlay": "#2a2e32",
+                        "color-surface-elevated": "#31363b",
+                        "color-border": "#3a4045",
+                        "color-border-subtle": "#2c3135",
+                        "color-border-strong": "#4f575e",
+                        "color-text-primary": "#fcfcfc",
+                        "color-text-secondary": "#bdc3c7",
+                        "color-text-muted": "#7f8c8d"
+                    }
+                }
+            })),
         ));
         // Demo secret store: the portable encrypted file, matching the wire
         // registry fixture (`SECRETS_STATUS_VALUE`) — two records, format v1.

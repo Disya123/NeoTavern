@@ -3386,6 +3386,14 @@ fn themes_catalog_activate_deactivate_uninstall_over_product_wire() {
     assert_eq!(active.len(), 1);
     assert_eq!(active[0].id, target);
     assert!(
+        shell.active_theme_tokens.is_some(),
+        "active theme tokens resolved"
+    );
+    assert!(
+        shell.active_theme_css.is_some(),
+        "active theme stylesheet generated"
+    );
+    assert!(
         shell
             .status_message
             .as_deref()
@@ -3394,10 +3402,12 @@ fn themes_catalog_activate_deactivate_uninstall_over_product_wire() {
         "activate surfaces a toast"
     );
 
-    // Built-in restore -> themes.deactivate clears the active flag.
+    // Built-in restore -> themes.deactivate clears the active flag and theme styles.
     session.apply_shell_action(ShellAction::UseBuiltInTheme);
     let shell = session.shell_view();
     assert!(shell.themes.iter().all(|item| !item.active));
+    assert!(shell.active_theme_tokens.is_none());
+    assert!(shell.active_theme_css.is_none());
 
     // Delete: confirm dialog -> themes.uninstall removes the row.
     session.apply_shell_action(ShellAction::ActivateTheme(target.clone()));
@@ -3432,6 +3442,74 @@ fn themes_catalog_activate_deactivate_uninstall_over_product_wire() {
         .issued_commands()
         .iter()
         .any(|op| op == "themes.install"));
+}
+
+#[test]
+fn live_theme_engine_dynamic_token_switching_and_reset() {
+    use neotavern_presentation_chat::ShellAction;
+    use neotavern_presentation_dioxus_shell::{install_product_shell, product_shell_app};
+    use neotavern_presentation_m0_d2::produce_product_app_at;
+
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+
+    // 1. Initial state: Built-in dark theme, no active theme tokens or stylesheet overrides.
+    session.apply_shell_action(ShellAction::SetPanel("settings".into()));
+    session.apply_shell_action(ShellAction::SetTab("themes".into()));
+    let shell = session.shell_view();
+    assert!(shell.active_theme_tokens.is_none());
+    assert!(shell.active_theme_css.is_none());
+
+    // 2. Live switch to Wii U Dark -> resolves tokens and injects dynamic scoped styles.
+    session.apply_shell_action(ShellAction::ActivateTheme("wii-u-dark".into()));
+    let shell = session.shell_view();
+    let tokens = shell
+        .active_theme_tokens
+        .as_ref()
+        .expect("wii-u-dark tokens resolved");
+    assert_eq!(tokens.color_accent, "#00a0e9");
+    assert_eq!(tokens.color_surface_canvas, "#0b1015");
+
+    let css = shell
+        .active_theme_css
+        .as_ref()
+        .expect("wii-u-dark stylesheet generated");
+    assert!(css.contains(r#"[data-theme-id="wii-u-dark"]"#));
+    assert!(css.contains("--st-color-accent: #00a0e9;"));
+    assert!(css.contains(r#"[data-theme-id="wii-u-dark"] .Sidebar_rail"#));
+
+    // Verify Dioxus/Blitz DOM renders with the active theme stylesheet.
+    install_product_shell(shell.clone());
+    let produced = produce_product_app_at(product_shell_app, 407, 904, 1.0, session.insets())
+        .expect("produce themed shell");
+    assert!(
+        produced.list.ops.len() > 0,
+        "themed shell renders scene ops"
+    );
+
+    // 3. Live switch to KDE Plasma -> instantly updates palette without restarting.
+    session.apply_shell_action(ShellAction::ActivateTheme("kde-plasma".into()));
+    let shell = session.shell_view();
+    let kde_tokens = shell
+        .active_theme_tokens
+        .as_ref()
+        .expect("kde-plasma tokens resolved");
+    assert_eq!(kde_tokens.color_accent, "#3daee9");
+    assert_eq!(kde_tokens.color_surface_canvas, "#1b1e20");
+
+    let kde_css = shell
+        .active_theme_css
+        .as_ref()
+        .expect("kde-plasma stylesheet generated");
+    assert!(kde_css.contains(r#"[data-theme-id="kde-plasma"]"#));
+    assert!(kde_css.contains("--st-color-accent: #3daee9;"));
+
+    // 4. Live restore built-in theme -> clears tokens and styles back to canonical dark.
+    session.apply_shell_action(ShellAction::UseBuiltInTheme);
+    let shell = session.shell_view();
+    assert!(shell.active_theme_tokens.is_none());
+    assert!(shell.active_theme_css.is_none());
+    assert!(shell.themes.iter().all(|item| !item.active));
 }
 
 #[test]

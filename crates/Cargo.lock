@@ -3763,6 +3763,7 @@ dependencies = [
  "jni 0.21.1",
  "neotavern-chat-viewport",
  "neotavern-neocompositor",
+ "neotavern-presentation-design-system",
  "neotavern-presentation-dioxus-shell",
  "neotavern-presentation-m0",
  "neotavern-presentation-m0-d2",
@@ -3784,6 +3785,8 @@ name = "neotavern-presentation-design-system"
 version = "0.1.0"
 dependencies = [
  "parley",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
