@@ -624,6 +624,206 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
     let run_id = row.run_id.clone();
     let excluded = row.manual_excluded;
 
+    let is_actions_mode = view.details_mode == "actions";
+
+    if is_actions_mode {
+        return Some(rsx! {
+            div {
+                class: "MessageDetailsCardV2_root",
+                "data-component": "dialog",
+                "data-part": "details-card",
+                role: "dialog",
+                "aria-label": "Message actions",
+                style: "position:absolute;left:16px;right:16px;top:12px;z-index:35;box-sizing:border-box;display:flex;flex-direction:column;gap:10px;max-height:85%;padding:14px;border:1px solid rgba(243,238,232,0.14);border-radius:16px;background:rgba(21,19,17,0.96);color:#f3eee8;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.5);",
+                div {
+                    class: "MessageDetailsCardV2_actionMode",
+                    "data-part": "details-action-menu",
+                    style: "display:flex;flex-direction:column;gap:10px;overflow:hidden;",
+                    // Header: Identity & Back/Close button
+                    div {
+                        class: "MessageDetailsCardV2_actionHeader",
+                        "data-part": "details-header",
+                        style: "display:flex;align-items:center;justify-content:space-between;gap:8px;",
+                        div {
+                            style: "display:flex;align-items:center;gap:8px;flex:1;min-width:0;",
+                            span {
+                                style: "width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:12px;background:rgba(243,238,232,0.1);color:#c5bbb2;",
+                                if is_user {
+                                    {crate::product_shell::icon("User", 14)}
+                                } else {
+                                    {crate::product_shell::icon("Robot", 14)}
+                                }
+                            }
+                            strong {
+                                style: "font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;",
+                                "{author}"
+                            }
+                        }
+                        button {
+                            class: "MessageBubble_actionButton",
+                            r#type: "button",
+                            "data-action": "details-mode-details",
+                            "data-message-id": "{owner}",
+                            "aria-label": "Close message actions",
+                            style: "width:28px;height:28px;border-radius:14px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;cursor:pointer;",
+                            {crate::product_shell::icon("X", 14)}
+                        }
+                    }
+                    // Preview
+                    div {
+                        class: "MessageDetailsCardV2_preview",
+                        "data-part": "details-action-preview",
+                        style: "max-height:80px;overflow-y:auto;padding:8px 10px;border-radius:10px;background:rgba(36,33,30,0.3);font-size:12px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere;color:#c5bbb2;",
+                        "{content}"
+                    }
+                    // Action scroll container
+                    div {
+                        class: "MessageDetailsCardV2_actionScroll",
+                        "data-part": "details-actions-scroll",
+                        style: "display:flex;flex-direction:column;gap:10px;overflow-y:auto;max-height:280px;padding-right:4px;",
+                        // Danger zone
+                        section {
+                            class: "MessageDetailsCardV2_actionGroup",
+                            "data-part": "details-danger-zone",
+                            style: "display:flex;flex-direction:column;gap:4px;padding:8px 10px;border-radius:10px;background:rgba(224,108,117,0.08);border:1px solid rgba(224,108,117,0.2);",
+                            h3 {
+                                style: "margin:0 0 4px 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#e06c75;",
+                                "Danger zone"
+                            }
+                            button {
+                                class: "MessageBubble_actionButton",
+                                r#type: "button",
+                                "data-action": "delete",
+                                "data-message-id": "{owner}",
+                                "aria-label": "Delete message and all versions",
+                                style: "display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;border:1px solid rgba(224,108,117,0.3);background:rgba(224,108,117,0.15);color:#f3eee8;font-size:12px;cursor:pointer;",
+                                {crate::product_shell::icon("Trash", 14)}
+                                span { "Delete message and all versions" }
+                            }
+                        }
+                        // Core actions
+                        section {
+                            class: "MessageDetailsCardV2_actionGroup",
+                            "data-part": "details-core-actions",
+                            style: "display:flex;flex-direction:column;gap:4px;",
+                            h3 {
+                                style: "margin:0 0 4px 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#998f87;",
+                                "Message actions"
+                            }
+                            button {
+                                class: "MessageBubble_actionButton",
+                                r#type: "button",
+                                "data-action": "copy",
+                                "data-message-id": "{owner}",
+                                "aria-label": "Copy message",
+                                style: "display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;font-size:12px;cursor:pointer;",
+                                {crate::product_shell::icon("Copy", 14)}
+                                span { "Copy message" }
+                            }
+                            button {
+                                class: "MessageBubble_actionButton",
+                                r#type: "button",
+                                "data-action": "context",
+                                "data-message-id": "{owner}",
+                                "aria-label": if excluded { "Include in prompt context" } else { "Exclude from prompt context" },
+                                style: "display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;font-size:12px;cursor:pointer;",
+                                if excluded {
+                                    {crate::product_shell::icon("Eye", 14)}
+                                    span { "Include in prompt context" }
+                                } else {
+                                    {crate::product_shell::icon("EyeSlash", 14)}
+                                    span { "Exclude from prompt context" }
+                                }
+                            }
+                            button {
+                                class: "MessageBubble_actionButton",
+                                r#type: "button",
+                                "data-action": "edit",
+                                "data-message-id": "{owner}",
+                                "aria-label": "Edit message",
+                                style: "display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;font-size:12px;cursor:pointer;",
+                                {crate::product_shell::icon("PencilSimple", 14)}
+                                span { "Edit message" }
+                            }
+                            button {
+                                class: "MessageBubble_actionButton",
+                                r#type: "button",
+                                "data-action": "history",
+                                "data-message-id": "{owner}",
+                                "aria-label": "Revision history",
+                                style: "display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;font-size:12px;cursor:pointer;",
+                                {crate::product_shell::icon("ClockCounterClockwise", 14)}
+                                span { "Revision history" }
+                            }
+                            button {
+                                class: "MessageBubble_actionButton",
+                                r#type: "button",
+                                "data-action": "regenerate",
+                                "data-message-id": "{owner}",
+                                "aria-label": "Regenerate",
+                                style: "display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;font-size:12px;cursor:pointer;",
+                                {crate::product_shell::icon("ArrowClockwise", 14)}
+                                span { "Regenerate" }
+                            }
+                            button {
+                                class: "MessageBubble_actionButton",
+                                r#type: "button",
+                                "data-action": "rollback",
+                                "data-message-id": "{owner}",
+                                "aria-label": "Rollback to here",
+                                style: "display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;font-size:12px;cursor:pointer;",
+                                {crate::product_shell::icon("ArrowUUpLeft", 14)}
+                                span { "Rollback to here" }
+                            }
+                            button {
+                                class: "MessageBubble_actionButton",
+                                r#type: "button",
+                                "data-action": "checkpoint",
+                                "data-message-id": "{owner}",
+                                "aria-label": "Set checkpoint",
+                                style: "display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;font-size:12px;cursor:pointer;",
+                                {crate::product_shell::icon("Flag", 14)}
+                                span { "Set checkpoint" }
+                            }
+                            button {
+                                class: "MessageBubble_actionButton",
+                                r#type: "button",
+                                "data-action": "branch",
+                                "data-message-id": "{owner}",
+                                "aria-label": "Branch from here",
+                                style: "display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;font-size:12px;cursor:pointer;",
+                                {crate::product_shell::icon("GitBranch", 14)}
+                                span { "Branch from here" }
+                            }
+                            if run_id.is_some() {
+                                button {
+                                    class: "MessageBubble_actionButton",
+                                    r#type: "button",
+                                    "data-action": "prompt",
+                                    "data-message-id": "{owner}",
+                                    "aria-label": "View prompt plan",
+                                    style: "display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;font-size:12px;cursor:pointer;",
+                                    {crate::product_shell::icon("BookOpenText", 14)}
+                                    span { "View prompt plan" }
+                                }
+                                button {
+                                    class: "MessageBubble_actionButton",
+                                    r#type: "button",
+                                    "data-action": "steps",
+                                    "data-message-id": "{owner}",
+                                    "aria-label": "View run steps",
+                                    style: "display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;font-size:12px;cursor:pointer;",
+                                    {crate::product_shell::icon("List", 14)}
+                                    span { "View run steps" }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
     Some(rsx! {
         div {
             class: "MessageDetailsCardV2_root",
@@ -740,6 +940,16 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
                         {crate::product_shell::icon("EyeSlash", 13)}
                         span { "Exclude" }
                     }
+                }
+                button {
+                    class: "MessageBubble_actionButton",
+                    r#type: "button",
+                    "data-action": "actions",
+                    "data-message-id": "{owner}",
+                    "aria-label": "More message actions",
+                    title: "More message actions",
+                    style: "display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:13px;border:1px solid rgba(243,238,232,0.1);background:rgba(36,33,30,0.62);color:#c5bbb2;cursor:pointer;",
+                    {crate::product_shell::icon("Plus", 13)}
                 }
                 if run_id.is_some() {
                     button {

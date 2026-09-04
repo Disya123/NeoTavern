@@ -133,6 +133,8 @@ pub struct ProductChatView {
     pub variant_picker_empty: bool,
     /// Message whose details card is open (React `MessageDetailsCardV2`).
     pub details_message_id: Option<String>,
+    /// Active mode of the message details card: `"details"` or `"actions"`.
+    pub details_mode: String,
 }
 
 /// One row of the snapshots menu (React `ChatSnapshotsMenu` item): the child
@@ -200,6 +202,7 @@ impl Default for ProductChatView {
             variant_picker_rows: Vec::new(),
             variant_picker_empty: false,
             details_message_id: None,
+            details_mode: "details".to_string(),
         }
     }
 }
@@ -471,6 +474,7 @@ pub fn product_chat_from_fixture(fixture: &CanonicalFixture, start: usize) -> Pr
         variant_picker_rows: Vec::new(),
         variant_picker_empty: false,
         details_message_id: None,
+        details_mode: "details".to_string(),
     }
 }
 

@@ -3,6 +3,29 @@
 ## Unreleased
 ### Added
 
+- **Нативный шелл: режим расширенных действий (actions mode) в MessageDetailsCardV2.**
+  В карточке деталей сообщения (`MessageDetailsCardV2`, `presentation-dioxus-shell`,
+  `presentation-chat`, `neocompositor-desktop`) реализован режим расширенных
+  действий (`details_mode: "actions"` / «More message actions»), соответствующий
+  React-модели (`MessageDetailsCardV2.tsx:282-360`):
+  - Кнопка перехода в режим действий в футере карточки деталей (`data-action="actions"`,
+    иконка `Plus`, `aria-label="More message actions"`).
+  - Экран меню действий (`data-part="details-action-menu"`):
+    - Шапка с кнопкой возврата назад (`data-action="details-mode-details"`, иконка
+      `ArrowLeft`, `aria-label="Back to details"`).
+    - Компактный предпросмотр сообщения (`data-part="details-action-preview"`).
+    - Опасная зона (`data-part="details-danger-zone"`) с кнопкой полного удаления
+      сообщения и всех его версий (`data-action="delete"`, иконка `Trash`,
+      "Delete message and all versions").
+    - Основные действия (`data-part="details-core-actions"`): `copy` (Copy text),
+      `context` (Toggle exclude from context), `edit` (Edit message), `history`
+      (View edit history), `regenerate` (Regenerate variant), `rollback`
+      (Rollback to here), `checkpoint` (Branch checkpoint), `branch` (Branch chat),
+      `prompt` (Inspect prompt plan), `steps` (View generation steps).
+  - Действия `ShellAction::SetMessageDetailsMode(String)` и методы сессии
+    `session.set_message_details_mode(&str)`.
+  - Интеграционный тест: `message_details_card_actions_mode_navigation_and_execution`.
+
 - **Нативный шелл: карточка деталей сообщения MessageDetailsCardV2.**
   В нативном композиторе (`presentation-dioxus-shell`, `presentation-chat`,
   `presentation-design-system`, `neocompositor-desktop`) реализована карточка

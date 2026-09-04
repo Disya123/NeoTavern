@@ -144,6 +144,7 @@ pub enum ShellAction {
     /// Message details modal (React `MessageDetailsCardV2.tsx`).
     OpenMessageDetails(String),
     CloseMessageDetails,
+    SetMessageDetailsMode(String),
     /// Settings → General appearance (React `GeneralTab` / `useUiStore`).
     /// Language is the only field that crosses Product Wire (`settings.update`).
     CycleLanguage,

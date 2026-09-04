@@ -181,6 +181,10 @@ pub enum MessageActionKind {
     Details,
     /// Close the message details card (`data-action="details-close"`).
     DetailsClose,
+    /// Switch message details card to actions menu mode (`data-action="actions"`).
+    DetailsModeActions,
+    /// Switch message details card back to details mode (`data-action="details-mode-details"` / `"details-back"`).
+    DetailsModeDetails,
 }
 
 impl MessageActionKind {
@@ -207,6 +211,8 @@ impl MessageActionKind {
             "delete-checkpoint" => Self::DeleteCheckpoint,
             "details" => Self::Details,
             "details-close" => Self::DetailsClose,
+            "actions" | "details-mode-actions" => Self::DetailsModeActions,
+            "details-mode-details" | "details-back" => Self::DetailsModeDetails,
             _ => return None,
         })
     }

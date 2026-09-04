@@ -230,6 +230,7 @@ fn markdown_minimal_probe() {
         variant_picker_rows: Vec::new(),
         variant_picker_empty: false,
         details_message_id: None,
+        details_mode: "details".to_string(),
     });
     let layout =
         inspect_product_layout(product_chat_app, 1100, 760, 1.0, Default::default()).expect("l");
@@ -5639,6 +5640,86 @@ fn message_details_card_open_inspect_and_close() {
     assert!(
         !skeleton_closed.has_identity("details-card"),
         "details-card removed on close"
+    );
+}
+
+#[test]
+fn message_details_card_actions_mode_navigation_and_execution() {
+    use neotavern_presentation_chat::{FakeWire, ShellAction};
+    use neotavern_presentation_dioxus_shell::product_shell_app;
+    use neotavern_presentation_m0_d2::inspect_slot_skeleton;
+
+    let (mut session, _) = start_flagged_session(
+        Some("1"),
+        FakeWire::demo(),
+        None,
+        None,
+    )
+    .expect("route");
+    session.set_surface_size(1100, 760, 1.0);
+
+    let target = session
+        .view()
+        .visible
+        .iter()
+        .find(|r| r.role == "assistant")
+        .map(|r| r.id.clone())
+        .expect("visible assistant message");
+
+    // Open message details card -> default mode is "details"
+    session.apply_shell_action(ShellAction::OpenMessageDetails(target.clone()));
+    assert_eq!(session.view().details_mode, "details");
+
+    // Switch to actions mode
+    session.apply_shell_action(ShellAction::SetMessageDetailsMode("actions".into()));
+    assert_eq!(session.view().details_mode, "actions");
+
+    // Inspect Dioxus slot skeleton in "actions" mode
+    neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
+    let skeleton_actions = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
+        .expect("actions mode skeleton");
+
+    assert!(
+        skeleton_actions.has_identity("details-action-menu"),
+        "details-action-menu rendered; identities={:?}",
+        skeleton_actions.identities()
+    );
+    assert!(
+        skeleton_actions.has_identity("details-action-preview"),
+        "details-action-preview rendered"
+    );
+    assert!(
+        skeleton_actions.has_identity("details-danger-zone"),
+        "details-danger-zone rendered"
+    );
+    assert!(
+        skeleton_actions.has_identity("details-core-actions"),
+        "details-core-actions rendered"
+    );
+    assert!(
+        skeleton_actions.has_identity("details-header"),
+        "details-header rendered in actions mode"
+    );
+
+    // Switch back to "details" mode
+    session.apply_shell_action(ShellAction::SetMessageDetailsMode("details".into()));
+    assert_eq!(session.view().details_mode, "details");
+
+    neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
+    let skeleton_details = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
+        .expect("details mode skeleton");
+
+    assert!(
+        skeleton_details.has_identity("details-meta"),
+        "details-meta restored in details mode"
+    );
+    assert!(
+        skeleton_details.has_identity("details-footer"),
+        "details-footer restored in details mode"
+    );
+    assert!(
+        !skeleton_details.has_identity("details-danger-zone"),
+        "details-danger-zone absent in details mode"
     );
 }
 

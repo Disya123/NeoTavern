@@ -368,9 +368,20 @@ title="Message details") открывает модальную карточку 
   `totalTokens`/`tokens`/`tokenCount`).
 - **Content preview**: блок предпросмотра текста сообщения (`data-part="details-content"`).
 - **Footer actions**: кнопки `Copy`, `Context` (toggle excluded), `Prompt` (план промпта),
-  `Steps` (транскрипт шагов).
+  `Steps` (транскрипт шагов), плюс кнопка `+` (`data-action="actions"`, иконка `Plus`,
+  title="More message actions") для переключения в режим действий.
+- **Actions mode (`details_mode: "actions"`)**:
+  - Нажатие на `+` переключает карточку в меню расширенных действий (`details-action-menu`).
+  - Шапка с кнопкой возврата назад (`data-action="details-mode-details"`, иконка `ArrowLeft`).
+  - Компактный предпросмотр сообщения (`data-part="details-action-preview"`).
+  - Секция Danger Zone (`details-danger-zone`) с заголовком и кнопкой полного удаления сообщения
+    и его вариантов (`data-action="delete"`, иконка `Trash`, "Delete message and all versions").
+  - Секция основных действий (`details-core-actions`) со списком действий с подписями: `copy`,
+    `context`, `edit`, `history`, `regenerate`, `rollback`, `checkpoint`, `branch`, `prompt`, `steps`.
+  - Возврат по стрелке `details-mode-details` возвращает карточку в режим просмотра метаданных `details`.
 
-Интеграционный тест: `message_details_card_open_inspect_and_close` в
+Интеграционные тесты: `message_details_card_open_inspect_and_close`,
+`message_details_card_actions_mode_navigation_and_execution` в
 `crates/presentation-chat/tests/compositor_host.rs`.
 
 ## Исключение из контекста (toggleMessageContext)

@@ -660,6 +660,12 @@ pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_presentF
                                 MessageActionKind::DetailsClose => {
                                     session.close_message_details()
                                 }
+                                MessageActionKind::DetailsModeActions => {
+                                    session.set_message_details_mode("actions")
+                                }
+                                MessageActionKind::DetailsModeDetails => {
+                                    session.set_message_details_mode("details")
+                                }
                             }
                         }
                         // Declarative custom intents: same authority-free

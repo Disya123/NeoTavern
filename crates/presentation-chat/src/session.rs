@@ -429,6 +429,7 @@ pub struct ChatRouteState {
     /// contents from `chats.messages.revisions.list`.
     pub history_message_id: Option<String>,
     pub details_message_id: Option<String>,
+    pub details_mode: String,
     pub message_revisions: Vec<RevisionRow>,
     /// Completed export payload awaiting the host's file sink (React
     /// downloads the file; the desktop host writes it to disk):
@@ -584,6 +585,7 @@ impl<W: ProductWire> ChatSession<W> {
         session.state.history_message_id = None;
         session.state.variant_picker_for = None;
         session.state.details_message_id = None;
+        session.state.details_mode = "details".into();
         session.state.swipe_label_for = None;
         Ok(session)
     }
@@ -1264,6 +1266,11 @@ impl<W: ProductWire> ChatSession<W> {
             editing_draft: self.state.message_edit_draft.clone(),
             history_open_for: self.state.history_message_id.clone(),
             details_message_id: self.state.details_message_id.clone(),
+            details_mode: if self.state.details_mode.is_empty() {
+                "details".to_string()
+            } else {
+                self.state.details_mode.clone()
+            },
             revision_history: self.state.message_revisions.clone(),
             snapshots_menu_open: self.state.snapshots_menu_open,
             snapshot_items: self
@@ -2458,8 +2465,10 @@ impl<W: ProductWire> ChatSession<W> {
     pub fn open_message_details(&mut self, row_id: &str) {
         if self.state.details_message_id.as_deref() == Some(row_id) {
             self.state.details_message_id = None;
+            self.state.details_mode = "details".into();
         } else {
             self.state.details_message_id = Some(row_id.to_string());
+            self.state.details_mode = "details".into();
         }
         self.bump_scene();
     }
@@ -2468,6 +2477,15 @@ impl<W: ProductWire> ChatSession<W> {
     pub fn close_message_details(&mut self) {
         if self.state.details_message_id.is_some() {
             self.state.details_message_id = None;
+            self.state.details_mode = "details".into();
+            self.bump_scene();
+        }
+    }
+
+    /// Set message details mode (`"details"` or `"actions"`).
+    pub fn set_message_details_mode(&mut self, mode: &str) {
+        if self.state.details_mode != mode {
+            self.state.details_mode = mode.to_string();
             self.bump_scene();
         }
     }
@@ -3639,6 +3657,7 @@ impl<W: ProductWire> ChatSession<W> {
             ShellAction::RemoveAlternateGreeting(idx) => self.remove_alternate_greeting(idx),
             ShellAction::OpenMessageDetails(id) => self.open_message_details(&id),
             ShellAction::CloseMessageDetails => self.close_message_details(),
+            ShellAction::SetMessageDetailsMode(mode) => self.set_message_details_mode(&mode),
             ShellAction::Import => self.open_card_import(),
             ShellAction::ImportClose => self.close_card_import(),
             ShellAction::ConfirmCardImport => self.confirm_card_import(),

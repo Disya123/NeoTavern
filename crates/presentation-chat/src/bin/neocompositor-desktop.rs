@@ -966,6 +966,18 @@ impl App {
                         self.dirty = true;
                         self.window.as_ref().map(|w| w.request_redraw());
                     }
+                    neotavern_presentation_chat::MessageActionKind::DetailsModeActions => {
+                        eprintln!("[neocompositor-desktop] details-mode-actions tapped");
+                        self.session.set_message_details_mode("actions");
+                        self.dirty = true;
+                        self.window.as_ref().map(|w| w.request_redraw());
+                    }
+                    neotavern_presentation_chat::MessageActionKind::DetailsModeDetails => {
+                        eprintln!("[neocompositor-desktop] details-mode-details tapped");
+                        self.session.set_message_details_mode("details");
+                        self.dirty = true;
+                        self.window.as_ref().map(|w| w.request_redraw());
+                    }
                 }
                 return;
             }
