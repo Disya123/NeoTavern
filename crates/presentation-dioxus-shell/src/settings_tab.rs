@@ -154,14 +154,18 @@ fn general_tab(view: &ProductShellView) -> Element {
             {general_cycle_row("Character message position", char_pos, "general-character-position")}
             {general_cycle_row("Chat style", chat_style, "general-chat-style")}
             {general_cycle_row("Message avatar", avatar_style, "general-avatar-style")}
-            {general_cycle_row(
+            {general_range_row(
                 "UI Opacity",
-                &format!("{}%", view.ui_opacity.min(100)),
+                view.ui_opacity.min(100),
+                100,
+                "%",
                 "general-opacity",
             )}
-            {general_cycle_row(
+            {general_range_row(
                 "Glass Blur",
-                &format!("{}px", view.ui_glass_blur.min(40)),
+                view.ui_glass_blur.min(40),
+                40,
+                "px",
                 "general-blur",
             )}
             div {
@@ -175,6 +179,87 @@ fn general_tab(view: &ProductShellView) -> Element {
                 "NEOTA_SAFE_MODE disables third-party themes and plugins. SecretStore values never appear here."
             }
             {diagnostics_section(view)}
+        }
+    }
+}
+
+fn general_range_row(
+    label: &'static str,
+    value: u32,
+    max: u32,
+    unit: &'static str,
+    part: &'static str,
+) -> Element {
+    let shown = format!("{value}{unit}");
+    let pct = if max > 0 { (value.min(max) * 100) / max } else { 0 };
+    let dec_action = format!("{part}-dec");
+    let inc_action = format!("{part}-inc");
+    rsx! {
+        div {
+            class: "SettingsPanel_field",
+            "data-part": "{part}",
+            style: "display:flex;flex-direction:column;gap:6px;min-height:56px;justify-content:center;",
+            div {
+                class: "SettingsPanel_rangeHeader",
+                "data-part": "range-header",
+                style: "display:flex;align-items:center;justify-content:space-between;",
+                span { style: "font-size:13px;", "{label}" }
+                span {
+                    class: "SettingsPanel_rangeValue",
+                    "data-part": "range-value",
+                    style: "color:#998f87;font-size:12px;font-family:monospace;",
+                    "{shown}"
+                }
+            }
+            div {
+                style: "display:flex;align-items:center;gap:8px;",
+                button {
+                    class: "st-button",
+                    r#type: "button",
+                    "data-component": "button",
+                    "data-variant": "default",
+                    "data-size": "sm",
+                    "data-action": "{dec_action}",
+                    "aria-label": "Decrease {label}",
+                    style: "height:28px;width:32px;display:flex;align-items:center;justify-content:center;padding:0;font-size:14px;font-weight:700;",
+                    span { "data-part": "label", "−" }
+                }
+                div {
+                    "data-part": "range-track",
+                    "data-action": "{part}",
+                    role: "progressbar",
+                    "aria-valuenow": "{value}",
+                    "aria-valuemin": "0",
+                    "aria-valuemax": "{max}",
+                    "aria-label": "{label}",
+                    style: "flex:1;height:8px;border-radius:4px;background:rgba(57,52,47,0.7);overflow:hidden;cursor:pointer;display:flex;",
+                    div {
+                        "data-part": "range-fill",
+                        style: "height:100%;width:{pct}%;border-radius:4px;background:#e38a62;pointer-events:none;",
+                    }
+                }
+                button {
+                    class: "st-button",
+                    r#type: "button",
+                    "data-component": "button",
+                    "data-variant": "default",
+                    "data-size": "sm",
+                    "data-action": "{inc_action}",
+                    "aria-label": "Increase {label}",
+                    style: "height:28px;width:32px;display:flex;align-items:center;justify-content:center;padding:0;font-size:14px;font-weight:700;",
+                    span { "data-part": "label", "+" }
+                }
+                button {
+                    class: "st-button",
+                    r#type: "button",
+                    "data-component": "button",
+                    "data-variant": "default",
+                    "data-size": "sm",
+                    "data-action": "{part}",
+                    style: "height:28px;min-width:60px;padding:0 8px;",
+                    span { "data-part": "label", "{shown}" }
+                }
+            }
         }
     }
 }

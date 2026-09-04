@@ -5822,5 +5822,73 @@ fn message_details_card_edit_mode_navigation_and_saving() {
     assert_eq!(session.view().details_mode, "details");
 }
 
+#[test]
+fn general_settings_steppers_and_range_sliders_interactive() {
+    use neotavern_presentation_chat::{FakeWire, ShellAction};
+    use neotavern_presentation_dioxus_shell::product_shell_app;
+    use neotavern_presentation_m0_d2::inspect_slot_skeleton;
+
+    let (mut session, _) = start_flagged_session(
+        Some("1"),
+        FakeWire::demo(),
+        None,
+        None,
+    )
+    .expect("route");
+    session.set_surface_size(1100, 760, 1.0);
+    session.apply_shell_action(ShellAction::SetPanel("settings".into()));
+
+    // Initial values
+    assert_eq!(session.shell_view().ui_opacity, 70);
+    assert_eq!(session.shell_view().ui_glass_blur, 16);
+
+    // Step UI Opacity up and down
+    session.apply_shell_action(ShellAction::StepUiOpacity(5));
+    assert_eq!(session.shell_view().ui_opacity, 75);
+
+    session.apply_shell_action(ShellAction::StepUiOpacity(-10));
+    assert_eq!(session.shell_view().ui_opacity, 65);
+
+    // Test clamping at 0 and 100
+    session.apply_shell_action(ShellAction::StepUiOpacity(-100));
+    assert_eq!(session.shell_view().ui_opacity, 0);
+
+    session.apply_shell_action(ShellAction::StepUiOpacity(200));
+    assert_eq!(session.shell_view().ui_opacity, 100);
+
+    // Step Glass Blur up and down
+    session.apply_shell_action(ShellAction::StepUiGlassBlur(4));
+    assert_eq!(session.shell_view().ui_glass_blur, 20);
+
+    session.apply_shell_action(ShellAction::StepUiGlassBlur(-8));
+    assert_eq!(session.shell_view().ui_glass_blur, 12);
+
+    // Test clamping at 0 and 40
+    session.apply_shell_action(ShellAction::StepUiGlassBlur(-50));
+    assert_eq!(session.shell_view().ui_glass_blur, 0);
+
+    session.apply_shell_action(ShellAction::StepUiGlassBlur(100));
+    assert_eq!(session.shell_view().ui_glass_blur, 40);
+
+    // Inspect Dioxus slot skeleton in settings panel
+    neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
+    let skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
+        .expect("settings skeleton");
+
+    assert!(
+        skeleton.has_identity("range-header"),
+        "range-header rendered in settings"
+    );
+    assert!(
+        skeleton.has_identity("range-track"),
+        "range-track rendered in settings"
+    );
+    assert!(
+        skeleton.has_identity("range-fill"),
+        "range-fill rendered in settings"
+    );
+}
+
+
 
 

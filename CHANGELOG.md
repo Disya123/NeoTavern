@@ -3,6 +3,22 @@
 ## Unreleased
 ### Added
 
+- **Нативный шелл: слайдеры и степперы UI Opacity и Glass Blur в настройках.**
+  В панели настроек (`SettingsPanel` → General, `presentation-dioxus-shell`,
+  `presentation-chat`, `neocompositor-desktop`) параметры прозрачности (`UI Opacity`)
+  и размытия (`Glass Blur`) приведены в точное визуальное и функциональное
+  соответствие React-компонентам (`SettingsPanel.tsx:298-329`, `SettingsPanel.module.css`):
+  - Заголовок слайдера (`SettingsPanel_rangeHeader`, `data-part="range-header"`)
+    с названием параметра и бейджем текущего значения (`SettingsPanel_rangeValue`,
+    `data-part="range-value"`: e.g. `70%`, `16px`).
+  - Кнопки пошагового регулирования (степперы): уменьшение (`data-action="*-dec"`,
+    лейбл «−») и увеличение (`data-action="*-inc"`, лейбл «+»).
+  - Визуальный трек прогресса (`data-part="range-track"`, `data-part="range-fill"`,
+    `role="progressbar"` с `aria-valuenow`, `aria-valuemin`, `aria-valuemax`).
+  - Действия `ShellAction::StepUiOpacity(i32)` (шаг 5%, границы `[0, 100]`) и
+    `ShellAction::StepUiGlassBlur(i32)` (шаг 4px, границы `[0, 40]`).
+  - Интеграционный тест: `general_settings_steppers_and_range_sliders_interactive`.
+
 - **Нативный шелл: режим редактирования (edit mode) в MessageDetailsCardV2.**
   В карточке деталей сообщения (`MessageDetailsCardV2`, `presentation-dioxus-shell`,
   `presentation-chat`, `neocompositor-desktop`) реализован полнофункциональный режим

@@ -2552,6 +2552,20 @@ impl<W: ProductWire> ChatSession<W> {
         self.bump_scene();
     }
 
+    /// Step UI opacity by a signed delta, clamped to `[0, 100]` (React range slider / stepper).
+    pub fn step_ui_opacity(&mut self, delta: i32) {
+        let current = self.state.ui_opacity as i32;
+        self.state.ui_opacity = (current + delta).clamp(0, 100) as u32;
+        self.bump_scene();
+    }
+
+    /// Step glass blur by a signed delta, clamped to `[0, 40]` (React range slider / stepper).
+    pub fn step_ui_glass_blur(&mut self, delta: i32) {
+        let current = self.state.ui_glass_blur as i32;
+        self.state.ui_glass_blur = (current + delta).clamp(0, 40) as u32;
+        self.bump_scene();
+    }
+
     /// Toggle the snapshots menu (React `ChatSnapshotsMenu` header trigger).
     /// Opening loads the child chats of the active chat via
     /// `chats.snapshots.list`; a chat without snapshots shows the honest
@@ -3569,6 +3583,8 @@ impl<W: ProductWire> ChatSession<W> {
                 self.state.ui_glass_blur = next_step(self.state.ui_glass_blur, 0, 40, 4);
                 self.bump_scene();
             }
+            ShellAction::StepUiOpacity(delta) => self.step_ui_opacity(delta),
+            ShellAction::StepUiGlassBlur(delta) => self.step_ui_glass_blur(delta),
             ShellAction::RunDiagnostics => self.load_diagnostics(),
             ShellAction::RebuildSearch => {
                 self.record_error(ChatRouteError::Product(ErrorDto {

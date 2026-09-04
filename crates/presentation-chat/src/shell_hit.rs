@@ -163,6 +163,8 @@ pub enum ShellAction {
     /// on the shell root (`setInterfacePreferences`).
     CycleUiOpacity,
     CycleUiGlassBlur,
+    StepUiOpacity(i32),
+    StepUiGlassBlur(i32),
     /// Settings → General `DiagnosticsPanel` (wire `diagnostics.export`).
     RunDiagnostics,
     /// Legacy sidecar maintenance: React kernel plane rejects with
@@ -1800,12 +1802,22 @@ fn general_hit(
         }
         cursor += row;
     }
-    // Opacity / glass-blur cycles (React range sliders).
+    // Opacity / glass-blur controls (React range sliders / steppers).
     if y >= cursor && y < cursor + CONTROL_SM {
+        if x < panel_x + pad + 36.0 {
+            return Some(ShellHit::Action(ShellAction::StepUiOpacity(-5)));
+        } else if x > panel_x + pad + 36.0 && x < panel_x + pad + 72.0 {
+            return Some(ShellHit::Action(ShellAction::StepUiOpacity(5)));
+        }
         return Some(ShellHit::Action(ShellAction::CycleUiOpacity));
     }
     cursor += row;
     if y >= cursor && y < cursor + CONTROL_SM {
+        if x < panel_x + pad + 36.0 {
+            return Some(ShellHit::Action(ShellAction::StepUiGlassBlur(-4)));
+        } else if x > panel_x + pad + 36.0 && x < panel_x + pad + 72.0 {
+            return Some(ShellHit::Action(ShellAction::StepUiGlassBlur(4)));
+        }
         return Some(ShellHit::Action(ShellAction::CycleUiGlassBlur));
     }
     cursor += row;

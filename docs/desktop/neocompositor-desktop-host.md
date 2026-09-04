@@ -495,15 +495,20 @@ chat style / avatar style / позиции сообщений / «Open Home when
 starts» живут в сессии и выставляют `data-ui-scale`, `data-ui-contrast`,
 `data-ui-font`, `data-ui-motion`, `data-chat-style`, `data-chat-avatar-style`,
 `data-user-message-position`, `data-character-message-position` на корне
-(React `setInterfacePreferences`). Opacity / glass blur — циклы шагом
-`+5` (0–100, старт 70) и `+4` (0–40, старт 16), потому что Blitz range
-не интерактивен; на корень пишутся `--st-custom-ui-opacity`,
-`--st-custom-glass-blur` / `--st-effect-glass-blur` и
-`--st-custom-wallpaper-overlay-alpha` (как React `setInterfacePreferences`).
-Blitz `<select>` не интерактивен — цикл как у gallery. Host-переключатель
-(только packaged Tauri), Kernel Preview / updater (`backend.meta()`,
-desktop update channel) и plugin settings в этом срезе нет. Тест
-`general_settings_language_and_appearance_over_product_wire`.
+(React `setInterfacePreferences`). Opacity / glass blur — визуальные контролы
+с заголовком (`SettingsPanel_rangeHeader`, `data-part="range-header"`),
+бейджем текущего значения (`SettingsPanel_rangeValue`, `data-part="range-value"`),
+кнопками-степперами «−» / «+» (`data-action="*-dec"`, `data-action="*-inc"`)
+и визуальным треком прогресса (`data-part="range-track"`, `data-part="range-fill"`,
+`role="progressbar"`), поддерживающими точечный шаг `StepUiOpacity(±5)` (0–100,
+старт 70) и `StepUiGlassBlur(±4)` (0–40, старт 16), а также циклический клик по треку;
+на корень пишутся `--st-custom-ui-opacity`, `--st-custom-glass-blur` /
+`--st-effect-glass-blur` и `--st-custom-wallpaper-overlay-alpha` (как React
+`setInterfacePreferences`). Blitz `<select>` не интерактивен — цикл как у gallery.
+Host-переключатель (только packaged Tauri), Kernel Preview / updater (`backend.meta()`,
+desktop update channel) и plugin settings в этом срезе нет. Тесты
+`general_settings_language_and_appearance_over_product_wire` и
+`general_settings_steppers_and_range_sliders_interactive`.
 
 ## Diagnostics (Settings → General)
 
