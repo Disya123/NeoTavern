@@ -3,6 +3,7 @@
   "assets.delete",
   "assets.get",
   "assets.put",
+  "assets.thumb",
   "backups.create",
   "backups.list",
   "backups.restore",

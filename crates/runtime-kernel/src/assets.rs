@@ -25,8 +25,9 @@
 
 use base64::Engine as _;
 use contracts_generated::generated::{
-    self, AssetsItem, RequestAssetsContent, RequestAssetsDelete, RequestAssetsGet,
-    RequestAssetsPut, ResultAssetsContent, ResultAssetsGet, ResultAssetsPut,
+    self, AssetThumbFormat, AssetsItem, RequestAssetsContent, RequestAssetsDelete,
+    RequestAssetsGet, RequestAssetsPut, RequestAssetsThumb, ResultAssetsContent, ResultAssetsGet,
+    ResultAssetsPut, ResultAssetsThumb,
 };
 use neotavern_storage::assets::resolve_asset_path;
 use neotavern_storage::open::Database;
@@ -154,6 +155,215 @@ pub(crate) fn assets_content(db: &Database, request: &[u8]) -> Result<Vec<u8>, K
         content_base64: base64::engine::general_purpose::STANDARD.encode(&bytes),
     };
     encode_result_content(&dto)
+}
+
+/// Bump when the thumbnail encoding pipeline changes (AGENTS.md §12.6: the
+/// cache key must include the algorithm version so stale entries rebuild).
+const THUMB_ALGO_VERSION: u32 = 1;
+
+/// Hard decode preflight for `assets.thumb` (mirror of the presentation
+/// layer's `check_image_limits` philosophy): a hostile `assets.put` payload
+/// must not be able to force an unbounded raster on the kernel either.
+const THUMB_MAX_ORIGINAL_BYTES: u64 = 64 * 1024 * 1024;
+const THUMB_MAX_AXIS_PX: u32 = 16_384;
+const THUMB_MAX_PIXELS: u64 = 64_000_000;
+
+/// `assets.thumb` — kernel-side, aspect-preserving thumbnail (image audit
+/// stage C). The longest side is `maxPx` (wire-validated 16..=1024); JPEG q82
+/// when the source has no alpha channel, PNG when it does. Thumbnails are
+/// CACHE (AGENTS.md §12): stored under `<data-root>/cache/thumbnails/` keyed
+/// by the original's sha256 + maxPx + algorithm version, written atomically
+/// (temp + rename), fully deletable and rebuilt on demand. The original
+/// bytes are never served through this operation.
+pub(crate) fn assets_thumb(db: &Database, request: &[u8]) -> Result<Vec<u8>, KernelError> {
+    let req: RequestAssetsThumb = generated::decode_request_assets_thumb(request)?;
+    let max_px = u32::try_from(req.max_px)
+        .map_err(|_| contract_violation("assets.thumb: maxPx out of range"))?;
+
+    let (relative_key, checksum): (String, String) = db
+        .conn()
+        .query_row(
+            "SELECT relative_key, checksum_sha256 FROM __neotavern_assets WHERE id = ?1",
+            rusqlite::params![req.asset_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()
+        .map_err(|err| sqlite(err, "assets.thumb: registry lookup failed"))?
+        .ok_or_else(|| asset_not_found(&req.asset_id))?;
+
+    let path = resolve_asset_path(db, &relative_key).map_err(|err| {
+        KernelError::new(
+            KernelErrorCode::StorageFailure,
+            format!("assets.thumb: cannot resolve asset file: {err}"),
+        )
+    })?;
+
+    // Cache lookup keyed by (original sha256, maxPx, algorithm version).
+    let cache_dir = db.data_root().join("cache").join("thumbnails");
+    for (ext, format) in [
+        ("jpg", AssetThumbFormat::Jpeg),
+        ("png", AssetThumbFormat::Png),
+    ] {
+        let cached = cache_dir.join(format!("{checksum}-{max_px}-v{THUMB_ALGO_VERSION}.{ext}"));
+        if !cached.is_file() {
+            continue;
+        }
+        let bytes = std::fs::read(&cached).map_err(|err| {
+            KernelError::new(
+                KernelErrorCode::StorageFailure,
+                format!("assets.thumb: cannot read cached thumbnail: {err}"),
+            )
+        })?;
+        let (width, height) = thumb_dimensions(&bytes)?;
+        return encode_thumb_response(&req.asset_id, format, width, height, &bytes);
+    }
+
+    // Cache miss: read + preflight + decode the ORIGINAL, then downscale.
+    let original_len = std::fs::metadata(&path)
+        .map_err(|err| {
+            KernelError::new(
+                KernelErrorCode::StorageFailure,
+                format!("assets.thumb: cannot stat asset file: {err}"),
+            )
+        })?
+        .len();
+    if original_len > THUMB_MAX_ORIGINAL_BYTES {
+        return Err(contract_violation(
+            "assets.thumb: original exceeds the 64 MiB decode cap",
+        ));
+    }
+    let bytes = std::fs::read(&path).map_err(|err| {
+        KernelError::new(
+            KernelErrorCode::StorageFailure,
+            format!("assets.thumb: cannot read asset file: {err}"),
+        )
+    })?;
+    let (width, height) = preflight_dimensions(&bytes)?;
+    if width > THUMB_MAX_AXIS_PX || height > THUMB_MAX_AXIS_PX {
+        return Err(contract_violation(
+            "assets.thumb: original axes exceed the 16384 px decode cap",
+        ));
+    }
+    if u64::from(width) * u64::from(height) > THUMB_MAX_PIXELS {
+        return Err(contract_violation(
+            "assets.thumb: original pixel count exceeds the 64 MP decode cap",
+        ));
+    }
+    let image = image::load_from_memory(&bytes).map_err(|err| {
+        KernelError::new(
+            KernelErrorCode::ContractViolation,
+            format!("assets.thumb: original is not a decodable raster: {err}"),
+        )
+    })?;
+    let thumb = image.thumbnail(u32::from(max_px), u32::from(max_px));
+    let has_alpha = matches!(
+        thumb.color(),
+        image::ColorType::Rgba8
+            | image::ColorType::Rgba16
+            | image::ColorType::La8
+            | image::ColorType::La16
+    );
+    let (format, encoded): (AssetThumbFormat, Vec<u8>) = if has_alpha {
+        let mut png = Vec::new();
+        let encoder = image::codecs::png::PngEncoder::new(std::io::Cursor::new(&mut png));
+        thumb.write_with_encoder(encoder).map_err(encode_failure)?;
+        (AssetThumbFormat::Png, png)
+    } else {
+        let mut out = Vec::new();
+        let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 82);
+        thumb.write_with_encoder(encoder).map_err(encode_failure)?;
+        (AssetThumbFormat::Jpeg, out)
+    };
+    let (tw, th) = (thumb.width(), thumb.height());
+
+    // Atomic cache write (AGENTS.md §12: temp file + rename); a failed cache
+    // write must not fail the request — the next call regenerates.
+    let ext = match format {
+        AssetThumbFormat::Jpeg => "jpg",
+        AssetThumbFormat::Png => "png",
+    };
+    let final_path = cache_dir.join(format!("{checksum}-{max_px}-v{THUMB_ALGO_VERSION}.{ext}"));
+    if std::fs::create_dir_all(&cache_dir).is_ok() {
+        let tmp = cache_dir.join(format!(
+            ".{}.tmp-{}",
+            final_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("thumb"),
+            std::process::id()
+        ));
+        if std::fs::write(&tmp, &encoded).is_ok() && std::fs::rename(&tmp, &final_path).is_err() {
+            let _ = std::fs::remove_file(&tmp);
+        }
+    }
+
+    encode_thumb_response(&req.asset_id, format, tw, th, &encoded)
+}
+
+/// Cached-thumbnail dimension probe (header-only decode; the cache only ever
+/// holds files this operation itself encoded).
+fn thumb_dimensions(bytes: &[u8]) -> Result<(u32, u32), KernelError> {
+    let reader = image::ImageReader::new(std::io::Cursor::new(bytes))
+        .with_guessed_format()
+        .map_err(|err| {
+            KernelError::new(
+                KernelErrorCode::StorageFailure,
+                format!("assets.thumb: cannot probe the cached thumbnail: {err}"),
+            )
+        })?;
+    let (width, height) = reader.into_dimensions().map_err(|err| {
+        KernelError::new(
+            KernelErrorCode::StorageFailure,
+            format!("assets.thumb: cached thumbnail is corrupt: {err}"),
+        )
+    })?;
+    Ok((width, height))
+}
+
+/// Header-only dimension preflight of the original bytes (no pixel decode).
+fn preflight_dimensions(bytes: &[u8]) -> Result<(u32, u32), KernelError> {
+    let reader = image::ImageReader::new(std::io::Cursor::new(bytes))
+        .with_guessed_format()
+        .map_err(|err| {
+            KernelError::new(
+                KernelErrorCode::ContractViolation,
+                format!("assets.thumb: cannot probe the original: {err}"),
+            )
+        })?;
+    reader.into_dimensions().map_err(|err| {
+        KernelError::new(
+            KernelErrorCode::ContractViolation,
+            format!("assets.thumb: original is not a decodable raster: {err}"),
+        )
+    })
+}
+
+fn encode_failure(err: image::ImageError) -> KernelError {
+    KernelError::new(
+        KernelErrorCode::Internal,
+        format!("assets.thumb: thumbnail encoding failed: {err}"),
+    )
+}
+
+fn contract_violation(message: &str) -> KernelError {
+    KernelError::new(KernelErrorCode::ContractViolation, message)
+}
+
+fn encode_thumb_response(
+    asset_id: &str,
+    format: AssetThumbFormat,
+    width: u32,
+    height: u32,
+    encoded: &[u8],
+) -> Result<Vec<u8>, KernelError> {
+    let dto = ResultAssetsThumb {
+        asset_id: asset_id.to_string(),
+        format,
+        width: i64::from(width),
+        height: i64::from(height),
+        content_base64: base64::engine::general_purpose::STANDARD.encode(encoded),
+    };
+    encode_checked(&dto, generated::validate_result_assets_thumb)
 }
 
 /// `assets.delete` — registry row first, file best-effort (orphan GC covers).

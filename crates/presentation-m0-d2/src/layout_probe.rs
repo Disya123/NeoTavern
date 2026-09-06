@@ -47,6 +47,10 @@ pub struct AvatarSlot {
     pub css_y: f32,
     pub css_width: f32,
     pub css_height: f32,
+    /// CSS border-radius of the slot, from `data-avatar-radius` (the same
+    /// source the fallback's own `border-radius` uses). `None` keeps the
+    /// shared [`AVATAR_CLIP_RADIUS_CSS`] default.
+    pub radius_css: Option<f32>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -57,7 +61,8 @@ pub enum AvatarKind {
     Other,
 }
 
-/// React `--st-radius-control` on header/card avatars.
+/// React `--st-radius-control` (10px) on header/card avatars — the default
+/// clip for slots that do not declare `data-avatar-radius`.
 pub const AVATAR_CLIP_RADIUS_CSS: f32 = 10.0;
 
 pub fn collect_paint_layout(doc: &BaseDocument, scale: f32) -> ProductPaintLayout {
@@ -83,16 +88,21 @@ pub fn image_paints_from_layout(
         .avatars
         .iter()
         .filter(|slot| !slot.asset_id.is_empty())
-        .map(|slot| ImagePaintOp {
-            asset_id: slot.asset_id.clone(),
-            dest: Rect::new(
-                slot.css_x * scale,
-                slot.css_y * scale,
-                slot.css_width * scale,
-                slot.css_height * scale,
-            ),
-            clip_radius: AVATAR_CLIP_RADIUS_CSS * scale,
-            ready_token,
+        .map(|slot| {
+            // Pixel-snap: fractional physical rects would be sampled with
+            // linear filtering while the scene around them renders sharp at
+            // the same fractional geometry — rounded edges go soft and drift
+            // half a pixel against the slot border.
+            let x = (slot.css_x * scale).round();
+            let y = (slot.css_y * scale).round();
+            let width = (slot.css_width * scale).round().max(1.0);
+            let height = (slot.css_height * scale).round().max(1.0);
+            ImagePaintOp {
+                asset_id: slot.asset_id.clone(),
+                dest: Rect::new(x, y, width, height),
+                clip_radius: slot.radius_css.unwrap_or(AVATAR_CLIP_RADIUS_CSS) * scale,
+                ready_token,
+            }
         })
         .collect()
 }
@@ -143,6 +153,8 @@ fn walk(
                     css_y: y,
                     css_width: layout.size.width,
                     css_height: layout.size.height,
+                    radius_css: attr_get(data, "data-avatar-radius")
+                        .and_then(|value| value.trim().parse::<f32>().ok()),
                 });
             }
         }
@@ -152,12 +164,7 @@ fn walk(
         if attr_is(data, "data-part", "message") || attr_is(data, "data-component", "chat-message")
         {
             let id = attr_get(data, "data-message-id").unwrap_or_default();
-            if !id.is_empty()
-                && !out
-                    .messages
-                    .iter()
-                    .any(|row| row.id == id)
-            {
+            if !id.is_empty() && !out.messages.iter().any(|row| row.id == id) {
                 out.messages.push(MessageRect {
                     id,
                     css_x: x,
@@ -298,7 +305,10 @@ pub struct SlotSkeleton {
 
 impl SlotSkeleton {
     pub fn identities(&self) -> Vec<&str> {
-        self.nodes.iter().map(|node| node.identity.as_str()).collect()
+        self.nodes
+            .iter()
+            .map(|node| node.identity.as_str())
+            .collect()
     }
 
     pub fn count_matching(&self, needle: &str) -> usize {
@@ -327,14 +337,7 @@ pub fn collect_slot_skeleton(
     height: u32,
 ) -> SlotSkeleton {
     let mut nodes = Vec::new();
-    walk_slots(
-        doc,
-        doc.root_element().id,
-        0.0,
-        0.0,
-        Vec::new(),
-        &mut nodes,
-    );
+    walk_slots(doc, doc.root_element().id, 0.0, 0.0, Vec::new(), &mut nodes);
     SlotSkeleton {
         source: source.to_string(),
         width,
@@ -447,7 +450,10 @@ pub fn slot_skeleton_to_json(skeleton: &SlotSkeleton) -> String {
         "  \"source\": {},\n",
         json_string(&skeleton.source)
     ));
-    out.push_str(&format!("  \"viewport\": {{ \"width\": {}, \"height\": {} }},\n", skeleton.width, skeleton.height));
+    out.push_str(&format!(
+        "  \"viewport\": {{ \"width\": {}, \"height\": {} }},\n",
+        skeleton.width, skeleton.height
+    ));
     out.push_str("  \"nodes\": [\n");
     for (index, node) in skeleton.nodes.iter().enumerate() {
         let comma = if index + 1 == skeleton.nodes.len() {
@@ -481,7 +487,10 @@ pub fn slot_skeleton_to_json(skeleton: &SlotSkeleton) -> String {
             "      \"state\": {},\n",
             json_opt(node.state.as_deref())
         ));
-        out.push_str(&format!("      \"key\": {},\n", json_opt(node.key.as_deref())));
+        out.push_str(&format!(
+            "      \"key\": {},\n",
+            json_opt(node.key.as_deref())
+        ));
         out.push_str(&format!(
             "      \"identity\": {},\n",
             json_string(&node.identity)
@@ -540,19 +549,60 @@ mod tests {
     #[test]
     fn slot_identity_joins_documented_hooks() {
         assert_eq!(
-            slot_identity(
-                Some("chat-message"),
-                None,
-                None,
-                Some("assistant"),
-                None
-            ),
+            slot_identity(Some("chat-message"), None, None, Some("assistant"), None),
             "component:chat-message+role:assistant"
         );
         assert_eq!(
             slot_identity(None, Some("toolbar"), Some("chat.composer"), None, None),
             "slot:chat.composer+part:toolbar"
         );
+    }
+
+    #[test]
+    fn avatar_paints_snap_dest_and_take_slot_radius() {
+        let layout = ProductPaintLayout {
+            avatars: vec![
+                // Fractional CSS geometry at density 2: dest must land on
+                // whole physical pixels, radius from `data-avatar-radius`.
+                AvatarSlot {
+                    asset_id: "a".into(),
+                    kind: AvatarKind::Other,
+                    css_x: 12.4,
+                    css_y: 88.6,
+                    css_width: 36.0,
+                    css_height: 36.0,
+                    radius_css: Some(18.0),
+                },
+                // No declared radius: shared --st-radius-control default.
+                AvatarSlot {
+                    asset_id: "b".into(),
+                    kind: AvatarKind::Card,
+                    css_x: 3.0,
+                    css_y: 4.0,
+                    css_width: 48.0,
+                    css_height: 48.0,
+                    radius_css: None,
+                },
+                // Empty asset id: no paint op at all.
+                AvatarSlot {
+                    asset_id: String::new(),
+                    kind: AvatarKind::Header,
+                    css_x: 0.0,
+                    css_y: 0.0,
+                    css_width: 32.0,
+                    css_height: 32.0,
+                    radius_css: Some(16.0),
+                },
+            ],
+            ..ProductPaintLayout::default()
+        };
+        let paints = image_paints_from_layout(&layout, 2.0, 7);
+        assert_eq!(paints.len(), 2, "empty asset ids produce no paints");
+        assert_eq!(paints[0].dest, Rect::new(25.0, 177.0, 72.0, 72.0));
+        assert_eq!(paints[0].clip_radius, 36.0, "slot radius × scale");
+        assert_eq!(paints[1].dest, Rect::new(6.0, 8.0, 96.0, 96.0));
+        assert_eq!(paints[1].clip_radius, AVATAR_CLIP_RADIUS_CSS * 2.0);
+        assert_eq!(paints[0].ready_token, 7);
     }
 
     #[test]

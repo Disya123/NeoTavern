@@ -6,6 +6,8 @@
 use dioxus_core::Element;
 use dioxus_core_macro::rsx;
 
+use crate::ASSET_URL_PREFIX;
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Inline {
     Text(String),
@@ -40,6 +42,47 @@ pub fn parse_document(value: &str) -> Vec<Block> {
         .filter(|block| !block.is_empty())
         .map(parse_block)
         .collect()
+}
+
+/// Asset ids referenced by `![alt](asset:{id})` images in `content`, in
+/// document order without duplicates. Uses the same parser the renderer runs,
+/// so hydration and rendering can never disagree about what counts as an
+/// image reference.
+pub fn asset_image_refs(content: &str) -> Vec<String> {
+    fn walk_inlines(inlines: &[Inline], out: &mut Vec<String>) {
+        for inline in inlines {
+            match inline {
+                Inline::Image { src, .. } => {
+                    if let Some(id) = src.strip_prefix(ASSET_URL_PREFIX) {
+                        if !id.is_empty() && !out.iter().any(|known| known == id) {
+                            out.push(id.to_string());
+                        }
+                    }
+                }
+                Inline::Strong(children)
+                | Inline::Emphasis(children)
+                | Inline::Quote(children)
+                | Inline::Link { children, .. } => walk_inlines(children, out),
+                Inline::Text(_) | Inline::Code(_) => {}
+            }
+        }
+    }
+    let mut out = Vec::new();
+    for block in parse_document(content) {
+        match block {
+            Block::Heading { children, .. } | Block::Paragraph(children) => {
+                walk_inlines(&children, &mut out)
+            }
+            Block::List { items, .. } => {
+                for item in items {
+                    walk_inlines(&item, &mut out);
+                }
+            }
+            Block::Quote(children) => walk_inlines(&children, &mut out),
+            Block::Rule => {}
+        }
+    }
+    out
 }
 
 fn parse_block(block: &str) -> Block {
@@ -609,15 +652,35 @@ fn render_inline(node: &Inline) -> Element {
                 {render_inlines(children)}
             }
         },
-        // Sheet: block image margin 8px 0 radius 16; probe keeps the asset
-        // placeholder block (no network images in the probe) on the warm
-        // tertiary surface with the standard border.
-        Inline::Image { alt, .. } => rsx! {
-            span {
-                "data-part": "message-image",
-                "aria-label": "{alt}",
-                style: "display:block;max-width:100%;height:32px;margin:8px 0;border-radius:16px;background:#302c28;border:1px solid #39342f;",
+        // Sheet: block image margin 8px 0 radius 16. `asset:{id}` sources
+        // render in-scene through the LocalNetProvider (`object-fit:
+        // contain`, capped height so one photo cannot swallow the viewport);
+        // http(s) links keep the placeholder block (no network in the native
+        // probe).
+        Inline::Image { src, alt } => {
+            if src.starts_with(ASSET_URL_PREFIX) {
+                rsx! {
+                    span {
+                        "data-part": "message-image",
+                        "data-state": "image",
+                        "aria-label": "{alt}",
+                        style: "display:block;max-width:100%;margin:8px 0;",
+                        img {
+                            src: "{src}",
+                            alt: "{alt}",
+                            style: "display:block;width:100%;height:auto;max-height:420px;object-fit:contain;border-radius:16px;",
+                        }
+                    }
+                }
+            } else {
+                rsx! {
+                    span {
+                        "data-part": "message-image",
+                        "aria-label": "{alt}",
+                        style: "display:block;max-width:100%;height:32px;margin:8px 0;border-radius:16px;background:#302c28;border:1px solid #39342f;",
+                    }
+                }
             }
-        },
+        }
     }
 }

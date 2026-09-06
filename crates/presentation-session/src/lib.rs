@@ -12,18 +12,17 @@ use neotavern_chat_viewport::{
     SceneGeneration, ScrollAck as ViewportScrollAck, TileFidelity, ViewportSession,
 };
 use neotavern_neocompositor::{
-    apply_autoscroll, autoscroll_delta, compose_selectable, AffineCoeffs, BackdropRootId,
-    BidiAffinity, ClipChainId, ClipId, ClipNode, CompositorFastPath, DamageRect, DeviceEpoch,
-    EffectKind, EffectNode, EffectNodeId, EpochClock, FrameMailbox, FrameTransaction,
-    FrameTransactionParts, GeometryTile, GeometryTileSnapshot, GestureId, GlassBoundary,
-    HitTestSnapshot, IngressReject, InteractionReady, LogicalRect, NeoDisplayList, NeoPaintOp,
-    NeoScene, PaintChunk, PaintChunkId, PaintOrderKey, Point, PointerEvent, PointerId, PointerKind,
-    PostAccept, PostReject, PresentationTime, PropertySnapshot, PropertyTreeBuilder,
+    AffineCoeffs, BackdropRootId, BidiAffinity, ClipChainId, ClipId, ClipNode, CompositorFastPath,
+    DamageRect, DeviceEpoch, EffectKind, EffectNode, EffectNodeId, EpochClock, FrameMailbox,
+    FrameTransaction, FrameTransactionParts, GeometryTile, GeometryTileSnapshot, GestureId,
+    GlassBoundary, HitTestSnapshot, IngressReject, InteractionReady, LogicalRect, NeoDisplayList,
+    NeoPaintOp, NeoScene, PaintChunk, PaintChunkId, PaintOrderKey, Point, PointerEvent, PointerId,
+    PointerKind, PostAccept, PostReject, PresentationTime, PropertySnapshot, PropertyTreeBuilder,
     RasterDecision, Rect, SceneEpoch, ScrollAck as CompositorScrollAck, ScrollEpoch, ScrollId,
     ScrollSequence, SelectablePaintPlan, SpatialKind, SpatialNode, SpatialNodeId, StableSemanticId,
     StubPayload, SurfaceFrameIngress, SurfaceId, TextFragmentId, TextInteractionSnapshot,
     TextOffset, TextRange, TextSnapshotSet, TileCoverage, TileId, TileKind, Vec2,
-    VisualSurfaceDeclare,
+    VisualSurfaceDeclare, apply_autoscroll, autoscroll_delta, compose_selectable,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -43,6 +42,17 @@ pub enum SessionOutcome {
     Applied,
     IgnoredAlreadyApplied,
     Cancel,
+}
+
+/// Producer rebase mode for [`PresentationSession::rebase_scroll_window`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ScrollRebase {
+    /// The re-published frame advanced the same content window the gesture
+    /// was scrolling: keep the visual continuous.
+    Advance,
+    /// The producer jumped the window (scroll-to-latest, user action): the
+    /// visual follows it.
+    Teleport,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -278,8 +288,12 @@ impl PresentationSession {
         let epoch = SceneEpoch(generation.geometry.max(1));
         let handoff = self.viewport.compositor_handoff();
         let geometry = map_viewport_geometry(&handoff, self.width, epoch)?;
+        // The scroll bounds must reflect the real content extent: a synthetic
+        // constant would clamp honest flings short of the chat history (and
+        // let short chats scroll into void).
+        let content_height = self.viewport.index().extent().max(f64::from(self.height));
         let (properties, scroll, spatial, clip) =
-            commit_properties(epoch, self.width, self.height)?;
+            commit_properties(epoch, self.width, self.height, content_height)?;
         self.scroll_id = Some(scroll);
         self.hit_spatial = Some(spatial);
         self.hit_clip = Some(clip);
@@ -340,6 +354,79 @@ impl PresentationSession {
             }
         }
         result
+    }
+
+    /// Producer-side rebase of the compositor fast path onto a newly produced
+    /// content window (`base_offset_y`, physical px of the scrollport). This
+    /// is the ack half of the fast-path scroll loop: the producer advanced
+    /// the product window and re-published its frame; the visual offset must
+    /// stay continuous while the committed (baked) offset jumps to the new
+    /// window.
+    ///
+    /// - [`ScrollRebase::Advance`] keeps the visual where it is: committed =
+    ///   base, unacked = visual − base. Requires at least one accepted input
+    ///   delta since the previous ack (the call sites rebase right after the
+    ///   frame's gesture tick); when refused because the gesture went idle,
+    ///   the advance target necessarily equals the current visual, so the
+    ///   teleport fallback is pixel-exact.
+    /// - [`ScrollRebase::Teleport`] follows the window (producer jumped it —
+    ///   scroll-to-latest, a user action): visual snaps to the base.
+    ///
+    /// The [`ViewportSession`] tile universe is intentionally untouched: the
+    /// present path renders the produced product list, not tiles; the
+    /// token-based [`PresentationSession::ack_scroll`] remains the contract
+    /// for the geometry-debt flow.
+    pub fn rebase_scroll_window(&mut self, base_offset_y: f64, mode: ScrollRebase) -> bool {
+        match mode {
+            ScrollRebase::Advance => {
+                let Some(scroll) = self.scroll_id else {
+                    return false;
+                };
+                let Some(state) = self.path.scroll_state(scroll) else {
+                    return false;
+                };
+                let ack = CompositorScrollAck {
+                    scroll_id: scroll,
+                    epoch: state.epoch,
+                    base_offset: Vec2::new(0.0, base_offset_y),
+                    scroll_sequence: state.applied_input_seq,
+                };
+                if self.path.ack(ack) == neotavern_neocompositor::AckResult::Applied {
+                    return true;
+                }
+                let Some(state) = self.path.scroll_state(scroll) else {
+                    return false;
+                };
+                (state.visual_offset().y - base_offset_y).abs() < 1e-6
+                    && self.teleport_scroll_window(base_offset_y)
+            }
+            ScrollRebase::Teleport => self.teleport_scroll_window(base_offset_y),
+        }
+    }
+
+    fn teleport_scroll_window(&mut self, base_offset_y: f64) -> bool {
+        let Some(scroll) = self.scroll_id else {
+            return false;
+        };
+        let Some(state) = self.path.scroll_state(scroll) else {
+            return false;
+        };
+        let ack = CompositorScrollAck {
+            scroll_id: scroll,
+            epoch: ScrollEpoch(state.epoch.0.saturating_add(1)),
+            base_offset: Vec2::new(0.0, base_offset_y),
+            scroll_sequence: state.applied_input_seq,
+        };
+        self.path.ack(ack) == neotavern_neocompositor::AckResult::Applied
+    }
+
+    /// Unacked scroll delta of the bound scroll node (visual − committed) in
+    /// physical px: exactly what a blit shift must present while the
+    /// committed offset tracks the produced window.
+    pub fn scroll_unacked_y(&self) -> Option<f64> {
+        let scroll = self.scroll_id?;
+        let state = self.path.scroll_state(scroll)?;
+        Some(state.unacked_delta.y)
     }
 
     pub fn commit_exact(
@@ -572,6 +659,7 @@ fn commit_properties(
     epoch: SceneEpoch,
     width: f32,
     height: f32,
+    content_height: f64,
 ) -> Result<
     (
         PropertySnapshot,
@@ -590,7 +678,7 @@ fn commit_properties(
         SpatialKind::Scroll {
             scroll_id: scroll,
             scrollport: LogicalRect::new(0.0, 0.0, f64::from(width), f64::from(height)),
-            content_extent: LogicalRect::new(0.0, 0.0, f64::from(width), f64::from(height) * 8.0),
+            content_extent: LogicalRect::new(0.0, 0.0, f64::from(width), content_height),
         },
     );
     let clip = builder.alloc_clip(

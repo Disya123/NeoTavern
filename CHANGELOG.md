@@ -1,7 +1,176 @@
 # Changelog
 
 ## Unreleased
+### Fixed
+
+- **Нативный композитор: ресайз окна — живой re-layout вместо слайдшоу/растяжения.**
+  Один produce стоил ~750 мс в dev-сборке (почти всё — `ProductVelloSession::open`:
+  `initial_build` VirtualDom ~370 мс + Blitz `resolve` ~330 мс), а путь
+  `WindowEvent::Resized` к тому же пересоздавал GPU-таргеты на каждый event
+  drag-а (десятки событий в секунду). Итог — окно обновлялось раз в секунды.
+  Теперь: (1) зависимости воркспейса компилируются с `opt-level = 2` и без
+  debug-инфы даже в dev-профиле (`crates/Cargo.toml`) — produce ~130–180 мс
+  в dev, release по-прежнему быстрее (~40–80 мс); (2) `PresentSurface` разделён
+  на дешёвый `set_swapchain_size` (только конфиг+configure, на каждый event) и
+  полный `resize` (реаллок целей + `rebuild_bind`, один раз на produce из
+  `produce_and_render`); (3) `Resized` снова просто ставит `dirty` — winit
+  коалесцирует redraw, документ пере-верстается на каждом промежуточном
+  размере, никакого растянутого финального кадра; (4) обои-cover
+  перегенерируется по порогу ±10% размера ректа (между порогами шейдер
+  растягивает кэшированный cover), полный декод исходника больше не на каждом
+  тике; (5) на каждый produce убраны лишние клонирования view-model (три
+  вызова `shell_view()` → один) и повторные полные обходы документа
+  (`slot_skeleton()` трижды → один). Диагностика: `NEOTA_OPEN_PROFILE=1`
+  печатает фазы `open` (dom_new/initial_build/resolve/collect), строка
+  produce расширена фазами layout/open/paint/render/post.
+
 ### Added
+
+- **Нативный шелл: этап C аудита image-пайплайна — обои вне blit-сдвига,
+  токены слотов, kernel-миниатюры.**
+  Фото-обои композитятся фиксированной подложкой в blit-шейдере (uniform
+  64 B, биндинги 3/4, общий WGSL десктопа и Android): фон неподвижен при
+  скролле, «плоская полоса» past-the-end заменена фото, дим-градиент
+  фиксирован вместе с фото, рект — `part:chat-wallpaper` (workspace + bleed
+  −12px), фото не светится сквозь сайдбар. `ThemeTokens` дополнен
+  size-токенами Theme SDK (`control-height*`, `space-*`); аватарные слоты и
+  `data-avatar-radius` рендерятся из токенов (карточка 52 = React-parity,
+  было 48; viewerAvatar = `object-fit: contain`). Новый Product Wire-op
+  `assets.thumb` (`maxPx 16..1024`): ядро генерирует aspect-сохраняющие
+  миниатюры (JPEG q82 / PNG, preflight-лимиты) с диск-кэшем
+  `cache/thumbnails/{sha256}-{maxPx}-v1.{ext}` (атомарная запись, §12) —
+  гидрация аватаров (192) и фото сообщений (768) больше не тянет 2.2 MiB
+  base64-оригиналы через `assets.content`. Escape-hatch
+  `NEOTA_INSCENE_IMAGES=0` (этап B) сохранён.
+- **Нативный шелл: этап B аудита image-пайплайна — картинки вернулись в сцену.**
+  Аватары и markdown-фото больше не рисуются пост-проходом поверх кадра:
+  они часть vello-сцены, поэтому z-order (модалки, панели), клипы и opacity
+  работают сами. `<img src="asset:{id}">` в аватарных слотах и сообщениях
+  резолвится `LocalNetProvider` (`presentation-m0-d2/src/asset_net.rs`)
+  из процесса-LRU `AssetStore` (64 записи / 32 MiB); гидрация кладёт туда
+  PNG-миниатюры аватаров (192²) и аспект-сохраняющие миниатюры фото
+  сообщений (≤768px, JPEG q82 / PNG с альфой, лимит 32 фетча за проход,
+  парсер `asset_image_refs` — тот же, что рендерит). `brush_ref` снова
+  кодирует `Paint::Image` в vello persistent image atlas; репро-тест
+  `gpu_vello_image_brush_rasterizes_on_the_sampled_target` держит контракт
+  «пиксели картинки попадают в sampled-таргет». Message-image: `asset:`
+  рендерит настоящий `<img>` (contain, max-height 420, radius 16) вместо
+  серой заглушки 32px; http(s) остаётся заглушкой. Рисующий GPU-оверлей
+  аватаров отключён на обоих хостах (остался для kill-switch
+  `NEOTA_INSCENE_IMAGES=0` — возврат Stage A-поведения при device-регрессии
+  vello-атласа); `AvatarGpu` продолжает обслуживать обои. Оценка высот
+  строк с фото в `compositor_height_index` — 56+436 CSS px, иначе overscan
+  открывает прозрачную щель (debug_assert chat-viewport). Демо-данные
+  переведены с `asset:thumb-N` (нарушал UUID-контракт `assets.content`) на
+  детерминированные UUID. Верификация: desktop-снапшот — фото-сообщение и
+  аватары рисуются в сцене при отключённом оверлее; blueprint-parity 95/95
+  (контракт `raster_images > 0` сменил старый «letter fallback only»);
+  m0-d2/shell/session/neocompositor зелёные; `aarch64-linux-android` check
+  зелёный (полный ран на устройстве требует NDK).
+
+- **Нативный шелл: этап A аудита image-пайплайна — cover-fit, честные радиусы, pixel-snap, мипмапы.**
+  По итогам аудита (`docs/desktop/native-image-pipeline-audit.md`) оверлей
+  аватаров приведён к React-семантике: шейдер делает cover-fit (UV-кроп
+  текстуры под аспект слота — квадрат 192² кропится в 4:5 галереи, а не
+  растягивается; обои с совпадающим аспектом — identity); радиус клипа берётся
+  из `data-avatar-radius` на слоте (шапка чата 32px и аватары сообщений 36px
+  стали кругами r16/r18 вместо «квадратных» r10; product_shell эмитит
+  `--st-radius-control` = 10); dest-ректы пиксельно снапятся к физическим px
+  (края перестали быть полупиксельными); mip-цепочка строится на CPU при
+  загрузке (премультиплицированный даунсэмпл линеен, wgpu 29 не имеет
+  `generate_mipmaps`) + `MipmapFilterMode::Linear` — минификация без
+  алиасинга. Удалена мёртвая ветка `AVATAR_OVERLAY`/`composite_avatar_overlay`
+  на Android (никем не активируется). Попутно починен сломанный в HEAD
+  паттерн-матч теста `inline_phosphor_svg_paints_a_fill` (некомпилируемый
+  `StreamOp::Draw` без `..`). Верификация: дифф против прежнего кадра
+  локализован в аватарных зонах (1.3%), остальной кадр бит-в-бит; шапка
+  визуально круг; mid-flight сдвиг с обоями 0.18% шума, header/composer —
+  0 diff; `aarch64-linux-android` зелёный.
+
+- **Нативный шелл: ack-петля ядра — fast-path скролл продвигает контент на обоих хостах (этап 3).**
+  До этого флинг скроллил замороженный растр: Android двигал visual-offset в
+  kernel fast path до синтетического `content_extent = 8 × height`, никогда
+  не перепродуцируя окно; десктоп перепродуцировал только по drift-cap/финалу.
+  Теперь общая политика (`scroll_ack::ScrollAckLoop`: presented-окно,
+  drift-cap = половина чат-бэнда, in-flight ack) решает по кадру, когда окно
+  должно продвинуться; ядро получило честный rebase fast path
+  (`PresentationSession::rebase_scroll_window`: `Advance` — same-epoch ack с
+  непрерывным visual, `Teleport` — для прыжков окна; фолбэк при затухшем
+  жесте пиксельно точен) и `scroll_unacked_y()` — honest blit-сдвиг;
+  `commit_properties` берёт реальный content extent вместо константы 8×.
+  Android: advance окна по cap-кроссу применяется в JNI bind-фазе через
+  `scroll_chat_by` (перепродуцирование посреди жеста), лендинг растра
+  ребейзит fast path после тика; blit-сдвиг = unacked. Desktop переведён на
+  ту же петлю без изменения поведения. Верификация: mid-flight сдвиг 35 px
+  бит-в-бит (0 из 310 284 px chat-колонки, ≡ `--blit-shift 35`); cap-посадка
+  в кадре (3 produce); регрессия покоя 2 px LSB из 836k; 6 unit-тестов
+  ack-петли + kernel-тест rebase (непрерывность/stale-фолбэк/телепорт);
+  `cargo check` desktop и `aarch64-linux-android` зелёные. Рантайм-проверка
+  Android на устройстве в этом окружении не выполнялась (см.
+  `docs/desktop/neocompositor-desktop-host.md`, «Этап 3»).
+
+- **Нативный шелл (desktop): скролл-анимации переведены на blit-сдвиг замороженного растра с sync-back — 0 re-produce на кадр анимации.**
+  Wheel ease-out, touch-драг и флинг двигают визуальное смещение
+  (`visual_scroll_css`); разница «визуал − запечённый оффсет» презентится как
+  blit-сдвиг через 2D blend-окно (`BlitWindow`). Посадка — один клэмпнутый
+  `scroll_chat_by` по завершении жеста, по drift-cap (половина высоты бэнда)
+  или grab'ом в `pointer_down` (синхронный produce до захвата — hit-ректы
+  всегда совпадают с экраном). Кэш бэнд-геометрии обновляется на каждом
+  produce. Верификация пробами с детерминированными часами: нотч
+  `--wheel 40 --tick 120` садится ровно в 40 при 0 produce на анимацию;
+  mid-flight swapchain — точный сдвиг 35 px (0 из 326 700 px разошлись),
+  филлер — #151311; drift-cap посадка на 385 px; регрессия покоя — идентичный
+  вывод. Семантика совпадает с fast-path Android; продвижение контента прямо
+  в fast path (ack-петля ядра) — следующий этап (см.
+  `docs/desktop/neocompositor-desktop-host.md`).
+
+- **Нативный шелл: 2D blend-окно скролла в blit-шейдере (этап 1 fast-path скролла) + починена Android-сборка ветки.**
+  Blit-шейдер (`BLIT_WGSL`, текст идентичен в `vello_gpu.rs` и
+  `android_surface.rs`) теперь принимает прямоугольное blend-окно
+  (`array<vec4<f32>, 2>`: вертикальный бэнд + горизонтальные границы,
+  uniform 16 → 32 байта в обоих хостах) — сдвигается только колонка чата,
+  а не всё окно. `PresentSurface::present` / `present_and_dump` принимают
+  `BlitWindow` (физические px; `default()` — прежнее поведение бит-в-бит,
+  Android передаёт full-width). Диагностическая проба `--blit-shift <dy_css>`
+  в `neocompositor-desktop` верифицирует окно пиксельно: header/сайдбар/
+  композер не двигаются, контент чата сдвигается точно, филлер — #151311.
+  Починена сломанная сборка под Android: JNI-диспетчер тапов не покрывал
+  `QuickIntent::Stop` и `MessageActionKind::SwipePicker` / `SwipePickerClose`
+  (плечи `cancel_generation` / `open_variant_picker` / `close_variant_picker`
+  зеркалят десктопный бин); `cargo check --target aarch64-linux-android` —
+  зелёный. Анализ fast-path скролла и план этапа 2 (анимации через blit-сдвиг
+  с sync-back, достройка ack-петли) — в
+  `docs/desktop/neocompositor-desktop-host.md`.
+
+- **Нативный шелл: скролл-динамика на общем ядре — плавный wheel, touch-драг с флингом и инерция Android в одном модуле.**
+  Динамика скролла обоих нативных хостов (desktop winit и Android SurfaceView)
+  вынесена в общий модуль `scroll_dynamics`
+  (`crates/presentation-chat/src/scroll_dynamics.rs`): бины хостов держат
+  только surface/input-обвязку, константы и кривые — одни на оба хоста.
+  - Пёрышковая инерция (fling): константы Android vsync-цикла
+    (`GLIDE_DECAY_PER_TICK = 0.94` за тик 8⅓ мс, порог остановки 12 CSS px/s)
+    теперь живут в модуле; `android_surface.rs` вызывает `glide_decay` /
+    `glide_active` (поведение бит-идентично прежнему inline-коду).
+  - Desktop: wheel-нотч анимируется ease-out (cubic, ~120 мс) вместо мгновенного
+    прыжка; нотч в полёте ретаргетится от текущей позиции (цепочки нотчей не
+    прыгают); сэмплы применяются через тот же клэмп `scroll_chat_by`.
+  - Desktop touch: контакт идёт через тот же pointer-пайплайн, что и мышь
+    (тач-тап = тап, hit-rects таблица решений); драг по канвасу скроллит 1:1,
+    релиз с скоростью выше порога стартует флинг на общих с Android
+    константах; захваченный контролом контакт не скроллит; синтезированные
+    mouse-события того же контакта подавляются. Мультитача нет (один палец).
+  - Драйв кадров: `about_to_wait` держит `request_redraw` + `WaitUntil(8 мс)`,
+    пока анимация жива; простой окна остаётся 0% CPU (`ControlFlow::Wait`).
+  - Пробы хоста: `--wheel <dy>` и `--tick <ms>` — детерминированные
+    скриптованные шаги анимации для снапшот-верификации
+    (`--wheel 40 --tick 120` садится ровно в 40.0; `--tick 60` даёт 35.0 =
+    `40 × ease_out_cubic(0.5)`).
+  - Тесты: 6 юнит-тестов `scroll_dynamics` (константы Android, масштабирование
+    dt, порог, ease-out, ретаргет, точная посадка) и 2 интеграционных в
+    `tests/compositor_host.rs` (`smooth_wheel_scroll_lands_exactly_on_target_through_session`,
+    `fling_glide_matches_shared_android_recurrence_through_session`).
+  - Журнал: «Скролл-динамика: общее ядро хостов» в
+    `docs/desktop/neocompositor-desktop-host.md`.
 
 - **Нативный рендер: динамический движок тем (Live Theme Engine) в презентационном контуре.**
   В презентационных пакетах нативного шелла (`presentation-design-system`,

@@ -3,7 +3,8 @@
 use contracts_generated::generated::MessageRole;
 use neotavern_neocompositor::PresentationTime;
 use neotavern_presentation_chat::{
-    start_flagged_session, ChatCompositor, FakeWire, AVATAR_DISPLAY_MAX_PX, DEMO_AVATAR_ASSET_ID,
+    scroll_dynamics::SmoothScroll, start_flagged_session, ChatCompositor, FakeWire,
+    AVATAR_DISPLAY_MAX_PX, DEMO_AVATAR_ASSET_ID,
 };
 use neotavern_presentation_dioxus_shell::{product_chat_app, product_shell_app};
 use neotavern_presentation_m0_d2::{
@@ -92,8 +93,11 @@ fn demo_session_loads_characters_list_for_character_manager() {
     let thumb = session
         .avatar_thumb(DEMO_AVATAR_ASSET_ID)
         .expect("premultiplied GPU thumbnail");
-    assert_eq!(thumb.width, AVATAR_DISPLAY_MAX_PX);
-    assert_eq!(thumb.height, AVATAR_DISPLAY_MAX_PX);
+    // Kernel `assets.thumb` is aspect-preserving (image audit stage C, no
+    // cover crop): the demo avatar asset is 192x288, so maxPx 192 yields
+    // 128x192 and the display paths cover-fit / object-fit from there.
+    assert_eq!(thumb.width, 128);
+    assert_eq!(thumb.height, u32::from(AVATAR_DISPLAY_MAX_PX));
     assert_eq!(
         shell.pinned_character_id.as_deref(),
         Some(shell.characters[0].id.as_str())
@@ -207,6 +211,7 @@ fn markdown_minimal_probe() {
         chrome: ProductChrome::HeaderComposer,
         character_avatar_asset: "asset:avatar-hazel".into(),
         character_name: "Hazel".into(),
+        active_theme_tokens: None,
         composer_text: String::new(),
         composer_placeholder: String::new(),
         error_code: None,
@@ -446,15 +451,42 @@ fn demo_session_hydrates_a_display_sized_avatar() {
     let thumb = session
         .avatar_thumb(DEMO_AVATAR_ASSET_ID)
         .expect("premultiplied GPU thumbnail");
-    assert_eq!(thumb.width, AVATAR_DISPLAY_MAX_PX);
-    assert_eq!(thumb.height, AVATAR_DISPLAY_MAX_PX);
+    // Kernel `assets.thumb` is aspect-preserving (image audit stage C, no
+    // cover crop): the demo avatar asset is 192x288, so maxPx 192 yields
+    // 128x192 and the display paths cover-fit / object-fit from there.
+    assert_eq!(thumb.width, 128);
+    assert_eq!(thumb.height, u32::from(AVATAR_DISPLAY_MAX_PX));
     neotavern_presentation_dioxus_shell::install_product_shell(shell);
     let produced = produce_product_app_at(product_shell_app, 407, 904, 1.0, session.insets())
         .expect("product blitz");
     assert!(produced.report.paint_commands > 0);
-    assert_eq!(
-        produced.report.raster_images, 0,
-        "GPU Vello blacks the SurfaceView if <img data:> is in the tree; letter fallback only"
+    assert!(
+        produced.report.raster_images > 0,
+        "stage B: avatar `<img src=\"asset:...\">` must decode to an in-scene raster (LocalNetProvider)"
+    );
+}
+
+#[test]
+fn message_markdown_photos_hydrate_and_decode_in_scene() {
+    let (session, _) = start_flagged_session(
+        Some("1"),
+        FakeWire::with_message_count(3),
+        Some(neotavern_presentation_chat::DEMO_CHAT_ID),
+        None,
+    )
+    .expect("route");
+    let store = neotavern_presentation_m0_d2::global_asset_store();
+    let photo_asset = "00000000-0000-4000-8000-000000009000";
+    assert!(
+        store.contains(photo_asset),
+        "message `![photo 0](asset:{photo_asset})` must hydrate into the process asset store"
+    );
+    neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
+    let produced = produce_product_app_at(product_shell_app, 1100, 760, 1.0, session.insets())
+        .expect("product blitz");
+    assert!(
+        produced.report.raster_images > 0,
+        "message-image `<img>` must decode through LocalNetProvider into the scene"
     );
 }
 
@@ -624,7 +656,7 @@ fn chats_panel_lists_wire_chats_and_opens_one() {
         session
             .message_text("00000000-0000-4000-8000-000000001000")
             .as_deref(),
-        Some("![photo 0](asset:thumb-0)")
+        Some("![photo 0](asset:00000000-0000-4000-8000-000000009000)")
     );
     assert_eq!(
         session.message_text("00000000-0000-4000-8000-000000001040"),
@@ -5454,9 +5486,7 @@ fn variant_picker_and_swipe_counter_over_product_wire() {
 #[test]
 fn composer_shows_stop_button_during_streaming_and_cancels_generation() {
     use contracts_generated::generated::GenerationEvent;
-    use neotavern_presentation_chat::{
-        HitRects, QuickIntent, ShellAction, StreamFrame, TapIntent,
-    };
+    use neotavern_presentation_chat::{HitRects, QuickIntent, ShellAction, StreamFrame, TapIntent};
     use neotavern_presentation_dioxus_shell::{
         install_product_chat, set_chat_blueprint_source, ChatBlueprintSource,
     };
@@ -5474,14 +5504,8 @@ fn composer_shows_stop_button_during_streaming_and_cancels_generation() {
     // Initial state: idle composer renders "send" action.
     assert!(!session.view().streaming);
     install_product_chat(session.view());
-    let skel_idle = inspect_slot_skeleton(
-        product_chat_app,
-        1100,
-        760,
-        1.0,
-        session.insets(),
-    )
-    .expect("idle skeleton");
+    let skel_idle = inspect_slot_skeleton(product_chat_app, 1100, 760, 1.0, session.insets())
+        .expect("idle skeleton");
     assert!(
         skel_idle
             .nodes
@@ -5503,14 +5527,8 @@ fn composer_shows_stop_button_during_streaming_and_cancels_generation() {
     for source in [ChatBlueprintSource::Disabled, ChatBlueprintSource::Embedded] {
         set_chat_blueprint_source(source.clone());
         install_product_chat(session.view());
-        let skel_stream = inspect_slot_skeleton(
-            product_chat_app,
-            1100,
-            760,
-            1.0,
-            session.insets(),
-        )
-        .unwrap_or_else(|err| panic!("skeleton for {source:?}: {err}"));
+        let skel_stream = inspect_slot_skeleton(product_chat_app, 1100, 760, 1.0, session.insets())
+            .unwrap_or_else(|err| panic!("skeleton for {source:?}: {err}"));
 
         let stop_node = skel_stream
             .nodes
@@ -5534,18 +5552,15 @@ fn composer_shows_stop_button_during_streaming_and_cancels_generation() {
 
     // Simulating tap on stop via ShellAction::StopGeneration cancels generation.
     session.apply_shell_action(ShellAction::StopGeneration);
-    assert!(!session.view().streaming, "streaming must stop after cancel");
+    assert!(
+        !session.view().streaming,
+        "streaming must stop after cancel"
+    );
 
     // Idle state restored: composer returns to send.
     install_product_chat(session.view());
-    let skel_after = inspect_slot_skeleton(
-        product_chat_app,
-        1100,
-        760,
-        1.0,
-        session.insets(),
-    )
-    .expect("after skeleton");
+    let skel_after = inspect_slot_skeleton(product_chat_app, 1100, 760, 1.0, session.insets())
+        .expect("after skeleton");
     assert!(
         skel_after
             .nodes
@@ -5579,10 +5594,24 @@ fn character_manager_alternate_greetings_add_toggle_and_remove() {
         .clone()
         .expect("hazel draft");
     assert_eq!(draft.name, "Hazel");
-    assert!(!draft.first_message.is_empty(), "initial first_message populated");
-    assert!(!draft.creator_notes.is_empty(), "initial creator_notes populated");
-    assert_eq!(draft.alternate_greetings.len(), 1, "initial greeting present");
-    assert_eq!(session.shell_view().expanded_greeting, None, "initially collapsed");
+    assert!(
+        !draft.first_message.is_empty(),
+        "initial first_message populated"
+    );
+    assert!(
+        !draft.creator_notes.is_empty(),
+        "initial creator_notes populated"
+    );
+    assert_eq!(
+        draft.alternate_greetings.len(),
+        1,
+        "initial greeting present"
+    );
+    assert_eq!(
+        session.shell_view().expanded_greeting,
+        None,
+        "initially collapsed"
+    );
 
     session.set_surface_size(1100, 760, 1.0);
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
@@ -5630,16 +5659,30 @@ fn character_manager_alternate_greetings_add_toggle_and_remove() {
 
     // Add another greeting
     session.apply_shell_action(ShellAction::AddAlternateGreeting);
-    let draft_after_add = session.shell_view().selected_draft.expect("draft after add");
+    let draft_after_add = session
+        .shell_view()
+        .selected_draft
+        .expect("draft after add");
     assert_eq!(draft_after_add.alternate_greetings.len(), 2);
-    assert_eq!(session.shell_view().expanded_greeting, Some(1), "new greeting expanded");
+    assert_eq!(
+        session.shell_view().expanded_greeting,
+        Some(1),
+        "new greeting expanded"
+    );
 
     // Remove greeting 0
     session.apply_shell_action(ShellAction::RemoveAlternateGreeting(0));
-    let draft_after_remove = session.shell_view().selected_draft.expect("draft after remove");
+    let draft_after_remove = session
+        .shell_view()
+        .selected_draft
+        .expect("draft after remove");
     assert_eq!(draft_after_remove.alternate_greetings.len(), 1);
     assert_eq!(draft_after_remove.alternate_greetings[0], "");
-    assert_eq!(session.shell_view().expanded_greeting, Some(0), "expansion adjusted");
+    assert_eq!(
+        session.shell_view().expanded_greeting,
+        Some(0),
+        "expansion adjusted"
+    );
 
     // Toggle closed
     session.apply_shell_action(ShellAction::ToggleAlternateGreeting(0));
@@ -5714,8 +5757,9 @@ fn message_details_card_open_inspect_and_close() {
     assert!(session.view().details_message_id.is_none());
 
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let skeleton_closed = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
-        .expect("closed details skeleton");
+    let skeleton_closed =
+        inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
+            .expect("closed details skeleton");
     assert!(
         !skeleton_closed.has_identity("details-card"),
         "details-card removed on close"
@@ -5728,13 +5772,8 @@ fn message_details_card_actions_mode_navigation_and_execution() {
     use neotavern_presentation_dioxus_shell::product_shell_app;
     use neotavern_presentation_m0_d2::inspect_slot_skeleton;
 
-    let (mut session, _) = start_flagged_session(
-        Some("1"),
-        FakeWire::demo(),
-        None,
-        None,
-    )
-    .expect("route");
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
     session.set_surface_size(1100, 760, 1.0);
 
     let target = session
@@ -5755,8 +5794,9 @@ fn message_details_card_actions_mode_navigation_and_execution() {
 
     // Inspect Dioxus slot skeleton in "actions" mode
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let skeleton_actions = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
-        .expect("actions mode skeleton");
+    let skeleton_actions =
+        inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
+            .expect("actions mode skeleton");
 
     assert!(
         skeleton_actions.has_identity("details-action-menu"),
@@ -5785,8 +5825,9 @@ fn message_details_card_actions_mode_navigation_and_execution() {
     assert_eq!(session.view().details_mode, "details");
 
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let skeleton_details = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
-        .expect("details mode skeleton");
+    let skeleton_details =
+        inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
+            .expect("details mode skeleton");
 
     assert!(
         skeleton_details.has_identity("details-meta"),
@@ -5808,13 +5849,8 @@ fn message_details_card_edit_mode_navigation_and_saving() {
     use neotavern_presentation_dioxus_shell::product_shell_app;
     use neotavern_presentation_m0_d2::inspect_slot_skeleton;
 
-    let (mut session, _) = start_flagged_session(
-        Some("1"),
-        FakeWire::demo(),
-        None,
-        None,
-    )
-    .expect("route");
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
     session.set_surface_size(1100, 760, 1.0);
 
     let target = session
@@ -5894,7 +5930,10 @@ fn message_details_card_edit_mode_navigation_and_saving() {
         .iter()
         .find(|r| r.id == target)
         .expect("updated row");
-    assert_eq!(updated_row.content, "Polished content via native details modal.");
+    assert_eq!(
+        updated_row.content,
+        "Polished content via native details modal."
+    );
 
     // Verify details card closed
     assert_eq!(session.view().details_message_id, None);
@@ -5907,13 +5946,8 @@ fn general_settings_steppers_and_range_sliders_interactive() {
     use neotavern_presentation_dioxus_shell::product_shell_app;
     use neotavern_presentation_m0_d2::inspect_slot_skeleton;
 
-    let (mut session, _) = start_flagged_session(
-        Some("1"),
-        FakeWire::demo(),
-        None,
-        None,
-    )
-    .expect("route");
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
     session.set_surface_size(1100, 760, 1.0);
     session.apply_shell_action(ShellAction::SetPanel("settings".into()));
 
@@ -6089,8 +6123,9 @@ fn chat_header_back_to_parent_button_navigates_to_parent_chat() {
 
     // Initial root chat has no parent: back-to-parent button must be absent.
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let initial_skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
-        .expect("initial skeleton");
+    let initial_skeleton =
+        inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
+            .expect("initial skeleton");
     assert!(
         !initial_skeleton.has_identity("back-to-parent"),
         "initial chat without parent must not render back-to-parent button"
@@ -6111,7 +6146,10 @@ fn chat_header_back_to_parent_button_navigates_to_parent_chat() {
     session.apply_shell_action(ShellAction::OpenSnapshot(child_id.clone()));
     assert_eq!(session.chat_id().as_deref(), Some(child_id.as_str()));
     assert_eq!(session.kernel_message_count(), 3);
-    assert_eq!(session.view().parent_chat_id.as_deref(), Some(parent_id.as_str()));
+    assert_eq!(
+        session.view().parent_chat_id.as_deref(),
+        Some(parent_id.as_str())
+    );
 
     // Child chat has a parent: verify the back-to-parent button is rendered and has action/component hooks.
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
@@ -6130,7 +6168,10 @@ fn chat_header_back_to_parent_button_navigates_to_parent_chat() {
         .find(|r| r.action.as_deref() == Some("back-to-parent"))
         .expect("back-to-parent hit rect");
     assert_eq!(
-        rects.resolve_tap(back_rect.x + back_rect.w / 2.0, back_rect.y + back_rect.h / 2.0),
+        rects.resolve_tap(
+            back_rect.x + back_rect.w / 2.0,
+            back_rect.y + back_rect.h / 2.0
+        ),
         neotavern_presentation_chat::hit_rects::TapIntent::Quick(QuickIntent::BackToParentChat)
     );
 
@@ -6142,15 +6183,131 @@ fn chat_header_back_to_parent_button_navigates_to_parent_chat() {
 
     // Returned to parent: back-to-parent button disappears.
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let parent_restored_skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
-        .expect("parent restored skeleton");
+    let parent_restored_skeleton =
+        inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
+            .expect("parent restored skeleton");
     assert!(
         !parent_restored_skeleton.has_identity("back-to-parent"),
         "back-to-parent button disappears once restored to parent chat"
     );
 }
 
+/// The desktop host's wheel path: a notch starts a `SmoothScroll` from the
+/// session's current scroll offset and frame ticks apply the sampled deltas
+/// through the same clamped `scroll_chat_by` the instant path uses. The eased
+/// sample never returns the endpoint itself — the landing frame must snap
+/// exactly. A third notch mid-flight retargets from the sampled position
+/// (never jumps backward), and the chain still lands exactly.
+#[test]
+fn smooth_wheel_scroll_lands_exactly_on_target_through_session() {
+    let (mut session, _) = start_flagged_session(
+        Some("1"),
+        FakeWire::with_message_count(256),
+        Some(neotavern_presentation_chat::DEMO_CHAT_ID),
+        None,
+    )
+    .expect("route");
+    assert_eq!(session.scroll_offset_css(), 0.0);
 
+    // One notch toward older messages (positive dy, desktop wheel direction).
+    let mut clock = 0u64;
+    let anim = SmoothScroll::impulse(session.scroll_offset_css(), 40.0, clock);
+    let mut last_end = 0.0_f32;
+    loop {
+        clock += 8_000_000;
+        let Some(offset) = anim.sample(clock) else {
+            break;
+        };
+        session.scroll_chat_by(offset - session.scroll_offset_css());
+        last_end = offset;
+        assert!(session.scroll_offset_css() >= 0.0, "never negative");
+    }
+    assert!(last_end < 40.0, "eased samples never reach the endpoint");
+    session.scroll_chat_by(anim.target() - session.scroll_offset_css());
+    assert_eq!(session.scroll_offset_css(), 40.0);
 
+    // A second notch starts a new flight from the landed offset; a third
+    // notch mid-flight retargets from the sampled position — the bin's
+    // `wheel` flow, framed at the same 8 ms cadence.
+    let mut anim = SmoothScroll::impulse(session.scroll_offset_css(), 40.0, clock);
+    let mid = clock + 30_000_000;
+    let mut now = clock;
+    while now < mid {
+        now += 8_000_000;
+        let offset = anim.sample(now).expect("pre-retarget frames are live");
+        session.scroll_chat_by(offset - session.scroll_offset_css());
+    }
+    anim.retarget(40.0, mid);
+    let mut last_offset = session.scroll_offset_css();
+    loop {
+        now += 8_000_000;
+        let Some(offset) = anim.sample(now) else {
+            break;
+        };
+        assert!(
+            offset >= last_offset,
+            "retarget continues forward, not backward"
+        );
+        last_offset = offset;
+        session.scroll_chat_by(offset - session.scroll_offset_css());
+    }
+    clock = now;
+    session.scroll_chat_by(anim.target() - session.scroll_offset_css());
+    assert_eq!(session.scroll_offset_css(), 120.0);
 
+    // A huge notch toward the newest clamps at 0, not negative.
+    let anim = SmoothScroll::impulse(session.scroll_offset_css(), -1.0e6, clock);
+    loop {
+        clock += 8_000_000;
+        let Some(offset) = anim.sample(clock) else {
+            break;
+        };
+        session.scroll_chat_by(offset - session.scroll_offset_css());
+    }
+    session.scroll_chat_by(anim.target() - session.scroll_offset_css());
+    assert_eq!(
+        session.scroll_offset_css(),
+        0.0,
+        "clamped at the newest edge"
+    );
+}
 
+/// The desktop fling loop applies the same per-tick recurrence the Android
+/// vsync loop runs (`compositor_tick` velocity, `glide_decay` decay): travel
+/// first, decay after, stop below the shared threshold. The session's
+/// accumulated offset must match that recurrence exactly — one core, not two
+/// look-alikes.
+#[test]
+fn fling_glide_matches_shared_android_recurrence_through_session() {
+    let (mut session, _) = start_flagged_session(
+        Some("1"),
+        FakeWire::with_message_count(256),
+        Some(neotavern_presentation_chat::DEMO_CHAT_ID),
+        None,
+    )
+    .expect("route");
+
+    const DT_NS: u64 = neotavern_presentation_chat::scroll_dynamics::GLIDE_TICK_NS;
+    let mut velocity = 1_200.0_f64;
+    let mut expected = 0.0_f64;
+    let mut applied_ticks = 0u32;
+    while neotavern_presentation_chat::scroll_dynamics::glide_active(velocity) {
+        let dy = velocity * (DT_NS as f64 / 1e9);
+        session.scroll_chat_by(dy as f32);
+        expected += dy;
+        velocity = neotavern_presentation_chat::scroll_dynamics::glide_decay(velocity, DT_NS);
+        applied_ticks += 1;
+        assert!(applied_ticks < 10_000, "glide must terminate");
+    }
+    assert!(applied_ticks > 10, "a 1200 px/s fling glides visibly");
+    assert!(
+        (session.scroll_offset_css() as f64 - expected).abs() < 0.5,
+        "session travel matches the Android recurrence: {} vs {expected}",
+        session.scroll_offset_css()
+    );
+    // The glide stopped exactly at the threshold crossing, not before: the
+    // final decayed velocity fell below the stop constant.
+    assert!(!neotavern_presentation_chat::scroll_dynamics::glide_active(
+        velocity
+    ));
+}

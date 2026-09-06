@@ -16,16 +16,25 @@
 //!   --w <px> --h <px>  initial window size in physical px    (default 1100x760)
 //!   --pointer <x>,<y>  simulate one CSS-px tap through the same pointer
 //!                      pipeline as the mouse (press+release, for snapshots)
+//!   --type <text>     type text into the focused field
+//!   --wheel <dy>      one wheel notch in CSS px through the live smooth-scroll
+//!                     path (positive = toward older messages)
+//!   --tick <ms>       advance the deterministic probe clock and run one
+//!                     animation step (`--wheel 40 --tick 120` lands the notch;
+//!                     a mid-flight `--tick 60` snapshots the eased state)
 //!   --snapshot <png> / --swapchain <png> / --dom-dump <json>  diagnostic dumps
 
 use std::collections::VecDeque;
 use std::sync::Arc;
 
 use neotavern_presentation_chat::{
-    hit_test, ChatCompositor, ChatSession, FakeWire, HitRects, PresentSurface, QuickIntent,
+    hit_test, scroll_ack::ScrollAckLoop, scroll_dynamics::SmoothScroll, sidebar_occupied_css,
+    BlitWindow, ChatCompositor, ChatSession, FakeWire, HitRects, PresentSurface, QuickIntent,
     ShellAction, ShellHit, TapIntent, DEMO_CHAT_ID, RAIL_WIDTH, TOUCH_SLOP_CSS,
 };
-use neotavern_presentation_dioxus_shell::{install_product_shell, product_shell_app};
+use neotavern_presentation_dioxus_shell::{
+    chrome_metrics, install_product_shell, product_shell_app,
+};
 use neotavern_presentation_m0_d2::{
     image_paints_from_layout, write_slot_skeleton, MessageRect, ProductVelloSession, VelloFilter,
 };
@@ -38,9 +47,22 @@ use winit::window::{Window, WindowAttributes};
 const TITLE: &str = "NeoCompositor вЂ” NeoTavern (Windows)";
 /// Approx CSS-px per wheel notch вЂ” a comfortable desktop scroll step.
 const WHEEL_LINE_CSS: f32 = 40.0;
-/// GPU texture cache key for the `--wallpaper` photo (not an avatar; lives in
-/// the same LRU only so the upload path is shared).
-const WALLPAPER_ASSET_ID: &str = "neota-wallpaper";
+
+/// Layout rect (css x, y, w, h) of the `part:chat-wallpaper` node — the
+/// wallpaper dest for the blit-shader underlay (image audit, stage C).
+fn wallpaper_rect_css(
+    skeleton: &neotavern_presentation_m0_d2::SlotSkeleton,
+) -> Option<(f32, f32, f32, f32)> {
+    skeleton
+        .nodes
+        .iter()
+        .find(|node| {
+            node.part.as_deref() == Some("chat-wallpaper")
+                && node.css_width > 0.0
+                && node.css_height > 0.0
+        })
+        .map(|node| (node.css_x, node.css_y, node.css_width, node.css_height))
+}
 
 /// Auto-dismiss delay for the Phase C status toast.
 const TOAST_MS: std::time::Duration = std::time::Duration::from_millis(3500);
@@ -144,6 +166,11 @@ fn preset_sampler_text(view: &neotavern_presentation_dioxus_shell::ProductShellV
 enum ProbeOp {
     Tap(f32, f32),
     Type(String),
+    /// One wheel notch in CSS px through the live smooth-scroll path.
+    Wheel(f32),
+    /// Advance the deterministic probe clock by N ms and run one animation
+    /// step (same sampler the real frame loop uses).
+    Tick(u64),
 }
 
 /// Inline message action captured at `Down`, like `PendingUi` for the shell.
@@ -184,6 +211,23 @@ struct PendingUi {
     hit: ShellHit,
 }
 
+/// Active touch contact (single pointer; no multitouch yet). Owns the drag
+/// scroll between slop-cross and release, plus the velocity estimate the
+/// release fling starts from — the Android host's `last_y`/`last_t`/`velocity`
+/// trio, in CSS px.
+struct TouchContact {
+    pointer_id: u64,
+    anchor_y: f32,
+    last_y: f32,
+    last_t_ns: u64,
+    velocity: f64,
+    dragging: bool,
+    /// A control captured the contact at `Down` (shell hit, message action,
+    /// quick action, panel resize). Captured contacts never drag-scroll;
+    /// the release runs the same slop-checked `pointer_up` as a mouse click.
+    captured: bool,
+}
+
 struct App {
     window: Option<Arc<Window>>,
     present: Option<PresentSurface>,
@@ -202,9 +246,43 @@ struct App {
     last_cursor: Option<(f32, f32)>,
     pointer_taps: VecDeque<ProbeOp>,
     simulated: bool,
+    /// Live wheel smooth-scroll; sampled per frame and applied through the
+    /// same clamped `scroll_chat_by` path as instant input.
+    smooth_scroll: Option<SmoothScroll>,
+    /// Fling velocity in CSS px/s after a touch release; decays via the
+    /// shared `scroll_dynamics` constants (identical core with Android).
+    glide_velocity: f64,
+    /// The scroll offset currently SHOWN on screen (CSS px). During a scroll
+    /// animation it leads the baked offset; the difference is the blit shift
+    /// (`BlitWindow.scroll_y`), so animation frames present the frozen raster
+    /// without a re-produce. Landing (gesture end, grab, drift cap) syncs the
+    /// session to this value with one `scroll_chat_by`.
+    visual_scroll_css: f32,
+    /// Chat-column blend window cached per produce: `(header, composer_top,
+    /// band_left, band_right)` in physical px.
+    chat_band: Option<(f32, f32, f32, f32)>,
+    /// Fast-path scroll ack-loop (shared with the Android host): owns the
+    /// drift cap (half the chat band), the presented-window bookkeeping and
+    /// the advance/land decisions, so both hosts run the identical policy.
+    ack: ScrollAckLoop,
+    /// Monotonic clock base for the scroll animation timelines.
+    clock_base: std::time::Instant,
+    /// Deterministic probe clock (ns since boot of the replay); `None`
+    /// disables it. `--tick` ops advance it and step the animations, so
+    /// `--wheel 40 --tick 120 --snapshot x.png` lands a deterministic end
+    /// state without depending on wall time.
+    probe_clock_ns: Option<u64>,
+    /// Monotonic ns of the last live fling step (physics dt source).
+    last_glide_tick_ns: Option<u64>,
+    /// Active touch contact, if any; mouse events are suppressed while set
+    /// (digitizers synthesize mouse events for the same contact).
+    touch: Option<TouchContact>,
+    /// `--blit-shift <dy_css>` diagnostic: one shifted present after the next
+    /// frame, to verify the 2D blend window (chat column shifts, chrome and
+    /// sidebar stay put).
+    blit_shift_probe: Option<f32>,
     focus: TextFocus,
     status_shown_at: Option<std::time::Instant>,
-    avatar_paints: Vec<neotavern_neocompositor::ImagePaintOp>,
     /// Chat message row boxes from the last painted frame, keyed by
     /// `data-message-id`; drives inline message-action hit-testing.
     message_rects: Vec<MessageRect>,
@@ -227,6 +305,9 @@ struct App {
     wallpaper_bytes: Option<Vec<u8>>,
     /// Cached cover raster + the physical size it was built for.
     wallpaper_cache: Option<(u32, u32, neotavern_presentation_chat::AvatarThumb)>,
+    /// Bumped whenever `wallpaper_cache` is rebuilt so the GPU underlay
+    /// re-uploads only on real content/size changes.
+    wallpaper_epoch: u64,
 }
 
 impl App {
@@ -257,9 +338,18 @@ impl App {
             last_cursor: None,
             pointer_taps: VecDeque::new(),
             simulated: false,
+            smooth_scroll: None,
+            glide_velocity: 0.0,
+            visual_scroll_css: 0.0,
+            chat_band: None,
+            ack: ScrollAckLoop::new(0.0),
+            clock_base: std::time::Instant::now(),
+            probe_clock_ns: None,
+            last_glide_tick_ns: None,
+            touch: None,
+            blit_shift_probe: None,
             focus: TextFocus::None,
             status_shown_at: None,
-            avatar_paints: Vec::new(),
             message_rects: Vec::new(),
             pending_message_action: None,
             pending_quick: None,
@@ -269,6 +359,7 @@ impl App {
             initial_size: (1100, 760),
             wallpaper_bytes: None,
             wallpaper_cache: None,
+            wallpaper_epoch: 0,
         })
     }
 
@@ -282,7 +373,11 @@ impl App {
         let t0 = std::time::Instant::now();
         let (width, height) = self.size;
         let density = self.density;
-        let (insets, toast_showing) = {
+        // Produce-time target re-allocation: resize events only re-configure
+        // the swapchain (stretch-present of the previous raster); here the
+        // rasters catch up with the settled size exactly once per produce.
+        present.resize(width.max(1), height);
+        let (insets, toast_showing, chat_band, ack_cap_css, ui_opacity, character_count) = {
             let session = &mut self.session;
             session.set_surface_size(width.max(1), height, density);
             session.set_safe_area_physical(0.0, 0.0, 0.0, 0.0);
@@ -291,9 +386,39 @@ impl App {
             // doubles that cost on every drag/scroll tick.
             let shell = session.shell_view();
             let toast_showing = shell.status_message.is_some();
+            // Chat-column blend window (physical px) for blit-shifted
+            // presents; the drift cap is half the band height so filler never
+            // covers the whole viewport between landings.
+            let d = density.max(1.0);
+            let css_w = ((width.max(1) as f32 / d).round()) as u32;
+            let css_h = ((height.max(1) as f32 / d).round()) as u32;
+            let (_, header, viewport, _) = chrome_metrics(css_w, css_h);
+            let occupied = sidebar_occupied_css(&shell);
+            let band = (
+                header as f32 * d,
+                (header + viewport) as f32 * d,
+                occupied * d,
+                width as f32,
+            );
+            let cap = (band.1 - band.0) * 0.5 / d;
+            // Captured before the move into `install_product_shell`; the
+            // wallpaper dim and the produce log need them, and a second
+            // `shell_view()` call would clone the whole view-model again
+            // (see the comment above).
+            let ui_opacity = shell.ui_opacity;
+            let character_count = shell.characters.len();
             install_product_shell(shell);
-            (session.insets(), toast_showing)
+            (
+                session.insets(),
+                toast_showing,
+                band,
+                cap,
+                ui_opacity,
+                character_count,
+            )
         };
+        self.chat_band = Some(chat_band);
+        self.ack.set_cap(ack_cap_css);
         if toast_showing {
             if self.status_shown_at.is_none() {
                 self.status_shown_at = Some(std::time::Instant::now());
@@ -303,6 +428,7 @@ impl App {
         }
         let t_layout = std::time::Instant::now();
 
+        let t_open = std::time::Instant::now();
         let mut sess = match ProductVelloSession::open(
             product_shell_app,
             width.max(1),
@@ -317,6 +443,7 @@ impl App {
                 return;
             }
         };
+        let t_paint = std::time::Instant::now();
         let (produced, scene, _diag) = match sess.paint(VelloFilter::full()) {
             Ok(out) => out,
             Err(err) => {
@@ -325,6 +452,7 @@ impl App {
                 return;
             }
         };
+        let t_render = std::time::Instant::now();
         let list_ops = produced.list.ops.len();
         let scene_paths = scene.encoding().n_paths;
 
@@ -372,83 +500,121 @@ impl App {
             self.dirty = true;
             return;
         }
+        let t_post = std::time::Instant::now();
         if std::env::var("NEOTA_DEBUG_PEEK").is_ok() {
             for (px, py) in [(550, 410), (1092, 410), (550, 100), (30, 400)] {
                 let before = present.debug_peek_resolve(px, py);
                 eprintln!("[wall-debug] after render ({px},{py}): {before:?}");
             }
         }
-        // Wallpaper photo UNDER the translucent scene (destination-over on
-        // `resolve`): glass fills blend over the photo like CSS glass over a
-        // background image. Rebuilt only when the physical size changes.
+        // One full skeleton build per produce: the same skeleton feeds the
+        // wallpaper dest rect, the hit rects and (when requested) the dom
+        // dump — `slot_skeleton()` walks the whole document on every call.
+        let skeleton = sess.slot_skeleton();
+        // Wallpaper photo: fixed underlay composited by the blit shader (image
+        // audit, stage C). The scroll blit shifts the scene OVER the photo, so
+        // the wallpaper no longer rides the band shift and the band's
+        // out-of-range region shows the photo instead of the flat filler. The
+        // dest rect is the layout rect of the `part:chat-wallpaper` node
+        // (chat workspace + bleed) — the photo no longer glows through the
+        // sidebar, matching the React chrome scoping.
         if let Some(bytes) = &self.wallpaper_bytes {
-            let cached = match &self.wallpaper_cache {
-                Some((w, h, _)) if *w == width && *h == height => None,
-                _ => neotavern_presentation_chat::wallpaper_cover_thumbnail(
-                    bytes,
-                    width.max(1),
-                    height.max(1),
-                ),
-            };
-            if let Some(thumb) = cached {
-                self.wallpaper_cache = Some((width, height, thumb));
-            }
-            if let Some((_, _, thumb)) = &self.wallpaper_cache {
-                present.upload_avatar(WALLPAPER_ASSET_ID, thumb);
-                present.composite_wallpaper_under(&neotavern_neocompositor::ImagePaintOp {
-                    asset_id: WALLPAPER_ASSET_ID.to_string(),
-                    dest: neotavern_neocompositor::Rect::new(
-                        0.0,
-                        0.0,
-                        width.max(1) as f32,
-                        height.max(1) as f32,
-                    ),
-                    clip_radius: 0.0,
-                    ready_token: 0,
-                });
-            }
-            if std::env::var("NEOTA_DEBUG_PEEK").is_ok() {
-                for (px, py) in [(550, 410), (1092, 410), (550, 100), (30, 400)] {
-                    let after = present.debug_peek_resolve(px, py);
-                    eprintln!("[wall-debug] after wallpaper ({px},{py}): {after:?}");
+            let density = density.max(1.0);
+            let wall_css = wallpaper_rect_css(&skeleton);
+            // React parity dim: `overlay_alpha = ui_opacity/100 * 0.45`
+            // (product_shell.rs); the shader applies it fixed to the photo.
+            let overlay_alpha = (ui_opacity.min(100) as f32 / 100.0) * 0.45;
+            present.set_wallpaper_overlay_alpha(overlay_alpha);
+            match wall_css {
+                Some(rect) => {
+                    let (rw, rh) = (
+                        (rect.2 * density).round().max(1.0),
+                        (rect.3 * density).round().max(1.0),
+                    );
+                    // Re-derive the cover only when the dest rect moved by
+                    // more than 10% along either axis; in between the shader
+                    // stretches the cached cover into the new rect (a photo
+                    // tolerates it, and a resize drag changes the rect every
+                    // produce — a full re-decode per tick would dominate the
+                    // frame).
+                    let stale = match &self.wallpaper_cache {
+                        Some((w, h, _)) => {
+                            let (w, h) = (*w as f32, *h as f32);
+                            (w - rw).abs() > w * 0.1 || (h - rh).abs() > h * 0.1
+                        }
+                        None => true,
+                    };
+                    let regen = if stale {
+                        neotavern_presentation_chat::wallpaper_cover_thumbnail(
+                            bytes, rw as u32, rh as u32,
+                        )
+                    } else {
+                        None
+                    };
+                    if let Some(thumb) = regen {
+                        self.wallpaper_cache = Some((rw as u32, rh as u32, thumb));
+                        self.wallpaper_epoch += 1;
+                    }
+                    if let Some((_, _, thumb)) = &self.wallpaper_cache {
+                        present.upload_wallpaper(self.wallpaper_epoch, thumb);
+                        present.set_wallpaper_rect(Some([
+                            (rect.0 * density).round(),
+                            (rect.1 * density).round(),
+                            rw,
+                            rh,
+                        ]));
+                    }
                 }
+                None => present.set_wallpaper_rect(None),
             }
         }
-        // Avatar GPU overlay (Android parity): upload thumbnails and draw them
-        // on `resolve` so the swapchain blit shows the real avatar image.
-        let avatar_paints = image_paints_from_layout(
-            sess.paint_layout(),
-            density.max(1.0),
-            self.session.avatar_ready_token(),
-        );
-        let avatar_count = avatar_paints.len();
-        for (asset_id, thumb) in self.session.avatar_thumbs() {
-            present.upload_avatar(asset_id, thumb);
-        }
-        present.composite_avatars(&avatar_paints);
-        self.avatar_paints = avatar_paints;
+        // Avatars ride the scene as `<img src="asset:{id}">` rasters (image
+        // audit, stage B): the paint walk z-orders them with clips and modal
+        // layers, so no post-frame composite exists. NEOTA_INSCENE_IMAGES=0
+        // restores the Stage A GPU overlay for a device where the Vello
+        // image atlas regresses.
+        let avatar_count = if neotavern_presentation_m0_d2::inscene_images_enabled() {
+            sess.paint_layout().avatars.len()
+        } else {
+            let avatar_paints = image_paints_from_layout(
+                sess.paint_layout(),
+                density.max(1.0),
+                self.session.avatar_ready_token(),
+            );
+            for (asset_id, thumb) in self.session.avatar_thumbs() {
+                present.upload_avatar(asset_id, thumb);
+            }
+            present.composite_avatars(&avatar_paints);
+            avatar_paints.len()
+        };
         // Message row boxes for inline action hit-testing (copy). The rows are
         // in-flow inside the chat viewport, so their layout rects are the
         // window CSS-px positions the pointer pipeline uses.
         self.message_rects = sess.paint_layout().messages.clone();
         // Layout-derived hit rects: the single geometry source for taps and
         // text-field focus (same skeleton the `--dom-dump` writes).
-        self.hit_rects = HitRects::from_skeleton(&sess.slot_skeleton());
+        self.hit_rects = HitRects::from_skeleton(&skeleton);
         let total = t0.elapsed();
         let layout_ms = t_layout.duration_since(t0).as_millis();
-        let render_ms = total.as_millis().saturating_sub(layout_ms);
+        let open_ms = t_paint.duration_since(t_open).as_millis();
+        let paint_ms = t_render.duration_since(t_paint).as_millis();
+        let render_ms = t_post.duration_since(t_render).as_millis();
+        let post_ms = total.as_millis() - layout_ms - open_ms - paint_ms - render_ms;
         eprintln!(
-            "[neocompositor-desktop] produced cmds={} ops={} paths={} glass={} backend={} kernel_messages={} characters={} avatars={} [layout {}ms raster {}ms total {}ms]",
+            "[neocompositor-desktop] produced cmds={} ops={} paths={} glass={} backend={} kernel_messages={} characters={} avatars={} [layout {}ms open {}ms paint {}ms render {}ms post {}ms total {}ms]",
             produced.report.paint_commands,
             list_ops,
             scene_paths,
             produced.report.glass_hooks,
             present.backend,
             self.session.kernel_message_count(),
-            self.session.shell_view().characters.len(),
+            character_count,
             avatar_count,
             layout_ms,
+            open_ms,
+            paint_ms,
             render_ms,
+            post_ms,
             total.as_millis(),
         );
         if let Some(path) = self.snapshot_path.take() {
@@ -458,7 +624,6 @@ impl App {
             }
         }
         if let Some(path) = self.dom_dump_path.take() {
-            let skeleton = sess.slot_skeleton();
             let count = skeleton.nodes.len();
             match write_slot_skeleton(&path, &skeleton) {
                 Ok(()) => {
@@ -466,6 +631,15 @@ impl App {
                 }
                 Err(err) => eprintln!("[neocompositor-desktop] dom-dump failed: {err}"),
             }
+        }
+        // After a produce the raster is baked at the session offset: the
+        // ack-loop lands on the produced window (the blit shift reads against
+        // it). While no scroll animation is mid-flight the visual follows the
+        // bake; mid-animation the visual keeps leading (landing will sync it
+        // back).
+        self.ack.land(self.session.scroll_offset_css());
+        if !self.scroll_animation_active() {
+            self.visual_scroll_css = self.session.scroll_offset_css();
         }
         self.dirty = false;
     }
@@ -485,6 +659,17 @@ impl App {
     /// `try_push(Down)`. Over the chat canvas (`None`) we capture nothing вЂ”
     /// wheel/drag handles that area.
     fn pointer_down(&mut self, css_x: f32, css_y: f32) {
+        // A grab lands any running scroll animation BEFORE capture: the
+        // sync-back produce refreshes hit rects so they match the shifted
+        // screen exactly (one ~30 ms produce per grab, not per scroll frame).
+        if self.scroll_animation_active()
+            || self.ack.drift(self.visual_scroll_css).abs() > f32::EPSILON
+        {
+            self.smooth_scroll = None;
+            self.glide_velocity = 0.0;
+            self.land_now();
+            self.produce_and_render();
+        }
         self.ensure_viewport();
         self.pending_message_action = None;
         self.pending_quick = None;
@@ -631,7 +816,8 @@ impl App {
             focus = TextFocus::CharacterFirstMessage;
         } else if rects.covers(css_x, css_y, "part:character-creator-notes-input") {
             focus = TextFocus::CharacterCreatorNotes;
-        } else if let Some(rect) = rects.top_matching(css_x, css_y, "part:character-greeting-input") {
+        } else if let Some(rect) = rects.top_matching(css_x, css_y, "part:character-greeting-input")
+        {
             if let Some(idx) = rect.key.as_deref().and_then(|k| k.parse::<usize>().ok()) {
                 focus = TextFocus::CharacterGreeting(idx);
             }
@@ -809,8 +995,11 @@ impl App {
                     }
                     QuickAction::ScrollLatest => {
                         // Saturate the virtualized window at the newest rows.
+                        // The jump happens outside the animation, so the
+                        // visual follows the baked offset (no stale shift).
                         self.pending_ui = None;
                         self.session.scroll_chat_by(1.0e6);
+                        self.visual_scroll_css = self.session.scroll_offset_css();
                         self.dirty = true;
                         self.window.as_ref().map(|w| w.request_redraw());
                     }
@@ -889,7 +1078,9 @@ impl App {
                     }
                     neotavern_presentation_chat::MessageActionKind::Edit => {
                         eprintln!("[neocompositor-desktop] edit tapped: {}", pending.row_id);
-                        if self.session.view().details_message_id.as_deref() == Some(&pending.row_id) {
+                        if self.session.view().details_message_id.as_deref()
+                            == Some(&pending.row_id)
+                        {
                             self.session.set_message_details_mode("edit");
                         } else {
                             self.session.start_message_edit(&pending.row_id);
@@ -1041,13 +1232,207 @@ impl App {
         }
     }
 
-    /// Wheel over the chat viewport scrolls it; `dy` is in CSS px (negative =
-    /// scroll up / older messages).
-    fn wheel(&mut self, css_dy: f32) {
-        if css_dy != 0.0 && self.present.is_some() {
-            self.session.scroll_chat_by(css_dy);
+    /// Monotonic nanoseconds for the scroll animation timelines. The
+    /// deterministic probe clock takes precedence while scripted ops run so
+    /// `--tick` sequences land on exact sample times.
+    fn monotonic_ns(&self) -> u64 {
+        self.probe_clock_ns
+            .unwrap_or_else(|| self.clock_base.elapsed().as_nanos() as u64)
+    }
+
+    /// Advances the scroll animations in the VISUAL offset only: the frozen
+    /// raster stays baked at the session offset and the difference presents
+    /// as a blit shift, so animation frames skip the ~30 ms re-produce.
+    /// Returns `true` when an animation just finished — `frame` then lands
+    /// the visual into the session (sync-back).
+    fn advance_scroll_animations(&mut self) -> bool {
+        let was_active = self.scroll_animation_active();
+        let now = self.monotonic_ns();
+        if let Some(anim) = self.smooth_scroll.take() {
+            match anim.sample(now) {
+                Some(offset) => {
+                    self.visual_scroll_css = offset.max(0.0);
+                    self.smooth_scroll = Some(anim);
+                }
+                None => {
+                    // The eased sample never returns the endpoint itself;
+                    // the visual ends exactly on the target.
+                    self.visual_scroll_css = anim.target().max(0.0);
+                }
+            }
+        }
+        // Touch fling: same glide constants as the Android vsync loop. The
+        // step dt is measured in the active clock domain (probe clock for
+        // scripted runs, wall time live), so decay and travel stay consistent.
+        if neotavern_presentation_chat::scroll_dynamics::glide_active(self.glide_velocity) {
+            const FLING_FRAME_NS: u64 = 8_333_333;
+            let now = self.monotonic_ns();
+            // Clamp one step to 250 ms: a stalled window (occlusion, system
+            // load) must not teleport the fling across the chat. Android gets
+            // this for free from its fixed vsync tick.
+            let dt = now
+                .saturating_sub(
+                    self.last_glide_tick_ns
+                        .unwrap_or(now.saturating_sub(FLING_FRAME_NS)),
+                )
+                .clamp(1, 250_000_000);
+            self.last_glide_tick_ns = Some(now);
+            self.visual_scroll_css += (self.glide_velocity * (dt as f64 / 1e9)) as f32;
+            self.visual_scroll_css = self.visual_scroll_css.max(0.0);
+            self.glide_velocity =
+                neotavern_presentation_chat::scroll_dynamics::glide_decay(self.glide_velocity, dt);
+        } else {
+            self.last_glide_tick_ns = None;
+        }
+        let finished = was_active && !self.scroll_animation_active();
+        finished
+    }
+
+    fn scroll_animation_active(&self) -> bool {
+        self.smooth_scroll.is_some()
+            || neotavern_presentation_chat::scroll_dynamics::glide_active(self.glide_velocity)
+            || self.touch.as_ref().is_some_and(|contact| contact.dragging)
+    }
+
+    /// Sync-back: lands the visual offset into the session with ONE clamped
+    /// `scroll_chat_by`, so the next produce bakes exactly what the screen
+    /// shows and the blit shift returns to zero. The ack-loop lands on the
+    /// produced window (produce is synchronous here — no in-flight state).
+    fn land_scroll(&mut self, shift: f32) {
+        if shift != 0.0 {
+            self.session.scroll_chat_by(shift);
+            self.ack.land(self.session.scroll_offset_css());
+            self.visual_scroll_css = self.session.scroll_offset_css();
             self.dirty = true;
-            self.window.as_ref().map(|w| w.request_redraw());
+        }
+    }
+
+    /// Land unconditionally (drag release, grab): sync the session to the
+    /// visual regardless of how large the drift is.
+    fn land_now(&mut self) {
+        let shift = self.ack.drift(self.visual_scroll_css);
+        self.land_scroll(shift);
+    }
+
+    /// Wheel over the chat viewport scrolls it; `dy` is in CSS px (negative =
+    /// scroll up / older messages). Notches land on a ~120 ms ease-out curve
+    /// over the blit shift (no re-produce per frame); chaining notches
+    /// mid-flight retargets.
+    fn wheel(&mut self, css_dy: f32) {
+        if css_dy == 0.0 || self.present.is_none() {
+            return;
+        }
+        self.glide_velocity = 0.0;
+        let now = self.monotonic_ns();
+        match self.smooth_scroll.as_mut() {
+            Some(anim) if anim.sample(now).is_some() => anim.retarget(css_dy, now),
+            _ => {
+                self.smooth_scroll =
+                    Some(SmoothScroll::impulse(self.visual_scroll_css, css_dy, now));
+            }
+        }
+        self.window.as_ref().map(|w| w.request_redraw());
+    }
+
+    /// Touch input: tap-through when a control captured the contact, drag
+    /// scroll over the chat canvas (1 : 1 while dragging), fling on release.
+    /// Single pointer; the digitizer's synthesized mouse events for the same
+    /// contact are ignored while it is active.
+    fn touch_input(
+        &mut self,
+        pointer_id: u64,
+        phase: winit::event::TouchPhase,
+        css_x: f32,
+        css_y: f32,
+    ) {
+        use winit::event::TouchPhase;
+        match phase {
+            TouchPhase::Started => {
+                let now = self.monotonic_ns();
+                // Route the contact through the same `Down` capture as a
+                // mouse press (controls, slop rules) so taps stay identical.
+                self.pointer_down(css_x, css_y);
+                let captured = self.pending_ui.is_some()
+                    || self.pending_message_action.is_some()
+                    || self.pending_quick.is_some()
+                    || self.panel_drag.is_some();
+                self.touch = Some(TouchContact {
+                    pointer_id,
+                    anchor_y: css_y,
+                    last_y: css_y,
+                    last_t_ns: now,
+                    velocity: 0.0,
+                    dragging: false,
+                    captured,
+                });
+                if !captured {
+                    // Canvas contact: drag-scroll candidate. Cancel any live
+                    // smooth scroll so the finger takes over 1 : 1.
+                    self.smooth_scroll = None;
+                    self.glide_velocity = 0.0;
+                }
+            }
+            TouchPhase::Moved => {
+                let now = self.monotonic_ns();
+                if let Some(contact) = self.touch.as_mut() {
+                    if contact.pointer_id != pointer_id {
+                        return;
+                    }
+                    if contact.captured {
+                        // The control's own slop check runs at release
+                        // (`pointer_up`), like the Android pending-tap rule.
+                        return;
+                    }
+                    if !contact.dragging {
+                        if (css_y - contact.anchor_y).abs() > TOUCH_SLOP_CSS {
+                            contact.dragging = true;
+                        } else {
+                            return;
+                        }
+                    }
+                    let dt_ns = now.saturating_sub(contact.last_t_ns).max(1);
+                    let dy = contact.last_y - css_y;
+                    contact.velocity = f64::from(dy) / (dt_ns as f64 / 1e9);
+                    contact.last_y = css_y;
+                    contact.last_t_ns = now;
+                    // Visual-only: the frozen raster presents the drag as a
+                    // blit shift; the session lands on release.
+                    self.visual_scroll_css = (self.visual_scroll_css + dy).max(0.0);
+                    self.window.as_ref().map(|w| w.request_redraw());
+                }
+            }
+            TouchPhase::Ended => {
+                if let Some(contact) = self.touch.take() {
+                    if contact.pointer_id != pointer_id {
+                        self.touch = Some(contact);
+                        return;
+                    }
+                    if contact.captured || !contact.dragging {
+                        // Tap (or a captured contact whose slop check runs
+                        // inside `pointer_up`): the same dispatch as a mouse
+                        // click.
+                        self.pointer_up(css_x, css_y);
+                    } else {
+                        // Release starts the shared glide decay (Android
+                        // fling constants); slow drags land immediately.
+                        if neotavern_presentation_chat::scroll_dynamics::glide_active(
+                            contact.velocity,
+                        ) {
+                            self.glide_velocity = contact.velocity;
+                        } else {
+                            self.land_now();
+                        }
+                        self.window.as_ref().map(|w| w.request_redraw());
+                    }
+                }
+            }
+            TouchPhase::Cancelled => {
+                self.touch = None;
+                self.glide_velocity = 0.0;
+                // The gesture died mid-flight: keep what the screen shows by
+                // landing the visual into the session.
+                self.land_now();
+            }
         }
     }
 
@@ -1525,8 +1910,48 @@ impl App {
                             self.type_char(ch);
                         }
                     }
+                    ProbeOp::Wheel(dy) => {
+                        // Route the notch through the live `wheel` path with
+                        // the deterministic clock started at 0 (a real-time
+                        // base would race the later `--tick` steps).
+                        self.probe_clock_ns.get_or_insert(0);
+                        self.wheel(dy);
+                    }
+                    ProbeOp::Tick(ms) => {
+                        // One animation step at a deterministic sample time:
+                        // the same sampler the real frame loop runs. A step
+                        // that finishes the animation lands immediately so
+                        // the produce below bakes the landed offset (the
+                        // frame-level landing already ran inside the replay).
+                        let clock = self.probe_clock_ns.get_or_insert(0);
+                        *clock = clock.saturating_add(ms.saturating_mul(1_000_000));
+                        if self.advance_scroll_animations() {
+                            self.land_now();
+                        }
+                    }
                 }
             }
+        }
+        // Wheel ease-out / touch fling advance the VISUAL offset (frozen
+        // raster + blit shift, no re-produce). The scripted probe clock lives
+        // exactly while a scripted animation is still mid-flight; once it
+        // lands, live input returns to wall time (a stale frozen clock would
+        // freeze the next live animation too).
+        if !self.scroll_animation_active() {
+            self.probe_clock_ns = None;
+        }
+        self.advance_scroll_animations();
+        // Landing (sync-back) through the shared ack-loop: a drift past half
+        // the chat band while the gesture runs — or any residual drift once
+        // it ended — bakes the visual into the session with one clamped
+        // `scroll_chat_by`; the produce below then re-renders the content
+        // window at the landed offset (the same contract the Android host
+        // drives through the kernel rebase).
+        if let Some(shift) = self
+            .ack
+            .due(self.visual_scroll_css, self.scroll_animation_active())
+        {
+            self.land_scroll(shift);
         }
         if self.dirty {
             self.produce_and_render();
@@ -1538,12 +1963,17 @@ impl App {
         }
         // Present from the accumulated resolve once per redraw. Redraws are
         // event-driven (resize, data change, later: pointer/stream) вЂ” the idle
-        // window stays at ~0% CPU instead of spinning the event loop.
+        // window stays at ~0% CPU instead of spinning the event loop. The
+        // probe dump (if requested) is re-written by the shifted present
+        // below, so `--blit-shift --swapchain x.png` captures the shifted
+        // frame.
+        let probe_swap = self.swap_path.clone();
+        let window = self.present_window();
         let result = {
             let present = self.present.as_mut().expect("present present");
             match &self.swap_path {
-                Some(path) => present.present_and_dump(0.0, 0.0, 0.0, path),
-                None => present.present(0.0, 0.0, 0.0),
+                Some(path) => present.present_and_dump(window, path),
+                None => present.present(window),
             }
         };
         match result {
@@ -1572,6 +2002,61 @@ impl App {
                 self.retry_present = true;
             }
         }
+        // `--blit-shift` diagnostic: one extra present with the chat column
+        // shifted by the given CSS px inside the 2D blend window — sidebar,
+        // header and composer must stay put while the chat viewport shifts.
+        if let Some(dy) = self.blit_shift_probe.take() {
+            let window = self.chat_blit_window(dy);
+            if let Some(present) = self.present.as_mut() {
+                let result = match &probe_swap {
+                    Some(path) => present.present_and_dump(window, path),
+                    None => present.present(window),
+                };
+                match result {
+                    Ok(()) => eprintln!(
+                        "[neocompositor-desktop] blit-shift {dy} css px (band {:?})",
+                        (
+                            window.header,
+                            window.composer_top,
+                            window.band_left,
+                            window.band_right
+                        )
+                    ),
+                    Err(err) => eprintln!("[neocompositor-desktop] blit-shift present: {err}"),
+                }
+            }
+        }
+    }
+
+    /// The blend window for the regular present: the cached chat column plus
+    /// the current blit shift (visual minus the ack-loop's presented window),
+    /// in physical px. Falls back to a plain full-frame blit before the first
+    /// produce.
+    fn present_window(&self) -> BlitWindow {
+        match self.chat_band {
+            Some((header, composer_top, band_left, band_right)) => BlitWindow {
+                scroll_y: self.ack.drift(self.visual_scroll_css) * self.density.max(1.0),
+                header,
+                composer_top,
+                band_left,
+                band_right,
+            },
+            None => BlitWindow::default(),
+        }
+    }
+
+    /// `--blit-shift` diagnostic window: the cached chat column shifted by an
+    /// absolute CSS px amount (independent of the animation state).
+    fn chat_blit_window(&self, dy_css: f32) -> BlitWindow {
+        let (header, composer_top, band_left, band_right) =
+            self.chat_band.unwrap_or((0.0, 0.0, 0.0, 0.0));
+        BlitWindow {
+            scroll_y: dy_css * self.density.max(1.0),
+            header,
+            composer_top,
+            band_left,
+            band_right,
+        }
     }
 
     fn resize(&mut self, width: u32, height: u32) {
@@ -1585,8 +2070,14 @@ impl App {
             );
         }
         self.size = (width, height);
+        // Per event: re-configure the swapchain only (the blit keeps sampling
+        // the previous raster between produces) and mark dirty — winit
+        // coalesces redraws, so the document re-lays-out at the new size at
+        // the display cadence instead of once per drag pixel. The expensive
+        // target re-allocation happens once per produce (`produce_and_render`
+        // calls `PresentSurface::resize`), not once per event.
         if let Some(present) = self.present.as_mut() {
-            present.resize(width, height);
+            present.set_swapchain_size(width, height);
         }
         self.dirty = true;
         self.window.as_ref().map(|w| w.request_redraw());
@@ -1667,7 +2158,16 @@ impl ApplicationHandler for App {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => self.resize(size.width, size.height),
             WindowEvent::RedrawRequested => self.frame(),
+            WindowEvent::Touch(touch) => {
+                // Digitizers synthesize mouse events for the same contact;
+                // while the touch pipeline owns the pointer, ignore those.
+                let (x, y) = self.css_point(touch.location.x, touch.location.y);
+                self.touch_input(touch.id, touch.phase, x, y);
+            }
             WindowEvent::CursorMoved { position, .. } => {
+                if self.touch.is_some() {
+                    return;
+                }
                 let (x, y) = self.css_point(position.x, position.y);
                 self.last_cursor = Some((x, y));
                 self.pointer_move(x, y);
@@ -1677,6 +2177,9 @@ impl ApplicationHandler for App {
                 button: MouseButton::Left,
                 ..
             } => {
+                if self.touch.is_some() {
+                    return;
+                }
                 let Some((x, y)) = self.last_cursor else {
                     return;
                 };
@@ -1717,6 +2220,22 @@ impl ApplicationHandler for App {
             }
             let next = std::time::Instant::now()
                 .checked_add(std::time::Duration::from_millis(50))
+                .expect("instant");
+            event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(next.into()));
+        } else if self.scroll_animation_active() {
+            // Wheel ease-out and touch fling frames at the vsync cadence; the
+            // animation is absolute-time based, so a late frame lands on the
+            // correct offset instead of skipping steps. A scripted animation
+            // still on the probe clock advances it at the same cadence, so it
+            // completes in real time after the replay.
+            if let Some(clock) = self.probe_clock_ns.as_mut() {
+                *clock = clock.saturating_add(8_000_000);
+            }
+            if let Some(window) = self.window.as_ref() {
+                window.request_redraw();
+            }
+            let next = std::time::Instant::now()
+                .checked_add(std::time::Duration::from_millis(8))
                 .expect("instant");
             event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(next.into()));
         } else if self.status_shown_at.is_some() {
@@ -1761,6 +2280,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .position(|a| a == "--dom-dump")
         .and_then(|i| args.get(i + 1))
         .cloned();
+    // Blit-window diagnostic: shift the chat column once (see `frame`).
+    let blit_shift: Option<f32> = args
+        .iter()
+        .position(|a| a == "--blit-shift")
+        .and_then(|i| args.get(i + 1))
+        .and_then(|v| v.trim().parse::<f32>().ok());
     // Blueprint-driven chrome (M2/M4): since the M4 wave-4 flip (ADR-0056)
     // the embedded canonical document is the DEFAULT renderer of the inner
     // chat chrome on this internal host. Opt-outs, strongest first:
@@ -1812,6 +2337,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         ops.push_back(ProbeOp::Type(text.clone()));
                     }
                 }
+                "--wheel" => {
+                    if let Some(spec) = args_iter.next() {
+                        if let Ok(dy) = spec.trim().parse::<f32>() {
+                            ops.push_back(ProbeOp::Wheel(dy));
+                        }
+                    }
+                }
+                "--tick" => {
+                    if let Some(spec) = args_iter.next() {
+                        if let Ok(ms) = spec.trim().parse::<u64>() {
+                            ops.push_back(ProbeOp::Tick(ms));
+                        }
+                    }
+                }
                 _ => {}
             }
         }
@@ -1823,6 +2362,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     app.swap_path = swapchain;
     app.dom_dump_path = dom_dump;
     app.pointer_taps = probe_ops;
+    app.blit_shift_probe = blit_shift;
     app.initial_size = (w.max(1), h.max(1));
     if let Some(path) = args
         .iter()

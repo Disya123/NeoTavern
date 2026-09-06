@@ -18,7 +18,7 @@ use neotavern_presentation_design_system::{
     phosphor_path, product_stylesheets_dev, SafeAreaInsets,
 };
 
-use crate::{product_chat_app, ProductChatView};
+use crate::{product_chat_app, ProductChatView, ASSET_URL_PREFIX};
 
 /// Full character draft (mirrors React `CharacterDraft`).
 #[derive(Clone, Debug, PartialEq)]
@@ -996,30 +996,73 @@ fn rail_button(item: &RailSpec, selected: bool) -> Element {
     }
 }
 
-fn character_avatar(name: &str, class: &'static str, asset_id: Option<&str>) -> Element {
+/// Resolved slot tokens for avatar chrome: the live theme when present, the
+/// canonical dark defaults otherwise (same fallback as the shell styles).
+fn avatar_tokens(view: &ProductShellView) -> neotavern_presentation_design_system::ThemeTokens {
+    view.active_theme_tokens.clone().unwrap_or_default()
+}
+
+fn character_avatar(
+    name: &str,
+    class: &'static str,
+    asset_id: Option<&str>,
+    tokens: &neotavern_presentation_design_system::ThemeTokens,
+) -> Element {
     let letter = name
         .chars()
         .next()
         .map(|ch| ch.to_uppercase().to_string())
         .unwrap_or_default();
     let asset = asset_id.unwrap_or("");
+    // React `--st-radius-control` from the packed token sheet — the fallback
+    // background, the GPU overlay clip and the in-scene `<img>` radius all
+    // use the same value.
+    let radius = tokens.radius_control_px();
+    let viewer = class.contains("viewerAvatar");
+    let fit = if viewer { "contain" } else { "cover" };
     let box_style = if class.contains("headerAvatar") {
-        "width:44px;height:44px;max-width:44px;max-height:44px;flex:none;align-self:center;overflow:hidden;"
+        // React: CharacterManagementPanel panel header is
+        // `var(--st-control-height)`.
+        let px = tokens.control_height_px();
+        format!("width:{px}px;height:{px}px;max-width:{px}px;max-height:{px}px;flex:none;align-self:center;overflow:hidden;")
     } else if class.contains("editorAvatar") {
-        "width:64px;height:64px;max-width:64px;max-height:64px;flex:none;align-self:start;overflow:hidden;"
+        // React: `calc(var(--st-control-height-large) + var(--st-space-md))`.
+        let px = tokens.control_height_large_plus_space_md_px();
+        format!("width:{px}px;height:{px}px;max-width:{px}px;max-height:{px}px;flex:none;align-self:start;overflow:hidden;")
     } else if class.contains("galleryAvatar") {
         "width:100%;max-width:100%;aspect-ratio:4/5;flex:none;align-self:stretch;overflow:hidden;"
+            .to_owned()
+    } else if viewer {
+        // React parity: CharacterManagementPanel `.viewerAvatar` — full-width
+        // block, intrinsic height, 1px strong border, `object-fit: contain`.
+        format!(
+            "display:block;width:100%;max-width:100%;height:auto;flex:none;align-self:stretch;overflow:hidden;border:1px solid {};",
+            tokens.color_border_strong
+        )
     } else {
-        // React parity: cardAvatar is var(--st-control-height-large) = 48px, not 52px.
-        "width:48px;height:48px;max-width:48px;max-height:48px;flex:none;align-self:start;overflow:hidden;"
+        // React parity: `.cardAvatar` is `var(--st-control-height-large)`.
+        let px = tokens.control_height_large_px();
+        format!("width:{px}px;height:{px}px;max-width:{px}px;max-height:{px}px;flex:none;align-self:start;overflow:hidden;")
     };
     rsx! {
         span {
             class: "{class}",
-            style: "{box_style}",
+            style: "{box_style}position:relative;",
             "aria-hidden": "true",
             "data-part": "avatar-fallback",
             "data-avatar-asset": "{asset}",
+            "data-avatar-radius": "{radius}",
+            // In-scene raster (image pipeline audit, stage B): `asset:{id}` is
+            // resolved by the m0-d2 LocalNetProvider against the process asset
+            // store. Absolute fill keeps the letter fallback's flex layout
+            // untouched; the `<img>` clips itself to its own border-radius.
+            if !asset.is_empty() {
+                img {
+                    src: "{ASSET_URL_PREFIX}{asset}",
+                    alt: "",
+                    style: "position:absolute;top:0;left:0;width:100%;height:100%;object-fit:{fit};border-radius:{radius}px;",
+                }
+            }
             if letter.is_empty() {
                 {icon("UsersThree", 20)}
             } else {
@@ -1033,8 +1076,13 @@ fn character_avatar(name: &str, class: &'static str, asset_id: Option<&str>) -> 
     }
 }
 
-fn character_avatar_with_asset(name: &str, asset_id: Option<&str>, class: &'static str) -> Element {
-    character_avatar(name, class, asset_id)
+fn character_avatar_with_asset(
+    view: &ProductShellView,
+    name: &str,
+    asset_id: Option<&str>,
+    class: &'static str,
+) -> Element {
+    character_avatar(name, class, asset_id, &avatar_tokens(view))
 }
 
 fn editor_field(
@@ -1269,7 +1317,7 @@ fn cards_tab(view: &ProductShellView) -> Element {
                                     "data-state": if selected { "selected" } else { "idle" },
                                     "data-pinned": if pinned { "true" } else { "false" },
                                     "aria-pressed": selected,
-                                    {character_avatar_with_asset(&item.name, item.avatar_asset_id.as_deref(), "CharacterManagementPanel_cardAvatar")}
+                                    {character_avatar_with_asset(view, &item.name, item.avatar_asset_id.as_deref(), "CharacterManagementPanel_cardAvatar")}
                                     span {
                                         class: "CharacterManagementPanel_cardCopy",
                                         strong { "{item.name}" }
@@ -1304,7 +1352,7 @@ fn cards_tab(view: &ProductShellView) -> Element {
     }
 }
 
-fn character_card_viewer(_view: &ProductShellView, draft: &CharacterDraftView) -> Element {
+fn character_card_viewer(view: &ProductShellView, draft: &CharacterDraftView) -> Element {
     let character_name = if draft.name.is_empty() {
         "Unnamed character"
     } else {
@@ -1321,7 +1369,7 @@ fn character_card_viewer(_view: &ProductShellView, draft: &CharacterDraftView) -
                 class: "CharacterManagementPanel_viewerIdentity",
                 "data-part": "character-viewer-identity",
                 style: "display:flex;align-items:center;gap:12px;",
-                {character_avatar_with_asset(&draft.name, draft.avatar_asset_id.as_deref(), "CharacterManagementPanel_viewerAvatar")}
+                {character_avatar_with_asset(view, &draft.name, draft.avatar_asset_id.as_deref(), "CharacterManagementPanel_viewerAvatar")}
                 div {
                     class: "CharacterManagementPanel_viewerIdentityCopy",
                     style: "display:flex;flex-direction:column;gap:4px;min-width:0;flex:1;",
@@ -1470,7 +1518,7 @@ fn edit_tab(view: &ProductShellView, draft: &CharacterDraftView) -> Element {
                     class: "CharacterManagementPanel_avatarButton",
                     r#type: "button",
                     "aria-label": "Change",
-                    {character_avatar_with_asset(&draft.name, draft.avatar_asset_id.as_deref(), "CharacterManagementPanel_editorAvatar")}
+                    {character_avatar_with_asset(view, &draft.name, draft.avatar_asset_id.as_deref(), "CharacterManagementPanel_editorAvatar")}
                     span { {icon("Pencil", 11)} }
                 }
                 div {
@@ -1919,6 +1967,7 @@ fn gallery_tab(view: &ProductShellView, draft: &CharacterDraftView) -> Element {
                         "data-part": "gallery-figure",
                         "data-state": "primary",
                         {character_avatar_with_asset(
+                            view,
                             &name,
                             asset_id.as_deref(),
                             "CharacterManagementPanel_galleryAvatar",
@@ -1999,6 +2048,7 @@ fn character_manager(view: &ProductShellView) -> Element {
                         class: "SidebarPanelHeader_avatar",
                         "data-part": "avatar",
                         {character_avatar_with_asset(
+                            view,
                             selected.map(|item| item.name.as_str()).unwrap_or(""),
                             selected.and_then(|item| item.avatar_asset_id.as_deref()),
                             "CharacterManagementPanel_headerAvatar",
@@ -2544,6 +2594,9 @@ pub fn product_shell_app() -> Element {
     let wallpaper_mode = crate::scene_chat::chat_wallpaper_mode();
     let shell_class = if wallpaper_mode { "" } else { "AppShell_shell" };
     let overlay_alpha = (view.ui_opacity.min(100) as f32 / 100.0) * 0.45;
+    // Wallpaper mode dims the photo in the blit shader (fixed with the photo,
+    // image audit stage C); the scene overlay div must not dim a second time.
+    let overlay_style_alpha = if wallpaper_mode { 0.0 } else { overlay_alpha };
     let pref_vars = {
         let motion = if view.ui_motion == "reduced" {
             "--st-motion-duration-fast:1ms;--st-motion-duration-normal:1ms;--st-motion-duration-slow:1ms;"
@@ -2855,16 +2908,6 @@ pub fn product_shell_app() -> Element {
                 None
             },
             a { class: "AppShell_skipLink", href: "#chat-workspace", "Skip to chat" }
-            div {
-                "data-part": "chat-wallpaper",
-                "aria-hidden": "true",
-                style: "position:absolute;left:-16px;top:-16px;right:-16px;bottom:-16px;z-index:0;pointer-events:none;background:transparent;",
-            }
-            div {
-                "data-part": "chat-wallpaper-overlay",
-                "aria-hidden": "true",
-                style: "position:absolute;left:0;top:0;right:0;bottom:-16px;z-index:0;pointer-events:none;background:rgba(18,16,14,{overlay_alpha});",
-            }
             if show_rail || show_panel {
                 aside {
                     class: "Sidebar_sidebar",
@@ -2959,6 +3002,24 @@ pub fn product_shell_app() -> Element {
                     "data-slot": "chat.viewport",
                     tabindex: "-1",
                     style: "{main_style}",
+                    // The wallpaper photo + dim overlay live inside the chat
+                    // main area (React parity for the desktop shell: the
+                    // photo belongs to the chat surface, not the sidebar).
+                    // The blit-shader wallpaper underlay dest (image audit,
+                    // stage C) reads this node's layout rect via
+                    // `part:chat-wallpaper` — workspace + bleed, so the photo
+                    // never glows through the sidebar glass. React bleed:
+                    // `inset: calc(var(--st-space-md) * -1)` = -12px.
+                    div {
+                        "data-part": "chat-wallpaper",
+                        "aria-hidden": "true",
+                        style: "position:absolute;left:-12px;top:-12px;right:-12px;bottom:-12px;z-index:0;pointer-events:none;background:transparent;",
+                    }
+                    div {
+                        "data-part": "chat-wallpaper-overlay",
+                        "aria-hidden": "true",
+                        style: "position:absolute;left:0;top:0;right:0;bottom:0;z-index:0;pointer-events:none;background:rgba(18,16,14,{overlay_style_alpha});",
+                    }
                     {product_chat_app()}
                 }
             }

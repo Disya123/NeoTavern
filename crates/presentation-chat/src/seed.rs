@@ -29,7 +29,12 @@ pub fn is_isolated_10k_profile(profile: Option<&str>) -> bool {
 
 pub fn isolated_message_content(index: u32) -> String {
     if index.is_multiple_of(5) {
-        format!("![photo {index}](asset:thumb-{index})")
+        // `assets.content` requires a UUID asset id (wire contract); the
+        // isolated workspace seeds the matching asset per photo message.
+        format!(
+            "![photo {index}](asset:00000000-0000-4000-8000-{:012x})",
+            0x9000u32 + index
+        )
     } else {
         format!("**msg {index}**\n\n- item one\n- `code`")
     }

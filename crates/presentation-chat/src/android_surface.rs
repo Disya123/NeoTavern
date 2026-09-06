@@ -39,9 +39,11 @@ use vello::{AaConfig, RenderParams, Renderer};
 use crate::avatar_gpu::AvatarGpu;
 use crate::compositor::ChatCompositor;
 use crate::hit_rects::{HitRects, TapIntent};
+use crate::scroll_ack::ScrollAckLoop;
 use crate::session::ChatSession;
 use crate::shell_hit::{hit_test, ShellAction, ShellHit};
 use crate::wire::ProductWire;
+use neotavern_presentation_session::ScrollRebase;
 
 #[link(name = "android")]
 extern "C" {
@@ -61,11 +63,18 @@ extern "C" {
     ) -> std::os::raw::c_int;
 }
 
+/// Must stay identical to `BLIT_WGSL` in `vello_gpu.rs` (same GPU contract on
+/// both hosts). `scroll[1].xy` is the horizontal blend-window bound; this host
+/// always passes the full width (0..1) — single-column phone layout. Uniform
+/// rows 2/3 (wallpaper underlay rect / enable + dim alpha) stay zero here: no
+/// wallpaper on this host.
 const BLIT_WGSL: &str = r#"
 struct VsOut { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32> }
 @group(0) @binding(0) var tex: texture_2d<f32>;
 @group(0) @binding(1) var samp: sampler;
-@group(0) @binding(2) var<uniform> scroll: vec4<f32>;
+@group(0) @binding(2) var<uniform> scroll: array<vec4<f32>, 4>;
+@group(0) @binding(3) var wall_tex: texture_2d<f32>;
+@group(0) @binding(4) var wall_samp: sampler;
 @vertex fn vs(@builtin(vertex_index) i: u32) -> VsOut {
     var p = array<vec2<f32>, 3>(vec2<f32>(-1.0, -1.0), vec2<f32>(3.0, -1.0), vec2<f32>(-1.0, 3.0));
     let pos = p[i];
@@ -76,16 +85,30 @@ struct VsOut { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32> }
 }
 @fragment fn fs(in: VsOut) -> @location(0) vec4<f32> {
     var uv = in.uv;
-    if (uv.y >= scroll.y && uv.y < scroll.z) {
-        let src_y = uv.y + scroll.x;
-        if (src_y < scroll.y || src_y >= scroll.z) {
-            return vec4<f32>(0.082, 0.075, 0.067, 1.0);
+    let in_band = uv.y >= scroll[0].y && uv.y < scroll[0].z
+        && uv.x >= scroll[1].x && uv.x < scroll[1].y;
+    let src_y = uv.y + scroll[0].x;
+    let shifted = in_band && src_y >= scroll[0].y && src_y < scroll[0].z;
+    uv.y = select(uv.y, src_y, shifted);
+    var wall = vec4<f32>(0.0, 0.0, 0.0, 0.0);
+    if (scroll[3].x > 0.5) {
+        let wx = (in.uv.x - scroll[2].x) / max(scroll[2].z - scroll[2].x, 1e-6);
+        let wy = (in.uv.y - scroll[2].y) / max(scroll[2].w - scroll[2].y, 1e-6);
+        if (wx >= 0.0 && wx <= 1.0 && wy >= 0.0 && wy <= 1.0) {
+            wall = textureSampleLevel(wall_tex, wall_samp, vec2<f32>(wx, wy), 0.0);
+            // React parity: the dim gradient lives inside the wallpaper
+            // element (fixed with the photo), never scrolls with the scene.
+            let dim = clamp(scroll[3].y, 0.0, 1.0);
+            wall = vec4(wall.rgb * (1.0 - dim)
+                + vec3<f32>(0.0706, 0.0627, 0.0549) * dim, wall.a);
         }
-        uv.y = src_y;
     }
-    let c = textureSample(tex, samp, uv);
-    var rgb = c.rgb;
-    if (scroll.w > 0.5) {
+    let c = textureSampleLevel(tex, samp, uv, 0.0);
+    var rgb = c.rgb + wall.rgb * (1.0 - c.a);
+    if (in_band && !shifted) {
+        rgb = wall.rgb + vec3<f32>(0.082, 0.075, 0.067) * (1.0 - wall.a);
+    }
+    if (scroll[0].w > 0.5) {
         let lo = rgb / 12.92;
         let hi = pow((rgb + 0.055) / 1.055, vec3<f32>(2.4));
         rgb = select(hi, lo, rgb <= vec3<f32>(0.04045));
@@ -177,19 +200,39 @@ pub(crate) struct GpuHost {
     pending_tap: Option<PendingTap>,
     gpu_probed: bool,
     image_paints: Vec<ImagePaintOp>,
+    /// Fast-path scroll ack-loop state (shared with the desktop host):
+    /// tracks the content window the presented raster was produced at and
+    /// decides when the product window must advance.
+    ack: ScrollAckLoop,
+    /// Set by `bind_host` when a freshly produced raster must rebase the
+    /// compositor fast path onto its content window: `(base_offset_y in
+    /// physical px, teleport)`. Consumed by `present_frame` after the
+    /// frame's gesture tick so the same-epoch ack sees applied > acked.
+    rebase_due: Option<(f64, bool)>,
 }
 
 unsafe impl Send for GpuHost {}
 
 pub(crate) static HOST: Mutex<Option<GpuHost>> = Mutex::new(None);
 static DIRTY: AtomicBool = AtomicBool::new(true);
-static AVATAR_OVERLAY: AtomicBool = AtomicBool::new(false);
 static COMPOSITE_LOGGED: AtomicU64 = AtomicU64::new(0);
 static SHELL_ACTION: Mutex<Option<ShellAction>> = Mutex::new(None);
 /// Layout-resolved taps (`hit_rects::TapIntent`) awaiting the JNI consumer in
 /// `presentFrame` — the Android twin of the desktop `pointer_up` dispatch.
 static HOST_INTENT: Mutex<Option<TapIntent>> = Mutex::new(None);
 static PENDING_INSETS: Mutex<Option<[f32; 4]>> = Mutex::new(None);
+/// Window advance decided by the fast-path ack-loop in `present_frame`
+/// (CSS px to apply through `ChatSession::scroll_chat_by`), consumed by the
+/// JNI bind phase on the next `presentFrame` call.
+static SCROLL_ADVANCE: Mutex<Option<f32>> = Mutex::new(None);
+
+/// Consume the pending window advance decided by the ack-loop.
+pub fn take_scroll_advance() -> Option<f32> {
+    SCROLL_ADVANCE
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .take()
+}
 
 pub fn take_host_intent() -> Option<TapIntent> {
     HOST_INTENT.lock().unwrap_or_else(|p| p.into_inner()).take()
@@ -340,6 +383,22 @@ fn open_gpu(
                 },
                 count: None,
             },
+            wgpu::BindGroupLayoutEntry {
+                binding: 3,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 4,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
         ],
     });
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -381,10 +440,47 @@ fn open_gpu(
     });
     let uniform = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("neocompositor-scroll"),
-        size: 16,
+        size: 64,
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
+    // The blit shader always expects the wallpaper underlay bindings; this
+    // host never enables a wallpaper (uniform rows 2/3 stay zero), so a 1×1
+    // transparent dummy texture keeps the bind group complete.
+    let wall_texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("neocompositor-wallpaper-dummy"),
+        size: wgpu::Extent3d {
+            width: 1,
+            height: 1,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    queue.write_texture(
+        wgpu::TexelCopyTextureInfo {
+            texture: &wall_texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        &[0u8; 4],
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(4),
+            rows_per_image: Some(1),
+        },
+        wgpu::Extent3d {
+            width: 1,
+            height: 1,
+            depth_or_array_layers: 1,
+        },
+    );
+    let wall_view = wall_texture.create_view(&wgpu::TextureViewDescriptor::default());
     let bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("neocompositor-bg"),
         layout: &bind_layout,
@@ -400,6 +496,14 @@ fn open_gpu(
             wgpu::BindGroupEntry {
                 binding: 2,
                 resource: uniform.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: wgpu::BindingResource::TextureView(&wall_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 4,
+                resource: wgpu::BindingResource::Sampler(&sampler),
             },
         ],
     });
@@ -895,12 +999,17 @@ fn blit(gpu: &GpuSurface, scroll_y: f32, header: f32, composer_top: f32) -> Resu
     let offset = scroll_y / height;
     let header_uv = header / height;
     let composer_uv = composer_top / height;
-    let mut uniform = [0u8; 16];
+    let mut uniform = [0u8; 64];
     uniform[0..4].copy_from_slice(&offset.to_le_bytes());
     uniform[4..8].copy_from_slice(&header_uv.to_le_bytes());
     uniform[8..12].copy_from_slice(&composer_uv.to_le_bytes());
     let srgb = if gpu.srgb_target { 1.0f32 } else { 0.0 };
     uniform[12..16].copy_from_slice(&srgb.to_le_bytes());
+    // Full-width horizontal band: the single-column phone layout shifts the
+    // whole viewport, same pixels as before the 2D window existed. Uniform
+    // rows 2/3 (wallpaper underlay) stay zero — this host has no wallpaper.
+    uniform[16..20].copy_from_slice(&0.0f32.to_le_bytes());
+    uniform[20..24].copy_from_slice(&1.0f32.to_le_bytes());
     gpu.queue.write_buffer(&gpu.uniform, 0, &uniform);
     let frame = match gpu.surface.get_current_texture() {
         wgpu::CurrentSurfaceTexture::Success(frame)
@@ -1033,6 +1142,8 @@ pub fn attach(env: &JNIEnv, surface: &JObject, width: i32, height: i32, density:
                 pending_tap: None,
                 gpu_probed: false,
                 image_paints: Vec::new(),
+                ack: ScrollAckLoop::new(0.0),
+                rebase_due: None,
             };
             DIRTY.store(true, Ordering::SeqCst);
             let line = host_line(&host.gpu, "live", host.devices, density);
@@ -1203,12 +1314,21 @@ pub fn bind_from_session<W: ProductWire>(session: &mut ChatSession<W>) -> String
         mark_dirty();
         return "host=neocompositor-surfaceview bind_pending reason=no_surface".into();
     };
-    match catch_unwind(AssertUnwindSafe(|| bind_host(host, session))) {
+    let bound = catch_unwind(AssertUnwindSafe(|| bind_host(host, session)));
+    match bound {
         Ok(Ok(line)) => line,
-        Ok(Err(err)) => format!(
-            "host=neocompositor-surfaceview bind_failed reason={}",
-            err.replace(' ', "_")
-        ),
+        Ok(Err(err)) => {
+            // The in-flight window advance never landed: drop the marker so
+            // the ack-loop re-decides against the unchanged raster instead
+            // of stalling. (`slot` is still locked — cancel in place.)
+            if let Some(host) = slot.as_mut() {
+                host.ack.cancel_advance();
+            }
+            format!(
+                "host=neocompositor-surfaceview bind_failed reason={}",
+                err.replace(' ', "_")
+            )
+        }
         Err(_) => "host=neocompositor-surfaceview bind_failed reason=panic".into(),
     }
 }
@@ -1220,27 +1340,32 @@ fn overlay_avatars<W: ProductWire>(
     layout: ProductPaintLayout,
 ) -> neotavern_presentation_m0_d2::ProducerOutput {
     produced.list.generation = session.scene_epoch();
-    for (asset_id, thumb) in session.avatar_thumbs() {
-        let uploaded = host
-            .gpu
-            .avatars
-            .upload(&host.gpu.device, &host.gpu.queue, asset_id, thumb);
-        if uploaded {
-            trace(&format!("avatar_gpu uploaded asset={asset_id}"));
+    // Stage B: `<img src="asset:{id}">` rasters paint inside the scene, so
+    // avatars z-order under modals/clips for free and no post-frame blit is
+    // needed. NEOTA_INSCENE_IMAGES=0 restores the Stage A GPU overlay.
+    if !neotavern_presentation_m0_d2::inscene_images_enabled() {
+        for (asset_id, thumb) in session.avatar_thumbs() {
+            let uploaded =
+                host.gpu
+                    .avatars
+                    .upload(&host.gpu.device, &host.gpu.queue, asset_id, thumb);
+            if uploaded {
+                trace(&format!("avatar_gpu uploaded asset={asset_id}"));
+            }
         }
+        let paints =
+            image_paints_from_layout(&layout, host.density, host.gpu.avatars.ready_token());
+        host.gpu.avatars.blit(
+            &host.gpu.device,
+            &host.gpu.queue,
+            &host.gpu.resolve_view,
+            host.gpu.config.width,
+            host.gpu.config.height,
+            &paints,
+        );
+        produced.list = attach_image_paints(produced.list, &paints);
+        host.image_paints = paints;
     }
-    let paints = image_paints_from_layout(&layout, host.density, host.gpu.avatars.ready_token());
-    host.gpu.avatars.blit(
-        &host.gpu.device,
-        &host.gpu.queue,
-        &host.gpu.resolve_view,
-        host.gpu.config.width,
-        host.gpu.config.height,
-        &paints,
-    );
-    produced.list = attach_image_paints(produced.list, &paints);
-    host.image_paints = paints;
-    AVATAR_OVERLAY.store(false, Ordering::SeqCst);
     produced
 }
 
@@ -1599,6 +1724,18 @@ fn bind_host<W: ProductWire>(
             ));
         }
     }
+    // The present path swapped to a raster produced for the current product
+    // window: land the ack-loop on it and queue the fast-path rebase. An
+    // advance whose produced window matches its target rebases continuously
+    // (Advance); any other re-bind may have jumped the window (user action,
+    // scroll-to-latest) and teleports the visual onto it.
+    let window_css = session.scroll_offset_css();
+    let teleport = !host
+        .ack
+        .in_flight_target()
+        .is_some_and(|target| (target - window_css).abs() <= 0.5);
+    host.ack.land(window_css);
+    host.rebase_due = Some((f64::from(window_css * host.density.max(1.0)), teleport));
     DIRTY.store(false, Ordering::SeqCst);
     let line = host_line(&host.gpu, "live", host.devices, host.density);
     trace(&line);
@@ -1619,25 +1756,74 @@ pub fn present_frame(
         .on_vsync(u64::try_from(callback_time.max(0)).unwrap_or(0));
     if let Some(compositor) = host.compositor.as_mut() {
         let _ = host.input.drain(compositor.session.path_mut());
-        let dt_ns = 8_333_333;
+        let dt_ns = crate::scroll_dynamics::GLIDE_TICK_NS;
         let time = PresentationTime::from_nanos(u64::try_from(callback_time.max(0)).unwrap_or(0));
         let _offset = compositor.compositor_tick(host.velocity, dt_ns, time);
-        host.velocity *= 0.94;
-        if host.velocity.abs() < 12.0 {
-            host.velocity = 0.0;
-        }
+        // Shared feather-glide decay (bit-identical to the former inline
+        // `*= 0.94` + stop-threshold at this fixed tick); the desktop host
+        // flings through the same constants.
+        host.velocity = crate::scroll_dynamics::glide_decay(host.velocity, dt_ns);
+        let density = host.density.max(1.0);
         let scroll = compositor
             .session
             .scroll_id()
             .and_then(|id| compositor.session.path().visual_offset(id))
             .map(|v| v.y as f32)
             .unwrap_or(0.0);
+        // Fast-path scroll ack-loop (shared with the desktop host): when the
+        // visual has drifted half a band past the produced window — or the
+        // gesture ended with residual drift — schedule a window advance. The
+        // JNI bind phase applies it through `ChatSession::scroll_chat_by`,
+        // re-produces, and the landed raster rebases the fast path (below),
+        // so the fling scrolls real content instead of a frozen raster.
+        let visual_css = scroll / density;
+        let gesture_active =
+            crate::scroll_dynamics::glide_active(host.velocity) || compositor.is_scrolling();
+        if let Some(shift) = host.ack.due(visual_css, gesture_active) {
+            host.ack.begin_advance(host.ack.presented() + shift);
+            *SCROLL_ADVANCE.lock().unwrap_or_else(|p| p.into_inner()) = Some(shift);
+            trace(&format!(
+                "scroll_ack advance target={} drift={shift:.1}",
+                host.ack.in_flight_target().unwrap_or(0.0)
+            ));
+        }
+        // A freshly produced raster (bind phase, earlier in this frame)
+        // rebases the fast path onto its content window — after the tick so
+        // the same-epoch ack sees applied > acknowledged.
+        if let Some((base_y, teleport)) = host.rebase_due.take() {
+            let mode = if teleport {
+                ScrollRebase::Teleport
+            } else {
+                ScrollRebase::Advance
+            };
+            let rebased = compositor.session.rebase_scroll_window(base_y, mode);
+            trace(&format!(
+                "scroll_ack rebase base={base_y:.1} teleport={teleport} applied={rebased}"
+            ));
+        }
+        // Blit shift = unacked delta (visual − committed): identical to the
+        // raw visual offset while the window has never advanced, and the
+        // honest remainder once rebase keeps committed on the produced
+        // window.
+        let shift = compositor
+            .session
+            .scroll_unacked_y()
+            .map(|v| v as f32)
+            .unwrap_or(scroll);
         let (header, composer_top) = if host.shell_overlay {
             (0.0, 0.0)
         } else {
             chrome_bands(host.gpu.config.width, host.gpu.config.height, host.density)
         };
-        match blit(&host.gpu, scroll, header, composer_top) {
+        // The drift cap follows the band actually presented (the overlay
+        // frame reports a zero-height band; fall back to the full viewport).
+        let band_px = if host.shell_overlay {
+            host.gpu.config.height as f32
+        } else {
+            (composer_top - header).max(1.0)
+        };
+        host.ack.set_cap(band_px * 0.5 / density);
+        match blit(&host.gpu, shift, header, composer_top) {
             Ok(()) => {
                 let n = compositor.composite_only_frames;
                 if n > 0 && n.is_multiple_of(30) && COMPOSITE_LOGGED.swap(n, Ordering::Relaxed) != n
@@ -1701,7 +1887,7 @@ pub fn is_scrolling() -> bool {
     let slot = HOST.lock().unwrap_or_else(|p| p.into_inner());
     slot.as_ref()
         .map(|host| {
-            host.velocity.abs() > 12.0
+            crate::scroll_dynamics::glide_active(host.velocity)
                 || host
                     .compositor
                     .as_ref()
@@ -1713,31 +1899,6 @@ pub fn is_scrolling() -> bool {
 
 pub fn is_dirty() -> bool {
     DIRTY.load(Ordering::SeqCst)
-}
-
-pub fn is_avatar_overlay() -> bool {
-    AVATAR_OVERLAY.load(Ordering::SeqCst)
-}
-
-pub fn composite_avatar_overlay() -> bool {
-    let mut slot = HOST.lock().unwrap_or_else(|p| p.into_inner());
-    let Some(host) = slot.as_mut() else {
-        return false;
-    };
-    if host.image_paints.is_empty() {
-        AVATAR_OVERLAY.store(false, Ordering::SeqCst);
-        return false;
-    }
-    host.gpu.avatars.blit(
-        &host.gpu.device,
-        &host.gpu.queue,
-        &host.gpu.resolve_view,
-        host.gpu.config.width,
-        host.gpu.config.height,
-        &host.image_paints,
-    );
-    AVATAR_OVERLAY.store(false, Ordering::SeqCst);
-    true
 }
 
 /// Native chat composer/Send overlay is only attached on the chat route.

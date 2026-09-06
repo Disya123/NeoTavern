@@ -21,7 +21,8 @@ struct Uniform {
     dest: vec4<f32>,
     surface: vec2<f32>,
     radius: f32,
-    _pad: f32,
+    // texture width / height — drives the cover-fit UV crop below.
+    tex_aspect: f32,
 }
 struct VsOut { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32>, @location(1) local: vec2<f32> }
 @group(0) @binding(0) var tex: texture_2d<f32>;
@@ -41,6 +42,20 @@ struct VsOut { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32>, @l
     return out;
 }
 @fragment fn fs(in: VsOut) -> @location(0) vec4<f32> {
+    // Cover-fit: sample the largest centered texture region whose aspect
+    // matches dest. A square 192px thumb then CROPS (React `object-fit:
+    // cover`) into any slot rect — e.g. the 4:5 gallery avatar — instead of
+    // stretching. For a texture already matching the dest aspect (the
+    // wallpaper raster) the crop is the identity.
+    var uv = in.uv;
+    let dest_aspect = u.dest.z / max(u.dest.w, 1.0);
+    if (u.tex_aspect > dest_aspect) {
+        let w = dest_aspect / u.tex_aspect;
+        uv.x = uv.x * w + (1.0 - w) * 0.5;
+    } else {
+        let h = u.tex_aspect / dest_aspect;
+        uv.y = uv.y * h + (1.0 - h) * 0.5;
+    }
     let half = u.dest.zw * 0.5;
     let radius = min(u.radius, min(half.x, half.y));
     let p = in.local - half;
@@ -50,18 +65,19 @@ struct VsOut { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32>, @l
     if (d > 0.5) {
         discard;
     }
-    return textureSample(tex, samp, in.uv);
+    return textureSample(tex, samp, uv);
 }
 "#;
 
 struct CachedAvatar {
     view: wgpu::TextureView,
     _texture: wgpu::Texture,
+    /// width / height of the uploaded texture (drives the cover-fit crop).
+    aspect: f32,
 }
 
 pub struct AvatarGpu {
     pipeline: wgpu::RenderPipeline,
-    pipeline_under: wgpu::RenderPipeline,
     bgl: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
     textures: HashMap<String, CachedAvatar>,
@@ -147,36 +163,16 @@ impl AvatarGpu {
             "avatar-pipe",
             wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING,
         );
-        // Destination-over keyed on the DESTINATION alpha (premultiplied):
-        // out = src·(1−dstα) + dst. The wallpaper composite uses this so the
-        // photo lands UNDER the already rasterized translucent scene — the
-        // scene's own alpha decides how much photo shows through, exactly
-        // like CSS glass over a background image.
-        let pipeline_under = make_pipeline(
-            "avatar-pipe-under",
-            wgpu::BlendState {
-                color: wgpu::BlendComponent {
-                    src_factor: wgpu::BlendFactor::OneMinusDstAlpha,
-                    dst_factor: wgpu::BlendFactor::One,
-                    operation: wgpu::BlendOperation::Add,
-                },
-                alpha: wgpu::BlendComponent {
-                    src_factor: wgpu::BlendFactor::OneMinusDstAlpha,
-                    dst_factor: wgpu::BlendFactor::One,
-                    operation: wgpu::BlendOperation::Add,
-                },
-            },
-        );
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::MipmapFilterMode::Linear,
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             ..Default::default()
         });
         Self {
             pipeline,
-            pipeline_under,
             bgl,
             sampler,
             textures: HashMap::new(),
@@ -296,6 +292,11 @@ impl AvatarGpu {
         }
         let need_bytes = expected;
         self.make_room(need_bytes);
+        // Full mip chain built on the CPU — downscaling PREMULTIPLIED RGBA is
+        // linear-filter-correct, and wgpu 29 has no `generate_mipmaps` helper.
+        // Thumbnails (192px) draw into slots from 32px to ~450px; without
+        // mips the minification side aliases.
+        let mip_levels = 32 - thumb.width.max(thumb.height).leading_zeros();
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("avatar-thumb"),
             size: wgpu::Extent3d {
@@ -303,38 +304,60 @@ impl AvatarGpu {
                 height: thumb.height,
                 depth_or_array_layers: 1,
             },
-            mip_level_count: 1,
+            mip_level_count: mip_levels,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
-        queue.write_texture(
-            wgpu::TexelCopyTextureInfo {
-                texture: &texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            &thumb.premul_rgba,
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(thumb.width * 4),
-                rows_per_image: Some(thumb.height),
-            },
-            wgpu::Extent3d {
-                width: thumb.width,
-                height: thumb.height,
-                depth_or_array_layers: 1,
-            },
-        );
+        let mut level_w = thumb.width;
+        let mut level_h = thumb.height;
+        let mut current =
+            image::RgbaImage::from_raw(thumb.width, thumb.height, thumb.premul_rgba.clone());
+        for level in 0..mip_levels {
+            let Some(image) = current.take() else { break };
+            queue.write_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture: &texture,
+                    mip_level: level,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                image.as_raw(),
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(level_w * 4),
+                    rows_per_image: Some(level_h),
+                },
+                wgpu::Extent3d {
+                    width: level_w,
+                    height: level_h,
+                    depth_or_array_layers: 1,
+                },
+            );
+            if level + 1 < mip_levels {
+                let next_w = (level_w / 2).max(1);
+                let next_h = (level_h / 2).max(1);
+                let next = image::imageops::resize(
+                    &image,
+                    next_w,
+                    next_h,
+                    image::imageops::FilterType::Triangle,
+                );
+                current = Some(next);
+                level_w = next_w;
+                level_h = next_h;
+            }
+        }
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let aspect = thumb.width as f32 / thumb.height as f32;
         self.textures.insert(
             asset_id.to_string(),
             CachedAvatar {
                 view,
                 _texture: texture,
+                aspect,
             },
         );
         self.order.push_front(asset_id.to_string());
@@ -354,21 +377,7 @@ impl AvatarGpu {
         surface_h: u32,
         ops: &[ImagePaintOp],
     ) {
-        self.blit_impl(device, queue, target, surface_w, surface_h, ops, false);
-    }
-
-    /// Destination-over composite (see `pipeline_under`): draws the wallpaper
-    /// photo UNDER whatever is already on the target.
-    pub fn blit_under(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        target: &wgpu::TextureView,
-        surface_w: u32,
-        surface_h: u32,
-        ops: &[ImagePaintOp],
-    ) {
-        self.blit_impl(device, queue, target, surface_w, surface_h, ops, true);
+        self.blit_impl(device, queue, target, surface_w, surface_h, ops);
     }
 
     fn blit_impl(
@@ -379,7 +388,6 @@ impl AvatarGpu {
         surface_w: u32,
         surface_h: u32,
         ops: &[ImagePaintOp],
-        under: bool,
     ) {
         if ops.is_empty() {
             return;
@@ -415,7 +423,7 @@ impl AvatarGpu {
                 surface_w as f32,
                 surface_h as f32,
                 op.clip_radius,
-                0.0,
+                cached.aspect,
             ];
             queue.write_buffer(&uniform, 0, &f32_bytes(&data));
             let bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -461,11 +469,7 @@ impl AvatarGpu {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
-            pass.set_pipeline(if under {
-                &self.pipeline_under
-            } else {
-                &self.pipeline
-            });
+            pass.set_pipeline(&self.pipeline);
             for (bind, _) in &draws {
                 pass.set_bind_group(0, bind, &[]);
                 pass.draw(0..6, 0..1);

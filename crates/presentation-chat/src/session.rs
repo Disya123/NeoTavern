@@ -3,7 +3,7 @@ use contracts_generated::generated::{
     decode_lorebook_entry_dto, decode_memory_dto, decode_message_draft_dto, decode_message_dto,
     decode_paged_characters, decode_paged_chats, decode_paged_generation_events,
     decode_paged_messages, decode_persona_dto, decode_preset_dto, decode_prompt_plan,
-    decode_provider_config_dto, decode_result_assets_content, decode_result_assets_put,
+    decode_provider_config_dto, decode_result_assets_put, decode_result_assets_thumb,
     decode_result_backups_restore, decode_result_characters_export_card,
     decode_result_chat_snapshot, decode_result_chats_export, decode_result_data_activation_status,
     decode_result_diagnostics_export, decode_result_imports_character_card,
@@ -19,7 +19,7 @@ use contracts_generated::generated::{
     LorebookDto, LorebookEntryDto, LorebookEntryInput, LorebookEntryPatch, MemoryDto, MemoryScope,
     MessageDraftDto, MessageDto, MessageRevisionDto, MessageRole, MessageVariantDto,
     PagedCharacters, PagedChats, PagedMessages, PersonaDto, PluginsItem, PresetDto, ProfilesItem,
-    PromptPlan, ProviderConfigDto, RequestAssetsContent, RequestAssetsPut, RequestBackupsRestore,
+    PromptPlan, ProviderConfigDto, RequestAssetsPut, RequestAssetsThumb, RequestBackupsRestore,
     RequestCancelGeneration, RequestCharactersExportCard, RequestChatsExport,
     RequestCreateCharacter, RequestCreateChat, RequestCreateChatSnapshot, RequestCreateLorebook,
     RequestCreateLorebookEntry, RequestCreateMemory, RequestCreateMessage, RequestCreatePersona,
@@ -39,7 +39,7 @@ use contracts_generated::generated::{
     RequestSnapshotsRollback, RequestStartGeneration, RequestThemesActivate,
     RequestThemesUninstall, RequestUpdateCharacter, RequestUpdateChat, RequestUpdateLorebook,
     RequestUpdateLorebookEntry, RequestUpdateMemory, RequestUpdateMessage, RequestUpdatePersona,
-    RequestUpdatePreset, ResultAssetsContent, ResultAssetsPut, ResultBackupsRestore,
+    RequestUpdatePreset, ResultAssetsPut, ResultAssetsThumb, ResultBackupsRestore,
     ResultCharactersExportCard, ResultChatSnapshot, ResultChatsExport, ResultDataActivationStatus,
     ResultDiagnosticsExport, ResultImportsCharacterCard, ResultListLorebookEntries,
     ResultListLorebooks, ResultListPersonas, ResultListPresets, ResultListProviders,
@@ -487,7 +487,9 @@ impl ChatRouteState {
 
     /// Insert a CPU thumbnail keyed by `asset_id` (shared header/card handle).
     /// Returns `true` when the entry was newly inserted (caller should bump
-    /// `avatar_ready_token`). A hit only promotes the LRU order.
+    /// `avatar_ready_token`). A hit only promotes the LRU order. The same
+    /// thumb also lands in the process asset store as a PNG so the in-scene
+    /// `<img src="asset:{id}">` raster can decode (image audit, stage B).
     pub(crate) fn insert_avatar_thumb(
         &mut self,
         asset_id: String,
@@ -496,6 +498,9 @@ impl ChatRouteState {
         if self.avatar_thumbs.contains_key(&asset_id) {
             self.touch_avatar(&asset_id);
             return false;
+        }
+        if let Some(png) = crate::avatar::display_png_from_thumb(&thumb) {
+            neotavern_presentation_m0_d2::global_asset_store().insert(&asset_id, png);
         }
         let need = thumb.byte_len();
         self.make_avatar_room(need);
@@ -696,6 +701,13 @@ impl<W: ProductWire> ChatSession<W> {
         self.bump_scene();
     }
 
+    /// Current chat scroll offset in CSS px (0 = pinned to the newest
+    /// messages). Read side of [`ChatSession::scroll_chat_by`]; the smooth
+    /// scroll animation samples against it between impulses.
+    pub fn scroll_offset_css(&self) -> f32 {
+        self.state.scroll_offset_css
+    }
+
     pub fn scroll_chat_by(&mut self, dy_css: f32) {
         if dy_css == 0.0 {
             return;
@@ -734,7 +746,16 @@ impl<W: ProductWire> ChatSession<W> {
             .max(1);
         let row_h = 56.0 * f64::from(self.hidpi_scale());
         for i in 0..n {
-            let _ = index.push(LogicalItemId(i as u64 + 1), row_h, HeightKind::Estimated);
+            // Rows carrying an in-scene markdown photo (`asset:{id}`) render
+            // up to 420 CSS px of raster plus bubble chrome. Over-estimating
+            // keeps the overscan window covering the real content — an
+            // under-estimate would open a transparent gap (debug_assert in
+            // chat-viewport `present`).
+            let has_photo = self.state.messages.get(i).is_some_and(|row| {
+                !neotavern_presentation_dioxus_shell::asset_image_refs(&row.content).is_empty()
+            });
+            let h = if has_photo { row_h + 436.0 } else { row_h };
+            let _ = index.push(LogicalItemId(i as u64 + 1), h, HeightKind::Estimated);
         }
         index
     }
@@ -1254,6 +1275,7 @@ impl<W: ProductWire> ChatSession<W> {
             composer_placeholder,
             character_avatar_asset,
             character_name,
+            active_theme_tokens: self.state.active_theme_tokens.clone(),
             error_code: self.state.last_error.as_ref().map(|err| err.code.clone()),
             streaming: !self.state.streaming_text.is_empty() || self.state.stream_handle.is_some(),
             tool_activity_name: if !self.state.streaming_text.is_empty()
@@ -2078,7 +2100,12 @@ impl<W: ProductWire> ChatSession<W> {
     /// Jump back to the parent chat of this branch/checkpoint (React
     /// `ChatHeader` `backToParentChatId` -> `data-component="back-to-parent"`).
     pub fn open_parent_chat(&mut self) {
-        if let Some(parent_id) = self.state.chat.as_ref().and_then(|c| c.parent_chat_id.clone()) {
+        if let Some(parent_id) = self
+            .state
+            .chat
+            .as_ref()
+            .and_then(|c| c.parent_chat_id.clone())
+        {
             self.open_chat(&parent_id);
         }
     }
@@ -4067,16 +4094,18 @@ impl<W: ProductWire> ChatSession<W> {
     }
 
     fn fetch_avatar_thumb(&mut self, asset_id: &str) -> Option<crate::avatar::AvatarThumb> {
+        // Kernel-side thumbnail (image audit stage C): the 2.2 MiB original
+        // never crosses the wire. No cover crop — the GPU overlay cover-fits
+        // (stage A) and the in-scene `<img>` uses object-fit.
         match self.call_decode(
-            "assets.content",
-            &RequestAssetsContent {
+            "assets.thumb",
+            &RequestAssetsThumb {
                 asset_id: asset_id.to_string(),
+                max_px: i64::from(crate::avatar::AVATAR_DISPLAY_MAX_PX),
             },
-            decode_result_assets_content,
+            decode_result_assets_thumb,
         ) {
-            Ok(ResultAssetsContent { content_base64, .. }) => {
-                crate::avatar::premultiplied_cover_thumbnail(&content_base64)
-            }
+            Ok(result) => crate::avatar::premultiplied_from_encoded(&result.content_base64),
             Err(_) => None,
         }
     }
@@ -6458,9 +6487,7 @@ impl<W: ProductWire> ChatSession<W> {
                 active.manifest.as_ref(),
             );
             let css = neotavern_presentation_design_system::render_theme_stylesheet(
-                &active.id,
-                &tokens,
-                None,
+                &active.id, &tokens, None,
             );
             self.state.active_theme_tokens = Some(tokens);
             self.state.active_theme_css = Some(css);
@@ -7633,6 +7660,7 @@ impl<W: ProductWire> ChatSession<W> {
         for message in items {
             self.push_unique(message);
         }
+        self.hydrate_message_assets();
     }
 
     fn absorb_older_page(&mut self, page: PagedMessages) {
@@ -7642,6 +7670,71 @@ impl<W: ProductWire> ChatSession<W> {
         older.retain(|message| !self.state.messages.iter().any(|row| row.id == message.id));
         older.append(&mut self.state.messages);
         self.state.messages = older;
+        self.hydrate_message_assets();
+    }
+
+    /// Fetch the raw bytes of an asset from Product Wire `assets.content`.
+    /// Returns `None` when the wire errors or the id is unknown — the message
+    /// keeps its placeholder block instead of blocking the route.
+    /// Kernel-side message-image thumbnail bytes (image audit stage C):
+    /// `assets.thumb` returns an encoded, aspect-preserving raster ready for
+    /// the in-scene Blitz `<img>` (the kernel never ships the original).
+    fn fetch_asset_thumb_bytes(&mut self, asset_id: &str, max_px: i64) -> Option<Vec<u8>> {
+        use base64::Engine as _;
+        let result: ResultAssetsThumb = self
+            .call_decode(
+                "assets.thumb",
+                &RequestAssetsThumb {
+                    asset_id: asset_id.to_string(),
+                    max_px,
+                },
+                decode_result_assets_thumb,
+            )
+            .ok()?;
+        let compact: String = result
+            .content_base64
+            .chars()
+            .filter(|ch| !ch.is_ascii_whitespace())
+            .collect();
+        base64::engine::general_purpose::STANDARD
+            .decode(compact.as_bytes())
+            .ok()
+    }
+
+    /// Resolve `![alt](asset:{id})` references in the loaded messages into
+    /// the process asset store, so the in-scene `<img>` rasters decode
+    /// (image audit, stage B). Bounded per call: at most
+    /// [`MESSAGE_ASSET_HYDRATE_LIMIT`] fetches; already-stored ids short-
+    /// circuit. Failures are silent — the message keeps the placeholder
+    /// block instead of blocking the route.
+    fn hydrate_message_assets(&mut self) {
+        const LIMIT: usize = 32;
+        let mut ids: Vec<String> = Vec::new();
+        for row in &self.state.messages {
+            for id in neotavern_presentation_dioxus_shell::asset_image_refs(&row.content) {
+                if !ids.contains(&id) {
+                    ids.push(id);
+                }
+                if ids.len() >= LIMIT {
+                    break;
+                }
+            }
+            if ids.len() >= LIMIT {
+                break;
+            }
+        }
+        let store = neotavern_presentation_m0_d2::global_asset_store();
+        for id in ids {
+            if store.contains(&id) {
+                continue;
+            }
+            let Some(thumb_bytes) =
+                self.fetch_asset_thumb_bytes(&id, i64::from(crate::avatar::MESSAGE_IMAGE_MAX_PX))
+            else {
+                continue;
+            };
+            store.insert(&id, thumb_bytes);
+        }
     }
 
     fn start_stream_op<T: Serialize>(
@@ -7705,6 +7798,7 @@ impl<W: ProductWire> ChatSession<W> {
         self.push_unique(message.clone());
         self.state.last_durable_message_id = Some(message.id.clone());
         if is_new {
+            self.hydrate_message_assets();
             self.bump_scene();
         }
     }
@@ -8552,7 +8646,13 @@ fn message_visible_row(
         .and_then(|g| g.get("usage"))
         .and_then(|u| u.get("totalTokens"))
         .and_then(|t| t.as_i64())
-        .or_else(|| message.meta.payload.get("tokenCount").and_then(|t| t.as_i64()))
+        .or_else(|| {
+            message
+                .meta
+                .payload
+                .get("tokenCount")
+                .and_then(|t| t.as_i64())
+        })
         .or_else(|| message.meta.payload.get("tokens").and_then(|t| t.as_i64()));
     VisibleRow {
         id: message.id.clone(),

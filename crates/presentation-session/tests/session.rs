@@ -2,17 +2,24 @@ use neotavern_chat_viewport::{
     AckResult, HeightIndex, HeightKind, ItemSpan, LogicalItemId, PredictorBudgets, ScrollAck,
     TileCache, ViewportSession,
 };
-use neotavern_neocompositor::{InteractionReady, PointerId, PresentationTime, RasterDecision};
+use neotavern_neocompositor::{
+    GestureId, InteractionReady, PointerId, PresentationTime, RasterDecision, ScrollSequence, Vec2,
+};
 use neotavern_presentation_m0_d2::publish_selectable_text;
-use neotavern_presentation_session::{map_viewport_geometry, PresentationSession, SessionOutcome};
+use neotavern_presentation_session::{
+    PresentationSession, ScrollRebase, SessionOutcome, map_viewport_geometry,
+};
 
 fn lid(n: u64) -> LogicalItemId {
     LogicalItemId(n)
 }
 
 fn three_item_session() -> ViewportSession {
+    // Ten items: the scroll bounds derive from the real content extent now,
+    // and the selection/autoscroll tests need room to scroll (extent 800 vs
+    // the 240 px viewport).
     let mut index = HeightIndex::new();
-    for n in 1..=3 {
+    for n in 1..=10 {
         index.push(lid(n), 80.0, HeightKind::Exact).expect("push");
     }
     let mut vp = ViewportSession::new(
@@ -182,10 +189,12 @@ fn autoscroll_uses_existing_scroll_id_and_selection_damage_is_underlay_only() {
         .expect("extend");
     assert_eq!(extended.raster, RasterDecision::SelectionOnly);
     assert!(!extended.glass_roi_invalidations.is_empty());
-    assert!(extended
-        .damage
-        .iter()
-        .all(|rect| { rect.width.saturating_mul(rect.height) < 240 * 240 || rect.is_empty() }));
+    assert!(
+        extended
+            .damage
+            .iter()
+            .all(|rect| { rect.width.saturating_mul(rect.height) < 240 * 240 || rect.is_empty() })
+    );
     let update = session
         .drag_selection(
             origin_x + 80.0,
@@ -204,6 +213,61 @@ fn autoscroll_uses_existing_scroll_id_and_selection_damage_is_underlay_only() {
     assert_eq!(session.path().latched_scroll(), Some(scroll));
     let offset = session.path().visual_offset(scroll).expect("offset");
     assert!(offset.y > 0.0);
+}
+
+#[test]
+fn scroll_rebase_keeps_visual_continuous_and_teleports_on_jump() {
+    let mut session = PresentationSession::new(three_item_session(), 240.0, 240.0);
+    session.publish().expect("publish");
+    let scroll = session.scroll_id().expect("scroll latch");
+    let time = |ms: u64| PresentationTime::from_millis(ms);
+    let gesture = |session: &mut PresentationSession, dy: f64, seq: u64, ms: u64| {
+        session
+            .path_mut()
+            .gesture_delta(
+                GestureId(1),
+                Vec2::new(0.0, dy),
+                ScrollSequence(seq),
+                time(ms),
+            )
+            .expect("gesture delta");
+    };
+
+    // Two applied input deltas: visual leads, committed (baked) is still 0.
+    gesture(&mut session, 60.0, 1, 16);
+    gesture(&mut session, 40.0, 2, 32);
+    assert_eq!(session.path().visual_offset(scroll).unwrap().y, 100.0);
+
+    // Producer advanced the window to 100 and re-published: committed
+    // follows, the visual stays continuous, the blit shift drains.
+    assert!(session.rebase_scroll_window(100.0, ScrollRebase::Advance));
+    let state = session.path().scroll_state(scroll).unwrap();
+    assert_eq!(state.committed_offset.y, 100.0);
+    assert_eq!(state.unacked_delta.y, 0.0);
+    assert_eq!(session.path().visual_offset(scroll).unwrap().y, 100.0);
+
+    // Motion on top of the new window: the unacked delta is the blit shift.
+    gesture(&mut session, 30.0, 3, 48);
+    assert_eq!(session.scroll_unacked_y(), Some(30.0));
+
+    // Next advance ack (motion happened since the previous one) drains it.
+    assert!(session.rebase_scroll_window(130.0, ScrollRebase::Advance));
+    assert_eq!(session.scroll_unacked_y(), Some(0.0));
+    assert_eq!(session.path().visual_offset(scroll).unwrap().y, 130.0);
+
+    // No motion since the previous ack: the same-epoch ack is refused
+    // (acknowledged == applied). The visual already equals the advance
+    // target, so the teleport fallback lands exactly instead of jumping.
+    assert!(session.rebase_scroll_window(130.0, ScrollRebase::Advance));
+    assert_eq!(session.scroll_unacked_y(), Some(0.0));
+    assert_eq!(session.path().visual_offset(scroll).unwrap().y, 130.0);
+
+    // A producer jump (scroll-to-latest) teleports the visual onto the
+    // window — the gesture's velocity state is invalid after a jump.
+    gesture(&mut session, 50.0, 4, 64);
+    assert!(session.rebase_scroll_window(40.0, ScrollRebase::Teleport));
+    assert_eq!(session.scroll_unacked_y(), Some(0.0));
+    assert_eq!(session.path().visual_offset(scroll).unwrap().y, 40.0);
 }
 
 #[test]

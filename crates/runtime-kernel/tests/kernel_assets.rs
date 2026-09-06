@@ -52,6 +52,131 @@ fn base64_encode(bytes: &[u8]) -> String {
 
 const PNG: &[u8] = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01";
 
+fn solid_png(width: u32, height: u32, alpha: bool) -> Vec<u8> {
+    let image = if alpha {
+        image::DynamicImage::new_rgba8(width, height)
+    } else {
+        image::DynamicImage::new_rgb8(width, height)
+    };
+    let mut out = std::io::Cursor::new(Vec::new());
+    image
+        .write_to(&mut out, image::ImageFormat::Png)
+        .expect("png encode cannot fail for a DynamicImage");
+    out.into_inner()
+}
+
+#[test]
+fn assets_thumb_generates_and_caches_a_kernel_thumbnail() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel(root.path());
+
+    let png = solid_png(64, 48, false);
+    let put = put_png(&kernel, "avatar", &png);
+    let id = put["asset"]["id"].as_str().expect("asset id").to_string();
+
+    let thumb = dispatch(
+        &kernel,
+        "assets.thumb",
+        json!({ "assetId": id, "maxPx": 32 }),
+    )
+    .expect("assets.thumb must succeed");
+    assert_eq!(thumb["assetId"], id);
+    // Opaque source: JPEG q82, aspect-preserving 32x24 (longest side = maxPx).
+    assert_eq!(thumb["format"], "jpeg");
+    assert_eq!(thumb["width"], 32);
+    assert_eq!(thumb["height"], 24);
+    let b64 = thumb["contentBase64"].as_str().expect("contentBase64");
+    let encoded = base64_decode(b64);
+    // Byte size is content-dependent (flat synthetic PNGs compress better
+    // than JPEG); the honest invariant is the pixel count.
+    let decoded = image::load_from_memory(&encoded).expect("thumbnail decodes");
+    assert!(
+        u64::from(decoded.width()) * u64::from(decoded.height()) < 64 * 48,
+        "thumbnail must have fewer pixels than the 64x48 original"
+    );
+    assert_eq!((decoded.width(), decoded.height()), (32, 24));
+
+    // Second call is a cache hit: identical bytes, one file on disk under
+    // <data-root>/cache/thumbnails (keyed sha256-maxPx-version).
+    let again = dispatch(
+        &kernel,
+        "assets.thumb",
+        json!({ "assetId": id, "maxPx": 32 }),
+    )
+    .expect("assets.thumb cache hit must succeed");
+    assert_eq!(again["contentBase64"], thumb["contentBase64"]);
+    let cache_dir = root.path().join("cache").join("thumbnails");
+    let entries = std::fs::read_dir(&cache_dir).expect("thumbnail cache dir exists");
+    assert_eq!(
+        entries.count(),
+        1,
+        "exactly one cached thumbnail file after two identical calls"
+    );
+}
+
+#[test]
+fn assets_thumb_alpha_source_returns_png() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel(root.path());
+
+    let png = solid_png(40, 40, true);
+    let put = put_png(&kernel, "avatar", &png);
+    let id = put["asset"]["id"].as_str().expect("asset id").to_string();
+
+    let thumb = dispatch(
+        &kernel,
+        "assets.thumb",
+        json!({ "assetId": id, "maxPx": 20 }),
+    )
+    .expect("assets.thumb must succeed");
+    assert_eq!(thumb["format"], "png");
+    assert_eq!(thumb["width"], 20);
+    assert_eq!(thumb["height"], 20);
+    let b64 = thumb["contentBase64"].as_str().expect("contentBase64");
+    let decoded = image::load_from_memory(&base64_decode(b64)).expect("thumbnail decodes");
+    assert_eq!(decoded.color(), image::ColorType::Rgba8);
+}
+
+#[test]
+fn assets_thumb_unknown_asset_is_not_found() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel(root.path());
+
+    let err = dispatch(
+        &kernel,
+        "assets.thumb",
+        json!({
+            "assetId": "00000000-0000-4000-8000-000000000001",
+            "maxPx": 32
+        }),
+    )
+    .expect_err("unknown asset must fail");
+    let product = err.product.expect("product error dto");
+    assert_eq!(product.code, "ASSET_NOT_FOUND");
+}
+
+#[test]
+fn assets_thumb_rejects_out_of_contract_max_px() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel(root.path());
+
+    // maxPx below the wire minimum (16) is a ContractViolation.
+    let err = dispatch(
+        &kernel,
+        "assets.thumb",
+        json!({ "assetId": "00000000-0000-4000-8000-000000000001", "maxPx": 8 }),
+    )
+    .expect_err("maxPx out of range must fail");
+    assert_eq!(err.code, runtime_kernel::KernelErrorCode::ContractViolation);
+}
+
+fn base64_decode(value: &str) -> Vec<u8> {
+    use base64::Engine as _;
+    base64::engine::general_purpose::STANDARD
+        .decode(value)
+        .expect("fixture base64 is valid")
+}
+
 #[test]
 fn assets_put_get_content_round_trip() {
     let root = tempfile::tempdir().expect("tempdir");

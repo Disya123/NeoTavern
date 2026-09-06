@@ -632,6 +632,7 @@ fn handle_unary(
         "assets.put" => with_db_opt(db, |db| assets::assets_put(db, req)),
         "assets.get" => with_db_opt(db, |db| assets::assets_get(db, req)),
         "assets.content" => with_db_opt(db, |db| assets::assets_content(db, req)),
+        "assets.thumb" => with_db_opt(db, |db| assets::assets_thumb(db, req)),
         "assets.delete" => with_db_opt(db, |db| assets::assets_delete(db, req)),
         "imports.character.card" => with_db_opt(db, |db| imports::imports_character_card(db, req)),
         "characters.export.card" => with_db_opt(db, |db| exports::characters_export_card(db, req)),

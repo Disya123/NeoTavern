@@ -31,8 +31,13 @@ Android-хост `GpuSurface` платформенно-нейтрален **кр
 - `render(scene, base_color)` — GPU Vello-растр в storage → GPU-копия в `resolve`;
 - `present(scroll, header, composer_top)` — фуллскрин-блит `resolve` → swapchain
   (зеркало Android `blit`);
-- `resize(w, h)` — пересоздать цели, пересоздать блит-bind group
-  (`rebuild_bind`) и сконфигурировать swapchain заново;
+- `set_swapchain_size(w, h)` — дёшево, на каждый `Resized` event: только
+  `config` + `surface.configure`; цели и bind group не трогаются, блит между
+  produce растягивает предыдущий `resolve` в новый swapchain;
+- `resize(w, h)` — дорого, один раз на produce (`produce_and_render`): при
+  изменении `targets_size` пересоздаёт цели, `rebuild_bind` и clear
+  (контракт «Коричневый фон» ниже сохраняется); swapchain донастраивается
+  только если ещё не совпал;
 - `snapshot(path)` / `present_and_dump(path)` — диагностика: чтение `resolve`
   до блита и чтение бэкбуфера swapchain ПОСЛЕ блита (`--snapshot PNG` /
   `--swapchain PNG` у раннера). Всё — PNG-дампы, пригодные для гистограммы.
@@ -50,11 +55,19 @@ cargo run --release --manifest-path crates/Cargo.toml -p neotavern-presentation-
   --features desktop-host --bin neocompositor-desktop -- --messages 12
 ```
 
-**Интерактив — только release-сборка.** Каждый клик/скролл пересоздаёт сцену
-(Blitz paint + vello-растр) синхронно на потоке событий. В debug-сборке это
-~550 мс на апдейт (окно «туго»/лагает); в release — ~40–80 мс (холодный paint
-после простоя чуть дороже, тёплый путь ~40 мс). Чинится сборкой, а не фокусом:
-`cargo run --release`.
+**Интерактив: release-сборка предпочтительна, dev-профиль ускорен.** Каждый
+клик/скролл/resize пересоздаёт сцену (Blitz paint + vello-растр) синхронно на
+потоке событий. Профиль стоимости одного produce (12 сообщений,
+`NEOTA_OPEN_PROFILE=1`): почти всё — `ProductVelloSession::open`
+(`initial_build` VirtualDom + Blitz `resolve`), paint/render — единицы мс.
+С `[profile.dev.package."*"] opt-level = 2` (deps оптимизированы и в dev;
+см. `crates/Cargo.toml`) produce в dev-сборке ~130–180 мс; в release —
+~40–80 мс. Resize окном пере-верстает документ живо: `Resized` →
+`set_swapchain_size` + `dirty` (winit сам коалесцирует redraw), цели
+догоняют размер один раз на produce; обои-cover перегенерируется по порогу
+±10% размера прямоугольника, между порогами шейдер растягивает кэшированный
+cover. Обновление «produce на каждый event без коалесинга» или «produce
+сбрасывающий dirty» — регрессия.
 
 Флаги: `--messages <N>` — число сид-сообщений wire (по умолчанию 12);
 `--w/--h` — начальный размер окна; `--pointer <x>,<y>` — один симулированный
@@ -361,6 +374,7 @@ title="Message details") открывает модальную карточку 
 `data-action="details-close"` или клавише Esc).
 
 Карточка (`data-component="MessageDetailsCard"`, CSS `MessageDetailsCardV2.module.css`):
+
 - **Header**: имя автора, аватар / `Robot`-иконка, бейджи (`Lightning` со счётчиком токенов,
   `ChatCircleDots` с числом вариантов ответа), кнопка закрытия `X`.
 - **Metadata list**: `Sent at` (`CalendarBlank`), `Model` (`Robot`), `Generation time` (`Timer`).
@@ -427,6 +441,7 @@ avatar. Автоселект + pin + вкладка Edit, тост «Created {na
 Kernel `characters.update` принимает только `name`, `description`, `tags`,
 `avatarAssetId`, `profileId`. Панель управления персонажем поддерживает два режима
 (`editor_mode: "view"` vs `"edit"`):
+
 - **Переключение режима**: в шапке панели (`SidebarPanelHeader_actions`) кнопка
   `ToggleCharacterEditorMode`: в режиме просмотра отображает `<Pencil>` («Edit card»,
   `data-action="character-edit-mode"`), в режиме редактирования — `<Eye>`
@@ -450,6 +465,7 @@ Kernel `characters.update` принимает только `name`, `description`
 
 Для полей `first_message`, `creator_notes` и `alternate_greetings` native shell
 предоставляет интерактивный черновик:
+
 - `data-part="character-first-message-input"` (`TextFocus::CharacterFirstMessage`)
   и `"character-creator-notes-input"` (`TextFocus::CharacterCreatorNotes`) с оценкой
   числа токенов `≈ N tokens`;
@@ -459,10 +475,10 @@ Kernel `characters.update` принимает только `name`, `description`
   удаления (`ShellAction::RemoveAlternateGreeting(idx)`, `data-action="character-greeting-remove"`),
   и многострочным полем ввода `character-greeting-input` (`TextFocus::CharacterGreeting(idx)`);
 - Полноценный ввод с клавиатуры и стирание через Backspace в десктопном композиторе.
-Тост Save — `Saved {name}.` (`characters:saveSuccess`). Тесты:
-`character_editor_name_description_tags_over_product_wire`,
-`character_manager_alternate_greetings_add_toggle_and_remove`,
-`character_card_viewer_mode_toggle_and_rendering`.
+  Тост Save — `Saved {name}.` (`characters:saveSuccess`). Тесты:
+  `character_editor_name_description_tags_over_product_wire`,
+  `character_manager_alternate_greetings_add_toggle_and_remove`,
+  `character_card_viewer_mode_toggle_and_rendering`.
 
 ## Галерея персонажа (GalleryTab)
 
@@ -588,6 +604,7 @@ name / id · vversion · trustState и несут Apply (96 px, `themes.activate
 (`neotavern-presentation-design-system`, `neotavern-presentation-dioxus-shell`,
 `neotavern-presentation-chat`, `neocompositor-desktop`) реализован полнофункциональный
 динамический движок тем **Live Theme Engine**:
+
 - **Разрешение токенов Theme SDK Level 1**: Структура `ThemeTokens` и парсер
   `parse_theme_tokens_from_manifest` извлекают дизайн-токены из манифеста темы
   (`manifest.tokens.dark`: поверхности, границы, акценты, текст, радиусы) с
@@ -1187,7 +1204,7 @@ ConfirmCreate → `characters=2` (durable через wire), тост «Character
    становится контентом сообщения (kernel-семантика), видимое окно
    перестраивается из авторитетного стора; тост «Variant N of M.», на краях —
    «No more variants.» без смены контента. Позиция выводится из совпадения
-   контента строки с вариантами (позиция 0 = оригинал).    FakeWire сидирует 3
+   контента строки с вариантами (позиция 0 = оригинал). FakeWire сидирует 3
    варианта у хвостового ответа демо-чата; `variants.create/delete` в
    FakeWire пока не реализованы (свайпам не нужны). Тест:
    `swipes_cycle_variants_and_stop_at_edges`; e2e: тап → paths растут,
@@ -1203,13 +1220,14 @@ ConfirmCreate → `characters=2` (durable через wire), тост «Character
 **Распознавание (M1/M2):** общая таблица решений `hit_rects::resolve_tap`
 классифицирует ВСЕ задокументированные действия строки —
 `context/edit/copy/checkpoint/branch/delete/rollback/prompt/steps/details/delete-checkpoint`
-+ version controls `history/regenerate/swipe-previous/swipe-next`. Кнопки
-version controls не несут собственного `data-message-id`; их владельцем
-становится ближайший ключевой предок из skeleton-цепочки (`effective_key`),
-поэтому тап по регенерации всегда знает свою строку. Un-keyed действие без
-ключевого предка отбрасывается. Android copy остаётся честным skip
-(`clipboard_bridge_pending`); остальные kind исполняются в JNI так же, как
-на десктопе.
+
+- version controls `history/regenerate/swipe-previous/swipe-next`. Кнопки
+  version controls не несут собственного `data-message-id`; их владельцем
+  становится ближайший ключевой предок из skeleton-цепочки (`effective_key`),
+  поэтому тап по регенерации всегда знает свою строку. Un-keyed действие без
+  ключевого предка отбрасывается. Android copy остаётся честным skip
+  (`clipboard_bridge_pending`); остальные kind исполняются в JNI так же, как
+  на десктопе.
 
 Верификация end-to-end (снапшот + реальный клипборд ОС):
 `--pointer 1032,100` (copy первого сообщения) → в логе
@@ -1221,9 +1239,13 @@ version controls не несут собственного `data-message-id`; и�
 
 ## Честные ограничения (чего НЕТ)
 
-- Drag-скролл инерцией и мультитач: десктоп использует колёсико +
-  `scroll_offset_css` (без физ.инерции); пёрышко-инерция Android — через
-  `ChatCompositor::compositor_tick`, не перенесено.
+- Мультитач: touch-драг с флингом на десктопе работает (один палец, общие
+  с Android константы `scroll_dynamics`); второй палец игнорируется. Скролл
+  идёт через compositor fast path + scroll-blit с продвижением контента
+  (ack-петля этапа 3, общая для хостов: `scroll_ack::ScrollAckLoop` +
+  `PresentationSession::rebase_scroll_window`); honest-остатки — в разделе
+  «Этап 3» (кадр задержки advance на Android, оценочные высоты строк в
+  fast-path bounds).
 - Все builtin-действия сообщения реальны: copy (клипборд хоста; Android —
   честный skip), delete (`chats.messages.delete`), edit
   (`chats.messages.update` + ревизии), history (`chats.messages.revisions.list`),
@@ -1328,3 +1350,304 @@ swapchain после `present()` — 1 цвет (`#151311`, LoadOp-клир). П
 clear `#151311`, покруг `acquire_*`). Android пока использует свой хост;
 перевод Android на `PresentSurface` — механическая миграция, которая не должна
 менять поведение `android_surface.rs`.
+
+## Скролл-динамика: общее ядро хостов (Android parity)
+
+Динамика скролла обоих нативных хостов вынесена в один модуль
+`crates/presentation-chat/src/scroll_dynamics.rs` (общий крейт; бины хостов
+держат только surface/input-обвязку — требование «один хост — везде»):
+
+- **Пёрышковая инерция (fling)**: константы Android-цикла —
+  `GLIDE_DECAY_PER_TICK = 0.94` за 60 Гц vsync-тик (`GLIDE_TICK_NS = 8_333_333`),
+  порог остановки `GLIDE_STOP_VELOCITY = 12` CSS px/s. `glide_decay(v, dt)`
+  масштабирует показатель степени под реальный dt кадра; при dt = тику это
+  ровно бывший inline `host.velocity *= 0.94` (бит-идентично, без powf-обхода).
+  `android_surface.rs` теперь вызывает `glide_decay`/`glide_active` из модуля,
+  поведение не менялось (порог применяется к затухающей величине, как раньше).
+- **Плавный wheel (desktop)**: `SmoothScroll` — ease-out (cubic) анимация к
+  цели за ~120 мс; нотч в полёте делает `retarget` от текущей сэмплированной
+  позиции (цепочка нотчей не прыгает). Сэмплирование — по абсолютному
+  монотонному времени, поэтому кадр, пришедший с опозданием, садится на
+  правильное смещение, а не пропускает шаги.
+- **Touch (desktop, один указатель)**: контакт проходит тот же `pointer_down`/
+  `pointer_up`, что и мышь (тач-тап = тап мышью, включая hit-rects таблицу
+  решений); контакт, захваченный контролом, не скроллит (slop-проверка
+  выполняется в `pointer_up`, как у Android pending-tap). Драг по канвасу
+  скроллит 1:1 (`scroll_chat_by(dy)`), оценка скорости — как на Android
+  (`(prev_y − y)/dt` в CSS px); релиз с |v| > порога стартует флинг на общих
+  константах. Синтезированные дигитайзером mouse-события того же контакта
+  подавляются. Мультитача нет (второй палец игнорируется).
+- **Драйв кадров**: `about_to_wait` крутит `request_redraw` + `WaitUntil(8ms)`,
+  пока анимация жива (wheel ease-out или флинг); каждый кадр применяет сэмпл
+  через тот же клэмп `scroll_chat_by` и уходит в обычный produce (скролл
+  запечён в выборку строк, как panel-drag). Простой окна по-прежнему 0% CPU
+  (`ControlFlow::Wait`).
+- **Пробы**: `--wheel <dy>` (нотч через живой `wheel`-путь) и `--tick <ms>`
+  (шаг детерминированных probe-часов + один шаг анимации). Probe-часы живут,
+  пока скриптованная анимация в полёте, затем возвращаются к wall time.
+  Верификация (эта машина, Vulkan): `--wheel 40 --tick 120` → лог
+  `smooth-scroll landed: 0.0 -> 40.0`, снапшот отличается от базового;
+  `--wheel 40 --tick 60` → `smooth-scroll -> 35.0` — ровно
+  `40 × ease_out_cubic(0.5)` (0.875), easing сходится бит-в-бит.
+- **Тесты**: `scroll_dynamics` (6 юнит: константы Android, масштабирование dt,
+  порог, ease-out, ретаргет, точная посадка) + в `tests/compositor_host.rs`:
+  `smooth_wheel_scroll_lands_exactly_on_target_through_session` (нотч, цепочка
+  ретаргетом, клэмп у 0) и `fling_glide_matches_shared_android_recurrence_through_session`
+  (рекуррентность флинга = рекуррентности Android-цикла).
+
+Честные границы (историческое, до этапов 2–3): скролл тогда шёл через
+re-produce на кадр анимации (~30 мс тёплый produce → фактические ~30 fps в
+движении). Этап 2 перевёл анимации на blit-сдвиг замороженного растра, этап
+3 замкнул ack-петлю с продвижением контента — см. соответствующие разделы
+ниже; инерционные константы и кривые общие. Drag-скролл мышью не
+добавлялся (мышь — колёсико, как в React golden).
+
+## Скролл-блендинг: 2D-окно в blit (этап 1 fast-path скролла)
+
+Архитектурный анализ (пересмотр допущения «перенести скролл как на Android»
+одним куском): fast-path скролл Android — `compositor_tick` + gesture_delta в
+`CompositorFastPath` — работает в синтетическом property-дереве
+(`commit_properties` объявляет scroll-контейнер высотой 8 вьюпортов независимо
+от DOM) и сдвигает **замороженный** растер через blit. Петля sync-back
+(mailbox → ack → re-produce с продвижением окна) не потребляется ни одним
+хостом — контент во время флинга не продвигается. Копировать это на десктоп
+«как есть» нельзя: сломало бы split-layout (вертикальный бэнд сдвинул
+сайдбар) и content-correctness. План из двух этапов:
+
+- **Этап 1 (этот коммит)**: blend-окно blit стало 2D-прямоугольником. WGSL
+  (`BLIT_WGSL`, текст идентичен в `vello_gpu.rs` и `android_surface.rs`) читает
+  `array<vec4<f32>, 2>`: `(offset_y, band_top, band_bottom, srgb)` +
+  `(band_left, band_right)`; uniform 16 → 32 байта в обоих хостах.
+  `PresentSurface::present` / `present_and_dump` принимают `BlitWindow`
+  (физические px; `default()` = plain blit — прежнее поведение бит-в-бит).
+  Android передаёт full-width (0..1) — поведение не менялось. Проба
+  `--blit-shift <dy_css>`: один сдвинутый present + swapchain-дамп.
+  Пиксельная верификация (Vulkan, 1100×760, бэнд 56..586 × 440..1100):
+  header/сайдбар/композер — 0 изменившихся пикселей; сдвинутый контент —
+  `shift[y] == base[y+40]` бит-в-бит (0 из 323 400 px); филлер — ровно
+  #151311; регрессия без пробы — max diff 1/255 на 7 px из 836k (GPU-шум LSB).
+- **Этап 2 (выполнен, см. ниже)**: анимации скролла десктопа (wheel ease-out,
+  touch drag/fling) едут как blit-сдвиг замороженного растра (`present` с
+  реальным `BlitWindow`, ~0 re-produce на кадр), синхронизация в session
+  одним `scroll_chat_by(net)` в конце жеста/анимации (grab в `pointer_down`
+  приземляет анимацию до hit-теста — hit-ректы всегда совпадают с экраном).
+- **Этап 3 (выполнен, см. ниже)**: ack-петля ядра (mailbox → ack →
+  re-produce с продвижением окна) — флинг больше не скроллит замороженный
+  растр ни на одном хосте.
+
+Заодно починена сломанная сборка ветки под Android: JNI-диспетчер тапов
+отставал от портов (не покрывал `QuickIntent::Stop` и
+`MessageActionKind::SwipePicker` / `SwipePickerClose` — их добавили только в
+десктопный бин). Плечи зеркалят десктопное поведение
+(`cancel_generation`, `open_variant_picker`, `close_variant_picker`);
+`cargo check --target aarch64-linux-android --features android-jni,gpu` —
+зелёный.
+
+### Этап 2 (выполнен): анимации скролла через blit-сдвиг + sync-back
+
+Скролл-анимации десктопа (wheel ease-out, touch-драг, флинг) больше не
+re-produce'ят кадр: они двигают **визуальное смещение**
+(`visual_scroll_css`), а разница «визуал − запечённый оффсет» презентится как
+blit-сдвиг через `BlitWindow` (замороженный растр, ~0 produce на кадр).
+Посадка (sync-back) — один клэмпнутый `scroll_chat_by(visual − baked)`:
+
+- по завершении анимации/жеста (eased-сэмпл дошёл до цели, флинг затух,
+  драг отпущен без скорости, `TouchPhase::Cancelled`);
+- по drift-cap: визуал убегает дальше половины высоты чат-бэнда → ранняя
+  посадка с produce, чтобы филлер не закрыл весь вьюпорт;
+- grab: `pointer_down` приземляет анимацию ДО захвата с синхронным produce —
+  hit-ректы всегда совпадают с тем, что на экране.
+  Клэмп визуала ≥ 0 (без rubber-band, как Android); `ScrollLatest` и любые
+  внеанимационные изменения оффсета синхронизируют визуал с запечённым
+  состоянием. Кэш бэнд-геометрии (`chat_band`/`shift_cap_css`) обновляется на
+  каждом produce (resize/панель — честно).
+
+Верификация (Vulkan, пробы с детерминированными probe-часами):
+
+- `--wheel 40 --tick 120` → садится ровно в 40; **2 produce суммарно
+  (стартовые), 0 на анимацию**; resolve бит-в-бит равен этапу 1 (2 px LSB).
+- `--wheel 40 --tick 60` (mid-flight) → swapchain = точный сдвиг 35 px:
+  `shift[y] == base[y+35]` — 0 из 326 700 px; филлер снизу — ровно #151311;
+  header/сайдбар/композер нетронуты (0–6 px LSB-шума).
+- `--wheel 400 --tick 80` → drift-cap посадка внутри кадра: 3 produce,
+  промежуточная запечка на ~385 px до завершения анимации.
+- Регрессия без проб: вывод идентичен этапу 1 (7 px LSB-шум из 836k).
+
+Честная граница этапа 2: во время сдвига контент заморожен (новые строки
+появляются только при посадке); филлер за пределами растроенного окна
+совпадает с фоном чата (тёмная тема), но поверх photo-wallpaper виден как
+плоская полоса на время сдвига.
+
+### Этап 3 (выполнен): ack-петля ядра — fast path продвигает контент
+
+До этого среза флинг на **обоих** хостах скроллил замороженный растр:
+Android двигал visual-offset в kernel fast path (`CompositorFastPath`) до
+синтетического `content_extent = 8 × height`, никогда не перепродуцируя
+окно; десктоп перепродуцировал только по drift-cap/финалу. Этап 3 замыкает
+петлю **mailbox → ack → re-produce с продвижением окна**, общую для хостов:
+
+- **Общая политика** — `scroll_ack::ScrollAckLoop` (рядом со
+  `scroll_dynamics`): хранит окно, под которое запечён текущий растр
+  (`presented`), drift-cap (половина чат-бэнда, floor 24 css px) и
+  in-flight ack. Решение `due(visual, gesture_active)`: cap-кросс при
+  активном жесте, любой остаточный дрейф (> 0.5 css px) после его
+  завершения. Десктоп использует её вместо бывших `shift_cap_css` +
+  ручного `visual − session`; Android — ту же структуру в `GpuHost`.
+- **Ядро** — `PresentationSession::rebase_scroll_window(base_y, mode)`:
+  честный rebase fast path на запечённое окно. `Advance` (same-epoch ack,
+  `seq = applied`) сохраняет visual непрерывным: committed = base, unacked
+  = visual − base. Если жест затух между решением и rebase (ack
+  отклонён как stale: acknowledged == applied), visual по построению равен
+  цели advance — фолбэк-телепорт пиксельно точен (проверяется
+  `visual == base`, иначе отказ). `Teleport` (epoch+1) — для jumps окна
+  (ScrollLatest, действия пользователя): visual следует за окном, velocity
+  fast path сбрасывается. Плюс `scroll_unacked_y()` — honest blit-сдвиг
+  (visual − committed). `commit_properties` теперь берёт **реальный**
+  content extent из `ViewportSession::index().extent()` вместо
+  синтетического `8 × height` — флинг ограничен историями чата, а не
+  константой, короткие чаты не скроллятся в пустоту.
+- **Android** (`android_surface.rs` + `android_jni.rs`): в `present_frame`
+  после gesture-тика ack-петля решает, нужен ли advance; решение уходит в
+  `SCROLL_ADVANCE`, JNI-фаза bind применяет его через
+  `ChatSession::scroll_chat_by` и перепродуцирует **даже посреди жеста**
+  (для обычного dirty гейт «не скроллим» сохранён — посторонний re-bind
+  посреди флинга телепортировал бы visual). `bind_host` после `bind_list`
+  сажает ack-петлю на новое окно и ставит `rebase_due`; `present_frame`
+  потребляет его **после тика** (same-epoch ack видит applied >
+  acknowledged). Blit-сдвиг = unacked (до первого rebase совпадает с
+  прежним raw visual). Режим rebase: Advance, если запечённое окно
+  совпало с целью in-flight advance (±0.5), иначе Teleport. Неудачный
+  bind отменяет in-flight — петля не застревает.
+- **Desktop** — та же петля, синхронная: `land_scroll` = advance + produce
+  - `ack.land` в одном кадре; `present_window` читает сдвиг из
+    `ack.drift`; поведение бит-в-бит как в этапе 2.
+
+Верификация (Vulkan, 1100×760, chat-колонка 424..1100):
+
+- `--wheel 40 --tick 60` (mid-flight) → сдвиг 35 px **бит-в-бит**: 0 из
+  310 284 px внутри chat-колонки; результат совпадает с `--blit-shift 35`
+  (7 px LSB) — fast path этапа 2 сохранён.
+- `--wheel 400 --tick 80` → cap-посадка в кадре: 3 produce (старт,
+  промежуточная запечка, финал) — как в этапе 2, но решение через
+  `ack.due()`.
+- Регрессия без проб: 2 px LSB из 836k.
+- `scroll_ack` — 6 unit-тестов; ядро —
+  `scroll_rebase_keeps_visual_continuous_and_teleports_on_jump`
+  (непрерывность, stale-фолбэк, телепорт); обе цели `cargo check`
+  (desktop + `aarch64-linux-android`) зелёные; прогоны
+  presentation-chat/session/chat-viewport/neocompositor зелёные.
+- Android-хост проверен на уровне контрактов ядра и компиляции —
+  рантайм-проверка на устройстве в этом окружении невозможна.
+
+Честные границы этапа 3: (1) на Android advance отстаёт от решения на один
+кадр (решение в present_frame, применение в bind-фазе следующего
+presentFrame) — окно checkerboard'а [cap, cap + движение кадра]; (2) при
+перепродуцировании после гидрации аватаров высоты строк меняются
+(компактный заголовок → полный) — лендинг честно запекает новое окно,
+поэтому растр лендинга ≠ база+сдвиг в демо-сиде; это свойство виртуализации
+продюсера, а не ack-петли (два лендинга бит-в-бит идентичны между собой);
+(3) fast-path bounds — оценочные высоты строк (`56 px × density`), точные
+высоты из продуктового окна — будущий срез.
+
+## Image-пайплайн: этап A аудита (cover-fit, радиусы, snap, мипмапы)
+
+Корневой аудит изображений — в
+[native-image-pipeline-audit.md](native-image-pipeline-audit.md); его этап A
+(«остановить кровотечение», без смены архитектуры) выполнен:
+
+- **Cover-fit в `AVATAR_WGSL`**: uniform получил `tex_aspect`; фрагмент
+  сэмплирует центральный регион текстуры под аспект dest-ректа. Квадрат
+  192² кропится в 4:5-слот галереи (`object-fit: cover` React-семантика), а
+  не растягивается; обои (аспект совпадает) — identity.
+- **Радиус клипа из слота**: RSX эмитит `data-avatar-radius` рядом с
+  `data-avatar-asset` (scene_chat: 16 — шапка чата, 18 — аватар сообщения —
+  круги; product_shell: 10 = `--st-radius-control`). Дефолт для слотов без
+  атрибута — прежний `AVATAR_CLIP_RADIUS_CSS`. Аватары шапки/сообщений
+  перестали быть «квадратными в круге».
+- **Pixel-snap**: dest-ректы `round(css × scale)` — края оверлея больше не
+  полупиксельные против резкой сцены.
+- **Мипмапы**: цепочка строится на CPU при upload (премультиплицированный
+  даунсэмпл линеен; wgpu 29 не имеет `generate_mipmaps`) с
+  `MipmapFilterMode::Linear` — минификация 192² → 32–108 px без алиасинга.
+- Удалена мёртвая `AVATAR_OVERLAY`-ветка Android (static + JNI else-if +
+  `composite_avatar_overlay`) — никто не ставил флаг.
+
+Верификация (Vulkan, 1100×760): дифф против прежнего кадра — 10 676 px из
+836 000, кластеры строго в аватарных зонах (слоты сайдбара, шапка чата),
+остальной кадр бит-в-бит; шапка визуально круг; mid-flight сдвиг
+`--wheel 40 --tick 60` с `--wallpaper`: 525 px шума из 286 624 в
+chat-колонке, header/composer — 0 diff, филлер — #151311; попутно починен
+некомпилируемый тест `inline_phosphor_svg_paints_a_fill` (паттерн без `..`).
+Остаётся из аудита: этап B (in-scene Image brush — z-order, modal-клипы,
+message-image) и этап C (обои вне blit-сдвига, токенизация, миниатюры ядра).
+
+## Этап B: картинки в сцене (2026-09-05)
+
+Аватары и фото-сообщения больше не рисуются пост-проходом поверх кадра —
+они часть vello-сцены, поэтому z-order (модалки, панели), клипы и opacity
+работают сами:
+
+- **DOM**: аватарные слоты и markdown-фото несут `<img src="asset:{id}">`
+  (absolute fill в слоте, `object-fit: contain` + max-height 420 у фото).
+- **Провайдер**: `LocalNetProvider` (`presentation-m0-d2/src/asset_net.rs`)
+  резолвит `asset:{id}` из процесса-LRU `AssetStore` (64 записи / 32 MiB);
+  `data:`-растровые URI — как раньше; SVG по-прежнему не разрешён.
+- **Гидрация**: аватары — PNG 192² из `insert_avatar_thumb`
+  (`display_png_from_thumb`); фото сообщений — аспект-сохраняющая миниатюра
+  ≤768px (JPEG q82 / PNG с альфой) из `hydrate_message_assets`
+  (парсер `asset_image_refs`, лимит 32 фетча за проход).
+- **Sink**: `brush_ref` кодирует `Paint::Image` в vello (persistent image
+  atlas). Репро-тест `gpu_vello_image_brush_rasterizes_on_the_sampled_target`
+  держит контракт «пиксели картинки попадают в sampled-таргет».
+- **Kill-switch**: `NEOTA_INSCENE_IMAGES=0` возвращает Stage A-поведение
+  (Image-браши дропаются, GPU-оверлей аватаров снова рисует).
+- Оценка высот строк с фото в `compositor_height_index` — `56+436` CSS px,
+  иначе overscan открывает прозрачную щель (debug_assert chat-viewport).
+
+Верификация: desktop-снапшот (`--messages 3 --snapshot`) — фото-сообщение
+и все аватары рисуются в сцене при отключённом оверлее; репро-тест
+атласа зелёный; 95/95 `compositor_host` (включая blueprint-parity и новый
+контракт `raster_images > 0`); демо-данные переведены с `asset:thumb-N`
+(нарушал UUID-контракт `assets.content`) на детерминированные UUID.
+Android: `cargo check --target aarch64-linux-android` зелёный; первый
+запуск на устройстве — проверить скриншотом (атлас на device Vulkan не
+воспроизводим в этой среде), при регрессии — escape-hatch выше.
+
+## Этап C: обои вне blit-сдвига, токены, kernel-миниатюры (2026-09-06)
+
+**Обои — фиксированная подложка blit-шейдера.** Фото больше не запекается в
+`resolve` до blit: `PresentSurface::upload_wallpaper(epoch, thumb)` + `set_wallpaper_rect`
+кладут текстуру (биндинги 3/4) и рект в uniform (расширен 32→64 байта, строки
+2/3: uv-рект + enable + dim-альфа). Шейдер сэмплирует обои по НЕсдвинутому uv
+внутри ректа (fixed under-scroll), under-composite поверх премультиплицированной
+сцены; регион бэнда past-the-end показывает фото вместо плоского филлера
+#151311 (без обоев шейдер бит-в-бит прежний). Рект — layout-рект
+`part:chat-wallpaper` из slot-скелета: дива обоев/дима перенесены внутрь
+`main#chat-workspace` (bleed −12px = `--st-space-md`), поэтому фото не светится
+сквозь сайдбар. Дим (React-градиент внутри `.wallpaper`) — в шейдере
+(`scroll[3].y` = `ui_opacity/100·0.45`), сценовый див дима в wallpaper-режиме
+прозрачен. `composite_wallpaper_under`/`AvatarGpu::blit_under`/`pipeline_under`
+и `WALLPAPER_ASSET_ID` удалены. Общий `BLIT_WGSL` десктопа и Android
+идентичен; Android держит wallpaper-строки нулями (1×1 dummy-текстура).
+
+**Токенизация слотов.** `ThemeTokens` получил size-токены Theme SDK
+(`control-height*`, `space-{sm,md,xl}`, парсинг из манифеста, `*_px`-хелперы).
+Аватарные слоты (шапка 32 = `2xs`, сообщение 36 = `xs`, карточка 52 =
+`large` — было 48, parity-fix, редактор 64 = `calc(large+md)`, панельный
+header 44 = `control-height`) и `data-avatar-radius` рендерятся из токенов;
+viewerAvatar = React-паритет (`contain`, `radius-control`).
+
+**Миниатюры на стороне ядра.** Новый wire-op `assets.thumb`
+(`assetId` + `maxPx 16..1024` → `format/width/height/contentBase64`): ядро
+декодирует с preflight-лимитами (≤64 MiB, ≤16384 px оси, ≤64 MP), делает
+aspect-сохраняющую миниатюру (JPEG q82 / PNG с альфой) и кэширует в
+`<data-root>/cache/thumbnails/{sha256}-{maxPx}-v1.{ext}` (атомарно, §12).
+Гидрация аватаров (192) и фото сообщений (768) ходит в `assets.thumb` —
+оригиналы (2.2 MiB base64) по проводу не передаются; `AvatarThumb` без
+cover-кропа (кадрирование делают cover-fit/object-fit).
+
+Верификация: `--swapchain` снапшоты — обои только в workspace, при
+`--blit-shift 280` фото/дим неподвижны; contracts 114 + `contracts:check`;
+kernel (4 новых thumb-теста), chat 42+95+26+1, shell 15, design-system 27,
+m0-d2, session — зелёные; android check presentation-chat зелёный (kernel
+на android-таргете не проверяем — нет NDK для `ring`).

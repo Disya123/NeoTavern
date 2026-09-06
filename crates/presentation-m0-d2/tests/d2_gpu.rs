@@ -129,7 +129,7 @@ fn d2_1000_frame_lifetime_or_skip() {
             assert!(line.contains("layout_rebuilds=0"));
             assert!(line.contains(&format!("producer_source={D2_PRODUCER_SOURCE}")));
             assert!(line.contains("glass_from_hook=2"));
-            assert!(line.contains("patch_lines=65"));
+            assert!(line.contains(&format!("patch_lines={D2_PATCH_LINES}")));
             assert!(line.contains("rebase_anyrender_0111=PASS"));
             assert!(line.contains("blitz_newer=NOT_AVAILABLE"));
         }

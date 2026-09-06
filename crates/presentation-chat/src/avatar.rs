@@ -64,7 +64,10 @@ fn check_image_limits(bytes: &[u8]) -> Option<(u32, u32)> {
     Some((width, height))
 }
 
-pub fn premultiplied_cover_thumbnail(content_base64: &str) -> Option<AvatarThumb> {
+/// Decode already-thumbnailized bytes (kernel `assets.thumb` output, image
+/// audit stage C) into a premultiplied `AvatarThumb`. No cover crop: the GPU
+/// overlay cover-fits (stage A) and the in-scene `<img>` uses object-fit.
+pub(crate) fn premultiplied_from_encoded(content_base64: &str) -> Option<AvatarThumb> {
     let compact: String = content_base64
         .chars()
         .filter(|ch| !ch.is_ascii_whitespace())
@@ -72,7 +75,18 @@ pub fn premultiplied_cover_thumbnail(content_base64: &str) -> Option<AvatarThumb
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(compact.as_bytes())
         .ok()?;
-    thumbnail_from_bytes(&bytes)
+    check_image_limits(&bytes)?;
+    let image = ImageReader::new(Cursor::new(&bytes))
+        .with_guessed_format()
+        .ok()?
+        .decode()
+        .ok()?;
+    let rgba = image.to_rgba8();
+    Some(AvatarThumb {
+        width: rgba.width(),
+        height: rgba.height(),
+        premul_rgba: premultiply(&rgba),
+    })
 }
 
 pub fn thumbnail_from_bytes(bytes: &[u8]) -> Option<AvatarThumb> {
@@ -116,13 +130,8 @@ fn premultiply(image: &RgbaImage) -> Vec<u8> {
 
 /// Longest allowed side of a decoded wallpaper raster. A 2048×1280 cover is
 /// ~10 MB premultiplied RGBA — one static GPU upload per load, rebuilt only
-/// when the window size changes.
+/// when the wallpaper rect size changes.
 pub const WALLPAPER_DISPLAY_MAX_PX: u32 = 2048;
-
-/// Asset id the desktop host uploads the wallpaper cover raster under. The
-/// overlay pipeline draws it with destination-over so it sits beneath the
-/// translucent scene.
-pub const WALLPAPER_ASSET_ID: &str = "neota-wallpaper";
 
 /// Aspect-preserving "cover" raster for the chat wallpaper: center-crops the
 /// source to the target aspect ratio and scales it so neither side exceeds
@@ -186,6 +195,29 @@ fn wallpaper_cover_premul(
     })
 }
 
+/// Encode an avatar thumbnail back to straight-alpha PNG bytes for the
+/// in-scene `<img src="asset:{id}">` path (image pipeline audit, stage B).
+/// One encode per hydrated asset; the m0-d2 asset store bounds total memory.
+pub fn display_png_from_thumb(thumb: &AvatarThumb) -> Option<Vec<u8>> {
+    let rgba = unpremultiply(&thumb.premul_rgba)?;
+    let img = RgbaImage::from_raw(thumb.width, thumb.height, rgba)?;
+    let mut png = Vec::new();
+    DynamicImage::ImageRgba8(img)
+        .write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png)
+        .ok()?;
+    Some(png)
+}
+
+/// Longest side of a message-image thumbnail. Message blocks render at up to
+/// ~320 CSS px, so 768 px keeps them sharp past density 2 without paying for
+/// a full-size re-encode per asset.
+pub const MESSAGE_IMAGE_MAX_PX: u32 = 768;
+
+/// Aspect-preserving thumbnail for message markdown images
+/// (`![alt](asset:{id})`): never crops (unlike avatar slots, message photos
+/// keep their aspect via `object-fit` at paint time), longest side capped at
+/// [`MESSAGE_IMAGE_MAX_PX`]. Fully opaque photos re-encode as JPEG (~an order
+
 /// Test helper only. Production paint never feeds this URI to Blitz/Vello.
 pub fn display_avatar_data_uri(content_base64: &str) -> Option<String> {
     let compact: String = content_base64
@@ -241,9 +273,10 @@ fn unpremultiply(premul: &[u8]) -> Option<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::{
-        thumbnail_from_bytes, AvatarThumb, AVATAR_DISPLAY_MAX_PX, THUMBNAIL_INPUT_MAX_BYTES,
+        display_png_from_thumb, thumbnail_from_bytes, AvatarThumb, AVATAR_DISPLAY_MAX_PX,
+        THUMBNAIL_INPUT_MAX_BYTES,
     };
-    use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
+    use image::{DynamicImage, ImageFormat, ImageReader, Rgba, RgbaImage};
     use std::io::Cursor;
 
     fn solid_png(width: u32, height: u32, color: [u8; 4]) -> Vec<u8> {
@@ -305,5 +338,29 @@ mod tests {
         // dimension / decoded-pixel guards (read from the header, no pixel decode).
         let png = huge_dimensions_png(9000, 9000);
         assert!(thumbnail_from_bytes(&png).is_none());
+    }
+
+    #[test]
+    fn display_png_round_trips_a_premultiplied_thumb() {
+        // Straight-alpha recovery: the premultiplied thumbnail must encode to a
+        // PNG whose pixels carry the original (unpremultiplied) color.
+        let png = solid_png(24, 24, [200, 100, 50, 128]);
+        let thumb = thumbnail_from_bytes(&png).expect("thumb");
+        let encoded = display_png_from_thumb(&thumb).expect("png");
+        assert_eq!(&encoded[0..4], &[0x89, b'P', b'N', b'G'], "PNG magic");
+        let decoded = ImageReader::new(Cursor::new(&encoded))
+            .with_guessed_format()
+            .unwrap()
+            .decode()
+            .unwrap()
+            .to_rgba8();
+        // JPEG-free path: colors survive premultiply → unpremultiply within the
+        // ±1 of integer round-trip error.
+        let pixel = decoded.get_pixel(4, 4);
+        let (r, g, b, a) = (pixel[0], pixel[1], pixel[2], pixel[3]);
+        assert!((r as i32 - 200).abs() <= 1);
+        assert!((g as i32 - 100).abs() <= 1);
+        assert!((b as i32 - 50).abs() <= 1);
+        assert_eq!(a, 128);
     }
 }

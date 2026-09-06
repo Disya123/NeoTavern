@@ -267,10 +267,15 @@ fn character_card_renders_with_grid_clip_and_no_height_clamp_golden() {
         card_section.contains("display:-webkit-box"),
         "clip display must be -webkit-box in cards_tab"
     );
-    // Avatar size parity: cardAvatar must be 48px (React --st-control-height-large), not 52px.
+    // Avatar size parity: cardAvatar renders from `--st-control-height-large`
+    // (Theme SDK default 52px) via the token helpers — no hardcoded literals.
     assert!(
-        text.contains("width:48px;height:48px;max-width:48px;max-height:48px"),
-        "card avatar must be 48px for React parity, not 52px"
+        text.contains("tokens.control_height_large_px()"),
+        "card avatar must render from --st-control-height-large, not a hardcoded size"
+    );
+    assert!(
+        !text.contains("width:48px;height:48px"),
+        "hardcoded card avatar size must be gone"
     );
     // Seam corpus: one full-viewport layout/PaintScene/SceneEpoch, no per-tile layout.
     // Verify android_surface.rs no longer does per-tile raster_tiled in production path.

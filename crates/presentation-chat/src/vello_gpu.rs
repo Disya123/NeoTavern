@@ -446,12 +446,28 @@ pub fn peek_texture_rgba(
 // migrate onto it without changing behavior.
 
 /// Fullscreen-triangle blit: samples `resolve` into the swapchain, with the
-/// NeoCompositor scroll blend band and optional sRGB re-encode.
+/// NeoCompositor scroll blend window, a fixed wallpaper underlay, and optional
+/// sRGB re-encode. The window is a 2D rect — `scroll[0] =
+/// (offset_y, band_top, band_bottom, srgb)` normalized to texture height,
+/// `scroll[1].xy = (band_left, band_right)` normalized to width — so split
+/// layouts shift only the chat column. Uniform rows 2/3 are the wallpaper
+/// underlay: `scroll[2] = (x0, y0, x1, y1)` dest rect in uv, `scroll[3].x =
+/// enabled`, `scroll[3].y = overlay dim alpha` (the React wallpaper gradient,
+/// fixed with the photo instead of scrolling with the scene). The wallpaper
+/// (bindings 3/4) is sampled at the
+/// UNSHIFTED fragment uv inside the rect, so the photo stays fixed while the
+/// scene scrolls over it, and the band's out-of-range region composites the
+/// photo over the flat filler instead of replacing it. With `enabled = 0` the
+/// underlay is fully transparent and the shader reduces to the pre-wallpaper
+/// blit. Must stay identical to `BLIT_WGSL` in `android_surface.rs` (same GPU
+/// contract on both hosts).
 pub const BLIT_WGSL: &str = r#"
 struct VsOut { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32> }
 @group(0) @binding(0) var tex: texture_2d<f32>;
 @group(0) @binding(1) var samp: sampler;
-@group(0) @binding(2) var<uniform> scroll: vec4<f32>;
+@group(0) @binding(2) var<uniform> scroll: array<vec4<f32>, 4>;
+@group(0) @binding(3) var wall_tex: texture_2d<f32>;
+@group(0) @binding(4) var wall_samp: sampler;
 @vertex fn vs(@builtin(vertex_index) i: u32) -> VsOut {
     var p = array<vec2<f32>, 3>(vec2<f32>(-1.0, -1.0), vec2<f32>(3.0, -1.0), vec2<f32>(-1.0, 3.0));
     let pos = p[i];
@@ -462,16 +478,30 @@ struct VsOut { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32> }
 }
 @fragment fn fs(in: VsOut) -> @location(0) vec4<f32> {
     var uv = in.uv;
-    if (uv.y >= scroll.y && uv.y < scroll.z) {
-        let src_y = uv.y + scroll.x;
-        if (src_y < scroll.y || src_y >= scroll.z) {
-            return vec4<f32>(0.082, 0.075, 0.067, 1.0);
+    let in_band = uv.y >= scroll[0].y && uv.y < scroll[0].z
+        && uv.x >= scroll[1].x && uv.x < scroll[1].y;
+    let src_y = uv.y + scroll[0].x;
+    let shifted = in_band && src_y >= scroll[0].y && src_y < scroll[0].z;
+    uv.y = select(uv.y, src_y, shifted);
+    var wall = vec4<f32>(0.0, 0.0, 0.0, 0.0);
+    if (scroll[3].x > 0.5) {
+        let wx = (in.uv.x - scroll[2].x) / max(scroll[2].z - scroll[2].x, 1e-6);
+        let wy = (in.uv.y - scroll[2].y) / max(scroll[2].w - scroll[2].y, 1e-6);
+        if (wx >= 0.0 && wx <= 1.0 && wy >= 0.0 && wy <= 1.0) {
+            wall = textureSampleLevel(wall_tex, wall_samp, vec2<f32>(wx, wy), 0.0);
+            // React parity: the dim gradient lives inside the wallpaper
+            // element (fixed with the photo), never scrolls with the scene.
+            let dim = clamp(scroll[3].y, 0.0, 1.0);
+            wall = vec4(wall.rgb * (1.0 - dim)
+                + vec3<f32>(0.0706, 0.0627, 0.0549) * dim, wall.a);
         }
-        uv.y = src_y;
     }
-    let c = textureSample(tex, samp, uv);
-    var rgb = c.rgb;
-    if (scroll.w > 0.5) {
+    let c = textureSampleLevel(tex, samp, uv, 0.0);
+    var rgb = c.rgb + wall.rgb * (1.0 - c.a);
+    if (in_band && !shifted) {
+        rgb = wall.rgb + vec3<f32>(0.082, 0.075, 0.067) * (1.0 - wall.a);
+    }
+    if (scroll[0].w > 0.5) {
         let lo = rgb / 12.92;
         let hi = pow((rgb + 0.055) / 1.055, vec3<f32>(2.4));
         rgb = select(hi, lo, rgb <= vec3<f32>(0.04045));
@@ -480,11 +510,37 @@ struct VsOut { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32> }
 }
 "#;
 
+/// Convert a wallpaper dest rect from physical px `(x, y, w, h)` into the
+/// shader's uv-space `(x0, y0, x1, y1)` row. A degenerate rect collapses to
+/// zeros (the enable flag is decided by the caller).
+pub fn wallpaper_rect_uv(rect_px: [f32; 4], width: f32, height: f32) -> [f32; 4] {
+    let (width, height) = (width.max(1.0), height.max(1.0));
+    let [x, y, w, h] = rect_px;
+    [x / width, y / height, (x + w) / width, (y + h) / height]
+}
+
 pub fn format_is_srgb(format: wgpu::TextureFormat) -> bool {
     matches!(
         format,
         wgpu::TextureFormat::Rgba8UnormSrgb | wgpu::TextureFormat::Bgra8UnormSrgb
     )
+}
+
+/// The NeoCompositor scroll blend window passed to [`PresentSurface::present`]:
+/// a 2D rect of the swapchain that samples `resolve` shifted down by
+/// `scroll_y` physical px, with everything outside the rect passed through.
+/// The rect spans `[header, composer_top)` vertically (the chat column between
+/// its fixed header and composer) and `[band_left, band_right)` horizontally
+/// (excluding the rail + sidebar panel on split layouts). All values in
+/// physical px; `BlitWindow::default()` (all zeros) disables the shift and
+/// blits the full frame unchanged — the pre-scroll-window behavior.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct BlitWindow {
+    pub scroll_y: f32,
+    pub header: f32,
+    pub composer_top: f32,
+    pub band_left: f32,
+    pub band_right: f32,
 }
 
 /// Prefer non-sRGB `Rgba8Unorm`/`Bgra8Unorm` so the swapchain target never
@@ -617,11 +673,24 @@ pub struct PresentSurface {
     pub convert: ConvertMode,
     plan: VelloTargetPlan,
     targets: PresentTargets,
+    /// Allocated size of `targets` (scene/resolve rasters). Tracked
+    /// separately from `config` so the cheap per-event swapchain
+    /// re-configure ([`Self::set_swapchain_size`]) does not make
+    /// [`Self::resize`] skip the produce-time target re-allocation.
+    targets_size: (u32, u32),
     pipeline: wgpu::RenderPipeline,
     bind_layout: wgpu::BindGroupLayout,
     bind: wgpu::BindGroup,
     sampler: wgpu::Sampler,
     uniform: wgpu::Buffer,
+    /// Wallpaper underlay texture for the blit shader (bindings 3/4). A 1×1
+    /// transparent dummy until [`Self::upload_wallpaper`] runs; the dummy
+    /// keeps the bind group complete on hosts that never enable a wallpaper.
+    wall_texture: wgpu::Texture,
+    wall_view: wgpu::TextureView,
+    wall_key: Option<u64>,
+    wall_rect_px: Option<[f32; 4]>,
+    wall_overlay_alpha: f32,
     renderer: vello::Renderer,
     convert_pipeline: Option<wgpu::ComputePipeline>,
     convert_bgl: Option<wgpu::BindGroupLayout>,
@@ -707,6 +776,22 @@ impl PresentSurface {
                     },
                     count: None,
                 },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 4,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
             ],
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -753,10 +838,12 @@ impl PresentSurface {
         });
         let uniform = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("neocompositor-scroll"),
-            size: 16,
+            size: 64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
+        let wall_texture = Self::alloc_dummy_wallpaper(&device, &queue);
+        let wall_view = wall_texture.create_view(&wgpu::TextureViewDescriptor::default());
         let bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("neocompositor-bg"),
             layout: &bind_layout,
@@ -772,6 +859,14 @@ impl PresentSurface {
                 wgpu::BindGroupEntry {
                     binding: 2,
                     resource: uniform.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::TextureView(&wall_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
                 },
             ],
         });
@@ -792,11 +887,17 @@ impl PresentSurface {
             convert: plan.convert,
             plan,
             targets,
+            targets_size: (width.max(1), height.max(1)),
             pipeline,
             bind_layout,
             bind,
             sampler,
             uniform,
+            wall_texture,
+            wall_view,
+            wall_key: None,
+            wall_rect_px: None,
+            wall_overlay_alpha: 0.0,
             renderer,
             convert_pipeline,
             convert_bgl,
@@ -830,22 +931,110 @@ impl PresentSurface {
         );
     }
 
-    /// Draw the wallpaper photo UNDER the rasterized scene (destination-over
-    /// on `resolve`). Call after `render` and before `composite_avatars`:
-    /// translucent scene fills then blend over the photo, opaque areas cover
-    /// it, exactly like CSS glass over a background image.
-    /// The texture must already be uploaded via [`Self::upload_avatar`] under
-    /// the same asset id.
-    pub fn composite_wallpaper_under(&mut self, paint: &neotavern_neocompositor::ImagePaintOp) {
-        let (w, h) = self.size();
-        self.avatars.blit_under(
-            &self.device,
-            &self.queue,
-            &self.targets.resolve_view,
-            w,
-            h,
-            std::slice::from_ref(paint),
+    /// Upload the wallpaper photo raster for the blit-shader underlay (image
+    /// audit, stage C). `key` is a caller-owned content token: a call with the
+    /// same key as the current texture is a no-op, so per-produce calls stay
+    /// cheap while a wallpaper change re-uploads. The texture must be paired
+    /// with [`Self::set_wallpaper_rect`] to become visible.
+    pub fn upload_wallpaper(&mut self, key: u64, thumb: &crate::avatar::AvatarThumb) -> bool {
+        if self.wall_key == Some(key) {
+            return false;
+        }
+        if thumb.width == 0 || thumb.height == 0 {
+            return false;
+        }
+        let texture = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("neocompositor-wallpaper"),
+            size: wgpu::Extent3d {
+                width: thumb.width,
+                height: thumb.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        self.queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &thumb.premul_rgba,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(thumb.width * 4),
+                rows_per_image: Some(thumb.height),
+            },
+            wgpu::Extent3d {
+                width: thumb.width,
+                height: thumb.height,
+                depth_or_array_layers: 1,
+            },
         );
+        self.wall_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        self.wall_texture = texture;
+        self.wall_key = Some(key);
+        self.rebuild_bind();
+        true
+    }
+
+    /// Place the wallpaper underlay: `rect_px` is `(x, y, w, h)` in physical
+    /// px — the layout rect of the `part:chat-wallpaper` node (workspace +
+    /// bleed), not the full window. `None` disables the underlay (the dummy
+    /// transparent texture stays bound). The rect is re-applied on every
+    /// produce; a resize self-corrects on the next produce.
+    pub fn set_wallpaper_rect(&mut self, rect_px: Option<[f32; 4]>) {
+        self.wall_rect_px = rect_px.filter(|[_, _, w, h]| *w > 0.0 && *h > 0.0);
+    }
+
+    /// Fixed dim over the wallpaper underlay (`scroll[3].y`): the React
+    /// wallpaper gradient parity. While this is > 0 the scene's
+    /// `chat-wallpaper-overlay` div must paint transparent, or the dim is
+    /// applied twice (once fixed by the shader, once scrolling with the band).
+    pub fn set_wallpaper_overlay_alpha(&mut self, alpha: f32) {
+        self.wall_overlay_alpha = alpha.clamp(0.0, 1.0);
+    }
+
+    fn alloc_dummy_wallpaper(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::Texture {
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("neocompositor-wallpaper-dummy"),
+            size: wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &[0u8; 4],
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(4),
+                rows_per_image: Some(1),
+            },
+            wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+        );
+        texture
     }
 
     pub fn size(&self) -> (u32, u32) {
@@ -907,42 +1096,47 @@ impl PresentSurface {
     }
 
     /// Draw `resolve` into the swapchain and present (mirror of the Android
-    /// host's `blit`). Scroll/header/composer are the NeoCompositor blend
-    /// window; header/composer may be 0 when the shell overlay is attached.
-    pub fn present(&mut self, scroll_y: f32, header: f32, composer_top: f32) -> Result<(), String> {
-        self.present_opt(scroll_y, header, composer_top, None)
+    /// host's `blit`). The window is the NeoCompositor scroll blend window;
+    /// `BlitWindow::default()` is a plain full-frame blit.
+    pub fn present(&mut self, window: BlitWindow) -> Result<(), String> {
+        self.present_opt(window, None)
     }
 
     /// `present` plus a one-shot swapchain read-back diagnostic (what the user
     /// actually sees). `swap_save` copies the backbuffer right after the blit,
     /// before `frame.present()`.
-    pub fn present_and_dump(
-        &mut self,
-        scroll_y: f32,
-        header: f32,
-        composer_top: f32,
-        swap_save: &str,
-    ) -> Result<(), String> {
-        self.present_opt(scroll_y, header, composer_top, Some(swap_save))
+    pub fn present_and_dump(&mut self, window: BlitWindow, swap_save: &str) -> Result<(), String> {
+        self.present_opt(window, Some(swap_save))
     }
 
-    fn present_opt(
-        &mut self,
-        scroll_y: f32,
-        header: f32,
-        composer_top: f32,
-        swap_save: Option<&str>,
-    ) -> Result<(), String> {
+    fn present_opt(&mut self, window: BlitWindow, swap_save: Option<&str>) -> Result<(), String> {
         let height = self.config.height.max(1) as f32;
-        let offset = scroll_y / height;
-        let header_uv = header / height;
-        let composer_uv = composer_top / height;
-        let mut uniform = [0u8; 16];
-        uniform[0..4].copy_from_slice(&offset.to_le_bytes());
-        uniform[4..8].copy_from_slice(&header_uv.to_le_bytes());
-        uniform[8..12].copy_from_slice(&composer_uv.to_le_bytes());
+        let width = self.config.width.max(1) as f32;
+        let mut uniform = [0u8; 64];
+        uniform[0..4].copy_from_slice(&(window.scroll_y / height).to_le_bytes());
+        uniform[4..8].copy_from_slice(&(window.header / height).to_le_bytes());
+        uniform[8..12].copy_from_slice(&(window.composer_top / height).to_le_bytes());
         let srgb = if self.srgb_target { 1.0f32 } else { 0.0 };
         uniform[12..16].copy_from_slice(&srgb.to_le_bytes());
+        uniform[16..20].copy_from_slice(&(window.band_left / width).to_le_bytes());
+        uniform[20..24].copy_from_slice(&(window.band_right / width).to_le_bytes());
+        // uniform[24..32] stay zero (reserved for the next window parameter).
+        // Rows 2/3: wallpaper underlay dest rect in uv + enable flag; zeros
+        // keep the shader at the pre-wallpaper blit when no wallpaper is set.
+        let (rect_uv, enabled) = match self.wall_rect_px {
+            Some(rect) => (
+                wallpaper_rect_uv(rect, width, height),
+                if self.wall_key.is_some() { 1.0f32 } else { 0.0 },
+            ),
+            None => ([0.0f32; 4], 0.0),
+        };
+        uniform[32..36].copy_from_slice(&rect_uv[0].to_le_bytes());
+        uniform[36..40].copy_from_slice(&rect_uv[1].to_le_bytes());
+        uniform[40..44].copy_from_slice(&rect_uv[2].to_le_bytes());
+        uniform[44..48].copy_from_slice(&rect_uv[3].to_le_bytes());
+        uniform[48..52].copy_from_slice(&enabled.to_le_bytes());
+        uniform[52..56].copy_from_slice(&self.wall_overlay_alpha.to_le_bytes());
+        // uniform[24..32] and [56..64] stay zero.
         self.queue.write_buffer(&self.uniform, 0, &uniform);
         let frame = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(frame)
@@ -1013,12 +1207,25 @@ impl PresentSurface {
                     binding: 2,
                     resource: self.uniform.as_entire_binding(),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::TextureView(&self.wall_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
             ],
         });
     }
 
-    /// Re-create targets and re-configure the swapchain at a new size.
-    pub fn resize(&mut self, width: u32, height: u32) {
+    /// Re-configure the swapchain for a new window size WITHOUT touching the
+    /// scene targets. The per-event resize path in the host calls this so a
+    /// drag does not re-allocate fullscreen rasters per `Resized` event; the
+    /// blit keeps sampling the old `resolve` and stretches it into the new
+    /// swapchain until the next produce re-renders at the settled size
+    /// ([`Self::resize`]).
+    pub fn set_swapchain_size(&mut self, width: u32, height: u32) {
         let width = width.max(1);
         let height = height.max(1);
         if width == self.config.width && height == self.config.height {
@@ -1026,6 +1233,21 @@ impl PresentSurface {
         }
         self.config.width = width;
         self.config.height = height;
+        self.surface.configure(&self.device, &self.config);
+    }
+
+    /// Re-create targets and re-configure the swapchain at a new size. The
+    /// host calls this from the produce path (once per settled size), never
+    /// per `Resized` event.
+    pub fn resize(&mut self, width: u32, height: u32) {
+        let width = width.max(1);
+        let height = height.max(1);
+        let targets_changed = (width, height) != self.targets_size;
+        self.set_swapchain_size(width, height);
+        if !targets_changed {
+            return;
+        }
+        self.targets_size = (width, height);
         self.targets = PresentTargets::alloc(&self.device, &self.plan, width, height);
         self.rebuild_bind();
         clear_view_color(
@@ -1034,7 +1256,6 @@ impl PresentSurface {
             &self.targets.resolve_view,
             canvas_clear_color(),
         );
-        self.surface.configure(&self.device, &self.config);
     }
 
     /// Headless diagnostic: read back the accumulated `resolve` (before the
@@ -1194,6 +1415,18 @@ mod tests {
         assert!(!software_raster_debug_enabled());
         assert_eq!(renderer_name(false), "vello-gpu");
         assert!(!vello_renderer_options(false).use_cpu);
+    }
+
+    #[test]
+    fn wallpaper_rect_maps_physical_px_into_uv() {
+        let uv = wallpaper_rect_uv([428.0, -12.0, 684.0, 784.0], 1100.0, 760.0);
+        assert!((uv[0] - 428.0 / 1100.0).abs() < 1e-6);
+        assert!((uv[1] - (-12.0 / 760.0)).abs() < 1e-6);
+        assert!((uv[2] - 1112.0 / 1100.0).abs() < 1e-6);
+        assert!((uv[3] - 772.0 / 760.0).abs() < 1e-6);
+        // Degenerate sizes clamp instead of dividing by zero.
+        let degenerate = wallpaper_rect_uv([0.0, 0.0, 0.0, 0.0], 0.0, 0.0);
+        assert_eq!(degenerate, [0.0, 0.0, 0.0, 0.0]);
     }
 
     #[test]
@@ -1453,6 +1686,147 @@ mod tests {
             px,
             [0, 0, 0, 0],
             "GPU Vello opaque rect must not leave sampled output black"
+        );
+    }
+
+    #[test]
+    fn gpu_vello_image_brush_rasterizes_on_the_sampled_target() {
+        // Stage B repro for the Vello 0.9-era "Image brush blacks the whole
+        // surface" regression: a scene with one Image-brush fill must write
+        // that image's pixels into the sampled target, not wipe it.
+        use vello::peniko::ImageData as PenikoImage;
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::VULKAN | wgpu::Backends::GL,
+            flags: wgpu::InstanceFlags::from_build_config()
+                | wgpu::InstanceFlags::ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER,
+            memory_budget_thresholds: wgpu::MemoryBudgetThresholds::default(),
+            backend_options: wgpu::BackendOptions::from_env_or_default(),
+            display: None,
+        });
+        let mut adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::all()));
+        adapters.sort_by_key(|adapter| {
+            let info = adapter.get_info();
+            adapter_sort_key(info.backend, info.device_type)
+        });
+        let Some(adapter) = adapters.into_iter().find(|adapter| {
+            let info = adapter.get_info();
+            !skip_emulator_vulkan(&info) && !matches!(info.device_type, wgpu::DeviceType::Cpu)
+        }) else {
+            eprintln!("SKIP: no wgpu adapter for GPU Vello image brush repro");
+            return;
+        };
+        let (device, queue) = match request_vello_device(&adapter) {
+            Ok(pair) => pair,
+            Err(err) => {
+                eprintln!("SKIP: request_vello_device failed: {err}");
+                return;
+            }
+        };
+        let plan =
+            plan_vello_target(adapter.get_texture_format_features(wgpu::TextureFormat::Rgba8Unorm))
+                .expect("Rgba8Unorm Vello target plan");
+        let width = 320u32;
+        let height = 200u32;
+        let storage = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("test-vello-image-storage"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: plan.format,
+            usage: plan.storage_usages,
+            view_formats: &[],
+        });
+        let sampled = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("test-vello-image-sampled"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: plan.format,
+            usage: plan.sampled_usages | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        let storage_view = storage.create_view(&wgpu::TextureViewDescriptor::default());
+        let sampled_view = sampled.create_view(&wgpu::TextureViewDescriptor::default());
+        let mut renderer =
+            vello::Renderer::new(&device, vello_renderer_options(false)).expect("vello gpu");
+        // A 4x1 opaque magenta strip scaled over the whole target.
+        let pixels: Vec<u8> = [255u8, 0, 255, 255].repeat(4);
+        let image = PenikoImage {
+            data: pixels.into(),
+            format: vello::peniko::ImageFormat::Rgba8,
+            alpha_type: vello::peniko::ImageAlphaType::Alpha,
+            width: 4,
+            height: 1,
+        };
+        let brush = vello::peniko::ImageBrush::from(image);
+        let mut scene = vello::Scene::new();
+        scene.fill(
+            vello::peniko::Fill::NonZero,
+            // 4×1 strip scaled non-uniformly to the full 320×200 target.
+            vello::kurbo::Affine::new([80.0, 0.0, 0.0, 200.0, 0.0, 0.0]),
+            &brush,
+            None,
+            &vello::kurbo::Rect::new(0.0, 0.0, 4.0, 1.0),
+        );
+        renderer
+            .render_to_texture(
+                &device,
+                &queue,
+                &scene,
+                &storage_view,
+                &vello::RenderParams {
+                    base_color: Color::from_rgb8(0x15, 0x13, 0x11),
+                    width,
+                    height,
+                    antialiasing_method: vello::AaConfig::Area,
+                },
+            )
+            .expect("gpu render with image brush");
+        let (convert_pipeline, convert_bgl) = if plan.convert == ConvertMode::Compute {
+            let (pipeline, bgl) = create_storage_convert_pipeline(&device);
+            (Some(pipeline), Some(bgl))
+        } else {
+            (None, None)
+        };
+        gpu_storage_to_sampled(
+            &device,
+            &queue,
+            VelloTargets {
+                storage: &storage,
+                sampled: &sampled,
+                storage_view: &storage_view,
+                sampled_view: &sampled_view,
+                size: wgpu::Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+                dest_origin: wgpu::Origin3d::ZERO,
+            },
+            StorageConvert {
+                mode: plan.convert,
+                pipeline: convert_pipeline.as_ref(),
+                layout: convert_bgl.as_ref(),
+            },
+        );
+        let center = peek_texture_rgba(&device, &queue, &sampled, width / 2, height / 2);
+        assert!(
+            center[3] > 0,
+            "image brush must not leave the sampled output empty, got {center:?}"
+        );
+        assert!(
+            center[0] > 128 && center[2] > 128 && center[1] < 128,
+            "center pixel must be the magenta image fill, got {center:?}"
         );
     }
 }

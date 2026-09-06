@@ -29,6 +29,7 @@ use neotavern_presentation_blueprint::{
 };
 
 use crate::product_path::{ProductChatView, ProductChrome};
+use crate::ASSET_URL_PREFIX;
 
 /// Where the chat blueprint document is loaded from.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -182,6 +183,9 @@ struct ChromeCtx {
     composer_label: String,
     header_title: String,
     avatar_asset: String,
+    /// Resolved design tokens (live theme or `default_dark`) — the single
+    /// source for avatar slot sizes/radii, matching the React token sheet.
+    tokens: neotavern_presentation_design_system::ThemeTokens,
     assistant_author: String,
     streaming: bool,
     compact: bool,
@@ -342,6 +346,7 @@ pub fn blueprint_chrome(view: &ProductChatView) -> Option<ChromeElements> {
         composer_label: label,
         header_title: display_name,
         avatar_asset: view.character_avatar_asset.clone(),
+        tokens: view.active_theme_tokens.clone().unwrap_or_default(),
         assistant_author,
         streaming: view.streaming,
         compact,
@@ -469,17 +474,33 @@ fn render_identity_child(node: &UiNodeV1, ctx: &ChromeCtx) -> Element {
                 rsx! {}
             } else {
                 let asset = ctx.avatar_asset.clone();
+                // React parity: ChatWorkspace.module.css `.headerAvatar` is
+                // `var(--st-control-height-2xs)` with `var(--st-radius-round)`
+                // (a circle → half the size).
+                let px = ctx.tokens.control_height_2xs_px();
+                let radius = px / 2.0;
                 rsx! {
                     span {
                         class: "ChatWorkspace_headerAvatar",
                         "data-part": "character-avatar",
                         "aria-hidden": "true",
-                        style: "flex:none;width:32px;height:32px;border-radius:16px;overflow:hidden;background:#302c28;",
+                        style: "flex:none;width:{px}px;height:{px}px;border-radius:{radius}px;overflow:hidden;background:#302c28;position:relative;",
                         span {
                             "data-part": "avatar-fallback",
                             "data-avatar-asset": "{asset}",
+                            // Same source as the inline border-radius: the
+                            // fallback background, the overlay clip and the
+                            // in-scene `<img>` radius all use this value.
+                            "data-avatar-radius": "{radius}",
                             class: "headerAvatar",
-                            style: "display:block;width:32px;height:32px;border-radius:16px;background:#302c28;",
+                            style: "display:block;width:{px}px;height:{px}px;border-radius:{radius}px;background:#302c28;",
+                        }
+                        // In-scene raster (`asset:{id}` via LocalNetProvider);
+                        // absolute fill keeps the fallback block layout intact.
+                        img {
+                            src: "{ASSET_URL_PREFIX}{asset}",
+                            alt: "",
+                            style: "position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;border-radius:{radius}px;",
                         }
                     }
                 }
@@ -636,19 +657,32 @@ fn render_row_child(node: &UiNodeV1, ctx: &ChromeCtx, row: &RowView) -> Element 
         },
         "message-avatar" => {
             let image = !row.user && !ctx.avatar_asset.is_empty();
+            // React parity: MessageBubble.module.css `.avatar` is
+            // `var(--st-control-height-xs)` with a round (half-size) radius.
+            let px = ctx.tokens.control_height_xs_px();
+            let radius = px / 2.0;
             rsx! {
                 span {
                     class: "MessageBubble_avatar",
                     "data-part": "message-avatar",
                     "data-state": if image { "image" } else { "fallback" },
                     "aria-hidden": "true",
-                    style: "flex:none;width:36px;height:36px;border-radius:18px;overflow:hidden;background:#492a20;",
+                    style: "flex:none;width:{px}px;height:{px}px;border-radius:{radius}px;overflow:hidden;background:#492a20;position:relative;",
                     if image {
                         span {
                             "data-part": "avatar-fallback",
                             "data-avatar-asset": "{ctx.avatar_asset}",
+                            // Same source as the inline border-radius (the
+                            // message badge is a circle): the fallback, the
+                            // overlay clip and the in-scene `<img>` share it.
+                            "data-avatar-radius": "{radius}",
                             class: "messageAvatar",
-                            style: "display:block;width:36px;height:36px;border-radius:18px;background:#302c28;",
+                            style: "display:block;width:{px}px;height:{px}px;border-radius:{radius}px;background:#302c28;",
+                        }
+                        img {
+                            src: "{ASSET_URL_PREFIX}{ctx.avatar_asset}",
+                            alt: "",
+                            style: "position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;border-radius:{radius}px;",
                         }
                     }
                 }

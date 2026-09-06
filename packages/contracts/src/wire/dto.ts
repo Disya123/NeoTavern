@@ -2144,6 +2144,47 @@ export const GetAssetContentResultDtoSchema = Type.Object(
 );
 export type GetAssetContentResultDto = Static<typeof GetAssetContentResultDtoSchema>;
 
+/** Asset thumbnail encoding (`wire.asset.thumb.format`): JPEG for opaque
+ * thumbnails, PNG when alpha survives. */
+export const WireAssetThumbFormat = Type.Union([Type.Literal('jpeg'), Type.Literal('png')], {
+  $id: 'wire.asset.thumb.format',
+  'x-wire-unknown-behavior': 'reject',
+});
+export type WireAssetThumbFormat = Static<typeof WireAssetThumbFormat>;
+
+/** Asset thumbnail request (`wire.request.assets.thumb`). `maxPx` bounds the
+ * longest side of the kernel-generated thumbnail (16..1024 px). */
+export const GetAssetThumbRequestDtoSchema = Type.Object(
+  {
+    assetId: Type.String({ format: 'uuid' }),
+    maxPx: Type.Integer({ minimum: 16, maximum: 1024 }),
+  },
+  { $id: 'wire.request.assets.thumb', additionalProperties: false },
+);
+export type GetAssetThumbRequestDto = Static<typeof GetAssetThumbRequestDtoSchema>;
+
+/**
+ * Asset thumbnail result (`wire.result.assets.thumb`). Kernel-side,
+ * aspect-preserving thumbnail of the original bytes (image audit stage C):
+ * JPEG q82 when the thumbnail is fully opaque, PNG when it has alpha. The
+ * kernel caches thumbnails by (original sha256, maxPx, algorithm version)
+ * and never serves the original through this operation.
+ */
+export const GetAssetThumbResultDtoSchema = Type.Object(
+  {
+    assetId: Type.String({ format: 'uuid' }),
+    format: WireAssetThumbFormat,
+    width: Type.Integer({ minimum: 1, maximum: 1024 }),
+    height: Type.Integer({ minimum: 1, maximum: 1024 }),
+    contentBase64: Type.String({
+      pattern: '^[A-Za-z0-9+/]*={0,2}$',
+      minLength: 1,
+    }),
+  },
+  { $id: 'wire.result.assets.thumb', additionalProperties: false },
+);
+export type GetAssetThumbResultDto = Static<typeof GetAssetThumbResultDtoSchema>;
+
 /** Asset delete request (`wire.request.assets.delete`). */
 export const DeleteAssetRequestDtoSchema = Type.Object(
   {
@@ -2473,6 +2514,9 @@ export const WIRE_SCHEMAS: Record<string, TSchema> = {
   'wire.result.assets.get': GetAssetResultDtoSchema,
   'wire.request.assets.content': GetAssetContentRequestDtoSchema,
   'wire.result.assets.content': GetAssetContentResultDtoSchema,
+  'wire.asset.thumb.format': WireAssetThumbFormat,
+  'wire.request.assets.thumb': GetAssetThumbRequestDtoSchema,
+  'wire.result.assets.thumb': GetAssetThumbResultDtoSchema,
   'wire.request.assets.delete': DeleteAssetRequestDtoSchema,
   'wire.plugins.item': PluginDtoSchema,
   'wire.result.plugins.list': ListPluginsResultDtoSchema,

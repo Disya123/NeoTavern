@@ -178,7 +178,9 @@ Native UI tooling: the desktop host and its diagnostics are documented in
 style-port loop, DOM parity and pixel gates live in
 [`rust-ui-style-port.md`](rust-ui-style-port.md); editing chat UI as data
 (blueprint documents) is covered step by step in
-[`chat-ui-recipe.md`](chat-ui-recipe.md).
+[`chat-ui-recipe.md`](chat-ui-recipe.md); the native image pipeline
+(avatar overlay, wallpaper, in-scene image brushes) is audited in
+[`native-image-pipeline-audit.md`](native-image-pipeline-audit.md).
 
 The Headless server is a **transport adapter over the Kernel**, not a second
 application core. `crates/adapters/remote-http` remains the library

@@ -13,6 +13,7 @@
 #[cfg(all(feature = "android-jni", target_os = "android"))]
 mod android_jni;
 mod assemble;
+mod asset_net;
 mod data_uri;
 #[cfg(feature = "gpu")]
 mod gpu_run;
@@ -37,7 +38,7 @@ use neotavern_presentation_m0::display_list::NeoDisplayList;
 use neotavern_presentation_m0::scene_d1a::{D1A_HEIGHT, D1A_WIDTH};
 use std::sync::Arc;
 
-use crate::data_uri::DataUriNetProvider;
+use crate::asset_net::LocalNetProvider;
 
 pub use neotavern_presentation_design_system::SafeAreaInsets as ProductSafeAreaInsets;
 
@@ -59,7 +60,11 @@ pub use text_publish::{
     ProducerCounters, PublishError,
 };
 #[cfg(feature = "gpu")]
-pub use vello_sink::{LayerDiag, VelloFilter, VelloSink};
+pub use vello_sink::{
+    inscene_images_enabled, set_inscene_images, LayerDiag, VelloFilter, VelloSink,
+};
+
+pub use asset_net::{global_asset_store, AssetStore, ASSET_URL_PREFIX};
 
 pub const D2_WIDTH: u32 = D1A_WIDTH;
 pub const D2_HEIGHT: u32 = D1A_HEIGHT;
@@ -220,7 +225,9 @@ fn product_document_config(
         ua_stylesheets: Some(Vec::new()),
         font_ctx: Some(product_font_context()),
         style_threading: StyleThreading::Sequential,
-        net_provider: Some(Arc::new(DataUriNetProvider)),
+        net_provider: Some(Arc::new(LocalNetProvider::new(
+            crate::asset_net::global_asset_store(),
+        ))),
         ..Default::default()
     }
 }
@@ -394,20 +401,35 @@ impl ProductVelloSession {
         let width = width.max(1);
         let height = height.max(1);
         let scale = scale.max(1.0);
+        let probe = std::env::var("NEOTA_OPEN_PROFILE").is_ok();
+        let t0 = std::time::Instant::now();
         let mut doc = DioxusDocument::new(
             VirtualDom::new(app),
             product_document_config(width, height, scale, insets),
         );
+        let t1 = std::time::Instant::now();
         beat_blitz_default_css(&doc, insets);
         doc.initial_build();
+        let t2 = std::time::Instant::now();
         {
             let mut inner = doc.inner.borrow_mut();
             inner.handle_messages();
             inner.resolve(0.0);
         }
+        let t3 = std::time::Instant::now();
         let diagnostic_dom_glass = diagnostic_glass_dom_order(&doc.inner.borrow());
         let raster_images = count_raster_images(&doc.inner.borrow());
         let paint_layout = collect_paint_layout(&doc.inner.borrow(), scale);
+        let t4 = std::time::Instant::now();
+        if probe {
+            eprintln!(
+                "[open-profile] dom_new {}ms initial_build {}ms resolve {}ms collect {}ms",
+                (t1 - t0).as_millis(),
+                (t2 - t1).as_millis(),
+                (t3 - t2).as_millis(),
+                (t4 - t3).as_millis(),
+            );
+        }
         Ok(Self {
             doc,
             width,
@@ -1022,7 +1044,8 @@ mod tests {
                 matches!(
                     op,
                     StreamOp::Draw {
-                        kind: DrawKind::Fill
+                        kind: DrawKind::Fill,
+                        ..
                     }
                 )
             })

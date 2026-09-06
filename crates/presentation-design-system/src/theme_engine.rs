@@ -30,6 +30,18 @@ pub struct ThemeTokens {
     pub radius_control: String,
     pub radius_card: String,
     pub radius_overlay: String,
+    /// Control size tokens mirroring Theme SDK `packages/theme-sdk/src/tokens.ts`
+    /// (`DEFAULT_LIGHT_TOKENS`; sizes are theme-independent —
+    /// `DEFAULT_DARK_TOKENS` spreads the light set). Kept as raw `"44px"`
+    /// strings so themes can override them; parse via the `*_px` helpers.
+    pub control_height: String,
+    pub control_height_large: String,
+    pub control_height_sm: String,
+    pub control_height_xs: String,
+    pub control_height_2xs: String,
+    pub space_sm: String,
+    pub space_md: String,
+    pub space_xl: String,
 }
 
 impl Default for ThemeTokens {
@@ -62,6 +74,14 @@ impl ThemeTokens {
             radius_control: "10px".into(),
             radius_card: "16px".into(),
             radius_overlay: "16px".into(),
+            control_height: "44px".into(),
+            control_height_large: "52px".into(),
+            control_height_sm: "40px".into(),
+            control_height_xs: "36px".into(),
+            control_height_2xs: "32px".into(),
+            space_sm: "8px".into(),
+            space_md: "12px".into(),
+            space_xl: "24px".into(),
         }
     }
 
@@ -103,6 +123,48 @@ impl ThemeTokens {
     pub fn panel_background(&self, alpha: f32) -> String {
         Self::hex_to_rgba(&self.color_surface_secondary, alpha)
     }
+
+    /// Parse a `"<n>px"` token value into CSS px, falling back to
+    /// `default_px` for absent/foreign units (the Theme SDK ships `px` sizes).
+    pub fn px_value(token: &str, default_px: f32) -> f32 {
+        token
+            .trim()
+            .strip_suffix("px")
+            .and_then(|value| value.parse::<f32>().ok())
+            .unwrap_or(default_px)
+    }
+
+    /// `var(--st-radius-control)` — shared by avatar slot radii and the
+    /// `data-avatar-radius` GPU clip attribute.
+    pub fn radius_control_px(&self) -> f32 {
+        Self::px_value(&self.radius_control, 10.0)
+    }
+
+    /// `var(--st-control-height)`.
+    pub fn control_height_px(&self) -> f32 {
+        Self::px_value(&self.control_height, 44.0)
+    }
+
+    /// `var(--st-control-height-large)`.
+    pub fn control_height_large_px(&self) -> f32 {
+        Self::px_value(&self.control_height_large, 52.0)
+    }
+
+    /// `var(--st-control-height-xs)`.
+    pub fn control_height_xs_px(&self) -> f32 {
+        Self::px_value(&self.control_height_xs, 36.0)
+    }
+
+    /// `var(--st-control-height-2xs)`.
+    pub fn control_height_2xs_px(&self) -> f32 {
+        Self::px_value(&self.control_height_2xs, 32.0)
+    }
+
+    /// `calc(var(--st-control-height-large) + var(--st-space-md))` — the
+    /// CharacterManagementPanel editor avatar size.
+    pub fn control_height_large_plus_space_md_px(&self) -> f32 {
+        Self::px_value(&self.control_height_large, 52.0) + Self::px_value(&self.space_md, 12.0)
+    }
 }
 
 /// Built-in theme token presets for bundled themes.
@@ -126,6 +188,14 @@ pub fn builtin_theme_tokens(id: &str) -> Option<ThemeTokens> {
             color_text_primary: "#eef5fb".into(),
             color_text_secondary: "#b8cad8".into(),
             color_text_muted: "#7d93a6".into(),
+            control_height: "44px".into(),
+            control_height_large: "52px".into(),
+            control_height_sm: "40px".into(),
+            control_height_xs: "36px".into(),
+            control_height_2xs: "32px".into(),
+            space_sm: "8px".into(),
+            space_md: "12px".into(),
+            space_xl: "24px".into(),
             radius_control: "12px".into(),
             radius_card: "18px".into(),
             radius_overlay: "18px".into(),
@@ -148,6 +218,14 @@ pub fn builtin_theme_tokens(id: &str) -> Option<ThemeTokens> {
             color_text_primary: "#fcfcfc".into(),
             color_text_secondary: "#bdc3c7".into(),
             color_text_muted: "#7f8c8d".into(),
+            control_height: "44px".into(),
+            control_height_large: "52px".into(),
+            control_height_sm: "40px".into(),
+            control_height_xs: "36px".into(),
+            control_height_2xs: "32px".into(),
+            space_sm: "8px".into(),
+            space_md: "12px".into(),
+            space_xl: "24px".into(),
             radius_control: "6px".into(),
             radius_card: "8px".into(),
             radius_overlay: "8px".into(),
@@ -170,6 +248,14 @@ pub fn builtin_theme_tokens(id: &str) -> Option<ThemeTokens> {
             color_text_primary: "#ffffff".into(),
             color_text_secondary: "#b8b8b8".into(),
             color_text_muted: "#8a8a8a".into(),
+            control_height: "44px".into(),
+            control_height_large: "52px".into(),
+            control_height_sm: "40px".into(),
+            control_height_xs: "36px".into(),
+            control_height_2xs: "32px".into(),
+            space_sm: "8px".into(),
+            space_md: "12px".into(),
+            space_xl: "24px".into(),
             radius_control: "10px".into(),
             radius_card: "16px".into(),
             radius_overlay: "16px".into(),
@@ -192,6 +278,14 @@ pub fn builtin_theme_tokens(id: &str) -> Option<ThemeTokens> {
             color_text_primary: "#f8f8f2".into(),
             color_text_secondary: "#bfbfbf".into(),
             color_text_muted: "#6272a4".into(),
+            control_height: "44px".into(),
+            control_height_large: "52px".into(),
+            control_height_sm: "40px".into(),
+            control_height_xs: "36px".into(),
+            control_height_2xs: "32px".into(),
+            space_sm: "8px".into(),
+            space_md: "12px".into(),
+            space_xl: "24px".into(),
             radius_control: "10px".into(),
             radius_card: "16px".into(),
             radius_overlay: "16px".into(),
@@ -274,6 +368,30 @@ pub fn parse_theme_tokens_from_manifest(manifest: &serde_json::Value) -> Option<
     }
     if let Some(v) = get_str("radius-overlay") {
         tokens.radius_overlay = v;
+    }
+    if let Some(v) = get_str("control-height") {
+        tokens.control_height = v;
+    }
+    if let Some(v) = get_str("control-height-large") {
+        tokens.control_height_large = v;
+    }
+    if let Some(v) = get_str("control-height-sm") {
+        tokens.control_height_sm = v;
+    }
+    if let Some(v) = get_str("control-height-xs") {
+        tokens.control_height_xs = v;
+    }
+    if let Some(v) = get_str("control-height-2xs") {
+        tokens.control_height_2xs = v;
+    }
+    if let Some(v) = get_str("space-sm") {
+        tokens.space_sm = v;
+    }
+    if let Some(v) = get_str("space-md") {
+        tokens.space_md = v;
+    }
+    if let Some(v) = get_str("space-xl") {
+        tokens.space_xl = v;
     }
 
     Some(tokens)
@@ -416,10 +534,7 @@ mod tests {
     fn hex_parsing_supports_three_and_six_digits() {
         assert_eq!(ThemeTokens::parse_hex_color("#fff"), Some((255, 255, 255)));
         assert_eq!(ThemeTokens::parse_hex_color("#000"), Some((0, 0, 0)));
-        assert_eq!(
-            ThemeTokens::parse_hex_color("#151311"),
-            Some((21, 19, 17))
-        );
+        assert_eq!(ThemeTokens::parse_hex_color("#151311"), Some((21, 19, 17)));
         assert_eq!(
             ThemeTokens::parse_hex_color("#e38a62"),
             Some((227, 138, 98))
@@ -472,6 +587,41 @@ mod tests {
         assert_eq!(parsed.color_border, "#ff003c");
         // Non-overridden fallback to default dark
         assert_eq!(parsed.color_text_primary, "#f3eee8");
+    }
+
+    #[test]
+    fn size_tokens_carry_the_theme_sdk_defaults() {
+        let tokens = ThemeTokens::default_dark();
+        assert_eq!(tokens.control_height, "44px");
+        assert_eq!(tokens.control_height_large, "52px");
+        assert_eq!(tokens.control_height_xs, "36px");
+        assert_eq!(tokens.control_height_2xs, "32px");
+        assert_eq!(tokens.space_md, "12px");
+        // CharacterManagementPanel editor avatar: large + space-md = 64.
+        assert_eq!(tokens.control_height_large_plus_space_md_px(), 64.0);
+        // Theme-independent sizes survive a colors-only manifest.
+        let manifest = json!({ "tokens": { "dark": { "color-accent": "#fcee0a" } } });
+        let parsed = parse_theme_tokens_from_manifest(&manifest).expect("parsed manifest");
+        assert_eq!(parsed.control_height_2xs_px(), 32.0);
+    }
+
+    #[test]
+    fn size_tokens_parse_manifest_overrides_and_reject_foreign_units() {
+        let manifest = json!({
+            "tokens": { "dark": { "control-height": "48px", "control-height-2xs": "2rem" } }
+        });
+        let parsed = parse_theme_tokens_from_manifest(&manifest).expect("parsed manifest");
+        assert_eq!(parsed.control_height_px(), 48.0);
+        // `2rem` is not a px size: the helper falls back to the default.
+        assert_eq!(parsed.control_height_2xs_px(), 32.0);
+    }
+
+    #[test]
+    fn px_value_parses_px_and_falls_back() {
+        assert_eq!(ThemeTokens::px_value("10px", 1.0), 10.0);
+        assert_eq!(ThemeTokens::px_value(" 12.5px ", 1.0), 12.5);
+        assert_eq!(ThemeTokens::px_value("2rem", 10.0), 10.0);
+        assert_eq!(ThemeTokens::px_value("", 7.0), 7.0);
     }
 
     #[test]

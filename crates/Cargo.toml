@@ -13,3 +13,13 @@ blitz-paint = { path = "vendor/blitz-paint" }
 # Diagnostic hook: `set_debug_shader_bounds_checks` for A/B vs upstream `unchecked`.
 # Not a WGSL index patch. Default remains upstream unchecked.
 vello = { path = "vendor/vello" }
+
+# Interactive hosts (neocompositor-desktop, probes) re-produce the whole
+# Dioxus/Blitz document per frame; in an unmodified dev profile that costs
+# ~700 ms (dom initial_build ~370 ms + style/layout resolve ~330 ms), which
+# turns every resize tick, scroll landing and tap into a slideshow. Dependency
+# crates carry almost all of that cost, so they compile optimized even in the
+# dev profile; workspace members stay debuggable and fast to rebuild.
+[profile.dev.package."*"]
+opt-level = 2
+debug = false

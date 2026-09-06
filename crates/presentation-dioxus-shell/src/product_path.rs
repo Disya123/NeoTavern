@@ -82,6 +82,9 @@ pub struct ProductChatView {
     /// Pinned character display name (React `ChatHeader` `<h1>`). Empty falls
     /// back to the chat title.
     pub character_name: String,
+    /// Active theme resolved design tokens (Theme SDK Level 1) — the avatar
+    /// slot sizes/radii render from the same sheet the CSS does.
+    pub active_theme_tokens: Option<neotavern_presentation_design_system::ThemeTokens>,
     pub error_code: Option<String>,
     pub streaming: bool,
     /// Waiting `tool_call` step name (React `ToolActivityBadge`). `None`
@@ -184,6 +187,7 @@ impl Default for ProductChatView {
             composer_placeholder: String::new(),
             character_avatar_asset: String::new(),
             character_name: String::new(),
+            active_theme_tokens: None,
             error_code: None,
             streaming: false,
             tool_activity_name: None,
@@ -457,6 +461,7 @@ pub fn product_chat_from_fixture(fixture: &CanonicalFixture, start: usize) -> Pr
         composer_placeholder: "Message Hazel…".into(),
         character_avatar_asset: String::new(),
         character_name: "Hazel".into(),
+        active_theme_tokens: None,
         error_code: None,
         streaming: false,
         tool_activity_name: None,

@@ -309,7 +309,12 @@ impl FakeWire {
         // Demo theme catalog (React `ThemesPage`): two installed themes, none
         // active — the built-in interface is the no-row state. `wii-u-dark`
         // mirrors the wire registry fixture (`THEME_VALUE`).
-        let theme = |id_high: u64, id: &str, name: &str, version: &str, trust: &str, manifest: Option<Value>| ThemesItem {
+        let theme = |id_high: u64,
+                     id: &str,
+                     name: &str,
+                     version: &str,
+                     trust: &str,
+                     manifest: Option<Value>| ThemesItem {
             id: id.into(),
             name: name.into(),
             version: version.into(),
@@ -572,7 +577,12 @@ impl FakeWire {
         let mut tail_content = String::new();
         for index in 0..count {
             let content = if index.is_multiple_of(5) {
-                format!("![photo {index}](asset:thumb-{index})")
+                // `assets.content` requires a UUID asset id (wire contract),
+                // so demo photos reference deterministic UUIDs.
+                format!(
+                    "![photo {index}](asset:{})",
+                    wire_id(0x9000 + u64::from(index))
+                )
             } else if index.is_multiple_of(2) {
                 format!("**msg {index}**\n\n- item one\n- `code`")
             } else {
@@ -1398,6 +1408,36 @@ impl ProductWire for FakeWire {
                         "contentType": "image/png",
                         "contentBase64": base64::engine::general_purpose::STANDARD
                             .encode(DEMO_AVATAR_PNG),
+                    }),
+                )
+            }
+            "assets.thumb" => {
+                // Demo-kernel thumbnail: mirror the real `assets.thumb`
+                // semantics (aspect-preserving, kernel-encoded) so the demo
+                // never ships the original bytes either.
+                let asset_id = payload_str(&payload, "assetId")?;
+                let max_px = payload
+                    .get("maxPx")
+                    .and_then(Value::as_i64)
+                    .unwrap_or(192)
+                    .clamp(16, 1024);
+                let decoded = image::load_from_memory(DEMO_AVATAR_PNG)
+                    .map_err(|_| Self::product("ASSET_NOT_FOUND", "assetId", &asset_id))?;
+                let thumb = decoded.thumbnail(max_px as u32, max_px as u32);
+                let mut png = Vec::new();
+                let encoder = image::codecs::png::PngEncoder::new(std::io::Cursor::new(&mut png));
+                thumb
+                    .write_with_encoder(encoder)
+                    .map_err(|_| Self::product("ASSET_NOT_FOUND", "assetId", &asset_id))?;
+                self.ok_call(
+                    operation_id,
+                    json!({
+                        "assetId": asset_id,
+                        "format": "png",
+                        "width": thumb.width(),
+                        "height": thumb.height(),
+                        "contentBase64": base64::engine::general_purpose::STANDARD
+                            .encode(&png),
                     }),
                 )
             }

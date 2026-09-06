@@ -4,22 +4,22 @@
 //! This crate never links `runtime-kernel`.
 
 use std::collections::{HashMap, VecDeque};
-use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Mutex;
 
 use contracts_generated::generated::{
-    decode_event_envelope, decode_generation_event, decode_response_envelope, EventEnvelope,
-    GenerationEvent, ResponseEnvelope,
+    EventEnvelope, GenerationEvent, ResponseEnvelope, decode_event_envelope,
+    decode_generation_event, decode_response_envelope,
 };
 use jni::objects::{GlobalRef, JByteArray, JClass, JObject, JString, JValue};
 use jni::sys::{jboolean, jfloat, jint, jlong, jstring};
 use jni::{JNIEnv, JavaVM};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::error::ChatRouteError;
 use crate::session::ChatSession;
 use crate::wire::{ProductWire, StreamFrame, WireCall};
-use crate::{blocked_line, start_flagged_session, LiveChatReport};
+use crate::{LiveChatReport, blocked_line, start_flagged_session};
 
 struct JniProductWire {
     vm: JavaVM,
@@ -576,11 +576,21 @@ pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_presentF
     let text = {
         let pending = crate::android_surface::take_shell_action();
         let tap_intent = crate::android_surface::take_host_intent();
+        // Fast-path ack-loop advance (decided last present): the product
+        // window must move and re-produce even while the gesture is active.
+        let scroll_advance = crate::android_surface::take_scroll_advance();
         if pending.is_some()
             || tap_intent.is_some()
+            || scroll_advance.is_some()
             || (crate::android_surface::is_dirty() && !crate::android_surface::is_scrolling())
         {
             let _ = with_route(|session| {
+                // Advance first so the produce below bakes the window the
+                // ack-loop asked for (a user action consumed afterwards may
+                // still override it — the rebase teleports then).
+                if let Some(shift) = scroll_advance {
+                    let _ = session.scroll_chat_by(shift);
+                }
                 if let Some(action) = pending {
                     session.apply_shell_action(action);
                 }
@@ -613,6 +623,9 @@ pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_presentF
                             crate::hit_rects::QuickIntent::BackToParentChat => {
                                 session.open_parent_chat();
                             }
+                            crate::hit_rects::QuickIntent::Stop => {
+                                let _ = session.cancel_generation();
+                            }
                         },
                         crate::hit_rects::TapIntent::MessageAction { kind, row_id } => {
                             use crate::hit_rects::MessageActionKind;
@@ -626,6 +639,12 @@ pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_presentF
                                     session.swipe_variant(&row_id, -1)
                                 }
                                 MessageActionKind::SwipeNext => session.swipe_variant(&row_id, 1),
+                                MessageActionKind::SwipePicker => {
+                                    session.open_variant_picker(&row_id)
+                                }
+                                MessageActionKind::SwipePickerClose => {
+                                    session.close_variant_picker()
+                                }
                                 // Platform clipboard bridge is not wired yet;
                                 // skip honestly instead of faking a "copied"
                                 // state.
@@ -635,7 +654,8 @@ pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_presentF
                                     );
                                 }
                                 MessageActionKind::Edit => {
-                                    if session.view().details_message_id.as_deref() == Some(&row_id) {
+                                    if session.view().details_message_id.as_deref() == Some(&row_id)
+                                    {
                                         session.set_message_details_mode("edit");
                                     } else {
                                         session.start_message_edit(&row_id);
@@ -663,12 +683,8 @@ pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_presentF
                                 MessageActionKind::DeleteCheckpoint => {
                                     session.open_checkpoint_delete(&row_id)
                                 }
-                                MessageActionKind::Details => {
-                                    session.open_message_details(&row_id)
-                                }
-                                MessageActionKind::DetailsClose => {
-                                    session.close_message_details()
-                                }
+                                MessageActionKind::Details => session.open_message_details(&row_id),
+                                MessageActionKind::DetailsClose => session.close_message_details(),
                                 MessageActionKind::DetailsModeActions => {
                                     session.set_message_details_mode("actions")
                                 }
@@ -693,8 +709,6 @@ pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_presentF
                 }
                 Ok(crate::android_surface::bind_from_session(session))
             });
-        } else if crate::android_surface::is_avatar_overlay() {
-            let _ = crate::android_surface::composite_avatar_overlay();
         }
         crate::android_surface::present_frame(vsync_id, callback_time, deadline, expected_present)
     };

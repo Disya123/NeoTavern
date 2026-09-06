@@ -1,5 +1,6 @@
 //! Blitz `PaintScene` that records into a Vello scene on the live GPU device.
 
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 
 use anyrender::{
@@ -10,6 +11,40 @@ use kurbo::{Affine, Rect as KurboRect, Shape, Stroke, Vec2};
 use peniko::{BlendMode, Color, Compose, Fill, FontData, Mix, StyleRef};
 use vello::peniko::kurbo as vkurbo;
 use vello::Scene;
+
+/// In-scene image-brush switch (image pipeline audit, stage B). `0` keeps the
+/// Vello 0.9-era workaround (Image brushes dropped → letter fallbacks + the
+/// host GPU overlay); anything else, including unset, paints `<img>` rasters
+/// through Vello's persistent image atlas so z-order/clips/modals apply.
+/// `NEOTA_INSCENE_IMAGES=0` is the documented escape hatch for a device where
+/// that atlas path regresses to a black SurfaceView.
+const INSCENE_IMAGES_UNSET: u8 = 0;
+const INSCENE_IMAGES_ON: u8 = 1;
+const INSCENE_IMAGES_OFF: u8 = 2;
+static INSCENE_IMAGES: AtomicU8 = AtomicU8::new(INSCENE_IMAGES_UNSET);
+
+pub fn set_inscene_images(enabled: bool) {
+    INSCENE_IMAGES.store(
+        if enabled {
+            INSCENE_IMAGES_ON
+        } else {
+            INSCENE_IMAGES_OFF
+        },
+        Ordering::Relaxed,
+    );
+}
+
+pub fn inscene_images_enabled() -> bool {
+    match INSCENE_IMAGES.load(Ordering::Relaxed) {
+        INSCENE_IMAGES_ON => true,
+        INSCENE_IMAGES_OFF => false,
+        _ => {
+            let enabled = !matches!(std::env::var("NEOTA_INSCENE_IMAGES").as_deref(), Ok("0"));
+            set_inscene_images(enabled);
+            enabled
+        }
+    }
+}
 
 /// Which Blitz paint classes are encoded into the Vello scene.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -217,10 +252,19 @@ fn brush_ref(paint: PaintRef<'_>) -> Option<peniko::Brush> {
     match paint {
         Paint::Solid(color) => Some(peniko::Brush::Solid(color)),
         Paint::Gradient(gradient) => Some(peniko::Brush::Gradient(gradient.clone())),
-        // Vello 0.9 Image brushes on Android Vulkan leave the whole
-        // SurfaceView black (bind still reports success). Skip until a
-        // sampled atlas path is proven. Header/card keep the clipped letter.
-        Paint::Image(_) | Paint::Resource(_) | Paint::Custom(_) => None,
+        // Stage B: rasters ride Vello's persistent image atlas (thumbnail
+        // PNG/JPEG only — originals never enter the DOM), so an `<img>` is
+        // ordinary scene content: clips, z-order and modal layers apply. The
+        // historical Android Vulkan black-surface regression keeps an escape
+        // hatch via NEOTA_INSCENE_IMAGES=0.
+        Paint::Image(image) => {
+            if inscene_images_enabled() {
+                Some(peniko::Brush::Image(image.to_owned()))
+            } else {
+                None
+            }
+        }
+        Paint::Resource(_) | Paint::Custom(_) => None,
     }
 }
 
@@ -426,5 +470,61 @@ mod tests {
         assert!(
             !filter.fills && !filter.glyphs && !filter.clips && !filter.layers && !filter.shadows
         );
+    }
+
+    fn opaque_image_brush() -> peniko::ImageBrush {
+        let image = peniko::ImageData {
+            data: vec![255, 60, 30, 255, 255, 60, 30, 255].into(),
+            format: peniko::ImageFormat::Rgba8,
+            alpha_type: peniko::ImageAlphaType::Alpha,
+            width: 2,
+            height: 1,
+        };
+        peniko::ImageBrush::from(image)
+    }
+
+    /// The switch is a process-global; serialize the two stateful tests.
+    static SWITCH_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn image_paint_encodes_into_the_scene_when_enabled() {
+        let _guard = SWITCH_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        set_inscene_images(true);
+        let mut sink = VelloSink::new();
+        sink.fill(
+            Fill::NonZero,
+            Affine::IDENTITY,
+            anyrender::PaintRef::Image(opaque_image_brush().as_ref()),
+            None,
+            &kurbo::Rect::new(0.0, 0.0, 8.0, 4.0),
+        );
+        let encoding = sink.scene.encoding();
+        assert!(encoding.n_paths > 0, "image fill is a real path");
+        assert!(
+            !encoding.resources.patches.is_empty(),
+            "image brush registers a late-bound resource"
+        );
+    }
+
+    #[test]
+    fn image_paint_is_dropped_when_the_escape_hatch_is_off() {
+        let _guard = SWITCH_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        set_inscene_images(false);
+        assert!(!inscene_images_enabled());
+        let mut sink = VelloSink::new();
+        sink.fill(
+            Fill::NonZero,
+            Affine::IDENTITY,
+            anyrender::PaintRef::Image(opaque_image_brush().as_ref()),
+            None,
+            &kurbo::Rect::new(0.0, 0.0, 8.0, 4.0),
+        );
+        assert_eq!(sink.scene.encoding().n_paths, 0);
+        set_inscene_images(true);
+        assert!(inscene_images_enabled());
     }
 }

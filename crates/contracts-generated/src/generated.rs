@@ -73,6 +73,7 @@ pub fn operation_request_limit(operation_id: &str) -> Option<u64> {
         "assets.put" => Some(1048576),
         "assets.get" => Some(1024),
         "assets.content" => Some(1024),
+        "assets.thumb" => Some(1024),
         "assets.delete" => Some(1024),
         "imports.character.card" => Some(1024),
         "plugins.list" => Some(1024),
@@ -178,6 +179,7 @@ pub fn operation_response_limit(operation_id: &str) -> Option<u64> {
         "assets.put" => Some(262144),
         "assets.get" => Some(262144),
         "assets.content" => Some(4194304),
+        "assets.thumb" => Some(3145728),
         "assets.delete" => Some(1024),
         "imports.character.card" => Some(262144),
         "plugins.list" => Some(262144),
@@ -5403,6 +5405,211 @@ pub fn validate_result_assets_content(value: &Value) -> Result<(), Vec<Issue>> {
 
 pub fn decode_result_assets_content(bytes: &[u8]) -> Result<ResultAssetsContent, WireError> {
     crate::decode::<ResultAssetsContent>(validate_result_assets_content, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum AssetThumbFormat {
+    #[serde(rename = "jpeg")] Jpeg,
+    #[serde(rename = "png")] Png,
+}
+
+pub(crate) fn check_asset_thumb_format(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    match value.as_str() {
+        Some(s) => {
+            if !matches!(s, "jpeg" | "png") {
+                issues.push(Issue::new(path, "Union"));
+            }
+        }
+        None => issues.push(Issue::new(path, "String")),
+    }
+}
+
+pub fn validate_asset_thumb_format(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_asset_thumb_format(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_asset_thumb_format(bytes: &[u8]) -> Result<AssetThumbFormat, WireError> {
+    crate::decode::<AssetThumbFormat>(validate_asset_thumb_format, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestAssetsThumb {
+    #[serde(rename = "assetId")]
+    pub asset_id: String,
+    #[serde(rename = "maxPx")]
+    pub max_px: i64,
+}
+
+pub(crate) fn check_request_assets_thumb(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("assetId").is_none() {
+            issues.push(Issue::new(join_path(path, "assetId"), "RequiredProperty"));
+        }
+        if value.get("maxPx").is_none() {
+            issues.push(Issue::new(join_path(path, "maxPx"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("assetId") {
+            let child_path = join_path(path, "assetId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("maxPx") {
+            let child_path = join_path(path, "maxPx");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 16 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                    if n > 1024 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMaximum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "assetId" | "maxPx") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_request_assets_thumb(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_request_assets_thumb(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_request_assets_thumb(bytes: &[u8]) -> Result<RequestAssetsThumb, WireError> {
+    crate::decode::<RequestAssetsThumb>(validate_request_assets_thumb, bytes)
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultAssetsThumb {
+    #[serde(rename = "assetId")]
+    pub asset_id: String,
+    pub format: AssetThumbFormat,
+    pub width: i64,
+    pub height: i64,
+    #[serde(rename = "contentBase64")]
+    pub content_base64: String,
+}
+
+pub(crate) fn check_result_assets_thumb(value: &Value, path: &str, issues: &mut Vec<Issue>) {
+    static RE_0: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    static RE_1: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[A-Za-z0-9+/]*={0,2}$").unwrap_or_else(|_| Regex::new("$^").unwrap()));
+    if !value.is_object() {
+        issues.push(Issue::new(path, "Object"));
+    } else {
+        if value.get("assetId").is_none() {
+            issues.push(Issue::new(join_path(path, "assetId"), "RequiredProperty"));
+        }
+        if value.get("format").is_none() {
+            issues.push(Issue::new(join_path(path, "format"), "RequiredProperty"));
+        }
+        if value.get("width").is_none() {
+            issues.push(Issue::new(join_path(path, "width"), "RequiredProperty"));
+        }
+        if value.get("height").is_none() {
+            issues.push(Issue::new(join_path(path, "height"), "RequiredProperty"));
+        }
+        if value.get("contentBase64").is_none() {
+            issues.push(Issue::new(join_path(path, "contentBase64"), "RequiredProperty"));
+        }
+        if let Some(child) = value.get("assetId") {
+            let child_path = join_path(path, "assetId");
+            match child.as_str() {
+                Some(s) => {
+                    if !RE_0.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringFormat"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(child) = value.get("format") {
+            let child_path = join_path(path, "format");
+            check_asset_thumb_format(child, &child_path, issues);
+        }
+        if let Some(child) = value.get("width") {
+            let child_path = join_path(path, "width");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                    if n > 1024 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMaximum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("height") {
+            let child_path = join_path(path, "height");
+            match child.as_i64() {
+                Some(n) => {
+                    if n < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMinimum"));
+                    }
+                    if n > 1024 {
+                        issues.push(Issue::new(child_path.as_str(), "IntegerMaximum"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "Integer")),
+            }
+        }
+        if let Some(child) = value.get("contentBase64") {
+            let child_path = join_path(path, "contentBase64");
+            match child.as_str() {
+                Some(s) => {
+                    let len = s.encode_utf16().count();
+                    if len < 1 {
+                        issues.push(Issue::new(child_path.as_str(), "StringMinLength"));
+                    }
+                    if !RE_1.is_match(s) {
+                        issues.push(Issue::new(child_path.as_str(), "StringPattern"));
+                    }
+                }
+                None => issues.push(Issue::new(child_path.as_str(), "String")),
+            }
+        }
+        if let Some(obj) = value.as_object() {
+            for key in obj.keys() {
+                if !matches!(key.as_str(), "assetId" | "format" | "width" | "height" | "contentBase64") {
+                    let key_path = join_path(path, key);
+                    issues.push(Issue::new(key_path.as_str(), "AdditionalProperties"));
+                }
+            }
+        }
+    }
+}
+
+pub fn validate_result_assets_thumb(value: &Value) -> Result<(), Vec<Issue>> {
+    let mut issues = Vec::new();
+    check_result_assets_thumb(value, "", &mut issues);
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
+}
+
+pub fn decode_result_assets_thumb(bytes: &[u8]) -> Result<ResultAssetsThumb, WireError> {
+    crate::decode::<ResultAssetsThumb>(validate_result_assets_thumb, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

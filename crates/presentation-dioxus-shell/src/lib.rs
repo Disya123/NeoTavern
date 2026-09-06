@@ -22,8 +22,17 @@ mod product_path;
 mod product_shell;
 mod scene_chat;
 mod settings_tab;
+
+/// URL scheme for locally resolved image assets: `<img src="asset:{id}">`.
+/// The m0-d2 `LocalNetProvider` resolves these hrefs against the process
+/// asset store, so images paint in-scene (z-order/clip/opacity for free).
+/// Single source of truth — the producer seam re-exports this constant.
+pub const ASSET_URL_PREFIX: &str = "asset:";
+
 pub use chat_route::{chat_route_line, flagged_chat_route, ChatRouteReport};
-pub use markdown::{contains_part, message_markdown, parse_document, parse_inline, Block, Inline};
+pub use markdown::{
+    asset_image_refs, contains_part, message_markdown, parse_document, parse_inline, Block, Inline,
+};
 pub use neotavern_presentation_blueprint::v1::{ContextUsageBreakdownV1, ContextUsageSummaryV1};
 pub use neotavern_presentation_design_system::SafeAreaInsets;
 pub use product_path::{
@@ -1075,6 +1084,16 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
 /// `product.css` and the DOM-parity dump share one contract.
 pub fn product_chat_app() -> Element {
     let view = current_product_chat();
+    // Resolved design tokens: avatar slot sizes/radii come from the same
+    // sheet the React CSS uses (live theme or canonical dark defaults).
+    let tokens = view.active_theme_tokens.clone().unwrap_or_default();
+    // React parity: ChatWorkspace `.headerAvatar` = `var(--st-control-height-2xs)`,
+    // MessageBubble `.avatar` = `var(--st-control-height-xs)`; both round
+    // (half-size radius).
+    let header_px = tokens.control_height_2xs_px();
+    let header_radius = header_px / 2.0;
+    let msg_px = tokens.control_height_xs_px();
+    let msg_radius = msg_px / 2.0;
     // Blueprint-driven chrome (M2 phase 2): when a document source is
     // installed, header/viewport/composer structure comes from the authored
     // JSON; the legacy RSX below stays the fallback and the parity oracle.
@@ -1205,12 +1224,13 @@ pub fn product_chat_app() -> Element {
                                         class: "ChatWorkspace_headerAvatar",
                                         "data-part": "character-avatar",
                                         "aria-hidden": "true",
-                                        style: "flex:none;width:32px;height:32px;border-radius:16px;overflow:hidden;background:#302c28;",
+                                        style: "flex:none;width:{header_px}px;height:{header_px}px;border-radius:{header_radius}px;overflow:hidden;background:#302c28;",
                                         span {
                                             "data-part": "avatar-fallback",
                                             "data-avatar-asset": "{view.character_avatar_asset}",
+                                            "data-avatar-radius": "{header_radius}",
                                             class: "headerAvatar",
-                                            style: "display:block;width:32px;height:32px;border-radius:16px;background:#302c28;",
+                                            style: "display:block;width:{header_px}px;height:{header_px}px;border-radius:{header_radius}px;background:#302c28;",
                                         }
                                     }
                                 }
@@ -1345,13 +1365,14 @@ pub fn product_chat_app() -> Element {
                                             "data-part": "message-avatar",
                                             "data-state": if !view.character_avatar_asset.is_empty() && row.role == "assistant" { "image" } else { "fallback" },
                                             "aria-hidden": "true",
-                                            style: "flex:none;width:36px;height:36px;border-radius:18px;overflow:hidden;background:#492a20;",
+                                            style: "flex:none;width:{msg_px}px;height:{msg_px}px;border-radius:{msg_radius}px;overflow:hidden;background:#492a20;",
                                             if !view.character_avatar_asset.is_empty() && row.role == "assistant" {
                                                 span {
                                                     "data-part": "avatar-fallback",
                                                     "data-avatar-asset": "{view.character_avatar_asset}",
+                                                    "data-avatar-radius": "{msg_radius}",
                                                     class: "messageAvatar",
-                                                    style: "display:block;width:36px;height:36px;border-radius:18px;background:#302c28;",
+                                                    style: "display:block;width:{msg_px}px;height:{msg_px}px;border-radius:{msg_radius}px;background:#302c28;",
                                                 }
                                             }
                                         }

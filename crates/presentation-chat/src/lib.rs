@@ -43,14 +43,15 @@ mod vello_gpu;
 use neotavern_presentation_dioxus_shell::{dioxus_shell_from_flag, DioxusShellHost};
 
 pub use avatar::{
-    display_avatar_data_uri, display_avatar_from_bytes, premultiplied_cover_thumbnail,
-    thumbnail_from_bytes, wallpaper_cover_thumbnail, AvatarThumb, AVATAR_DISPLAY_MAX_PX,
-    AVATAR_DISPLAY_URI_MAX_CHARS, THUMBNAIL_INPUT_MAX_BYTES, WALLPAPER_ASSET_ID,
-    WALLPAPER_DISPLAY_MAX_PX,
+    display_avatar_data_uri, display_avatar_from_bytes, thumbnail_from_bytes,
+    wallpaper_cover_thumbnail, AvatarThumb, AVATAR_DISPLAY_MAX_PX,
+    AVATAR_DISPLAY_URI_MAX_CHARS, THUMBNAIL_INPUT_MAX_BYTES, WALLPAPER_DISPLAY_MAX_PX,
 };
 pub use compositor::ChatCompositor;
 pub use error::ChatRouteError;
 pub mod hit_rects;
+pub mod scroll_ack;
+pub mod scroll_dynamics;
 pub use fake_wire::{
     FakeWire, DEMO_AVATAR_ASSET_ID, DEMO_CHARACTER_ID, DEMO_CHAT_ID, DEMO_LOREBOOK_ID,
 };
@@ -70,7 +71,7 @@ pub use shell_hit::{
 #[doc(hidden)]
 pub use vello_gpu::peek_texture_rgba;
 #[cfg(feature = "gpu")]
-pub use vello_gpu::PresentSurface;
+pub use vello_gpu::{BlitWindow, PresentSurface};
 pub use wire::{ProductWire, StreamFrame, WireCall, PAGE_LIMIT};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
