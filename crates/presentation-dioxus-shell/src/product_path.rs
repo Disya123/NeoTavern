@@ -2,6 +2,7 @@
 //! chat. The VirtualDom only mounts the visible window plus glass chrome.
 
 use std::cell::RefCell;
+use std::rc::Rc;
 
 use neotavern_presentation_blueprint::v1::ContextUsageSummaryV1;
 use serde_json::{json, Value};
@@ -237,7 +238,8 @@ pub fn chrome_metrics(width: u32, height: u32) -> (u32, u32, u32, u32) {
 }
 
 thread_local! {
-    static PRODUCT_CHAT: RefCell<ProductChatView> = RefCell::new(ProductChatView::default());
+    static PRODUCT_CHAT: RefCell<Rc<ProductChatView>> =
+        RefCell::new(Rc::new(ProductChatView::default()));
 }
 
 pub fn mixed_height(index: u32) -> f64 {
@@ -399,7 +401,7 @@ pub fn visible_rows(fixture: &CanonicalFixture, start: usize) -> Vec<VisibleRow>
 }
 
 pub fn install_product_chat(view: ProductChatView) {
-    PRODUCT_CHAT.with(|slot| *slot.borrow_mut() = view);
+    PRODUCT_CHAT.with(|slot| *slot.borrow_mut() = Rc::new(view));
 }
 
 /// en-US `Intl` label for RFC3339 UTC stamps
@@ -442,7 +444,9 @@ pub fn format_timestamp(value: &str) -> String {
     )
 }
 
-pub fn current_product_chat() -> ProductChatView {
+/// Shared read: the installed chat is handed out as an `Rc` — the render
+/// path bumps a refcount instead of cloning the whole view-model.
+pub fn current_product_chat() -> Rc<ProductChatView> {
     PRODUCT_CHAT.with(|slot| slot.borrow().clone())
 }
 

@@ -7,6 +7,7 @@
 //! mark the compositor dirty.
 
 use std::cell::RefCell;
+use std::rc::Rc;
 
 use contracts_generated::generated::{
     MessageRole, PromptPlan, ResultDataActivationStatus, ResultDiagnosticsExport,
@@ -762,15 +763,19 @@ impl Default for ProductShellView {
 }
 
 thread_local! {
-    static PRODUCT_SHELL: RefCell<ProductShellView> = RefCell::new(ProductShellView::default());
+    static PRODUCT_SHELL: RefCell<Rc<ProductShellView>> =
+        RefCell::new(Rc::new(ProductShellView::default()));
 }
 
 pub fn install_product_shell(view: ProductShellView) {
+    // One chat data-clone per produce: the shell keeps its own `chat` (the
+    // shell render reads `view.chat.*` geometry), the chat surface reads the
+    // shared slot. Render-path reads are Rc bumps, not view-model clones.
     crate::install_product_chat(view.chat.clone());
-    PRODUCT_SHELL.with(|slot| *slot.borrow_mut() = view);
+    PRODUCT_SHELL.with(|slot| *slot.borrow_mut() = Rc::new(view));
 }
 
-pub fn current_product_shell() -> ProductShellView {
+pub fn current_product_shell() -> Rc<ProductShellView> {
     PRODUCT_SHELL.with(|slot| slot.borrow().clone())
 }
 

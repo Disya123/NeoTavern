@@ -5,6 +5,18 @@
 //! assignment).
 use super::*;
 impl<W: ProductWire> ChatSession<W> {
+    /// Read-only route state for hot input paths (keyboard, pointer):
+    /// `shell_view` clones characters, visible rows and drafts on every
+    /// call, so a keystroke reads its draft field directly instead.
+    pub(crate) fn route_state(&self) -> &ChatRouteState {
+        &self.state
+    }
+
+    /// Last `set_surface_size` viewport width in CSS px.
+    pub(crate) fn viewport_width(&self) -> u32 {
+        self.viewport_width
+    }
+
     pub fn open(wire: W, preferred_chat_id: Option<&str>) -> Result<Self, ChatRouteError> {
         let mut session = Self {
             wire,
