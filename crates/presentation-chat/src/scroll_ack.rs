@@ -36,6 +36,26 @@ pub struct ScrollAckLoop {
 /// of leaving the chat on the blit fast path.
 pub const MIN_ACK_CAP_CSS: f32 = 12.0;
 
+/// Ceiling for the drift cap on hosts whose fast path shifts a FROZEN
+/// raster (desktop band blit). The leading edge of the shift has no baked
+/// content — the blit shader fills it — so the visible filler strip grows
+/// with the drift; a half-band cap let it reach ~300px mid-fling. 96px
+/// bounds the strip to a screen-edge sliver while keeping the re-produce
+/// cadence at wheel speeds unchanged (a notch never approaches the cap).
+/// The Android host composites rows instead of shifting a band, so its
+/// cap stays the half-band policy.
+pub const ACK_CAP_MAX_CSS: f32 = 96.0;
+
+/// Drift cap for a frozen-raster fast path over a chat band of
+/// `band_height_css`: half the band (filler must not cover the whole
+/// viewport between landings), floored by [`MIN_ACK_CAP_CSS`] and capped
+/// by [`ACK_CAP_MAX_CSS`].
+pub fn ack_cap_for_band(band_height_css: f32) -> f32 {
+    (band_height_css * 0.5)
+        .min(ACK_CAP_MAX_CSS)
+        .max(MIN_ACK_CAP_CSS)
+}
+
 /// Drift below this is treated as landed (final landing must not re-produce
 /// for sub-pixel residue).
 pub const LANDED_EPSILON_CSS: f32 = 0.5;
@@ -127,7 +147,21 @@ impl ScrollAckLoop {
 
 #[cfg(test)]
 mod tests {
-    use super::{ScrollAckLoop, LANDED_EPSILON_CSS, MIN_ACK_CAP_CSS};
+    use super::{
+        ack_cap_for_band, ScrollAckLoop, ACK_CAP_MAX_CSS, LANDED_EPSILON_CSS, MIN_ACK_CAP_CSS,
+    };
+
+    #[test]
+    fn band_cap_is_bounded_for_frozen_raster_hosts() {
+        // A tall band no longer lets the filler strip reach half the
+        // viewport mid-fling: the cap tops out at ACK_CAP_MAX_CSS.
+        assert_eq!(ack_cap_for_band(1200.0), ACK_CAP_MAX_CSS);
+        assert_eq!(ack_cap_for_band(600.0), ACK_CAP_MAX_CSS);
+        // Small bands keep the half-band policy above the floor.
+        assert_eq!(ack_cap_for_band(100.0), 50.0);
+        // Degenerate bands floor at MIN so idle frames stay idle.
+        assert_eq!(ack_cap_for_band(0.0), MIN_ACK_CAP_CSS);
+    }
 
     #[test]
     fn cap_cross_decides_only_past_half_band() {

@@ -36,8 +36,10 @@ impl App {
             let shell = session.shell_view();
             let toast_showing = shell.status_message.is_some();
             // Chat-column blend window (physical px) for blit-shifted
-            // presents; the drift cap is half the band height so filler never
-            // covers the whole viewport between landings.
+            // presents. The frozen-raster fast path has no baked content
+            // beyond the band — the blit shader fills the leading edge — so
+            // the drift cap is bounded (96px) instead of half the band:
+            // the filler strip stays a screen-edge sliver mid-fling.
             let d = density.max(1.0);
             let css_w = ((width.max(1) as f32 / d).round()) as u32;
             let css_h = ((height.max(1) as f32 / d).round()) as u32;
@@ -49,7 +51,7 @@ impl App {
                 occupied * d,
                 width as f32,
             );
-            let cap = (band.1 - band.0) * 0.5 / d;
+            let cap = crate::scroll_ack::ack_cap_for_band(viewport as f32);
             // Captured before the move into `install_product_shell`; the
             // wallpaper dim and the produce log need them, and a second
             // `shell_view()` call would clone the whole view-model again
