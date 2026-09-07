@@ -91,3 +91,4 @@ apps/android/milestone-c-captures/
 
 # Python bytecode
 __pycache__/
+.zcode/

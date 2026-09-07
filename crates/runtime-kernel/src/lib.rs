@@ -742,6 +742,28 @@ fn drain_pending(
                 req,
                 cancel,
                 reply,
+            } if op == "generation.tool.result" => {
+                // The resumed tool turn runs a full provider turn (up to the
+                // run timeout) inside the handler. Executing it here — in the
+                // emit loop of a DIFFERENT run's stream — would stall that
+                // stream for the whole turn (head-of-line blocking). Queue it
+                // for the writer loop after the current executor finishes;
+                // per-run ordering is preserved (single active stream + FIFO
+                // pending). The common single-chat flow is unaffected: a
+                // waiting run has no executing stream, so its result is
+                // handled in the main loop directly.
+                pending.push(Command::Unary {
+                    op,
+                    req,
+                    cancel,
+                    reply,
+                });
+            }
+            Command::Unary {
+                op,
+                req,
+                cancel,
+                reply,
             } => {
                 let result = handle_unary(Some(db), meta, state, &op, &req, &cancel, lease_owner);
                 let _ = reply.send(result);
@@ -1263,15 +1285,29 @@ impl Kernel {
     }
 }
 
+/// How long [`Drop for Kernel`] waits for the writer to acknowledge the
+/// shutdown before detaching the thread.
+const SHUTDOWN_GRACE: Duration = Duration::from_secs(5);
+
 impl Drop for Kernel {
     fn drop(&mut self) {
         // Orderly shutdown: the writer stops (mid-generation it commits
         // progress at the next step boundary), closes the database and exits.
         let (reply_tx, reply_rx) = mpsc::sync_channel(1);
         let _ = self.cmd_tx.send(Command::Shutdown { reply: reply_tx });
-        let _ = reply_rx.recv();
-        if let Some(writer) = self.writer.take() {
-            let _ = writer.join();
+        // Bounded wait: a writer wedged inside a provider turn (hung adapter,
+        // stuck socket) never reaches the shutdown branch — waiting forever
+        // would hang the whole process on exit. Detaching abandons the
+        // thread (documented leak, ADR-worthy cost of a hung adapter): the
+        // queued shutdown is processed if the writer ever unblocks, which
+        // also releases the data-root lease; otherwise the OS reclaims the
+        // thread at process exit.
+        if reply_rx.recv_timeout(SHUTDOWN_GRACE).is_ok() {
+            if let Some(writer) = self.writer.take() {
+                let _ = writer.join();
+            }
+        } else {
+            let _ = self.writer.take();
         }
     }
 }

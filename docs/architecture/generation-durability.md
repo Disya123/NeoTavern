@@ -71,7 +71,25 @@ operations — CRUD reads/writes, generation steps, cancel, shutdown — are
 commands on its queue. While a generation streams, the loop drains pending
 commands between provider steps: reads and `generation.cancel` stay live
 during long runs, and at most one generation executes at a time (queued
-streams wait their turn). `Kernel` is `Send + Sync`; `dispatch` is a short
+streams wait their turn)
+
+**Bounded shutdown (wave 3).** `Drop for Kernel` sends the shutdown
+command and waits at most 5s (`SHUTDOWN_GRACE`) for the writer to
+acknowledge, then joins. A writer wedged inside a provider turn (hung
+adapter, stuck socket) can never reach the shutdown branch; blocking Drop
+forever would hang the whole process on exit, so the wedged writer is
+detached instead — a documented leak: the queued shutdown is processed if
+the writer ever unblocks (releasing the data-root lease), otherwise the OS
+reclaims the thread at process exit.
+
+**Fairness (wave 3).** `generation.tool.result` resumes a run with a full
+provider turn (bounded by the run timeout). Executed inline inside ANOTHER
+run's emit drain it would stall that stream for the whole turn
+(head-of-line blocking), so the drain queues it for the writer loop after
+the active executor finishes; per-run ordering is preserved (single active
+stream + FIFO). The common single-chat flow is unaffected — a waiting run
+has no executing stream, so its result is handled in the main loop
+directly.. `Kernel` is `Send + Sync`; `dispatch` is a short
 round-trip; streaming operations go through `dispatch_stream`, which returns
 an `EventStream` (`stream_id()` = run id, `next_notice(timeout)` →
 `Committed { through_sequence }` / `Terminal { last_sequence }`).
