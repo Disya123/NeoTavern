@@ -231,11 +231,22 @@ impl<W: ProductWire> ChatSession<W> {
     /// Select a character by id and load its draft + avatar.
     pub fn select_character(&mut self, id: &str) {
         if self.state.selected_character_id.as_deref() == Some(id) {
+            // React `selectCharacter` has no re-tap guard: tapping the
+            // selected card again resets to the read-only card view.
+            if self.state.character_editor_mode != "view" {
+                self.state.character_editor_mode = "view".into();
+                self.reset_panel_scroll();
+                self.bump_scene();
+            }
             return;
         }
         self.state.selected_character_id = Some(id.to_string());
         self.state.pinned_character_id = Some(id.to_string());
+        // React `selectCharacter` resets to the read-only card view on every
+        // selection, not only re-taps.
+        self.state.character_editor_mode = "view".into();
         self.load_character_draft();
+        self.reset_panel_scroll();
         self.bump_scene();
     }
 
@@ -260,7 +271,28 @@ impl<W: ProductWire> ChatSession<W> {
             // React `CharacterLorebooks` queries `lorebooks.list` on mount.
             self.load_lorebooks();
         }
+        self.reset_panel_scroll();
         self.bump_scene();
+    }
+
+    /// Native shim for React's native side-panel scrolling: the host routes
+    /// wheel input over the panel here and clamps against the rendered
+    /// content height. `0` = scrolled to the top. Returns `true` when the
+    /// offset changed (host re-produces).
+    pub fn scroll_panel_by(&mut self, dy_css: f32, max_offset_css: f32) -> bool {
+        let next = (self.state.panel_scroll_css + dy_css).clamp(0.0, max_offset_css.max(0.0));
+        if (next - self.state.panel_scroll_css).abs() > f32::EPSILON {
+            self.state.panel_scroll_css = next;
+            self.bump_scene();
+            return true;
+        }
+        false
+    }
+
+    pub fn reset_panel_scroll(&mut self) {
+        if self.state.panel_scroll_css != 0.0 {
+            self.state.panel_scroll_css = 0.0;
+        }
     }
 
     pub fn toggle_character_editor_mode(&mut self) {
@@ -275,6 +307,7 @@ impl<W: ProductWire> ChatSession<W> {
         } else {
             self.state.character_editor_mode = "view".into();
         }
+        self.reset_panel_scroll();
         self.bump_scene();
     }
 
@@ -294,6 +327,7 @@ impl<W: ProductWire> ChatSession<W> {
         }
         self.state.sidebar_panel = panel.to_string();
         self.state.sidebar_open = true;
+        self.reset_panel_scroll();
         match panel {
             "characters" => self.refresh_characters(),
             "personas" => self.load_personas(),

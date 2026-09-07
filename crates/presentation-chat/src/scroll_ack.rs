@@ -31,7 +31,10 @@ pub struct ScrollAckLoop {
 
 /// Floor for the drift cap so a degenerate chrome band (overlay frames
 /// report zero-height bands) cannot turn every frame into a re-produce.
-pub const MIN_ACK_CAP_CSS: f32 = 24.0;
+/// 12px: a wheel notch (~40px) crosses the cap mid-gesture within a few
+/// notches, so the frozen raster hands back to a real produce early instead
+/// of leaving the chat on the blit fast path.
+pub const MIN_ACK_CAP_CSS: f32 = 12.0;
 
 /// Drift below this is treated as landed (final landing must not re-produce
 /// for sub-pixel residue).

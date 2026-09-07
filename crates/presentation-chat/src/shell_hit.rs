@@ -1161,104 +1161,20 @@ fn cards_hit(
 
 fn editor_hit(
     view: &ProductShellView,
-    panel_x: f32,
-    x1: f32,
-    content_top: f32,
-    x: f32,
-    y: f32,
+    _panel_x: f32,
+    _x1: f32,
+    _content_top: f32,
+    _x: f32,
+    _y: f32,
 ) -> Option<ShellHit> {
-    if view.editor_mode == "view" {
-        return Some(ShellHit::Absorb);
-    }
-    let bar_top = content_top + SPACE_SM;
-    let bar_bottom = bar_top + CONTROL_SM;
-    if y >= bar_top && y < bar_bottom {
-        if x < panel_x + SPACE_LG + CONTROL_SM {
-            return Some(ShellHit::Action(ShellAction::BackToCards));
-        }
-        let right = x1 - SPACE_LG;
-        if x >= right - CONTROL_SM {
-            return Some(ShellHit::Action(ShellAction::OpenDelete));
-        }
-        // Duplicate button (`characters.create` with "{name} copy").
-        if x >= right - CONTROL_SM * 2.0 {
-            return Some(ShellHit::Action(ShellAction::DuplicateCharacter));
-        }
-        if x >= right - CONTROL_SM * 3.0 {
-            if let Some(id) = view.selected_character_id.as_deref() {
-                return Some(ShellHit::Action(ShellAction::ExportCharacterCard(
-                    id.into(),
-                )));
-            }
-            return Some(ShellHit::Absorb);
-        }
-        if x >= right - CONTROL_SM * 4.0 {
-            return Some(ShellHit::Action(ShellAction::ToggleFavorite));
-        }
-        return Some(ShellHit::Absorb);
-    }
-    let pad = SPACE_LG;
-    let mut cursor = bar_bottom + SPACE_SM;
-    // Identity row (avatar + title).
-    cursor += 64.0 + SPACE_SM;
-    if y >= cursor && y < cursor + 56.0 {
-        return Some(ShellHit::Absorb);
-    }
-    cursor += 56.0 + SPACE_SM;
-    if y >= cursor && y < cursor + 88.0 {
-        return Some(ShellHit::Absorb);
-    }
-    cursor += 88.0 + SPACE_SM;
-    if y >= cursor && y < cursor + 36.0 && x >= panel_x + pad && x < panel_x + pad + 96.0 {
-        return Some(ShellHit::Action(ShellAction::CharacterSaveMeta));
-    }
-    cursor += 36.0 + SPACE_SM;
-    // Tags heading 20 + gap 8.
-    cursor += 20.0 + SPACE_SM;
-    if y >= cursor && y < cursor + 36.0 && x >= panel_x + pad && x < x1 - pad {
-        if x >= x1 - pad - 96.0 {
-            return Some(ShellHit::Action(ShellAction::AddCharacterTag));
-        }
-        return Some(ShellHit::Absorb);
-    }
-    cursor += 36.0 + SPACE_SM;
-    if let Some(draft) = view.selected_draft.as_ref() {
-        for tag in draft.tags.iter() {
-            if y >= cursor && y < cursor + 28.0 && x >= panel_x + pad && x < x1 - pad {
-                return Some(ShellHit::Action(ShellAction::RemoveCharacterTag(
-                    tag.clone(),
-                )));
-            }
-            cursor += 28.0 + 4.0;
-        }
-        // First message (88px) + Creator notes (88px)
-        cursor += 88.0 + SPACE_SM;
-        cursor += 88.0 + SPACE_SM;
-        // Greetings subsection header (title + Add button)
-        let header_h = 36.0;
-        if y >= cursor && y < cursor + header_h && x >= panel_x + pad && x < x1 - pad {
-            if x >= x1 - pad - 96.0 {
-                return Some(ShellHit::Action(ShellAction::AddAlternateGreeting));
-            }
-            return Some(ShellHit::Absorb);
-        }
-        cursor += header_h + SPACE_SM;
-        for (idx, _greeting) in draft.alternate_greetings.iter().enumerate() {
-            let row_h = 36.0;
-            if y >= cursor && y < cursor + row_h && x >= panel_x + pad && x < x1 - pad {
-                if x >= x1 - pad - CONTROL_SM {
-                    return Some(ShellHit::Action(ShellAction::RemoveAlternateGreeting(idx)));
-                } else {
-                    return Some(ShellHit::Action(ShellAction::ToggleAlternateGreeting(idx)));
-                }
-            }
-            cursor += row_h + 4.0;
-            if view.expanded_greeting == Some(idx) {
-                let edit_h = 88.0;
-                cursor += edit_h + 4.0;
-            }
-        }
-    }
+    // The Edit tab's controls dispatch through the layout-derived HitRects
+    // (`custom.characters.*` data-actions — geometry-true per produce). The
+    // hand-measured bands this mirror used to keep drifted up to ~175px from
+    // the real Blitz layout (mis-firing Save / Add-tag / greeting taps), so
+    // the mirror only owns the panel absorb: taps here must never fall
+    // through to the chat canvas. The read-only viewer keeps the same
+    // absorb; its header toggles route through the header band above.
+    let _ = view;
     Some(ShellHit::Absorb)
 }
 
@@ -1354,6 +1270,41 @@ fn gallery_hit(
         }
     }
     Some(ShellHit::Absorb)
+}
+
+/// Map a `custom.characters.*` intent onto its shell action. A trailing
+/// numeric segment (`tag-remove.2`) indexes the current draft — safe to
+/// resolve against `view` because the tap and the dispatch read the same
+/// produced frame. `None` falls through to the generic custom-intent trace.
+pub fn character_custom_action(name: &str, view: &ProductShellView) -> Option<ShellAction> {
+    let rest = name.strip_prefix("custom.characters.")?;
+    let (kind, idx) = match rest.rsplit_once('.') {
+        Some((kind, idx)) => (kind, idx.parse::<usize>().ok()),
+        None => (rest, None),
+    };
+    let action = match kind {
+        "save" => ShellAction::CharacterSaveMeta,
+        "tag-add" => ShellAction::AddCharacterTag,
+        "tag-remove" => ShellAction::RemoveCharacterTag(
+            view.selected_draft
+                .as_ref()?
+                .tags
+                .get(idx?)?
+                .clone(),
+        ),
+        "greeting-add" => ShellAction::AddAlternateGreeting,
+        "greeting-toggle" => ShellAction::ToggleAlternateGreeting(idx?),
+        "greeting-remove" => ShellAction::RemoveAlternateGreeting(idx?),
+        "back" => ShellAction::BackToCards,
+        "toggle-favorite" => ShellAction::ToggleFavorite,
+        "export" => {
+            ShellAction::ExportCharacterCard(view.selected_character_id.clone()?)
+        }
+        "duplicate" => ShellAction::DuplicateCharacter,
+        "delete" => ShellAction::OpenDelete,
+        _ => return None,
+    };
+    Some(action)
 }
 
 /// Hit-test CSS-pixel coordinates against the current shell view.
@@ -2494,7 +2445,7 @@ fn profiles_hit(
     view: &ProductShellView,
     x: f32,
     y: f32,
-    panel_x: f32,
+    _panel_x: f32,
     x1: f32,
     tabs_bottom: f32,
 ) -> Option<ShellHit> {

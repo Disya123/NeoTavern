@@ -1370,7 +1370,9 @@ pub fn product_chat_app() -> Element {
                                     header {
                                         class: "MessageBubble_messageHeader",
                                         "data-part": "message-header",
-                                        style: "display:flex;align-items:center;width:100%;gap:8px;margin-bottom:4px;",
+                                        // Layout comes from the packed class only (React
+                                        // parity: flex row, wrap, gap 12px) — mirrors the
+                                        // blueprint branch in scene_chat.rs.
                                         span {
                                             class: "MessageBubble_avatar",
                                             "data-part": "message-avatar",
@@ -1411,7 +1413,8 @@ pub fn product_chat_app() -> Element {
                                             "data-component": "message-action-bar",
                                             "data-part": "message-actions-inline",
                                             "data-state": "idle",
-                                            style: "display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-left:auto;",
+                                            // Packed class governs (flex row, wrap, gap 4px,
+                                            // margin-left:auto) — see the message-header note.
                                             {message_action_button("details", "Message details", "TextAlignLeft", &row.id)}
                                             {if row.manual_excluded {
                                                 message_action_button("context", "Include in prompt context", "Eye", &row.id)

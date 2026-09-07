@@ -75,6 +75,15 @@ pump'ит живой kernel-стрим: `about_to_wait` держит redraw ~60 
 терминала); `--dom-dump`/`--snapshot`/`--swapchain` работают одинаково на
 обоих проводах.
 
+**Каденс стрима: один produce на бёрст, ≤30/с (аудит плавности).** Хост
+выкачивает всю накопившуюся очередь стрим-событий за кадр одним
+`ChatSession::pump_stream` (dirty один раз на насос, не на событие), а гейт
+33 мс в `frame` ограничивает produce ~30/с (AGENTS §24) — между produces
+present показывает прежний растр; терминальный кадр поднимает гейт
+немедленно. Гидратация изображений (`refresh_visible_assets`) выполняется
+после present и только вне живого скролл-жеста (не внутри produce — иначе
+ленд удлинялся на все 32 wire-феча); свежий ассет поднимает один redraw.
+
 **Смена чата отписывается, а не отменяет (срез A аудита).** Контракт
 `ProductWire` дополнен методом `drop_stream(handle)` (default no-op):
 провод забывает handle, не отменяя ран — kernel-стрим продолжает
@@ -518,8 +527,10 @@ Kernel `characters.update` принимает только `name`, `description`
     описание (`data-part="character-viewer-description"`) и список приветствий
     (`data-part="character-viewer-greetings"`, первое сообщение и альтернативные
     варианты `data-part="character-viewer-greeting"`).
-- **Режим редактирования (EditTab)**: поднимает поля наверх (без скролла панели)
-  и пишет их в провод: Save — изменённые name+description (`TextFocus::CharacterName/Description`,
+- **Режим редактирования (EditTab)**: поля пишутся в провод и прокручиваются
+  нативным шимом скролла панели (см. «Скролл панели и React-паритет режима
+  карточки» ниже). Save — изменённые name+description
+  (`TextFocus::CharacterName/Description`,
   `data-part="character-name-input"` / `"character-description-input"`), пустое имя хранит
   текущее, no-op — «No changes.» без вызова. Теги — Add/Remove сразу (`character-tag-input` /
   `character-tag-add` / chip = remove), дубликаты case-insensitive, лимит 32 / 64 символа.
@@ -540,6 +551,34 @@ Kernel `characters.update` принимает только `name`, `description`
   `character_editor_name_description_tags_over_product_wire`,
   `character_manager_alternate_greetings_add_toggle_and_remove`,
   `character_card_viewer_mode_toggle_and_rendering`.
+
+### Скролл панели и React-паритет режима карточки
+
+React-панели скроллятся нативно; у Blitz-краски overflow-скролла нет. Хост
+роутит wheel над панелью редактора в `ChatSession::scroll_panel_by` — смещение
+клэмпится по высоте отрендеренного контента (`HitRects::subtree_bottom`:
+корневой бокс клипается вьюпортом, экстент дают переливающиеся строки —
+приветствия, чипы тегов), а тело редактора применяет его отрицательным
+`margin-top`. Узел ре-креируется сменой `key` при смене смещения: Blitz не
+перекрашивает сменившийся inline-стиль на переиспользованном узле. Смещение
+сбрасывается в 0 при смене панели / вкладки / персонажа. Для проб добавлена
+операция `--move x,y` (wheel-роутинг берёт последний трекнутый курсор — в этой
+версии winit wheel не несёт позиции), и скриптовый replay делает produce между
+операциями, если кадр грязный.
+
+Режим карточки выровнен по React `CharacterManagementPanel`:
+`selectCharacter` всегда ставит `editorMode='view'` — выбор персонажа
+(включая повторный тап по выбранной карточке) открывает read-only viewer, а
+в редактор ведёт кнопка-карандаш в шапке (`ToggleCharacterEditorMode`); дефолт
+состояния — тоже `view`. Кнопки action-бара редактора (назад, favorite,
+export, duplicate, delete) несут настоящие `data-action` (`custom.characters.*`),
+резолвятся через hit-rects и `character_custom_action`; жёсткие пиксельные
+полосы `editor_hit` заменены чистым `Absorb` (паттерн M1: геометрия из layout,
+не из «измеренных полос»). Inline-оверрайды раскладки message-header /
+message-action-bar сняты симметрично в blueprint-ветке (`scene_chat.rs`) и
+legacy RSX (`lib.rs`): раскладку даёт packed-класс (React golden: flex row,
+wrap, gap 12px; action-bar — wrap, gap 4px), паритет blueprint↔legacy снова
+сходится.
 
 ## Галерея персонажа (GalleryTab)
 

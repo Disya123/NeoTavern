@@ -120,6 +120,21 @@ impl HitRects {
             .rev()
             .find(|rect| rect.identity.contains(needle) && rect.contains(x, y))
     }
+
+    /// Lowest edge among hook rects that start at/below `root`'s top and
+    /// horizontally overlap it. The panel scroll shim needs the CONTENT
+    /// extent: the Blitz root box is clipped to the viewport (its layout
+    /// bottom is the visible bottom), while overflowing rows — alternate
+    /// greetings, tag chips — extend past it.
+    pub fn subtree_bottom(&self, root: &HitRect) -> f32 {
+        self.rects
+            .iter()
+            .filter(|rect| {
+                rect.y >= root.y - 1.0 && rect.x < root.x + root.w && rect.x + rect.w > root.x
+            })
+            .map(|rect| rect.y + rect.h)
+            .fold(root.y + root.h, f32::max)
+    }
 }
 
 /// Shared press-slop (CSS px): a move beyond this cancels the tap. Mirrors the

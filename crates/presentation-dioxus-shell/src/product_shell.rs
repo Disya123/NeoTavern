@@ -368,6 +368,10 @@ pub struct ProductShellView {
     pub gallery_sort: String,
     pub expanded_greeting: Option<usize>,
     pub tag_input: String,
+    /// CSS px the panel body is scrolled down (native shim for React's
+    /// native panel scrolling; the host clamps it to the rendered content).
+    /// The panel body applies it as a negative top margin.
+    pub panel_scroll_css: f32,
     pub personas: Vec<PersonaCardView>,
     pub selected_persona_id: Option<String>,
     pub persona_tab: String,
@@ -607,6 +611,7 @@ impl Default for ProductShellView {
             gallery_sort: "oldest".into(),
             expanded_greeting: None,
             tag_input: String::new(),
+            panel_scroll_css: 0.0,
             personas: Vec::new(),
             selected_persona_id: None,
             persona_tab: "cards".into(),
@@ -972,6 +977,9 @@ fn rail_button(item: &RailSpec, selected: bool) -> Element {
     rsx! {
         span {
             class: "{class}",
+            // Key flips with selection: the Blitz diff does not repaint
+            // state-dependent inline styles (icon fill) on reused nodes.
+            key: "rail-{item.theme_id}-{state}",
             "data-part": "item",
             "data-item": "{item.theme_id}",
             "data-group": "main",
@@ -1034,9 +1042,11 @@ fn character_avatar(
             .to_owned()
     } else if viewer {
         // React parity: CharacterManagementPanel `.viewerAvatar` — full-width
-        // block, intrinsic height, 1px strong border, `object-fit: contain`.
+        // block, 1px strong border, `object-fit: contain`. React's
+        // `block-size:auto` relies on intrinsic sizing; the native img is
+        // abs-filled, so the height comes from an explicit aspect ratio.
         format!(
-            "display:block;width:100%;max-width:100%;height:auto;flex:none;align-self:stretch;overflow:hidden;border:1px solid {};",
+            "display:block;width:100%;max-width:100%;height:auto;aspect-ratio:4/3;flex:none;align-self:stretch;overflow:hidden;border:1px solid {};",
             tokens.color_border_strong
         )
     } else {
@@ -1368,7 +1378,11 @@ fn character_card_viewer(view: &ProductShellView, draft: &CharacterDraftView) ->
             section {
                 class: "CharacterManagementPanel_viewerIdentity",
                 "data-part": "character-viewer-identity",
-                style: "display:flex;align-items:center;gap:12px;",
+                // React `.viewerIdentity` stacks the full-width avatar above
+                // the name/tag copy; Blitz sizes an abs-fill <img> from the
+                // box, so the avatar keeps an explicit aspect-ratio height
+                // (`block-size:auto` would collapse to 0).
+                style: "display:flex;flex-direction:column;align-items:stretch;gap:12px;padding:12px;border-bottom:1px solid #39342f;",
                 {character_avatar_with_asset(view, &draft.name, draft.avatar_asset_id.as_deref(), "CharacterManagementPanel_viewerAvatar")}
                 div {
                     class: "CharacterManagementPanel_viewerIdentityCopy",
@@ -1415,7 +1429,10 @@ fn character_card_viewer(view: &ProductShellView, draft: &CharacterDraftView) ->
                         open: true,
                         style: "border:1px solid #39342f;border-radius:10px;background:#1e1b18;padding:8px 12px;",
                         summary {
-                            style: "cursor:pointer;font-weight:600;font-size:0.8125rem;color:#f3eee8;padding:4px 0;",
+                            // Blitz lays <summary> out inline (no UA display:
+                            // list-item/block), gluing the body text to the
+                            // heading — force the block.
+                            style: "display:block;cursor:pointer;font-weight:600;font-size:0.8125rem;color:#f3eee8;padding:4px 0;",
                             "Description"
                         }
                         div {
@@ -1432,7 +1449,7 @@ fn character_card_viewer(view: &ProductShellView, draft: &CharacterDraftView) ->
                         open: true,
                         style: "border:1px solid #39342f;border-radius:10px;background:#1e1b18;padding:8px 12px;",
                         summary {
-                            style: "cursor:pointer;font-weight:600;font-size:0.8125rem;color:#f3eee8;padding:4px 0;",
+                            style: "display:block;cursor:pointer;font-weight:600;font-size:0.8125rem;color:#f3eee8;padding:4px 0;",
                             "Greetings"
                         }
                         div {
@@ -1472,15 +1489,29 @@ fn character_card_viewer(view: &ProductShellView, draft: &CharacterDraftView) ->
 
 fn edit_tab(view: &ProductShellView, draft: &CharacterDraftView) -> Element {
     let first_msg_tokens = format!("≈ {} tokens", (draft.first_message.len() / 4).max(0));
+    // Native panel scroll shim: Blitz paint has no overflow scrolling, so
+    // the host routes wheel input over the panel into
+    // `session.scroll_panel_by` and this negative margin shifts the body
+    // (the tabs-scroll-content clip hides the overscan). The host clamps
+    // against the rendered content height between produces.
+    let scroll_offset = view.panel_scroll_css.max(0.0).round() as i32;
+    let root_margin = format!("margin-top:-{scroll_offset}px;");
     rsx! {
         div {
             class: "CharacterManagementPanel_editor",
             "data-part": "character-editor",
+            // Same Blitz stale-inline-style workaround as the tab triggers:
+            // a reused node keeps its first-paint inline style, so the
+            // shifting scroll margin would be ignored. Recreate the editor
+            // subtree whenever the offset changes.
+            key: "editor-root-{scroll_offset}",
+            style: "{root_margin}",
             div {
                 class: "CharacterManagementPanel_characterActionBar",
                 button {
                     class: "st-button st-icon-button CharacterManagementPanel_iconButton",
                     r#type: "button",
+                    "data-action": "custom.characters.back",
                     "aria-label": "Back to character cards",
                     {icon("ArrowLeft", 18)}
                 }
@@ -1488,6 +1519,7 @@ fn edit_tab(view: &ProductShellView, draft: &CharacterDraftView) -> Element {
                 button {
                     class: "st-button st-icon-button CharacterManagementPanel_iconButton",
                     r#type: "button",
+                    "data-action": "custom.characters.toggle-favorite",
                     "data-state": if draft.favorite { "active" } else { "inactive" },
                     "aria-label": if draft.favorite { "Remove from favorites" } else { "Add to favorites" },
                     "aria-pressed": draft.favorite,
@@ -1496,18 +1528,21 @@ fn edit_tab(view: &ProductShellView, draft: &CharacterDraftView) -> Element {
                 button {
                     class: "st-button st-icon-button CharacterManagementPanel_iconButton",
                     r#type: "button",
+                    "data-action": "custom.characters.export",
                     "aria-label": "Export character card",
                     {icon("DownloadSimple", 18)}
                 }
                 button {
                     class: "st-button st-icon-button CharacterManagementPanel_iconButton",
                     r#type: "button",
+                    "data-action": "custom.characters.duplicate",
                     "aria-label": "Duplicate character",
                     {icon("Copy", 18)}
                 }
                 button {
                     class: "st-button st-icon-button CharacterManagementPanel_iconButton",
                     r#type: "button",
+                    "data-action": "custom.characters.delete",
                     "aria-label": "Delete character",
                     {icon("Trash", 18)}
                 }
@@ -1521,30 +1556,38 @@ fn edit_tab(view: &ProductShellView, draft: &CharacterDraftView) -> Element {
                     {character_avatar_with_asset(view, &draft.name, draft.avatar_asset_id.as_deref(), "CharacterManagementPanel_editorAvatar")}
                     span { {icon("Pencil", 11)} }
                 }
+                // Blitz misses the packed descendant rule that stacks this
+                // copy block, so the layout rides inline (same pattern as
+                // the composer workarounds).
                 div {
+                    style: "display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 auto;overflow:hidden;",
                     h3 {
+                        style: "margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
                         if draft.name.is_empty() { "Unnamed character" } else { "{draft.name}" }
                     }
-                    p { "Identity, greeting, attribution, and tags." }
+                    p {
+                        style: "margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
+                        "Identity, greeting, attribution, and tags."
+                    }
                 }
             }
             label {
                 class: "CharacterManagementPanel_editorField",
-                style: "display:flex;flex-direction:column;gap:4px;height:56px;box-sizing:border-box;",
+                style: "display:flex;flex-direction:column;gap:4px;box-sizing:border-box;flex:none;",
                 span { class: "CharacterManagementPanel_fieldHeading", strong { "Name" } }
                 span {
                     "data-part": "character-name-input",
-                    style: "display:block;width:100%;height:36px;line-height:36px;padding:0 12px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;color:#e8eef7;font-size:0.8125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;",
+                    style: "display:block;width:100%;height:36px;line-height:36px;padding:0 12px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;color:#e8eef7;font-size:0.8125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;flex:none;",
                     "{draft.name}"
                 }
             }
             label {
                 class: "CharacterManagementPanel_editorField",
-                style: "display:flex;flex-direction:column;gap:4px;height:88px;box-sizing:border-box;",
+                style: "display:flex;flex-direction:column;gap:4px;box-sizing:border-box;flex:none;",
                 span { class: "CharacterManagementPanel_fieldHeading", strong { "Description" } }
                 span {
                     "data-part": "character-description-input",
-                    style: "display:block;width:100%;height:64px;line-height:20px;padding:8px 12px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;color:#e8eef7;font-size:0.8125rem;overflow:hidden;box-sizing:border-box;",
+                    style: "display:block;width:100%;height:64px;line-height:20px;padding:8px 12px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;color:#e8eef7;font-size:0.8125rem;overflow:hidden;box-sizing:border-box;flex:none;",
                     if draft.description.is_empty() {
                         span { style: "color:#998f87;", "No character description yet." }
                     } else {
@@ -1555,9 +1598,11 @@ fn edit_tab(view: &ProductShellView, draft: &CharacterDraftView) -> Element {
             button {
                 class: "st-button",
                 r#type: "button",
-                "data-part": "character-save",
+                "data-component": "button",
                 "data-variant": "primary",
-                style: "width:96px;height:36px;",
+                "data-action": "custom.characters.save",
+                "data-part": "character-save",
+                style: "width:96px;height:44px;flex:none;",
                 span { "data-part": "label", "Save" }
             }
             section {
@@ -1567,7 +1612,10 @@ fn edit_tab(view: &ProductShellView, draft: &CharacterDraftView) -> Element {
                 strong { style: "height:20px;font-size:0.875rem;", "Tags" }
                 div {
                     class: "CharacterManagementPanel_tagInputRow",
-                    style: "display:flex;align-items:center;gap:8px;height:36px;",
+                    // min-height keeps the 44px touch targets (the packed
+                    // `[data-component='button']` rule floors the Add button
+                    // at 44px; a fixed 36px row made it overflow).
+                    style: "display:flex;align-items:center;gap:8px;min-height:44px;",
                     span {
                         "data-part": "character-tag-input",
                         "aria-label": "New tag",
@@ -1584,9 +1632,10 @@ fn edit_tab(view: &ProductShellView, draft: &CharacterDraftView) -> Element {
                         "data-component": "button",
                         "data-variant": "default",
                         "data-size": "sm",
+                        "data-action": "custom.characters.tag-add",
                         "data-part": "character-tag-add",
                         "aria-label": "Add tag",
-                        style: "width:96px;height:36px;flex:none;",
+                        style: "width:96px;height:44px;flex:none;",
                         span { "data-part": "icon", "aria-hidden": "true", {icon("Plus", 15)} }
                         span { "data-part": "label", "Add tag" }
                     }
@@ -1599,18 +1648,20 @@ fn edit_tab(view: &ProductShellView, draft: &CharacterDraftView) -> Element {
                         "data-part": "character-tag-chips",
                         "aria-label": "Assigned tags",
                         style: "display:flex;flex-direction:column;gap:4px;",
-                        for tag in draft.tags.iter() {
+                        for (tag_idx, tag) in draft.tags.iter().enumerate() {
                             {
                                 let tag = tag.clone();
                                 let remove_aria = format!("Remove tag {tag}");
+                                let remove_action = format!("custom.characters.tag-remove.{tag_idx}");
                                 rsx! {
                                     button {
                                         class: "st-button",
                                         r#type: "button",
                                         key: "{tag}",
                                         "data-part": "character-tag-chip",
+                                        "data-action": "{remove_action}",
                                         "aria-label": "{remove_aria}",
-                                        style: "height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;width:100%;box-sizing:border-box;",
+                                        style: "height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;width:100%;box-sizing:border-box;flex:none;",
                                         span {
                                             style: "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
                                             "{tag}"
@@ -1625,7 +1676,7 @@ fn edit_tab(view: &ProductShellView, draft: &CharacterDraftView) -> Element {
             }
             label {
                 class: "CharacterManagementPanel_editorField",
-                style: "display:flex;flex-direction:column;gap:4px;height:88px;box-sizing:border-box;",
+                style: "display:flex;flex-direction:column;gap:4px;box-sizing:border-box;flex:none;",
                 span {
                     class: "CharacterManagementPanel_fieldHeading",
                     strong { "First message" }
@@ -1633,7 +1684,7 @@ fn edit_tab(view: &ProductShellView, draft: &CharacterDraftView) -> Element {
                 }
                 span {
                     "data-part": "character-first-message-input",
-                    style: "display:block;width:100%;height:64px;line-height:20px;padding:8px 12px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;color:#e8eef7;font-size:0.8125rem;overflow:hidden;box-sizing:border-box;",
+                    style: "display:block;width:100%;height:64px;line-height:20px;padding:8px 12px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;color:#e8eef7;font-size:0.8125rem;overflow:hidden;box-sizing:border-box;flex:none;",
                     if draft.first_message.is_empty() {
                         span { style: "color:#998f87;", "No opening message yet." }
                     } else {
@@ -1643,14 +1694,14 @@ fn edit_tab(view: &ProductShellView, draft: &CharacterDraftView) -> Element {
             }
             label {
                 class: "CharacterManagementPanel_editorField",
-                style: "display:flex;flex-direction:column;gap:4px;height:88px;box-sizing:border-box;",
+                style: "display:flex;flex-direction:column;gap:4px;box-sizing:border-box;flex:none;",
                 span {
                     class: "CharacterManagementPanel_fieldHeading",
                     strong { "Creator's notes" }
                 }
                 span {
                     "data-part": "character-creator-notes-input",
-                    style: "display:block;width:100%;height:64px;line-height:20px;padding:8px 12px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;color:#e8eef7;font-size:0.8125rem;overflow:hidden;box-sizing:border-box;",
+                    style: "display:block;width:100%;height:64px;line-height:20px;padding:8px 12px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;color:#e8eef7;font-size:0.8125rem;overflow:hidden;box-sizing:border-box;flex:none;",
                     if draft.creator_notes.is_empty() {
                         span { style: "color:#998f87;", "No creator notes yet." }
                     } else {
@@ -1672,8 +1723,11 @@ fn edit_tab(view: &ProductShellView, draft: &CharacterDraftView) -> Element {
                         "data-component": "button",
                         "data-variant": "default",
                         "data-size": "sm",
-                        "data-action": "character-greeting-add",
+                        "data-action": "custom.characters.greeting-add",
                         "data-part": "character-greeting-add",
+                        // Blitz misses the packed nowrap-on-label rule; without
+                        // it the narrow header column wraps "Add" vertically.
+                        style: "white-space:nowrap;flex:none;",
                         span { "data-part": "label", "Add" }
                     }
                 }
@@ -1688,6 +1742,8 @@ fn edit_tab(view: &ProductShellView, draft: &CharacterDraftView) -> Element {
                             let is_open = view.expanded_greeting == Some(idx);
                             let state = if is_open { "open" } else { "closed" };
                             let idx_str = idx.to_string();
+                            let toggle_action = format!("custom.characters.greeting-toggle.{idx}");
+                            let remove_action = format!("custom.characters.greeting-remove.{idx}");
                             rsx! {
                                 div {
                                     class: "CharacterManagementPanel_greetingItem",
@@ -1698,7 +1754,7 @@ fn edit_tab(view: &ProductShellView, draft: &CharacterDraftView) -> Element {
                                         button {
                                             class: "CharacterManagementPanel_greetingToggle",
                                             r#type: "button",
-                                            "data-action": "character-greeting-toggle",
+                                            "data-action": "{toggle_action}",
                                             "data-index": "{idx_str}",
                                             "aria-expanded": is_open,
                                             {icon("CaretDown", 15)}
@@ -1710,7 +1766,7 @@ fn edit_tab(view: &ProductShellView, draft: &CharacterDraftView) -> Element {
                                         button {
                                             class: "CharacterManagementPanel_compactIconButton",
                                             r#type: "button",
-                                            "data-action": "character-greeting-remove",
+                                            "data-action": "{remove_action}",
                                             "data-index": "{idx_str}",
                                             "aria-label": "Remove greeting {idx + 1}",
                                             {icon("Trash", 15)}
@@ -1722,6 +1778,10 @@ fn edit_tab(view: &ProductShellView, draft: &CharacterDraftView) -> Element {
                                             style: "padding:8px 12px;display:flex;flex-direction:column;gap:4px;",
                                             span {
                                                 "data-part": "character-greeting-input",
+                                                // The host keyboard-focus path parses
+                                                // the greeting index from the
+                                                // skeleton `key` (data-ui-key).
+                                                "data-ui-key": "{idx_str}",
                                                 "data-index": "{idx_str}",
                                                 style: "display:block;width:100%;min-height:64px;line-height:20px;padding:8px 12px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;color:#e8eef7;font-size:0.8125rem;overflow:hidden;box-sizing:border-box;",
                                                 if greeting.is_empty() {
@@ -2025,10 +2085,6 @@ fn character_manager(view: &ProductShellView) -> Element {
         "flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;position:relative;padding-bottom:{pad_bottom}px;"
     );
     let tabs_style = "display:flex;flex-direction:row;flex:none;box-sizing:border-box;align-self:stretch;position:static;width:auto;max-width:100%;order:0;z-index:0;margin:8px 16px 8px;padding:4px;border:1px solid #39342f;border-radius:10px;background:#1e1b18;";
-    let cards_tab_style = tab_trigger_style(tab == "cards");
-    let edit_tab_style = tab_trigger_style(tab == "edit");
-    let advanced_tab_style = tab_trigger_style(tab == "advanced");
-    let gallery_tab_style = tab_trigger_style(tab == "gallery");
     rsx! {
         div {
             class: "FloatingTabPanel_root",
@@ -2072,6 +2128,7 @@ fn character_manager(view: &ProductShellView) -> Element {
                     style: "display:flex;flex:none;align-items:center;",
                     if view.tab == "edit" && view.editor_mode == "view" {
                         button {
+                            key: "mode-{view.editor_mode}-pencil",
                             class: "st-button st-icon-button CharacterManagementPanel_iconButton",
                             r#type: "button",
                             "data-component": "button",
@@ -2086,6 +2143,7 @@ fn character_manager(view: &ProductShellView) -> Element {
                         }
                     } else {
                         button {
+                            key: "mode-{view.editor_mode}-eye",
                             class: "st-button st-icon-button CharacterManagementPanel_iconButton",
                             r#type: "button",
                             "data-component": "button",
@@ -2126,37 +2184,34 @@ fn character_manager(view: &ProductShellView) -> Element {
                     "data-variant": "segment",
                     "data-layout": "content",
                     "aria-label": "Character management sections",
+                    // Render the triggers through a keyed `for` loop: this
+                    // Blitz build freezes class-rule matching (the packed
+                    // `[data-state='active']` pill) on reused nodes, and keys
+                    // on statically written children are ignored by
+                    // template diffing. Keyed loop children whose key changes
+                    // ARE recreated, giving the moved pill fresh styles.
+                    key: "tabs-list-{tab}",
                     style: "{tabs_style}",
-                    button {
-                        "data-component": "tabs-trigger",
-                        "data-part": "trigger",
-                        "data-state": if tab == "cards" { "active" } else { "inactive" },
-                        style: "{cards_tab_style}",
-                        "Cards"
-                    }
-                    button {
-                        "data-component": "tabs-trigger",
-                        "data-part": "trigger",
-                        "data-state": if tab == "edit" { "active" } else { "inactive" },
-                        disabled: !can_edit,
-                        style: "{edit_tab_style}",
-                        "Edit"
-                    }
-                    button {
-                        "data-component": "tabs-trigger",
-                        "data-part": "trigger",
-                        "data-state": if tab == "advanced" { "active" } else { "inactive" },
-                        disabled: !can_edit,
-                        style: "{advanced_tab_style}",
-                        "Advanced"
-                    }
-                    button {
-                        "data-component": "tabs-trigger",
-                        "data-part": "trigger",
-                        "data-state": if tab == "gallery" { "active" } else { "inactive" },
-                        disabled: !can_edit,
-                        style: "{gallery_tab_style}",
-                        "Gallery"
+                    for (trigger_id, label, active, enabled) in [
+                        ("cards", "Cards", tab == "cards", true),
+                        ("edit", "Edit", tab == "edit", can_edit),
+                        ("advanced", "Advanced", tab == "advanced", can_edit),
+                        ("gallery", "Gallery", tab == "gallery", can_edit),
+                    ] {
+                        {
+                            let style = tab_trigger_style(active);
+                            rsx! {
+                                button {
+                                    key: "trigger-{trigger_id}-{active}",
+                                    "data-component": "tabs-trigger",
+                                    "data-part": "trigger",
+                                    "data-state": if active { "active" } else { "inactive" },
+                                    disabled: !enabled,
+                                    style: "{style}",
+                                    "{label}"
+                                }
+                            }
+                        }
                     }
                 }
                 div {
@@ -2345,6 +2400,9 @@ pub(crate) fn management_shell(
                         "data-part": "list",
                         "data-variant": "segment",
                         "data-layout": "content",
+                        // Same stale-pill workaround as the character tabs:
+                        // recreate triggers when the active tab flips.
+                        key: "tabs-list-{active_tab}",
                         style: "{tabs_style}",
                         for tab in tabs.iter() {
                             {
@@ -2352,6 +2410,7 @@ pub(crate) fn management_shell(
                                 let state = if tab.id == active_tab { "active" } else { "inactive" };
                                 rsx! {
                                     button {
+                                        key: "trigger-{tab.id}-{state}",
                                         "data-component": "tabs-trigger",
                                         "data-part": "trigger",
                                         "data-state": "{state}",

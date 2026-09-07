@@ -202,6 +202,27 @@ impl<W: ProductWire> ChatSession<W> {
         Ok(frame)
     }
 
+    /// Host frame pump: applies every currently-queued stream frame (deltas,
+    /// checkpoints, terminal frames) until the wire reports `Timeout`, then
+    /// returns whether anything was applied. The host marks the frame dirty
+    /// once per pump instead of once per event, so a burst of deltas that
+    /// arrived between two redraws coalesces into a single produce.
+    pub fn pump_stream(&mut self) -> bool {
+        let mut progressed = false;
+        for _ in 0..64 {
+            match self.poll_stream(0) {
+                Ok(StreamFrame::Event { .. }) => progressed = true,
+                Ok(StreamFrame::Terminal | StreamFrame::Error(_)) => {
+                    progressed = true;
+                    break;
+                }
+                Ok(StreamFrame::Timeout) => break,
+                Err(_) => break,
+            }
+        }
+        progressed
+    }
+
     /// Applies a stream frame, skipping duplicate envelope `sequence` values
     /// and identical unsequenced deltas at the same offset.
     pub fn apply_stream_frame(&mut self, frame: &StreamFrame) {

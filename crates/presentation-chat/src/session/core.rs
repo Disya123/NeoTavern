@@ -28,7 +28,9 @@ impl<W: ProductWire> ChatSession<W> {
         session.state.character_sort = "name".into();
         session.state.character_view = "list".into();
         session.state.character_tab = "cards".into();
-        session.state.character_editor_mode = "edit".into();
+        // React `CharacterManagementPanel` mounts in the read-only viewer
+        // mode; the header pencil button enters the editor.
+        session.state.character_editor_mode = "view".into();
         session.state.gallery_columns = 3;
         session.state.gallery_sort = "oldest".into();
         session.state.persona_tab = "cards".into();

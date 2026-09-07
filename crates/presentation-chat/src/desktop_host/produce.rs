@@ -296,11 +296,9 @@ impl App {
         if !self.scroll_animation_active() {
             self.visual_scroll_css = self.session.scroll_offset_css();
         }
-        // A3 scroll-settle hydration: the produced window may have revealed
-        // rows whose images are not in the asset store yet (wheel/fling to a
-        // fresh span). Hydrate right after the bake so the next produce paints
-        // real pixels instead of placeholders.
-        self.session.refresh_visible_assets();
+        // A3 scroll-settle hydration moved out of the produce (host `frame`
+        // runs it after the present): image fetches must not extend the
+        // land-critical path, and a hydrated asset re-arms one redraw itself.
         self.dirty = false;
     }
 }

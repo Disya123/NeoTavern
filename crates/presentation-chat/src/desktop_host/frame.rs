@@ -5,11 +5,15 @@ use std::sync::Arc;
 
 use super::probe::ProbeOp;
 use super::{App, TITLE, TOAST_MS, WHEEL_LINE_CSS};
-use crate::{BlitWindow, PresentSurface, StreamFrame};
+use crate::{BlitWindow, PresentSurface};
 use winit::application::ApplicationHandler;
 use winit::event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow};
 use winit::window::WindowAttributes;
+
+/// Produce cadence floor while a generation stream is live (AGENTS §24:
+/// no more than 30 UI updates per second for streaming responses).
+const STREAM_PRODUCE_MIN_INTERVAL: std::time::Duration = std::time::Duration::from_millis(33);
 
 impl App {
     pub(super) fn frame(&mut self) {
@@ -38,16 +42,13 @@ impl App {
             }
         }
         // Kernel-backed generation streams commit asynchronously on the
-        // kernel's writer thread: pump the live run here (one frame per
-        // redraw, `about_to_wait` re-arms redraws while the stream is live).
-        // FakeWire drains synchronously inside `send`, so this is a no-op for
-        // the default in-memory host.
-        if self.session.state().stream_handle.is_some() {
-            match self.session.poll_stream(0) {
-                Ok(StreamFrame::Event { .. }) => self.dirty = true,
-                Ok(StreamFrame::Terminal | StreamFrame::Error(_)) => self.dirty = true,
-                _ => {}
-            }
+        // kernel's writer thread: drain every queued frame here (one produce
+        // per pump, not one per event) and keep the produce cadence at
+        // ~30/s while the run is live (AGENTS §24). FakeWire drains
+        // synchronously inside `send`, so this is a no-op for the default
+        // in-memory host.
+        if self.session.pump_stream() {
+            self.dirty = true;
         }
         // `--pointer` taps: replay the whole sequence through the same pointer
         // pipeline (each tap hit-tests against the state mutated by the prior
@@ -75,17 +76,22 @@ impl App {
                         self.pointer_down(x, y);
                         self.pointer_up(x, y);
                     }
+                    ProbeOp::Move(x, y) => {
+                        self.pointer_css = (x, y);
+                    }
                     ProbeOp::Type(text) => {
                         for ch in text.chars() {
                             self.type_char(ch);
                         }
                     }
                     ProbeOp::Wheel(dy) => {
-                        // Route the notch through the live `wheel` path with
-                        // the deterministic clock started at 0 (a real-time
-                        // base would race the later `--tick` steps).
+                        // Route the notch through the live `wheel_at` path
+                        // (panel vs chat routing off the tracked pointer)
+                        // with the deterministic clock started at 0 (a
+                        // real-time base would race the later `--tick` steps).
                         self.probe_clock_ns.get_or_insert(0);
-                        self.wheel(dy);
+                        let (css_px, css_py) = self.pointer_css;
+                        self.wheel_at(css_px, css_py, dy);
                     }
                     ProbeOp::Tick(ms) => {
                         // One animation step at a deterministic sample time:
@@ -99,6 +105,19 @@ impl App {
                             self.land_now();
                         }
                     }
+                }
+                // A live window produces between input events; the scripted
+                // replay must too, or the next op reads stale geometry
+                // (panel wheel routing hit hit_rects from the priming
+                // produce — before the panel even opened).
+                if self.dirty {
+                    let snapshot = self.snapshot_path.take();
+                    let swap = self.swap_path.take();
+                    let dump = self.dom_dump_path.take();
+                    self.produce_and_render();
+                    self.snapshot_path = snapshot;
+                    self.swap_path = swap;
+                    self.dom_dump_path = dump;
                 }
             }
         }
@@ -124,11 +143,29 @@ impl App {
             self.land_scroll(shift);
         }
         if self.dirty {
-            self.produce_and_render();
+            let streaming = self.session.state().stream_handle.is_some();
+            let due = !streaming
+                || self
+                    .last_stream_produce
+                    .is_none_or(|at| at.elapsed() >= STREAM_PRODUCE_MIN_INTERVAL);
+            if due {
+                self.produce_and_render();
+                self.produce_deferred = false;
+                if streaming {
+                    self.last_stream_produce = Some(std::time::Instant::now());
+                }
+            } else {
+                // Streaming gate: present the previous raster now; the live
+                // stream re-arms redraws at ~16 ms, so the deferred produce
+                // lands on the next frame (the terminal frame lifts the gate
+                // immediately).
+                self.produce_deferred = true;
+            }
         }
         // A produce failure leaves `dirty` set so we retry instead of
-        // presenting stale content.
-        if self.dirty {
+        // presenting stale content; a merely deferred produce still presents
+        // the last raster below.
+        if self.dirty && !self.produce_deferred {
             return;
         }
         // Present from the accumulated resolve once per redraw. Redraws are
@@ -195,6 +232,15 @@ impl App {
                     Err(err) => eprintln!("[neocompositor-desktop] blit-shift present: {err}"),
                 }
             }
+        }
+        // A3 scroll-settle hydration: after the present, and only outside a
+        // live scroll gesture, so image fetches never extend an animation
+        // frame (they used to sit inside the produce and extend the land
+        // stall). A hydrated asset re-arms one redraw so the next produce
+        // paints it.
+        if !self.scroll_animation_active() && self.session.refresh_visible_assets() {
+            self.dirty = true;
+            self.window.as_ref().map(|w| w.request_redraw());
         }
     }
 
@@ -363,7 +409,11 @@ impl ApplicationHandler for App {
                     MouseScrollDelta::LineDelta(_, lines) => lines * WHEEL_LINE_CSS,
                     MouseScrollDelta::PixelDelta(pos) => (pos.y as f32) / self.density.max(1.0),
                 };
-                self.wheel(css_y);
+                // Wheel events carry no cursor position in this winit
+                // version; route through the last tracked pointer so wheel
+                // over the side panel scrolls the panel, not the chat.
+                let (css_px, css_py) = self.pointer_css;
+                self.wheel_at(css_px, css_py, css_y);
             }
             WindowEvent::KeyboardInput { event, .. }
                 if event.state == winit::event::ElementState::Pressed =>

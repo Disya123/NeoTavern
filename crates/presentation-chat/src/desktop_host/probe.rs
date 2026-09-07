@@ -8,6 +8,9 @@ use std::collections::VecDeque;
 #[derive(Clone, Debug)]
 pub(super) enum ProbeOp {
     Tap(f32, f32),
+    /// Track the cursor without clicking — wheel routing (panel vs chat)
+    /// uses the last pointer position.
+    Move(f32, f32),
     Type(String),
     /// One wheel notch in CSS px through the live smooth-scroll path.
     Wheel(f32),
@@ -28,6 +31,15 @@ pub(super) fn parse_probe_ops(args: &[String]) -> VecDeque<ProbeOp> {
                     if let Some((x, y)) = spec.split_once(",") {
                         if let (Ok(x), Ok(y)) = (x.trim().parse::<f32>(), y.trim().parse::<f32>()) {
                             ops.push_back(ProbeOp::Tap(x, y));
+                        }
+                    }
+                }
+            }
+            "--move" => {
+                if let Some(spec) = args_iter.next() {
+                    if let Some((x, y)) = spec.split_once(",") {
+                        if let (Ok(x), Ok(y)) = (x.trim().parse::<f32>(), y.trim().parse::<f32>()) {
+                            ops.push_back(ProbeOp::Move(x, y));
                         }
                     }
                 }

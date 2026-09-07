@@ -73,9 +73,9 @@ pub use seed::{
 };
 pub use session::{ChatRouteState, ChatSession, LastExport};
 pub use shell_hit::{
-    chat_origin_x, hit_test, is_compact, next_gallery_columns, next_gallery_sort, next_sort,
-    panel_css_width, sidebar_occupied_css, ShellAction, ShellHit, PANEL_WIDTH_DEFAULT,
-    PANEL_WIDTH_MAX, PANEL_WIDTH_MIN, RAIL_PANELS, RAIL_WIDTH, SORTS, TABS,
+    character_custom_action, chat_origin_x, hit_test, is_compact, next_gallery_columns,
+    next_gallery_sort, next_sort, panel_css_width, sidebar_occupied_css, ShellAction, ShellHit,
+    PANEL_WIDTH_DEFAULT, PANEL_WIDTH_MAX, PANEL_WIDTH_MIN, RAIL_PANELS, RAIL_WIDTH, SORTS, TABS,
 };
 #[cfg(feature = "gpu")]
 #[doc(hidden)]

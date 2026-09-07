@@ -387,7 +387,7 @@ impl<W: ProductWire> ChatSession<W> {
             },
             insets: self.state.insets,
             editor_mode: if self.state.character_editor_mode.is_empty() {
-                "edit".into()
+                "view".into()
             } else {
                 self.state.character_editor_mode.clone()
             },
@@ -410,6 +410,7 @@ impl<W: ProductWire> ChatSession<W> {
             },
             expanded_greeting: self.state.expanded_greeting,
             tag_input: self.state.tag_input.clone(),
+            panel_scroll_css: self.state.panel_scroll_css,
             personas: self.persona_cards(),
             selected_persona_id: self.state.selected_persona_id.clone(),
             persona_tab: self.state.persona_tab.clone(),

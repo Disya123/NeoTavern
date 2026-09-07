@@ -651,7 +651,11 @@ fn render_row_child(node: &UiNodeV1, ctx: &ChromeCtx, row: &RowView) -> Element 
             header {
                 class: "MessageBubble_messageHeader",
                 "data-part": "message-header",
-                style: "display:flex;align-items:center;width:100%;gap:8px;margin-bottom:4px;",
+                // Layout comes from the packed class only (React parity:
+                // flex row, wrap, gap 12px). The removed inline override
+                // pinned `gap:8px` and dropped `flex-wrap`, diverging from
+                // the React golden CSS — the legacy RSX in lib.rs mirrors
+                // this (no inline), keeping the parity gate symmetric.
                 for child in node.children.iter() { {render_row_child(child, ctx, row)} }
             }
         },
@@ -726,7 +730,8 @@ fn render_row_child(node: &UiNodeV1, ctx: &ChromeCtx, row: &RowView) -> Element 
                 "data-component": "message-action-bar",
                 "data-part": "message-actions-inline",
                 "data-state": "idle",
-                style: "display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-left:auto;",
+                // Packed class governs (flex row, wrap, gap 4px,
+                // margin-left:auto) — see the message-header note above.
                 {message_action_button("details", row)}
                 for child in node.children.iter() { {render_row_child(child, ctx, row)} }
             }

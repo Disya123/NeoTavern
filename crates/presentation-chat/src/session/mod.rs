@@ -217,6 +217,12 @@ pub struct ChatRouteState {
     /// to the latest messages (Android default). Clamped to the message extent
     /// inside `visible_window` on each `view()`.
     pub scroll_offset_css: f32,
+    /// CSS-px offset the side-panel content is scrolled by (native shim for
+    /// React's native panel scrolling, which Blitz paint does not provide:
+    /// the shell applies it as a negative top margin on the panel body and
+    /// the host clamps it to the rendered content height). Reset to `0` on
+    /// tab / panel / character switches.
+    pub panel_scroll_css: f32,
     pub insets: SafeAreaInsets,
     /// Full draft for the selected character (Edit / Advanced / Gallery tabs).
     pub character_draft: Option<CharacterDraftView>,

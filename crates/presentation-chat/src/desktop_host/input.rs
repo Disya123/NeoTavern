@@ -73,6 +73,11 @@ impl App {
                 if name == "custom.chat.snapshots-menu" {
                     eprintln!("[neocompositor-desktop] snapshots menu toggled");
                     self.session.toggle_snapshots_menu();
+                } else if let Some(action) = crate::character_custom_action(&name, &view) {
+                    eprintln!("[neocompositor-desktop] tap -> {action:?}");
+                    self.session.apply_shell_action(action);
+                    self.dirty = true;
+                    self.window.as_ref().map(|w| w.request_redraw());
                 } else {
                     eprintln!("[neocompositor-desktop] custom intent tapped: {name}");
                     self.session.custom_intent(&name);
@@ -244,6 +249,9 @@ impl App {
     }
     /// Move: a drag beyond the slop cancels the tap (Android 16 CSS-px rule).
     pub(super) fn pointer_move(&mut self, css_x: f32, css_y: f32) {
+        // Wheel events carry no position in this winit version; the panel
+        // scroll router uses the last tracked cursor instead.
+        self.pointer_css = (css_x, css_y);
         if let Some(drag) = self.panel_drag.as_ref() {
             let target = drag.start_width + (css_x - drag.start_x);
             // One produce = full vdom mount + Blitz layout + vello raster of

@@ -300,6 +300,15 @@ struct App {
     /// Bumped whenever `wallpaper_cache` is rebuilt so the GPU underlay
     /// re-uploads only on real content/size changes.
     wallpaper_epoch: u64,
+    /// Last produce timestamp while a generation stream was live — the
+    /// ~30/s streaming cadence gate (AGENTS §24).
+    last_stream_produce: Option<std::time::Instant>,
+    /// Set when the streaming gate deferred this frame's produce: the present
+    /// still shows the previous raster and the next redraw re-produces.
+    produce_deferred: bool,
+    /// Last tracked CSS cursor position — wheel events carry no position in
+    /// this winit version, and the panel scroll router needs one.
+    pointer_css: (f32, f32),
 }
 
 pub struct RunConfig {

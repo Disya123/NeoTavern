@@ -18,6 +18,13 @@ enum Script {
     /// Emit the inner wire's frames, but inject `after_terminal` between the
     /// terminal event and the inner `Terminal` frame.
     InjectAfterTerminal(VecDeque<StreamFrame>),
+    /// Held (timeout) until the shared flag flips; then every queued frame is
+    /// served (one per poll) before the inner wire's own frames. The test arms
+    /// frames after `send`, whose own drain sees an empty queue.
+    HeldUntilArmed(
+        std::sync::Arc<std::sync::atomic::AtomicBool>,
+        std::sync::Arc<std::sync::Mutex<VecDeque<StreamFrame>>>,
+    ),
 }
 
 struct ScriptedWire {
@@ -67,6 +74,17 @@ impl ProductWire for ScriptedWire {
         if self.handle.as_deref() == Some(handle) {
             match &mut self.script {
                 Script::Hold => return Ok(StreamFrame::Timeout),
+                Script::HeldUntilArmed(armed, queue) => {
+                    if !armed.load(std::sync::atomic::Ordering::SeqCst) {
+                        return Ok(StreamFrame::Timeout);
+                    }
+                    if let Ok(mut queue) = queue.lock() {
+                        if let Some(frame) = queue.pop_front() {
+                            return Ok(frame);
+                        }
+                    }
+                    // Queue exhausted: fall through to the inner wire.
+                }
                 Script::InjectAfterTerminal(inject) => {
                     if self.seen_terminal_event {
                         if let Some(frame) = inject.pop_front() {
@@ -239,4 +257,65 @@ fn drain_stream_consumes_frames_after_the_terminal_event() {
         "the completed message is durable"
     );
     assert!(state.streaming_text.is_empty());
+}
+
+/// The desktop host pumps the live stream once per frame (AGENTS §24: one
+/// produce per pump, not per event): every frame queued between frames must
+/// apply in a single `pump_stream`, and an idle pump must report nothing.
+#[test]
+fn pump_stream_applies_a_whole_burst_in_one_pass() {
+    let armed = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let queue = std::sync::Arc::new(std::sync::Mutex::new(VecDeque::new()));
+    let wire = ScriptedWire::new(
+        FakeWire::with_message_count(2),
+        Script::HeldUntilArmed(armed.clone(), queue.clone()),
+    );
+    let (mut session, _) =
+        start_flagged_session(Some("1"), wire, Some(DEMO_CHAT_ID), None).expect("route");
+    session.send(Some("hi")).expect("send starts the run");
+    assert!(
+        session.state().stream_handle.is_some(),
+        "the held stream must keep the handle live"
+    );
+    assert_eq!(
+        session.state().streaming_text,
+        "",
+        "no deltas apply while the script holds"
+    );
+
+    // Sequences below the inner wire's own (0..2) so the burst cannot reject
+    // the inner deltas/completion as stale.
+    for (i, text) in ["a", "b", "c"].iter().enumerate() {
+        queue
+            .lock()
+            .expect("script queue")
+            .push_back(StreamFrame::from_sequenced(
+                (i as i64) - 3,
+                GenerationEvent::GenerationDelta {
+                    text: (*text).to_string(),
+                },
+            ));
+    }
+    armed.store(true, std::sync::atomic::Ordering::SeqCst);
+
+    assert!(
+        session.pump_stream(),
+        "the pump applied the armed burst (plus the inner completion)"
+    );
+    let state = session.state();
+    assert!(
+        state.stream_handle.is_none(),
+        "the pump must reach the inner Terminal, not strand the handle"
+    );
+    assert!(
+        state
+            .messages
+            .iter()
+            .any(|row| row.role == MessageRole::Assistant && row.content == "echo: hi"),
+        "the completed message is durable after the burst pump"
+    );
+    assert!(
+        !session.pump_stream(),
+        "a second pump over the finished run reports nothing"
+    );
 }

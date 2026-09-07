@@ -1440,6 +1440,9 @@ fn character_editor_name_description_tags_over_product_wire() {
     session.apply_shell_action(ShellAction::SetPanel("characters".into()));
     session.select_character(neotavern_presentation_chat::DEMO_CHARACTER_ID);
     session.apply_shell_action(ShellAction::SetTab("edit".into()));
+    // React parity: `selectCharacter` always lands in the read-only viewer;
+    // the header pencil button (`ToggleCharacterEditorMode`) enters the editor.
+    session.apply_shell_action(ShellAction::ToggleCharacterEditorMode);
     let draft = session
         .shell_view()
         .selected_draft
@@ -5791,6 +5794,9 @@ fn character_manager_alternate_greetings_add_toggle_and_remove() {
     session.apply_shell_action(ShellAction::SetPanel("characters".into()));
     session.select_character(neotavern_presentation_chat::DEMO_CHARACTER_ID);
     session.apply_shell_action(ShellAction::SetTab("edit".into()));
+    // React parity: `selectCharacter` always lands in the read-only viewer;
+    // the header pencil button (`ToggleCharacterEditorMode`) enters the editor.
+    session.apply_shell_action(ShellAction::ToggleCharacterEditorMode);
 
     let draft = session
         .shell_view()
@@ -6269,8 +6275,11 @@ fn character_card_viewer_mode_toggle_and_rendering() {
     session.apply_shell_action(ShellAction::SetPanel("characters".into()));
     session.select_character(neotavern_presentation_chat::DEMO_CHARACTER_ID);
     session.apply_shell_action(ShellAction::SetTab("edit".into()));
+    // React parity: `selectCharacter` always lands in the read-only viewer;
+    // the header pencil button (`ToggleCharacterEditorMode`) enters the editor.
+    session.apply_shell_action(ShellAction::ToggleCharacterEditorMode);
 
-    // Initial state is edit mode
+    // The pencil button entered the editor (React `editCard` flow).
     assert_eq!(session.shell_view().editor_mode, "edit");
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
     let edit_skeleton = inspect_slot_skeleton(

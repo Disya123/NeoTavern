@@ -101,7 +101,7 @@ impl<W: ProductWire> ChatSession<W> {
     /// compositor height-index model + current scroll offset, with overscan)
     /// are fetched before everything else, so a jump/scroll paints images
     /// where the user is looking rather than at the head of the list.
-    pub(crate) fn hydrate_message_assets(&mut self) {
+    pub(crate) fn hydrate_message_assets(&mut self) -> bool {
         const LIMIT: usize = 32;
         let mut ids: Vec<String> = Vec::new();
         let push_id = |ids: &mut Vec<String>, id: String| {
@@ -137,6 +137,7 @@ impl<W: ProductWire> ChatSession<W> {
             }
         }
         let store = self.asset_store();
+        let mut hydrated = 0usize;
         for id in ids {
             if store.contains(&id) {
                 continue;
@@ -147,15 +148,19 @@ impl<W: ProductWire> ChatSession<W> {
                 continue;
             };
             store.insert(&id, thumb_bytes);
+            hydrated += 1;
         }
+        hydrated > 0
     }
 
     /// Scroll-settle trigger (A3): hosts call this when the visible window
     /// changed without a page absorb (wheel/glide landed, grab, resize) so
     /// the just-revealed images hydrate before the next paint. Cheap when
     /// everything visible is already stored (`contains` short-circuits).
-    pub fn refresh_visible_assets(&mut self) {
-        self.hydrate_message_assets();
+    /// Returns whether any new asset landed — the host requests one redraw
+    /// so the next produce paints it.
+    pub fn refresh_visible_assets(&mut self) -> bool {
+        self.hydrate_message_assets()
     }
 
     /// Diagnostic/observability view of the A3 hydration window: the row ids
@@ -313,5 +318,45 @@ impl<W: ProductWire> ChatSession<W> {
                 });
             }
         }
+    }
+}
+
+/// The host consumes the `refresh_visible_assets` bool to decide whether to
+/// re-arm a redraw (a hydrated asset paints on the next produce): fresh
+/// hydration must report exactly once, then short-circuit.
+#[cfg(test)]
+mod hydration_flag_tests {
+    use crate::{start_flagged_session, DEMO_CHAT_ID};
+
+    #[test]
+    fn refresh_visible_assets_reports_fresh_hydration_once() {
+        let (mut session, _) = start_flagged_session(
+            Some("1"),
+            crate::FakeWire::with_message_count(40),
+            Some(DEMO_CHAT_ID),
+            None,
+        )
+        .expect("route");
+        assert!(
+            !session.refresh_visible_assets(),
+            "the settled window is fully hydrated right after open"
+        );
+        // Point the bottom-anchored tail row at a synthetic id: the visible
+        // window now references an asset the store never fetched. The demo
+        // `assets.thumb` serves bytes for any id, so the fetch succeeds.
+        let tail = session
+            .state
+            .messages
+            .last_mut()
+            .expect("the demo chat has rows");
+        tail.content = "![fresh](asset:00000000-0000-4000-8000-00000000feed)".to_string();
+        assert!(
+            session.refresh_visible_assets(),
+            "a visible unhydrated id must be reported"
+        );
+        assert!(
+            !session.refresh_visible_assets(),
+            "the second call must short-circuit (already stored)"
+        );
     }
 }

@@ -66,6 +66,9 @@ impl App {
             wallpaper_bytes: None,
             wallpaper_cache: None,
             wallpaper_epoch: 0,
+            last_stream_produce: None,
+            produce_deferred: false,
+            pointer_css: (0.0, 0.0),
         })
     }
 

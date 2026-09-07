@@ -105,4 +105,50 @@ impl App {
         }
         self.window.as_ref().map(|w| w.request_redraw());
     }
+
+    /// Wheel with a pointer position: over the characters Edit panel the
+    /// notch scrolls the panel body (native shim for React's native panel
+    /// scrolling — Blitz paint has no overflow scroll), elsewhere it scrolls
+    /// the chat.
+    pub(super) fn wheel_at(&mut self, css_x: f32, css_y: f32, css_dy: f32) {
+        if self.route_panel_wheel(css_x, css_y, css_dy) {
+            return;
+        }
+        self.wheel(css_dy);
+    }
+
+    fn route_panel_wheel(&mut self, css_x: f32, css_y: f32, css_dy: f32) -> bool {
+        let view = self.session.shell_view();
+        if !(view.sidebar_open && view.panel == "characters" && view.tab == "edit") {
+            return false;
+        }
+        let panel_x = crate::RAIL_WIDTH;
+        let panel_w = self.session.panel_width();
+        if css_x < panel_x || css_x >= panel_x + panel_w {
+            return false;
+        }
+        // The scroller only exists where the editor content overflows the
+        // window; the hit rects already carry the applied offset, so the
+        // unscrolled content bottom adds it back. The root box is clipped to
+        // the viewport — overflowing rows (greetings, chips) set the extent.
+        let window_h = self.size.1 as f32 / self.density.max(1.0);
+        let Some(rect) = self
+            .hit_rects
+            .top_matching(css_x, css_y, "part:character-editor")
+        else {
+            return false;
+        };
+        let max_offset =
+            (self.hit_rects.subtree_bottom(rect) + view.panel_scroll_css - window_h).max(0.0);
+        if max_offset <= 0.0 {
+            // Over the editor but nothing to scroll: still consume the
+            // notch — it must not reach the chat behind the panel.
+            return true;
+        }
+        if self.session.scroll_panel_by(css_dy, max_offset) {
+            self.dirty = true;
+            self.window.as_ref().map(|w| w.request_redraw());
+        }
+        true
+    }
 }
