@@ -540,7 +540,39 @@ fn create_safety_copy(data_root: &Path, source_db: &Path) -> Result<PathBuf> {
     let checksum = crate::snapshot::sha256_file_hex(&target)?;
     fs::write(dir.join("checksum.sha256"), checksum.as_bytes())
         .map_err(|e| io_err(e, "write safety copy checksum"))?;
+
+    // The legacy avatar converter reads originals from
+    // `<data-dir>/files/avatars/` next to the DATABASE it is given. With a
+    // backup requested, that database is the copy — so the copy must carry
+    // the legacy root's `files/` tree too, or every avatar original would be
+    // reported missing and silently dropped. No `files/` directory (no
+    // avatars at all) is fine: nothing to copy.
+    let legacy_files = source_db
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join("files");
+    if legacy_files.is_dir() {
+        copy_dir_recursive(&legacy_files, &dir.join("files"))?;
+    }
     Ok(dir)
+}
+
+/// Copies `src` (a directory) into `dst` recursively, creating `dst` and
+/// mirroring the relative layout. Used only by [`create_safety_copy`] for
+/// the legacy `files/` tree (avatar originals).
+fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
+    fs::create_dir_all(dst).map_err(|e| io_err(e, "safety copy: create files dir"))?;
+    for entry in fs::read_dir(src).map_err(|e| io_err(e, "safety copy: read files dir"))? {
+        let entry = entry.map_err(|e| io_err(e, "safety copy: read files entry"))?;
+        let from = entry.path();
+        let to = dst.join(entry.file_name());
+        if from.is_dir() {
+            copy_dir_recursive(&from, &to)?;
+        } else {
+            fs::copy(&from, &to).map_err(|e| io_err(e, "safety copy: copy file"))?;
+        }
+    }
+    Ok(())
 }
 
 /// Allocates a fresh versioned staging root: `<data-root>/roots/root-<id>/`.

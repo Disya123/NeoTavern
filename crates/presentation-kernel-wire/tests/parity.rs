@@ -404,3 +404,60 @@ fn extract_production_deps(manifest: &str) -> String {
     }
     out
 }
+
+// ---------------------------------------------------------------------------
+// drop_stream: unsubscribe without cancelling (chat switch mid-generation)
+// ---------------------------------------------------------------------------
+
+/// Dropping a live kernel stream must stop frame delivery for that handle
+/// while the run itself keeps executing on the kernel's writer thread and
+/// commits `completed` — the durable log stays canonical, so re-entering the
+/// chat reads the finished state back. This is also the regression test for
+/// the writer surviving a dropped notice receiver (generation.rs must ignore
+/// `SendError`, never panic).
+#[test]
+fn drop_stream_unsubscribes_without_cancelling_the_run() {
+    let (mut kernel, _root) = kernel_wire();
+    let chat = seed_parity_workspace(&mut kernel, "Drop", 2).expect("seed");
+    let handle = kernel
+        .start_stream(
+            "generation.start",
+            json!({
+                "chatId": chat,
+                "message": "drop me mid-flight",
+                "provider": "fake",
+                "model": "steps=8;delay-ms=15",
+            }),
+        )
+        .expect("stream starts");
+
+    kernel.drop_stream(&handle).expect("drop");
+    assert_eq!(
+        kernel.poll_stream(&handle, 0),
+        Ok(StreamFrame::Timeout),
+        "a dropped handle must never deliver frames again"
+    );
+
+    // The run was NOT cancelled: it must reach `completed` on its own.
+    let mut status = String::new();
+    for _ in 0..200 {
+        let call = kernel
+            .call("generation.get", json!({ "workflowId": handle }))
+            .expect("generation.get");
+        status = call
+            .result
+            .get("status")
+            .and_then(|value| value.as_str())
+            .unwrap_or_default()
+            .to_string();
+        if status == "completed" {
+            break;
+        }
+        assert_ne!(status, "cancelled", "drop_stream must never cancel the run");
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+    assert_eq!(
+        status, "completed",
+        "the dropped run finishes on the writer thread without a consumer"
+    );
+}

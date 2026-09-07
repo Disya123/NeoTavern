@@ -454,6 +454,12 @@ pub fn open_read_only(root: &Path) -> Result<ReadOnlyDatabase> {
     let conn = rusqlite::Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY)
         .map_err(|e| classify_open_error(e, "open_read_only: open read-only"))?;
 
+    // `PRAGMA foreign_keys` is a per-connection flag, not a database write —
+    // it is legal on a read-only connection and recovery FK checks stay
+    // honest (a fresh connection answers 0 until it is turned on).
+    conn.pragma_update(None, "foreign_keys", "ON")
+        .map_err(|e| StorageError::from_sqlite(e, "open_read_only: foreign_keys"))?;
+
     // Read-only verification: foreign_keys == 1 (no pragma writes).
     verify_connection(&conn)?;
     quick_check_ok(&conn, "open_read_only")?;

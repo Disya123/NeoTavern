@@ -107,6 +107,7 @@ pub fn publish_asset_in_tx(
     relative_key: &str,
     content: &[u8],
 ) -> Result<AssetRecord> {
+    validate_asset_id(id)?;
     validate_relative_key(relative_key)?;
     validate_kind(kind)?;
 
@@ -325,6 +326,25 @@ fn validate_kind(kind: &str) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Asset ids end up inside file names (`.tmp-<id>-<counter>`) and in the
+/// registry primary key: they must be a single path component.
+/// [`validate_relative_key`] already rejects empty ids, control characters,
+/// `.`/`..` components, Windows reserved names and trailing dots/spaces; the
+/// extra check forbids the `/` separators it would otherwise accept.
+fn validate_asset_id(id: &str) -> Result<()> {
+    if id.contains('/') {
+        return Err(StorageError::with(
+            StorageErrorCode::InvalidAssetKey,
+            format!("asset id {id:?} must be a single path component"),
+            vec![
+                ("rule".to_string(), "id_single_component".to_string()),
+                ("id".to_string(), id.to_string()),
+            ],
+        ));
+    }
+    validate_relative_key(id)
 }
 
 /// Create `.tmp-<id>-<counter>` in the assets dir with `create_new`, so

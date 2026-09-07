@@ -1226,3 +1226,116 @@ fn windows_held_handle_leads_to_activation_pending_and_resolves() {
     );
     drop(db);
 }
+
+/// Migration 9 with a v8 schema that carries duplicate preset names (audit
+/// C3): the dedupe UPDATE renames every non-oldest duplicate
+/// (`name #<rowid>`) BEFORE the `(kind, name)` unique index is created, so
+/// the upgrade no longer bricks the database.
+#[test]
+fn migration_9_deduplicates_preset_names_instead_of_failing() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let root = dir.path().to_path_buf();
+    build_kernel_version(&root, 7).expect("build kernel v7");
+
+    {
+        let conn = rusqlite::Connection::open(neotavern_storage::paths::db_path(&root))
+            .expect("open stale db");
+        conn.execute_batch(neotavern_storage::schema::MIGRATION_8_SQL)
+            .expect("apply migration 8");
+        conn.execute(
+            "INSERT INTO __neotavern_migrations (id, name, checksum, applied_at) \
+             VALUES (8, ?1, ?2, '2026-08-13T10:00:00Z')",
+            rusqlite::params![
+                neotavern_storage::schema::MIGRATION_8_NAME,
+                neotavern_storage::schema::MIGRATION_8_CHECKSUM
+            ],
+        )
+        .expect("record migration 8");
+        conn.execute_batch(
+            "PRAGMA user_version = 8;
+             INSERT INTO presets (id, name, settings_json, created_at, updated_at) VALUES
+               ('p-1', 'My preset', '{}', '2026-08-13T10:00:00Z', '2026-08-13T10:00:00Z'),
+               ('p-2', 'My preset', '{}', '2026-08-13T10:01:00Z', '2026-08-13T10:01:00Z'),
+               ('p-3', 'My preset', '{}', '2026-08-13T10:02:00Z', '2026-08-13T10:02:00Z'),
+               ('p-4', 'Unique preset', '{}', '2026-08-13T10:03:00Z', '2026-08-13T10:03:00Z');",
+        )
+        .expect("seed duplicate preset names");
+    }
+
+    let mut progress = |_: MigrationProgress| {};
+    let db = open(&root, &ConnectionPolicy::default(), &mut progress)
+        .expect("v8 root with duplicate preset names must migrate");
+    assert_eq!(
+        db.schema_revision().expect("revision"),
+        neotavern_storage::CURRENT_SCHEMA
+    );
+
+    let names: Vec<String> = {
+        let mut stmt = db
+            .conn()
+            .prepare("SELECT name FROM presets ORDER BY created_at")
+            .expect("prepare");
+        let rows = stmt
+            .query_map([], |r| r.get::<_, String>(0))
+            .expect("query");
+        rows.map(|r| r.expect("row")).collect()
+    };
+    assert_eq!(names.len(), 4, "no preset row is dropped");
+    assert_eq!(names[0], "My preset", "the oldest duplicate keeps its name");
+    let unique: std::collections::HashSet<&String> = names.iter().collect();
+    assert_eq!(unique.len(), names.len(), "names are unique after dedupe");
+    assert!(names.contains(&"Unique preset".to_string()));
+}
+
+/// A migration with `backup: true` must copy the legacy root's `files/`
+/// tree into the safety copy (audit C2): the converter reads avatar
+/// originals from `<data-dir>/files/avatars/` NEXT TO the conversion source
+/// — without the copy every avatar original would be reported missing and
+/// silently dropped.
+#[test]
+fn safety_copy_carries_the_legacy_files_tree() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let data_root = dir.path().join("data");
+    fs::create_dir_all(&data_root).expect("create data root");
+    let source = dir.path().join("legacy.db");
+    build_legacy(&source).expect("build legacy");
+
+    // The avatar original for `leg-c1` (URL carries a 64-hex content hash).
+    const HASH: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    {
+        let conn = rusqlite::Connection::open(&source).expect("reopen legacy");
+        conn.execute(
+            "UPDATE characters SET avatar = ?1 WHERE id = 'leg-c1'",
+            rusqlite::params![format!("/api/v2/assets/avatars/{HASH}.png")],
+        )
+        .expect("point leg-c1 at a hashed avatar URL");
+    }
+    let avatars = dir.path().join("files").join("avatars");
+    fs::create_dir_all(&avatars).expect("create files/avatars");
+    fs::write(avatars.join(format!("{HASH}.png")), b"\x89PNG avatar").expect("write original");
+
+    let session =
+        MigrationSession::begin(&data_root, &source, true, &mut nop_stage).expect("begin");
+    let report = session.report();
+    assert_eq!(
+        report.assets, 1,
+        "the avatar original converts through the safety copy"
+    );
+
+    // The safety copy carries the files/ tree.
+    let backup = session.backup_path().expect("backup path");
+    assert!(
+        backup
+            .join("files")
+            .join("avatars")
+            .join(format!("{HASH}.png"))
+            .is_file(),
+        "safety copy must carry files/avatars"
+    );
+
+    // And the converted root references the published asset.
+    let staging = session.staging_root().to_path_buf();
+    let outcome = session.commit(&mut nop_stage).expect("commit");
+    assert_eq!(outcome.active_root, staging);
+    assert_eq!(read_name(&data_root, "leg-c1"), "Alice");
+}

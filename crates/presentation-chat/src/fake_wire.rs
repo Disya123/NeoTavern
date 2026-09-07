@@ -2564,6 +2564,11 @@ impl ProductWire for FakeWire {
         }
         Ok(())
     }
+
+    fn drop_stream(&mut self, handle: &str) -> Result<(), ChatRouteError> {
+        self.streams.remove(handle);
+        Ok(())
+    }
 }
 
 fn to_value<T: serde::Serialize>(value: &T) -> Result<Value, ChatRouteError> {

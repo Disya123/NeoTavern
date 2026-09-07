@@ -472,7 +472,21 @@ pub fn list_backups(root: &Path) -> Result<Vec<BackupRecord>> {
             .strip_suffix(BACKUP_DIR_SUFFIX)
             .map(str::to_string)
             .unwrap_or_else(|| name.to_string());
-        records.push(record_from_container(&path, &id)?);
+        match record_from_container(&path, &id) {
+            Ok(record) => records.push(record),
+            // A broken container (bad/missing manifest, bad checksums) is
+            // listed as `corrupt` instead of failing the whole enumeration —
+            // the user must still see (and be able to delete) their other
+            // backups. Its disk footprint still counts against the quota.
+            Err(_) => records.push(BackupRecord {
+                id,
+                created_at: String::new(),
+                format_version: 0,
+                size_bytes: 0,
+                checksum_sha256: String::new(),
+                status: "corrupt".to_string(),
+            }),
+        }
     }
     Ok(records)
 }

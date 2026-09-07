@@ -277,7 +277,8 @@ impl<W: ProductWire> ChatSession<W> {
                     self.chat_id = None;
                     self.state.chat = None;
                     self.state.messages.clear();
-                    self.state.draft = None;
+                    // Its live run (if any) stops being polled here too.
+                    self.reset_stream_state();
                 }
                 self.load_chat_list();
                 self.state.status_message = Some("Chat deleted.".into());

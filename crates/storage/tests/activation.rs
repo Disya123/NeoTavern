@@ -663,3 +663,27 @@ fn migration_lifecycle_round_trip() {
     assert_eq!(entry.from_root, data_root);
     assert_eq!(entry.to_root, target);
 }
+
+/// Recovery mode FK honesty (audit C1): `PRAGMA foreign_keys` is a
+/// connection flag a fresh connection answers 0 for — `open_read_only` must
+/// turn it ON (legal on a read-only connection, no database write) or
+/// [`verify_connection`] would reject every recovery open.
+#[test]
+fn open_read_only_enables_foreign_keys() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let data_root = temp.path().join("data");
+    let target = data_root
+        .join(ROOTS_DIR)
+        .join(format!("{ROOT_DIR_PREFIX}t1"));
+    fs::create_dir_all(&data_root).expect("create data root");
+    build_kernel_root(&target);
+    seed_root(&target, "fkcheck");
+    write_pointer(&data_root, &target).expect("write pointer");
+
+    let db = open_read_only(&data_root).expect("read-only open");
+    let foreign_keys: i64 = db
+        .conn()
+        .query_row("PRAGMA foreign_keys", [], |row| row.get(0))
+        .expect("foreign_keys pragma");
+    assert_eq!(foreign_keys, 1, "recovery connection enforces FK");
+}

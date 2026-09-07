@@ -565,10 +565,15 @@ pub fn build_prompt_plan(db: &Database, input: &PlanInput<'_>) -> Result<PromptP
     };
     let mut excluded: Vec<PromptExcluded> = Vec::new();
     let mut over_budget = false;
-    // Drop the oldest unpinned history messages (index 1 = oldest history;
-    // the system prompt at index 0 and the user message stay pinned).
-    while tokens_of(&messages) > available && messages.len() > 2 && !history_ids.is_empty() {
-        messages.remove(1);
+    // Drop the oldest unpinned history message (the system prompt, when
+    // present, and the trailing user message stay pinned). When the chat
+    // has no system blocks the oldest history sits at index 0, not 1 — the
+    // removed row and its id must always be the same message.
+    let has_system = messages.first().is_some_and(|m| m.role == "system");
+    let history_start = usize::from(has_system);
+    while tokens_of(&messages) > available && messages.len() > history_start + 1 {
+        debug_assert_eq!(history_ids.len(), messages.len() - history_start - 1);
+        messages.remove(history_start);
         excluded.push(PromptExcluded {
             message_id: history_ids.remove(0),
             reason: "token_budget".to_string(),
@@ -723,6 +728,45 @@ mod tests {
             plan.messages.iter().any(|m| m.content == "second"),
             "newest history message survives truncation"
         );
+    }
+
+    /// Same budget pressure as
+    /// [`history_is_selected_and_oldest_dropped_on_budget`], but the
+    /// character has no description/persona → no system block is built and
+    /// the oldest history message sits at index 0. Truncation must evict
+    /// exactly that message (the off-by-one where the drop index assumed a
+    /// system message at index 0 kept the oldest and evicted the second).
+    #[test]
+    fn budget_truncation_without_a_system_block_evicts_the_oldest_history() {
+        let _temp = tempfile::tempdir().expect("tempdir");
+        let db = open_test_db(_temp.path());
+        db.conn()
+            .execute(
+                "UPDATE characters SET description = NULL, ext_json = '{}' \
+                 WHERE id = '33333333-3333-4333-8333-333333333333'",
+                [],
+            )
+            .expect("strip character blocks");
+        let plan = build_prompt_plan(&db, &plan_input("hi", 16)).expect("plan builds");
+        assert!(
+            plan.messages.first().is_some_and(|m| m.role != "system"),
+            "no description/persona → no system message: {:?}",
+            plan.messages
+        );
+        assert_eq!(
+            plan.excluded[0].message_id, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "excluded id must be the oldest message"
+        );
+        assert_eq!(plan.excluded[0].reason, "token_budget");
+        assert!(
+            !plan.messages.iter().any(|m| m.content == "oldest"),
+            "the oldest history message is the one evicted"
+        );
+        assert!(
+            plan.messages.iter().any(|m| m.content == "second"),
+            "newer history survives"
+        );
+        assert_eq!(plan.messages.last().unwrap().content, "hi");
     }
 
     #[test]

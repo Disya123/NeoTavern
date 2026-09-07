@@ -3,6 +3,54 @@
 ## Unreleased
 ### Changed
 
+- **Аудит P0/P1 (срез C — storage: данные и экспорт).** Семь дефектов
+  хранилища, найденных ревью:
+
+  - **`open_read_only` падал на `verify_connection`.** Read-only соединение
+    открывалось без `PRAGMA foreign_keys=ON`, а свежее соединение отвечает
+    `0` — Recovery Mode был мёртв с самого старта. PRAGMA — флаг
+    соединения, не запись в файл: включается до проверки (legal на
+    `SQLITE_OPEN_READ_ONLY`).
+  - **Миграция с `backup: true` теряла аватары.** Safety-copy снимал только
+    `database.sqlite`, а конвертер ищет оригиналы в `<data-dir>/files/
+    avatars/` рядом с базой — при конвертации из копии все аватары
+    «not found» и молча пропадали. Теперь `create_safety_copy` переносит
+    дерево `files/` рекурсивно.
+  - **Миграция 9 бриковала БД с дубликатами имён пресетов** на
+    `CREATE UNIQUE INDEX (kind, name)`. Перед индексом добавлен
+    dedupe-UPDATE (не-старейшие дубликаты переименовываются `name #<rowid>`),
+    checksum миграции пересчитана (дев-БД пересоздадутся, релиза нет —
+    риск принят).
+  - **Формат контейнера экспорта расширен до v2** (ADR-0032): секции
+    `personas`, `message_variants`, `message_content_revisions`,
+    `message_drafts`, `character_lorebooks`, `memories`, `settings` и
+    потерянные колонки (`chats.personaId/parentChatId/origin/
+    sourceMessageId`, `messages.meta/generationRunId/checkpointChatId/
+    updatedAt`, `characters.importHash`, `presets.kind`). Порядок импорта
+    FK-безопасный; неразрешимые `personaId`/`characterId` зануляются с
+    отчётом orphan, снапшот-ссылки — так же; `generationRunId` переносится
+    как есть без проверки (журналы ядра — вне контейнера). Контейнеры v1
+    импортируются обратно совместимо (отсутствующая секция = пусто, поля —
+    дефолты); контейнер v2 на старой сборке — контролируемая
+    `UnsupportedStorageFormat`. Граница формата: `generation_runs/events/
+    steps`, `prompt_plans`, `plugins`, `themes`, `profiles` сознательно не
+    включаются.
+  - **Dangling `persona_id` в legacy-конвертации блокировал всю миграцию**
+    FK-ошибкой. Чат вставляется с NULL persona, пропуск фиксируется в
+    отчёте.
+  - **`list_backups` валил всё перечисление на одном битом контейнере.**
+    Битый помечается записью `corrupt` (место на диске продолжает
+    учитываться квотой), здоровые резервы остаются видимы.
+  - **`publish_asset` не валидировал id** — id попадал в имя temp-файла
+    (`.tmp-<id>-…`), `id` с `/` или `..` уходил за пределы каталога
+    ассетов. Добавлен `validate_asset_id` (одна компонента пути; остальные
+    правила переиспользуют `validate_relative_key`).
+    Верификация: `cargo test -p neotavern-storage` — 107 зелёных (новые:
+    read-only FK, дубликаты пресетов миграции 9, `files/`-слепок в
+    safety-copy, dangling persona, corrupt в списке резервов, invalid
+    asset id; export — round-trip v2 на 19 записях, понижение контейнера
+    до v1, Remap с ремапом связей), `runtime-kernel` — 190 зелёных.
+
 - **Фаза B (архитектурный долг): session.rs → `session/`, per-session
   `AssetStore`, `KernelProductWire`.** Три среза одного захода по расплате с
   глобальным состоянием и проводом:
@@ -90,6 +138,73 @@
 
 ### Fixed
 
+- **Аудит P0 (срез A — стрим-гигиена сессии).** Четыре бага нативной
+  сессии, найденных ревью:
+
+  - **Кросс-чатовая утечка стрима.** `open_chat`/`confirm_delete_chat` не
+    сбрасывали стрим-состояние: при смене чата во время генерации хост
+    продолжал качать кадры СТАРОГО чата, а `GenerationCompleted` от него
+    вставлял сообщение старого чата в `state.messages` нового (плюс
+    `streaming_text`/черновик/`composer_text` старого чата рендерились в
+    новом). Теперь новый приватный `ChatSession::reset_stream_state()`
+    отписывается от стрима и чистит каждое per-run/per-chat поле ввода.
+  - **Двойная отправка.** `send_in_flight` снимался по выходу из `send()`,
+    хотя стрим продолжал жить: двойной тап по Send успевал создать второе
+    сообщение и второй `generation.start`. Guard переведён на
+    `state.stream_handle` (живёт до `Terminal`/`Error`).
+  - **`drain_stream` терял хвост.** На терминальном событии цикл делал
+    один слепой дополнительный poll и выходил — кадры между терминальным
+    событием и `Terminal` оставались в очереди, а `stream_handle` —
+    навсегда живым. Теперь цикл поллит до `Terminal`/`Timeout`/`Error`.
+  - **`ProductWire::drop_stream` (расширение контракта).** Отписка без
+    отмены: провод забывает handle (FakeWire/JNI удаляют свои записи,
+    `KernelProductWire` — `EventStream`+replay-курсор; заодно терминальный
+    poll теперь чистит и `applied`), а ран генерации продолжается на
+    writer-потоке ядра и закоммитится в durable-лог — при возврате в чат
+    `open_chat` перечитает завершённое состояние. Инвариант
+    «writer переживает дроп rx» уже был соблюдён (`send_committed`/
+    `send_terminal` игнорируют `SendError`) и зафиксирован тестом.
+    Верификация: новые `presentation-chat/tests/stream_hygiene.rs`
+    (4 теста: смена чата при живом стриме, двойной send, хвост drain,
+    drop на FakeWire) + `presentation-kernel-wire/tests/parity.rs`
+    `drop_stream_unsubscribes_without_cancelling_the_run` (ран доходит до
+    `completed` без потребителя); полный комплект 42+97+1+26+4 зелёный,
+    parity 10/10, `--dom-dump` дефолтного хоста побайтово 401 узел.
+- **Аудит P1 (срез B — ядро: гонки и off-by-one).** Пять дефектов
+  `runtime-kernel`, найденных ревью:
+
+  - **Гонка отмены в `cas_status`.** Пер-туровые переходы статуса рана
+    (`queued→preparing→streaming`) обновляли строку по `id + revision` без
+    guard'а по статусу — быстрая `generation.cancel` (особенно до первого
+    шага) ставила `cancelling`, а следующий переход перезаписывал её назад,
+    отмену теряли, ран догонял провайдера до конца. Теперь `cas_status`
+    guard'ит `revision AND status` (исходный статус перечитанного рана):
+    проигранный CAS корректно проходит reload-цикл и коммитит
+    `cancelled`.
+  - **`personas.update` коммитил побочный эффект при ошибке.** Проверка
+    `changed == 0 → PERSONA_NOT_FOUND` шла ПОСЛЕ транзакции, поэтому
+    `clear_persona_default` успевал закоммититься, а клиент получал
+    not-found — единственный дефолт персоны молча сбрасывался. Теперь
+    UPDATE первым, side-effect только при `changed > 0`, ошибка — наружу.
+  - **`lorebooks.update` отвечал FOREIGN KEY вместо `LOREBOOK_NOT_FOUND`.**
+    Линк-апсерт `character_lorebooks` выполнялся до проверки существования
+    книги. Теперь не найденная книга — `LOREBOOK_NOT_FOUND` без единой
+    мутации.
+  - **`memories.update` позволял перевести память в character-scope без
+    `characterId`** (паритет с `memories.create` восстановлен: такая строка
+    была бы невидима для выборки).
+  - **Off-by-one усечения промпта без system-блока.** Цикл бюджета
+    считал, что `messages[0]` — всегда system: у персонажа без
+    описания/персоны вытеснялся ВТОРОЙ (новейший) хвост истории, а
+    excluded-список называл первый. Индекс первого history-сообщения
+    вычисляется (`0` без system-блока), debug-инвариант синхронизирует
+    его с `history_ids`. Бонусы того же захода: `commit_shutdown_progress`
+    больше не глотает ошибку транзакции (иначе recovery ждал полный lease),
+    `generation.prompt.plan` не маскирует Internal под NOT_FOUND.
+    Верификация: 5 новых тестов (`generation_cancel_before_the_first_step_
+    wins_the_race`; personas/lorebooks/memories error-path в
+    `kernel_crud.rs`; `budget_truncation_without_a_system_block_evicts_the_
+    oldest_history`), полный прогон `runtime-kernel` 190 зелёных.
 - **Нативный композитор: ресайз окна — живой re-layout вместо слайдшоу/растяжения.**
   Один produce стоил ~750 мс в dev-сборке (почти всё — `ProductVelloSession::open`:
   `initial_build` VirtualDom ~370 мс + Blitz `resolve` ~330 мс), а путь

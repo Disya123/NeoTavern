@@ -217,3 +217,37 @@ fn gc_reports_referenced_but_missing_files() -> Result<(), Box<dyn std::error::E
     );
     Ok(())
 }
+
+/// Asset ids end up inside temp FILE names (`.tmp-<id>-<counter>`): a hostile
+/// id with `/` (or a relative-key-invalid id) must be rejected before any
+/// path join (audit C7).
+#[test]
+fn invalid_ids_rejected() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = tempfile::tempdir()?;
+    let root = dir.path();
+    let mut noop = |_| {};
+    let mut db = open(root, &ConnectionPolicy::default(), &mut noop)?;
+
+    let invalid_ids: &[&str] = &[
+        "img/escape.png", // path separator → temp file outside the assets dir
+        "a/b",            // plain separator
+        "..",             // parent component
+        "",               // empty
+        "CON",            // Windows reserved device name
+        "id.",            // trailing dot
+    ];
+    for id in invalid_ids {
+        let err = match publish_asset(&mut db, id, "image", "ok/key.png", b"x") {
+            Ok(_) => panic!("id {id:?} must be rejected"),
+            Err(e) => e,
+        };
+        assert_eq!(err.code, StorageErrorCode::InvalidAssetKey, "id {id:?}");
+    }
+
+    // No partial state may remain after rejected publishes.
+    let count: i64 = db
+        .conn()
+        .query_row("SELECT COUNT(*) FROM __neotavern_assets", [], |r| r.get(0))?;
+    assert_eq!(count, 0);
+    Ok(())
+}

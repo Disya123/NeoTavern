@@ -85,6 +85,10 @@ impl<W: ProductWire> ChatSession<W> {
                 self.state.chat = Some(chat);
                 self.state.messages.clear();
                 self.state.scroll_offset_css = 0.0;
+                // The previous chat's run must not leak in: stop polling it
+                // (unsubscribe, no cancel) and drop its draft/composer text
+                // before the new chat's rows load.
+                self.reset_stream_state();
                 // Interactive overlays never outlive their chat.
                 self.state.message_edit_id = None;
                 self.state.message_edit_draft.clear();

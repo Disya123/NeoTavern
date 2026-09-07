@@ -196,8 +196,8 @@ fn convert(
     // Personas convert BEFORE chats: `chats.persona_id` has an FK to
     // `personas` (ON DELETE SET NULL), so the persona rows must exist before
     // any chat row references them (foreign_keys = ON during conversion).
-    convert_personas(legacy, tx, &mut report)?;
-    let chat_ids = convert_chats(legacy, tx, &character_ids, &mut report)?;
+    let persona_ids = convert_personas(legacy, tx, &mut report)?;
+    let chat_ids = convert_chats(legacy, tx, &character_ids, &persona_ids, &mut report)?;
     let message_ids = convert_messages(legacy, tx, &chat_ids, &mut report)?;
     convert_message_variants(legacy, tx, &message_ids, &mut report)?;
     convert_content_revisions(legacy, tx, &message_ids, &mut report)?;
@@ -503,6 +503,7 @@ fn convert_chats(
     legacy: &Connection,
     tx: &rusqlite::Transaction,
     character_ids: &HashSet<String>,
+    persona_ids: &HashSet<String>,
     report: &mut ConversionReport,
 ) -> Result<HashSet<String>> {
     let cols = column_names(legacy, "chats")?;
@@ -569,12 +570,25 @@ fn convert_chats(
             );
             continue;
         }
-        // The legacy persona reference converts verbatim (the kernel FK is
-        // `ON DELETE SET NULL` — same semantics as legacy). A dangling
-        // persona_id (persona row already gone) survives as-is on the wire
-        // just like it did in the source: the FK fires only on *delete*.
+        // The legacy persona reference converts verbatim when the persona
+        // row converted too. A DANGLING reference (persona skipped above —
+        // missing name/timestamps, or the row simply absent) must not fail
+        // the whole migration with a FOREIGN KEY error: the chat inserts
+        // with a NULL persona and the skip is reported.
         let persona_id: Option<String> = if has_persona_id {
-            as_text(get("persona_id")).map(str::to_owned)
+            match as_text(get("persona_id")).map(str::to_owned) {
+                Some(pid) if persona_ids.contains(&pid) => Some(pid),
+                Some(pid) => {
+                    skip(
+                        report,
+                        &format!(
+                            "chat {id}: references missing persona {pid}; chat keeps no persona"
+                        ),
+                    );
+                    None
+                }
+                None => None,
+            }
         } else {
             None
         };
@@ -1423,9 +1437,9 @@ fn convert_personas(
     legacy: &Connection,
     tx: &rusqlite::Transaction,
     report: &mut ConversionReport,
-) -> Result<()> {
+) -> Result<HashSet<String>> {
     if !table_exists(legacy, "personas")? {
-        return Ok(());
+        return Ok(HashSet::new());
     }
     let cols = column_names(legacy, "personas")?;
     require_columns(
@@ -1456,6 +1470,7 @@ fn convert_personas(
         .query([])
         .map_err(|e| StorageError::from_sqlite(e, "legacy: query personas"))?;
     let mut default_assigned = false;
+    let mut persona_ids = HashSet::new();
     while let Some(row) = rows
         .next()
         .map_err(|e| StorageError::from_sqlite(e, "legacy: read personas"))?
@@ -1500,8 +1515,9 @@ fn convert_personas(
         )
         .map_err(|e| StorageError::from_sqlite(e, "legacy: insert persona"))?;
         report.personas += 1;
+        persona_ids.insert(id.to_string());
     }
-    Ok(())
+    Ok(persona_ids)
 }
 
 /// Maps the legacy `settings` table into the kernel `settings` table

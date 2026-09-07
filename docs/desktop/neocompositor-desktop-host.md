@@ -75,6 +75,18 @@ pump'ит живой kernel-стрим: `about_to_wait` держит redraw ~60 
 терминала); `--dom-dump`/`--snapshot`/`--swapchain` работают одинаково на
 обоих проводах.
 
+**Смена чата отписывается, а не отменяет (срез A аудита).** Контракт
+`ProductWire` дополнен методом `drop_stream(handle)` (default no-op):
+провод забывает handle, не отменяя ран — kernel-стрим продолжает
+коммититься на writer-потоке в durable-лог. `ChatSession::open_chat`/
+`confirm_delete_chat` вызывают приватный `reset_stream_state()`:
+`drop_stream` + сброс `stream_handle`/`active_run_id`/`streaming_text`/
+sequence-курсоров/черновика/текста композера. Двойной `send` при живом
+стриме — no-op (guard по `stream_handle`); `drain_stream` поллит до
+`Terminal`, не оставляя хвост очереди. Регрессионные тесты:
+`presentation-chat/tests/stream_hygiene.rs`,
+`presentation-kernel-wire/tests/parity.rs::drop_stream_unsubscribes_without_cancelling_the_run`.
+
 ## Запуск
 
 ```bash

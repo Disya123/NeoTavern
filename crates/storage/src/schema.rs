@@ -273,9 +273,17 @@ CREATE INDEX idx_message_drafts_chat ON message_drafts(chat_id);"#
 /// the `presets.kind` column (the v2 `presets` table predates kinds; the
 /// legacy `presets` repo enforces kind + data and a unique `(kind, name)`,
 /// mirrored here with `settings_json` carrying the wire `data` payload).
+/// Legacy roots with duplicate preset names would bridge the unique index —
+/// every non-oldest duplicate is renamed `name #<rowid>` before it (all rows
+/// share the `'generation'` default kind at this point, so deduping by name
+/// alone is exact; a literal legacy preset named `name #<rowid>` colliding
+/// with the rename remains possible in principle and fails the migration
+/// loudly rather than silently dropping a row).
 macro_rules! migration_9_sql {
     () => {
         r#"ALTER TABLE presets ADD COLUMN kind TEXT NOT NULL DEFAULT 'generation';
+UPDATE presets SET name = name || ' #' || rowid
+ WHERE rowid NOT IN (SELECT MIN(rowid) FROM presets GROUP BY name);
 CREATE UNIQUE INDEX idx_presets_kind_name ON presets(kind, name);
 CREATE TABLE memories (
   id TEXT PRIMARY KEY,
@@ -574,16 +582,19 @@ pub const MIGRATION_9_NAME: &str = "009_memories_presets_kind";
 
 /// Exact SQL of the memories/presets-kind schema migration (v9) — the
 /// `migration_9_sql!()` literal. Adds the STRICT `memories` table and the
-/// `presets.kind` column + `(kind, name)` uniqueness (Этап 4 slice 3).
+/// `presets.kind` column + `(kind, name)` uniqueness, deduplicating legacy
+/// preset names first (Этап 4 slice 3; audit: duplicates bridged the unique
+/// index).
 pub const MIGRATION_9_SQL: &str = migration_9_sql!();
 
 /// Lowercase sha256 hex of the `MIGRATION_9_SQL` string bytes.
 ///
-/// Computed on 2026-08-17 via node (`crypto.createHash('sha256')` over the
-/// literal bytes, no trailing newline) and asserted by the migration test
-/// suite against the ledger.
+/// Recomputed 2026-09-07 via node (`crypto.createHash('sha256')` over the
+/// literal bytes, no trailing newline) after the migration gained the
+/// duplicate-preset dedupe ahead of the unique index, and asserted by the
+/// migration test suite against the ledger.
 pub const MIGRATION_9_CHECKSUM: &str =
-    "0a27e95db6afa600c87900fcd6052c1070a9fc485eae0b141818f9e4a9f77aff";
+    "bf1b7574369f3c6c7f792e5eadb3ab084acfbbbadde253a959b4a6cff4c09f40";
 
 /// Name of the chat-persona (v10) schema migration.
 pub const MIGRATION_10_NAME: &str = "010_chat_persona";

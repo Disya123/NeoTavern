@@ -85,6 +85,13 @@ impl<W: ProductWire> ChatSession<W> {
         if self.send_in_flight {
             return Ok(());
         }
+        // A live stream means the previous send is still generating: the
+        // handle only clears on Terminal/Error, so a double tap cannot start
+        // a second run. FakeWire drains synchronously inside `send_inner`,
+        // so the in-memory host is unaffected.
+        if self.state.stream_handle.is_some() {
+            return Ok(());
+        }
         self.send_in_flight = true;
         self.state.send_accepted = false;
         let result = self.send_inner(text);
@@ -277,21 +284,31 @@ impl<W: ProductWire> ChatSession<W> {
         self.state.tool_activity_name = None;
     }
 
+    /// Full stream/draft teardown for leaving the open chat (React navigates
+    /// away; the native session must not keep polling the OLD chat's run).
+    /// Unsubscribes from the live stream without cancelling it — the wire
+    /// side keeps committing, and re-entering the chat reads the finished
+    /// state back — then clears every per-run and per-chat input field.
+    pub(crate) fn reset_stream_state(&mut self) {
+        if let Some(handle) = self.state.stream_handle.take() {
+            let _ = self.wire.drop_stream(&handle);
+        }
+        self.state.active_run_id = None;
+        self.state.last_applied_stream_sequence = None;
+        self.clear_stream_progress();
+        self.state.composer_text.clear();
+        self.state.draft = None;
+    }
+
+    /// Pumps the live stream until it ends: both wires guarantee a
+    /// `Terminal` frame after the terminal event (FakeWire deque tail;
+    /// `KernelProductWire` returns it from the next poll), and `Timeout` is
+    /// the fuse for a still-running kernel stream — the host frame loop
+    /// keeps pumping those.
     pub fn drain_stream(&mut self) -> Result<(), ChatRouteError> {
         for _ in 0..64 {
             match self.poll_stream(0)? {
                 StreamFrame::Timeout | StreamFrame::Terminal | StreamFrame::Error(_) => break,
-                StreamFrame::Event { event, .. }
-                    if matches!(
-                        event.as_ref(),
-                        GenerationEvent::GenerationCompleted { .. }
-                            | GenerationEvent::GenerationFailed { .. }
-                            | GenerationEvent::GenerationCancelled
-                    ) =>
-                {
-                    let _ = self.poll_stream(0)?;
-                    break;
-                }
                 StreamFrame::Event { .. } => {}
             }
         }

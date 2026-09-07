@@ -2093,3 +2093,114 @@ fn message_update_clears_checkpoint_link() {
     assert_eq!(cleared.checkpoint_chat_id, None);
     assert_eq!(cleared.content, "Hello");
 }
+
+// ---------------------------------------------------------------------------
+// Error-path side effects (audit: no commits on not-found)
+// ---------------------------------------------------------------------------
+
+/// `personas.update` on a MISSING persona with `isDefault: true` must return
+/// `PERSONA_NOT_FOUND` AND leave the existing default untouched — the
+/// `clear_persona_default` side effect must not commit on the error path.
+#[test]
+fn persona_update_not_found_leaves_the_default_intact() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel_with_root(root.path());
+    let created = dispatch_decoded::<PersonaDto>(
+        &kernel,
+        "personas.create",
+        json!({ "name": "Aria", "isDefault": true }),
+    )
+    .expect("personas.create must succeed");
+    assert!(created.is_default);
+
+    let err = dispatch_json(
+        &kernel,
+        "personas.update",
+        json!({
+            "personaId": "00000000-0000-4000-8000-000000000099",
+            "name": "Ghost",
+            "isDefault": true
+        }),
+    )
+    .expect_err("missing persona must fail");
+    assert!(err.to_string().contains("PERSONA_NOT_FOUND"), "{err}");
+
+    let still_default =
+        dispatch_decoded::<PersonaDto>(&kernel, "personas.get", json!({ "personaId": created.id }))
+            .expect("get after failed update");
+    assert!(
+        still_default.is_default,
+        "the only default must survive a failed update with isDefault: true"
+    );
+}
+
+/// `lorebooks.update` on a MISSING lorebook with a `characterId` must return
+/// `LOREBOOK_NOT_FOUND` — not a raw FOREIGN KEY failure from the link upsert
+/// that used to run before the not-found check.
+#[test]
+fn lorebook_update_not_found_with_character_link_reports_not_found() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel_with_root(root.path());
+    let seed = seed_character_and_chat(&kernel);
+
+    let err = dispatch_json(
+        &kernel,
+        "lorebooks.update",
+        json!({
+            "lorebookId": "00000000-0000-4000-8000-000000000098",
+            "name": "Ghost book",
+            "characterId": seed.character_id
+        }),
+    )
+    .expect_err("missing lorebook must fail");
+    assert!(err.to_string().contains("LOREBOOK_NOT_FOUND"), "{err}");
+
+    let err2 = dispatch_json(
+        &kernel,
+        "lorebooks.update",
+        json!({ "lorebookId": "00000000-0000-4000-8000-000000000098", "name": "Ghost book" }),
+    )
+    .expect_err("missing lorebook without a character link must fail the same way");
+    assert!(err2.to_string().contains("LOREBOOK_NOT_FOUND"), "{err2}");
+}
+
+/// `memories.update` must reject a switch to character scope WITHOUT a
+/// `characterId` — parity with create; such a row would be invisible to
+/// retrieval (`character_id = ?` never matches NULL).
+#[test]
+fn memory_update_to_character_scope_requires_character_id() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel_with_root(root.path());
+    let created = dispatch_decoded::<serde_json::Value>(
+        &kernel,
+        "memories.create",
+        json!({ "scope": "global", "content": "recall me" }),
+    )
+    .expect("memories.create must succeed");
+    let id = created["id"].as_str().expect("memory id");
+
+    let err = dispatch_json(
+        &kernel,
+        "memories.update",
+        json!({ "memoryId": id, "scope": "character" }),
+    )
+    .expect_err("character scope without characterId must fail");
+    assert!(err.to_string().contains("VALIDATION"), "{err}");
+}
+
+/// Seed helper for the error-path tests: one character row through the wire.
+struct SeedIds {
+    character_id: String,
+}
+
+fn seed_character_and_chat(kernel: &Kernel) -> SeedIds {
+    let created = dispatch_decoded::<serde_json::Value>(
+        kernel,
+        "characters.create",
+        json!({ "name": "Aria" }),
+    )
+    .expect("characters.create must succeed");
+    SeedIds {
+        character_id: created["id"].as_str().expect("character id").to_string(),
+    }
+}

@@ -6,7 +6,7 @@
 //! stateless StorageFailure, and concurrent unary reads during a stream.
 
 use contracts_generated::generated::{
-    GenerationRun, MessageDto, PagedGenerationEvents, PagedMessages,
+    GenerationRun, GenerationStatus, MessageDto, PagedGenerationEvents, PagedMessages,
 };
 use runtime_kernel::{
     CancellationFlag, Kernel, KernelConfig, KernelError, KernelErrorCode, StreamNotice,
@@ -286,6 +286,68 @@ fn run_to_completion(
 // ---------------------------------------------------------------------------
 // 2. Cancel mid-run
 // ---------------------------------------------------------------------------
+
+#[test]
+fn generation_cancel_before_the_first_step_wins_the_race() {
+    let root = tempfile::tempdir().expect("tempdir");
+    seed_chat(root.path());
+    let kernel = open_kernel(root.path());
+    let mut stream = start_stream(
+        &kernel,
+        "generation.start",
+        serde_json::json!({
+            "chatId": CHAT_ID,
+            "message": "Hello",
+            "model": "steps=8;delay-ms=50;tokens-per-step=48"
+        }),
+    )
+    .expect("generation.start must succeed");
+    let run_id = stream.stream_id().to_string();
+
+    // Enqueue the cancel immediately — no committed delta waited for. The
+    // run row is still `queued` when dispatch_stream returns; per-turn
+    // transitions must NOT overwrite `cancelling` (cas_status is guarded by
+    // revision AND status).
+    dispatch_json(
+        &kernel,
+        "generation.cancel",
+        serde_json::json!({ "workflowId": run_id }),
+    )
+    .expect("generation.cancel must succeed on a just-created run");
+
+    drain_until_terminal(&mut stream, Duration::from_secs(30));
+
+    let run = get_run(&kernel, &run_id);
+    assert_eq!(
+        run.status,
+        GenerationStatus::Cancelled,
+        "an immediately-enqueued cancel must not be lost to a per-turn status flip"
+    );
+    assert_eq!(run.message_id, None, "cancelled runs have no final message");
+    assert!(
+        list_messages(&kernel, CHAT_ID).is_empty(),
+        "no assistant turn in the chat"
+    );
+
+    let events = list_events(&kernel, &run_id, -1, None);
+    let types: Vec<&str> = events.items.iter().map(|e| e.r#type.as_str()).collect();
+    assert!(
+        !types.contains(&"generation.completed"),
+        "a lost cancel would run to completion: {types:?}"
+    );
+    assert_eq!(
+        types
+            .iter()
+            .filter(|t| **t == "generation.cancelled")
+            .count(),
+        1,
+        "exactly one cancelled terminal: {types:?}"
+    );
+    assert!(
+        !types.contains(&"generation.delta"),
+        "a cancel enqueued before the first step commits no delta: {types:?}"
+    );
+}
 
 #[test]
 fn generation_cancel_mid_run() {

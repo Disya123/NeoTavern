@@ -39,6 +39,11 @@ in-memory `FakeWire`.
 - `cancel_stream` — `generation.cancel` через unary `dispatch` (идемпотентен
   для `cancelling`); терминальный `generation.cancelled` реплеится
   последующими poll'ами.
+- `drop_stream` — отписка без отмены (смена чата): удаляет `EventStream` и
+  replay-курсор; ран продолжает выполняться на writer-потоке ядра и
+  закоммитит терминальное событие в durable-лог — повторный вход в чат
+  перечитает завершённое состояние. Терминальный poll (`Terminal` с
+  авто-удалением стрима) теперь чистит и replay-курсор `applied`.
 - Ошибки: `KernelError.product → ChatRouteError::Product`, иначе
   `ChatRouteError::Transport`.
 

@@ -70,7 +70,15 @@ use crate::snapshot::sha256_file_hex;
 pub const EXPORT_FORMAT: &str = "neotavern-export";
 
 /// Format version written by this build.
-pub const EXPORT_FORMAT_VERSION: u64 = 1;
+///
+/// v2 (2026-09-07, audit C4) extends v1 with the sections
+/// `personas`, `message_variants`, `message_content_revisions`,
+/// `message_drafts`, `character_lorebooks`, `memories`, `settings` and the
+/// lost columns (`chats.persona_id`/`parentChatId`/`origin`/`sourceMessageId`,
+/// `messages.meta`/`generationRunId`/`checkpointChatId`/`updatedAt`,
+/// `characters.importHash`, `presets.kind`). v1 containers stay importable:
+/// a missing section is empty and missing record fields take their defaults.
+pub const EXPORT_FORMAT_VERSION: u64 = 2;
 
 /// Maximum size of the parsed manifest in bytes.
 pub const MAX_MANIFEST_BYTES: u64 = 1 << 20;
@@ -81,8 +89,27 @@ pub const MAX_NDJSON_LINE_BYTES: u64 = 1 << 20;
 /// Maximum number of NDJSON lines per section file.
 pub const MAX_NDJSON_LINES: u64 = 1_000_000;
 
-/// The five NDJSON section files of the container, in canonical order.
-const NDJSON_FILES: [&str; 5] = [
+/// The NDJSON section files of a v2 container, in canonical (FK-safe import)
+/// order: personas before chats (`chats.persona_id`), messages before their
+/// variants/revisions/drafts, lorebooks before the character links.
+const NDJSON_FILES: [&str; 12] = [
+    "characters.ndjson",
+    "personas.ndjson",
+    "chats.ndjson",
+    "messages.ndjson",
+    "message_variants.ndjson",
+    "message_content_revisions.ndjson",
+    "message_drafts.ndjson",
+    "lorebooks.ndjson",
+    "character_lorebooks.ndjson",
+    "presets.ndjson",
+    "memories.ndjson",
+    "settings.ndjson",
+];
+
+/// The five NDJSON section files a v1 container carries (imported as the
+/// base sections; the v2-only sections are absent → empty).
+const NDJSON_FILES_V1: [&str; 5] = [
     "characters.ndjson",
     "chats.ndjson",
     "messages.ndjson",
@@ -109,10 +136,17 @@ pub enum DuplicatePolicy {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ExportCounts {
     pub characters: u64,
+    pub personas: u64,
     pub chats: u64,
     pub messages: u64,
+    pub message_variants: u64,
+    pub message_content_revisions: u64,
+    pub message_drafts: u64,
     pub lorebooks: u64,
+    pub character_lorebooks: u64,
     pub presets: u64,
+    pub memories: u64,
+    pub settings: u64,
 }
 
 /// Result of [`create_export`]: section counts, asset count and total bytes.
@@ -184,22 +218,62 @@ pub struct ExportCharacter {
     pub ext: serde_json::Value,
     #[serde(default)]
     pub profile_id: Option<String>,
+    /// sha256 of the original character-card file (v2; migration 19) — the
+    /// re-import idempotency key.
+    #[serde(default)]
+    pub import_hash: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// Portable persona record (v2 section; kernel `personas`, migration 5).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportPersona {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub avatar: Option<String>,
+    #[serde(default)]
+    pub is_default: bool,
     pub created_at: String,
     pub updated_at: String,
 }
 
 /// Portable chat record.
+///
+/// v2 carries the persona/snapshot columns (migrations 10/18). `persona_id`
+/// is FK-checked on import (unresolvable → NULL + orphan report);
+/// `parent_chat_id`/`source_message_id` are soft links (no FK in the
+/// schema) — unresolvable links are nulled and reported the same way.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportChat {
     pub id: String,
     pub title: String,
     pub character_id: String,
+    #[serde(default)]
+    pub persona_id: Option<String>,
+    #[serde(default)]
+    pub parent_chat_id: Option<String>,
+    #[serde(default)]
+    pub origin: Option<String>,
+    #[serde(default)]
+    pub source_message_id: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
 
 /// Portable message record.
+///
+/// v2 carries `updatedAt` (migration 8), the free-form `meta` object
+/// (migration 17), the generation run link and the checkpoint link
+/// (migration 18). `generationRunId` is carried verbatim WITHOUT a
+/// reference check — generation runs are kernel journals deliberately
+/// outside the container (the run row may legitimately not exist in the
+/// target).
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportMessage {
@@ -208,7 +282,57 @@ pub struct ExportMessage {
     pub role: String,
     pub content: String,
     pub sequence: u64,
+    #[serde(default)]
+    pub generation_run_id: Option<String>,
+    #[serde(default = "default_json_object")]
+    pub meta: serde_json::Value,
+    #[serde(default)]
+    pub checkpoint_chat_id: Option<String>,
+    #[serde(default)]
+    pub updated_at: Option<String>,
     pub created_at: String,
+}
+
+/// Portable message variant record (v2 section; migration 8).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportMessageVariant {
+    pub id: String,
+    pub message_id: String,
+    pub position: i64,
+    pub content: String,
+    pub created_at: String,
+}
+
+/// Portable message content-revision record (v2 section; migration 8).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportMessageContentRevision {
+    pub id: String,
+    pub message_id: String,
+    pub position: i64,
+    pub content: String,
+    pub created_at: String,
+}
+
+/// Portable message-draft record (v2 section; migration 8).
+/// `committed_message_id` is a soft link to the message the draft produced.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportMessageDraft {
+    pub id: String,
+    pub chat_id: String,
+    pub role: String,
+    #[serde(default)]
+    pub content: String,
+    #[serde(default)]
+    pub sequence: i64,
+    #[serde(default = "default_one")]
+    pub revision: i64,
+    #[serde(default)]
+    pub committed_message_id: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 /// Portable lorebook entry (one item of `lorebooks.entries`).
@@ -249,16 +373,63 @@ pub struct ExportLorebook {
     pub updated_at: String,
 }
 
-/// Portable preset record.
+/// Portable preset record. `kind` is the v2 addition (migration 9, the
+/// `(kind, name)` uniqueness pair); v1 containers carry no kind — the
+/// migration default `'generation'` is applied.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportPreset {
     pub id: String,
     pub name: String,
+    #[serde(default = "default_preset_kind")]
+    pub kind: String,
     #[serde(default = "default_json_object")]
     pub settings: serde_json::Value,
     pub created_at: String,
     pub updated_at: String,
+}
+
+/// Portable memory record (v2 section; migration 9). `characterId` is
+/// FK-checked on import (unresolvable → NULL + orphan report).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportMemory {
+    pub id: String,
+    #[serde(default = "default_memory_scope")]
+    pub scope: String,
+    #[serde(default)]
+    pub character_id: Option<String>,
+    #[serde(default)]
+    pub keys: Vec<String>,
+    pub content: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub position: i64,
+    #[serde(default = "default_json_object")]
+    pub metadata: serde_json::Value,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// Portable non-secret setting record (v2 section; migration 11). The
+/// primary key is `key`, not `id`. Secrets never appear here (ТЗ §9.4).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportSetting {
+    pub key: String,
+    pub value: serde_json::Value,
+    pub updated_at: String,
+}
+
+/// Portable character↔lorebook link record (v2 section; migration 16).
+/// Composite-key record without its own id; `lorebook_id` is UNIQUE (one
+/// book binds to one character).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportCharacterLorebook {
+    pub character_id: String,
+    pub lorebook_id: String,
 }
 
 fn default_json_object() -> serde_json::Value {
@@ -267,6 +438,18 @@ fn default_json_object() -> serde_json::Value {
 
 fn default_true() -> bool {
     true
+}
+
+fn default_one() -> i64 {
+    1
+}
+
+fn default_preset_kind() -> String {
+    "generation".to_string()
+}
+
+fn default_memory_scope() -> String {
+    "global".to_string()
 }
 
 /// Writes a portable export of `db`'s product data into `dest`.
@@ -316,21 +499,49 @@ pub fn create_export(
     let chats = read_chats(db, profile_id, &character_ids)?;
     let chat_ids: HashSet<&str> = chats.iter().map(|c| c.id.as_str()).collect();
     let messages = read_messages(db, profile_id, &chat_ids)?;
+    let message_ids: HashSet<&str> = messages.iter().map(|m| m.id.as_str()).collect();
     let lorebooks = read_lorebooks(db)?;
     let presets = read_presets(db)?;
+    let personas = read_personas(db)?;
+    let variants = read_message_variants(db, &message_ids)?;
+    let content_revisions = read_message_content_revisions(db, &message_ids)?;
+    let drafts = read_message_drafts(db, &chat_ids)?;
+    let character_lorebooks = read_character_lorebooks(db)?;
+    let memories = read_memories(db)?;
+    let settings = read_settings(db)?;
 
     write_ndjson(&dest.join("characters.ndjson"), &characters)?;
+    write_ndjson(&dest.join("personas.ndjson"), &personas)?;
     write_ndjson(&dest.join("chats.ndjson"), &chats)?;
     write_ndjson(&dest.join("messages.ndjson"), &messages)?;
+    write_ndjson(&dest.join("message_variants.ndjson"), &variants)?;
+    write_ndjson(
+        &dest.join("message_content_revisions.ndjson"),
+        &content_revisions,
+    )?;
+    write_ndjson(&dest.join("message_drafts.ndjson"), &drafts)?;
     write_ndjson(&dest.join("lorebooks.ndjson"), &lorebooks)?;
+    write_ndjson(
+        &dest.join("character_lorebooks.ndjson"),
+        &character_lorebooks,
+    )?;
     write_ndjson(&dest.join("presets.ndjson"), &presets)?;
+    write_ndjson(&dest.join("memories.ndjson"), &memories)?;
+    write_ndjson(&dest.join("settings.ndjson"), &settings)?;
 
     let counts = ExportCounts {
         characters: characters.len() as u64,
+        personas: personas.len() as u64,
         chats: chats.len() as u64,
         messages: messages.len() as u64,
+        message_variants: variants.len() as u64,
+        message_content_revisions: content_revisions.len() as u64,
+        message_drafts: drafts.len() as u64,
         lorebooks: lorebooks.len() as u64,
+        character_lorebooks: character_lorebooks.len() as u64,
         presets: presets.len() as u64,
+        memories: memories.len() as u64,
+        settings: settings.len() as u64,
     };
 
     // Referenced assets, deterministic order (sorted, deduped ids). Skipped
@@ -376,10 +587,17 @@ pub fn create_export(
         },
         "records": {
             "characters": counts.characters,
+            "personas": counts.personas,
             "chats": counts.chats,
             "messages": counts.messages,
+            "messageVariants": counts.message_variants,
+            "messageContentRevisions": counts.message_content_revisions,
+            "messageDrafts": counts.message_drafts,
             "lorebooks": counts.lorebooks,
+            "characterLorebooks": counts.character_lorebooks,
             "presets": counts.presets,
+            "memories": counts.memories,
+            "settings": counts.settings,
         },
         "inventory": inventory,
     });
@@ -455,9 +673,16 @@ pub fn verify_export(source: &Path) -> Result<VerifiedExport> {
             vec![("formatVersion".to_string(), format_version.to_string())],
         ));
     }
-    if format_version != EXPORT_FORMAT_VERSION {
+    if !(1..=EXPORT_FORMAT_VERSION).contains(&format_version) {
         return Err(manifest_corrupt("invalid formatVersion"));
     }
+    // v1 containers carry only the five base sections; v2 adds the seven
+    // extended ones. `section_files` drives the inventory bounds checks.
+    let section_files: &[&str] = if format_version == 1 {
+        &NDJSON_FILES_V1
+    } else {
+        &NDJSON_FILES
+    };
 
     let created_at = manifest
         .get("createdAt")
@@ -471,11 +696,20 @@ pub fn verify_export(source: &Path) -> Result<VerifiedExport> {
         .ok_or_else(|| manifest_corrupt("manifest missing records"))?;
     let mut records = ExportCounts {
         characters: 0,
+        personas: 0,
         chats: 0,
         messages: 0,
+        message_variants: 0,
+        message_content_revisions: 0,
+        message_drafts: 0,
         lorebooks: 0,
+        character_lorebooks: 0,
         presets: 0,
+        memories: 0,
+        settings: 0,
     };
+    // The five base sections are required at every format version; the seven
+    // v2 sections are required in a v2 manifest and default to 0 for v1.
     for (name, slot) in [
         ("characters", &mut records.characters),
         ("chats", &mut records.chats),
@@ -487,6 +721,26 @@ pub fn verify_export(source: &Path) -> Result<VerifiedExport> {
             .get(name)
             .and_then(|v| v.as_u64())
             .ok_or_else(|| manifest_corrupt(&format!("records.{name} missing or invalid")))?;
+    }
+    for (name, slot) in [
+        ("personas", &mut records.personas),
+        ("messageVariants", &mut records.message_variants),
+        (
+            "messageContentRevisions",
+            &mut records.message_content_revisions,
+        ),
+        ("messageDrafts", &mut records.message_drafts),
+        ("characterLorebooks", &mut records.character_lorebooks),
+        ("memories", &mut records.memories),
+        ("settings", &mut records.settings),
+    ] {
+        *slot = records_value
+            .get(name)
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+        if format_version >= 2 && records_value.get(name).is_none() {
+            return Err(manifest_corrupt(&format!("records.{name} missing")));
+        }
     }
 
     let inventory_value = manifest
@@ -578,16 +832,31 @@ pub fn verify_export(source: &Path) -> Result<VerifiedExport> {
         }
     }
 
-    // NDJSON bounds + per-section line counts.
-    for (file, expected) in [
+    // NDJSON bounds + per-section line counts. v1 containers carry only the
+    // five base sections.
+    let section_counts: [(&str, u64); 12] = [
         ("characters.ndjson", records.characters),
+        ("personas.ndjson", records.personas),
         ("chats.ndjson", records.chats),
         ("messages.ndjson", records.messages),
+        ("message_variants.ndjson", records.message_variants),
+        (
+            "message_content_revisions.ndjson",
+            records.message_content_revisions,
+        ),
+        ("message_drafts.ndjson", records.message_drafts),
         ("lorebooks.ndjson", records.lorebooks),
+        ("character_lorebooks.ndjson", records.character_lorebooks),
         ("presets.ndjson", records.presets),
-    ] {
+        ("memories.ndjson", records.memories),
+        ("settings.ndjson", records.settings),
+    ];
+    for (file, expected) in section_counts
+        .iter()
+        .filter(|(f, _)| section_files.contains(f))
+    {
         let (lines, _) = ndjson_bounds(&source.join(file))?;
-        if lines != expected {
+        if lines != *expected {
             return Err(manifest_corrupt(&format!(
                 "{file}: declared {expected} records, found {lines} lines"
             )));
@@ -620,26 +889,90 @@ pub fn apply_import(
 ) -> Result<ImportReport> {
     // Integrity first, before any write.
     let verified = verify_export(source)?;
+    // v1 containers lack the v2 sections → parsed as empty (the missing
+    // section is empty, never an error).
+    let v2_sections = verified.format_version >= 2;
 
     let mut characters = parse_ndjson::<ExportCharacter>(
         &source.join("characters.ndjson"),
         verified.records.characters,
     )?;
-    let chats = parse_ndjson::<ExportChat>(&source.join("chats.ndjson"), verified.records.chats)?;
-    let messages =
-        parse_ndjson::<ExportMessage>(&source.join("messages.ndjson"), verified.records.messages)?;
-    let lorebooks = parse_ndjson::<ExportLorebook>(
+    let personas = parse_optional_ndjson::<ExportPersona>(
+        &source.join("personas.ndjson"),
+        verified.records.personas,
+        v2_sections,
+    )?;
+    let mut chats = parse_optional_ndjson::<ExportChat>(
+        &source.join("chats.ndjson"),
+        verified.records.chats,
+        true,
+    )?;
+    let mut messages = parse_optional_ndjson::<ExportMessage>(
+        &source.join("messages.ndjson"),
+        verified.records.messages,
+        true,
+    )?;
+    let variants = parse_optional_ndjson::<ExportMessageVariant>(
+        &source.join("message_variants.ndjson"),
+        verified.records.message_variants,
+        v2_sections,
+    )?;
+    let content_revisions = parse_optional_ndjson::<ExportMessageContentRevision>(
+        &source.join("message_content_revisions.ndjson"),
+        verified.records.message_content_revisions,
+        v2_sections,
+    )?;
+    let drafts = parse_optional_ndjson::<ExportMessageDraft>(
+        &source.join("message_drafts.ndjson"),
+        verified.records.message_drafts,
+        v2_sections,
+    )?;
+    let lorebooks = parse_optional_ndjson::<ExportLorebook>(
         &source.join("lorebooks.ndjson"),
         verified.records.lorebooks,
+        true,
     )?;
-    let presets =
-        parse_ndjson::<ExportPreset>(&source.join("presets.ndjson"), verified.records.presets)?;
+    let character_lorebooks = parse_optional_ndjson::<ExportCharacterLorebook>(
+        &source.join("character_lorebooks.ndjson"),
+        verified.records.character_lorebooks,
+        v2_sections,
+    )?;
+    let presets = parse_optional_ndjson::<ExportPreset>(
+        &source.join("presets.ndjson"),
+        verified.records.presets,
+        true,
+    )?;
+    let mut memories = parse_optional_ndjson::<ExportMemory>(
+        &source.join("memories.ndjson"),
+        verified.records.memories,
+        v2_sections,
+    )?;
+    let settings = parse_optional_ndjson::<ExportSetting>(
+        &source.join("settings.ndjson"),
+        verified.records.settings,
+        v2_sections,
+    )?;
 
     reject_duplicate_ids(&characters, |c| c.id.as_str(), "characters")?;
+    reject_duplicate_ids(&personas, |p| p.id.as_str(), "personas")?;
     reject_duplicate_ids(&chats, |c| c.id.as_str(), "chats")?;
     reject_duplicate_ids(&messages, |m| m.id.as_str(), "messages")?;
+    reject_duplicate_ids(&variants, |v| v.id.as_str(), "message_variants")?;
+    reject_duplicate_ids(
+        &content_revisions,
+        |r| r.id.as_str(),
+        "message_content_revisions",
+    )?;
+    reject_duplicate_ids(&drafts, |d| d.id.as_str(), "message_drafts")?;
     reject_duplicate_ids(&lorebooks, |b| b.id.as_str(), "lorebooks")?;
+    reject_duplicate_ids(
+        &character_lorebooks,
+        |l| l.lorebook_id.as_str(),
+        "character_lorebooks",
+    )?;
     reject_duplicate_ids(&presets, |p| p.id.as_str(), "presets")?;
+    reject_duplicate_ids(&memories, |m| m.id.as_str(), "memories")?;
+    reject_duplicate_ids(&settings, |s| s.key.as_str(), "settings")?;
 
     for message in &messages {
         if !matches!(
@@ -706,6 +1039,66 @@ pub fn apply_import(
     }
 
     let character_ids: HashSet<&str> = characters.iter().map(|c| c.id.as_str()).collect();
+    let incoming_lorebook_ids: HashSet<&str> = lorebooks.iter().map(|b| b.id.as_str()).collect();
+
+    // v2 persona/snapshot links (migrations 8/10/18): a link is kept when it
+    // resolves against the container OR the target library; an unresolvable
+    // persona (FK column) NULLs the chat, snapshot links (no FK) NULL too —
+    // both are reported as orphans, never silently dropped. Dangling
+    // `generation_run_id` stays verbatim: runs are kernel journals
+    // deliberately outside the container.
+    let persona_ids: HashSet<&str> = personas.iter().map(|p| p.id.as_str()).collect();
+    let incoming_chat_ids: HashSet<String> = chats.iter().map(|c| c.id.clone()).collect();
+    let incoming_message_ids: HashSet<String> = messages.iter().map(|m| m.id.clone()).collect();
+    for chat in &mut chats {
+        if let Some(pid) = chat.persona_id.clone() {
+            if !persona_ids.contains(pid.as_str()) && !record_exists(db.conn(), "personas", &pid)? {
+                orphans.push(format!(
+                    "chat {}: references missing persona {} (persona-less)",
+                    chat.id, pid
+                ));
+                chat.persona_id = None;
+            }
+        }
+        if let Some(parent) = chat.parent_chat_id.clone() {
+            if !incoming_chat_ids.contains(parent.as_str())
+                && !record_exists(db.conn(), "chats", &parent)?
+            {
+                orphans.push(format!(
+                    "chat {}: references missing parent chat {} (unlinked)",
+                    chat.id, parent
+                ));
+                chat.parent_chat_id = None;
+            }
+        }
+        if let Some(source) = chat.source_message_id.clone() {
+            if !incoming_message_ids.contains(source.as_str())
+                && !record_exists(db.conn(), "messages", &source)?
+            {
+                orphans.push(format!(
+                    "chat {}: references missing source message {} (unlinked)",
+                    chat.id, source
+                ));
+                chat.source_message_id = None;
+            }
+        }
+    }
+    for message in &mut messages {
+        if let Some(child) = message.checkpoint_chat_id.clone() {
+            if !incoming_chat_ids.contains(child.as_str())
+                && !record_exists(db.conn(), "chats", &child)?
+            {
+                orphans.push(format!(
+                    "message {}: references missing checkpoint chat {} (unlinked)",
+                    message.id, child
+                ));
+                message.checkpoint_chat_id = None;
+            }
+        }
+    }
+
+    // Kept sets: children whose parents resolve against the container or the
+    // target; the rest are skipped and reported.
     let mut kept_chats: Vec<&ExportChat> = Vec::new();
     for chat in &chats {
         if !character_ids.contains(chat.character_id.as_str()) {
@@ -729,14 +1122,98 @@ pub fn apply_import(
             kept_messages.push(message);
         }
     }
+    let kept_message_ids: HashSet<&str> = kept_messages.iter().map(|m| m.id.as_str()).collect();
+    let mut kept_variants: Vec<&ExportMessageVariant> = Vec::new();
+    for variant in &variants {
+        if !kept_message_ids.contains(variant.message_id.as_str())
+            && !record_exists(db.conn(), "messages", &variant.message_id)?
+        {
+            orphans.push(format!(
+                "message variant {}: references missing message {}",
+                variant.id, variant.message_id
+            ));
+        } else {
+            kept_variants.push(variant);
+        }
+    }
+    let mut kept_content_revisions: Vec<&ExportMessageContentRevision> = Vec::new();
+    for revision in &content_revisions {
+        if !kept_message_ids.contains(revision.message_id.as_str())
+            && !record_exists(db.conn(), "messages", &revision.message_id)?
+        {
+            orphans.push(format!(
+                "content revision {}: references missing message {}",
+                revision.id, revision.message_id
+            ));
+        } else {
+            kept_content_revisions.push(revision);
+        }
+    }
+    let mut kept_drafts: Vec<&ExportMessageDraft> = Vec::new();
+    for draft in &drafts {
+        if !kept_chat_ids.contains(draft.chat_id.as_str())
+            && !record_exists(db.conn(), "chats", &draft.chat_id)?
+        {
+            orphans.push(format!(
+                "message draft {}: references missing chat {}",
+                draft.id, draft.chat_id
+            ));
+        } else {
+            kept_drafts.push(draft);
+        }
+    }
+    let kept_character_ids: HashSet<&str> = kept_chats
+        .iter()
+        .map(|c| c.character_id.as_str())
+        .chain(character_ids.iter().copied())
+        .collect();
+    let mut kept_character_lorebooks: Vec<&ExportCharacterLorebook> = Vec::new();
+    for link in &character_lorebooks {
+        let character_ok = kept_character_ids.contains(link.character_id.as_str())
+            || record_exists(db.conn(), "characters", &link.character_id)?;
+        let lorebook_ok = incoming_lorebook_ids.contains(link.lorebook_id.as_str())
+            || record_exists(db.conn(), "lorebooks", &link.lorebook_id)?;
+        if character_ok && lorebook_ok {
+            kept_character_lorebooks.push(link);
+        } else {
+            orphans.push(format!(
+                "character-lorebook link {}: references missing character {} or lorebook {}",
+                link.lorebook_id, link.character_id, link.lorebook_id
+            ));
+        }
+    }
+    for memory in &mut memories {
+        if let Some(cid) = memory.character_id.clone() {
+            if !kept_character_ids.contains(cid.as_str())
+                && !record_exists(db.conn(), "characters", &cid)?
+            {
+                orphans.push(format!(
+                    "memory {}: references missing character {} (unscoped)",
+                    memory.id, cid
+                ));
+                memory.character_id = None;
+            }
+        }
+    }
     let orphan_count = orphans.len() as u64;
 
     let mut inserted = 0u64;
     let mut updated = 0u64;
     let mut skipped = orphan_count;
     db.transaction(|tx| {
+        // Import order is FK-safe: personas before chats (`chats.persona_id`),
+        // messages before their variants/revisions/drafts, lorebooks before
+        // the character links.
         match policy {
             DuplicatePolicy::Reject => {
+                for persona in &personas {
+                    if row_exists(tx, "personas", &persona.id)? {
+                        skipped += 1;
+                    } else {
+                        insert_persona(tx, persona)?;
+                        inserted += 1;
+                    }
+                }
                 for character in &characters {
                     if row_exists(tx, "characters", &character.id)? {
                         skipped += 1;
@@ -761,11 +1238,43 @@ pub fn apply_import(
                         inserted += 1;
                     }
                 }
+                for variant in &kept_variants {
+                    if row_exists(tx, "message_variants", &variant.id)? {
+                        skipped += 1;
+                    } else {
+                        insert_message_variant(tx, variant)?;
+                        inserted += 1;
+                    }
+                }
+                for revision in &kept_content_revisions {
+                    if row_exists(tx, "message_content_revisions", &revision.id)? {
+                        skipped += 1;
+                    } else {
+                        insert_message_content_revision(tx, revision)?;
+                        inserted += 1;
+                    }
+                }
+                for draft in &kept_drafts {
+                    if row_exists(tx, "message_drafts", &draft.id)? {
+                        skipped += 1;
+                    } else {
+                        insert_message_draft(tx, draft)?;
+                        inserted += 1;
+                    }
+                }
                 for book in &lorebooks {
                     if row_exists(tx, "lorebooks", &book.id)? {
                         skipped += 1;
                     } else {
                         insert_lorebook(tx, book)?;
+                        inserted += 1;
+                    }
+                }
+                for link in &kept_character_lorebooks {
+                    if link_exists(tx, &link.character_id, &link.lorebook_id)? {
+                        skipped += 1;
+                    } else {
+                        insert_character_lorebook(tx, link)?;
                         inserted += 1;
                     }
                 }
@@ -777,8 +1286,33 @@ pub fn apply_import(
                         inserted += 1;
                     }
                 }
+                for memory in &memories {
+                    if row_exists(tx, "memories", &memory.id)? {
+                        skipped += 1;
+                    } else {
+                        insert_memory(tx, memory)?;
+                        inserted += 1;
+                    }
+                }
+                for setting in &settings {
+                    if setting_exists(tx, &setting.key)? {
+                        skipped += 1;
+                    } else {
+                        insert_setting(tx, setting)?;
+                        inserted += 1;
+                    }
+                }
             }
             DuplicatePolicy::Replace => {
+                for persona in &personas {
+                    if row_exists(tx, "personas", &persona.id)? {
+                        update_persona(tx, persona)?;
+                        updated += 1;
+                    } else {
+                        insert_persona(tx, persona)?;
+                        inserted += 1;
+                    }
+                }
                 for character in &characters {
                     if row_exists(tx, "characters", &character.id)? {
                         update_character(tx, character)?;
@@ -806,6 +1340,33 @@ pub fn apply_import(
                         inserted += 1;
                     }
                 }
+                for variant in &kept_variants {
+                    if row_exists(tx, "message_variants", &variant.id)? {
+                        update_message_variant(tx, variant)?;
+                        updated += 1;
+                    } else {
+                        insert_message_variant(tx, variant)?;
+                        inserted += 1;
+                    }
+                }
+                for revision in &kept_content_revisions {
+                    if row_exists(tx, "message_content_revisions", &revision.id)? {
+                        update_message_content_revision(tx, revision)?;
+                        updated += 1;
+                    } else {
+                        insert_message_content_revision(tx, revision)?;
+                        inserted += 1;
+                    }
+                }
+                for draft in &kept_drafts {
+                    if row_exists(tx, "message_drafts", &draft.id)? {
+                        update_message_draft(tx, draft)?;
+                        updated += 1;
+                    } else {
+                        insert_message_draft(tx, draft)?;
+                        inserted += 1;
+                    }
+                }
                 for book in &lorebooks {
                     if row_exists(tx, "lorebooks", &book.id)? {
                         update_lorebook(tx, book)?;
@@ -814,6 +1375,14 @@ pub fn apply_import(
                         insert_lorebook(tx, book)?;
                         inserted += 1;
                     }
+                }
+                for link in &kept_character_lorebooks {
+                    if !link_exists(tx, &link.character_id, &link.lorebook_id)? {
+                        insert_character_lorebook(tx, link)?;
+                        inserted += 1;
+                    }
+                    // A link has no updatable payload: an existing link is a
+                    // no-op under Replace.
                 }
                 for preset in &presets {
                     if row_exists(tx, "presets", &preset.id)? {
@@ -824,8 +1393,40 @@ pub fn apply_import(
                         inserted += 1;
                     }
                 }
+                for memory in &memories {
+                    if row_exists(tx, "memories", &memory.id)? {
+                        update_memory(tx, memory)?;
+                        updated += 1;
+                    } else {
+                        insert_memory(tx, memory)?;
+                        inserted += 1;
+                    }
+                }
+                for setting in &settings {
+                    if setting_exists(tx, &setting.key)? {
+                        update_setting(tx, setting)?;
+                        updated += 1;
+                    } else {
+                        insert_setting(tx, setting)?;
+                        inserted += 1;
+                    }
+                }
             }
             DuplicatePolicy::Remap => {
+                let persona_ids: HashMap<&str, String> = personas
+                    .iter()
+                    .map(|p| (p.id.as_str(), uuid_v7()))
+                    .collect();
+                for persona in &personas {
+                    insert_persona(
+                        tx,
+                        &ExportPersona {
+                            id: persona_ids[persona.id.as_str()].clone(),
+                            ..persona.clone()
+                        },
+                    )?;
+                    inserted += 1;
+                }
                 let character_ids: HashMap<&str, String> = characters
                     .iter()
                     .map(|c| (c.id.as_str(), uuid_v7()))
@@ -853,16 +1454,29 @@ pub fn apply_import(
                                 "internal remap error: chat character reference missing",
                             )
                         })?;
+                    // A persona outside the container keeps its target id.
+                    let new_persona_id = chat.persona_id.as_ref().map(|pid| {
+                        persona_ids
+                            .get(pid.as_str())
+                            .cloned()
+                            .unwrap_or_else(|| pid.clone())
+                    });
                     insert_chat(
                         tx,
                         &ExportChat {
                             id: chat_ids[chat.id.as_str()].clone(),
                             character_id: new_character_id.clone(),
+                            persona_id: new_persona_id,
+                            parent_chat_id: remap_opt(&chat.parent_chat_id, &chat_ids),
                             ..chat.clone()
                         },
                     )?;
                     inserted += 1;
                 }
+                let message_ids: HashMap<&str, String> = kept_messages
+                    .iter()
+                    .map(|m| (m.id.as_str(), uuid_v7()))
+                    .collect();
                 for message in kept_messages {
                     let new_chat_id = chat_ids.get(message.chat_id.as_str()).ok_or_else(|| {
                         StorageError::new(
@@ -873,19 +1487,105 @@ pub fn apply_import(
                     insert_message(
                         tx,
                         &ExportMessage {
-                            id: uuid_v7(),
+                            // From the map, never a fresh id: children
+                            // (variants/revisions/drafts) remap through it.
+                            id: message_ids[message.id.as_str()].clone(),
                             chat_id: new_chat_id.clone(),
+                            checkpoint_chat_id: remap_opt(&message.checkpoint_chat_id, &chat_ids),
                             ..message.clone()
                         },
                     )?;
                     inserted += 1;
                 }
+                for variant in kept_variants {
+                    let new_message_id =
+                        message_ids
+                            .get(variant.message_id.as_str())
+                            .ok_or_else(|| {
+                                StorageError::new(
+                                    StorageErrorCode::IntegrityViolation,
+                                    "internal remap error: variant message reference missing",
+                                )
+                            })?;
+                    insert_message_variant(
+                        tx,
+                        &ExportMessageVariant {
+                            id: uuid_v7(),
+                            message_id: new_message_id.clone(),
+                            ..variant.clone()
+                        },
+                    )?;
+                    inserted += 1;
+                }
+                for revision in kept_content_revisions {
+                    let new_message_id =
+                        message_ids
+                            .get(revision.message_id.as_str())
+                            .ok_or_else(|| {
+                                StorageError::new(
+                                    StorageErrorCode::IntegrityViolation,
+                                    "internal remap error: revision message reference missing",
+                                )
+                            })?;
+                    insert_message_content_revision(
+                        tx,
+                        &ExportMessageContentRevision {
+                            id: uuid_v7(),
+                            message_id: new_message_id.clone(),
+                            ..revision.clone()
+                        },
+                    )?;
+                    inserted += 1;
+                }
+                for draft in kept_drafts {
+                    let new_chat_id = chat_ids.get(draft.chat_id.as_str()).ok_or_else(|| {
+                        StorageError::new(
+                            StorageErrorCode::IntegrityViolation,
+                            "internal remap error: draft chat reference missing",
+                        )
+                    })?;
+                    insert_message_draft(
+                        tx,
+                        &ExportMessageDraft {
+                            id: uuid_v7(),
+                            chat_id: new_chat_id.clone(),
+                            committed_message_id: remap_opt(
+                                &draft.committed_message_id,
+                                &message_ids,
+                            ),
+                            ..draft.clone()
+                        },
+                    )?;
+                    inserted += 1;
+                }
+                let lorebook_ids: HashMap<&str, String> = lorebooks
+                    .iter()
+                    .map(|b| (b.id.as_str(), uuid_v7()))
+                    .collect();
                 for book in &lorebooks {
                     insert_lorebook(
                         tx,
                         &ExportLorebook {
-                            id: uuid_v7(),
+                            id: lorebook_ids[book.id.as_str()].clone(),
                             ..book.clone()
+                        },
+                    )?;
+                    inserted += 1;
+                }
+                for link in &kept_character_lorebooks {
+                    let new_character_id = character_ids
+                        .get(link.character_id.as_str())
+                        .cloned()
+                        .unwrap_or_else(|| link.character_id.clone());
+                    let new_lorebook_id = lorebook_ids
+                        .get(link.lorebook_id.as_str())
+                        .cloned()
+                        .unwrap_or_else(|| link.lorebook_id.clone());
+                    insert_character_lorebook(
+                        tx,
+                        &ExportCharacterLorebook {
+                            character_id: new_character_id,
+                            lorebook_id: new_lorebook_id,
                         },
                     )?;
                     inserted += 1;
@@ -899,6 +1599,34 @@ pub fn apply_import(
                         },
                     )?;
                     inserted += 1;
+                }
+                for memory in &memories {
+                    let new_character_id = memory.character_id.as_ref().map(|cid| {
+                        character_ids
+                            .get(cid.as_str())
+                            .cloned()
+                            .unwrap_or_else(|| cid.clone())
+                    });
+                    insert_memory(
+                        tx,
+                        &ExportMemory {
+                            id: uuid_v7(),
+                            character_id: new_character_id,
+                            ..memory.clone()
+                        },
+                    )?;
+                    inserted += 1;
+                }
+                for setting in &settings {
+                    // Settings are keyed, not id'd: Remap ("nothing is ever
+                    // overwritten") must not clobber a target setting with
+                    // the same key.
+                    if setting_exists(tx, &setting.key)? {
+                        skipped += 1;
+                    } else {
+                        insert_setting(tx, setting)?;
+                        inserted += 1;
+                    }
                 }
             }
         }
@@ -919,13 +1647,13 @@ pub fn apply_import(
 fn read_characters(db: &Database, profile_id: Option<&str>) -> Result<Vec<ExportCharacter>> {
     let (sql, params): (String, Vec<Box<dyn rusqlite::ToSql>>) = match profile_id {
         Some(profile_id) => (
-            "SELECT id, name, description, avatar_asset_id, tags_json, ext_json, profile_id, created_at, updated_at \
+            "SELECT id, name, description, avatar_asset_id, tags_json, ext_json, profile_id, import_hash, created_at, updated_at \
              FROM characters WHERE profile_id = ?1 ORDER BY id"
                 .to_string(),
             vec![Box::new(profile_id.to_string())],
         ),
         None => (
-            "SELECT id, name, description, avatar_asset_id, tags_json, ext_json, profile_id, created_at, updated_at \
+            "SELECT id, name, description, avatar_asset_id, tags_json, ext_json, profile_id, import_hash, created_at, updated_at \
              FROM characters ORDER BY id"
                 .to_string(),
             Vec::new(),
@@ -947,8 +1675,9 @@ fn read_characters(db: &Database, profile_id: Option<&str>) -> Result<Vec<Export
                     row.get::<_, String>(4)?,
                     row.get::<_, String>(5)?,
                     row.get::<_, Option<String>>(6)?,
-                    row.get::<_, String>(7)?,
+                    row.get::<_, Option<String>>(7)?,
                     row.get::<_, String>(8)?,
+                    row.get::<_, String>(9)?,
                 ))
             },
         )
@@ -963,6 +1692,7 @@ fn read_characters(db: &Database, profile_id: Option<&str>) -> Result<Vec<Export
             tags_json,
             ext_json,
             profile_id,
+            import_hash,
             created_at,
             updated_at,
         ) = row.map_err(|e| StorageError::from_sqlite(e, "export: read characters"))?;
@@ -988,6 +1718,7 @@ fn read_characters(db: &Database, profile_id: Option<&str>) -> Result<Vec<Export
             tags,
             ext,
             profile_id,
+            import_hash,
             created_at,
             updated_at,
         });
@@ -1002,13 +1733,15 @@ fn read_chats(
 ) -> Result<Vec<ExportChat>> {
     let (sql, params): (String, Vec<Box<dyn rusqlite::ToSql>>) = match profile_id {
         Some(profile_id) => (
-            "SELECT id, title, character_id, created_at, updated_at FROM chats \
+            "SELECT id, title, character_id, persona_id, parent_chat_id, origin, source_message_id, created_at, updated_at \
+             FROM chats \
              WHERE character_id IN (SELECT id FROM characters WHERE profile_id = ?1) ORDER BY id"
                 .to_string(),
             vec![Box::new(profile_id.to_string())],
         ),
         None => (
-            "SELECT id, title, character_id, created_at, updated_at FROM chats ORDER BY id"
+            "SELECT id, title, character_id, persona_id, parent_chat_id, origin, source_message_id, created_at, updated_at \
+             FROM chats ORDER BY id"
                 .to_string(),
             Vec::new(),
         ),
@@ -1027,16 +1760,29 @@ fn read_chats(
                     row.get::<_, String>(0)?,
                     row.get::<_, String>(1)?,
                     row.get::<_, String>(2)?,
-                    row.get::<_, String>(3)?,
-                    row.get::<_, String>(4)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, Option<String>>(4)?,
+                    row.get::<_, Option<String>>(5)?,
+                    row.get::<_, Option<String>>(6)?,
+                    row.get::<_, String>(7)?,
+                    row.get::<_, String>(8)?,
                 ))
             },
         )
         .map_err(|e| StorageError::from_sqlite(e, "export: read chats"))?;
     let mut out = Vec::new();
     for row in rows {
-        let (id, title, character_id, created_at, updated_at) =
-            row.map_err(|e| StorageError::from_sqlite(e, "export: read chats"))?;
+        let (
+            id,
+            title,
+            character_id,
+            persona_id,
+            parent_chat_id,
+            origin,
+            source_message_id,
+            created_at,
+            updated_at,
+        ) = row.map_err(|e| StorageError::from_sqlite(e, "export: read chats"))?;
         if profile_id.is_some() && !character_ids.contains(character_id.as_str()) {
             continue;
         }
@@ -1044,6 +1790,10 @@ fn read_chats(
             id,
             title,
             character_id,
+            persona_id,
+            parent_chat_id,
+            origin,
+            source_message_id,
             created_at,
             updated_at,
         });
@@ -1058,14 +1808,16 @@ fn read_messages(
 ) -> Result<Vec<ExportMessage>> {
     let (sql, params): (String, Vec<Box<dyn rusqlite::ToSql>>) = match profile_id {
         Some(profile_id) => (
-            "SELECT id, chat_id, role, content, sequence, created_at FROM messages \
+            "SELECT id, chat_id, role, content, sequence, generation_run_id, meta_json, checkpoint_chat_id, updated_at, created_at \
+             FROM messages \
              WHERE chat_id IN (SELECT id FROM chats WHERE character_id IN \
                (SELECT id FROM characters WHERE profile_id = ?1)) ORDER BY id"
                 .to_string(),
             vec![Box::new(profile_id.to_string())],
         ),
         None => (
-            "SELECT id, chat_id, role, content, sequence, created_at FROM messages ORDER BY id"
+            "SELECT id, chat_id, role, content, sequence, generation_run_id, meta_json, checkpoint_chat_id, updated_at, created_at \
+             FROM messages ORDER BY id"
                 .to_string(),
             Vec::new(),
         ),
@@ -1084,24 +1836,49 @@ fn read_messages(
                     row.get::<_, String>(2)?,
                     row.get::<_, String>(3)?,
                     row.get::<_, i64>(4)?,
-                    row.get::<_, String>(5)?,
+                    row.get::<_, Option<String>>(5)?,
+                    row.get::<_, String>(6)?,
+                    row.get::<_, Option<String>>(7)?,
+                    row.get::<_, Option<String>>(8)?,
+                    row.get::<_, String>(9)?,
                 ))
             },
         )
         .map_err(|e| StorageError::from_sqlite(e, "export: read messages"))?;
     let mut out = Vec::new();
     for row in rows {
-        let (id, chat_id, role, content, sequence, created_at) =
-            row.map_err(|e| StorageError::from_sqlite(e, "export: read messages"))?;
+        let (
+            id,
+            chat_id,
+            role,
+            content,
+            sequence,
+            generation_run_id,
+            meta_json,
+            checkpoint_chat_id,
+            updated_at,
+            created_at,
+        ) = row.map_err(|e| StorageError::from_sqlite(e, "export: read messages"))?;
         if profile_id.is_some() && !chat_ids.contains(chat_id.as_str()) {
             continue;
         }
+        let meta: serde_json::Value = serde_json::from_str(&meta_json).map_err(|e| {
+            StorageError::with(
+                StorageErrorCode::IntegrityViolation,
+                format!("message {id}: invalid meta_json: {e}"),
+                vec![("id".to_string(), id.clone())],
+            )
+        })?;
         out.push(ExportMessage {
             id,
             chat_id,
             role,
             content,
             sequence: sequence as u64,
+            generation_run_id,
+            meta,
+            checkpoint_chat_id,
+            updated_at,
             created_at,
         });
     }
@@ -1153,7 +1930,9 @@ fn read_lorebooks(db: &Database) -> Result<Vec<ExportLorebook>> {
 fn read_presets(db: &Database) -> Result<Vec<ExportPreset>> {
     let mut stmt = db
         .conn()
-        .prepare("SELECT id, name, settings_json, created_at, updated_at FROM presets ORDER BY id")
+        .prepare(
+            "SELECT id, name, kind, settings_json, created_at, updated_at FROM presets ORDER BY id",
+        )
         .map_err(|e| StorageError::from_sqlite(e, "export: prepare presets"))?;
     let rows = stmt
         .query_map([], |row| {
@@ -1163,12 +1942,13 @@ fn read_presets(db: &Database) -> Result<Vec<ExportPreset>> {
                 row.get::<_, String>(2)?,
                 row.get::<_, String>(3)?,
                 row.get::<_, String>(4)?,
+                row.get::<_, String>(5)?,
             ))
         })
         .map_err(|e| StorageError::from_sqlite(e, "export: read presets"))?;
     let mut out = Vec::new();
     for row in rows {
-        let (id, name, settings_json, created_at, updated_at) =
+        let (id, name, kind, settings_json, created_at, updated_at) =
             row.map_err(|e| StorageError::from_sqlite(e, "export: read presets"))?;
         let settings: serde_json::Value = serde_json::from_str(&settings_json).map_err(|e| {
             StorageError::with(
@@ -1180,8 +1960,309 @@ fn read_presets(db: &Database) -> Result<Vec<ExportPreset>> {
         out.push(ExportPreset {
             id,
             name,
+            kind,
             settings,
             created_at,
+            updated_at,
+        });
+    }
+    Ok(out)
+}
+
+// --- v2 section readers -----------------------------------------------------
+
+fn read_personas(db: &Database) -> Result<Vec<ExportPersona>> {
+    let mut stmt = db
+        .conn()
+        .prepare(
+            "SELECT id, name, description, avatar, is_default, created_at, updated_at \
+             FROM personas ORDER BY id",
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "export: prepare personas"))?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, Option<String>>(2)?,
+                row.get::<_, Option<String>>(3)?,
+                row.get::<_, i64>(4)?,
+                row.get::<_, String>(5)?,
+                row.get::<_, String>(6)?,
+            ))
+        })
+        .map_err(|e| StorageError::from_sqlite(e, "export: read personas"))?;
+    let mut out = Vec::new();
+    for row in rows {
+        let (id, name, description, avatar, is_default, created_at, updated_at) =
+            row.map_err(|e| StorageError::from_sqlite(e, "export: read personas"))?;
+        out.push(ExportPersona {
+            id,
+            name,
+            description,
+            avatar,
+            is_default: is_default != 0,
+            created_at,
+            updated_at,
+        });
+    }
+    Ok(out)
+}
+
+fn read_message_variants(
+    db: &Database,
+    message_ids: &HashSet<&str>,
+) -> Result<Vec<ExportMessageVariant>> {
+    let mut stmt = db
+        .conn()
+        .prepare(
+            "SELECT id, message_id, position, content, created_at \
+             FROM message_variants ORDER BY message_id, position, id",
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "export: prepare message variants"))?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i64>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+            ))
+        })
+        .map_err(|e| StorageError::from_sqlite(e, "export: read message variants"))?;
+    let mut out = Vec::new();
+    for row in rows {
+        let (id, message_id, position, content, created_at) =
+            row.map_err(|e| StorageError::from_sqlite(e, "export: read message variants"))?;
+        if !message_ids.contains(message_id.as_str()) {
+            continue;
+        }
+        out.push(ExportMessageVariant {
+            id,
+            message_id,
+            position,
+            content,
+            created_at,
+        });
+    }
+    Ok(out)
+}
+
+fn read_message_content_revisions(
+    db: &Database,
+    message_ids: &HashSet<&str>,
+) -> Result<Vec<ExportMessageContentRevision>> {
+    let mut stmt = db
+        .conn()
+        .prepare(
+            "SELECT id, message_id, position, content, created_at \
+             FROM message_content_revisions ORDER BY message_id, position, id",
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "export: prepare content revisions"))?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i64>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+            ))
+        })
+        .map_err(|e| StorageError::from_sqlite(e, "export: read content revisions"))?;
+    let mut out = Vec::new();
+    for row in rows {
+        let (id, message_id, position, content, created_at) =
+            row.map_err(|e| StorageError::from_sqlite(e, "export: read content revisions"))?;
+        if !message_ids.contains(message_id.as_str()) {
+            continue;
+        }
+        out.push(ExportMessageContentRevision {
+            id,
+            message_id,
+            position,
+            content,
+            created_at,
+        });
+    }
+    Ok(out)
+}
+
+fn read_message_drafts(db: &Database, chat_ids: &HashSet<&str>) -> Result<Vec<ExportMessageDraft>> {
+    let mut stmt = db
+        .conn()
+        .prepare(
+            "SELECT id, chat_id, role, content, sequence, revision, committed_message_id, created_at, updated_at \
+             FROM message_drafts ORDER BY chat_id, sequence, id",
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "export: prepare drafts"))?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, i64>(4)?,
+                row.get::<_, i64>(5)?,
+                row.get::<_, Option<String>>(6)?,
+                row.get::<_, String>(7)?,
+                row.get::<_, String>(8)?,
+            ))
+        })
+        .map_err(|e| StorageError::from_sqlite(e, "export: read drafts"))?;
+    let mut out = Vec::new();
+    for row in rows {
+        let (
+            id,
+            chat_id,
+            role,
+            content,
+            sequence,
+            revision,
+            committed_message_id,
+            created_at,
+            updated_at,
+        ) = row.map_err(|e| StorageError::from_sqlite(e, "export: read drafts"))?;
+        if !chat_ids.contains(chat_id.as_str()) {
+            continue;
+        }
+        out.push(ExportMessageDraft {
+            id,
+            chat_id,
+            role,
+            content,
+            sequence,
+            revision,
+            committed_message_id,
+            created_at,
+            updated_at,
+        });
+    }
+    Ok(out)
+}
+
+fn read_character_lorebooks(db: &Database) -> Result<Vec<ExportCharacterLorebook>> {
+    let mut stmt = db
+        .conn()
+        .prepare(
+            "SELECT character_id, lorebook_id FROM character_lorebooks ORDER BY lorebook_id, character_id",
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "export: prepare character lorebooks"))?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
+        .map_err(|e| StorageError::from_sqlite(e, "export: read character lorebooks"))?;
+    let mut out = Vec::new();
+    for row in rows {
+        let (character_id, lorebook_id) =
+            row.map_err(|e| StorageError::from_sqlite(e, "export: read character lorebooks"))?;
+        out.push(ExportCharacterLorebook {
+            character_id,
+            lorebook_id,
+        });
+    }
+    Ok(out)
+}
+
+fn read_memories(db: &Database) -> Result<Vec<ExportMemory>> {
+    let mut stmt = db
+        .conn()
+        .prepare(
+            "SELECT id, scope, character_id, keys_json, content, enabled, position, metadata_json, created_at, updated_at \
+             FROM memories ORDER BY id",
+        )
+        .map_err(|e| StorageError::from_sqlite(e, "export: prepare memories"))?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, Option<String>>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, i64>(5)?,
+                row.get::<_, i64>(6)?,
+                row.get::<_, String>(7)?,
+                row.get::<_, String>(8)?,
+                row.get::<_, String>(9)?,
+            ))
+        })
+        .map_err(|e| StorageError::from_sqlite(e, "export: read memories"))?;
+    let mut out = Vec::new();
+    for row in rows {
+        let (
+            id,
+            scope,
+            character_id,
+            keys_json,
+            content,
+            enabled,
+            position,
+            metadata_json,
+            created_at,
+            updated_at,
+        ) = row.map_err(|e| StorageError::from_sqlite(e, "export: read memories"))?;
+        let keys: Vec<String> = serde_json::from_str(&keys_json).map_err(|e| {
+            StorageError::with(
+                StorageErrorCode::IntegrityViolation,
+                format!("memory {id}: invalid keys_json: {e}"),
+                vec![("id".to_string(), id.clone())],
+            )
+        })?;
+        let metadata: serde_json::Value = serde_json::from_str(&metadata_json).map_err(|e| {
+            StorageError::with(
+                StorageErrorCode::IntegrityViolation,
+                format!("memory {id}: invalid metadata_json: {e}"),
+                vec![("id".to_string(), id.clone())],
+            )
+        })?;
+        out.push(ExportMemory {
+            id,
+            scope,
+            character_id,
+            keys,
+            content,
+            enabled: enabled != 0,
+            position,
+            metadata,
+            created_at,
+            updated_at,
+        });
+    }
+    Ok(out)
+}
+
+fn read_settings(db: &Database) -> Result<Vec<ExportSetting>> {
+    let mut stmt = db
+        .conn()
+        .prepare("SELECT key, value_json, updated_at FROM settings ORDER BY key")
+        .map_err(|e| StorageError::from_sqlite(e, "export: prepare settings"))?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })
+        .map_err(|e| StorageError::from_sqlite(e, "export: read settings"))?;
+    let mut out = Vec::new();
+    for row in rows {
+        let (key, value_json, updated_at) =
+            row.map_err(|e| StorageError::from_sqlite(e, "export: read settings"))?;
+        let value: serde_json::Value = serde_json::from_str(&value_json).map_err(|e| {
+            StorageError::with(
+                StorageErrorCode::IntegrityViolation,
+                format!("setting {key}: invalid value_json: {e}"),
+                vec![("key".to_string(), key.clone())],
+            )
+        })?;
+        out.push(ExportSetting {
+            key,
+            value,
             updated_at,
         });
     }
@@ -1370,6 +2451,27 @@ fn parse_ndjson<T: serde::de::DeserializeOwned>(path: &Path, expected: u64) -> R
     Ok(out)
 }
 
+/// Parses a v2 section NDJSON file. `required == false` (a v1 container)
+/// treats a MISSING file as an empty section — the missing section is empty,
+/// never an error; a v1 manifest that still DECLARES records for a missing
+/// file is corrupt.
+fn parse_optional_ndjson<T: serde::de::DeserializeOwned>(
+    path: &Path,
+    expected: u64,
+    required: bool,
+) -> Result<Vec<T>> {
+    if !required && !path.exists() {
+        if expected != 0 {
+            return Err(manifest_corrupt(&format!(
+                "{}: manifest declares {expected} records but the file is missing",
+                path.display()
+            )));
+        }
+        return Ok(Vec::new());
+    }
+    parse_ndjson(path, expected)
+}
+
 fn reject_duplicate_ids<T>(records: &[T], id_of: impl Fn(&T) -> &str, section: &str) -> Result<()> {
     let mut seen = HashSet::new();
     for record in records {
@@ -1386,6 +2488,18 @@ fn reject_duplicate_ids<T>(records: &[T], id_of: impl Fn(&T) -> &str, section: &
 
 // --- import writers --------------------------------------------------------
 
+/// Probe on the live connection (single writer): `record_exists(conn, table,
+/// id)` — used during import referential checks BEFORE the transaction, the
+/// tx probe is [`row_exists`].
+fn record_exists(conn: &rusqlite::Connection, table: &str, id: &str) -> Result<bool> {
+    let sql = format!("SELECT 1 FROM {table} WHERE id = ?1");
+    let found = conn
+        .query_row(&sql, [id], |r| r.get::<_, i64>(0))
+        .optional()
+        .map_err(|e| StorageError::from_sqlite(e, "import: probe record"))?;
+    Ok(found.is_some())
+}
+
 fn row_exists(tx: &rusqlite::Transaction, table: &str, id: &str) -> Result<bool> {
     let sql = format!("SELECT 1 FROM {table} WHERE id = ?1");
     let found = tx
@@ -1395,14 +2509,48 @@ fn row_exists(tx: &rusqlite::Transaction, table: &str, id: &str) -> Result<bool>
     Ok(found.is_some())
 }
 
+/// Composite-PK probe of the `character_lorebooks` link.
+fn link_exists(tx: &rusqlite::Transaction, character_id: &str, lorebook_id: &str) -> Result<bool> {
+    let found = tx
+        .query_row(
+            "SELECT 1 FROM character_lorebooks WHERE character_id = ?1 AND lorebook_id = ?2",
+            [character_id, lorebook_id],
+            |r| r.get::<_, i64>(0),
+        )
+        .optional()
+        .map_err(|e| StorageError::from_sqlite(e, "import: probe lorebook link"))?;
+    Ok(found.is_some())
+}
+
+/// Key-PK probe of the `settings` table (settings have no id column).
+fn setting_exists(tx: &rusqlite::Transaction, key: &str) -> Result<bool> {
+    let found = tx
+        .query_row("SELECT 1 FROM settings WHERE key = ?1", [key], |r| {
+            r.get::<_, i64>(0)
+        })
+        .optional()
+        .map_err(|e| StorageError::from_sqlite(e, "import: probe setting"))?;
+    Ok(found.is_some())
+}
+
+/// Remaps an optional child reference under `DuplicatePolicy::Remap`; a
+/// reference outside the container (target-only or unlinked) keeps its id.
+fn remap_opt(id: &Option<String>, map: &HashMap<&str, String>) -> Option<String> {
+    id.as_ref().map(|value| {
+        map.get(value.as_str())
+            .cloned()
+            .unwrap_or_else(|| value.clone())
+    })
+}
+
 fn insert_character(tx: &rusqlite::Transaction, c: &ExportCharacter) -> Result<()> {
     let tags = serde_json::to_string(&c.tags)
         .map_err(|e| StorageError::new(StorageErrorCode::Io, format!("serialize tags: {e}")))?;
     let ext = serde_json::to_string(&c.ext)
         .map_err(|e| StorageError::new(StorageErrorCode::Io, format!("serialize ext: {e}")))?;
     tx.execute(
-        "INSERT INTO characters (id, name, description, avatar_asset_id, tags_json, ext_json, profile_id, created_at, updated_at) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        "INSERT INTO characters (id, name, description, avatar_asset_id, tags_json, ext_json, profile_id, import_hash, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         rusqlite::params![
             c.id,
             c.name,
@@ -1411,6 +2559,7 @@ fn insert_character(tx: &rusqlite::Transaction, c: &ExportCharacter) -> Result<(
             tags,
             ext,
             c.profile_id,
+            c.import_hash,
             c.created_at,
             c.updated_at,
         ],
@@ -1426,7 +2575,7 @@ fn update_character(tx: &rusqlite::Transaction, c: &ExportCharacter) -> Result<(
         .map_err(|e| StorageError::new(StorageErrorCode::Io, format!("serialize ext: {e}")))?;
     tx.execute(
         "UPDATE characters SET name = ?2, description = ?3, avatar_asset_id = ?4, tags_json = ?5, \
-         ext_json = ?6, profile_id = ?7, created_at = ?8, updated_at = ?9 WHERE id = ?1",
+         ext_json = ?6, profile_id = ?7, import_hash = ?8, created_at = ?9, updated_at = ?10 WHERE id = ?1",
         rusqlite::params![
             c.id,
             c.name,
@@ -1435,6 +2584,7 @@ fn update_character(tx: &rusqlite::Transaction, c: &ExportCharacter) -> Result<(
             tags,
             ext,
             c.profile_id,
+            c.import_hash,
             c.created_at,
             c.updated_at,
         ],
@@ -1445,8 +2595,19 @@ fn update_character(tx: &rusqlite::Transaction, c: &ExportCharacter) -> Result<(
 
 fn insert_chat(tx: &rusqlite::Transaction, chat: &ExportChat) -> Result<()> {
     tx.execute(
-        "INSERT INTO chats (id, title, character_id, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)",
-        rusqlite::params![chat.id, chat.title, chat.character_id, chat.created_at, chat.updated_at],
+        "INSERT INTO chats (id, title, character_id, persona_id, parent_chat_id, origin, source_message_id, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        rusqlite::params![
+            chat.id,
+            chat.title,
+            chat.character_id,
+            chat.persona_id,
+            chat.parent_chat_id,
+            chat.origin,
+            chat.source_message_id,
+            chat.created_at,
+            chat.updated_at,
+        ],
     )
     .map_err(|e| StorageError::from_sqlite(e, "import: insert chat"))?;
     Ok(())
@@ -1454,22 +2615,40 @@ fn insert_chat(tx: &rusqlite::Transaction, chat: &ExportChat) -> Result<()> {
 
 fn update_chat(tx: &rusqlite::Transaction, chat: &ExportChat) -> Result<()> {
     tx.execute(
-        "UPDATE chats SET title = ?2, character_id = ?3, created_at = ?4, updated_at = ?5 WHERE id = ?1",
-        rusqlite::params![chat.id, chat.title, chat.character_id, chat.created_at, chat.updated_at],
+        "UPDATE chats SET title = ?2, character_id = ?3, persona_id = ?4, parent_chat_id = ?5, \
+         origin = ?6, source_message_id = ?7, created_at = ?8, updated_at = ?9 WHERE id = ?1",
+        rusqlite::params![
+            chat.id,
+            chat.title,
+            chat.character_id,
+            chat.persona_id,
+            chat.parent_chat_id,
+            chat.origin,
+            chat.source_message_id,
+            chat.created_at,
+            chat.updated_at,
+        ],
     )
     .map_err(|e| StorageError::from_sqlite(e, "import: update chat"))?;
     Ok(())
 }
 
 fn insert_message(tx: &rusqlite::Transaction, message: &ExportMessage) -> Result<()> {
+    let meta = serde_json::to_string(&message.meta)
+        .map_err(|e| StorageError::new(StorageErrorCode::Io, format!("serialize meta: {e}")))?;
     tx.execute(
-        "INSERT INTO messages (id, chat_id, role, content, sequence, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        "INSERT INTO messages (id, chat_id, role, content, sequence, generation_run_id, meta_json, checkpoint_chat_id, updated_at, created_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         rusqlite::params![
             message.id,
             message.chat_id,
             message.role,
             message.content,
             message.sequence as i64,
+            message.generation_run_id,
+            meta,
+            message.checkpoint_chat_id,
+            message.updated_at,
             message.created_at,
         ],
     )
@@ -1478,14 +2657,21 @@ fn insert_message(tx: &rusqlite::Transaction, message: &ExportMessage) -> Result
 }
 
 fn update_message(tx: &rusqlite::Transaction, message: &ExportMessage) -> Result<()> {
+    let meta = serde_json::to_string(&message.meta)
+        .map_err(|e| StorageError::new(StorageErrorCode::Io, format!("serialize meta: {e}")))?;
     tx.execute(
-        "UPDATE messages SET chat_id = ?2, role = ?3, content = ?4, sequence = ?5, created_at = ?6 WHERE id = ?1",
+        "UPDATE messages SET chat_id = ?2, role = ?3, content = ?4, sequence = ?5, \
+         generation_run_id = ?6, meta_json = ?7, checkpoint_chat_id = ?8, updated_at = ?9, created_at = ?10 WHERE id = ?1",
         rusqlite::params![
             message.id,
             message.chat_id,
             message.role,
             message.content,
             message.sequence as i64,
+            message.generation_run_id,
+            meta,
+            message.checkpoint_chat_id,
+            message.updated_at,
             message.created_at,
         ],
     )
@@ -1533,8 +2719,15 @@ fn insert_preset(tx: &rusqlite::Transaction, preset: &ExportPreset) -> Result<()
     let settings = serde_json::to_string(&preset.settings)
         .map_err(|e| StorageError::new(StorageErrorCode::Io, format!("serialize settings: {e}")))?;
     tx.execute(
-        "INSERT INTO presets (id, name, settings_json, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)",
-        rusqlite::params![preset.id, preset.name, settings, preset.created_at, preset.updated_at],
+        "INSERT INTO presets (id, name, kind, settings_json, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        rusqlite::params![
+            preset.id,
+            preset.name,
+            preset.kind,
+            settings,
+            preset.created_at,
+            preset.updated_at,
+        ],
     )
     .map_err(|e| StorageError::from_sqlite(e, "import: insert preset"))?;
     Ok(())
@@ -1544,10 +2737,253 @@ fn update_preset(tx: &rusqlite::Transaction, preset: &ExportPreset) -> Result<()
     let settings = serde_json::to_string(&preset.settings)
         .map_err(|e| StorageError::new(StorageErrorCode::Io, format!("serialize settings: {e}")))?;
     tx.execute(
-        "UPDATE presets SET name = ?2, settings_json = ?3, created_at = ?4, updated_at = ?5 WHERE id = ?1",
-        rusqlite::params![preset.id, preset.name, settings, preset.created_at, preset.updated_at],
+        "UPDATE presets SET name = ?2, kind = ?3, settings_json = ?4, created_at = ?5, updated_at = ?6 WHERE id = ?1",
+        rusqlite::params![
+            preset.id,
+            preset.name,
+            preset.kind,
+            settings,
+            preset.created_at,
+            preset.updated_at,
+        ],
     )
     .map_err(|e| StorageError::from_sqlite(e, "import: update preset"))?;
+    Ok(())
+}
+
+// --- v2 section writers -----------------------------------------------------
+
+fn insert_persona(tx: &rusqlite::Transaction, persona: &ExportPersona) -> Result<()> {
+    tx.execute(
+        "INSERT INTO personas (id, name, description, avatar, is_default, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        rusqlite::params![
+            persona.id,
+            persona.name,
+            persona.description,
+            persona.avatar,
+            i64::from(persona.is_default),
+            persona.created_at,
+            persona.updated_at,
+        ],
+    )
+    .map_err(|e| StorageError::from_sqlite(e, "import: insert persona"))?;
+    Ok(())
+}
+
+fn update_persona(tx: &rusqlite::Transaction, persona: &ExportPersona) -> Result<()> {
+    tx.execute(
+        "UPDATE personas SET name = ?2, description = ?3, avatar = ?4, is_default = ?5, \
+         created_at = ?6, updated_at = ?7 WHERE id = ?1",
+        rusqlite::params![
+            persona.id,
+            persona.name,
+            persona.description,
+            persona.avatar,
+            i64::from(persona.is_default),
+            persona.created_at,
+            persona.updated_at,
+        ],
+    )
+    .map_err(|e| StorageError::from_sqlite(e, "import: update persona"))?;
+    Ok(())
+}
+
+fn insert_message_variant(
+    tx: &rusqlite::Transaction,
+    variant: &ExportMessageVariant,
+) -> Result<()> {
+    tx.execute(
+        "INSERT INTO message_variants (id, message_id, position, content, created_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        rusqlite::params![
+            variant.id,
+            variant.message_id,
+            variant.position,
+            variant.content,
+            variant.created_at,
+        ],
+    )
+    .map_err(|e| StorageError::from_sqlite(e, "import: insert message variant"))?;
+    Ok(())
+}
+
+fn update_message_variant(
+    tx: &rusqlite::Transaction,
+    variant: &ExportMessageVariant,
+) -> Result<()> {
+    tx.execute(
+        "UPDATE message_variants SET message_id = ?2, position = ?3, content = ?4, created_at = ?5 WHERE id = ?1",
+        rusqlite::params![
+            variant.id,
+            variant.message_id,
+            variant.position,
+            variant.content,
+            variant.created_at,
+        ],
+    )
+    .map_err(|e| StorageError::from_sqlite(e, "import: update message variant"))?;
+    Ok(())
+}
+
+fn insert_message_content_revision(
+    tx: &rusqlite::Transaction,
+    revision: &ExportMessageContentRevision,
+) -> Result<()> {
+    tx.execute(
+        "INSERT INTO message_content_revisions (id, message_id, position, content, created_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        rusqlite::params![
+            revision.id,
+            revision.message_id,
+            revision.position,
+            revision.content,
+            revision.created_at,
+        ],
+    )
+    .map_err(|e| StorageError::from_sqlite(e, "import: insert content revision"))?;
+    Ok(())
+}
+
+fn update_message_content_revision(
+    tx: &rusqlite::Transaction,
+    revision: &ExportMessageContentRevision,
+) -> Result<()> {
+    tx.execute(
+        "UPDATE message_content_revisions SET message_id = ?2, position = ?3, content = ?4, created_at = ?5 WHERE id = ?1",
+        rusqlite::params![
+            revision.id,
+            revision.message_id,
+            revision.position,
+            revision.content,
+            revision.created_at,
+        ],
+    )
+    .map_err(|e| StorageError::from_sqlite(e, "import: update content revision"))?;
+    Ok(())
+}
+
+fn insert_message_draft(tx: &rusqlite::Transaction, draft: &ExportMessageDraft) -> Result<()> {
+    tx.execute(
+        "INSERT INTO message_drafts (id, chat_id, role, content, sequence, revision, committed_message_id, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        rusqlite::params![
+            draft.id,
+            draft.chat_id,
+            draft.role,
+            draft.content,
+            draft.sequence,
+            draft.revision,
+            draft.committed_message_id,
+            draft.created_at,
+            draft.updated_at,
+        ],
+    )
+    .map_err(|e| StorageError::from_sqlite(e, "import: insert message draft"))?;
+    Ok(())
+}
+
+fn update_message_draft(tx: &rusqlite::Transaction, draft: &ExportMessageDraft) -> Result<()> {
+    tx.execute(
+        "UPDATE message_drafts SET chat_id = ?2, role = ?3, content = ?4, sequence = ?5, \
+         revision = ?6, committed_message_id = ?7, created_at = ?8, updated_at = ?9 WHERE id = ?1",
+        rusqlite::params![
+            draft.id,
+            draft.chat_id,
+            draft.role,
+            draft.content,
+            draft.sequence,
+            draft.revision,
+            draft.committed_message_id,
+            draft.created_at,
+            draft.updated_at,
+        ],
+    )
+    .map_err(|e| StorageError::from_sqlite(e, "import: update message draft"))?;
+    Ok(())
+}
+
+fn insert_character_lorebook(
+    tx: &rusqlite::Transaction,
+    link: &ExportCharacterLorebook,
+) -> Result<()> {
+    tx.execute(
+        "INSERT INTO character_lorebooks (character_id, lorebook_id) VALUES (?1, ?2)",
+        rusqlite::params![link.character_id, link.lorebook_id],
+    )
+    .map_err(|e| StorageError::from_sqlite(e, "import: insert lorebook link"))?;
+    Ok(())
+}
+
+fn insert_memory(tx: &rusqlite::Transaction, memory: &ExportMemory) -> Result<()> {
+    let keys = serde_json::to_string(&memory.keys)
+        .map_err(|e| StorageError::new(StorageErrorCode::Io, format!("serialize keys: {e}")))?;
+    let metadata = serde_json::to_string(&memory.metadata)
+        .map_err(|e| StorageError::new(StorageErrorCode::Io, format!("serialize metadata: {e}")))?;
+    tx.execute(
+        "INSERT INTO memories (id, scope, character_id, keys_json, content, enabled, position, metadata_json, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        rusqlite::params![
+            memory.id,
+            memory.scope,
+            memory.character_id,
+            keys,
+            memory.content,
+            i64::from(memory.enabled),
+            memory.position,
+            metadata,
+            memory.created_at,
+            memory.updated_at,
+        ],
+    )
+    .map_err(|e| StorageError::from_sqlite(e, "import: insert memory"))?;
+    Ok(())
+}
+
+fn update_memory(tx: &rusqlite::Transaction, memory: &ExportMemory) -> Result<()> {
+    let keys = serde_json::to_string(&memory.keys)
+        .map_err(|e| StorageError::new(StorageErrorCode::Io, format!("serialize keys: {e}")))?;
+    let metadata = serde_json::to_string(&memory.metadata)
+        .map_err(|e| StorageError::new(StorageErrorCode::Io, format!("serialize metadata: {e}")))?;
+    tx.execute(
+        "UPDATE memories SET scope = ?2, character_id = ?3, keys_json = ?4, content = ?5, \
+         enabled = ?6, position = ?7, metadata_json = ?8, created_at = ?9, updated_at = ?10 WHERE id = ?1",
+        rusqlite::params![
+            memory.id,
+            memory.scope,
+            memory.character_id,
+            keys,
+            memory.content,
+            i64::from(memory.enabled),
+            memory.position,
+            metadata,
+            memory.created_at,
+            memory.updated_at,
+        ],
+    )
+    .map_err(|e| StorageError::from_sqlite(e, "import: update memory"))?;
+    Ok(())
+}
+
+fn insert_setting(tx: &rusqlite::Transaction, setting: &ExportSetting) -> Result<()> {
+    let value = serde_json::to_string(&setting.value)
+        .map_err(|e| StorageError::new(StorageErrorCode::Io, format!("serialize value: {e}")))?;
+    tx.execute(
+        "INSERT INTO settings (key, value_json, updated_at) VALUES (?1, ?2, ?3)",
+        rusqlite::params![setting.key, value, setting.updated_at],
+    )
+    .map_err(|e| StorageError::from_sqlite(e, "import: insert setting"))?;
+    Ok(())
+}
+
+fn update_setting(tx: &rusqlite::Transaction, setting: &ExportSetting) -> Result<()> {
+    let value = serde_json::to_string(&setting.value)
+        .map_err(|e| StorageError::new(StorageErrorCode::Io, format!("serialize value: {e}")))?;
+    tx.execute(
+        "UPDATE settings SET value_json = ?2, updated_at = ?3 WHERE key = ?1",
+        rusqlite::params![setting.key, value, setting.updated_at],
+    )
+    .map_err(|e| StorageError::from_sqlite(e, "import: update setting"))?;
     Ok(())
 }
 

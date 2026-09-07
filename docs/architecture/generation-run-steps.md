@@ -111,6 +111,14 @@ operation:
 - `generation.cancel` on `{queued, preparing, streaming}` still only sets
   `cancelling` + `cancel_requested` (an executor IS live there); on a
   **waiting** run it commits the `cancelled` terminal directly.
+- Per-turn status transitions (`queued→preparing→streaming`) go through
+  `cas_status`, whose UPDATE is guarded by `revision AND status` (the
+  status observed when the run row was re-read). Without the status guard a
+  cancel landing between two turns was silently overwritten by the next
+  transition (`cancelling` flipped back to `preparing`/`streaming`) and the
+  run completed despite `cancel_requested`. A lost CAS is not an error: the
+  executor reloads the row, sees the terminal state, and commits
+  `cancelled`.
 - **All four terminal writers clear `pending_tool_call_json`** (`completed`,
   `failed`, `cancelled`, and startup `interrupted` recovery), so a terminal
   run never reports a derived waiting status and a stale host submission is

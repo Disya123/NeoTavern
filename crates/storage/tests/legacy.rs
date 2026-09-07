@@ -858,3 +858,93 @@ fn legacy_detection_rejects_kernel_and_foreign_databases() -> Result<(), Box<dyn
     assert!(err.message.contains("messages"), "message: {}", err.message);
     Ok(())
 }
+
+/// A chat referencing a persona that never converted (row absent, or the
+/// persona skipped for a missing name/timestamp) must NOT fail the whole
+/// migration with a FOREIGN KEY error (audit C5): the chat inserts with a
+/// NULL persona and the skip is reported.
+#[test]
+fn dangling_legacy_persona_reference_does_not_block_conversion(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let dir = tempfile::tempdir()?;
+    let legacy_path = dir.path().join("legacy.db");
+    {
+        let conn = rusqlite::Connection::open(&legacy_path)?;
+        conn.execute_batch(
+            "CREATE TABLE characters (
+                id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT, avatar TEXT,
+                ext TEXT DEFAULT '{}', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+            );
+            CREATE TABLE chats (
+                id TEXT PRIMARY KEY, title TEXT, character_id TEXT, persona_id TEXT,
+                created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+            );
+            CREATE TABLE messages (
+                id TEXT PRIMARY KEY, chat_id TEXT NOT NULL, role TEXT, content TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            );
+            CREATE TABLE lorebooks (
+                id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT,
+                created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+                metadata TEXT DEFAULT '{}'
+            );
+            CREATE TABLE presets (
+                id TEXT PRIMARY KEY, kind TEXT NOT NULL, name TEXT NOT NULL, data TEXT DEFAULT '{}',
+                created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+            );
+            CREATE TABLE memories (
+                id TEXT PRIMARY KEY, scope TEXT NOT NULL DEFAULT 'global', character_id TEXT,
+                keys_json TEXT NOT NULL DEFAULT '[]', content TEXT NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1, position INTEGER NOT NULL DEFAULT 0,
+                metadata TEXT NOT NULL DEFAULT '{}',
+                created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+            );
+            CREATE TABLE settings (
+                key TEXT PRIMARY KEY, value TEXT NOT NULL
+            );",
+        )?;
+        conn.execute(
+            "INSERT INTO characters (id, name, created_at, updated_at) \
+             VALUES ('leg-c1', 'Alice', 1700000000000, 1700000001000)",
+            [],
+        )?;
+        // chat-1 → missing persona row; chat-2 → persona kept NULL by the source.
+        conn.execute(
+            "INSERT INTO chats (id, title, character_id, persona_id, created_at, updated_at) \
+             VALUES ('leg-h1', 'Dangling persona', 'leg-c1', 'leg-p-ghost', 1700000002000, 1700000003000)",
+            [],
+        )?;
+        conn.execute(
+            "INSERT INTO chats (id, title, character_id, created_at, updated_at) \
+             VALUES ('leg-h2', 'No persona', 'leg-c1', 1700000004000, 1700000005000)",
+            [],
+        )?;
+    }
+
+    let target_root = dir.path().join("root");
+    let candidate = stage_candidate(&target_root)?;
+    let report = convert_legacy(&legacy_path, &candidate)?;
+
+    assert_eq!(report.chats, 2, "both chats convert despite the dangle");
+    assert!(
+        report
+            .orphans
+            .iter()
+            .any(|entry| entry.contains("leg-h1") && entry.contains("leg-p-ghost")),
+        "the dangling persona reference is reported: {:?}",
+        report.orphans
+    );
+
+    let db = open_candidate(&candidate)?;
+    let persona: Option<String> = db.conn().query_row(
+        "SELECT persona_id FROM chats WHERE id = 'leg-h1'",
+        [],
+        |r| r.get(0),
+    )?;
+    assert_eq!(persona, None, "dangling reference converts to NULL persona");
+    let total: i64 = db
+        .conn()
+        .query_row("SELECT COUNT(*) FROM chats", [], |r| r.get(0))?;
+    assert_eq!(total, 2);
+    Ok(())
+}

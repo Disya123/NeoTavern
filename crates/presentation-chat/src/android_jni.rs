@@ -249,6 +249,15 @@ impl ProductWire for JniProductWire {
             Self::check_exception(env)
         })
     }
+
+    /// Local unsubscribe: the pending deque and the native handle map forget
+    /// the stream, so later polls return `Timeout`. No new JNI surface — the
+    /// host keeps buffering until the run finishes on its own.
+    fn drop_stream(&mut self, handle: &str) -> Result<(), ChatRouteError> {
+        self.native_handles.remove(handle);
+        self.pending.remove(handle);
+        Ok(())
+    }
 }
 
 fn generation_from_envelope(envelope: &EventEnvelope) -> Result<GenerationEvent, ChatRouteError> {

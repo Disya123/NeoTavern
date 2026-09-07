@@ -194,6 +194,7 @@ impl ProductWire for KernelProductWire {
         if let Some(entry) = self.streams.get_mut(handle) {
             if entry.terminal_sent {
                 self.streams.remove(handle);
+                self.applied.remove(handle);
                 return Ok(StreamFrame::Terminal);
             }
         } else {
@@ -230,6 +231,16 @@ impl ProductWire for KernelProductWire {
             .dispatch("generation.cancel", &bytes, &flag)
             .map_err(map_kernel)?;
         decode_result_empty(&resp).map_err(|err| ChatRouteError::Wire(err.message))?;
+        Ok(())
+    }
+
+    /// Unsubscribe without cancelling: the entry (and its replay cursor)
+    /// dies here, the kernel's writer thread keeps executing the run and
+    /// commits the terminal event to the durable log — re-entering the chat
+    /// later reads the finished state back.
+    fn drop_stream(&mut self, handle: &str) -> Result<(), ChatRouteError> {
+        self.streams.remove(handle);
+        self.applied.remove(handle);
         Ok(())
     }
 }

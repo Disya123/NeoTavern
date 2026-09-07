@@ -266,8 +266,18 @@ fn list_surfaces_a_container_missing_its_manifest() -> TestResult {
     let broken = backups_dir(root).join("broken.neotavern-backup");
     fs::create_dir_all(&broken)?;
 
-    let err = list_backups(root).expect_err("broken container must fail the list");
-    assert_eq!(err.code, StorageErrorCode::Corrupt);
+    // Audit C6: a broken container is surfaced as a `corrupt` record and
+    // must not fail the whole enumeration — the user must still see (and be
+    // able to delete) their healthy backups.
+    let records = list_backups(root).expect("broken container must not fail the list");
+    assert_eq!(records.len(), 2, "both containers are listed");
+    let ok = records.iter().find(|r| r.id == "ok-1").expect("ok record");
+    assert_eq!(ok.status, "completed");
+    let broken_record = records
+        .iter()
+        .find(|r| r.id == "broken")
+        .expect("broken record listed");
+    assert_eq!(broken_record.status, "corrupt");
     Ok(())
 }
 

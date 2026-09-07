@@ -148,8 +148,16 @@ pub(crate) fn generation_prompt_plan(
     request: &[u8],
 ) -> Result<Vec<u8>, KernelError> {
     let req = generated::decode_request_get_prompt_plan(request)?;
-    let plan = crate::prompt::load_prompt_plan(db, &req.run_id)
-        .map_err(|_| prompt_plan_not_found(&req.run_id))?;
+    // A missing plan is the honest `PROMPT_PLAN_NOT_FOUND`; a corrupted
+    // stored plan is an Internal and must surface as one, not masquerade
+    // as "no plan" (which would invite a destructive rebuild).
+    let plan = crate::prompt::load_prompt_plan(db, &req.run_id).map_err(|err| {
+        if err.code == KernelErrorCode::NotFound {
+            prompt_plan_not_found(&req.run_id)
+        } else {
+            err
+        }
+    })?;
     let value = serde_json::to_value(&plan)
         .map_err(|e| internal(format!("prompt plan: serialize: {e}")))?;
     validate(&value, generated::validate_prompt_plan)?;
@@ -820,10 +828,14 @@ enum StepOutcome {
     AlreadyTerminal,
 }
 
-/// CAS-transitions the run to `new_status` (with a lease refresh). On a
-/// lost CAS the row is re-read and the reaction is decided there — a
-/// `cancelling` run is committed `cancelled`, a terminal run stops, anything
-/// else retries with the fresh revision. Never a blind retry.
+/// CAS-transitions the run to `new_status` (with a lease refresh). The
+/// WHERE guards BOTH the revision and the observed `run.status`: a cancel
+/// that landed between the caller's reload and this CAS bumps the revision
+/// AND flips the status to `cancelling` — either way the CAS loses, the row
+/// is re-read, and the reaction is decided there: a `cancelling` run is
+/// committed `cancelled`, a terminal run stops, anything else retries with
+/// the fresh revision. Never a blind retry — and never an overwrite of a
+/// cancel by `preparing`/`streaming`.
 fn cas_status(
     db: &mut Database,
     mut run: RunRow,
@@ -833,18 +845,20 @@ fn cas_status(
     let updated_at = now();
     let lease = lease_expires();
     for _ in 0..8 {
+        let observed_status = run.status.clone();
         let changed = db.transaction(|tx| {
             tx.execute(
                 "UPDATE generation_runs SET status = ?1, revision = revision + 1, \
                  lease_owner = ?2, lease_expires_at = ?3, updated_at = ?4 \
-                 WHERE id = ?5 AND revision = ?6",
+                 WHERE id = ?5 AND revision = ?6 AND status = ?7",
                 params![
                     new_status,
                     lease_owner,
                     &lease,
                     &updated_at,
                     run.run_id,
-                    run.revision
+                    run.revision,
+                    observed_status
                 ],
             )
             .map_err(|e| StorageError::from_sqlite(e, "generation: status cas"))
@@ -1681,7 +1695,10 @@ fn terminal_cancelled(
 /// act immediately. No terminal event is committed.
 fn commit_shutdown_progress(db: &mut Database, run: &RunRow) -> Result<(), KernelError> {
     let updated_at = now();
-    let _ = db.transaction(|tx| {
+    // A failed progress commit (disk full, BUSY) must surface: swallowing it
+    // would leave a live lease behind, so startup recovery would wait the
+    // full lease window before marking the run `interrupted`.
+    db.transaction(|tx| {
         tx.execute(
             "UPDATE generation_runs SET lease_expires_at = NULL, revision = revision + 1, \
              updated_at = ?1 WHERE id = ?2 AND revision = ?3",

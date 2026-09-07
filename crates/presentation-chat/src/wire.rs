@@ -54,6 +54,15 @@ pub trait ProductWire {
     fn poll_stream(&mut self, handle: &str, timeout_ms: u32)
         -> Result<StreamFrame, ChatRouteError>;
     fn cancel_stream(&mut self, handle: &str) -> Result<(), ChatRouteError>;
+    /// Stops tracking a live stream WITHOUT cancelling it — the user left the
+    /// chat, the run keeps committing on the wire side and the durable log
+    /// stays canonical. Polling a dropped handle afterwards returns
+    /// `Timeout`. The default is a no-op for wires that keep no per-handle
+    /// state.
+    fn drop_stream(&mut self, handle: &str) -> Result<(), ChatRouteError> {
+        let _ = handle;
+        Ok(())
+    }
 }
 
 /// Hosts that pick the wire implementation at runtime (e.g. the desktop
@@ -80,5 +89,8 @@ impl<T: ProductWire + ?Sized> ProductWire for Box<T> {
     }
     fn cancel_stream(&mut self, handle: &str) -> Result<(), ChatRouteError> {
         (**self).cancel_stream(handle)
+    }
+    fn drop_stream(&mut self, handle: &str) -> Result<(), ChatRouteError> {
+        (**self).drop_stream(handle)
     }
 }

@@ -2384,6 +2384,13 @@ pub fn lorebooks_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Ke
         let changed = tx
             .execute(&sql, params_from_iter(values))
             .map_err(|e| StorageError::from_sqlite(e, "lorebooks_update: update"))?;
+        if changed == 0 {
+            // Nothing was touched: return before the link upsert can fire a
+            // FOREIGN KEY error on the missing book — the caller must see
+            // LOREBOOK_NOT_FOUND, the same code the no-characterId path
+            // returns.
+            return Ok(false);
+        }
         if let Some(character_id) = &req.character_id {
             tx.execute(
                 "INSERT INTO character_lorebooks (character_id, lorebook_id) VALUES (?1, ?2) \
@@ -2392,9 +2399,9 @@ pub fn lorebooks_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Ke
             )
             .map_err(|e| StorageError::from_sqlite(e, "lorebooks_update: link upsert"))?;
         }
-        Ok(changed)
+        Ok(true)
     })?;
-    if changed == 0 {
+    if !changed {
         return Err(not_found("LOREBOOK", &id));
     }
     let dto = query_lorebook(db.conn(), &id)?.ok_or_else(|| not_found("LOREBOOK", &id))?;
@@ -3067,8 +3074,21 @@ pub fn memories_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Ker
     let req = generated::decode_request_update_memory(request)?;
     let id = req.memory_id.clone();
     let now = now();
-    if let (Some(scope), Some(character_id)) = (&req.scope, &req.character_id) {
+    // Parity with `memories_create`: setting scope to `character` REQUIRES a
+    // characterId (a character memory with a NULL owner is invisible to
+    // retrieval — `character_id = ch.character_id` never matches NULL).
+    // An absent scope with an explicit characterId keeps the stored scope.
+    if let Some(scope) = &req.scope {
         if *scope == MemoryScope::Character {
+            let Some(character_id) = &req.character_id else {
+                return Err(KernelError::product(
+                    "VALIDATION".to_string(),
+                    vec![(
+                        "message".to_string(),
+                        "character-scoped memory requires characterId".to_string(),
+                    )],
+                ));
+            };
             let exists = db
                 .conn()
                 .query_row(
@@ -3247,10 +3267,11 @@ pub fn personas_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Ker
     let req = generated::decode_request_update_persona(request)?;
     let id = req.persona_id.clone();
     let now = now();
-    let changed = db.transaction(|tx| {
-        if req.is_default == Some(true) {
-            clear_persona_default(tx)?;
-        }
+    // The UPDATE runs FIRST: when it touches 0 rows the transaction commits
+    // nothing (no `clear_persona_default` side effect) and the caller gets
+    // PERSONA_NOT_FOUND — the single-default invariant cannot break on the
+    // error path.
+    let updated = db.transaction(|tx| {
         let mut sets: Vec<&str> = Vec::new();
         let mut values: Vec<Value> = Vec::new();
         if let Some(name) = &req.name {
@@ -3273,10 +3294,18 @@ pub fn personas_update(db: &mut Database, request: &[u8]) -> Result<Vec<u8>, Ker
         values.push(Value::Text(now.clone()));
         let sql = format!("UPDATE personas SET {} WHERE id = ?", sets.join(", "));
         values.push(Value::Text(id.clone()));
-        tx.execute(&sql, params_from_iter(values))
-            .map_err(|e| StorageError::from_sqlite(e, "personas_update: update"))
+        let changed = tx
+            .execute(&sql, params_from_iter(values))
+            .map_err(|e| StorageError::from_sqlite(e, "personas_update: update"))?;
+        if changed == 0 {
+            return Ok(false);
+        }
+        if req.is_default == Some(true) {
+            clear_persona_default(tx)?;
+        }
+        Ok(true)
     })?;
-    if changed == 0 {
+    if !updated {
         return Err(not_found("PERSONA", &id));
     }
     let dto = query_persona(db.conn(), &id)?.ok_or_else(|| not_found("PERSONA", &id))?;

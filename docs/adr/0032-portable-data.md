@@ -47,6 +47,23 @@ a second writer.
   and is re-run safe. Import and legacy conversion are OFFLINE: the host
   closes the kernel, stages a candidate, verifies, activates — the kernel
   exposes no import wire op (registry frozen at 21 ops).
+- **Format v2 (2026-09-07, audit)** extends the container with the sections
+  `personas`, `message_variants`, `message_content_revisions`,
+  `message_drafts`, `character_lorebooks`, `memories`, `settings` and the
+  columns the v1 writer dropped (`chats.personaId`/`parentChatId`/`origin`/
+  `sourceMessageId`, `messages.meta`/`generationRunId`/`checkpointChatId`/
+  `updatedAt`, `characters.importHash`, `presets.kind`). Import order is
+  FK-safe; unresolvable `personaId`/`characterId` references null out and
+  are reported as orphans, the snapshot soft-links (`parentChatId`,
+  `sourceMessageId`, `checkpointChatId`, `committedMessageId`) are treated
+  the same way, and `generationRunId` is carried verbatim without a check —
+  generation runs are kernel journals deliberately OUTSIDE the container
+  (with `generation_runs`/`generation_events`/`generation_steps` and
+  `prompt_plans`, plus the system tables `plugins`/`themes`/`profiles`,
+  they form the documented boundary of the format). v1 containers stay
+  importable: a missing section is empty and missing record fields take
+  their defaults (e.g. preset `kind = 'generation'`); a v2 container opened
+  by an older build is a controlled `UnsupportedStorageFormat` error.
 - **Legacy converter** reads pre-kernel data roots strictly read-only,
   maps the five product families into a fresh candidate schema, skips
   secrets/plugins/themes, and reports skipped orphans; the source is never
