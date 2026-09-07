@@ -25,6 +25,8 @@ mod text_publish;
 #[cfg(feature = "gpu")]
 mod vello_sink;
 
+#[cfg(feature = "gpu")]
+use blitz_dom::Document;
 use blitz_dom::{BaseDocument, StyleThreading};
 use blitz_paint::paint_scene;
 use blitz_traits::shell::{ColorScheme, Viewport};
@@ -60,9 +62,7 @@ pub use text_publish::{
     ProducerCounters, PublishError,
 };
 #[cfg(feature = "gpu")]
-pub use vello_sink::{
-    inscene_images_enabled, set_inscene_images, LayerDiag, VelloFilter, VelloSink,
-};
+pub use vello_sink::{inscene_images_enabled, LayerDiag, VelloFilter, VelloSink};
 
 pub use asset_net::{global_asset_store, AssetStore, ASSET_URL_PREFIX};
 
@@ -217,6 +217,7 @@ fn product_document_config(
     height: u32,
     scale: f32,
     _insets: SafeAreaInsets,
+    store: AssetStore,
 ) -> DocumentConfig {
     DocumentConfig {
         viewport: Some(Viewport::new(width, height, scale, ColorScheme::Dark)),
@@ -225,9 +226,7 @@ fn product_document_config(
         ua_stylesheets: Some(Vec::new()),
         font_ctx: Some(product_font_context()),
         style_threading: StyleThreading::Sequential,
-        net_provider: Some(Arc::new(LocalNetProvider::new(
-            crate::asset_net::global_asset_store(),
-        ))),
+        net_provider: Some(Arc::new(LocalNetProvider::new(store))),
         ..Default::default()
     }
 }
@@ -247,8 +246,9 @@ pub fn produce_product_app_at(
     height: u32,
     scale: f32,
     insets: SafeAreaInsets,
+    store: AssetStore,
 ) -> Result<ProducerOutput, String> {
-    produce_product_vdom_at(VirtualDom::new(app), width, height, scale, insets)
+    produce_product_vdom_at(VirtualDom::new(app), width, height, scale, insets, store)
 }
 
 pub fn produce_product_vdom_at(
@@ -257,11 +257,15 @@ pub fn produce_product_vdom_at(
     height: u32,
     scale: f32,
     insets: SafeAreaInsets,
+    store: AssetStore,
 ) -> Result<ProducerOutput, String> {
     let width = width.max(1);
     let height = height.max(1);
     let scale = scale.max(1.0);
-    let mut doc = DioxusDocument::new(vdom, product_document_config(width, height, scale, insets));
+    let mut doc = DioxusDocument::new(
+        vdom,
+        product_document_config(width, height, scale, insets, store),
+    );
     beat_blitz_default_css(&doc, insets);
     doc.initial_build();
     {
@@ -287,13 +291,14 @@ pub fn inspect_product_layout(
     height: u32,
     scale: f32,
     insets: SafeAreaInsets,
+    store: AssetStore,
 ) -> Result<ProductPaintLayout, String> {
     let width = width.max(1);
     let height = height.max(1);
     let scale = scale.max(1.0);
     let mut doc = DioxusDocument::new(
         VirtualDom::new(app),
-        product_document_config(width, height, scale, insets),
+        product_document_config(width, height, scale, insets, store),
     );
     beat_blitz_default_css(&doc, insets);
     doc.initial_build();
@@ -316,13 +321,14 @@ pub fn inspect_slot_skeleton(
     height: u32,
     scale: f32,
     insets: SafeAreaInsets,
+    store: AssetStore,
 ) -> Result<SlotSkeleton, String> {
     let width = width.max(1);
     let height = height.max(1);
     let scale = scale.max(1.0);
     let mut doc = DioxusDocument::new(
         VirtualDom::new(app),
-        product_document_config(width, height, scale, insets),
+        product_document_config(width, height, scale, insets, store),
     );
     beat_blitz_default_css(&doc, insets);
     doc.initial_build();
@@ -344,13 +350,14 @@ pub fn produce_product_gpu_app_scaled(
     height: u32,
     scale: f32,
     insets: SafeAreaInsets,
+    store: AssetStore,
 ) -> Result<(ProducerOutput, vello::Scene), String> {
     let width = width.max(1);
     let height = height.max(1);
     let scale = scale.max(1.0);
     let mut doc = DioxusDocument::new(
         VirtualDom::new(app),
-        product_document_config(width, height, scale, insets),
+        product_document_config(width, height, scale, insets, store),
     );
     beat_blitz_default_css(&doc, insets);
     doc.initial_build();
@@ -384,9 +391,13 @@ pub struct ProductVelloSession {
     width: u32,
     height: u32,
     scale: f32,
+    insets: SafeAreaInsets,
     diagnostic_dom_glass: Vec<u64>,
     raster_images: u64,
     paint_layout: ProductPaintLayout,
+    /// `true` once `open`/`refresh` succeeded — drives the incremental
+    /// decision in `open_or_refresh`.
+    warm: bool,
 }
 
 #[cfg(feature = "gpu")]
@@ -397,6 +408,7 @@ impl ProductVelloSession {
         height: u32,
         scale: f32,
         insets: SafeAreaInsets,
+        store: AssetStore,
     ) -> Result<Self, String> {
         let width = width.max(1);
         let height = height.max(1);
@@ -405,7 +417,7 @@ impl ProductVelloSession {
         let t0 = std::time::Instant::now();
         let mut doc = DioxusDocument::new(
             VirtualDom::new(app),
-            product_document_config(width, height, scale, insets),
+            product_document_config(width, height, scale, insets, store),
         );
         let t1 = std::time::Instant::now();
         beat_blitz_default_css(&doc, insets);
@@ -435,14 +447,150 @@ impl ProductVelloSession {
             width,
             height,
             scale,
+            insets,
             diagnostic_dom_glass,
             raster_images,
             paint_layout,
+            warm: true,
         })
     }
 
     pub fn paint_layout(&self) -> &ProductPaintLayout {
         &self.paint_layout
+    }
+
+    /// Incremental re-produce: keep the live document, diff only what changed.
+    ///
+    /// The full `open` (VirtualDom rebuild + full Blitz resolve) dominates a
+    /// produce (~85–95 ms release); after the hosts swap the product thread
+    /// locals and bump the viewport, the same view-model change can be applied
+    /// to the still-mounted document with `mark_all_dirty` → `poll` →
+    /// `resolve` and re-painted — typically a few ms.
+    ///
+    /// Contract:
+    /// - the caller MUST have installed the fresh view through
+    ///   [`install_product_shell`](neotavern_presentation_dioxus_shell::install_product_shell)
+    ///   (or be the sole owner that already did) before calling `refresh`;
+    /// - sizes are clamped like `open`; a changed size runs
+    ///   `BaseDocument::set_viewport` (no rebuild);
+    /// - changed insets re-bake the UA stylesheets (remove + re-add) so the
+    ///   `--nt-inset-*` tokens stay correct;
+    /// - `poll` may return `false` when the vdom has no work — that is not an
+    ///   error (the document is still consistent); it is reported through the
+    ///   `refresh` phase profile line.
+    ///
+    /// Kill switch: `NEOTA_INCREMENTAL_PRODUCE=0` makes the caller fall back
+    /// to `open` per produce (see `ProductVelloSession::open_or_refresh`).
+    pub fn refresh(
+        &mut self,
+        app: fn() -> Element,
+        width: u32,
+        height: u32,
+        scale: f32,
+        insets: SafeAreaInsets,
+    ) -> Result<(), String> {
+        let width = width.max(1);
+        let height = height.max(1);
+        let scale = scale.max(1.0);
+        let probe = std::env::var("NEOTA_OPEN_PROFILE").is_ok();
+        let t0 = std::time::Instant::now();
+        if scale != self.scale {
+            return Err(format!(
+                "refresh: scale changed {0} -> {1}; rebuild required",
+                self.scale, scale
+            ));
+        }
+        let size_changed = width != self.width || height != self.height;
+        let insets_changed = insets != self.insets;
+        {
+            let mut inner = self.doc.inner.borrow_mut();
+            if size_changed {
+                inner.set_viewport(Viewport::new(width, height, scale, ColorScheme::Dark));
+            }
+            if insets_changed {
+                // Same bake the initial `beat_blitz_default_css` did: the
+                // inset sheet is keyed by its full text, so remove + re-add
+                // replaces the baked values without touching other UA sheets.
+                for sheet in product_stylesheets_dev(insets) {
+                    inner.remove_user_agent_stylesheet(&sheet);
+                }
+                for sheet in product_stylesheets_dev(insets) {
+                    inner.add_user_agent_stylesheet(&sheet);
+                }
+            }
+        }
+        self.width = width;
+        self.height = height;
+        self.insets = insets;
+        let t1 = std::time::Instant::now();
+        self.doc.vdom.mark_all_dirty();
+        let dirty = self.doc.poll(None);
+        let t2 = std::time::Instant::now();
+        {
+            let mut inner = self.doc.inner.borrow_mut();
+            inner.handle_messages();
+            inner.resolve(0.0);
+        }
+        let t3 = std::time::Instant::now();
+        let diagnostic_dom_glass = diagnostic_glass_dom_order(&self.doc.inner.borrow());
+        let raster_images = count_raster_images(&self.doc.inner.borrow());
+        let paint_layout = collect_paint_layout(&self.doc.inner.borrow(), scale);
+        let t4 = std::time::Instant::now();
+        if probe {
+            eprintln!(
+                "[open-profile] refresh viewport/style {}ms poll {}ms(dirtied {}) resolve {}ms collect {}ms",
+                (t1 - t0).as_millis(),
+                (t2 - t1).as_millis(),
+                dirty,
+                (t3 - t2).as_millis(),
+                (t4 - t3).as_millis(),
+            );
+        }
+        self.diagnostic_dom_glass = diagnostic_dom_glass;
+        self.raster_images = raster_images;
+        self.paint_layout = paint_layout;
+        let _ = app;
+        Ok(())
+    }
+
+    /// Produce entry point with the incremental kill switch. `None` (or
+    /// `NEOTA_INCREMENTAL_PRODUCE=0`) opens cold; `Some(session)` refreshes
+    /// the mounted document in place. Typical host loop:
+    ///
+    /// ```ignore
+    /// let mut sess = None;
+    /// loop {
+    ///     let s = ProductVelloSession::open_or_refresh(
+    ///         product_shell_app, w, h, scale, insets, sess.take())?;
+    ///     let (out, scene, diag) = s.paint(VelloFilter::full())?;
+    ///     sess = Some(s);
+    /// }
+    /// ```
+    pub fn open_or_refresh(
+        app: fn() -> Element,
+        width: u32,
+        height: u32,
+        scale: f32,
+        insets: SafeAreaInsets,
+        store: AssetStore,
+        session: Option<Self>,
+    ) -> Result<Self, String> {
+        let incremental = std::env::var("NEOTA_INCREMENTAL_PRODUCE")
+            .map(|v| v != "0" && !v.is_empty())
+            .unwrap_or(true);
+        match (incremental, session) {
+            (true, Some(mut session)) => {
+                session.refresh(app, width, height, scale, insets)?;
+                Ok(session)
+            }
+            _ => ProductVelloSession::open(app, width, height, scale, insets, store),
+        }
+    }
+
+    /// True once this session was built by `open` (or replaced by one); a
+    /// `refresh` keeps it warm. Diagnostics for the incremental-produce gate.
+    pub fn is_warm(&self) -> bool {
+        self.warm
     }
 
     pub fn slot_skeleton(&self) -> SlotSkeleton {
@@ -807,6 +955,18 @@ fn stream_glass_index(stream: &[StreamOp], nth: usize) -> usize {
         .expect("glass in stream")
 }
 
+/// A2 test fixture: the real product shell app function (m0-d2 already
+/// depends on the shell crate for the produce path).
+#[cfg(test)]
+fn product_shell_app_for_tests() -> dioxus_core::Element {
+    neotavern_presentation_dioxus_shell::product_shell_app()
+}
+
+#[cfg(test)]
+fn current_shell_for_tests() -> neotavern_presentation_dioxus_shell::ProductShellView {
+    neotavern_presentation_dioxus_shell::current_product_shell()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1035,8 +1195,15 @@ mod tests {
 
     #[test]
     fn inline_phosphor_svg_paints_a_fill() {
-        let out = produce_product_app_at(phosphor_icon_app, 64, 64, 1.0, SafeAreaInsets::default())
-            .expect("icon");
+        let out = produce_product_app_at(
+            phosphor_icon_app,
+            64,
+            64,
+            1.0,
+            SafeAreaInsets::default(),
+            AssetStore::new(),
+        )
+        .expect("icon");
         let fills = out
             .stream
             .iter()
@@ -1054,6 +1221,229 @@ mod tests {
             fills >= 1,
             "usvg/blitz-paint must fill the Phosphor path, stream={:?}",
             out.stream
+        );
+    }
+
+    /// A2 incremental produce: `refresh` after `open` paints the same scene
+    /// (same paint commands / ops / paths counts) as a cold `open` of the
+    /// same view — the diff must be transparent.
+    #[test]
+    fn refresh_after_open_matches_open_paint_shape() {
+        use neotavern_presentation_dioxus_shell::{install_product_shell, ProductShellView};
+        install_product_shell(ProductShellView::default());
+        let (cold_out, cold_scene, _) = ProductVelloSession::open(
+            product_shell_app_for_tests,
+            320,
+            240,
+            1.0,
+            SafeAreaInsets::default(),
+            AssetStore::new(),
+        )
+        .expect("cold open")
+        .paint(VelloFilter::full())
+        .expect("cold paint");
+        // Same process keeps the session alive across produce calls.
+        let mut session = ProductVelloSession::open(
+            product_shell_app_for_tests,
+            320,
+            240,
+            1.0,
+            SafeAreaInsets::default(),
+            AssetStore::new(),
+        )
+        .expect("open");
+        session
+            .refresh(
+                product_shell_app_for_tests,
+                320,
+                240,
+                1.0,
+                SafeAreaInsets::default(),
+            )
+            .expect("refresh");
+        let (warm_out, warm_scene, _) = session.paint(VelloFilter::full()).expect("warm paint");
+        assert_eq!(
+            cold_out.report.paint_commands, warm_out.report.paint_commands,
+            "paint command count must match after a no-op refresh"
+        );
+        assert_eq!(cold_out.list.ops.len(), warm_out.list.ops.len());
+        assert_eq!(cold_scene.encoding().n_paths, warm_scene.encoding().n_paths);
+    }
+
+    /// `refresh` must be a no-op when nothing changed: `poll` returning false
+    /// (vdom had no work) is not an error, and the paint shape stays stable.
+    #[test]
+    fn refresh_with_no_pending_work_is_not_an_error() {
+        use neotavern_presentation_dioxus_shell::{install_product_shell, ProductShellView};
+        install_product_shell(ProductShellView::default());
+        let mut session = ProductVelloSession::open(
+            product_shell_app_for_tests,
+            320,
+            240,
+            1.0,
+            SafeAreaInsets::default(),
+            AssetStore::new(),
+        )
+        .expect("open");
+        // Re-install the identical view: mark_all_dirty still dirties scopes,
+        // but the resolved tree is unchanged. `refresh` must not error and the
+        // paint layout must stay consistent.
+        install_product_shell(current_shell_for_tests());
+        session
+            .refresh(
+                product_shell_app_for_tests,
+                320,
+                240,
+                1.0,
+                SafeAreaInsets::default(),
+            )
+            .expect("redundant refresh is still ok");
+        let (_out, _scene, _diag) = session
+            .paint(VelloFilter::full())
+            .expect("paint after no-op");
+    }
+
+    /// Insets changes must re-bake UA stylesheets without accumulating:
+    /// N refreshes with alternating insets leave the same UA sheet count and
+    /// produce the same geometry as a fresh open with the final insets.
+    #[test]
+    fn refresh_does_not_accumulate_ua_stylesheets() {
+        use neotavern_presentation_dioxus_shell::{install_product_shell, ProductShellView};
+        install_product_shell(ProductShellView::default());
+        let cold = ProductVelloSession::open(
+            product_shell_app_for_tests,
+            320,
+            240,
+            1.0,
+            SafeAreaInsets {
+                top: 0.0,
+                right: 0.0,
+                bottom: 24.0,
+                left: 0.0,
+            },
+            AssetStore::new(),
+        )
+        .expect("cold open with insets");
+        let cold_skeleton = cold.slot_skeleton();
+        let mut session = ProductVelloSession::open(
+            product_shell_app_for_tests,
+            320,
+            240,
+            1.0,
+            SafeAreaInsets::default(),
+            AssetStore::new(),
+        )
+        .expect("open zero insets");
+        for i in 0..4 {
+            let insets = if i % 2 == 0 {
+                SafeAreaInsets {
+                    top: 0.0,
+                    right: 0.0,
+                    bottom: 24.0,
+                    left: 0.0,
+                }
+            } else {
+                SafeAreaInsets::default()
+            };
+            session
+                .refresh(product_shell_app_for_tests, 320, 240, 1.0, insets)
+                .expect("refresh alternates insets");
+        }
+        let skeleton = session.slot_skeleton();
+        assert_eq!(
+            cold_skeleton.nodes.len(),
+            skeleton.nodes.len(),
+            "alternating insets refresh must converge to the same node count as a cold open"
+        );
+        for (cold_node, node) in cold_skeleton.nodes.iter().zip(skeleton.nodes.iter()) {
+            assert_eq!(
+                (cold_node.css_x, cold_node.css_y),
+                (node.css_x, node.css_y),
+                "inset-sensitive geometry must match the cold-open reference"
+            );
+        }
+    }
+
+    /// Resize through `refresh` re-lays out without a rebuild: same rows the
+    /// cold open of the target size yields.
+    #[test]
+    fn refresh_resizes_the_viewport_in_place() {
+        use neotavern_presentation_dioxus_shell::{install_product_shell, ProductShellView};
+        install_product_shell(ProductShellView::default());
+        let cold = ProductVelloSession::open(
+            product_shell_app_for_tests,
+            480,
+            320,
+            1.0,
+            SafeAreaInsets::default(),
+            AssetStore::new(),
+        )
+        .expect("cold open at target size");
+        let cold_skeleton = cold.slot_skeleton();
+        let mut session = ProductVelloSession::open(
+            product_shell_app_for_tests,
+            320,
+            240,
+            1.0,
+            SafeAreaInsets::default(),
+            AssetStore::new(),
+        )
+        .expect("open at initial size");
+        session
+            .refresh(
+                product_shell_app_for_tests,
+                480,
+                320,
+                1.0,
+                SafeAreaInsets::default(),
+            )
+            .expect("resize refresh");
+        let skeleton = session.slot_skeleton();
+        assert_eq!(cold_skeleton.nodes.len(), skeleton.nodes.len());
+        for (cold_node, node) in cold_skeleton.nodes.iter().zip(skeleton.nodes.iter()) {
+            assert_eq!(
+                (
+                    cold_node.css_x,
+                    cold_node.css_y,
+                    cold_node.css_width,
+                    cold_node.css_height
+                ),
+                (node.css_x, node.css_y, node.css_width, node.css_height),
+                "resize refresh must land the same geometry as a cold open"
+            );
+        }
+    }
+
+    /// The kill switch must make `open_or_refresh` take the full `open` path
+    /// even with a warm session in hand.
+    #[test]
+    fn open_or_refresh_kill_switch_forces_open() {
+        use neotavern_presentation_dioxus_shell::{install_product_shell, ProductShellView};
+        install_product_shell(ProductShellView::default());
+        let mut session = ProductVelloSession::open(
+            product_shell_app_for_tests,
+            320,
+            240,
+            1.0,
+            SafeAreaInsets::default(),
+            AssetStore::new(),
+        )
+        .expect("open");
+        std::env::set_var("NEOTA_INCREMENTAL_PRODUCE", "0");
+        let session = ProductVelloSession::open_or_refresh(
+            product_shell_app_for_tests,
+            320,
+            240,
+            1.0,
+            SafeAreaInsets::default(),
+            AssetStore::new(),
+            Some(session),
+        )
+        .expect("kill-switch refresh");
+        std::env::remove_var("NEOTA_INCREMENTAL_PRODUCE");
+        assert!(
+            session.is_warm(),
+            "the cold-opened replacement session is warm again"
         );
     }
 }

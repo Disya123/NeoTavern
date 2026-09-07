@@ -146,8 +146,15 @@ fn chat_markdown_structure_reaches_the_blitz_dom() {
     .expect("route");
     session.set_surface_size(1100, 760, 1.0);
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let layout = inspect_product_layout(product_shell_app, 1100, 760, 1.0, session.insets())
-        .expect("product layout");
+    let layout = inspect_product_layout(
+        product_shell_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("product layout");
     // Expected structure from the rows the virtualized window actually
     // serves: every seeded non-image row carries an inline `code` span and
     // every image row an `asset:` block.
@@ -238,8 +245,15 @@ fn markdown_minimal_probe() {
         details_mode: "details".to_string(),
         parent_chat_id: None,
     });
-    let layout =
-        inspect_product_layout(product_chat_app, 1100, 760, 1.0, Default::default()).expect("l");
+    let layout = inspect_product_layout(
+        product_chat_app,
+        1100,
+        760,
+        1.0,
+        Default::default(),
+        neotavern_presentation_m0_d2::global_asset_store(),
+    )
+    .expect("l");
     // Both inline code spans of the seeded markdown reach the DOM.
     assert_eq!(layout.markdown_code_nodes, 2);
     // "Hazel" at 13px/700 is ~34 CSS px wide.
@@ -258,8 +272,15 @@ fn chat_slot_skeleton_covers_react_workspace_contract() {
     .expect("route");
     session.set_surface_size(1100, 760, 1.0);
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
-        .expect("slot skeleton");
+    let skeleton = inspect_slot_skeleton(
+        product_shell_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("slot skeleton");
     for needle in [
         "chat-view",
         "chat-panel",
@@ -304,8 +325,15 @@ fn hit_rects_resolve_actions_from_layout_not_bands() {
     .expect("route");
     session.set_surface_size(1100, 760, 1.0);
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
-        .expect("slot skeleton");
+    let skeleton = inspect_slot_skeleton(
+        product_shell_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("slot skeleton");
     let rects = HitRects::from_skeleton(&skeleton);
 
     // Composer Send sits flush with its `.composerActions` row — regression
@@ -417,8 +445,15 @@ fn product_shell_character_manager_paints_react_tokens() {
     let (session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let produced = produce_product_app_at(product_shell_app, 407, 904, 1.0, session.insets())
-        .expect("product blitz");
+    let produced = produce_product_app_at(
+        product_shell_app,
+        407,
+        904,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("product blitz");
     assert!(produced.report.layout_resolved);
     assert!(produced.report.paint_commands > 0);
     let glass: Vec<_> = produced
@@ -457,8 +492,15 @@ fn demo_session_hydrates_a_display_sized_avatar() {
     assert_eq!(thumb.width, 128);
     assert_eq!(thumb.height, u32::from(AVATAR_DISPLAY_MAX_PX));
     neotavern_presentation_dioxus_shell::install_product_shell(shell);
-    let produced = produce_product_app_at(product_shell_app, 407, 904, 1.0, session.insets())
-        .expect("product blitz");
+    let produced = produce_product_app_at(
+        product_shell_app,
+        407,
+        904,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("product blitz");
     assert!(produced.report.paint_commands > 0);
     assert!(
         produced.report.raster_images > 0,
@@ -475,15 +517,22 @@ fn message_markdown_photos_hydrate_and_decode_in_scene() {
         None,
     )
     .expect("route");
-    let store = neotavern_presentation_m0_d2::global_asset_store();
+    let store = session.asset_store();
     let photo_asset = "00000000-0000-4000-8000-000000009000";
     assert!(
         store.contains(photo_asset),
-        "message `![photo 0](asset:{photo_asset})` must hydrate into the process asset store"
+        "message `![photo 0](asset:{photo_asset})` must hydrate into the session asset store"
     );
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let produced = produce_product_app_at(product_shell_app, 1100, 760, 1.0, session.insets())
-        .expect("product blitz");
+    let produced = produce_product_app_at(
+        product_shell_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("product blitz");
     assert!(
         produced.report.raster_images > 0,
         "message-image `<img>` must decode through LocalNetProvider into the scene"
@@ -496,8 +545,15 @@ fn hazel_card_stays_compact_on_the_phone_viewport() {
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
     session.set_surface_size(1220, 2712, 3.0);
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let layout = inspect_product_layout(product_shell_app, 1220, 2712, 3.0, session.insets())
-        .expect("product layout");
+    let layout = inspect_product_layout(
+        product_shell_app,
+        1220,
+        2712,
+        3.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("product layout");
     assert!(
         layout.card_css_height > 52.0 && layout.card_css_height <= 140.0,
         "Hazel card must be a compact list row, css height={}",
@@ -553,8 +609,15 @@ fn header_title_ellipsizes_on_the_phone_viewport() {
     );
     assert!(title.starts_with("Character"), "{title}");
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let layout = inspect_product_layout(product_shell_app, 1220, 2712, 3.0, session.insets())
-        .expect("product layout");
+    let layout = inspect_product_layout(
+        product_shell_app,
+        1220,
+        2712,
+        3.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("product layout");
     assert!(
         layout.title_css_width >= 96.0,
         "header title box must not be squeezed by the divider, css width={}",
@@ -1485,8 +1548,15 @@ fn character_editor_name_description_tags_over_product_wire() {
 
     session.set_surface_size(1100, 760, 1.0);
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
-        .expect("slot skeleton");
+    let skeleton = inspect_slot_skeleton(
+        product_shell_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("slot skeleton");
     assert!(
         skeleton.has_identity("character-name-input"),
         "missing character-name-input; identities={:?}",
@@ -1855,8 +1925,15 @@ fn prompt_template_blocks_toggle_over_product_wire() {
 
     session.set_surface_size(1100, 760, 1.0);
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
-        .expect("slot skeleton");
+    let skeleton = inspect_slot_skeleton(
+        product_shell_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("slot skeleton");
     assert!(
         skeleton.has_identity("prompt-template-editor"),
         "missing prompt-template-editor; identities={:?}",
@@ -1980,8 +2057,15 @@ fn prompt_template_presets_over_product_wire() {
 
     session.set_surface_size(1100, 760, 1.0);
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
-        .expect("slot skeleton");
+    let skeleton = inspect_slot_skeleton(
+        product_shell_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("slot skeleton");
     assert!(
         skeleton.has_identity("prompt-preset-cycle"),
         "missing prompt-preset-cycle; identities={:?}",
@@ -2131,8 +2215,15 @@ fn prompt_template_custom_blocks_over_product_wire() {
 
     session.set_surface_size(1100, 760, 1.0);
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
-        .expect("slot skeleton");
+    let skeleton = inspect_slot_skeleton(
+        product_shell_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("slot skeleton");
     assert!(
         skeleton.has_identity("prompt-block-add"),
         "missing prompt-block-add; identities={:?}",
@@ -2288,8 +2379,15 @@ fn prompt_template_reorder_blocks_over_product_wire() {
     }
 
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
-        .expect("slot skeleton");
+    let skeleton = inspect_slot_skeleton(
+        product_shell_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("slot skeleton");
     assert!(
         skeleton.has_identity("prompt-block-move-up"),
         "missing prompt-block-move-up; identities={:?}",
@@ -2401,8 +2499,15 @@ fn prompt_template_block_placement_over_product_wire() {
 
     session.apply_shell_action(ShellAction::CyclePromptBlockPosition);
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
-        .expect("slot skeleton");
+    let skeleton = inspect_slot_skeleton(
+        product_shell_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("slot skeleton");
     assert!(
         skeleton.has_identity("prompt-block-position-cycle"),
         "missing prompt-block-position-cycle; identities={:?}",
@@ -2486,8 +2591,15 @@ fn prompt_template_block_role_over_product_wire() {
     assert_eq!(session.shell_view().prompt_block_role, "system");
 
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
-        .expect("slot skeleton");
+    let skeleton = inspect_slot_skeleton(
+        product_shell_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("slot skeleton");
     assert!(
         skeleton.has_identity("prompt-block-role-cycle"),
         "missing prompt-block-role-cycle; identities={:?}",
@@ -2609,8 +2721,15 @@ fn prompt_template_block_triggers_over_product_wire() {
     );
 
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
-        .expect("slot skeleton");
+    let skeleton = inspect_slot_skeleton(
+        product_shell_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("slot skeleton");
     assert!(
         skeleton.has_identity("prompt-block-trigger"),
         "missing prompt-block-trigger; identities={:?}",
@@ -2704,8 +2823,15 @@ fn prompt_template_block_forbid_overrides_over_product_wire() {
 
     session.apply_shell_action(ShellAction::EditPromptBlock("custom-1".into()));
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
-        .expect("slot skeleton");
+    let skeleton = inspect_slot_skeleton(
+        product_shell_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("slot skeleton");
     assert!(
         skeleton.has_identity("prompt-block-forbid-overrides"),
         "missing prompt-block-forbid-overrides; identities={:?}",
@@ -2802,8 +2928,15 @@ fn prompt_template_block_model_binding_over_product_wire() {
     );
 
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
-        .expect("slot skeleton");
+    let skeleton = inspect_slot_skeleton(
+        product_shell_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("slot skeleton");
     assert!(
         skeleton.has_identity("prompt-block-model-input"),
         "missing prompt-block-model-input; identities={:?}",
@@ -2986,8 +3119,15 @@ fn prompt_template_import_export_over_product_wire() {
 
     session.apply_shell_action(ShellAction::PromptTemplateImportOpen);
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
-        .expect("slot skeleton");
+    let skeleton = inspect_slot_skeleton(
+        product_shell_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("slot skeleton");
     assert!(
         skeleton.has_identity("prompt-preset-import"),
         "missing prompt-preset-import; identities={:?}",
@@ -3290,8 +3430,15 @@ fn tool_activity_badge_from_waiting_tool_call_step() {
     let assert_badge = |source: ChatBlueprintSource| {
         set_chat_blueprint_source(source.clone());
         install_product_chat(session.view());
-        let skeleton = inspect_slot_skeleton(product_chat_app, 1100, 760, 1.0, session.insets())
-            .unwrap_or_else(|err| panic!("skeleton for {source:?}: {err}"));
+        let skeleton = inspect_slot_skeleton(
+            product_chat_app,
+            1100,
+            760,
+            1.0,
+            session.insets(),
+            session.asset_store(),
+        )
+        .unwrap_or_else(|err| panic!("skeleton for {source:?}: {err}"));
         assert!(
             skeleton.has_identity("tool-activity"),
             "tool-activity missing for {source:?}"
@@ -3512,8 +3659,15 @@ fn live_theme_engine_dynamic_token_switching_and_reset() {
 
     // Verify Dioxus/Blitz DOM renders with the active theme stylesheet.
     install_product_shell(shell.clone());
-    let produced = produce_product_app_at(product_shell_app, 407, 904, 1.0, session.insets())
-        .expect("produce themed shell");
+    let produced = produce_product_app_at(
+        product_shell_app,
+        407,
+        904,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("produce themed shell");
     assert!(
         produced.list.ops.len() > 0,
         "themed shell renders scene ops"
@@ -4178,8 +4332,15 @@ fn generation_preset_import_export_over_product_wire() {
 
     session.apply_shell_action(ShellAction::PresetImportOpen);
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
-        .expect("slot skeleton");
+    let skeleton = inspect_slot_skeleton(
+        product_shell_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("slot skeleton");
     assert!(
         skeleton.has_identity("preset-import"),
         "missing preset-import; identities={:?}",
@@ -4305,8 +4466,15 @@ fn generation_preset_sampler_editing_over_product_wire() {
         .any(|op| op == "settings.update"));
 
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
-        .expect("slot skeleton");
+    let skeleton = inspect_slot_skeleton(
+        product_shell_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("slot skeleton");
     assert!(
         skeleton.has_identity("unlock-context"),
         "missing unlock-context; identities={:?}",
@@ -4343,8 +4511,15 @@ fn product_shell_phosphor_svg_emits_path_fills() {
     let (session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let produced = produce_product_app_at(product_shell_app, 407, 904, 1.0, session.insets())
-        .expect("product blitz");
+    let produced = produce_product_app_at(
+        product_shell_app,
+        407,
+        904,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("product blitz");
     let fills = produced
         .stream
         .iter()
@@ -4474,8 +4649,15 @@ fn blueprint_chrome_skeleton_matches_legacy_rsx() {
 
     let mount = |source: ChatBlueprintSource| {
         set_chat_blueprint_source(source.clone());
-        inspect_slot_skeleton(product_chat_app, width, height, 1.0, insets)
-            .unwrap_or_else(|err| panic!("skeleton for {source:?}: {err}"))
+        inspect_slot_skeleton(
+            product_chat_app,
+            width,
+            height,
+            1.0,
+            insets,
+            session.asset_store(),
+        )
+        .unwrap_or_else(|err| panic!("skeleton for {source:?}: {err}"))
     };
     let legacy = mount(ChatBlueprintSource::Disabled);
     let blueprint = mount(ChatBlueprintSource::Embedded);
@@ -4636,6 +4818,7 @@ fn blueprint_document_edit_changes_the_live_skeleton() {
             view.viewport_height,
             1.0,
             insets,
+            session.asset_store(),
         )
         .expect("skeleton")
     };
@@ -5504,8 +5687,15 @@ fn composer_shows_stop_button_during_streaming_and_cancels_generation() {
     // Initial state: idle composer renders "send" action.
     assert!(!session.view().streaming);
     install_product_chat(session.view());
-    let skel_idle = inspect_slot_skeleton(product_chat_app, 1100, 760, 1.0, session.insets())
-        .expect("idle skeleton");
+    let skel_idle = inspect_slot_skeleton(
+        product_chat_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("idle skeleton");
     assert!(
         skel_idle
             .nodes
@@ -5527,8 +5717,15 @@ fn composer_shows_stop_button_during_streaming_and_cancels_generation() {
     for source in [ChatBlueprintSource::Disabled, ChatBlueprintSource::Embedded] {
         set_chat_blueprint_source(source.clone());
         install_product_chat(session.view());
-        let skel_stream = inspect_slot_skeleton(product_chat_app, 1100, 760, 1.0, session.insets())
-            .unwrap_or_else(|err| panic!("skeleton for {source:?}: {err}"));
+        let skel_stream = inspect_slot_skeleton(
+            product_chat_app,
+            1100,
+            760,
+            1.0,
+            session.insets(),
+            session.asset_store(),
+        )
+        .unwrap_or_else(|err| panic!("skeleton for {source:?}: {err}"));
 
         let stop_node = skel_stream
             .nodes
@@ -5559,8 +5756,15 @@ fn composer_shows_stop_button_during_streaming_and_cancels_generation() {
 
     // Idle state restored: composer returns to send.
     install_product_chat(session.view());
-    let skel_after = inspect_slot_skeleton(product_chat_app, 1100, 760, 1.0, session.insets())
-        .expect("after skeleton");
+    let skel_after = inspect_slot_skeleton(
+        product_chat_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("after skeleton");
     assert!(
         skel_after
             .nodes
@@ -5615,8 +5819,15 @@ fn character_manager_alternate_greetings_add_toggle_and_remove() {
 
     session.set_surface_size(1100, 760, 1.0);
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
-        .expect("slot skeleton");
+    let skeleton = inspect_slot_skeleton(
+        product_shell_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("slot skeleton");
 
     assert!(
         skeleton.has_identity("character-first-message-input"),
@@ -5640,8 +5851,15 @@ fn character_manager_alternate_greetings_add_toggle_and_remove() {
 
     // When open, the skeleton exposes the greeting text input
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let skeleton_open = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
-        .expect("open slot skeleton");
+    let skeleton_open = inspect_slot_skeleton(
+        product_shell_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("open slot skeleton");
     assert!(
         skeleton_open.has_identity("character-greeting-input"),
         "expanded greeting renders character-greeting-input; identities={:?}",
@@ -5724,8 +5942,15 @@ fn message_details_card_open_inspect_and_close() {
 
     // Install shell view and verify slot skeleton contains details card components
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let skeleton_open = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
-        .expect("open details skeleton");
+    let skeleton_open = inspect_slot_skeleton(
+        product_shell_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("open details skeleton");
     assert!(
         skeleton_open.has_identity("details-card"),
         "details-card rendered; identities={:?}",
@@ -5757,9 +5982,15 @@ fn message_details_card_open_inspect_and_close() {
     assert!(session.view().details_message_id.is_none());
 
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let skeleton_closed =
-        inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
-            .expect("closed details skeleton");
+    let skeleton_closed = inspect_slot_skeleton(
+        product_shell_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("closed details skeleton");
     assert!(
         !skeleton_closed.has_identity("details-card"),
         "details-card removed on close"
@@ -5794,9 +6025,15 @@ fn message_details_card_actions_mode_navigation_and_execution() {
 
     // Inspect Dioxus slot skeleton in "actions" mode
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let skeleton_actions =
-        inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
-            .expect("actions mode skeleton");
+    let skeleton_actions = inspect_slot_skeleton(
+        product_shell_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("actions mode skeleton");
 
     assert!(
         skeleton_actions.has_identity("details-action-menu"),
@@ -5825,9 +6062,15 @@ fn message_details_card_actions_mode_navigation_and_execution() {
     assert_eq!(session.view().details_mode, "details");
 
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let skeleton_details =
-        inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
-            .expect("details mode skeleton");
+    let skeleton_details = inspect_slot_skeleton(
+        product_shell_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("details mode skeleton");
 
     assert!(
         skeleton_details.has_identity("details-meta"),
@@ -5880,8 +6123,15 @@ fn message_details_card_edit_mode_navigation_and_saving() {
 
     // Inspect Dioxus slot skeleton in "edit" mode
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let skeleton_edit = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
-        .expect("edit mode skeleton");
+    let skeleton_edit = inspect_slot_skeleton(
+        product_shell_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("edit mode skeleton");
 
     assert!(
         skeleton_edit.has_identity("details-editor"),
@@ -5985,8 +6235,15 @@ fn general_settings_steppers_and_range_sliders_interactive() {
 
     // Inspect Dioxus slot skeleton in settings panel
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
-        .expect("settings skeleton");
+    let skeleton = inspect_slot_skeleton(
+        product_shell_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("settings skeleton");
 
     assert!(
         skeleton.has_identity("range-header"),
@@ -6016,8 +6273,15 @@ fn character_card_viewer_mode_toggle_and_rendering() {
     // Initial state is edit mode
     assert_eq!(session.shell_view().editor_mode, "edit");
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let edit_skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
-        .expect("edit skeleton");
+    let edit_skeleton = inspect_slot_skeleton(
+        product_shell_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("edit skeleton");
     assert!(
         edit_skeleton.has_identity("character-editor"),
         "edit mode renders character-editor"
@@ -6037,8 +6301,15 @@ fn character_card_viewer_mode_toggle_and_rendering() {
 
     // Inspect Dioxus slot skeleton in view mode
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let view_skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
-        .expect("view skeleton");
+    let view_skeleton = inspect_slot_skeleton(
+        product_shell_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("view skeleton");
 
     assert!(
         view_skeleton.has_identity("character-viewer"),
@@ -6084,8 +6355,15 @@ fn character_card_viewer_mode_toggle_and_rendering() {
     assert_eq!(session.shell_view().editor_mode, "edit");
 
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let back_skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
-        .expect("back skeleton");
+    let back_skeleton = inspect_slot_skeleton(
+        product_shell_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("back skeleton");
     assert!(
         back_skeleton.has_identity("character-editor"),
         "returns to character-editor in edit mode"
@@ -6123,9 +6401,15 @@ fn chat_header_back_to_parent_button_navigates_to_parent_chat() {
 
     // Initial root chat has no parent: back-to-parent button must be absent.
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let initial_skeleton =
-        inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
-            .expect("initial skeleton");
+    let initial_skeleton = inspect_slot_skeleton(
+        product_shell_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("initial skeleton");
     assert!(
         !initial_skeleton.has_identity("back-to-parent"),
         "initial chat without parent must not render back-to-parent button"
@@ -6153,8 +6437,15 @@ fn chat_header_back_to_parent_button_navigates_to_parent_chat() {
 
     // Child chat has a parent: verify the back-to-parent button is rendered and has action/component hooks.
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let child_skeleton = inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
-        .expect("child skeleton");
+    let child_skeleton = inspect_slot_skeleton(
+        product_shell_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("child skeleton");
     assert!(
         child_skeleton.has_identity("back-to-parent"),
         "child chat must render back-to-parent button in header"
@@ -6183,9 +6474,15 @@ fn chat_header_back_to_parent_button_navigates_to_parent_chat() {
 
     // Returned to parent: back-to-parent button disappears.
     neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
-    let parent_restored_skeleton =
-        inspect_slot_skeleton(product_shell_app, 1100, 760, 1.0, session.insets())
-            .expect("parent restored skeleton");
+    let parent_restored_skeleton = inspect_slot_skeleton(
+        product_shell_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("parent restored skeleton");
     assert!(
         !parent_restored_skeleton.has_identity("back-to-parent"),
         "back-to-parent button disappears once restored to parent chat"
@@ -6310,4 +6607,95 @@ fn fling_glide_matches_shared_android_recurrence_through_session() {
     assert!(!neotavern_presentation_chat::scroll_dynamics::glide_active(
         velocity
     ));
+}
+
+// A3 window-first asset hydration: the visible span (height-index model +
+// current scroll offset) hydrates before the rest of the loaded page, and the
+// scroll-settle trigger exposes that through `refresh_visible_assets`.
+
+#[test]
+fn asset_hydration_window_follows_the_scroll_offset() {
+    let (mut session, _) = start_flagged_session(
+        Some("1"),
+        FakeWire::with_message_count(40),
+        Some(neotavern_presentation_chat::DEMO_CHAT_ID),
+        None,
+    )
+    .expect("route");
+    // Bottom-anchored offset 0: the window is the newest rows (the tail of
+    // the list, ids in layout order oldest→newest inside the window).
+    let at_bottom = session.visible_asset_window_ids();
+    assert!(
+        !at_bottom.is_empty(),
+        "a non-empty chat must always produce a hydration window"
+    );
+    let tail_set: std::collections::HashSet<String> = session
+        .state()
+        .messages
+        .iter()
+        .rev()
+        .take(at_bottom.len())
+        .map(|row| row.id.clone())
+        .collect();
+    let at_bottom_set: std::collections::HashSet<String> = at_bottom.iter().cloned().collect();
+    assert_eq!(
+        at_bottom_set, tail_set,
+        "at offset 0 the window must be the newest rows"
+    );
+
+    // Scroll deep into history: the window must move to older rows (the head
+    // side), not stay pinned to the tail.
+    let extent_proxy: f32 = 40.0 * 56.0;
+    session.scroll_chat_by(extent_proxy * 0.7);
+    let scrolled = session.visible_asset_window_ids();
+    assert!(!scrolled.is_empty());
+    let scrolled_set: std::collections::HashSet<String> = scrolled.iter().cloned().collect();
+    assert_ne!(
+        scrolled_set, tail_set,
+        "the window must move after a deep scroll"
+    );
+    // And every window id must be a real message row (id mapping is exact).
+    for id in &scrolled {
+        assert!(
+            session.state().messages.iter().any(|row| &row.id == id),
+            "window id {id} must map to a loaded message row"
+        );
+    }
+}
+
+#[test]
+fn refresh_visible_assets_hydrates_the_scrolled_window() {
+    let (mut session, _) = start_flagged_session(
+        Some("1"),
+        FakeWire::with_message_count(40),
+        Some(neotavern_presentation_chat::DEMO_CHAT_ID),
+        None,
+    )
+    .expect("route");
+    let store = session.asset_store();
+    // The open-time hydration filled the visible-at-bottom ids; verify every
+    // asset referenced by those rows is now in the store.
+    for id in session.visible_asset_window_ids() {
+        let row = session
+            .state()
+            .messages
+            .iter()
+            .find(|row| row.id == *id)
+            .expect("window id maps to a row");
+        for asset in neotavern_presentation_dioxus_shell::asset_image_refs(&row.content) {
+            assert!(
+                store.contains(&asset),
+                "photo {asset} of the visible window must be hydrated after open"
+            );
+        }
+    }
+    // The scroll-settle trigger on a fresh session must be a cheap no-op when
+    // the window is already hydrated (no fetch, no error, no state change).
+    let issued_before = session.issued_commands().len();
+    session.refresh_visible_assets();
+    assert_eq!(
+        issued_before,
+        session.issued_commands().len(),
+        "a fully-hydrated window must short-circuit without new wire calls"
+    );
 }

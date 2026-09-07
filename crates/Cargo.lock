@@ -3806,6 +3806,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "neotavern-presentation-kernel-wire"
+version = "0.1.0"
+dependencies = [
+ "contracts-generated",
+ "neotavern-presentation-chat",
+ "neotavern-presentation-dioxus-shell",
+ "runtime-kernel",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "neotavern-presentation-m0"
 version = "0.1.0"
 dependencies = [

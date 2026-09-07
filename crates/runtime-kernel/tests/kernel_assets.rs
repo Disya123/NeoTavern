@@ -170,6 +170,53 @@ fn assets_thumb_rejects_out_of_contract_max_px() {
     assert_eq!(err.code, runtime_kernel::KernelErrorCode::ContractViolation);
 }
 
+#[test]
+fn assets_thumb_corrupt_cache_entry_is_regenerated() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let kernel = open_kernel(root.path());
+
+    let png = solid_png(64, 48, false);
+    let put = put_png(&kernel, "avatar", &png);
+    let id = put["asset"]["id"].as_str().expect("asset id").to_string();
+    let first = dispatch(
+        &kernel,
+        "assets.thumb",
+        json!({ "assetId": id, "maxPx": 32 }),
+    )
+    .expect("assets.thumb must succeed");
+
+    // Corrupt every cached entry: the cache is regenerable (AGENTS §12/§20),
+    // so the next request must rebuild it instead of failing forever.
+    let cache_dir = root.path().join("cache").join("thumbnails");
+    for entry in std::fs::read_dir(&cache_dir).expect("cache dir exists") {
+        let path = entry.expect("dir entry").path();
+        std::fs::write(&path, b"not an image at all").expect("corrupt the cache entry");
+    }
+
+    let second = dispatch(
+        &kernel,
+        "assets.thumb",
+        json!({ "assetId": id, "maxPx": 32 }),
+    )
+    .expect("corrupt cache must regenerate, not fail");
+    assert_eq!(second["assetId"], id);
+    assert_eq!(second["width"], 32);
+    assert_eq!(second["height"], 24);
+    let decoded = image::load_from_memory(&base64_decode(
+        second["contentBase64"].as_str().expect("b64"),
+    ))
+    .expect("regenerated thumbnail is a valid raster");
+    assert_eq!((decoded.width(), decoded.height()), (32, 24));
+    let entries = std::fs::read_dir(&cache_dir).expect("cache dir exists");
+    assert_eq!(entries.count(), 1, "exactly one valid entry after regen");
+    // The re-encode is deterministic: same source + maxPx ⇒ identical bytes
+    // (this is the point — the corrupt entry must not be served instead).
+    assert_eq!(
+        second["contentBase64"], first["contentBase64"],
+        "regeneration reproduces the original encoding"
+    );
+}
+
 fn base64_decode(value: &str) -> Vec<u8> {
     use base64::Engine as _;
     base64::engine::general_purpose::STANDARD

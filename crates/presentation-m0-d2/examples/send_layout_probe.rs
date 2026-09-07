@@ -8,7 +8,15 @@ use neotavern_presentation_m0_d2::inspect_slot_skeleton;
 
 fn dump(name: &str, app: fn() -> dioxus_core::Element) {
     install_product_chat(ProductChatView::default());
-    let skel = inspect_slot_skeleton(app, 1100, 760, 1.0, Default::default()).expect("skeleton");
+    let skel = inspect_slot_skeleton(
+        app,
+        1100,
+        760,
+        1.0,
+        Default::default(),
+        neotavern_presentation_m0_d2::global_asset_store(),
+    )
+    .expect("skeleton");
     let row = skel
         .nodes
         .iter()

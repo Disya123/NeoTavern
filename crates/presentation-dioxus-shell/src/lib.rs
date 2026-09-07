@@ -8,7 +8,6 @@ use dioxus_core::{Element, VirtualDom};
 use dioxus_core_macro::rsx;
 use serde::Deserialize;
 use std::collections::HashSet;
-use std::sync::Mutex;
 
 mod ai_settings_tab;
 mod backgrounds_tab;
@@ -35,6 +34,10 @@ pub use markdown::{
 };
 pub use neotavern_presentation_blueprint::v1::{ContextUsageBreakdownV1, ContextUsageSummaryV1};
 pub use neotavern_presentation_design_system::SafeAreaInsets;
+pub use neotavern_presentation_design_system::{
+    builtin_theme_tokens, parse_theme_tokens_from_manifest, render_theme_stylesheet,
+    resolve_theme_tokens, ThemeTokens,
+};
 pub use product_path::{
     chrome_metrics, current_product_chat, format_timestamp, install_product_chat, message_id,
     mixed_height, mixed_height_catalog, product_chat_from_fixture, product_chat_with_chrome,
@@ -51,10 +54,6 @@ pub use product_shell::{
     ProviderCardView, ProviderConfigCardView, RunStepView, ThemeCardView, ToolCardView,
     AI_SETTINGS_TITLE, BACKGROUNDS_MANAGER_TITLE, CHARACTER_MANAGER_TITLE, CHATS_MANAGER_TITLE,
     LOREBOOK_MANAGER_TITLE, PERSONA_MANAGER_TITLE, PLUGINS_MANAGER_TITLE, SETTINGS_TITLE,
-};
-pub use neotavern_presentation_design_system::{
-    builtin_theme_tokens, parse_theme_tokens_from_manifest, render_theme_stylesheet,
-    resolve_theme_tokens, ThemeTokens,
 };
 pub use scene_chat::{
     chat_wallpaper_mode, set_chat_blueprint_source, set_chat_wallpaper_mode, ChatBlueprintSource,
@@ -243,25 +242,33 @@ pub fn project_canonical(fixture: &CanonicalFixture) -> Result<CanonicalProjecti
     })
 }
 
-static SHELL_TITLE: Mutex<String> = Mutex::new(String::new());
-static SHELL_COUNT: Mutex<usize> = Mutex::new(0);
+/// Props for the canonical-projection smoke component (B2: the former
+/// `SHELL_TITLE`/`SHELL_COUNT` process globals became a plain parameter, so
+/// concurrent mounts cannot leak state into each other).
+#[derive(Clone)]
+struct ShellProbeProps {
+    title: String,
+    count: usize,
+}
 
-fn shell_app() -> Element {
-    let title = SHELL_TITLE.lock().expect("shell title").clone();
-    let count = *SHELL_COUNT.lock().expect("shell count");
+fn shell_app(props: ShellProbeProps) -> Element {
     rsx! {
         div {
             "data-component": "chat-workspace",
-            "{title} ({count})"
+            "{props.title} ({props.count})"
         }
     }
 }
 
 /// Build a Dioxus VirtualDom from Wire view models. Not a GPU/JNI mount.
 pub fn mount_virtual_dom(title: &str, message_count: usize) -> usize {
-    *SHELL_TITLE.lock().expect("shell title") = title.to_string();
-    *SHELL_COUNT.lock().expect("shell count") = message_count;
-    let mut vdom = VirtualDom::new(shell_app);
+    let mut vdom = VirtualDom::new_with_props(
+        shell_app,
+        ShellProbeProps {
+            title: title.to_string(),
+            count: message_count,
+        },
+    );
     let mutations = vdom.rebuild_to_vec();
     mutations.edits.len()
 }
@@ -630,7 +637,11 @@ fn message_details_card(view: &ProductChatView) -> Option<Element> {
     let author = row.author.clone();
     let is_user = row.role == "user";
     let token_label = row.token_count.map(|c| format!("{c}t"));
-    let timestamp = if row.timestamp.is_empty() { None } else { Some(row.timestamp.clone()) };
+    let timestamp = if row.timestamp.is_empty() {
+        None
+    } else {
+        Some(row.timestamp.clone())
+    };
     let model = row.model.clone();
     let duration = row.generation_time.clone();
     let content = row.content.clone();

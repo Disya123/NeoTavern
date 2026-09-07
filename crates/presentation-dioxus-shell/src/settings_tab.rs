@@ -191,7 +191,11 @@ fn general_range_row(
     part: &'static str,
 ) -> Element {
     let shown = format!("{value}{unit}");
-    let pct = if max > 0 { (value.min(max) * 100) / max } else { 0 };
+    let pct = if max > 0 {
+        (value.min(max) * 100) / max
+    } else {
+        0
+    };
     let dec_action = format!("{part}-dec");
     let inc_action = format!("{part}-inc");
     rsx! {

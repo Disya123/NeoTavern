@@ -121,20 +121,6 @@ function dumpUi(adbBin, serial) {
   return `${pulled.stdout || ''}\n${pulled.stderr || ''}`;
 }
 
-function parseNodeCenter(xml, desc) {
-  const nodes = xml.split('<node ');
-  for (const node of nodes) {
-    if (!node.includes(`content-desc="${desc}"`)) continue;
-    const hit = /bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/u.exec(node);
-    if (!hit) continue;
-    return {
-      x: Math.floor((Number(hit[1]) + Number(hit[3])) / 2),
-      y: Math.floor((Number(hit[2]) + Number(hit[4])) / 2),
-    };
-  }
-  return null;
-}
-
 function parseNodeCenterIncludes(xml, snippet) {
   const nodes = xml.split('<node ');
   for (const node of nodes) {

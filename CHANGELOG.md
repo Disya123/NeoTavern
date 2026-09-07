@@ -1,6 +1,93 @@
 # Changelog
 
 ## Unreleased
+### Changed
+
+- **Фаза B (архитектурный долг): session.rs → `session/`, per-session
+  `AssetStore`, `KernelProductWire`.** Три среза одного захода по расплате с
+  глобальным состоянием и проводом:
+
+  - **B1 — `session.rs` (8989 строк) распилен на `session/` из 13
+    кластеров** (`core/composer/view/chat_nav/characters/personas/settings/
+    wire_ops/messages/profiles/presets/helpers/...`): один impl-блок разрезан
+    на per-cluster impl-блоки, `mod.rs` ре-экспортирует прежнюю публичную
+    поверхность. Механический распил без смены поведения — побайтовое
+    совпадение `--dom-dump` (401 узел) и зелёный комплект
+    26+97+1+26+27+15.
+  - **B2 — глобальное состояние ушло в параметры:** `global_asset_store`
+    заменён per-session `AssetStore` через produce-seam (стейл-растры больше
+    не утекают между чатами), `INSCENE_IMAGES` стал полем `VelloSink`
+    (SWITCH_LOCK мёртв), `SHELL_TITLE` — параметром теста.
+  - **B3 — новый мини-крейт
+    `neotavern-presentation-kernel-wire`: `KernelProductWire` реализует
+    `ProductWire` поверх канонического Rust Kernel.** Unary-операции идут
+    через `Kernel::dispatch` (call-путь доказан ранее в
+    `tests/isolated_10k_kernel.rs`), генерация — через
+    `Kernel::dispatch_stream` + replay durable-лога `generation.events`:
+    каждый poll отдаёт ровно один кадр (после терминального события —
+    `Terminal`, затем exhausted-deque `Timeout`, паритет семантики FakeWire);
+    `cancel_stream` — `generation.cancel`. Маппинг ошибок:
+    `err.product → ChatRouteError::Product`, иначе `Transport`. Крейт —
+    единственное место на стороне presentation, где зависимость
+    `runtime-kernel` легальна (guard-тесты в `tests/parity.rs` держат
+    package-graph ацикличным и список зависимостей минимальным; guard в
+    `presentation-chat/tests/live_wire.rs` по-прежнему запрещает kernel в
+    прод-зависимостях presentation-chat). Новый бин `neocompositor-kernel` —
+    тот же winit/present-хост `desktop_host`, но провод — настоящий Kernel с
+    durable SQLite (`--data-root`, по умолчанию temp; `--seed N` вместо
+    `--messages`). Десктопный `desktop_host::run` принимает injectable wire
+    (`RunConfig.wire: Option<Box<dyn ProductWire>>` + `RunConfig.chat_id`);
+    кадровый цикл pump'ит живой kernel-стрим (~60 Гц, async writer-поток
+    ядра коммитит события после `dispatch_stream`-reply). Blanket-impl
+    `ProductWire for Box<T>` держит сессию как `ChatSession<Box<dyn
+    ProductWire>>`. Верификация: 9 parity-тестов FakeWire↔Kernel (send →
+    completed с durable assistant-сообщением; cancel mid-flight через
+    `steps`/`delay-ms` model-config; retry после cancel; retry после
+    completed = `GENERATION_RUN_STATE_CONFLICT`; одинаковые product-коды
+    `CHAT_NOT_FOUND`; exhausted-deque-семантика после Terminal; уникальность
+    envelope sequence), smoke-прогон бина (`kernel_messages=12` через
+    настоящий SQLite, dom-dump 373 узла), побайтовое совпадение dom-dump
+    дефолтного хоста с бейзлайном до правки `App` (401 узел), полный
+    комплект 26+97+1+26+27+15 зелёный.
+
+- **Десктоп-хост: бин `neocompositor-desktop` распилен на модули крейта
+  (2428 строк → `desktop_host/`).** Бин теперь — только парсинг аргументов и
+  `desktop_host::run(RunConfig)`; логика хоста разложена по образцу
+  `android_surface.rs`: `state` (сессия/окно), `produce` (медленный путь:
+  пересборка документа + Vello-растр), `input` (указатель/тач, slop, действия),
+  `scroll` (анимации смещения), `text` (клавиатура), `frame` (present,
+  blend-окна, resize, `ApplicationHandler`), `probe`
+  (`--pointer`/`--type`/`--wheel`/`--tick` машинка). Механический распил без
+  смены поведения — подтверждено побайтовым совпадением `--dom-dump` с
+  бейзлайном до распила и зелёным композитор-комплектом (26+95+1+26).
+
+- **Инкрементальный produce тёплой сессии (~2.5–3× ускорение интерактивного
+  рендера).** `ProductVelloSession::open_or_refresh`/`refresh`
+  (`presentation-m0-d2`): документ больше не пересобирается на каждый dirty
+  кадр — после swap'а product thread_locals и `set_viewport` сцена диффится
+  (`mark_all_dirty` → `poll` → `resolve`) и пере-красится. Замер (release,
+  сцена 12 сообщений): тёплый produce ~26–33 мс против ~57–79 мс полного
+  `open`; холодный старт не изменился. Изменение insets пере-запекает
+  UA-стили без накопления; `poll=false` — не ошибка. Kill-switch
+  `NEOTA_INCREMENTAL_PRODUCE=0` возвращает полный пересбор. Корректность:
+  побайтовое совпадение `--dom-dump` с полным путём, 5 новых тестов m0-d2,
+  `NEOTA_OPEN_PROFILE` печатает фазы refresh/poll/resolve.
+
+- **Гидрация фото-сообщений по видимому окну + унификация моделей высот.**
+  `hydrate_message_assets` теперь первый проход берёт id'ы из *видимого*
+  окна (span по `compositor_height_index` с текущим scroll-офсетом и
+  overscan 4 строки), остальная страница дозаполняет лимит 32 в прежнем
+  порядке — при прыжках/скролле картинки загружаются там, куда смотрит
+  пользователь, а не в голове списка. Scroll-settle триггер
+  `ChatSession::refresh_visible_assets()` вызывается desktop-хостом после
+  посадки скролла (`ack.land`); Android — отдельным срезом. Модели высот
+  унифицированы: presentation-оценка и `compositor_height_index` выводятся
+  из одного `estimate_height` (композитор поднимает до bubble-базлайна и
+  добавляет photo-cover 436 px сверху) — окно гидрации и нарисованное окно
+  больше не расходятся. 2 новых теста compositor_host
+  (`asset_hydration_window_follows_the_scroll_offset`,
+  `refresh_visible_assets_hydrates_the_scrolled_window`).
+
 ### Fixed
 
 - **Нативный композитор: ресайз окна — живой re-layout вместо слайдшоу/растяжения.**
@@ -10,7 +97,8 @@
   drag-а (десятки событий в секунду). Итог — окно обновлялось раз в секунды.
   Теперь: (1) зависимости воркспейса компилируются с `opt-level = 2` и без
   debug-инфы даже в dev-профиле (`crates/Cargo.toml`) — produce ~130–180 мс
-  в dev, release по-прежнему быстрее (~40–80 мс); (2) `PresentSurface` разделён
+  в dev, release по-прежнему быстрее (замер после этапов A–C: ~85–95 мс;
+  исторические ~40–80 мс — меньшая сцена до роста документов); (2) `PresentSurface` разделён
   на дешёвый `set_swapchain_size` (только конфиг+configure, на каждый event) и
   полный `resize` (реаллок целей + `rebuild_bind`, один раз на produce из
   `produce_and_render`); (3) `Resized` снова просто ставит `dirty` — winit
@@ -23,6 +111,23 @@
   (`slot_skeleton()` трижды → один). Диагностика: `NEOTA_OPEN_PROFILE=1`
   печатает фазы `open` (dom_new/initial_build/resolve/collect), строка
   produce расширена фазами layout/open/paint/render/post.
+
+- **Починка по итогам самоаудита (P1).** (1) Blit-шейдер — единый источник:
+  `presentation-chat::blit_wgsl::BLIT_WGSL`; десктоп и Android компилируют
+  одну константу вместо двух копипаст «must stay identical» без охраняющего
+  теста. (2) Битый файл в `cache/thumbnails` больше не фейлит `assets.thumb`
+  навсегда: запись удаляется и миниатюра регенерируется (§12/§20 —
+  «автоматически восстанавливаемый кэш»); интеграционный тест портит кэш и
+  проверяет регенерацию. (3) `assets.thumb` не падает на легитимно крупном
+  контенте: кодирование идёт по лестнице — полностью непрозрачная альфа
+  сбрасывается в JPEG (RGBA-thumbnail конвертируется в RGB8 — JPEG-энкодер
+  image не принимает RGBA), затем maxPx ступенями ×3/4 до влезания в
+  wire-лимит из реестра (без хардкода байтов, §23); при невозможности —
+  стабильный `PAYLOAD_TOO_LARGE`; кэш пишет только влезшее кодирование.
+  Юнит-тесты: шумовой RGBA 2000×1400 при maxPx 1024 (шаг вниз, PNG под
+  лимитом), полностью непрозрачная альфа → JPEG. (4) Удалена мёртвая
+  `parseNodeCenter` из `scripts/milestone-c-physical-capture.mjs` (ветка
+  снова проходит `pnpm lint`).
 
 ### Added
 

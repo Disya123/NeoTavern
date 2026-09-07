@@ -27,7 +27,8 @@ Android-хост `GpuSurface` платформенно-нейтрален **кр
 - `open(instance, surface, w, h)` — поиск адаптера (Vulkan в приоритете),
   `request_vello_device`, `plan_vello_target`, выбор формата поверхности
   (`pick_surface_format` предпочитает non-sRGB `Rgba8Unorm`/`Bgra8Unorm`),
-  блит-пайплайн (тот же `BLIT_WGSL`, что в Android);
+  блит-пайплайн (шейдер — единый `blit_wgsl::BLIT_WGSL`, его же компилирует
+  Android-хост);
 - `render(scene, base_color)` — GPU Vello-растр в storage → GPU-копия в `resolve`;
 - `present(scroll, header, composer_top)` — фуллскрин-блит `resolve` → swapchain
   (зеркало Android `blit`);
@@ -43,10 +44,36 @@ Android-хост `GpuSurface` платформенно-нейтрален **кр
   `--swapchain PNG` у раннера). Всё — PNG-дампы, пригодные для гистограммы.
 
 Десктоп-раннер — `crates/presentation-chat/src/bin/neocompositor-desktop.rs`
-(feature `desktop-host = ["gpu", "dep:winit"]`, только Windows/macOS). Его
-платформенный код — только winit-окно и `instance.create_surface(window)`;
+(feature `desktop-host = ["gpu", "dep:winit", "dep:arboard"]`, только
+Windows/macOS). Сам бин — только парсинг аргументов и вызов
+`desktop_host::run(RunConfig)`; вся логика хоста живёт в модуле
+`crates/presentation-chat/src/desktop_host/` (зеркало структуры
+`android_surface.rs`): `state` (конструирование сессии/окна), `produce`
+(пересборка документа + Vello-растр — медленный путь), `input`
+(указатель/тач, slop-правила, действия), `scroll` (анимации визуального
+смещения), `text` (клавиатура в фокусное поле), `frame` (present, blend-окна,
+resize, `ApplicationHandler`), `probe` (детерминированные
+`--pointer`/`--type`/`--wheel`/`--tick` пробы). `App` объявлен в `mod.rs`,
+дочерние модули видят приватные поля как потомки — контракт публичного API
+не изменился. Платформенный код хоста — только winit-окно и
+`instance.create_surface(window)`;
 кадры идут по Android-каденции: layout + Vello-растр один раз на `bind`/dirty,
 дальше чисто composite-only переблиты на каждый present-кадр.
+
+**Провод выбирается на старте (фаза B3).** `RunConfig.wire:
+Option<Box<dyn ProductWire>>` + `RunConfig.chat_id: Option<String>`:
+`None`/`None` — in-memory `FakeWire` с `--messages` сид-сообщениями
+(дефолтный бин); kernel-провод инжектится из
+`neotavern-presentation-kernel-wire` (см. `crates/presentation-kernel-wire/`),
+который не может зависеть от `presentation-chat` в обратную сторону —
+поэтому kernel-режим оформлен отдельным бином `neocompositor-kernel` в этом
+крейте. Сессия хоста — `ChatSession<Box<dyn ProductWire>>` (blanket-impl
+`ProductWire for Box<T>` в `presentation-chat/src/wire.rs`). Кадровый цикл
+pump'ит живой kernel-стрим: `about_to_wait` держит redraw ~60 Гц, пока
+`state().stream_handle` жив (writer-поток ядра коммитит события после
+`dispatch_stream`-reply, поэтому `drain_stream(0)` может выйти раньше
+терминала); `--dom-dump`/`--snapshot`/`--swapchain` работают одинаково на
+обоих проводах.
 
 ## Запуск
 
@@ -56,18 +83,40 @@ cargo run --release --manifest-path crates/Cargo.toml -p neotavern-presentation-
 ```
 
 **Интерактив: release-сборка предпочтительна, dev-профиль ускорен.** Каждый
-клик/скролл/resize пересоздаёт сцену (Blitz paint + vello-растр) синхронно на
-потоке событий. Профиль стоимости одного produce (12 сообщений,
+клик/скролл/resize пересобирает сцену (Blitz paint + vello-растр) синхронно
+на потоке событий. Профиль стоимости одного produce (12 сообщений,
 `NEOTA_OPEN_PROFILE=1`): почти всё — `ProductVelloSession::open`
 (`initial_build` VirtualDom + Blitz `resolve`), paint/render — единицы мс.
 С `[profile.dev.package."*"] opt-level = 2` (deps оптимизированы и в dev;
-см. `crates/Cargo.toml`) produce в dev-сборке ~130–180 мс; в release —
-~40–80 мс. Resize окном пере-верстает документ живо: `Resized` →
-`set_swapchain_size` + `dirty` (winit сам коалесцирует redraw), цели
-догоняют размер один раз на produce; обои-cover перегенерируется по порогу
-±10% размера прямоугольника, между порогами шейдер растягивает кэшированный
-cover. Обновление «produce на каждый event без коалесинга» или «produce
-сбрасывающий dirty» — регрессия.
+см. `crates/Cargo.toml`) produce в dev-сборке ~130–180 мс; в release,
+замер на этой сцене после этапов A–C, — ~85–95 мс холодного produce
+(исторические ~40–80 мс относились к меньшей сцене до роста документов).
+
+**Инкрементальный produce (A2, по умолчанию включён).** Хост держит
+`ProductVelloSession` живым между produce-вызовами: после swap'а product
+thread_locals и обновления вьюпорта документ не пересобирается, а диффится
+(`mark_all_dirty` → `poll` → `resolve(0.0)`) и пере-красится —
+`ProductVelloSession::open_or_refresh` в
+`crates/presentation-m0-d2/src/lib.rs`. Замер на этой сцене (release):
+тёплый produce **~26–33 мс** против ~57–79 мс полного `open`
+(poll ~7–10 мс + resolve ~12–18 мс; `NEOTA_OPEN_PROFILE=1` печатает фазу
+`refresh viewport/style ... poll ... (dirtied ...) resolve ...`), т.е.
+**~2.5–3×** быстрее; холодный первый кадр не изменился. Корректность
+закреплена тестами m0-d2 (`refresh_after_open_matches_open_paint_shape`,
+`refresh_does_not_accumulate_ua_stylesheets`, `refresh_resizes_the_viewport_in_place`,
+`open_or_refresh_kill_switch_forces_open`) и побайтовым совпадением
+`--dom-dump` incremental-пути с полным. Контракт: перед `refresh` хост обязан
+установить свежий view (`install_product_shell`); изменение insets пере-
+запекает UA-стили (remove+re-add, без накопления); `poll=false` (vdom без
+работы) — не ошибка. Kill-switch: `NEOTA_INCREMENTAL_PRODUCE=0` возвращает
+полный `open` на каждый produce (тот же паттерн, что `NEOTA_INSCENE_IMAGES=0`).
+
+Resize окном пере-верстает
+документ живо: `Resized` → `set_swapchain_size` + `dirty` (winit сам
+коалесцирует redraw), цели догоняют размер один раз на produce; обои-cover
+перегенерируется по порогу ±10% размера прямоугольника, между порогами
+шейдер растягивает кэшированный cover. Обновление «produce на каждый event
+без коалесинга» или «produce сбрасывающий dirty» — регрессия.
 
 Флаги: `--messages <N>` — число сид-сообщений wire (по умолчанию 12);
 `--w/--h` — начальный размер окна; `--pointer <x>,<y>` — один симулированный

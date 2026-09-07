@@ -21,7 +21,9 @@ use neotavern_presentation_design_system::SafeAreaInsets;
 use neotavern_presentation_dioxus_shell::{
     install_product_shell, product_shell_app, CharacterCardView, ProductShellView,
 };
-use neotavern_presentation_m0_d2::{inspect_slot_skeleton, produce_product_gpu_app_scaled, write_slot_skeleton};
+use neotavern_presentation_m0_d2::{
+    inspect_slot_skeleton, produce_product_gpu_app_scaled, write_slot_skeleton,
+};
 use vello::peniko::color::palette;
 use vello::wgpu::{
     CommandEncoderDescriptor, Extent3d, MapMode, TexelCopyBufferInfo, TexelCopyBufferLayout,
@@ -60,6 +62,7 @@ fn main() {
             height,
             scale,
             SafeAreaInsets::default(),
+            neotavern_presentation_m0_d2::global_asset_store(),
         )
         .expect("slot skeleton");
         let count = skeleton.nodes.len();
@@ -73,6 +76,7 @@ fn main() {
         height,
         scale,
         SafeAreaInsets::default(),
+        neotavern_presentation_m0_d2::global_asset_store(),
     )
     .expect("product shell produce");
 

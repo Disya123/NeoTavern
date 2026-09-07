@@ -199,6 +199,9 @@ pub(crate) fn assets_thumb(db: &Database, request: &[u8]) -> Result<Vec<u8>, Ker
     })?;
 
     // Cache lookup keyed by (original sha256, maxPx, algorithm version).
+    // A corrupt or unreadable entry is DELETED and regenerated below (AGENTS
+    // §12/§20: the cache is regenerable and must recover automatically), never
+    // allowed to fail the request.
     let cache_dir = db.data_root().join("cache").join("thumbnails");
     for (ext, format) in [
         ("jpg", AssetThumbFormat::Jpeg),
@@ -208,13 +211,20 @@ pub(crate) fn assets_thumb(db: &Database, request: &[u8]) -> Result<Vec<u8>, Ker
         if !cached.is_file() {
             continue;
         }
-        let bytes = std::fs::read(&cached).map_err(|err| {
-            KernelError::new(
-                KernelErrorCode::StorageFailure,
-                format!("assets.thumb: cannot read cached thumbnail: {err}"),
-            )
-        })?;
-        let (width, height) = thumb_dimensions(&bytes)?;
+        let bytes = match std::fs::read(&cached) {
+            Ok(bytes) => bytes,
+            Err(_) => {
+                let _ = std::fs::remove_file(&cached);
+                continue;
+            }
+        };
+        let (width, height) = match thumb_dimensions(&bytes) {
+            Ok(dims) => dims,
+            Err(_) => {
+                let _ = std::fs::remove_file(&cached);
+                continue;
+            }
+        };
         return encode_thumb_response(&req.asset_id, format, width, height, &bytes);
     }
 
@@ -255,26 +265,7 @@ pub(crate) fn assets_thumb(db: &Database, request: &[u8]) -> Result<Vec<u8>, Ker
             format!("assets.thumb: original is not a decodable raster: {err}"),
         )
     })?;
-    let thumb = image.thumbnail(u32::from(max_px), u32::from(max_px));
-    let has_alpha = matches!(
-        thumb.color(),
-        image::ColorType::Rgba8
-            | image::ColorType::Rgba16
-            | image::ColorType::La8
-            | image::ColorType::La16
-    );
-    let (format, encoded): (AssetThumbFormat, Vec<u8>) = if has_alpha {
-        let mut png = Vec::new();
-        let encoder = image::codecs::png::PngEncoder::new(std::io::Cursor::new(&mut png));
-        thumb.write_with_encoder(encoder).map_err(encode_failure)?;
-        (AssetThumbFormat::Png, png)
-    } else {
-        let mut out = Vec::new();
-        let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 82);
-        thumb.write_with_encoder(encoder).map_err(encode_failure)?;
-        (AssetThumbFormat::Jpeg, out)
-    };
-    let (tw, th) = (thumb.width(), thumb.height());
+    let (format, encoded, tw, th) = encode_thumb_with_ladder(&image, max_px)?;
 
     // Atomic cache write (AGENTS.md §12: temp file + rename); a failed cache
     // write must not fail the request — the next call regenerates.
@@ -336,6 +327,70 @@ fn preflight_dimensions(bytes: &[u8]) -> Result<(u32, u32), KernelError> {
             format!("assets.thumb: original is not a decodable raster: {err}"),
         )
     })
+}
+
+/// Encode a thumbnail of `image` under the op's wire response cap. The cap
+/// bounds the BASE64 payload (AGENTS §23: the limit comes from the registry,
+/// never a hard-coded constant), and a 1024px PNG with a noisy alpha channel
+/// can legitimately exceed it, so the encode walks a ladder instead of
+/// failing: (1) a fully OPAQUE alpha channel is dropped in favor of JPEG
+/// (renders identically, 5–10× smaller), then (2) the thumbnail shrinks by
+/// 25% per step down to a floor. Returns the format, the encoded bytes and
+/// the final thumbnail dimensions; an encoding that still exceeds the cap at
+/// the floor is a stable `PAYLOAD_TOO_LARGE` product error.
+pub(crate) fn encode_thumb_with_ladder(
+    image: &image::DynamicImage,
+    max_px: u32,
+) -> Result<(AssetThumbFormat, Vec<u8>, u32, u32), KernelError> {
+    let response_limit = generated::operation_response_limit("assets.thumb")
+        .unwrap_or(generated::DEFAULT_RESPONSE_LIMIT_BYTES) as usize;
+    let min_px = max_px.clamp(16, 256);
+    let mut step_max = max_px;
+    let mut opaque_alpha: Option<bool> = None;
+    loop {
+        let thumb = image.thumbnail(step_max, step_max);
+        let has_alpha = matches!(
+            thumb.color(),
+            image::ColorType::Rgba8
+                | image::ColorType::Rgba16
+                | image::ColorType::La8
+                | image::ColorType::La16
+        );
+        // One probe per request: `to_rgba8` normalizes 16-bit channels, so a
+        // single `== 255` comparison is correct for every color type.
+        let drop_alpha = has_alpha
+            && *opaque_alpha
+                .get_or_insert_with(|| thumb.to_rgba8().pixels().all(|px| px[3] == 255));
+        let (format, encoded): (AssetThumbFormat, Vec<u8>) = if has_alpha && !drop_alpha {
+            let mut png = Vec::new();
+            let encoder = image::codecs::png::PngEncoder::new(std::io::Cursor::new(&mut png));
+            thumb.write_with_encoder(encoder).map_err(encode_failure)?;
+            (AssetThumbFormat::Png, png)
+        } else {
+            // The JPEG encoder has no RGBA support (and the opaque-alpha path
+            // can reach it with an RGBA thumbnail) — collapse to RGB8 first.
+            let rgb = image::DynamicImage::ImageRgb8(thumb.to_rgb8());
+            let mut out = Vec::new();
+            let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 82);
+            rgb.write_with_encoder(encoder).map_err(encode_failure)?;
+            (AssetThumbFormat::Jpeg, out)
+        };
+        let b64_len = (encoded.len() + 2) / 3 * 4;
+        if b64_len <= response_limit {
+            return Ok((format, encoded, thumb.width(), thumb.height()));
+        }
+        if step_max <= min_px {
+            return Err(KernelError::product(
+                "PAYLOAD_TOO_LARGE".to_string(),
+                vec![
+                    ("operationId".to_string(), "assets.thumb".to_string()),
+                    ("bytes".to_string(), b64_len.to_string()),
+                    ("limit".to_string(), response_limit.to_string()),
+                ],
+            ));
+        }
+        step_max = (step_max * 3 / 4).max(min_px);
+    }
 }
 
 fn encode_failure(err: image::ImageError) -> KernelError {
@@ -527,5 +582,77 @@ fn extension_of(filename: &str) -> String {
             out
         }
         _ => String::new(),
+    }
+}
+
+#[cfg(test)]
+mod thumb_ladder_tests {
+    use super::*;
+
+    /// Deterministic LCG noise: incompressible per-pixel content without a
+    /// rand dependency.
+    struct Lcg(u64);
+    impl Lcg {
+        fn next_byte(&mut self) -> u8 {
+            self.0 = self
+                .0
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            (self.0 >> 33) as u8
+        }
+    }
+
+    fn noise_rgba8(width: u32, height: u32, opaque_alpha: bool) -> image::DynamicImage {
+        let mut rng = Lcg(0x9E3779B97F4A7C15);
+        let mut buffer = image::RgbaImage::new(width, height);
+        for px in buffer.pixels_mut() {
+            *px = image::Rgba([
+                rng.next_byte(),
+                rng.next_byte(),
+                rng.next_byte(),
+                if opaque_alpha { 255 } else { rng.next_byte() },
+            ]);
+        }
+        image::DynamicImage::ImageRgba8(buffer)
+    }
+
+    /// A noisy RGBA source at maxPx 1024 overflows the base64 response cap as
+    /// a 1024px PNG; the ladder must step the size down (and stay under the
+    /// registry limit) instead of failing with PAYLOAD_TOO_LARGE.
+    #[test]
+    fn ladder_steps_noisy_alpha_png_under_the_response_cap() {
+        let image = noise_rgba8(2000, 1400, false);
+        let (format, encoded, tw, th) =
+            encode_thumb_with_ladder(&image, 1024).expect("ladder must find a fitting encode");
+        assert_eq!(format, AssetThumbFormat::Png, "translucent noise stays PNG");
+        let limit = generated::operation_response_limit("assets.thumb")
+            .expect("assets.thumb declares a response limit");
+        assert!(
+            (encoded.len() + 2) / 3 * 4 <= limit as usize,
+            "base64 {} exceeds limit {}",
+            (encoded.len() + 2) / 3 * 4,
+            limit
+        );
+        // `thumbnail` preserves the 10:7 source aspect (longest side = step).
+        let aspect = f64::from(th) / f64::from(tw);
+        assert!(
+            (aspect - 0.7).abs() < 0.01,
+            "aspect must be preserved: {tw}x{th}"
+        );
+        assert!(
+            tw < 1024,
+            "must have stepped below the requested maxPx: {tw}"
+        );
+    }
+
+    /// A fully opaque alpha channel renders identically as JPEG and encodes
+    /// several times smaller — the ladder must drop it instead of keeping an
+    /// oversized PNG.
+    #[test]
+    fn ladder_drops_fully_opaque_alpha_to_jpeg() {
+        let image = noise_rgba8(2000, 1400, true);
+        let (format, _encoded, _tw, _th) =
+            encode_thumb_with_ladder(&image, 1024).expect("ladder must succeed");
+        assert_eq!(format, AssetThumbFormat::Jpeg);
     }
 }

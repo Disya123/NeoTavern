@@ -4,22 +4,22 @@
 //! This crate never links `runtime-kernel`.
 
 use std::collections::{HashMap, VecDeque};
-use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::Mutex;
 
 use contracts_generated::generated::{
-    EventEnvelope, GenerationEvent, ResponseEnvelope, decode_event_envelope,
-    decode_generation_event, decode_response_envelope,
+    decode_event_envelope, decode_generation_event, decode_response_envelope, EventEnvelope,
+    GenerationEvent, ResponseEnvelope,
 };
 use jni::objects::{GlobalRef, JByteArray, JClass, JObject, JString, JValue};
 use jni::sys::{jboolean, jfloat, jint, jlong, jstring};
 use jni::{JNIEnv, JavaVM};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 use crate::error::ChatRouteError;
 use crate::session::ChatSession;
 use crate::wire::{ProductWire, StreamFrame, WireCall};
-use crate::{LiveChatReport, blocked_line, start_flagged_session};
+use crate::{blocked_line, start_flagged_session, LiveChatReport};
 
 struct JniProductWire {
     vm: JavaVM,

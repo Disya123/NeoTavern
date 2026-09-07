@@ -55,3 +55,30 @@ pub trait ProductWire {
         -> Result<StreamFrame, ChatRouteError>;
     fn cancel_stream(&mut self, handle: &str) -> Result<(), ChatRouteError>;
 }
+
+/// Hosts that pick the wire implementation at runtime (e.g. the desktop
+/// `--wire kernel` mode) hold the session as `ChatSession<Box<dyn ProductWire>>`;
+/// this blanket keeps every `Box`ed wire a full wire without changing the
+/// trait itself.
+impl<T: ProductWire + ?Sized> ProductWire for Box<T> {
+    fn call(&mut self, operation_id: &str, payload: Value) -> Result<WireCall, ChatRouteError> {
+        (**self).call(operation_id, payload)
+    }
+    fn start_stream(
+        &mut self,
+        operation_id: &str,
+        payload: Value,
+    ) -> Result<String, ChatRouteError> {
+        (**self).start_stream(operation_id, payload)
+    }
+    fn poll_stream(
+        &mut self,
+        handle: &str,
+        timeout_ms: u32,
+    ) -> Result<StreamFrame, ChatRouteError> {
+        (**self).poll_stream(handle, timeout_ms)
+    }
+    fn cancel_stream(&mut self, handle: &str) -> Result<(), ChatRouteError> {
+        (**self).cancel_stream(handle)
+    }
+}

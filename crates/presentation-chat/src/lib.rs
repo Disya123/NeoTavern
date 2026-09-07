@@ -18,15 +18,25 @@ mod wire;
 mod android_jni;
 #[cfg(all(feature = "android-jni", feature = "gpu", target_os = "android"))]
 mod android_surface;
-/// GPU avatar overlay, now shared by the Android host and the cross-platform
-/// `PresentSurface` host (`desktop-host`). Compiled whenever `gpu` is on;
-/// only Android feeds it at build time.
 #[cfg(feature = "gpu")]
 #[cfg_attr(
     not(all(feature = "android-jni", target_os = "android")),
     allow(dead_code)
 )]
 mod avatar_gpu;
+/// GPU avatar overlay, now shared by the Android host and the cross-platform
+/// `PresentSurface` host (`desktop-host`). Compiled whenever `gpu` is on;
+/// only Android feeds it at build time.
+/// Single-source blit shader for both GPU hosts (`vello_gpu` desktop /
+/// `android_surface` Android). No cfg gate: a string constant is inert on
+/// builds that never compile a GPU host, and the whole point is that both
+/// hosts reference the exact same bytes.
+mod blit_wgsl;
+/// Desktop winit host — the cross-platform mirror of `android_surface`
+/// (same present pipeline, same probe machinery). Compiled only behind the
+/// `desktop-host` feature, which also gates the `neocompositor-desktop` bin.
+#[cfg(feature = "desktop-host")]
+pub mod desktop_host;
 #[cfg(feature = "gpu")]
 #[cfg_attr(
     not(all(feature = "android-jni", target_os = "android")),
@@ -44,8 +54,8 @@ use neotavern_presentation_dioxus_shell::{dioxus_shell_from_flag, DioxusShellHos
 
 pub use avatar::{
     display_avatar_data_uri, display_avatar_from_bytes, thumbnail_from_bytes,
-    wallpaper_cover_thumbnail, AvatarThumb, AVATAR_DISPLAY_MAX_PX,
-    AVATAR_DISPLAY_URI_MAX_CHARS, THUMBNAIL_INPUT_MAX_BYTES, WALLPAPER_DISPLAY_MAX_PX,
+    wallpaper_cover_thumbnail, AvatarThumb, AVATAR_DISPLAY_MAX_PX, AVATAR_DISPLAY_URI_MAX_CHARS,
+    THUMBNAIL_INPUT_MAX_BYTES, WALLPAPER_DISPLAY_MAX_PX,
 };
 pub use compositor::ChatCompositor;
 pub use error::ChatRouteError;

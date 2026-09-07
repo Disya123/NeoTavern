@@ -1,6 +1,5 @@
 //! Blitz `PaintScene` that records into a Vello scene on the live GPU device.
 
-use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 
 use anyrender::{
@@ -12,38 +11,18 @@ use peniko::{BlendMode, Color, Compose, Fill, FontData, Mix, StyleRef};
 use vello::peniko::kurbo as vkurbo;
 use vello::Scene;
 
-/// In-scene image-brush switch (image pipeline audit, stage B). `0` keeps the
-/// Vello 0.9-era workaround (Image brushes dropped → letter fallbacks + the
-/// host GPU overlay); anything else, including unset, paints `<img>` rasters
+/// In-scene image-brush switch (image pipeline audit, stage B). `false` keeps
+/// the Vello 0.9-era workaround (Image brushes dropped → letter fallbacks +
+/// the host GPU overlay); `true`, including unset, paints `<img>` rasters
 /// through Vello's persistent image atlas so z-order/clips/modals apply.
 /// `NEOTA_INSCENE_IMAGES=0` is the documented escape hatch for a device where
 /// that atlas path regresses to a black SurfaceView.
-const INSCENE_IMAGES_UNSET: u8 = 0;
-const INSCENE_IMAGES_ON: u8 = 1;
-const INSCENE_IMAGES_OFF: u8 = 2;
-static INSCENE_IMAGES: AtomicU8 = AtomicU8::new(INSCENE_IMAGES_UNSET);
-
-pub fn set_inscene_images(enabled: bool) {
-    INSCENE_IMAGES.store(
-        if enabled {
-            INSCENE_IMAGES_ON
-        } else {
-            INSCENE_IMAGES_OFF
-        },
-        Ordering::Relaxed,
-    );
-}
-
+///
+/// B2: the switch is a per-sink field (default `true`), not a process global —
+/// a sink is created per produce, so the env is read once per frame and no
+/// cross-frame state can leak.
 pub fn inscene_images_enabled() -> bool {
-    match INSCENE_IMAGES.load(Ordering::Relaxed) {
-        INSCENE_IMAGES_ON => true,
-        INSCENE_IMAGES_OFF => false,
-        _ => {
-            let enabled = !matches!(std::env::var("NEOTA_INSCENE_IMAGES").as_deref(), Ok("0"));
-            set_inscene_images(enabled);
-            enabled
-        }
-    }
+    !matches!(std::env::var("NEOTA_INSCENE_IMAGES").as_deref(), Ok("0"))
 }
 
 /// Which Blitz paint classes are encoded into the Vello scene.
@@ -133,6 +112,9 @@ pub struct VelloSink {
     pub scene: Scene,
     pub filter: VelloFilter,
     pub diag: LayerDiag,
+    /// Per-sink image-brush switch (B2): `false` drops `Paint::Image` fills
+    /// (the `NEOTA_INSCENE_IMAGES=0` escape hatch), `true` encodes them.
+    pub inscene_images: bool,
     skip_stack: Vec<bool>,
 }
 
@@ -146,6 +128,7 @@ impl VelloSink {
             scene: Scene::new(),
             filter,
             diag: LayerDiag::default(),
+            inscene_images: inscene_images_enabled(),
             skip_stack: Vec::new(),
         }
     }
@@ -212,6 +195,28 @@ impl Default for VelloSink {
     }
 }
 
+impl VelloSink {
+    fn brush_ref(&self, paint: PaintRef<'_>) -> Option<peniko::Brush> {
+        match paint {
+            Paint::Solid(color) => Some(peniko::Brush::Solid(color)),
+            Paint::Gradient(gradient) => Some(peniko::Brush::Gradient(gradient.clone())),
+            // Stage B: rasters ride Vello's persistent image atlas (thumbnail
+            // PNG/JPEG only — originals never enter the DOM), so an `<img>` is
+            // ordinary scene content: clips, z-order and modal layers apply.
+            // The historical Android Vulkan black-surface regression keeps an
+            // escape hatch via NEOTA_INSCENE_IMAGES=0.
+            Paint::Image(image) => {
+                if self.inscene_images {
+                    Some(peniko::Brush::Image(image.to_owned()))
+                } else {
+                    None
+                }
+            }
+            Paint::Resource(_) | Paint::Custom(_) => None,
+        }
+    }
+}
+
 impl RenderContext for VelloSink {}
 
 fn affine(transform: Affine) -> vkurbo::Affine {
@@ -246,26 +251,6 @@ fn vpath(shape: &impl Shape) -> vkurbo::BezPath {
         }
     }
     out
-}
-
-fn brush_ref(paint: PaintRef<'_>) -> Option<peniko::Brush> {
-    match paint {
-        Paint::Solid(color) => Some(peniko::Brush::Solid(color)),
-        Paint::Gradient(gradient) => Some(peniko::Brush::Gradient(gradient.clone())),
-        // Stage B: rasters ride Vello's persistent image atlas (thumbnail
-        // PNG/JPEG only — originals never enter the DOM), so an `<img>` is
-        // ordinary scene content: clips, z-order and modal layers apply. The
-        // historical Android Vulkan black-surface regression keeps an escape
-        // hatch via NEOTA_INSCENE_IMAGES=0.
-        Paint::Image(image) => {
-            if inscene_images_enabled() {
-                Some(peniko::Brush::Image(image.to_owned()))
-            } else {
-                None
-            }
-        }
-        Paint::Resource(_) | Paint::Custom(_) => None,
-    }
 }
 
 impl PaintScene for VelloSink {
@@ -343,7 +328,7 @@ impl PaintScene for VelloSink {
         if !self.admit_draw() || !self.filter.fills || !self.transform_ok(transform) {
             return;
         }
-        let Some(brush) = brush_ref(brush.into()) else {
+        let Some(brush) = self.brush_ref(brush.into()) else {
             return;
         };
         let path = vpath(shape);
@@ -367,7 +352,7 @@ impl PaintScene for VelloSink {
         if !self.admit_draw() || !self.filter.fills || !self.transform_ok(transform) {
             return;
         }
-        let Some(brush) = brush_ref(brush.into()) else {
+        let Some(brush) = self.brush_ref(brush.into()) else {
             return;
         };
         let path = vpath(shape);
@@ -397,7 +382,7 @@ impl PaintScene for VelloSink {
         if !self.admit_draw() || !self.filter.glyphs || !self.transform_ok(transform) {
             return;
         }
-        let Some(brush) = brush_ref(brush.into()) else {
+        let Some(brush) = self.brush_ref(brush.into()) else {
             return;
         };
         let style = style.into();
@@ -483,16 +468,10 @@ mod tests {
         peniko::ImageBrush::from(image)
     }
 
-    /// The switch is a process-global; serialize the two stateful tests.
-    static SWITCH_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
     #[test]
     fn image_paint_encodes_into_the_scene_when_enabled() {
-        let _guard = SWITCH_LOCK
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        set_inscene_images(true);
         let mut sink = VelloSink::new();
+        sink.inscene_images = true;
         sink.fill(
             Fill::NonZero,
             Affine::IDENTITY,
@@ -510,12 +489,8 @@ mod tests {
 
     #[test]
     fn image_paint_is_dropped_when_the_escape_hatch_is_off() {
-        let _guard = SWITCH_LOCK
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        set_inscene_images(false);
-        assert!(!inscene_images_enabled());
         let mut sink = VelloSink::new();
+        sink.inscene_images = false;
         sink.fill(
             Fill::NonZero,
             Affine::IDENTITY,
@@ -524,7 +499,5 @@ mod tests {
             &kurbo::Rect::new(0.0, 0.0, 8.0, 4.0),
         );
         assert_eq!(sink.scene.encoding().n_paths, 0);
-        set_inscene_images(true);
-        assert!(inscene_images_enabled());
     }
 }

@@ -124,7 +124,7 @@ impl ScrollAckLoop {
 
 #[cfg(test)]
 mod tests {
-    use super::{LANDED_EPSILON_CSS, MIN_ACK_CAP_CSS, ScrollAckLoop};
+    use super::{ScrollAckLoop, LANDED_EPSILON_CSS, MIN_ACK_CAP_CSS};
 
     #[test]
     fn cap_cross_decides_only_past_half_band() {

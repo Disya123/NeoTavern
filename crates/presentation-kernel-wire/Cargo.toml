@@ -1,0 +1,30 @@
+[package]
+name = "neotavern-presentation-kernel-wire"
+version = "0.1.0"
+edition = "2021"
+description = "ProductWire adapter over the canonical Rust Kernel (generation streams included)"
+license = "AGPL-3.0"
+publish = false
+
+[lib]
+name = "neotavern_presentation_kernel_wire"
+
+[features]
+default = []
+# Gates the `neocompositor-kernel` desktop host (the same winit/present
+# pipeline as `neocompositor-desktop`, but the wire is the real Kernel).
+desktop-host = ["neotavern-presentation-chat/desktop-host"]
+
+[dependencies]
+contracts-generated = { path = "../contracts-generated" }
+neotavern-presentation-chat = { path = "../presentation-chat" }
+neotavern-presentation-dioxus-shell = { path = "../presentation-dioxus-shell" }
+runtime-kernel = { path = "../runtime-kernel" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tempfile = "3"
+
+[[bin]]
+name = "neocompositor-kernel"
+path = "src/bin/neocompositor-kernel.rs"
+required-features = ["desktop-host"]
