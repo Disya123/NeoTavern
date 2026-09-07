@@ -137,6 +137,11 @@ pub struct ProductChatView {
     pub variant_picker_empty: bool,
     /// Message whose details card is open (React `MessageDetailsCardV2`).
     pub details_message_id: Option<String>,
+    /// Resolved owner row of the open details card, looked up from the FULL
+    /// message list (not the visible window) so the card stays alive while
+    /// the owner is scrolled out of view — React holds the message object,
+    /// not a window slice.
+    pub details_row: Option<VisibleRow>,
     /// Active mode of the message details card: `"details"` or `"actions"`.
     pub details_mode: String,
     /// Parent chat id when this chat is a branch or checkpoint (React `ChatHeader`
@@ -210,6 +215,7 @@ impl Default for ProductChatView {
             variant_picker_rows: Vec::new(),
             variant_picker_empty: false,
             details_message_id: None,
+            details_row: None,
             details_mode: "details".to_string(),
             parent_chat_id: None,
         }
@@ -487,6 +493,7 @@ pub fn product_chat_from_fixture(fixture: &CanonicalFixture, start: usize) -> Pr
         variant_picker_rows: Vec::new(),
         variant_picker_empty: false,
         details_message_id: None,
+        details_row: None,
         details_mode: "details".to_string(),
         parent_chat_id: None,
     }

@@ -340,10 +340,11 @@ pub struct RunStepView {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ProductShellView {
     pub chat: ProductChatView,
-    /// All filtered+sorted cards (session cache, shared as an Rc). The grid
+    /// All filtered+sorted cards (session cache, shared as an Arc — Send
+    /// for the JNI host Mutex). The grid
     /// lays out only the first `character_browser_limit` — React
     /// `useCharacters(limit: 50)` paging, revealed by `characters.load-more`.
-    pub characters: Rc<Vec<CharacterCardView>>,
+    pub characters: std::sync::Arc<Vec<CharacterCardView>>,
     /// Browser paging limit (one page = `CHARACTERS_PAGE`).
     pub character_browser_limit: usize,
     pub selected_character_id: Option<String>,
@@ -590,7 +591,7 @@ impl Default for ProductShellView {
     fn default() -> Self {
         Self {
             chat: ProductChatView::default(),
-            characters: Rc::new(Vec::new()),
+            characters: std::sync::Arc::new(Vec::new()),
             character_browser_limit: 50,
             selected_character_id: None,
             selected_draft: None,
@@ -2310,7 +2311,9 @@ fn modal_geometry(view: &ProductShellView, dw: f32, dh: f32) -> (f32, f32, f32, 
     };
     (
         chat_x0 + (width - chat_x0 - dw).max(0.0) * 0.5,
-        (height - dh) * 0.5,
+        // A dialog taller than the viewport parks at the top edge — a
+        // negative top would push it above the visible chrome.
+        ((height - dh) * 0.5).max(0.0),
         dw,
         dh,
     )
@@ -4126,5 +4129,24 @@ pub fn product_shell_app() -> Element {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn modal_geometry_parks_a_tall_dialog_at_the_top_edge() {
+        let mut view = ProductShellView::default();
+        view.chat.viewport_width = 1100;
+        view.chat.viewport_height = 200;
+        let (x, y, w, h) = modal_geometry(&view, 320.0, 360.0);
+        assert_eq!(
+            y, 0.0,
+            "a taller-than-viewport dialog never gets a negative top"
+        );
+        assert!(x >= 0.0, "x stays inside the chrome");
+        assert_eq!((w, h), (320.0, 360.0));
     }
 }

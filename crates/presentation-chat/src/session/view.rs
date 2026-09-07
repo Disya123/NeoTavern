@@ -88,6 +88,19 @@ impl<W: ProductWire> ChatSession<W> {
             .map(|chat| chat.title.clone())
             .unwrap_or_else(|| "Chat".into());
         let (mut visible, _) = self.visible_window();
+        // The details card outlives the visible window: resolve its owner
+        // from the FULL message list so scrolling the row away while the
+        // card is open keeps the card alive (React keeps the message
+        // object, not a window slice).
+        let details_row = self.state.details_message_id.as_deref().and_then(|owner| {
+            self.state
+                .messages
+                .iter()
+                .find(|row| row.id == owner)
+                .map(|row| {
+                    message_visible_row(row, &self.assistant_author(), &self.macro_context())
+                })
+        });
         if !self.state.streaming_text.is_empty() {
             visible.push(VisibleRow {
                 id: "streaming".into(),
@@ -193,6 +206,7 @@ impl<W: ProductWire> ChatSession<W> {
             editing_draft: self.state.message_edit_draft.clone(),
             history_open_for: self.state.history_message_id.clone(),
             details_message_id: self.state.details_message_id.clone(),
+            details_row,
             details_mode: if self.state.details_mode.is_empty() {
                 "details".to_string()
             } else {

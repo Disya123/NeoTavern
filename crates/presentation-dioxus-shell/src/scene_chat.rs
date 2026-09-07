@@ -987,10 +987,19 @@ struct ComposerCtx {
 
 fn render_node(node: &UiNodeV1, ctx: &ComposerCtx) -> Element {
     if node.semantic.role == "button" {
-        render_button(node, ctx.streaming)
+        render_button(node, ctx)
     } else {
         render_container(node, ctx)
     }
+}
+
+/// Honest context-meter label (audit P2: the button carried a placeholder
+/// "4%" while the session computes a real estimate). Both the blueprint
+/// chrome and the legacy RSX read this one source; a `None` summary reads
+/// 0% — the popover details render from the same summary when opened.
+pub(crate) fn context_meter_label(summary: Option<&ContextUsageSummaryV1>) -> (String, String) {
+    let percent = summary.map(|row| row.usage_percent).unwrap_or(0);
+    (format!("Context {percent}%"), format!("{percent}%"))
 }
 
 /// Static presentation per stable node id: `(class, data-part, inline style)`.
@@ -1363,8 +1372,16 @@ const BUTTON_GEOMETRY: ButtonLook = ButtonLook {
     danger: false,
 };
 
-fn render_button(node: &UiNodeV1, streaming: bool) -> Element {
+fn render_button(node: &UiNodeV1, ctx: &ComposerCtx) -> Element {
+    let streaming = ctx.streaming;
     let look = button_look(&node.id, streaming);
+    // Honest context meter: the real estimate from the session summary, not
+    // the built-in placeholder (see `context_meter_label`).
+    let context_meter = if node.id == "composer-context" {
+        Some(context_meter_label(ctx.context_summary.as_ref()))
+    } else {
+        None
+    };
     // Authored document overrides win over the built-in table: label text
     // replaces aria/title/visible spans, icon name and token-backed style
     // declarations come straight from the document.
@@ -1380,7 +1397,9 @@ fn render_button(node: &UiNodeV1, streaming: bool) -> Element {
             .map(|label| label.text.clone())
             .unwrap_or_else(|| look.aria.to_owned())
     };
-    let title: Option<String> = if is_streaming_send {
+    let title: Option<String> = if let Some((meter_title, _)) = &context_meter {
+        Some(meter_title.clone())
+    } else if is_streaming_send {
         Some("Stop".to_owned())
     } else {
         authored_label
@@ -1388,7 +1407,9 @@ fn render_button(node: &UiNodeV1, streaming: bool) -> Element {
             .unwrap_or_else(|| look.title.map(str::to_owned))
     };
     let renders_text = look.trailing_label.is_some() || look.lead_label;
-    let trailing_label: Option<String> = if is_streaming_send {
+    let trailing_label: Option<String> = if let Some((_, meter_label)) = &context_meter {
+        Some(meter_label.clone())
+    } else if is_streaming_send {
         Some("Stop".to_owned())
     } else if renders_text {
         Some(
@@ -1524,5 +1545,29 @@ fn button_style(id: &str, primary: bool, danger: bool) -> String {
         "composer-reset" => "width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;border-radius:16px;background:transparent;color:#998f87;".to_owned(),
         "utility-settings" | "utility-scroll-latest" | "utility-wand" => "width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;background:transparent;color:#998f87;".to_owned(),
         _ => String::new(),
+    }
+}
+
+#[cfg(test)]
+mod context_meter_tests {
+    use super::*;
+
+    #[test]
+    fn context_meter_label_reads_the_real_estimate() {
+        let summary = ContextUsageSummaryV1 {
+            prompt_tokens: 420,
+            context_limit: 1000,
+            reserved_for_reply: 0,
+            available_tokens: 580,
+            usage_percent: 42,
+            breakdown: Default::default(),
+        };
+        let (title, label) = context_meter_label(Some(&summary));
+        assert_eq!(title, "Context 42%");
+        assert_eq!(label, "42%");
+        // No estimate yet: 0%, never a stale placeholder.
+        let (title, label) = context_meter_label(None);
+        assert_eq!(title, "Context 0%");
+        assert_eq!(label, "0%");
     }
 }

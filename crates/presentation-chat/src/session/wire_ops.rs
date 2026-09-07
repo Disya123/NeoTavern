@@ -297,13 +297,20 @@ impl<W: ProductWire> ChatSession<W> {
     }
 
     pub(crate) fn last_run_id(&self) -> Option<&str> {
-        self.state.active_run_id.as_deref().or_else(|| {
-            self.state
-                .messages
-                .iter()
-                .rev()
-                .find_map(|row| row.generation_run_id.as_deref())
-        })
+        // A synthetic JNI stream key (`s<pointer>`) is transport-only: handing
+        // it to the kernel as a run id would fail every retry. Real run ids
+        // arrive with the first step event / final message.
+        self.state
+            .active_run_id
+            .as_deref()
+            .filter(|key| !crate::wire::is_synthetic_stream_key(key))
+            .or_else(|| {
+                self.state
+                    .messages
+                    .iter()
+                    .rev()
+                    .find_map(|row| row.generation_run_id.as_deref())
+            })
     }
 
     pub(crate) fn record_error(&mut self, err: ChatRouteError) {

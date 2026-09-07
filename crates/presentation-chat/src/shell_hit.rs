@@ -6,7 +6,9 @@
 //! a DOM hit tree, so geometry is reconstructed from the same tokens the
 //! RSX uses.
 
-use neotavern_presentation_dioxus_shell::{chrome_metrics, PresetValueRow, ProductShellView};
+use neotavern_presentation_dioxus_shell::{
+    chats_layout, chrome_metrics, PresetValueRow, ProductShellView,
+};
 
 pub const RAIL_WIDTH: f32 = 60.0;
 pub const PANEL_WIDTH_DEFAULT: f32 = 380.0;
@@ -1288,21 +1290,15 @@ pub fn character_custom_action(name: &str, view: &ProductShellView) -> Option<Sh
     let action = match kind {
         "save" => ShellAction::CharacterSaveMeta,
         "tag-add" => ShellAction::AddCharacterTag,
-        "tag-remove" => ShellAction::RemoveCharacterTag(
-            view.selected_draft
-                .as_ref()?
-                .tags
-                .get(idx?)?
-                .clone(),
-        ),
+        "tag-remove" => {
+            ShellAction::RemoveCharacterTag(view.selected_draft.as_ref()?.tags.get(idx?)?.clone())
+        }
         "greeting-add" => ShellAction::AddAlternateGreeting,
         "greeting-toggle" => ShellAction::ToggleAlternateGreeting(idx?),
         "greeting-remove" => ShellAction::RemoveAlternateGreeting(idx?),
         "back" => ShellAction::BackToCards,
         "toggle-favorite" => ShellAction::ToggleFavorite,
-        "export" => {
-            ShellAction::ExportCharacterCard(view.selected_character_id.clone()?)
-        }
+        "export" => ShellAction::ExportCharacterCard(view.selected_character_id.clone()?),
         "duplicate" => ShellAction::DuplicateCharacter,
         "delete" => ShellAction::OpenDelete,
         "load-more" => ShellAction::LoadMoreCharacters,
@@ -2619,20 +2615,23 @@ fn chats_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
         }
         return Some(ShellHit::Absorb);
     }
-    // Measured from the live Windows render (snapshot color-band mapping at
-    // 1100×760): the panel's own `SidebarPanelHeader` sits above these bands,
-    // so anchors are taken from the rendered pixels, not re-derived:
-    // search field [86,130), `newChatAction` button [146,190), list rows from
-    // 198 with a measured ~76px row height (React chatCopy stacks
-    // strong/span/characterLabel) plus the 4px list gap.
-    let search_top = 86.0;
-    let search_bottom = 130.0;
+    // Layout-derived bands: `chats_layout` mirrors the renderer's packed
+    // styles, so the hit pass and the paint derive from one token. The top
+    // anchor stays `header_bottom` (the rendered `SidebarPanelHeader` chrome);
+    // everything below it is paddings + measured heights.
+    let search_top = header_end + chats_layout::TOOLBAR_PAD_Y;
+    let search_bottom = search_top + chats_layout::SEARCH_MIN_H;
     if y >= search_top && y < search_bottom {
         // Typing focus is bin-local (like the character manager search).
         return Some(ShellHit::Absorb);
     }
-    let new_chat_top = 146.0;
-    let new_chat_bottom = 190.0;
+    // Toolbar bottom padding + 1px `SidebarPanelHeader_headerDivider`, then
+    // `.body` padding-top.
+    let new_chat_top = search_bottom
+        + chats_layout::TOOLBAR_PAD_Y
+        + chats_layout::HEADER_DIVIDER_H
+        + chats_layout::BODY_PAD_TOP;
+    let new_chat_bottom = new_chat_top + chats_layout::NEW_CHAT_H;
     if contains(
         x,
         y,
@@ -2643,10 +2642,12 @@ fn chats_hit(view: &ProductShellView, x: f32, y: f32) -> Option<ShellHit> {
     ) {
         return Some(ShellHit::Action(ShellAction::CreateChat));
     }
-    let mut cursor = 198.0;
+    let mut cursor = new_chat_bottom + chats_layout::BODY_GAP;
     let pad = SPACE_LG;
     for item in view.chat_list.iter() {
-        let bottom = cursor + 76.0;
+        // Row pitch follows the row shape: a `character_label` adds one
+        // 17px meta line (measured 76px 3-line row from the live render).
+        let bottom = cursor + chats_layout::row_height(item.character_label.is_empty());
         if y >= cursor && y < bottom {
             let id = item.id.clone();
             // Row actions in the right 132 px (rename / export / delete) —

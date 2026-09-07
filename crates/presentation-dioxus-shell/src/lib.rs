@@ -13,6 +13,8 @@ mod ai_settings_tab;
 mod backgrounds_tab;
 mod chat_route;
 mod chats_tab;
+
+pub use chats_tab::chats_layout;
 mod lorebooks_tab;
 mod markdown;
 mod personas_tab;
@@ -633,7 +635,9 @@ fn variant_picker_popover(view: &ProductChatView) -> Option<Element> {
 /// prompt plan, run steps) with Close action (`details-close`).
 fn message_details_card(view: &ProductChatView) -> Option<Element> {
     let owner = view.details_message_id.as_deref()?;
-    let row = view.visible.iter().find(|r| r.id == owner)?;
+    // Resolved from the full message list in `ChatSession::view` — the card
+    // survives its owner leaving the visible window.
+    let row = view.details_row.as_ref()?;
     let author = row.author.clone();
     let is_user = row.role == "user";
     let token_label = row.token_count.map(|c| format!("{c}t"));
@@ -1109,6 +1113,9 @@ pub fn product_chat_app() -> Element {
     // installed, header/viewport/composer structure comes from the authored
     // JSON; the legacy RSX below stays the fallback and the parity oracle.
     let chrome_parts = crate::scene_chat::blueprint_chrome(&view);
+    // Honest context-meter label (audit P2: the trigger carried "4%").
+    let (context_meter_title, context_meter_label) =
+        crate::scene_chat::context_meter_label(view.context_summary.as_ref());
     let (_width, header_h, _viewport_h, composer_h) =
         crate::chrome_metrics(view.viewport_width, view.viewport_height);
     let compact = view.viewport_height <= 240;
@@ -1684,10 +1691,12 @@ pub fn product_chat_app() -> Element {
                                             r#type: "button",
                                             "data-action": "composer-context",
                                             "aria-label": "Context",
-                                            title: "Context 4%",
+                                            // Honest estimate from the session
+                                            // summary (see `context_meter_label`).
+                                            title: "{context_meter_title}",
                                             style: "display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 8px;border:1px solid rgba(243,238,232,0.10);border-radius:16px;color:#c5bbb2;background:rgba(243,238,232,0.05);",
                                             {crate::product_shell::icon("Database", 15)}
-                                            span { style: "font-size:13px;", "4%" }
+                                            span { style: "font-size:13px;", "{context_meter_label}" }
                                         }
                                     }
                                     {crate::scene_chat::render_context_panel_slot(

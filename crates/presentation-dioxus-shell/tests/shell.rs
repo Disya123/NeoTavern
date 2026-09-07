@@ -94,14 +94,14 @@ fn product_shell_virtualdom_contains_character_manager() {
     assert!(vdom.rebuild_to_vec().edits.len() > 0);
 
     let mut view = ProductShellView::default();
-    view.characters = vec![CharacterCardView {
+    view.characters = std::sync::Arc::new(vec![CharacterCardView {
         id: "4f2f0a1e-9b3c-4d5e-8f6a-7b8c9d0e1f2a".into(),
         name: "Hazel".into(),
         description: "wry".into(),
         tags: vec!["wry".into()],
         avatar_asset_id: None,
         avatar_data_uri: None,
-    }];
+    }]);
     view.selected_character_id = Some("4f2f0a1e-9b3c-4d5e-8f6a-7b8c9d0e1f2a".into());
     view.selected_draft = Some(CharacterDraftView {
         id: "4f2f0a1e-9b3c-4d5e-8f6a-7b8c9d0e1f2a".into(),

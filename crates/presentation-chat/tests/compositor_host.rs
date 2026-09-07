@@ -232,6 +232,7 @@ fn markdown_minimal_probe() {
         editing_message_id: None,
         editing_draft: String::new(),
         history_open_for: None,
+        details_row: None,
         revision_history: Vec::new(),
         snapshots_menu_open: false,
         snapshot_items: Vec::new(),
@@ -6711,14 +6712,14 @@ fn refresh_visible_assets_hydrates_the_scrolled_window() {
 
 #[test]
 fn character_cards_cache_is_shared_until_catalog_or_inputs_change() {
-    use std::rc::Rc;
+    use std::sync::Arc;
 
     let (mut session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
     let first = session.shell_view();
     let second = session.shell_view();
     assert!(
-        Rc::ptr_eq(&first.characters, &second.characters),
+        Arc::ptr_eq(&first.characters, &second.characters),
         "two produces over an unchanged catalog share one cards build"
     );
 
@@ -6726,7 +6727,7 @@ fn character_cards_cache_is_shared_until_catalog_or_inputs_change() {
     session.set_character_search("zzz");
     let filtered = session.shell_view();
     assert!(
-        !Rc::ptr_eq(&first.characters, &filtered.characters),
+        !Arc::ptr_eq(&first.characters, &filtered.characters),
         "a search change rebuilds the cards"
     );
     assert!(
@@ -6750,7 +6751,7 @@ fn character_cards_cache_is_shared_until_catalog_or_inputs_change() {
 fn character_browser_pages_via_load_more() {
     use neotavern_presentation_chat::ShellAction;
     use neotavern_presentation_m0_d2::inspect_slot_skeleton;
-    use std::rc::Rc;
+    use std::sync::Arc;
 
     let (mut session, _) =
         start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
@@ -6765,16 +6766,20 @@ fn character_browser_pages_via_load_more() {
     // The grid lays out only the current page: a hand-built view with more
     // cards than the limit renders `limit` cards plus the load-more button.
     let mut view = neotavern_presentation_dioxus_shell::ProductShellView::default();
-    view.characters = Rc::new((0..3)
-        .map(|index| neotavern_presentation_dioxus_shell::CharacterCardView {
-            id: format!("card-{index}"),
-            name: format!("Card {index}"),
-            description: String::new(),
-            tags: Vec::new(),
-            avatar_asset_id: None,
-            avatar_data_uri: None,
-        })
-        .collect());
+    view.characters = Arc::new(
+        (0..3)
+            .map(
+                |index| neotavern_presentation_dioxus_shell::CharacterCardView {
+                    id: format!("card-{index}"),
+                    name: format!("Card {index}"),
+                    description: String::new(),
+                    tags: Vec::new(),
+                    avatar_asset_id: None,
+                    avatar_data_uri: None,
+                },
+            )
+            .collect(),
+    );
     view.character_browser_limit = 2;
     session.set_surface_size(1100, 760, 1.0);
     neotavern_presentation_dioxus_shell::install_product_shell(view);
@@ -6788,7 +6793,11 @@ fn character_browser_pages_via_load_more() {
     )
     .expect("paged skeleton");
     assert_eq!(
-        skeleton.identities().iter().filter(|id| **id == "part:character-card").count(),
+        skeleton
+            .identities()
+            .iter()
+            .filter(|id| **id == "part:character-card")
+            .count(),
         2,
         "the grid lays out only the current page"
     );
@@ -6799,5 +6808,170 @@ fn character_browser_pages_via_load_more() {
             .any(|id| id.starts_with("part:character-load-more")),
         "the load-more button renders while cards exceed the page; identities={:?}",
         skeleton.identities()
+    );
+}
+
+#[test]
+fn chats_panel_hits_follow_layout_constants() {
+    use neotavern_presentation_chat::{hit_test, ShellAction, ShellHit};
+    use neotavern_presentation_dioxus_shell::{chats_layout, ChatCardView, ProductShellView};
+
+    let card = |id: &str, label: &str| ChatCardView {
+        id: id.into(),
+        title: format!("Chat {id}"),
+        message_count: 3,
+        character_label: label.into(),
+    };
+    let mut view = ProductShellView::default();
+    view.sidebar_open = true;
+    view.panel = "home".into();
+    view.chat_list = vec![card("r1", "Hazel"), card("r2", "Hazel"), card("r3", "")];
+    view.chat.viewport_width = 1100;
+    view.chat.viewport_height = 760;
+    // The layout constants were measured on the live Windows render with a
+    // 26px top inset (titlebar): header_end = 52 + 26 = 78, search [86,130),
+    // new-chat button [147,191), rows from 199.
+    view.insets.top = 26.0;
+
+    assert!(
+        matches!(hit_test(&view, 250.0, 90.0), Some(ShellHit::Absorb)),
+        "search field absorbs"
+    );
+    assert!(matches!(
+        hit_test(&view, 100.0, 150.0),
+        Some(ShellHit::Action(ShellAction::CreateChat))
+    ));
+    match hit_test(&view, 250.0, 210.0) {
+        Some(ShellHit::Action(ShellAction::SelectChat(id))) => assert_eq!(id, "r1"),
+        other => panic!("expected row 1, got {other:?}"),
+    }
+    match hit_test(&view, 250.0, 290.0) {
+        Some(ShellHit::Action(ShellAction::SelectChat(id))) => assert_eq!(id, "r2"),
+        other => panic!("expected row 2, got {other:?}"),
+    }
+    // An unlabeled row is one meta line shorter (59px vs 76px): row 3 spans
+    // [359,418); at y=420 the old fixed 76px pitch still returned a phantom
+    // row 3.
+    match hit_test(&view, 250.0, 380.0) {
+        Some(ShellHit::Action(ShellAction::SelectChat(id))) => assert_eq!(id, "r3"),
+        other => panic!("expected unlabeled row 3, got {other:?}"),
+    }
+    // Past the shorter third row: absorb, no phantom row 4.
+    assert!(matches!(
+        hit_test(&view, 250.0, 420.0),
+        Some(ShellHit::Absorb)
+    ));
+    // Right-edge action bands ride the same geometry.
+    match hit_test(&view, 400.0, 210.0) {
+        Some(ShellHit::Action(ShellAction::OpenChatDelete(id))) => assert_eq!(id, "r1"),
+        other => panic!("expected delete action, got {other:?}"),
+    }
+
+    // Compact width: the panel starts at the rail and chrome_top raises to
+    // SPACE_2XL (32 > 26 inset), so every band shifts down 6px; row action
+    // bands shift with the panel's right edge (480 - 60 = 420 wide panel).
+    view.chat.viewport_width = 480;
+    assert!(matches!(
+        hit_test(&view, 100.0, 170.0),
+        Some(ShellHit::Action(ShellAction::CreateChat))
+    ));
+    match hit_test(&view, 440.0, 210.0) {
+        Some(ShellHit::Action(ShellAction::OpenChatDelete(id))) => assert_eq!(id, "r1"),
+        other => panic!("expected compact delete action, got {other:?}"),
+    }
+    // Row heights come from the shared tokens the renderer pins onto rows.
+    assert_eq!(
+        chats_layout::ROW_H_LABELED - chats_layout::META_LINE_H,
+        chats_layout::ROW_H
+    );
+}
+
+#[test]
+fn retry_skips_the_synthetic_transport_key() {
+    use neotavern_presentation_chat::FakeWire;
+    // JNI parity: the stream handle is a transport-only `s<counter>` key,
+    // while the final message carries the real kernel run id. `retry` must
+    // not hand the synthetic key to the kernel as `sourceRunId`.
+    let (mut session, _) = start_flagged_session(
+        Some("1"),
+        FakeWire::with_synthetic_stream_keys(),
+        Some(neotavern_presentation_chat::DEMO_CHAT_ID),
+        None,
+    )
+    .expect("route");
+    session.send(None).expect("send");
+    let view = session.view();
+    let tail = view.visible.last().expect("tail row").clone();
+    let real_run = tail.run_id.clone().expect("final message run id");
+    assert!(
+        real_run.starts_with("0x9000") || !real_run.starts_with('s'),
+        "unexpected run id shape: {real_run}"
+    );
+
+    session.retry().expect("retry");
+    let view = session.view();
+    assert!(
+        view.error_code.is_none(),
+        "retry must not fail with a synthetic key: {:?}",
+        view.error_code
+    );
+    let retried = view.visible.last().expect("retried tail").clone();
+    assert!(
+        retried.content.starts_with("retry of "),
+        "unexpected content: {}",
+        retried.content
+    );
+}
+
+#[test]
+fn message_details_card_survives_owner_scroll_out_of_window() {
+    use neotavern_presentation_chat::{FakeWire, ShellAction};
+    use neotavern_presentation_dioxus_shell::product_shell_app;
+    use neotavern_presentation_m0_d2::inspect_slot_skeleton;
+
+    let (mut session, _) = start_flagged_session(
+        Some("1"),
+        FakeWire::with_message_count(12),
+        Some(neotavern_presentation_chat::DEMO_CHAT_ID),
+        None,
+    )
+    .expect("route");
+    session.set_surface_size(1100, 760, 1.0);
+    // Anchored at the BOTTOM of the chat, the window's last row is the
+    // chat tail; scrolling to the very top must push it out of the window.
+    let owner = session
+        .view()
+        .visible
+        .last()
+        .map(|row| row.id.clone())
+        .expect("visible rows");
+    session.apply_shell_action(ShellAction::OpenMessageDetails(owner.clone()));
+    // Scroll the owner out: the offset counts from the chat BOTTOM, so the
+    // maximum offset anchors the window at the very top of the transcript.
+    session.scroll_chat_by(100_000.0);
+    let view = session.view();
+    assert!(
+        !view.visible.iter().any(|row| row.id == owner),
+        "owner must be outside the visible window"
+    );
+    assert_eq!(
+        view.details_row.as_ref().map(|row| row.id.as_str()),
+        Some(owner.as_str()),
+        "details row resolves from the full message list"
+    );
+
+    neotavern_presentation_dioxus_shell::install_product_shell(session.shell_view());
+    let skeleton = inspect_slot_skeleton(
+        product_shell_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("scrolled details skeleton");
+    assert!(
+        skeleton.has_identity("details-card"),
+        "details card stays open while its owner is scrolled away"
     );
 }

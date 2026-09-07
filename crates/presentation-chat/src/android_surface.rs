@@ -1317,7 +1317,8 @@ fn overlay_avatars<W: ProductWire>(
 }
 
 fn shell_without_avatars(mut shell: ProductShellView) -> ProductShellView {
-    for item in &mut shell.characters {
+    let cards = std::sync::Arc::make_mut(&mut shell.characters);
+    for item in cards.iter_mut() {
         item.avatar_data_uri = None;
     }
     if let Some(draft) = shell.selected_draft.as_mut() {
@@ -1570,6 +1571,7 @@ fn produce_and_raster(
     height: u32,
     density: f32,
     insets: SafeAreaInsets,
+    assets: neotavern_presentation_m0_d2::AssetStore,
 ) -> Result<
     (
         neotavern_presentation_m0_d2::ProducerOutput,
@@ -1578,7 +1580,7 @@ fn produce_and_raster(
     String,
 > {
     let mut session = catch_unwind(AssertUnwindSafe(|| {
-        ProductVelloSession::open(product_shell_app, width, height, density, insets)
+        ProductVelloSession::open(product_shell_app, width, height, density, insets, assets)
     }))
     .unwrap_or_else(|_| Err("produce_panic".into()))?;
     let (produced, full_scene, diag) = session.paint(VelloFilter::full())?;
@@ -1635,7 +1637,14 @@ fn bind_host<W: ProductWire>(
     host.shell_overlay = shell.sidebar_open;
     host.hit_view = Some(shell.clone());
     install_product_shell(shell.clone());
-    let produced = match produce_and_raster(host, width, height, host.density, session.insets()) {
+    let produced = match produce_and_raster(
+        host,
+        width,
+        height,
+        host.density,
+        session.insets(),
+        session.asset_store(),
+    ) {
         Ok((produced, layout)) => overlay_avatars(host, session, produced, layout),
         Err(err) => {
             trace(&format!(
@@ -1645,8 +1654,14 @@ fn bind_host<W: ProductWire>(
             let stripped = shell_without_avatars(shell);
             host.hit_view = Some(stripped.clone());
             install_product_shell(stripped);
-            let (produced, layout) =
-                produce_and_raster(host, width, height, host.density, session.insets())?;
+            let (produced, layout) = produce_and_raster(
+                host,
+                width,
+                height,
+                host.density,
+                session.insets(),
+                session.asset_store(),
+            )?;
             overlay_avatars(host, session, produced, layout)
         }
     };

@@ -122,6 +122,11 @@ pub struct FakeWire {
     cursors: HashMap<String, CursorCut>,
     fail_ops: HashSet<String>,
     next: u64,
+    /// JNI-parity knob: `start_stream` returns transport-only keys
+    /// (`s<counter>`) instead of the kernel run id, mirroring a native
+    /// stream that dies before its first envelope id. Real run ids still
+    /// land in the final message.
+    synthetic_stream_keys: bool,
 }
 
 impl Default for FakeWire {
@@ -209,6 +214,7 @@ impl Default for FakeWire {
             cursors: HashMap::new(),
             fail_ops: HashSet::new(),
             next: 0x9000,
+            synthetic_stream_keys: false,
         }
     }
 }
@@ -564,6 +570,14 @@ impl FakeWire {
         let mut wire = Self::default();
         wire.insert_character(demo_character());
         wire.insert_persona(demo_persona());
+        wire
+    }
+
+    /// JNI-parity mode: stream handles are synthetic transport keys while
+    /// final messages still carry real run ids.
+    pub fn with_synthetic_stream_keys() -> Self {
+        let mut wire = Self::with_message_count(4);
+        wire.synthetic_stream_keys = true;
         wire
     }
 
@@ -1153,8 +1167,15 @@ impl FakeWire {
             GenerationEvent::GenerationCompleted { final_message },
         ));
         frames.push_back(StreamFrame::Terminal);
-        self.streams.insert(run_id.clone(), frames);
-        Ok(run_id)
+        // JNI parity: the transport handle is only a lookup key; the durable
+        // run (plans, steps, final message) keeps the real run id.
+        let handle = if self.synthetic_stream_keys {
+            format!("s{}", self.next)
+        } else {
+            run_id.clone()
+        };
+        self.streams.insert(handle.clone(), frames);
+        Ok(handle)
     }
 
     /// Builds the demo prompt plan for a run: the wire shape of the kernel's

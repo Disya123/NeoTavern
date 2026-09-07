@@ -198,7 +198,12 @@ impl ProductWire for JniProductWire {
                     return Err(ChatRouteError::Product(error.clone()));
                 }
                 StreamFrame::Event { .. } | StreamFrame::Terminal => {
-                    let key = stream_key_from_frame(&bytes).unwrap_or_else(|| format!("s{native}"));
+                    // Prefer the envelope stream id, then the kernel run id
+                    // embedded in the event; the synthetic pointer key is a
+                    // transport-only last resort (never a run id).
+                    let key = crate::wire::stream_key_from_frame(&bytes)
+                        .or_else(|| crate::wire::run_id_from_frame(&bytes))
+                        .unwrap_or_else(|| format!("s{native}"));
                     self.native_handles.insert(key.clone(), native);
                     self.pending
                         .entry(key.clone())
@@ -273,14 +278,6 @@ fn generation_from_envelope(envelope: &EventEnvelope) -> Result<GenerationEvent,
         .map_err(|err| ChatRouteError::Wire(err.message))
 }
 
-fn stream_key_from_frame(bytes: &[u8]) -> Option<String> {
-    let value: Value = serde_json::from_slice(bytes).ok()?;
-    value
-        .get("event")?
-        .get("streamId")?
-        .as_str()
-        .map(str::to_string)
-}
 
 static ROUTE: Mutex<Option<ChatSession<JniProductWire>>> = Mutex::new(None);
 

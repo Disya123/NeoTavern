@@ -583,7 +583,7 @@ pub struct ChatSession<W: ProductWire> {
     /// keys the filtered-cards cache — `shell_view` runs per produce, so the
     /// filter+sort must not re-lowercase and re-clone the catalog per frame.
     characters_revision: u64,
-    /// Filtered+sorted cards shared with the shell view as an `Rc`, rebuilt
+    /// Filtered+sorted cards shared with the shell view as an `Arc`, rebuilt
     /// only when the revision, search or sort changes.
     characters_cards: RefCell<Option<CharacterCardsCache>>,
 }

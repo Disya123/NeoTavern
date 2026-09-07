@@ -1794,3 +1794,54 @@ cover-кропа (кадрирование делают cover-fit/object-fit).
 kernel (4 новых thumb-теста), chat 42+95+26+1, shell 15, design-system 27,
 m0-d2, session — зелёные; android check presentation-chat зелёный (kernel
 на android-таргете не проверяем — нет NDK для `ring`).
+
+## Волна 2 «хвост корректности» (2026-09-08)
+
+**Честный «Context N%».** Триггер контекст-панели больше не пишет хардкод
+«Context 4%»: один хелпер `scene_chat::context_meter_label` строит
+«Context N%»/«N%» из `usage_percent` (blueprint-ветка через
+`render_button`, legacy-RSX — прямо в `product_chat_app`). Нет оценки —
+«Context 0%».
+
+**Clamp модалок.** `modal_geometry` паркует диалоги выше вьюпорта у верхней
+кромки (`y = ((height - dh) * 0.5).max(0.0)`), а не уводит в минус.
+
+**chats_hit из layout-токенов.** Геометрия хитов домашней панели выведена
+из общего модуля `chats_tab::chats_layout` (тот же источник, что рендер):
+тамбл-пэддинги, поиск 44px, дивайдер 1px, кнопка 44px (замер), гэп 8px.
+Высота строки теперь по форме строки: строка с `character_label` — 76px
+(замер живого рендера), без — 59px (−17px мета-строка); рендер пиннит
+высоту `<li>` из того же токена, так что хит и краска совпадают по
+построению. Верхний якорь — прежний `header_bottom`. До фикса хит считал
+все строки по 76px и уезжал с 3-й строки смешанного списка.
+
+**Скрипт-чувствительный `estimate_height`.** База высоты строки
+(A3-модель: окно гидрации и композитор) считалась по UTF-8-байтам —
+кириллица завышалась ×2, эмодзи ×4. Теперь через `estimate_tokens`
+(плотности скриптов), PX_PER_TOKEN калибрует латиницу 1:1 к прежней
+модели; кэп +160px сохранён.
+
+**Карточка деталей живёт вне видимого окна.** `ProductChatView.details_row`
+резолвится из ПОЛНОГО списка сообщений (React держит объект сообщения, не
+срез окна): скролл владельца за окно больше не схлопывает карточку.
+
+**JNI: transport-ключ ≠ run id.** `last_run_id` не отдаёт синтетический
+ключ `s<pointer>` как `sourceRunId` (ретраи падали бы с
+GENERATION_RUN_NOT_FOUND): ядро получает реальный run id из события
+(`generation.step.runId` / `generation.completed.generationRunId`);
+`stream_key_from_frame`/`run_id_from_frame`/`is_synthetic_stream_key`
+переехали в `wire.rs` (тестируемы на десктопе), FakeWire получил
+JNI-паритетный режим `with_synthetic_stream_keys`.
+
+**Rc→Arc для кэша карточек.** `CharacterCardsCache.cards` и
+`ProductShellView.characters` — `Arc<Vec<..>>` (Send): JNI-статик
+`ROUTE: Mutex<Option<ChatSession<..>>>` требует Send, `Rc` ломал
+android-сборку среза C. Заодно закрыты два старых разрыва android-таргета:
+`shell_without_avatars` через `Arc::make_mut`, `produce_and_raster`
+получил обязательный `AssetStore` (аргумент #6 `ProductVelloSession::open`).
+Android check `--target aarch64-linux-android --features android-jni,gpu`
+зелёный.
+
+**Не менялось (ложное срабатывание аудита).** «stale `<` → `<=`» в
+`m0-d2/lib.rs:213`: события живого роута несут один `generation`, поэтому
+`<=` отбрасывал бы все кадры стрима после первого — оставлено как есть.

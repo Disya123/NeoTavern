@@ -14,7 +14,7 @@ pub(crate) struct CharacterCardsCache {
     pub(crate) revision: u64,
     pub(crate) search: String,
     pub(crate) sort: String,
-    pub(crate) cards: Rc<Vec<CharacterCardView>>,
+    pub(crate) cards: std::sync::Arc<Vec<CharacterCardView>>,
 }
 
 impl<W: ProductWire> ChatSession<W> {
@@ -250,15 +250,15 @@ impl<W: ProductWire> ChatSession<W> {
     }
 
     /// Filtered + sorted character cards, built once per (catalog, search,
-    /// sort) change and shared as an `Rc`. `shell_view` runs per produce, so
+    /// sort) change and shared as an `Arc` (Send for the JNI host Mutex).
     /// this must not re-lowercase and re-clone the catalog per frame.
-    pub(crate) fn filtered_character_cards(&self) -> Rc<Vec<CharacterCardView>> {
+    pub(crate) fn filtered_character_cards(&self) -> std::sync::Arc<Vec<CharacterCardView>> {
         let search = self.state.character_search.trim().to_lowercase();
         let sort = self.state.character_sort.clone();
         let revision = self.characters_revision;
         if let Some(cache) = self.characters_cards.borrow().as_ref() {
             if cache.revision == revision && cache.search == search && cache.sort == sort {
-                return Rc::clone(&cache.cards);
+                return std::sync::Arc::clone(&cache.cards);
             }
         }
         let mut cards: Vec<CharacterCardView> = self
@@ -274,7 +274,10 @@ impl<W: ProductWire> ChatSession<W> {
                         .unwrap_or("")
                         .to_lowercase()
                         .contains(&search)
-                    || row.tags.iter().any(|tag| tag.to_lowercase().contains(&search))
+                    || row
+                        .tags
+                        .iter()
+                        .any(|tag| tag.to_lowercase().contains(&search))
             })
             .map(|row| CharacterCardView {
                 id: row.id.clone(),
@@ -286,21 +289,19 @@ impl<W: ProductWire> ChatSession<W> {
             })
             .collect();
         match sort.as_str() {
-            "name-desc" => {
-                cards.sort_by_key(|card| std::cmp::Reverse(card.name.to_lowercase()))
-            }
+            "name-desc" => cards.sort_by_key(|card| std::cmp::Reverse(card.name.to_lowercase())),
             "newest" | "oldest" => {}
             _ => cards.sort_by_key(|card| card.name.to_lowercase()),
         }
         if sort == "oldest" {
             cards.reverse();
         }
-        let cards = Rc::new(cards);
+        let cards = std::sync::Arc::new(cards);
         *self.characters_cards.borrow_mut() = Some(CharacterCardsCache {
             revision,
             search,
             sort,
-            cards: Rc::clone(&cards),
+            cards: std::sync::Arc::clone(&cards),
         });
         cards
     }

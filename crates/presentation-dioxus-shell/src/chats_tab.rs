@@ -12,7 +12,44 @@ use crate::product_shell::{
     icon, icon_fill, management_shell, ChatCardView, ProductShellView, CHATS_MANAGER_TITLE,
 };
 
+/// Shared chats-panel geometry — the single source for both the renderer
+/// below and the native hit-rect pass (`presentation_chat::shell_hit`).
+/// Values mirror the packed React `ChatManagementPanel` styles; row heights
+/// are pinned onto the rendered rows so hit rects and paint can never drift.
+pub mod chats_layout {
+    /// `.toolbar` vertical padding (packed: `padding:8px 16px`).
+    pub const TOOLBAR_PAD_Y: f32 = 8.0;
+    /// `.searchControl` min-height.
+    pub const SEARCH_MIN_H: f32 = 44.0;
+    /// `SidebarPanelHeader_headerDivider` thickness between toolbar and body.
+    pub const HEADER_DIVIDER_H: f32 = 1.0;
+    /// `.body` padding-top and flex gap between the action row and the list.
+    pub const BODY_PAD_TOP: f32 = 8.0;
+    pub const BODY_GAP: f32 = 8.0;
+    /// `newChatAction` button: primary sm control, measured on the live
+    /// Windows render (snapshot band [146,190) at 1100×760).
+    pub const NEW_CHAT_H: f32 = 44.0;
+    /// Measured three-line row (title + meta + character label) from the
+    /// live Windows render.
+    pub const ROW_H_LABELED: f32 = 76.0;
+    /// One meta line (11px text) inside the measured row pitch.
+    pub const META_LINE_H: f32 = 17.0;
+    /// Two-line row: the measured pitch minus the character-label line.
+    pub const ROW_H: f32 = ROW_H_LABELED - META_LINE_H;
+
+    /// Row box height for one chat row; the renderer pins this onto the
+    /// `<li>` so the hit pass can use the exact same number.
+    pub fn row_height(character_label_empty: bool) -> f32 {
+        if character_label_empty {
+            ROW_H
+        } else {
+            ROW_H_LABELED
+        }
+    }
+}
+
 pub fn chats_panel(view: &ProductShellView) -> Element {
+    let new_chat_h = chats_layout::NEW_CHAT_H;
     let body = rsx! {
         // React `.toolbar`: search control over a bottom border. Typing is
         // wired through the host keyboard focus (like the character search).
@@ -65,6 +102,7 @@ pub fn chats_panel(view: &ProductShellView) -> Element {
                 button {
                     class: "st-button",
                     r#type: "button",
+                    style: "min-height:{new_chat_h}px;",
                     "data-component": "button",
                     "data-variant": "primary",
                     "data-size": "sm",
@@ -78,7 +116,7 @@ pub fn chats_panel(view: &ProductShellView) -> Element {
                 "data-part": "chat-list",
                 style: "display:flex;margin:0;padding:0;flex-direction:column;gap:4px;list-style:none;",
                 for (index, item) in view.chat_list.iter().enumerate() {
-                    li { "data-chat-index": "{index}", {chat_row(item, view.selected_chat_id.as_deref())} }
+                    {chat_item(index, item, view.selected_chat_id.as_deref())}
                 }
             }
             if view.chat_list.is_empty() {
@@ -102,6 +140,19 @@ pub fn chats_panel(view: &ProductShellView) -> Element {
         "",
         body,
     )
+}
+
+fn chat_item(index: usize, item: &ChatCardView, selected_id: Option<&str>) -> Element {
+    let row_h = chats_layout::row_height(item.character_label.is_empty());
+    rsx! {
+        li {
+            "data-chat-index": "{index}",
+            // Pinned row box: the hit pass derives the same height from
+            // `chats_layout`, so they stay in sync regardless of text flow.
+            style: "height:{row_h}px;box-sizing:border-box;",
+            {chat_row(item, selected_id)}
+        }
+    }
 }
 
 fn chat_row(item: &ChatCardView, selected_id: Option<&str>) -> Element {

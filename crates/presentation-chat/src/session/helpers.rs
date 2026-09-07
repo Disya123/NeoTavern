@@ -786,8 +786,14 @@ pub(crate) fn virtualized_window(
 pub(crate) const COMPOSITOR_ROW_CSS: f64 = 56.0;
 
 pub(crate) fn estimate_height(message: &MessageDto) -> f64 {
-    let text = 48.0 + (message.content.len() as f64 / 8.0).min(160.0);
-    text
+    // Script-aware width proxy: UTF-8 byte length double-counts Cyrillic and
+    // quadruple-counts emoji, so those rows were baselined 2-4x too tall.
+    // `estimate_tokens` weights chars by measured script density instead;
+    // PX_PER_TOKEN keeps Latin single-byte text identical to the old byte
+    // model (bytes/8 at ~4.6 chars/token).
+    const PX_PER_TOKEN: f64 = 4.6 / 8.0;
+    let tokens = estimate_tokens(&message.content) as f64;
+    48.0 + (tokens * PX_PER_TOKEN).min(160.0)
 }
 
 pub(crate) fn visible_rows(
@@ -1065,4 +1071,49 @@ pub(crate) fn tool_call_display_name(input: &Option<Value>) -> String {
         .filter(|name| !name.is_empty())
         .unwrap_or("tool")
         .to_string()
+}
+
+#[cfg(test)]
+mod height_estimate_tests {
+    use super::*;
+    use contracts_generated::generated::{FreeObject, MessageRole};
+
+    fn msg(content: &str) -> MessageDto {
+        MessageDto {
+            id: "m".into(),
+            chat_id: "c".into(),
+            role: MessageRole::User,
+            content: content.into(),
+            created_at: "2026-01-01T00:00:00Z".into(),
+            sequence: 1,
+            generation_run_id: None,
+            meta: FreeObject {
+                payload: serde_json::json!({}),
+            },
+            checkpoint_chat_id: None,
+        }
+    }
+
+    #[test]
+    fn estimate_height_is_script_aware() {
+        let latin = msg(&"a".repeat(400));
+        let cyrillic = msg(&"а".repeat(400)); // U+0430, 2 bytes in UTF-8
+        let emoji = msg(&"😀".repeat(50)); // 4 bytes each
+
+        // Latin keeps the old byte-model calibration (400 chars -> ~50px
+        // above the 48px base; estimate_tokens rounds to whole tokens).
+        let latin_h = estimate_height(&latin);
+        assert!((latin_h - 98.025).abs() < 0.01, "latin: {latin_h}");
+        // Cyrillic was 2x inflated by UTF-8 byte length (148px); the script
+        // model lands on the Latin baseline plus the wider-glyph margin.
+        let cyr_h = estimate_height(&cyrillic);
+        assert!((cyr_h - 105.5).abs() < 0.01, "cyrillic: {cyr_h}");
+        assert!(cyr_h > latin_h, "cyrillic glyphs are wider, not narrower");
+        // Emoji stays proportional to its on-screen advance, not its 4-byte
+        // encoding: a 50-emoji row beats a 50-char Latin row but is far from
+        // the 200-byte penalty.
+        let emoji_h = estimate_height(&emoji);
+        let latin50 = estimate_height(&msg(&"a".repeat(50)));
+        assert!(emoji_h > latin50, "emoji {emoji_h} vs latin {latin50}");
+    }
 }
