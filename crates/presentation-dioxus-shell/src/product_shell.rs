@@ -340,7 +340,12 @@ pub struct RunStepView {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ProductShellView {
     pub chat: ProductChatView,
-    pub characters: Vec<CharacterCardView>,
+    /// All filtered+sorted cards (session cache, shared as an Rc). The grid
+    /// lays out only the first `character_browser_limit` — React
+    /// `useCharacters(limit: 50)` paging, revealed by `characters.load-more`.
+    pub characters: Rc<Vec<CharacterCardView>>,
+    /// Browser paging limit (one page = `CHARACTERS_PAGE`).
+    pub character_browser_limit: usize,
     pub selected_character_id: Option<String>,
     pub selected_draft: Option<CharacterDraftView>,
     pub pinned_character_id: Option<String>,
@@ -585,7 +590,8 @@ impl Default for ProductShellView {
     fn default() -> Self {
         Self {
             chat: ProductChatView::default(),
-            characters: Vec::new(),
+            characters: Rc::new(Vec::new()),
+            character_browser_limit: 50,
             selected_character_id: None,
             selected_draft: None,
             pinned_character_id: None,
@@ -1305,7 +1311,7 @@ fn cards_tab(view: &ProductShellView) -> Element {
                     } else {
                         "display:flex;flex-direction:column;gap:8px;width:100%;box-sizing:border-box;flex:1;min-height:0;overflow:auto;"
                     },
-                    for item in view.characters.iter() {
+                    for item in view.characters.iter().take(view.character_browser_limit.max(1)) {
                         {
                             let selected = view.selected_character_id.as_deref() == Some(item.id.as_str());
                             // React fallback: pinned defaults to selected when pinned is None (Home pinned character).
@@ -1360,6 +1366,18 @@ fn cards_tab(view: &ProductShellView) -> Element {
                                 }
                             }
                         }
+                    }
+                }
+                // React `characters.load-more` button: shown while the
+                // browser has more filtered cards than the current page.
+                if view.characters.len() > view.character_browser_limit {
+                    button {
+                        class: "st-button CharacterManagementPanel_loadMore",
+                        r#type: "button",
+                        "data-part": "character-load-more",
+                        "data-action": "custom.characters.load-more",
+                        style: "align-self:center;min-width:120px;",
+                        "Load more"
                     }
                 }
             }

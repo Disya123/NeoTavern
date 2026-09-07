@@ -121,6 +121,9 @@ pub enum ShellAction {
     DuplicateCharacter,
     /// Toggle character editor mode (View <-> Edit mode; React `CharacterManagementPanel`).
     ToggleCharacterEditorMode,
+    /// Reveal one more page of the character browser
+    /// (`characters.load-more`; React `useCharacters(limit: 50)`).
+    LoadMoreCharacters,
     SetCharacterEditorMode(String),
     /// Character Advanced lorebooks (React `CharacterLorebooks`): create a
     /// book bound to the selected character (`lorebooks.create` + open the
@@ -1302,6 +1305,7 @@ pub fn character_custom_action(name: &str, view: &ProductShellView) -> Option<Sh
         }
         "duplicate" => ShellAction::DuplicateCharacter,
         "delete" => ShellAction::OpenDelete,
+        "load-more" => ShellAction::LoadMoreCharacters,
         _ => return None,
     };
     Some(action)

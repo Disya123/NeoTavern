@@ -1,7 +1,7 @@
 //! Keyboard input for the desktop host: every `TextFocus` target maps to one
 //! session draft setter (`type_char` / `backspace`).
 
-use super::{instruct_focus_role, preset_sampler_text, App, TextFocus};
+use super::{instruct_focus_role, App, TextFocus};
 
 impl App {
     pub(super) fn instruct_field_text(&self, role: &str) -> String {

@@ -6708,3 +6708,96 @@ fn refresh_visible_assets_hydrates_the_scrolled_window() {
         "a fully-hydrated window must short-circuit without new wire calls"
     );
 }
+
+#[test]
+fn character_cards_cache_is_shared_until_catalog_or_inputs_change() {
+    use std::rc::Rc;
+
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    let first = session.shell_view();
+    let second = session.shell_view();
+    assert!(
+        Rc::ptr_eq(&first.characters, &second.characters),
+        "two produces over an unchanged catalog share one cards build"
+    );
+
+    // A search change invalidates the cache and filters the catalog.
+    session.set_character_search("zzz");
+    let filtered = session.shell_view();
+    assert!(
+        !Rc::ptr_eq(&first.characters, &filtered.characters),
+        "a search change rebuilds the cards"
+    );
+    assert!(
+        filtered.characters.is_empty(),
+        "no demo character matches 'zzz'"
+    );
+    assert_eq!(
+        session.shell_view().characters.len(),
+        0,
+        "the filtered build is cached (second produce sees the same list)"
+    );
+    session.set_character_search("");
+    assert_eq!(
+        session.shell_view().characters.len(),
+        first.characters.len(),
+        "clearing the search restores the full demo catalog"
+    );
+}
+
+#[test]
+fn character_browser_pages_via_load_more() {
+    use neotavern_presentation_chat::ShellAction;
+    use neotavern_presentation_m0_d2::inspect_slot_skeleton;
+    use std::rc::Rc;
+
+    let (mut session, _) =
+        start_flagged_session(Some("1"), FakeWire::demo(), None, None).expect("route");
+    let before = session.shell_view().character_browser_limit;
+    session.apply_shell_action(ShellAction::LoadMoreCharacters);
+    assert_eq!(
+        session.shell_view().character_browser_limit,
+        before + 50,
+        "load-more reveals one page (React useCharacters limit: 50)"
+    );
+
+    // The grid lays out only the current page: a hand-built view with more
+    // cards than the limit renders `limit` cards plus the load-more button.
+    let mut view = neotavern_presentation_dioxus_shell::ProductShellView::default();
+    view.characters = Rc::new((0..3)
+        .map(|index| neotavern_presentation_dioxus_shell::CharacterCardView {
+            id: format!("card-{index}"),
+            name: format!("Card {index}"),
+            description: String::new(),
+            tags: Vec::new(),
+            avatar_asset_id: None,
+            avatar_data_uri: None,
+        })
+        .collect());
+    view.character_browser_limit = 2;
+    session.set_surface_size(1100, 760, 1.0);
+    neotavern_presentation_dioxus_shell::install_product_shell(view);
+    let skeleton = inspect_slot_skeleton(
+        product_shell_app,
+        1100,
+        760,
+        1.0,
+        session.insets(),
+        session.asset_store(),
+    )
+    .expect("paged skeleton");
+    assert_eq!(
+        skeleton.identities().iter().filter(|id| **id == "part:character-card").count(),
+        2,
+        "the grid lays out only the current page"
+    );
+    assert!(
+        skeleton
+            .identities()
+            .iter()
+            .any(|id| id.starts_with("part:character-load-more")),
+        "the load-more button renders while cards exceed the page; identities={:?}",
+        skeleton.identities()
+    );
+}

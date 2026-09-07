@@ -360,6 +360,7 @@ impl<W: ProductWire> ChatSession<W> {
             ShellAction::CloseCheckpointDelete => self.close_checkpoint_delete(),
             ShellAction::ConfirmCheckpointDelete => self.confirm_checkpoint_delete(),
             ShellAction::DuplicateCharacter => self.duplicate_selected_character(),
+            ShellAction::LoadMoreCharacters => self.load_more_characters(),
             ShellAction::ToggleCharacterEditorMode => self.toggle_character_editor_mode(),
             ShellAction::SetCharacterEditorMode(mode) => self.set_character_editor_mode(&mode),
             ShellAction::CreateCharacterLorebook => self.create_character_lorebook(),
@@ -648,6 +649,7 @@ impl<W: ProductWire> ChatSession<W> {
                     row.name = updated.name.clone();
                     row.description = updated.description.clone();
                 }
+                self.characters_revision += 1;
                 if let Some(local) = self.state.character_draft.as_mut() {
                     if local.id == updated.id {
                         local.name = updated.name.clone();
@@ -802,6 +804,7 @@ impl<W: ProductWire> ChatSession<W> {
                 {
                     row.tags = updated.tags.clone();
                 }
+                self.characters_revision += 1;
                 if let Some(local) = self.state.character_draft.as_mut() {
                     if local.id == updated.id {
                         local.tags = updated.tags;

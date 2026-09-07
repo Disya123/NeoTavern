@@ -29,6 +29,8 @@ impl<W: ProductWire> ChatSession<W> {
             viewport_height: 200,
             hidpi_scale: 1.0,
             asset_store: neotavern_presentation_m0_d2::AssetStore::new(),
+            characters_revision: 0,
+            characters_cards: RefCell::new(None),
         };
         if let Err(err) = session.load_workspace() {
             session.record_error(err);
@@ -40,6 +42,7 @@ impl<W: ProductWire> ChatSession<W> {
         session.state.character_sort = "name".into();
         session.state.character_view = "list".into();
         session.state.character_tab = "cards".into();
+        session.state.character_browser_limit = CHARACTERS_PAGE;
         // React `CharacterManagementPanel` mounts in the read-only viewer
         // mode; the header pencil button enters the editor.
         session.state.character_editor_mode = "view".into();

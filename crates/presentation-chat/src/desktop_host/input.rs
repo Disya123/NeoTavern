@@ -186,8 +186,9 @@ impl App {
         self.focus = focus;
     }
     pub(super) fn near_panel_resize(&self, css_x: f32) -> bool {
-        let view = self.session.shell_view();
-        if !view.sidebar_open || view.chat.viewport_width <= 600 {
+        // Hot path (per pointer event): direct state reads, no view-model
+        // build — `shell_view` clones characters, rows and drafts per call.
+        if !self.session.route_state().sidebar_open || self.session.viewport_width() <= 600 {
             return false;
         }
         let edge = RAIL_WIDTH + self.session.panel_width();

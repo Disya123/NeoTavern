@@ -84,7 +84,9 @@ use neotavern_presentation_dioxus_shell::{
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::{json, Value};
+use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
+use std::rc::Rc;
 
 use crate::error::ChatRouteError;
 use crate::shell_hit::{
@@ -226,6 +228,10 @@ pub struct ChatRouteState {
     pub insets: SafeAreaInsets,
     /// Full draft for the selected character (Edit / Advanced / Gallery tabs).
     pub character_draft: Option<CharacterDraftView>,
+    /// React `useCharacters(limit: 50)` paging: how many filtered cards the
+    /// browser lays out. `characters.load-more` bumps it by one page
+    /// (`CHARACTERS_PAGE`); the catalog itself is already in memory.
+    pub character_browser_limit: usize,
     /// Tag chip composer (React `EditTab` `tagInput`).
     pub tag_input: String,
     /// Cached cover-cropped premultiplied thumbnails keyed by avatar asset id.
@@ -573,6 +579,13 @@ pub struct ChatSession<W: ProductWire> {
     /// with the document's `LocalNetProvider`, so decoded thumbnails never
     /// leak between chats and the process-global store is gone.
     asset_store: neotavern_presentation_m0_d2::AssetStore,
+    /// Bumped whenever the character catalog rows change (`refresh_characters`);
+    /// keys the filtered-cards cache — `shell_view` runs per produce, so the
+    /// filter+sort must not re-lowercase and re-clone the catalog per frame.
+    characters_revision: u64,
+    /// Filtered+sorted cards shared with the shell view as an `Rc`, rebuilt
+    /// only when the revision, search or sort changes.
+    characters_cards: RefCell<Option<CharacterCardsCache>>,
 }
 
 impl<W: ProductWire> ChatSession<W> {
@@ -602,3 +615,4 @@ mod wire_ops;
 // this re-export (each cluster opens with `use super::*;`); items live as
 // `pub(crate)` in `helpers`, so they stay invisible outside the crate.
 pub(crate) use helpers::*;
+pub(crate) use chat_nav::{CharacterCardsCache, CHARACTERS_PAGE};

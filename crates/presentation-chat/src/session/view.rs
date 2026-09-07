@@ -318,43 +318,9 @@ impl<W: ProductWire> ChatSession<W> {
     }
 
     pub fn shell_view(&self) -> ProductShellView {
-        let mut characters: Vec<CharacterCardView> = self
-            .state
-            .characters
-            .iter()
-            .filter(|row| {
-                let q = self.state.character_search.trim().to_lowercase();
-                if q.is_empty() {
-                    return true;
-                }
-                row.name.to_lowercase().contains(&q)
-                    || row
-                        .description
-                        .as_deref()
-                        .unwrap_or("")
-                        .to_lowercase()
-                        .contains(&q)
-                    || row.tags.iter().any(|tag| tag.to_lowercase().contains(&q))
-            })
-            .map(|row| CharacterCardView {
-                id: row.id.clone(),
-                name: row.name.clone(),
-                description: row.description.clone().unwrap_or_default(),
-                tags: row.tags.clone(),
-                avatar_asset_id: row.avatar_asset_id.clone(),
-                avatar_data_uri: None,
-            })
-            .collect();
-        match self.state.character_sort.as_str() {
-            "name-desc" => {
-                characters.sort_by(|a, b| b.name.to_lowercase().cmp(&a.name.to_lowercase()))
-            }
-            "newest" | "oldest" => {}
-            _ => characters.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase())),
-        }
-        if self.state.character_sort == "oldest" {
-            characters.reverse();
-        }
+        // Filtered + sorted cards come from the keyed cache (one build per
+        // catalog/search/sort change, shared as an Rc) — not per produce.
+        let characters = self.filtered_character_cards();
         let selected = self
             .state
             .selected_character_id
@@ -364,6 +330,7 @@ impl<W: ProductWire> ChatSession<W> {
         ProductShellView {
             chat: self.view(),
             characters,
+            character_browser_limit: self.state.character_browser_limit,
             selected_character_id: selected.clone(),
             selected_draft,
             pinned_character_id: self

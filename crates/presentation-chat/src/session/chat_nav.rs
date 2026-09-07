@@ -4,6 +4,19 @@
 //! public surface (AGENTS: no public contract changes without an explicit
 //! assignment).
 use super::*;
+
+/// React `useCharacters(limit: 50)`: one browser page of cards.
+pub(crate) const CHARACTERS_PAGE: usize = 50;
+
+/// Keyed cache of the filtered+sorted browser cards (see
+/// [`ChatSession::filtered_character_cards`]).
+pub(crate) struct CharacterCardsCache {
+    pub(crate) revision: u64,
+    pub(crate) search: String,
+    pub(crate) sort: String,
+    pub(crate) cards: Rc<Vec<CharacterCardView>>,
+}
+
 impl<W: ProductWire> ChatSession<W> {
     pub(crate) fn load_workspace(&mut self) -> Result<(), ChatRouteError> {
         let chat_result = self.load_open_chat();
@@ -216,6 +229,7 @@ impl<W: ProductWire> ChatSession<W> {
                     self.state.pinned_character_id = self.state.selected_character_id.clone();
                 }
                 self.state.characters = items;
+                self.characters_revision += 1;
                 self.hydrate_character_avatars();
             }
             Err(err) => self.record_error(err),
@@ -226,6 +240,69 @@ impl<W: ProductWire> ChatSession<W> {
     pub fn refresh_characters(&mut self) {
         self.load_characters();
         self.load_character_draft();
+    }
+
+    /// React `characters.load-more`: reveal one more page of the browser.
+    /// Paging bounds the DOM, not the fetch — the catalog is in memory.
+    pub fn load_more_characters(&mut self) {
+        self.state.character_browser_limit += CHARACTERS_PAGE;
+        self.bump_scene();
+    }
+
+    /// Filtered + sorted character cards, built once per (catalog, search,
+    /// sort) change and shared as an `Rc`. `shell_view` runs per produce, so
+    /// this must not re-lowercase and re-clone the catalog per frame.
+    pub(crate) fn filtered_character_cards(&self) -> Rc<Vec<CharacterCardView>> {
+        let search = self.state.character_search.trim().to_lowercase();
+        let sort = self.state.character_sort.clone();
+        let revision = self.characters_revision;
+        if let Some(cache) = self.characters_cards.borrow().as_ref() {
+            if cache.revision == revision && cache.search == search && cache.sort == sort {
+                return Rc::clone(&cache.cards);
+            }
+        }
+        let mut cards: Vec<CharacterCardView> = self
+            .state
+            .characters
+            .iter()
+            .filter(|row| {
+                search.is_empty()
+                    || row.name.to_lowercase().contains(&search)
+                    || row
+                        .description
+                        .as_deref()
+                        .unwrap_or("")
+                        .to_lowercase()
+                        .contains(&search)
+                    || row.tags.iter().any(|tag| tag.to_lowercase().contains(&search))
+            })
+            .map(|row| CharacterCardView {
+                id: row.id.clone(),
+                name: row.name.clone(),
+                description: row.description.clone().unwrap_or_default(),
+                tags: row.tags.clone(),
+                avatar_asset_id: row.avatar_asset_id.clone(),
+                avatar_data_uri: None,
+            })
+            .collect();
+        match sort.as_str() {
+            "name-desc" => {
+                cards.sort_by_key(|card| std::cmp::Reverse(card.name.to_lowercase()))
+            }
+            "newest" | "oldest" => {}
+            _ => cards.sort_by_key(|card| card.name.to_lowercase()),
+        }
+        if sort == "oldest" {
+            cards.reverse();
+        }
+        let cards = Rc::new(cards);
+        *self.characters_cards.borrow_mut() = Some(CharacterCardsCache {
+            revision,
+            search,
+            sort,
+            cards: Rc::clone(&cards),
+        });
+        cards
     }
 
     /// Select a character by id and load its draft + avatar.

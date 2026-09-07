@@ -148,14 +148,6 @@ fn instruct_focus_role(focus: TextFocus) -> Option<&'static str> {
     }
 }
 
-fn preset_sampler_text(view: &neotavern_presentation_dioxus_shell::ProductShellView) -> String {
-    view.preset_rows
-        .iter()
-        .find(|row| row.focused)
-        .map(|row| row.value.clone())
-        .unwrap_or_default()
-}
-
 /// Inline message action captured at `Down`, like `PendingUi` for the shell.
 /// Kind vocabulary is the shared hit-rects decision table; execution here:
 /// React-builtin `copy` (client-side OS clipboard), `delete` (session), the

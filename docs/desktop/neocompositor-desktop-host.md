@@ -588,6 +588,20 @@ legacy RSX (`lib.rs`): раскладку даёт packed-класс (React gold
 wrap, gap 12px; action-bar — wrap, gap 4px), паритет blueprint↔legacy снова
 сходится.
 
+### Браузер персонажей: кэш карточек и постраничный load-more
+
+`shell_view()` раньше на каждый produce фильтровал, сортировал и клонировал
+весь каталог (`to_lowercase` на строку за кадр). Теперь фильтр+сортировка
+собираются один раз на изменение (ревизия каталога, поиск, сортировка —
+`ChatSession::filtered_character_cards`, кэш инвалидируют `refresh_characters`
+и in-place обновления `characters.update`) и раздаются как `Rc`
+(`ProductShellView.characters`). Сетка раскладывает только текущую страницу —
+React `useCharacters(limit: 50)`: кнопка `Load more`
+(`data-action="custom.characters.load-more"` → `ShellAction::LoadMoreCharacters`)
+открывает следующую страницу; DOM ограничен страницей, каталог лежит в памяти.
+Тесты: `character_cards_cache_is_shared_until_catalog_or_inputs_change`,
+`character_browser_pages_via_load_more`.
+
 ## Галерея персонажа (GalleryTab)
 
 У галереи нет Product Wire-операций: kernel-плоскость честно пуста (React
