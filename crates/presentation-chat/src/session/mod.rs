@@ -241,6 +241,13 @@ pub struct ChatRouteState {
     pub avatar_ready_token: u64,
     /// Always `None` on the paint path (no `data:` URI in Blitz).
     pub avatar_data_uri: Option<String>,
+    /// Measured painted row heights keyed by message id (L3 height
+    /// correction): `id -> (measured_css_height, estimate_at_capture)`. The
+    /// capture-estimate makes a correction self-invalidating when the row
+    /// content changes. Bounded LRU (`height_correction_order`), see
+    /// `HEIGHT_CORRECTION_CAP` — AGENTS §20.
+    pub height_corrections: HashMap<String, (f64, f64)>,
+    pub(crate) height_correction_order: VecDeque<String>,
     /// Matches React `useUiStore.pinnedCharacterId` (select also pins).
     pub pinned_character_id: Option<String>,
     pub create_dialog_open: bool,
@@ -563,7 +570,43 @@ impl ChatRouteState {
         }
         evicted
     }
+
+    /// Store a measured painted height for one message row (L3). Called from
+    /// the hosts' produce with the painted layout rects; never bumps the
+    /// scene — corrections ride the NEXT produce, so learning cannot loop
+    /// into a repaint.
+    pub(crate) fn learn_height_correction(&mut self, id: &str, measured: f64, estimate: f64) {
+        if !measured.is_finite() || measured <= 0.0 {
+            return;
+        }
+        if self.height_corrections.contains_key(id) {
+            self.height_corrections
+                .insert(id.to_string(), (measured, estimate));
+            return;
+        }
+        self.height_corrections
+            .insert(id.to_string(), (measured, estimate));
+        self.height_correction_order.push_front(id.to_string());
+        while self.height_correction_order.len() > HEIGHT_CORRECTION_CAP {
+            let Some(oldest) = self.height_correction_order.pop_back() else {
+                break;
+            };
+            self.height_corrections.remove(&oldest);
+        }
+    }
+
+    /// The measured height for `id`, if a correction is stored (freshness is
+    /// validated by the caller against the row's current estimate).
+    pub(crate) fn height_correction(&self, id: &str) -> Option<f64> {
+        self.height_corrections
+            .get(id)
+            .map(|(measured, _)| *measured)
+    }
 }
+
+/// LRU cap for learned painted heights (AGENTS §20: every cache has a memory
+/// limit). 512 rows cover any realistic visible-window history.
+const HEIGHT_CORRECTION_CAP: usize = 512;
 
 pub struct ChatSession<W: ProductWire> {
     wire: W,

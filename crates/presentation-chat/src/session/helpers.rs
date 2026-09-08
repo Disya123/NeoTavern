@@ -725,14 +725,12 @@ pub(crate) fn virtualized_window(
     scroll_from_bottom_css: f64,
     assistant_author: &str,
     macros: &crate::macros::MacroContext,
+    height_corrections: &HashMap<String, (f64, f64)>,
 ) -> (Vec<VisibleRow>, PresentOutcome) {
     let mut index = HeightIndex::new();
     for message in messages {
-        let _ = index.push(
-            LogicalItemId(message.sequence as u64),
-            estimate_height(message),
-            HeightKind::Estimated,
-        );
+        let (height, kind) = corrected_height_kind(message, height_corrections);
+        let _ = index.push(LogicalItemId(message.sequence as u64), height, kind);
     }
     let viewport_height = viewport_height.max(1.0);
     let extent = index.extent();
@@ -794,6 +792,30 @@ pub(crate) fn estimate_height(message: &MessageDto) -> f64 {
     const PX_PER_TOKEN: f64 = 4.6 / 8.0;
     let tokens = estimate_tokens(&message.content) as f64;
     48.0 + (tokens * PX_PER_TOKEN).min(160.0)
+}
+
+/// A learned painted height applies only while the row's current estimate
+/// still matches the estimate captured at learn time — an edited row
+/// invalidates its own correction without any explicit invalidation path.
+pub(crate) fn corrected_height_kind(
+    message: &MessageDto,
+    corrections: &HashMap<String, (f64, f64)>,
+) -> (f64, HeightKind) {
+    match corrections.get(&message.id) {
+        Some((measured, captured)) if *captured == estimate_height(message) => {
+            (*measured, HeightKind::Exact)
+        }
+        _ => (estimate_height(message), HeightKind::Estimated),
+    }
+}
+
+/// The single shared row-height read (L3): the measured painted height when
+/// a fresh correction exists, the estimate otherwise.
+pub(crate) fn corrected_height(
+    message: &MessageDto,
+    corrections: &HashMap<String, (f64, f64)>,
+) -> f64 {
+    corrected_height_kind(message, corrections).0
 }
 
 pub(crate) fn visible_rows(
@@ -1115,5 +1137,43 @@ mod height_estimate_tests {
         let emoji_h = estimate_height(&emoji);
         let latin50 = estimate_height(&msg(&"a".repeat(50)));
         assert!(emoji_h > latin50, "emoji {emoji_h} vs latin {latin50}");
+    }
+
+    #[test]
+    fn height_corrections_replace_estimates_until_content_changes() {
+        let mut row = msg("hello");
+        row.sequence = 3;
+        let estimate = estimate_height(&row);
+        let corrections = HashMap::from([(
+            row.id.clone(),
+            (250.0, estimate), // painted 250px, captured at this estimate
+        )]);
+
+        // Fresh correction: the measured painted height wins, marked Exact.
+        let (height, kind) = corrected_height_kind(&row, &corrections);
+        assert_eq!(height, 250.0);
+        assert_eq!(kind, HeightKind::Exact);
+
+        // The row is edited (content changed): the captured estimate no
+        // longer matches, the correction self-invalidates.
+        row.content = "hello, edited".into();
+        let (height, kind) = corrected_height_kind(&row, &corrections);
+        assert_eq!(height, estimate_height(&row));
+        assert_eq!(kind, HeightKind::Estimated);
+    }
+
+    #[test]
+    fn height_correction_lru_evicts_oldest() {
+        let mut state = ChatRouteState::default();
+        for i in 0..600 {
+            state.learn_height_correction(&format!("m{i}"), 100.0, 90.0);
+        }
+        assert!(state.height_corrections.len() <= 512);
+        // The first 88 ids were evicted; the newest survive.
+        assert!(!state.height_corrections.contains_key("m0"));
+        assert!(state.height_corrections.contains_key("m599"));
+        // A re-learn of an existing id refreshes without re-inserting order.
+        state.learn_height_correction("m599", 120.0, 90.0);
+        assert_eq!(state.height_correction("m599"), Some(120.0));
     }
 }

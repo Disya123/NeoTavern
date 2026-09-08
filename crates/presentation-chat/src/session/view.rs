@@ -809,6 +809,7 @@ impl<W: ProductWire> ChatSession<W> {
             f64::from(self.state.scroll_offset_css),
             &self.assistant_author(),
             &self.macro_context(),
+            &self.state.height_corrections,
         )
     }
 

@@ -246,6 +246,9 @@ impl App {
         // in-flow inside the chat viewport, so their layout rects are the
         // window CSS-px positions the pointer pipeline uses.
         self.message_rects = sess.paint_layout().messages.clone();
+        // L3 height feedback: measured painted heights replace the estimates
+        // on the next produce (never bumps the scene — no produce loop).
+        self.session.learn_measured_heights(&self.message_rects);
         // Layout-derived hit rects: the single geometry source for taps and
         // text-field focus (same skeleton the `--dom-dump` writes).
         self.hit_rects = HitRects::from_skeleton(&skeleton);

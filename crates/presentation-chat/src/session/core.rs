@@ -215,6 +215,35 @@ impl<W: ProductWire> ChatSession<W> {
         (self.viewport_width, self.viewport_height)
     }
 
+    /// L3 height feedback: learn the measured painted row heights from the
+    /// last produce. `rects` are the painted message boxes
+    /// (`paint_layout().messages`, keyed by `data-message-id`). Learning
+    /// never bumps the scene — corrections ride the NEXT produce, so the
+    /// learn step cannot loop into a repaint. An edited row invalidates its
+    /// own correction via the captured estimate (see `corrected_height_kind`).
+    pub fn learn_measured_heights(&mut self, rects: &[neotavern_presentation_m0_d2::MessageRect]) {
+        for rect in rects {
+            let Some(row) = self.state.messages.iter().find(|row| row.id == rect.id) else {
+                continue;
+            };
+            let measured = f64::from(rect.css_height);
+            if self.state.height_correction(&rect.id) != Some(measured) {
+                let estimate = estimate_height(row);
+                self.state
+                    .learn_height_correction(&rect.id, measured, estimate);
+            }
+        }
+    }
+
+    /// The single shared row height (L3): the measured painted height when a
+    /// fresh correction exists, the A3 estimate otherwise.
+    pub fn row_height_css(&self, row: &MessageDto) -> f64 {
+        match self.state.height_corrections.get(&row.id) {
+            Some((measured, captured)) if *captured == estimate_height(row) => *measured,
+            _ => estimate_height(row),
+        }
+    }
+
     pub fn compositor_height_index(&self) -> HeightIndex {
         let mut index = HeightIndex::new();
         let n = self
@@ -227,17 +256,38 @@ impl<W: ProductWire> ChatSession<W> {
         // scales to physical px. The compositor viewport must OVER-cover the
         // real raster — an under-estimate would open a transparent gap
         // (debug_assert in chat-viewport `present`).
+        // L3: a learned painted height replaces the estimate — the
+        // measurement is the real raster (photo included), so the +436
+        // over-cover applies only to estimated rows; a measured row floors
+        // at the bubble baseline and needs no margin above the truth.
         let scale = f64::from(self.hidpi_scale());
         for i in 0..n {
-            let base = match self.state.messages.get(i) {
-                Some(row) => estimate_height(row),
-                None => 48.0,
+            let Some(row) = self.state.messages.get(i) else {
+                let _ = index.push(
+                    LogicalItemId(i as u64 + 1),
+                    48.0 * scale,
+                    HeightKind::Estimated,
+                );
+                continue;
             };
-            let has_photo = self.state.messages.get(i).is_some_and(|row| {
-                !neotavern_presentation_dioxus_shell::asset_image_refs(&row.content).is_empty()
-            });
-            let h = (base.max(COMPOSITOR_ROW_CSS) + if has_photo { 436.0 } else { 0.0 }) * scale;
-            let _ = index.push(LogicalItemId(i as u64 + 1), h, HeightKind::Estimated);
+            match self.state.height_corrections.get(&row.id) {
+                Some((measured, captured)) if *captured == estimate_height(row) => {
+                    let _ = index.push(
+                        LogicalItemId(i as u64 + 1),
+                        measured.max(COMPOSITOR_ROW_CSS) * scale,
+                        HeightKind::Exact,
+                    );
+                }
+                _ => {
+                    let base = estimate_height(row);
+                    let has_photo =
+                        !neotavern_presentation_dioxus_shell::asset_image_refs(&row.content)
+                            .is_empty();
+                    let h = (base.max(COMPOSITOR_ROW_CSS) + if has_photo { 436.0 } else { 0.0 })
+                        * scale;
+                    let _ = index.push(LogicalItemId(i as u64 + 1), h, HeightKind::Estimated);
+                }
+            }
         }
         index
     }

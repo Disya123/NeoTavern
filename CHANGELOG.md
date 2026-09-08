@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- Native desktop UI determinism (wave C): painted row heights now feed back
+  into the height model — every produce measures the rendered message rows
+  and the virtualization window, compositor index and hydration window read
+  the measurement (bounded LRU of 512, self-invalidating on row edits)
+  instead of a never-corrected heuristic estimate.
 - Native desktop UI determinism (wave B): a document declaration that shadows
   a built-in presentation table now prints a one-time stderr notice ("edit
   the document, not scene_chat tables") — six composer buttons were silently
