@@ -59,6 +59,10 @@ thread_local! {
         const { RefCell::new(ChatBlueprintSource::Disabled) };
 
     static CACHED_DOCUMENT: RefCell<Option<DocumentCacheEntry>> = const { RefCell::new(None) };
+    // Kept separately from the parser cache: compact/unsupported chrome can
+    // legitimately skip materialization, but must not repaint on every poll.
+    static WATCHED_STAMP: RefCell<Option<Option<(SystemTime, u64)>>> =
+        const { RefCell::new(None) };
 
     /// Wallpaper mode: the shell base turns transparent so the host-composited
     /// photo (destination-over under the scene) shows through the glass
@@ -70,7 +74,7 @@ thread_local! {
 
 struct DocumentCacheEntry {
     /// `None` marks the embedded fixture, which never changes for a process.
-    mtime: Option<SystemTime>,
+    mtime: Option<(SystemTime, u64)>,
     document: Result<UiBlueprintDocumentV1, String>,
     /// Last rejection already reported on stderr — a per-frame fallback must
     /// not repeat it (the document is re-read whenever its mtime changes).
@@ -81,6 +85,7 @@ struct DocumentCacheEntry {
 /// host calls this once before mounting; tests switch it under a lock.
 pub fn set_chat_blueprint_source(source: ChatBlueprintSource) {
     CACHED_DOCUMENT.with(|cell| *cell.borrow_mut() = None);
+    WATCHED_STAMP.with(|cell| *cell.borrow_mut() = None);
     BLUEPRINT_SOURCE.with(|cell| *cell.borrow_mut() = source);
 }
 
@@ -96,6 +101,27 @@ pub fn chat_wallpaper_mode() -> bool {
 
 fn current_source() -> ChatBlueprintSource {
     BLUEPRINT_SOURCE.with(|cell| cell.borrow().clone())
+}
+
+fn document_stamp(path: &std::path::Path) -> Option<(SystemTime, u64)> {
+    let metadata = std::fs::metadata(path).ok()?;
+    Some((metadata.modified().ok()?, metadata.len()))
+}
+
+/// Whether a path-backed authoring document needs a new frame. `None` means
+/// no file is being watched (embedded/legacy mode). Hosts poll at a bounded
+/// idle cadence; this only reads metadata and never rebuilds an unchanged UI.
+pub fn chat_blueprint_file_changed() -> Option<bool> {
+    let ChatBlueprintSource::Path(path) = current_source() else {
+        return None;
+    };
+    let stamp = document_stamp(&path);
+    Some(WATCHED_STAMP.with(|cell| {
+        let mut observed = cell.borrow_mut();
+        let changed = *observed != Some(stamp);
+        *observed = Some(stamp);
+        changed
+    }))
 }
 
 /// Materializes the chat scene from the active document source. Returns
@@ -115,13 +141,11 @@ fn materialize_scene(state: &ChatSurfaceStateV1) -> Result<UiSceneV1, String> {
         let mut cell = cell.borrow_mut();
         let fresh_mtime = match &source {
             ChatBlueprintSource::Disabled | ChatBlueprintSource::Embedded => None,
-            ChatBlueprintSource::Path(path) => std::fs::metadata(path)
-                .ok()
-                .and_then(|meta| meta.modified().ok()),
+            ChatBlueprintSource::Path(path) => document_stamp(path),
         };
         let cached_valid = cell
             .as_ref()
-            .map(|entry| entry.mtime == fresh_mtime && entry.document.is_ok())
+            .map(|entry| entry.mtime == fresh_mtime)
             .unwrap_or(false);
         if !cached_valid {
             let parsed = match &source {
@@ -1569,5 +1593,56 @@ mod context_meter_tests {
         let (title, label) = context_meter_label(None);
         assert_eq!(title, "Context 0%");
         assert_eq!(label, "0%");
+    }
+}
+
+#[cfg(test)]
+mod document_reload_tests {
+    use super::*;
+
+    #[test]
+    fn file_edits_and_recovery_request_frames_without_user_input() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("chat.json");
+        let original = include_str!(
+            "../../../packages/contracts/src/presentation/fixtures/ui-blueprint-document-chat-v1.json"
+        );
+        let state = ChatSurfaceStateV1 {
+            revision: 1,
+            messages: vec![],
+            composer_draft: String::new(),
+            character_name: "Test".into(),
+            streaming: false,
+            context_panel_open: false,
+            context_summary: None,
+        };
+        std::fs::write(&path, original).unwrap();
+        set_chat_blueprint_source(ChatBlueprintSource::Path(path.clone()));
+        assert_eq!(chat_blueprint_file_changed(), Some(true));
+        // Polling consumes the change even if this chrome skips rendering.
+        assert_eq!(chat_blueprint_file_changed(), Some(false));
+        let first = materialize_scene(&state).unwrap();
+        assert_eq!(chat_blueprint_file_changed(), Some(false));
+        let updated = original.replace("composer-send", "composer-send-authored");
+        std::fs::write(&path, updated).unwrap();
+        assert_eq!(chat_blueprint_file_changed(), Some(true));
+        let second = materialize_scene(&state).unwrap();
+        assert_ne!(format!("{first:?}"), format!("{second:?}"));
+        assert_eq!(chat_blueprint_file_changed(), Some(false));
+        std::fs::write(&path, "{").unwrap();
+        assert_eq!(chat_blueprint_file_changed(), Some(true));
+        assert!(materialize_scene(&state).is_err());
+        assert_eq!(chat_blueprint_file_changed(), Some(false));
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(chat_blueprint_file_changed(), Some(true));
+        assert!(materialize_scene(&state).is_err());
+        assert_eq!(chat_blueprint_file_changed(), Some(false));
+        std::fs::write(&path, original).unwrap();
+        assert_eq!(chat_blueprint_file_changed(), Some(true));
+        assert!(materialize_scene(&state).is_ok());
+        set_chat_blueprint_source(ChatBlueprintSource::Embedded);
+        assert_eq!(chat_blueprint_file_changed(), None);
+        set_chat_blueprint_source(ChatBlueprintSource::Disabled);
+        assert_eq!(chat_blueprint_file_changed(), None);
     }
 }

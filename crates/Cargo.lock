@@ -3803,6 +3803,7 @@ dependencies = [
  "neotavern-presentation-design-system",
  "serde",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]

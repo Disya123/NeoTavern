@@ -227,6 +227,7 @@ struct App {
     retry_present: bool,
     last_present_error: Option<std::time::Instant>,
     pending_ui: Option<PendingUi>,
+    pending_custom: Option<(String, f32, f32)>,
     last_cursor: Option<(f32, f32)>,
     pointer_taps: VecDeque<ProbeOp>,
     simulated: bool,

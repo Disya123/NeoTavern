@@ -27,6 +27,7 @@ impl App {
         self.ensure_viewport();
         self.pending_message_action = None;
         self.pending_quick = None;
+        self.pending_custom = None;
         self.panel_drag = None;
         let rects = self.hit_rects.clone();
         let view = self.session.shell_view();
@@ -66,22 +67,11 @@ impl App {
                     row_id,
                 });
             }
-            // Declarative custom intents have no authority: the honest
-            // default is the session trace toast (a future registry attaches
-            // real handlers without touching this call site).
+            // Capture custom controls through the same release/slop path as
+            // builtins. The layout target supersedes geometric shell hits.
             TapIntent::Custom { name } => {
-                if name == "custom.chat.snapshots-menu" {
-                    eprintln!("[neocompositor-desktop] snapshots menu toggled");
-                    self.session.toggle_snapshots_menu();
-                } else if let Some(action) = crate::character_custom_action(&name, &view) {
-                    eprintln!("[neocompositor-desktop] tap -> {action:?}");
-                    self.session.apply_shell_action(action);
-                    self.dirty = true;
-                    self.window.as_ref().map(|w| w.request_redraw());
-                } else {
-                    eprintln!("[neocompositor-desktop] custom intent tapped: {name}");
-                    self.session.custom_intent(&name);
-                }
+                self.pending_ui = None;
+                self.pending_custom = Some((name, css_x, css_y));
             }
             TapIntent::None => {}
         }
@@ -285,6 +275,11 @@ impl App {
         if let Some((_, px, py)) = self.pending_quick.as_ref() {
             if (css_x - px).abs() > TOUCH_SLOP_CSS || (css_y - py).abs() > TOUCH_SLOP_CSS {
                 self.pending_quick = None;
+            }
+        }
+        if let Some((_, px, py)) = self.pending_custom.as_ref() {
+            if (css_x - px).abs() > TOUCH_SLOP_CSS || (css_y - py).abs() > TOUCH_SLOP_CSS {
+                self.pending_custom = None;
             }
         }
         if let Some(window) = self.window.as_ref() {
@@ -555,6 +550,30 @@ impl App {
                 return;
             }
         }
+        if let Some((name, px, py)) = self.pending_custom.take() {
+            self.pending_ui = None;
+            if (css_x - px).abs() > TOUCH_SLOP_CSS || (css_y - py).abs() > TOUCH_SLOP_CSS {
+                return;
+            }
+            if let Some(action) = crate::character_custom_action(&name, &self.session.shell_view())
+            {
+                // Reuse shell dispatch, including its host-side export sink.
+                self.pending_ui = Some(PendingUi {
+                    css_x: px,
+                    css_y: py,
+                    hit: ShellHit::Action(action),
+                });
+            } else {
+                if name == "custom.chat.snapshots-menu" {
+                    self.session.toggle_snapshots_menu();
+                } else {
+                    self.session.custom_intent(&name);
+                }
+                self.dirty = true;
+                self.window.as_ref().map(|w| w.request_redraw());
+                return;
+            }
+        }
         let Some(pending) = self.pending_ui.take() else {
             return;
         };
@@ -600,6 +619,9 @@ impl App {
         use winit::event::TouchPhase;
         match phase {
             TouchPhase::Started => {
+                if self.touch.is_some() {
+                    return;
+                }
                 let now = self.monotonic_ns();
                 // Route the contact through the same `Down` capture as a
                 // mouse press (controls, slop rules) so taps stay identical.
@@ -607,6 +629,7 @@ impl App {
                 let captured = self.pending_ui.is_some()
                     || self.pending_message_action.is_some()
                     || self.pending_quick.is_some()
+                    || self.pending_custom.is_some()
                     || self.panel_drag.is_some();
                 self.touch = Some(TouchContact {
                     pointer_id,
@@ -625,14 +648,20 @@ impl App {
                 }
             }
             TouchPhase::Moved => {
+                if self
+                    .touch
+                    .as_ref()
+                    .is_some_and(|contact| contact.pointer_id == pointer_id)
+                {
+                    self.pointer_move(css_x, css_y);
+                }
                 let now = self.monotonic_ns();
                 if let Some(contact) = self.touch.as_mut() {
                     if contact.pointer_id != pointer_id {
                         return;
                     }
                     if contact.captured {
-                        // The control's own slop check runs at release
-                        // (`pointer_up`), like the Android pending-tap rule.
+                        // pointer_move already applied cancellation beyond slop.
                         return;
                     }
                     if !contact.dragging {
@@ -677,12 +706,114 @@ impl App {
                 }
             }
             TouchPhase::Cancelled => {
+                if !self
+                    .touch
+                    .as_ref()
+                    .is_some_and(|contact| contact.pointer_id == pointer_id)
+                {
+                    return;
+                }
                 self.touch = None;
+                self.pending_ui = None;
+                self.pending_quick = None;
+                self.pending_message_action = None;
+                self.pending_custom = None;
+                self.panel_drag = None;
                 self.glide_velocity = 0.0;
                 // The gesture died mid-flight: keep what the screen shows by
                 // landing the visual into the session.
                 self.land_now();
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::hit_rects::HitRect;
+    use winit::event::TouchPhase;
+
+    fn custom_button(name: &str) -> App {
+        let mut app = App::new(1, None, None).expect("fake-wire app");
+        app.size = (1100, 760);
+        app.ensure_viewport();
+        // Deliberately overlap a geometric rail target. The authored button
+        // must own the click exclusively, regardless of that fallback hit.
+        app.hit_rects.rects.push(HitRect {
+            identity: format!("action:{name}"),
+            action: Some(name.into()),
+            key: None,
+            x: 10.0,
+            y: 90.0,
+            w: 40.0,
+            h: 40.0,
+        });
+        app.dirty = false;
+        app
+    }
+
+    #[test]
+    fn custom_click_waits_for_release_dispatches_once_and_marks_dirty() {
+        let mut app = custom_button("custom.chat.snapshots-menu");
+        let panel = app.session.shell_view().panel;
+        app.pointer_down(30.0, 110.0);
+        assert!(!app.session.view().snapshots_menu_open);
+        assert!(!app.dirty);
+        assert!(app.pending_ui.is_none());
+        assert!(app.pending_custom.is_some());
+        app.pointer_up(30.0, 110.0);
+        assert!(app.session.view().snapshots_menu_open);
+        assert!(app.dirty);
+        assert_eq!(app.session.shell_view().panel, panel);
+        app.dirty = false;
+        app.pointer_up(30.0, 110.0);
+        assert!(app.session.view().snapshots_menu_open);
+        assert!(!app.dirty);
+    }
+
+    #[test]
+    fn custom_click_stays_cancelled_after_drag_returns_to_origin() {
+        let mut app = custom_button("custom.chat.snapshots-menu");
+        app.pointer_down(30.0, 110.0);
+        app.pointer_move(30.0, 110.0 + TOUCH_SLOP_CSS + 1.0);
+        app.pointer_move(30.0, 110.0);
+        app.pointer_up(30.0, 110.0);
+        assert!(!app.session.view().snapshots_menu_open);
+        assert!(!app.dirty);
+        assert!(app.pending_custom.is_none());
+        app.pointer_down(30.0, 110.0);
+        app.pointer_up(30.0, 110.0 + TOUCH_SLOP_CSS + 1.0);
+        assert!(!app.session.view().snapshots_menu_open);
+        assert!(!app.dirty);
+    }
+
+    #[test]
+    fn unregistered_custom_intent_requests_a_fresh_frame() {
+        let mut app = custom_button("custom.test.notice");
+        let epoch = app.session.scene_epoch();
+        app.pointer_down(30.0, 110.0);
+        assert_eq!(app.session.scene_epoch(), epoch);
+        app.pointer_up(30.0, 110.0);
+        assert!(app.session.scene_epoch() > epoch);
+        assert!(app.dirty);
+    }
+
+    #[test]
+    fn touch_custom_capture_honors_slop_and_contact_cancellation() {
+        let mut app = custom_button("custom.chat.snapshots-menu");
+        app.touch_input(1, TouchPhase::Started, 30.0, 110.0);
+        assert!(app.touch.as_ref().is_some_and(|contact| contact.captured));
+        app.touch_input(2, TouchPhase::Cancelled, 30.0, 110.0);
+        assert!(app.pending_custom.is_some());
+        app.touch_input(1, TouchPhase::Moved, 30.0, 110.0 + TOUCH_SLOP_CSS + 1.0);
+        app.touch_input(1, TouchPhase::Ended, 30.0, 110.0);
+        assert!(!app.session.view().snapshots_menu_open);
+        app.touch_input(1, TouchPhase::Started, 30.0, 110.0);
+        app.touch_input(1, TouchPhase::Cancelled, 30.0, 110.0);
+        assert!(app.pending_custom.is_none());
+        assert!(app.pending_ui.is_none());
+        app.pointer_up(30.0, 110.0);
+        assert!(!app.session.view().snapshots_menu_open);
     }
 }

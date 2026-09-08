@@ -41,6 +41,7 @@ impl App {
             retry_present: false,
             last_present_error: None,
             pending_ui: None,
+            pending_custom: None,
             last_cursor: None,
             pointer_taps: VecDeque::new(),
             simulated: false,

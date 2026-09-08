@@ -58,7 +58,8 @@ pub use product_shell::{
     LOREBOOK_MANAGER_TITLE, PERSONA_MANAGER_TITLE, PLUGINS_MANAGER_TITLE, SETTINGS_TITLE,
 };
 pub use scene_chat::{
-    chat_wallpaper_mode, set_chat_blueprint_source, set_chat_wallpaper_mode, ChatBlueprintSource,
+    chat_blueprint_file_changed, chat_wallpaper_mode, set_chat_blueprint_source,
+    set_chat_wallpaper_mode, ChatBlueprintSource,
 };
 
 pub const DIOXUS_SHELL_FLAG: &str = "NEOTA_DIOXUS_SHELL";

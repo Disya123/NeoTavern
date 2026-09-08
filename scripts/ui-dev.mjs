@@ -11,7 +11,7 @@
  */
 
 import { spawn, spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
+import { constants, copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
@@ -44,24 +44,46 @@ function desktopBin() {
   return resolve(repositoryRoot, 'crates', 'target', 'release', exe);
 }
 
-function parseOption(name) {
-  const index = process.argv.indexOf(name);
-  return index === -1 ? null : process.argv[index + 1];
+export function parseUiDevArgs(args) {
+  const options = { width: '1100', height: '760', messages: '12', document: null };
+  const flags = { '--w': 'width', '--h': 'height', '--messages': 'messages' };
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (Object.hasOwn(flags, arg)) {
+      const value = args[++index];
+      if (!value || !/^[1-9]\d*$/.test(value) || !Number.isSafeInteger(Number(value))) {
+        throw new Error(`${arg} requires a positive integer`);
+      }
+      options[flags[arg]] = value;
+    } else if (arg.startsWith('--')) {
+      throw new Error(`Unknown option: ${arg}`);
+    } else if (options.document !== null) {
+      throw new Error('Only one UI document can be supplied');
+    } else {
+      options.document = arg;
+    }
+  }
+  return options;
+}
+
+export function seedUiDocument(source, destination) {
+  mkdirSync(join(destination, '..'), { recursive: true });
+  try {
+    copyFileSync(source, destination, constants.COPYFILE_EXCL);
+  } catch (error) {
+    if (error.code !== 'EEXIST') throw error;
+  }
 }
 
 function main() {
-  const positional = process.argv.slice(2).filter((arg) => !arg.startsWith('--'));
-  const width = parseOption('--w') ?? '1100';
-  const height = parseOption('--h') ?? '760';
-  const messages = parseOption('--messages') ?? '12';
+  const { document, width, height, messages } = parseUiDevArgs(process.argv.slice(2));
 
   let documentPath;
-  if (positional.length === 0) {
-    mkdirSync(join(scratchDoc, '..'), { recursive: true });
-    copyFileSync(canonicalFixture, scratchDoc);
+  if (document === null) {
+    seedUiDocument(canonicalFixture, scratchDoc);
     documentPath = scratchDoc;
   } else {
-    documentPath = resolve(positional[0]);
+    documentPath = resolve(document);
   }
   if (!existsSync(documentPath)) {
     console.error(`[ui:dev] document not found: ${documentPath}`);
@@ -78,8 +100,8 @@ function main() {
     process.exit(validation.status ?? 1);
   }
 
-  if (!existsSync(desktopBin())) {
-    console.log('[ui:dev] building desktop host (release)…');
+  if (!process.env.NEOTA_DESKTOP_BIN) {
+    console.log('[ui:dev] checking/building desktop host (release)…');
     const built = spawnSync(
       process.platform === 'win32' ? 'cmd.exe' : 'cargo',
       process.platform === 'win32'

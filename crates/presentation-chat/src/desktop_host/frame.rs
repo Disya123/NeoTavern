@@ -434,6 +434,13 @@ impl ApplicationHandler for App {
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        let document_changed = neotavern_presentation_dioxus_shell::chat_blueprint_file_changed();
+        if document_changed == Some(true) {
+            self.dirty = true;
+            if let Some(window) = self.window.as_ref() {
+                window.request_redraw();
+            }
+        }
         if self.retry_present {
             if let Some(window) = self.window.as_ref() {
                 window.request_redraw();
@@ -477,6 +484,12 @@ impl ApplicationHandler for App {
                 .checked_add(std::time::Duration::from_millis(16))
                 .expect("instant");
             event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(next.into()));
+        } else if document_changed.is_some() {
+            // Only file-backed authoring mode polls. Embedded product UI
+            // remains event-driven; unchanged documents do not repaint.
+            event_loop.set_control_flow(ControlFlow::WaitUntil(
+                std::time::Instant::now() + std::time::Duration::from_millis(100),
+            ));
         } else {
             event_loop.set_control_flow(winit::event_loop::ControlFlow::Wait);
         }

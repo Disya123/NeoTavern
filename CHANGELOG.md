@@ -1,6 +1,16 @@
 # Changelog
 
 ## Unreleased
+
+### Fixed
+
+- Native desktop UI: file-backed blueprint edits trigger a frame while idle;
+  unchanged invalid documents are cached until the next edit. `ui:dev` preserves
+  authored scratch documents, checks the Cargo build on every default launch,
+  and parses size/message options independently of the document path.
+- Native custom buttons dispatch once on release, cancel on drag/touch
+  cancellation, suppress overlapping fallback actions, and redraw menus/toasts.
+
 ### Changed
 
 - **Аудит плавности нативного хоста (десктоп): дёрганый скролл и лагающий
