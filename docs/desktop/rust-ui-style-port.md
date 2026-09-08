@@ -62,6 +62,18 @@ CSS. Не дотюнивай числа в Rust «под скриншот» — 
 `phosphor.rs`, шрифты, `react-golden-character-manager.png`). **Пак не изобретает
 токены, формы иконок или гарнитуры**, всё берётся из React.
 
+**Кириллические компаньоны (L6).** Outfit не имеет кириллицы в принципе, а
+latin-сабсеты отрезали её и у JetBrains Mono — при `system_fonts: false`
+кириллический кластер не имел шрифта вовсе. В
+`generated/fonts/` добавлены полные вариативные TTF: `onest-variable.ttf`
+(OFL, ближайший метрический сосед Outfit с нативной кириллицей) и
+`jetbrains-mono-variable.ttf`. `product_font_context` регистрирует их ПОСЛЕ
+основных гарнитур в тех же generic-семействах: латиница остаётся Outfit
+(голдены детерминичны), кириллица уходит в компаньон; системные шрифты по-
+прежнему выключены (Android Roboto не подменяет гарнитуру). Контракт
+регистрации — тест `cyrillic_companions_are_registered_after_the_primaries`
+в `presentation-design-system/src/lib.rs`.
+
 ### 2. P1 — runtime hot stylesheet (`NEOTA_DEV_HOT_STYLES`)
 
 `crates/presentation-design-system/src/lib.rs`:

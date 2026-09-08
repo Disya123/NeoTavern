@@ -4,6 +4,12 @@
 
 ### Fixed
 
+- Native desktop UI: Cyrillic text now renders at all — the font context only
+  bundled Latin subsets (Outfit has no Cyrillic glyphs upstream), so every
+  Cyrillic cluster had no font. Onest (metric neighbor with native Cyrillic)
+  and the full JetBrains Mono variable are registered as fallback companions;
+  Latin stays Outfit and system fonts stay off, keeping goldens
+  deterministic.
 - Native desktop UI determinism (wave C): painted row heights now feed back
   into the height model — every produce measures the rendered message rows
   and the virtualization window, compositor index and hydration window read

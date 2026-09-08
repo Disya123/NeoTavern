@@ -27,6 +27,15 @@ pub const OUTFIT_VARIABLE_LATIN: &[u8] =
     include_bytes!("../generated/fonts/outfit-variable-latin.ttf");
 pub const JETBRAINS_MONO_VARIABLE_LATIN: &[u8] =
     include_bytes!("../generated/fonts/jetbrains-mono-variable-latin.ttf");
+/// Cyrillic companions: Outfit has no Cyrillic glyphs upstream and the latin
+/// subsets cut JetBrains Mono to Latin, so with `system_fonts: false` every
+/// Cyrillic cluster had no font at all. Onest is the closest metric neighbor
+/// with native Cyrillic (OFL); the full JetBrains Mono variable restores mono
+/// Cyrillic. Registered AFTER the primary families — Latin stays Outfit, so
+/// the goldens stay deterministic.
+pub const ONEST_VARIABLE: &[u8] = include_bytes!("../generated/fonts/onest-variable.ttf");
+pub const JETBRAINS_MONO_VARIABLE: &[u8] =
+    include_bytes!("../generated/fonts/jetbrains-mono-variable.ttf");
 
 /// CSS-pixel safe-area box matching `--nt-safe-area-*` on the React host.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -448,12 +457,18 @@ pub fn product_font_context() -> FontContext {
     };
     let outfit = register_family(&mut ctx, OUTFIT_VARIABLE_LATIN, "Outfit Variable");
     let _ = register_family(&mut ctx, OUTFIT_VARIABLE_LATIN, "Outfit");
+    let onest = register_family(&mut ctx, ONEST_VARIABLE, "Onest");
     let mono = register_family(
         &mut ctx,
         JETBRAINS_MONO_VARIABLE_LATIN,
         "JetBrains Mono Variable",
     );
+    let mono_cyr = register_family(&mut ctx, JETBRAINS_MONO_VARIABLE, "JetBrains Mono Full");
     let _ = register_family(&mut ctx, JETBRAINS_MONO_VARIABLE_LATIN, "JetBrains Mono");
+    // Fallback order per generic family: Latin resolves to Outfit (first),
+    // Cyrillic falls through to Onest / the mono companion (Outfit has no
+    // Cyrillic cmap). System fonts stay off so Android Roboto cannot replace
+    // the golden typeface.
     for generic in [
         GenericFamily::SansSerif,
         GenericFamily::SystemUi,
@@ -461,15 +476,35 @@ pub fn product_font_context() -> FontContext {
     ] {
         ctx.collection
             .append_generic_families(generic, outfit.iter().copied());
+        ctx.collection
+            .append_generic_families(generic, onest.iter().copied());
     }
     ctx.collection
         .append_generic_families(GenericFamily::Monospace, mono.iter().copied());
+    ctx.collection
+        .append_generic_families(GenericFamily::Monospace, mono_cyr.iter().copied());
     ctx
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cyrillic_companions_are_registered_after_the_primaries() {
+        let mut ctx = product_font_context();
+        // The companions must exist and be resolvable by name — with
+        // system_fonts off they are the ONLY Cyrillic source (Outfit has no
+        // Cyrillic cmap; the latin mono subset cut it too).
+        assert!(
+            ctx.collection.family_id("Onest").is_some(),
+            "Onest companion must be registered"
+        );
+        assert!(
+            ctx.collection.family_id("JetBrains Mono Full").is_some(),
+            "mono Cyrillic companion must be registered"
+        );
+    }
 
     #[test]
     fn packed_sheet_keeps_all_react_tokens() {
