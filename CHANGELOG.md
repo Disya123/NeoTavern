@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Added
+
+- `pnpm ui:dev --watch` (wave E): `.rs` edits anywhere under
+  `crates/presentation-*` now rebuild the release desktop bin and restart
+  the window after a 1.5 s debounce — Rust fixes land in the loop with one
+  save, like the JSON document hot-reload that already exists. A failed
+  rebuild keeps the previous binary running; closing the window ends the
+  loop. Parsing/root-selection covered by `scripts/ui-dev.test.mjs` (18
+  tests).
+
 ### Fixed
 
 - Native desktop UI (wave D): the six interactive overlays (snapshots menu,
