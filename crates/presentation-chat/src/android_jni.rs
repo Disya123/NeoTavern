@@ -702,6 +702,23 @@ pub extern "system" fn Java_com_neotavern_mobile_PresentationChatNative_presentF
                                 MessageActionKind::DetailsSaveEdit => {
                                     session.submit_message_details_edit()
                                 }
+                                MessageActionKind::SnapshotOpen => {
+                                    session.apply_shell_action(crate::ShellAction::OpenSnapshot(
+                                        row_id.clone(),
+                                    ));
+                                }
+                                MessageActionKind::SwipePick => {
+                                    // The open picker names the owner message;
+                                    // the row key carries the variant id — the
+                                    // same contract the desktop host uses.
+                                    if let Some(owner) =
+                                        session.route_state().variant_picker_for.clone()
+                                    {
+                                        session.apply_shell_action(
+                                            crate::ShellAction::PickVariant(owner, row_id.clone()),
+                                        );
+                                    }
+                                }
                             }
                         }
                         // Declarative custom intents: same authority-free
