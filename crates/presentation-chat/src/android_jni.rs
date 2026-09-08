@@ -278,7 +278,6 @@ fn generation_from_envelope(envelope: &EventEnvelope) -> Result<GenerationEvent,
         .map_err(|err| ChatRouteError::Wire(err.message))
 }
 
-
 static ROUTE: Mutex<Option<ChatSession<JniProductWire>>> = Mutex::new(None);
 
 fn to_jstring(env: &mut JNIEnv, text: String) -> jstring {

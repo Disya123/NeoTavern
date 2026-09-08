@@ -3,6 +3,7 @@
 
 use super::App;
 use crate::scroll_dynamics::SmoothScroll;
+use neotavern_presentation_dioxus_shell::current_product_shell;
 
 impl App {
     /// Monotonic nanoseconds for the scroll animation timelines. The
@@ -118,7 +119,10 @@ impl App {
     }
 
     fn route_panel_wheel(&mut self, css_x: f32, css_y: f32, css_dy: f32) -> bool {
-        let view = self.session.shell_view();
+        // Same single-geometry contract as the tap capture: the wheel routes
+        // against the installed (painted) view, whose `panel_scroll_css`
+        // matches the hit_rects extent below.
+        let view = current_product_shell();
         if !(view.sidebar_open && view.panel == "characters" && view.tab == "edit") {
             return false;
         }

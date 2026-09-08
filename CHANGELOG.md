@@ -4,6 +4,17 @@
 
 ### Fixed
 
+- Native desktop UI determinism (wave A): every visible session mutation now
+  reaches the screen — the host observes the session's `scene_epoch`
+  (`about_to_wait`/`frame`) instead of relying on per-call-site `dirty`
+  writes, so a forgotten invalidation can no longer hide a change. Window
+  moves across mixed-DPI monitors (100%/125%/150%) re-open the produce in
+  the new scale (`ScaleFactorChanged` was previously unhandled — layout and
+  hit-testing drifted forever). Both hit-test systems resolve taps against
+  the installed (painted) frame instead of a per-event fresh view-model
+  clone. Generation and route errors surface as a toast (stable error code)
+  instead of failing silently, and a new `--hit <x>,<y>` probe prints both
+  hit-test systems' resolution for a point.
 - Native desktop UI: file-backed blueprint edits trigger a frame while idle;
   unchanged invalid documents are cached until the next edit. `ui:dev` preserves
   authored scratch documents, checks the Cargo build on every default launch,

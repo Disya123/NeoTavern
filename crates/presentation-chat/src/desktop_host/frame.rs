@@ -16,6 +16,55 @@ use winit::window::WindowAttributes;
 const STREAM_PRODUCE_MIN_INTERVAL: std::time::Duration = std::time::Duration::from_millis(33);
 
 impl App {
+    /// Single invalidation observation point: every visible session mutation
+    /// bumps `scene_epoch`, so consuming an epoch change here marks the frame
+    /// dirty regardless of per-call-site `dirty` bookkeeping. Mirrors the
+    /// Android host (`produced.list.generation = session.scene_epoch()`).
+    /// Returns `true` when a change was consumed.
+    pub(super) fn observe_scene_epoch(&mut self) -> bool {
+        let epoch = self.session.scene_epoch();
+        if epoch != self.observed_scene_epoch {
+            self.observed_scene_epoch = epoch;
+            self.dirty = true;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// DPI move (mixed-DPI Windows monitors): `refresh` hard-errors on a
+    /// scale change (m0-d2 produce guard), so the warm session is dropped for
+    /// a cold open in the new scale. Caches keyed by physical size re-derive
+    /// per produce; the wallpaper cover re-derives through its size
+    /// hysteresis once the dest rect scales.
+    pub(super) fn apply_scale_change(&mut self, scale: f32) {
+        let scale = scale.max(1.0);
+        if (self.density - scale).abs() <= f32::EPSILON {
+            return;
+        }
+        eprintln!(
+            "[neocompositor-desktop] scale {:.3} -> {:.3}; cold produce",
+            self.density, scale
+        );
+        self.density = scale;
+        self.vello_session = None;
+        self.wallpaper_cache = None;
+        self.dirty = true;
+        self.window.as_ref().map(|w| w.request_redraw());
+    }
+
+    /// `--hit x y` debug report: both hit-test systems' resolution for one
+    /// CSS point, against the installed (painted) view — the same single
+    /// geometry contract the tap capture uses.
+    pub(super) fn hit_probe_report(&self, css_x: f32, css_y: f32) -> String {
+        let view = neotavern_presentation_dioxus_shell::current_product_shell();
+        format!(
+            "[hit-probe] ({css_x},{css_y}) geometric={:?} layout={:?}",
+            crate::hit_test(&view, css_x, css_y),
+            self.hit_rects.resolve_tap(css_x, css_y)
+        )
+    }
+
     pub(super) fn frame(&mut self) {
         if self.present.is_none() {
             return;
@@ -50,6 +99,10 @@ impl App {
         if self.session.pump_stream() {
             self.dirty = true;
         }
+        // Invalidation contract inside the frame too: toast dismissal and the
+        // probe replay below mutate the session; nothing may depend on a
+        // per-handler `dirty` memory being correct.
+        self.observe_scene_epoch();
         // `--pointer` taps: replay the whole sequence through the same pointer
         // pipeline (each tap hit-tests against the state mutated by the prior
         // taps) before this frame's produce, so `--snapshot` captures the
@@ -105,11 +158,20 @@ impl App {
                             self.land_now();
                         }
                     }
+                    ProbeOp::Hit(x, y) => {
+                        // Resolves against the geometry produced by the
+                        // previous op's produce (or the priming pass), like
+                        // every other replayed op.
+                        eprintln!("{}", self.hit_probe_report(x, y));
+                    }
                 }
                 // A live window produces between input events; the scripted
                 // replay must too, or the next op reads stale geometry
                 // (panel wheel routing hit hit_rects from the priming
-                // produce — before the panel even opened).
+                // produce — before the panel even opened). The epoch
+                // observation keeps this true even for ops that bump the
+                // session without remembering `dirty`.
+                self.observe_scene_epoch();
                 if self.dirty {
                     let snapshot = self.snapshot_path.take();
                     let swap = self.swap_path.take();
@@ -372,6 +434,9 @@ impl ApplicationHandler for App {
     ) {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
+            WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+                self.apply_scale_change(scale_factor as f32);
+            }
             WindowEvent::Resized(size) => self.resize(size.width, size.height),
             WindowEvent::RedrawRequested => self.frame(),
             WindowEvent::Touch(touch) => {
@@ -434,6 +499,13 @@ impl ApplicationHandler for App {
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        // Invalidation contract: any event-handler mutation that bumped the
+        // session epoch becomes visible here, even without a `dirty` write.
+        if self.observe_scene_epoch() {
+            if let Some(window) = self.window.as_ref() {
+                window.request_redraw();
+            }
+        }
         let document_changed = neotavern_presentation_dioxus_shell::chat_blueprint_file_changed();
         if document_changed == Some(true) {
             self.dirty = true;

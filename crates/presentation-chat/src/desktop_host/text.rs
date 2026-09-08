@@ -101,7 +101,11 @@ impl App {
                 eprintln!("[neocompositor-desktop] typed '{ch}' -> lorebook_name=\"{next}\"");
             }
             TextFocus::LorebookDescription => {
-                let current = self.session.route_state().lorebook_description_draft.clone();
+                let current = self
+                    .session
+                    .route_state()
+                    .lorebook_description_draft
+                    .clone();
                 let next = format!("{current}{ch}");
                 self.session.set_lorebook_description_draft(&next);
                 eprintln!("[neocompositor-desktop] typed '{ch}' -> lorebook_desc+{ch}");
@@ -125,7 +129,11 @@ impl App {
                 eprintln!("[neocompositor-desktop] typed '{ch}' -> card_path+{ch}");
             }
             TextFocus::PromptTemplatePath => {
-                let current = self.session.route_state().prompt_template_path_draft.clone();
+                let current = self
+                    .session
+                    .route_state()
+                    .prompt_template_path_draft
+                    .clone();
                 let next = format!("{current}{ch}");
                 self.session.set_prompt_template_path_draft(&next);
                 eprintln!("[neocompositor-desktop] typed '{ch}' -> prompt_template_path+{ch}");
@@ -171,7 +179,11 @@ impl App {
                 eprintln!("[neocompositor-desktop] typed '{ch}' -> prompt_block_name=\"{next}\"");
             }
             TextFocus::PromptBlockContent => {
-                let current = self.session.route_state().prompt_block_content_draft.clone();
+                let current = self
+                    .session
+                    .route_state()
+                    .prompt_block_content_draft
+                    .clone();
                 let next = format!("{current}{ch}");
                 self.session.set_prompt_block_content_draft(&next);
                 eprintln!("[neocompositor-desktop] typed '{ch}' -> prompt_block_content+{ch}");
@@ -262,12 +274,12 @@ impl App {
             }
             TextFocus::PresetSampler => {
                 let current = self
-            .session
-            .preset_value_rows()
-            .iter()
-            .find(|row| row.focused)
-            .map(|row| row.value.clone())
-            .unwrap_or_default();
+                    .session
+                    .preset_value_rows()
+                    .iter()
+                    .find(|row| row.focused)
+                    .map(|row| row.value.clone())
+                    .unwrap_or_default();
                 let next = format!("{current}{ch}");
                 self.session.set_preset_value_draft(&next);
                 eprintln!("[neocompositor-desktop] typed '{ch}' -> preset_sampler=\"{next}\"");
@@ -294,17 +306,21 @@ impl App {
             TextFocus::ProviderName => self.session.route_state().provider_name_draft.clone(),
             TextFocus::MessageEdit => self.session.view().editing_draft.clone(),
             TextFocus::LorebookName => self.session.route_state().lorebook_name_draft.clone(),
-            TextFocus::LorebookDescription => {
-                self.session.route_state().lorebook_description_draft.clone()
-            }
+            TextFocus::LorebookDescription => self
+                .session
+                .route_state()
+                .lorebook_description_draft
+                .clone(),
             TextFocus::PersonaName => self.session.route_state().persona_name_draft.clone(),
             TextFocus::PersonaDescription => {
                 self.session.route_state().persona_description_draft.clone()
             }
             TextFocus::CardPath => self.session.route_state().card_path_draft.clone(),
-            TextFocus::PromptTemplatePath => {
-                self.session.route_state().prompt_template_path_draft.clone()
-            }
+            TextFocus::PromptTemplatePath => self
+                .session
+                .route_state()
+                .prompt_template_path_draft
+                .clone(),
             TextFocus::PresetImportPath => self
                 .session
                 .route_state()
@@ -321,10 +337,14 @@ impl App {
                 let role = instruct_focus_role(self.focus).expect("instruct focus");
                 self.instruct_field_text(role)
             }
-            TextFocus::PromptBlockName => self.session.route_state().prompt_block_name_draft.clone(),
-            TextFocus::PromptBlockContent => {
-                self.session.route_state().prompt_block_content_draft.clone()
+            TextFocus::PromptBlockName => {
+                self.session.route_state().prompt_block_name_draft.clone()
             }
+            TextFocus::PromptBlockContent => self
+                .session
+                .route_state()
+                .prompt_block_content_draft
+                .clone(),
             TextFocus::PromptBlockDepth => {
                 self.session.route_state().prompt_block_depth_draft.clone()
             }
@@ -371,12 +391,12 @@ impl App {
                 .and_then(|draft| draft.alternate_greetings.get(idx).cloned())
                 .unwrap_or_default(),
             TextFocus::PresetSampler => self
-            .session
-            .preset_value_rows()
-            .iter()
-            .find(|row| row.focused)
-            .map(|row| row.value.clone())
-            .unwrap_or_default(),
+                .session
+                .preset_value_rows()
+                .iter()
+                .find(|row| row.focused)
+                .map(|row| row.value.clone())
+                .unwrap_or_default(),
             TextFocus::None => return,
         };
         let next: String = current

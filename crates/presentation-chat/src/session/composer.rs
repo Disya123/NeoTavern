@@ -260,7 +260,7 @@ impl<W: ProductWire> ChatSession<W> {
                     }
                     GenerationEvent::GenerationFailed { error } => {
                         self.clear_stream_progress();
-                        self.state.last_error = Some(error.clone());
+                        self.surface_error(error.clone());
                     }
                     GenerationEvent::GenerationCancelled => {
                         self.clear_stream_progress();
@@ -272,7 +272,7 @@ impl<W: ProductWire> ChatSession<W> {
                 }
             }
             StreamFrame::Error(error) => {
-                self.state.last_error = Some(error.clone());
+                self.surface_error(error.clone());
                 self.state.stream_handle = None;
                 self.clear_stream_progress();
             }

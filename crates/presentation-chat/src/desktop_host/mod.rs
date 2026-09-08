@@ -221,6 +221,12 @@ struct App {
     density: f32,
     message_count: u32,
     dirty: bool,
+    /// Last `scene_epoch` the host observed. This IS the invalidation
+    /// contract: every visible session mutation bumps the epoch, so observing
+    /// it in `about_to_wait`/`frame` makes any mutation visible without
+    /// per-call-site `dirty` bookkeeping (the Android host reads the same
+    /// epoch for its presenter generation).
+    observed_scene_epoch: u64,
     snapshot_path: Option<String>,
     swap_path: Option<String>,
     dom_dump_path: Option<String>,

@@ -17,6 +17,10 @@ pub(super) enum ProbeOp {
     /// Advance the deterministic probe clock by N ms and run one animation
     /// step (same sampler the real frame loop uses).
     Tick(u64),
+    /// Debug-print both hit-test systems' resolution for a CSS point
+    /// (geometric `shell_hit` + layout-derived `HitRects::resolve_tap`).
+    /// The direct tool for "I clicked X, Y happened" questions.
+    Hit(f32, f32),
 }
 
 /// Parse the probe ops in argv order so "focus -> type -> send" scenarios are
@@ -63,8 +67,44 @@ pub(super) fn parse_probe_ops(args: &[String]) -> VecDeque<ProbeOp> {
                     }
                 }
             }
+            "--hit" => {
+                if let Some(spec) = args_iter.next() {
+                    if let Some((x, y)) = spec.split_once(",") {
+                        if let (Ok(x), Ok(y)) = (x.trim().parse::<f32>(), y.trim().parse::<f32>()) {
+                            ops.push_back(ProbeOp::Hit(x, y));
+                        }
+                    }
+                }
+            }
             _ => {}
         }
     }
     ops
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ops(args: &[&str]) -> Vec<ProbeOp> {
+        parse_probe_ops(&args.iter().map(|s| s.to_string()).collect::<Vec<String>>())
+            .into_iter()
+            .collect()
+    }
+
+    #[test]
+    fn hit_probe_parses_css_points_in_order() {
+        let parsed = ops(&[
+            "--hit",
+            "300,120",
+            "--pointer",
+            "10,20",
+            "--hit",
+            "55.5, 66",
+        ]);
+        assert_eq!(parsed.len(), 3);
+        assert!(matches!(parsed[0], ProbeOp::Hit(x, y) if x == 300.0 && y == 120.0));
+        assert!(matches!(parsed[1], ProbeOp::Tap(..)));
+        assert!(matches!(parsed[2], ProbeOp::Hit(x, y) if x == 55.5 && y == 66.0));
+    }
 }

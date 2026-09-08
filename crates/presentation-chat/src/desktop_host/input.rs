@@ -7,6 +7,7 @@ use super::{
     TouchContact,
 };
 use crate::{hit_test, QuickIntent, ShellAction, ShellHit, TapIntent, RAIL_WIDTH, TOUCH_SLOP_CSS};
+use neotavern_presentation_dioxus_shell::current_product_shell;
 
 impl App {
     /// Down: capture native controls via `hit_test`, exactly like the Android
@@ -30,7 +31,11 @@ impl App {
         self.pending_custom = None;
         self.panel_drag = None;
         let rects = self.hit_rects.clone();
-        let view = self.session.shell_view();
+        // Single geometry per tap: both hit systems read the INSTALLED view —
+        // the same produce painted `rects` above. A fresh `shell_view()` here
+        // cloned the whole view-model per pointer event AND diverged from the
+        // painted frame whenever state mutated between produce and Down.
+        let view = current_product_shell();
         if self.near_panel_resize(css_x) {
             self.panel_drag = Some(PanelDrag {
                 start_x: css_x,
@@ -797,6 +802,34 @@ mod tests {
         app.pointer_up(30.0, 110.0);
         assert!(app.session.scene_epoch() > epoch);
         assert!(app.dirty);
+    }
+
+    #[test]
+    fn session_mutation_becomes_visible_through_epoch_observation() {
+        let mut app = custom_button("custom.chat.snapshots-menu");
+        app.dirty = false;
+        let epoch = app.session.scene_epoch();
+        // A session mutation with zero App.dirty bookkeeping anywhere...
+        app.session.scroll_chat_by(10.0);
+        assert!(!app.dirty);
+        // ...is picked up by the host's epoch observation, exactly once.
+        assert!(app.observe_scene_epoch());
+        assert!(app.dirty);
+        assert_eq!(app.session.scene_epoch(), epoch + 1);
+        assert!(!app.observe_scene_epoch());
+    }
+
+    #[test]
+    fn scale_change_forces_cold_reproduce_at_new_density() {
+        let mut app = custom_button("custom.chat.snapshots-menu");
+        app.dirty = false;
+        app.apply_scale_change(1.0);
+        assert!(!app.dirty);
+        app.apply_scale_change(1.5);
+        assert_eq!(app.density, 1.5);
+        assert!(app.dirty);
+        assert!(app.vello_session.is_none());
+        assert!(app.wallpaper_cache.is_none());
     }
 
     #[test]

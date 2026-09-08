@@ -614,5 +614,5 @@ mod wire_ops;
 // Cluster modules see every free item of the former single-file module through
 // this re-export (each cluster opens with `use super::*;`); items live as
 // `pub(crate)` in `helpers`, so they stay invisible outside the crate.
-pub(crate) use helpers::*;
 pub(crate) use chat_nav::{CharacterCardsCache, CHARACTERS_PAGE};
+pub(crate) use helpers::*;

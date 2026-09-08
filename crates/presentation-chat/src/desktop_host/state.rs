@@ -25,6 +25,7 @@ impl App {
         // Hydrate avatar thumbnails via `assets.content` so the GPU overlay on
         // the shared host has real pixels (Android parity).
         session.refresh_characters();
+        let observed_scene_epoch = session.scene_epoch();
         Ok(Self {
             window: None,
             present: None,
@@ -35,6 +36,7 @@ impl App {
             density: 1.0,
             message_count: messages,
             dirty: true,
+            observed_scene_epoch,
             snapshot_path: None,
             swap_path: None,
             dom_dump_path: None,

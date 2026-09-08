@@ -315,16 +315,26 @@ impl<W: ProductWire> ChatSession<W> {
 
     pub(crate) fn record_error(&mut self, err: ChatRouteError) {
         match err {
-            ChatRouteError::Product(dto) => self.state.last_error = Some(dto),
-            other => {
-                self.state.last_error = Some(ErrorDto {
-                    code: other.reason_code(),
-                    params: json!({ "message": other.to_string() }),
-                    trace_id: None,
-                    correlation_id: None,
-                });
-            }
+            ChatRouteError::Product(dto) => self.surface_error(dto),
+            other => self.surface_error(ErrorDto {
+                code: other.reason_code(),
+                params: json!({ "message": other.to_string() }),
+                trace_id: None,
+                correlation_id: None,
+            }),
         }
+    }
+
+    /// Single error surface: `last_error` is what session state machines
+    /// read, `status_message` is the visible toast. An error must never be
+    /// silent in the native UI — until the host grows i18n it shows the
+    /// stable code (the same thing the legacy composer banner shows). The
+    /// bump is load-bearing: `record_error` never bumped, so an error could
+    /// previously skip the produce entirely.
+    pub(crate) fn surface_error(&mut self, error: ErrorDto) {
+        self.state.last_error = Some(error.clone());
+        self.state.status_message = Some(error.code);
+        self.bump_scene();
     }
 }
 
@@ -334,6 +344,28 @@ impl<W: ProductWire> ChatSession<W> {
 #[cfg(test)]
 mod hydration_flag_tests {
     use crate::{start_flagged_session, DEMO_CHAT_ID};
+
+    #[test]
+    fn recorded_error_surfaces_as_toast_and_bumps_scene() {
+        let (mut session, _) = start_flagged_session(
+            Some("1"),
+            crate::FakeWire::with_message_count(4),
+            Some(DEMO_CHAT_ID),
+            None,
+        )
+        .expect("route");
+        let epoch = session.scene_epoch();
+        session.record_error(crate::ChatRouteError::NoActiveRun);
+        let err = session.state.last_error.as_ref().expect("recorded");
+        assert_eq!(err.code, crate::ChatRouteError::NoActiveRun.reason_code());
+        // The visible half: the error rides the toast pipeline, and the bump
+        // makes the host repaint it without any per-handler dirty write.
+        assert_eq!(
+            session.state.status_message.as_deref(),
+            Some(err.code.as_str())
+        );
+        assert!(session.scene_epoch() > epoch);
+    }
 
     #[test]
     fn refresh_visible_assets_reports_fresh_hydration_once() {
